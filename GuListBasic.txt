@@ -1,0 +1,84 @@
+Dưới đây là danh sách chi tiết được chia theo từng giai đoạn và chức năng trong game:
+1. Phàm Cổ (Rank 1 - 5): Giai đoạn Cày cuốc & Sinh tồn cơ bản
+Đây là nhóm Cổ trùng dành cho người chơi ở giai đoạn đầu game.
+A. Nhóm Tấn công & Phòng ngự (Active / Defense)
+Nguyệt Quang cổ (Moonlight Gu): Rank 1, Type: Active. Cổ bản mệnh phổ biến của Cổ Nguyệt tộc, có thể bắn ra nguyệt nhận màu xanh nhạt
+.
+Cốt Thương cổ (Bone Spear Gu): Rank 1, Type: Active. Cổ cơ sở của truyền thừa Bạch Cốt, bắn ra giáo xương
+. Hợp luyện lên Rank 2 là Cổ Cốt Thương xoắn ốc có thêm xoắn kình tăng sát thương
+.
+Điểm Kim cổ (Golden Touch Gu): Rank 5, Type: Active. Bắn ra tia sáng, sinh linh bị trúng sẽ hóa thành vàng nguyên chất và mất mạng
+.
+Kim Cương Trừng Mắt (Vajra Stare Gu): Rank 5, Type: Active. Phóng ra ánh mắt kim mang công kích tâm hồn kẻ địch, yêu cầu phải cải tạo mắt vàng trước khi dùng
+.
+Tiêu Lôi Thổ Đậu (Charred Thunder Potato Gu): Rank 2 đến 4, Type: Active. Cổ gài bẫy dưới đất, phát nổ khi có người giẫm phải
+.
+Huyết Mạc Thiên Hoa: Rank 5, Type: Defense. Tạo ra một vòng bảo vệ hình quả cầu máu cực kỳ kiên cố, người bên trong có thể ra nhưng người bên ngoài không thể vào
+.
+B. Nhóm Cải tạo Thể chất & Nội tại (Passive_Stats) Những cổ này tăng vĩnh viễn chỉ số cơ bản của người chơi (Base HP, Base Attack).
+Hắc Thỉ cổ / Bạch Thỉ cổ (Black/White Boar Gu): Rank 1-2, Type: Passive_Attack. Cải tạo cơ thể từ gốc, tăng sức mạnh một con lợn rừng vĩnh viễn
+.
+Đồng Bì cổ (Copper Skin Gu): Rank 1, Type: Passive_Defense. Cải tạo da thành màu đồng, tăng phòng ngự cơ bản
+. Lên Rank 4 là Da Đồng Cổ
+.
+Ngọc Bì cổ (Jade Skin Gu): Rank 1, Type: Passive_Defense. Quý hiếm hơn Đồng Bì, có thể kết hợp với Băng Cơ để tạo thành tổ hợp phòng ngự thượng giai
+.
+Thiết Cốt / Tinh Thiết Cốt cổ: Rank 3-4, Type: Passive_HP. Biến xương cốt thành màu đen nhánh, cứng như sắt thép
+.
+C. Nhóm Lực Đạo Tác Chiến (Sát Chiêu Combo)
+Toàn Lực Ứng Phó cổ (All-out Effort Gu): Rank 3, Type: Active/Buff. Hạch tâm của Lực đạo, triệu hồi 100% sức mạnh của các thú ảnh (như lợn rừng, cá sấu, voi trắng) đang ẩn chứa trong người
+.
+Khổ Lực cổ (Bitter Strength Gu): Rank 4, Type: Passive/Buff. Càng chịu nhiều thương tích, sức mạnh bộc phát ra càng lớn, kết hợp hoàn hảo với Toàn Lực Ứng Phó
+.
+Tự Lực Cánh Sinh cổ (Self-Reliance Gu): Rank 3, Type: Heal. Trị liệu dựa trên sức mạnh của cổ sư, sức mạnh bộc phát càng lớn, tốc độ hồi phục vết thương càng cao
+.
+Mạnh Mẽ Đâm Tới cổ (Charging Crash Gu): Rank 4, Type: Movement/Active. Cổ di động, tạo đà xông thẳng về phía trước để cưỡng ép đột phá
+.
+D. Nhóm Phụ Trợ & Tài nguyên (Support / Consumable)
+Tửu Trùng (Liquor Worm): Rank 1-4, Type: Support. Tinh luyện chân nguyên lên một cảnh giới nhỏ, giải quyết bài toán thiếu mana cho người có tư chất thấp
+. Thức ăn là các loại rượu như rượu Thanh Trúc
+.
+Hệ thống Cổ Xá Lợi (Relic Gu): Rank 1-5, Type: Consumable. Bao gồm Thanh Đồng (Rank 1), Xích Thiết (Rank 2), Bạch Ngân (Rank 3), Hoàng Kim (Rank 4), Tử Tinh (Rank 5). Giúp cổ sư trực tiếp tăng một cảnh giới nhỏ mà không cần cày cuốc
+.
+Cổ Nhất Tâm Đa Dụng: Rank 2-5, Type: Support. Chia tinh thần ra làm nhiều luồng để điều khiển đàn thú hoặc sử dụng nhiều cổ trùng cùng lúc
+.
+Công Bội cổ (Amplify Effect Gu): Rank 2-5, Type: Support. Tăng hiệu quả của cổ trùng khác lên gấp bội theo số chuyển (VD: Rank 5 tăng 5 lần sức mạnh)
+.
+
+--------------------------------------------------------------------------------
+2. Tiên Cổ (Rank 6 - 9): Giai đoạn Endgame & Thế Lực
+Đây là nhóm vật phẩm "Độc nhất vô nhị" (Unique) trong thiên hạ, được săn lùng bởi các Cổ Tiên, cũng là mục tiêu cho các bang hội tranh đoạt.
+A. Cổ Cửu Chuyển (Tối Thượng/Truyền Thuyết)
+Trí Tuệ cổ (Wisdom Gu): Rank 9, Type: Support. Mang lại vầng sáng trí tuệ, tạo ra linh cảm vô hạn nhưng tiêu hao tuổi thọ của cổ sư
+. Thức ăn của nó là Thọ Cổ
+.
+Số Mệnh cổ (Fate Gu): Rank 9, Type: Passive/Lore. Trụ cột của Thiên Đình, khống chế quỹ đạo của vạn vật thế gian, quy định vạn vật cuối cùng phải chết
+.
+Tình Yêu cổ (Love Gu): Rank 9, Type: Active. Cổ trùng duy nhất có khả năng chống lại Số Mệnh, sử dụng bằng cách tiêu hao tuổi thọ, do Triệu Liên Vân nắm giữ
+.
+B. Cổ Bát Chuyển (Đại Năng Tác Chiến)
+Thái Độ cổ (Attitude Gu): Rank 8, Type: Active. Hoạt động như một chiếc mặt nạ của trái tim, có thể dùng tâm lực để thôi động mà không tốn tiên nguyên
+. Hạch tâm của sát chiêu "Gặp Mặt Từng Quen Biết"
+.
+Tuệ Kiếm cổ (Wisdom Sword Gu): Rank 8, Type: Active/Damage. Sáng tạo bởi Bạc Thanh, có khả năng chém đứt tơ tình, đoạn tuyệt ý niệm, yêu cầu tiên nguyên bát chuyển để kích hoạt
+. Thức ăn là hoa Ban Lan bá vương
+.
+Tự Thủy Lưu Niên cổ: Rank 8, Type: Support. Liên tục sinh ra các phàm cổ Niên và tiên cổ Niên theo mức tiêu hao tiên nguyên, hỗ trợ đắc lực cho Trụ đạo
+.
+Hồn Thú Lệnh: Rank 8, Type: Support/Enslavement. Dùng để hiệu lệnh, khống chế đại quân hồn thú, từng nằm trong tay hồn thú Thái cổ Thanh Cừu
+.
+C. Cổ Lục - Thất Chuyển (Vật Phẩm PvP / Mở Rộng Cơ Sở)
+Xuân Thu Thiền (Spring Autumn Cicada): Rank 6, Type: Active/Movement. Bản mệnh cổ của Phương Nguyên, cho phép trọng sinh (quay ngược thời gian) nhưng mang rủi ro thất bại cực lớn và chứa thiên ý
+.
+Định Tiên Du (Fixed Immortal Travel): Rank 6, Type: Movement. Cho phép dịch chuyển đến bất kỳ đâu trên thế gian chỉ cần trong đầu có hình ảnh nơi đó
+.
+Giang Sơn Như Cũ (Landscape as Before) & Nhân Như Cố (Man as Before): Rank 6, Type: Heal/Restore. Cổ Trụ đạo, giúp khôi phục địa hình hoặc sinh mạng/trạng thái cơ thể cổ sư về khoảnh khắc trước đó
+.
+Ngã Lực cổ (My Strength Gu) / Bạt Sơn cổ / Kéo Sông cổ: Rank 6, Type: Active/Passive. Nền tảng cốt lõi của Lực đạo cấp Tiên, giúp gia tăng sức mạnh thể chất khổng lồ
+.
+Chiêu Tai cổ (Beckon Disaster Gu): Rank 7, Type: Active. Cổ Vận đạo, thu hút thiên kiếp địa tai đến người sở hữu hoặc dùng để hãm hại kẻ thù
+.
+Đổi Hồn cổ: Rank 7, Type: Active. Cho phép hoán đổi hồn phách và thể xác với mục tiêu khác
+.
+Kiếm Độn cổ (Sword Escape Gu): Rank 7, Type: Movement. Biến thân hình thành thanh kiếm sắc, đâm rách không gian để phi hành tốc độ cực cao
+.
