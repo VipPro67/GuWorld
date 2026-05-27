@@ -60,6 +60,7 @@ type Player struct {
 	CurrentMana        float64            `json:"current_mana"`     // Current Primeval Essence
 	MaxMana            float64            `json:"max_mana"`         // Max Primeval Essence (equals AptitudePercent)
 	PrimevalStones     int                `json:"primeval_stones"`  // Game currency
+	ImmortalStones    float64            `json:"immortal_stones"`
 	GuInventory        GuInventory        `json:"gu_inventory"`
 	MaterialsInventory MaterialsInventory `json:"materials_inventory"`
 	HP                 float64            `json:"hp"`

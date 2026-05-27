@@ -84,10 +84,18 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     prevHpRef.current = player.hp;
   }, [player.hp]);
 
-  // Filter active Gus in player inventory
-  const eligibleGus = (player.gu_inventory || []).filter(
-    (gu) => gu.status !== "DEAD"
-  );
+  const isPassiveGu = (spec?: GuSpec): boolean => {
+    if (!spec) return false;
+    const t = (spec.gu_type || "").toLowerCase();
+    return t.includes("passive") || t.includes("nội tại") || t.includes("the chat") || t.includes("thể chất");
+  };
+
+  // Only allow ACTIVE + EQUIPPED + non-passive Gu in map combat
+  const eligibleGus = (player.gu_inventory || []).filter((gu) => {
+    if (gu.status !== "ACTIVE" || !gu.equipped) return false;
+    const spec = guDictionary[gu.gu_id];
+    return !isPassiveGu(spec);
+  });
 
   const toggleGuSelection = (instanceId: string) => {
     if (actionLoading) return;
@@ -325,7 +333,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
         {eligibleGus.length === 0 ? (
           <div className="text-center py-6 border border-dashed border-zinc-800 rounded-2xl text-xs text-zinc-600 italic">
-            Không có Cổ trùng có thể sử dụng (Toàn bộ đã chết hoặc chưa sở hữu).
+            Không có Cổ trùng hợp lệ để dùng trong chiến đấu bản đồ (chỉ nhận Cổ đang Xuất Trận và không phải Cổ nội tại).
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

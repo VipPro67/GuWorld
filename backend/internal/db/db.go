@@ -108,6 +108,7 @@ func InitSchema() error {
 		current_mana DOUBLE PRECISION NOT NULL,
 		max_mana DOUBLE PRECISION NOT NULL,
 		primeval_stones INTEGER DEFAULT 0,
+		immortal_stones DOUBLE PRECISION DEFAULT 0,
 		gu_inventory JSONB NOT NULL DEFAULT '[]',
 		materials_inventory JSONB NOT NULL DEFAULT '{}',
 		hp DOUBLE PRECISION NOT NULL DEFAULT 100,
@@ -201,6 +202,11 @@ func InitSchema() error {
 	}
 
 	_, err = DB.Exec(`ALTER TABLE players ADD COLUMN IF NOT EXISTS cleared_cells JSONB NOT NULL DEFAULT '{}';`)
+	if err != nil {
+		return fmt.Errorf("failed to add cleared_cells: %w", err)
+	}
+
+	_, err = DB.Exec(`ALTER TABLE players ADD COLUMN IF NOT EXISTS immortal_stones DOUBLE PRECISION NOT NULL DEFAULT 0;`)
 	if err != nil {
 		return fmt.Errorf("failed to add cleared_cells: %w", err)
 	}
