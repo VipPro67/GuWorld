@@ -165,6 +165,23 @@ func addExploredCells(player *models.Player, radius int) {
 	player.ExploredCells = newSlice
 }
 
+
+func isCellClearedRecently(player *models.Player, x, y int, cooldown time.Duration) bool {
+	if player.ClearedCells == nil {
+		return false
+	}
+	coordKey := fmt.Sprintf("%d,%d", x, y)
+	clearedTimeStr, ok := player.ClearedCells[coordKey]
+	if !ok {
+		return false
+	}
+	t, err := time.Parse(time.RFC3339, clearedTimeStr)
+	if err != nil {
+		return false
+	}
+	return time.Since(t) < cooldown
+}
+
 // GetGrid retrieves the viewport viewport within vision range
 func GetGrid(c *gin.Context) {
 	authID, exists := middleware.GetPlayerID(c)
@@ -198,7 +215,11 @@ func GetGrid(c *gin.Context) {
 			cx := player.X + dx
 			cy := player.Y + dy
 			if cx >= 0 && cx < 100 && cy >= 0 && cy < 100 {
-				cells = append(cells, GenerateCell(cx, cy, player.CurrentRegion))
+				cell := GenerateCell(cx, cy, player.CurrentRegion)
+				if isCellClearedRecently(&player, cx, cy, 2*time.Minute) && (cell.Type == "Resource" || cell.Type == "WildGu") {
+					cell = Cell{X: cx, Y: cy, Type: "Empty", Content: ""}
+				}
+				cells = append(cells, cell)
 			}
 		}
 	}
@@ -291,16 +312,7 @@ func MovePlayer(c *gin.Context) {
 
 	// Check if cell is cleared recently (2 minutes cooldown)
 	coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
-	isCleared := false
-	if player.ClearedCells != nil {
-		if clearedTimeStr, ok := player.ClearedCells[coordKey]; ok {
-			if t, err := time.Parse(time.RFC3339, clearedTimeStr); err == nil {
-				if time.Since(t) < 2*time.Minute {
-					isCleared = true
-				}
-			}
-		}
-	}
+	isCleared := isCellClearedRecently(&player, player.X, player.Y, 2*time.Minute)
 
 	// Trigger cell action
 	cell := GenerateCell(player.X, player.Y, player.CurrentRegion)
