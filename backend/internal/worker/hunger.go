@@ -57,11 +57,14 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 	// Select and lock the row
 	var username string
 	var guInvRaw []byte
+	var hp float64
+	var eqRaw []byte
+
 	err = tx.QueryRow(`
-		SELECT username, gu_inventory 
+		SELECT username, gu_inventory, hp, equipped_gus 
 		FROM players 
 		WHERE id = $1 
-		FOR UPDATE`, playerID).Scan(&username, &guInvRaw)
+		FOR UPDATE`, playerID).Scan(&username, &guInvRaw, &hp, &eqRaw)
 	if err != nil {
 		return err
 	}
@@ -71,14 +74,21 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 		return err
 	}
 
-	updated := false
-	for i := range guInv {
-		gu := &guInv[i]
+	var equippedGus []string
+	if err := json.Unmarshal(eqRaw, &equippedGus); err != nil {
+		equippedGus = []string{}
+	}
 
-		// Only active Gu bugs feel hunger
-		if gu.Status == "ACTIVE" {
+	updated := false
+	playerHPBacklash := 0.0
+	newInventory := models.GuInventory{}
+
+	for i := range guInv {
+		gu := guInv[i]
+		if gu.Status == "ACTIVE" || gu.Status == "SLEEPING" {
 			specs, found := models.GuRegistry[gu.GuID]
 			if !found {
+				newInventory = append(newInventory, gu)
 				continue
 			}
 
@@ -87,31 +97,72 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 
 			if gu.Hunger <= 0 {
 				gu.Hunger = 0
-				// Roll for sleep vs death
-				// 20% Sleeping (hibernation), 80% Dead
+				// Roll for sleep vs death (20% Hibernation, 80% Dead)
 				roll := rand.Intn(100)
 				if roll < 20 {
 					gu.Status = "SLEEPING"
 					log.Printf("Cultivation Log: Player %s's Gu %s (%s) starved and went into HIBERNATION", username, specs.Name, gu.InstanceID[:8])
+					newInventory = append(newInventory, gu)
 				} else {
 					gu.Status = "DEAD"
 					log.Printf("Cultivation Log: Player %s's Gu %s (%s) starved and DIED", username, specs.Name, gu.InstanceID[:8])
+					if gu.IsVital {
+						playerHPBacklash += 80.0
+					}
+					// Dead Gu is deleted, so we do not append it to newInventory
 				}
+			} else {
+				newInventory = append(newInventory, gu)
+			}
+		} else {
+			// Keep other statuses (e.g. SEALED, DYING, or existing DEAD bugs if any, though regular dead are removed)
+			if gu.Status != "DEAD" {
+				newInventory = append(newInventory, gu)
 			}
 		}
 	}
 
-	// If no Gu was modified, we can just return
-	if !updated {
+	// If no Gu was modified and no HP backlash occurred, we can return early
+	if !updated && playerHPBacklash == 0 {
 		return nil
 	}
 
-	newGuInvRaw, err := json.Marshal(guInv)
+	// Apply HP Backlash if Vital Gu died
+	if playerHPBacklash > 0 {
+		hp -= playerHPBacklash
+		if hp <= 0 {
+			hp = 0
+			// Reset combat state upon defeat
+			_, err = tx.Exec(`UPDATE players SET hp = $1, active_combat = NULL WHERE id = $2`, hp, playerID)
+		} else {
+			_, err = tx.Exec(`UPDATE players SET hp = $1 WHERE id = $2`, hp, playerID)
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	// Re-evaluate equipped_gus array
+	newEquippedGus := []string{}
+	for _, eqInstID := range equippedGus {
+		stillExists := false
+		for _, item := range newInventory {
+			if item.InstanceID == eqInstID && item.Status == "ACTIVE" {
+				stillExists = true
+				break
+			}
+		}
+		if stillExists {
+			newEquippedGus = append(newEquippedGus, eqInstID)
+		}
+	}
+
+	newGuInvRaw, err := json.Marshal(newInventory)
 	if err != nil {
 		return err
 	}
 
-	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1 WHERE id = $2`, newGuInvRaw, playerID)
+	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1, equipped_gus = $2 WHERE id = $3`, newGuInvRaw, newEquippedGus, playerID)
 	if err != nil {
 		return err
 	}

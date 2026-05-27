@@ -28,6 +28,11 @@ var CaravanShopCatalog = []ShopItem{
 	{ID: "GU_MOONLIGHT", Name: "Nguyệt Quang Cổ", Description: "Cổ trùng Rank 1 Nhất Chuyển, phóng ra nguyệt nhận sắc bén tấn công.", Type: "Gu", Price: 50, Stock: 5},
 	{ID: "GU_BLACK_BOAR", Name: "Hắc Thỉ Cổ", Description: "Cổ trùng Rank 1 Nhất Chuyển, cải tạo thể chất tăng lực lực lượng vĩnh viễn.", Type: "Gu", Price: 100, Stock: 2},
 	{ID: "GU_CLEANSING_WATER", Name: "Tịnh Thủy Cổ", Description: "Cổ trùng hỗ trợ tẩy rửa cặn bã Không khiếu và thanh trừ ý chí lạ.", Type: "Gu", Price: 650, Stock: 1},
+	{ID: "GU_SHADOW_STEPS", Name: "Ảnh Bộ Cổ", Description: "Cổ trùng di chuyển giúp thân pháp nhanh thoăn thoắt, nhảy vọt 2 ô.", Type: "Gu", Price: 120, Stock: 3},
+	{ID: "GU_EARTH_COMMUNICATION", Name: "Địa Thính Nhục Chi Nha", Description: "Cổ trùng trinh thám dưới lòng đất mở rộng tầm nhìn thêm 3 ô.", Type: "Gu", Price: 150, Stock: 2},
+	{ID: "GU_TUSITA_FLOWER", Name: "Thố Ti Hoa Cổ", Description: "Cổ trùng không gian tăng thêm 20 ô chứa đồ trong hành lý.", Type: "Gu", Price: 180, Stock: 2},
+	{ID: "GU_RELIC", Name: "Xá Lợi Cổ (Relic Gu)", Description: "Cổ trùng tiêu hao nâng cao tu vi ngay lập tức thêm 1 Tiểu Chuyển.", Type: "Gu", Price: 300, Stock: 2},
+	{ID: "GU_STONE_APERTURE", Name: "Thạch Khiếu Cổ (Stone Aperture Gu)", Description: "Cổ trùng tiêu hao hóa thạch Không khiếu nhận 500 Nguyên Thạch nhưng giảm 15 Chân Nguyên tối đa.", Type: "Gu", Price: 150, Stock: 3},
 }
 
 // GetShopList returns the hardcoded shop inventory
@@ -98,6 +103,21 @@ func BuyShopItem(c *gin.Context) {
 		return
 	}
 
+	// Validate Inventory space
+	incomingCount := 0
+	if selectedItem.Type == "Gu" {
+		incomingCount = req.Quantity
+	} else {
+		if player.MaterialsInventory[selectedItem.ID] == 0 {
+			incomingCount = 1
+		}
+	}
+
+	if !HasInventorySpace(&player, incomingCount) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bách Bảo Nang đã đầy! Hãy trang bị thêm Thố Ti Hoa Cổ hoặc thăng cấp lên Lục Chuyển."})
+		return
+	}
+
 	// Deduct currency
 	player.PrimevalStones -= totalCost
 
@@ -116,6 +136,7 @@ func BuyShopItem(c *gin.Context) {
 				GuID:       spec.ID,
 				Hunger:     100,
 				Status:     "ACTIVE",
+				Equipped:   false,
 			}
 			player.GuInventory = append(player.GuInventory, newInstance)
 		}

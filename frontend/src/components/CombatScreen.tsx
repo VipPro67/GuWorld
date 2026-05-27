@@ -9,9 +9,43 @@ interface CombatScreenProps {
   enemy: CombatState;
   guDictionary: Record<string, GuSpec>;
   actionLoading: boolean;
-  onAttack: (equippedGuIds: string[]) => Promise<any>;
+  onAttack: (equippedGuIds: string[], isCharge?: boolean) => Promise<any>;
   onRetreat?: () => Promise<void>;
 }
+
+const getPathColor = (path: string): string => {
+  switch (path) {
+    case "Moon Path":
+      return "text-indigo-400 bg-indigo-950/30 border-indigo-900/40";
+    case "Strength Path":
+      return "text-orange-400 bg-orange-950/30 border-orange-900/40";
+    case "Earth Path":
+      return "text-amber-400 bg-amber-950/30 border-amber-900/40";
+    case "Refinement Path":
+      return "text-emerald-400 bg-emerald-950/30 border-emerald-900/40";
+    case "Rule Path":
+      return "text-sky-400 bg-sky-950/30 border-sky-900/40";
+    default:
+      return "text-zinc-400 bg-zinc-950/30 border-zinc-900/40";
+  }
+};
+
+const FormatKey = (key: string): string => {
+  switch (key) {
+    case "damage":
+    case "add_base_attack":
+      return "Dmg";
+    case "defense":
+    case "add_base_defense":
+      return "Def";
+    case "refine_mana_tier":
+      return "Refine";
+    case "cleansing_power":
+      return "Clean";
+    default:
+      return key.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+  }
+};
 
 export const CombatScreen: React.FC<CombatScreenProps> = ({
   player,
@@ -83,8 +117,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         backlashRisk = true;
       }
 
-      // Base mana cost logic: 10% player max mana
-      let cost = 0.1 * player.max_mana;
+      // Base mana cost logic: BaseManaCost percentage or fallback to 10% player max mana
+      let baseManaPct = spec.base_mana_cost > 0.0 ? spec.base_mana_cost / 100.0 : 0.10;
+      let cost = baseManaPct * player.max_mana;
       if (player.rank > spec.rank) {
         cost /= Math.pow(10, player.rank - spec.rank);
       }
@@ -100,8 +135,31 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         powerScale = effectiveRank / spec.rank;
       }
 
-      expectedDamage += (spec.base_damage || 0) * powerScale;
-      expectedDefense += (spec.base_defense || 0) * powerScale;
+      const baseDmg = spec.effects?.["damage"] || spec.effects?.["add_base_attack"] || 0;
+      const baseDef = spec.effects?.["defense"] || spec.effects?.["add_base_defense"] || 0;
+
+      // Extract player's mastery for spec.path
+      let masteryMultiplier = 1.0;
+      if (player.path_masteries && player.path_masteries[spec.path]) {
+        const mLevel = player.path_masteries[spec.path];
+        switch (mLevel) {
+          case "Ordinary":
+            masteryMultiplier = 1.0;
+            break;
+          case "Master":
+            masteryMultiplier = 1.1;
+            break;
+          case "Grandmaster":
+            masteryMultiplier = 1.25;
+            break;
+          case "Supreme Grandmaster":
+            masteryMultiplier = 1.5;
+            break;
+        }
+      }
+
+      expectedDamage += baseDmg * powerScale * masteryMultiplier;
+      expectedDefense += baseDef * powerScale * masteryMultiplier;
     });
 
     // Apply strength dao marks to damage estimate
@@ -121,7 +179,13 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     
     // Clear selection
     setSelectedGuInstanceIds([]);
-    await onAttack(selectedGuInstanceIds);
+    await onAttack(selectedGuInstanceIds, false);
+  };
+
+  const handleExecuteCharge = async () => {
+    if (actionLoading) return;
+    setSelectedGuInstanceIds([]);
+    await onAttack([], true);
   };
 
   return (
@@ -267,11 +331,18 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {eligibleGus.map((gu) => {
               const spec = guDictionary[gu.gu_id] || {
+                id: gu.gu_id,
                 name: gu.gu_id,
                 rank: 1,
+                path: "Unknown Path",
+                gu_type: "Phàm Cổ",
                 origin_region: "",
-                base_damage: 0,
-                base_defense: 0,
+                base_mana_cost: 0,
+                effects: {},
+                hunger_rate: 0,
+                food_type: "unknown",
+                max_hunger: 100,
+                description: "Cổ trùng chưa được giải nghĩa.",
               };
 
               const isSelected = selectedGuInstanceIds.includes(gu.instance_id);
@@ -281,7 +352,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                 <div
                   key={gu.instance_id}
                   onClick={() => toggleGuSelection(gu.instance_id)}
-                  className={`p-3 rounded-xl border transition-all cursor-pointer text-left relative flex flex-col justify-between h-28 ${
+                  className={`p-3 rounded-xl border transition-all cursor-pointer text-left relative flex flex-col justify-between min-h-[7.5rem] h-auto ${
                     isSelected
                       ? "bg-amber-500/10 border-amber-500 shadow-md shadow-amber-950/15"
                       : "bg-zinc-950/40 border-zinc-900 hover:border-zinc-800 hover:bg-zinc-950/60"
@@ -298,16 +369,24 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                     </div>
 
                     <div className="flex flex-wrap gap-1 items-center pt-1">
-                      {spec.base_damage > 0 && (
-                        <span className="text-[8px] bg-rose-950/20 border border-rose-500/10 px-1 rounded text-rose-400 font-mono">
-                          Dmg: {spec.base_damage}
-                        </span>
-                      )}
-                      {spec.base_defense > 0 && (
-                        <span className="text-[8px] bg-blue-950/20 border border-blue-500/10 px-1 rounded text-blue-400 font-mono">
-                          Def: {spec.base_defense}
-                        </span>
-                      )}
+                      <span className={`text-[7px] px-1 rounded font-mono border leading-normal ${getPathColor(spec.path)}`}>
+                        {spec.path}
+                      </span>
+                      {spec.effects && Object.entries(spec.effects).map(([key, val]) => {
+                        const isDmg = key === "damage" || key === "add_base_attack";
+                        const isDef = key === "defense" || key === "add_base_defense";
+                        const label = isDmg ? "Dmg" : isDef ? "Def" : FormatKey(key);
+                        const color = isDmg 
+                          ? "bg-rose-950/20 border-rose-500/20 text-rose-400" 
+                          : isDef 
+                          ? "bg-blue-950/20 border-blue-500/20 text-blue-400" 
+                          : "bg-zinc-900 border-zinc-850 text-zinc-400";
+                        return (
+                          <span key={key} className={`text-[7px] px-1 rounded font-mono border leading-normal ${color}`}>
+                            {label}: {val}
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -317,7 +396,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                     </span>
                     {isNorthernSuppressed && (
                       <span
-                        className="text-[6px] text-rose-400 bg-rose-950/20 px-1 py-0.2 rounded font-bold uppercase font-mono tracking-wide"
+                        className="text-[6px] text-rose-450 bg-rose-950/20 border border-rose-800/40 px-1 py-0.2 rounded font-bold uppercase font-mono tracking-wide"
                         title="Regional Suppression: Effective Rank reduced by 1!"
                       >
                         Áp Chế
@@ -350,10 +429,21 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
               </button>
             )}
             <button
+              onClick={handleExecuteCharge}
+              disabled={actionLoading}
+              className={`py-3 px-5 rounded-xl font-bold font-serif text-xs tracking-wider border transition-all cursor-pointer active:scale-[0.98] ${
+                enemy.charge_points > 0 
+                  ? "bg-amber-600/20 border-amber-500 text-amber-400 hover:bg-amber-600/30" 
+                  : "border-amber-900/50 hover:bg-amber-950/30 text-amber-500"
+              }`}
+            >
+              {enemy.charge_points > 0 ? "BỘC PHÁ SÁT CHIÊU (RELEASE)" : "TÍCH TỤ CÔNG LỰC (CHARGE)"}
+            </button>
+            <button
               onClick={handleExecuteKillerMove}
-              disabled={!canAttack}
+              disabled={!canAttack || enemy.charge_points > 0}
               className={`py-3 px-6 rounded-xl font-bold font-serif text-xs tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                canAttack
+                canAttack && enemy.charge_points === 0
                   ? "bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-md shadow-rose-950/30 active:scale-[0.98]"
                   : "bg-zinc-900 border border-zinc-850 text-zinc-500 cursor-not-allowed"
               }`}

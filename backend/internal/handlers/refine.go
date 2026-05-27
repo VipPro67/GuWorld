@@ -168,14 +168,6 @@ func RefineGu(c *gin.Context) {
 		}
 	}
 
-	newInventory := models.GuInventory{}
-	for _, item := range player.GuInventory {
-		if !seenInstances[item.InstanceID] {
-			newInventory = append(newInventory, item)
-		}
-	}
-	player.GuInventory = newInventory
-
 	// 8. RNG Roll
 	roll := rand.Float64()
 	success := roll <= recipe.SuccessRate
@@ -186,26 +178,75 @@ func RefineGu(c *gin.Context) {
 
 	if success {
 		statusStr = "success"
-		statusMsg = "Refining successful! You obtained a new Gu bug."
+		statusMsg = "Hợp luyện thành công! Đạo hữu luyện chế được Cổ trùng mới."
+		
+		// Check if any of the consumed ingredients was a Vital Gu
+		hasVitalIngredient := false
+		newInventory := models.GuInventory{}
+		for _, item := range player.GuInventory {
+			if seenInstances[item.InstanceID] {
+				if item.IsVital {
+					hasVitalIngredient = true
+				}
+			} else {
+				newInventory = append(newInventory, item)
+			}
+		}
+		
 		newGuInstance = models.GuInstance{
 			InstanceID: uuid.New().String(),
 			GuID:       recipe.TargetGuID,
 			Hunger:     100,
 			Status:     "ACTIVE",
+			Equipped:   false,
+			IsVital:    hasVitalIngredient,
 		}
-		player.GuInventory = append(player.GuInventory, newGuInstance)
+		
+		newInventory = append(newInventory, newGuInstance)
+		player.GuInventory = newInventory
 	} else {
 		statusStr = "failed"
-		statusMsg = "Refining failed. The Gu bugs perished in the fire."
+		statusMsg = "Hợp luyện thất bại! Các nguyên liệu thường đã hóa thành tro bụi."
+		
+		hasVitalSurvived := false
+		newInventory := models.GuInventory{}
+		for _, item := range player.GuInventory {
+			if seenInstances[item.InstanceID] {
+				if item.IsVital {
+					// Vital Gu survives in DYING state
+					item.Hunger = 1
+					item.Status = "DYING"
+					item.Equipped = false
+					newInventory = append(newInventory, item)
+					hasVitalSurvived = true
+				}
+				// Regular Gus are not appended (perished)
+			} else {
+				newInventory = append(newInventory, item)
+			}
+		}
+		player.GuInventory = newInventory
+		
+		if hasVitalSurvived {
+			statusMsg = "Hợp luyện thất bại! Các nguyên liệu thường đã hóa thành tro bụi, riêng Cổ Bản Mệnh của đạo hữu vẫn sống sót nhưng rơi vào trạng thái Hấp Hối!"
+		}
+	}
+
+	// Recalculate equipped_gus list
+	player.EquippedGus = []string{}
+	for _, gu := range player.GuInventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
+		}
 	}
 
 	// 9. Update player status in database
 	updateQuery := `
 		UPDATE players
-		SET primeval_stones = $1, materials_inventory = $2, gu_inventory = $3
-		WHERE id = $4
+		SET primeval_stones = $1, materials_inventory = $2, gu_inventory = $3, equipped_gus = $4
+		WHERE id = $5
 	`
-	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.MaterialsInventory, player.GuInventory, player.ID)
+	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.MaterialsInventory, player.GuInventory, player.EquippedGus, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save refining results"})
 		return

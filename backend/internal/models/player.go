@@ -15,6 +15,8 @@ type GuInstance struct {
 	GuID       string `json:"gu_id"`
 	Hunger     int    `json:"hunger"`
 	Status     string `json:"status"` // "ACTIVE", "SLEEPING", "DEAD"
+	Equipped   bool   `json:"equipped"`
+	IsVital    bool   `json:"is_vital"`
 }
 
 // GuInventory is a collection of GuInstances owned by a player.
@@ -29,13 +31,21 @@ type DaoMarksMap map[string]int
 // PathMasteriesMap maps cultivation path names to their mastery levels.
 type PathMasteriesMap map[string]string
 
+// BodyModsList represents passive body modifications
+type BodyModsList []string
+
+// ExploredCellsList represents coordinates visited by the player
+type ExploredCellsList []string
+
 // CombatState represents the PVE combat status with a wild beast.
 type CombatState struct {
-	EnemyName    string  `json:"enemy_name"`
-	EnemyHP      float64 `json:"enemy_hp"`
-	EnemyMaxHP   float64 `json:"enemy_max_hp"`
-	EnemyDamage  float64 `json:"enemy_damage"`
-	EnemyDefense float64 `json:"enemy_defense"`
+	EnemyName      string  `json:"enemy_name"`
+	EnemyHP        float64 `json:"enemy_hp"`
+	EnemyMaxHP     float64 `json:"enemy_max_hp"`
+	EnemyDamage    float64 `json:"enemy_damage"`
+	EnemyDefense   float64 `json:"enemy_defense"`
+	ChargePoints   int     `json:"charge_points"`
+	TargetPlayerID string  `json:"target_player_id,omitempty"`
 }
 
 // Player represents a cultivator in the Gu World.
@@ -53,12 +63,64 @@ type Player struct {
 	GuInventory        GuInventory        `json:"gu_inventory"`
 	MaterialsInventory MaterialsInventory `json:"materials_inventory"`
 	HP                 float64            `json:"hp"`
+	BaseHP             float64            `json:"base_hp"`
+	BodyMods           BodyModsList       `json:"body_mods"`
+	X                  int                `json:"x"`
+	Y                  int                `json:"y"`
+	ExploredCells      ExploredCellsList  `json:"explored_cells"`
+	EquippedGus        EquippedGusList    `json:"equipped_gus"`
+	ClearedCells       ClearedCellsMap    `json:"cleared_cells"`
 	CurrentRegion      string             `json:"current_region"`
 	DaoMarks           DaoMarksMap        `json:"dao_marks"`
 	PathMasteries      PathMasteriesMap   `json:"path_masteries"`
 	ActiveCombat       *CombatState       `json:"active_combat"`
 	LastManaUpdate     time.Time          `json:"last_mana_update"` // Time of last mana recalculation
 	CreatedAt          time.Time          `json:"created_at"`
+}
+
+type EquippedGusList []string
+type ClearedCellsMap map[string]string
+
+// Scan implements the sql.Scanner interface for EquippedGusList
+func (e *EquippedGusList) Scan(value interface{}) error {
+	if value == nil {
+		*e = EquippedGusList{}
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+	}
+	return json.Unmarshal(bytes, e)
+}
+
+// Value implements the driver.Valuer interface for EquippedGusList
+func (e EquippedGusList) Value() (driver.Value, error) {
+	if e == nil {
+		return "[]", nil
+	}
+	return json.Marshal(e)
+}
+
+// Scan implements the sql.Scanner interface for ClearedCellsMap
+func (c *ClearedCellsMap) Scan(value interface{}) error {
+	if value == nil {
+		*c = ClearedCellsMap{}
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+	}
+	return json.Unmarshal(bytes, c)
+}
+
+// Value implements the driver.Valuer interface for ClearedCellsMap
+func (c ClearedCellsMap) Value() (driver.Value, error) {
+	if c == nil {
+		return "{}", nil
+	}
+	return json.Marshal(c)
 }
 
 // Scan implements the sql.Scanner interface for GuInventory
@@ -163,5 +225,47 @@ func (p PathMasteriesMap) Value() (driver.Value, error) {
 		return "{}", nil
 	}
 	return json.Marshal(p)
+}
+
+// Scan implements the sql.Scanner interface for BodyModsList
+func (b *BodyModsList) Scan(value interface{}) error {
+	if value == nil {
+		*b = BodyModsList{}
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+	}
+	return json.Unmarshal(bytes, b)
+}
+
+// Value implements the driver.Valuer interface for BodyModsList
+func (b BodyModsList) Value() (driver.Value, error) {
+	if b == nil {
+		return "[]", nil
+	}
+	return json.Marshal(b)
+}
+
+// Scan implements the sql.Scanner interface for ExploredCellsList
+func (e *ExploredCellsList) Scan(value interface{}) error {
+	if value == nil {
+		*e = ExploredCellsList{}
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+	}
+	return json.Unmarshal(bytes, e)
+}
+
+// Value implements the driver.Valuer interface for ExploredCellsList
+func (e ExploredCellsList) Value() (driver.Value, error) {
+	if e == nil {
+		return "[\"50,50\"]", nil
+	}
+	return json.Marshal(e)
 }
 

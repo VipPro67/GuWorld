@@ -103,6 +103,11 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   // Check if all slots are filled
   const allSlotsFilled = requiredSlots.every((slot) => !!slottedGus[slot.index]);
 
+  const hasSlottedVital = Object.values(slottedGus).some(instanceId => {
+    const gu = player.gu_inventory.find(g => g.instance_id === instanceId);
+    return gu ? gu.is_vital : false;
+  });
+
   // Check if player has enough materials
   const hasRequiredMaterials = () => {
     if (!selectedRecipe) return false;
@@ -235,10 +240,18 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
           ) : (
             availableInventoryGus.map((gu) => {
               const spec = guDictionary[gu.gu_id] || {
+                id: gu.gu_id,
                 name: gu.gu_id,
-                type: "Cổ Trùng",
                 rank: 1,
-                description: "",
+                path: "Unknown Path",
+                gu_type: "Phàm Cổ",
+                origin_region: "",
+                base_mana_cost: 0,
+                effects: {},
+                hunger_rate: 0,
+                food_type: "unknown",
+                max_hunger: 100,
+                description: "Cổ trùng chưa được giải nghĩa.",
               };
               const isSleeping = gu.status === "SLEEPING";
 
@@ -260,7 +273,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                       </span>
                     </div>
                     <span className="text-[9px] text-zinc-500 font-mono block">
-                      {spec.type}
+                      {spec.gu_type}
                     </span>
                     <p className="text-[10px] text-zinc-400 line-clamp-1 leading-normal">
                       {spec.description}
@@ -404,10 +417,16 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                             </div>
                           </div>
                         )}
-                      </div>
+                        </div>
                     );
                   })}
                 </div>
+                {hasSlottedVital && (
+                  <div className="text-center text-[10px] text-amber-400 font-mono bg-amber-950/20 border border-amber-900/30 px-3 py-1.5 rounded-lg max-w-md mx-auto animate-pulse flex items-center gap-1.5 justify-center">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Đặc quyền Bản Mệnh: Cổ Bản Mệnh sẽ không bị tiêu biến nếu hợp luyện thất bại!</span>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="text-xs text-zinc-500 italic">Đang phân tích dược phẩm và công thức hợp luyện...</div>
@@ -532,7 +551,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                       </span>
                     </div>
                     <div className="text-[9px] text-left text-zinc-500 font-mono">
-                      Loại: {guDictionary[refineResult.new_gu.gu_id]?.type || "Thượng Cổ"}
+                      Loại: {guDictionary[refineResult.new_gu.gu_id]?.gu_type || "Thượng Cổ"}
                     </div>
                     <p className="text-[11px] text-left text-zinc-400 leading-relaxed italic border-t border-zinc-900 pt-2">
                       {guDictionary[refineResult.new_gu.gu_id]?.description || ""}

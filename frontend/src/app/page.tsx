@@ -5,7 +5,6 @@ import { useGameStore } from "@/store/useGameStore";
 import { Registration } from "@/components/Registration";
 import { Aperture } from "@/components/Aperture";
 import { PlayerStats } from "@/components/PlayerStats";
-import { ExploreCard } from "@/components/ExploreCard";
 import { LogConsole } from "@/components/LogConsole";
 import { GuInventory } from "@/components/GuInventory";
 import { RefiningFurnace } from "@/components/RefiningFurnace";
@@ -37,11 +36,14 @@ export default function Home() {
     fetchRecipes,
     refineGu,
     exploreNode,
+    retreat,
+    buyShopItem,
+    equipGu,
+    updateGuStatus,
+    useItem,
     executeCombatTurn,
     currentView,
     setView,
-    retreat,
-    buyShopItem,
   } = useGameStore();
 
   const [checkingSession, setCheckingSession] = useState(true);
@@ -203,21 +205,17 @@ export default function Home() {
                 />
               </div>
               <div className="w-full max-w-sm flex-1">
-                <PlayerStats player={player} onLogout={handleLogout} />
+                <PlayerStats
+                  player={player}
+                  onLogout={handleLogout}
+                  guDictionary={guDictionary}
+                  onEquipToggle={equipGu}
+                />
               </div>
             </div>
 
             {/* Right Column: Combat/Explore Activity & Log Monitor */}
             <div className="lg:col-span-7 flex flex-col gap-8 items-center lg:items-stretch w-full">
-              <div className="w-full max-w-lg">
-                <ExploreCard
-                  currentMana={player.current_mana}
-                  maxMana={player.max_mana}
-                  onExplore={explore}
-                  isLoading={actionLoading}
-                  error={error}
-                />
-              </div>
               <div className="w-full max-w-lg">
                 <LogConsole logs={logs} />
               </div>
@@ -228,6 +226,9 @@ export default function Home() {
                   actionLoading={actionLoading}
                   guDictionary={guDictionary}
                   itemDictionary={itemDictionary}
+                  onEquipToggle={equipGu}
+                  onUseItem={useItem}
+                  onUpdateStatus={updateGuStatus}
                 />
               </div>
             </div>

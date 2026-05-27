@@ -68,7 +68,9 @@ func SetupRouter() *gin.Engine {
 		player.Use(middleware.AuthRequired())
 		{
 			player.GET("/status/:id", handlers.GetPlayerStatus)
+			player.GET("/stats", handlers.GetPlayerStatsHandler)
 			player.POST("/explore/:id", handlers.Explore)
+			player.POST("/use-item", handlers.UseItem)
 		}
 
 		// Protected Inventory Endpoints
@@ -76,6 +78,10 @@ func SetupRouter() *gin.Engine {
 		inventory.Use(middleware.AuthRequired())
 		{
 			inventory.POST("/feed", handlers.FeedGu)
+			inventory.POST("/equip", handlers.EquipGu)
+			inventory.POST("/status", handlers.UpdateGuStatus)
+			inventory.POST("/set-vital", handlers.SetVitalGu)
+			inventory.POST("/use-gu", handlers.UseConsumableGu)
 		}
 
 		// Protected Refining Endpoints
@@ -94,6 +100,8 @@ func SetupRouter() *gin.Engine {
 
 		api.POST("/explore", middleware.AuthRequired(), handlers.ExploreNode)
 		api.POST("/explore/retreat/:id", middleware.AuthRequired(), handlers.Retreat)
+		api.GET("/explore/grid", middleware.AuthRequired(), handlers.GetGrid)
+		api.POST("/explore/move", middleware.AuthRequired(), handlers.MovePlayer)
 
 		// Shop Endpoints
 		api.GET("/shop/list", handlers.GetShopList)

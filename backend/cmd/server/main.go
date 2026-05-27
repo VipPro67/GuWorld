@@ -39,8 +39,8 @@ func main() {
 		log.Fatalf("Failed to load Gu registry cache: %v", err)
 	}
 
-	// 2.5. Start Hunger Decay Background Worker (1-minute intervals for testing)
-	worker.StartHungerWorker(db.DB, 1*time.Minute)
+	// 2.5. Start Hunger Decay Background Worker (15-minute intervals for slower, balanced survival gameplay)
+	worker.StartHungerWorker(db.DB, 15*time.Minute)
 
 	// 3. Setup router & run
 	r := server.SetupRouter()
