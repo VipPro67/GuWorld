@@ -12,6 +12,7 @@ import { ExplorationMap } from "@/components/ExplorationMap";
 import { CombatScreen } from "@/components/CombatScreen";
 import { CaravanShop } from "@/components/CaravanShop";
 import { Sparkles, HelpCircle } from "lucide-react";
+import { BaoHoangMarket } from "@/components/BaoHoangMarket";
 
 export default function Home() {
   const {
@@ -49,6 +50,11 @@ export default function Home() {
     executeCombatTurn,
     currentView,
     setView,
+    marketplaceListings,
+    fetchMarketplaceListings,
+    createMarketplaceListing,
+    placeMarketplaceBid,
+    cancelMarketplaceListing,
   } = useGameStore();
 
   const [checkingSession, setCheckingSession] = useState(true);
@@ -165,6 +171,19 @@ export default function Home() {
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-600 shadow-[0_0_8px_rgba(217,119,6,0.5)]" />
             )}
           </button>
+          <button
+            onClick={() => setView("auction")}
+            className={`pb-3 px-4 font-serif text-sm font-semibold tracking-wider transition-all relative cursor-pointer ${
+              currentView === "auction"
+                ? "text-violet-400 font-bold"
+                : "text-zinc-500 hover:text-zinc-350"
+            }`}
+          >
+            BẢO HOÀNG THIÊN
+            {currentView === "auction" && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-violet-500 shadow-[0_0_8px_rgba(139,92,246,0.5)]" />
+            )}
+          </button>
         </div>
       )}
 
@@ -255,7 +274,7 @@ export default function Home() {
               onRefine={refineGu}
             />
           </div>
-        ) : (
+        ) : currentView === "shop" ? (
           <div className="w-full">
             <CaravanShop
               player={player}
@@ -264,6 +283,18 @@ export default function Home() {
               onSell={sellShopItem}
             />
           </div>
+        ) : (
+          <BaoHoangMarket
+            player={player}
+            guInventory={player.gu_inventory}
+            materials={player.materials_inventory}
+            actionLoading={actionLoading}
+            listings={marketplaceListings as any[]}
+            onRefresh={fetchMarketplaceListings}
+            onCreate={createMarketplaceListing}
+            onBid={placeMarketplaceBid}
+            onCancel={cancelMarketplaceListing}
+          />
         )}
       </main>
 
