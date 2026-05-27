@@ -133,6 +133,11 @@ interface GameState {
   fetchGrid: () => Promise<{ x: number; y: number; vision_radius: number; cells: any[]; explored_cells: string[]; stats: any } | null>;
   dropGu: (instanceId: string) => Promise<boolean>;
   sellShopItem: (itemId: string, quantity: number, itemType: "Gu" | "Material") => Promise<boolean>;
+  marketplaceListings: any[];
+  fetchMarketplaceListings: () => Promise<void>;
+  createMarketplaceListing: (payload: { itemType: "Gu" | "Material"; guInstanceId?: string; itemId?: string; quantity: number; price: number; durationHours: number; currency: "primeval" | "immortal" }) => Promise<boolean>;
+  placeMarketplaceBid: (listingId: string, amount: number) => Promise<boolean>;
+  cancelMarketplaceListing: (listingId: string) => Promise<boolean>;
 }
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
@@ -150,6 +155,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   recipes: [],
   recipesLoaded: false,
   currentView: "dashboard",
+  marketplaceListings: [],
   setView: (view) => set({ currentView: view }),
 
   login: async (username, password) => {
@@ -521,6 +527,71 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
+
+
+  fetchMarketplaceListings: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/shop/bao-hoang/listings`, { headers: { "Authorization": `Bearer ${token}` } });
+      if (response.status === 401 || response.status === 403) { logout(); return; }
+      const data = await response.json();
+      set({ marketplaceListings: Array.isArray(data) ? data : [] });
+    } catch (err) {
+      console.error("market listings failed", err);
+    }
+  },
+
+  createMarketplaceListing: async (payload) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/shop/bao-hoang/listings`, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify({ item_type: payload.itemType, gu_instance_id: payload.guInstanceId || "", item_id: payload.itemId || "", quantity: payload.quantity, price: payload.price, duration_hours: payload.durationHours, currency: payload.currency }) });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Đăng bán thất bại");
+      get().addLog(data.message || "Đăng bán thành công");
+      await get().fetchPlayerStatus(localStorage.getItem("gu_player_id") || "");
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Đăng bán thất bại: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  placeMarketplaceBid: async (listingId, amount) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/shop/bao-hoang/bid`, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify({ listing_id: listingId, amount }) });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Đặt giá thất bại");
+      get().addLog(data.message || "Đặt giá thành công");
+      await get().fetchPlayerStatus(localStorage.getItem("gu_player_id") || "");
+      await get().fetchMarketplaceListings();
+      return true;
+    } catch (err: any) { set({ error: err.message }); get().addLog(`Đặt giá thất bại: ${err.message}`); return false; } finally { set({ actionLoading: false }); }
+  },
+
+  cancelMarketplaceListing: async (listingId) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/shop/bao-hoang/cancel`, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify({ listing_id: listingId }) });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Hủy listing thất bại");
+      get().addLog(data.message || "Đã hủy");
+      await get().fetchPlayerStatus(localStorage.getItem("gu_player_id") || "");
+      await get().fetchMarketplaceListings();
+      return true;
+    } catch (err: any) { set({ error: err.message }); get().addLog(`Hủy listing thất bại: ${err.message}`); return false; } finally { set({ actionLoading: false }); }
+  },
   buyShopItem: async (itemId, quantity) => {
     const { player, token, actionLoading, logout } = get();
     if (!player || !token || actionLoading) return false;
