@@ -26,6 +26,7 @@ type Cell struct {
 
 // GenerateCell procedurally generates the cell content based on region, x, y coordinates
 func GenerateCell(x, y int, region string) Cell {
+	respawnWindow := time.Now().Unix() / 180
 	if x == 50 && y == 50 {
 		return Cell{X: x, Y: y, Type: "Empty", Content: "Thanh Bản Thôn (Safe Village)"}
 	}
@@ -38,6 +39,7 @@ func GenerateCell(x, y int, region string) Cell {
 	h.Write([]byte(region))
 	binary.Write(h, binary.BigEndian, int64(x))
 	binary.Write(h, binary.BigEndian, int64(y))
+	binary.Write(h, binary.BigEndian, respawnWindow)
 	seed := int64(binary.BigEndian.Uint64(h.Sum(nil)[:8]))
 
 	rng := rand.New(rand.NewSource(seed))
@@ -163,6 +165,23 @@ func addExploredCells(player *models.Player, radius int) {
 	player.ExploredCells = newSlice
 }
 
+
+func isCellClearedRecently(player *models.Player, x, y int, cooldown time.Duration) bool {
+	if player.ClearedCells == nil {
+		return false
+	}
+	coordKey := fmt.Sprintf("%d,%d", x, y)
+	clearedTimeStr, ok := player.ClearedCells[coordKey]
+	if !ok {
+		return false
+	}
+	t, err := time.Parse(time.RFC3339, clearedTimeStr)
+	if err != nil {
+		return false
+	}
+	return time.Since(t) < cooldown
+}
+
 // GetGrid retrieves the viewport viewport within vision range
 func GetGrid(c *gin.Context) {
 	authID, exists := middleware.GetPlayerID(c)
@@ -196,7 +215,11 @@ func GetGrid(c *gin.Context) {
 			cx := player.X + dx
 			cy := player.Y + dy
 			if cx >= 0 && cx < 100 && cy >= 0 && cy < 100 {
-				cells = append(cells, GenerateCell(cx, cy, player.CurrentRegion))
+				cell := GenerateCell(cx, cy, player.CurrentRegion)
+				if isCellClearedRecently(&player, cx, cy, 2*time.Minute) && (cell.Type == "Resource" || cell.Type == "WildGu") {
+					cell = Cell{X: cx, Y: cy, Type: "Empty", Content: ""}
+				}
+				cells = append(cells, cell)
 			}
 		}
 	}
@@ -276,18 +299,7 @@ func MovePlayer(c *gin.Context) {
 		return
 	}
 
-	// Determine mana cost
-	manaCost := 2.0
-	if dist > 1 {
-		manaCost = 3.0
-	}
-
-	if player.CurrentMana < manaCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Chân Nguyên để di chuyển."})
-		return
-	}
-
-	player.CurrentMana -= manaCost
+	// Movement no longer consumes mana
 	player.X = req.X
 	player.Y = req.Y
 
@@ -300,16 +312,7 @@ func MovePlayer(c *gin.Context) {
 
 	// Check if cell is cleared recently (2 minutes cooldown)
 	coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
-	isCleared := false
-	if player.ClearedCells != nil {
-		if clearedTimeStr, ok := player.ClearedCells[coordKey]; ok {
-			if t, err := time.Parse(time.RFC3339, clearedTimeStr); err == nil {
-				if time.Since(t) < 2*time.Minute {
-					isCleared = true
-				}
-			}
-		}
-	}
+	isCleared := isCellClearedRecently(&player, player.X, player.Y, 2*time.Minute)
 
 	// Trigger cell action
 	cell := GenerateCell(player.X, player.Y, player.CurrentRegion)
@@ -427,6 +430,22 @@ func MovePlayer(c *gin.Context) {
 					TargetPlayerID: targetPlayer.ID.String(),
 				}
 				logMsg = fmt.Sprintf("Đạo hữu bắt gặp một Cổ Sư khác đang du ngoạn: %s! Lập tức giao đấu!", targetPlayer.Username)
+			}
+		}
+	}
+
+	if !combatTriggered {
+		for ax := -1; ax <= 1 && !combatTriggered; ax++ {
+			for ay := -1; ay <= 1 && !combatTriggered; ay++ {
+				if ax == 0 && ay == 0 {
+					continue
+				}
+				adj := GenerateCell(player.X+ax, player.Y+ay, player.CurrentRegion)
+				if adj.Type == "Monster" && rand.Intn(100) < 25 {
+					combatTriggered = true
+					player.ActiveCombat = &models.CombatState{EnemyName: adj.Content, EnemyHP: 70, EnemyMaxHP: 70, EnemyDamage: 11, EnemyDefense: 4}
+					logMsg = fmt.Sprintf("Phục kích! %s chủ động lao ra tấn công đạo hữu tại (%d, %d)!", adj.Content, player.X, player.Y)
+				}
 			}
 		}
 	}

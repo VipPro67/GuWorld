@@ -82,6 +82,7 @@ func SetupRouter() *gin.Engine {
 			inventory.POST("/status", handlers.UpdateGuStatus)
 			inventory.POST("/set-vital", handlers.SetVitalGu)
 			inventory.POST("/use-gu", handlers.UseConsumableGu)
+			inventory.POST("/drop", handlers.DropGu)
 		}
 
 		// Protected Refining Endpoints
@@ -109,6 +110,10 @@ func SetupRouter() *gin.Engine {
 		shop.Use(middleware.AuthRequired())
 		{
 			shop.POST("/buy", handlers.BuyShopItem)
+			shop.POST("/sell", handlers.SellShopItem)
+			shop.GET("/bao-hoang/listings", handlers.ListListings)
+			shop.POST("/bao-hoang/listings", handlers.CreateListing)
+			shop.POST("/bao-hoang/bid", handlers.PlaceBid)
 		}
 	}
 

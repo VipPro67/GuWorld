@@ -74,6 +74,7 @@ func InitSchema() error {
 		effects JSONB NOT NULL DEFAULT '{}',
 		hunger_rate INTEGER NOT NULL,
 		food_type VARCHAR(50) REFERENCES item_dictionary(id) ON DELETE SET NULL,
+		food_types JSONB NOT NULL DEFAULT '[]',
 		max_hunger INTEGER DEFAULT 100,
 		description TEXT
 	);`)
@@ -108,6 +109,7 @@ func InitSchema() error {
 		current_mana DOUBLE PRECISION NOT NULL,
 		max_mana DOUBLE PRECISION NOT NULL,
 		primeval_stones INTEGER DEFAULT 0,
+		immortal_stones DOUBLE PRECISION DEFAULT 0,
 		gu_inventory JSONB NOT NULL DEFAULT '[]',
 		materials_inventory JSONB NOT NULL DEFAULT '{}',
 		hp DOUBLE PRECISION NOT NULL DEFAULT 100,
@@ -205,6 +207,11 @@ func InitSchema() error {
 		return fmt.Errorf("failed to add cleared_cells: %w", err)
 	}
 
+	_, err = DB.Exec(`ALTER TABLE players ADD COLUMN IF NOT EXISTS immortal_stones DOUBLE PRECISION NOT NULL DEFAULT 0;`)
+	if err != nil {
+		return fmt.Errorf("failed to add cleared_cells: %w", err)
+	}
+
 	_, err = DB.Exec(`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS origin_region VARCHAR(50) NOT NULL DEFAULT 'Southern_Border';`)
 	if err != nil {
 		return fmt.Errorf("failed to add origin_region column: %w", err)
@@ -221,6 +228,11 @@ func InitSchema() error {
 	}
 
 	_, err = DB.Exec(`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{}';`)
+	if err != nil {
+		return fmt.Errorf("failed to add effects column: %w", err)
+	}
+
+	_, err = DB.Exec(`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS food_types JSONB NOT NULL DEFAULT '[]';`)
 	if err != nil {
 		return fmt.Errorf("failed to add effects column: %w", err)
 	}
@@ -310,13 +322,13 @@ func SeedDictionaries() error {
 			foodType = gu.FoodType
 		}
 		_, err := DB.Exec(`
-			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, origin_region, base_mana_cost, effects, hunger_rate, food_type, max_hunger, description)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12)
+			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, origin_region, base_mana_cost, effects, hunger_rate, food_type, food_types, max_hunger, description)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11::jsonb, $12, $13)
 			ON CONFLICT (id) DO UPDATE 
 			SET name = EXCLUDED.name, rank = EXCLUDED.rank, path = EXCLUDED.path, gu_type = EXCLUDED.gu_type, 
 			    origin_region = EXCLUDED.origin_region, base_mana_cost = EXCLUDED.base_mana_cost, effects = EXCLUDED.effects,
-			    hunger_rate = EXCLUDED.hunger_rate, food_type = EXCLUDED.food_type, max_hunger = EXCLUDED.max_hunger, description = EXCLUDED.description
-		`, gu.ID, gu.Name, gu.Rank, gu.Path, gu.Type, gu.OriginRegion, gu.BaseManaCost, gu.Effects, gu.HungerRate, foodType, gu.MaxHunger, gu.Desc)
+			    hunger_rate = EXCLUDED.hunger_rate, food_type = EXCLUDED.food_type, food_types = EXCLUDED.food_types, max_hunger = EXCLUDED.max_hunger, description = EXCLUDED.description
+		`, gu.ID, gu.Name, gu.Rank, gu.Path, gu.Type, gu.OriginRegion, gu.BaseManaCost, gu.Effects, gu.HungerRate, foodType, fmt.Sprintf("[\"%s\"]", gu.FoodType), gu.MaxHunger, gu.Desc)
 		if err != nil {
 			return fmt.Errorf("failed to seed gu %s: %w", gu.ID, err)
 		}

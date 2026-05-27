@@ -170,3 +170,111 @@ func BuyShopItem(c *gin.Context) {
 		"message": "Giao dịch thành công!",
 	})
 }
+
+type SellShopRequest struct {
+	PlayerID string `json:"player_id" binding:"required"`
+	ItemID   string `json:"item_id" binding:"required"`
+	Quantity int    `json:"quantity" binding:"required,min=1"`
+	ItemType string `json:"item_type" binding:"required"`
+}
+
+func SellShopItem(c *gin.Context) {
+	var req SellShopRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	playerUUID, err := uuid.Parse(req.PlayerID)
+	if err != nil || playerUUID != authID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: Aperture mismatch"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock player Aperture"})
+		return
+	}
+
+	totalGain := 0
+	if req.ItemType == "Material" {
+		qty := player.MaterialsInventory[req.ItemID]
+		if qty < req.Quantity {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ vật phẩm để bán"})
+			return
+		}
+		player.MaterialsInventory[req.ItemID] -= req.Quantity
+		if player.MaterialsInventory[req.ItemID] <= 0 {
+			delete(player.MaterialsInventory, req.ItemID)
+		}
+		price := 2
+		for _, it := range CaravanShopCatalog {
+			if it.ID == req.ItemID {
+				price = it.Price / 2
+				if price < 1 {
+					price = 1
+				}
+				break
+			}
+		}
+		totalGain = price * req.Quantity
+	} else if req.ItemType == "Gu" {
+		removed := 0
+		newInv := models.GuInventory{}
+		for _, gu := range player.GuInventory {
+			if gu.GuID == req.ItemID && !gu.IsVital && removed < req.Quantity {
+				removed++
+				continue
+			}
+			newInv = append(newInv, gu)
+		}
+		if removed < req.Quantity {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Cổ trùng để bán hoặc Cổ là Bản Mệnh"})
+			return
+		}
+		player.GuInventory = newInv
+		price := 10
+		for _, it := range CaravanShopCatalog {
+			if it.ID == req.ItemID {
+				price = it.Price / 2
+				if price < 1 {
+					price = 1
+				}
+				break
+			}
+		}
+		totalGain = price * req.Quantity
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "item_type phải là Gu hoặc Material"})
+		return
+	}
+
+	player.PrimevalStones += totalGain
+	player.EquippedGus = []string{}
+	for _, gu := range player.GuInventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
+		}
+	}
+	_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, gu_inventory=$2, materials_inventory=$3, equipped_gus=$4 WHERE id=$5`, player.PrimevalStones, player.GuInventory, player.MaterialsInventory, player.EquippedGus, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save sell transaction"})
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"player": player, "message": "Bán thành công, nhận Nguyên Thạch!"})
+}
