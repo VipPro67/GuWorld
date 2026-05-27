@@ -26,6 +26,8 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   const [isRefining, setIsRefining] = useState(false);
   const [furnaceStage, setFurnaceStage] = useState("Đang khởi động lò luyện...");
   const [refineResult, setRefineResult] = useState<{ status: "success" | "failed"; new_gu?: GuInstance; message: string } | null>(null);
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [customRecipes, setCustomRecipes] = useState<RefiningRecipe[]>([]);
 
   // Auto-select first recipe if none selected
   useEffect(() => {
@@ -39,7 +41,12 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     setSlottedGus({});
   }, [selectedRecipeId]);
 
-  const selectedRecipe = recipes.find((r) => r.id === selectedRecipeId);
+  const allRecipes = [...recipes, ...customRecipes];
+  const filteredRecipes = allRecipes.filter((r) => {
+    const targetName = guDictionary[r.target_gu_id]?.name || r.target_gu_id;
+    return targetName.toLowerCase().includes(searchKeyword.toLowerCase()) || r.id.toLowerCase().includes(searchKeyword.toLowerCase());
+  });
+  const selectedRecipe = allRecipes.find((r) => r.id === selectedRecipeId);
 
   // Flatten the required Gus into an ordered list of slots
   const getRequiredSlots = () => {
@@ -156,6 +163,17 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
         const response = await onRefine(selectedRecipe.id, selectedIds);
         if (response) {
           setRefineResult(response);
+          if (response.status === "success" && response.new_gu) {
+            const discovered: RefiningRecipe = {
+              id: `user_${Date.now()}`,
+              target_gu_id: response.new_gu.gu_id,
+              required_gus: requiredSlots.reduce((acc, slot) => { acc[slot.guId] = (acc[slot.guId] || 0) + 1; return acc; }, {} as Record<string, number>),
+              required_materials: selectedRecipe.required_materials,
+              success_rate: selectedRecipe.success_rate,
+              primeval_stones_cost: selectedRecipe.primeval_stones_cost,
+            };
+            setCustomRecipes((prev) => [discovered, ...prev]);
+          }
         } else {
           setRefineResult({
             status: "failed",
@@ -334,7 +352,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
 
             {/* Recipes Tabs */}
             <div className="flex gap-2">
-              {recipes.map((recipe) => {
+              {filteredRecipes.map((recipe) => {
                 const targetGu = guDictionary[recipe.target_gu_id] || { name: recipe.target_gu_id };
                 const isActive = recipe.id === selectedRecipeId;
                 return (
