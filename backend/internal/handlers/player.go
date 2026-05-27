@@ -483,14 +483,24 @@ func FeedGu(c *gin.Context) {
 	}
 
 	// 4. Check food availability
-	foodCount, hasFood := player.MaterialsInventory[specs.FoodType]
-	if !hasFood || foodCount <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("You need at least 1 %s to feed %s.", specs.FoodType, specs.Name)})
+	foodOptions := specs.FoodTypes
+	if len(foodOptions) == 0 && specs.FoodType != "" {
+		foodOptions = []string{specs.FoodType}
+	}
+	chosenFood := ""
+	for _, food := range foodOptions {
+		if player.MaterialsInventory[food] > 0 {
+			chosenFood = food
+			break
+		}
+	}
+	if chosenFood == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không có thức ăn phù hợp cho %s. Cần một trong: %v", specs.Name, foodOptions)})
 		return
 	}
 
 	// 5. Consume 1 food and restore hunger
-	player.MaterialsInventory[specs.FoodType]--
+	player.MaterialsInventory[chosenFood]--
 	targetGu.Hunger = specs.MaxHunger
 	targetGu.Status = "ACTIVE" // Wakes up from sleep (hibernation)
 
@@ -513,7 +523,7 @@ func FeedGu(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"player":  player,
-		"message": fmt.Sprintf("Fed %s successfully! Consumed 1 %s.", specs.Name, specs.FoodType),
+		"message": fmt.Sprintf("Fed %s successfully! Consumed 1 %s.", specs.Name, chosenFood),
 	})
 }
 
