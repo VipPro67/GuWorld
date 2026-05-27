@@ -39,9 +39,13 @@ export default function Home() {
     exploreNode,
     retreat,
     buyShopItem,
+    sellShopItem,
     equipGu,
     updateGuStatus,
     useItem,
+    setVitalGu,
+    useGu,
+    dropGu,
     executeCombatTurn,
     currentView,
     setView,
@@ -224,6 +228,9 @@ export default function Home() {
                   onEquipToggle={equipGu}
                   onUseItem={useItem}
                   onUpdateStatus={updateGuStatus}
+                  onSetVital={setVitalGu}
+                  onUseGu={useGu}
+                  onDropGu={dropGu}
                 />
               </div>
             </div>
@@ -254,6 +261,7 @@ export default function Home() {
               player={player}
               actionLoading={actionLoading}
               onBuy={buyShopItem}
+              onSell={sellShopItem}
             />
           </div>
         )}

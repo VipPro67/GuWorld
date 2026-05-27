@@ -17,12 +17,14 @@ interface CaravanShopProps {
   player: Player;
   actionLoading: boolean;
   onBuy: (itemId: string, quantity: number) => Promise<boolean>;
+  onSell: (itemId: string, quantity: number, itemType: "Gu" | "Material") => Promise<boolean>;
 }
 
 export const CaravanShop: React.FC<CaravanShopProps> = ({
   player,
   actionLoading,
   onBuy,
+  onSell,
 }) => {
   const [shopItems, setShopItems] = useState<ShopItem[]>([]);
   const [fetchingList, setFetchingList] = useState(false);
@@ -51,6 +53,14 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
     };
     fetchShopList();
   }, [BACKEND_URL]);
+
+
+  const sellableMaterials = Object.entries(player.materials_inventory || {}).filter(([,qty]) => qty > 0);
+  const sellableGuCounts = (player.gu_inventory || []).reduce((acc, gu) => {
+    if (gu.is_vital) return acc;
+    acc[gu.gu_id] = (acc[gu.gu_id] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
 
   const handleOpenBuyModal = (item: ShopItem) => {
     setSelectedItem(item);
@@ -161,6 +171,25 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
           })}
         </div>
       )}
+
+
+      <div className="border-t border-zinc-900 pt-4 space-y-3">
+        <h4 className="text-sm font-bold text-zinc-200 font-serif">Quầy Thu Mua</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+          {sellableMaterials.map(([id, qty]) => (
+            <button key={`m-${id}`} onClick={() => onSell(id, 1, "Material")} disabled={actionLoading}
+              className="text-left px-3 py-2 rounded-lg border border-zinc-800 hover:border-amber-500/40">
+              Bán 1x {id} (còn {qty})
+            </button>
+          ))}
+          {Object.entries(sellableGuCounts).map(([id, qty]) => (
+            <button key={`g-${id}`} onClick={() => onSell(id, 1, "Gu")} disabled={actionLoading}
+              className="text-left px-3 py-2 rounded-lg border border-zinc-800 hover:border-amber-500/40">
+              Bán 1x {id} (còn {qty})
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Buy Quantity Modal */}
       {selectedItem && (

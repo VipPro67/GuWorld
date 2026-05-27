@@ -10,11 +10,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // CreatePlayerRequest represents the incoming registration payload
@@ -347,7 +347,7 @@ func Explore(c *gin.Context) {
 	var capturedGuName string
 	if rollGu < 10 { // 10% chance overall
 		subRoll := rand.Intn(10) // 0 to 9
-		if subRoll < 5 { // 5% absolute chance
+		if subRoll < 5 {         // 5% absolute chance
 			capturedGuID = "GU_JADE_SKIN"
 			capturedGuName = "Ngọc Bì Cổ (Jade Skin Gu)"
 		} else if subRoll < 8 { // 3% absolute chance
@@ -982,7 +982,7 @@ func UseItem(c *gin.Context) {
 	_, err = tx.Exec(`
 		UPDATE players 
 		SET materials_inventory = $1, current_mana = $2, hp = $3
-		WHERE id = $4`, 
+		WHERE id = $4`,
 		player.MaterialsInventory, player.CurrentMana, player.HP, player.ID,
 	)
 	if err != nil {
@@ -1101,7 +1101,7 @@ func SetVitalGu(c *gin.Context) {
 	_, err = tx.Exec(`
 		UPDATE players 
 		SET gu_inventory = $1, hp = $2, equipped_gus = $3, active_combat = $4
-		WHERE id = $5`, 
+		WHERE id = $5`,
 		player.GuInventory, player.HP, player.EquippedGus, player.ActiveCombat, player.ID,
 	)
 	if err != nil {
@@ -1118,6 +1118,75 @@ func SetVitalGu(c *gin.Context) {
 		"player":  player,
 		"message": fmt.Sprintf("Thiết lập %s thành Bản Mệnh Cổ thành công!%s", targetGu.GuID, backlashMessage),
 	})
+}
+
+// DropGuRequest removes an owned Gu from inventory intentionally.
+type DropGuRequest struct {
+	GuInstanceID string `json:"gu_instance_id" binding:"required"`
+}
+
+func DropGu(c *gin.Context) {
+	var req DropGuRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "gu_instance_id is required"})
+		return
+	}
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		return
+	}
+
+	idx := -1
+	for i, gu := range player.GuInventory {
+		if gu.InstanceID == req.GuInstanceID {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Cổ trùng trong túi đồ"})
+		return
+	}
+	if player.GuInventory[idx].IsVital {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể vứt Bản Mệnh Cổ"})
+		return
+	}
+
+	newInv := models.GuInventory{}
+	for i, gu := range player.GuInventory {
+		if i != idx {
+			newInv = append(newInv, gu)
+		}
+	}
+	player.GuInventory = newInv
+	player.EquippedGus = []string{}
+	for _, gu := range player.GuInventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
+		}
+	}
+	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1, equipped_gus = $2 WHERE id = $3`, player.GuInventory, player.EquippedGus, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gu"})
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"player": player, "message": "Đã vứt bỏ Cổ trùng khỏi túi đồ."})
 }
 
 // UseGuRequest represents request payload to use a consumable Gu
@@ -1191,7 +1260,7 @@ func UseConsumableGu(c *gin.Context) {
 			return
 		}
 		player.SubRank++
-		
+
 		stageNames := map[int]string{1: "Sơ Giai", 2: "Trung Giai", 3: "Cao Giai", 4: "Đỉnh Phong"}
 		logMsg = fmt.Sprintf("Đột phá! Đạo hữu luyện hóa Xá Lợi Cổ, tu vi nâng cao lên %s %s!", getRankName(player.Rank), stageNames[player.SubRank])
 
@@ -1231,7 +1300,7 @@ func UseConsumableGu(c *gin.Context) {
 	_, err = tx.Exec(`
 		UPDATE players 
 		SET gu_inventory = $1, sub_rank = $2, primeval_stones = $3, max_mana = $4, current_mana = $5, equipped_gus = $6
-		WHERE id = $7`, 
+		WHERE id = $7`,
 		player.GuInventory, player.SubRank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.ID,
 	)
 	if err != nil {

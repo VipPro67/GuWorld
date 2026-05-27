@@ -130,6 +130,8 @@ interface GameState {
   useItem: (itemId: string) => Promise<void>;
   movePlayer: (x: number, y: number) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
   fetchGrid: () => Promise<{ x: number; y: number; vision_radius: number; cells: any[]; explored_cells: string[]; stats: any } | null>;
+  dropGu: (instanceId: string) => Promise<boolean>;
+  sellShopItem: (itemId: string, quantity: number, itemType: "Gu" | "Material") => Promise<boolean>;
 }
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
@@ -559,6 +561,52 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
+
+  sellShopItem: async (itemId, quantity, itemType) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/shop/sell`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ player_id: player.id, item_id: itemId, quantity, item_type: itemType }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Bán hàng thất bại.");
+      set({ player: data.player });
+      get().addLog(data.message || "Bán hàng thành công!");
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Bán hàng thất bại: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  dropGu: async (instanceId) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/inventory/drop`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ gu_instance_id: instanceId }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Vứt Cổ thất bại.");
+      set({ player: data.player });
+      get().addLog(data.message || "Đã vứt Cổ trùng.");
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Vứt Cổ thất bại: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
   equipGu: async (instanceId, equip) => {
     const { player, token, actionLoading, logout } = get();
     if (!player || !token || actionLoading) return;
