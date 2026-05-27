@@ -23,6 +23,7 @@ export default function Home() {
     login,
     register,
     fetchPlayerStatus,
+    initializeSession,
     logout,
     explore,
     feedGu,
@@ -52,16 +53,10 @@ export default function Home() {
   useEffect(() => {
     fetchDictionary();
     fetchRecipes();
-    const savedId = localStorage.getItem("gu_player_id");
-    const savedToken = localStorage.getItem("gu_auth_token");
-    if (savedId && savedToken) {
-      fetchPlayerStatus(savedId).finally(() => {
-        setCheckingSession(false);
-      });
-    } else {
+    initializeSession().finally(() => {
       setCheckingSession(false);
-    }
-  }, [fetchPlayerStatus, fetchDictionary, fetchRecipes]);
+    });
+  }, [initializeSession, fetchDictionary, fetchRecipes]);
 
   // 2. Real-time Status Polling (Every 5 seconds) - Skip polling if actively in combat to avoid lag/race conditions
   useEffect(() => {

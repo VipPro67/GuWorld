@@ -26,6 +26,7 @@ type Cell struct {
 
 // GenerateCell procedurally generates the cell content based on region, x, y coordinates
 func GenerateCell(x, y int, region string) Cell {
+	respawnWindow := time.Now().Unix() / 180
 	if x == 50 && y == 50 {
 		return Cell{X: x, Y: y, Type: "Empty", Content: "Thanh Bản Thôn (Safe Village)"}
 	}
@@ -38,6 +39,7 @@ func GenerateCell(x, y int, region string) Cell {
 	h.Write([]byte(region))
 	binary.Write(h, binary.BigEndian, int64(x))
 	binary.Write(h, binary.BigEndian, int64(y))
+	binary.Write(h, binary.BigEndian, respawnWindow)
 	seed := int64(binary.BigEndian.Uint64(h.Sum(nil)[:8]))
 
 	rng := rand.New(rand.NewSource(seed))
@@ -276,18 +278,7 @@ func MovePlayer(c *gin.Context) {
 		return
 	}
 
-	// Determine mana cost
-	manaCost := 2.0
-	if dist > 1 {
-		manaCost = 3.0
-	}
-
-	if player.CurrentMana < manaCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Chân Nguyên để di chuyển."})
-		return
-	}
-
-	player.CurrentMana -= manaCost
+	// Movement no longer consumes mana
 	player.X = req.X
 	player.Y = req.Y
 
@@ -427,6 +418,22 @@ func MovePlayer(c *gin.Context) {
 					TargetPlayerID: targetPlayer.ID.String(),
 				}
 				logMsg = fmt.Sprintf("Đạo hữu bắt gặp một Cổ Sư khác đang du ngoạn: %s! Lập tức giao đấu!", targetPlayer.Username)
+			}
+		}
+	}
+
+	if !combatTriggered {
+		for ax := -1; ax <= 1 && !combatTriggered; ax++ {
+			for ay := -1; ay <= 1 && !combatTriggered; ay++ {
+				if ax == 0 && ay == 0 {
+					continue
+				}
+				adj := GenerateCell(player.X+ax, player.Y+ay, player.CurrentRegion)
+				if adj.Type == "Monster" && rand.Intn(100) < 25 {
+					combatTriggered = true
+					player.ActiveCombat = &models.CombatState{EnemyName: adj.Content, EnemyHP: 70, EnemyMaxHP: 70, EnemyDamage: 11, EnemyDefense: 4}
+					logMsg = fmt.Sprintf("Phục kích! %s chủ động lao ra tấn công đạo hữu tại (%d, %d)!", adj.Content, player.X, player.Y)
+				}
 			}
 		}
 	}

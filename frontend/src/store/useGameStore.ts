@@ -111,6 +111,7 @@ interface GameState {
   logout: () => void;
   clearError: () => void;
   fetchPlayerStatus: (id: string) => Promise<void>;
+  initializeSession: () => Promise<void>;
   explore: () => Promise<void>;
   feedGu: (guInstanceId: string) => Promise<void>;
   fetchDictionary: () => Promise<void>;
@@ -219,6 +220,14 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => ({
       logs: [message, ...state.logs].slice(0, 50),
     }));
+  },
+
+  initializeSession: async () => {
+    const savedId = typeof window !== "undefined" ? localStorage.getItem("gu_player_id") : null;
+    const savedToken = typeof window !== "undefined" ? localStorage.getItem("gu_auth_token") : null;
+    if (!savedId || !savedToken) return;
+    set({ token: savedToken });
+    await get().fetchPlayerStatus(savedId);
   },
 
   fetchPlayerStatus: async (id) => {
