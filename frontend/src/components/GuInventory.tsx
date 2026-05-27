@@ -13,6 +13,9 @@ interface GuInventoryProps {
   onEquipToggle?: (instanceId: string, equip: boolean) => Promise<void>;
   onUseItem?: (itemId: string) => Promise<void>;
   onUpdateStatus?: (instanceId: string, status: string) => Promise<void>;
+  onSetVital?: (instanceId: string) => Promise<void>;
+  onUseGu?: (instanceId: string) => Promise<void>;
+  onDropGu?: (instanceId: string) => Promise<boolean>;
 }
 
 const getPathColor = (path: string): string => {
@@ -60,6 +63,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   onUpdateStatus,
   onSetVital,
   onUseGu,
+  onDropGu,
 }) => {
   const [feedingId, setFeedingId] = useState<string | null>(null);
   const [equippingId, setEquippingId] = useState<string | null>(null);
@@ -67,6 +71,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
   const [usingGuId, setUsingGuId] = useState<string | null>(null);
   const [settingVitalId, setSettingVitalId] = useState<string | null>(null);
+  const [droppingId, setDroppingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTab, setSelectedTab] = useState<"all" | "gu" | "material">("all");
 
@@ -512,6 +517,20 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                 >
                                   {isCurrentlyFeeding ? "..." : "Cho Ăn"}
                                 </button>
+                                {onDropGu && !gu.is_vital && (
+                                  <button
+                                    type="button"
+                                    disabled={actionLoading || droppingId === gu.instance_id}
+                                    onClick={async () => {
+                                      if (!confirm(`Vứt bỏ ${spec.name}?`)) return;
+                                      setDroppingId(gu.instance_id);
+                                      try { await onDropGu(gu.instance_id); } finally { setDroppingId(null); }
+                                    }}
+                                    className="text-[9px] font-bold py-1 px-2.5 rounded-lg transition-all cursor-pointer font-mono bg-rose-950/30 text-rose-400 border border-rose-900/40 hover:bg-rose-950/50"
+                                  >
+                                    {droppingId === gu.instance_id ? "..." : "Thả"}
+                                  </button>
+                                )}
                               </>
                             )}
                           </div>
