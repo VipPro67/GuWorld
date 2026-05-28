@@ -294,6 +294,8 @@ export default function Home() {
             onCreate={createMarketplaceListing}
             onBid={placeMarketplaceBid}
             onCancel={cancelMarketplaceListing}
+            guDictionary={guDictionary}
+            itemDictionary={itemDictionary}
           />
         )}
       </main>

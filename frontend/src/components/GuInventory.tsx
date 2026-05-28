@@ -381,6 +381,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                               </span>
                             )}
                           </h4>
+                          <div className="text-[8px] text-zinc-500 font-mono mt-0.5">{gu.gu_id}</div>
                         </div>
                         <span className="text-[8px] font-mono font-bold text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded uppercase shrink-0">
                           Rank {spec.rank}

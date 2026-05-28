@@ -55,7 +55,7 @@ var GuRegistry = make(map[string]GuDictionaryItem)
 // LoadGuRegistry queries the database and populates the in-memory cache
 func LoadGuRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
-		SELECT id, name, rank, path, gu_type, origin_region, base_mana_cost, effects, food_type, food_types, hunger_rate, max_hunger, description 
+		SELECT id, name, rank, path, gu_type, origin_region, base_mana_cost, effects, food_types, hunger_rate, max_hunger, description 
 		FROM gu_dictionary
 	`)
 	if err != nil {
@@ -69,12 +69,11 @@ func LoadGuRegistry(db *sql.DB) error {
 
 	for rows.Next() {
 		var item GuDictionaryItem
-		var foodType sql.NullString
 		var foodTypesRaw []byte
 		err = rows.Scan(
 			&item.ID, &item.Name, &item.Rank, &item.Path,
 			&item.Type, &item.OriginRegion, &item.BaseManaCost,
-			&item.Effects, &foodType, &foodTypesRaw, &item.HungerRate,
+			&item.Effects, &foodTypesRaw, &item.HungerRate,
 			&item.MaxHunger, &item.Description,
 		)
 		if err != nil {
@@ -82,16 +81,10 @@ func LoadGuRegistry(db *sql.DB) error {
 			continue
 		}
 
-		if foodType.Valid {
-			item.FoodType = foodType.String
-		}
 		if len(foodTypesRaw) > 0 {
 			_ = json.Unmarshal(foodTypesRaw, &item.FoodTypes)
 		}
-		if len(item.FoodTypes) == 0 && item.FoodType != "" {
-			item.FoodTypes = []string{item.FoodType}
-		}
-		if item.FoodType == "" && len(item.FoodTypes) > 0 {
+		if len(item.FoodTypes) > 0 {
 			item.FoodType = item.FoodTypes[0]
 		}
 

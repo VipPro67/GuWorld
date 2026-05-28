@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	_ "github.com/lib/pq"
 )
@@ -73,7 +74,6 @@ func InitSchema() error {
 		base_mana_cost DOUBLE PRECISION NOT NULL DEFAULT 0,
 		effects JSONB NOT NULL DEFAULT '{}',
 		hunger_rate INTEGER NOT NULL,
-		food_type VARCHAR(50) REFERENCES item_dictionary(id) ON DELETE SET NULL,
 		food_types JSONB NOT NULL DEFAULT '[]',
 		max_hunger INTEGER DEFAULT 100,
 		description TEXT
@@ -129,6 +129,29 @@ func InitSchema() error {
 	_, err = DB.Exec(query)
 	if err != nil {
 		return fmt.Errorf("failed to create players table: %w", err)
+	}
+
+	//create table Auction
+	//INSERT INTO auction(id,seller_id,item_type,item_data,quantity,currency,start_price,current_price,highest_bidder_id,end_time,status,created_at)
+	query = `
+	CREATE TABLE IF NOT EXISTS auction (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		seller_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		item_type VARCHAR(20) NOT NULL,
+		item_data JSONB NOT NULL,
+		quantity INTEGER NOT NULL,
+		currency VARCHAR(20) NOT NULL,
+		start_price DOUBLE PRECISION NOT NULL,
+		current_price DOUBLE PRECISION NOT NULL,
+		highest_bidder_id UUID REFERENCES players(id) ON DELETE SET NULL,
+		end_time TIMESTAMP WITH TIME ZONE NOT NULL,
+		status VARCHAR(20) NOT NULL DEFAULT 'active',
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);
+	`
+	_, err = DB.Exec(query)
+	if err != nil {
+		return fmt.Errorf("failed to create auction table: %w", err)
 	}
 
 	// Ensure columns exist (for backwards compatibility/migrations)
@@ -295,40 +318,50 @@ func SeedDictionaries() error {
 		OriginRegion string
 		BaseManaCost float64
 		Effects      string
-		FoodType     string
+		FoodTypes    []string
 		HungerRate   int
 		MaxHunger    int
 		Desc         string
 	}{
-		{"GU_MOONLIGHT", "Nguyệt Quang Cổ", 1, "Moon Path", "Active", "Southern_Border", 10.0, `{"damage": 25.0}`, "moon_orchid_petal", 5, 100, "Bắn ra nguyệt nhận sắc lẹm màu xanh lam."},
-		{"GU_JADE_SKIN", "Ngọc Bì Cổ", 1, "Earth Path", "Passive", "Southern_Border", 0.0, `{"add_base_defense": 40.0}`, "jade_stone", 2, 100, "Cải tạo bề mặt da trở nên cứng cáp như ngọc bích."},
-		{"GU_LIQUOR_WORM", "Tửu Trùng", 1, "Refinement Path", "Support", "Southern_Border", 0.0, `{"refine_mana_tier": 1.0}`, "green_bamboo_wine", 3, 100, "Tinh luyện và nâng cao chất lượng Chân Nguyên."},
-		{"GU_WHITE_BOAR", "Bạch Thỉ Cổ", 1, "Strength Path", "Passive", "Northern_Plains", 0.0, `{"add_base_attack": 15.0, "add_base_defense": 5.0}`, "boar_meat", 6, 100, "Cải tạo thể chất vĩnh viễn, tăng sức mạnh một con lợn rừng."},
-		{"GU_MOON_RAIMENT", "Nguyệt Nghê Thường", 2, "Moon Path", "Defense", "Southern_Border", 15.0, `{"add_base_defense": 75.0}`, "moon_orchid_petal", 4, 100, "Tạo ra một bộ xiêm y bằng ánh trăng che chở cơ thể."},
-		{"GU_WHITE_JADE", "Bạch Ngọc Cổ", 2, "Earth Path", "Defense", "Southern_Border", 20.0, `{"add_base_attack": 10.0, "add_base_defense": 110.0}`, "jade_stone", 3, 100, "Biến làn da toàn thân thành ngọc trắng cứng cáp che chắn."},
-		{"GU_FOUR_FLAVORS_LIQUOR", "Tứ Vị Tửu Trùng", 2, "Refinement Path", "Support", "Southern_Border", 0.0, `{"refine_mana_tier": 2.0}`, "green_bamboo_wine", 2, 100, "Cổ trùng tinh luyện chân nguyên Nhị Chuyển tối thượng."},
-		{"GU_BLACK_BOAR", "Hắc Thỉ Cổ", 1, "Strength Path", "Passive", "Southern_Border", 0.0, `{"add_base_attack": 15.0, "add_base_defense": 5.0}`, "boar_meat", 6, 100, "Cải tạo thể chất vĩnh viễn, tăng sức mạnh một con hắc thỉ (heo rừng đen)."},
-		{"GU_CLEANSING_WATER", "Tịnh Thủy Cổ", 1, "Rule Path", "Support", "Southern_Border", 15.0, `{"cleansing_power": 1.0}`, "green_bamboo_wine", 4, 100, "Tẩy sạch cặn bã trong Không khiếu và tẩy trừ ý chí của cổ sư khác."},
-		{"GU_SHADOW_STEPS", "Ảnh Bộ Cổ", 1, "Space Path", "Movement", "Southern_Border", 5.0, `{"movement": 2.0}`, "green_bamboo_wine", 3, 100, "Cổ trùng di chuyển hỗ trợ thân thủ nhanh thoăn thoắt, nhảy vọt 2 bước."},
-		{"GU_EARTH_COMMUNICATION", "Địa Thính Nhục Chi Nha", 1, "Earth Path", "Investigation", "Southern_Border", 5.0, `{"investigation": 3.0}`, "jade_stone", 3, 100, "Cổ trùng trinh thám thông qua chấn động lòng đất, khuếch đại tầm nhìn lên 3 ô."},
-		{"GU_TUSITA_FLOWER", "Thố Ti Hoa Cổ", 1, "Wood Path", "Storage", "Southern_Border", 0.0, `{"storage": 20.0}`, "moon_orchid_petal", 2, 100, "Cổ trùng lưu trữ không gian phàm cấp, tăng thêm 20 ô hành lý."},
-		{"GU_RELIC", "Xá Lợi Cổ (Relic Gu)", 1, "Refinement Path", "Consumable", "Southern_Border", 0.0, `{"raise_cultivation": 1.0}`, "", 0, 100, "Cổ trùng tiêu hao nâng cao tu vi ngay lập tức thêm 1 Tiểu Chuyển."},
-		{"GU_STONE_APERTURE", "Thạch Khiếu Cổ (Stone Aperture Gu)", 1, "Earth Path", "Consumable", "Southern_Border", 0.0, `{"give_stones": 500.0}`, "", 0, 100, "Cổ trùng tiêu hao hóa thạch Không khiếu nhận 500 Nguyên Thạch nhưng giảm 15 Chân Nguyên tối đa."},
+		{"GU_MOONLIGHT", "Nguyệt Quang Cổ", 1, "Moon Path", "Active", "Southern_Border", 10.0, `{"damage": 25.0}`, []string{"moon_orchid_petal"}, 5, 100, "Bắn ra nguyệt nhận sắc lẹm màu xanh lam."},
+		{"GU_JADE_SKIN", "Ngọc Bì Cổ", 1, "Earth Path", "Passive", "Southern_Border", 0.0, `{"add_base_defense": 40.0}`, []string{"jade_stone"}, 2, 100, "Cải tạo bề mặt da trở nên cứng cáp như ngọc bích."},
+		{"GU_LIQUOR_WORM", "Tửu Trùng", 1, "Refinement Path", "Support", "Southern_Border", 0.0, `{"refine_mana_tier": 1.0}`, []string{"green_bamboo_wine"}, 3, 100, "Tinh luyện và nâng cao chất lượng Chân Nguyên."},
+		{"GU_WHITE_BOAR", "Bạch Thỉ Cổ", 1, "Strength Path", "Passive", "Northern_Plains", 0.0, `{"add_base_attack": 15.0, "add_base_defense": 5.0}`, []string{"boar_meat"}, 6, 100, "Cải tạo thể chất vĩnh viễn, tăng sức mạnh một con lợn rừng."},
+		{"GU_MOON_RAIMENT", "Nguyệt Nghê Thường", 2, "Moon Path", "Defense", "Southern_Border", 15.0, `{"add_base_defense": 75.0}`, []string{"moon_orchid_petal"}, 4, 100, "Tạo ra một bộ xiêm y bằng ánh trăng che chở cơ thể."},
+		{"GU_WHITE_JADE", "Bạch Ngọc Cổ", 2, "Earth Path", "Defense", "Southern_Border", 20.0, `{"add_base_attack": 10.0, "add_base_defense": 110.0}`, []string{"jade_stone"}, 3, 100, "Biến làn da toàn thân thành ngọc trắng cứng cáp che chắn."},
+		{"GU_FOUR_FLAVORS_LIQUOR", "Tứ Vị Tửu Trùng", 2, "Refinement Path", "Support", "Southern_Border", 0.0, `{"refine_mana_tier": 2.0}`, []string{"green_bamboo_wine"}, 2, 100, "Cổ trùng tinh luyện chân nguyên Nhị Chuyển tối thượng."},
+		{"GU_BLACK_BOAR", "Hắc Thỉ Cổ", 1, "Strength Path", "Passive", "Southern_Border", 0.0, `{"add_base_attack": 15.0, "add_base_defense": 5.0}`, []string{"boar_meat"}, 6, 100, "Cải tạo thể chất vĩnh viễn, tăng sức mạnh một con hắc thỉ (heo rừng đen)."},
+		{"GU_CLEANSING_WATER", "Tịnh Thủy Cổ", 1, "Water Path", "Support", "Southern_Border", 0.0, `{"cleanse_debuffs": true}`, []string{"grass_puppet"}, 1, 100, "Sử dụng nước tinh khiết để rửa trôi các trạng thái tiêu cực."},
+		{"GU_TUSITA_FLOWER", "Thố Ti Hoa Cổ", 1, "Wood Path", "Storage", "Southern_Border", 0.0, `{"storage": 20.0}`, []string{"moon_orchid_petal"}, 2, 100, "Cổ trùng lưu trữ không gian phàm cấp, tăng thêm 20 ô hành lý."},
+		{"GU_RELIC", "Xá Lợi Cổ (Relic Gu)", 1, "Refinement Path", "Consumable", "Southern_Border", 0.0, `{"raise_cultivation": 1.0}`, []string{""}, 0, 100, "Cổ trùng tiêu hao nâng cao tu vi ngay lập tức thêm 1 Tiểu Chuyển."},
+		{"GU_STONE_APERTURE", "Thạch Khiếu Cổ (Stone Aperture Gu)", 1, "Earth Path", "Consumable", "Southern_Border", 0.0, `{"give_stones": 500.0}`, []string{""}, 0, 100, "Cổ trùng tiêu hao hóa thạch Không khiếu nhận 500 Nguyên Thạch nhưng giảm 15 Chân Nguyên tối đa."},
 	}
 
 	for _, gu := range guSeeds {
-		var foodType interface{}
-		if gu.FoodType != "" {
-			foodType = gu.FoodType
+		foodTypesJSON := "[]"
+		if len(gu.FoodTypes) > 0 {
+			validTypes := make([]string, 0, len(gu.FoodTypes))
+			for _, t := range gu.FoodTypes {
+				if t != "" {
+					validTypes = append(validTypes, t)
+				}
+			}
+			if len(validTypes) > 0 {
+				escaped := make([]string, len(validTypes))
+				for i, t := range validTypes {
+					escaped[i] = fmt.Sprintf("\"%s\"", t)
+				}
+				foodTypesJSON = fmt.Sprintf("[%s]", strings.Join(escaped, ","))
+			}
 		}
 		_, err := DB.Exec(`
-			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, origin_region, base_mana_cost, effects, hunger_rate, food_type, food_types, max_hunger, description)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11::jsonb, $12, $13)
+			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, origin_region, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10::jsonb, $11, $12)
 			ON CONFLICT (id) DO UPDATE 
 			SET name = EXCLUDED.name, rank = EXCLUDED.rank, path = EXCLUDED.path, gu_type = EXCLUDED.gu_type, 
 			    origin_region = EXCLUDED.origin_region, base_mana_cost = EXCLUDED.base_mana_cost, effects = EXCLUDED.effects,
-			    hunger_rate = EXCLUDED.hunger_rate, food_type = EXCLUDED.food_type, food_types = EXCLUDED.food_types, max_hunger = EXCLUDED.max_hunger, description = EXCLUDED.description
-		`, gu.ID, gu.Name, gu.Rank, gu.Path, gu.Type, gu.OriginRegion, gu.BaseManaCost, gu.Effects, gu.HungerRate, foodType, fmt.Sprintf("[\"%s\"]", gu.FoodType), gu.MaxHunger, gu.Desc)
+			    hunger_rate = EXCLUDED.hunger_rate, food_types = EXCLUDED.food_types, max_hunger = EXCLUDED.max_hunger, description = EXCLUDED.description
+		`, gu.ID, gu.Name, gu.Rank, gu.Path, gu.Type, gu.OriginRegion, gu.BaseManaCost, gu.Effects, gu.HungerRate, foodTypesJSON, gu.MaxHunger, gu.Desc)
 		if err != nil {
 			return fmt.Errorf("failed to seed gu %s: %w", gu.ID, err)
 		}

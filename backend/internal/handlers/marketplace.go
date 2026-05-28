@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -68,6 +70,11 @@ func CreateListing(c *gin.Context) {
 		return
 	}
 
+	if req.Currency != "primeval" && req.Currency != "immortal" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "currency phải là primeval hoặc immortal"})
+		return
+	}
+
 	itemData := ""
 	if req.ItemType == "Gu" {
 		idx := -1
@@ -110,8 +117,15 @@ func CreateListing(c *gin.Context) {
 	}
 	listingID := uuid.New().String()
 	end := time.Now().Add(time.Duration(req.DurationHours) * time.Hour)
-	_, err = tx.Exec(`INSERT INTO bao_hoang_listings(id,seller_id,item_type,item_data,quantity,currency,start_price,current_price,highest_bidder_id,end_time,status,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$7,NULL,$8,'ACTIVE',NOW())`, listingID, player.ID, req.ItemType, itemData, req.Quantity, req.Currency, req.Price, end)
+	itemDataJSON, err := json.Marshal(itemData)
 	if err != nil {
+		log.Printf("Failed to marshal auction item_data: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo phiên đấu giá"})
+		return
+	}
+	_, err = tx.Exec(`INSERT INTO auction(id,seller_id,item_type,item_data,quantity,currency,start_price,current_price,highest_bidder_id,end_time,status,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$7,NULL,$8,'ACTIVE',NOW())`, listingID, player.ID, req.ItemType, itemDataJSON, req.Quantity, req.Currency, req.Price, end)
+	if err != nil {
+		log.Printf("Failed to create auction listing: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo phiên đấu giá"})
 		return
 	}
@@ -128,7 +142,13 @@ func CreateListing(c *gin.Context) {
 }
 
 func ListListings(c *gin.Context) {
-	rows, err := db.DB.Query(`SELECT id,seller_id,item_type,item_data,quantity,currency,start_price,current_price,highest_bidder_id,end_time,status,created_at FROM bao_hoang_listings WHERE status='ACTIVE' AND end_time > NOW() ORDER BY created_at DESC`)
+	if err := settleExpiredAuctions(); err != nil {
+		log.Printf("Failed to settle expired auctions: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to settle expired auctions"})
+		return
+	}
+
+	rows, err := db.DB.Query(`SELECT id,seller_id,item_type,item_data,quantity,currency,start_price,current_price,highest_bidder_id,end_time,status,created_at FROM auction WHERE status='ACTIVE' AND end_time > NOW() ORDER BY created_at DESC`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed"})
 		return
@@ -136,12 +156,21 @@ func ListListings(c *gin.Context) {
 	defer rows.Close()
 	out := []gin.H{}
 	for rows.Next() {
-		var id, seller, it, data, cur, status string
+		var id, seller, it, cur, status string
 		var qty int
 		var start, current float64
 		var bidder sql.NullString
 		var end, created time.Time
-		_ = rows.Scan(&id, &seller, &it, &data, &qty, &cur, &start, &current, &bidder, &end, &status, &created)
+		var rawItemData []byte
+		if err := rows.Scan(&id, &seller, &it, &rawItemData, &qty, &cur, &start, &current, &bidder, &end, &status, &created); err != nil {
+			log.Printf("Warning: failed to scan auction row: %v", err)
+			continue
+		}
+		var data string
+		if err := json.Unmarshal(rawItemData, &data); err != nil {
+			log.Printf("Warning: failed to unmarshal auction item_data: %v", err)
+			data = string(rawItemData)
+		}
 		out = append(out, gin.H{"id": id, "seller_id": seller, "item_type": it, "item_data": data, "quantity": qty, "currency": cur, "start_price": start, "current_price": current, "highest_bidder_id": bidder.String, "end_time": end, "status": status, "created_at": created})
 	}
 	c.JSON(http.StatusOK, out)
@@ -173,7 +202,7 @@ func PlaceBid(c *gin.Context) {
 	var current float64
 	var bidder sql.NullString
 	var end time.Time
-	err = tx.QueryRow(`SELECT currency,current_price,highest_bidder_id,status,end_time FROM bao_hoang_listings WHERE id=$1 FOR UPDATE`, req.ListingID).Scan(&currency, &current, &bidder, &status, &end)
+	err = tx.QueryRow(`SELECT currency,current_price,highest_bidder_id,status,end_time FROM auction WHERE id=$1 FOR UPDATE`, req.ListingID).Scan(&currency, &current, &bidder, &status, &end)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phiên đấu giá"})
 		return
@@ -203,7 +232,7 @@ func PlaceBid(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "update failed"})
 		return
 	}
-	_, err = tx.Exec(`UPDATE bao_hoang_listings SET current_price=$1, highest_bidder_id=$2 WHERE id=$3`, req.Amount, player.ID, req.ListingID)
+	_, err = tx.Exec(`UPDATE auction SET current_price=$1, highest_bidder_id=$2 WHERE id=$3`, req.Amount, player.ID, req.ListingID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "bid failed"})
 		return
@@ -213,6 +242,121 @@ func PlaceBid(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đặt giá thành công"})
+}
+
+func SettleExpiredAuctions(c *gin.Context) {
+	if err := settleExpiredAuctions(); err != nil {
+		log.Printf("Failed to settle expired auctions: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to settle expired auctions"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Expired auctions settled"})
+}
+
+func settleExpiredAuctions() error {
+	rows, err := db.DB.Query(`SELECT id,seller_id,highest_bidder_id,item_type,item_data,quantity,current_price FROM auction WHERE status='ACTIVE' AND end_time <= NOW()`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id string
+		var sellerID uuid.UUID
+		var highestBidderID sql.NullString
+		var itemType string
+		var rawItemData []byte
+		var qty int
+		var currentPrice float64
+		if err := rows.Scan(&id, &sellerID, &highestBidderID, &itemType, &rawItemData, &qty, &currentPrice); err != nil {
+			log.Printf("Failed to scan expired auction row: %v", err)
+			continue
+		}
+
+		var itemData string
+		if err := json.Unmarshal(rawItemData, &itemData); err != nil {
+			itemData = string(rawItemData)
+		}
+
+		if err := settleAuction(id, sellerID, highestBidderID, itemType, itemData, qty, currentPrice); err != nil {
+			log.Printf("Failed to settle auction %s: %v", id, err)
+			continue
+		}
+	}
+
+	return rows.Err()
+}
+
+func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.NullString, itemType, itemData string, qty int, currentPrice float64) error {
+	tx, err := db.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	seller, err := evaluateManaTx(tx, sellerID)
+	if err != nil {
+		return err
+	}
+
+	if highestBidderID.Valid {
+		buyerID, err := uuid.Parse(highestBidderID.String)
+		if err != nil {
+			return err
+		}
+
+		buyer, err := evaluateManaTx(tx, buyerID)
+		if err != nil {
+			return err
+		}
+
+		seller.PrimevalStones += int(currentPrice)
+		if err := addAuctionItemToPlayer(&buyer, itemType, itemData, qty); err != nil {
+			return err
+		}
+
+		if err := updatePlayerInventory(tx, buyer); err != nil {
+			return err
+		}
+		if err := updatePlayerInventory(tx, seller); err != nil {
+			return err
+		}
+
+		if _, err := tx.Exec(`UPDATE auction SET status='COMPLETED' WHERE id=$1`, auctionID); err != nil {
+			return err
+		}
+	} else {
+		if err := addAuctionItemToPlayer(&seller, itemType, itemData, qty); err != nil {
+			return err
+		}
+		if err := updatePlayerInventory(tx, seller); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`UPDATE auction SET status='CANCELLED' WHERE id=$1`, auctionID); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func addAuctionItemToPlayer(player *models.Player, itemType, itemData string, qty int) error {
+	if itemType == "Gu" {
+		player.GuInventory = append(player.GuInventory, mapGuFromRaw(itemData))
+		return nil
+	}
+
+	if player.MaterialsInventory == nil {
+		player.MaterialsInventory = map[string]int{}
+	}
+	player.MaterialsInventory[itemData] += qty
+	return nil
+}
+
+func updatePlayerInventory(tx *sql.Tx, player models.Player) error {
+	_, err := tx.Exec(`UPDATE players SET gu_inventory=$1, materials_inventory=$2, equipped_gus=$3, primeval_stones=$4 WHERE id=$5`, player.GuInventory, player.MaterialsInventory, player.EquippedGus, player.PrimevalStones, player.ID)
+	return err
 }
 
 type CancelListingRequest struct {
@@ -236,9 +380,11 @@ func CancelListing(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
-	var sellerID, itemType, itemData, status string
+	var sellerID uuid.UUID
+	var itemType, status string
+	var rawItemData []byte
 	var qty int
-	err = tx.QueryRow(`SELECT seller_id,item_type,item_data,quantity,status FROM bao_hoang_listings WHERE id=$1 FOR UPDATE`, req.ListingID).Scan(&sellerID, &itemType, &itemData, &qty, &status)
+	err = tx.QueryRow(`SELECT seller_id,item_type,item_data,quantity,status FROM auction WHERE id=$1 FOR UPDATE`, req.ListingID).Scan(&sellerID, &itemType, &rawItemData, &qty, &status)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy listing"})
 		return
@@ -246,6 +392,10 @@ func CancelListing(c *gin.Context) {
 	if sellerID != authID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Bạn không phải chủ listing"})
 		return
+	}
+	itemData := ""
+	if err := json.Unmarshal(rawItemData, &itemData); err != nil {
+		itemData = string(rawItemData)
 	}
 	if status != "ACTIVE" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Listing không còn hoạt động"})
@@ -269,7 +419,7 @@ func CancelListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể trả vật phẩm"})
 		return
 	}
-	_, err = tx.Exec(`UPDATE bao_hoang_listings SET status='CANCELLED' WHERE id=$1`, req.ListingID)
+	_, err = tx.Exec(`UPDATE auction SET status='CANCELLED' WHERE id=$1`, req.ListingID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hủy listing"})
 		return

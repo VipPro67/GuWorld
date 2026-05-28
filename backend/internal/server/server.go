@@ -115,6 +115,7 @@ func SetupRouter() *gin.Engine {
 			shop.POST("/bao-hoang/listings", handlers.CreateListing)
 			shop.POST("/bao-hoang/bid", handlers.PlaceBid)
 			shop.POST("/bao-hoang/cancel", handlers.CancelListing)
+			shop.POST("/bao-hoang/settle", handlers.SettleExpiredAuctions)
 		}
 	}
 
