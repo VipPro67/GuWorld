@@ -126,8 +126,11 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
 
   // Check if player has enough stones
   const hasEnoughStones = selectedRecipe ? player.primeval_stones >= selectedRecipe.primeval_stones_cost : false;
+  const hasEnoughImmortalStones = selectedRecipe
+    ? (selectedRecipe.immortal_essence_stones_cost <= 0 || player.immortal_stones >= selectedRecipe.immortal_essence_stones_cost)
+    : false;
 
-  const canRefine = allSlotsFilled && hasRequiredMaterials() && hasEnoughStones && !actionLoading && !isRefining;
+  const canRefine = allSlotsFilled && hasRequiredMaterials() && hasEnoughStones && hasEnoughImmortalStones && !actionLoading && !isRefining;
 
   // Run Refining Logic
   const handleRefine = async () => {
@@ -171,6 +174,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
               required_materials: selectedRecipe.required_materials,
               success_rate: selectedRecipe.success_rate,
               primeval_stones_cost: selectedRecipe.primeval_stones_cost,
+              immortal_essence_stones_cost: selectedRecipe.immortal_essence_stones_cost,
             };
             setCustomRecipes((prev) => [discovered, ...prev]);
           }
@@ -506,6 +510,18 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                       {player.primeval_stones}/{selectedRecipe.primeval_stones_cost} viên
                     </span>
                   </div>
+
+                  {selectedRecipe.immortal_essence_stones_cost > 0 && (
+                    <div className="flex justify-between items-center text-xs px-1">
+                      <span className="text-zinc-500 uppercase tracking-widest font-mono text-[10px] flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+                        Tiên Tinh Thạch tiêu hao:
+                      </span>
+                      <span className={`font-bold font-mono ${hasEnoughImmortalStones ? "text-violet-300" : "text-rose-400 font-bold text-sm animate-pulse"}`}>
+                        {player.immortal_stones.toFixed(1)}/{selectedRecipe.immortal_essence_stones_cost} viên
+                      </span>
+                    </div>
+                  )}
 
                   <button
                     onClick={handleRefine}

@@ -84,9 +84,6 @@ func LoadGuRegistry(db *sql.DB) error {
 		if len(foodTypesRaw) > 0 {
 			_ = json.Unmarshal(foodTypesRaw, &item.FoodTypes)
 		}
-		if len(item.FoodTypes) > 0 {
-			item.FoodType = item.FoodTypes[0]
-		}
 
 		newRegistry[item.ID] = item
 		count++

@@ -98,99 +98,58 @@ export default function Home() {
   const inCombat = player && player.active_combat;
 
   return (
-    <div className="min-h-screen flex flex-col justify-between py-8 px-4 sm:px-6 lg:px-8 relative">
+    <div className="min-h-screen flex flex-col py-4 sm:py-8 px-3 sm:px-6 lg:px-8 relative">
       {/* Top Header Navigation */}
-      <header className="max-w-7xl w-full mx-auto flex justify-between items-center pb-6 border-b border-zinc-900/50 mb-6">
+      <header className="max-w-7xl w-full mx-auto flex justify-between items-center pb-4 border-b border-zinc-900/50 mb-4">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-500/20 flex items-center justify-center">
-            <Sparkles className="w-4.5 h-4.5 text-emerald-400" />
+          <div className="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-500/20 flex items-center justify-center shrink-0">
+            <Sparkles className="w-4 h-4 text-emerald-400" />
           </div>
-          <h1 className="text-xl font-bold font-serif tracking-wider text-zinc-100 bg-gradient-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">
+          <h1 className="text-lg sm:text-xl font-bold font-serif tracking-wider text-zinc-100 bg-gradient-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">
             GuWorld
           </h1>
         </div>
 
-        <div className="flex items-center gap-1.5 text-xs text-zinc-500 border border-zinc-900 bg-zinc-950/20 px-3 py-1.5 rounded-xl">
-          <HelpCircle className="w-3.5 h-3.5 text-zinc-600" />
-          <span>Bản Thử Nghiệm (Phase 4 & 5)</span>
+        <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-zinc-500 border border-zinc-900 bg-zinc-950/20 px-2 sm:px-3 py-1.5 rounded-xl">
+          <HelpCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-zinc-600 shrink-0" />
+          <span className="hidden sm:inline">Bản Thử Nghiệm (Phase 4 & 5)</span>
+          <span className="sm:hidden">Beta</span>
         </div>
       </header>
 
-      {/* Tab Switcher - Hidden if in combat */}
+      {/* Tab Switcher - scrollable on mobile */}
       {player && !inCombat && (
-        <div className="max-w-7xl w-full mx-auto flex justify-center border-b border-zinc-900 mb-8 gap-6 shrink-0">
-          <button
-            onClick={() => setView("dashboard")}
-            className={`pb-3 px-4 font-serif text-sm font-semibold tracking-wider transition-all relative cursor-pointer ${
-              currentView === "dashboard"
-                ? "text-emerald-400 font-bold"
-                : "text-zinc-500 hover:text-zinc-350"
-            }`}
-          >
-            TU LUYỆN
-            {currentView === "dashboard" && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-            )}
-          </button>
-          <button
-            onClick={() => setView("explore")}
-            className={`pb-3 px-4 font-serif text-sm font-semibold tracking-wider transition-all relative cursor-pointer ${
-              currentView === "explore"
-                ? "text-cyan-400 font-bold"
-                : "text-zinc-500 hover:text-zinc-350"
-            }`}
-          >
-            KHÁM PHÁ BẢN ĐỒ
-            {currentView === "explore" && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-500 shadow-[0_0_8px_rgba(34,211,238,0.5)]" />
-            )}
-          </button>
-          <button
-            onClick={() => setView("refine")}
-            className={`pb-3 px-4 font-serif text-sm font-semibold tracking-wider transition-all relative cursor-pointer ${
-              currentView === "refine"
-                ? "text-amber-400 font-bold"
-                : "text-zinc-500 hover:text-zinc-350"
-            }`}
-          >
-            LUYỆN CỔ THẤT
-            {currentView === "refine" && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500 shadow-[0_0_8px_rgba(234,179,8,0.5)]" />
-            )}
-          </button>
-          <button
-            onClick={() => setView("shop")}
-            className={`pb-3 px-4 font-serif text-sm font-semibold tracking-wider transition-all relative cursor-pointer ${
-              currentView === "shop"
-                ? "text-amber-500 font-bold"
-                : "text-zinc-500 hover:text-zinc-350"
-            }`}
-          >
-            GIẢ GIA THƯƠNG ĐỘI
-            {currentView === "shop" && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-600 shadow-[0_0_8px_rgba(217,119,6,0.5)]" />
-            )}
-          </button>
-          <button
-            onClick={() => setView("auction")}
-            className={`pb-3 px-4 font-serif text-sm font-semibold tracking-wider transition-all relative cursor-pointer ${
-              currentView === "auction"
-                ? "text-violet-400 font-bold"
-                : "text-zinc-500 hover:text-zinc-350"
-            }`}
-          >
-            BẢO HOÀNG THIÊN
-            {currentView === "auction" && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-violet-500 shadow-[0_0_8px_rgba(139,92,246,0.5)]" />
-            )}
-          </button>
+        <div className="max-w-7xl w-full mx-auto border-b border-zinc-900 mb-6 shrink-0 overflow-x-auto">
+          <div className="flex min-w-max sm:min-w-0 sm:justify-center gap-1 sm:gap-4 px-1">
+            {[
+              { id: "dashboard", label: "TU LUYỆN", shortLabel: "Tu Luyện", activeColor: "text-emerald-400", barColor: "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" },
+              { id: "explore", label: "KHÁM PHÁ BẢN ĐỒ", shortLabel: "Khám Phá", activeColor: "text-cyan-400", barColor: "bg-cyan-500 shadow-[0_0_8px_rgba(34,211,238,0.5)]" },
+              { id: "refine", label: "LUYỆN CỔ THẤT", shortLabel: "Luyện Cổ", activeColor: "text-amber-400", barColor: "bg-amber-500 shadow-[0_0_8px_rgba(234,179,8,0.5)]" },
+              { id: "shop", label: "GIẢ GIA THƯƠNG ĐỘI", shortLabel: "Thương Đội", activeColor: "text-amber-500", barColor: "bg-amber-600 shadow-[0_0_8px_rgba(217,119,6,0.5)]" },
+              { id: "auction", label: "BẢO HOÀNG THIÊN", shortLabel: "Bảo Hoàng", activeColor: "text-violet-400", barColor: "bg-violet-500 shadow-[0_0_8px_rgba(139,92,246,0.5)]" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setView(tab.id)}
+                className={`pb-3 px-3 sm:px-4 font-serif text-[10px] sm:text-sm font-semibold tracking-wider transition-all relative cursor-pointer whitespace-nowrap ${
+                  currentView === tab.id ? `${tab.activeColor} font-bold` : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                <span className="hidden sm:inline">{tab.label}</span>
+                <span className="sm:hidden">{tab.shortLabel}</span>
+                {currentView === tab.id && (
+                  <span className={`absolute bottom-0 left-0 right-0 h-0.5 ${tab.barColor}`} />
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
       {/* Main Content Area */}
-      <main className="flex-grow flex items-center justify-center max-w-7xl w-full mx-auto">
+      <main className="flex-grow flex items-start justify-center max-w-7xl w-full mx-auto">
         {!player ? (
-          <div className="py-12">
+          <div className="py-12 w-full flex justify-center">
             <Registration
               onRegister={register}
               onLogin={login}
@@ -211,47 +170,43 @@ export default function Home() {
             />
           </div>
         ) : currentView === "dashboard" ? (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 w-full items-start justify-center">
-            {/* Left Column: Character Stats & Aperture Status */}
-            <div className="lg:col-span-5 flex flex-col sm:flex-row lg:flex-col gap-8 justify-center items-center lg:items-stretch w-full">
-              <div className="w-full max-w-sm">
-                <Aperture
-                  currentMana={player.current_mana}
-                  maxMana={player.max_mana}
-                  aptitudeType={player.aptitude_type}
-                  aptitudePercent={player.aptitude_percent}
-                />
-              </div>
-              <div className="w-full max-w-sm flex-1">
-                <PlayerStats
-                  player={player}
-                  onLogout={handleLogout}
-                  guDictionary={guDictionary}
-                  onEquipToggle={equipGu}
-                />
-              </div>
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 sm:gap-6 w-full items-start">
+            {/* Left Column: Aperture + PlayerStats — side by side on md, stacked on mobile */}
+            <div className="xl:col-span-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-4 sm:gap-6 w-full">
+              <Aperture
+                currentMana={player.current_mana}
+                maxMana={player.max_mana}
+                aptitudeType={player.aptitude_type}
+                aptitudePercent={player.aptitude_percent}
+                rank={player.rank}
+                subRank={player.sub_rank}
+                guInventory={player.gu_inventory}
+                guDictionary={guDictionary}
+              />
+              <PlayerStats
+                player={player}
+                onLogout={handleLogout}
+                guDictionary={guDictionary}
+                onEquipToggle={equipGu}
+              />
             </div>
 
-            {/* Right Column: Combat/Explore Activity & Log Monitor */}
-            <div className="lg:col-span-7 flex flex-col gap-8 items-center lg:items-stretch w-full">
-              <div className="w-full max-w-lg">
-                <LogConsole logs={logs} />
-              </div>
-              <div className="w-full max-w-lg">
-                <GuInventory
-                  player={player}
-                  onFeed={feedGu}
-                  actionLoading={actionLoading}
-                  guDictionary={guDictionary}
-                  itemDictionary={itemDictionary}
-                  onEquipToggle={equipGu}
-                  onUseItem={useItem}
-                  onUpdateStatus={updateGuStatus}
-                  onSetVital={setVitalGu}
-                  onUseGu={useGu}
-                  onDropGu={dropGu}
-                />
-              </div>
+            {/* Right Column: Log + Inventory */}
+            <div className="xl:col-span-7 flex flex-col gap-4 sm:gap-6 w-full">
+              <LogConsole logs={logs} />
+              <GuInventory
+                player={player}
+                onFeed={feedGu}
+                actionLoading={actionLoading}
+                guDictionary={guDictionary}
+                itemDictionary={itemDictionary}
+                onEquipToggle={equipGu}
+                onUseItem={useItem}
+                onUpdateStatus={updateGuStatus}
+                onSetVital={setVitalGu}
+                onUseGu={useGu}
+                onDropGu={dropGu}
+              />
             </div>
           </div>
         ) : currentView === "explore" ? (
@@ -301,7 +256,7 @@ export default function Home() {
       </main>
 
       {/* Footer Details */}
-      <footer className="max-w-7xl w-full mx-auto text-center mt-12 pt-6 border-t border-zinc-950 text-xs text-zinc-600 font-mono">
+      <footer className="max-w-7xl w-full mx-auto text-center mt-8 pt-4 border-t border-zinc-950 text-xs text-zinc-600 font-mono">
         <p>Cổ Chân Nhân Web Game © 2026 • Thiết Kế Trực Quan Sinh Động</p>
       </footer>
     </div>

@@ -517,6 +517,11 @@ func FeedGu(c *gin.Context) {
 	targetGu.Hunger = specs.MaxHunger
 	targetGu.Status = "ACTIVE" // Wakes up from sleep (hibernation)
 
+	// Vital Gu must always be equipped and active
+	if targetGu.IsVital {
+		targetGu.Equipped = true
+	}
+
 	// 6. Update database
 	updateQuery := `
 		UPDATE players
@@ -756,6 +761,12 @@ func EquipGu(c *gin.Context) {
 		return
 	}
 
+	// Vital Gu is always equipped and active — cannot be unequipped
+	if targetGu.IsVital && !req.Equip {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bản Mệnh Cổ luôn luôn được trang bị, không thể tháo ra."})
+		return
+	}
+
 	if req.Equip {
 		if targetGu.Equipped {
 			c.JSON(http.StatusOK, gin.H{"message": "Gu bug is already equipped", "player": player})
@@ -853,6 +864,12 @@ func UpdateGuStatus(c *gin.Context) {
 	targetGu := &player.GuInventory[targetIdx]
 	if targetGu.Status == "DEAD" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể thay đổi trạng thái của Cổ trùng ĐÃ CHẾT."})
+		return
+	}
+
+	// Vital Gu is always ACTIVE — cannot be put to sleep or sealed
+	if targetGu.IsVital && req.Status != "ACTIVE" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bản Mệnh Cổ luôn luôn ở trạng thái ACTIVE, không thể thay đổi."})
 		return
 	}
 
@@ -1104,10 +1121,12 @@ func SetVitalGu(c *gin.Context) {
 		}
 	}
 
-	// Update is_vital flags
+	// Update is_vital flags; vital Gu is always ACTIVE and equipped
 	for idx := range player.GuInventory {
 		if idx == targetIndex {
 			player.GuInventory[idx].IsVital = true
+			player.GuInventory[idx].Status = "ACTIVE"
+			player.GuInventory[idx].Equipped = true
 		} else {
 			player.GuInventory[idx].IsVital = false
 		}

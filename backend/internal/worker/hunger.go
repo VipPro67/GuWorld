@@ -81,7 +81,7 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 
 	updated := false
 	playerHPBacklash := 0.0
-	newInventory := models.GuInventory{}
+	newInventory := models.GuInventory{} // never nil — marshals to [] not null
 
 	for i := range guInv {
 		gu := guInv[i]
@@ -97,19 +97,24 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 
 			if gu.Hunger <= 0 {
 				gu.Hunger = 0
-				// Roll for sleep vs death (20% Hibernation, 80% Dead)
-				roll := rand.Intn(100)
-				if roll < 20 {
-					gu.Status = "SLEEPING"
-					log.Printf("Cultivation Log: Player %s's Gu %s (%s) starved and went into HIBERNATION", username, specs.Name, gu.InstanceID[:8])
-					newInventory = append(newInventory, gu)
-				} else {
+				// Vital Gu never sleeps — it either stays alive (fed) or dies
+				if gu.IsVital {
 					gu.Status = "DEAD"
-					log.Printf("Cultivation Log: Player %s's Gu %s (%s) starved and DIED", username, specs.Name, gu.InstanceID[:8])
-					if gu.IsVital {
-						playerHPBacklash += 80.0
+					log.Printf("Cultivation Log: Player %s's VITAL Gu %s (%s) starved and DIED — HP backlash incoming", username, specs.Name, gu.InstanceID[:8])
+					playerHPBacklash += 80.0
+					// Dead Gu is deleted — do not append
+				} else {
+					// Roll for sleep vs death (20% Hibernation, 80% Dead)
+					roll := rand.Intn(100)
+					if roll < 20 {
+						gu.Status = "SLEEPING"
+						log.Printf("Cultivation Log: Player %s's Gu %s (%s) starved and went into HIBERNATION", username, specs.Name, gu.InstanceID[:8])
+						newInventory = append(newInventory, gu)
+					} else {
+						gu.Status = "DEAD"
+						log.Printf("Cultivation Log: Player %s's Gu %s (%s) starved and DIED", username, specs.Name, gu.InstanceID[:8])
+						// Dead Gu is deleted, so we do not append it to newInventory
 					}
-					// Dead Gu is deleted, so we do not append it to newInventory
 				}
 			} else {
 				newInventory = append(newInventory, gu)
@@ -143,7 +148,7 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 	}
 
 	// Re-evaluate equipped_gus array
-	newEquippedGus := []string{}
+	newEquippedGus := []string{} // never nil — marshals to [] not null
 	for _, eqInstID := range equippedGus {
 		stillExists := false
 		for _, item := range newInventory {
@@ -162,7 +167,12 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 		return err
 	}
 
-	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1, equipped_gus = $2 WHERE id = $3`, newGuInvRaw, newEquippedGus, playerID)
+	newEquippedGusRaw, err := json.Marshal(newEquippedGus)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1, equipped_gus = $2 WHERE id = $3`, string(newGuInvRaw), string(newEquippedGusRaw), playerID)
 	if err != nil {
 		return err
 	}

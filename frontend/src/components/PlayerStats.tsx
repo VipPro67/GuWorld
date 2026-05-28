@@ -154,7 +154,7 @@ export const PlayerStats: React.FC<PlayerStatsProps> = ({
   };
 
   return (
-    <div className="glass-panel rounded-3xl p-6 w-full max-w-sm flex flex-col justify-between h-full relative overflow-hidden group">
+    <div className="glass-panel rounded-3xl p-4 sm:p-6 w-full flex flex-col justify-between h-full relative overflow-hidden group">
       {/* Decorative background grid pattern */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(16,185,129,0.01)_1px,transparent_1px),linear-gradient(to_bottom,rgba(16,185,129,0.01)_1px,transparent_1px)] bg-[size:14px_24px] pointer-events-none" />
 
@@ -212,7 +212,7 @@ export const PlayerStats: React.FC<PlayerStatsProps> = ({
 
           {/* SVG Radar Chart Display */}
           <div className="flex justify-center items-center py-2 relative">
-            <svg width="200" height="200" className="overflow-visible">
+            <svg viewBox="0 0 200 200" className="w-full max-w-[200px] overflow-visible">
               {/* Concentric grid lines */}
               {gridSteps.map((step, idx) => {
                 const r = 15 + step * 65;

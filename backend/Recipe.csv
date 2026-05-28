@@ -1,0 +1,14 @@
+id,target_gu_id,required_gus,required_materials,success_rate,primeval_stones_cost,immortal_essence_stones_cost
+recipe_moon_raiment,GU_MOON_RAIMENT,"{""GU_JADE_SKIN"": 1, ""GU_MOONLIGHT"": 1}","{}",0.85,10,0.0
+recipe_white_jade,GU_WHITE_JADE,"{""GU_JADE_SKIN"": 1, ""GU_WHITE_BOAR"": 1}","{""wild_boar_tusk"": 1}",0.8,15,0.0
+recipe_four_flavors_liquor,GU_FOUR_FLAVORS_LIQUOR,"{""GU_LIQUOR_WORM"": 2}","{""sour_wine"": 1, ""spicy_wine"": 1, ""sweet_wine"": 1, ""bitter_wine"": 1}",0.6,30,0.0
+recipe_moon_halo,GU_MOON_HALO,"{""GU_MOONLIGHT"": 1, ""GU_LITTLE_LIGHT"": 2}","{}",0.75,20,0.0
+recipe_blood_moon,GU_BLOOD_MOON,"{""GU_MOON_HALO"": 1, ""GU_BLOOD_QI"": 1}","{}",0.7,35,0.0
+recipe_stealth_scales,GU_STEALTH_SCALES,"{""GU_STEALTH_STONE"": 1, ""GU_FISH_SCALE"": 1}","{}",0.8,25,0.0
+recipe_moon_silver,GU_MOON_SILVER,"{""GU_MOONLIGHT"": 1, ""GU_SILVER_STONE"": 1}","{}",0.85,10,0.0
+recipe_moon_whirl,GU_MOON_WHIRL,"{""GU_MOONLIGHT"": 1, ""GU_WHIRLWIND"": 1}","{}",0.85,15,0.0
+recipe_seven_fragrances_liquor,GU_SEVEN_FRAGRANCES_LIQUOR,"{""GU_FOUR_FLAVORS_LIQUOR"": 2}","{""seven_spices"": 1}",0.4,100,0.0
+recipe_nine_eyes_liquor,GU_NINE_EYES_LIQUOR,"{""GU_SEVEN_FRAGRANCES_LIQUOR"": 2}","{""nine_beast_kings_eyes"": 1}",0.2,500,0.0
+recipe_fixed_immortal_travel,GU_FIXED_IMMORTAL_TRAVEL,"{""GU_DIVINE_TRAVEL"": 1, ""GU_STAR_GEM"": 1, ""GU_AZURE_BAMBOO"": 1, ""GU_SUN_RAY"": 1}","{""glory_of_the_immemorial_light"": 1}",0.01,0,50.0
+recipe_shadow_steps,GU_SHADOW_STEPS,"{""GU_SWIFT_STEP"": 1, ""GU_SHADOW"": 1}","{}",0.8,15,0.0
+recipe_earth_communication,GU_EARTH_COMMUNICATION,"{""GU_EARTH_WORM"": 1, ""GU_FLESH_EAR"": 1}","{""ginseng"": 2}",0.75,20,0.0

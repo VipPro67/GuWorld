@@ -20,7 +20,7 @@ type RefineRequest struct {
 // GetRecipes returns list of all seeded refining formulas
 func GetRecipes(c *gin.Context) {
 	rows, err := db.DB.Query(`
-		SELECT id, target_gu_id, required_gus, required_materials, success_rate, primeval_stones_cost 
+		SELECT id, target_gu_id, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost 
 		FROM refining_recipes
 	`)
 	if err != nil {
@@ -35,6 +35,7 @@ func GetRecipes(c *gin.Context) {
 		err = rows.Scan(
 			&recipe.ID, &recipe.TargetGuID, &recipe.RequiredGus,
 			&recipe.RequiredMaterials, &recipe.SuccessRate, &recipe.PrimevalStonesCost,
+			&recipe.ImmortalEssenceStonesCost,
 		)
 		if err != nil {
 			continue
@@ -81,11 +82,12 @@ func RefineGu(c *gin.Context) {
 	// 3. Fetch Recipe
 	var recipe models.RefiningRecipe
 	err = tx.QueryRow(`
-		SELECT id, target_gu_id, required_gus, required_materials, success_rate, primeval_stones_cost 
+		SELECT id, target_gu_id, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost 
 		FROM refining_recipes 
 		WHERE id = $1`, req.RecipeID).Scan(
 		&recipe.ID, &recipe.TargetGuID, &recipe.RequiredGus,
 		&recipe.RequiredMaterials, &recipe.SuccessRate, &recipe.PrimevalStonesCost,
+		&recipe.ImmortalEssenceStonesCost,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -99,6 +101,12 @@ func RefineGu(c *gin.Context) {
 	// 4. Validate Costs (Primeval Stones)
 	if player.PrimevalStones < recipe.PrimevalStonesCost {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Not enough Primeval Stones"})
+		return
+	}
+
+	// 4b. Validate Costs (Immortal Essence Stones)
+	if recipe.ImmortalEssenceStonesCost > 0 && player.ImmortalStones < recipe.ImmortalEssenceStonesCost {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Not enough Immortal Essence Stones (Tiên Tinh Thạch)"})
 		return
 	}
 
@@ -160,6 +168,9 @@ func RefineGu(c *gin.Context) {
 
 	// 7. Consume resources (Stones & Materials & Gus)
 	player.PrimevalStones -= recipe.PrimevalStonesCost
+	if recipe.ImmortalEssenceStonesCost > 0 {
+		player.ImmortalStones -= recipe.ImmortalEssenceStonesCost
+	}
 
 	for matID, reqQty := range recipe.RequiredMaterials {
 		player.MaterialsInventory[matID] -= reqQty
@@ -243,10 +254,10 @@ func RefineGu(c *gin.Context) {
 	// 9. Update player status in database
 	updateQuery := `
 		UPDATE players
-		SET primeval_stones = $1, materials_inventory = $2, gu_inventory = $3, equipped_gus = $4
-		WHERE id = $5
+		SET primeval_stones = $1, immortal_stones = $2, materials_inventory = $3, gu_inventory = $4, equipped_gus = $5
+		WHERE id = $6
 	`
-	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.MaterialsInventory, player.GuInventory, player.EquippedGus, player.ID)
+	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ImmortalStones, player.MaterialsInventory, player.GuInventory, player.EquippedGus, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save refining results"})
 		return

@@ -73,7 +73,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const [settingVitalId, setSettingVitalId] = useState<string | null>(null);
   const [droppingId, setDroppingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedTab, setSelectedTab] = useState<"all" | "gu" | "material">("all");
+  const [selectedTab, setSelectedTab] = useState<"gu" | "material">("gu");
 
   const handleStatusUpdate = async (instanceId: string, status: string) => {
     if (!onUpdateStatus) return;
@@ -189,11 +189,11 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
     );
   });
 
-  const showMaterials = selectedTab === "all" || selectedTab === "material";
-  const showGus = selectedTab === "all" || selectedTab === "gu";
+  const showMaterials = selectedTab === "material";
+  const showGus = selectedTab === "gu";
 
   return (
-    <div className="glass-panel-gold rounded-3xl p-6 w-full max-w-lg space-y-6">
+    <div className="glass-panel-gold rounded-3xl p-4 sm:p-6 w-full space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
         <div className="flex items-center gap-2">
@@ -208,32 +208,20 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
       <div className="space-y-3">
         <div className="flex gap-2 bg-zinc-950/80 p-1.5 rounded-xl border border-zinc-900">
           <button
-            onClick={() => setSelectedTab("all")}
-            className={`flex-1 text-xs py-1.5 rounded-lg font-mono font-medium transition-all ${
-              selectedTab === "all"
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                : "text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            Tất Cả
-          </button>
-          <button
             onClick={() => setSelectedTab("gu")}
-            className={`flex-1 text-xs py-1.5 rounded-lg font-mono font-medium transition-all ${
-              selectedTab === "gu"
+            className={`flex-1 text-xs py-1.5 rounded-lg font-mono font-medium transition-all ${selectedTab === "gu"
                 ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                 : "text-zinc-500 hover:text-zinc-300"
-            }`}
+              }`}
           >
             Cổ Trùng
           </button>
           <button
             onClick={() => setSelectedTab("material")}
-            className={`flex-1 text-xs py-1.5 rounded-lg font-mono font-medium transition-all ${
-              selectedTab === "material"
+            className={`flex-1 text-xs py-1.5 rounded-lg font-mono font-medium transition-all ${selectedTab === "material"
                 ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                 : "text-zinc-500 hover:text-zinc-300"
-            }`}
+              }`}
           >
             Vật Phẩm
           </button>
@@ -261,7 +249,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
           {filteredMaterials.length === 0 ? (
             <div className="text-[10px] text-zinc-600 italic">Hộp nguyên liệu trống.</div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {filteredMaterials.map(({ key, spec, qty }) => {
                 const isConsumable = ["green_bamboo_wine", "moon_orchid_petal", "jade_stone"].includes(key);
                 const isUsing = usingId === key;
@@ -297,7 +285,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
       {/* Gu Bug list section */}
       {showGus && (
-        <div className="space-y-3 text-left">
+        <div className="space-y-6 text-left">
           <span className="text-[10px] font-mono text-zinc-505 uppercase tracking-widest block font-bold">
             Cổ Trùng Sở Hữu (My Gu Bugs)
           </span>
@@ -307,8 +295,41 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
               Không tìm thấy Cổ trùng nào khớp.
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {filteredGus.map((gu) => {
+            (() => {
+              // 1. Phân loại Bản Mệnh Cổ và Cổ trùng thường
+              const vitalGus = filteredGus.filter(gu => gu.is_vital);
+              const normalGus = filteredGus.filter(gu => !gu.is_vital);
+
+              // Định nghĩa trọng số cho trạng thái để dễ sắp xếp (ACTIVE ưu tiên cao nhất, DEAD thấp nhất)
+              const statusPriority = {
+                'ACTIVE': 1,
+                'SLEEPING': 2,
+                'SEALED': 3,
+                'DYING': 4,
+                'DEAD': 5
+              };
+
+              // 2. Sắp xếp danh sách Cổ trùng thường
+              normalGus.sort((a, b) => {
+                const specA = guDictionary[a.gu_id] || {};
+                const specB = guDictionary[b.gu_id] || {};
+
+                // Ưu tiên 1 Equip
+                const equipA = a.equipped ? 1 : 0;
+                const equipB = b.equipped ? 1 : 0;
+                if (equipA !== equipB) return equipB - equipA;
+
+                // Ưu tiên 2: Trạng thái (ACTIVE > SLEEPING > SEALED...)
+                const pA = statusPriority[a.status as keyof typeof statusPriority];
+                const pB = statusPriority[b.status as keyof typeof statusPriority];
+                if (pA !== pB) return pA - pB;
+
+                // Ưu tiên 3: Độ no (Giảm dần từ No nhiều đến Đói)
+                return b.hunger - a.hunger;
+              });
+
+              // Hàm helper render từng card Cổ Trùng để tránh lặp lại code
+              const renderGuCard = (gu: GuInstance) => {
                 const spec = guDictionary[gu.gu_id] || {
                   id: gu.gu_id,
                   name: gu.gu_id,
@@ -427,8 +448,8 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                 hunger <= 20
                                   ? "text-rose-450 font-bold"
                                   : hunger <= 50
-                                  ? "text-yellow-450"
-                                  : "text-emerald-450"
+                                    ? "text-yellow-450"
+                                    : "text-emerald-450"
                               }
                             >
                               {hunger}/{spec.max_hunger}
@@ -491,16 +512,15 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                               </button>
                             ) : (
                               <>
-                                {onEquipToggle && status === "ACTIVE" && (
+                                {onEquipToggle && status === "ACTIVE" && !gu.is_vital && (
                                   <button
                                     type="button"
                                     disabled={actionLoading || isCurrentlyEquipping}
                                     onClick={() => handleEquipClick(gu.instance_id, !isEquipped)}
-                                    className={`text-[9px] font-bold py-1 px-2.5 rounded-lg transition-all cursor-pointer font-mono ${
-                                      isEquipped
+                                    className={`text-[9px] font-bold py-1 px-2.5 rounded-lg transition-all cursor-pointer font-mono ${isEquipped
                                         ? "bg-amber-950/30 text-amber-400 border border-amber-900/40 hover:bg-amber-950/50"
                                         : "bg-indigo-950/30 text-indigo-400 border border-indigo-900/40 hover:bg-indigo-950/50"
-                                    }`}
+                                      }`}
                                   >
                                     {isCurrentlyEquipping ? "..." : isEquipped ? "Tháo" : "Trang Bị"}
                                   </button>
@@ -510,11 +530,10 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                   disabled={actionLoading || !canFeed || isCurrentlyFeeding}
                                   onClick={() => handleFeedClick(gu.instance_id)}
                                   title={status === "SEALED" ? "Cổ trùng đang bị phong ấn, không thể cho ăn" : `Ăn: 1x ${foodName}`}
-                                  className={`text-[9px] font-bold py-1 px-2.5 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer font-mono ${
-                                    canFeed
+                                  className={`text-[9px] font-bold py-1 px-2.5 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer font-mono ${canFeed
                                       ? "bg-emerald-600 text-white hover:bg-emerald-500 active:scale-[0.96]"
                                       : "bg-zinc-900 text-zinc-600 border border-zinc-850 cursor-not-allowed"
-                                  }`}
+                                    }`}
                                 >
                                   {isCurrentlyFeeding ? "..." : "Cho Ăn"}
                                 </button>
@@ -551,8 +570,8 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                               {settingVitalId === gu.instance_id ? "..." : "👑 Hóa Bản Mệnh"}
                             </button>
                           )}
-                          
-                          {onUpdateStatus && (
+
+                          {onUpdateStatus && !gu.is_vital && (
                             <>
                               {status === "ACTIVE" && (
                                 <>
@@ -611,8 +630,40 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                     </div>
                   </div>
                 );
-              })}
-            </div>
+              };
+
+              return (
+                <div className="space-y-6">
+                  {/* PHẦN 1: BẢN MỆNH CỔ */}
+                  {vitalGus.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-[9px] font-mono font-bold text-amber-400/80 uppercase tracking-wider flex items-center gap-1">
+                        <span>✦ Bản Mệnh Cổ</span>
+                        <div className="h-px flex-1 bg-gradient-to-r flow from-amber-500/20 to-transparent ml-2"></div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+                        {vitalGus.map(renderGuCard)}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PHẦN 2: CỔ TRÙNG KHÁC */}
+                  {normalGus.length > 0 && (
+                    <div className="space-y-2">
+                      {vitalGus.length > 0 && (
+                        <div className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1 pt-2">
+                          <span>✦ Cổ Trùng Khác</span>
+                          <div className="h-px flex-1 bg-gradient-to-r from-zinc-800 to-transparent ml-2"></div>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+                        {normalGus.map(renderGuCard)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
           )}
         </div>
       )}

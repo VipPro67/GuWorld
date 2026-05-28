@@ -93,6 +93,7 @@ export interface RefiningRecipe {
   required_materials: Record<string, number>;
   success_rate: number;
   primeval_stones_cost: number;
+  immortal_essence_stones_cost: number;
 }
 
 interface GameState {
@@ -177,7 +178,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       localStorage.setItem("gu_auth_token", data.token);
       localStorage.setItem("gu_player_id", data.player.id);
       
-      get().addLog(`Đồng chí ${data.player.username} đã quy vị! Tu vi: Nhất Chuyển Sơ Giai.`);
+      get().addLog(`Đồng chí ${data.player.username} đã quy vị!`);
       return true;
     } catch (err: any) {
       set({ error: err.message });
