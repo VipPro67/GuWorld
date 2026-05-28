@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -28,7 +30,40 @@ type CreatePlayerRequest struct {
 // CreatePlayerResponse represents the output payload for registration/login
 type CreatePlayerResponse struct {
 	Player models.Player `json:"player"`
-	Token  string        `json:"token"`
+}
+
+const authCookieName = "gu_auth_token"
+const authCookieMaxAge = 7 * 24 * 60 * 60
+
+func authCookieDomain() string {
+	return os.Getenv("AUTH_COOKIE_DOMAIN")
+}
+
+func authCookieSecure(c *gin.Context) bool {
+	secureEnv := os.Getenv("AUTH_COOKIE_SECURE")
+	if secureEnv != "" {
+		return strings.EqualFold(secureEnv, "true")
+	}
+
+	return c.Request.TLS != nil
+}
+
+func setAuthCookie(c *gin.Context, token string) {
+	sameSite := http.SameSiteLaxMode
+	switch strings.ToLower(os.Getenv("AUTH_COOKIE_SAMESITE")) {
+	case "strict":
+		sameSite = http.SameSiteStrictMode
+	case "none":
+		sameSite = http.SameSiteNoneMode
+	}
+
+	c.SetSameSite(sameSite)
+	c.SetCookie(authCookieName, token, authCookieMaxAge, "/", authCookieDomain(), authCookieSecure(c), true)
+}
+
+func clearAuthCookie(c *gin.Context) {
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(authCookieName, "", -1, "/", authCookieDomain(), authCookieSecure(c), true)
 }
 
 // RegisterPlayer handles registering a new player, hashing password, and rolling their aptitude
@@ -39,11 +74,11 @@ func RegisterPlayer(c *gin.Context) {
 		return
 	}
 	validRegions := map[string]bool{
-		"Southern_Border": true,
+		"Southern_Border":   true,
 		"Central_Continent": true,
-		"Northern_Plains": true,
-		"Western_Desert": true,
-		"Eastern_Sea": true,
+		"Northern_Plains":   true,
+		"Western_Desert":    true,
+		"Eastern_Sea":       true,
 	}
 	if !validRegions[req.StartingRegion] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Starting region không hợp lệ"})
@@ -131,10 +166,10 @@ func RegisterPlayer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create access token"})
 		return
 	}
+	setAuthCookie(c, token)
 
 	c.JSON(http.StatusCreated, CreatePlayerResponse{
 		Player: player,
-		Token:  token,
 	})
 }
 
@@ -209,11 +244,50 @@ func LoginPlayer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sign access token"})
 		return
 	}
+	setAuthCookie(c, token)
 
 	c.JSON(http.StatusOK, CreatePlayerResponse{
 		Player: player,
-		Token:  token,
 	})
+}
+
+// LogoutPlayer clears the auth cookie for the current browser session.
+func LogoutPlayer(c *gin.Context) {
+	clearAuthCookie(c)
+	c.Status(http.StatusNoContent)
+}
+
+// GetCurrentPlayer returns the authenticated player from the httpOnly cookie session.
+func GetCurrentPlayer(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid auth session"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, playerID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Player not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to evaluate player status: " + err.Error()})
+		}
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to persist mana update"})
+		return
+	}
+
+	c.JSON(http.StatusOK, player)
 }
 
 // GetPlayerStatus retrieves the player and updates their mana via lazy evaluation
