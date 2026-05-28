@@ -19,8 +19,10 @@ import (
 
 // CreatePlayerRequest represents the incoming registration payload
 type CreatePlayerRequest struct {
-	Username string `json:"username" binding:"required,min=3,max=30"`
-	Password string `json:"password" binding:"required,min=6,max=50"`
+	Username       string `json:"username" binding:"required,min=3,max=30"`
+	Password       string `json:"password" binding:"required,min=6,max=50"`
+	StartingRegion string `json:"starting_region" binding:"required"`
+	SetVitalNow    bool   `json:"set_vital_now"`
 }
 
 // CreatePlayerResponse represents the output payload for registration/login
@@ -34,6 +36,17 @@ func RegisterPlayer(c *gin.Context) {
 	var req CreatePlayerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	validRegions := map[string]bool{
+		"Southern_Border": true,
+		"Central_Continent": true,
+		"Northern_Plains": true,
+		"Western_Desert": true,
+		"Eastern_Sea": true,
+	}
+	if !validRegions[req.StartingRegion] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Starting region không hợp lệ"})
 		return
 	}
 
@@ -74,7 +87,7 @@ func RegisterPlayer(c *gin.Context) {
 			GuID:       "GU_MOONLIGHT",
 			Hunger:     100,
 			Status:     "ACTIVE",
-			IsVital:    true,
+			IsVital:    req.SetVitalNow,
 		},
 	}
 	starterMaterials := models.MaterialsInventory{
@@ -86,12 +99,12 @@ func RegisterPlayer(c *gin.Context) {
 	var player models.Player
 	query := `
 		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, gu_inventory, materials_inventory, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat)
-		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, 0, $7, $8, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, '[]'::jsonb, '{}'::jsonb, 'Southern_Border', '{"strength": 0}'::jsonb, '{}'::jsonb, NULL)
+		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, 0, $7, $8, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, '[]'::jsonb, '{}'::jsonb, $9, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL)
 		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, gu_inventory, materials_inventory, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at
 	`
 
 	var activeCombatBytes []byte
-	err = db.DB.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, currentMana, maxMana, starterGu, starterMaterials).Scan(
+	err = db.DB.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, currentMana, maxMana, starterGu, starterMaterials, req.StartingRegion).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.CurrentMana,
 		&player.MaxMana, &player.PrimevalStones, &player.GuInventory, &player.MaterialsInventory,
