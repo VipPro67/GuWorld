@@ -108,7 +108,7 @@ interface GameState {
   recipes: RefiningRecipe[];
   recipesLoaded: boolean;
   login: (username: string, password: string) => Promise<boolean>;
-  register: (username: string, password: string) => Promise<boolean>;
+  register: (username: string, password: string, startingRegion: string, setVitalNow: boolean) => Promise<boolean>;
   logout: () => void;
   clearError: () => void;
   fetchPlayerStatus: (id: string) => Promise<void>;
@@ -187,13 +187,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  register: async (username, password) => {
+  register: async (username, password, startingRegion, setVitalNow) => {
     set({ isLoading: true, error: null });
     try {
       const response = await fetch(`${BACKEND_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, starting_region: startingRegion, set_vital_now: setVitalNow }),
       });
 
       if (!response.ok) {

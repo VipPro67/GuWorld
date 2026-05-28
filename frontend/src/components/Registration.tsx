@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { Sparkles, Compass, ShieldAlert, KeyRound, User, Eye, EyeOff } from "lucide-react";
 
 interface RegistrationProps {
-  onRegister: (username: string, password: string) => Promise<boolean>;
+  onRegister: (username: string, password: string, startingRegion: string, setVitalNow: boolean) => Promise<boolean>;
   onLogin: (username: string, password: string) => Promise<boolean>;
   isLoading: boolean;
   error: string | null;
@@ -22,6 +22,8 @@ export const Registration: React.FC<RegistrationProps> = ({
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [startingRegion, setStartingRegion] = useState("Southern_Border");
+  const [setVitalNow, setSetVitalNow] = useState(true);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +32,7 @@ export const Registration: React.FC<RegistrationProps> = ({
     if (isLoginTab) {
       await onLogin(username.trim(), password);
     } else {
-      await onRegister(username.trim(), password);
+      await onRegister(username.trim(), password, startingRegion, setVitalNow);
     }
   };
 
@@ -94,6 +96,34 @@ export const Registration: React.FC<RegistrationProps> = ({
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-4">
+        {!isLoginTab && (
+          <>
+            <div>
+              <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5">
+                Khu Vực Khởi Đầu
+              </label>
+              <select
+                value={startingRegion}
+                onChange={(e) => setStartingRegion(e.target.value)}
+                className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-zinc-100"
+              >
+                <option value="Southern_Border">Nam Cương</option>
+                <option value="Central_Continent">Trung Châu</option>
+                <option value="Northern_Plains">Bắc Nguyên</option>
+                <option value="Western_Desert">Tây Mạc</option>
+                <option value="Eastern_Sea">Đông Hải</option>
+              </select>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-zinc-300">
+              <input
+                type="checkbox"
+                checked={setVitalNow}
+                onChange={(e) => setSetVitalNow(e.target.checked)}
+              />
+              Đặt Cổ đầu tiên làm Bản Mệnh ngay (bỏ chọn để trì hoãn)
+            </label>
+          </>
+        )}
         {/* Username */}
         <div className="relative">
           <label
