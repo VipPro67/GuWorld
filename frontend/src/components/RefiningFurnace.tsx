@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Player, GuSpec, ItemSpec, RefiningRecipe, GuInstance, useGameStore } from "@/store/useGameStore";
-import { Flame, Sparkles, AlertCircle, Check, X, RefreshCw, Coins, Zap, Trophy, HelpCircle } from "lucide-react";
+import { Flame, Sparkles, AlertCircle, Check, X, RefreshCw, Coins, Zap, Trophy, HelpCircle, ChevronDown, Search } from "lucide-react";
 
 interface RefiningFurnaceProps {
   player: Player;
@@ -28,6 +28,18 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   const [refineResult, setRefineResult] = useState<{ status: "success" | "failed"; new_gu?: GuInstance; message: string } | null>(null);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [customRecipes, setCustomRecipes] = useState<RefiningRecipe[]>([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Auto-select first recipe if none selected
   useEffect(() => {
@@ -354,26 +366,69 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
               </span>
             </div>
 
-            {/* Recipes Tabs */}
-            <div className="flex gap-2">
-              {filteredRecipes.map((recipe) => {
-                const targetGu = guDictionary[recipe.target_gu_id] || { name: recipe.target_gu_id };
-                const isActive = recipe.id === selectedRecipeId;
-                return (
-                  <button
-                    key={recipe.id}
-                    disabled={isRefining}
-                    onClick={() => setSelectedRecipeId(recipe.id)}
-                    className={`flex-1 py-2 px-3 text-xs font-semibold rounded-xl border text-center transition-all cursor-pointer ${
-                      isActive
-                        ? "bg-amber-500/15 text-amber-400 border-amber-500/50 shadow-md shadow-amber-950/20"
-                        : "bg-zinc-950/40 text-zinc-400 border-zinc-900 hover:text-zinc-200 hover:border-zinc-800"
-                    }`}
-                  >
-                    {targetGu.name}
-                  </button>
-                );
-              })}
+            {/* Recipe Selection Combobox */}
+            <div className="relative" ref={dropdownRef}>
+              <div 
+                className={`flex items-center justify-between w-full p-3.5 rounded-xl border transition-all cursor-pointer ${
+                  isRefining ? "bg-zinc-950/20 border-zinc-800 opacity-50 cursor-not-allowed" : "bg-zinc-950/60 border-zinc-800 hover:border-amber-500/50 hover:shadow-[0_0_10px_rgba(245,158,11,0.1)]"
+                }`}
+                onClick={() => !isRefining && setIsDropdownOpen(!isDropdownOpen)}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-amber-400 font-bold font-serif text-sm">
+                    {selectedRecipe ? (guDictionary[selectedRecipe.target_gu_id]?.name || selectedRecipe.target_gu_id) : "Chọn công thức hợp luyện..."}
+                  </span>
+                </div>
+                <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-300 ${isDropdownOpen ? "rotate-180" : ""}`} />
+              </div>
+
+              {isDropdownOpen && !isRefining && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-72 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="p-3 border-b border-zinc-800/80 flex items-center gap-2 sticky top-0 bg-zinc-950/95 backdrop-blur-sm z-10">
+                    <Search className="w-4 h-4 text-amber-500/70" />
+                    <input
+                      type="text"
+                      placeholder="Tìm kiếm tên Cổ trùng..."
+                      className="w-full bg-transparent border-none text-sm text-zinc-200 focus:outline-none focus:ring-0 placeholder:text-zinc-600 font-serif"
+                      value={searchKeyword}
+                      onChange={(e) => setSearchKeyword(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="overflow-y-auto custom-scrollbar flex-1 p-1.5">
+                    {filteredRecipes.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-zinc-500 italic">
+                        Không tìm thấy công thức phù hợp
+                      </div>
+                    ) : (
+                      filteredRecipes.map((recipe) => {
+                        const targetGu = guDictionary[recipe.target_gu_id] || { name: recipe.target_gu_id };
+                        const isActive = recipe.id === selectedRecipeId;
+                        return (
+                          <div
+                            key={recipe.id}
+                            onClick={() => {
+                              setSelectedRecipeId(recipe.id);
+                              setIsDropdownOpen(false);
+                            }}
+                            className={`p-3 rounded-lg text-sm cursor-pointer transition-all flex justify-between items-center ${
+                              isActive
+                                ? "bg-amber-500/15 text-amber-400 font-bold border border-amber-500/20"
+                                : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200 border border-transparent"
+                            }`}
+                          >
+                            <span className="font-serif">{targetGu.name}</span>
+                            <span className="text-[10px] font-mono opacity-50">
+                              {recipe.success_rate ? `${recipe.success_rate * 100}%` : ""}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
