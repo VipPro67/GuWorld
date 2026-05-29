@@ -12,6 +12,9 @@ interface ApertureProps {
   subRank: number;
   guInventory?: GuInstance[];
   guDictionary?: Record<string, GuSpec>;
+  actionLoading?: boolean;
+  cultivationProgress?: number;
+  onTemper?: (energyAmount: number) => Promise<boolean>;
 }
 
 const RANK_NAMES: Record<number, string> = {
@@ -94,20 +97,37 @@ export const Aperture: React.FC<ApertureProps> = ({
   subRank,
   guInventory = [],
   guDictionary = {},
+  actionLoading = false,
+  cultivationProgress = 0,
+  onTemper,
 }) => {
+  const [temperAmount, setTemperAmount] = React.useState(10);
   const percent   = Math.min(100, Math.max(0, (currentMana / maxMana) * 100));
   const rankName  = RANK_NAMES[rank]    ?? `Rank ${rank}`;
   const subRankName = SUB_RANK_NAMES[subRank] ?? `Sub ${subRank}`;
-  const manaQuality = MANA_QUALITY[rank] ?? "Chân Nguyên";
+  const isImmortal = rank >= 6;
+  const energyType = isImmortal ? "Tiên Nguyên" : "Chân Nguyên";
+  const apertureName = isImmortal ? "Tiên Khiếu (Immortal Aperture)" : "Không Khiếu (Aperture)";
+  const energyPoolName = isImmortal ? "Tiên Nguyên Hải" : "Chân Nguyên Hải";
+  const regenLabel = isImmortal ? "Tiên Khiếu ngưng tụ" : "Tư chất hồi phục";
+  const manaQuality = MANA_QUALITY[rank] ?? energyType;
   const c = RANK_COLORS[rank] ?? RANK_COLORS[1];
 
   const dashOffset = CIRC * (1 - percent / 100);
 
-  const regenRate =
-    aptitudeType === "Giáp"  ? (2   * rank).toFixed(1)
-    : aptitudeType === "Ất"  ? (1.5 * rank).toFixed(1)
-    : aptitudeType === "Bính"? (1   * rank).toFixed(1)
-    : (0.5 * rank).toFixed(1);
+  const immortalBaseRegen: Record<number, number> = { 6: 0.5, 7: 0.8, 8: 1.2, 9: 2.0 };
+  const mortalRegen = aptitudeType === "Giáp" ? 8 : aptitudeType === "Ất" ? 6 : aptitudeType === "Bính" ? 4 : 2;
+  const immortalRegen = (immortalBaseRegen[rank] ?? 0.5 + (rank - 6) * 0.35) * (1 + (Math.min(Math.max(subRank, 1), 4) - 1) * 0.15);
+  const regenRate = (isImmortal ? immortalRegen : mortalRegen).toFixed(1);
+  const cultivationThreshold = isImmortal
+    ? ({ 6: 800, 7: 1200, 8: 1800, 9: 2600 }[rank] ?? 800 + (rank - 6) * 500) * (1 + (subRank - 1) * 0.35)
+    : ({ 1: 100, 2: 160, 3: 240, 4: 360, 5: 500 }[rank] ?? 100) * (1 + (subRank - 1) * 0.25);
+  const cultivationPercent = Math.min(100, Math.max(0, (cultivationProgress / cultivationThreshold) * 100));
+  const canTemper = Boolean(onTemper) && !actionLoading && currentMana >= temperAmount && temperAmount > 0;
+  const handleTemper = async () => {
+    if (!onTemper || !canTemper) return;
+    await onTemper(temperAmount);
+  };
 
   // Vital Gu
   const vitalGu   = guInventory.find((g) => g.is_vital);
@@ -162,10 +182,10 @@ export const Aperture: React.FC<ApertureProps> = ({
           className="text-sm sm:text-base font-semibold tracking-wide uppercase font-serif mb-0.5"
           style={{ color: c.text }}
         >
-          Không Khiếu (Aperture)
+          {apertureName}
         </h3>
         <p className="text-[9px] sm:text-[10px] text-zinc-500 italic text-center mb-1">
-          Tư Chất: {aptitudeType} ({aptitudePercent}%) • {manaQuality}
+          {isImmortal ? "Tư chất phàm không còn quyết định hồi năng lượng" : `Tư Chất: ${aptitudeType} (${aptitudePercent}%)`} • {manaQuality}
         </p>
         <p className="text-[10px] sm:text-xs font-semibold tracking-wide text-center mb-3" style={{ color: c.text }}>
           Tu Vi: {rankName}&nbsp;&nbsp;|&nbsp;&nbsp;Cảnh Giới: {subRankName}
@@ -306,9 +326,51 @@ export const Aperture: React.FC<ApertureProps> = ({
               {currentMana.toFixed(1)} / {maxMana.toFixed(0)}
             </span>
             <span className="text-[9px] mt-1 text-zinc-400 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-              Chân Nguyên Hải
+              {energyPoolName}
             </span>
           </div>
+        </div>
+
+
+
+        {/* Cultivation progress */}
+        <div className="w-full mb-3 rounded-2xl border border-zinc-900 bg-zinc-950/40 p-3">
+          <div className="flex justify-between items-center mb-1.5">
+            <span className="text-[9px] text-zinc-500 uppercase tracking-widest">
+              {isImmortal ? "Diễn hóa Tiên Khiếu" : "Ôn dưỡng Không Khiếu"}
+            </span>
+            <span className="text-[9px] font-mono" style={{ color: c.text }}>
+              {cultivationProgress.toFixed(1)} / {cultivationThreshold.toFixed(0)}
+            </span>
+          </div>
+          <div className="h-2 rounded-full bg-zinc-900 overflow-hidden mb-2">
+            <div
+              className="h-full rounded-full transition-all"
+              style={{ width: `${cultivationPercent}%`, background: c.waveSolid, boxShadow: `0 0 8px ${c.glow}` }}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="1"
+              max={Math.max(1, Math.floor(currentMana))}
+              value={temperAmount}
+              onChange={(e) => setTemperAmount(Math.max(1, Number(e.target.value) || 1))}
+              className="w-20 bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1 text-[10px] text-zinc-200 font-mono"
+            />
+            <button
+              onClick={handleTemper}
+              disabled={!canTemper}
+              className="flex-1 rounded-lg border border-amber-700/40 bg-amber-950/20 px-2 py-1 text-[10px] font-bold text-amber-200 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-amber-900/30 transition-colors"
+            >
+              Tiêu hao {temperAmount.toFixed(0)} {energyType} để tu luyện
+            </button>
+          </div>
+          <p className="mt-1.5 text-[9px] text-zinc-600">
+            {isImmortal
+              ? "Rank 6+ tiêu hao Tiên Nguyên để diễn hóa Tiên Khiếu, tăng tiểu cảnh giới rồi đại cảnh giới Tiên."
+              : "Phàm cấp tiêu hao Chân Nguyên ôn dưỡng vách Không Khiếu; Rank 5 Đỉnh Phong đủ tiến độ sẽ độ kiếp lên Rank 6."}
+          </p>
         </div>
 
         {/* Vital Gu badge */}
@@ -372,8 +434,13 @@ export const Aperture: React.FC<ApertureProps> = ({
         </div>
 
         {/* Regen */}
-        <div className="text-[10px] text-zinc-500 text-center">
-          Tái sinh: {regenRate} chân nguyên/giờ
+        <div className="text-[10px] text-zinc-500 text-center space-y-1">
+          <div>{regenLabel}: {regenRate} {energyType.toLowerCase()}/giờ</div>
+          <div className="text-[9px] text-zinc-600">
+            {isImmortal
+              ? "Cổ Tiên dùng Tiên Nguyên, trần chứa theo cấp Tiên Khiếu; phàm tài không hồi được nguồn này."
+              : "Cổ sư dùng Chân Nguyên, trần chứa theo tư chất/Không Khiếu và hồi theo tư chất."}
+          </div>
         </div>
       </div>
     </>

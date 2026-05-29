@@ -61,6 +61,8 @@ func SetupRouter() *gin.Engine {
 		{
 			authGroup.POST("/register", handlers.RegisterPlayer)
 			authGroup.POST("/login", handlers.LoginPlayer)
+			authGroup.POST("/logout", handlers.LogoutPlayer)
+			authGroup.GET("/me", middleware.AuthRequired(), handlers.GetCurrentPlayer)
 		}
 
 		// Protected Cultivation Endpoints
@@ -70,6 +72,7 @@ func SetupRouter() *gin.Engine {
 			player.GET("/status/:id", handlers.GetPlayerStatus)
 			player.GET("/stats", handlers.GetPlayerStatsHandler)
 			player.POST("/explore/:id", handlers.Explore)
+			player.POST("/cultivate", handlers.TemperAperture)
 			player.POST("/use-item", handlers.UseItem)
 		}
 

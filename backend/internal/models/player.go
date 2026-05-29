@@ -50,33 +50,34 @@ type CombatState struct {
 
 // Player represents a cultivator in the Gu World.
 type Player struct {
-	ID                 uuid.UUID          `json:"id"`
-	Username           string             `json:"username"`
-	PasswordHash       string             `json:"-"`
-	Rank               int                `json:"rank"`             // 1 to 9 (Nhất chuyển to Cửu chuyển)
-	SubRank            int                `json:"sub_rank"`         // 1: Sơ giai, 2: Trung giai, 3: Cao giai, 4: Đỉnh phong
-	AptitudeType       string             `json:"aptitude_type"`    // 'Giáp', 'Ất', 'Bính', 'Đinh'
-	AptitudePercent    int                `json:"aptitude_percent"` // 20 to 99
-	CurrentMana        float64            `json:"current_mana"`     // Current Primeval Essence
-	MaxMana            float64            `json:"max_mana"`         // Max Primeval Essence (equals AptitudePercent)
-	PrimevalStones     int                `json:"primeval_stones"`  // Game currency
-	ImmortalStones    float64            `json:"immortal_stones"`
-	GuInventory        GuInventory        `json:"gu_inventory"`
-	MaterialsInventory MaterialsInventory `json:"materials_inventory"`
-	HP                 float64            `json:"hp"`
-	BaseHP             float64            `json:"base_hp"`
-	BodyMods           BodyModsList       `json:"body_mods"`
-	X                  int                `json:"x"`
-	Y                  int                `json:"y"`
-	ExploredCells      ExploredCellsList  `json:"explored_cells"`
-	EquippedGus        EquippedGusList    `json:"equipped_gus"`
-	ClearedCells       ClearedCellsMap    `json:"cleared_cells"`
-	CurrentRegion      string             `json:"current_region"`
-	DaoMarks           DaoMarksMap        `json:"dao_marks"`
-	PathMasteries      PathMasteriesMap   `json:"path_masteries"`
-	ActiveCombat       *CombatState       `json:"active_combat"`
-	LastManaUpdate     time.Time          `json:"last_mana_update"` // Time of last mana recalculation
-	CreatedAt          time.Time          `json:"created_at"`
+	ID                  uuid.UUID          `json:"id"`
+	Username            string             `json:"username"`
+	PasswordHash        string             `json:"-"`
+	Rank                int                `json:"rank"`             // 1 to 9 (Nhất chuyển to Cửu chuyển)
+	SubRank             int                `json:"sub_rank"`         // 1: Sơ giai, 2: Trung giai, 3: Cao giai, 4: Đỉnh phong
+	AptitudeType        string             `json:"aptitude_type"`    // 'Giáp', 'Ất', 'Bính', 'Đinh'
+	AptitudePercent     int                `json:"aptitude_percent"` // 20 to 99
+	CurrentMana         float64            `json:"current_mana"`     // Current Primeval Essence
+	MaxMana             float64            `json:"max_mana"`         // Max Primeval Essence (equals AptitudePercent)
+	PrimevalStones      int                `json:"primeval_stones"`  // Game currency
+	ImmortalStones      float64            `json:"immortal_stones"`
+	CultivationProgress float64            `json:"cultivation_progress"`
+	GuInventory         GuInventory        `json:"gu_inventory"`
+	MaterialsInventory  MaterialsInventory `json:"materials_inventory"`
+	HP                  float64            `json:"hp"`
+	BaseHP              float64            `json:"base_hp"`
+	BodyMods            BodyModsList       `json:"body_mods"`
+	X                   int                `json:"x"`
+	Y                   int                `json:"y"`
+	ExploredCells       ExploredCellsList  `json:"explored_cells"`
+	EquippedGus         EquippedGusList    `json:"equipped_gus"`
+	ClearedCells        ClearedCellsMap    `json:"cleared_cells"`
+	CurrentRegion       string             `json:"current_region"`
+	DaoMarks            DaoMarksMap        `json:"dao_marks"`
+	PathMasteries       PathMasteriesMap   `json:"path_masteries"`
+	ActiveCombat        *CombatState       `json:"active_combat"`
+	LastManaUpdate      time.Time          `json:"last_mana_update"` // Time of last mana recalculation
+	CreatedAt           time.Time          `json:"created_at"`
 }
 
 type EquippedGusList []string
@@ -269,4 +270,3 @@ func (e ExploredCellsList) Value() (driver.Value, error) {
 	}
 	return json.Marshal(e)
 }
-

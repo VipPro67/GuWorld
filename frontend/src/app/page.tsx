@@ -25,6 +25,7 @@ export default function Home() {
     register,
     fetchPlayerStatus,
     initializeSession,
+    temperAperture,
     logout,
     explore,
     feedGu,
@@ -182,6 +183,9 @@ export default function Home() {
                 subRank={player.sub_rank}
                 guInventory={player.gu_inventory}
                 guDictionary={guDictionary}
+                actionLoading={actionLoading}
+                cultivationProgress={player.cultivation_progress}
+                onTemper={temperAperture}
               />
               <PlayerStats
                 player={player}
