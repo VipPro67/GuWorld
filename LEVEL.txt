@@ -1,0 +1,46 @@
+Hệ thống thăng cấp trong thế giới Cổ Chân Nhân được chia làm hai giai đoạn hoàn toàn khác biệt: Phàm nhân (Cổ sư từ Nhất chuyển đến Ngũ chuyển) và Cổ tiên (Từ Lục chuyển đến Cửu chuyển)
+. Quá trình này không dựa vào việc "tích lũy điểm kinh nghiệm" (EXP) như game truyền thống, mà dựa vào tài nguyên, tố chất và khả năng sinh tồn.
+Dưới đây là chi tiết cách thức thăng cấp và bản Prompt để bạn giao cho AI Agent triển khai.
+1. Cách thức thăng cấp của Cổ Sư Phàm Nhân (Rank 1 - Rank 5)
+Mỗi đại cảnh giới (Chuyển) của cổ sư được chia làm 4 tiểu cảnh giới: Sơ giai, Trung giai, Cao giai và Đỉnh phong
+.
+Phương pháp căn bản (Trùng kích vách khiếu): Cổ sư sử dụng Chân Nguyên trong Không khiếu để liên tục đánh sâu, cọ rửa và phá vỡ "vách khiếu" (màng pha lê/màng nước bảo vệ Không khiếu)
+. Khi vách khiếu bị phá vỡ và lập lại, cổ sư sẽ tiến lên một tiểu cảnh giới mới
+.
+Yếu tố quyết định - Tư chất: Tư chất (Giáp, Ất, Bính, Đinh) quyết định lượng Chân Nguyên tối đa và tốc độ hồi phục
+. Người có tư chất cao (Giáp) có thể tự dùng Chân Nguyên của mình để phá vách khiếu dễ dàng, trong khi tư chất thấp (Bính, Đinh) thường cạn kiệt Chân Nguyên trước khi vách khiếu vỡ, buộc phải vừa trùng kích vừa tay cầm Nguyên thạch để nạp lại năng lượng
+.
+Các đường tắt (Shortcuts) thăng cấp:
+Cổ Xá Lợi (Relic Gu): Là vật phẩm tiêu hao trân quý nhất để thăng cấp. Sử dụng cổ Xá Lợi sẽ trực tiếp nâng tu vi lên 1 tiểu cảnh giới mà không có bất kỳ tác dụng phụ hay khiến căn cơ bất ổn nào
+.
+Tửu Trùng (Liquor Worm): Giúp tinh luyện Chân Nguyên lên một cảnh giới nhỏ (VD: Từ Sơ giai lên Trung giai), dùng Chân nguyên chất lượng cao này để phá vách khiếu sẽ dễ dàng hơn rất nhiều
+.
+Quán đỉnh (Trưởng bối truyền công): Cổ sư cấp cao trực tiếp rót chân nguyên vào không khiếu của hậu bối để nuôi dưỡng vách khiếu
+. Tuy nhiên, cách này để lại "khí tức dị chủng", làm thu hẹp không gian phát triển tương lai, trừ khi tìm được Tịnh Thủy Cổ để gột rửa
+.
+Cổ Cốt Nhục Đoàn Viên: Hai cổ sư có quan hệ máu mủ song tu, chia sẻ chân nguyên để cùng nhau tăng vọt tu vi
+.
+2. Quá trình Thăng Tiên (Từ Ngũ chuyển lên Lục chuyển)
+Đây là ranh giới sinh tử, mười ngàn người mới có một người thành công
+. Quá trình gồm 3 bước:
+Vỡ khiếu: Cổ sư tự đập nát Không khiếu của mình
+.
+Nạp khí: Hấp thu Thiên khí và Địa khí từ tự nhiên. Lượng Thiên - Địa khí này phải được dung hợp và cân bằng tuyệt đối với Nhân khí (tích lũy từ tài năng, kinh nghiệm, hồn phách và chiến lực của cổ sư cả đời)
+.
+Tạo Tiên khiếu: Nếu cân bằng thành công 3 loại khí, Không khiếu nát sẽ hóa thành một thế giới nhỏ (Phúc địa/Động thiên), sản sinh ra Tiên Nguyên Thanh Đề, chính thức bước vào Lục chuyển
+.
+3. Cách thức thăng cấp của Cổ Tiên (Rank 6 - Rank 9)
+Cổ tiên không còn "phá vách khiếu" nữa. Để tăng tu vi (từ 6 lên 7, 7 lên 8...), cổ tiên bắt buộc phải đối mặt với Thiên Tai Địa Kiếp
+.
+Chu kỳ Tai Kiếp (Độ kiếp):
+Lục chuyển: Cứ 10 năm gặp 1 Địa tai, 100 năm gặp 1 Thiên kiếp. Vượt qua 3 lần Thiên kiếp (300 năm) sẽ thăng lên Thất chuyển
+.
+Thất chuyển: 10 năm 1 Địa tai, 50 năm 1 Thiên kiếp, 100 năm gặp 1 Hạo kiếp. Vượt qua 3 Hạo kiếp (300 năm) lên Bát chuyển
+.
+Bát chuyển: Không còn Địa tai. 10 năm 1 Thiên kiếp, 50 năm 1 Hạo kiếp, 100 năm 1 Vạn kiếp. Vượt 3 lần Vạn kiếp sẽ thành Cửu chuyển (Tôn giả)
+.
+Phần thưởng Độ kiếp: Vượt qua tai kiếp, trời đất sẽ khắc Đạo Ngân lên người cổ tiên. Tai kiếp càng mạnh, Đạo ngân thu được càng nhiều, sức mạnh càng tăng vọt
+.
+Đường tắt của Cổ Tiên (Chiếm đoạt Tiên khiếu): Cổ tiên có thể giết cổ tiên khác và nuốt chửng Tiên khiếu của họ. Việc này giúp bỏ qua (nhảy vọt) số lần tai kiếp và đoạt lấy Đạo ngân của kẻ thua
+. Tuy nhiên, điều kiện cực kỳ khắt khe: Đòi hỏi lưu phái phải tương đồng và Cảnh giới lưu phái của người nuốt phải đạt cấp Đại sư (để nuốt rank 6), Tông sư (nuốt rank 7), Đại tông sư (nuốt rank 8)
+.
