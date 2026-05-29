@@ -72,7 +72,6 @@ export interface ItemSpec {
 
 interface AuthResponse {
   player: Player;
-  token: string;
 }
 
 interface ExploreResponse {
@@ -133,6 +132,7 @@ interface GameState {
   movePlayer: (x: number, y: number) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
   fetchGrid: () => Promise<{ x: number; y: number; vision_radius: number; cells: any[]; explored_cells: string[]; stats: any } | null>;
   dropGu: (instanceId: string) => Promise<boolean>;
+  buyShopItem: (itemId: string, quantity: number) => Promise<boolean>;
   sellShopItem: (itemId: string, quantity: number, itemType: "Gu" | "Material") => Promise<boolean>;
   marketplaceListings: any[];
   fetchMarketplaceListings: () => Promise<void>;
@@ -142,10 +142,17 @@ interface GameState {
 }
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+const AUTHENTICATED_SESSION = "cookie-session";
+
+const authFetch = (input: RequestInfo | URL, init: RequestInit = {}) =>
+  fetch(input, {
+    ...init,
+    credentials: "include",
+  });
 
 export const useGameStore = create<GameState>((set, get) => ({
   player: null,
-  token: typeof window !== "undefined" ? localStorage.getItem("gu_auth_token") : null,
+  token: null,
   isLoading: false,
   actionLoading: false,
   error: null,
@@ -162,7 +169,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   login: async (username, password) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
+      const response = await authFetch(`${BACKEND_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
@@ -174,8 +181,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
 
       const data: AuthResponse = await response.json();
-      set({ player: data.player, token: data.token });
-      localStorage.setItem("gu_auth_token", data.token);
+      set({ player: data.player, token: AUTHENTICATED_SESSION });
+      localStorage.removeItem("gu_auth_token");
       localStorage.setItem("gu_player_id", data.player.id);
       
       get().addLog(`Đồng chí ${data.player.username} đã quy vị!`);
@@ -191,7 +198,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   register: async (username, password, startingRegion, setVitalNow) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/auth/register`, {
+      const response = await authFetch(`${BACKEND_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password, starting_region: startingRegion, set_vital_now: setVitalNow }),
@@ -203,8 +210,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
 
       const data: AuthResponse = await response.json();
-      set({ player: data.player, token: data.token });
-      localStorage.setItem("gu_auth_token", data.token);
+      set({ player: data.player, token: AUTHENTICATED_SESSION });
+      localStorage.removeItem("gu_auth_token");
       localStorage.setItem("gu_player_id", data.player.id);
 
       get().addLog(`Cổ sư ${data.player.username} khai mở Không Khiếu! Tư chất: ${data.player.aptitude_type} (${data.player.aptitude_percent}%)`);
@@ -218,6 +225,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   logout: () => {
+    void authFetch(`${BACKEND_URL}/api/auth/logout`, { method: "POST" });
     set({ player: null, token: null });
     localStorage.removeItem("gu_auth_token");
     localStorage.removeItem("gu_player_id");
@@ -233,11 +241,29 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   initializeSession: async () => {
-    const savedId = typeof window !== "undefined" ? localStorage.getItem("gu_player_id") : null;
-    const savedToken = typeof window !== "undefined" ? localStorage.getItem("gu_auth_token") : null;
-    if (!savedId || !savedToken) return;
-    set({ token: savedToken });
-    await get().fetchPlayerStatus(savedId);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("gu_auth_token");
+    }
+
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/auth/me`);
+      if (response.status === 401 || response.status === 403) {
+        set({ player: null, token: null });
+        return;
+      }
+      if (!response.ok) {
+        throw new Error("Failed to restore session");
+      }
+
+      const player: Player = await response.json();
+      set({ player, token: AUTHENTICATED_SESSION });
+      if (typeof window !== "undefined") {
+        localStorage.setItem("gu_player_id", player.id);
+      }
+    } catch (err: any) {
+      console.error("Session restore failed:", err.message);
+      set({ player: null, token: null });
+    }
   },
 
   fetchPlayerStatus: async (id) => {
@@ -245,11 +271,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (!token || actionLoading) return;
 
     try {
-      const response = await fetch(`${BACKEND_URL}/api/player/status/${id}`, {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
-      });
+      const response = await authFetch(`${BACKEND_URL}/api/player/status/${id}`);
 
       if (response.status === 401 || response.status === 403) {
         logout();
@@ -276,11 +298,8 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/player/explore/${player.id}`, {
+      const response = await authFetch(`${BACKEND_URL}/api/player/explore/${player.id}`, {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
       });
 
       if (response.status === 401 || response.status === 403) {
@@ -310,11 +329,10 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/inventory/feed`, {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/feed`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({ gu_instance_id: guInstanceId }),
       });
@@ -342,7 +360,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   fetchDictionary: async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/dictionary`);
+      const response = await authFetch(`${BACKEND_URL}/api/dictionary`);
       if (!response.ok) {
         throw new Error("Failed to load global metadata");
       }
@@ -359,7 +377,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   fetchRecipes: async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/recipes`);
+      const response = await authFetch(`${BACKEND_URL}/api/recipes`);
       if (!response.ok) {
         throw new Error("Failed to load recipes");
       }
@@ -376,11 +394,10 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/refine`, {
+      const response = await authFetch(`${BACKEND_URL}/api/refine`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({
           recipe_id: recipeId,
@@ -416,11 +433,10 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/explore`, {
+      const response = await authFetch(`${BACKEND_URL}/api/explore`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({
           player_id: player.id,
@@ -456,11 +472,10 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/combat/attack`, {
+      const response = await authFetch(`${BACKEND_URL}/api/combat/attack`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({
           player_id: player.id,
@@ -501,11 +516,8 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/explore/retreat/${player.id}`, {
+      const response = await authFetch(`${BACKEND_URL}/api/explore/retreat/${player.id}`, {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
       });
 
       if (response.status === 401 || response.status === 403) {
@@ -534,7 +546,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     const { token, logout } = get();
     if (!token) return;
     try {
-      const response = await fetch(`${BACKEND_URL}/api/shop/bao-hoang/listings`, { headers: { "Authorization": `Bearer ${token}` } });
+      const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/listings`, {});
       if (response.status === 401 || response.status === 403) { logout(); return; }
       const data = await response.json();
       set({ marketplaceListings: Array.isArray(data) ? data : [] });
@@ -548,12 +560,12 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (!token || actionLoading) return false;
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/shop/bao-hoang/listings`, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify({ item_type: payload.itemType, gu_instance_id: payload.guInstanceId || "", item_id: payload.itemId || "", quantity: payload.quantity, price: payload.price, duration_hours: payload.durationHours, currency: payload.currency }) });
+      const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/listings`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ item_type: payload.itemType, gu_instance_id: payload.guInstanceId || "", item_id: payload.itemId || "", quantity: payload.quantity, price: payload.price, duration_hours: payload.durationHours, currency: payload.currency }) });
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Đăng bán thất bại");
       get().addLog(data.message || "Đăng bán thành công");
-      await get().fetchPlayerStatus(localStorage.getItem("gu_player_id") || "");
+      await get().initializeSession();
       return true;
     } catch (err: any) {
       set({ error: err.message });
@@ -567,12 +579,12 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (!token || actionLoading) return false;
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/shop/bao-hoang/bid`, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify({ listing_id: listingId, amount }) });
+      const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/bid`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listing_id: listingId, amount }) });
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Đặt giá thất bại");
       get().addLog(data.message || "Đặt giá thành công");
-      await get().fetchPlayerStatus(localStorage.getItem("gu_player_id") || "");
+      await get().initializeSession();
       await get().fetchMarketplaceListings();
       return true;
     } catch (err: any) { set({ error: err.message }); get().addLog(`Đặt giá thất bại: ${err.message}`); return false; } finally { set({ actionLoading: false }); }
@@ -583,12 +595,12 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (!token || actionLoading) return false;
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/shop/bao-hoang/cancel`, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify({ listing_id: listingId }) });
+      const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/cancel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listing_id: listingId }) });
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hủy listing thất bại");
       get().addLog(data.message || "Đã hủy");
-      await get().fetchPlayerStatus(localStorage.getItem("gu_player_id") || "");
+      await get().initializeSession();
       await get().fetchMarketplaceListings();
       return true;
     } catch (err: any) { set({ error: err.message }); get().addLog(`Hủy listing thất bại: ${err.message}`); return false; } finally { set({ actionLoading: false }); }
@@ -599,11 +611,10 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/shop/buy`, {
+      const response = await authFetch(`${BACKEND_URL}/api/shop/buy`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({
           player_id: player.id,
@@ -640,9 +651,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (!player || !token || actionLoading) return false;
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/shop/sell`, {
+      const response = await authFetch(`${BACKEND_URL}/api/shop/sell`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ player_id: player.id, item_id: itemId, quantity, item_type: itemType }),
       });
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
@@ -663,9 +674,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (!token || actionLoading) return false;
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/inventory/drop`, {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/drop`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ gu_instance_id: instanceId }),
       });
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
@@ -686,11 +697,10 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/inventory/equip`, {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/equip`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({
           instance_id: instanceId,
@@ -724,11 +734,10 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/inventory/status`, {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/status`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({
           instance_id: instanceId,
@@ -762,11 +771,10 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/inventory/set-vital`, {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/set-vital`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({
           gu_instance_id: instanceId,
@@ -799,11 +807,10 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/inventory/use-gu`, {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/use-gu`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({
           gu_instance_id: instanceId,
@@ -836,11 +843,10 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/player/use-item`, {
+      const response = await authFetch(`${BACKEND_URL}/api/player/use-item`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({
           item_id: itemId,
@@ -873,11 +879,10 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     set({ actionLoading: true, error: null });
     try {
-      const response = await fetch(`${BACKEND_URL}/api/explore/move`, {
+      const response = await authFetch(`${BACKEND_URL}/api/explore/move`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({
           x: x,
@@ -912,9 +917,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (!token) return null;
 
     try {
-      const response = await fetch(`${BACKEND_URL}/api/explore/grid`, {
+      const response = await authFetch(`${BACKEND_URL}/api/explore/grid`, {
         headers: {
-          "Authorization": `Bearer ${token}`,
         },
       });
 

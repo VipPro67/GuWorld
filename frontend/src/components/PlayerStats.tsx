@@ -177,7 +177,7 @@ export const PlayerStats: React.FC<PlayerStatsProps> = ({
         <div className="space-y-4">
           <div>
             <span className="text-[9px] text-zinc-500 uppercase tracking-wider block mb-0.5">
-              Cổ Sư Aperture
+              {player.rank >= 6 ? "Cổ Tiên Tiên Khiếu" : "Cổ Sư Không Khiếu"}
             </span>
             <h2 className="text-xl font-bold text-zinc-100 flex items-center gap-1.5 font-serif">
               {player.username}
