@@ -44,6 +44,7 @@ type GuAbility interface {
 
 // MoonlightAbility deals damage
 type MoonlightAbility struct{}
+
 func (m *MoonlightAbility) Execute(ctx *CombatContext, guSpec *models.GuDictionaryItem) error {
 	dmg, _, cost, err := CalculateGuEffect(ctx.Attacker, guSpec)
 	if err != nil {
@@ -57,6 +58,7 @@ func (m *MoonlightAbility) Execute(ctx *CombatContext, guSpec *models.GuDictiona
 
 // JadeSkinAbility adds shields/defense
 type JadeSkinAbility struct{}
+
 func (j *JadeSkinAbility) Execute(ctx *CombatContext, guSpec *models.GuDictionaryItem) error {
 	_, def, cost, err := CalculateGuEffect(ctx.Attacker, guSpec)
 	if err != nil {
@@ -70,6 +72,7 @@ func (j *JadeSkinAbility) Execute(ctx *CombatContext, guSpec *models.GuDictionar
 
 // WhiteBoarAbility deals damage and adds shield
 type WhiteBoarAbility struct{}
+
 func (w *WhiteBoarAbility) Execute(ctx *CombatContext, guSpec *models.GuDictionaryItem) error {
 	dmg, def, cost, err := CalculateGuEffect(ctx.Attacker, guSpec)
 	if err != nil {
@@ -84,6 +87,7 @@ func (w *WhiteBoarAbility) Execute(ctx *CombatContext, guSpec *models.GuDictiona
 
 // MoonRaimentAbility adds shields
 type MoonRaimentAbility struct{}
+
 func (mr *MoonRaimentAbility) Execute(ctx *CombatContext, guSpec *models.GuDictionaryItem) error {
 	_, def, cost, err := CalculateGuEffect(ctx.Attacker, guSpec)
 	if err != nil {
@@ -97,6 +101,7 @@ func (mr *MoonRaimentAbility) Execute(ctx *CombatContext, guSpec *models.GuDicti
 
 // WhiteJadeAbility deals damage and adds massive shield
 type WhiteJadeAbility struct{}
+
 func (wj *WhiteJadeAbility) Execute(ctx *CombatContext, guSpec *models.GuDictionaryItem) error {
 	dmg, def, cost, err := CalculateGuEffect(ctx.Attacker, guSpec)
 	if err != nil {
@@ -111,6 +116,7 @@ func (wj *WhiteJadeAbility) Execute(ctx *CombatContext, guSpec *models.GuDiction
 
 // LiquorWormAbility boosts damage
 type LiquorWormAbility struct{}
+
 func (l *LiquorWormAbility) Execute(ctx *CombatContext, guSpec *models.GuDictionaryItem) error {
 	_, _, cost, err := CalculateGuEffect(ctx.Attacker, guSpec)
 	if err != nil {
@@ -124,6 +130,7 @@ func (l *LiquorWormAbility) Execute(ctx *CombatContext, guSpec *models.GuDiction
 
 // FourFlavorsLiquorWormAbility boosts damage even more
 type FourFlavorsLiquorWormAbility struct{}
+
 func (f *FourFlavorsLiquorWormAbility) Execute(ctx *CombatContext, guSpec *models.GuDictionaryItem) error {
 	_, _, cost, err := CalculateGuEffect(ctx.Attacker, guSpec)
 	if err != nil {
@@ -137,6 +144,7 @@ func (f *FourFlavorsLiquorWormAbility) Execute(ctx *CombatContext, guSpec *model
 
 // CleansingWaterAbility cleanses negative effects
 type CleansingWaterAbility struct{}
+
 func (cw *CleansingWaterAbility) Execute(ctx *CombatContext, guSpec *models.GuDictionaryItem) error {
 	_, _, cost, err := CalculateGuEffect(ctx.Attacker, guSpec)
 	if err != nil {
@@ -149,15 +157,15 @@ func (cw *CleansingWaterAbility) Execute(ctx *CombatContext, guSpec *models.GuDi
 
 // AbilityRegistry maps Gu ID to its ability executor logic
 var AbilityRegistry = map[string]GuAbility{
-	"GU_MOONLIGHT":            &MoonlightAbility{},
-	"GU_JADE_SKIN":            &JadeSkinAbility{},
-	"GU_WHITE_BOAR":           &WhiteBoarAbility{},
-	"GU_MOON_RAIMENT":         &MoonRaimentAbility{},
-	"GU_WHITE_JADE":           &WhiteJadeAbility{},
-	"GU_LIQUOR_WORM":          &LiquorWormAbility{},
-	"GU_FOUR_FLAVORS_LIQUOR":  &FourFlavorsLiquorWormAbility{},
-	"GU_BLACK_BOAR":           &WhiteBoarAbility{}, // Reuses WhiteBoarAbility strength mechanics
-	"GU_CLEANSING_WATER":      &CleansingWaterAbility{},
+	"GU_MOONLIGHT":           &MoonlightAbility{},
+	"GU_JADE_SKIN":           &JadeSkinAbility{},
+	"GU_WHITE_BOAR":          &WhiteBoarAbility{},
+	"GU_MOON_RAIMENT":        &MoonRaimentAbility{},
+	"GU_WHITE_JADE":          &WhiteJadeAbility{},
+	"GU_LIQUOR_WORM":         &LiquorWormAbility{},
+	"GU_FOUR_FLAVORS_LIQUOR": &FourFlavorsLiquorWormAbility{},
+	"GU_BLACK_BOAR":          &WhiteBoarAbility{}, // Reuses WhiteBoarAbility strength mechanics
+	"GU_CLEANSING_WATER":     &CleansingWaterAbility{},
 }
 
 // CalculateGuEffect computes lore-accurate adjustments for level penalty, regional suppression, and mana cost
@@ -217,29 +225,9 @@ func CalculateGuEffect(player *models.Player, guSpec *models.GuDictionaryItem) (
 	effectiveDamage = baseDmg * powerScale * masteryMultiplier
 	effectiveDefense = baseDef * powerScale * masteryMultiplier
 
-	// Rule 3: Mana cost calculation
-	var baseManaPct float64
-	if guSpec.BaseManaCost > 0.0 {
-		baseManaPct = guSpec.BaseManaCost / 100.0
-	} else {
-		baseManaPct = 0.10
-	}
-	cost := baseManaPct * player.MaxMana
-
-	// If player.Rank > guSpec.Rank, divide by 10 for each rank difference
-	if player.Rank > guSpec.Rank {
-		rankDiff := player.Rank - guSpec.Rank
-		for i := 0; i < rankDiff; i++ {
-			cost /= 10.0
-		}
-	}
-
-	// Sub-rank division: Divide by 2 for each sub-rank above initial (Sơ Giai)
-	divisor := 1
-	for i := 1; i < player.SubRank; i++ {
-		divisor *= 2
-	}
-	cost /= float64(divisor)
+	// Rule 3: Energy cost calculation. Mortals spend Chân Nguyên from the aperture;
+	// immortals spend Tiên Nguyên, with mortal Gu becoming only a trace upkeep.
+	cost := calculateEnergyCost(player, guSpec)
 
 	return effectiveDamage, effectiveDefense, cost, nil
 }
@@ -337,7 +325,7 @@ func CombatAttack(c *gin.Context) {
 		}
 
 		if player.CurrentMana < totalManaCost {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Chân Nguyên để kích hoạt sát chiêu."})
+			c.JSON(http.StatusBadRequest, gin.H{"error": insufficientEnergyMessage(&player)})
 			return
 		}
 	}
@@ -739,11 +727,11 @@ func CombatAttack(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"player":   player,
-		"logs":     ctx.Logs,
-		"enemy":    player.ActiveCombat,
-		"victory":  victory,
-		"defeat":   defeat,
+		"player":  player,
+		"logs":    ctx.Logs,
+		"enemy":   player.ActiveCombat,
+		"victory": victory,
+		"defeat":  defeat,
 	})
 }
 
@@ -788,13 +776,16 @@ func ExploreNode(c *gin.Context) {
 		return
 	}
 
-	// Deduct 5 mana
-	exploreManaCost := 5.0
-	if player.CurrentMana < exploreManaCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Chân Nguyên. Vui lòng nghỉ ngơi tĩnh tọa để hồi phục."})
+	// Deduct exploration energy. Mortals spend Chân Nguyên; Immortals spend a small Tiên Nguyên upkeep.
+	exploreEnergyCost := 5.0
+	if isImmortalCultivator(&player) {
+		exploreEnergyCost = 0.25
+	}
+	if player.CurrentMana < exploreEnergyCost {
+		c.JSON(http.StatusBadRequest, gin.H{"error": insufficientEnergyMessage(&player)})
 		return
 	}
-	player.CurrentMana -= exploreManaCost
+	player.CurrentMana -= exploreEnergyCost
 
 	// Resolve map node name
 	nodeName := "Khu Vực Bí Ẩn"
@@ -820,7 +811,7 @@ func ExploreNode(c *gin.Context) {
 	} else if roll < 70 {
 		// 30% chance: Combat
 		combatTriggered = true
-		
+
 		// Spawn enemy based on map node ID
 		var enemy models.CombatState
 		if req.NodeID == "three_kings_inheritance" {
@@ -937,9 +928,9 @@ func Retreat(c *gin.Context) {
 			player.PrimevalStones = 0
 		}
 
-		logMsg = fmt.Sprintf("Đạo hữu hốt hoảng tháo chạy khỏi %s! Bị phản phệ %.1f HP và mất %d Nguyên Thạch do vứt bỏ vật tư khi đào tẩu.", 
+		logMsg = fmt.Sprintf("Đạo hữu hốt hoảng tháo chạy khỏi %s! Bị phản phệ %.1f HP và mất %d Nguyên Thạch do vứt bỏ vật tư khi đào tẩu.",
 			player.ActiveCombat.EnemyName, penaltyHP, penaltyStones)
-		
+
 		player.ActiveCombat = nil
 	}
 
@@ -965,4 +956,3 @@ func Retreat(c *gin.Context) {
 		"log":    logMsg,
 	})
 }
-

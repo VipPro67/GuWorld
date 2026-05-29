@@ -133,16 +133,16 @@ func RegisterPlayer(c *gin.Context) {
 
 	var player models.Player
 	query := `
-		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, gu_inventory, materials_inventory, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat)
-		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, 0, $7, $8, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, '[]'::jsonb, '{}'::jsonb, $9, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL)
-		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, gu_inventory, materials_inventory, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at
+		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat)
+		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, 0, 0, $7, $8, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, '[]'::jsonb, '{}'::jsonb, $9, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL)
+		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at
 	`
 
 	var activeCombatBytes []byte
 	err = db.DB.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, currentMana, maxMana, starterGu, starterMaterials, req.StartingRegion).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.CurrentMana,
-		&player.MaxMana, &player.PrimevalStones, &player.GuInventory, &player.MaterialsInventory,
+		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
 		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y, &player.ExploredCells,
 		&player.EquippedGus, &player.ClearedCells,
 		&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries, &activeCombatBytes,
@@ -191,7 +191,7 @@ func LoginPlayer(c *gin.Context) {
 	var passwordHash string
 
 	query := `
-		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, gu_inventory, materials_inventory, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at
+		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at
 		FROM players
 		WHERE username = $1
 	`
@@ -199,7 +199,7 @@ func LoginPlayer(c *gin.Context) {
 	err := db.DB.QueryRow(query, req.Username).Scan(
 		&player.ID, &player.Username, &passwordHash, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.CurrentMana,
-		&player.MaxMana, &player.PrimevalStones, &player.GuInventory, &player.MaterialsInventory,
+		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
 		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y, &player.ExploredCells,
 		&player.EquippedGus, &player.ClearedCells,
 		&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries, &activeCombatBytes,
@@ -372,15 +372,18 @@ func Explore(c *gin.Context) {
 		return
 	}
 
-	// 2. Check mana cost (10.0 mana)
-	manaCost := 10.0
-	if player.CurrentMana < manaCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Not enough Primeval Essence. Rest to recover."})
+	// 2. Check energy cost. Mortals spend Chân Nguyên; Immortals spend a smaller Tiên Nguyên travel upkeep.
+	energyCost := 10.0
+	if isImmortalCultivator(&player) {
+		energyCost = 0.5
+	}
+	if player.CurrentMana < energyCost {
+		c.JSON(http.StatusBadRequest, gin.H{"error": insufficientEnergyMessage(&player)})
 		return
 	}
 
-	// 3. Deduct mana and roll reward stones
-	player.CurrentMana -= manaCost
+	// 3. Deduct energy and roll reward stones
+	player.CurrentMana -= energyCost
 	rewardStones := 1 + rand.Intn(3) // 1 to 3 primeval stones
 	player.PrimevalStones += rewardStones
 	player.LastManaUpdate = time.Now()
@@ -624,7 +627,7 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	var player models.Player
 
 	query := `
-		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, gu_inventory, materials_inventory, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at
+		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at
 		FROM players
 		WHERE id = $1
 		FOR UPDATE
@@ -633,7 +636,7 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	err := tx.QueryRow(query, id).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.CurrentMana,
-		&player.MaxMana, &player.PrimevalStones, &player.GuInventory, &player.MaterialsInventory,
+		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
 		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y, &player.ExploredCells,
 		&player.EquippedGus, &player.ClearedCells,
 		&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries, &activeCombatBytes,
@@ -649,19 +652,8 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 		return player, err
 	}
 
-	var regenRatePerHour float64
-	switch player.AptitudeType {
-	case "Giáp":
-		regenRatePerHour = 8.0
-	case "Ất":
-		regenRatePerHour = 6.0
-	case "Bính":
-		regenRatePerHour = 4.0
-	case "Đinh":
-		regenRatePerHour = 2.0
-	default:
-		regenRatePerHour = 2.0
-	}
+	poolChanged := normalizeEnergyPool(&player)
+	regenRatePerHour := energyRegenRatePerHour(&player)
 
 	now := time.Now()
 	secondsPassed := now.Sub(player.LastManaUpdate).Seconds()
@@ -675,17 +667,21 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 
 		if newMana != player.CurrentMana {
 			player.CurrentMana = newMana
-			player.LastManaUpdate = now
+			poolChanged = true
+		}
+	}
 
-			updateQuery := `
-				UPDATE players
-				SET current_mana = $1, last_mana_update = $2
-				WHERE id = $3
-			`
-			_, err = tx.Exec(updateQuery, player.CurrentMana, player.LastManaUpdate, player.ID)
-			if err != nil {
-				return player, err
-			}
+	if poolChanged {
+		player.LastManaUpdate = now
+
+		updateQuery := `
+			UPDATE players
+			SET current_mana = $1, max_mana = $2, last_mana_update = $3
+			WHERE id = $4
+		`
+		_, err = tx.Exec(updateQuery, player.CurrentMana, player.MaxMana, player.LastManaUpdate, player.ID)
+		if err != nil {
+			return player, err
 		}
 	}
 
@@ -1066,12 +1062,20 @@ func UseItem(c *gin.Context) {
 	logMsg := ""
 	switch req.ItemID {
 	case "green_bamboo_wine":
+		if isImmortalCultivator(&player) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Rượu Thanh Trúc chỉ bổ sung Chân Nguyên phàm cấp; Cổ Tiên cần Tiên Nguyên Thạch hoặc Tiên Khiếu ngưng tụ Tiên Nguyên."})
+			return
+		}
 		player.CurrentMana += 20.0
 		if player.CurrentMana > player.MaxMana {
 			player.CurrentMana = player.MaxMana
 		}
 		logMsg = "Đạo hữu uống Rượu Thanh Trúc, phục hồi 20 Chân Nguyên!"
 	case "moon_orchid_petal":
+		if isImmortalCultivator(&player) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cánh hoa Nguyệt Lan chỉ luyện hóa được Chân Nguyên; Tiên Nguyên của Cổ Tiên không thể phục hồi bằng phàm tài này."})
+			return
+		}
 		player.CurrentMana += 10.0
 		if player.CurrentMana > player.MaxMana {
 			player.CurrentMana = player.MaxMana

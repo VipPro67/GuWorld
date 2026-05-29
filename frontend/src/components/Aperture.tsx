@@ -98,16 +98,20 @@ export const Aperture: React.FC<ApertureProps> = ({
   const percent   = Math.min(100, Math.max(0, (currentMana / maxMana) * 100));
   const rankName  = RANK_NAMES[rank]    ?? `Rank ${rank}`;
   const subRankName = SUB_RANK_NAMES[subRank] ?? `Sub ${subRank}`;
-  const manaQuality = MANA_QUALITY[rank] ?? "Chân Nguyên";
+  const isImmortal = rank >= 6;
+  const energyType = isImmortal ? "Tiên Nguyên" : "Chân Nguyên";
+  const apertureName = isImmortal ? "Tiên Khiếu (Immortal Aperture)" : "Không Khiếu (Aperture)";
+  const energyPoolName = isImmortal ? "Tiên Nguyên Hải" : "Chân Nguyên Hải";
+  const regenLabel = isImmortal ? "Tiên Khiếu ngưng tụ" : "Tư chất hồi phục";
+  const manaQuality = MANA_QUALITY[rank] ?? energyType;
   const c = RANK_COLORS[rank] ?? RANK_COLORS[1];
 
   const dashOffset = CIRC * (1 - percent / 100);
 
-  const regenRate =
-    aptitudeType === "Giáp"  ? (2   * rank).toFixed(1)
-    : aptitudeType === "Ất"  ? (1.5 * rank).toFixed(1)
-    : aptitudeType === "Bính"? (1   * rank).toFixed(1)
-    : (0.5 * rank).toFixed(1);
+  const immortalBaseRegen: Record<number, number> = { 6: 0.5, 7: 0.8, 8: 1.2, 9: 2.0 };
+  const mortalRegen = aptitudeType === "Giáp" ? 8 : aptitudeType === "Ất" ? 6 : aptitudeType === "Bính" ? 4 : 2;
+  const immortalRegen = (immortalBaseRegen[rank] ?? 0.5 + (rank - 6) * 0.35) * (1 + (Math.min(Math.max(subRank, 1), 4) - 1) * 0.15);
+  const regenRate = (isImmortal ? immortalRegen : mortalRegen).toFixed(1);
 
   // Vital Gu
   const vitalGu   = guInventory.find((g) => g.is_vital);
@@ -162,10 +166,10 @@ export const Aperture: React.FC<ApertureProps> = ({
           className="text-sm sm:text-base font-semibold tracking-wide uppercase font-serif mb-0.5"
           style={{ color: c.text }}
         >
-          Không Khiếu (Aperture)
+          {apertureName}
         </h3>
         <p className="text-[9px] sm:text-[10px] text-zinc-500 italic text-center mb-1">
-          Tư Chất: {aptitudeType} ({aptitudePercent}%) • {manaQuality}
+          {isImmortal ? "Tư chất phàm không còn quyết định hồi năng lượng" : `Tư Chất: ${aptitudeType} (${aptitudePercent}%)`} • {manaQuality}
         </p>
         <p className="text-[10px] sm:text-xs font-semibold tracking-wide text-center mb-3" style={{ color: c.text }}>
           Tu Vi: {rankName}&nbsp;&nbsp;|&nbsp;&nbsp;Cảnh Giới: {subRankName}
@@ -306,7 +310,7 @@ export const Aperture: React.FC<ApertureProps> = ({
               {currentMana.toFixed(1)} / {maxMana.toFixed(0)}
             </span>
             <span className="text-[9px] mt-1 text-zinc-400 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-              Chân Nguyên Hải
+              {energyPoolName}
             </span>
           </div>
         </div>
@@ -372,8 +376,13 @@ export const Aperture: React.FC<ApertureProps> = ({
         </div>
 
         {/* Regen */}
-        <div className="text-[10px] text-zinc-500 text-center">
-          Tái sinh: {regenRate} chân nguyên/giờ
+        <div className="text-[10px] text-zinc-500 text-center space-y-1">
+          <div>{regenLabel}: {regenRate} {energyType.toLowerCase()}/giờ</div>
+          <div className="text-[9px] text-zinc-600">
+            {isImmortal
+              ? "Cổ Tiên dùng Tiên Nguyên, trần chứa theo cấp Tiên Khiếu; phàm tài không hồi được nguồn này."
+              : "Cổ sư dùng Chân Nguyên, trần chứa theo tư chất/Không Khiếu và hồi theo tư chất."}
+          </div>
         </div>
       </div>
     </>
