@@ -110,6 +110,20 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     }
   };
 
+  const handleSlotClick = (slot: { index: number; guId: string }) => {
+    const slottedInstanceId = slottedGus[slot.index];
+    if (slottedInstanceId) {
+      removeGuFromSlot(slot.index);
+    } else {
+      const matchingGu = availableInventoryGus.find((g) => g.gu_id === slot.guId);
+      if (matchingGu) {
+        slotGu(matchingGu.instance_id, slot.index);
+      } else {
+        alert("Không có cổ trùng phù hợp trong túi đồ!");
+      }
+    }
+  };
+
   // Remove Gu from slot
   const removeGuFromSlot = (slotIndex: number) => {
     setSlottedGus((prev) => {
@@ -463,7 +477,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                         key={slot.index}
                         onDragOver={handleDragOver}
                         onDrop={(e) => handleDrop(e, slot.index)}
-                        onClick={() => slottedInstanceId && removeGuFromSlot(slot.index)}
+                        onClick={() => handleSlotClick(slot)}
                         className={`w-32 h-36 rounded-2xl border transition-all flex flex-col items-center justify-center p-3 relative cursor-pointer group ${
                           slottedGu
                             ? "bg-zinc-950/90 border-amber-500/40 shadow-lg shadow-amber-900/5 hover:border-rose-500/50"

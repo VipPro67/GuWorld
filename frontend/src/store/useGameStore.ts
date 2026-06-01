@@ -9,6 +9,25 @@ export interface GuInstance {
   is_vital: boolean;
 }
 
+export interface Combatant {
+  id: string;
+  name: string;
+  kind: string; // "Player", "Normal", "Boss", etc.
+  rank: number;
+  sub_rank: number;
+  hp: number;
+  max_hp: number;
+  current_mana: number;
+  max_mana: number;
+  base_attack: number;
+  base_defense: number;
+  gu_inventory?: GuInstance[];
+  dao_marks?: Record<string, number>;
+  path_masteries?: Record<string, string>;
+  ai_profile?: string;
+  loot_table_id?: string;
+}
+
 export interface CombatState {
   enemy_name: string;
   enemy_hp: number;
@@ -17,6 +36,10 @@ export interface CombatState {
   enemy_defense: number;
   charge_points: number;
   target_player_id?: string;
+  enemy_template_id?: string;
+  allies?: Combatant[];
+  enemies?: Combatant[];
+  enemy_type?: string;
 }
 
 export interface Player {
@@ -32,6 +55,10 @@ export interface Player {
   immortal_stones: number;
   gu_inventory: GuInstance[];
   materials_inventory: Record<string, number>;
+  wall_progress?: number;
+  human_qi?: number;
+  next_tribulation_time?: string | null;
+  tribulation_count?: number;
   hp: number;
   base_hp: number;
   body_mods: string[];
@@ -46,6 +73,11 @@ export interface Player {
   active_combat: CombatState | null;
   last_mana_update: string;
   created_at: string;
+  lifespan: number;
+  max_lifespan: number;
+  time_speed_multiplier: number;
+  party_id?: string | null;
+  arena_rank?: number | null;
 }
 
 export interface GuSpec {
@@ -58,7 +90,7 @@ export interface GuSpec {
   base_mana_cost: number;
   effects: Record<string, number>;
   hunger_rate: number;
-  food_type: string;
+  food_types: string[];
   max_hunger: number;
   description: string;
 }
@@ -67,6 +99,12 @@ export interface ItemSpec {
   id: string;
   name: string;
   item_type: string;
+  type?: string;
+  rarity?: number;
+  rank?: number;
+  path?: string;
+  effects?: Record<string, number>;
+  tags?: string[];
   description: string;
 }
 
@@ -108,7 +146,7 @@ interface GameState {
   recipes: RefiningRecipe[];
   recipesLoaded: boolean;
   login: (username: string, password: string) => Promise<boolean>;
-  register: (username: string, password: string, startingRegion: string, setVitalNow: boolean) => Promise<boolean>;
+  register: (username: string, password: string, email: string, phoneNumber: string, startingRegion: string, setVitalNow: boolean) => Promise<boolean>;
   logout: () => void;
   clearError: () => void;
   fetchPlayerStatus: (id: string) => Promise<void>;
@@ -118,8 +156,13 @@ interface GameState {
   fetchDictionary: () => Promise<void>;
   fetchRecipes: () => Promise<void>;
   refineGu: (recipeId: string, selectedInstanceIds: string[]) => Promise<{ status: "success" | "failed"; message: string; new_gu?: GuInstance } | null>;
+  breakWall: (manaSpend: number) => Promise<{ success: boolean; message: string } | null>;
+  useRelicGu: (relicKey: string) => Promise<{ success: boolean; message: string } | null>;
+  ascension: () => Promise<{ success: boolean; message: string } | null>;
+  triggerTribulation: () => Promise<{ success: boolean; message: string } | null>;
+  rechargeWithStones: (stones: number) => Promise<{ success: boolean; message: string } | null>;
   exploreNode: (nodeId: string) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
-  executeCombatTurn: (equippedGuIds: string[], isCharge?: boolean) => Promise<{ player: Player; logs: string[]; enemy: CombatState | null; victory: boolean; defeat: boolean } | null>;
+  executeCombatTurn: (equippedGuIds: string[], isCharge?: boolean, targetId?: string) => Promise<{ player: Player; logs: string[]; enemy: CombatState | null; victory: boolean; defeat: boolean } | null>;
   addLog: (message: string) => void;
   currentView: string;
   setView: (view: string) => void;
@@ -130,7 +173,7 @@ interface GameState {
   useGu: (instanceId: string) => Promise<void>;
   useItem: (itemId: string) => Promise<void>;
   movePlayer: (x: number, y: number) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
-  fetchGrid: () => Promise<{ x: number; y: number; vision_radius: number; cells: any[]; explored_cells: string[]; stats: any } | null>;
+  fetchGrid: () => Promise<{ x: number; y: number; vision_radius: number; cells: any[]; explored_cells: string[]; stats: any; players_on_map?: any[] } | null>;
   dropGu: (instanceId: string) => Promise<boolean>;
   buyShopItem: (itemId: string, quantity: number) => Promise<boolean>;
   sellShopItem: (itemId: string, quantity: number, itemType: "Gu" | "Material") => Promise<boolean>;
@@ -139,6 +182,26 @@ interface GameState {
   createMarketplaceListing: (payload: { itemType: "Gu" | "Material"; guInstanceId?: string; itemId?: string; quantity: number; price: number; durationHours: number; currency: "primeval" | "immortal" }) => Promise<boolean>;
   placeMarketplaceBid: (listingId: string, amount: number) => Promise<boolean>;
   cancelMarketplaceListing: (listingId: string) => Promise<boolean>;
+
+  // Party State & Actions
+  party: { id: string; leader_id: string; members: { id: string; username: string }[] } | null;
+  createParty: () => Promise<boolean>;
+  fetchPartyStatus: () => Promise<void>;
+  invitePlayer: (username: string) => Promise<boolean>;
+  leaveParty: () => Promise<boolean>;
+
+  // Arena State & Actions
+  arenaLeaderboard: any[];
+  fetchArenaLeaderboard: () => Promise<void>;
+  challengeArena: (targetPlayerId: string) => Promise<boolean>;
+
+  // Chat/Mail State & Actions
+  inbox: any[];
+  baoHoangMessages: any[];
+  sendPrivateMail: (receiverUsername: string, content: string) => Promise<boolean>;
+  fetchInbox: () => Promise<void>;
+  sendBaoHoangChat: (content: string) => Promise<boolean>;
+  fetchBaoHoangMessages: () => Promise<void>;
 }
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
@@ -150,7 +213,17 @@ const authFetch = (input: RequestInfo | URL, init: RequestInit = {}) =>
     credentials: "include",
   });
 
-export const useGameStore = create<GameState>((set, get) => ({
+export const useGameStore = create<GameState>((set, get) => {
+  const normalizePlayer = (player: Player | null): Player | null => {
+    if (!player) return null;
+    const guInventory = (player.gu_inventory || []).map((g) => ({ ...g, equipped: !!g.equipped || !!g.is_vital }));
+    const equippedSet = new Set<string>(player.equipped_gus || []);
+    const vital = guInventory.find((g) => g.is_vital);
+    if (vital && vital.status !== "DEAD") equippedSet.add(vital.instance_id);
+    return { ...player, gu_inventory: guInventory, equipped_gus: Array.from(equippedSet) };
+  };
+
+  return ({
   player: null,
   token: null,
   isLoading: false,
@@ -164,6 +237,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   recipesLoaded: false,
   currentView: "dashboard",
   marketplaceListings: [],
+  party: null,
+  arenaLeaderboard: [],
+  inbox: [],
+  baoHoangMessages: [],
   setView: (view) => set({ currentView: view }),
 
   login: async (username, password) => {
@@ -181,7 +258,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
 
       const data: AuthResponse = await response.json();
-      set({ player: data.player, token: AUTHENTICATED_SESSION });
+      set({ player: normalizePlayer(data.player), token: AUTHENTICATED_SESSION });
       localStorage.removeItem("gu_auth_token");
       localStorage.setItem("gu_player_id", data.player.id);
       
@@ -195,13 +272,20 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  register: async (username, password, startingRegion, setVitalNow) => {
+  register: async (username, password, email, phoneNumber, startingRegion, setVitalNow) => {
     set({ isLoading: true, error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password, starting_region: startingRegion, set_vital_now: setVitalNow }),
+        body: JSON.stringify({
+          username,
+          password,
+          email,
+          phone_number: phoneNumber,
+          starting_region: startingRegion,
+          set_vital_now: setVitalNow,
+        }),
       });
 
       if (!response.ok) {
@@ -210,7 +294,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
 
       const data: AuthResponse = await response.json();
-      set({ player: data.player, token: AUTHENTICATED_SESSION });
+      set({ player: normalizePlayer(data.player), token: AUTHENTICATED_SESSION });
       localStorage.removeItem("gu_auth_token");
       localStorage.setItem("gu_player_id", data.player.id);
 
@@ -256,7 +340,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
 
       const player: Player = await response.json();
-      set({ player, token: AUTHENTICATED_SESSION });
+      set({ player: normalizePlayer(player), token: AUTHENTICATED_SESSION });
       if (typeof window !== "undefined") {
         localStorage.setItem("gu_player_id", player.id);
       }
@@ -285,7 +369,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       const player: Player = await response.json();
       const currentPlayer = get().player;
       if (currentPlayer && currentPlayer.id === id) {
-        set({ player });
+        set({ player: normalizePlayer(player) });
       }
     } catch (err: any) {
       console.error("Status fetch failed:", err.message);
@@ -313,7 +397,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
 
       const data: ExploreResponse = await response.json();
-      set({ player: data.player });
+      set({ player: normalizePlayer(data.player) });
       get().addLog(data.log);
     } catch (err: any) {
       set({ error: err.message });
@@ -348,7 +432,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
 
       const data: FeedResponse = await response.json();
-      set({ player: data.player });
+      set({ player: normalizePlayer(data.player) });
       get().addLog(data.message);
     } catch (err: any) {
       set({ error: err.message });
@@ -427,6 +511,129 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
+  breakWall: async (manaSpend) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return null;
+    // Client-side validation to prevent unnecessary requests
+    if (manaSpend < 0 || manaSpend > Math.floor(player.current_mana)) {
+      set({ error: "Số lượng Chân Nguyên không hợp lệ." });
+      return null;
+    }
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/cultivate/break-wall`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mana_spend: manaSpend}),
+      });
+
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) { throw new Error(data.error || "Trùng kích thất bại."); }
+
+      set({ player: data.player });
+      get().addLog(data.message || "Trùng kích hoàn tất.");
+      return { success: data.success, message: data.message };
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Trùng kích lỗi: ${err.message}`);
+      return { success: false, message: err.message };
+    } finally { set({ actionLoading: false }); }
+  },
+
+  rechargeWithStones: async (stones) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return null;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/recharge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_id: player.id, stones: stones }),
+      });
+
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Nạp nguyên thạch thất bại.");
+
+      set({ player: normalizePlayer(data.player) });
+      get().addLog(data.message || "Nạp nguyên thạch thành công.");
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Nạp nguyên thạch lỗi: ${err.message}`);
+      return { success: false, message: err.message };
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  useRelicGu: async (relicKey) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return null;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/cultivate/use-relic-gu`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ relic_key: relicKey }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) { throw new Error(data.error || "Không thể dùng Cổ Xá Lợi."); }
+      set({ player: data.player });
+      get().addLog(data.message || "Đã sử dụng Cổ Xá Lợi.");
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Dùng Cổ Xá Lợi lỗi: ${err.message}`);
+      return { success: false, message: err.message };
+    } finally { set({ actionLoading: false }); }
+  },
+
+  ascension: async () => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return null;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/cultivate/ascension`, {
+        method: "POST",
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) { throw new Error(data.error || "Thăng tiên thất bại."); }
+      set({ player: data.player });
+      get().addLog(data.message || "Thăng tiên hoàn tất.");
+      return { success: data.success, message: data.message };
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Thăng tiên lỗi: ${err.message}`);
+      return { success: false, message: err.message };
+    } finally { set({ actionLoading: false }); }
+  },
+
+  triggerTribulation: async () => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return null;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/cultivate/tribulation`, {
+        method: "POST",
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) { throw new Error(data.error || "Không thể kích hoạt thiên kiếp."); }
+      set({ player: data.player });
+      get().addLog(data.message || "Thiên kiếp giáng lâm.");
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Lỗi độ kiếp: ${err.message}`);
+      return { success: false, message: err.message };
+    } finally { set({ actionLoading: false }); }
+  },
+
   exploreNode: async (nodeId) => {
     const { player, token, actionLoading, logout } = get();
     if (!player || !token || actionLoading) return null;
@@ -466,7 +673,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  executeCombatTurn: async (equippedGuIds, isCharge = false) => {
+  executeCombatTurn: async (equippedGuIds, isCharge = false, targetId) => {
     const { player, token, actionLoading, logout } = get();
     if (!player || !token || actionLoading) return null;
 
@@ -481,6 +688,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           player_id: player.id,
           equipped_gu_ids: equippedGuIds,
           is_charge: isCharge,
+          target_id: targetId || "",
         }),
       });
 
@@ -938,4 +1146,192 @@ export const useGameStore = create<GameState>((set, get) => ({
       return null;
     }
   },
-}));
+
+  createParty: async () => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/party/create`, {
+        method: "POST",
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Tạo tổ đội thất bại");
+      set({ party: data.party });
+      get().addLog(data.message || "Đã lập tổ đội thành công!");
+      await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Lỗi tạo party: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  fetchPartyStatus: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/party/status`);
+      if (response.status === 401 || response.status === 403) { logout(); return; }
+      const data = await response.json();
+      set({ party: data.party });
+    } catch (err) {
+      console.error("fetch party status failed", err);
+    }
+  },
+
+  invitePlayer: async (username) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/party/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Không thể mời");
+      set({ party: data.party });
+      get().addLog(data.message || `Đã mời người chơi ${username} vào tổ đội.`);
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Mời tổ đội thất bại: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  leaveParty: async () => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/party/leave`, {
+        method: "POST",
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Rời tổ đội thất bại");
+      set({ party: null });
+      get().addLog(data.message || "Bạn đã rời khỏi tổ đội.");
+      await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Rời tổ đội thất bại: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  fetchArenaLeaderboard: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/arena/leaderboard`);
+      if (response.status === 401 || response.status === 403) { logout(); return; }
+      const data = await response.json();
+      set({ arenaLeaderboard: Array.isArray(data.leaderboard) ? data.leaderboard : [] });
+    } catch (err) {
+      console.error("fetch arena leaderboard failed", err);
+    }
+  },
+
+  challengeArena: async (targetPlayerId) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/arena/challenge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target_player_id: targetPlayerId }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Khiêu chiến thất bại");
+      set({ player: data.player, currentView: "dashboard" }); // Force update player state which triggers combat screen
+      get().addLog(data.message || "Đã thách đấu đối thủ!");
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Khiêu chiến võ đài lỗi: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  sendPrivateMail: async (receiverUsername, content) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/chat/mail/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ receiver_username: receiverUsername, content }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Gửi thư thất bại");
+      get().addLog(data.message || "Đã gửi thư truyền tin!");
+      await get().initializeSession(); // update stone count
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Truyền tin lỗi: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  fetchInbox: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/chat/mail/inbox`);
+      if (response.status === 401 || response.status === 403) { logout(); return; }
+      const data = await response.json();
+      set({ inbox: Array.isArray(data.inbox) ? data.inbox : [] });
+    } catch (err) {
+      console.error("fetch inbox failed", err);
+    }
+  },
+
+  sendBaoHoangChat: async (content) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/chat/bao-hoang/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Ký gửi thần niệm thất bại");
+      get().addLog(data.message || "Đã đăng tin lên Hoàng Bảo Thiên!");
+      await get().fetchBaoHoangMessages();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Lỗi gửi chat Hoàng Bảo Thiên: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  fetchBaoHoangMessages: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/chat/bao-hoang/messages`);
+      if (response.status === 401 || response.status === 403) { return; }
+      const data = await response.json();
+      set({ baoHoangMessages: Array.isArray(data.messages) ? data.messages : [] });
+    } catch (err) {
+      console.error("fetch bao hoang chat messages failed", err);
+    }
+  },
+})});

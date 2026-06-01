@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -33,6 +34,7 @@ var CaravanShopCatalog = []ShopItem{
 	{ID: "GU_TUSITA_FLOWER", Name: "Thố Ti Hoa Cổ", Description: "Cổ trùng không gian tăng thêm 20 ô chứa đồ trong hành lý.", Type: "Gu", Price: 180, Stock: 2},
 	{ID: "GU_RELIC", Name: "Xá Lợi Cổ (Relic Gu)", Description: "Cổ trùng tiêu hao nâng cao tu vi ngay lập tức thêm 1 Tiểu Chuyển.", Type: "Gu", Price: 300, Stock: 2},
 	{ID: "GU_STONE_APERTURE", Name: "Thạch Khiếu Cổ (Stone Aperture Gu)", Description: "Cổ trùng tiêu hao hóa thạch Không khiếu nhận 500 Nguyên Thạch nhưng giảm 15 Chân Nguyên tối đa.", Type: "Gu", Price: 150, Stock: 3},
+	{ID: "GU_RED_STEEL_RELIC", Name: "Xích Thiết Xá Lợi Cổ", Description: "Tăng tu vi Nhị Chuyển lên một tiểu cảnh giới.", Type: "Gu", Price: 500, Stock: 1},
 }
 
 // GetShopList returns the hardcoded shop inventory
@@ -122,8 +124,9 @@ func BuyShopItem(c *gin.Context) {
 	player.PrimevalStones -= totalCost
 
 	// 5. Add items to player inventory
-	if selectedItem.Type == "Gu" {
-		// Verify if the Gu ID is in static GuRegistry
+	switch selectedItem.Type {
+	case "Gu":
+		log.Printf("Adding %d x %s to player %s inventory", req.Quantity, selectedItem.Name, player.ID)
 		spec, ok := models.GuRegistry[selectedItem.ID]
 		if !ok {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy định nghĩa của Cổ trùng trong Dictionary"})
@@ -140,7 +143,7 @@ func BuyShopItem(c *gin.Context) {
 			}
 			player.GuInventory = append(player.GuInventory, newInstance)
 		}
-	} else if selectedItem.Type == "Material" {
+	case "Material":
 		if player.MaterialsInventory == nil {
 			player.MaterialsInventory = make(models.MaterialsInventory)
 		}

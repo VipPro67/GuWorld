@@ -39,6 +39,12 @@ func main() {
 		log.Fatalf("Failed to load Gu registry cache: %v", err)
 	}
 
+	// 2.3. Load Item registry cache from database Dictionaries
+	err = models.LoadItemRegistry(db.DB)
+	if err != nil {
+		log.Fatalf("Failed to load Item registry cache: %v", err)
+	}
+
 	// 2.5. Start Hunger Decay Background Worker (15-minute intervals for slower, balanced survival gameplay)
 	worker.StartHungerWorker(db.DB, 15*time.Minute)
 

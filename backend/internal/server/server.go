@@ -73,9 +73,28 @@ func SetupRouter() *gin.Engine {
 			player.GET("/stats", handlers.GetPlayerStatsHandler)
 			player.POST("/explore/:id", handlers.Explore)
 			player.POST("/use-item", handlers.UseItem)
+			player.POST("/recharge", handlers.RechargeWithStones)
+		}
+
+		cultivate := api.Group("/cultivate")
+		cultivate.Use(middleware.AuthRequired())
+		{
+			cultivate.POST("/break-wall", handlers.BreakWall)
+			cultivate.POST("/use-relic-gu", handlers.UseRelicGu)
+			cultivate.POST("/ascension", handlers.Ascension)
+			cultivate.POST("/tribulation", handlers.Tribulation)
 		}
 
 		// Protected Inventory Endpoints
+		party := api.Group("/party")
+		party.Use(middleware.AuthRequired())
+		{
+			party.POST("/create", handlers.CreateParty)
+			party.GET("/status", handlers.GetPartyStatus)
+			party.POST("/invite", handlers.InvitePlayer)
+			party.POST("/leave", handlers.LeaveParty)
+		}
+
 		inventory := api.Group("/inventory")
 		inventory.Use(middleware.AuthRequired())
 		{
@@ -84,6 +103,7 @@ func SetupRouter() *gin.Engine {
 			inventory.POST("/status", handlers.UpdateGuStatus)
 			inventory.POST("/set-vital", handlers.SetVitalGu)
 			inventory.POST("/use-gu", handlers.UseConsumableGu)
+			inventory.POST("/use-support", handlers.UseSupportGu)
 			inventory.POST("/drop", handlers.DropGu)
 		}
 
@@ -99,6 +119,24 @@ func SetupRouter() *gin.Engine {
 		combat.Use(middleware.AuthRequired())
 		{
 			combat.POST("/attack", handlers.CombatAttack)
+		}
+
+		// Arena Endpoints
+		arena := api.Group("/arena")
+		arena.Use(middleware.AuthRequired())
+		{
+			arena.GET("/leaderboard", handlers.GetArenaLeaderboard)
+			arena.POST("/challenge", handlers.ChallengeArena)
+		}
+
+		// Chat / Mail Endpoints
+		chat := api.Group("/chat")
+		chat.Use(middleware.AuthRequired())
+		{
+			chat.POST("/mail/send", handlers.SendPrivateMail)
+			chat.GET("/mail/inbox", handlers.GetInbox)
+			chat.POST("/bao-hoang/send", handlers.SendBaoHoangChat)
+			chat.GET("/bao-hoang/messages", handlers.GetBaoHoangMessages)
 		}
 
 		api.POST("/explore", middleware.AuthRequired(), handlers.ExploreNode)

@@ -144,19 +144,6 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
     }
   };
 
-  // Helper to render material icon
-  const renderMaterialIcon = (key: string) => {
-    switch (key) {
-      case "moon_orchid_petal":
-        return <Flower2 className="w-4 h-4 text-emerald-450" />;
-      case "green_bamboo_wine":
-        return <Wine className="w-4 h-4 text-amber-500" />;
-      case "jade_stone":
-        return <Gem className="w-4 h-4 text-cyan-400" />;
-      default:
-        return <HelpCircle className="w-4 h-4 text-zinc-500" />;
-    }
-  };
 
   // Filter materials (only those with qty > 0 and matching searchTerm)
   const filteredMaterials = Object.keys(itemDictionary)
@@ -251,7 +238,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {filteredMaterials.map(({ key, spec, qty }) => {
-                const isConsumable = ["green_bamboo_wine", "moon_orchid_petal", "jade_stone"].includes(key);
+                const isConsumable = spec.item_type === "Consumable" || spec.type === "Consumable";
                 const isUsing = usingId === key;
                 return (
                   <div
@@ -260,7 +247,6 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                     title={spec.description}
                   >
                     <div className="flex items-center gap-2">
-                      {renderMaterialIcon(key)}
                       <div className="text-left">
                         <div className="text-xs font-semibold text-zinc-200">{spec.name}</div>
                         <div className="text-[9px] text-zinc-500 font-mono">x{qty} sở hữu</div>
@@ -340,7 +326,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                   base_mana_cost: 0,
                   effects: {},
                   hunger_rate: 0,
-                  food_type: "unknown",
+                  food_types: ["unknown"],
                   max_hunger: 100,
                   description: "Cổ trùng chưa được giải nghĩa.",
                 };
@@ -352,9 +338,17 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                 const isSealed = status === "SEALED";
                 const isEquipped = gu.equipped;
 
-                const foodSpec = itemDictionary[spec.food_type];
-                const foodName = foodSpec ? foodSpec.name : spec.food_type;
-                const availableFood = materials[spec.food_type] || 0;
+                const availableFoodId = spec.food_types.find(
+                    foodId => (materials[foodId] || 0) > 0
+                );
+
+                const foodName = availableFoodId
+                    ? itemDictionary[availableFoodId]?.name || availableFoodId
+                    : null;
+
+                const availableFood = availableFoodId
+                    ? materials[availableFoodId]
+                    : 0;
                 const canFeed = availableFood > 0 && !isDead && !isSealed;
                 const isCurrentlyFeeding = feedingId === gu.instance_id;
                 const isCurrentlyEquipping = equippingId === gu.instance_id;

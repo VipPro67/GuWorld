@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Player, GuSpec, useGameStore } from "@/store/useGameStore";
-import { Award, Shield, Compass, Sparkles, PackageOpen, ShieldAlert, Zap, Compass as RadarIcon } from "lucide-react";
+import { Award, Shield, Compass, Sparkles, PackageOpen, ShieldAlert, Zap, Compass as RadarIcon, Heart, Clock } from "lucide-react";
 
 interface PlayerStatsProps {
   player: Player;
@@ -183,6 +183,11 @@ export const PlayerStats: React.FC<PlayerStatsProps> = ({
               {player.username}
               <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
             </h2>
+            {player.lifespan <= 0 && (
+              <div className="bg-rose-950/40 border border-rose-500/20 text-rose-450 p-2 rounded-xl text-[10px] font-mono animate-pulse mt-2">
+                ⚠️ LÃO HÓA: Thọ nguyên đã tận! Khí hải khô kiệt, hồi phục giảm 50%. Hãy tìm Thọ Cổ!
+              </div>
+            )}
           </div>
 
           <div className="border-t border-zinc-900 my-1" />
@@ -206,6 +211,36 @@ export const PlayerStats: React.FC<PlayerStatsProps> = ({
               </div>
               <span className="text-xs font-semibold text-zinc-300 block">
                 {getSubRankName(player.sub_rank)}
+              </span>
+            </div>
+
+            <div className="bg-zinc-950/40 p-2.5 rounded-xl border border-zinc-900">
+              <div className="flex items-center gap-1 text-zinc-500 mb-0.5">
+                <ShieldAlert className="w-3 h-3 text-rose-400" />
+                <span className="text-[8px] uppercase tracking-wider">Thể Trạng</span>
+              </div>
+              <span className="text-xs font-semibold text-zinc-300 block">
+                {Math.round(player.hp)} / {Math.round(player.base_hp)}
+              </span>
+            </div>
+
+            <div className="bg-zinc-950/40 p-2.5 rounded-xl border border-zinc-900">
+              <div className="flex items-center gap-1 text-zinc-500 mb-0.5">
+                <Heart className="w-3 h-3 text-rose-500" />
+                <span className="text-[8px] uppercase tracking-wider">Thọ Nguyên</span>
+              </div>
+              <span className="text-xs font-semibold text-zinc-300 block">
+                {player.lifespan !== undefined ? player.lifespan.toFixed(1) : "0"}/{player.max_lifespan !== undefined ? player.max_lifespan.toFixed(0) : "100"} năm
+              </span>
+            </div>
+
+            <div className="bg-zinc-950/40 p-2.5 rounded-xl border border-zinc-900 col-span-2">
+              <div className="flex items-center gap-1 text-zinc-500 mb-0.5">
+                <Clock className="w-3 h-3 text-cyan-400" />
+                <span className="text-[8px] uppercase tracking-wider">Hệ Số Lưu Tốc Tiên Khiếu (Aperture Flow)</span>
+              </div>
+              <span className="text-xs font-semibold text-zinc-300 block">
+                Nhanh gấp x{player.time_speed_multiplier !== undefined ? player.time_speed_multiplier.toFixed(0) : "1"} lần
               </span>
             </div>
           </div>

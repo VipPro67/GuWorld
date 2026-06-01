@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { Sparkles, Compass, ShieldAlert, KeyRound, User, Eye, EyeOff } from "lucide-react";
+import { Sparkles, Compass, ShieldAlert, KeyRound, User, Eye, EyeOff, Mail, Phone } from "lucide-react";
 
 interface RegistrationProps {
-  onRegister: (username: string, password: string, startingRegion: string, setVitalNow: boolean) => Promise<boolean>;
+  onRegister: (username: string, password: string, email: string, phoneNumber: string, startingRegion: string, setVitalNow: boolean) => Promise<boolean>;
   onLogin: (username: string, password: string) => Promise<boolean>;
   isLoading: boolean;
   error: string | null;
@@ -21,6 +21,8 @@ export const Registration: React.FC<RegistrationProps> = ({
   const [isLoginTab, setIsLoginTab] = useState(true);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [startingRegion, setStartingRegion] = useState("Southern_Border");
   const [setVitalNow, setSetVitalNow] = useState(true);
@@ -32,7 +34,7 @@ export const Registration: React.FC<RegistrationProps> = ({
     if (isLoginTab) {
       await onLogin(username.trim(), password);
     } else {
-      await onRegister(username.trim(), password, startingRegion, setVitalNow);
+      await onRegister(username.trim(), password, email.trim(), phoneNumber.trim(), startingRegion, setVitalNow);
     }
   };
 
@@ -40,6 +42,8 @@ export const Registration: React.FC<RegistrationProps> = ({
     setIsLoginTab(login);
     onClearError();
     setPassword("");
+    setEmail("");
+    setPhoneNumber("");
   };
 
   return (
@@ -130,7 +134,7 @@ export const Registration: React.FC<RegistrationProps> = ({
             htmlFor="username"
             className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5"
           >
-            Đạo Hiệu (Character Name)
+            {isLoginTab ? "Đạo Hiệu / Email / Số điện thoại" : "Đạo Hiệu (Character Name)"}
           </label>
           <div className="relative">
             <User className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-600" />
@@ -143,13 +147,69 @@ export const Registration: React.FC<RegistrationProps> = ({
                 onClearError();
                 setUsername(e.target.value);
               }}
-              placeholder="Nhập đạo hiệu..."
+              placeholder={isLoginTab ? "Nhập đạo hiệu, email hoặc SĐT..." : "Nhập đạo hiệu..."}
               className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-sm text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-amber-500/50 focus:shadow-[0_0_15px_rgba(234,179,8,0.1)] transition-all font-serif"
-              maxLength={30}
+              maxLength={50}
               required
             />
           </div>
         </div>
+
+        {/* Email - Only in registration */}
+        {!isLoginTab && (
+          <div className="relative">
+            <label
+              htmlFor="email"
+              className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5"
+            >
+              Email (Thư điện tử)
+            </label>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-600" />
+              <input
+                type="email"
+                id="email"
+                disabled={isLoading}
+                value={email}
+                onChange={(e) => {
+                  onClearError();
+                  setEmail(e.target.value);
+                }}
+                placeholder="example@gmail.com"
+                className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-sm text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-amber-500/50 focus:shadow-[0_0_15px_rgba(234,179,8,0.1)] transition-all font-mono"
+                required
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Phone Number - Only in registration */}
+        {!isLoginTab && (
+          <div className="relative">
+            <label
+              htmlFor="phoneNumber"
+              className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5"
+            >
+              Số điện thoại (Phone Number)
+            </label>
+            <div className="relative">
+              <Phone className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-600" />
+              <input
+                type="tel"
+                id="phoneNumber"
+                disabled={isLoading}
+                value={phoneNumber}
+                onChange={(e) => {
+                  onClearError();
+                  setPhoneNumber(e.target.value);
+                }}
+                placeholder="0912345678"
+                className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-sm text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-amber-500/50 focus:shadow-[0_0_15px_rgba(234,179,8,0.1)] transition-all font-mono"
+                required
+              />
+            </div>
+          </div>
+        )}
 
         {/* Password */}
         <div className="relative">
@@ -197,9 +257,17 @@ export const Registration: React.FC<RegistrationProps> = ({
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={isLoading || username.trim().length < 3 || password.length < 6}
+          disabled={
+            isLoading ||
+            username.trim().length < 3 ||
+            password.length < 6 ||
+            (!isLoginTab && (email.trim().length === 0 || phoneNumber.trim().length === 0))
+          }
           className={`w-full py-4 px-6 rounded-xl font-serif text-sm font-semibold tracking-wider transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-lg mt-6 ${
-            isLoading || username.trim().length < 3 || password.length < 6
+            isLoading ||
+            username.trim().length < 3 ||
+            password.length < 6 ||
+            (!isLoginTab && (email.trim().length === 0 || phoneNumber.trim().length === 0))
               ? "bg-zinc-900 text-zinc-600 border border-zinc-850 cursor-not-allowed"
               : "bg-gradient-to-r from-amber-600 to-yellow-600 text-zinc-950 font-bold hover:from-amber-500 hover:to-yellow-500 hover:shadow-[0_0_25px_rgba(234,179,8,0.25)] active:scale-[0.98]"
           }`}

@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -16,23 +18,15 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
-// Cell represents a cell on the grid map
-type Cell struct {
-	X       int    `json:"x"`
-	Y       int    `json:"y"`
-	Type    string `json:"cell_type"` // "Empty", "Resource", "Monster", "WildGu", "PVP"
-	Content string `json:"content"`   // name/ID of item, beast, or Gu
-}
-
 // GenerateCell procedurally generates the cell content based on region, x, y coordinates
-func GenerateCell(x, y int, region string) Cell {
+func GenerateCell(x, y int, region string) models.Cell {
 	respawnWindow := time.Now().Unix() / 180
 	if x == 50 && y == 50 {
-		return Cell{X: x, Y: y, Type: "Empty", Content: "Thanh Bản Thôn (Safe Village)"}
+		return models.Cell{X: x, Y: y, Type: "Empty", Content: "Thanh Bản Thôn (Safe Village)"}
 	}
 
 	if x < 0 || x >= 100 || y < 0 || y >= 100 {
-		return Cell{X: x, Y: y, Type: "Empty", Content: "Biên Giới Cổ Giới (World Edge)"}
+		return models.Cell{X: x, Y: y, Type: "Empty", Content: "Biên Giới Cổ Giới (World Edge)"}
 	}
 
 	h := sha256.New()
@@ -48,9 +42,9 @@ func GenerateCell(x, y int, region string) Cell {
 	// 70% chance empty/PVP
 	if roll < 70 {
 		if roll >= 67 {
-			return Cell{X: x, Y: y, Type: "PVP", Content: "cultivator"}
+			return models.Cell{X: x, Y: y, Type: "PVP", Content: "cultivator"}
 		}
-		return Cell{X: x, Y: y, Type: "Empty", Content: ""}
+		return models.Cell{X: x, Y: y, Type: "Empty", Content: ""}
 	} else if roll < 85 {
 		// Region-specific resources
 		var res string
@@ -79,7 +73,7 @@ func GenerateCell(x, y int, region string) Cell {
 		default:
 			res = "moon_orchid_petal"
 		}
-		return Cell{X: x, Y: y, Type: "Resource", Content: res}
+		return models.Cell{X: x, Y: y, Type: "Resource", Content: res}
 	} else if roll < 97 {
 		// Region-specific monsters
 		var monster string
@@ -103,41 +97,67 @@ func GenerateCell(x, y int, region string) Cell {
 				monster = "Thạch Hầu (Stone Ape)"
 			}
 		}
-		return Cell{X: x, Y: y, Type: "Monster", Content: monster}
+		return models.Cell{X: x, Y: y, Type: "Monster", Content: monster}
 	} else {
 		// Region-specific Gu bugs
 		var gu string
 		switch region {
 		case "three_kings_inheritance":
 			sub := rng.Intn(3)
-			if sub == 0 {
+			switch sub {
+			case 0:
 				gu = "GU_EARTH_COMMUNICATION"
-			} else if sub == 1 {
+			case 1:
 				gu = "GU_TUSITA_FLOWER"
-			} else {
+			default:
 				gu = "GU_CLEANSING_WATER"
 			}
 		case "gu_luan_slope":
 			sub := rng.Intn(3)
-			if sub == 0 {
+			switch sub {
+			case 0:
 				gu = "GU_WHITE_BOAR"
-			} else if sub == 1 {
+			case 1:
 				gu = "GU_BLACK_BOAR"
-			} else {
+			default:
 				gu = "GU_SHADOW_STEPS"
 			}
 		default: // qing_mao_mountain
 			sub := rng.Intn(3)
-			if sub == 0 {
+			switch sub {
+			case 0:
 				gu = "GU_MOONLIGHT"
-			} else if sub == 1 {
+			case 1:
 				gu = "GU_JADE_SKIN"
-			} else {
+			default:
 				gu = "GU_LIQUOR_WORM"
 			}
 		}
-		return Cell{X: x, Y: y, Type: "WildGu", Content: gu}
+		return models.Cell{X: x, Y: y, Type: "WildGu", Content: gu}
 	}
+}
+
+func ResolveCell(tx *sql.Tx, region string, x int, y int) (models.Cell, error) {
+	special, ok, err := db.FindSpecialCell(tx, region, x, y)
+	if err == nil && ok {
+		return special, nil
+	}
+
+	spawn, ok, err := db.FindFixedSpawn(tx, region, x, y)
+	if err == nil && ok {
+		return models.Cell{X: x, Y: y, Type: "Monster", Content: spawn.MonsterID}, nil
+	}
+
+	cell := GenerateCell(x, y, region)
+
+	if cell.Type == "Monster" {
+		monsterID, err := db.PickRandomMonsterFromRegion(tx, region)
+		if err == nil && monsterID != "" {
+			cell.Content = monsterID
+		}
+	}
+
+	return cell, nil
 }
 
 // addExploredCells formats and appends visible coordinates to explored_cells JSONB list
@@ -164,7 +184,6 @@ func addExploredCells(player *models.Player, radius int) {
 	}
 	player.ExploredCells = newSlice
 }
-
 
 func isCellClearedRecently(player *models.Player, x, y int, cooldown time.Duration) bool {
 	if player.ClearedCells == nil {
@@ -209,17 +228,46 @@ func GetGrid(c *gin.Context) {
 		visionRadius = 1
 	}
 
-	cells := []Cell{}
+	cells := []models.Cell{}
 	for dx := -visionRadius; dx <= visionRadius; dx++ {
 		for dy := -visionRadius; dy <= visionRadius; dy++ {
 			cx := player.X + dx
 			cy := player.Y + dy
 			if cx >= 0 && cx < 100 && cy >= 0 && cy < 100 {
-				cell := GenerateCell(cx, cy, player.CurrentRegion)
+				cell, err := ResolveCell(tx, player.CurrentRegion, cx, cy)
+				if err != nil {
+					cell = GenerateCell(cx, cy, player.CurrentRegion)
+				}
 				if isCellClearedRecently(&player, cx, cy, 2*time.Minute) && (cell.Type == "Resource" || cell.Type == "WildGu") {
-					cell = Cell{X: cx, Y: cy, Type: "Empty", Content: ""}
+					cell = models.Cell{X: cx, Y: cy, Type: "Empty", Content: ""}
 				}
 				cells = append(cells, cell)
+			}
+		}
+	}
+
+	type NearbyPlayer struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+		X        int    `json:"x"`
+		Y        int    `json:"y"`
+	}
+	nearbyPlayers := []NearbyPlayer{}
+	rows, errQuery := tx.Query(`
+		SELECT id, username, x, y 
+		FROM players 
+		WHERE current_region = $1 
+		  AND id != $2 
+		  AND last_mana_update >= NOW() - INTERVAL '15 minutes'
+		  AND x >= $3 AND x <= $4
+		  AND y >= $5 AND y <= $6
+	`, player.CurrentRegion, player.ID, player.X-visionRadius, player.X+visionRadius, player.Y-visionRadius, player.Y+visionRadius)
+	if errQuery == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var np NearbyPlayer
+			if errScan := rows.Scan(&np.ID, &np.Username, &np.X, &np.Y); errScan == nil {
+				nearbyPlayers = append(nearbyPlayers, np)
 			}
 		}
 	}
@@ -231,6 +279,7 @@ func GetGrid(c *gin.Context) {
 		"cells":          cells,
 		"explored_cells": player.ExploredCells,
 		"stats":          stats,
+		"players_on_map": nearbyPlayers,
 	})
 }
 
@@ -315,14 +364,18 @@ func MovePlayer(c *gin.Context) {
 	isCleared := isCellClearedRecently(&player, player.X, player.Y, 2*time.Minute)
 
 	// Trigger cell action
-	cell := GenerateCell(player.X, player.Y, player.CurrentRegion)
+	cell, err := ResolveCell(tx, player.CurrentRegion, player.X, player.Y)
+	if err != nil {
+		cell = GenerateCell(player.X, player.Y, player.CurrentRegion)
+	}
 	logMsg := fmt.Sprintf("Di chuyển thành công đến (%d, %d).", player.X, player.Y)
 	combatTriggered := false
 
 	if isCleared {
 		logMsg = fmt.Sprintf("Di chuyển thành công đến (%d, %d). Vùng đất trống trải hoang tàn.", player.X, player.Y)
 	} else {
-		if cell.Type == "Resource" {
+		switch cell.Type {
+		case "Resource":
 			if HasInventorySpace(&player, 1) {
 				if player.MaterialsInventory == nil {
 					player.MaterialsInventory = make(models.MaterialsInventory)
@@ -337,7 +390,7 @@ func MovePlayer(c *gin.Context) {
 			} else {
 				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Phát hiện 1x %s, nhưng Bách Bảo Nang đã đầy!", player.X, player.Y, cell.Content)
 			}
-		} else if cell.Type == "WildGu" {
+		case "WildGu":
 			if HasInventorySpace(&player, 1) {
 				newGu := models.GuInstance{
 					InstanceID: uuid.New().String(),
@@ -356,47 +409,67 @@ func MovePlayer(c *gin.Context) {
 			} else {
 				logMsg = fmt.Sprintf("Đạo hữu phát hiện thấy Cổ trùng hoang dã %s, tiếc là Bách Bảo Nang đã đầy nên để nó trốn thoát!", cell.Content)
 			}
-		} else if cell.Type == "Monster" {
+		case "Monster", "Boss":
 			combatTriggered = true
-			enemyHp := 60.0
-			enemyDmg := 10.0
-			enemyDef := 3.0
 
-			if cell.Content == "Mãng Xà Dung Nham (Lava Python)" {
-				enemyHp = 150.0
-				enemyDmg = 24.0
-				enemyDef = 10.0
-			} else if cell.Content == "Thiết Giáp Hùng (Iron Armored Bear)" {
-				enemyHp = 200.0
-				enemyDmg = 18.0
-				enemyDef = 18.0
-			} else if cell.Content == "Độc Lang Vương (Wolf Leader)" {
-				enemyHp = 100.0
-				enemyDmg = 15.0
-				enemyDef = 6.0
-			} else if cell.Content == "Dã Trĩ Vương (Boar King)" {
-				enemyHp = 120.0
-				enemyDmg = 12.0
-				enemyDef = 8.0
-			} else if cell.Content == "Thạch Hầu (Stone Ape)" {
-				enemyHp = 60.0
-				enemyDmg = 10.0
-				enemyDef = 3.0
-			} else if cell.Content == "Dã Trĩ (Wild Boar)" {
-				enemyHp = 50.0
-				enemyDmg = 8.0
-				enemyDef = 2.0
-			}
+			// Load from database if possible
+			mon, err := db.LoadMonsterTemplate(tx, cell.Content)
+			if err == nil {
+				logMsg = fmt.Sprintf("Đạo hữu chạm trán %s tại tọa độ (%d, %d)! (Quái vật được tải từ cơ sở dữ liệu)", mon.Name, player.X, player.Y)
+				log.Println(logMsg)
+				combatState := models.BuildCombatStateFromMonster(mon)
+				player.ActiveCombat = &combatState
+				logMsg = fmt.Sprintf("Nguy hiểm! Đạo hữu chạm trán %s tại tọa độ (%d, %d)!", mon.Name, player.X, player.Y)
+			} else {
+				// Fallback to hardcoded stats based on content string
+				enemyHp := 60.0
+				enemyDmg := 10.0
+				enemyDef := 3.0
+				name := cell.Content
 
-			player.ActiveCombat = &models.CombatState{
-				EnemyName:    cell.Content,
-				EnemyHP:      enemyHp,
-				EnemyMaxHP:   enemyHp,
-				EnemyDamage:  enemyDmg,
-				EnemyDefense: enemyDef,
+				switch cell.Content {
+				case "monster_lava_python", "Mãng Xà Dung Nham (Lava Python)":
+					name = "Mãng Xà Dung Nham (Lava Python)"
+					enemyHp = 150.0
+					enemyDmg = 24.0
+					enemyDef = 10.0
+				case "monster_iron_bear", "Thiết Giáp Hùng (Iron Armored Bear)":
+					name = "Thiết Giáp Hùng (Iron Armored Bear)"
+					enemyHp = 200.0
+					enemyDmg = 18.0
+					enemyDef = 18.0
+				case "monster_wolf_leader", "Độc Lang Vương (Wolf Leader)":
+					name = "Độc Lang Vương (Wolf Leader)"
+					enemyHp = 100.0
+					enemyDmg = 15.0
+					enemyDef = 6.0
+				case "monster_boar_king", "Dã Trĩ Vương (Boar King)":
+					name = "Dã Trĩ Vương (Boar King)"
+					enemyHp = 120.0
+					enemyDmg = 12.0
+					enemyDef = 8.0
+				case "monster_stone_ape", "Thạch Hầu (Stone Ape)":
+					name = "Thạch Hầu (Stone Ape)"
+					enemyHp = 60.0
+					enemyDmg = 10.0
+					enemyDef = 3.0
+				case "monster_wild_boar", "Dã Trĩ (Wild Boar)":
+					name = "Dã Trĩ (Wild Boar)"
+					enemyHp = 50.0
+					enemyDmg = 8.0
+					enemyDef = 2.0
+				}
+
+				player.ActiveCombat = &models.CombatState{
+					EnemyName:    name,
+					EnemyHP:      enemyHp,
+					EnemyMaxHP:   enemyHp,
+					EnemyDamage:  enemyDmg,
+					EnemyDefense: enemyDef,
+				}
+				logMsg = fmt.Sprintf("Nguy hiểm! Đạo hữu chạm trán với mãnh thú phục kích: %s tại tọa độ (%d, %d)!", name, player.X, player.Y)
 			}
-			logMsg = fmt.Sprintf("Nguy hiểm! Đạo hữu chạm trán với mãnh thú phục kích: %s tại tọa độ (%d, %d)!", cell.Content, player.X, player.Y)
-		} else if cell.Type == "PVP" {
+		case "PVP":
 			var targetPlayer models.Player
 			err := tx.QueryRow(`
 				SELECT id, username, rank, sub_rank, hp, max_mana, path_masteries, gu_inventory, dao_marks
@@ -448,6 +521,10 @@ func MovePlayer(c *gin.Context) {
 				}
 			}
 		}
+	}
+
+	if player.ActiveCombat != nil {
+		player.ActiveCombat = StartCombat(tx, player.ActiveCombat, &player)
 	}
 
 	// Update DB

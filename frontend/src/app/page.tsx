@@ -13,6 +13,8 @@ import { CombatScreen } from "@/components/CombatScreen";
 import { CaravanShop } from "@/components/CaravanShop";
 import { Sparkles, HelpCircle } from "lucide-react";
 import { BaoHoangMarket } from "@/components/BaoHoangMarket";
+import { ArenaView } from "@/components/ArenaView";
+import { ChatConsole } from "@/components/ChatConsole";
 
 export default function Home() {
   const {
@@ -127,6 +129,8 @@ export default function Home() {
               { id: "refine", label: "LUYỆN CỔ THẤT", shortLabel: "Luyện Cổ", activeColor: "text-amber-400", barColor: "bg-amber-500 shadow-[0_0_8px_rgba(234,179,8,0.5)]" },
               { id: "shop", label: "GIẢ GIA THƯƠNG ĐỘI", shortLabel: "Thương Đội", activeColor: "text-amber-500", barColor: "bg-amber-600 shadow-[0_0_8px_rgba(217,119,6,0.5)]" },
               { id: "auction", label: "BẢO HOÀNG THIÊN", shortLabel: "Bảo Hoàng", activeColor: "text-violet-400", barColor: "bg-violet-500 shadow-[0_0_8px_rgba(139,92,246,0.5)]" },
+              { id: "arena", label: "VÕ ĐÀI ĐUA TOP", shortLabel: "Võ Đài", activeColor: "text-red-400", barColor: "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" },
+              { id: "chat", label: "TRUYỀN TIN CỔ TRÙNG", shortLabel: "Truyền Tin", activeColor: "text-indigo-400", barColor: "bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]" },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -238,7 +242,7 @@ export default function Home() {
               onSell={sellShopItem}
             />
           </div>
-        ) : (
+        ) : currentView === "auction" ? (
           <BaoHoangMarket
             player={player}
             guInventory={player.gu_inventory}
@@ -252,6 +256,10 @@ export default function Home() {
             guDictionary={guDictionary}
             itemDictionary={itemDictionary}
           />
+        ) : currentView === "arena" ? (
+          <ArenaView />
+        ) : (
+          <ChatConsole />
         )}
       </main>
 

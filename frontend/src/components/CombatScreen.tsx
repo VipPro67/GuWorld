@@ -9,7 +9,7 @@ interface CombatScreenProps {
   enemy: CombatState;
   guDictionary: Record<string, GuSpec>;
   actionLoading: boolean;
-  onAttack: (equippedGuIds: string[], isCharge?: boolean) => Promise<any>;
+  onAttack: (equippedGuIds: string[], isCharge?: boolean, targetId?: string) => Promise<any>;
   onRetreat?: () => Promise<void>;
 }
 
@@ -56,9 +56,39 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   onRetreat,
 }) => {
   const [selectedGuInstanceIds, setSelectedGuInstanceIds] = useState<string[]>([]);
+  const [selectedTargetID, setSelectedTargetID] = useState<string>("");
   const [shouldFlashRed, setShouldFlashRed] = useState(false);
   const [shouldShake, setShouldShake] = useState(false);
   const logEndRef = useRef<HTMLDivElement | null>(null);
+
+  const isSelf = (ally: any) => {
+    if (!ally) return false;
+    return (
+      ally.id?.toLowerCase() === player.id?.toLowerCase() ||
+      ally.name === player.username
+    );
+  };
+
+  const selfCombatant = enemy.allies?.find(isSelf);
+  const currentHP = selfCombatant !== undefined ? selfCombatant.hp : player.hp;
+  const maxHP = selfCombatant !== undefined ? selfCombatant.max_hp : (player.base_hp || 100);
+  const currentMana = selfCombatant !== undefined ? selfCombatant.current_mana : player.current_mana;
+  const maxMana = selfCombatant !== undefined ? selfCombatant.max_mana : player.max_mana;
+  const alliesFiltered = enemy.allies ? enemy.allies.filter((ally) => !isSelf(ally)) : [];
+
+  // Initialize target
+  useEffect(() => {
+    if (enemy.enemies && enemy.enemies.length > 0) {
+      const activeEnemy = enemy.enemies.find((e) => e.hp > 0);
+      if (activeEnemy) {
+        setSelectedTargetID(activeEnemy.id);
+      } else {
+        setSelectedTargetID(enemy.enemies[0].id);
+      }
+    } else {
+      setSelectedTargetID(enemy.enemy_template_id || "enemy");
+    }
+  }, [enemy.enemy_name, enemy.enemies, enemy.enemy_template_id]);
 
   const logs = useGameStore((state) => state.logs);
 
@@ -184,16 +214,14 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   const handleExecuteKillerMove = async () => {
     if (!canAttack) return;
-    
-    // Clear selection
+    await onAttack(selectedGuInstanceIds, false, selectedTargetID);
     setSelectedGuInstanceIds([]);
-    await onAttack(selectedGuInstanceIds, false);
   };
 
   const handleExecuteCharge = async () => {
     if (actionLoading) return;
+    await onAttack([], true, selectedTargetID);
     setSelectedGuInstanceIds([]);
-    await onAttack([], true);
   };
 
   return (
@@ -207,94 +235,195 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       }`}
     >
       {/* 1. TOP VIEW: Character vs Enemy stats splits */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-zinc-950/30 border border-zinc-900/60 p-5 rounded-2xl">
-        {/* Left: Player status */}
-        <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch bg-zinc-950/30 border border-zinc-900/60 p-5 rounded-2xl">
+        {/* Left: Allies (Phe Ta) */}
+        <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h4 className="text-sm font-bold text-emerald-400 font-serif flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-emerald-500" />
-              Đạo hữu: {player.username}
+              Phe Ta (Allies)
             </h4>
-            <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
-              Khung Không Khiếu
+            <span className="text-[9px] font-mono text-zinc-550 uppercase tracking-widest">
+              Lực lượng đồng minh
             </span>
           </div>
 
-          {/* HP Bar */}
-          <div className="space-y-1">
-            <div className="flex justify-between text-[10px] font-mono">
-              <span className="text-rose-400 font-semibold flex items-center gap-1">
-                <Heart className="w-3.5 h-3.5" /> Thể Trạng (HP):
-              </span>
-              <span className="text-rose-400 font-bold">{Math.round(player.hp)}/100</span>
+          {/* Self Card */}
+          <div
+            onClick={() => setSelectedTargetID(player.id)}
+            className={`bg-zinc-950/40 p-3 rounded-xl border transition-all cursor-pointer ${
+              selectedTargetID === player.id
+                ? "border-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)] bg-emerald-950/5"
+                : "border-zinc-900 hover:border-zinc-800"
+            }`}
+          >
+            <div className="flex justify-between text-xs font-semibold text-zinc-350 mb-1.5">
+              <span>Bản Tôn ({player.username})</span>
+              {selectedTargetID === player.id && <span className="text-[8px] bg-emerald-900/30 text-emerald-400 px-1 rounded uppercase tracking-wider">Mục tiêu</span>}
             </div>
-            <div className="w-full bg-zinc-900 h-2.5 rounded-full overflow-hidden border border-zinc-800">
-              <div
-                className="bg-rose-500 h-full rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(239,68,68,0.4)]"
-                style={{ width: `${player.hp}%` }}
-              />
+            
+            {/* HP Bar */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-[9px] font-mono text-zinc-500">
+                <span>Thể Trạng (HP):</span>
+                <span>{Math.round(currentHP)}/{Math.round(maxHP)}</span>
+              </div>
+              <div className="w-full bg-zinc-955 h-2 rounded-full overflow-hidden border border-zinc-900">
+                <div
+                  className="bg-rose-500 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${maxHP > 0 ? (currentHP / maxHP) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Mana Bar */}
+            <div className="space-y-1 mt-1.5">
+              <div className="flex justify-between text-[9px] font-mono text-zinc-500">
+                <span>Chân Nguyên:</span>
+                <span>{currentMana.toFixed(1)}/{maxMana}</span>
+              </div>
+              <div className="w-full bg-zinc-955 h-2 rounded-full overflow-hidden border border-zinc-900">
+                <div
+                  className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${maxMana > 0 ? (currentMana / maxMana) * 100 : 0}%` }}
+                />
+              </div>
             </div>
           </div>
 
-          {/* Mana Bar */}
-          <div className="space-y-1">
-            <div className="flex justify-between text-[10px] font-mono">
-              <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                <Zap className="w-3.5 h-3.5" /> Chân Nguyên (Essence):
-              </span>
-              <span className="text-emerald-400 font-bold">
-                {player.current_mana.toFixed(1)}/{player.max_mana}
-              </span>
-            </div>
-            <div className="w-full bg-zinc-900 h-2.5 rounded-full overflow-hidden border border-zinc-800">
-              <div
-                className="bg-emerald-500 h-full rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(16,185,129,0.4)]"
-                style={{ width: `${(player.current_mana / player.max_mana) * 100}%` }}
-              />
-            </div>
-          </div>
+          {/* Allies List */}
+          {alliesFiltered.length > 0 && (
+            <div className="space-y-2">
+              {alliesFiltered.map((ally) => {
+                const isSelected = selectedTargetID === ally.id;
+                return (
+                  <div
+                    key={ally.id}
+                    onClick={() => setSelectedTargetID(ally.id)}
+                    className={`bg-zinc-950/40 p-3 rounded-xl border transition-all cursor-pointer ${
+                      isSelected
+                        ? "border-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)] bg-emerald-950/5"
+                        : "border-zinc-900 hover:border-zinc-800"
+                    }`}
+                  >
+                    <div className="flex justify-between text-xs font-semibold text-zinc-300 mb-1.5">
+                      <span>Đồng minh: {ally.name}</span>
+                      {isSelected && <span className="text-[8px] bg-emerald-900/30 text-emerald-400 px-1 rounded uppercase tracking-wider">Mục tiêu</span>}
+                    </div>
 
-          {/* Player region & Dao Marks */}
-          <div className="flex items-center justify-between text-[10px] text-zinc-500 pt-1 font-mono">
-            <span>Môi trường: {player.current_region}</span>
-            <span className="flex items-center gap-1 text-amber-500">
-              <Award className="w-3 h-3" /> Dao Marks Lực Đạo: {player.dao_marks?.["strength"] || 0}
-            </span>
-          </div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[9px] font-mono text-zinc-500">
+                        <span>Thể Trạng (HP):</span>
+                        <span>{Math.round(ally.hp)}/{Math.round(ally.max_hp)}</span>
+                      </div>
+                      <div className="w-full bg-zinc-955 h-2 rounded-full overflow-hidden border border-zinc-900">
+                        <div
+                          className="bg-rose-500 h-full rounded-full transition-all duration-300"
+                          style={{ width: `${(ally.hp / ally.max_hp) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Right: Enemy status */}
-        <div className="space-y-4 md:border-l md:border-zinc-900 md:pl-8 h-full flex flex-col justify-center">
+        {/* Right: Phe Địch */}
+        <div className="space-y-4 md:border-l md:border-zinc-900 md:pl-8 flex flex-col justify-start">
           <div className="flex justify-between items-center">
-            <h4 className="text-sm font-bold text-rose-400 font-serif flex items-center gap-1.5">
+            <h4 className="text-sm font-bold text-rose-455 font-serif flex items-center gap-1.5">
               <Flame className="w-4.5 h-4.5 text-rose-500 animate-pulse" />
-              Kẻ Địch: {enemy.enemy_name}
+              Phe Địch (Enemies)
             </h4>
             <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
-              Dã Thú PVE
+              {enemy.enemy_type === "PVP" ? "Đối thủ Võ đài" : "Dã thú PVE"}
             </span>
           </div>
 
-          {/* Enemy HP Bar */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-[10px] font-mono">
-              <span className="text-zinc-400">Sinh lực địch:</span>
-              <span className="text-rose-400 font-extrabold">
-                {Math.round(enemy.enemy_hp)}/{enemy.enemy_max_hp}
-              </span>
-            </div>
-            <div className="w-full bg-zinc-900 h-3 rounded-full overflow-hidden border border-zinc-800">
-              <div
-                className="bg-gradient-to-r from-red-600 to-orange-500 h-full rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(239,68,68,0.3)]"
-                style={{ width: `${(enemy.enemy_hp / enemy.enemy_max_hp) * 100}%` }}
-              />
-            </div>
-          </div>
+          {enemy.enemies && enemy.enemies.length > 0 ? (
+            <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+              {enemy.enemies.map((opponent) => {
+                const isSelected = selectedTargetID === opponent.id;
+                const isDead = opponent.hp <= 0;
+                return (
+                  <div
+                    key={opponent.id}
+                    onClick={() => !isDead && setSelectedTargetID(opponent.id)}
+                    className={`bg-zinc-950/40 p-3 rounded-xl border transition-all ${
+                      isDead
+                        ? "border-zinc-950 opacity-40 cursor-not-allowed"
+                        : isSelected
+                        ? "border-rose-500 bg-rose-950/5 shadow-[0_0_8px_rgba(239,68,68,0.2)] cursor-pointer"
+                        : "border-zinc-900 hover:border-zinc-800 cursor-pointer"
+                    }`}
+                  >
+                    <div className="flex justify-between text-xs font-semibold text-zinc-200 mb-1.5">
+                      <span className={isDead ? "line-through text-zinc-500" : "text-zinc-200"}>
+                        {opponent.name}
+                      </span>
+                      {isDead ? (
+                        <span className="text-[8px] bg-zinc-900 text-zinc-600 px-1 rounded uppercase tracking-wider font-bold">Tử trận</span>
+                      ) : isSelected ? (
+                        <span className="text-[8px] bg-rose-955/30 text-rose-450 px-1 rounded uppercase tracking-wider font-bold animate-pulse">Nhắm bắn</span>
+                      ) : null}
+                    </div>
 
-          <div className="grid grid-cols-2 gap-4 text-[10px] text-zinc-500 font-mono">
-            <div>Công Kích: <span className="text-zinc-300 font-bold">{enemy.enemy_damage}</span></div>
-            <div>Phòng Ngự: <span className="text-zinc-300 font-bold">{enemy.enemy_defense}</span></div>
-          </div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[9px] font-mono text-zinc-550">
+                        <span>Thể Trạng (HP):</span>
+                        <span>{Math.round(opponent.hp)}/{Math.round(opponent.max_hp)}</span>
+                      </div>
+                      <div className="w-full bg-zinc-955 h-2 rounded-full overflow-hidden border border-zinc-900">
+                        <div
+                          className="bg-gradient-to-r from-red-650 to-orange-500 h-full rounded-full transition-all duration-300"
+                          style={{ width: `${(opponent.hp / opponent.max_hp) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div
+              onClick={() => setSelectedTargetID(enemy.enemy_template_id || "enemy")}
+              className={`bg-zinc-950/40 p-4 rounded-xl border transition-all cursor-pointer ${
+                selectedTargetID === (enemy.enemy_template_id || "enemy")
+                  ? "border-rose-500 bg-rose-955/5 shadow-[0_0_8px_rgba(239,68,68,0.2)]"
+                  : "border-zinc-900 hover:border-zinc-800"
+              }`}
+            >
+              <div className="flex justify-between text-xs font-bold text-zinc-250 mb-2">
+                <span>{enemy.enemy_name}</span>
+                {selectedTargetID === (enemy.enemy_template_id || "enemy") && (
+                  <span className="text-[8px] bg-rose-950/30 text-rose-400 px-1.5 py-0.2 rounded uppercase tracking-wider font-bold animate-pulse">Nhắm bắn</span>
+                )}
+              </div>
+
+              {/* Enemy HP Bar */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-[9px] font-mono text-zinc-550">
+                  <span>Sinh lực địch:</span>
+                  <span className="text-rose-400 font-bold">
+                    {Math.round(enemy.enemy_hp)}/{enemy.enemy_max_hp}
+                  </span>
+                </div>
+                <div className="w-full bg-zinc-955 h-2.5 rounded-full overflow-hidden border border-zinc-900">
+                  <div
+                    className="bg-gradient-to-r from-red-600 to-orange-500 h-full rounded-full transition-all duration-300"
+                    style={{ width: `${(enemy.enemy_hp / enemy.enemy_max_hp) * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 text-[9px] text-zinc-500 font-mono mt-3">
+                <div>Công Kích: <span className="text-zinc-300 font-bold">{enemy.enemy_damage}</span></div>
+                <div>Phòng Ngự: <span className="text-zinc-350 font-bold">{enemy.enemy_defense}</span></div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

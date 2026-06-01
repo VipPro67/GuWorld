@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -173,6 +172,46 @@ func calculateEnergyCost(player *models.Player, guSpec *models.GuDictionaryItem)
 	return cost
 }
 
-func describeEnergyCost(player *models.Player, cost float64) string {
-	return fmt.Sprintf("%.1f %s", cost, energyName(player))
+func calculateEnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuDictionaryItem) float64 {
+	isImmortal := actor.Rank >= 6
+
+	if isImmortal {
+		if guSpec.Rank < immortalRankThreshold {
+			// To an Immortal Aperture, mortal Gu draw only a trace of immortal essence.
+			return 0.1
+		}
+
+		cost := immortalGuBaseCost(guSpec.Rank, guSpec.BaseManaCost)
+		if actor.Rank > guSpec.Rank {
+			for i := 0; i < actor.Rank-guSpec.Rank; i++ {
+				cost *= 0.85
+			}
+		}
+		if actor.SubRank > 1 {
+			cost *= math.Pow(0.92, float64(actor.SubRank-1))
+		}
+		if cost < 0.1 {
+			return 0.1
+		}
+		return cost
+	}
+
+	baseManaPct := 0.10
+	if guSpec.BaseManaCost > 0.0 {
+		baseManaPct = guSpec.BaseManaCost / 100.0
+	}
+	cost := baseManaPct * actor.MaxMana
+
+	if actor.Rank > guSpec.Rank {
+		for i := 0; i < actor.Rank-guSpec.Rank; i++ {
+			cost /= 10.0
+		}
+	}
+
+	divisor := 1
+	for i := 1; i < actor.SubRank; i++ {
+		divisor *= 2
+	}
+	cost /= float64(divisor)
+	return cost
 }

@@ -1,0 +1,280 @@
+package handlers
+
+import (
+	"database/sql"
+	"encoding/json"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/models"
+)
+
+type PartyMember struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+}
+
+func CreateParty(c *gin.Context) {
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player status"})
+		return
+	}
+
+	if player.PartyID != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đã ở trong một tổ đội rồi!"})
+		return
+	}
+
+	partyID := uuid.New()
+	members := []PartyMember{
+		{ID: player.ID.String(), Username: player.Username},
+	}
+	membersBytes, _ := json.Marshal(members)
+
+	_, err = tx.Exec("INSERT INTO parties (id, leader_id, members) VALUES ($1, $2, $3)", partyID, player.ID, membersBytes)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create party"})
+		return
+	}
+
+	_, err = tx.Exec("UPDATE players SET party_id = $1 WHERE id = $2", partyID, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player party"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Tạo tổ đội thành công!",
+		"party": gin.H{
+			"id":        partyID.String(),
+			"leader_id": player.ID.String(),
+			"members":   members,
+		},
+	})
+}
+
+func GetPartyStatus(c *gin.Context) {
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var partyIDStr sql.NullString
+	err := db.DB.QueryRow("SELECT party_id FROM players WHERE id = $1", authID).Scan(&partyIDStr)
+	if err != nil || !partyIDStr.Valid || partyIDStr.String == "" {
+		c.JSON(http.StatusOK, gin.H{"party": nil})
+		return
+	}
+
+	var leaderID string
+	var membersRaw []byte
+	err = db.DB.QueryRow("SELECT leader_id, members FROM parties WHERE id = $1", partyIDStr.String).Scan(&leaderID, &membersRaw)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"party": nil})
+		return
+	}
+
+	var members []PartyMember
+	json.Unmarshal(membersRaw, &members)
+
+	c.JSON(http.StatusOK, gin.H{
+		"party": gin.H{
+			"id":        partyIDStr.String,
+			"leader_id": leaderID,
+			"members":   members,
+		},
+	})
+}
+
+type InviteRequest struct {
+	Username string `json:"username" binding:"required"`
+}
+
+func InvitePlayer(c *gin.Context) {
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var req InviteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username is required"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player status"})
+		return
+	}
+
+	if player.PartyID == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn phải ở trong tổ đội để mời người khác!"})
+		return
+	}
+
+	var leaderID string
+	var membersRaw []byte
+	err = tx.QueryRow("SELECT leader_id, members FROM parties WHERE id = $1 FOR UPDATE", player.PartyID).Scan(&leaderID, &membersRaw)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy tổ đội"})
+		return
+	}
+
+	if leaderID != player.ID.String() {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Trưởng nhóm mới có quyền mời!"})
+		return
+	}
+
+	var targetPlayer models.Player
+	var targetPartyID sql.NullString
+	err = tx.QueryRow("SELECT id, username, party_id FROM players WHERE username = $1 FOR UPDATE", req.Username).Scan(&targetPlayer.ID, &targetPlayer.Username, &targetPartyID)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi này"})
+		return
+	}
+
+	if targetPartyID.Valid && targetPartyID.String != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Người chơi này đã có tổ đội rồi!"})
+		return
+	}
+
+	var members []PartyMember
+	json.Unmarshal(membersRaw, &members)
+
+	if len(members) >= 4 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tổ đội đã đầy (tối đa 4 người)!"})
+		return
+	}
+
+	members = append(members, PartyMember{ID: targetPlayer.ID.String(), Username: targetPlayer.Username})
+	newMembersBytes, _ := json.Marshal(members)
+
+	_, err = tx.Exec("UPDATE parties SET members = $1 WHERE id = $2", newMembersBytes, player.PartyID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update party members"})
+		return
+	}
+
+	_, err = tx.Exec("UPDATE players SET party_id = $1 WHERE id = $2", player.PartyID, targetPlayer.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update target player party ID"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Đã thêm người chơi vào tổ đội thành công!",
+		"party": gin.H{
+			"id":        player.PartyID.String(),
+			"leader_id": leaderID,
+			"members":   members,
+		},
+	})
+}
+
+func LeaveParty(c *gin.Context) {
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
+		return
+	}
+
+	if player.PartyID == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn không ở trong tổ đội nào."})
+		return
+	}
+
+	partyID := player.PartyID.String()
+	var leaderID string
+	var membersRaw []byte
+	err = tx.QueryRow("SELECT leader_id, members FROM parties WHERE id = $1 FOR UPDATE", partyID).Scan(&leaderID, &membersRaw)
+	if err != nil {
+		_, _ = tx.Exec("UPDATE players SET party_id = NULL WHERE id = $1", player.ID)
+		tx.Commit()
+		c.JSON(http.StatusOK, gin.H{"message": "Đã rời tổ đội"})
+		return
+	}
+
+	var members []PartyMember
+	json.Unmarshal(membersRaw, &members)
+
+	newMembers := []PartyMember{}
+	for _, m := range members {
+		if m.ID != player.ID.String() {
+			newMembers = append(newMembers, m)
+		}
+	}
+
+	_, err = tx.Exec("UPDATE players SET party_id = NULL WHERE id = $1", player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database update failed"})
+		return
+	}
+
+	if len(newMembers) == 0 {
+		_, _ = tx.Exec("DELETE FROM parties WHERE id = $1", partyID)
+	} else {
+		newLeaderID := leaderID
+		if leaderID == player.ID.String() {
+			newLeaderID = newMembers[0].ID
+		}
+		newMembersBytes, _ := json.Marshal(newMembers)
+		_, _ = tx.Exec("UPDATE parties SET leader_id = $1, members = $2 WHERE id = $3", newLeaderID, newMembersBytes, partyID)
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Rời tổ đội thành công!"})
+}

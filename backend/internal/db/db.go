@@ -59,6 +59,11 @@ func InitSchema() error {
 		id VARCHAR(50) PRIMARY KEY,
 		name VARCHAR(100) NOT NULL,
 		item_type VARCHAR(50) NOT NULL,
+		rarity INTEGER DEFAULT 1,
+		rank INTEGER DEFAULT 1,
+		path VARCHAR(50) NOT NULL DEFAULT 'None',
+		effects JSONB NOT NULL DEFAULT '{}',
+		tags JSONB NOT NULL DEFAULT '[]',
 		description TEXT
 	);`)
 	if err != nil {
@@ -73,7 +78,6 @@ func InitSchema() error {
 		rank INTEGER NOT NULL,
 		path VARCHAR(50) NOT NULL DEFAULT 'Moon Path',
 		gu_type VARCHAR(50) NOT NULL,
-		origin_region VARCHAR(50) NOT NULL DEFAULT 'Southern_Border',
 		base_mana_cost DOUBLE PRECISION NOT NULL DEFAULT 0,
 		effects JSONB NOT NULL DEFAULT '{}',
 		hunger_rate INTEGER NOT NULL,
@@ -156,6 +160,144 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create auction table: %w", err)
 	}
 
+	// Create parties table
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS parties (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		leader_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		members JSONB NOT NULL DEFAULT '[]',
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create parties table: %w", err)
+	}
+
+	// Create messages table
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS messages (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		sender_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		receiver_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		content TEXT NOT NULL,
+		is_read BOOLEAN NOT NULL DEFAULT FALSE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create messages table: %w", err)
+	}
+
+	// Create arena_rankings table
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS arena_rankings (
+		player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+		rank INTEGER UNIQUE NOT NULL,
+		points INTEGER DEFAULT 1000,
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create arena_rankings table: %w", err)
+	}
+
+	// 4.5. Create regions
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS regions (
+		id VARCHAR(50) PRIMARY KEY,
+		name VARCHAR(100) NOT NULL,
+		description TEXT,
+		width INT NOT NULL DEFAULT 100,
+		height INT NOT NULL DEFAULT 100,
+		min_rank INT NOT NULL DEFAULT 1,
+		max_rank INT NOT NULL DEFAULT 5,
+		is_active BOOLEAN NOT NULL DEFAULT TRUE,
+		created_at TIMESTAMP DEFAULT NOW(),
+		updated_at TIMESTAMP DEFAULT NOW()
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create regions table: %w", err)
+	}
+
+	// 4.6. Create loot_tables
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS loot_tables (
+		id VARCHAR(50) PRIMARY KEY,
+		name VARCHAR(100) NOT NULL,
+		entries JSONB NOT NULL DEFAULT '[]',
+		created_at TIMESTAMP DEFAULT NOW(),
+		updated_at TIMESTAMP DEFAULT NOW()
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create loot_tables table: %w", err)
+	}
+
+	// 4.7. Create monster_templates
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS monster_templates (
+		id VARCHAR(50) PRIMARY KEY,
+		name VARCHAR(100) NOT NULL,
+		type VARCHAR(50) NOT NULL,
+		rank INT NOT NULL DEFAULT 1,
+		sub_rank INT NOT NULL DEFAULT 1,
+		path VARCHAR(50),
+		max_hp DOUBLE PRECISION NOT NULL,
+		base_attack DOUBLE PRECISION NOT NULL,
+		base_defense DOUBLE PRECISION NOT NULL,
+		max_mana DOUBLE PRECISION NOT NULL DEFAULT 100,
+		current_mana DOUBLE PRECISION NOT NULL DEFAULT 100,
+		gu_inventory JSONB NOT NULL DEFAULT '[]',
+		item_inventory JSONB NOT NULL DEFAULT '{}',
+		dao_marks JSONB NOT NULL DEFAULT '{}',
+		path_masteries JSONB NOT NULL DEFAULT '{}',
+		ai_profile VARCHAR(50) NOT NULL DEFAULT 'beast_basic',
+		loot_table_id VARCHAR(50),
+		description TEXT,
+		is_active BOOLEAN NOT NULL DEFAULT TRUE,
+		created_at TIMESTAMP DEFAULT NOW(),
+		updated_at TIMESTAMP DEFAULT NOW()
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create monster_templates table: %w", err)
+	}
+
+	// 4.8. Create monster_spawns
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS monster_spawns (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		region_id VARCHAR(50) NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
+		monster_id VARCHAR(50) NOT NULL REFERENCES monster_templates(id) ON DELETE CASCADE,
+		x INT,
+		y INT,
+		spawn_mode VARCHAR(50) NOT NULL DEFAULT 'Random',
+		chance DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+		respawn_seconds INT NOT NULL DEFAULT 300,
+		min_rank INT NOT NULL DEFAULT 1,
+		max_rank INT NOT NULL DEFAULT 9,
+		is_boss_spawn BOOLEAN NOT NULL DEFAULT FALSE,
+		is_active BOOLEAN NOT NULL DEFAULT TRUE,
+		created_at TIMESTAMP DEFAULT NOW(),
+		updated_at TIMESTAMP DEFAULT NOW()
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create monster_spawns table: %w", err)
+	}
+
+	// 4.9. Create map_cells
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS map_cells (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		region_id VARCHAR(50) NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
+		x INT NOT NULL,
+		y INT NOT NULL,
+		cell_type VARCHAR(50) NOT NULL,
+		content_id VARCHAR(50),
+		metadata JSONB NOT NULL DEFAULT '{}',
+		respawn_seconds INT NOT NULL DEFAULT 300,
+		is_active BOOLEAN NOT NULL DEFAULT TRUE,
+		UNIQUE(region_id, x, y)
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create map_cells table: %w", err)
+	}
+
 	// Backwards-compatible column migrations
 	migrations := []struct{ sql, errMsg string }{
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) NOT NULL DEFAULT '';`, "password_hash"},
@@ -179,7 +321,26 @@ func InitSchema() error {
 		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS path VARCHAR(50) NOT NULL DEFAULT 'Moon Path';`, "path"},
 		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS base_mana_cost DOUBLE PRECISION NOT NULL DEFAULT 0;`, "base_mana_cost"},
 		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{}';`, "effects"},
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS food_types JSONB NOT NULL DEFAULT '[]';`, "food_types"},
+		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS food_types JSONB NOT NULL DEFAULT '[]';`, "food_types"}, // Cultivation system columns
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS aptitude_grade INTEGER DEFAULT 4;`, "aptitude_grade"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS wall_progress DOUBLE PRECISION NOT NULL DEFAULT 0.0;`, "wall_progress"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS human_qi DOUBLE PRECISION NOT NULL DEFAULT 0.0;`, "human_qi"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS next_tribulation_time TIMESTAMPTZ NULL;`, "next_tribulation_time"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS tribulation_count INTEGER NOT NULL DEFAULT 0;`, "tribulation_count"},
+		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS rarity INTEGER DEFAULT 1;`, "item_dictionary.rarity"},
+		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS rank INTEGER DEFAULT 1;`, "item_dictionary.rank"},
+		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS path VARCHAR(50) NOT NULL DEFAULT 'None';`, "item_dictionary.path"},
+		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{}';`, "item_dictionary.effects"},
+		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]';`, "item_dictionary.tags"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS lifespan DOUBLE PRECISION NOT NULL DEFAULT 100.0;`, "lifespan"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS max_lifespan DOUBLE PRECISION NOT NULL DEFAULT 100.0;`, "max_lifespan"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS time_speed_multiplier DOUBLE PRECISION NOT NULL DEFAULT 1.0;`, "time_speed_multiplier"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS party_id UUID NULL;`, "party_id"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS arena_rank INTEGER NULL;`, "arena_rank"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS phone_number VARCHAR(50) NULL;`, "phone_number"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS email VARCHAR(100) NULL;`, "email"},
+		{`CREATE UNIQUE INDEX IF NOT EXISTS players_email_idx ON players (email) WHERE email IS NOT NULL AND email != '';`, "players_email_idx"},
+		{`CREATE UNIQUE INDEX IF NOT EXISTS players_phone_number_idx ON players (phone_number) WHERE phone_number IS NOT NULL AND phone_number != '';`, "players_phone_number_idx"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {
@@ -221,6 +382,9 @@ func SeedDictionaries() error {
 		if err2 := seedRecipesHardcoded(); err2 != nil {
 			return fmt.Errorf("hardcoded recipe seed failed: %w", err2)
 		}
+	}
+	if err := SeedMonstersAndSpawns(); err != nil {
+		return fmt.Errorf("monster and spawn seeding failed: %w", err)
 	}
 	return nil
 }
@@ -279,7 +443,13 @@ func seedItemsFromCSV(filename string) error {
 	idIdx := colIndex(header, "id")
 	nameIdx := colIndex(header, "name")
 	typeIdx := colIndex(header, "item_type")
+	rarityIdx := colIndex(header, "rarity")
+	rankIdx := colIndex(header, "rank")
+	pathIdx := colIndex(header, "path")
+	effectsIdx := colIndex(header, "effects")
+	tagsIdx := colIndex(header, "tags")
 	descIdx := colIndex(header, "description")
+
 	if idIdx < 0 || nameIdx < 0 || typeIdx < 0 {
 		return fmt.Errorf("Item.csv missing required columns (id, name, item_type)")
 	}
@@ -298,16 +468,53 @@ func seedItemsFromCSV(filename string) error {
 		}
 		name := strings.TrimSpace(row[nameIdx])
 		itemType := strings.TrimSpace(row[typeIdx])
+
+		rarity := 1
+		if rarityIdx >= 0 && rarityIdx < len(row) {
+			fmt.Sscanf(strings.TrimSpace(row[rarityIdx]), "%d", &rarity)
+		}
+
+		rank := 1
+		if rankIdx >= 0 && rankIdx < len(row) {
+			fmt.Sscanf(strings.TrimSpace(row[rankIdx]), "%d", &rank)
+		}
+
+		path := "None"
+		if pathIdx >= 0 && pathIdx < len(row) {
+			pathVal := strings.TrimSpace(row[pathIdx])
+			if pathVal != "" {
+				path = pathVal
+			}
+		}
+
+		effects := "{}"
+		if effectsIdx >= 0 && effectsIdx < len(row) {
+			effVal := strings.TrimSpace(row[effectsIdx])
+			if effVal != "" {
+				effects = effVal
+			}
+		}
+
+		tags := "[]"
+		if tagsIdx >= 0 && tagsIdx < len(row) {
+			tagsVal := strings.TrimSpace(row[tagsIdx])
+			if tagsVal != "" {
+				tags = tagsVal
+			}
+		}
+
 		desc := ""
 		if descIdx >= 0 && descIdx < len(row) {
 			desc = strings.TrimSpace(row[descIdx])
 		}
+
 		_, err = DB.Exec(`
-			INSERT INTO item_dictionary (id, name, item_type, description)
-			VALUES ($1, $2, $3, $4)
+			INSERT INTO item_dictionary (id, name, item_type, rarity, rank, path, effects, tags, description)
+			VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9)
 			ON CONFLICT (id) DO UPDATE
-			SET name=EXCLUDED.name, item_type=EXCLUDED.item_type, description=EXCLUDED.description
-		`, id, name, itemType, desc)
+			SET name=EXCLUDED.name, item_type=EXCLUDED.item_type, rarity=EXCLUDED.rarity, rank=EXCLUDED.rank,
+			    path=EXCLUDED.path, effects=EXCLUDED.effects, tags=EXCLUDED.tags, description=EXCLUDED.description
+		`, id, name, itemType, rarity, rank, path, effects, tags, desc)
 		if err != nil {
 			return fmt.Errorf("upsert item %s: %w", id, err)
 		}
@@ -514,23 +721,29 @@ func seedRecipesFromCSV(filename string) error {
 // ── Hardcoded fallback seeds ──────────────────────────────────────────────────
 
 func seedItemsHardcoded() error {
-	items := []struct{ ID, Name, Type, Desc string }{
-		{"moon_orchid_petal", "Cánh hoa Nguyệt Lan", "Food", "Thức ăn chuyên dụng của Nguyệt Quang cổ."},
-		{"green_bamboo_wine", "Rượu Thanh Trúc", "Food", "Thức ăn của Tửu Trùng."},
-		{"jade_stone", "Ngọc Thạch", "Food", "Thức ăn của Ngọc Bì cổ."},
-		{"wild_boar_tusk", "Nanh Lợn Rừng", "Material", "Vật phẩm phụ dùng trong hợp luyện Bạch Ngọc Cổ."},
-		{"boar_meat", "Thịt Lợn Rừng", "Food", "Thức ăn của Bạch Thỉ cổ."},
-		{"sour_wine", "Rượu Chua", "Food", "Loại rượu chua cần cho Tứ Vị Tửu Trùng."},
-		{"sweet_wine", "Rượu Ngọt", "Food", "Loại rượu ngọt cần cho Tứ Vị Tửu Trùng."},
-		{"bitter_wine", "Rượu Đắng", "Food", "Loại rượu đắng cần cho Tứ Vị Tửu Trùng."},
-		{"spicy_wine", "Rượu Cay", "Food", "Loại rượu cay cần cho Tứ Vị Tửu Trùng."},
-		{"grass_puppet", "Hình nộm người cỏ", "Material", "Vật phẩm luyện tập cơ bản."},
+	type itemSeed struct {
+		ID, Name, Type, Path, Effects, Tags, Desc string
+		Rarity, Rank                              int
+	}
+	items := []itemSeed{
+		{"moon_orchid_petal", "Cánh Hoa Nguyệt Lan", "Consumable", "Moon Path", `{"restore_mana": 10, "mortal_only": 1}`, `["food", "moon_path_food"]`, "Cánh hoa chứa nguyệt hoa, dùng nuôi Nguyệt đạo Cổ hoặc luyện hóa Chân Nguyên.", 1, 1},
+		{"green_bamboo_wine", "Rượu Thanh Trúc", "Consumable", "Wood Path", `{"restore_mana": 20, "mortal_only": 1}`, `["food", "wine", "liquor_worm_food"]`, "Rượu trúc xanh, có thể khôi phục Chân Nguyên hoặc nuôi Tửu Trùng.", 1, 1},
+		{"jade_stone", "Ngọc Thạch", "Consumable", "Earth Path", `{"restore_hp": 20}`, `["material", "earth_path"]`, "Đá ngọc có linh khí, dùng dưỡng thương hoặc luyện Cổ phòng ngự.", 1, 1},
+		{"wild_boar_tusk", "Nanh Lợn Rừng", "Material", "None", `{}`, `[]`, "Vật phẩm phụ dùng trong hợp luyện Bạch Ngọc Cổ.", 1, 1},
+		{"boar_meat", "Thịt Lợn Rừng", "Food", "None", `{}`, `["food"]`, "Thức ăn của Bạch Thỉ cổ.", 1, 1},
+		{"sour_wine", "Rượu Chua", "Food", "None", `{}`, `["food"]`, "Loại rượu chua cần cho Tứ Vị Tửu Trùng.", 1, 1},
+		{"sweet_wine", "Rượu Ngọt", "Food", "None", `{}`, `["food"]`, "Loại rượu ngọt cần cho Tứ Vị Tửu Trùng.", 1, 1},
+		{"bitter_wine", "Rượu Đắng", "Food", "None", `{}`, `["food"]`, "Loại rượu đắng cần cho Tứ Vị Tửu Trùng.", 1, 1},
+		{"spicy_wine", "Rượu Cay", "Food", "None", `{}`, `["food"]`, "Loại rượu cay cần cho Tứ Vị Tửu Trùng.", 1, 1},
+		{"grass_puppet", "Hình nộm người cỏ", "Material", "None", `{}`, `[]`, "Vật phẩm luyện tập cơ bản.", 1, 1},
 	}
 	for _, item := range items {
 		_, err := DB.Exec(`
-			INSERT INTO item_dictionary (id, name, item_type, description) VALUES ($1,$2,$3,$4)
-			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, item_type=EXCLUDED.item_type, description=EXCLUDED.description
-		`, item.ID, item.Name, item.Type, item.Desc)
+			INSERT INTO item_dictionary (id, name, item_type, rarity, rank, path, effects, tags, description)
+			VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9)
+			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, item_type=EXCLUDED.item_type, rarity=EXCLUDED.rarity,
+			rank=EXCLUDED.rank, path=EXCLUDED.path, effects=EXCLUDED.effects, tags=EXCLUDED.tags, description=EXCLUDED.description
+		`, item.ID, item.Name, item.Type, item.Rarity, item.Rank, item.Path, item.Effects, item.Tags, item.Desc)
 		if err != nil {
 			return fmt.Errorf("hardcoded item %s: %w", item.ID, err)
 		}
@@ -617,4 +830,109 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func SeedMonstersAndSpawns() error {
+	// 1. Seed regions
+	regions := []struct{ ID, Name, Desc string }{
+		{"qing_mao_mountain", "Thanh Mao Sơn (Qing Mao Mountain)", "Southern Border mountain containing Gu Yue, Bai, and Xiong clans."},
+		{"gu_luan_slope", "Cổ Loạn Sườn (Gu Luan Slope)", "Southern Border region full of dangerous wild beast packs."},
+		{"three_kings_inheritance", "Tam Vương Truyền Thừa (Three Kings Inheritance)", "An ancient inheritance ground with rich resources and relics."},
+	}
+	for _, r := range regions {
+		_, err := DB.Exec(`
+			INSERT INTO regions (id, name, description)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (id) DO NOTHING
+		`, r.ID, r.Name, r.Desc)
+		if err != nil {
+			return fmt.Errorf("seed region %s: %w", r.ID, err)
+		}
+	}
+
+	// 2. Seed loot tables
+	lootTables := []struct {
+		ID, Name, Entries string
+	}{
+		{"loot_boar", "Loot Dã Trĩ", `[{"item_id": "boar_meat", "min_qty": 1, "max_qty": 1, "chance": 0.5}, {"item_id": "wild_boar_tusk", "min_qty": 1, "max_qty": 1, "chance": 0.1}]`},
+		{"loot_ape", "Loot Thạch Hầu", `[{"item_id": "jade_stone", "min_qty": 1, "max_qty": 1, "chance": 0.3}]`},
+		{"loot_boar_king", "Loot Dã Trĩ Vương", `[{"item_id": "boar_meat", "min_qty": 2, "max_qty": 4, "chance": 0.8}, {"item_id": "wild_boar_tusk", "min_qty": 1, "max_qty": 2, "chance": 0.5}, {"gu_id": "GU_WHITE_BOAR", "chance": 0.05}]`},
+		{"loot_wolf_leader", "Loot Độc Lang Vương", `[{"item_id": "jade_stone", "min_qty": 2, "max_qty": 5, "chance": 0.8}, {"gu_id": "GU_BLACK_BOAR", "chance": 0.05}]`},
+		{"loot_python", "Loot Mãng Xà Dung Nham", `[{"item_id": "jade_stone", "min_qty": 3, "max_qty": 6, "chance": 0.8}]`},
+		{"loot_bear", "Loot Thiết Giáp Hùng", `[{"item_id": "boar_meat", "min_qty": 3, "max_qty": 6, "chance": 0.8}]`},
+		{"loot_wandering", "Loot Cổ Sư Lang Thang", `[{"item_id": "primeval_stone", "min_qty": 50, "max_qty": 100, "chance": 1.0}]`},
+		{"loot_boss_wolf_king", "Loot Boss Độc Lang Vương", `[{"item_id": "jade_stone", "min_qty": 5, "max_qty": 10, "chance": 1.0}, {"gu_id": "GU_WHITE_BOAR", "chance": 0.15}]`},
+	}
+	for _, lt := range lootTables {
+		_, err := DB.Exec(`
+			INSERT INTO loot_tables (id, name, entries)
+			VALUES ($1, $2, $3::jsonb)
+			ON CONFLICT (id) DO UPDATE SET entries=EXCLUDED.entries
+		`, lt.ID, lt.Name, lt.Entries)
+		if err != nil {
+			return fmt.Errorf("seed loot table %s: %w", lt.ID, err)
+		}
+	}
+
+	// 3. Seed monster templates
+	monsters := []struct {
+		ID, Name, Type string
+		Rank, SubRank  int
+		Path           string
+		MaxHP, Attack  float64
+		Defense        float64
+		MaxMana        float64
+		GuInventory    string
+		AIProfile      string
+		LootTableID    string
+		Desc           string
+	}{
+		{"monster_wild_boar", "Dã Trĩ (Wild Boar)", "Normal", 1, 1, "None", 50, 8, 2, 100, "[]", "beast_basic", "loot_boar", "Thịt lợn hoang dã rất bổ dưỡng."},
+		{"monster_stone_ape", "Thạch Hầu (Stone Ape)", "Normal", 1, 1, "Earth Path", 60, 10, 3, 100, "[]", "beast_basic", "loot_ape", "Vượn đá sống ở vách núi."},
+		{"monster_boar_king", "Dã Trĩ Vương (Boar King)", "Elite", 1, 3, "Strength Path", 120, 12, 8, 100, "[]", "beast_basic", "loot_boar_king", "Lợn lòi đầu đàn hung tợn."},
+		{"monster_wolf_leader", "Độc Lang Vương (Wolf Leader)", "Elite", 1, 4, "Moon Path", 100, 15, 6, 100, "[]", "beast_basic", "loot_wolf_leader", "Sói hoang dã hung dữ."},
+		{"monster_lava_python", "Mãng Xà Dung Nham (Lava Python)", "Elite", 3, 1, "Fire Path", 150, 24, 10, 100, "[]", "beast_basic", "loot_python", "Mãng xà khổng lồ sống trong khe dung nham."},
+		{"monster_iron_bear", "Thiết Giáp Hùng (Iron Armored Bear)", "Elite", 3, 2, "Strength Path", 200, 18, 18, 100, "[]", "beast_basic", "loot_bear", "Gấu lớn da dày như thép."},
+		{"monster_wandering", "Cổ Sư Lang Thang (Wandering Cultivator)", "HumanCultivator", 1, 1, "Moon Path", 100, 15, 5, 100, "[]", "beast_basic", "loot_wandering", "Cổ sư lang thang nguy hiểm."},
+		{"boss_wolf_king", "Độc Lang Vương Boss (Boss Wolf Leader)", "Boss", 3, 4, "Moon Path", 500, 35, 18, 120, `[{"instance_id": "boss-moonlight", "gu_id": "GU_MOONLIGHT", "hunger": 100, "status": "ACTIVE", "equipped": true}]`, "boss_balanced", "loot_boss_wolf_king", "Lang vương thống lĩnh đàn sói đặc biệt nguy hiểm."},
+	}
+	for _, m := range monsters {
+		_, err := DB.Exec(`
+			INSERT INTO monster_templates (
+				id, name, type, rank, sub_rank, path, max_hp, base_attack, base_defense,
+				max_mana, current_mana, gu_inventory, ai_profile, loot_table_id, description
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $11::jsonb, $12, $13, $14)
+			ON CONFLICT (id) DO UPDATE SET
+				name=EXCLUDED.name, type=EXCLUDED.type, rank=EXCLUDED.rank, sub_rank=EXCLUDED.sub_rank,
+				max_hp=EXCLUDED.max_hp, base_attack=EXCLUDED.base_attack, base_defense=EXCLUDED.base_defense,
+				gu_inventory=EXCLUDED.gu_inventory, ai_profile=EXCLUDED.ai_profile, loot_table_id=EXCLUDED.loot_table_id
+		`, m.ID, m.Name, m.Type, m.Rank, m.SubRank, m.Path, m.MaxHP, m.Attack, m.Defense, m.MaxMana, m.GuInventory, m.AIProfile, m.LootTableID, m.Desc)
+		if err != nil {
+			return fmt.Errorf("seed monster %s: %w", m.ID, err)
+		}
+	}
+
+	// 4. Seed spawns and special cells (Boss spawns)
+	// Seed fixed Boss spawn at Gu Luan Slope (80, 80)
+	_, err := DB.Exec(`
+		INSERT INTO monster_spawns (region_id, monster_id, x, y, spawn_mode, chance, respawn_seconds, is_boss_spawn)
+		VALUES ('gu_luan_slope', 'boss_wolf_king', 80, 80, 'BossRoom', 1.0, 3600, TRUE)
+		ON CONFLICT DO NOTHING
+	`)
+	if err != nil {
+		return fmt.Errorf("seed boss spawn: %w", err)
+	}
+
+	// Seed map cells for Boss Room
+	_, err = DB.Exec(`
+		INSERT INTO map_cells (region_id, x, y, cell_type, content_id)
+		VALUES ('gu_luan_slope', 80, 80, 'Boss', 'boss_wolf_king')
+		ON CONFLICT (region_id, x, y) DO UPDATE SET cell_type=EXCLUDED.cell_type, content_id=EXCLUDED.content_id
+	`)
+	if err != nil {
+		return fmt.Errorf("seed boss room map cell: %w", err)
+	}
+
+	return nil
 }

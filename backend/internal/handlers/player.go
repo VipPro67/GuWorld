@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"net/http"
 	"os"
@@ -25,6 +26,8 @@ type CreatePlayerRequest struct {
 	Password       string `json:"password" binding:"required,min=6,max=50"`
 	StartingRegion string `json:"starting_region" binding:"required"`
 	SetVitalNow    bool   `json:"set_vital_now"`
+	Email          string `json:"email" binding:"required,email"`
+	PhoneNumber    string `json:"phone_number" binding:"required"`
 }
 
 // CreatePlayerResponse represents the output payload for registration/login
@@ -112,6 +115,19 @@ func RegisterPlayer(c *gin.Context) {
 		aptitudePercent = 20 + rand.Intn(20) // 20 - 39
 	}
 
+	// Map aptitude type to numeric grade (1 = A/Giáp .. 4 = D/Đinh)
+	aptitudeGrade := 4
+	switch aptitudeType {
+	case "Giáp":
+		aptitudeGrade = 1
+	case "Ất":
+		aptitudeGrade = 2
+	case "Bính":
+		aptitudeGrade = 3
+	case "Đinh":
+		aptitudeGrade = 4
+	}
+
 	maxMana := float64(aptitudePercent)
 	currentMana := maxMana
 
@@ -122,6 +138,7 @@ func RegisterPlayer(c *gin.Context) {
 			GuID:       "GU_MOONLIGHT",
 			Hunger:     100,
 			Status:     "ACTIVE",
+			Equipped:   true,
 			IsVital:    req.SetVitalNow,
 		},
 	}
@@ -133,20 +150,23 @@ func RegisterPlayer(c *gin.Context) {
 
 	var player models.Player
 	query := `
-		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat)
-		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, 0, 0, $7, $8, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, '[]'::jsonb, '{}'::jsonb, $9, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL)
-		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at
+		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, max_lifespan, time_speed_multiplier, email, phone_number)
+		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 0, 0, $8, $9, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, '[]'::jsonb, '{}'::jsonb, $10, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 100.0, 1.0, $11, $12)
+		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, email, phone_number
 	`
 
 	var activeCombatBytes []byte
-	err = db.DB.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, currentMana, maxMana, starterGu, starterMaterials, req.StartingRegion).Scan(
+	err = db.DB.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, starterGu, starterMaterials, req.StartingRegion, req.Email, req.PhoneNumber).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
-		&player.AptitudeType, &player.AptitudePercent, &player.CurrentMana,
+		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
 		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
+		&player.WallProgress, &player.HumanQi, &player.NextTribulationTime, &player.TribulationCount,
 		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y, &player.ExploredCells,
 		&player.EquippedGus, &player.ClearedCells,
 		&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries, &activeCombatBytes,
 		&player.LastManaUpdate, &player.CreatedAt,
+		&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
+		&player.Email, &player.PhoneNumber,
 	)
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
@@ -156,7 +176,7 @@ func RegisterPlayer(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Username already exists in the Gu World"})
+		c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu, Email hoặc Số điện thoại đã tồn tại trong Cổ Giới!"})
 		return
 	}
 
@@ -191,19 +211,22 @@ func LoginPlayer(c *gin.Context) {
 	var passwordHash string
 
 	query := `
-		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at
+		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), COALESCE(phone_number, '')
 		FROM players
-		WHERE username = $1
+		WHERE username = $1 OR email = $1 OR phone_number = $1
 	`
 	var activeCombatBytes []byte
 	err := db.DB.QueryRow(query, req.Username).Scan(
 		&player.ID, &player.Username, &passwordHash, &player.Rank, &player.SubRank,
-		&player.AptitudeType, &player.AptitudePercent, &player.CurrentMana,
+		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
 		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
+		&player.WallProgress, &player.HumanQi, &player.NextTribulationTime, &player.TribulationCount,
 		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y, &player.ExploredCells,
 		&player.EquippedGus, &player.ClearedCells,
 		&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries, &activeCombatBytes,
 		&player.LastManaUpdate, &player.CreatedAt,
+		&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
+		&player.Email, &player.PhoneNumber,
 	)
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
@@ -214,9 +237,9 @@ func LoginPlayer(c *gin.Context) {
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Thông tin đăng nhập không hợp lệ!"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu: " + err.Error()})
 		}
 		return
 	}
@@ -329,6 +352,114 @@ func GetPlayerStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, player)
+}
+
+type RechargeWithStoneRequest struct {
+	Stones int `json:"stones" binding:"required,min=1"`
+}
+
+// RechargeWithStones converts primeval stones into current mana for mortals
+func RechargeWithStones(c *gin.Context) {
+	var req RechargeWithStoneRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	authID, ok := middleware.GetPlayerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		return
+	}
+
+	// Cổ Tiên (Rank 6+) sử dụng Tiên Nguyên Thạch, không nạp bằng Nguyên Thạch phàm tục
+	if player.Rank >= 6 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ Tiên sử dụng Tiên Nguyên Thạch, không thể nạp bằng Nguyên Thạch phàm tục."})
+		return
+	}
+
+	if player.CurrentMana >= player.MaxMana {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chân nguyên đã đầy, không cần nạp thêm."})
+		return
+	}
+
+	// --- BẮT ĐẦU CHỈNH SỬA LOGIC MATCH VỚI TRUYỆN ---
+	// Mốc cơ bản: 1 viên nguyên thạch hồi 10% Chân nguyên cho Cổ sư Nhất chuyển Sơ giai (Rank 1, SubRank 1)
+	baseManaPerStone := 20.0
+
+	// 1. Hệ số nén của Tiểu cảnh giới (Sơ, Trung, Cao, Đỉnh)
+	// Nguyên tác: 2 thành Sơ giai luyện thành 1 thành Trung giai -> Hệ số x2 mỗi tiểu cảnh giới.
+	subRankMultiplier := math.Pow(2.0, float64(player.SubRank-1))
+
+	// 2. Hệ số nén của Đại cảnh giới (Nhất chuyển lên Nhị chuyển...)
+	// Nguyên tác: Chênh lệch chất lượng chân nguyên giữa các Đại cảnh giới cực lớn, lấy mốc x10 lần.
+	rankMultiplier := math.Pow(10.0, float64(player.Rank-1))
+
+	// Lượng % chân nguyên thực tế mà 1 viên nguyên thạch hồi được ở Level hiện tại của Player
+	manaPerStone := baseManaPerStone / (rankMultiplier * subRankMultiplier)
+	// ------------------------------------------------
+
+	neededMana := player.MaxMana - player.CurrentMana
+
+	// Tính số Nguyên thạch TỐI ĐA cần dùng để sạc đầy Không khiếu
+	maxUsableStones := int(math.Ceil(neededMana / manaPerStone))
+
+	stonesToUse := req.Stones
+	if stonesToUse > maxUsableStones {
+		stonesToUse = maxUsableStones
+	}
+
+	if stonesToUse > player.PrimevalStones {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên thạch trong túi."})
+		return
+	}
+
+	// Tính toán số chân nguyên cộng vào
+	addedMana := float64(stonesToUse) * manaPerStone
+
+	// Tránh việc nạp bị lố MaxMana do làm tròn math.Ceil
+	if player.CurrentMana+addedMana > player.MaxMana {
+		addedMana = player.MaxMana - player.CurrentMana
+		player.CurrentMana = player.MaxMana
+	} else {
+		player.CurrentMana += addedMana
+	}
+
+	player.PrimevalStones -= stonesToUse
+	player.LastManaUpdate = time.Now()
+
+	updateQuery := `
+		UPDATE players SET current_mana = $1, primeval_stones = $2, last_mana_update = $3
+		WHERE id = $4
+	`
+	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.LastManaUpdate, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save recharge"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"player":  player,
+		"message": fmt.Sprintf("Nạp %d nguyên thạch, khôi phục %.4f%% chân nguyên.", stonesToUse, addedMana),
+	})
 }
 
 // ExploreResponse represents the action of exploring
@@ -574,14 +705,27 @@ func FeedGu(c *gin.Context) {
 
 	// 4. Check food availability
 	foodOptions := specs.FoodTypes
-	if len(foodOptions) == 0 && specs.FoodType != "" {
-		foodOptions = []string{specs.FoodType}
-	}
 	chosenFood := ""
 	for _, food := range foodOptions {
 		if player.MaterialsInventory[food] > 0 {
-			chosenFood = food
-			break
+			itemSpec, ok := models.ItemRegistry[food]
+			if !ok {
+				continue
+			}
+			// Check if item is food
+			isFood := itemSpec.Type == "Food"
+			if !isFood {
+				for _, t := range itemSpec.Tags {
+					if t == "food" {
+						isFood = true
+						break
+					}
+				}
+			}
+			if isFood {
+				chosenFood = food
+				break
+			}
 		}
 	}
 	if chosenFood == "" {
@@ -591,6 +735,9 @@ func FeedGu(c *gin.Context) {
 
 	// 5. Consume 1 food and restore hunger
 	player.MaterialsInventory[chosenFood]--
+	if player.MaterialsInventory[chosenFood] <= 0 {
+		delete(player.MaterialsInventory, chosenFood)
+	}
 	targetGu.Hunger = specs.MaxHunger
 	targetGu.Status = "ACTIVE" // Wakes up from sleep (hibernation)
 
@@ -627,7 +774,7 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	var player models.Player
 
 	query := `
-		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at
+		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), COALESCE(phone_number, '')
 		FROM players
 		WHERE id = $1
 		FOR UPDATE
@@ -635,12 +782,15 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	var activeCombatBytes []byte
 	err := tx.QueryRow(query, id).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
-		&player.AptitudeType, &player.AptitudePercent, &player.CurrentMana,
+		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
 		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
+		&player.WallProgress, &player.HumanQi, &player.NextTribulationTime, &player.TribulationCount,
 		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y, &player.ExploredCells,
 		&player.EquippedGus, &player.ClearedCells,
 		&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries, &activeCombatBytes,
 		&player.LastManaUpdate, &player.CreatedAt,
+		&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
+		&player.Email, &player.PhoneNumber,
 	)
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
@@ -652,14 +802,37 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 		return player, err
 	}
 
+	// Initialize defaults for new fields if not set
+	if player.MaxLifespan <= 0 {
+		player.MaxLifespan = 100.0
+	}
+	if player.Lifespan <= 0 && player.MaxLifespan > 0 {
+		// Only initialize lifespan if it was never set (i.e. <= 0)
+		player.Lifespan = player.MaxLifespan
+	}
+	if player.TimeSpeedMultiplier <= 0 {
+		if player.Rank >= 6 {
+			player.TimeSpeedMultiplier = 10.0
+		} else {
+			player.TimeSpeedMultiplier = 1.0
+		}
+	}
+
 	poolChanged := normalizeEnergyPool(&player)
 	regenRatePerHour := energyRegenRatePerHour(&player)
+
+	// Lão hóa: Giảm 50% tốc độ hồi mana nếu thọ nguyên cạn kiệt
+	if player.Lifespan <= 0 {
+		regenRatePerHour = regenRatePerHour * 0.5
+	}
 
 	now := time.Now()
 	secondsPassed := now.Sub(player.LastManaUpdate).Seconds()
 
 	if secondsPassed > 0 {
-		earnedMana := (secondsPassed / 3600.0) * regenRatePerHour
+		// Subjective time speed passed
+		subjectiveSeconds := secondsPassed * player.TimeSpeedMultiplier
+		earnedMana := (subjectiveSeconds / 3600.0) * regenRatePerHour
 		newMana := player.CurrentMana + earnedMana
 		if newMana > player.MaxMana {
 			newMana = player.MaxMana
@@ -669,6 +842,14 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 			player.CurrentMana = newMana
 			poolChanged = true
 		}
+
+		// Lifespan decay (1 game year = 3600 subjective seconds)
+		yearsPassed := subjectiveSeconds / 3600.0
+		player.Lifespan -= yearsPassed
+		if player.Lifespan < 0 {
+			player.Lifespan = 0
+		}
+		poolChanged = true
 	}
 
 	if poolChanged {
@@ -676,10 +857,10 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 
 		updateQuery := `
 			UPDATE players
-			SET current_mana = $1, max_mana = $2, last_mana_update = $3
-			WHERE id = $4
+			SET current_mana = $1, max_mana = $2, last_mana_update = $3, lifespan = $4, max_lifespan = $5, time_speed_multiplier = $6
+			WHERE id = $7
 		`
-		_, err = tx.Exec(updateQuery, player.CurrentMana, player.MaxMana, player.LastManaUpdate, player.ID)
+		_, err = tx.Exec(updateQuery, player.CurrentMana, player.MaxMana, player.LastManaUpdate, player.Lifespan, player.MaxLifespan, player.TimeSpeedMultiplier, player.ID)
 		if err != nil {
 			return player, err
 		}
@@ -728,53 +909,17 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 				continue
 			}
 
-			masteryMultiplier := 1.0
-			if player.PathMasteries != nil {
-				if mLevel, ok := player.PathMasteries[spec.Path]; ok {
-					switch mLevel {
-					case "Ordinary":
-						masteryMultiplier = 1.0
-					case "Master":
-						masteryMultiplier = 1.1
-					case "Grandmaster":
-						masteryMultiplier = 1.25
-					case "Supreme Grandmaster":
-						masteryMultiplier = 1.5
-					}
+			// Ràng buộc Bí cảnh (Secret Realm): Chỉ dùng Moon Path hoặc Earth Path
+			if player.CurrentRegion == "three_kings_inheritance" {
+				if spec.Path != "Moon Path" && spec.Path != "Earth Path" {
+					continue
 				}
 			}
 
-			if dmg, ok := spec.Effects["damage"]; ok {
-				stats["attack"] += dmg * masteryMultiplier
-			}
-			if dmg, ok := spec.Effects["add_base_attack"]; ok {
-				stats["attack"] += dmg * masteryMultiplier
-			}
-
-			if def, ok := spec.Effects["defense"]; ok {
-				stats["defense"] += def * masteryMultiplier
-			}
-			if def, ok := spec.Effects["add_base_defense"]; ok {
-				stats["defense"] += def * masteryMultiplier
-			}
-
-			if heal, ok := spec.Effects["refine_mana_tier"]; ok {
-				stats["healing"] += heal * 10.0
-			}
-			if heal, ok := spec.Effects["cleansing_power"]; ok {
-				stats["healing"] += heal * 15.0
-			}
-
-			if mv, ok := spec.Effects["movement"]; ok {
-				stats["movement"] += mv
-			}
-
-			if inv, ok := spec.Effects["investigation"]; ok {
-				stats["investigation"] += inv
-			}
-
-			if st, ok := spec.Effects["storage"]; ok {
-				stats["storage"] += st
+			for effectKey := range spec.Effects {
+				if handler, ok := StatEffectRegistry[effectKey]; ok {
+					handler(player, &spec, stats)
+				}
 			}
 		}
 	}
@@ -1059,37 +1204,46 @@ func UseItem(c *gin.Context) {
 		return
 	}
 
-	logMsg := ""
-	switch req.ItemID {
-	case "green_bamboo_wine":
-		if isImmortalCultivator(&player) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Rượu Thanh Trúc chỉ bổ sung Chân Nguyên phàm cấp; Cổ Tiên cần Tiên Nguyên Thạch hoặc Tiên Khiếu ngưng tụ Tiên Nguyên."})
-			return
-		}
-		player.CurrentMana += 20.0
-		if player.CurrentMana > player.MaxMana {
-			player.CurrentMana = player.MaxMana
-		}
-		logMsg = "Đạo hữu uống Rượu Thanh Trúc, phục hồi 20 Chân Nguyên!"
-	case "moon_orchid_petal":
-		if isImmortalCultivator(&player) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Cánh hoa Nguyệt Lan chỉ luyện hóa được Chân Nguyên; Tiên Nguyên của Cổ Tiên không thể phục hồi bằng phàm tài này."})
-			return
-		}
-		player.CurrentMana += 10.0
-		if player.CurrentMana > player.MaxMana {
-			player.CurrentMana = player.MaxMana
-		}
-		logMsg = "Đạo hữu luyện hóa Cánh hoa Nguyệt Lan, phục hồi 10 Chân Nguyên!"
-	case "jade_stone":
-		player.HP += 20.0
-		if player.HP > 100.0 {
-			player.HP = 100.0
-		}
-		logMsg = "Đạo hữu mài da Ngọc Thạch đắp vết thương, hồi phục 20 HP!"
-	default:
+	item, ok := models.ItemRegistry[req.ItemID]
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại trong ItemRegistry"})
+		return
+	}
+
+	if item.Type != "Consumable" && item.Type != "SoulResource" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm này không thể sử dụng trực tiếp"})
 		return
+	}
+
+	messages := []string{}
+
+	// 1. Validation phase
+	for effectKey := range item.Effects {
+		if valHandler, ok := ValidateItemEffects[effectKey]; ok {
+			_, err := valHandler(&player, item)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+		}
+	}
+
+	// 2. Application phase
+	for effectKey := range item.Effects {
+		if appHandler, ok := ApplyItemEffects[effectKey]; ok {
+			msg, err := appHandler(&player, item)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			if msg != "" {
+				messages = append(messages, msg)
+			}
+		}
+	}
+
+	if len(messages) == 0 {
+		messages = append(messages, fmt.Sprintf("Đạo hữu sử dụng thành công %s.", item.Name))
 	}
 
 	player.MaterialsInventory[req.ItemID]--
@@ -1099,9 +1253,9 @@ func UseItem(c *gin.Context) {
 
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET materials_inventory = $1, current_mana = $2, hp = $3
-		WHERE id = $4`,
-		player.MaterialsInventory, player.CurrentMana, player.HP, player.ID,
+		SET materials_inventory = $1, current_mana = $2, max_mana = $3, hp = $4, base_hp = $5, dao_marks = $6
+		WHERE id = $7`,
+		player.MaterialsInventory, player.CurrentMana, player.MaxMana, player.HP, player.BaseHP, player.DaoMarks, player.ID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state"})
@@ -1115,7 +1269,7 @@ func UseItem(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"player":  player,
-		"message": logMsg,
+		"message": strings.Join(messages, " "),
 	})
 }
 
@@ -1355,12 +1509,6 @@ func UseConsumableGu(c *gin.Context) {
 	}
 
 	targetGu := &player.GuInventory[targetIdx]
-	if targetGu.Status == "DEAD" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng đã CHẾT, không thể sử dụng!"})
-		return
-	}
-
-	// Fetch specs from dictionary
 	specs, found := models.GuRegistry[targetGu.GuID]
 	if !found {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy thông tin Cổ trùng trong thư viện"})
@@ -1372,59 +1520,155 @@ func UseConsumableGu(c *gin.Context) {
 		return
 	}
 
-	logMsg := ""
-	switch targetGu.GuID {
-	case "GU_RELIC":
-		if player.SubRank >= 4 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Xá Lợi Cổ không thể dùng để đột phá đại cảnh giới. Hãy hợp luyện đột phá!"})
-			return
-		}
-		player.SubRank++
-
-		stageNames := map[int]string{1: "Sơ Giai", 2: "Trung Giai", 3: "Cao Giai", 4: "Đỉnh Phong"}
-		logMsg = fmt.Sprintf("Đột phá! Đạo hữu luyện hóa Xá Lợi Cổ, tu vi nâng cao lên %s %s!", getRankName(player.Rank), stageNames[player.SubRank])
-
-	case "GU_STONE_APERTURE":
-		player.PrimevalStones += 500
-		player.MaxMana -= 15.0
-		if player.MaxMana < 20.0 {
-			player.MaxMana = 20.0
-		}
-		if player.CurrentMana > player.MaxMana {
-			player.CurrentMana = player.MaxMana
-		}
-		logMsg = "Đạo hữu kích hoạt Thạch Khiếu Cổ, nhận ngay 500 Nguyên Thạch nhưng Không khiếu bị hóa đá một phần (giảm 15 Chân Nguyên tối đa)!"
-
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Hiệu ứng của Cổ trùng tiêu hao này chưa được định nghĩa!"})
+	if err := ValidateGuUsable(&player, targetGu, &specs, false); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Delete from inventory
-	newInventory := models.GuInventory{}
-	for idx, item := range player.GuInventory {
-		if idx != targetIdx {
-			newInventory = append(newInventory, item)
-		}
-	}
-	player.GuInventory = newInventory
+	cost := calculateEnergyCost(&player, &specs)
+	player.CurrentMana -= cost
 
-	// Recalculate equipped_gus
-	player.EquippedGus = []string{}
-	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
+	var logs []string
+	for effectKey := range specs.Effects {
+		if handler, ok := ConsumableEffectRegistry[effectKey]; ok {
+			msg, err := handler(&player, *targetGu, specs)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			if msg != "" {
+				logs = append(logs, msg)
+			}
 		}
 	}
+
+	if len(logs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Hiệu ứng của Cổ trùng tiêu hao này chưa được định nghĩa hoặc không kích hoạt thành công!"})
+		return
+	}
+
+	logMsg := strings.Join(logs, " ")
+
+	// Delete from inventory
+	RemoveGuFromInventory(&player, targetGu.InstanceID)
 
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET gu_inventory = $1, sub_rank = $2, primeval_stones = $3, max_mana = $4, current_mana = $5, equipped_gus = $6
-		WHERE id = $7`,
-		player.GuInventory, player.SubRank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.ID,
+		SET gu_inventory = $1, sub_rank = $2, rank = $3, primeval_stones = $4, max_mana = $5, current_mana = $6, equipped_gus = $7, dao_marks = $8, wall_progress = $9, hp = $10
+		WHERE id = $11`,
+		player.GuInventory, player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.DaoMarks, player.WallProgress, player.HP, player.ID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using Gu"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"player":  player,
+		"message": logMsg,
+	})
+}
+
+// UseSupportGuRequest represents request payload to use a support Gu out of combat
+type UseSupportGuRequest struct {
+	GuInstanceID string `json:"gu_instance_id" binding:"required"`
+}
+
+// UseSupportGu activates an out-of-combat support Gu bug's effect
+func UseSupportGu(c *gin.Context) {
+	var req UseSupportGuRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "gu_instance_id is required"})
+		return
+	}
+
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		return
+	}
+
+	targetIdx := -1
+	for idx, gu := range player.GuInventory {
+		if gu.InstanceID == req.GuInstanceID {
+			targetIdx = idx
+			break
+		}
+	}
+
+	if targetIdx == -1 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Cổ trùng này trong túi đồ"})
+		return
+	}
+
+	targetGu := &player.GuInventory[targetIdx]
+	specs, found := models.GuRegistry[targetGu.GuID]
+	if !found {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy thông tin Cổ trùng trong thư viện"})
+		return
+	}
+
+	if specs.Type != "Support" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng này không thuộc loại Hỗ Trợ, không thể sử dụng trực tiếp ngoài combat!"})
+		return
+	}
+
+	if err := ValidateGuUsable(&player, targetGu, &specs, false); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	cost := calculateEnergyCost(&player, &specs)
+	player.CurrentMana -= cost
+
+	var logs []string
+	for effectKey := range specs.Effects {
+		if handler, ok := OutCombatSupportRegistry[effectKey]; ok {
+			msg, err := handler(&player, specs)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			if msg != "" {
+				logs = append(logs, msg)
+			}
+		}
+	}
+
+	if len(logs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng hỗ trợ này không có hiệu ứng ngoài chiến đấu!"})
+		return
+	}
+
+	logMsg := strings.Join(logs, " ")
+
+	// Save to DB
+	_, err = tx.Exec(`
+		UPDATE players 
+		SET gu_inventory = $1, max_mana = $2, current_mana = $3, aptitude_percent = $4, hp = $5
+		WHERE id = $6`,
+		player.GuInventory, player.MaxMana, player.CurrentMana, player.AptitudePercent, player.HP, player.ID,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using support Gu"})
 		return
 	}
 
