@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
-import { GuInstance, GuSpec } from "@/store/useGameStore";
+import { GuInstance, GuSpec, Player } from "@/store/useGameStore";
 import {
   Sparkles,
   ShieldAlert,
@@ -14,17 +14,14 @@ import {
   Heart,
   Activity,
   Compass,
+  Shield,
+  Clock,
 } from "lucide-react";
 
 interface ApertureProps {
-  currentMana: number;
-  maxMana: number;
-  aptitudeType: string;
-  aptitudePercent: number;
-  rank: number;
-  subRank: number;
-  guInventory?: GuInstance[];
-  guDictionary?: Record<string, GuSpec>;
+  player: Player;
+  onLogout: () => void;
+  guDictionary: Record<string, GuSpec>;
 }
 
 const RANK_NAMES: Record<number, string> = {
@@ -108,17 +105,18 @@ const formatGuName = (name: string) => {
 };
 
 export const Aperture: React.FC<ApertureProps> = ({
-  currentMana,
-  maxMana,
-  aptitudeType,
-  aptitudePercent,
-  rank,
-  subRank,
-  guInventory = [],
-  guDictionary = {},
+  player,
+  onLogout,
+  guDictionary,
 }) => {
   const store = useGameStore();
-  const playerFromStore = store.player;
+  const currentMana = player.current_mana;
+  const maxMana = player.max_mana;
+  const aptitudeType = player.aptitude_type;
+  const aptitudePercent = player.aptitude_percent;
+  const rank = player.rank;
+  const subRank = player.sub_rank;
+  const guInventory = player.gu_inventory || [];
   const percent   = Math.min(100, Math.max(0, (currentMana / maxMana) * 100));
   const rankName  = RANK_NAMES[rank]    ?? `Rank ${rank}`;
   const subRankName = SUB_RANK_NAMES[subRank] ?? `Sub ${subRank}`;
@@ -130,11 +128,96 @@ export const Aperture: React.FC<ApertureProps> = ({
   const manaQuality = MANA_QUALITY[rank] ?? energyType;
   const c = RANK_COLORS[rank] ?? RANK_COLORS[1];
 
-  const currentHP = playerFromStore?.hp ?? 0;
-  const maxHP = playerFromStore?.base_hp ?? 0;
+  const currentHP = player?.hp ?? 0;
+  const maxHP = player?.base_hp ?? 0;
   const hpPercent = maxHP > 0 ? Math.min(100, Math.max(0, (currentHP / maxHP) * 100)) : 0;
 
   const dashOffset = CIRC * (1 - percent / 100);
+
+  const [activeTab, setActiveTab] = useState<"aperture" | "stats" | "quests">("aperture");
+
+  // Compute stats
+  const stats = {
+    attack: 10 + (rank - 1) * 10 + (subRank - 1) * 2 + (player.dao_marks?.["strength"] || 0) / 10,
+    defense: 5 + (rank - 1) * 5 + (subRank - 1) * 1,
+    healing: 0,
+    movement: 1,
+    investigation: 1,
+    storage: 20,
+  };
+
+  // Add passive permanent body modifications buffs
+  if (player.body_mods) {
+    player.body_mods.forEach((mod) => {
+      switch (mod) {
+        case "Iron Bone":
+          stats.defense += 15;
+          stats.attack += 5;
+          break;
+        case "Jade Skin Mod":
+          stats.defense += 25;
+          break;
+        case "Wind Walk":
+          stats.movement += 1;
+          break;
+      }
+    });
+  }
+
+  guInventory.forEach((gu) => {
+    if (gu.equipped && gu.status === "ACTIVE") {
+      const spec = guDictionary[gu.gu_id];
+      if (spec) {
+        let masteryMultiplier = 1.0;
+        if (player.path_masteries && player.path_masteries[spec.path]) {
+          const mLevel = player.path_masteries[spec.path];
+          if (mLevel === "Master") masteryMultiplier = 1.1;
+          else if (mLevel === "Grandmaster") masteryMultiplier = 1.25;
+          else if (mLevel === "Supreme Grandmaster") masteryMultiplier = 1.5;
+        }
+
+        if (spec.effects) {
+          if (spec.effects.damage) stats.attack += spec.effects.damage * masteryMultiplier;
+          if (spec.effects.add_base_attack) stats.attack += spec.effects.add_base_attack * masteryMultiplier;
+          if (spec.effects.defense) stats.defense += spec.effects.defense * masteryMultiplier;
+          if (spec.effects.add_base_defense) stats.defense += spec.effects.add_base_defense * masteryMultiplier;
+          if (spec.effects.refine_mana_tier) stats.healing += spec.effects.refine_mana_tier * 10;
+          if (spec.effects.cleansing_power) stats.healing += spec.effects.cleansing_power * 15;
+          if (spec.effects.movement) stats.movement += spec.effects.movement;
+          if (spec.effects.investigation) stats.investigation += spec.effects.investigation;
+          if (spec.effects.storage) stats.storage += spec.effects.storage;
+        }
+      }
+    }
+  });
+
+  if (rank >= 6) {
+    stats.storage = 999;
+  }
+
+  // Generate SVG Radar Chart points
+  const statsCenter = 100;
+  const statsAxes = [
+    { key: "attack", angle: -Math.PI / 2, max: 100, label: "Tấn Công" },
+    { key: "defense", angle: -Math.PI / 6, max: 100, label: "Phòng Thủ" },
+    { key: "healing", angle: Math.PI / 6, max: 100, label: "Trị Liệu" },
+    { key: "movement", angle: Math.PI / 2, max: 5, label: "Tốc Độ" },
+    { key: "investigation", angle: (5 * Math.PI) / 6, max: 5, label: "Tầm Nhìn" },
+    { key: "storage", angle: (7 * Math.PI) / 6, max: 100, label: "Hộp Trữ" },
+  ];
+
+  const radarPoints = statsAxes.map((axis) => {
+    const rawVal = stats[axis.key as keyof typeof stats] || 0;
+    const val = Math.min(axis.max, rawVal);
+    const ratio = val / axis.max;
+    const radius = 15 + ratio * 65; // radius from 15 to 80
+    const x = statsCenter + radius * Math.cos(axis.angle);
+    const y = statsCenter + radius * Math.sin(axis.angle);
+    return { x, y, label: axis.label, val: rawVal, angle: axis.angle };
+  });
+
+  const radarPath = radarPoints.map((p) => `${p.x},${p.y}`).join(" ");
+  const gridSteps = [0.2, 0.4, 0.6, 0.8, 1.0];
 
   const immortalBaseRegen: Record<number, number> = { 6: 0.5, 7: 0.8, 8: 1.2, 9: 2.0 };
   const mortalRegen = aptitudeType === "Giáp" ? 8 : aptitudeType === "Ất" ? 6 : aptitudeType === "Bính" ? 4 : 2;
@@ -188,28 +271,48 @@ export const Aperture: React.FC<ApertureProps> = ({
       `}</style>
 
       <div 
-        className="flex flex-col items-center justify-center p-5 glass-panel-gold rounded-3xl w-full border border-amber-500/20 transition-all duration-300"
+        className="flex flex-col items-center justify-center p-5 glass-panel-gold rounded-3xl w-full border border-amber-500/20 transition-all duration-300 relative overflow-hidden group"
         style={{ 
           boxShadow: `0 8px 32px 0 rgba(0, 0, 0, 0.45), 0 0 25px ${c.glow}20`,
           borderColor: c.ring + "2a"
         }}
       >
-        {/* Header */}
+        {/* Decorative background grid pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(16,185,129,0.01)_1px,transparent_1px),linear-gradient(to_bottom,rgba(16,185,129,0.01)_1px,transparent_1px)] bg-[size:14px_24px] pointer-events-none" />
+
+        {/* Top Header Row: Coordinates and Logout */}
+        <div className="w-full flex justify-between items-center mb-4 z-10">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            <span className="text-[9px] text-emerald-400 font-mono uppercase tracking-widest">
+              Tọa độ: ({player.x}, {player.y})
+            </span>
+          </div>
+          <button
+            onClick={onLogout}
+            className="text-[10px] text-zinc-500 hover:text-rose-450 transition-colors cursor-pointer border border-zinc-800 hover:border-rose-900/30 px-2 py-0.5 rounded bg-zinc-950/40 font-mono"
+          >
+            Đăng Xuất
+          </button>
+        </div>
+
+        {/* Character Title */}
         <h3
-          className="text-base sm:text-lg font-bold tracking-wider uppercase font-serif mb-1 flex items-center gap-1.5"
+          className="text-base sm:text-lg font-bold tracking-wider uppercase font-serif mb-1 flex items-center gap-1.5 z-10"
           style={{ color: c.text, textShadow: `0 0 10px ${c.glow}` }}
         >
-          {apertureName}
+          {player.username}
+          <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
         </h3>
-        <p className="text-[10px] text-zinc-400 text-center mb-1 font-mono uppercase tracking-wide">
+        <p className="text-[10px] text-zinc-400 text-center mb-1 font-mono uppercase tracking-wide z-10">
           {isImmortal ? "Tiên Phàm Cách Biệt" : `Tư Chất: ${aptitudeType} (${aptitudePercent}%)`} • {manaQuality}
         </p>
-        <p className="text-xs font-semibold tracking-widest text-center mb-4 text-zinc-150 uppercase">
+        <p className="text-xs font-semibold tracking-widest text-center mb-4 text-zinc-150 uppercase z-10">
           Tu Vi: <span className="font-bold" style={{ color: c.text }}>{rankName}</span>&nbsp;&nbsp;❖&nbsp;&nbsp;Cảnh Giới: <span className="font-bold" style={{ color: c.text }}>{subRankName}</span>
         </p>
 
         {/* Health Bar (Sleek Glossy Bar) */}
-        <div className="relative h-6 w-full overflow-hidden rounded-xl border border-red-950/60 bg-zinc-950/60 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] mb-5 flex items-center px-2">
+        <div className="relative h-6 w-full overflow-hidden rounded-xl border border-red-950/60 bg-zinc-950/60 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] mb-5 flex items-center px-2 z-10">
           <Heart className="w-3.5 h-3.5 text-rose-500 mr-2 shrink-0 animate-pulse" />
           <div className="relative flex-grow h-3 rounded-md overflow-hidden bg-zinc-900/60">
             <div
@@ -218,243 +321,443 @@ export const Aperture: React.FC<ApertureProps> = ({
             />
           </div>
           <span className="text-[10px] font-mono font-bold text-zinc-300 ml-2.5 shrink-0">
-            {playerFromStore
+            {player
               ? `${Math.round(currentHP)}/${Math.round(maxHP)} (${hpPercent.toFixed(0)}%)`
               : "--"}
           </span>
         </div>
 
-        {/* Orb Area */}
-        <div className="relative w-full max-w-[280px] mx-auto mb-4" style={{ aspectRatio: "1 / 1" }}>
-          {!isImmortal ? (
-            <svg
-              viewBox={`0 0 ${VB} ${VB}`}
-              width="100%"
-              height="100%"
-              className="absolute inset-0 overflow-visible"
-              style={{ filter: `drop-shadow(0 0 25px ${c.glow})` }}
-            >
-              <defs>
-                <radialGradient id={gradId} cx="50%" cy="30%" r="70%">
-                  <stop offset="0%" stopColor={c.from} />
-                  <stop offset="100%" stopColor={c.to} />
-                </radialGradient>
-                <clipPath id={clipId}>
-                  <circle cx={CX} cy={CY} r={R} />
-                </clipPath>
-              </defs>
+        {/* Tab Selection */}
+        <div className="flex gap-2 w-full bg-zinc-950/60 p-1.5 rounded-2xl border border-zinc-900 mb-5 z-10">
+          <button
+            onClick={() => setActiveTab("aperture")}
+            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${
+              activeTab === "aperture"
+                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            Không Khiếu
+          </button>
+          <button
+            onClick={() => setActiveTab("stats")}
+            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${
+              activeTab === "stats"
+                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            Thuộc Tính
+          </button>
+          <button
+            onClick={() => setActiveTab("quests")}
+            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${
+              activeTab === "quests"
+                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            Nhiệm Vụ
+          </button>
+        </div>
 
-              {/* Decorative spinning orbit ring */}
-              <circle
-                cx={CX}
-                cy={CY}
-                r={R + 12}
-                fill="none"
-                stroke={c.ring}
-                strokeWidth="1"
-                strokeDasharray="4, 7"
-                opacity="0.25"
-                className="animate-spin"
-                style={{ animationDuration: "16s", transformOrigin: `${CX}px ${CY}px` }}
-              />
+        {/* Tab Content */}
+        {activeTab === "aperture" && (
+          <div className="w-full space-y-4 z-10">
+            {/* Orb Area */}
+            <div className="relative w-full max-w-[280px] mx-auto mb-4" style={{ aspectRatio: "1 / 1" }}>
+              {!isImmortal ? (
+                <svg
+                  viewBox={`0 0 ${VB} ${VB}`}
+                  width="100%"
+                  height="100%"
+                  className="absolute inset-0 overflow-visible"
+                  style={{ filter: `drop-shadow(0 0 25px ${c.glow})` }}
+                >
+                  <defs>
+                    <radialGradient id={gradId} cx="50%" cy="30%" r="70%">
+                      <stop offset="0%" stopColor={c.from} />
+                      <stop offset="100%" stopColor={c.to} />
+                    </radialGradient>
+                    <clipPath id={clipId}>
+                      <circle cx={CX} cy={CY} r={R} />
+                    </clipPath>
+                  </defs>
 
-              {/* Sphere Background */}
-              <circle cx={CX} cy={CY} r={R} fill={`url(#${gradId})`} />
-
-              {/* Liquid fill */}
-              <g clipPath={`url(#${clipId})`}>
-                <rect
-                  x={CX - R} y={fillTop}
-                  width={R * 2} height={R * 2 + 10}
-                  fill={c.waveSolid}
-                  opacity="0.25"
-                />
-                <g className={`wave-group-1-${rank}`} style={{ transformOrigin: `${CX}px ${fillTop}px` }}>
-                  <path d={wave1} fill={c.waveSolid} opacity="0.65" transform={`translate(0, ${fillTop})`} />
-                </g>
-                <g className={`wave-group-2-${rank}`} style={{ transformOrigin: `${CX}px ${fillTop}px` }}>
-                  <path d={wave2} fill={c.waveAlpha} opacity="0.5" transform={`translate(0, ${fillTop})`} />
-                </g>
-                {/* Surface line */}
-                <rect x={CX - R} y={fillTop - 1} width={R * 2} height={2} fill="rgba(255,255,255,0.25)" />
-              </g>
-
-              {/* Glass shine crescent overlay */}
-              <path 
-                d={`M ${CX - R * 0.7} ${CY - R * 0.7} A ${R} ${R} 0 0 1 ${CX + R * 0.7} ${CY - R * 0.7} A ${R * 0.95} ${R * 0.9} 0 0 0 ${CX - R * 0.7} ${CY - R * 0.7} Z`} 
-                fill="rgba(255,255,255,0.12)" 
-              />
-
-              {/* Orbit dots track (faint) */}
-              <circle cx={CX} cy={CY} r={ORBIT_R} fill="none" stroke={c.ring} strokeWidth="1" strokeDasharray="3, 5" opacity="0.12" />
-
-              {/* Progress arc border */}
-              <circle cx={CX} cy={CY} r={R} fill="none" stroke={c.ring} strokeWidth="3" opacity="0.2" />
-              <circle cx={CX} cy={CY} r={R} fill="none" stroke={c.ring} strokeWidth="3.5" strokeLinecap="round" strokeDasharray={CIRC} strokeDashoffset={dashOffset} transform={`rotate(-90 ${CX} ${CY})`} opacity="0.9" />
-
-              {/* Orbit dots for equipped Gu */}
-              {orbitDots.map(({ g, spec, x, y }, i) => (
-                <g key={g.instance_id}>
-                  {/* Connecting thread to center */}
-                  <line
-                    x1={CX + (R + 1) * Math.cos((i / Math.max(equippedGus.length, 1)) * 2 * Math.PI - Math.PI / 2)}
-                    y1={CY + (R + 1) * Math.sin((i / Math.max(equippedGus.length, 1)) * 2 * Math.PI - Math.PI / 2)}
-                    x2={x} y2={y}
+                  {/* Decorative spinning orbit ring */}
+                  <circle
+                    cx={CX}
+                    cy={CY}
+                    r={R + 12}
+                    fill="none"
                     stroke={c.ring}
-                    strokeWidth="0.8"
-                    opacity="0.35"
+                    strokeWidth="1"
+                    strokeDasharray="4, 7"
+                    opacity="0.25"
+                    className="animate-spin"
+                    style={{ animationDuration: "16s", transformOrigin: `${CX}px ${CY}px` }}
                   />
-                  {/* Glowing background halo */}
-                  <circle cx={x} cy={y} r={14} fill={c.glow} opacity="0.25" />
-                  <circle cx={x} cy={y} r={11} fill="#0d0d12" stroke={c.ring} strokeWidth="1.5" opacity="0.95" />
-                  <circle cx={x} cy={y} r={5} fill={c.waveSolid} opacity="0.9" className="animate-pulse" />
-                  {/* Unclipped name tag */}
-                  <text 
-                    x={x} 
-                    y={y + 19} 
-                    textAnchor="middle" 
-                    fontSize="8.5" 
-                    fill="#e4e4e7" 
-                    fontWeight="bold"
-                    className="font-sans drop-shadow-[0_1px_3px_rgba(0,0,0,0.95)]"
-                  >
-                    {spec ? formatGuName(spec.name) : `G${i + 1}`}
-                  </text>
-                </g>
-              ))}
-            </svg>
-          ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-              <div className="flex flex-col items-center gap-1.5 p-4 bg-zinc-950/40 border border-cyan-500/10 rounded-3xl backdrop-blur-sm">
-                <span className="text-3xl animate-bounce">💎</span>
-                <div className="text-sm font-bold text-zinc-100 font-mono tracking-wide" style={{ color: c.text }}>
-                  {manaQuality}:
-                </div>
-                <div className="text-xl font-bold font-mono text-cyan-400">
-                  {playerFromStore ? playerFromStore.immortal_stones.toLocaleString() : "--"} viên
-                </div>
-                <div className="text-[10px] text-zinc-400 mt-0.5 tracking-wider uppercase font-semibold">{energyPoolName}</div>
-                <div className="text-[10px] text-zinc-300 mt-2 font-mono" style={{ color: c.text }}>
-                  Tốc lưu tiên khiếu: +{Math.round(Number(regenRate) * 24)} viên/ngày
-                </div>
-              </div>
-            </div>
-          )}
 
-          {/* Center text for mortals */}
-          {!isImmortal && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 select-none">
-              <span className="text-3xl font-extrabold tracking-wide drop-shadow-[0_2px_8px_rgba(0,0,0,0.98)] font-mono" style={{ color: c.text }}>
-                {percent.toFixed(1)}%
-              </span>
-              <span className="text-xs font-bold mt-1 drop-shadow-[0_1.5px_4px_rgba(0,0,0,0.95)] font-mono" style={{ color: c.text }}>
-                {currentMana.toFixed(1)} / {maxMana.toFixed(0)}
-              </span>
-              <span className="text-[9px] mt-1 text-zinc-400 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] uppercase font-semibold tracking-wider font-mono">
-                {energyPoolName}
-              </span>
-            </div>
-          )}
-        </div>
+                  {/* Sphere Background */}
+                  <circle cx={CX} cy={CY} r={R} fill={`url(#${gradId})`} />
 
-        {/* Vital Gu Section */}
-        <div className="w-full mb-4 bg-zinc-950/40 border border-zinc-900 rounded-2xl p-3">
-          <div className="text-[9px] text-zinc-550 uppercase tracking-widest text-center mb-2 font-bold font-mono flex items-center justify-center gap-1.5">
-            <Flame className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-            Bản Mệnh Cổ (Vital Gu)
-          </div>
-          {vitalGu ? (
-            <div
-              className="flex items-center justify-between px-3 py-2 rounded-xl border max-w-sm mx-auto"
-              style={{ borderColor: c.ring + "33", background: c.to + "44" }}
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className="w-2 h-2 rounded-full flex-shrink-0 animate-pulse"
-                  style={{ background: c.waveSolid, boxShadow: `0 0 6px ${c.glow}` }}
-                />
-                <span className="text-xs font-bold text-zinc-100">
-                  {vitalSpec ? vitalSpec.name : vitalGu.gu_id}
-                </span>
-              </div>
-              <span className={`text-[9px] font-mono px-2 py-0.5 rounded-lg font-bold border ${
-                vitalGu.status === "ACTIVE" 
-                  ? "bg-emerald-950/20 text-emerald-450 border-emerald-500/20"
-                  : vitalGu.status === "SLEEPING" 
-                  ? "bg-amber-950/20 text-amber-400 border-amber-500/20"
-                  : "bg-rose-950/20 text-rose-450 border-rose-500/20"
-              }`}>
-                {vitalGu.status === "ACTIVE" ? "ACTIVE"
-                  : vitalGu.status === "SLEEPING" ? "SLEEPING"
-                  : "DEAD"}
-              </span>
-            </div>
-          ) : (
-            <div className="text-[10px] text-zinc-500 text-center italic py-1">Không Có Bản Mệnh Cổ</div>
-          )}
-        </div>
-
-        {/* Equipped Gu List */}
-        <div className="w-full mb-4 bg-zinc-950/40 border border-zinc-900 rounded-2xl p-3">
-          <div className="text-[9px] text-zinc-550 uppercase tracking-widest text-center mb-2.5 font-bold font-mono flex items-center justify-center gap-1.5">
-            <Activity className="w-3.5 h-3.5 text-cyan-400" />
-            Cổ Trùng Đang Trang Bị ({equippedGus.length})
-          </div>
-          {equippedGus.length > 0 ? (
-            <div className="flex flex-wrap gap-2 justify-center">
-              {equippedGus.map((g) => {
-                const spec = guDictionary[g.gu_id];
-                return (
-                  <div
-                    key={g.instance_id}
-                    className="flex items-center gap-2 px-2.5 py-1 rounded-xl border text-xs font-semibold backdrop-blur-sm transition-all hover:scale-105"
-                    style={{ borderColor: c.ring + "2d", background: c.to + "33" }}
-                    title={spec?.description ?? g.gu_id}
-                  >
-                    <span
-                      className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                      style={{ background: c.waveSolid, boxShadow: `0 0 4px ${c.glow}` }}
+                  {/* Liquid fill */}
+                  <g clipPath={`url(#${clipId})`}>
+                    <rect
+                      x={CX - R} y={fillTop}
+                      width={R * 2} height={R * 2 + 10}
+                      fill={c.waveSolid}
+                      opacity="0.25"
                     />
-                    <span className="text-zinc-250">
-                      {spec ? spec.name : g.gu_id.slice(0, 8)}
+                    <g className={`wave-group-1-${rank}`} style={{ transformOrigin: `${CX}px ${fillTop}px` }}>
+                      <path d={wave1} fill={c.waveSolid} opacity="0.65" transform={`translate(0, ${fillTop})`} />
+                    </g>
+                    <g className={`wave-group-2-${rank}`} style={{ transformOrigin: `${CX}px ${fillTop}px` }}>
+                      <path d={wave2} fill={c.waveAlpha} opacity="0.5" transform={`translate(0, ${fillTop})`} />
+                    </g>
+                    {/* Surface line */}
+                    <rect x={CX - R} y={fillTop - 1} width={R * 2} height={2} fill="rgba(255,255,255,0.25)" />
+                  </g>
+
+                  {/* Glass shine crescent overlay */}
+                  <path 
+                    d={`M ${CX - R * 0.7} ${CY - R * 0.7} A ${R} ${R} 0 0 1 ${CX + R * 0.7} ${CY - R * 0.7} A ${R * 0.95} ${R * 0.9} 0 0 0 ${CX - R * 0.7} ${CY - R * 0.7} Z`} 
+                    fill="rgba(255,255,255,0.12)" 
+                  />
+
+                  {/* Orbit dots track (faint) */}
+                  <circle cx={CX} cy={CY} r={ORBIT_R} fill="none" stroke={c.ring} strokeWidth="1" strokeDasharray="3, 5" opacity="0.12" />
+
+                  {/* Progress arc border */}
+                  <circle cx={CX} cy={CY} r={R} fill="none" stroke={c.ring} strokeWidth="3" opacity="0.2" />
+                  <circle cx={CX} cy={CY} r={R} fill="none" stroke={c.ring} strokeWidth="3.5" strokeLinecap="round" strokeDasharray={CIRC} strokeDashoffset={dashOffset} transform={`rotate(-90 ${CX} ${CY})`} opacity="0.9" />
+
+                  {/* Orbit dots for equipped Gu */}
+                  {orbitDots.map(({ g, spec, x, y }, i) => (
+                    <g key={g.instance_id}>
+                      {/* Connecting thread to center */}
+                      <line
+                        x1={CX + (R + 1) * Math.cos((i / Math.max(equippedGus.length, 1)) * 2 * Math.PI - Math.PI / 2)}
+                        y1={CY + (R + 1) * Math.sin((i / Math.max(equippedGus.length, 1)) * 2 * Math.PI - Math.PI / 2)}
+                        x2={x} y2={y}
+                        stroke={c.ring}
+                        strokeWidth="0.8"
+                        opacity="0.35"
+                      />
+                      {/* Glowing background halo */}
+                      <circle cx={x} cy={y} r={14} fill={c.glow} opacity="0.25" />
+                      <circle cx={x} cy={y} r={11} fill="#0d0d12" stroke={c.ring} strokeWidth="1.5" opacity="0.95" />
+                      <circle cx={x} cy={y} r={5} fill={c.waveSolid} opacity="0.9" className="animate-pulse" />
+                      {/* Unclipped name tag */}
+                      <text 
+                        x={x} 
+                        y={y + 19} 
+                        textAnchor="middle" 
+                        fontSize="8.5" 
+                        fill="#e4e4e7" 
+                        fontWeight="bold"
+                        className="font-sans drop-shadow-[0_1px_3px_rgba(0,0,0,0.95)]"
+                      >
+                        {spec ? formatGuName(spec.name) : `G${i + 1}`}
+                      </text>
+                    </g>
+                  ))}
+                </svg>
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
+                  <div className="flex flex-col items-center gap-1.5 p-4 bg-zinc-950/40 border border-cyan-500/10 rounded-3xl backdrop-blur-sm">
+                    <span className="text-3xl animate-bounce">💎</span>
+                    <div className="text-sm font-bold text-zinc-100 font-mono tracking-wide" style={{ color: c.text }}>
+                      {manaQuality}:
+                    </div>
+                    <div className="text-xl font-bold font-mono text-cyan-400">
+                      {player ? player.immortal_stones.toLocaleString() : "--"} viên
+                    </div>
+                    <div className="text-[10px] text-zinc-400 mt-0.5 tracking-wider uppercase font-semibold">{energyPoolName}</div>
+                    <div className="text-[10px] text-zinc-300 mt-2 font-mono" style={{ color: c.text }}>
+                      Tốc lưu tiên khiếu: +{Math.round(Number(regenRate) * 24)} viên/ngày
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Center text for mortals */}
+              {!isImmortal && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 select-none">
+                  <span className="text-3xl font-extrabold tracking-wide drop-shadow-[0_2px_8px_rgba(0,0,0,0.98)] font-mono" style={{ color: c.text }}>
+                    {percent.toFixed(1)}%
+                  </span>
+                  <span className="text-xs font-bold mt-1 drop-shadow-[0_1.5px_4px_rgba(0,0,0,0.95)] font-mono" style={{ color: c.text }}>
+                    {currentMana.toFixed(1)} / {maxMana.toFixed(0)}
+                  </span>
+                  <span className="text-[9px] mt-1 text-zinc-400 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] uppercase font-semibold tracking-wider font-mono">
+                    {energyPoolName}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Vital Gu Section */}
+            <div className="w-full mb-4 bg-zinc-950/40 border border-zinc-900 rounded-2xl p-3">
+              <div className="text-[9px] text-zinc-550 uppercase tracking-widest text-center mb-2 font-bold font-mono flex items-center justify-center gap-1.5">
+                <Flame className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                Bản Mệnh Cổ (Vital Gu)
+              </div>
+              {vitalGu ? (
+                <div
+                  className="flex items-center justify-between px-3 py-2 rounded-xl border max-w-sm mx-auto"
+                  style={{ borderColor: c.ring + "33", background: c.to + "44" }}
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="w-2 h-2 rounded-full flex-shrink-0 animate-pulse"
+                      style={{ background: c.waveSolid, boxShadow: `0 0 6px ${c.glow}` }}
+                    />
+                    <span className="text-xs font-bold text-zinc-100">
+                      {vitalSpec ? vitalSpec.name : vitalGu.gu_id}
                     </span>
                   </div>
-                );
-              })}
+                  <span className={`text-[9px] font-mono px-2 py-0.5 rounded-lg font-bold border ${
+                    vitalGu.status === "ACTIVE" 
+                      ? "bg-emerald-950/20 text-emerald-450 border-emerald-500/20"
+                      : vitalGu.status === "SLEEPING" 
+                      ? "bg-amber-950/20 text-amber-400 border-amber-500/20"
+                      : "bg-rose-950/20 text-rose-450 border-rose-500/20"
+                  }`}>
+                    {vitalGu.status === "ACTIVE" ? "ACTIVE"
+                      : vitalGu.status === "SLEEPING" ? "SLEEPING"
+                      : "DEAD"}
+                  </span>
+                </div>
+              ) : (
+                <div className="text-[10px] text-zinc-550 text-center italic py-1">Không Có Bản Mệnh Cổ</div>
+              )}
             </div>
-          ) : (
-            <div className="text-[10px] text-zinc-500 text-center italic py-1">Chưa trang bị Cổ trùng</div>
-          )}
-        </div>
 
-        {/* Cultivation / Blessed Land Controls */}
-        {!isImmortal ? (
-          <div className="w-full mb-4">
-            <WallControls />
-          </div>
-        ) : (
-          <div className="w-full mb-4">
-            <BlessedLandControls />
+            {/* Equipped Gu List */}
+            <div className="w-full mb-4 bg-zinc-950/40 border border-zinc-900 rounded-2xl p-3">
+              <div className="text-[9px] text-zinc-550 uppercase tracking-widest text-center mb-2.5 font-bold font-mono flex items-center justify-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 text-cyan-400" />
+                Cổ Trùng Đang Trang Bị ({equippedGus.length})
+              </div>
+              {equippedGus.length > 0 ? (
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {equippedGus.map((g) => {
+                    const spec = guDictionary[g.gu_id];
+                    return (
+                      <div
+                        key={g.instance_id}
+                        className="flex items-center gap-2 px-2.5 py-1 rounded-xl border text-xs font-semibold backdrop-blur-sm transition-all hover:scale-105"
+                        style={{ borderColor: c.ring + "2d", background: c.to + "33" }}
+                        title={spec?.description ?? g.gu_id}
+                      >
+                        <span
+                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                          style={{ background: c.waveSolid, boxShadow: `0 0 4px ${c.glow}` }}
+                        />
+                        <span className="text-zinc-250">
+                          {spec ? spec.name : g.gu_id.slice(0, 8)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-[10px] text-zinc-500 text-center italic py-1">Chưa trang bị Cổ trùng</div>
+              )}
+            </div>
+
+            {/* Cultivation / Blessed Land Controls */}
+            {!isImmortal ? (
+              <div className="w-full mb-4">
+                <WallControls />
+              </div>
+            ) : (
+              <div className="w-full mb-4">
+                <BlessedLandControls />
+              </div>
+            )}
+
+            {/* Regen details */}
+            <div className="text-[10px] text-zinc-550 text-center space-y-1.5 w-full bg-black/20 border border-zinc-900/50 p-2.5 rounded-xl">
+              <div className="font-semibold flex items-center justify-center gap-1">
+                <Compass className="w-3 h-3 text-zinc-400 animate-spin" style={{ animationDuration: "12s" }} />
+                <span>{regenLabel}: <span className="font-bold text-zinc-300">{regenRate}</span> {energyType.toLowerCase()}/giờ</span>
+              </div>
+              <div className="text-[9px] text-zinc-650 leading-relaxed max-w-sm mx-auto">
+                {isImmortal
+                  ? "Cổ Tiên hấp thụ Tiên Nguyên Thạch, dung tích tùy thuộc vào quy mô và đẳng cấp của Tiên Khiếu."
+                  : "Cổ sư hấp thụ Chân Nguyên trong không khiếu, tự động tích lũy và phục hồi theo hạn mức tư chất."}
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Main Quests Panel */}
-        <div className="w-full mb-4 border-t border-zinc-900 pt-4">
-          <MainQuestsPanel />
-        </div>
+        {activeTab === "stats" && (
+          <div className="w-full space-y-4 z-10">
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 gap-2.5 text-xs text-left">
+              <div className="bg-zinc-950/40 p-2.5 rounded-xl border border-zinc-900">
+                <div className="flex items-center gap-1 text-zinc-500 mb-0.5">
+                  <Award className="w-3 h-3 text-amber-500" />
+                  <span className="text-[8px] uppercase tracking-wider">Tấn Công (Attack)</span>
+                </div>
+                <span className="text-xs font-semibold text-zinc-300 block">
+                  {stats.attack.toFixed(0)} Sức mạnh
+                </span>
+              </div>
 
-        {/* Regen details */}
-        <div className="text-[10px] text-zinc-500 text-center space-y-1.5 w-full bg-black/25 border border-zinc-900 p-2.5 rounded-xl">
-          <div className="font-semibold flex items-center justify-center gap-1">
-            <Compass className="w-3 h-3 text-zinc-400 animate-spin" style={{ animationDuration: "12s" }} />
-            <span>{regenLabel}: <span className="font-bold text-zinc-300">{regenRate}</span> {energyType.toLowerCase()}/giờ</span>
+              <div className="bg-zinc-950/40 p-2.5 rounded-xl border border-zinc-900">
+                <div className="flex items-center gap-1 text-zinc-500 mb-0.5">
+                  <Shield className="w-3 h-3 text-emerald-500" />
+                  <span className="text-[8px] uppercase tracking-wider">Phòng Thủ (Defense)</span>
+                </div>
+                <span className="text-xs font-semibold text-zinc-300 block">
+                  {stats.defense.toFixed(0)} Giáp ảo
+                </span>
+              </div>
+
+              <div className="bg-zinc-950/40 p-2.5 rounded-xl border border-zinc-900">
+                <div className="flex items-center gap-1 text-zinc-500 mb-0.5">
+                  <Heart className="w-3 h-3 text-rose-500" />
+                  <span className="text-[8px] uppercase tracking-wider">Thọ Nguyên (Lifespan)</span>
+                </div>
+                <span className="text-xs font-semibold text-zinc-300 block">
+                  {player.lifespan !== undefined ? player.lifespan.toFixed(1) : "0"}/{player.max_lifespan !== undefined ? player.max_lifespan.toFixed(0) : "100"} năm
+                </span>
+              </div>
+
+              <div className="bg-zinc-950/40 p-2.5 rounded-xl border border-zinc-900">
+                <div className="flex items-center gap-1 text-zinc-500 mb-0.5">
+                  <Clock className="w-3 h-3 text-cyan-400" />
+                  <span className="text-[8px] uppercase tracking-wider">Lưu Tốc Tiên Khiếu</span>
+                </div>
+                <span className="text-xs font-semibold text-zinc-300 block">
+                  Nhanh gấp x{player.time_speed_multiplier !== undefined ? player.time_speed_multiplier.toFixed(0) : "1"} lần
+                </span>
+              </div>
+            </div>
+
+            {/* SVG Radar Chart Display */}
+            <div className="flex justify-center items-center py-2 relative">
+              <svg viewBox="0 0 200 200" className="w-full max-w-[200px] overflow-visible">
+                {/* Concentric grid lines */}
+                {gridSteps.map((step, idx) => {
+                  const r = 15 + step * 65;
+                  const gridPoints = statsAxes.map((axis) => {
+                    const gx = statsCenter + r * Math.cos(axis.angle);
+                    const gy = statsCenter + r * Math.sin(axis.angle);
+                    return `${gx},${gy}`;
+                  }).join(" ");
+                  return (
+                    <polygon
+                      key={idx}
+                      points={gridPoints}
+                      className="stroke-zinc-800/60 fill-none"
+                      strokeWidth="0.5"
+                    />
+                  );
+                })}
+
+                {/* Radial lines */}
+                {statsAxes.map((axis, idx) => {
+                  const lx = statsCenter + 80 * Math.cos(axis.angle);
+                  const ly = statsCenter + 80 * Math.sin(axis.angle);
+                  return (
+                    <line
+                      key={idx}
+                      x1={statsCenter}
+                      y1={statsCenter}
+                      x2={lx}
+                      y2={ly}
+                      className="stroke-zinc-900"
+                      strokeWidth="0.5"
+                    />
+                  );
+                })}
+
+                {/* Glowing outer boundary */}
+                <polygon
+                  points={statsAxes.map((axis) => `${statsCenter + 80 * Math.cos(axis.angle)},${statsCenter + 80 * Math.sin(axis.angle)}`).join(" ")}
+                  className="stroke-zinc-800/80 fill-none"
+                  strokeWidth="1"
+                />
+
+                {/* Actual stats polygon */}
+                <polygon
+                  points={radarPath}
+                  className="fill-emerald-500/10 stroke-emerald-500 shadow-lg"
+                  strokeWidth="1.5"
+                />
+
+                {/* Vertices circles */}
+                {radarPoints.map((p, idx) => (
+                  <circle
+                    key={idx}
+                    cx={p.x}
+                    cy={p.y}
+                    r="3.5"
+                    className="fill-emerald-450 stroke-zinc-950"
+                    strokeWidth="1"
+                  >
+                    <title>{`${p.label}: ${p.val.toFixed(0)}`}</title>
+                  </circle>
+                ))}
+
+                {/* Labels */}
+                {statsAxes.map((axis, idx) => {
+                  const lx = statsCenter + 95 * Math.cos(axis.angle);
+                  const ly = statsCenter + 95 * Math.sin(axis.angle);
+                  const cos = Math.cos(axis.angle);
+                  const anchor = Math.abs(cos) < 0.1 ? "middle" : cos > 0 ? "start" : "end";
+                  return (
+                    <text
+                      key={idx}
+                      x={lx}
+                      y={ly + 3}
+                      textAnchor={anchor}
+                      className="fill-zinc-400 font-mono font-bold text-[8px]"
+                    >
+                      {axis.label} ({stats[axis.key as keyof typeof stats].toFixed(0)})
+                    </text>
+                  );
+                })}
+              </svg>
+            </div>
+
+            {/* Path Masteries Section */}
+            <div className="w-full text-left pt-2">
+              <span className="text-[9px] text-zinc-500 uppercase tracking-wider block mb-2 font-mono">
+                Lĩnh Ngộ Lưu Phái (Path Masteries)
+              </span>
+              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                {player.path_masteries && Object.keys(player.path_masteries).length > 0 ? (
+                  Object.entries(player.path_masteries).map(([path, level]) => (
+                    <div key={path} className="flex justify-between items-center bg-zinc-950/30 px-2.5 py-1.5 rounded-lg border border-zinc-900/50 text-xs">
+                      <span className="text-zinc-400 font-medium">{path}</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold font-mono ${
+                        level === "Supreme Grandmaster" ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" :
+                        level === "Grandmaster" ? "bg-amber-950/50 text-amber-300 border border-amber-800/40" :
+                        level === "Master" ? "bg-blue-950/50 text-blue-300 border border-blue-800/40" :
+                        "bg-zinc-800/50 text-zinc-400 border border-zinc-700/40"
+                      }`}>
+                        {level}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-[10px] text-zinc-655 italic">Chưa có lĩnh ngộ lưu phái đặc thù.</div>
+                )}
+              </div>
+            </div>
           </div>
-          <div className="text-[9px] text-zinc-650 leading-relaxed max-w-sm mx-auto">
-            {isImmortal
-              ? "Cổ Tiên hấp thụ Tiên Nguyên Thạch, dung tích tùy thuộc vào quy mô và đẳng cấp của Tiên Khiếu."
-              : "Cổ sư hấp thụ Chân Nguyên trong không khiếu, tự động tích lũy và phục hồi theo hạn mức tư chất."}
+        )}
+
+        {activeTab === "quests" && (
+          <div className="w-full z-10">
+            <MainQuestsPanel />
           </div>
-        </div>
+        )}
       </div>
     </>
   );

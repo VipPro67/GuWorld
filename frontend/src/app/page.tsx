@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import { Registration } from "@/components/Registration";
 import { Aperture } from "@/components/Aperture";
-import { PlayerStats } from "@/components/PlayerStats";
 import { LogConsole } from "@/components/LogConsole";
 import { GuInventory } from "@/components/GuInventory";
 import { RefiningFurnace } from "@/components/RefiningFurnace";
@@ -175,29 +174,18 @@ export default function Home() {
           </div>
         ) : currentView === "dashboard" ? (
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 sm:gap-6 w-full items-start">
-            {/* Left Column: Aperture + PlayerStats — side by side on md, stacked on mobile */}
+            {/* Left Column: Aperture & Cultivation Log */}
             <div className="xl:col-span-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-4 sm:gap-6 w-full">
               <Aperture
-                currentMana={player.current_mana}
-                maxMana={player.max_mana}
-                aptitudeType={player.aptitude_type}
-                aptitudePercent={player.aptitude_percent}
-                rank={player.rank}
-                subRank={player.sub_rank}
-                guInventory={player.gu_inventory}
-                guDictionary={guDictionary}
-              />
-              <PlayerStats
                 player={player}
                 onLogout={handleLogout}
                 guDictionary={guDictionary}
-                onEquipToggle={equipGu}
               />
+              <LogConsole logs={logs} />
             </div>
 
-            {/* Right Column: Log + Inventory */}
+            {/* Right Column: Inventory */}
             <div className="xl:col-span-7 flex flex-col gap-4 sm:gap-6 w-full">
-              <LogConsole logs={logs} />
               <GuInventory
                 player={player}
                 onFeed={feedGu}
