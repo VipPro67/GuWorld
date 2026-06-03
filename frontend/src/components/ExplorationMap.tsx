@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { Player, useGameStore } from "@/store/useGameStore";
-import { Compass, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, User, Gem, Flower2, HelpCircle, Wine, Users, Crown } from "lucide-react";
+import { Compass, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, User, Gem, Flower2, HelpCircle, Wine, Users, Crown, Package } from "lucide-react";
+import { LogConsole } from "./LogConsole";
 
 interface ExplorationMapProps {
   player: Player;
@@ -70,10 +71,28 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     players_on_map?: any[];
   } | null>(null);
 
-  const { fetchGrid, movePlayer, party, createParty, fetchPartyStatus, invitePlayer, leaveParty } = useGameStore();
+  const { fetchGrid, movePlayer, party, createParty, fetchPartyStatus, invitePlayer, leaveParty, retreat } = useGameStore();
   const [inviteUsername, setInviteUsername] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [partyLoading, setPartyLoading] = useState(false);
+  const logs = useGameStore((state) => state.logs);
+  const guDictionary = useGameStore((state) => state.guDictionary);
+  const itemDictionary = useGameStore((state) => state.itemDictionary);
+
+  const handleExitMap = async () => {
+    if (isExploringActiveRegion) {
+      if (window.confirm("Đạo hữu có chắc chắn muốn rời khỏi bản đồ khám phá? Tất cả Nguyên Thạch, Cổ trùng và tài nguyên thu thập tạm thời sẽ được thu hoạch an toàn về túi đồ.")) {
+        await retreat();
+        if (onBack) {
+          onBack();
+        }
+      }
+    } else {
+      if (onBack) {
+        onBack();
+      }
+    }
+  };
 
   const isExploringActiveRegion =
     player.current_region === "qing_mao_mountain" ||
@@ -210,14 +229,18 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                 Về Bản Đồ Hiện Tại
               </button>
             )}
-            {onBack && (
+             {onBack && (
               <button
                 type="button"
-                onClick={onBack}
+                onClick={handleExitMap}
                 disabled={actionLoading}
-                className="py-1 px-3 border border-zinc-800 rounded-xl text-[10px] text-zinc-450 hover:bg-zinc-900 transition-all cursor-pointer font-mono font-bold"
+                className={`py-1 px-3 border rounded-xl text-[10px] cursor-pointer font-mono font-bold transition-all ${
+                  isExploringActiveRegion
+                    ? "bg-emerald-950/40 text-emerald-450 border-emerald-900/60 hover:bg-emerald-950/60 hover:border-emerald-700 shadow-[0_0_10px_rgba(16,185,129,0.1)]"
+                    : "border-zinc-800 text-zinc-450 hover:bg-zinc-900"
+                }`}
               >
-                Trở Về
+                {isExploringActiveRegion ? "Thoát & Nhận Đồ" : "Trở Về"}
               </button>
             )}
           </div>
@@ -345,10 +368,10 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
           </button>
           {onBack && (
             <button
-              onClick={onBack}
-              className="py-1.5 px-3 border border-zinc-800 hover:bg-zinc-900 rounded-xl text-[10px] text-zinc-400 cursor-pointer font-mono font-bold"
+              onClick={handleExitMap}
+              className="py-1.5 px-3 bg-emerald-950/40 text-emerald-450 border border-emerald-900/60 hover:bg-emerald-950/60 hover:border-emerald-700 rounded-xl text-[10px] cursor-pointer font-mono font-bold transition-all shadow-[0_0_10px_rgba(16,185,129,0.1)]"
             >
-              Trở Về
+              Thoát & Nhận Đồ
             </button>
           )}
         </div>
@@ -359,7 +382,6 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
         <div className="lg:col-span-8 space-y-6">
           <div className="text-[10px] text-zinc-500 font-mono max-w-xl">
             * Nhấp vào một ô trong phạm vi thân pháp (<span className="text-emerald-400 font-bold">{movementRange} ô</span>) để di chuyển. 
-            Chân Nguyên: 1 bước mất <span className="text-emerald-450 font-bold">2 mana</span>, 2 bước mất <span className="text-emerald-450 font-bold">3 mana</span>.
           </div>
 
           {/* Grid Canvas */}
@@ -441,17 +463,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
           </div>
 
           {/* Exploration Log Overlay */}
-          {lastLog && (
-            <div className="bg-zinc-950/70 border border-zinc-900 rounded-2xl p-4 flex items-start gap-3">
-              <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0 mt-0.5">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-              </div>
-              <div className="space-y-1">
-                <span className="text-[9px] text-zinc-550 uppercase tracking-widest block font-mono">Nhật ký hành quân</span>
-                <p className="text-xs text-zinc-300 font-mono leading-relaxed">{lastLog}</p>
-              </div>
-            </div>
-          )}
+          
 
           {player.active_combat && (
             <div className="bg-rose-950/20 border border-rose-900/40 rounded-2xl p-4 flex items-center justify-between animate-pulse">
@@ -468,108 +480,215 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
           )}
         </div>
 
-        {/* Right Column: Party Manager */}
-        <div className="lg:col-span-4 bg-zinc-950/40 border border-zinc-900 rounded-3xl p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
-            <h4 className="font-serif font-bold text-sm text-amber-400 flex items-center gap-1.5">
-              <Users className="w-4 h-4" /> TỔ ĐỘI CHIẾN HỮU
-            </h4>
-            {party && (
-              <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
-                {party.members.length}/4 Cổ sư
-              </span>
+        {/* Right Column: Party Manager, Temporary Loot & Cultivation Log */}
+        <div className="lg:col-span-4 space-y-6">
+          <div className="bg-zinc-950/40 border border-zinc-900 rounded-3xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
+              <h4 className="font-serif font-bold text-sm text-amber-400 flex items-center gap-1.5">
+                <Users className="w-4 h-4" /> TỔ ĐỘI CHIẾN HỮU
+              </h4>
+              {party && (
+                <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
+                  {party.members.length}/4 Cổ sư
+                </span>
+              )}
+            </div>
+
+            {!party ? (
+              <div className="text-center py-4 space-y-3">
+                <p className="text-[11px] text-zinc-400 leading-normal">
+                  Đạo hữu chưa gia nhập tổ đội. Lập tổ đội để đi chung bản đồ và cùng chia sẻ Nguyên thạch & Vật phẩm rơi ra khi chiến thắng.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleCreateParty}
+                  disabled={partyLoading}
+                  className="w-full py-2 bg-emerald-950/30 border border-emerald-500/30 text-emerald-450 hover:bg-emerald-950/50 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer"
+                >
+                  {partyLoading ? "Đang lập tổ..." : "Lập Tổ Đội Mới"}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Member list */}
+                <div className="space-y-2">
+                  {party.members.map((member) => {
+                    const isLeader = member.id === party.leader_id;
+                    const isMe = member.id === player.id;
+                    return (
+                      <div
+                        key={member.id}
+                        className="flex items-center justify-between bg-zinc-950/60 border border-zinc-900 rounded-lg p-2.5 text-xs"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[9px] ${
+                            isMe ? "bg-emerald-500 text-zinc-950" : "bg-zinc-800 text-zinc-300"
+                          }`}>
+                            {member.username.slice(0, 2).toUpperCase()}
+                          </div>
+                          <span className={`font-semibold ${isMe ? "text-emerald-400" : "text-zinc-300"}`}>
+                            {member.username} {isMe && "(Bạn)"}
+                          </span>
+                        </div>
+                        {isLeader && (
+                          <span className="text-[9px] text-amber-500 bg-amber-950/30 border border-amber-900/30 px-1.5 py-0.5 rounded font-mono uppercase tracking-wider flex items-center gap-1">
+                            <Crown className="w-2.5 h-2.5" /> Trưởng nhóm
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Invite Form for Leader */}
+                {party.leader_id === player.id && (
+                  <div className="pt-2 border-t border-zinc-900/60 space-y-2">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono block">
+                      Chiêu mộ thành viên
+                    </span>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Đạo hiệu đối phương..."
+                        value={inviteUsername}
+                        onChange={(e) => {
+                          setInviteUsername(e.target.value);
+                          setInviteError(null);
+                        }}
+                        className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-750 flex-grow focus:outline-none focus:border-zinc-800 transition-colors"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleInvitePlayer}
+                        disabled={partyLoading || !inviteUsername.trim()}
+                        className="bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-250 hover:text-zinc-100 font-bold px-3 py-1.5 rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer font-mono shrink-0"
+                      >
+                        Mời
+                      </button>
+                    </div>
+                    {inviteError && (
+                      <p className="text-[9px] text-rose-450 font-mono">{inviteError}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Leave Button */}
+                <button
+                  type="button"
+                  onClick={handleLeaveParty}
+                  disabled={partyLoading}
+                  className="w-full py-2 bg-rose-950/15 border border-rose-950/40 text-rose-400 hover:bg-rose-950/30 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer"
+                >
+                  Rời Khỏi Tổ Đội
+                </button>
+              </div>
             )}
           </div>
 
-          {!party ? (
-            <div className="text-center py-4 space-y-3">
-              <p className="text-[11px] text-zinc-400 leading-normal">
-                Đạo hữu chưa gia nhập tổ đội. Lập tổ đội để đi chung bản đồ và cùng chia sẻ Nguyên thạch & Vật phẩm rơi ra khi chiến thắng.
-              </p>
-              <button
-                type="button"
-                onClick={handleCreateParty}
-                disabled={partyLoading}
-                className="w-full py-2 bg-emerald-950/30 border border-emerald-500/30 text-emerald-450 hover:bg-emerald-950/50 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer"
-              >
-                {partyLoading ? "Đang lập tổ..." : "Lập Tổ Đội Mới"}
-              </button>
+          {/* Temporary Loot Panel */}
+          <div className="bg-zinc-950/40 border border-zinc-900 rounded-3xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-900/60 pb-2">
+              <h4 className="font-serif font-bold text-sm text-emerald-450 flex items-center gap-1.5">
+                <Package className="w-4 h-4 text-emerald-400" /> CHIẾN LỢI PHẨM TẠM THỜI
+              </h4>
+              <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest bg-emerald-950/30 border border-emerald-900/40 px-1.5 py-0.5 rounded">
+                Tạm thời
+              </span>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Member list */}
-              <div className="space-y-2">
-                {party.members.map((member) => {
-                  const isLeader = member.id === party.leader_id;
-                  const isMe = member.id === player.id;
-                  return (
-                    <div
-                      key={member.id}
-                      className="flex items-center justify-between bg-zinc-950/60 border border-zinc-900 rounded-lg p-2.5 text-xs"
-                    >
+
+            {(() => {
+              const tempLoot = player.temp_loot || { gu_inventory: [], materials_inventory: {}, primeval_stones: 0 };
+              const isEmptyLoot =
+                tempLoot.primeval_stones === 0 &&
+                tempLoot.gu_inventory.length === 0 &&
+                Object.values(tempLoot.materials_inventory).every((qty) => qty <= 0);
+
+              if (isEmptyLoot) {
+                return (
+                  <div className="text-center py-3">
+                    <p className="text-[11px] text-zinc-500 leading-normal italic">
+                      Đạo hữu chưa thu thập được gì. Di chuyển trên lưới bản đồ để tìm tài nguyên hoặc đánh bại đối thủ.
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-2 max-h-[160px] overflow-y-auto custom-scrollbar pr-1">
+                  {/* Primeval Stones */}
+                  {tempLoot.primeval_stones > 0 && (
+                    <div className="flex items-center justify-between bg-zinc-950/60 border border-amber-900/20 rounded-xl p-2 text-xs">
                       <div className="flex items-center gap-2">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[9px] ${
-                          isMe ? "bg-emerald-500 text-zinc-950" : "bg-zinc-800 text-zinc-300"
-                        }`}>
-                          {member.username.slice(0, 2).toUpperCase()}
+                        <div className="w-6 h-6 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                          <Gem className="w-3.5 h-3.5 text-amber-500" />
                         </div>
-                        <span className={`font-semibold ${isMe ? "text-emerald-400" : "text-zinc-300"}`}>
-                          {member.username} {isMe && "(Bạn)"}
+                        <span className="font-semibold text-zinc-300">Nguyên Thạch</span>
+                      </div>
+                      <span className="font-mono font-bold text-amber-400">+{tempLoot.primeval_stones}</span>
+                    </div>
+                  )}
+
+                  {/* Gu Inventory */}
+                  {tempLoot.gu_inventory.map((gu, idx) => {
+                    const spec = guDictionary[gu.gu_id] || { name: gu.gu_id, path: "Không rõ" };
+                    return (
+                      <div
+                        key={gu.instance_id || idx}
+                        className="flex items-center justify-between bg-zinc-950/60 border border-emerald-900/20 rounded-xl p-2 text-xs"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                            <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                          </div>
+                          <div>
+                            <span className="font-semibold text-zinc-300 block leading-tight">{spec.name}</span>
+                            <span className="text-[8px] text-zinc-550 font-mono">{spec.path}</span>
+                          </div>
+                        </div>
+                        <span className="text-[8px] font-mono text-emerald-450 bg-emerald-950/20 border border-emerald-900/30 px-1 py-0.5 rounded uppercase tracking-wide shrink-0">
+                          Cổ trùng
                         </span>
                       </div>
-                      {isLeader && (
-                        <span className="text-[9px] text-amber-500 bg-amber-950/30 border border-amber-900/30 px-1.5 py-0.5 rounded font-mono uppercase tracking-wider flex items-center gap-1">
-                          <Crown className="w-2.5 h-2.5" /> Trưởng nhóm
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
 
-              {/* Invite Form for Leader */}
-              {party.leader_id === player.id && (
-                <div className="pt-2 border-t border-zinc-900/60 space-y-2">
-                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono block">
-                    Chiêu mộ thành viên
-                  </span>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Đạo hiệu đối phương..."
-                      value={inviteUsername}
-                      onChange={(e) => {
-                        setInviteUsername(e.target.value);
-                        setInviteError(null);
-                      }}
-                      className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-750 flex-grow focus:outline-none focus:border-zinc-800 transition-colors"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleInvitePlayer}
-                      disabled={partyLoading || !inviteUsername.trim()}
-                      className="bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-250 hover:text-zinc-100 font-bold px-3 py-1.5 rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer font-mono shrink-0"
-                    >
-                      Mời
-                    </button>
-                  </div>
-                  {inviteError && (
-                    <p className="text-[9px] text-rose-450 font-mono">{inviteError}</p>
-                  )}
+                  {/* Materials */}
+                  {Object.entries(tempLoot.materials_inventory)
+                    .filter(([_, qty]) => qty > 0)
+                    .map(([matId, qty]) => {
+                      const spec = itemDictionary[matId] || { name: matId, item_type: "Nguyên Liệu" };
+                      return (
+                        <div
+                          key={matId}
+                          className="flex items-center justify-between bg-zinc-950/60 border border-zinc-900 rounded-xl p-2 text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-lg bg-zinc-900/60 flex items-center justify-center">
+                              {matId.includes("wine") ? (
+                                <Wine className="w-3.5 h-3.5 text-amber-500" />
+                              ) : matId.includes("petal") || matId.includes("flower") ? (
+                                <Flower2 className="w-3.5 h-3.5 text-emerald-450" />
+                              ) : (
+                                <Gem className="w-3.5 h-3.5 text-cyan-400" />
+                              )}
+                            </div>
+                            <div>
+                              <span className="font-semibold text-zinc-300 block leading-tight">{spec.name}</span>
+                              <span className="text-[8px] text-zinc-550 font-mono">{spec.item_type}</span>
+                            </div>
+                          </div>
+                          <span className="font-mono font-bold text-zinc-400 shrink-0">x{qty}</span>
+                        </div>
+                      );
+                    })}
                 </div>
-              )}
+              );
+            })()}
+          </div>
 
-              {/* Leave Button */}
-              <button
-                type="button"
-                onClick={handleLeaveParty}
-                disabled={partyLoading}
-                className="w-full py-2 bg-rose-950/15 border border-rose-950/40 text-rose-400 hover:bg-rose-950/30 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer"
-              >
-                Rời Khỏi Tổ Đội
-              </button>
-            </div>
-          )}
+        </div>
+        <div className="lg:col-span-12">
+          <LogConsole logs={logs} />
         </div>
       </div>
     </div>

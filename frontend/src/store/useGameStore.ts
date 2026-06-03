@@ -7,6 +7,7 @@ export interface GuInstance {
   status: string; // "ACTIVE", "SLEEPING", "DEAD"
   equipped: boolean;
   is_vital: boolean;
+  integration_time?: number;
 }
 
 export interface Combatant {
@@ -26,6 +27,10 @@ export interface Combatant {
   path_masteries?: Record<string, string>;
   ai_profile?: string;
   loot_table_id?: string;
+  grid_x?: number;
+  grid_y?: number;
+  speed?: number;
+  virtual_shield?: number;
 }
 
 export interface CombatState {
@@ -40,6 +45,8 @@ export interface CombatState {
   allies?: Combatant[];
   enemies?: Combatant[];
   enemy_type?: string;
+  enemy_rank?: number;
+  enemy_sub_rank?: number;
 }
 
 export interface Player {
@@ -78,6 +85,14 @@ export interface Player {
   time_speed_multiplier: number;
   party_id?: string | null;
   arena_rank?: number | null;
+  completed_quests: string[];
+  aperture_stress?: number;
+  last_cultivate_time?: string;
+  temp_loot?: {
+    gu_inventory: GuInstance[];
+    materials_inventory: Record<string, number>;
+    primeval_stones: number;
+  };
 }
 
 export interface GuSpec {
@@ -160,9 +175,11 @@ interface GameState {
   useRelicGu: (relicKey: string) => Promise<{ success: boolean; message: string } | null>;
   ascension: () => Promise<{ success: boolean; message: string } | null>;
   triggerTribulation: () => Promise<{ success: boolean; message: string } | null>;
+  completeQuest: (questId: string) => Promise<{ success: boolean; message: string } | null>;
   rechargeWithStones: (stones: number) => Promise<{ success: boolean; message: string } | null>;
+  clearStress: () => Promise<{ success: boolean; message: string } | null>;
   exploreNode: (nodeId: string) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
-  executeCombatTurn: (equippedGuIds: string[], isCharge?: boolean, targetId?: string) => Promise<{ player: Player; logs: string[]; enemy: CombatState | null; victory: boolean; defeat: boolean } | null>;
+  executeCombatTurn: (equippedGuIds: string[], isCharge?: boolean, targetId?: string, targetX?: number, targetY?: number) => Promise<{ player: Player; logs: string[]; enemy: CombatState | null; victory: boolean; defeat: boolean } | null>;
   addLog: (message: string) => void;
   currentView: string;
   setView: (view: string) => void;
@@ -172,7 +189,7 @@ interface GameState {
   setVitalGu: (instanceId: string) => Promise<void>;
   useGu: (instanceId: string) => Promise<void>;
   useItem: (itemId: string) => Promise<void>;
-  movePlayer: (x: number, y: number) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
+  movePlayer: (x: number, y: number, attackTargetId?: string) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
   fetchGrid: () => Promise<{ x: number; y: number; vision_radius: number; cells: any[]; explored_cells: string[]; stats: any; players_on_map?: any[] } | null>;
   dropGu: (instanceId: string) => Promise<boolean>;
   buyShopItem: (itemId: string, quantity: number) => Promise<boolean>;
@@ -613,6 +630,29 @@ export const useGameStore = create<GameState>((set, get) => {
     } finally { set({ actionLoading: false }); }
   },
 
+  completeQuest: async (questId) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return null;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/quest/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quest_id: questId }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) { throw new Error(data.error || "Không thể nhận thưởng nhiệm vụ."); }
+      set({ player: normalizePlayer(data.player) });
+      get().addLog(data.message || "Hoàn thành nhiệm vụ.");
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Nhận thưởng nhiệm vụ lỗi: ${err.message}`);
+      return { success: false, message: err.message };
+    } finally { set({ actionLoading: false }); }
+  },
+
   triggerTribulation: async () => {
     const { player, token, actionLoading, logout } = get();
     if (!player || !token || actionLoading) return null;
@@ -673,7 +713,37 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
-  executeCombatTurn: async (equippedGuIds, isCharge = false, targetId) => {
+  clearStress: async () => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return null;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/clear-stress`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_id: player.id }),
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Tịnh hóa Không khiếu thất bại.");
+
+      set({ player: data.player });
+      get().addLog(data.message || "Tịnh hóa Không khiếu hoàn tất.");
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Tịnh hóa lỗi: ${err.message}`);
+      return { success: false, message: err.message };
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  executeCombatTurn: async (equippedGuIds, isCharge = false, targetId, targetX, targetY) => {
     const { player, token, actionLoading, logout } = get();
     if (!player || !token || actionLoading) return null;
 
@@ -689,6 +759,8 @@ export const useGameStore = create<GameState>((set, get) => {
           equipped_gu_ids: equippedGuIds,
           is_charge: isCharge,
           target_id: targetId || "",
+          target_x: targetX || 0,
+          target_y: targetY || 0,
         }),
       });
 
@@ -1081,7 +1153,7 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
-  movePlayer: async (x, y) => {
+  movePlayer: async (x, y, attackTargetId?) => {
     const { player, token, actionLoading, logout } = get();
     if (!player || !token || actionLoading) return null;
 
@@ -1095,6 +1167,7 @@ export const useGameStore = create<GameState>((set, get) => {
         body: JSON.stringify({
           x: x,
           y: y,
+          attack_target_id: attackTargetId,
         }),
       });
 

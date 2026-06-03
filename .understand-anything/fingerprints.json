@@ -1,0 +1,5526 @@
+{
+  "version": "1.0.0",
+  "gitCommitHash": "6c59bce131c17998e1c5dbdf582a3bedc2d01e48",
+  "generatedAt": "2026-06-02T13:38:54.597Z",
+  "files": {
+    ".kiro/specs/cultivation-leveling-system/.config.kiro": {
+      "filePath": ".kiro/specs/cultivation-leveling-system/.config.kiro",
+      "contentHash": "614417abe8d2be29511b8291bb6d14013be090e0a49f6db2aa56843c22a3955d",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 2,
+      "hasStructuralAnalysis": false
+    },
+    ".kiro/specs/cultivation-leveling-system/requirements.md": {
+      "filePath": ".kiro/specs/cultivation-leveling-system/requirements.md",
+      "contentHash": "6a303b65abea9811fd68558a42445d3324e6a320a2c1cd8d6851717c44df9577",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 202,
+      "hasStructuralAnalysis": true
+    },
+    ".understand-anything/.understandignore": {
+      "filePath": ".understand-anything/.understandignore",
+      "contentHash": "882d49a3f6397d5697ab1118f7530f6442fa49fc0242493a3e8c769adb9263ea",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 14,
+      "hasStructuralAnalysis": false
+    },
+    "AscensionEnergySystemDesignDocumen.txt": {
+      "filePath": "AscensionEnergySystemDesignDocumen.txt",
+      "contentHash": "8964d4251276e38cd594e15063ac5e4fcac78a7f908bb17f8bc20e79fc15bb6b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 71,
+      "hasStructuralAnalysis": false
+    },
+    "backend/.env": {
+      "filePath": "backend/.env",
+      "contentHash": "c142765d304afb75f41700cd697facae63113b119432b1fd9d61d87127bd3245",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 9,
+      "hasStructuralAnalysis": true
+    },
+    "backend/cmd/server/main.go": {
+      "filePath": "backend/cmd/server/main.go",
+      "contentHash": "8093d5f7dfde8d031f3ea421816175ed8f923f208b6d3aa9e490d11d05640ac2",
+      "functions": [
+        {
+          "name": "main",
+          "params": [],
+          "exported": false,
+          "lineCount": 50
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "log",
+          "specifiers": [
+            "log"
+          ]
+        },
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "time",
+          "specifiers": [
+            "time"
+          ]
+        },
+        {
+          "source": "github.com/joho/godotenv",
+          "specifiers": [
+            "godotenv"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/db",
+          "specifiers": [
+            "db"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/server",
+          "specifiers": [
+            "server"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/worker",
+          "specifiers": [
+            "worker"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 65,
+      "hasStructuralAnalysis": true
+    },
+    "backend/go.mod": {
+      "filePath": "backend/go.mod",
+      "contentHash": "0085115ac3e043987c0403af694ad3c6fc684fefd3ad1222a6e12e65de3baa01",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 44,
+      "hasStructuralAnalysis": false
+    },
+    "backend/go.sum": {
+      "filePath": "backend/go.sum",
+      "contentHash": "ec17fa00db72aa1a7cecbc3c331ec56adeedb91ebf942a85db48677da5edc3a4",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 98,
+      "hasStructuralAnalysis": false
+    },
+    "backend/Gu.csv": {
+      "filePath": "backend/Gu.csv",
+      "contentHash": "078e078981be3fa83e4141e159d030118df96ba7cde96a8df0fd4f8159fcc84c",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 68,
+      "hasStructuralAnalysis": false
+    },
+    "backend/internal/auth/jwt.go": {
+      "filePath": "backend/internal/auth/jwt.go",
+      "contentHash": "3ae9f10f1c10de8ebe35a821355df12c94286a1e6a3e104d339fe599b4229f2b",
+      "functions": [
+        {
+          "name": "init",
+          "params": [],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "GenerateToken",
+          "params": [
+            "playerID",
+            "username"
+          ],
+          "returnType": "(string, error)",
+          "exported": true,
+          "lineCount": 20
+        },
+        {
+          "name": "ValidateToken",
+          "params": [
+            "tokenString"
+          ],
+          "returnType": "(*CustomClaims, error)",
+          "exported": true,
+          "lineCount": 19
+        }
+      ],
+      "classes": [
+        {
+          "name": "CustomClaims",
+          "methods": [],
+          "properties": [
+            "PlayerID",
+            "Username"
+          ],
+          "exported": true,
+          "lineCount": 5
+        }
+      ],
+      "imports": [
+        {
+          "source": "errors",
+          "specifiers": [
+            "errors"
+          ]
+        },
+        {
+          "source": "fmt",
+          "specifiers": [
+            "fmt"
+          ]
+        },
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "time",
+          "specifiers": [
+            "time"
+          ]
+        },
+        {
+          "source": "github.com/golang-jwt/jwt/v5",
+          "specifiers": [
+            "v5"
+          ]
+        },
+        {
+          "source": "github.com/google/uuid",
+          "specifiers": [
+            "uuid"
+          ]
+        }
+      ],
+      "exports": [
+        "CustomClaims",
+        "GenerateToken",
+        "ValidateToken"
+      ],
+      "totalLines": 72,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/db/db.go": {
+      "filePath": "backend/internal/db/db.go",
+      "contentHash": "17c6667164a02ef5daa249df6e580d79f8a0e5bd158eebe209b3abdd42a4a109",
+      "functions": [
+        {
+          "name": "Connect",
+          "params": [],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 25
+        },
+        {
+          "name": "InitSchema",
+          "params": [],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 318
+        },
+        {
+          "name": "SeedDictionaries",
+          "params": [],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 24
+        },
+        {
+          "name": "csvPath",
+          "params": [
+            "filename"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 13
+        },
+        {
+          "name": "openCSV",
+          "params": [
+            "filename"
+          ],
+          "returnType": "(*os.File, *csv.Reader, []string, error)",
+          "exported": false,
+          "lineCount": 16
+        },
+        {
+          "name": "colIndex",
+          "params": [
+            "header",
+            "name"
+          ],
+          "returnType": "int",
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "seedItemsFromCSV",
+          "params": [
+            "filename"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 89
+        },
+        {
+          "name": "seedGusFromCSV",
+          "params": [
+            "filename"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 108
+        },
+        {
+          "name": "seedRecipesFromCSV",
+          "params": [
+            "filename"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 81
+        },
+        {
+          "name": "seedItemsHardcoded",
+          "params": [],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 30
+        },
+        {
+          "name": "seedGusHardcoded",
+          "params": [],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 45
+        },
+        {
+          "name": "seedRecipesHardcoded",
+          "params": [],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 27
+        },
+        {
+          "name": "getEnv",
+          "params": [
+            "key",
+            "fallback"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "SeedMonstersAndSpawns",
+          "params": [],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 104
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "database/sql",
+          "specifiers": [
+            "sql"
+          ]
+        },
+        {
+          "source": "encoding/csv",
+          "specifiers": [
+            "csv"
+          ]
+        },
+        {
+          "source": "fmt",
+          "specifiers": [
+            "fmt"
+          ]
+        },
+        {
+          "source": "io",
+          "specifiers": [
+            "io"
+          ]
+        },
+        {
+          "source": "log",
+          "specifiers": [
+            "log"
+          ]
+        },
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "path/filepath",
+          "specifiers": [
+            "filepath"
+          ]
+        },
+        {
+          "source": "strings",
+          "specifiers": [
+            "strings"
+          ]
+        },
+        {
+          "source": "github.com/lib/pq",
+          "specifiers": [
+            "_"
+          ]
+        }
+      ],
+      "exports": [
+        "Connect",
+        "InitSchema",
+        "SeedDictionaries",
+        "SeedMonstersAndSpawns"
+      ],
+      "totalLines": 939,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/db/monster_db.go": {
+      "filePath": "backend/internal/db/monster_db.go",
+      "contentHash": "6b0f25394d01575d09eb5d1b24f934c3e89c8e3743f8453642f566382438c296",
+      "functions": [
+        {
+          "name": "LoadMonsterTemplate",
+          "params": [
+            "tx",
+            "id"
+          ],
+          "returnType": "(models.MonsterTemplate, error)",
+          "exported": true,
+          "lineCount": 47
+        },
+        {
+          "name": "FindFixedSpawn",
+          "params": [
+            "tx",
+            "regionID",
+            "x",
+            "y"
+          ],
+          "returnType": "(models.MonsterSpawn, bool, error)",
+          "exported": true,
+          "lineCount": 22
+        },
+        {
+          "name": "PickRandomMonsterFromRegion",
+          "params": [
+            "tx",
+            "regionID"
+          ],
+          "returnType": "(string, error)",
+          "exported": true,
+          "lineCount": 27
+        },
+        {
+          "name": "LoadLootTable",
+          "params": [
+            "tx",
+            "id"
+          ],
+          "returnType": "(models.LootTable, error)",
+          "exported": true,
+          "lineCount": 18
+        },
+        {
+          "name": "FindSpecialCell",
+          "params": [
+            "tx",
+            "regionID",
+            "x",
+            "y"
+          ],
+          "returnType": "(models.Cell, bool, error)",
+          "exported": true,
+          "lineCount": 20
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "database/sql",
+          "specifiers": [
+            "sql"
+          ]
+        },
+        {
+          "source": "encoding/json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        }
+      ],
+      "exports": [
+        "LoadMonsterTemplate",
+        "FindFixedSpawn",
+        "PickRandomMonsterFromRegion",
+        "LoadLootTable",
+        "FindSpecialCell"
+      ],
+      "totalLines": 153,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/handlers/arena.go": {
+      "filePath": "backend/internal/handlers/arena.go",
+      "contentHash": "b007e5ade65918cb47fdf37598cd655ff5664c1f0411b63f85d9d96bc8bc19c1",
+      "functions": [
+        {
+          "name": "EnsurePlayerArenaRanking",
+          "params": [
+            "tx",
+            "playerID"
+          ],
+          "returnType": "(int, error)",
+          "exported": true,
+          "lineCount": 18
+        },
+        {
+          "name": "GetArenaLeaderboard",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 41
+        },
+        {
+          "name": "ChallengeArena",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 114
+        }
+      ],
+      "classes": [
+        {
+          "name": "ArenaRanking",
+          "methods": [],
+          "properties": [
+            "PlayerID",
+            "Username",
+            "Rank",
+            "Points",
+            "UpdatedAt"
+          ],
+          "exported": true,
+          "lineCount": 7
+        },
+        {
+          "name": "ChallengeRequest",
+          "methods": [],
+          "properties": [
+            "TargetPlayerID"
+          ],
+          "exported": true,
+          "lineCount": 3
+        }
+      ],
+      "imports": [
+        {
+          "source": "database/sql",
+          "specifiers": [
+            "sql"
+          ]
+        },
+        {
+          "source": "net/http",
+          "specifiers": [
+            "http"
+          ]
+        },
+        {
+          "source": "time",
+          "specifiers": [
+            "time"
+          ]
+        },
+        {
+          "source": "github.com/gin-gonic/gin",
+          "specifiers": [
+            "gin"
+          ]
+        },
+        {
+          "source": "github.com/google/uuid",
+          "specifiers": [
+            "uuid"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/db",
+          "specifiers": [
+            "db"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/middleware",
+          "specifiers": [
+            "middleware"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        }
+      ],
+      "exports": [
+        "ArenaRanking",
+        "EnsurePlayerArenaRanking",
+        "GetArenaLeaderboard",
+        "ChallengeRequest",
+        "ChallengeArena"
+      ],
+      "totalLines": 202,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/handlers/chat.go": {
+      "filePath": "backend/internal/handlers/chat.go",
+      "contentHash": "f8ffd3e7965009bc529763659a98a27f9166b445d687f2429b5f758a02999d7a",
+      "functions": [
+        {
+          "name": "SendPrivateMail",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 64
+        },
+        {
+          "name": "GetInbox",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 34
+        },
+        {
+          "name": "SendBaoHoangChat",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 47
+        },
+        {
+          "name": "GetBaoHoangMessages",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 41
+        }
+      ],
+      "classes": [
+        {
+          "name": "MailRequest",
+          "methods": [],
+          "properties": [
+            "ReceiverUsername",
+            "Content"
+          ],
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "MailItem",
+          "methods": [],
+          "properties": [
+            "ID",
+            "SenderID",
+            "SenderUsername",
+            "Content",
+            "IsRead",
+            "CreatedAt"
+          ],
+          "exported": true,
+          "lineCount": 8
+        },
+        {
+          "name": "BaoHoangRequest",
+          "methods": [],
+          "properties": [
+            "Content"
+          ],
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "ChatItem",
+          "methods": [],
+          "properties": [
+            "ID",
+            "SenderID",
+            "SenderUsername",
+            "Content",
+            "CreatedAt"
+          ],
+          "exported": true,
+          "lineCount": 7
+        }
+      ],
+      "imports": [
+        {
+          "source": "database/sql",
+          "specifiers": [
+            "sql"
+          ]
+        },
+        {
+          "source": "net/http",
+          "specifiers": [
+            "http"
+          ]
+        },
+        {
+          "source": "time",
+          "specifiers": [
+            "time"
+          ]
+        },
+        {
+          "source": "github.com/gin-gonic/gin",
+          "specifiers": [
+            "gin"
+          ]
+        },
+        {
+          "source": "github.com/google/uuid",
+          "specifiers": [
+            "uuid"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/db",
+          "specifiers": [
+            "db"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/middleware",
+          "specifiers": [
+            "middleware"
+          ]
+        }
+      ],
+      "exports": [
+        "MailRequest",
+        "MailItem",
+        "SendPrivateMail",
+        "GetInbox",
+        "BaoHoangRequest",
+        "ChatItem",
+        "SendBaoHoangChat",
+        "GetBaoHoangMessages"
+      ],
+      "totalLines": 229,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/handlers/combat_boss_test.go": {
+      "filePath": "backend/internal/handlers/combat_boss_test.go",
+      "contentHash": "88abb75f1ed3e74049f897aaabc8596d7287b22bfee919d7658562822b0c55cb",
+      "functions": [
+        {
+          "name": "TestSelectActionsByAI_BossBurst",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 25
+        },
+        {
+          "name": "TestSelectActionsByAI_Defensive",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 16
+        },
+        {
+          "name": "TestSelectActionsByAI_BossBalanced",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 24
+        },
+        {
+          "name": "TestRollLoot",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 22
+        },
+        {
+          "name": "TestCalculateGuEffectForCombatant_Backlash",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 19
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "testing",
+          "specifiers": [
+            "testing"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        }
+      ],
+      "exports": [
+        "TestSelectActionsByAI_BossBurst",
+        "TestSelectActionsByAI_Defensive",
+        "TestSelectActionsByAI_BossBalanced",
+        "TestRollLoot",
+        "TestCalculateGuEffectForCombatant_Backlash"
+      ],
+      "totalLines": 119,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/handlers/combat.go": {
+      "filePath": "backend/internal/handlers/combat.go",
+      "contentHash": "c0f03d1f5078bcac9563eaa142f8c5b4eb9f7ca89b32a635bffdc1391925c700",
+      "functions": [
+        {
+          "name": "getActorPathMasteryMultiplier",
+          "params": [
+            "actor",
+            "path"
+          ],
+          "returnType": "float64",
+          "exported": false,
+          "lineCount": 18
+        },
+        {
+          "name": "CalculateGuEffectForCombatant",
+          "params": [
+            "actor",
+            "guSpec"
+          ],
+          "returnType": "(effectiveDamage float64, effectiveDefense float64, manaCost float64, err error)",
+          "exported": true,
+          "lineCount": 37
+        },
+        {
+          "name": "CalculateGuEffect",
+          "params": [
+            "player",
+            "guSpec"
+          ],
+          "returnType": "(effectiveDamage float64, effectiveDefense float64, manaCost float64, err error)",
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "InitializeCombatState",
+          "params": [
+            "tx",
+            "base",
+            "player"
+          ],
+          "returnType": "*models.CombatState",
+          "exported": true,
+          "lineCount": 79
+        },
+        {
+          "name": "StartCombat",
+          "params": [
+            "tx",
+            "base",
+            "player"
+          ],
+          "returnType": "*models.CombatState",
+          "exported": true,
+          "lineCount": 15
+        },
+        {
+          "name": "CombatAttack",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 592
+        },
+        {
+          "name": "ExploreNode",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 149
+        },
+        {
+          "name": "Retreat",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 74
+        },
+        {
+          "name": "RollLoot",
+          "params": [
+            "lt"
+          ],
+          "returnType": "RolledLoot",
+          "exported": true,
+          "lineCount": 25
+        },
+        {
+          "name": "ApplyLoot",
+          "params": [
+            "player",
+            "loot"
+          ],
+          "returnType": "[]string",
+          "exported": true,
+          "lineCount": 48
+        },
+        {
+          "name": "BuildEnemyActions",
+          "params": [
+            "ctx",
+            "enemy"
+          ],
+          "returnType": "[]Action",
+          "exported": true,
+          "lineCount": 22
+        },
+        {
+          "name": "BuildBasicEnemyAction",
+          "params": [
+            "enemy"
+          ],
+          "returnType": "[]Action",
+          "exported": true,
+          "lineCount": 18
+        },
+        {
+          "name": "SelectActionsByAI",
+          "params": [
+            "profile",
+            "potentialActions",
+            "currentMana"
+          ],
+          "returnType": "[]Action",
+          "exported": true,
+          "lineCount": 119
+        }
+      ],
+      "classes": [
+        {
+          "name": "CombatAttackRequest",
+          "methods": [],
+          "properties": [
+            "PlayerID",
+            "TargetID",
+            "EquippedGuIDs",
+            "IsCharge"
+          ],
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "ExploreRequest",
+          "methods": [],
+          "properties": [
+            "PlayerID",
+            "NodeID"
+          ],
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "CombatContext",
+          "methods": [],
+          "properties": [
+            "Attacker",
+            "Defender",
+            "DamageDealt",
+            "ShieldAdded",
+            "DamageBoost",
+            "Logs"
+          ],
+          "exported": true,
+          "lineCount": 8
+        },
+        {
+          "name": "RolledLoot",
+          "methods": [],
+          "properties": [
+            "Items",
+            "Gus"
+          ],
+          "exported": true,
+          "lineCount": 4
+        }
+      ],
+      "imports": [
+        {
+          "source": "database/sql",
+          "specifiers": [
+            "sql"
+          ]
+        },
+        {
+          "source": "encoding/json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "fmt",
+          "specifiers": [
+            "fmt"
+          ]
+        },
+        {
+          "source": "log",
+          "specifiers": [
+            "log"
+          ]
+        },
+        {
+          "source": "math/rand",
+          "specifiers": [
+            "rand"
+          ]
+        },
+        {
+          "source": "net/http",
+          "specifiers": [
+            "http"
+          ]
+        },
+        {
+          "source": "time",
+          "specifiers": [
+            "time"
+          ]
+        },
+        {
+          "source": "github.com/gin-gonic/gin",
+          "specifiers": [
+            "gin"
+          ]
+        },
+        {
+          "source": "github.com/google/uuid",
+          "specifiers": [
+            "uuid"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/db",
+          "specifiers": [
+            "db"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/middleware",
+          "specifiers": [
+            "middleware"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        }
+      ],
+      "exports": [
+        "CombatAttackRequest",
+        "ExploreRequest",
+        "CombatContext",
+        "CalculateGuEffectForCombatant",
+        "CalculateGuEffect",
+        "InitializeCombatState",
+        "StartCombat",
+        "CombatAttack",
+        "ExploreNode",
+        "Retreat",
+        "RolledLoot",
+        "RollLoot",
+        "ApplyLoot",
+        "BuildEnemyActions",
+        "BuildBasicEnemyAction",
+        "SelectActionsByAI"
+      ],
+      "totalLines": 1274,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/handlers/cultivate.go": {
+      "filePath": "backend/internal/handlers/cultivate.go",
+      "contentHash": "cf68ecf776f43a6a9c6d2775aee356c883698c6b570d7e3bbebd4318d28660cc",
+      "functions": [
+        {
+          "name": "BreakWall",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 106
+        },
+        {
+          "name": "UseRelicGu",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 60
+        },
+        {
+          "name": "Ascension",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 98
+        },
+        {
+          "name": "Tribulation",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 60
+        }
+      ],
+      "classes": [
+        {
+          "name": "BreakWallRequest",
+          "methods": [],
+          "properties": [
+            "ManaSpend"
+          ],
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "BreakWallResponse",
+          "methods": [],
+          "properties": [
+            "Player",
+            "Success",
+            "Message"
+          ],
+          "exported": true,
+          "lineCount": 5
+        },
+        {
+          "name": "UseRelicGuRequest",
+          "methods": [],
+          "properties": [
+            "RelicKey"
+          ],
+          "exported": true,
+          "lineCount": 3
+        }
+      ],
+      "imports": [
+        {
+          "source": "math",
+          "specifiers": [
+            "math"
+          ]
+        },
+        {
+          "source": "math/rand",
+          "specifiers": [
+            "rand"
+          ]
+        },
+        {
+          "source": "net/http",
+          "specifiers": [
+            "http"
+          ]
+        },
+        {
+          "source": "time",
+          "specifiers": [
+            "time"
+          ]
+        },
+        {
+          "source": "github.com/gin-gonic/gin",
+          "specifiers": [
+            "gin"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/db",
+          "specifiers": [
+            "db"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/middleware",
+          "specifiers": [
+            "middleware"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        }
+      ],
+      "exports": [
+        "BreakWallRequest",
+        "BreakWallResponse",
+        "UseRelicGuRequest",
+        "BreakWall",
+        "UseRelicGu",
+        "Ascension",
+        "Tribulation"
+      ],
+      "totalLines": 363,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/handlers/dictionary.go": {
+      "filePath": "backend/internal/handlers/dictionary.go",
+      "contentHash": "cf3a1bea551b98f21f2bb3eeac1d8c7e1689db2bffe361297ac60d24c119b027",
+      "functions": [
+        {
+          "name": "GetDictionary",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 6
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "net/http",
+          "specifiers": [
+            "http"
+          ]
+        },
+        {
+          "source": "github.com/gin-gonic/gin",
+          "specifiers": [
+            "gin"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        }
+      ],
+      "exports": [
+        "GetDictionary"
+      ],
+      "totalLines": 17,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/handlers/energy_test.go": {
+      "filePath": "backend/internal/handlers/energy_test.go",
+      "contentHash": "fb8b5dd6729933117dd6e5f429edffbf901d73608b3df532d47c069f436d8576",
+      "functions": [
+        {
+          "name": "TestEnergyRegenMortalUsesAptitude",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "TestEnergyRegenImmortalIgnoresAptitudeAndUsesRank",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 10
+        },
+        {
+          "name": "TestNormalizeEnergyPoolExpandsImmortalApertureOnly",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 14
+        },
+        {
+          "name": "TestCalculateEnergyCostSeparatesMortalAndImmortalGu",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 16
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "testing",
+          "specifiers": [
+            "testing"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        }
+      ],
+      "exports": [
+        "TestEnergyRegenMortalUsesAptitude",
+        "TestEnergyRegenImmortalIgnoresAptitudeAndUsesRank",
+        "TestNormalizeEnergyPoolExpandsImmortalApertureOnly",
+        "TestCalculateEnergyCostSeparatesMortalAndImmortalGu"
+      ],
+      "totalLines": 58,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/handlers/energy.go": {
+      "filePath": "backend/internal/handlers/energy.go",
+      "contentHash": "b18f9c5db49af9797900bac5f084a99b32719a08f79452f7c4fd0d605fa4a0c5",
+      "functions": [
+        {
+          "name": "isImmortalCultivator",
+          "params": [
+            "player"
+          ],
+          "returnType": "bool",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "energyName",
+          "params": [
+            "player"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "insufficientEnergyMessage",
+          "params": [
+            "player"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "immortalApertureCapacity",
+          "params": [
+            "rank",
+            "subRank"
+          ],
+          "returnType": "float64",
+          "exported": false,
+          "lineCount": 25
+        },
+        {
+          "name": "normalizeEnergyPool",
+          "params": [
+            "player"
+          ],
+          "returnType": "bool",
+          "exported": false,
+          "lineCount": 21
+        },
+        {
+          "name": "energyRegenRatePerHour",
+          "params": [
+            "player"
+          ],
+          "returnType": "float64",
+          "exported": false,
+          "lineCount": 36
+        },
+        {
+          "name": "immortalGuBaseCost",
+          "params": [
+            "rank",
+            "configuredCost"
+          ],
+          "returnType": "float64",
+          "exported": false,
+          "lineCount": 18
+        },
+        {
+          "name": "calculateEnergyCost",
+          "params": [
+            "player",
+            "guSpec"
+          ],
+          "returnType": "float64",
+          "exported": false,
+          "lineCount": 41
+        },
+        {
+          "name": "calculateEnergyCostForCombatant",
+          "params": [
+            "actor",
+            "guSpec"
+          ],
+          "returnType": "float64",
+          "exported": false,
+          "lineCount": 43
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "math",
+          "specifiers": [
+            "math"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 218,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/handlers/exploration.go": {
+      "filePath": "backend/internal/handlers/exploration.go",
+      "contentHash": "0c94a0e5d9eb3b2d9846390db148a27a119ab8553a16288eeb64b27151c3175d",
+      "functions": [
+        {
+          "name": "GenerateCell",
+          "params": [
+            "x",
+            "y",
+            "region"
+          ],
+          "returnType": "models.Cell",
+          "exported": true,
+          "lineCount": 117
+        },
+        {
+          "name": "ResolveCell",
+          "params": [
+            "tx",
+            "region",
+            "x",
+            "y"
+          ],
+          "returnType": "(models.Cell, error)",
+          "exported": true,
+          "lineCount": 22
+        },
+        {
+          "name": "addExploredCells",
+          "params": [
+            "player",
+            "radius"
+          ],
+          "exported": false,
+          "lineCount": 23
+        },
+        {
+          "name": "isCellClearedRecently",
+          "params": [
+            "player",
+            "x",
+            "y",
+            "cooldown"
+          ],
+          "returnType": "bool",
+          "exported": false,
+          "lineCount": 15
+        },
+        {
+          "name": "GetGrid",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 80
+        },
+        {
+          "name": "MovePlayer",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 263
+        }
+      ],
+      "classes": [
+        {
+          "name": "MoveRequest",
+          "methods": [],
+          "properties": [
+            "X",
+            "Y"
+          ],
+          "exported": true,
+          "lineCount": 4
+        }
+      ],
+      "imports": [
+        {
+          "source": "crypto/sha256",
+          "specifiers": [
+            "sha256"
+          ]
+        },
+        {
+          "source": "database/sql",
+          "specifiers": [
+            "sql"
+          ]
+        },
+        {
+          "source": "encoding/binary",
+          "specifiers": [
+            "binary"
+          ]
+        },
+        {
+          "source": "fmt",
+          "specifiers": [
+            "fmt"
+          ]
+        },
+        {
+          "source": "log",
+          "specifiers": [
+            "log"
+          ]
+        },
+        {
+          "source": "math",
+          "specifiers": [
+            "math"
+          ]
+        },
+        {
+          "source": "math/rand",
+          "specifiers": [
+            "rand"
+          ]
+        },
+        {
+          "source": "net/http",
+          "specifiers": [
+            "http"
+          ]
+        },
+        {
+          "source": "time",
+          "specifiers": [
+            "time"
+          ]
+        },
+        {
+          "source": "github.com/gin-gonic/gin",
+          "specifiers": [
+            "gin"
+          ]
+        },
+        {
+          "source": "github.com/google/uuid",
+          "specifiers": [
+            "uuid"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/db",
+          "specifiers": [
+            "db"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/middleware",
+          "specifiers": [
+            "middleware"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        }
+      ],
+      "exports": [
+        "GenerateCell",
+        "ResolveCell",
+        "GetGrid",
+        "MoveRequest",
+        "MovePlayer"
+      ],
+      "totalLines": 557,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/handlers/gu_effects.go": {
+      "filePath": "backend/internal/handlers/gu_effects.go",
+      "contentHash": "e19a6b2731160286b26ec64b2d533214c2dfe1c91578274ab7ee943f2d0503ff",
+      "functions": [
+        {
+          "name": "getPathMasteryMultiplier",
+          "params": [
+            "player",
+            "path"
+          ],
+          "returnType": "float64",
+          "exported": false,
+          "lineCount": 18
+        },
+        {
+          "name": "ValidateGuUsable",
+          "params": [
+            "player",
+            "gu",
+            "spec",
+            "actionRequiresEquipped"
+          ],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 26
+        },
+        {
+          "name": "RemoveGuFromInventory",
+          "params": [
+            "player",
+            "instanceID"
+          ],
+          "exported": true,
+          "lineCount": 10
+        },
+        {
+          "name": "RebuildEquippedGus",
+          "params": [
+            "player"
+          ],
+          "exported": true,
+          "lineCount": 8
+        },
+        {
+          "name": "BuildCombatAction",
+          "params": [
+            "ctx",
+            "spec"
+          ],
+          "returnType": "(Action, error)",
+          "exported": true,
+          "lineCount": 25
+        },
+        {
+          "name": "ApplyPostDamageEffects",
+          "params": [
+            "ctx",
+            "playerAction",
+            "enemyAction",
+            "playerHit",
+            "enemyHit",
+            "playerNetDmg",
+            "enemyNetDmg"
+          ],
+          "exported": true,
+          "lineCount": 29
+        },
+        {
+          "name": "addAttackStat",
+          "params": [
+            "player",
+            "spec",
+            "stats"
+          ],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "addDefenseStat",
+          "params": [
+            "player",
+            "spec",
+            "stats"
+          ],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "addDamageOnHitStat",
+          "params": [
+            "player",
+            "spec",
+            "stats"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "addSoulStat",
+          "params": [
+            "player",
+            "spec",
+            "stats"
+          ],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "addStorageStat",
+          "params": [
+            "player",
+            "spec",
+            "stats"
+          ],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "addMovementStat",
+          "params": [
+            "player",
+            "spec",
+            "stats"
+          ],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "addInvestigationStat",
+          "params": [
+            "player",
+            "spec",
+            "stats"
+          ],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "addHearingStat",
+          "params": [
+            "player",
+            "spec",
+            "stats"
+          ],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "addEvasionStat",
+          "params": [
+            "player",
+            "spec",
+            "stats"
+          ],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "addRefineManaTierStat",
+          "params": [
+            "player",
+            "spec",
+            "stats"
+          ],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "addCleansingPowerStat",
+          "params": [
+            "player",
+            "spec",
+            "stats"
+          ],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "handleDamageEffect",
+          "params": [
+            "ctx",
+            "spec",
+            "action"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "handleDefenseEffect",
+          "params": [
+            "ctx",
+            "spec",
+            "action"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "handleRangeEffect",
+          "params": [
+            "ctx",
+            "spec",
+            "action"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "handleCurveAttackEffect",
+          "params": [
+            "ctx",
+            "spec",
+            "action"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "handleManaRegen",
+          "params": [
+            "ctx",
+            "spec",
+            "action"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 10
+        },
+        {
+          "name": "handleWoodTransformation",
+          "params": [
+            "ctx",
+            "spec",
+            "action"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "handleBloodDrain",
+          "params": [
+            "ctx",
+            "spec",
+            "action"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "handleReplicate",
+          "params": [
+            "ctx",
+            "spec",
+            "action"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "handleBleedEffect",
+          "params": [
+            "ctx",
+            "spec",
+            "action"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 13
+        },
+        {
+          "name": "handleLifeStealEffect",
+          "params": [
+            "ctx",
+            "spec",
+            "action"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "handleRefineManaTier",
+          "params": [
+            "ctx",
+            "spec",
+            "action"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "handleDamageMultiplier",
+          "params": [
+            "ctx",
+            "spec",
+            "action"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "handleCleansingPower",
+          "params": [
+            "ctx",
+            "spec",
+            "action"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "handleSummonPhantom",
+          "params": [
+            "ctx",
+            "spec",
+            "action"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "handleGenerateGu",
+          "params": [
+            "ctx",
+            "spec",
+            "action"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "handleIncreaseAptitude",
+          "params": [
+            "player",
+            "spec"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 18
+        },
+        {
+          "name": "handleShareCultivation",
+          "params": [
+            "player",
+            "spec"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "handleRankProgress",
+          "params": [
+            "player",
+            "gu",
+            "spec"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 20
+        },
+        {
+          "name": "handleAperturePetrification",
+          "params": [
+            "player",
+            "gu",
+            "spec"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 14
+        },
+        {
+          "name": "handleGiveStones",
+          "params": [
+            "player",
+            "gu",
+            "spec"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "handleSoulBoost",
+          "params": [
+            "player",
+            "gu",
+            "spec"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "handleForceRankUp",
+          "params": [
+            "player",
+            "gu",
+            "spec"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "handleManaPollution",
+          "params": [
+            "player",
+            "gu",
+            "spec"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "handleEnslaveBeastTier",
+          "params": [
+            "player",
+            "gu",
+            "spec"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "tickStatusEffects",
+          "params": [
+            "player",
+            "ctx"
+          ],
+          "exported": false,
+          "lineCount": 37
+        }
+      ],
+      "classes": [
+        {
+          "name": "Action",
+          "methods": [],
+          "properties": [
+            "Name",
+            "Dmg",
+            "Def",
+            "ManaCost",
+            "IsUtility",
+            "LifeStealRate",
+            "StatusEffects",
+            "Logs"
+          ],
+          "exported": true,
+          "lineCount": 10
+        }
+      ],
+      "imports": [
+        {
+          "source": "fmt",
+          "specifiers": [
+            "fmt"
+          ]
+        },
+        {
+          "source": "math",
+          "specifiers": [
+            "math"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        }
+      ],
+      "exports": [
+        "Action",
+        "ValidateGuUsable",
+        "RemoveGuFromInventory",
+        "RebuildEquippedGus",
+        "BuildCombatAction",
+        "ApplyPostDamageEffects"
+      ],
+      "totalLines": 503,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/handlers/item_effects_test.go": {
+      "filePath": "backend/internal/handlers/item_effects_test.go",
+      "contentHash": "812b5cb253b7e9dafb5fc342696c3b8352b013cd74b81eef20c157312b63d85f",
+      "functions": [
+        {
+          "name": "TestItemEffectRestoreMana",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 28
+        },
+        {
+          "name": "TestItemEffectRestoreHP",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 27
+        },
+        {
+          "name": "TestItemEffectMortalOnly",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 17
+        },
+        {
+          "name": "TestItemEffectImmortalOnly",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 17
+        },
+        {
+          "name": "TestItemEffectSoulBoost",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 16
+        },
+        {
+          "name": "TestItemEffectDaoMarkGain",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 17
+        },
+        {
+          "name": "TestItemEffectRemoveNegativeStatus",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 20
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "testing",
+          "specifiers": [
+            "testing"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        }
+      ],
+      "exports": [
+        "TestItemEffectRestoreMana",
+        "TestItemEffectRestoreHP",
+        "TestItemEffectMortalOnly",
+        "TestItemEffectImmortalOnly",
+        "TestItemEffectSoulBoost",
+        "TestItemEffectDaoMarkGain",
+        "TestItemEffectRemoveNegativeStatus"
+      ],
+      "totalLines": 157,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/handlers/item_effects.go": {
+      "filePath": "backend/internal/handlers/item_effects.go",
+      "contentHash": "3d3a5c388ef035940dd00cb32a93bc09abbf57acfe83fc6265762030dc81de0d",
+      "functions": [
+        {
+          "name": "lifespanBoostEffect",
+          "params": [
+            "player",
+            "item"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "restoreManaEffect",
+          "params": [
+            "player",
+            "item"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "restoreHPEffect",
+          "params": [
+            "player",
+            "item"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "mortalOnlyEffect",
+          "params": [
+            "player",
+            "item"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "immortalOnlyEffect",
+          "params": [
+            "player",
+            "item"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "minRankEffect",
+          "params": [
+            "player",
+            "item"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "maxRankEffect",
+          "params": [
+            "player",
+            "item"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "soulBoostEffect",
+          "params": [
+            "player",
+            "item"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "daoMarkGainEffect",
+          "params": [
+            "player",
+            "item"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 15
+        },
+        {
+          "name": "removeNegativeStatusEffect",
+          "params": [
+            "player",
+            "item"
+          ],
+          "returnType": "(string, error)",
+          "exported": false,
+          "lineCount": 7
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "fmt",
+          "specifiers": [
+            "fmt"
+          ]
+        },
+        {
+          "source": "strings",
+          "specifiers": [
+            "strings"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 115,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/handlers/marketplace.go": {
+      "filePath": "backend/internal/handlers/marketplace.go",
+      "contentHash": "2ae36137934ecefbab12805a5e83fd3240df26b6b3b01b1457b5f965bb8c7f9c",
+      "functions": [
+        {
+          "name": "CreateListing",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 110
+        },
+        {
+          "name": "ListListings",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 34
+        },
+        {
+          "name": "PlaceBid",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 67
+        },
+        {
+          "name": "SettleExpiredAuctions",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 9
+        },
+        {
+          "name": "settleExpiredAuctions",
+          "params": [],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 33
+        },
+        {
+          "name": "settleAuction",
+          "params": [
+            "auctionID",
+            "sellerID",
+            "highestBidderID",
+            "itemType",
+            "itemData",
+            "qty",
+            "currentPrice"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 52
+        },
+        {
+          "name": "addAuctionItemToPlayer",
+          "params": [
+            "player",
+            "itemType",
+            "itemData",
+            "qty"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 12
+        },
+        {
+          "name": "updatePlayerInventory",
+          "params": [
+            "tx",
+            "player"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "CancelListing",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 67
+        },
+        {
+          "name": "mapGuFromRaw",
+          "params": [
+            "guID"
+          ],
+          "returnType": "models.GuInstance",
+          "exported": false,
+          "lineCount": 3
+        }
+      ],
+      "classes": [
+        {
+          "name": "CreateListingRequest",
+          "methods": [],
+          "properties": [
+            "ItemType",
+            "GuInstanceID",
+            "ItemID",
+            "Quantity",
+            "Price",
+            "Currency",
+            "DurationHours"
+          ],
+          "exported": true,
+          "lineCount": 9
+        },
+        {
+          "name": "PlaceBidRequest",
+          "methods": [],
+          "properties": [
+            "ListingID",
+            "Amount"
+          ],
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "CancelListingRequest",
+          "methods": [],
+          "properties": [
+            "ListingID"
+          ],
+          "exported": true,
+          "lineCount": 3
+        }
+      ],
+      "imports": [
+        {
+          "source": "database/sql",
+          "specifiers": [
+            "sql"
+          ]
+        },
+        {
+          "source": "encoding/json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "fmt",
+          "specifiers": [
+            "fmt"
+          ]
+        },
+        {
+          "source": "log",
+          "specifiers": [
+            "log"
+          ]
+        },
+        {
+          "source": "net/http",
+          "specifiers": [
+            "http"
+          ]
+        },
+        {
+          "source": "time",
+          "specifiers": [
+            "time"
+          ]
+        },
+        {
+          "source": "github.com/gin-gonic/gin",
+          "specifiers": [
+            "gin"
+          ]
+        },
+        {
+          "source": "github.com/google/uuid",
+          "specifiers": [
+            "uuid"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/db",
+          "specifiers": [
+            "db"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/middleware",
+          "specifiers": [
+            "middleware"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        }
+      ],
+      "exports": [
+        "CreateListingRequest",
+        "PlaceBidRequest",
+        "CreateListing",
+        "ListListings",
+        "PlaceBid",
+        "SettleExpiredAuctions",
+        "CancelListingRequest",
+        "CancelListing"
+      ],
+      "totalLines": 437,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/handlers/party.go": {
+      "filePath": "backend/internal/handlers/party.go",
+      "contentHash": "bf38181b198958047855297a89a6b45c99d0585445f57c255b9d24f475b3fe2c",
+      "functions": [
+        {
+          "name": "CreateParty",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 57
+        },
+        {
+          "name": "GetPartyStatus",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 33
+        },
+        {
+          "name": "InvitePlayer",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 94
+        },
+        {
+          "name": "LeaveParty",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 70
+        }
+      ],
+      "classes": [
+        {
+          "name": "PartyMember",
+          "methods": [],
+          "properties": [
+            "ID",
+            "Username"
+          ],
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "InviteRequest",
+          "methods": [],
+          "properties": [
+            "Username"
+          ],
+          "exported": true,
+          "lineCount": 3
+        }
+      ],
+      "imports": [
+        {
+          "source": "database/sql",
+          "specifiers": [
+            "sql"
+          ]
+        },
+        {
+          "source": "encoding/json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "net/http",
+          "specifiers": [
+            "http"
+          ]
+        },
+        {
+          "source": "github.com/gin-gonic/gin",
+          "specifiers": [
+            "gin"
+          ]
+        },
+        {
+          "source": "github.com/google/uuid",
+          "specifiers": [
+            "uuid"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/db",
+          "specifiers": [
+            "db"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/middleware",
+          "specifiers": [
+            "middleware"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        }
+      ],
+      "exports": [
+        "PartyMember",
+        "CreateParty",
+        "GetPartyStatus",
+        "InviteRequest",
+        "InvitePlayer",
+        "LeaveParty"
+      ],
+      "totalLines": 281,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/handlers/player.go": {
+      "filePath": "backend/internal/handlers/player.go",
+      "contentHash": "bef7ffea7157e9bf102157b6b0f2857f72af3270d7b2c64490600afa2a242287",
+      "functions": [
+        {
+          "name": "authCookieDomain",
+          "params": [],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "authCookieSecure",
+          "params": [
+            "c"
+          ],
+          "returnType": "bool",
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "setAuthCookie",
+          "params": [
+            "c",
+            "token"
+          ],
+          "exported": false,
+          "lineCount": 12
+        },
+        {
+          "name": "clearAuthCookie",
+          "params": [
+            "c"
+          ],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "RegisterPlayer",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 122
+        },
+        {
+          "name": "LoginPlayer",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 73
+        },
+        {
+          "name": "LogoutPlayer",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "GetCurrentPlayer",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 31
+        },
+        {
+          "name": "GetPlayerStatus",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 39
+        },
+        {
+          "name": "RechargeWithStones",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 102
+        },
+        {
+          "name": "Explore",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 171
+        },
+        {
+          "name": "FeedGu",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 120
+        },
+        {
+          "name": "evaluateManaTx",
+          "params": [
+            "tx",
+            "id"
+          ],
+          "returnType": "(models.Player, error)",
+          "exported": false,
+          "lineCount": 98
+        },
+        {
+          "name": "CalculatePlayerStats",
+          "params": [
+            "player"
+          ],
+          "returnType": "map[string]float64",
+          "exported": true,
+          "lineCount": 50
+        },
+        {
+          "name": "EquipGu",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 96
+        },
+        {
+          "name": "UpdateGuStatus",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 87
+        },
+        {
+          "name": "GetPlayerStatsHandler",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 26
+        },
+        {
+          "name": "HasInventorySpace",
+          "params": [
+            "player",
+            "incomingCount"
+          ],
+          "returnType": "bool",
+          "exported": true,
+          "lineCount": 16
+        },
+        {
+          "name": "UseItem",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 100
+        },
+        {
+          "name": "SetVitalGu",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 114
+        },
+        {
+          "name": "DropGu",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 63
+        },
+        {
+          "name": "UseConsumableGu",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 104
+        },
+        {
+          "name": "UseSupportGu",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 102
+        },
+        {
+          "name": "getRankName",
+          "params": [
+            "rank"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 17
+        }
+      ],
+      "classes": [
+        {
+          "name": "CreatePlayerRequest",
+          "methods": [],
+          "properties": [
+            "Username",
+            "Password",
+            "StartingRegion",
+            "SetVitalNow",
+            "Email",
+            "PhoneNumber"
+          ],
+          "exported": true,
+          "lineCount": 8
+        },
+        {
+          "name": "CreatePlayerResponse",
+          "methods": [],
+          "properties": [
+            "Player"
+          ],
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "LoginRequest",
+          "methods": [],
+          "properties": [
+            "Username",
+            "Password"
+          ],
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "RechargeWithStoneRequest",
+          "methods": [],
+          "properties": [
+            "Stones"
+          ],
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "ExploreResponse",
+          "methods": [],
+          "properties": [
+            "Player",
+            "RewardStones",
+            "Log"
+          ],
+          "exported": true,
+          "lineCount": 5
+        },
+        {
+          "name": "FeedRequest",
+          "methods": [],
+          "properties": [
+            "GuInstanceID"
+          ],
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "EquipGuRequest",
+          "methods": [],
+          "properties": [
+            "InstanceID",
+            "Equip"
+          ],
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "UpdateGuStatusRequest",
+          "methods": [],
+          "properties": [
+            "InstanceID",
+            "Status"
+          ],
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "UseItemRequest",
+          "methods": [],
+          "properties": [
+            "ItemID"
+          ],
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "SetVitalGuRequest",
+          "methods": [],
+          "properties": [
+            "GuInstanceID"
+          ],
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "DropGuRequest",
+          "methods": [],
+          "properties": [
+            "GuInstanceID"
+          ],
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "UseGuRequest",
+          "methods": [],
+          "properties": [
+            "GuInstanceID"
+          ],
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "UseSupportGuRequest",
+          "methods": [],
+          "properties": [
+            "GuInstanceID"
+          ],
+          "exported": true,
+          "lineCount": 3
+        }
+      ],
+      "imports": [
+        {
+          "source": "database/sql",
+          "specifiers": [
+            "sql"
+          ]
+        },
+        {
+          "source": "encoding/json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "fmt",
+          "specifiers": [
+            "fmt"
+          ]
+        },
+        {
+          "source": "math",
+          "specifiers": [
+            "math"
+          ]
+        },
+        {
+          "source": "math/rand",
+          "specifiers": [
+            "rand"
+          ]
+        },
+        {
+          "source": "net/http",
+          "specifiers": [
+            "http"
+          ]
+        },
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "strings",
+          "specifiers": [
+            "strings"
+          ]
+        },
+        {
+          "source": "time",
+          "specifiers": [
+            "time"
+          ]
+        },
+        {
+          "source": "github.com/gin-gonic/gin",
+          "specifiers": [
+            "gin"
+          ]
+        },
+        {
+          "source": "github.com/google/uuid",
+          "specifiers": [
+            "uuid"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/auth",
+          "specifiers": [
+            "auth"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/db",
+          "specifiers": [
+            "db"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/middleware",
+          "specifiers": [
+            "middleware"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        },
+        {
+          "source": "golang.org/x/crypto/bcrypt",
+          "specifiers": [
+            "bcrypt"
+          ]
+        }
+      ],
+      "exports": [
+        "CreatePlayerRequest",
+        "CreatePlayerResponse",
+        "RegisterPlayer",
+        "LoginRequest",
+        "LoginPlayer",
+        "LogoutPlayer",
+        "GetCurrentPlayer",
+        "GetPlayerStatus",
+        "RechargeWithStoneRequest",
+        "RechargeWithStones",
+        "ExploreResponse",
+        "Explore",
+        "FeedRequest",
+        "FeedGu",
+        "EquipGuRequest",
+        "CalculatePlayerStats",
+        "EquipGu",
+        "UpdateGuStatusRequest",
+        "UpdateGuStatus",
+        "GetPlayerStatsHandler",
+        "HasInventorySpace",
+        "UseItemRequest",
+        "UseItem",
+        "SetVitalGuRequest",
+        "SetVitalGu",
+        "DropGuRequest",
+        "DropGu",
+        "UseGuRequest",
+        "UseConsumableGu",
+        "UseSupportGuRequest",
+        "UseSupportGu"
+      ],
+      "totalLines": 1704,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/handlers/refine.go": {
+      "filePath": "backend/internal/handlers/refine.go",
+      "contentHash": "0807e787bbc286b393e67a339e884ef62ac47bdca6e8fb1ffc86d90a367d2f88",
+      "functions": [
+        {
+          "name": "GetRecipes",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 27
+        },
+        {
+          "name": "RefineGu",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 237
+        }
+      ],
+      "classes": [
+        {
+          "name": "RefineRequest",
+          "methods": [],
+          "properties": [
+            "RecipeID",
+            "SelectedGuInstanceIDs"
+          ],
+          "exported": true,
+          "lineCount": 4
+        }
+      ],
+      "imports": [
+        {
+          "source": "database/sql",
+          "specifiers": [
+            "sql"
+          ]
+        },
+        {
+          "source": "math/rand",
+          "specifiers": [
+            "rand"
+          ]
+        },
+        {
+          "source": "net/http",
+          "specifiers": [
+            "http"
+          ]
+        },
+        {
+          "source": "github.com/gin-gonic/gin",
+          "specifiers": [
+            "gin"
+          ]
+        },
+        {
+          "source": "github.com/google/uuid",
+          "specifiers": [
+            "uuid"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/db",
+          "specifiers": [
+            "db"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/middleware",
+          "specifiers": [
+            "middleware"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        }
+      ],
+      "exports": [
+        "RefineRequest",
+        "GetRecipes",
+        "RefineGu"
+      ],
+      "totalLines": 287,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/handlers/shop.go": {
+      "filePath": "backend/internal/handlers/shop.go",
+      "contentHash": "bdaf866b46f87edceb9b519a98737fbe90417b5692eac906d807be3a33a8b8c4",
+      "functions": [
+        {
+          "name": "GetShopList",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "BuyShopItem",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 123
+        },
+        {
+          "name": "SellShopItem",
+          "params": [
+            "c"
+          ],
+          "exported": true,
+          "lineCount": 100
+        }
+      ],
+      "classes": [
+        {
+          "name": "ShopItem",
+          "methods": [],
+          "properties": [
+            "ID",
+            "Name",
+            "Description",
+            "Type",
+            "Price",
+            "Stock"
+          ],
+          "exported": true,
+          "lineCount": 8
+        },
+        {
+          "name": "BuyShopRequest",
+          "methods": [],
+          "properties": [
+            "PlayerID",
+            "ItemID",
+            "Quantity"
+          ],
+          "exported": true,
+          "lineCount": 5
+        },
+        {
+          "name": "SellShopRequest",
+          "methods": [],
+          "properties": [
+            "PlayerID",
+            "ItemID",
+            "Quantity",
+            "ItemType"
+          ],
+          "exported": true,
+          "lineCount": 6
+        }
+      ],
+      "imports": [
+        {
+          "source": "log",
+          "specifiers": [
+            "log"
+          ]
+        },
+        {
+          "source": "net/http",
+          "specifiers": [
+            "http"
+          ]
+        },
+        {
+          "source": "github.com/gin-gonic/gin",
+          "specifiers": [
+            "gin"
+          ]
+        },
+        {
+          "source": "github.com/google/uuid",
+          "specifiers": [
+            "uuid"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/db",
+          "specifiers": [
+            "db"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/middleware",
+          "specifiers": [
+            "middleware"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        }
+      ],
+      "exports": [
+        "ShopItem",
+        "GetShopList",
+        "BuyShopRequest",
+        "BuyShopItem",
+        "SellShopRequest",
+        "SellShopItem"
+      ],
+      "totalLines": 284,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/middleware/auth.go": {
+      "filePath": "backend/internal/middleware/auth.go",
+      "contentHash": "6e339065b6ac64da73d7d2e08368ad6f868c4fa1be8258f50086c9245f32a7a6",
+      "functions": [
+        {
+          "name": "AuthRequired",
+          "params": [],
+          "returnType": "gin.HandlerFunc",
+          "exported": true,
+          "lineCount": 41
+        },
+        {
+          "name": "GetPlayerID",
+          "params": [
+            "c"
+          ],
+          "returnType": "(uuid.UUID, bool)",
+          "exported": true,
+          "lineCount": 8
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "net/http",
+          "specifiers": [
+            "http"
+          ]
+        },
+        {
+          "source": "strings",
+          "specifiers": [
+            "strings"
+          ]
+        },
+        {
+          "source": "github.com/gin-gonic/gin",
+          "specifiers": [
+            "gin"
+          ]
+        },
+        {
+          "source": "github.com/google/uuid",
+          "specifiers": [
+            "uuid"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/auth",
+          "specifiers": [
+            "auth"
+          ]
+        }
+      ],
+      "exports": [
+        "AuthRequired",
+        "GetPlayerID"
+      ],
+      "totalLines": 64,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/models/cell.go": {
+      "filePath": "backend/internal/models/cell.go",
+      "contentHash": "302a63e91fced3efe5f4a2eece097a438ca9dc54ec5e347a7019becda97d98e4",
+      "functions": [],
+      "classes": [
+        {
+          "name": "Cell",
+          "methods": [],
+          "properties": [
+            "X",
+            "Y",
+            "Type",
+            "Content"
+          ],
+          "exported": true,
+          "lineCount": 6
+        }
+      ],
+      "imports": [],
+      "exports": [
+        "Cell"
+      ],
+      "totalLines": 10,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/models/gu.go": {
+      "filePath": "backend/internal/models/gu.go",
+      "contentHash": "ff5201691cb5c73fc5aa8c8319180c3638142878773e3049727ec28dbfc8b057",
+      "functions": [
+        {
+          "name": "Scan",
+          "params": [
+            "value"
+          ],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 11
+        },
+        {
+          "name": "Value",
+          "params": [],
+          "returnType": "(driver.Value, error)",
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "LoadGuRegistry",
+          "params": [
+            "db"
+          ],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 40
+        }
+      ],
+      "classes": [
+        {
+          "name": "GuDictionaryItem",
+          "methods": [],
+          "properties": [
+            "ID",
+            "Name",
+            "Rank",
+            "Path",
+            "Type",
+            "BaseManaCost",
+            "Effects",
+            "FoodTypes",
+            "HungerRate",
+            "MaxHunger",
+            "Description"
+          ],
+          "exported": true,
+          "lineCount": 13
+        }
+      ],
+      "imports": [
+        {
+          "source": "database/sql",
+          "specifiers": [
+            "sql"
+          ]
+        },
+        {
+          "source": "database/sql/driver",
+          "specifiers": [
+            "driver"
+          ]
+        },
+        {
+          "source": "encoding/json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "fmt",
+          "specifiers": [
+            "fmt"
+          ]
+        },
+        {
+          "source": "log",
+          "specifiers": [
+            "log"
+          ]
+        }
+      ],
+      "exports": [
+        "GuDictionaryItem",
+        "Scan",
+        "Value",
+        "LoadGuRegistry"
+      ],
+      "totalLines": 94,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/models/item.go": {
+      "filePath": "backend/internal/models/item.go",
+      "contentHash": "b5d33c7534af05bab3eb371ea66a15630fd0f9af7f12b54a137ebfe5f237df84",
+      "functions": [
+        {
+          "name": "Scan",
+          "params": [
+            "value"
+          ],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 11
+        },
+        {
+          "name": "Value",
+          "params": [],
+          "returnType": "(driver.Value, error)",
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "LoadItemRegistry",
+          "params": [
+            "db"
+          ],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 42
+        }
+      ],
+      "classes": [
+        {
+          "name": "ItemSpec",
+          "methods": [],
+          "properties": [
+            "ID",
+            "Name",
+            "Type",
+            "ItemType",
+            "Rarity",
+            "Rank",
+            "Path",
+            "Effects",
+            "Tags",
+            "Description"
+          ],
+          "exported": true,
+          "lineCount": 12
+        }
+      ],
+      "imports": [
+        {
+          "source": "database/sql",
+          "specifiers": [
+            "sql"
+          ]
+        },
+        {
+          "source": "database/sql/driver",
+          "specifiers": [
+            "driver"
+          ]
+        },
+        {
+          "source": "encoding/json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "fmt",
+          "specifiers": [
+            "fmt"
+          ]
+        },
+        {
+          "source": "log",
+          "specifiers": [
+            "log"
+          ]
+        }
+      ],
+      "exports": [
+        "Scan",
+        "Value",
+        "ItemSpec",
+        "LoadItemRegistry"
+      ],
+      "totalLines": 95,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/models/monster.go": {
+      "filePath": "backend/internal/models/monster.go",
+      "contentHash": "b1953fd623300fc4878b6aba7d8b19047f2a71467069a224cde079208f99267b",
+      "functions": [
+        {
+          "name": "BuildCombatStateFromMonster",
+          "params": [
+            "mon"
+          ],
+          "returnType": "CombatState",
+          "exported": true,
+          "lineCount": 20
+        },
+        {
+          "name": "CombatantFromPlayer",
+          "params": [
+            "player",
+            "stats"
+          ],
+          "returnType": "Combatant",
+          "exported": true,
+          "lineCount": 19
+        },
+        {
+          "name": "CombatantFromActiveCombat",
+          "params": [
+            "cs"
+          ],
+          "returnType": "Combatant",
+          "exported": true,
+          "lineCount": 21
+        }
+      ],
+      "classes": [
+        {
+          "name": "MonsterTemplate",
+          "methods": [],
+          "properties": [
+            "ID",
+            "Name",
+            "Type",
+            "Rank",
+            "SubRank",
+            "Path",
+            "MaxHP",
+            "BaseAttack",
+            "BaseDefense",
+            "MaxMana",
+            "CurrentMana",
+            "GuInventory",
+            "ItemInventory",
+            "DaoMarks",
+            "PathMasteries",
+            "AIProfile",
+            "LootTableID",
+            "Description"
+          ],
+          "exported": true,
+          "lineCount": 20
+        },
+        {
+          "name": "LootEntry",
+          "methods": [],
+          "properties": [
+            "ItemID",
+            "GuID",
+            "MinQty",
+            "MaxQty",
+            "Chance"
+          ],
+          "exported": true,
+          "lineCount": 7
+        },
+        {
+          "name": "LootTable",
+          "methods": [],
+          "properties": [
+            "ID",
+            "Name",
+            "Entries"
+          ],
+          "exported": true,
+          "lineCount": 5
+        },
+        {
+          "name": "MonsterSpawn",
+          "methods": [],
+          "properties": [
+            "ID",
+            "RegionID",
+            "MonsterID",
+            "X",
+            "Y",
+            "SpawnMode",
+            "Chance",
+            "RespawnSeconds",
+            "MinRank",
+            "MaxRank",
+            "IsBossSpawn",
+            "IsActive"
+          ],
+          "exported": true,
+          "lineCount": 14
+        },
+        {
+          "name": "Combatant",
+          "methods": [],
+          "properties": [
+            "ID",
+            "Name",
+            "Kind",
+            "Rank",
+            "SubRank",
+            "HP",
+            "MaxHP",
+            "CurrentMana",
+            "MaxMana",
+            "BaseAttack",
+            "BaseDefense",
+            "GuInventory",
+            "DaoMarks",
+            "PathMasteries",
+            "AIProfile",
+            "LootTableID",
+            "StatusEffects"
+          ],
+          "exported": true,
+          "lineCount": 19
+        }
+      ],
+      "imports": [],
+      "exports": [
+        "MonsterTemplate",
+        "LootEntry",
+        "LootTable",
+        "MonsterSpawn",
+        "Combatant",
+        "BuildCombatStateFromMonster",
+        "CombatantFromPlayer",
+        "CombatantFromActiveCombat"
+      ],
+      "totalLines": 135,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/models/player.go": {
+      "filePath": "backend/internal/models/player.go",
+      "contentHash": "943100b57e8fb3384cf2639f7662bd7d929a971b9bc36460d25259491784e32c",
+      "functions": [
+        {
+          "name": "Scan",
+          "params": [
+            "value"
+          ],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 11
+        },
+        {
+          "name": "Value",
+          "params": [],
+          "returnType": "(driver.Value, error)",
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "Scan",
+          "params": [
+            "value"
+          ],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 11
+        },
+        {
+          "name": "Value",
+          "params": [],
+          "returnType": "(driver.Value, error)",
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "Scan",
+          "params": [
+            "value"
+          ],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 11
+        },
+        {
+          "name": "Value",
+          "params": [],
+          "returnType": "(driver.Value, error)",
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "Scan",
+          "params": [
+            "value"
+          ],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 11
+        },
+        {
+          "name": "Value",
+          "params": [],
+          "returnType": "(driver.Value, error)",
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "Scan",
+          "params": [
+            "value"
+          ],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 11
+        },
+        {
+          "name": "Value",
+          "params": [],
+          "returnType": "(driver.Value, error)",
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "Scan",
+          "params": [
+            "value"
+          ],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 10
+        },
+        {
+          "name": "Value",
+          "params": [],
+          "returnType": "(driver.Value, error)",
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "Scan",
+          "params": [
+            "value"
+          ],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 11
+        },
+        {
+          "name": "Value",
+          "params": [],
+          "returnType": "(driver.Value, error)",
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "Scan",
+          "params": [
+            "value"
+          ],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 11
+        },
+        {
+          "name": "Value",
+          "params": [],
+          "returnType": "(driver.Value, error)",
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "Scan",
+          "params": [
+            "value"
+          ],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 11
+        },
+        {
+          "name": "Value",
+          "params": [],
+          "returnType": "(driver.Value, error)",
+          "exported": true,
+          "lineCount": 6
+        }
+      ],
+      "classes": [
+        {
+          "name": "GuInstance",
+          "methods": [],
+          "properties": [
+            "InstanceID",
+            "GuID",
+            "Hunger",
+            "Status",
+            "Equipped",
+            "IsVital"
+          ],
+          "exported": true,
+          "lineCount": 8
+        },
+        {
+          "name": "StatusEffect",
+          "methods": [],
+          "properties": [
+            "Type",
+            "Value",
+            "Turns"
+          ],
+          "exported": true,
+          "lineCount": 5
+        },
+        {
+          "name": "CombatState",
+          "methods": [
+            "Scan",
+            "Value"
+          ],
+          "properties": [
+            "EnemyTemplateID",
+            "EnemyName",
+            "EnemyType",
+            "EnemyHP",
+            "EnemyMaxHP",
+            "EnemyMana",
+            "EnemyMaxMana",
+            "EnemyDamage",
+            "EnemyDefense",
+            "EnemyRank",
+            "EnemySubRank",
+            "EnemyGuInventory",
+            "EnemyDaoMarks",
+            "EnemyPathMasteries",
+            "AIProfile",
+            "LootTableID",
+            "ChargePoints",
+            "TargetPlayerID",
+            "EnemyStatusEffects",
+            "PlayerStatusEffects",
+            "Allies",
+            "Enemies"
+          ],
+          "exported": true,
+          "lineCount": 24
+        },
+        {
+          "name": "Player",
+          "methods": [],
+          "properties": [
+            "ID",
+            "Username",
+            "PasswordHash",
+            "Rank",
+            "SubRank",
+            "AptitudeType",
+            "AptitudePercent",
+            "AptitudeGrade",
+            "CurrentMana",
+            "MaxMana",
+            "PrimevalStones",
+            "ImmortalStones",
+            "GuInventory",
+            "MaterialsInventory",
+            "WallProgress",
+            "HumanQi",
+            "HP",
+            "BaseHP",
+            "BodyMods",
+            "X",
+            "Y",
+            "ExploredCells",
+            "EquippedGus",
+            "ClearedCells",
+            "CurrentRegion",
+            "DaoMarks",
+            "PathMasteries",
+            "NextTribulationTime",
+            "TribulationCount",
+            "ActiveCombat",
+            "LastManaUpdate",
+            "CreatedAt",
+            "Lifespan",
+            "MaxLifespan",
+            "TimeSpeedMultiplier",
+            "PartyID",
+            "ArenaRank",
+            "Email",
+            "PhoneNumber"
+          ],
+          "exported": true,
+          "lineCount": 41
+        }
+      ],
+      "imports": [
+        {
+          "source": "database/sql/driver",
+          "specifiers": [
+            "driver"
+          ]
+        },
+        {
+          "source": "encoding/json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "fmt",
+          "specifiers": [
+            "fmt"
+          ]
+        },
+        {
+          "source": "time",
+          "specifiers": [
+            "time"
+          ]
+        },
+        {
+          "source": "github.com/google/uuid",
+          "specifiers": [
+            "uuid"
+          ]
+        }
+      ],
+      "exports": [
+        "GuInstance",
+        "StatusEffect",
+        "CombatState",
+        "Player",
+        "Scan",
+        "Value",
+        "Scan",
+        "Value",
+        "Scan",
+        "Value",
+        "Scan",
+        "Value",
+        "Scan",
+        "Value",
+        "Scan",
+        "Value",
+        "Scan",
+        "Value",
+        "Scan",
+        "Value",
+        "Scan",
+        "Value"
+      ],
+      "totalLines": 305,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/models/recipe.go": {
+      "filePath": "backend/internal/models/recipe.go",
+      "contentHash": "7f2c5e5bb681c7d03ee5641ff7ab660a4663f84211549f0a2b8915d59b5ce180",
+      "functions": [
+        {
+          "name": "Scan",
+          "params": [
+            "value"
+          ],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 11
+        },
+        {
+          "name": "Value",
+          "params": [],
+          "returnType": "(driver.Value, error)",
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "Scan",
+          "params": [
+            "value"
+          ],
+          "returnType": "error",
+          "exported": true,
+          "lineCount": 11
+        },
+        {
+          "name": "Value",
+          "params": [],
+          "returnType": "(driver.Value, error)",
+          "exported": true,
+          "lineCount": 6
+        }
+      ],
+      "classes": [
+        {
+          "name": "RefiningRecipe",
+          "methods": [],
+          "properties": [
+            "ID",
+            "TargetGuID",
+            "RequiredGus",
+            "RequiredMaterials",
+            "SuccessRate",
+            "PrimevalStonesCost",
+            "ImmortalEssenceStonesCost"
+          ],
+          "exported": true,
+          "lineCount": 9
+        }
+      ],
+      "imports": [
+        {
+          "source": "database/sql/driver",
+          "specifiers": [
+            "driver"
+          ]
+        },
+        {
+          "source": "encoding/json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "fmt",
+          "specifiers": [
+            "fmt"
+          ]
+        }
+      ],
+      "exports": [
+        "RefiningRecipe",
+        "Scan",
+        "Value",
+        "Scan",
+        "Value"
+      ],
+      "totalLines": 63,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/server/server.go": {
+      "filePath": "backend/internal/server/server.go",
+      "contentHash": "48d4b5132464c9c8fb3977b3270f98a78dd916a270deac96e635a63560920af0",
+      "functions": [
+        {
+          "name": "SetupRouter",
+          "params": [],
+          "returnType": "*gin.Engine",
+          "exported": true,
+          "lineCount": 150
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "net/http",
+          "specifiers": [
+            "http"
+          ]
+        },
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "strings",
+          "specifiers": [
+            "strings"
+          ]
+        },
+        {
+          "source": "github.com/gin-gonic/gin",
+          "specifiers": [
+            "gin"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/handlers",
+          "specifiers": [
+            "handlers"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/middleware",
+          "specifiers": [
+            "middleware"
+          ]
+        }
+      ],
+      "exports": [
+        "SetupRouter"
+      ],
+      "totalLines": 164,
+      "hasStructuralAnalysis": true
+    },
+    "backend/internal/worker/hunger.go": {
+      "filePath": "backend/internal/worker/hunger.go",
+      "contentHash": "4ae88a6a9e1956c1b012be7596b45d92e54d5ef5a6c5bf09de1dc7c85df76dcd",
+      "functions": [
+        {
+          "name": "StartHungerWorker",
+          "params": [
+            "db",
+            "interval"
+          ],
+          "exported": true,
+          "lineCount": 9
+        },
+        {
+          "name": "processHungerDecay",
+          "params": [
+            "db"
+          ],
+          "exported": false,
+          "lineCount": 25
+        },
+        {
+          "name": "updatePlayerGuHunger",
+          "params": [
+            "db",
+            "playerID"
+          ],
+          "returnType": "error",
+          "exported": false,
+          "lineCount": 132
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "database/sql",
+          "specifiers": [
+            "sql"
+          ]
+        },
+        {
+          "source": "encoding/json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "log",
+          "specifiers": [
+            "log"
+          ]
+        },
+        {
+          "source": "math/rand",
+          "specifiers": [
+            "rand"
+          ]
+        },
+        {
+          "source": "time",
+          "specifiers": [
+            "time"
+          ]
+        },
+        {
+          "source": "github.com/vippro67/GuWorld/backend/internal/models",
+          "specifiers": [
+            "models"
+          ]
+        }
+      ],
+      "exports": [
+        "StartHungerWorker"
+      ],
+      "totalLines": 182,
+      "hasStructuralAnalysis": true
+    },
+    "backend/Item.csv": {
+      "filePath": "backend/Item.csv",
+      "contentHash": "d07836eab1d46b06dfe63303bf56e7fb9e2ebc42cecfc72fde00626cae7c242e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 62,
+      "hasStructuralAnalysis": false
+    },
+    "backend/Recipe.csv": {
+      "filePath": "backend/Recipe.csv",
+      "contentHash": "c27f135f671d11b2f02abfa4c5ff251a034033fa0dc82d8ca03340252dccd982",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 15,
+      "hasStructuralAnalysis": false
+    },
+    "backend/server": {
+      "filePath": "backend/server",
+      "contentHash": "cdc85da7f504df0532565a7d54c039c63e13d40e6f1fac86af13bda551d01d2b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 140848,
+      "hasStructuralAnalysis": false
+    },
+    "docker-compose.yml": {
+      "filePath": "docker-compose.yml",
+      "contentHash": "8ed00daf05cd8ae7860ed0f1fc01ffe64a043206776c7e277f262c22bb76ad5e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 17,
+      "hasStructuralAnalysis": true
+    },
+    "FixGu.md": {
+      "filePath": "FixGu.md",
+      "contentHash": "f62a916e3ad87c8b1cd70e8d4da8d83059287ee879a946a75030623b23203670",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 859,
+      "hasStructuralAnalysis": true
+    },
+    "FixPhase6.md": {
+      "filePath": "FixPhase6.md",
+      "contentHash": "191a577db7ee17fc7d33c198df8e3884542f59691520b77983f57a47bd3e10af",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 62,
+      "hasStructuralAnalysis": true
+    },
+    "FixPhase7.md": {
+      "filePath": "FixPhase7.md",
+      "contentHash": "797c0cf33d026d584a1e2ce98d2db0ec1834e025f5f0d6bbde223acf9fd713e0",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 154,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/AGENTS.md": {
+      "filePath": "frontend/AGENTS.md",
+      "contentHash": "e3447d84251880fb34cfae09131cb4c57471529bbfe60976a3245793cf621627",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 6,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/CLAUDE.md": {
+      "filePath": "frontend/CLAUDE.md",
+      "contentHash": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 2,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/eslint.config.mjs": {
+      "filePath": "frontend/eslint.config.mjs",
+      "contentHash": "870f1adccecf3051cbcd9fd307cef51d7633cf510979c181a81f4b1797273493",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "eslint/config",
+          "specifiers": [
+            "defineConfig",
+            "globalIgnores"
+          ]
+        },
+        {
+          "source": "eslint-config-next/core-web-vitals",
+          "specifiers": [
+            "nextVitals"
+          ]
+        },
+        {
+          "source": "eslint-config-next/typescript",
+          "specifiers": [
+            "nextTs"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 19,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/next.config.ts": {
+      "filePath": "frontend/next.config.ts",
+      "contentHash": "614bce25b089c3f19b1e17a6346c74b858034040154c6621e7d35303004767cc",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "next",
+          "specifiers": [
+            "NextConfig"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 8,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/package.json": {
+      "filePath": "frontend/package.json",
+      "contentHash": "f2b509d621207eb829c74327ad65da5a8a6fb4ed554a1adf21de414e92ed1f80",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 29,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/postcss.config.mjs": {
+      "filePath": "frontend/postcss.config.mjs",
+      "contentHash": "dfac7ac2d86d326a0e5adb024e7943c181393ed17a5fcb8f0315b24c7da6ddde",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 8,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/README.md": {
+      "filePath": "frontend/README.md",
+      "contentHash": "60b55ff7df79af72590f9524208e46642bc32bdc175cdad41349681c0e2f958f",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 37,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/app/globals.css": {
+      "filePath": "frontend/src/app/globals.css",
+      "contentHash": "7ffd9e5c0bd8bbb6ed1b6727c313ad0ab88a926913d4904d1a2b77d58a8aaa97",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 148,
+      "hasStructuralAnalysis": false
+    },
+    "frontend/src/app/layout.tsx": {
+      "filePath": "frontend/src/app/layout.tsx",
+      "contentHash": "6896752d33bdf9b5999becff20a82727cd7f88ec05d6bd7c7f16e81b4fc02ff4",
+      "functions": [
+        {
+          "name": "RootLayout",
+          "params": [
+            "{\n  children,\n}"
+          ],
+          "exported": true,
+          "lineCount": 14
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "next",
+          "specifiers": [
+            "Metadata"
+          ]
+        },
+        {
+          "source": "next/font/google",
+          "specifiers": [
+            "Geist",
+            "Geist_Mono"
+          ]
+        },
+        {
+          "source": "./globals.css",
+          "specifiers": []
+        }
+      ],
+      "exports": [
+        "metadata",
+        "RootLayout"
+      ],
+      "totalLines": 34,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/app/page.tsx": {
+      "filePath": "frontend/src/app/page.tsx",
+      "contentHash": "f073696a922894e857b029c70baed6863a60d0ac8d14d87e68d1dd5f921f20a2",
+      "functions": [
+        {
+          "name": "Home",
+          "params": [],
+          "exported": true,
+          "lineCount": 254
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "useEffect",
+            "useState"
+          ]
+        },
+        {
+          "source": "@/store/useGameStore",
+          "specifiers": [
+            "useGameStore"
+          ]
+        },
+        {
+          "source": "@/components/Registration",
+          "specifiers": [
+            "Registration"
+          ]
+        },
+        {
+          "source": "@/components/Aperture",
+          "specifiers": [
+            "Aperture"
+          ]
+        },
+        {
+          "source": "@/components/PlayerStats",
+          "specifiers": [
+            "PlayerStats"
+          ]
+        },
+        {
+          "source": "@/components/LogConsole",
+          "specifiers": [
+            "LogConsole"
+          ]
+        },
+        {
+          "source": "@/components/GuInventory",
+          "specifiers": [
+            "GuInventory"
+          ]
+        },
+        {
+          "source": "@/components/RefiningFurnace",
+          "specifiers": [
+            "RefiningFurnace"
+          ]
+        },
+        {
+          "source": "@/components/ExplorationMap",
+          "specifiers": [
+            "ExplorationMap"
+          ]
+        },
+        {
+          "source": "@/components/CombatScreen",
+          "specifiers": [
+            "CombatScreen"
+          ]
+        },
+        {
+          "source": "@/components/CaravanShop",
+          "specifiers": [
+            "CaravanShop"
+          ]
+        },
+        {
+          "source": "lucide-react",
+          "specifiers": [
+            "Sparkles",
+            "HelpCircle"
+          ]
+        },
+        {
+          "source": "@/components/BaoHoangMarket",
+          "specifiers": [
+            "BaoHoangMarket"
+          ]
+        },
+        {
+          "source": "@/components/ArenaView",
+          "specifiers": [
+            "ArenaView"
+          ]
+        },
+        {
+          "source": "@/components/ChatConsole",
+          "specifiers": [
+            "ChatConsole"
+          ]
+        }
+      ],
+      "exports": [
+        "Home"
+      ],
+      "totalLines": 273,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/components/Aperture.tsx": {
+      "filePath": "frontend/src/components/Aperture.tsx",
+      "contentHash": "4330de0c2787deae741aee1458bcb6db251d5f18bd797ae3f6133b723fe5b006",
+      "functions": [
+        {
+          "name": "buildWavePath",
+          "params": [
+            "amplitude",
+            "wavelength",
+            "phase"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 14
+        },
+        {
+          "name": "Aperture",
+          "params": [
+            "{\n  currentMana,\n  maxMana,\n  aptitudeType,\n  aptitudePercent,\n  rank,\n  subRank,\n  guInventory = [],\n  guDictionary = {},\n}"
+          ],
+          "exported": true,
+          "lineCount": 299
+        },
+        {
+          "name": "WallControls",
+          "params": [],
+          "exported": false,
+          "lineCount": 73
+        },
+        {
+          "name": "BlessedLandControls",
+          "params": [],
+          "exported": false,
+          "lineCount": 55
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "React"
+          ]
+        },
+        {
+          "source": "react",
+          "specifiers": [
+            "useState"
+          ]
+        },
+        {
+          "source": "@/store/useGameStore",
+          "specifiers": [
+            "useGameStore"
+          ]
+        },
+        {
+          "source": "@/store/useGameStore",
+          "specifiers": [
+            "GuInstance",
+            "GuSpec"
+          ]
+        }
+      ],
+      "exports": [
+        "Aperture"
+      ],
+      "totalLines": 519,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/components/ArenaView.tsx": {
+      "filePath": "frontend/src/components/ArenaView.tsx",
+      "contentHash": "38ece38d8e4adf0c962dfbc5ef621bb9d857533e9bcced9fe04ff699e6c3a944",
+      "functions": [
+        {
+          "name": "ArenaView",
+          "params": [],
+          "exported": true,
+          "lineCount": 177
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "React",
+            "useEffect",
+            "useState"
+          ]
+        },
+        {
+          "source": "@/store/useGameStore",
+          "specifiers": [
+            "useGameStore"
+          ]
+        },
+        {
+          "source": "lucide-react",
+          "specifiers": [
+            "Swords",
+            "Trophy",
+            "ShieldAlert",
+            "Award",
+            "RefreshCw",
+            "Star"
+          ]
+        }
+      ],
+      "exports": [
+        "ArenaView"
+      ],
+      "totalLines": 184,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/components/BaoHoangMarket.tsx": {
+      "filePath": "frontend/src/components/BaoHoangMarket.tsx",
+      "contentHash": "eab4a2f364f42ea383c70427e81d1d8bd1cc191b59488c96f38f4e6e1a5c8aa7",
+      "functions": [
+        {
+          "name": "BaoHoangMarket",
+          "params": [
+            "{ player, guInventory, materials, actionLoading, listings, onRefresh, onCreate, onBid, onCancel, guDictionary, itemDictionary }"
+          ],
+          "exported": true,
+          "lineCount": 204
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "useEffect",
+            "useState"
+          ]
+        },
+        {
+          "source": "@/store/useGameStore",
+          "specifiers": [
+            "GuInstance",
+            "Player",
+            "GuSpec",
+            "ItemSpec"
+          ]
+        },
+        {
+          "source": "lucide-react",
+          "specifiers": [
+            "AlertCircle"
+          ]
+        }
+      ],
+      "exports": [
+        "BaoHoangMarket"
+      ],
+      "totalLines": 238,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/components/CaravanShop.tsx": {
+      "filePath": "frontend/src/components/CaravanShop.tsx",
+      "contentHash": "0947f21ec5417ac8ad7825c9082a7e543bbb1a6079755bfbd2d20996268b815f",
+      "functions": [
+        {
+          "name": "CaravanShop",
+          "params": [
+            "{\n  player,\n  actionLoading,\n  onBuy,\n  onSell,\n}"
+          ],
+          "exported": true,
+          "lineCount": 275
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "React",
+            "useState",
+            "useEffect"
+          ]
+        },
+        {
+          "source": "@/store/useGameStore",
+          "specifiers": [
+            "Player",
+            "useGameStore"
+          ]
+        },
+        {
+          "source": "lucide-react",
+          "specifiers": [
+            "ShoppingBag",
+            "Coins",
+            "Sparkles",
+            "AlertCircle",
+            "ShoppingCart"
+          ]
+        }
+      ],
+      "exports": [
+        "CaravanShop"
+      ],
+      "totalLines": 298,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/components/ChatConsole.tsx": {
+      "filePath": "frontend/src/components/ChatConsole.tsx",
+      "contentHash": "807acaec2b3f03b610261cd95774b790dced9be2786e8234eb6cfd9b3a930ab4",
+      "functions": [
+        {
+          "name": "ChatConsole",
+          "params": [],
+          "exported": true,
+          "lineCount": 336
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "React",
+            "useEffect",
+            "useState"
+          ]
+        },
+        {
+          "source": "@/store/useGameStore",
+          "specifiers": [
+            "useGameStore"
+          ]
+        },
+        {
+          "source": "lucide-react",
+          "specifiers": [
+            "Mail",
+            "Send",
+            "RefreshCw",
+            "Lock",
+            "AlertCircle",
+            "MessageSquare"
+          ]
+        }
+      ],
+      "exports": [
+        "ChatConsole"
+      ],
+      "totalLines": 343,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/components/CombatScreen.tsx": {
+      "filePath": "frontend/src/components/CombatScreen.tsx",
+      "contentHash": "33bf35ba7bd0185e00d9b6a9de3a023684546fcecf71430e2857146c0fe0644b",
+      "functions": [
+        {
+          "name": "getPathColor",
+          "params": [
+            "path"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 16
+        },
+        {
+          "name": "FormatKey",
+          "params": [
+            "key"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 16
+        },
+        {
+          "name": "CombatScreen",
+          "params": [
+            "{\n  player,\n  enemy,\n  guDictionary,\n  actionLoading,\n  onAttack,\n  onRetreat,\n}"
+          ],
+          "exported": true,
+          "lineCount": 547
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "React",
+            "useState",
+            "useEffect",
+            "useRef"
+          ]
+        },
+        {
+          "source": "@/store/useGameStore",
+          "specifiers": [
+            "Player",
+            "CombatState",
+            "GuSpec",
+            "GuInstance",
+            "useGameStore"
+          ]
+        },
+        {
+          "source": "lucide-react",
+          "specifiers": [
+            "Flame",
+            "Shield",
+            "Heart",
+            "Zap",
+            "Sparkles",
+            "Award",
+            "Play"
+          ]
+        }
+      ],
+      "exports": [
+        "CombatScreen"
+      ],
+      "totalLines": 597,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/components/ExplorationMap.tsx": {
+      "filePath": "frontend/src/components/ExplorationMap.tsx",
+      "contentHash": "85e4d27962066cc734b6f2f9d2a873cd96637e8f815f622098dab640b4a547ba",
+      "functions": [
+        {
+          "name": "ExplorationMap",
+          "params": [
+            "{\n  player,\n  actionLoading,\n  onExplore,\n  onBack,\n}"
+          ],
+          "exported": true,
+          "lineCount": 524
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "React",
+            "useState",
+            "useEffect"
+          ]
+        },
+        {
+          "source": "@/store/useGameStore",
+          "specifiers": [
+            "Player",
+            "useGameStore"
+          ]
+        },
+        {
+          "source": "lucide-react",
+          "specifiers": [
+            "Compass",
+            "Sparkles",
+            "MapPin",
+            "ShieldAlert",
+            "Award",
+            "Footprints",
+            "Flame",
+            "User",
+            "Gem",
+            "Flower2",
+            "HelpCircle",
+            "Wine",
+            "Users",
+            "Crown"
+          ]
+        }
+      ],
+      "exports": [
+        "ExplorationMap"
+      ],
+      "totalLines": 578,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/components/ExploreCard.tsx": {
+      "filePath": "frontend/src/components/ExploreCard.tsx",
+      "contentHash": "653d1d4582940b06ad10ae64af463ae6e7530b3e8a841c7c867e56b3c84f2bb7",
+      "functions": [
+        {
+          "name": "ExploreCard",
+          "params": [
+            "{\n  currentMana,\n  maxMana,\n  onExplore,\n  isLoading,\n  error,\n}"
+          ],
+          "exported": true,
+          "lineCount": 94
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "React"
+          ]
+        },
+        {
+          "source": "lucide-react",
+          "specifiers": [
+            "Compass",
+            "Sparkles",
+            "AlertCircle"
+          ]
+        }
+      ],
+      "exports": [
+        "ExploreCard"
+      ],
+      "totalLines": 108,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/components/GuInventory.tsx": {
+      "filePath": "frontend/src/components/GuInventory.tsx",
+      "contentHash": "7454259bfc039bb2dd906db0624ff1d485d9709e3531ec64d4c278104af62c40",
+      "functions": [
+        {
+          "name": "getPathColor",
+          "params": [
+            "path"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 16
+        },
+        {
+          "name": "FormatKey",
+          "params": [
+            "key"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 16
+        },
+        {
+          "name": "GuInventory",
+          "params": [
+            "{\n  player,\n  onFeed,\n  actionLoading,\n  guDictionary,\n  itemDictionary,\n  onEquipToggle,\n  onUseItem,\n  onUpdateStatus,\n  onSetVital,\n  onUseGu,\n  onDropGu,\n}"
+          ],
+          "exported": true,
+          "lineCount": 612
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "React",
+            "useState"
+          ]
+        },
+        {
+          "source": "@/store/useGameStore",
+          "specifiers": [
+            "Player",
+            "GuSpec",
+            "ItemSpec",
+            "GuInstance"
+          ]
+        },
+        {
+          "source": "lucide-react",
+          "specifiers": [
+            "Flower2",
+            "Wine",
+            "Gem",
+            "ShieldAlert",
+            "Sparkles",
+            "HelpCircle",
+            "Search",
+            "Shield",
+            "Zap"
+          ]
+        }
+      ],
+      "exports": [
+        "GuInventory"
+      ],
+      "totalLines": 667,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/components/LogConsole.tsx": {
+      "filePath": "frontend/src/components/LogConsole.tsx",
+      "contentHash": "646496a6a30cc350d158f0d4b7b4e4f6a2c38aec0f3788338b41ed202ad952a1",
+      "functions": [
+        {
+          "name": "LogConsole",
+          "params": [
+            "{ logs }"
+          ],
+          "exported": true,
+          "lineCount": 51
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "React",
+            "useEffect",
+            "useRef"
+          ]
+        },
+        {
+          "source": "lucide-react",
+          "specifiers": [
+            "Terminal"
+          ]
+        }
+      ],
+      "exports": [
+        "LogConsole"
+      ],
+      "totalLines": 61,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/components/PlayerStats.tsx": {
+      "filePath": "frontend/src/components/PlayerStats.tsx",
+      "contentHash": "87f79d080be28e189277cf2db3c1207d7ea8df6496e009d42bfb21f2eaedc5a7",
+      "functions": [
+        {
+          "name": "getRankName",
+          "params": [
+            "rank"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 15
+        },
+        {
+          "name": "getSubRankName",
+          "params": [
+            "subRank"
+          ],
+          "returnType": "string",
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "PlayerStats",
+          "params": [
+            "{\n  player,\n  onLogout,\n  guDictionary,\n  onEquipToggle,\n}"
+          ],
+          "exported": true,
+          "lineCount": 374
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "React",
+            "useState"
+          ]
+        },
+        {
+          "source": "@/store/useGameStore",
+          "specifiers": [
+            "Player",
+            "GuSpec",
+            "useGameStore"
+          ]
+        },
+        {
+          "source": "lucide-react",
+          "specifiers": [
+            "Award",
+            "Shield",
+            "Compass",
+            "Sparkles",
+            "PackageOpen",
+            "ShieldAlert",
+            "Zap",
+            "RadarIcon",
+            "Heart",
+            "Clock"
+          ]
+        }
+      ],
+      "exports": [
+        "PlayerStats"
+      ],
+      "totalLines": 409,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/components/RefiningFurnace.tsx": {
+      "filePath": "frontend/src/components/RefiningFurnace.tsx",
+      "contentHash": "bdafdaaad46c7eab072bfd37c36cb41aa78510b93519604f56fa2677039b526f",
+      "functions": [
+        {
+          "name": "RefiningFurnace",
+          "params": [
+            "{\n  player,\n  guDictionary,\n  itemDictionary,\n  recipes,\n  actionLoading,\n  onRefine,\n}"
+          ],
+          "exported": true,
+          "lineCount": 698
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "React",
+            "useState",
+            "useEffect",
+            "useRef"
+          ]
+        },
+        {
+          "source": "@/store/useGameStore",
+          "specifiers": [
+            "Player",
+            "GuSpec",
+            "ItemSpec",
+            "RefiningRecipe",
+            "GuInstance",
+            "useGameStore"
+          ]
+        },
+        {
+          "source": "lucide-react",
+          "specifiers": [
+            "Flame",
+            "Sparkles",
+            "AlertCircle",
+            "Check",
+            "X",
+            "RefreshCw",
+            "Coins",
+            "Zap",
+            "Trophy",
+            "HelpCircle",
+            "ChevronDown",
+            "Search"
+          ]
+        }
+      ],
+      "exports": [
+        "RefiningFurnace"
+      ],
+      "totalLines": 714,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/components/Registration.tsx": {
+      "filePath": "frontend/src/components/Registration.tsx",
+      "contentHash": "ed9025c0df758f32e7297b3c4166a1d35903fd709536b40e4242b44c1253c6af",
+      "functions": [
+        {
+          "name": "Registration",
+          "params": [
+            "{\n  onRegister,\n  onLogin,\n  isLoading,\n  error,\n  onClearError,\n}"
+          ],
+          "exported": true,
+          "lineCount": 277
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "react",
+          "specifiers": [
+            "React",
+            "useState"
+          ]
+        },
+        {
+          "source": "lucide-react",
+          "specifiers": [
+            "Sparkles",
+            "Compass",
+            "ShieldAlert",
+            "KeyRound",
+            "User",
+            "Eye",
+            "EyeOff",
+            "Mail",
+            "Phone"
+          ]
+        }
+      ],
+      "exports": [
+        "Registration"
+      ],
+      "totalLines": 291,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/src/store/useGameStore.ts": {
+      "filePath": "frontend/src/store/useGameStore.ts",
+      "contentHash": "aebb567eea3bb09de9950bc604cd90276a66faac7155bc248194a25c6634054a",
+      "functions": [
+        {
+          "name": "authFetch",
+          "params": [
+            "input",
+            "init"
+          ],
+          "exported": false,
+          "lineCount": 5
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "zustand",
+          "specifiers": [
+            "create"
+          ]
+        }
+      ],
+      "exports": [
+        "useGameStore"
+      ],
+      "totalLines": 1338,
+      "hasStructuralAnalysis": true
+    },
+    "frontend/tsconfig.json": {
+      "filePath": "frontend/tsconfig.json",
+      "contentHash": "5c51df4c59f4510d8c7dadf07a5c32132228826a3b331da5e286207b4df7ef9c",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 35,
+      "hasStructuralAnalysis": true
+    },
+    "GameplayCore_DesignSpec.md": {
+      "filePath": "GameplayCore_DesignSpec.md",
+      "contentHash": "bfaa289791a7d83c52cf529fcb7e0b55bbe68459d5a1094008159480fb116bbb",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 148,
+      "hasStructuralAnalysis": true
+    },
+    "GuListBasic.txt": {
+      "filePath": "GuListBasic.txt",
+      "contentHash": "dee85c07c007104cdc976f67fd92261d44a99677466b314c2b78df6c63a54384",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 84,
+      "hasStructuralAnalysis": false
+    },
+    "ItemGuild.md": {
+      "filePath": "ItemGuild.md",
+      "contentHash": "57b2d016568858ac7fc04d785be2c0ce17e380a5fc80b4e3304acb7e33a6ff86",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 915,
+      "hasStructuralAnalysis": true
+    },
+    "ItemListBasic.txt": {
+      "filePath": "ItemListBasic.txt",
+      "contentHash": "65546867bf8b2ff4805e404c8921dceab952e484c0980ea6ce3fc469f074501b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 77,
+      "hasStructuralAnalysis": false
+    },
+    "LEVEL.txt": {
+      "filePath": "LEVEL.txt",
+      "contentHash": "373a2f9aa4e92e8e77432886356ee341df2ca819843037c2c16eed94e703b870",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 46,
+      "hasStructuralAnalysis": false
+    },
+    "MonsterBossGuild.md": {
+      "filePath": "MonsterBossGuild.md",
+      "contentHash": "be925115ca0e31f965d0a5ee170b458a1e948cde644938986d26a96cf07eb1cd",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1025,
+      "hasStructuralAnalysis": true
+    },
+    "OtherOptimize.md": {
+      "filePath": "OtherOptimize.md",
+      "contentHash": "3f5aba8fef117465e9f1f2c7b7fb47e9c40a7fbd02ef8dc8e83ed11e8f8440ad",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 36,
+      "hasStructuralAnalysis": true
+    },
+    "Phase1.md": {
+      "filePath": "Phase1.md",
+      "contentHash": "853498585c4616d2c19d2cb7a4411505689249416a932449793b7997cc6ad5b6",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 73,
+      "hasStructuralAnalysis": true
+    },
+    "Phase10.md": {
+      "filePath": "Phase10.md",
+      "contentHash": "d0e6ebabcc482dd6b1ea0b755c7abded8124394a61d0c9b0828ceceea2d18b62",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 43,
+      "hasStructuralAnalysis": true
+    },
+    "Phase2.md": {
+      "filePath": "Phase2.md",
+      "contentHash": "e942f54717189d0a2d37cbafc8561fe72fd00f75c8c35c730692168bd6f80b2d",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 74,
+      "hasStructuralAnalysis": true
+    },
+    "Phase3.md": {
+      "filePath": "Phase3.md",
+      "contentHash": "4b975470817083c1b97300aaea391a82e66bb052f610dc70577abbf3f123c2ca",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 66,
+      "hasStructuralAnalysis": true
+    },
+    "Phase4-5.md": {
+      "filePath": "Phase4-5.md",
+      "contentHash": "6ef04d7c7817d4fa7e9c38331cff9759a3c12de3a362ff45cb47433f03926eac",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 74,
+      "hasStructuralAnalysis": true
+    },
+    "Phase8.md": {
+      "filePath": "Phase8.md",
+      "contentHash": "901029fe3c2159029878d47aa7ea0fef6e9aa47601a8bf8bfadfa43f4b209320",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 49,
+      "hasStructuralAnalysis": true
+    },
+    "Phase9.md": {
+      "filePath": "Phase9.md",
+      "contentHash": "fcb0ef90b0fa489adc0ec07bf03399a46ae146caef0719fde5de6253d04e5115",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 124,
+      "hasStructuralAnalysis": true
+    },
+    "PROJECT.md": {
+      "filePath": "PROJECT.md",
+      "contentHash": "4b24bd22821d60b83e299adaeaa44e8e19cf55d12e00e88cb608f73d103e6d94",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 74,
+      "hasStructuralAnalysis": true
+    },
+    "WorldBuild.md": {
+      "filePath": "WorldBuild.md",
+      "contentHash": "05cb4ca261c977c6c271901dbf151c0ea7aa19b13b1a82931bd324f8d27eaf08",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 70,
+      "hasStructuralAnalysis": true
+    }
+  }
+}

@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -83,7 +84,8 @@ func InitSchema() error {
 		hunger_rate INTEGER NOT NULL,
 		food_types JSONB NOT NULL DEFAULT '[]',
 		max_hunger INTEGER DEFAULT 100,
-		description TEXT
+		description TEXT,
+		target_type VARCHAR(50) NOT NULL DEFAULT 'SINGLE'
 	);`)
 	if err != nil {
 		return fmt.Errorf("failed to create gu_dictionary table: %w", err)
@@ -131,7 +133,9 @@ func InitSchema() error {
 		path_masteries JSONB NOT NULL DEFAULT '{}',
 		active_combat JSONB DEFAULT NULL,
 		last_mana_update TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		aperture_stress DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+		last_cultivate_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);
 	`
 	_, err = DB.Exec(query)
@@ -341,6 +345,13 @@ func InitSchema() error {
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS email VARCHAR(100) NULL;`, "email"},
 		{`CREATE UNIQUE INDEX IF NOT EXISTS players_email_idx ON players (email) WHERE email IS NOT NULL AND email != '';`, "players_email_idx"},
 		{`CREATE UNIQUE INDEX IF NOT EXISTS players_phone_number_idx ON players (phone_number) WHERE phone_number IS NOT NULL AND phone_number != '';`, "players_phone_number_idx"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS completed_quests JSONB NOT NULL DEFAULT '[]';`, "completed_quests"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS temp_loot JSONB NOT NULL DEFAULT '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}';`, "temp_loot"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS explore_count INTEGER NOT NULL DEFAULT 0;`, "explore_count"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS last_explore_reset TIMESTAMP NOT NULL DEFAULT NOW();`, "last_explore_reset"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS aperture_stress DOUBLE PRECISION NOT NULL DEFAULT 0.0;`, "aperture_stress"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS last_cultivate_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;`, "last_cultivate_time"},
+		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS target_type VARCHAR(50) NOT NULL DEFAULT 'SINGLE';`, "target_type"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {
@@ -618,14 +629,33 @@ func seedGusFromCSV(filename string) error {
 			foodTypesJSON = fmt.Sprintf(`["%s"]`, foodType)
 		}
 
+		var effMap map[string]interface{}
+		_ = json.Unmarshal([]byte(effectsRaw), &effMap)
+
+		targetType := "SINGLE"
+		if effMap != nil {
+			if _, ok := effMap["aoe_row"]; ok {
+				targetType = "ROW"
+			} else if _, ok := effMap["aoe_col"]; ok {
+				targetType = "COL"
+			} else if _, ok := effMap["aoe_cross"]; ok {
+				targetType = "CROSS"
+			} else if _, ok := effMap["aoe_all"]; ok {
+				targetType = "ALL"
+			} else if _, ok := effMap["aoe"]; ok {
+				targetType = "ALL"
+			}
+		}
+
 		_, err := DB.Exec(`
-			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, origin_region, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10::jsonb, $11, $12)
+			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, origin_region, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description, target_type)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10::jsonb, $11, $12, $13)
 			ON CONFLICT (id) DO UPDATE
 			SET name=EXCLUDED.name, rank=EXCLUDED.rank, path=EXCLUDED.path, gu_type=EXCLUDED.gu_type,
 			    origin_region=EXCLUDED.origin_region, base_mana_cost=EXCLUDED.base_mana_cost, effects=EXCLUDED.effects,
-			    hunger_rate=EXCLUDED.hunger_rate, food_types=EXCLUDED.food_types, max_hunger=EXCLUDED.max_hunger, description=EXCLUDED.description
-		`, id, name, rank, path, guType, origin, manaCost, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc)
+			    hunger_rate=EXCLUDED.hunger_rate, food_types=EXCLUDED.food_types, max_hunger=EXCLUDED.max_hunger, description=EXCLUDED.description,
+			    target_type=EXCLUDED.target_type
+		`, id, name, rank, path, guType, origin, manaCost, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType)
 		if err != nil {
 			return fmt.Errorf("upsert gu %s: %w", id, err)
 		}

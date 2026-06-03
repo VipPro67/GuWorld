@@ -74,6 +74,7 @@ func SetupRouter() *gin.Engine {
 			player.POST("/explore/:id", handlers.Explore)
 			player.POST("/use-item", handlers.UseItem)
 			player.POST("/recharge", handlers.RechargeWithStones)
+			player.POST("/clear-stress", handlers.ClearStress)
 		}
 
 		cultivate := api.Group("/cultivate")
@@ -83,6 +84,12 @@ func SetupRouter() *gin.Engine {
 			cultivate.POST("/use-relic-gu", handlers.UseRelicGu)
 			cultivate.POST("/ascension", handlers.Ascension)
 			cultivate.POST("/tribulation", handlers.Tribulation)
+		}
+
+		quest := api.Group("/quest")
+		quest.Use(middleware.AuthRequired())
+		{
+			quest.POST("/complete", handlers.CompleteQuest)
 		}
 
 		// Protected Inventory Endpoints

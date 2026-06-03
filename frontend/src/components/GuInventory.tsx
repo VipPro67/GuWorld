@@ -427,6 +427,22 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                             <span className="text-emerald-450 font-bold">+{val}</span>
                           </div>
                         ))}
+                        {spec.gu_type === "Passive" && (
+                          <div className="pt-1.5 mt-1.5 border-t border-dashed border-zinc-900/40 space-y-1">
+                            <div className="flex justify-between text-[9px] font-mono">
+                              <span className="text-zinc-505">Dung hợp Đạo Ngân:</span>
+                              <span className="text-amber-400 font-bold">
+                                {Math.round((gu.integration_time || 0) * 20)}%
+                              </span>
+                            </div>
+                            <div className="w-full bg-zinc-900 rounded-full h-1 overflow-hidden">
+                              <div
+                                className="bg-amber-500 h-full rounded-full transition-all duration-500 shadow-[0_0_4px_rgba(245,158,11,0.5)]"
+                                style={{ width: `${Math.min(100, (gu.integration_time || 0) * 20)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 

@@ -332,45 +332,6 @@ export const PlayerStats: React.FC<PlayerStatsProps> = ({
             </svg>
           </div>
 
-          {/* Active Gu slots section */}
-          <div className="pt-2 border-t border-zinc-900/60">
-            <div className="flex items-center gap-1.5 mb-2">
-              <RadarIcon className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono">
-                Cổ Trùng Bản Mệnh Kích Hoạt ({equippedGus.length}/6)
-              </span>
-            </div>
-            <div className="space-y-1.5 max-h-36 overflow-y-auto">
-              {equippedGus.length > 0 ? (
-                equippedGus.map((gu) => {
-                  const spec = guDictionary[gu.gu_id] || { name: gu.gu_id, rank: 1, path: "Unknown" };
-                  return (
-                    <div
-                      key={gu.instance_id}
-                      className="flex justify-between items-center bg-zinc-950/40 border border-zinc-900 rounded-lg p-2 text-xs"
-                    >
-                      <div className="text-left">
-                        <div className="font-semibold text-zinc-200">{spec.name}</div>
-                        <div className="text-[8px] text-zinc-500 font-mono">
-                          Rank {spec.rank} | {spec.path}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleUnequip(gu.instance_id)}
-                        disabled={actionLoading}
-                        className="text-[9px] font-bold text-rose-400 hover:text-rose-300 border border-rose-950 bg-rose-950/10 px-2 py-1 rounded hover:bg-rose-950/20 active:scale-[0.98] transition-all cursor-pointer font-mono"
-                      >
-                        Tháo
-                      </button>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="text-[9px] text-zinc-600 italic">Chưa kích hoạt Cổ trùng bản mệnh.</div>
-              )}
-            </div>
-          </div>
-
           {/* Path Masteries Section */}
           <div className="mt-4 pt-3 border-t border-zinc-900/60">
             <span className="text-[9px] text-zinc-500 uppercase tracking-wider block mb-2 font-mono">

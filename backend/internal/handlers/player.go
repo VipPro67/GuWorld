@@ -150,9 +150,9 @@ func RegisterPlayer(c *gin.Context) {
 
 	var player models.Player
 	query := `
-		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, max_lifespan, time_speed_multiplier, email, phone_number)
-		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 0, 0, $8, $9, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, '[]'::jsonb, '{}'::jsonb, $10, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 100.0, 1.0, $11, $12)
-		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, email, phone_number
+		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, max_lifespan, time_speed_multiplier, email, phone_number, completed_quests, temp_loot, explore_count, last_explore_reset)
+		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 0, 0, $8, $9, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, '[]'::jsonb, '{}'::jsonb, $10, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 100.0, 1.0, $11, $12, '[]'::jsonb, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW())
+		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, email, phone_number, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time
 	`
 
 	var activeCombatBytes []byte
@@ -166,7 +166,8 @@ func RegisterPlayer(c *gin.Context) {
 		&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries, &activeCombatBytes,
 		&player.LastManaUpdate, &player.CreatedAt,
 		&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
-		&player.Email, &player.PhoneNumber,
+		&player.Email, &player.PhoneNumber, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+		&player.ApertureStress, &player.LastCultivateTime,
 	)
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
@@ -211,7 +212,7 @@ func LoginPlayer(c *gin.Context) {
 	var passwordHash string
 
 	query := `
-		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), COALESCE(phone_number, '')
+		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), COALESCE(phone_number, ''), completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time
 		FROM players
 		WHERE username = $1 OR email = $1 OR phone_number = $1
 	`
@@ -226,7 +227,8 @@ func LoginPlayer(c *gin.Context) {
 		&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries, &activeCombatBytes,
 		&player.LastManaUpdate, &player.CreatedAt,
 		&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
-		&player.Email, &player.PhoneNumber,
+		&player.Email, &player.PhoneNumber, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+		&player.ApertureStress, &player.LastCultivateTime,
 	)
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
@@ -774,7 +776,7 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	var player models.Player
 
 	query := `
-		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), COALESCE(phone_number, '')
+		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), COALESCE(phone_number, ''), completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time
 		FROM players
 		WHERE id = $1
 		FOR UPDATE
@@ -790,7 +792,8 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 		&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries, &activeCombatBytes,
 		&player.LastManaUpdate, &player.CreatedAt,
 		&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
-		&player.Email, &player.PhoneNumber,
+		&player.Email, &player.PhoneNumber, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+		&player.ApertureStress, &player.LastCultivateTime,
 	)
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
@@ -852,15 +855,32 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 		poolChanged = true
 	}
 
+	// Real-time Aperture Stress Decay: 10.0% per hour in real time
+	if player.ApertureStress > 0 && !player.LastCultivateTime.IsZero() {
+		elapsedHours := now.Sub(player.LastCultivateTime).Hours()
+		if elapsedHours > 0 {
+			decay := elapsedHours * 10.0
+			newStress := player.ApertureStress - decay
+			if newStress < 0 {
+				newStress = 0
+			}
+			if newStress != player.ApertureStress {
+				player.ApertureStress = newStress
+				player.LastCultivateTime = now
+				poolChanged = true
+			}
+		}
+	}
+
 	if poolChanged {
 		player.LastManaUpdate = now
 
 		updateQuery := `
 			UPDATE players
-			SET current_mana = $1, max_mana = $2, last_mana_update = $3, lifespan = $4, max_lifespan = $5, time_speed_multiplier = $6
-			WHERE id = $7
+			SET current_mana = $1, max_mana = $2, last_mana_update = $3, lifespan = $4, max_lifespan = $5, time_speed_multiplier = $6, aperture_stress = $7, last_cultivate_time = $8
+			WHERE id = $9
 		`
-		_, err = tx.Exec(updateQuery, player.CurrentMana, player.MaxMana, player.LastManaUpdate, player.Lifespan, player.MaxLifespan, player.TimeSpeedMultiplier, player.ID)
+		_, err = tx.Exec(updateQuery, player.CurrentMana, player.MaxMana, player.LastManaUpdate, player.Lifespan, player.MaxLifespan, player.TimeSpeedMultiplier, player.ApertureStress, player.LastCultivateTime, player.ID)
 		if err != nil {
 			return player, err
 		}
@@ -893,10 +913,15 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 	for _, mod := range player.BodyMods {
 		switch mod {
 		case "Iron Bone":
-			stats["defense"] += 15.0
-			stats["attack"] += 5.0
+			stats["defense"] += 100.0
 		case "Jade Skin Mod":
-			stats["defense"] += 25.0
+			stats["defense"] += 40.0
+		case "Copper Skin Mod":
+			stats["defense"] += 20.0
+		case "White Boar Strength":
+			stats["attack"] += 15.0
+		case "Black Boar Strength":
+			stats["attack"] += 15.0
 		case "Wind Walk":
 			stats["movement"] += 1.0
 		}
@@ -923,6 +948,9 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 			}
 		}
 	}
+
+	// Add storage capacity bonus based on dynamic strength/attack
+	stats["storage"] += math.Floor(stats["attack"] * 0.5)
 
 	return stats
 }

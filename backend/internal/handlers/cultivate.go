@@ -86,44 +86,74 @@ func BreakWall(c *gin.Context) {
 
 	// Base success chance and progress calculation
 	manaRatio := req.ManaSpend / math.Max(1.0, player.MaxMana)
-	baseSuccess := 0.15
-	successChance := math.Min(0.95, baseSuccess+manaRatio*0.5*aptMul)
+	progressGain := manaRatio * (0.2 + 0.3*aptMul) / (float64(player.Rank) + float64(player.SubRank)/4.0)
 
-	progressGain := manaRatio * (0.2 + 0.3*aptMul)
+	if player.ApertureStress >= 80.0 {
+		progressGain *= 0.25
+	}
+
 	player.WallProgress += progressGain
+	success := player.WallProgress >= 1.0
+	player.ApertureStress += 5.0
+	player.LastCultivateTime = time.Now()
 
-	success := false
-	// Automatic success if progress reached 1.0
-	if player.WallProgress >= 1.0 {
-		success = true
-	} else {
-		if rand.Float64() < successChance {
-			success = true
+	cracked := false
+	if player.ApertureStress >= 100.0 {
+		cracked = true
+		player.ApertureStress = 50.0
+		// Crack penalty: lose permanent 5% MaxMana (clamped at minimum 20.0)
+		player.MaxMana = math.Max(20.0, math.Round(player.MaxMana*0.95))
+		if player.CurrentMana > player.MaxMana {
+			player.CurrentMana = player.MaxMana
 		}
+		// Demote sub-rank by 1 (or rank by 1 if sub-rank was 1)
+		if player.SubRank > 1 {
+			player.SubRank -= 1
+		} else if player.Rank > 1 {
+			player.Rank -= 1
+			player.SubRank = 4
+		} else {
+			player.SubRank = 1
+		}
+		player.WallProgress = 0.0
 	}
 
 	msg := "Hãy tiếp tục trùng kích không khiếu của bạn!"
-	if success {
+	if cracked {
+		msg = "Cảnh báo: Áp lực Không Khiếu vượt quá giới hạn (100%), Không khiếu bị nứt vỡ! Đạo hữu bị rớt tu vi và tổn thất vĩnh viễn 5% chân nguyên tối đa!"
+	} else if success {
 		// Advance sub-rank
-		player.SubRank += 1
-		if player.SubRank > 4 {
-			player.SubRank = 1
-			player.Rank += 1
+		if player.Rank == 5 && player.SubRank == 4 {
+			player.WallProgress = 1.0
+			msg = "Bạn đã mài mòn vách không khiếu đến cực hạn Ngũ Chuyển Đỉnh Phong. Muốn tiến lên Lục Chuyển cần thực hiện Thăng Tiên, không thể dùng trùng kích thường."
+		} else {
+			player.SubRank += 1
+			if player.SubRank > 4 {
+				player.SubRank = 1
+				player.Rank += 1
+			}
+			// On success reset progress
+			player.WallProgress = 0.0
+			// If rank < 6 => mana not change, if rank 6+ then max mana is infinite so we don't need to adjust it
+			if player.Rank >= 6 {
+				player.MaxMana = math.Inf(1)
+			}
+			// Increase human_qi by 30 for breakthrough
+			player.HumanQi += 30.0
+			if player.HumanQi > 1000.0 {
+				player.HumanQi = 1000.0
+			}
+			msg = "Chúc mừng! Bạn đã trùng kích vỡ nát được một tầng khiếu, tiến lên tu vi cao hơn!"
 		}
-		// On success reset progress
-		player.WallProgress = 0.0
-		// Increase max mana slightly on breakthroughs
-		player.MaxMana = math.Round(player.MaxMana * 1.10)
-		player.CurrentMana = math.Min(player.CurrentMana, player.MaxMana)
-		msg = "Chúc mừng! Bạn đã trùng kích vỡ nát được một tầng khiếu, tiến lên tu vi cao hơn!"
 	}
 
 	// Persist changes
 	updateQuery := `
-        UPDATE players SET current_mana = $1, primeval_stones = $2, wall_progress = $3, max_mana = $4, sub_rank = $5, rank = $6, last_mana_update = $7
-        WHERE id = $8
+        UPDATE players 
+        SET current_mana = $1, primeval_stones = $2, wall_progress = $3, max_mana = $4, sub_rank = $5, rank = $6, last_mana_update = $7, human_qi = $8, aperture_stress = $9, last_cultivate_time = $10
+        WHERE id = $11
     `
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.WallProgress, player.MaxMana, player.SubRank, player.Rank, player.LastManaUpdate, player.ID)
+	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.WallProgress, player.MaxMana, player.SubRank, player.Rank, player.LastManaUpdate, player.HumanQi, player.ApertureStress, player.LastCultivateTime, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save cultivation progress"})
 		return
@@ -134,7 +164,7 @@ func BreakWall(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, BreakWallResponse{Player: player, Success: success, Message: msg})
+	c.JSON(http.StatusOK, BreakWallResponse{Player: player, Success: success && !cracked, Message: msg})
 }
 
 // UseRelicGu consumes a relic item to instantly increase sub-rank
@@ -181,11 +211,17 @@ func UseRelicGu(c *gin.Context) {
 	// Reset wall progress
 	player.WallProgress = 0.0
 
+	// Increase human_qi by 30 for breakthrough
+	player.HumanQi += 30.0
+	if player.HumanQi > 1000.0 {
+		player.HumanQi = 1000.0
+	}
+
 	updateQuery := `
-        UPDATE players SET materials_inventory = $1, sub_rank = $2, rank = $3, wall_progress = $4
-        WHERE id = $5
+        UPDATE players SET materials_inventory = $1, sub_rank = $2, rank = $3, wall_progress = $4, human_qi = $5
+        WHERE id = $6
     `
-	_, err = tx.Exec(updateQuery, player.MaterialsInventory, player.SubRank, player.Rank, player.WallProgress, player.ID)
+	_, err = tx.Exec(updateQuery, player.MaterialsInventory, player.SubRank, player.Rank, player.WallProgress, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to apply Relic Gu"})
 		return
@@ -359,4 +395,201 @@ func Tribulation(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"player": player, "message": "Thiên kiếp giáng lâm! Hãy chuẩn bị chiến đấu!"})
+}
+
+// CompleteQuestRequest defines body to complete a main quest and gain human_qi
+type CompleteQuestRequest struct {
+	QuestID string `json:"quest_id" binding:"required"`
+}
+
+// CompleteQuest rewards player with +50 human_qi if they meet requirements
+func CompleteQuest(c *gin.Context) {
+	var req CompleteQuestRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	authID, ok := middleware.GetPlayerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		return
+	}
+
+	// Check if already completed
+	for _, q := range player.CompletedQuests {
+		if q == req.QuestID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Nhiệm vụ này đã được hoàn thành trước đó"})
+			return
+		}
+	}
+
+	// Validate quest requirements
+	valid := false
+	msg := ""
+	switch req.QuestID {
+	case "quest_1_awaken":
+		// Awaken Aperture: rank >= 1
+		if player.Rank >= 1 {
+			valid = true
+			msg = "Hoàn thành nhiệm vụ 'Giác Tỉnh Không Khiếu'! Đạo hải dâng trào."
+		} else {
+			msg = "Chưa đạt yêu cầu: Cần ít nhất tu vi Nhất Chuyển."
+		}
+	case "quest_2_vital_gu":
+		// Obtain vital gu: has at least one vital gu or any gu in inventory
+		hasGu := false
+		for _, g := range player.GuInventory {
+			if g.IsVital || g.Equipped {
+				hasGu = true
+				break
+			}
+		}
+		if hasGu {
+			valid = true
+			msg = "Hoàn thành nhiệm vụ 'Kích Hoạt Cổ Trùng Bản Mệnh'! Sức mạnh liên kết."
+		} else {
+			msg = "Chưa đạt yêu cầu: Cần trang bị hoặc kích hoạt ít nhất 1 Cổ trùng."
+		}
+	case "quest_3_rank_2":
+		// Breakthrough to Rank 2: rank >= 2
+		if player.Rank >= 2 {
+			valid = true
+			msg = "Hoàn thành nhiệm vụ 'Đột Phá Nhị Chuyển'! Danh vọng vang xa."
+		} else {
+			msg = "Chưa đạt yêu cầu: Cần tu vi Nhị Chuyển trở lên."
+		}
+	case "quest_4_refine_gu":
+		// Refine a Gu bug (has at least 1 Rank 2 or higher Gu bug in inventory)
+		hasRank2 := false
+		for _, g := range player.GuInventory {
+			if spec, ok := models.GuRegistry[g.GuID]; ok && spec.Rank >= 2 {
+				hasRank2 = true
+				break
+			}
+		}
+		if hasRank2 {
+			valid = true
+			msg = "Hoàn thành nhiệm vụ 'Hợp Luyện Nhị Chuyển Cổ'! Kỳ tích luyện đạo."
+		} else {
+			msg = "Chưa đạt yêu cầu: Cần sở hữu ít nhất một Cổ trùng Nhị Chuyển."
+		}
+	case "quest_5_fame":
+		// Clear cells count >= 5
+		if len(player.ClearedCells) >= 5 {
+			valid = true
+			msg = "Hoàn thành nhiệm vụ 'Danh Chấn Thanh Bản Thôn'! Người người kính ngưỡng."
+		} else {
+			msg = "Chưa đạt yêu cầu: Cần chiến thắng quái vật để dọn sạch ít nhất 5 ô bản đồ."
+		}
+	case "quest_6_rank_5":
+		// Reach Rank 5
+		if player.Rank >= 5 {
+			valid = true
+			msg = "Hoàn thành nhiệm vụ 'Đỉnh Phong Chuẩn Bị'! Cận kề thăng tiên."
+		} else {
+			msg = "Chưa đạt yêu cầu: Cần đạt tu vi Ngũ Chuyển."
+		}
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Nhiệm vụ không tồn tại"})
+		return
+	}
+
+	if !valid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		return
+	}
+
+	// Reward human_qi
+	player.HumanQi += 50.0
+	if player.HumanQi > 1000.0 {
+		player.HumanQi = 1000.0
+	}
+	player.CompletedQuests = append(player.CompletedQuests, req.QuestID)
+
+	// Save player
+	updateQuery := `
+		UPDATE players SET human_qi = $1, completed_quests = $2
+		WHERE id = $3
+	`
+	_, err = tx.Exec(updateQuery, player.HumanQi, player.CompletedQuests, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update quest status"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"player":  player,
+		"message": msg + " Nhận được 50 Nhân Khí!",
+	})
+}
+
+// ClearStress allows paying 100 Primeval Stones to reduce ApertureStress by 50%
+func ClearStress(c *gin.Context) {
+	authID, ok := middleware.GetPlayerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		return
+	}
+
+	if player.PrimevalStones < 100 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch (Cần 100 Nguyên Thạch)"})
+		return
+	}
+
+	// Deduct stones and reduce stress
+	player.PrimevalStones -= 100
+	player.ApertureStress = math.Max(0.0, player.ApertureStress-50.0)
+
+	updateQuery := `
+		UPDATE players 
+		SET primeval_stones = $1, aperture_stress = $2
+		WHERE id = $3
+	`
+	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ApertureStress, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player stress"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"player":  player,
+		"message": "Không khiếu đã được tịnh hóa thành công! Giảm 50% áp lực.",
+	})
 }

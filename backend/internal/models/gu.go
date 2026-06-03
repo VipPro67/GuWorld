@@ -24,6 +24,7 @@ type GuDictionaryItem struct {
 	HungerRate   int       `json:"hunger_rate"` // Hunger lost per tick
 	MaxHunger    int       `json:"max_hunger"`
 	Description  string    `json:"description"`
+	TargetType   string    `json:"target_type"` // e.g. "SINGLE", "ROW", "COL", "ALL", "CROSS"
 }
 
 // Scan implements the sql.Scanner interface for GuEffects
@@ -36,7 +37,36 @@ func (g *GuEffects) Scan(value interface{}) error {
 	if !ok {
 		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 	}
-	return json.Unmarshal(b, g)
+
+	var rawEffects map[string]json.RawMessage
+	if err := json.Unmarshal(b, &rawEffects); err != nil {
+		return err
+	}
+
+	effects := make(GuEffects, len(rawEffects))
+	for key, raw := range rawEffects {
+		var number float64
+		if err := json.Unmarshal(raw, &number); err == nil {
+			effects[key] = number
+			continue
+		}
+
+		// Older dictionary rows used JSON booleans for feature flags.
+		var flag bool
+		if err := json.Unmarshal(raw, &flag); err == nil {
+			if flag {
+				effects[key] = 1
+			} else {
+				effects[key] = 0
+			}
+			continue
+		}
+
+		return fmt.Errorf("effect %q must be a number or boolean", key)
+	}
+
+	*g = effects
+	return nil
 }
 
 // Value implements the driver.Valuer interface for GuEffects
@@ -53,7 +83,7 @@ var GuRegistry = make(map[string]GuDictionaryItem)
 // LoadGuRegistry queries the database and populates the in-memory cache
 func LoadGuRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
-		SELECT id, name, rank, path, gu_type, base_mana_cost, effects, food_types, hunger_rate, max_hunger, description 
+		SELECT id, name, rank, path, gu_type, base_mana_cost, effects, food_types, hunger_rate, max_hunger, description, target_type
 		FROM gu_dictionary
 	`)
 	if err != nil {
@@ -72,7 +102,7 @@ func LoadGuRegistry(db *sql.DB) error {
 			&item.ID, &item.Name, &item.Rank, &item.Path,
 			&item.Type, &item.BaseManaCost,
 			&item.Effects, &foodTypesRaw, &item.HungerRate,
-			&item.MaxHunger, &item.Description,
+			&item.MaxHunger, &item.Description, &item.TargetType,
 		)
 		if err != nil {
 			log.Printf("Warning: failed to scan Gu spec row: %v", err)

@@ -39,6 +39,7 @@ export const LogConsole: React.FC<LogConsoleProps> = ({ logs }) => {
           return (
             <div
               key={index}
+              style={{ whiteSpace: "pre-line" }}
               className={`p-2 rounded-lg transition-colors border leading-relaxed ${
                 isNewest
                   ? isError

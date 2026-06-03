@@ -201,6 +201,29 @@ func isCellClearedRecently(player *models.Player, x, y int, cooldown time.Durati
 	return time.Since(t) < cooldown
 }
 
+// cleanupExpiredClearedCells removes cells from player.ClearedCells that have exceeded the cooldown duration.
+// Returns true if any cells were removed.
+func cleanupExpiredClearedCells(player *models.Player, cooldown time.Duration) bool {
+	if player.ClearedCells == nil {
+		return false
+	}
+	changed := false
+	now := time.Now()
+	for coord, timeStr := range player.ClearedCells {
+		t, err := time.Parse(time.RFC3339, timeStr)
+		if err != nil {
+			delete(player.ClearedCells, coord)
+			changed = true
+			continue
+		}
+		if now.Sub(t) >= cooldown {
+			delete(player.ClearedCells, coord)
+			changed = true
+		}
+	}
+	return changed
+}
+
 // GetGrid retrieves the viewport viewport within vision range
 func GetGrid(c *gin.Context) {
 	authID, exists := middleware.GetPlayerID(c)
@@ -220,6 +243,14 @@ func GetGrid(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
 		return
+	}
+
+	cleaned := cleanupExpiredClearedCells(&player, 2*time.Minute)
+	if cleaned {
+		_, err = tx.Exec("UPDATE players SET cleared_cells = $1 WHERE id = $2", player.ClearedCells, player.ID)
+		if err != nil {
+			log.Println("Failed to save cleaned up cleared_cells:", err)
+		}
 	}
 
 	stats := CalculatePlayerStats(&player)
@@ -258,7 +289,7 @@ func GetGrid(c *gin.Context) {
 		FROM players 
 		WHERE current_region = $1 
 		  AND id != $2 
-		  AND last_mana_update >= NOW() - INTERVAL '15 minutes'
+		  AND (current_region IN ('qing_mao_mountain', 'gu_luan_slope', 'three_kings_inheritance') OR last_mana_update >= NOW() - INTERVAL '15 minutes')
 		  AND x >= $3 AND x <= $4
 		  AND y >= $5 AND y <= $6
 	`, player.CurrentRegion, player.ID, player.X-visionRadius, player.X+visionRadius, player.Y-visionRadius, player.Y+visionRadius)
@@ -272,6 +303,10 @@ func GetGrid(c *gin.Context) {
 		}
 	}
 
+	if err := tx.Commit(); err != nil {
+		log.Println("GetGrid commit warning:", err)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"x":              player.X,
 		"y":              player.Y,
@@ -283,11 +318,36 @@ func GetGrid(c *gin.Context) {
 	})
 }
 
-// MoveRequest specifies target position
+// HasExplorationInventorySpace checks bag capacity including temporary loot
+func HasExplorationInventorySpace(player *models.Player, incomingCount int) bool {
+	stats := CalculatePlayerStats(player)
+	maxSlots := int(stats["storage"])
+	if player.Rank >= 6 {
+		maxSlots = 999
+	}
+
+	currentSize := len(player.GuInventory)
+	for _, qty := range player.MaterialsInventory {
+		if qty > 0 {
+			currentSize++
+		}
+	}
+	
+	currentSize += len(player.TempLoot.GuInventory)
+	for _, qty := range player.TempLoot.MaterialsInventory {
+		if qty > 0 {
+			currentSize++
+		}
+	}
+
+	return (currentSize + incomingCount) <= maxSlots
+}
+
 // MoveRequest specifies target position
 type MoveRequest struct {
-	X int `json:"x"`
-	Y int `json:"y"`
+	X              int    `json:"x"`
+	Y              int    `json:"y"`
+	AttackTargetID string `json:"attack_target_id,omitempty"`
 }
 
 // MovePlayer moves the player on the 100x100 grid and triggers cell actions
@@ -321,6 +381,8 @@ func MovePlayer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
 		return
 	}
+
+	cleanupExpiredClearedCells(&player, 2*time.Minute)
 
 	if player.ActiveCombat != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đang trong trạng thái chiến đấu! Hãy kết thúc trận chiến trước."})
@@ -370,18 +432,85 @@ func MovePlayer(c *gin.Context) {
 	}
 	logMsg := fmt.Sprintf("Di chuyển thành công đến (%d, %d).", player.X, player.Y)
 	combatTriggered := false
+	pvpTriggered := false
+
+	// Check if there is another active player (not in same party) at req.X, req.Y
+	var targetPlayer models.Player
+	var hasTargetPlayer bool
+	queryStr := `
+		SELECT id, username, rank, sub_rank, hp, max_mana, current_mana, base_hp, path_masteries, gu_inventory, dao_marks
+		FROM players
+		WHERE current_region = $1 AND x = $2 AND y = $3 AND id != $4
+		  AND (current_region IN ('qing_mao_mountain', 'gu_luan_slope', 'three_kings_inheritance') OR last_mana_update >= NOW() - INTERVAL '15 minutes')
+	`
+	var errTarget error
+	if player.PartyID != nil {
+		queryStr += ` AND (party_id IS NULL OR party_id != $5)`
+		errTarget = tx.QueryRow(queryStr, player.CurrentRegion, player.X, player.Y, player.ID, player.PartyID).Scan(
+			&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
+			&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
+			&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks,
+		)
+	} else {
+		errTarget = tx.QueryRow(queryStr, player.CurrentRegion, player.X, player.Y, player.ID).Scan(
+			&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
+			&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
+			&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks,
+		)
+	}
+	if errTarget == nil {
+		hasTargetPlayer = true
+	}
+
+	if hasTargetPlayer && req.AttackTargetID == targetPlayer.ID.String() {
+		combatTriggered = true
+		pvpTriggered = true
+		targetStats := CalculatePlayerStats(&targetPlayer)
+
+		enemyHP := targetPlayer.HP
+		if enemyHP <= 0 {
+			enemyHP = targetPlayer.BaseHP
+		}
+		if enemyHP <= 0 {
+			enemyHP = 100.0
+		}
+		enemyMaxHP := targetPlayer.BaseHP
+		if enemyMaxHP <= 0 {
+			enemyMaxHP = 100.0
+		}
+
+		pvpCombat := models.CombatState{
+			EnemyTemplateID:    targetPlayer.ID.String(),
+			EnemyName:          targetPlayer.Username,
+			EnemyType:          "PVP",
+			EnemyHP:            enemyHP,
+			EnemyMaxHP:         enemyMaxHP,
+			EnemyMana:          targetPlayer.CurrentMana,
+			EnemyMaxMana:       targetPlayer.MaxMana,
+			EnemyDamage:        targetStats["attack"],
+			EnemyDefense:       targetStats["defense"],
+			EnemyRank:          targetPlayer.Rank,
+			EnemySubRank:       targetPlayer.SubRank,
+			EnemyGuInventory:   targetPlayer.GuInventory,
+			EnemyDaoMarks:      targetPlayer.DaoMarks,
+			EnemyPathMasteries: targetPlayer.PathMasteries,
+			TargetPlayerID:     targetPlayer.ID.String(),
+		}
+		player.ActiveCombat = &pvpCombat
+		logMsg = fmt.Sprintf("Ngươi chủ động tuyên chiến và tấn công Cổ Sư %s tại tọa độ (%d, %d)!", targetPlayer.Username, player.X, player.Y)
+	}
 
 	if isCleared {
 		logMsg = fmt.Sprintf("Di chuyển thành công đến (%d, %d). Vùng đất trống trải hoang tàn.", player.X, player.Y)
-	} else {
+	} else if !pvpTriggered {
 		switch cell.Type {
 		case "Resource":
-			if HasInventorySpace(&player, 1) {
-				if player.MaterialsInventory == nil {
-					player.MaterialsInventory = make(models.MaterialsInventory)
+			if HasExplorationInventorySpace(&player, 1) {
+				if player.TempLoot.MaterialsInventory == nil {
+					player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
 				}
-				player.MaterialsInventory[cell.Content]++
-				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Đạo hữu tìm thấy nguyên liệu hoang dã: 1x %s!", player.X, player.Y, cell.Content)
+				player.TempLoot.MaterialsInventory[cell.Content]++
+				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Đạo hữu tìm thấy nguyên liệu hoang dã: 1x %s (được giữ tạm thời trong bản đồ)!", player.X, player.Y, cell.Content)
 
 				if player.ClearedCells == nil {
 					player.ClearedCells = make(models.ClearedCellsMap)
@@ -391,7 +520,7 @@ func MovePlayer(c *gin.Context) {
 				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Phát hiện 1x %s, nhưng Bách Bảo Nang đã đầy!", player.X, player.Y, cell.Content)
 			}
 		case "WildGu":
-			if HasInventorySpace(&player, 1) {
+			if HasExplorationInventorySpace(&player, 1) {
 				newGu := models.GuInstance{
 					InstanceID: uuid.New().String(),
 					GuID:       cell.Content,
@@ -399,8 +528,8 @@ func MovePlayer(c *gin.Context) {
 					Status:     "ACTIVE",
 					Equipped:   false,
 				}
-				player.GuInventory = append(player.GuInventory, newGu)
-				logMsg = fmt.Sprintf("Cơ duyên! Đạo hữu bắt gặp và thu phục thành công Cổ trùng hoang dã: %s!", cell.Content)
+				player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, newGu)
+				logMsg = fmt.Sprintf("Cơ duyên! Đạo hữu bắt gặp và thu phục thành công Cổ trùng hoang dã: %s (được giữ tạm thời trong bản đồ)!", cell.Content)
 
 				if player.ClearedCells == nil {
 					player.ClearedCells = make(models.ClearedCellsMap)
@@ -530,10 +659,10 @@ func MovePlayer(c *gin.Context) {
 	// Update DB
 	updateQuery := `
 		UPDATE players
-		SET current_mana = $1, x = $2, y = $3, explored_cells = $4, gu_inventory = $5, materials_inventory = $6, cleared_cells = $7, active_combat = $8
-		WHERE id = $9
+		SET current_mana = $1, x = $2, y = $3, explored_cells = $4, gu_inventory = $5, materials_inventory = $6, cleared_cells = $7, active_combat = $8, temp_loot = $9, last_mana_update = $10
+		WHERE id = $11
 	`
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.ExploredCells, player.GuInventory, player.MaterialsInventory, player.ClearedCells, player.ActiveCombat, player.ID)
+	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.ExploredCells, player.GuInventory, player.MaterialsInventory, player.ClearedCells, player.ActiveCombat, player.TempLoot, time.Now(), player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return

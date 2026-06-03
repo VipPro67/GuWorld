@@ -68,6 +68,10 @@ type Combatant struct {
 	AIProfile     string            `json:"ai_profile"`
 	LootTableID   string            `json:"loot_table_id"`
 	StatusEffects []StatusEffect    `json:"status_effects"`
+	GridX         int               `json:"grid_x"` // 1 (Front), 2 (Mid), 3 (Back)
+	GridY         int               `json:"grid_y"` // 1 (Top), 2 (Mid), 3 (Bottom)
+	Speed         float64           `json:"speed"`
+	VirtualShield float64           `json:"virtual_shield"`
 }
 
 func BuildCombatStateFromMonster(mon MonsterTemplate) CombatState {

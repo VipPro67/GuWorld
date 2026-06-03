@@ -10,5 +10,4 @@ recipe_moon_whirl,GU_MOON_WHIRL,"{""GU_MOONLIGHT"": 1, ""GU_WHIRLWIND"": 1}","{}
 recipe_seven_fragrances_liquor,GU_SEVEN_FRAGRANCES_LIQUOR,"{""GU_FOUR_FLAVORS_LIQUOR"": 2}","{""seven_spices"": 1}",0.4,100,0.0
 recipe_nine_eyes_liquor,GU_NINE_EYES_LIQUOR,"{""GU_SEVEN_FRAGRANCES_LIQUOR"": 2}","{""nine_beast_kings_eyes"": 1}",0.2,500,0.0
 recipe_fixed_immortal_travel,GU_FIXED_IMMORTAL_TRAVEL,"{""GU_DIVINE_TRAVEL"": 1, ""GU_STAR_GEM"": 1, ""GU_AZURE_BAMBOO"": 1, ""GU_SUN_RAY"": 1}","{""glory_of_the_immemorial_light"": 1}",0.01,0,50.0
-recipe_shadow_steps,GU_SHADOW_STEPS,"{""GU_SWIFT_STEP"": 1, ""GU_SHADOW"": 1}","{}",0.8,15,0.0
 recipe_earth_communication,GU_EARTH_COMMUNICATION,"{""GU_EARTH_WORM"": 1, ""GU_FLESH_EAR"": 1}","{""ginseng"": 2}",0.75,20,0.0
