@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -127,6 +128,7 @@ func GetInbox(c *gin.Context) {
 
 type BaoHoangRequest struct {
 	Content string `json:"content" binding:"required"`
+	Channel string `json:"channel"`
 }
 
 type ChatItem struct {
@@ -134,6 +136,7 @@ type ChatItem struct {
 	SenderID       string    `json:"sender_id"`
 	SenderUsername string    `json:"sender_username"`
 	Content        string    `json:"content"`
+	Channel        string    `json:"channel"`
 	CreatedAt      time.Time `json:"created_at"`
 }
 
@@ -150,6 +153,23 @@ func SendBaoHoangChat(c *gin.Context) {
 		return
 	}
 
+	if req.Channel == "" {
+		req.Channel = "world"
+	}
+
+	var fee int
+	switch req.Channel {
+	case "world":
+		fee = 10
+	case "general":
+		fee = 1
+	case "sect":
+		fee = 0
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Kênh chat không hợp lệ"})
+		return
+	}
+
 	tx, err := db.DB.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
@@ -163,53 +183,52 @@ func SendBaoHoangChat(c *gin.Context) {
 		return
 	}
 
-	// Restricted to Rank >= 6 (immortals)
-	if player.Rank < 6 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Cổ Tiên (Rank >= 6) mới được phép kết nối thần niệm vào Hoàng Bảo Thiên!"})
+	if player.PrimevalStones < fee {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch! Cần %d Nguyên Thạch để gửi tin nhắn kênh này.", fee)})
 		return
 	}
 
 	globalUUID := "00000000-0000-0000-0000-000000000000"
 
 	_, err = tx.Exec(`
-		INSERT INTO messages (sender_id, receiver_id, content)
-		VALUES ($1, $2, $3)
-	`, player.ID, globalUUID, req.Content)
+		INSERT INTO messages (sender_id, receiver_id, content, channel)
+		VALUES ($1, $2, $3, $4)
+	`, player.ID, globalUUID, req.Content, req.Channel)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send chat"})
 		return
 	}
 
+	if fee > 0 {
+		player.PrimevalStones -= fee
+		_, err = tx.Exec("UPDATE players SET primeval_stones = $1 WHERE id = $2", player.PrimevalStones, player.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct stones"})
+			return
+		}
+	}
+
 	tx.Commit()
 
-	c.JSON(http.StatusOK, gin.H{"message": "Đã truyền phát thần niệm lên Hoàng Bảo Thiên!"})
+	msg := "Đã truyền tin nhắn thành công!"
+	if fee > 0 {
+		msg = fmt.Sprintf("Đã truyền tin nhắn thành công! Trừ %d Nguyên Thạch phí truyền phát.", fee)
+	}
+	c.JSON(http.StatusOK, gin.H{"message": msg})
 }
 
 func GetBaoHoangMessages(c *gin.Context) {
-	authID, exists := middleware.GetPlayerID(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-
-	// Verify player is Rank >= 6
-	var rank int
-	err := db.DB.QueryRow("SELECT rank FROM players WHERE id = $1", authID).Scan(&rank)
-	if err != nil || rank < 6 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Cổ Tiên (Rank >= 6) mới được xem thần niệm Hoàng Bảo Thiên"})
-		return
-	}
-
+	channel := c.DefaultQuery("channel", "world")
 	globalUUID := "00000000-0000-0000-0000-000000000000"
 
 	rows, err := db.DB.Query(`
-		SELECT m.id, m.sender_id, p.username, m.content, m.created_at
+		SELECT m.id, m.sender_id, p.username, m.content, m.created_at, m.channel
 		FROM messages m
 		JOIN players p ON m.sender_id = p.id
-		WHERE m.receiver_id = $1
+		WHERE m.receiver_id = $1 AND m.channel = $2
 		ORDER BY m.created_at ASC
 		LIMIT 50
-	`, globalUUID)
+	`, globalUUID, channel)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load global chat"})
 		return
@@ -219,7 +238,7 @@ func GetBaoHoangMessages(c *gin.Context) {
 	messages := []ChatItem{}
 	for rows.Next() {
 		var m ChatItem
-		if errScan := rows.Scan(&m.ID, &m.SenderID, &m.SenderUsername, &m.Content, &m.CreatedAt); errScan == nil {
+		if errScan := rows.Scan(&m.ID, &m.SenderID, &m.SenderUsername, &m.Content, &m.CreatedAt, &m.Channel); errScan == nil {
 			messages = append(messages, m)
 		}
 	}

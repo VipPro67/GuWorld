@@ -143,6 +143,120 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create players table: %w", err)
 	}
 
+	// Seed system player for global/world/sect chat channels
+	_, _ = DB.Exec(`
+		INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, hp, base_hp, current_region, x, y)
+		VALUES ('00000000-0000-0000-0000-000000000000', 'Bảo Hoàng Thiên', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'Southern_Border', 50, 50)
+		ON CONFLICT (id) DO NOTHING;
+	`)
+
+	// 5. Create immortal_apertures table
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS immortal_apertures (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		player_id UUID NOT NULL UNIQUE REFERENCES players(id) ON DELETE CASCADE,
+		grade VARCHAR(20) NOT NULL,
+		time_rate DOUBLE PRECISION NOT NULL DEFAULT 10,
+		aperture_hp INTEGER NOT NULL DEFAULT 10000,
+		max_aperture_hp INTEGER NOT NULL DEFAULT 10000,
+		area_size BIGINT NOT NULL DEFAULT 3000000,
+		immortal_essence INTEGER NOT NULL DEFAULT 0,
+		essence_production_per_year INTEGER NOT NULL DEFAULT 10,
+		internal_years_passed DOUBLE PRECISION NOT NULL DEFAULT 0,
+		next_tribulation_year DOUBLE PRECISION NOT NULL DEFAULT 10,
+		tribulation_count INTEGER NOT NULL DEFAULT 0,
+		state VARCHAR(30) NOT NULL DEFAULT 'STABLE',
+		created_at TIMESTAMP DEFAULT now(),
+		updated_at TIMESTAMP DEFAULT now()
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create immortal_apertures table: %w", err)
+	}
+
+	// 6. Create dao_marks table
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS dao_marks (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		path VARCHAR(50) NOT NULL,
+		amount INTEGER NOT NULL DEFAULT 0,
+		created_at TIMESTAMP DEFAULT now(),
+		updated_at TIMESTAMP DEFAULT now(),
+		UNIQUE(player_id, path)
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create dao_marks table: %w", err)
+	}
+
+	// 7. Create aperture_resource_nodes table
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS aperture_resource_nodes (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		node_type VARCHAR(50) NOT NULL,
+		name VARCHAR(100) NOT NULL,
+		path VARCHAR(50),
+		level INTEGER NOT NULL DEFAULT 1,
+		hp INTEGER NOT NULL DEFAULT 1000,
+		max_hp INTEGER NOT NULL DEFAULT 1000,
+		x INTEGER NOT NULL,
+		y INTEGER NOT NULL,
+		production_type VARCHAR(50),
+		production_amount INTEGER NOT NULL DEFAULT 0,
+		production_interval_hours INTEGER NOT NULL DEFAULT 24,
+		last_collected_at TIMESTAMP,
+		is_destroyed BOOLEAN NOT NULL DEFAULT false,
+		created_at TIMESTAMP DEFAULT now(),
+		updated_at TIMESTAMP DEFAULT now()
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create aperture_resource_nodes table: %w", err)
+	}
+
+	// 8. Create tribulation_events table
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS tribulation_events (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		tribulation_type VARCHAR(30) NOT NULL,
+		path VARCHAR(50) NOT NULL,
+		difficulty INTEGER NOT NULL DEFAULT 1,
+		status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
+		aperture_hp_before INTEGER NOT NULL,
+		aperture_hp_after INTEGER,
+		reward_dao_marks INTEGER NOT NULL DEFAULT 0,
+		started_at TIMESTAMP DEFAULT now(),
+		ended_at TIMESTAMP
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create tribulation_events table: %w", err)
+	}
+
+	// 9. Create tribulation_enemies table
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS tribulation_enemies (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		event_id UUID NOT NULL REFERENCES tribulation_events(id) ON DELETE CASCADE,
+		name VARCHAR(100) NOT NULL,
+		enemy_type VARCHAR(50) NOT NULL,
+		path VARCHAR(50) NOT NULL,
+		hp INTEGER NOT NULL,
+		max_hp INTEGER NOT NULL,
+		attack INTEGER NOT NULL,
+		defense INTEGER NOT NULL,
+		target_node_id UUID REFERENCES aperture_resource_nodes(id) ON DELETE SET NULL,
+		x INTEGER NOT NULL,
+		y INTEGER NOT NULL,
+		is_boss BOOLEAN NOT NULL DEFAULT false,
+		is_dead BOOLEAN NOT NULL DEFAULT false,
+		created_at TIMESTAMP DEFAULT now(),
+		updated_at TIMESTAMP DEFAULT now()
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create tribulation_enemies table: %w", err)
+	}
+
 	query = `
 	CREATE TABLE IF NOT EXISTS auction (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -172,8 +286,37 @@ func InitSchema() error {
 		members JSONB NOT NULL DEFAULT '[]',
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);`)
+	// Create mine_slots table
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS mine_slots (
+		id INTEGER PRIMARY KEY,
+		rarity VARCHAR(50) NOT NULL,
+		occupier_id UUID REFERENCES players(id) ON DELETE SET NULL,
+		occupied_at TIMESTAMPTZ NULL,
+		last_claimed_at TIMESTAMPTZ NULL
+	);`)
 	if err != nil {
-		return fmt.Errorf("failed to create parties table: %w", err)
+		return fmt.Errorf("failed to create mine_slots table: %w", err)
+	}
+
+	// Seed mine slots if empty
+	var mineCount int
+	err = DB.QueryRow("SELECT COUNT(*) FROM mine_slots").Scan(&mineCount)
+	if err == nil && mineCount == 0 {
+		for i := 1; i <= 20; i++ {
+			rarity := "Thường"
+			if i == 1 {
+				rarity = "Truyền Thuyết"
+			} else if i >= 2 && i <= 4 {
+				rarity = "Sử Thi"
+			} else if i >= 5 && i <= 10 {
+				rarity = "Hiếm"
+			}
+			_, err = DB.Exec("INSERT INTO mine_slots (id, rarity) VALUES ($1, $2)", i, rarity)
+			if err != nil {
+				log.Printf("Warning: failed to seed mine slot %d: %v", i, err)
+			}
+		}
 	}
 
 	// Create messages table
@@ -352,6 +495,7 @@ func InitSchema() error {
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS aperture_stress DOUBLE PRECISION NOT NULL DEFAULT 0.0;`, "aperture_stress"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS last_cultivate_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;`, "last_cultivate_time"},
 		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS target_type VARCHAR(50) NOT NULL DEFAULT 'SINGLE';`, "target_type"},
+		{`ALTER TABLE messages ADD COLUMN IF NOT EXISTS channel VARCHAR(50) NOT NULL DEFAULT 'private';`, "messages.channel"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {
@@ -549,7 +693,10 @@ func seedGusFromCSV(filename string) error {
 	rankIdx := col("rank")
 	typeIdx := col("gu_type")
 	hungerIdx := col("hunger_rate")
-	foodIdx := col("food_type")
+	foodIdx := col("food_types")
+	if foodIdx < 0 {
+		foodIdx = col("food_type")
+	}
 	maxHungerIdx := col("max_hunger")
 	descIdx := col("description")
 	originIdx := col("origin_region")
@@ -623,10 +770,14 @@ func seedGusFromCSV(filename string) error {
 			effectsRaw = "{}"
 		}
 
-		// Build food_types JSON array from single food_type string
+		// Build food_types JSON array from column value
 		foodTypesJSON := "[]"
 		if foodType != "" && foodType != "none" && foodType != "unknown" {
-			foodTypesJSON = fmt.Sprintf(`["%s"]`, foodType)
+			if strings.HasPrefix(foodType, "[") && strings.HasSuffix(foodType, "]") {
+				foodTypesJSON = foodType
+			} else {
+				foodTypesJSON = fmt.Sprintf(`["%s"]`, foodType)
+			}
 		}
 
 		var effMap map[string]interface{}

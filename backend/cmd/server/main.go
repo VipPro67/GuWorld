@@ -8,6 +8,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/handlers"
 	"github.com/vippro67/GuWorld/backend/internal/server"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
 )
@@ -47,6 +48,9 @@ func main() {
 
 	// 2.5. Start Hunger Decay Background Worker (15-minute intervals for slower, balanced survival gameplay)
 	worker.StartHungerWorker(db.DB, 15*time.Minute)
+
+	// 2.6. Start Tribulation background worker
+	handlers.StartTribulationWorker()
 
 	// 3. Setup router & run
 	r := server.SetupRouter()

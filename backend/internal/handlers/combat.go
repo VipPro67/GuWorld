@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -94,8 +95,20 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 
 	masteryMultiplier := getActorPathMasteryMultiplier(actor, guSpec.Path)
 
-	effectiveDamage = baseDmg * powerScale * masteryMultiplier
-	effectiveDefense = baseDef * powerScale * masteryMultiplier
+	daoMultiplier := 1.0
+	cleanPath := strings.TrimSuffix(strings.ToLower(guSpec.Path), " path")
+	if actor.DaoMarks != nil {
+		if amt, ok := actor.DaoMarks[cleanPath]; ok && amt > 0 {
+			if amt <= 10000 {
+				daoMultiplier = 1.0 + float64(amt)/100.0
+			} else {
+				daoMultiplier = 1.0 + 100.0 + float64(amt-10000)/500.0
+			}
+		}
+	}
+
+	effectiveDamage = baseDmg * powerScale * masteryMultiplier * daoMultiplier
+	effectiveDefense = baseDef * powerScale * masteryMultiplier * daoMultiplier
 
 	cost := calculateEnergyCostForCombatant(actor, guSpec)
 
@@ -935,6 +948,9 @@ func CombatAttack(c *gin.Context) {
 				lt, err := db.LoadLootTable(tx, player.ActiveCombat.LootTableID)
 				if err == nil {
 					loot := RollLoot(lt)
+					if loot.Items != nil {
+						delete(loot.Items, "primeval_stone")
+					}
 					if len(partyMembers) > 1 {
 						ctx.Logs = append(ctx.Logs, "=== PHÂN CHIA CHIẾN LỢI PHẨM TỔ ĐỘI ===")
 						stoneQty := loot.Items["primeval_stone"]
@@ -1066,7 +1082,7 @@ func CombatAttack(c *gin.Context) {
 									targetGuInv = append(targetGuInv, newGu)
 									_, _ = tx.Exec("UPDATE players SET gu_inventory = $1 WHERE id = $2", targetGuInv, winnerID)
 								}
-								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, gID))
+							ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, gID))
 							}
 						}
 					} else {
@@ -1077,47 +1093,37 @@ func CombatAttack(c *gin.Context) {
 					log.Printf("Failed to load loot table %s: %v", player.ActiveCombat.LootTableID, err)
 				}
 			} else {
-				rewardStones := 5 + rand.Intn(11)
-				if len(partyMembers) > 1 {
-					splitStones := rewardStones / len(partyMembers)
-					if splitStones < 1 {
-						splitStones = 1
-					}
-					for _, memberID := range partyMembers {
-						if memberID == player.ID {
-							if isExplore {
-								player.TempLoot.PrimevalStones += splitStones
-								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch (giữ tạm thời).", splitStones))
-							} else {
-								player.PrimevalStones += splitStones
-								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch.", splitStones))
-							}
-						} else {
-							if isExplore {
-								var targetLoot models.TempLoot
-								var targetLootBytes []byte
-								_ = tx.QueryRow("SELECT temp_loot FROM players WHERE id = $1 FOR UPDATE", memberID).Scan(&targetLootBytes)
-								if len(targetLootBytes) > 0 {
-									json.Unmarshal(targetLootBytes, &targetLoot)
-								}
-								targetLoot.PrimevalStones += splitStones
-								_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, memberID)
-							} else {
-								_, _ = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", splitStones, memberID)
-							}
-							var uname string
-							_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", memberID).Scan(&uname)
-							ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s nhận được %d Nguyên Thạch.", uname, splitStones))
+				// No fallback stones in PVE victory as requested
+				ctx.Logs = append(ctx.Logs, "Chiến đấu thắng lợi vang dội!")
+			}
+
+			// If it is a mine slot challenge victory:
+			if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
+				slotID := player.ActiveCombat.MineSlotID
+				var rarity string
+				var currentOccupierStr *string
+				var lastClaimedAt *time.Time
+				err = tx.QueryRow("SELECT rarity, occupier_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &currentOccupierStr, &lastClaimedAt)
+				if err == nil && currentOccupierStr != nil {
+					currOccupierUUID, errParse := uuid.Parse(*currentOccupierStr)
+					if errParse == nil && lastClaimedAt != nil {
+						stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
+						if stones > 0 || qi > 0.0 || chests > 0 {
+							_ = AddMineRewardsToPlayerTx(tx, currOccupierUUID, stones, qi, chests)
 						}
 					}
+				}
+
+				now := time.Now()
+				_, errUpdate := tx.Exec(`
+					UPDATE mine_slots
+					SET occupier_id = $1, occupied_at = $2, last_claimed_at = $3
+					WHERE id = $4
+				`, player.ID, now, now, slotID)
+				if errUpdate == nil {
+					ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chiếm lĩnh thành công mỏ phẩm chất %s #%d!", rarity, slotID))
 				} else {
-					if isExplore {
-						player.TempLoot.PrimevalStones += rewardStones
-						ctx.Logs = append(ctx.Logs, fmt.Sprintf("Thu hoạch Nguyên Thạch: +%d Nguyên Thạch (giữ tạm thời).", rewardStones))
-					} else {
-						player.PrimevalStones += rewardStones
-						ctx.Logs = append(ctx.Logs, fmt.Sprintf("Thu hoạch Nguyên Thạch: +%d Nguyên Thạch.", rewardStones))
-					}
+					log.Printf("Failed to update mine slot occupier in combat victory: %v", errUpdate)
 				}
 			}
 
@@ -1141,7 +1147,11 @@ func CombatAttack(c *gin.Context) {
 	} else if defeat {
 		player.HP = 20.0
 		defeat = true
-		ctx.Logs = append(ctx.Logs, "Đại bại! Đạo hữu bất tỉnh nhân sự trước áp lực của đối thủ. May mắn thoát chết nhưng rơi rớt mất sạch chiến lợi phẩm thu thập trong chuyến đi này.")
+		if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
+			ctx.Logs = append(ctx.Logs, "Thách đấu mỏ linh thạch thất bại, không thể chiếm lĩnh mỏ.")
+		} else {
+			ctx.Logs = append(ctx.Logs, "Đại bại! Đạo hữu bất tỉnh nhân sự trước áp lực của đối thủ. May mắn thoát chết nhưng rơi rớt mất sạch chiến lợi phẩm thu thập trong chuyến đi này.")
+		}
 
 		// Transfer player's temp_loot to the PVP target if isPVP
 		if isPVP && player.ActiveCombat.TargetPlayerID != "dummy" {

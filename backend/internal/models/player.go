@@ -64,6 +64,7 @@ type CombatState struct {
 	LootTableID         string            `json:"loot_table_id,omitempty"`
 	ChargePoints        int               `json:"charge_points"`
 	TargetPlayerID      string            `json:"target_player_id,omitempty"`
+	MineSlotID          int               `json:"mine_slot_id,omitempty"`
 	EnemyStatusEffects  []StatusEffect    `json:"enemy_status_effects,omitempty"`
 	PlayerStatusEffects []StatusEffect    `json:"player_status_effects,omitempty"`
 	Allies              []Combatant       `json:"allies,omitempty"`

@@ -577,19 +577,6 @@ export const Aperture: React.FC<ApertureProps> = ({
                 <BlessedLandControls />
               </div>
             )}
-
-            {/* Regen details */}
-            <div className="text-[10px] text-zinc-550 text-center space-y-1.5 w-full bg-black/20 border border-zinc-900/50 p-2.5 rounded-xl">
-              <div className="font-semibold flex items-center justify-center gap-1">
-                <Compass className="w-3 h-3 text-zinc-400 animate-spin" style={{ animationDuration: "12s" }} />
-                <span>{regenLabel}: <span className="font-bold text-zinc-300">{regenRate}</span> {energyType.toLowerCase()}/giờ</span>
-              </div>
-              <div className="text-[9px] text-zinc-650 leading-relaxed max-w-sm mx-auto">
-                {isImmortal
-                  ? "Cổ Tiên hấp thụ Tiên Nguyên Thạch, dung tích tùy thuộc vào quy mô và đẳng cấp của Tiên Khiếu."
-                  : "Cổ sư hấp thụ Chân Nguyên trong không khiếu, tự động tích lũy và phục hồi theo hạn mức tư chất."}
-              </div>
-            </div>
           </div>
         )}
 
@@ -1007,51 +994,108 @@ function WallControls() {
 function BlessedLandControls() {
   const store = useGameStore();
   const player = store.player;
+  const aperture = store.aperture;
+
+  React.useEffect(() => {
+    store.fetchAperture();
+    store.fetchDaoMarks();
+    store.fetchActiveTribulation();
+  }, []);
 
   if (!player) return null;
 
-  const nextTrib = player.next_tribulation_time ? new Date(player.next_tribulation_time) : null;
-  const now = new Date();
-  const isTimeForTribulation = nextTrib && now >= nextTrib;
+  // Render helper for grade
+  const getGradeText = (g?: string) => {
+    if (g === "LOW") return "Hạ Đẳng";
+    if (g === "MID") return "Trung Đẳng";
+    if (g === "HIGH") return "Thượng Đẳng";
+    if (g === "EXTREME") return "Chí Cao";
+    return "Không Xác Định";
+  };
+
+  // Render helper for state
+  const getStateText = (s?: string) => {
+    if (s === "STABLE") return { text: "Ổn Định", color: "text-emerald-400" };
+    if (s === "TRIBULATION_ACTIVE") return { text: "Có Tai Kiếp Đang Tấn Công", color: "text-rose-400 animate-pulse font-bold" };
+    if (s === "TRIBULATION_PENDING") return { text: "Kiếp Lực Tích Lũy", color: "text-yellow-400" };
+    if (s === "DAMAGED") return { text: "Hư Tổn", color: "text-amber-500" };
+    return { text: "Ổn Định", color: "text-emerald-400" };
+  };
+
+  const stateInfo = getStateText(aperture?.state);
+
+  // Fallback map if database daoMarks isn't synced yet
+  const displayMarks = store.daoMarks.length > 0
+    ? store.daoMarks
+    : Object.entries(player.dao_marks || {}).map(([path, amount]) => ({ path, amount }));
 
   return (
     <div className="w-full">
-      <div className="p-4 border border-zinc-900 bg-zinc-950/30 rounded-2xl">
-        <div className="text-center mb-3">
-          <div className="text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1">Thời Gian Tới Thiên Kiếp</div>
-          {nextTrib ? (
-             <div className={`text-base font-mono font-bold ${isTimeForTribulation ? "text-rose-500 animate-pulse font-extrabold" : "text-cyan-400"}`}>
-               {isTimeForTribulation ? "★ THIÊN KIẾP GIÁNG LÂM! ★" : nextTrib.toLocaleString()}
-             </div>
-          ) : (
-             <div className="text-xs text-zinc-650 italic">Chưa xác định chu kỳ thiên kiếp</div>
+      <div className="p-4 border border-zinc-900 bg-zinc-950/30 rounded-2xl space-y-4">
+        {/* Tiên Khiếu Stats Summary */}
+        <div className="space-y-2.5">
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-zinc-400 font-medium">Quy mô Tiên Khiếu:</span>
+            <span className="text-zinc-200 font-bold">
+              {aperture ? getGradeText(aperture.grade) : "Đang tải..."}
+            </span>
+          </div>
+
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-zinc-400 font-medium">Trạng thái:</span>
+            <span className={stateInfo.color}>{stateInfo.text}</span>
+          </div>
+
+          {aperture && (
+            <>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-zinc-400 font-medium">Lưu tốc thời gian:</span>
+                <span className="text-cyan-400 font-semibold">x{aperture.time_rate} lần</span>
+              </div>
+
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-zinc-400 font-medium">Tiên Nguyên trong khiếu:</span>
+                <span className="text-yellow-400 font-semibold">{aperture.immortal_essence} hạt</span>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px] text-zinc-500 font-mono">
+                  <span>Chu kỳ Kiếp nạn ({aperture.internal_years_passed.toFixed(2)} / {aperture.next_tribulation_year.toFixed(1)} năm)</span>
+                  <span>{((aperture.internal_years_passed / aperture.next_tribulation_year) * 100).toFixed(1)}%</span>
+                </div>
+                <div className="w-full bg-zinc-950 h-1.5 rounded-full overflow-hidden border border-zinc-900">
+                  <div
+                    className="h-full bg-gradient-to-r from-cyan-600 to-amber-500"
+                    style={{ width: `${Math.min(100, (aperture.internal_years_passed / aperture.next_tribulation_year) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            </>
           )}
         </div>
-        
-        {isTimeForTribulation && (
-          <div className="flex justify-center mt-3">
-             <button 
-               className="px-5 py-2 bg-gradient-to-r from-rose-750 to-red-650 hover:from-rose-650 hover:to-red-550 text-white text-xs font-bold rounded-xl shadow-lg shadow-rose-950/30 active:scale-95 transition-all cursor-pointer uppercase tracking-wider animate-bounce"
-               onClick={async () => {
-                 const res = await store.triggerTribulation();
-                 if(res) alert(res.message);
-               }}
-             >
-               Nghênh Đón Thiên Kiếp
-             </button>
-          </div>
-        )}
 
-        <div className="mt-4 border-t border-zinc-900 pt-3">
+        {/* Enter Tiên Khiếu Button */}
+        <div className="flex justify-center pt-2">
+          <button
+            onClick={() => store.setView("aperture")}
+            className="w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold rounded-xl shadow-lg active:scale-95 transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1"
+          >
+            <Sparkles className="w-4 h-4 animate-pulse" />
+            Vào Tiên Khiếu Phúc Địa
+          </button>
+        </div>
+
+        {/* Dao Marks summary */}
+        <div className="border-t border-zinc-900 pt-3">
           <div className="text-[9px] text-zinc-550 text-center mb-2 uppercase tracking-widest font-bold font-mono">Đạo Ngân Tích Lũy</div>
           <div className="flex flex-wrap gap-2 justify-center">
-            {Object.entries(player.dao_marks || {}).map(([type, count]) => (
-               <div key={type} className="px-2.5 py-1 bg-zinc-950/80 border border-zinc-900 rounded-xl text-[10px] font-mono">
-                 <span className="text-amber-500 font-bold uppercase">{type}</span>: <span className="text-zinc-200 font-bold">{count}</span>
-               </div>
+            {displayMarks.map((mark: any, idx: number) => (
+              <div key={idx} className="px-2.5 py-1 bg-zinc-950/80 border border-zinc-900 rounded-xl text-[10px] font-mono">
+                <span className="text-amber-500 font-bold uppercase">{mark.path}</span>: <span className="text-zinc-200 font-bold">{mark.amount}</span>
+              </div>
             ))}
-            {(!player.dao_marks || Object.keys(player.dao_marks).length === 0) && (
-              <div className="text-[10px] text-zinc-600 italic">Tiên Khiếu chưa ngưng tụ Đạo Ngân</div>
+            {displayMarks.length === 0 && (
+              <div className="text-[10px] text-zinc-650 italic">Tiên Khiếu chưa ngưng tụ Đạo Ngân</div>
             )}
           </div>
         </div>

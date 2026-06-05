@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"fmt"
+	"math/rand"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -23,6 +25,7 @@ var ApplyItemEffects = map[string]ItemEffectHandler{
 	"dao_mark_gain":          daoMarkGainEffect,
 	"remove_negative_status": removeNegativeStatusEffect,
 	"lifespan_boost":         lifespanBoostEffect,
+	"open_mine_chest":        openMineChestEffect,
 }
 
 func lifespanBoostEffect(player *models.Player, item models.ItemSpec) (string, error) {
@@ -112,3 +115,60 @@ func removeNegativeStatusEffect(player *models.Player, item models.ItemSpec) (st
 	}
 	return "", nil
 }
+
+func openMineChestEffect(player *models.Player, item models.ItemSpec) (string, error) {
+	stones := 200 + rand.Intn(301)
+	player.PrimevalStones += stones
+
+	msg := fmt.Sprintf("Mở %s thành công!\n- Nhận được %d Nguyên Thạch\n", item.Name, stones)
+
+	var materials []string
+	for id, spec := range models.ItemRegistry {
+		if spec.Type == "Material" {
+			materials = append(materials, id)
+		}
+	}
+	if len(materials) == 0 {
+		materials = []string{"wild_boar_tusk", "jade_stone", "nine_beast_kings_eyes", "stone_man_rice"}
+	}
+
+	numMats := 1 + rand.Intn(3)
+	if player.MaterialsInventory == nil {
+		player.MaterialsInventory = make(models.MaterialsInventory)
+	}
+	for i := 0; i < numMats; i++ {
+		matID := materials[rand.Intn(len(materials))]
+		player.MaterialsInventory[matID]++
+		matName := matID
+		if spec, ok := models.ItemRegistry[matID]; ok {
+			matName = spec.Name
+		}
+		msg += fmt.Sprintf("- Nhận được 1x %s\n", matName)
+	}
+
+	if rand.Float64() < 0.05 {
+		var guIDs []string
+		for id := range models.GuRegistry {
+			guIDs = append(guIDs, id)
+		}
+		if len(guIDs) > 0 {
+			guID := guIDs[rand.Intn(len(guIDs))]
+			newInstance := models.GuInstance{
+				InstanceID: "gu-" + uuid.New().String(),
+				GuID:       guID,
+				Hunger:     100,
+				Status:     "ACTIVE",
+				Equipped:   false,
+			}
+			player.GuInventory = append(player.GuInventory, newInstance)
+			guName := guID
+			if spec, ok := models.GuRegistry[guID]; ok {
+				guName = spec.Name
+			}
+			msg += fmt.Sprintf("- Cơ duyên xảo hợp! Đạo hữu nhận thêm Cổ trùng: [%s]!\n", guName)
+		}
+	}
+
+	return msg, nil
+}
+

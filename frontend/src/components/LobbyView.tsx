@@ -1,0 +1,483 @@
+import React, { useEffect, useState, useRef } from "react";
+import { useGameStore } from "@/store/useGameStore";
+import {
+  User,
+  Briefcase,
+  Flame,
+  Store,
+  Gem,
+  Compass,
+  Coins,
+  Swords,
+  Lock,
+  Send,
+  Loader2,
+  Sparkles,
+} from "lucide-react";
+import { LogConsole } from "./LogConsole";
+
+interface HubItem {
+  id: string;
+  label: string;
+  icon: React.ComponentType<any>;
+  gradient: string;
+  glow: string;
+  borderColor: string;
+  iconColor: string;
+  locked?: boolean;
+}
+
+export const LobbyView: React.FC = () => {
+  const {
+    player,
+    logs,
+    setView,
+    baoHoangMessages,
+    sendBaoHoangChat,
+    fetchBaoHoangMessages,
+    actionLoading,
+  } = useGameStore();
+
+  const [activeChannel, setActiveChannel] = useState<"world" | "general" | "sect">("world");
+  const [chatInput, setChatInput] = useState("");
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Management items (Removed "Truyền Tin" as requested)
+  const managementItems: HubItem[] = [
+    {
+      id: "character",
+      label: "Nhân Vật",
+      icon: User,
+      gradient: "from-emerald-500 to-teal-600",
+      glow: "group-hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]",
+      borderColor: "border-emerald-400/20",
+      iconColor: "text-emerald-100",
+    },
+    {
+      id: "inventory",
+      label: "Túi Đồ",
+      icon: Briefcase,
+      gradient: "from-cyan-500 to-blue-600",
+      glow: "group-hover:shadow-[0_0_20px_rgba(6,182,212,0.4)]",
+      borderColor: "border-cyan-400/20",
+      iconColor: "text-cyan-100",
+    },
+    {
+      id: "refine",
+      label: "Luyện Cổ",
+      icon: Flame,
+      gradient: "from-amber-500 to-orange-600",
+      glow: "group-hover:shadow-[0_0_20px_rgba(245,158,11,0.4)]",
+      borderColor: "border-amber-400/20",
+      iconColor: "text-amber-100",
+    },
+    {
+      id: "shop",
+      label: "Cửa Hàng",
+      icon: Store,
+      gradient: "from-yellow-400 to-amber-500",
+      glow: "group-hover:shadow-[0_0_20px_rgba(234,179,8,0.4)]",
+      borderColor: "border-yellow-400/20",
+      iconColor: "text-yellow-100",
+    },
+    {
+      id: "auction",
+      label: "Chợ (Bảo Hoàng)",
+      icon: Gem,
+      gradient: "from-violet-500 to-purple-600",
+      glow: "group-hover:shadow-[0_0_20px_rgba(139,92,246,0.4)]",
+      borderColor: "border-violet-400/20",
+      iconColor: "text-violet-100",
+    },
+  ];
+
+  const activityItems: HubItem[] = [
+    {
+      id: "explore",
+      label: "Khám Phá",
+      icon: Compass,
+      gradient: "from-teal-500 to-emerald-600",
+      glow: "group-hover:shadow-[0_0_25px_rgba(20,184,166,0.45)]",
+      borderColor: "border-teal-400/30",
+      iconColor: "text-teal-500",
+    },
+    {
+      id: "mine",
+      label: "Mỏ Linh Thạch",
+      icon: Coins,
+      gradient: "from-yellow-500 to-amber-600",
+      glow: "group-hover:shadow-[0_0_25px_rgba(234,179,8,0.45)]",
+      borderColor: "border-yellow-400/30",
+      iconColor: "text-yellow-500",
+    },
+    {
+      id: "arena",
+      label: "Võ Đài",
+      icon: Swords,
+      gradient: "from-rose-500 to-red-600",
+      glow: "group-hover:shadow-[0_0_25px_rgba(239,68,68,0.45)]",
+      borderColor: "border-rose-400/30",
+      iconColor: "text-rose-500",
+    },
+    {
+      id: "sect",
+      label: "Tông Môn",
+      icon: Lock,
+      gradient: "from-zinc-800 to-zinc-950",
+      glow: "",
+      borderColor: "border-zinc-800",
+      iconColor: "text-zinc-600",
+      locked: true,
+    },
+    {
+      id: "dungeon",
+      label: "Phó Bản",
+      icon: Lock,
+      gradient: "from-zinc-800 to-zinc-950",
+      glow: "",
+      borderColor: "border-zinc-800",
+      iconColor: "text-zinc-600",
+      locked: true,
+    },
+    {
+      id: "beasts",
+      label: "Thần Thú",
+      icon: Lock,
+      gradient: "from-zinc-800 to-zinc-950",
+      glow: "",
+      borderColor: "border-zinc-800",
+      iconColor: "text-zinc-600",
+      locked: true,
+    },
+    {
+      id: "aperture",
+      label: "Tiên Khiếu",
+      icon: Sparkles,
+      gradient: player && player.rank >= 6 ? "from-indigo-500 to-purple-600" : "from-zinc-800 to-zinc-950",
+      glow: player && player.rank >= 6 ? "group-hover:shadow-[0_0_25px_rgba(99,102,241,0.45)]" : "",
+      borderColor: player && player.rank >= 6 ? "border-indigo-400/30" : "border-zinc-800",
+      iconColor: player && player.rank >= 6 ? "text-indigo-400" : "text-zinc-600",
+      locked: !player || player.rank < 6,
+    },
+  ];
+
+  // Fetch messages for active channel
+  useEffect(() => {
+    fetchBaoHoangMessages(activeChannel);
+    const timer = setInterval(() => {
+      fetchBaoHoangMessages(activeChannel);
+    }, 5000); // Polling every 5s
+    return () => clearInterval(timer);
+  }, [activeChannel, fetchBaoHoangMessages]);
+
+  // Scroll chat to bottom on new messages
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [baoHoangMessages]);
+
+  const handleItemClick = (item: HubItem) => {
+    if (item.locked) return;
+    setView(item.id);
+  };
+
+  const handleSendChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+    const success = await sendBaoHoangChat(chatInput.trim(), activeChannel);
+    if (success) {
+      setChatInput("");
+    }
+  };
+
+  const getRankName = (rank: number, sub: number): string => {
+    const ranks = ["Sơ giai", "Trung giai", "Cao giai", "Đỉnh phong"];
+    const rankNames = [
+      "Nhất Chuyển",
+      "Nhị Chuyển",
+      "Tam Chuyển",
+      "Tứ Chuyển",
+      "Ngũ Chuyển",
+      "Lục Tiên",
+      "Thất Tiên",
+      "Bát Tiên",
+      "Cửu Tôn",
+    ];
+    const rName = rankNames[rank - 1] || `${rank} Chuyển`;
+    const sName = ranks[sub - 1] || `${sub} Giai`;
+    return `${rName} • ${sName}`;
+  };
+
+  const getInitials = (username: string): string => {
+    if (!username) return "?";
+    return username.slice(0, 2).toUpperCase();
+  };
+
+  return (
+    <div className="w-full max-w-4xl mx-auto px-4 py-4 flex flex-col gap-8">
+      {/* 1. CHARACTER & RESOURCE HUD */}
+      {player && (
+        <div className="bg-zinc-950/60 border border-zinc-900 rounded-3xl p-4 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl backdrop-blur-md">
+          {/* Left Block: Avatar & Name & Tu vi */}
+          <div className="flex items-center gap-4 w-full md:w-auto">
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-zinc-100 font-bold border-2 border-zinc-900 shrink-0">
+              {getInitials(player.username)}
+            </div>
+            <div className="flex flex-col min-w-0">
+              <h2 className="text-base sm:text-lg font-serif font-bold text-zinc-100 truncate">
+                {player.username}
+              </h2>
+              <span className="text-xs text-zinc-500 font-mono font-semibold">
+                {getRankName(player.rank, player.sub_rank)}
+              </span>
+            </div>
+          </div>
+
+          {/* Center Block: HP & Mana Bars */}
+          <div className="flex flex-col gap-2.5 w-full md:w-80 grow max-w-md">
+            {/* HP Bar */}
+            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
+              <span>Máu (HP)</span>
+              <span>
+                {Math.round(player.hp)} / {Math.round(player.base_hp)}
+              </span>
+            </div>
+            <div className="w-full bg-zinc-950 rounded-full h-2.5 border border-zinc-900 overflow-hidden">
+              <div
+                className="bg-gradient-to-r from-red-600 to-rose-500 h-full rounded-full transition-all duration-300"
+                style={{ width: `${Math.min(100, (player.hp / player.base_hp) * 100)}%` }}
+              />
+            </div>
+
+            {/* Mana Bar */}
+            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
+              <span>Chân Nguyên</span>
+              <span>
+                {Math.round(player.current_mana)} / {Math.round(player.max_mana)}
+              </span>
+            </div>
+            <div className="w-full bg-zinc-950 rounded-full h-2.5 border border-zinc-900 overflow-hidden">
+              <div
+                className="bg-gradient-to-r from-cyan-600 to-blue-500 h-full rounded-full transition-all duration-300"
+                style={{ width: `${Math.min(100, (player.current_mana / player.max_mana) * 100)}%` }}
+              />
+            </div>
+          </div>
+          {/* Right Block: Resources */}
+          <div className="flex justify-around md:justify-end items-center gap-4 sm:gap-6 w-full md:w-auto border-t md:border-t-0 border-zinc-900/60 pt-3 md:pt-0 shrink-0">
+            {/* Primeval Stones */}
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">Nguyên Thạch</span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <Coins className="w-4 h-4 text-yellow-500" />
+                <span className="text-sm font-bold text-yellow-500/90 font-mono">
+                  {player.primeval_stones?.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* Immortal Stones */}
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">Tiên Nguyên</span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <Gem className="w-4 h-4 text-purple-400" />
+                <span className="text-sm font-bold text-purple-400 font-mono">
+                  {player.immortal_stones?.toFixed(0)}
+                </span>
+              </div>
+            </div>
+
+            {/* Human Qi */}
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">Nhân Khí</span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <Flame className="w-4 h-4 text-orange-500" />
+                <span className="text-sm font-bold text-orange-500 font-mono">
+                  {player.human_qi?.toFixed(0)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex sm:gap-6 w-full">
+        <LogConsole logs={logs} />
+      </div>
+
+      {/* 2. Category: CHỨC NĂNG */}
+      <div className="flex flex-col gap-5">
+        <div className="flex items-center justify-between border-b border-zinc-900/60 pb-2">
+          <h2 className="text-xs uppercase tracking-widest text-zinc-500 font-mono font-semibold">
+            Chức năng chính (Management)
+          </h2>
+          <span className="text-[10px] text-zinc-600 font-mono">
+            {managementItems.length} chức năng
+          </span>
+        </div>
+
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-6 justify-center">
+          {managementItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={item.id}
+                onClick={() => handleItemClick(item)}
+                className="flex flex-col items-center p-2 rounded-2xl transition-all duration-300 hover:bg-zinc-900/20 cursor-pointer group select-none"
+              >
+                <div
+                  className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center bg-gradient-to-br ${item.gradient} border ${item.borderColor} transition-all duration-300 group-hover:scale-110 shadow-lg active:scale-95 relative ${item.glow}`}
+                >
+                  <Icon className={`w-7 h-7 sm:w-9 sm:h-9 ${item.iconColor} drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]`} />
+                </div>
+                <span className="font-serif text-[11px] sm:text-xs font-semibold text-zinc-400 mt-3 tracking-wide text-center group-hover:text-zinc-100 transition-colors">
+                  {item.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 3. Category: HOẠT ĐỘNG */}
+      <div className="flex flex-col gap-5">
+        <div className="flex items-center justify-between border-b border-zinc-900/60 pb-2">
+          <h2 className="text-xs uppercase tracking-widest text-zinc-500 font-mono font-semibold">
+            Hoạt động thế giới (Activities)
+          </h2>
+          <span className="text-[10px] text-zinc-600 font-mono">
+            {activityItems.length} hoạt động
+          </span>
+        </div>
+
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-6 justify-center">
+          {activityItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={item.id}
+                onClick={() => handleItemClick(item)}
+                className={`flex flex-col items-center p-2 rounded-2xl transition-all duration-300 select-none ${
+                  item.locked
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:bg-zinc-900/20 cursor-pointer group"
+                }`}
+              >
+                <div
+                  className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center ${
+                    item.locked
+                      ? "bg-zinc-950 border border-zinc-900"
+                      : "bg-zinc-950 border border-zinc-900 hover:border-zinc-800 transition-all duration-300 group-hover:scale-110 shadow-md active:scale-95"
+                  } relative ${item.glow}`}
+                >
+                  {!item.locked && (
+                    <div className={`absolute inset-1 rounded-full border border-dashed border-zinc-800 opacity-60`} />
+                  )}
+                  <Icon className={`w-7 h-7 sm:w-9 sm:h-9 ${item.iconColor}`} />
+                  {item.locked && (
+                    <div className="absolute -bottom-1 -right-1 bg-zinc-900 border border-zinc-800 p-1 rounded-full">
+                      <Lock className="w-3 h-3 text-zinc-500" />
+                    </div>
+                  )}
+                </div>
+                <span className={`font-serif text-[11px] sm:text-xs font-semibold mt-3 tracking-wide text-center transition-colors ${
+                  item.locked
+                    ? "text-zinc-600"
+                    : "text-zinc-400 group-hover:text-zinc-100"
+                }`}>
+                  {item.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 4. CHAT PANEL (WORLD, GENERAL, SECT) */}
+      <div className="bg-zinc-950/45 border border-zinc-900 rounded-3xl p-4 sm:p-5 flex flex-col gap-4 shadow-xl backdrop-blur-md">
+        {/* Channel Tabs */}
+        <div className="flex gap-2 border-b border-zinc-900 pb-3">
+          {[
+            { id: "world", label: "Thế Giới (10 NT)" },
+            { id: "general", label: "Kênh Chung (1 NT)" },
+            { id: "sect", label: "Tông Môn (Miễn phí)" },
+          ].map((ch) => (
+            <button
+              key={ch.id}
+              onClick={() => setActiveChannel(ch.id as any)}
+              className={`px-3 py-1.5 rounded-xl font-serif text-[11px] sm:text-xs font-semibold transition-all border cursor-pointer ${
+                activeChannel === ch.id
+                  ? "bg-zinc-900 text-zinc-100 border-zinc-800"
+                  : "bg-transparent text-zinc-500 border-transparent hover:text-zinc-300"
+              }`}
+            >
+              {ch.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Message View Area */}
+        <div className="bg-zinc-950/80 border border-zinc-900/60 rounded-2xl p-3 h-44 overflow-y-auto flex flex-col gap-2.5 font-mono text-[11px] sm:text-xs">
+          {baoHoangMessages.length === 0 ? (
+            <div className="text-zinc-600 text-center py-12">
+              Kênh chat trống. Hãy gửi tin nhắn đầu tiên!
+            </div>
+          ) : (
+            baoHoangMessages.map((msg, index) => {
+              // Color-coding based on channel
+              const labelColor =
+                msg.channel === "world"
+                  ? "text-red-400"
+                  : msg.channel === "general"
+                  ? "text-cyan-400"
+                  : "text-emerald-400";
+              const label =
+                msg.channel === "world"
+                  ? "[Thế Giới]"
+                  : msg.channel === "general"
+                  ? "[Kênh Chung]"
+                  : "[Tông Môn]";
+
+              return (
+                <div key={msg.id || index} className="flex items-start gap-1.5 leading-relaxed break-all">
+                  <span className={`${labelColor} font-bold shrink-0`}>{label}</span>
+                  <span className="text-zinc-400 font-bold shrink-0">{msg.sender_username}:</span>
+                  <span className="text-zinc-200">{msg.content}</span>
+                </div>
+              );
+            })
+          )}
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* Chat input form */}
+        <form onSubmit={handleSendChat} className="flex gap-2">
+          <input
+            type="text"
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            placeholder={
+              activeChannel === "world"
+                ? "Gửi tin lên Hoàng Bảo Thiên (tốn 10 Nguyên Thạch)..."
+                : activeChannel === "general"
+                ? "Nhắn tin lên Kênh Chung (tốn 1 Nguyên Thạch)..."
+                : "Trò chuyện nội bộ Tông Môn (Miễn phí)..."
+            }
+            maxLength={100}
+            className="flex-grow bg-zinc-950 border border-zinc-900 focus:border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-all font-mono"
+          />
+          <button
+            type="submit"
+            disabled={actionLoading || !chatInput.trim()}
+            className="bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 hover:border-zinc-700 disabled:bg-zinc-950 disabled:border-zinc-900 disabled:text-zinc-700 text-zinc-300 hover:text-white px-4 py-2.5 rounded-xl transition-all flex items-center justify-center shrink-0 cursor-pointer active:scale-95"
+          >
+            {actionLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};

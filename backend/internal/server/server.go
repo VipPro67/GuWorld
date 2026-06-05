@@ -77,6 +77,16 @@ func SetupRouter() *gin.Engine {
 			player.POST("/clear-stress", handlers.ClearStress)
 		}
 
+		mine := api.Group("/mine")
+		mine.Use(middleware.AuthRequired())
+		{
+			mine.GET("/slots", handlers.GetMineSlots)
+			mine.POST("/occupy", handlers.OccupyMineSlot)
+			mine.POST("/claim", handlers.ClaimMineRewards)
+			mine.POST("/abandon", handlers.AbandonMineSlot)
+			mine.POST("/attack", handlers.AttackMineSlot)
+		}
+
 		cultivate := api.Group("/cultivate")
 		cultivate.Use(middleware.AuthRequired())
 		{
@@ -126,6 +136,34 @@ func SetupRouter() *gin.Engine {
 		combat.Use(middleware.AuthRequired())
 		{
 			combat.POST("/attack", handlers.CombatAttack)
+		}
+
+		// Protected Immortal Aperture Endpoints
+		aperture := api.Group("/immortal-aperture")
+		aperture.Use(middleware.AuthRequired())
+		{
+			aperture.GET("", handlers.GetImmortalAperture)
+			aperture.GET("/nodes", handlers.GetApertureNodes)
+			aperture.POST("/nodes", handlers.PlaceApertureNode)
+			aperture.POST("/nodes/:id/collect", handlers.CollectApertureResource)
+			aperture.POST("/nodes/:id/uninstall", handlers.UninstallApertureNode)
+			aperture.DELETE("/nodes/:id", handlers.DeleteApertureNode)
+		}
+
+		// Protected Dao Marks Endpoints
+		daoMarks := api.Group("/dao-marks")
+		daoMarks.Use(middleware.AuthRequired())
+		{
+			daoMarks.GET("", handlers.GetDaoMarks)
+		}
+
+		// Protected Tribulation Endpoints
+		tribulations := api.Group("/tribulations")
+		tribulations.Use(middleware.AuthRequired())
+		{
+			tribulations.GET("/active", handlers.GetActiveTribulation)
+			tribulations.POST("/:eventId/attack", handlers.AttackTribulationEnemy)
+			tribulations.POST("/:eventId/resolve", handlers.ResolveTribulation)
 		}
 
 		// Arena Endpoints

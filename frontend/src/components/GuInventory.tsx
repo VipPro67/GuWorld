@@ -338,13 +338,16 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                 const isSealed = status === "SEALED";
                 const isEquipped = gu.equipped;
 
+                const preferredFoodId = spec.food_types[0] || "unknown";
+                const preferredFoodName = itemDictionary[preferredFoodId]?.name || preferredFoodId;
+
                 const availableFoodId = spec.food_types.find(
                     foodId => (materials[foodId] || 0) > 0
                 );
 
                 const foodName = availableFoodId
                     ? itemDictionary[availableFoodId]?.name || availableFoodId
-                    : null;
+                    : preferredFoodName;
 
                 const availableFood = availableFoodId
                     ? materials[availableFoodId]
@@ -539,7 +542,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                   type="button"
                                   disabled={actionLoading || !canFeed || isCurrentlyFeeding}
                                   onClick={() => handleFeedClick(gu.instance_id)}
-                                  title={status === "SEALED" ? "Cổ trùng đang bị phong ấn, không thể cho ăn" : `Ăn: 1x ${foodName}`}
+                                  title={status === "SEALED" ? "Cổ trùng đang bị phong ấn, không thể cho ăn" : `Yêu cầu thức ăn: 1x ${foodName} (Sở hữu: ${availableFood})`}
                                   className={`text-[9px] font-bold py-1 px-2.5 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer font-mono ${canFeed
                                       ? "bg-emerald-600 text-white hover:bg-emerald-500 active:scale-[0.96]"
                                       : "bg-zinc-900 text-zinc-600 border border-zinc-850 cursor-not-allowed"

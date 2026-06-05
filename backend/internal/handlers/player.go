@@ -617,20 +617,20 @@ func Explore(c *gin.Context) {
 
 	// Cultivation logs
 	exploreLogs := []string{
-		"You explored the bamboo forests of Qing Mao Mountain and picked up %d Primeval Stones!",
-		"You defeated a wild mountain boar and extracted %d Primeval Stones from its body.",
-		"You scaled the rocky cliffs and discovered %d Primeval Stones hidden in a small crevice.",
-		"You sat by a quiet stream, filtered the sediments, and recovered %d Primeval Stones.",
+		"Đạo hữu khám phá rừng trúc Thanh Mao Sơn và nhặt được %d Nguyên Thạch!",
+		"Đạo hữu đánh bại dã trư rừng và thu hoạch %d Nguyên Thạch từ thi thể nó.",
+		"Đạo hữu leo lên vách đá gồ ghề và phát hiện %d Nguyên Thạch giấu trong khe đá.",
+		"Đạo hữu ngồi bên dòng suối nhỏ yên bình đãi cát tìm thấy %d Nguyên Thạch.",
 	}
 	selectedLogTemplate := exploreLogs[rand.Intn(len(exploreLogs))]
 	logMsg := fmt.Sprintf(selectedLogTemplate, rewardStones)
 
 	if droppedMaterial != "" {
-		logMsg = fmt.Sprintf("%s Additionally, you found 1x %s!", logMsg, droppedMaterialName)
+		logMsg = fmt.Sprintf("%s Ngoài ra, đạo hữu còn tìm thấy 1x %s!", logMsg, droppedMaterialName)
 	}
 
 	if capturedGuID != "" {
-		logMsg = fmt.Sprintf("%s And you successfully captured a wild %s!", logMsg, capturedGuName)
+		logMsg = fmt.Sprintf("%s Và đạo hữu đã thu phục thành công một con %s hoang dã!", logMsg, capturedGuName)
 	}
 
 	if inventoryFullMsg != "" {
@@ -765,9 +765,14 @@ func FeedGu(c *gin.Context) {
 		return
 	}
 
+	foodName := chosenFood
+	if itemSpec, ok := models.ItemRegistry[chosenFood]; ok {
+		foodName = itemSpec.Name
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"player":  player,
-		"message": fmt.Sprintf("Fed %s successfully! Consumed 1 %s.", specs.Name, chosenFood),
+		"message": fmt.Sprintf("Cho %s ăn thành công! Tiêu hao 1 %s.", specs.Name, foodName),
 	})
 }
 
@@ -822,6 +827,17 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	}
 
 	poolChanged := normalizeEnergyPool(&player)
+
+	if player.Rank >= 6 {
+		var timeRate float64
+		err = tx.QueryRow(`SELECT time_rate FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&timeRate)
+		if err == nil && timeRate > 0 {
+			if player.TimeSpeedMultiplier != timeRate {
+				player.TimeSpeedMultiplier = timeRate
+				poolChanged = true
+			}
+		}
+	}
 	regenRatePerHour := energyRegenRatePerHour(&player)
 
 	// Lão hóa: Giảm 50% tốc độ hồi mana nếu thọ nguyên cạn kiệt
@@ -1042,14 +1058,19 @@ func EquipGu(c *gin.Context) {
 		return
 	}
 
-	statusMsg := "Unequipped"
+	guName := targetGu.GuID
+	if spec, ok := models.GuRegistry[targetGu.GuID]; ok {
+		guName = spec.Name
+	}
+
+	statusMsg := fmt.Sprintf("Tháo %s thành công!", guName)
 	if req.Equip {
-		statusMsg = "Equipped"
+		statusMsg = fmt.Sprintf("Trang bị %s thành công!", guName)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"player":  player,
-		"message": fmt.Sprintf("%s Gu successfully!", statusMsg),
+		"message": statusMsg,
 	})
 }
 

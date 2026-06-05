@@ -1,65 +1,65 @@
-"id","name","rank","path","gu_type","base_mana_cost","effects","hunger_rate","food_types","max_hunger","description","origin_region"
-GU_THUNDER_WINGS,Lôi Dực Cổ,3,Lightning Path,Movement,20.0,"{""movement"": 5.0}",5,"[]",100,Tạo ra đôi cánh sấm sét giúp phi hành tốc độ cao.,Southern_Border
-GU_TUSITA_FLOWER,Đâu Suất Hoa,3,Wood Path,Storage,0.0,"{""storage"": 15000.0}",2,"[]",100,Lồng đèn hoa màu đỏ chứa được vạn rưỡi nguyên thạch hoặc vật tư.,Southern_Border
+id,name,rank,path,gu_type,base_mana_cost,effects,hunger_rate,food_types,max_hunger,description,origin_region
+GU_THUNDER_WINGS,Lôi Dực Cổ,3,Lightning Path,Movement,20.0,"{""movement"": 5.0}",5,"[""lightning_pearl""]",100,Tạo ra đôi cánh sấm sét giúp phi hành tốc độ cao.,Southern_Border
+GU_TUSITA_FLOWER,Đâu Suất Hoa,3,Wood Path,Storage,0.0,"{""storage"": 15000.0}",2,"[""nectar""]",100,Lồng đèn hoa màu đỏ chứa được vạn rưỡi nguyên thạch hoặc vật tư.,Southern_Border
 GU_NINE_LEAF_VITALITY_GRASS,Cửu Diệp Sinh Cơ Thảo,2,Wood Path,Healing,10.0,"{""generate_gu"": 1.0}",2,"[""water""]",100,Trồng trong không khiếu để liên tục sinh ra Sinh Cơ Diệp nhất chuyển.,Southern_Border
 GU_BLACK_BOAR,Hắc Thỉ Cổ,1,Strength Path,Passive,0.0,"{""add_base_attack"": 15.0}",6,"[""boar_meat""]",100,Cải tạo thể chất vĩnh viễn tăng sức mạnh một con hắc thỉ.,Southern_Border
 GU_CLEANSING_WATER,Tịnh Thủy Cổ,1,Water Path,Support,15.0,"{""cleansing_power"": 1.0}",4,"[""green_bamboo_wine""]",100,Tẩy sạch chân nguyên dị chủng và cặn bã trong Không khiếu.,Southern_Border
 GU_JADE_SKIN,Ngọc Bì Cổ,1,Earth Path,Passive,0.0,"{""add_base_defense"": 40.0}",2,"[""jade_stone""]",100,Cải tạo bề mặt da trở nên cứng cáp như ngọc bích.,Southern_Border
-GU_CANOPY,Thiên Bồng Cổ,3,Earth Path,Defense,20.0,"{""add_base_defense"": 150.0}",4,"[]",100,Hình thành áo giáp bạch ngọc phòng thủ kiên cố giảm sát thương.,Southern_Border
-GU_MAN_BEAST_LIFE_BURIAL,Nhân Thú Táng Sinh Cổ,3,Blood Path,Consumable,0.0,"{""force_rank_up"": 1.0, ""mana_pollution"": 1.0}",0,"[]",100,Ép cổ sư nhị chuyển đỉnh phong thăng cấp lên tam chuyển nhưng ô nhiễm chân nguyên.,Southern_Border
+GU_CANOPY,Thiên Bồng Cổ,3,Earth Path,Defense,20.0,"{""add_base_defense"": 150.0}",4,"[""beast_bones""]",100,Hình thành áo giáp bạch ngọc phòng thủ kiên cố giảm sát thương.,Southern_Border
+GU_MAN_BEAST_LIFE_BURIAL,Nhân Thú Táng Sinh Cổ,3,Blood Path,Consumable,0.0,"{""force_rank_up"": 1.0, ""mana_pollution"": 1.0}",0,"[""beast_blood""]",100,Ép cổ sư nhị chuyển đỉnh phong thăng cấp lên tam chuyển nhưng ô nhiễm chân nguyên.,Southern_Border
 GU_BLOOD_MOON,Huyết Nguyệt Cổ,3,Blood Path,Active,15.0,"{""damage"": 50.0, ""bleed_effect"": 10.0, ""aoe_col"": 1.0}",5,"[""fresh_blood""]",100,Bắn ra nguyệt nhận màu máu gây hiệu ứng chảy máu không ngừng.,Southern_Border
 GU_STEALTH_SCALES,Ẩn Lân Cổ,2,Water Path,Support,10.0,"{""stealth"": 1.0}",3,"[""fish_scales""]",100,Giúp cổ sư tàng hình cùng với toàn bộ quần áo trên người.,Southern_Border
 GU_FOUR_FLAVORS_LIQUOR,Tứ Vị Tửu Trùng,2,Refinement Path,Support,0.0,"{""refine_mana_tier"": 2.0}",2,"[""four_flavors_wine""]",100,Tinh luyện chân nguyên Nhị Chuyển tối thượng.,Southern_Border
-GU_STONE_APERTURE,Thạch Khiếu Cổ,3,Earth Path,Consumable,0.0,"{""max_subrank"": 1.0, ""aperture_petrification"": 1.0}",0,"[]",100,Vắt kiệt tiềm lực không khiếu đẩy tu vi lên đỉnh phong nhưng đoạn tuyệt đường thăng cấp.,Southern_Border
+GU_STONE_APERTURE,Thạch Khiếu Cổ,3,Earth Path,Consumable,0.0,"{""max_subrank"": 1.0, ""aperture_petrification"": 1.0}",0,"[""earth_qi""]",100,Vắt kiệt tiềm lực không khiếu đẩy tu vi lên đỉnh phong nhưng đoạn tuyệt đường thăng cấp.,Southern_Border
 GU_MOON_RAIMENT,Nguyệt Nghê Thường,2,Moon Path,Defense,15.0,"{""add_base_defense"": 75.0}",4,"[""moon_orchid_petal""]",100,Tạo ra một bộ xiêm y bằng ánh trăng che chở cơ thể.,Southern_Border
-GU_WATER_SHIELD,Thủy Tráo Cổ,2,Water Path,Defense,15.0,"{""add_base_defense"": 50.0}",4,"[]",100,Tạo khiên nước hình cầu bảo vệ tuyệt đối từ mọi phía.,Southern_Border
+GU_WATER_SHIELD,Thủy Tráo Cổ,2,Water Path,Defense,15.0,"{""add_base_defense"": 50.0}",4,"[""water_weed""]",100,Tạo khiên nước hình cầu bảo vệ tuyệt đối từ mọi phía.,Southern_Border
 GU_LITTLE_LIGHT,Tiểu Quang Cổ,1,Light Path,Support,5.0,"{""damage_multiplier"": 2.0}",4,"[""moon_orchid_petal""]",100,Tăng cường uy lực của nguyệt nhận lên gấp đôi.,Southern_Border
-GU_BONE_FLESH_REUNION,Cốt Nhục Đoàn Viên Cổ,4,Human Path,Support,0.0,"{""share_cultivation"": 1.0}",5,"[]",100,Giúp hai cổ sư tiến hành song tu chia sẻ tu vi kề vai sát cánh.,Southern_Border
+GU_BONE_FLESH_REUNION,Cốt Nhục Đoàn Viên Cổ,4,Human Path,Support,0.0,"{""share_cultivation"": 1.0}",5,"[""twin_blood""]",100,Giúp hai cổ sư tiến hành song tu chia sẻ tu vi kề vai sát cánh.,Southern_Border
 GU_WHITE_BOAR,Bạch Thỉ Cổ,1,Strength Path,Passive,0.0,"{""add_base_attack"": 15.0}",6,"[""boar_meat""]",100,Cải tạo thể chất vĩnh viễn tăng sức mạnh một con lợn rừng trắng.,Northern_Plains
 GU_EARTH_WORM,Địa Trùng,1,Earth Path,Support,5.0,"{""burrow"": 1.0}",2,"[""earth_qi""]",100,Lẩn trốn vào lòng đất.,Southern_Border
-GU_SAW_TOOTH_GOLDEN_CENTIPEDE,Cự Xỉ Kim Ngô,3,Metal Path,Active,15.0,"{""damage"": 120.0}",6,"[]",100,Rết vàng hóa thành cưa máy cầm tay sát thương cận chiến cực mạnh.,Southern_Border
-GU_ALL_OUT_EFFORT,Toàn Lực Ứng Phó Cổ,3,Strength Path,Support,10.0,"{""summon_phantom"": 1.0}",5,"[]",100,Triệu hồi 100% hư ảnh thú lực của bản thân để tấn công.,Southern_Border
-GU_BITTER_STRENGTH,Khổ Lực Cổ,4,Strength Path,Passive,0.0,"{""damage_multiplier_on_hit"": 0.1}",5,"[]",100,Càng chịu đau đớn và thương tích sức mạnh bộc phát ra càng khổng lồ.,Southern_Border
-GU_SELF_RELIANCE,Tự Lực Cánh Sinh Cổ,3,Strength Path,Healing,15.0,"{""heal_based_on_strength"": 1.0}",4,"[]",100,Hồi phục vết thương nhanh chóng dựa trên sức mạnh vật lý của cổ sư.,Southern_Border
+GU_SAW_TOOTH_GOLDEN_CENTIPEDE,Cự Xỉ Kim Ngô,3,Metal Path,Active,15.0,"{""damage"": 120.0}",6,"[""poisonous_flesh""]",100,Rết vàng hóa thành cưa máy cầm tay sát thương cận chiến cực mạnh.,Southern_Border
+GU_ALL_OUT_EFFORT,Toàn Lực Ứng Phó Cổ,3,Strength Path,Support,10.0,"{""summon_phantom"": 1.0}",5,"[""stone_man_heart""]",100,Triệu hồi 100% hư ảnh thú lực của bản thân để tấn công.,Southern_Border
+GU_BITTER_STRENGTH,Khổ Lực Cổ,4,Strength Path,Passive,0.0,"{""damage_multiplier_on_hit"": 0.1}",5,"[""bitter_water""]",100,Càng chịu đau đớn và thương tích sức mạnh bộc phát ra càng khổng lồ.,Southern_Border
+GU_SELF_RELIANCE,Tự Lực Cánh Sinh Cổ,3,Strength Path,Healing,15.0,"{""heal_based_on_strength"": 1.0}",4,"[""water""]",100,Hồi phục vết thương nhanh chóng dựa trên sức mạnh vật lý của cổ sư.,Southern_Border
 GU_LIQUOR_WORM,Tửu Trùng,1,Refinement Path,Support,0.0,"{""refine_mana_tier"": 1.0}",3,"[""green_bamboo_wine""]",100,Tinh luyện và nâng cao chất lượng Chân Nguyên lên một tiểu cảnh giới.,Southern_Border
 GU_BLOOD_SKULL,Huyết Sọ Cổ,4,Blood Path,Support,0.0,"{""increase_aptitude"": 1.0}",5,"[""blood""]",100,Rút máu người thân cùng huyết thống để tăng tư chất tu hành cho bản thân.,Southern_Border
-GU_CHARRED_THUNDER_POTATO,Tiêu Lôi Thổ Đậu,2,Earth Path,Consumable,0.0,"{""trap_damage"": 80.0}",0,"[]",100,Cổ gài bẫy dưới đất phát nổ khi có rung chấn.,Southern_Border
+GU_CHARRED_THUNDER_POTATO,Tiêu Lôi Thổ Đậu,2,Earth Path,Consumable,0.0,"{""trap_damage"": 80.0}",0,"[""earth_qi""]",100,Cổ gài bẫy dưới đất phát nổ khi có rung chấn.,Southern_Border
 GU_MOONLIGHT,Nguyệt Quang Cổ,1,Moon Path,Active,10.0,"{""damage"": 25.0}",5,"[""moon_orchid_petal""]",100,Bắn ra nguyệt nhận sắc lẹm màu xanh lam.,Southern_Border
 GU_WHITE_JADE,Bạch Ngọc Cổ,2,Earth Path,Defense,20.0,"{""add_base_defense"": 110.0}",3,"[""jade_stone""]",100,Biến làn da toàn thân thành ngọc trắng cứng cáp che chắn.,Southern_Border
 GU_NINE_EYES_LIQUOR,Cửu Nhãn Tửu Trùng,4,Refinement Path,Support,0.0,"{""refine_mana_tier"": 4.0}",4,"[""four_flavors_wine""]",100,Tinh luyện chân nguyên Tứ chuyển lên một tiểu cảnh giới.,Southern_Border
-GU_WOLF_ENSLAVEMENT_3,Ngự Lang Cổ (Tam Chuyển),3,Enslavement Path,Consumable,0.0,"{""enslave_beast_tier"": 3.0}",0,"[]",100,Điều khiển một thiên thú vương sói.,Northern_Plains
-GU_WOLF_ENSLAVEMENT_4,Ngự Lang Cổ (Tứ Chuyển),4,Enslavement Path,Consumable,0.0,"{""enslave_beast_tier"": 4.0}",0,"[]",100,Điều khiển một vạn thú vương sói.,Northern_Plains
-GU_WOLF_SOUL,Lang Hồn Cổ,3,Soul Path,Passive,0.0,"{""soul_refinement"": 1.0}",4,"[]",100,Cô đọng và chuyển hóa hồn phách thành Lang Nhân Hồn.,Northern_Plains
-GU_CONNECTING_HEAVEN,Thông Thiên Cổ,5,Information Path,Investigation,20.0,"{""connect_treasure_yellow_heaven"": 1.0}",5,"[]",100,Kết nối thần niệm với mạng lưới giao dịch Bảo Hoàng Thiên.,Central_Continent
+GU_WOLF_ENSLAVEMENT_3,Ngự Lang Cổ (Tam Chuyển),3,Enslavement Path,Consumable,0.0,"{""enslave_beast_tier"": 3.0}",0,"[""wolf_bone""]",100,Điều khiển một thiên thú vương sói.,Northern_Plains
+GU_WOLF_ENSLAVEMENT_4,Ngự Lang Cổ (Tứ Chuyển),4,Enslavement Path,Consumable,0.0,"{""enslave_beast_tier"": 4.0}",0,"[""wolf_bone""]",100,Điều khiển một vạn thú vương sói.,Northern_Plains
+GU_WOLF_SOUL,Lang Hồn Cổ,3,Soul Path,Passive,0.0,"{""soul_refinement"": 1.0}",4,"[""wolf_soul""]",100,Cô đọng và chuyển hóa hồn phách thành Lang Nhân Hồn.,Northern_Plains
+GU_CONNECTING_HEAVEN,Thông Thiên Cổ,5,Information Path,Investigation,20.0,"{""connect_treasure_yellow_heaven"": 1.0}",5,"[""heaven_qi""]",100,Kết nối thần niệm với mạng lưới giao dịch Bảo Hoàng Thiên.,Central_Continent
 GU_SWIFT_STEP,Tật Bộ Cổ,1,Movement Path,Movement,5.0,"{""movement"": 1.0}",2,"[""green_bamboo_wine""]",100,Tăng nhẹ tốc độ di chuyển.,Southern_Border
 GU_MAN_AS_BEFORE,Nhân Như Cố,6,Time Path,Healing,0.0,"{""restore_status"": 1.0}",1,"[""immortal_essence""]",100,Tiên cổ Trụ đạo khôi phục trạng thái cơ thể cổ sư về khoảnh khắc trước.,Northern_Plains
-GU_DIVINE_SENSE,Thần Niệm Cổ,5,Wisdom Path,Support,10.0,"{""generate_divine_sense"": 1.0}",5,"[]",100,Tạo ra thần niệm để giao tiếp và tra xét mọi thứ.,Central_Continent
-GU_GUTS,Can Đảm Cổ,3,Soul Path,Consumable,0.0,"{""soul_boost"": 10.0}",0,"[]",100,Tráng kiện hồn phách một cách an toàn nhất không lưu lại tác dụng phụ.,Central_Continent
+GU_DIVINE_SENSE,Thần Niệm Cổ,5,Wisdom Path,Support,10.0,"{""generate_divine_sense"": 1.0}",5,"[""soul_qi""]",100,Tạo ra thần niệm để giao tiếp và tra xét mọi thứ.,Central_Continent
+GU_GUTS,Can Đảm Cổ,3,Soul Path,Consumable,0.0,"{""soul_boost"": 10.0}",0,"[""none""]",100,Tráng kiện hồn phách một cách an toàn nhất không lưu lại tác dụng phụ.,Central_Continent
 GU_CLEANSE_SOUL,Tịnh Hồn Cổ,6,Soul Path,Support,0.0,"{""cleanse_soul"": 1.0}",1,"[""white_lotus_giant_silkworm""]",100,Tinh luyện hồn phách loại bỏ tạp chất và là hạch tâm sát chiêu Vạn Ngã.,Northern_Plains
 GU_MOON_SILVER,Nguyệt Ngân Cổ,2,Moon Path,Active,10.0,"{""range"": 20.0, ""damage"": 25.0}",4,"[""moon_orchid_petal""]",100,Tăng gấp đôi tầm bắn của nguyệt nhận lên 20 thước.,Southern_Border
-GU_SHADOW,Ảnh Cổ,1,Dark Path,Support,5.0,"{""evasion"": 1.0}",2,"[]",100,Tạo ra cái bóng phân tán sự chú ý.,Southern_Border
+GU_SHADOW,Ảnh Cổ,1,Dark Path,Support,5.0,"{""evasion"": 1.0}",2,"[""light""]",100,Tạo ra cái bóng phân tán sự chú ý.,Southern_Border
 GU_WISDOM,Trí Tuệ Cổ,9,Wisdom Path,Support,0.0,"{""infinite_inspiration"": 1.0}",1,"[""lifespan_gu""]",100,Tỏa ra vầng sáng trí tuệ cung cấp linh cảm vô hạn nhưng tiêu hao thọ nguyên.,Northern_Plains
 GU_BLOOD_ASSET,Huyết Tích Tử,5,Blood Path,Active,20.0,"{""replicate"": 1.0, ""blood_drain"": 100.0}",5,"[""blood""]",100,Hút máu để sinh sản điên cuồng hợp thành ma cổ Huyết Thần Tử.,Southern_Border
-GU_WOOD_CHARM,Mộc Mị Cổ,3,Wood Path,Active,10.0,"{""mana_regen"": 5.0, ""wood_transformation"": 1.0}",5,"[]",100,Biến thân thành yêu tinh cây tự động hút nguyên khí thiên nhiên để chiến đấu dai dẳng.,Southern_Border
+GU_WOOD_CHARM,Mộc Mị Cổ,3,Wood Path,Active,10.0,"{""mana_regen"": 5.0, ""wood_transformation"": 1.0}",5,"[""tree_sap""]",100,Biến thân thành yêu tinh cây tự động hút nguyên khí thiên nhiên để chiến đấu dai dẳng.,Southern_Border
 GU_MOON_HALO,Nguyệt Mang Cổ,2,Moon Path,Active,15.0,"{""damage"": 75.0}",5,"[""moon_orchid_petal""]",100,Gấp ba lần uy lực của Nguyệt Quang Cổ.,Southern_Border
-GU_WOLF_ENSLAVEMENT_2,Ngự Lang Cổ (Nhị Chuyển),2,Enslavement Path,Consumable,0.0,"{""enslave_beast_tier"": 2.0}",0,"[]",100,Điều khiển một bách thú vương sói.,Northern_Plains
-GU_WATER_CLEANSING,Tuyệt Tẩy Cổ (Tuyết Tẩy),4,Water Path,Healing,15.0,"{""cure_poison"": 1.0}",4,"[]",100,Cổ trùng giải độc trứ danh của Bắc Nguyên.,Northern_Plains
+GU_WOLF_ENSLAVEMENT_2,Ngự Lang Cổ (Nhị Chuyển),2,Enslavement Path,Consumable,0.0,"{""enslave_beast_tier"": 2.0}",0,"[""wolf_bone""]",100,Điều khiển một bách thú vương sói.,Northern_Plains
+GU_WATER_CLEANSING,Tuyệt Tẩy Cổ (Tuyết Tẩy),4,Water Path,Healing,15.0,"{""cure_poison"": 1.0}",4,"[""water""]",100,Cổ trùng giải độc trứ danh của Bắc Nguyên.,Northern_Plains
 GU_CONNECT_LUCK,Liên Vận Cổ,6,Luck Path,Support,0.0,"{""connect_luck"": 1.0}",1,"[""sand_gull_soil""]",100,Tiên cổ Vận đạo kết nối vận khí của bản thân với người khác hoặc vật khác.,Northern_Plains
 GU_MOON_WHIRL,Nguyệt Toàn Cổ,2,Moon Path,Active,15.0,"{""damage"": 35.0, ""curve_attack"": 1.0}",5,"[""moon_orchid_petal""]",100,Nguyệt nhận biến thành màu xanh lục và bay theo đường cong.,Southern_Border
 GU_SEVEN_FRAGRANCES_LIQUOR,Thất Hương Tửu Trùng,3,Refinement Path,Support,0.0,"{""refine_mana_tier"": 3.0}",3,"[""four_flavors_wine""]",100,Tinh luyện chân nguyên Tam chuyển lên một tiểu cảnh giới.,Southern_Border
 GU_ATTITUDE,Thái Độ Cổ,8,Wisdom Path,Support,0.0,"{""perfect_disguise"": 1.0}",1,"[""flowing_light_apple""]",100,Mặt nạ của trái tim thay đổi thái độ ngụy trang hoàn hảo chống mọi trinh sát.,Northern_Plains
 GU_WOMANS_HEART,Phụ Nhân Tâm Cổ,6,Poison Path,Consumable,0.0,"{""lethal_poison"": 1.0}",1,"[""womans_heart""]",100,Tiên cổ Độc đạo kịch độc dùng 1 lần sinh ra từ oán hận phụ nữ.,Central_Continent
-GU_JIN_STRENGTH,Cân Lực Cổ,1,Strength Path,Passive,0.0,"{""add_base_attack"": 5.0}",2,"[]",100,Tăng vĩnh viễn sức mạnh 1 cân khí lực cho cổ sư.,Northern_Plains
-GU_JUN_STRENGTH,Quân Lực Cổ,3,Strength Path,Passive,0.0,"{""add_base_attack"": 50.0}",4,"[]",100,Tăng vĩnh viễn sức mạnh 1 quân (30 cân) khí lực.,Northern_Plains
+GU_JIN_STRENGTH,Cân Lực Cổ,1,Strength Path,Passive,0.0,"{""add_base_attack"": 5.0}",2,"[""meat""]",100,Tăng vĩnh viễn sức mạnh 1 cân khí lực cho cổ sư.,Northern_Plains
+GU_JUN_STRENGTH,Quân Lực Cổ,3,Strength Path,Passive,0.0,"{""add_base_attack"": 50.0}",4,"[""meat""]",100,Tăng vĩnh viễn sức mạnh 1 quân (30 cân) khí lực.,Northern_Plains
 GU_STARGATE,Tinh Môn Cổ,5,Space Path,Movement,50.0,"{""portal_creation"": 1.0}",6,"[""starlight_firefly""]",100,Mở cổng không gian vượt rào cản năm vực nhờ ánh sao trời ban đêm.,Central_Continent
 GU_LANDSCAPE_AS_BEFORE,Giang Sơn Như Cũ,6,Time Path,Healing,0.0,"{""restore_landscape"": 1.0}",1,"[""immortal_essence""]",100,Tiên cổ Trụ đạo khôi phục địa hình về trạng thái trước đó.,Northern_Plains
-GU_TEN_JUN_STRENGTH,Thập Quân Lực Cổ,4,Strength Path,Passive,0.0,"{""add_base_attack"": 500.0}",5,"[]",100,Tăng vĩnh viễn sức mạnh 10 quân khí lực.,Northern_Plains
-GU_WHITE_SILVER_RELIC,Bạch Ngân Xá Lợi Cổ,3,Human Path,Consumable,0.0,"{""rank_progress"": 1.0}",0,"[]",100,Tăng tu vi Tam Chuyển lên một tiểu cảnh giới.,Southern_Border
-GU_YELLOW_GOLD_RELIC,Hoàng Kim Xá Lợi Cổ,4,Human Path,Consumable,0.0,"{""rank_progress"": 1.0}",0,"[]",100,Tăng tu vi Tứ Chuyển lên một tiểu cảnh giới.,Southern_Border
-GU_PURPLE_CRYSTAL_RELIC,Tử Tinh Xá Lợi Cổ,5,Human Path,Consumable,0.0,"{""rank_progress"": 1.0}",0,"[]",100,Tăng tu vi Ngũ Chuyển lên một tiểu cảnh giới.,Southern_Border
+GU_TEN_JUN_STRENGTH,Thập Quân Lực Cổ,4,Strength Path,Passive,0.0,"{""add_base_attack"": 500.0}",5,"[""meat""]",100,Tăng vĩnh viễn sức mạnh 10 quân khí lực.,Northern_Plains
+GU_WHITE_SILVER_RELIC,Bạch Ngân Xá Lợi Cổ,3,Human Path,Consumable,0.0,"{""rank_progress"": 1.0}",0,"[""none""]",100,Tăng tu vi Tam Chuyển lên một tiểu cảnh giới.,Southern_Border
+GU_YELLOW_GOLD_RELIC,Hoàng Kim Xá Lợi Cổ,4,Human Path,Consumable,0.0,"{""rank_progress"": 1.0}",0,"[""none""]",100,Tăng tu vi Tứ Chuyển lên một tiểu cảnh giới.,Southern_Border
+GU_PURPLE_CRYSTAL_RELIC,Tử Tinh Xá Lợi Cổ,5,Human Path,Consumable,0.0,"{""rank_progress"": 1.0}",0,"[""none""]",100,Tăng tu vi Ngũ Chuyển lên một tiểu cảnh giới.,Southern_Border
 GU_SPRING_AUTUMN_CICADA,Xuân Thu Thiền,6,Time Path,Support,0.0,"{""time_travel"": 1.0}",1,"[""time_river_water""]",100,Tiên cổ bản mệnh của Phương Nguyên có khả năng trọng sinh quay ngược thời gian.,Central_Continent
 GU_EARTH_COMMUNICATION,Địa Thính Nhục Nhĩ Thảo,2,Earth Path,Investigation,5.0,"{""investigation"": 30.0}",3,"[""ginseng""]",100,Mọc ra lỗ tai thịt nghe ngóng chấn động lòng đất phạm vi 300 bước.,Southern_Border
-GU_CHARGING_CRASH,Mạnh Mẽ Đâm Tới Cổ,4,Strength Path,Movement,20.0,"{""damage"": 50.0, ""movement"": 4.0}",5,"[]",100,Tạo đà xông thẳng về phía trước để cưỡng ép đột phá trận hình.,Southern_Border
+GU_CHARGING_CRASH,Mạnh Mẽ Đâm Tới Cổ,4,Strength Path,Movement,20.0,"{""damage"": 50.0, ""movement"": 4.0}",5,"[""beast_meat""]",100,Tạo đà xông thẳng về phía trước để cưỡng ép đột phá trận hình.,Southern_Border
 GU_WORLDLY_ESCAPE,Độn Không Cổ,6,Space Path,Movement,120.0,"{""escape"": 1.0, ""space_travel"": 1.0}",15,"[""immortal_essence""]",100,"Xuyên qua không gian, đào thoát khỏi hiểm cảnh.",Central_Continent
 GU_DREAM_WINGS,Mộng Dực Cổ,6,Dream Path,Movement,80.0,"{""dream_travel"": 1.0}",12,"[""dream_material""]",100,Cho phép tiến vào và di chuyển trong mộng cảnh.,Southern_Border
 GU_SELF_STRENGTH,Tự Lực Cổ,4,Strength Path,Passive,20.0,"{""strength"": 100.0}",5,"[""wild_boar_tusk""]",100,Gia tăng lực lượng cơ thể liên tục.,Northern_Plains
@@ -71,18 +71,18 @@ GU_SWORD_DRAGON,Kiếm Long Cổ,9,Sword Path,Active,1.0,"{""damage"": 50000.0, 
 GU_IRON_BONE,Thiết Cốt Cổ,3,Earth Path,Passive,0.0,"{""add_base_defense"": 100.0}",3,"[""iron""]",100,Biến xương cốt thành màu đen nhánh cứng như sắt thép.,Southern_Border
 GU_FIXED_IMMORTAL_TRAVEL,Định Tiên Du,6,Space Path,Movement,0.0,"{""teleportation"": 1.0}",1,"[""immortal_essence""]",100,Dịch chuyển tức thời đến bất kỳ nơi nào có ấn tượng rõ ràng trong đầu.,Central_Continent
 GU_FLESH_EAR,Nhục Nhĩ Cổ,1,Human Path,Investigation,5.0,"{""hearing"": 2.0}",2,"[""ginseng""]",100,Cường hóa thính giác.,Southern_Border
-GU_BRONZE_RELIC,Thanh Đồng Xá Lợi Cổ,1,Human Path,Consumable,0.0,"{""rank_progress"": 1.0}",0,"[]",100,Tăng tu vi Nhất Chuyển lên một tiểu cảnh giới.,Southern_Border
-GU_FLYING_SWORD,Phi Kiếm Cổ,7,Sword Path,Active,1.0,"{""damage"": 35000.0, ""armor_penetration"": 80.0}",1,"[]",100,Tiên Cổ kiếm đạo công kích đơn thể xuyên thấu vạn vật.,Central_Continent
-GU_MYRIAD_SELF,Vạn Ngã Tiên Cổ,7,Human Path,Active,1.0,"{""summon_clones"": 10000, ""damage_multiplier"": 500.0}",1,"[]",100,Dung hợp Nô Lực sáng tạo ra hàng vạn phân thân có lực chiến cường hãn.,Southern_Border
-GU_RED_STEEL_RELIC,Xích Thiết Xá Lợi Cổ,2,Human Path,Consumable,0.0,"{""rank_progress"": 1.0}",0,"[]",100,Tăng tu vi Nhị Chuyển lên một tiểu cảnh giới.,Southern_Border
+GU_BRONZE_RELIC,Thanh Đồng Xá Lợi Cổ,1,Human Path,Consumable,0.0,"{""rank_progress"": 1.0}",0,"[""none""]",100,Tăng tu vi Nhất Chuyển lên một tiểu cảnh giới.,Southern_Border
+GU_FLYING_SWORD,Phi Kiếm Cổ,7,Sword Path,Active,1.0,"{""damage"": 35000.0, ""armor_penetration"": 80.0}",1,"[""sword_qi""]",100,Tiên Cổ kiếm đạo công kích đơn thể xuyên thấu vạn vật.,Central_Continent
+GU_MYRIAD_SELF,Vạn Ngã Tiên Cổ,7,Human Path,Active,1.0,"{""summon_clones"": 10000, ""damage_multiplier"": 500.0}",1,"[""immortal_essence""]",100,Dung hợp Nô Lực sáng tạo ra hàng vạn phân thân có lực chiến cường hãn.,Southern_Border
+GU_RED_STEEL_RELIC,Xích Thiết Xá Lợi Cổ,2,Human Path,Consumable,0.0,"{""rank_progress"": 1.0}",0,"[""none""]",100,Tăng tu vi Nhị Chuyển lên một tiểu cảnh giới.,Southern_Border
 GU_BLOOD_DEITY,Huyết Thần Cổ,9,Blood Path,Active,1.0,"{""damage"": 60000.0, ""lifesteal"": 100.0}",40,"[""immortal_blood""]",100,Ngưng tụ huyết thần bất tử hấp thu sinh mệnh địch nhân.,Northern_Plains
 GU_SUN_FIRE,Đại Nhật Hỏa Cổ,9,Fire Path,Active,1.0,"{""aoe_all"": 1.0, ""burn"": 5000.0, ""damage"": 100000.0}",35,"[""sun_flame""]",100,Ngưng tụ chân hỏa của đại nhật thiêu đốt vạn vật.,Western_Desert
-GU_RELIC,Xá Lợi Cổ (Relic Gu),1,Refinement Path,Consumable,0.0,"{""raise_cultivation"": 1.0}",0,"[]",100,Cổ trùng tiêu hao nâng cao tu vi ngay lập tức thêm 1 Tiểu Chuyển.,Southern_Border
-GU_HEAVENLY_ESSENCE_LOTUS_3,Thiên Nguyên Bảo Liên,3,Wood Path,Support,0.0,"{""generate_primeval_stones"": 50.0}",2,"[]",100,Nguyên tuyền di động sản sinh nguyên thạch mỗi ngày.,Southern_Border
-GU_COPPER_SKIN,Đồng Bì Cổ,1,Earth Path,Passive,0.0,"{""add_base_defense"": 20.0}",2,"[]",100,Cải tạo da thành màu đồng tăng cường phòng ngự vật lý.,Southern_Border
-GU_STEEL_TENDON,Cương Cân Cổ,3,Strength Path,Passive,0.0,"{""add_base_attack"": 50.0, ""add_base_defense"": 50.0}",3,"[]",100,Gân cốt cứng như thép rèn luyện sức chịu đựng.,Southern_Border
-GU_SWORD_ESCAPE,Kiếm Độn Tiên Cổ,7,Sword Path,Movement,1.0,"{""movement"": 150.0}",1,"[]",100,Hóa thân thành kiếm quang phi hành với tốc độ xé rách không gian.,Central_Continent
-GU_PULLING_MOUNTAIN,Bạt Sơn Tiên Cổ,6,Strength Path,Active,1.0,"{""damage"": 15000.0, ""lift_mountain"": 1.0}",1,"[]",100,Sức mạnh nhổ núi dời non vô cùng uy dũng.,Southern_Border
-GU_PULLING_WATER,Kéo Sông Tiên Cổ,6,Water Path,Active,1.0,"{""pull_river"": 1.0, ""water_control"": 10000.0}",1,"[]",100,Nắm giữ lực kéo dòng nước biển cả.,Eastern_Sea
-GU_REGRET,Hối Hận Cổ,8,Refinement Path,Support,1.0,"{""refinement_guarantee"": 1.0}",1,"[]",100,Tiên cổ hạch tâm của Trì Hối Hận giúp loại trừ tỉ lệ luyện cổ thất bại.,Heaven_Court
-GU_THIEF_GHOST_HAND,Đại Tặc Quỷ Thủ,7,Theft Path,Active,2.0,"{""steal_immortal_gu"": 1.0}",1,"[]",100,Quỷ thủ vô hình vô tướng chuyên trộm cắp Tiên Cổ của kẻ địch.,Western_Desert
+GU_RELIC,Xá Lợi Cổ (Relic Gu),1,Refinement Path,Consumable,0.0,"{""raise_cultivation"": 1.0}",0,"[""none""]",100,Cổ trùng tiêu hao nâng cao tu vi ngay lập tức thêm 1 Tiểu Chuyển.,Southern_Border
+GU_HEAVENLY_ESSENCE_LOTUS_3,Thiên Nguyên Bảo Liên,3,Wood Path,Support,0.0,"{""generate_primeval_stones"": 50.0}",2,"[""spirit_spring_water""]",100,Nguyên tuyền di động sản sinh nguyên thạch mỗi ngày.,Southern_Border
+GU_COPPER_SKIN,Đồng Bì Cổ,1,Earth Path,Passive,0.0,"{""add_base_defense"": 20.0}",2,"[""copper_ore""]",100,Cải tạo da thành màu đồng tăng cường phòng ngự vật lý.,Southern_Border
+GU_STEEL_TENDON,Cương Cân Cổ,3,Strength Path,Passive,0.0,"{""add_base_attack"": 50.0, ""add_base_defense"": 50.0}",3,"[""iron_ore""]",100,Gân cốt cứng như thép rèn luyện sức chịu đựng.,Southern_Border
+GU_SWORD_ESCAPE,Kiếm Độn Tiên Cổ,7,Sword Path,Movement,1.0,"{""movement"": 150.0}",1,"[""immortal_essence""]",100,Hóa thân thành kiếm quang phi hành với tốc độ xé rách không gian.,Central_Continent
+GU_PULLING_MOUNTAIN,Bạt Sơn Tiên Cổ,6,Strength Path,Active,1.0,"{""damage"": 15000.0, ""lift_mountain"": 1.0}",1,"[""immortal_essence""]",100,Sức mạnh nhổ núi dời non vô cùng uy dũng.,Southern_Border
+GU_PULLING_WATER,Kéo Sông Tiên Cổ,6,Water Path,Active,1.0,"{""pull_river"": 1.0, ""water_control"": 10000.0}",1,"[""immortal_essence""]",100,Nắm giữ lực kéo dòng nước biển cả.,Eastern_Sea
+GU_REGRET,Hối Hận Cổ,8,Refinement Path,Support,1.0,"{""refinement_guarantee"": 1.0}",1,"[""regret_water""]",100,Tiên cổ hạch tâm của Trì Hối Hận giúp loại trừ tỉ lệ luyện cổ thất bại.,Heaven_Court
+GU_THIEF_GHOST_HAND,Đại Tặc Quỷ Thủ,7,Theft Path,Active,2.0,"{""steal_immortal_gu"": 1.0}",1,"[""immortal_essence""]",100,Quỷ thủ vô hình vô tướng chuyên trộm cắp Tiên Cổ của kẻ địch.,Western_Desert
