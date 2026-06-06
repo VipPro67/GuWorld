@@ -17,6 +17,8 @@ import { MineView } from "@/components/MineView";
 import { LobbyView } from "@/components/LobbyView";
 import { ToastContainer } from "@/components/ToastContainer";
 import { ImmortalApertureView } from "@/components/ImmortalApertureView";
+import { DungeonView } from "@/components/DungeonView";
+import { SectView } from "@/components/SectView";
 
 
 
@@ -235,6 +237,14 @@ export default function Home() {
         ) : currentView === "aperture" ? (
           <div className="w-full">
             <ImmortalApertureView />
+          </div>
+        ) : currentView === "dungeon" ? (
+          <div className="w-full">
+            <DungeonView />
+          </div>
+        ) : currentView === "sect" ? (
+          <div className="w-full">
+            <SectView />
           </div>
         ) : (
           <div className="text-center py-12 text-zinc-500 font-mono">Giao diện không khả dụng</div>

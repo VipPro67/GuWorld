@@ -68,6 +68,66 @@ var ResourceNodeTemplates = map[string]ResourceNodeTemplate{
 		ProdAmount:        200,
 		ProdIntervalHours: 12,
 	},
+	"SWORD_LEAF_GRASS": {
+		NodeType:          "SWORD_LEAF_GRASS",
+		Name:              "Đồng Cỏ Kiếm Diệp",
+		Path:              "Sword Path",
+		CostStones:        800,
+		ProdType:          "Material",
+		ProdKey:           "sword_leaf_grass",
+		ProdAmount:        8,
+		ProdIntervalHours: 6,
+	},
+	"SPIRIT_DEER_PASTURE": {
+		NodeType:          "SPIRIT_DEER_PASTURE",
+		Name:              "Bãi Chăn Thả Hươu Linh",
+		Path:              "Food Path",
+		CostStones:        1200,
+		ProdType:          "Material",
+		ProdKey:           "spirit_deer_meat",
+		ProdAmount:        5,
+		ProdIntervalHours: 8,
+	},
+	"SILVER_WOLF_DEN": {
+		NodeType:          "SILVER_WOLF_DEN",
+		Name:              "Hang Sói Bạc",
+		Path:              "Food Path",
+		CostStones:        2000,
+		ProdType:          "Material",
+		ProdKey:           "silver_wolf_pelt",
+		ProdAmount:        3,
+		ProdIntervalHours: 12,
+	},
+	"HAIRY_MAN_SETTLEMENT": {
+		NodeType:          "HAIRY_MAN_SETTLEMENT",
+		Name:              "Bộ Lạc Người Lông",
+		Path:              "Human Path",
+		CostStones:        3000,
+		ProdType:          "Material",
+		ProdKey:           "hairy_man_slaves",
+		ProdAmount:        1,
+		ProdIntervalHours: 24,
+	},
+	"ROCKMAN_TRIBE": {
+		NodeType:          "ROCKMAN_TRIBE",
+		Name:              "Bản Doanh Người Đá",
+		Path:              "Human Path",
+		CostStones:        3000,
+		ProdType:          "Material",
+		ProdKey:           "jade_stone",
+		ProdAmount:        2,
+		ProdIntervalHours: 24,
+	},
+	"FEATHERMAN_CANYON": {
+		NodeType:          "FEATHERMAN_CANYON",
+		Name:              "Hẻm Núi Người Lông Vũ",
+		Path:              "Human Path",
+		CostStones:        3000,
+		ProdType:          "Material",
+		ProdKey:           "featherman_feather",
+		ProdAmount:        4,
+		ProdIntervalHours: 18,
+	},
 }
 
 // GetImmortalAperture returns the player's immortal aperture, creating one if not exists (Rank >= 6)
@@ -449,6 +509,12 @@ func PlaceApertureNode(c *gin.Context) {
 		return
 	}
 
+	err = updateVariantHumanOnNodeChange(tx, ap.ID, template.NodeType, 50)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật số lượng dị nhân: " + err.Error()})
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit"})
 		return
@@ -503,11 +569,11 @@ func CollectApertureResource(c *gin.Context) {
 	var areaSize int64
 	var timeRate float64
 	err = tx.QueryRow(`
-		SELECT n.id, n.aperture_id, n.node_type, n.name, n.production_type, n.production_amount, n.production_interval_hours, n.last_collected_at, n.is_destroyed, a.area_size, a.time_rate
+		SELECT n.id, n.aperture_id, n.node_type, n.name, n.production_type, n.production_amount, n.production_interval_hours, n.last_collected_at, n.is_destroyed, a.area_size, a.time_rate, n.path, n.x, n.y
 		FROM aperture_resource_nodes n
 		JOIN immortal_apertures a ON n.aperture_id = a.id
 		WHERE n.id = $1 AND a.player_id = $2
-	`, nodeID, playerID).Scan(&n.ID, &n.ApertureID, &n.NodeType, &n.Name, &n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol, &n.IsDestroyed, &areaSize, &timeRate)
+	`, nodeID, playerID).Scan(&n.ID, &n.ApertureID, &n.NodeType, &n.Name, &n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol, &n.IsDestroyed, &areaSize, &timeRate, &n.Path, &n.X, &n.Y)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ tài nguyên không tồn tại hoặc không thuộc đạo hữu"})
@@ -547,11 +613,123 @@ func CollectApertureResource(c *gin.Context) {
 	if multiples > 3 {
 		multiples = 3
 	}
+
+	// Retrieve all active nodes in the aperture to evaluate conflicts and food chain
+	rows, err := tx.Query(`
+		SELECT id, node_type, path, x, y, is_destroyed 
+		FROM aperture_resource_nodes 
+		WHERE aperture_id = $1 AND is_destroyed = false
+	`, n.ApertureID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải bản đồ sinh thái"})
+		return
+	}
+	var allNodes []models.ApertureResourceNode
+	for rows.Next() {
+		var other models.ApertureResourceNode
+		if err := rows.Scan(&other.ID, &other.NodeType, &other.Path, &other.X, &other.Y, &other.IsDestroyed); err == nil {
+			allNodes = append(allNodes, other)
+		}
+	}
+	rows.Close()
+
+	// 1. Dao Marks multiplier
+	var daoMarks int
+	_ = tx.QueryRow(`SELECT amount FROM dao_marks WHERE player_id = $1 AND path = $2`, playerID, n.Path).Scan(&daoMarks)
+	daoMultiplier := 1.0 + float64(daoMarks)*0.005
+
+	// 2. Conflict multiplier
+	conflictMultiplier := 1.0
+	if CheckNodeConflict(n, allNodes) {
+		conflictMultiplier = 0.5
+	}
+
+	// 3. Ecosystem / Food Chain multiplier
+	_, herbivores, _, overgrazing, starvationHerb, starvationCarn := EvaluateEcosystem(allNodes)
+	ecoMultiplier := 1.0
+	switch n.NodeType {
+	case "MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS":
+		if overgrazing {
+			ecoMultiplier = 0.5
+		} else if herbivores > 0 {
+			ecoMultiplier = 1.25 // Fertilization bonus
+		}
+	case "SPIRIT_DEER_PASTURE":
+		if starvationHerb {
+			ecoMultiplier = 0.2
+		}
+	case "SILVER_WOLF_DEN":
+		if starvationCarn {
+			ecoMultiplier = 0.2
+		}
+	}
+
+	// 4. Variant Human labor intensity multiplier
+	laborMultiplier := 1.0
+	variantBonus := 1.0
+
+	// Check if Rockman labor boosts mine nodes
+	if n.NodeType == "JADE_STONE_MINE" || n.NodeType == "PRIMEVAL_MINE" {
+		var pop int
+		var intensity string
+		err = tx.QueryRow(`
+			SELECT population, labor_intensity FROM aperture_variant_humans 
+			WHERE aperture_id = $1 AND race = 'ROCKMAN'
+		`, n.ApertureID).Scan(&pop, &intensity)
+		if err == nil && pop > 0 {
+			variantBonus = 1.0 + float64(pop)*0.001
+			if variantBonus > 1.5 {
+				variantBonus = 1.5
+			}
+			switch intensity {
+			case "LOW":
+				laborMultiplier = 0.7
+			case "NORMAL":
+				laborMultiplier = 1.0
+			case "HIGH":
+				laborMultiplier = 1.5
+			case "EXPLOIT":
+				laborMultiplier = 2.0
+			}
+		}
+	} else if n.NodeType == "HAIRY_MAN_SETTLEMENT" || n.NodeType == "ROCKMAN_TRIBE" || n.NodeType == "FEATHERMAN_CANYON" {
+		// Settlement production is boosted by its own labor intensity setting
+		var race string
+		if n.NodeType == "HAIRY_MAN_SETTLEMENT" {
+			race = "HAIRY_MAN"
+		} else if n.NodeType == "ROCKMAN_TRIBE" {
+			race = "ROCKMAN"
+		} else {
+			race = "FEATHERMAN"
+		}
+		var pop int
+		var intensity string
+		err = tx.QueryRow(`
+			SELECT population, labor_intensity FROM aperture_variant_humans 
+			WHERE aperture_id = $1 AND race = $2
+		`, n.ApertureID, race).Scan(&pop, &intensity)
+		if err == nil {
+			switch intensity {
+			case "LOW":
+				laborMultiplier = 0.7
+			case "NORMAL":
+				laborMultiplier = 1.0
+			case "HIGH":
+				laborMultiplier = 1.5
+			case "EXPLOIT":
+				laborMultiplier = 2.0
+			}
+		}
+	}
+
 	baseReward := n.ProductionAmount * multiples
 	
 	// Apply area size production multiplier
 	areaMultiplier := 1.0 + float64(areaSize)/10000000.0
-	totalReward := int(float64(baseReward) * areaMultiplier)
+	totalReward := int(float64(baseReward) * areaMultiplier * daoMultiplier * conflictMultiplier * ecoMultiplier * variantBonus * laborMultiplier)
+	if totalReward < 1 && baseReward > 0 {
+		totalReward = 1
+	}
 
 	// 3. Grant rewards
 	var rewardMsg string
@@ -699,6 +877,12 @@ func UninstallApertureNode(c *gin.Context) {
 		return
 	}
 
+	err = updateVariantHumanOnNodeChange(tx, n.ApertureID, n.NodeType, -50)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật số lượng dị nhân: " + err.Error()})
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to uninstall node"})
 		return
@@ -735,11 +919,11 @@ func DeleteApertureNode(c *gin.Context) {
 	// 1. Fetch node details to verify ownership
 	var n models.ApertureResourceNode
 	err = tx.QueryRow(`
-		SELECT n.id, n.aperture_id, n.name
+		SELECT n.id, n.aperture_id, n.name, n.node_type
 		FROM aperture_resource_nodes n
 		JOIN immortal_apertures a ON n.aperture_id = a.id
 		WHERE n.id = $1 AND a.player_id = $2
-	`, nodeID, playerID).Scan(&n.ID, &n.ApertureID, &n.Name)
+	`, nodeID, playerID).Scan(&n.ID, &n.ApertureID, &n.Name, &n.NodeType)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ tài nguyên không tồn tại hoặc không thuộc đạo hữu"})
@@ -756,6 +940,12 @@ func DeleteApertureNode(c *gin.Context) {
 		return
 	}
 
+	err = updateVariantHumanOnNodeChange(tx, n.ApertureID, n.NodeType, -50)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật số lượng dị nhân: " + err.Error()})
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete node"})
 		return
@@ -765,5 +955,310 @@ func DeleteApertureNode(c *gin.Context) {
 		"message": fmt.Sprintf("San phẳng thành công %s. Vị trí đã được giải phóng.", n.Name),
 		"node_id": nodeIDStr,
 	})
+}
+
+// ArePathsConflicting returns true if two paths conflict
+func ArePathsConflicting(path1, path2 string) bool {
+	p1 := strings.ToLower(strings.TrimSpace(path1))
+	p2 := strings.ToLower(strings.TrimSpace(path2))
+	if p1 == p2 {
+		return false
+	}
+	if p1 > p2 {
+		p1, p2 = p2, p1
+	}
+	// e.g. "earth path:wood path"
+	conflicts := map[string]bool{
+		"fire path:water path": true,
+		"metal path:wood path": true,
+		"earth path:wood path": true, // Wood roots break earth
+		"fire path:ice path":   true,
+	}
+	return conflicts[p1+":"+p2]
+}
+
+// ChebyshevDistance returns Chebyshev distance between two coordinates
+func ChebyshevDistance(x1, y1, x2, y2 int) int {
+	dx := x1 - x2
+	if dx < 0 {
+		dx = -dx
+	}
+	dy := y1 - y2
+	if dy < 0 {
+		dy = -dy
+	}
+	if dx > dy {
+		return dx
+	}
+	return dy
+}
+
+// CheckNodeConflict returns true if a node is in conflict with any other node
+func CheckNodeConflict(node models.ApertureResourceNode, allNodes []models.ApertureResourceNode) bool {
+	for _, other := range allNodes {
+		if other.ID == node.ID || other.IsDestroyed {
+			continue
+		}
+		if ChebyshevDistance(node.X, node.Y, other.X, other.Y) <= 2 {
+			if ArePathsConflicting(node.Path, other.Path) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// EvaluateEcosystem computes plant, herbivore, and carnivore metrics
+func EvaluateEcosystem(allNodes []models.ApertureResourceNode) (plants, herbivores, carnivores int, overgrazing bool, starvationHerb bool, starvationCarn bool) {
+	for _, n := range allNodes {
+		if n.IsDestroyed {
+			continue
+		}
+		switch n.NodeType {
+		case "MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS":
+			plants++
+		case "SPIRIT_DEER_PASTURE":
+			herbivores++
+		case "SILVER_WOLF_DEN":
+			carnivores++
+		}
+	}
+
+	starvationHerb = herbivores > 0 && plants == 0
+	starvationCarn = carnivores > 0 && herbivores == 0
+	overgrazing = herbivores > plants && carnivores == 0 && plants > 0
+	return
+}
+
+func updateVariantHumanOnNodeChange(tx *sql.Tx, apertureID string, nodeType string, change int) error {
+	var race string
+	switch nodeType {
+	case "HAIRY_MAN_SETTLEMENT":
+		race = "HAIRY_MAN"
+	case "ROCKMAN_TRIBE":
+		race = "ROCKMAN"
+	case "FEATHERMAN_CANYON":
+		race = "FEATHERMAN"
+	default:
+		return nil
+	}
+
+	// Update population
+	_, err := tx.Exec(`
+		INSERT INTO aperture_variant_humans (aperture_id, race, population, happiness, oppression, rebellion_rate, labor_intensity)
+		VALUES ($1, $2, GREATEST(0, $3), 70.0, 0.0, 0.0, 'NORMAL')
+		ON CONFLICT (aperture_id, race) 
+		DO UPDATE SET population = GREATEST(0, aperture_variant_humans.population + $3), updated_at = NOW()
+	`, apertureID, race, change)
+	return err
+}
+
+type SetTimeRateRequest struct {
+	TimeRate float64 `json:"time_rate" binding:"required"`
+}
+
+func SetApertureTimeRate(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var req SetTimeRateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu yêu cầu không hợp lệ"})
+		return
+	}
+
+	if req.TimeRate < 1.0 || req.TimeRate > 100.0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tốc độ dòng thời gian chỉ được điều chỉnh từ 1.0x đến 100.0x"})
+		return
+	}
+
+	res, err := db.DB.Exec(`
+		UPDATE immortal_apertures
+		SET time_rate = $1, updated_at = NOW()
+		WHERE player_id = $2
+	`, req.TimeRate, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật dòng thời gian"})
+		return
+	}
+
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa khai mở Tiên Khiếu"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Điều chỉnh dòng thời gian Tiên Khiếu thành công: %.1fx", req.TimeRate)})
+}
+
+type SetLaborRequest struct {
+	Race           string `json:"race" binding:"required"`
+	LaborIntensity string `json:"labor_intensity" binding:"required"`
+}
+
+func SetApertureLabor(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var req SetLaborRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu yêu cầu không hợp lệ"})
+		return
+	}
+
+	intensity := strings.ToUpper(req.LaborIntensity)
+	if intensity != "LOW" && intensity != "NORMAL" && intensity != "HIGH" && intensity != "EXPLOIT" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cường độ lao động không hợp lệ (LOW, NORMAL, HIGH, EXPLOIT)"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	var apID string
+	err = tx.QueryRow(`SELECT id FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&apID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa khai mở Tiên Khiếu"})
+		return
+	}
+
+	_, err = tx.Exec(`
+		UPDATE aperture_variant_humans
+		SET labor_intensity = $1, updated_at = NOW()
+		WHERE aperture_id = $2 AND race = $3
+	`, intensity, apID, req.Race)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cường độ lao động"})
+		return
+	}
+
+	_ = tx.Commit()
+
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Cập nhật cường độ lao động của %s thành %s thành công!", req.Race, intensity)})
+}
+
+func RepairApertureNode(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	nodeIDStr := c.Param("id")
+	nodeID, err := uuid.Parse(nodeIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Mã tài nguyên không hợp lệ"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	// Fetch node
+	var n models.ApertureResourceNode
+	err = tx.QueryRow(`
+		SELECT n.id, n.aperture_id, n.name, n.hp, n.max_hp, n.is_destroyed
+		FROM aperture_resource_nodes n
+		JOIN immortal_apertures a ON n.aperture_id = a.id
+		WHERE n.id = $1 AND a.player_id = $2
+	`, nodeID, playerID).Scan(&n.ID, &n.ApertureID, &n.Name, &n.HP, &n.MaxHP, &n.IsDestroyed)
+
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ tài nguyên không tồn tại hoặc không thuộc đạo hữu"})
+		return
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
+		return
+	}
+
+	cost := n.MaxHP - n.HP
+	if n.IsDestroyed {
+		cost = n.MaxHP * 2
+	}
+
+	if cost <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Mỏ tài nguyên đang ở trạng thái nguyên vẹn tốt nhất."})
+		return
+	}
+
+	// Check player stones
+	var stones int
+	err = tx.QueryRow(`SELECT primeval_stones FROM players WHERE id = $1`, playerID).Scan(&stones)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})
+		return
+	}
+
+	if stones < cost {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Nguyên thạch không đủ để sửa chữa mỏ này (Yêu cầu: %d, Hiện có: %d).", cost, stones)})
+		return
+	}
+
+	// Deduct stones
+	_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2`, cost, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Nguyên thạch"})
+		return
+	}
+
+	// Repair node
+	_, err = tx.Exec(`
+		UPDATE aperture_resource_nodes
+		SET hp = max_hp, is_destroyed = false, updated_at = NOW()
+		WHERE id = $1
+	`, nodeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật trạng thái sửa chữa"})
+		return
+	}
+
+	_ = tx.Commit()
+
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Sửa chữa thành công %s! Tiêu tốn %d Nguyên Thạch.", n.Name, cost)})
+}
+
+func GetApertureVariantHumans(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	rows, err := db.DB.Query(`
+		SELECT v.id, v.aperture_id, v.race, v.population, v.happiness, v.oppression, v.rebellion_rate, v.labor_intensity, v.created_at, v.updated_at
+		FROM aperture_variant_humans v
+		JOIN immortal_apertures a ON v.aperture_id = a.id
+		WHERE a.player_id = $1
+	`, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy thông tin dị nhân"})
+		return
+	}
+	defer rows.Close()
+
+	list := []models.ApertureVariantHuman{}
+	for rows.Next() {
+		var v models.ApertureVariantHuman
+		err = rows.Scan(&v.ID, &v.ApertureID, &v.Race, &v.Population, &v.Happiness, &v.Oppression, &v.RebellionRate, &v.LaborIntensity, &v.CreatedAt, &v.UpdatedAt)
+		if err == nil {
+			list = append(list, v)
+		}
+	}
+
+	c.JSON(http.StatusOK, list)
 }
 

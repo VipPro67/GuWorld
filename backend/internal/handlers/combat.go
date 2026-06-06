@@ -48,7 +48,8 @@ type CombatContext struct {
 func getActorPathMasteryMultiplier(actor *models.Combatant, path string) float64 {
 	masteryMultiplier := 1.0
 	if actor.PathMasteries != nil {
-		if mLevel, ok := actor.PathMasteries[path]; ok {
+		cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
+		if mLevel, ok := actor.PathMasteries[cleanPath]; ok {
 			switch mLevel {
 			case "Ordinary":
 				masteryMultiplier = 1.0
@@ -56,6 +57,8 @@ func getActorPathMasteryMultiplier(actor *models.Combatant, path string) float64
 				masteryMultiplier = 1.1
 			case "Grandmaster":
 				masteryMultiplier = 1.25
+			case "Great Grandmaster":
+				masteryMultiplier = 1.4
 			case "Supreme Grandmaster":
 				masteryMultiplier = 1.5
 			}
@@ -93,10 +96,58 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 		baseDef = def
 	}
 
+	cleanPath := strings.TrimSuffix(strings.ToLower(guSpec.Path), " path")
+
+	// Cross-path penalty (if path attainment is less than Grandmaster, reduce power by 30%)
+	attainmentLevel := 0
+	if actor.PathMasteries != nil {
+		if mLevel, ok := actor.PathMasteries[cleanPath]; ok {
+			switch mLevel {
+			case "Ordinary":
+				attainmentLevel = 0
+			case "Master":
+				attainmentLevel = 1
+			case "Grandmaster":
+				attainmentLevel = 2
+			case "Great Grandmaster":
+				attainmentLevel = 3
+			case "Supreme Grandmaster":
+				attainmentLevel = 4
+			}
+		}
+	}
+	if attainmentLevel < 2 {
+		powerScale *= 0.70
+	}
+
+	// Great Grandmaster/Supreme Grandmaster regional resonance (Natural Dao) (+50% power)
+	if attainmentLevel >= 3 && actor.Kind == "Player" {
+		currentRegion := ""
+		playerUUID, parseErr := uuid.Parse(actor.ID)
+		if parseErr == nil {
+			_ = db.DB.QueryRow(`SELECT current_region FROM players WHERE id = $1`, playerUUID).Scan(&currentRegion)
+		}
+		isResonant := false
+		switch strings.ToLower(currentRegion) {
+		case "eastern_sea":
+			isResonant = (cleanPath == "water")
+		case "western_desert":
+			isResonant = (cleanPath == "fire")
+		case "northern_plains":
+			isResonant = (cleanPath == "wind")
+		case "southern_border":
+			isResonant = (cleanPath == "earth")
+		case "central_continent":
+			isResonant = (cleanPath == "qi")
+		}
+		if isResonant {
+			powerScale *= 1.50
+		}
+	}
+
 	masteryMultiplier := getActorPathMasteryMultiplier(actor, guSpec.Path)
 
 	daoMultiplier := 1.0
-	cleanPath := strings.TrimSuffix(strings.ToLower(guSpec.Path), " path")
 	if actor.DaoMarks != nil {
 		if amt, ok := actor.DaoMarks[cleanPath]; ok && amt > 0 {
 			if amt <= 10000 {
@@ -382,6 +433,10 @@ func ResolveTargets(team []models.Combatant, targetType string, targetX, targetY
 }
 
 func applyDamageWithLogs(initiatorName, targetName string, target *models.Combatant, damage float64) string {
+	if (target.Kind == "Player" || target.Kind == "Ally") && target.Rank >= 6 {
+		damage = damage / 200.0
+	}
+
 	if target.VirtualShield > 0 {
 		if target.VirtualShield >= damage {
 			target.VirtualShield -= damage

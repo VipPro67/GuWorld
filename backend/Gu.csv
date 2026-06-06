@@ -38,6 +38,7 @@ GU_GUTS,Can Đảm Cổ,3,Soul Path,Consumable,0.0,"{""soul_boost"": 10.0}",0,"[
 GU_CLEANSE_SOUL,Tịnh Hồn Cổ,6,Soul Path,Support,0.0,"{""cleanse_soul"": 1.0}",1,"[""white_lotus_giant_silkworm""]",100,Tinh luyện hồn phách loại bỏ tạp chất và là hạch tâm sát chiêu Vạn Ngã.,Northern_Plains
 GU_MOON_SILVER,Nguyệt Ngân Cổ,2,Moon Path,Active,10.0,"{""range"": 20.0, ""damage"": 25.0}",4,"[""moon_orchid_petal""]",100,Tăng gấp đôi tầm bắn của nguyệt nhận lên 20 thước.,Southern_Border
 GU_SHADOW,Ảnh Cổ,1,Dark Path,Support,5.0,"{""evasion"": 1.0}",2,"[""light""]",100,Tạo ra cái bóng phân tán sự chú ý.,Southern_Border
+GU_SHADOW_STEPS,Ảnh Bộ Cổ,2,Dark Path,Movement,10.0,"{""movement"": 2.0}",3,"[""light""]",100,Thôi động di động nhanh hơn tăng thân pháp thêm 2 ô.,Southern_Border
 GU_WISDOM,Trí Tuệ Cổ,9,Wisdom Path,Support,0.0,"{""infinite_inspiration"": 1.0}",1,"[""lifespan_gu""]",100,Tỏa ra vầng sáng trí tuệ cung cấp linh cảm vô hạn nhưng tiêu hao thọ nguyên.,Northern_Plains
 GU_BLOOD_ASSET,Huyết Tích Tử,5,Blood Path,Active,20.0,"{""replicate"": 1.0, ""blood_drain"": 100.0}",5,"[""blood""]",100,Hút máu để sinh sản điên cuồng hợp thành ma cổ Huyết Thần Tử.,Southern_Border
 GU_WOOD_CHARM,Mộc Mị Cổ,3,Wood Path,Active,10.0,"{""mana_regen"": 5.0, ""wood_transformation"": 1.0}",5,"[""tree_sap""]",100,Biến thân thành yêu tinh cây tự động hút nguyên khí thiên nhiên để chiến đấu dai dẳng.,Southern_Border

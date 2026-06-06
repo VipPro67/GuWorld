@@ -445,6 +445,103 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create map_cells table: %w", err)
 	}
 
+	// 4.10. Create instance_templates
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS instance_templates (
+		id VARCHAR(50) PRIMARY KEY,
+		name VARCHAR(100) NOT NULL,
+		type VARCHAR(50) NOT NULL, -- "INHERITANCE_RIGHTEOUS", "INHERITANCE_DEMONIC", "DREAM_REALM"
+		required_rank INTEGER NOT NULL,
+		entry_item VARCHAR(50) NOT NULL, -- Item ID needed to enter or "NONE"
+		description TEXT NOT NULL,
+		rewards JSONB NOT NULL DEFAULT '{}', -- e.g., {"attainment": {"path": "Sword", "amount": 1}}
+		map_data JSONB NOT NULL DEFAULT '[]' -- Sequence of stages / rooms
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create instance_templates table: %w", err)
+	}
+
+	// 4.11. Create player_instance_sessions
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS player_instance_sessions (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		instance_id VARCHAR(50) NOT NULL REFERENCES instance_templates(id) ON DELETE CASCADE,
+		current_stage INTEGER NOT NULL DEFAULT 0,
+		status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE', -- "ACTIVE", "COMPLETED", "FAILED"
+		temp_inventory JSONB NOT NULL DEFAULT '[]', -- Lock player's own items for Dream Realms
+		created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now()
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create player_instance_sessions table: %w", err)
+	}
+
+	_, _ = DB.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS player_active_session_idx ON player_instance_sessions(player_id) WHERE status = 'ACTIVE';`)
+
+	// 4.12. Create sects
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS sects (
+		id VARCHAR(50) PRIMARY KEY,
+		name VARCHAR(100) NOT NULL,
+		description TEXT NOT NULL,
+		region VARCHAR(50) NOT NULL,
+		vault_gu JSONB NOT NULL DEFAULT '[]',
+		vault_materials JSONB NOT NULL DEFAULT '{}',
+		vault_recipes JSONB NOT NULL DEFAULT '[]',
+		funds INTEGER NOT NULL DEFAULT 0,
+		level INTEGER NOT NULL DEFAULT 1
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create sects table: %w", err)
+	}
+
+	// 4.13. Create sect_members
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS sect_members (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE UNIQUE,
+		member_rank VARCHAR(30) NOT NULL DEFAULT 'NGOAI_MON',
+		contribution_points INTEGER NOT NULL DEFAULT 0,
+		master_id VARCHAR(50) DEFAULT NULL,
+		joined_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now()
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create sect_members table: %w", err)
+	}
+
+	// 4.14. Create sect_missions
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS sect_missions (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,
+		title VARCHAR(100) NOT NULL,
+		description TEXT NOT NULL,
+		mission_type VARCHAR(30) NOT NULL,
+		target_id VARCHAR(50) NOT NULL,
+		target_amount INTEGER NOT NULL DEFAULT 1,
+		reward_contribution INTEGER NOT NULL DEFAULT 0,
+		required_member_rank VARCHAR(30) NOT NULL DEFAULT 'NGOAI_MON'
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create sect_missions table: %w", err)
+	}
+
+	// 4.15. Create player_sect_missions
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS player_sect_missions (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		mission_id UUID NOT NULL REFERENCES sect_missions(id) ON DELETE CASCADE,
+		current_progress INTEGER NOT NULL DEFAULT 0,
+		status VARCHAR(30) NOT NULL DEFAULT 'IN_PROGRESS',
+		assigned_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
+		UNIQUE(player_id, mission_id)
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create player_sect_missions table: %w", err)
+	}
+
 	// Backwards-compatible column migrations
 	migrations := []struct{ sql, errMsg string }{
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) NOT NULL DEFAULT '';`, "password_hash"},
@@ -496,6 +593,46 @@ func InitSchema() error {
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS last_cultivate_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;`, "last_cultivate_time"},
 		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS target_type VARCHAR(50) NOT NULL DEFAULT 'SINGLE';`, "target_type"},
 		{`ALTER TABLE messages ADD COLUMN IF NOT EXISTS channel VARCHAR(50) NOT NULL DEFAULT 'private';`, "messages.channel"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS soul_hp INTEGER NOT NULL DEFAULT 10;`, "soul_hp"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS max_soul INTEGER NOT NULL DEFAULT 10;`, "max_soul"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS soul_tier VARCHAR(30) NOT NULL DEFAULT 'NHAN_HON';`, "soul_tier"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS needs_soul_refine BOOLEAN NOT NULL DEFAULT FALSE;`, "needs_soul_refine"},
+		{`ALTER TABLE messages ADD COLUMN IF NOT EXISTS sect_id VARCHAR(50) REFERENCES sects(id) ON DELETE CASCADE;`, "messages.sect_id"},
+		{`ALTER TABLE sects ADD COLUMN IF NOT EXISTS funds INTEGER NOT NULL DEFAULT 0;`, "sects.funds"},
+		{`ALTER TABLE sects ADD COLUMN IF NOT EXISTS level INTEGER NOT NULL DEFAULT 1;`, "sects.level"},
+		{`ALTER TABLE sects ADD COLUMN IF NOT EXISTS require_approval BOOLEAN NOT NULL DEFAULT FALSE;`, "sects.require_approval"},
+		{`CREATE TABLE IF NOT EXISTS sect_join_requests (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,
+			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
+			created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
+			UNIQUE(sect_id, player_id)
+		);`, "sect_join_requests"},
+		{`CREATE TABLE IF NOT EXISTS sect_promotion_requests (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,
+			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			current_rank VARCHAR(30) NOT NULL,
+			target_rank VARCHAR(30) NOT NULL,
+			status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
+			created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
+			UNIQUE(sect_id, player_id)
+		);`, "sect_promotion_requests"},
+		{`CREATE TABLE IF NOT EXISTS aperture_variant_humans (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+			race VARCHAR(50) NOT NULL,
+			population INTEGER NOT NULL DEFAULT 0,
+			happiness DOUBLE PRECISION NOT NULL DEFAULT 70.0,
+			oppression DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+			rebellion_rate DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+			labor_intensity VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
+			created_at TIMESTAMP DEFAULT now(),
+			updated_at TIMESTAMP DEFAULT now(),
+			UNIQUE(aperture_id, race)
+		);`, "aperture_variant_humans"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS unlocked_recipes JSONB NOT NULL DEFAULT '[]';`, "unlocked_recipes"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {
@@ -511,6 +648,16 @@ func InitSchema() error {
 	// 5. Seed master data
 	if err = SeedDictionaries(); err != nil {
 		return fmt.Errorf("database dictionaries seeding failed: %w", err)
+	}
+
+	// 5b. Seed phó bản / instances data
+	if err = SeedInstanceTemplates(); err != nil {
+		return fmt.Errorf("database instances seeding failed: %w", err)
+	}
+
+	// 5c. Seed tông môn / sects data
+	if err = SeedSects(); err != nil {
+		return fmt.Errorf("database sects seeding failed: %w", err)
 	}
 
 	log.Println("Database schema initialized successfully")
@@ -917,6 +1064,17 @@ func seedItemsHardcoded() error {
 		{"bitter_wine", "Rượu Đắng", "Food", "None", `{}`, `["food"]`, "Loại rượu đắng cần cho Tứ Vị Tửu Trùng.", 1, 1},
 		{"spicy_wine", "Rượu Cay", "Food", "None", `{}`, `["food"]`, "Loại rượu cay cần cho Tứ Vị Tửu Trùng.", 1, 1},
 		{"grass_puppet", "Hình nộm người cỏ", "Material", "None", `{}`, `[]`, "Vật phẩm luyện tập cơ bản.", 1, 1},
+		{"sword_leaf_grass", "Cỏ Kiếm Diệp", "Material", "Sword Path", `{}`, `["material"]`, "Cỏ có hình dạng kiếm diệp sắc bén dùng cho Kiếm đạo.", 2, 2},
+		{"spirit_deer_meat", "Thịt Hươu Linh", "Food", "Food Path", `{}`, `["food"]`, "Thịt hươu có linh tính cao.", 2, 2},
+		{"silver_wolf_pelt", "Da Sói Bạc", "Material", "Food Path", `{}`, `["material"]`, "Tấm da từ sói bạc hoang dã.", 3, 3},
+		{"hairy_man_slaves", "Nô Lệ Người Lông", "Material", "Human Path", `{}`, `["material"]`, "Dị nhân người lông giỏi luyện Cổ.", 3, 6},
+		{"featherman_feather", "Lông Vũ Người Chim", "Material", "Human Path", `{}`, `["material"]`, "Lông vũ nhẹ nhàng từ dị nhân người lông vũ.", 2, 2},
+		{"node_sword_leaf_grass", "Cơ sở Đồng Cỏ Kiếm Diệp", "Material", "Sword Path", `{}`, `[]`, "Cơ sở Tiên Khiếu dùng để sản sinh Cỏ Kiếm Diệp.", 3, 6},
+		{"node_spirit_deer_pasture", "Cơ sở Bãi Chăn Thả Hươu Linh", "Material", "Food Path", `{}`, `[]`, "Cơ sở Tiên Khiếu dùng để sản sinh Thịt Hươu Linh.", 3, 6},
+		{"node_silver_wolf_den", "Cơ sở Hang Sói Bạc", "Material", "Food Path", `{}`, `[]`, "Cơ sở Tiên Khiếu dùng để sản sinh Da Sói Bạc.", 3, 6},
+		{"node_hairy_man_settlement", "Cơ sở Bộ Lạc Người Lông", "Material", "Human Path", `{}`, `[]`, "Cơ sở Tiên Khiếu chiêu mộ dị nhân Người Lông.", 3, 6},
+		{"node_rockman_tribe", "Cơ sở Bản Doanh Người Đá", "Material", "Human Path", `{}`, `[]`, "Cơ sở Tiên Khiếu chiêu mộ dị nhân Người Đá.", 3, 6},
+		{"node_featherman_canyon", "Cơ sở Hẻm Núi Người Lông Vũ", "Material", "Human Path", `{}`, `[]`, "Cơ sở Tiên Khiếu chiêu mộ dị nhân Người Lông Vũ.", 3, 6},
 	}
 	for _, item := range items {
 		_, err := DB.Exec(`
@@ -1076,6 +1234,11 @@ func SeedMonstersAndSpawns() error {
 		{"monster_iron_bear", "Thiết Giáp Hùng (Iron Armored Bear)", "Elite", 3, 2, "Strength Path", 200, 18, 18, 100, "[]", "beast_basic", "loot_bear", "Gấu lớn da dày như thép."},
 		{"monster_wandering", "Cổ Sư Lang Thang (Wandering Cultivator)", "HumanCultivator", 1, 1, "Moon Path", 100, 15, 5, 100, "[]", "beast_basic", "loot_wandering", "Cổ sư lang thang nguy hiểm."},
 		{"boss_wolf_king", "Độc Lang Vương Boss (Boss Wolf Leader)", "Boss", 3, 4, "Moon Path", 500, 35, 18, 120, `[{"instance_id": "boss-moonlight", "gu_id": "GU_MOONLIGHT", "hunger": 100, "status": "ACTIVE", "equipped": true}]`, "boss_balanced", "loot_boss_wolf_king", "Lang vương thống lĩnh đàn sói đặc biệt nguy hiểm."},
+		{"monster_tribulation_beast", "Kiếp Lực Ma Vật (Tribulation Beast)", "Tribulation_Monster", 6, 1, "None", 100, 15, 2, 100, "[]", "beast_basic", "loot_boar", "Sinh vật sinh ra từ kiếp lực hoành hành."},
+		{"monster_earth_calamity_boss", "Địa Tai Thần Ma (Earth Calamity Boss)", "Tribulation_Boss", 6, 1, "Earth Path", 500, 80, 10, 100, "[]", "boss_balanced", "loot_boss_wolf_king", "Thần ma sinh ra từ Địa Tai."},
+		{"monster_heaven_tribulation_boss", "Thiên Kiếp Thần Ma (Heaven Calamity Boss)", "Tribulation_Boss", 6, 1, "Heaven Path", 600, 100, 12, 100, "[]", "boss_balanced", "loot_boss_wolf_king", "Thần ma ngưng tụ từ Thiên Kiếp."},
+		{"monster_grand_calamity_boss", "Hạo Kiếp Thần Ma (Grand Calamity Boss)", "Tribulation_Boss", 7, 1, "Rule Path", 1000, 150, 25, 100, "[]", "boss_balanced", "loot_boss_wolf_king", "Hạo kiếp chấn động vạn vật."},
+		{"monster_myriad_tribulation_boss", "Vạn Kiếp Thần Ma (Myriad Calamity Boss)", "Tribulation_Boss", 8, 1, "Chaos Path", 2000, 300, 50, 100, "[]", "boss_balanced", "loot_boss_wolf_king", "Vạn kiếp vô phục sinh."},
 	}
 	for _, m := range monsters {
 		_, err := DB.Exec(`
@@ -1105,14 +1268,287 @@ func SeedMonstersAndSpawns() error {
 		return fmt.Errorf("seed boss spawn: %w", err)
 	}
 
-	// Seed map cells for Boss Room
-	_, err = DB.Exec(`
-		INSERT INTO map_cells (region_id, x, y, cell_type, content_id)
-		VALUES ('gu_luan_slope', 80, 80, 'Boss', 'boss_wolf_king')
-		ON CONFLICT (region_id, x, y) DO UPDATE SET cell_type=EXCLUDED.cell_type, content_id=EXCLUDED.content_id
-	`)
-	if err != nil {
-		return fmt.Errorf("seed boss room map cell: %w", err)
+	return nil
+}
+
+func SeedInstanceTemplates() error {
+	templates := []struct {
+		ID          string
+		Name        string
+		Type        string
+		ReqRank     int
+		EntryItem   string
+		Description string
+		Rewards     string
+		MapData     string
+	}{
+		{
+			ID:          "dungeon_flower_wine",
+			Name:        "Truyền Thừa Hoa Tửu Hành Giả",
+			Type:        "INHERITANCE_DEMONIC",
+			ReqRank:     1,
+			EntryItem:   "NONE",
+			Description: "Di tích động đá ẩn mật của Hoa Tửu Hành Giả lưu lại từ trăm năm trước, ẩn chứa cơ duyên Moonlight Gu và nguy cơ tử vong.",
+			Rewards:     `{"materials": {"guts_gu": 2, "green_bamboo_wine": 1}, "primeval_stones": 100, "attainment": {"path": "Moon Path", "amount": 10}}`,
+			MapData: `[
+				{
+					"stage_index": 0,
+					"description": "Đạo hữu tiến vào mật thất tối tăm bên vách đá. Phía trước có hai cửa đá dẫn sâu vào lòng đất: cửa bên trái bốc lên mùi thơm trà nhẹ, cửa bên phải dán đầy tàn cốt.",
+					"options": [
+						{"text": "Đi sang ngả rẽ bên trái (Cửa Trà)", "next_stage": 1, "requirements": {}},
+						{"text": "Đi sang ngả rẽ bên phải (Cửa Tàn Cốt)", "next_stage": 2, "requirements": {}}
+					]
+				},
+				{
+					"stage_index": 1,
+					"description": "Một vách đá xám lớn đổ sụp chắn ngang lối đi của đạo hữu. Để phá vỡ tảng đá này, đạo hữu cần sức mạnh cơ thể lớn hoặc một lượng rượu xanh để làm mềm khe nứt.",
+					"options": [
+						{"text": "Dùng sức mạnh đập đá (Lệch hệ / Sát thương 20 HP)", "next_stage": 3, "requirements": {}},
+						{"text": "Tiêu hao 1 bình Rượu Xanh (Green Bamboo Wine) để hòa tan vách đá", "next_stage": 3, "requirements": {"material_id": "green_bamboo_wine", "amount": 1}}
+					]
+				},
+				{
+					"stage_index": 2,
+					"description": "Một đàn dã thú lao ra từ trong bóng tối tấn công đạo hữu! Đàn dã thú cắn xé cơ thể làm đạo hữu tổn thất nặng nề.",
+					"options": [
+						{"text": "Quay lại ngả rẽ bên trái", "next_stage": 1, "requirements": {}},
+						{"text": "Liều mình chống trả (Mất 40 HP)", "next_stage": 3, "requirements": {}}
+					]
+				},
+				{
+					"stage_index": 3,
+					"description": "Đạo hữu bước vào chính điện, trên bục đá là bộ xương khô của Hoa Tửu Hành Giả. Dưới đất là một hàng chữ khắc: 'Người kế nghiệp ta phải dập đầu lạy ta ba lạy!'",
+					"options": [
+						{"text": "Kính cẩn lạy bộ xương 3 lạy", "next_stage": 4, "requirements": {}},
+						{"text": "Khám xét trực tiếp bộ xương khô để tìm bảo vật", "next_stage": 5, "requirements": {}}
+					]
+				},
+				{
+					"stage_index": 4,
+					"description": "Bộ xương khô đột ngột sụp xuống, vách ngăn phía dưới mở ra hé lộ Moonlight Gu và rương Nguyên Thạch. Đạo hữu đã thành công kế thừa y bát Hoa Tửu Hành Giả!",
+					"options": [
+						{"text": "Thu nhận phần thưởng và kết thúc phó bản", "next_stage": -1, "requirements": {}}
+					]
+				},
+				{
+					"stage_index": 5,
+					"description": "Hoa Tửu Hành Giả đã giấu độc phấn trên xương! Đạo hữu trúng độc tố chấn động cơ thể thất bại thảm hại.",
+					"options": [
+						{"text": "Chấp nhận thất bại và rời khỏi truyền thừa", "next_stage": -2, "requirements": {}}
+					]
+				}
+			]`,
+		},
+		{
+			ID:          "dream_realm_star_constellation",
+			Name:        "Mộng Cảnh Tinh Túc Tiên Tôn",
+			Type:        "DREAM_REALM",
+			ReqRank:     5,
+			EntryItem:   "NONE",
+			Description: "Thám hiểm thời niên thiếu đầy thử thách của Tinh Túc Tiên Tôn khi nghiên cứu trận đồ giữa bầu trời tinh thần đại đạo.",
+			Rewards:     `{"attainment": {"path": "Dream Path", "amount": 50}, "materials": {"guts_gu": 5}}`,
+			MapData: `[
+				{
+					"stage_index": 0,
+					"description": "Đạo hữu nhập vai vào tiểu đồng tử nghiên cứu tinh thần đại đạo. Mỗi hành động ở đây sẽ trừ 20 Soul HP. Phía trước tinh đồ bùng nổ, hãy chọn hướng nghiên cứu:",
+					"options": [
+						{"text": "Tìm hiểu Bắc Cực Tinh (Tiêu hao 20 Soul HP)", "next_stage": 1, "requirements": {}},
+						{"text": "Bày bố trận nhãn Tinh đồ cơ bản (Tiêu hao 20 Soul HP)", "next_stage": 2, "requirements": {}}
+					]
+				},
+				{
+					"stage_index": 1,
+					"description": "Nghiên cứu quá tải khiến Tinh linh phản phệ mạnh mẽ. Đạo hữu cần năng lượng linh hồn kiên cường hoặc Cổ Giải Mộng để hóa giải hiểm cảnh.",
+					"options": [
+						{"text": "Sử dụng lực lượng hồn phách trấn áp (Yêu cầu Soul HP >= 80)", "next_stage": 3, "requirements": {"min_soul_hp": 80}},
+						{"text": "Sử dụng Cổ Giải Mộng (Dream Gu) skip qua ải hiểm nguy", "next_stage": 4, "requirements": {"gu_id": "GU_DREAM", "amount": 1}}
+					]
+				},
+				{
+					"stage_index": 2,
+					"description": "Một đầu Hoang Thú ngưng tụ từ Tinh Thần Lực lao đến! Hãy chọn cách ứng biến nhanh:",
+					"options": [
+						{"text": "Sử dụng Trận Pháp Cổ của mộng cảnh phòng ngự (Mất 20 Soul HP)", "next_stage": 3, "requirements": {}},
+						{"text": "Tấn công vật lý trực diện (Thất bại, tổn thất 50 Soul HP)", "next_stage": 1, "requirements": {}}
+					]
+				},
+				{
+					"stage_index": 3,
+					"description": "Trải qua gian nan tinh đồ mở rộng, hình bóng Tinh Túc Tiên Tôn xuất hiện chỉ tay về vòm trời tinh quang truyền thừa Chân Ý.",
+					"options": [
+						{"text": "Nhập định hấp thu Tinh Thần Chân Ý (Tiêu hao 20 Soul HP)", "next_stage": 4, "requirements": {}}
+					]
+				},
+				{
+					"stage_index": 4,
+					"description": "Tinh quang hòa tan linh hồn đạo hữu, nâng tầm cảnh giới thấu hiểu đại đạo tinh thần. Đạo hữu hoàn thành thám hiểm mộng cảnh!",
+					"options": [
+						{"text": "Hấp thụ Chân Ý và rời Mộng Cảnh", "next_stage": -1, "requirements": {}}
+					]
+				}
+			]`,
+		},
+	}
+
+	for _, t := range templates {
+		_, err := DB.Exec(`
+			INSERT INTO instance_templates (id, name, type, required_rank, entry_item, description, rewards, map_data)
+			VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb)
+			ON CONFLICT (id) DO UPDATE SET
+				name=EXCLUDED.name, type=EXCLUDED.type, required_rank=EXCLUDED.required_rank,
+				entry_item=EXCLUDED.entry_item, description=EXCLUDED.description,
+				rewards=EXCLUDED.rewards, map_data=EXCLUDED.map_data
+		`, t.ID, t.Name, t.Type, t.ReqRank, t.EntryItem, t.Description, t.Rewards, t.MapData)
+		if err != nil {
+			return fmt.Errorf("failed to seed instance %s: %w", t.ID, err)
+		}
+	}
+	return nil
+}
+
+func SeedSects() error {
+	type SectSeed struct {
+		ID             string
+		Name           string
+		Description    string
+		Region         string
+		VaultGu        string
+		VaultMaterials string
+		VaultRecipes   string
+	}
+
+	seeds := []SectSeed{
+		{
+			ID:             "hu_ca_sect",
+			Name:           "Hồ Ca Phái",
+			Description:    "Tông môn danh tiếng tại Trung Châu, chuyên tu Hồn đạo và Luyện đạo, sở hữu Đãng Hồn Sơn và tài nguyên Can Đảm Cổ phong phú.",
+			Region:         "Central_Continent",
+			VaultGu:        `[{"id": "GU_LIQUOR_WORM", "cost": 150, "quantity": 5}, {"id": "GU_JADE_SKIN", "cost": 100, "quantity": 5}, {"id": "GU_WHITE_BOAR", "cost": 120, "quantity": 5}]`,
+			VaultMaterials: `{"guts_gu": 100, "green_bamboo_wine": 20}`,
+			VaultRecipes:   `["recipe_liquor_worm"]`,
+		},
+		{
+			ID:             "gu_yue_clan",
+			Name:           "Cổ Nguyệt Gia Tộc",
+			Description:    "Thế lực gia tộc lâu đời tại Nam Cương, chuyên tu Nguyệt đạo và Huyết đạo, ngự trị trên ngọn núi Thanh Mao Sơn hiểm trở.",
+			Region:         "Southern_Border",
+			VaultGu:        `[{"id": "GU_MOONLIGHT", "cost": 80, "quantity": 5}, {"id": "GU_WHITE_BOAR", "cost": 120, "quantity": 5}, {"id": "GU_JADE_SKIN", "cost": 100, "quantity": 5}]`,
+			VaultMaterials: `{"moon_orchid_petal": 50, "jade_stone": 30}`,
+			VaultRecipes:   `[]`,
+		},
+		{
+			ID:             "wan_hang_sect",
+			Name:           "Vạn Hằng Tông",
+			Description:    "Tông môn hùng mạnh tại Bắc Nguyên, nổi tiếng với đệ tử chuyên tu Phong đạo và Kiếm đạo, hành tung tựa như gió tự do.",
+			Region:         "Northern_Plains",
+			VaultGu:        `[{"id": "GU_WHITE_BOAR", "cost": 120, "quantity": 5}, {"id": "GU_MOONLIGHT", "cost": 100, "quantity": 5}]`,
+			VaultMaterials: `{"wild_boar_tusk": 40, "green_bamboo_wine": 10}`,
+			VaultRecipes:   `[]`,
+		},
+	}
+
+	for _, s := range seeds {
+		_, err := DB.Exec(`
+			INSERT INTO sects (id, name, description, region, vault_gu, vault_materials, vault_recipes)
+			VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb)
+			ON CONFLICT (id) DO UPDATE SET
+				name=EXCLUDED.name, description=EXCLUDED.description, region=EXCLUDED.region,
+				vault_gu=EXCLUDED.vault_gu, vault_materials=EXCLUDED.vault_materials, vault_recipes=EXCLUDED.vault_recipes
+		`, s.ID, s.Name, s.Description, s.Region, s.VaultGu, s.VaultMaterials, s.VaultRecipes)
+		if err != nil {
+			return fmt.Errorf("failed to seed sect %s: %w", s.ID, err)
+		}
+	}
+
+	// Seed missions
+	type MissionSeed struct {
+		SectID             string
+		Title              string
+		Description        string
+		MissionType        string
+		TargetID           string
+		TargetAmount       int
+		RewardContribution int
+		RequiredMemberRank string
+	}
+
+	missions := []MissionSeed{
+		// Hu Ca Sect
+		{
+			SectID:             "hu_ca_sect",
+			Title:              "Thu thập Rượu Thanh Trúc",
+			Description:        "Nộp 3 bình Rượu Xanh (green_bamboo_wine) đóng góp cho đan lâu tông môn bồi dưỡng sinh cơ.",
+			MissionType:        "GATHER",
+			TargetID:           "green_bamboo_wine",
+			TargetAmount:       3,
+			RewardContribution: 150,
+			RequiredMemberRank: "NGOAI_MON",
+		},
+		{
+			SectID:             "hu_ca_sect",
+			Title:              "Chinh phạt Lợn Rừng Dã Ngoại",
+			Description:        "Bảo vệ lối vào Đãng Hồn Sơn, tiêu diệt 2x Lợn Rừng Đột Biến (wild_boar_tusk) để thu thập nanh thú chế tác Cổ trận.",
+			MissionType:        "GATHER",
+			TargetID:           "wild_boar_tusk",
+			TargetAmount:       2,
+			RewardContribution: 250,
+			RequiredMemberRank: "NOI_MON",
+		},
+		{
+			SectID:             "hu_ca_sect",
+			Title:              "Cống hiến Ngọc Bì Cổ",
+			Description:        "Nộp 1x Ngọc Bì Cổ (GU_JADE_SKIN) hỗ trợ hộ pháp đệ tử chân truyền thăng hạng.",
+			MissionType:        "DONATE",
+			TargetID:           "GU_JADE_SKIN",
+			TargetAmount:       1,
+			RewardContribution: 500,
+			RequiredMemberRank: "TINH_ANH",
+		},
+		// Gu Yue Clan
+		{
+			SectID:             "gu_yue_clan",
+			Title:              "Hái cánh hoa Nguyệt Lan",
+			Description:        "Thu thập 5x Cánh hoa Nguyệt Lan (moon_orchid_petal) cho Đường chủ dược đường chế tạo bột trị thương.",
+			MissionType:        "GATHER",
+			TargetID:           "moon_orchid_petal",
+			TargetAmount:       5,
+			RewardContribution: 100,
+			RequiredMemberRank: "NGOAI_MON",
+		},
+		{
+			SectID:             "gu_yue_clan",
+			Title:              "Thu phục Bạch Thỉ Cổ",
+			Description:        "Bắt và cống hiến 1x Bạch Thỉ Cổ (GU_WHITE_BOAR) để cấp phát cho đệ tử xuất chúng mới khai mở Không Khiếu.",
+			MissionType:        "DONATE",
+			TargetID:           "GU_WHITE_BOAR",
+			TargetAmount:       1,
+			RewardContribution: 400,
+			RequiredMemberRank: "NOI_MON",
+		},
+		// Wan Hang Sect
+		{
+			SectID:             "wan_hang_sect",
+			Title:              "Đóng góp Nanh Lợn Rừng",
+			Description:        "Thu thập và đóng góp 3x Nanh Lợn Rừng (wild_boar_tusk) chế tạo giáo mác cho đệ tử canh gác biên giới.",
+			MissionType:        "GATHER",
+			TargetID:           "wild_boar_tusk",
+			TargetAmount:       3,
+			RewardContribution: 120,
+			RequiredMemberRank: "NGOAI_MON",
+		},
+	}
+
+	// Clean existing and re-seed to avoid duplicates
+	_, _ = DB.Exec(`DELETE FROM sect_missions`)
+
+	for _, m := range missions {
+		_, err := DB.Exec(`
+			INSERT INTO sect_missions (sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`, m.SectID, m.Title, m.Description, m.MissionType, m.TargetID, m.TargetAmount, m.RewardContribution, m.RequiredMemberRank)
+		if err != nil {
+			return fmt.Errorf("failed to seed mission %s: %w", m.Title, err)
+		}
 	}
 
 	return nil

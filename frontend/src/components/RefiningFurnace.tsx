@@ -29,6 +29,9 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   const [searchKeyword, setSearchKeyword] = useState("");
   const [customRecipes, setCustomRecipes] = useState<RefiningRecipe[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [statusTab, setStatusTab] = useState<"all" | "complete" | "incomplete">("all");
+  const [isDeducing, setIsDeducing] = useState(false);
+  const deduceRecipe = useGameStore((state) => state.deduceRecipe);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -56,9 +59,51 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   const allRecipes = [...recipes, ...customRecipes];
   const filteredRecipes = allRecipes.filter((r) => {
     const targetName = guDictionary[r.target_gu_id]?.name || r.target_gu_id;
-    return targetName.toLowerCase().includes(searchKeyword.toLowerCase()) || r.id.toLowerCase().includes(searchKeyword.toLowerCase());
+    const matchesSearch = targetName.toLowerCase().includes(searchKeyword.toLowerCase()) || r.id.toLowerCase().includes(searchKeyword.toLowerCase());
+    const isComplete = r.completion_rate === undefined || r.completion_rate >= 100.0;
+    
+    if (statusTab === "complete") {
+      return matchesSearch && isComplete;
+    }
+    if (statusTab === "incomplete") {
+      return matchesSearch && !isComplete;
+    }
+    return matchesSearch;
   });
   const selectedRecipe = allRecipes.find((r) => r.id === selectedRecipeId);
+
+  // Get masked status for current recipe
+  const getMaskedStatus = (recipe?: RefiningRecipe) => {
+    if (!recipe) return { maskedMats: new Set<string>(), maskedGus: new Set<string>() };
+    const rate = recipe.completion_rate !== undefined ? recipe.completion_rate : 100;
+    const isComplete = rate >= 100;
+
+    // Get all materials
+    const materials = Object.entries(recipe.required_materials).sort((a, b) => a[0].localeCompare(b[0]));
+    const totalMats = materials.length;
+    const numMaskedMats = isComplete ? 0 : Math.ceil(((100 - rate) / 100) * totalMats);
+    const maskedMats = new Set<string>();
+    for (let i = totalMats - numMaskedMats; i < totalMats; i++) {
+      if (materials[i]) {
+        maskedMats.add(materials[i][0]);
+      }
+    }
+
+    // Get all required Gus
+    const gus = Object.entries(recipe.required_gus).sort((a, b) => a[0].localeCompare(b[0]));
+    const totalGus = gus.length;
+    const numMaskedGus = isComplete ? 0 : Math.ceil(((100 - rate) / 100) * totalGus);
+    const maskedGus = new Set<string>();
+    for (let i = totalGus - numMaskedGus; i < totalGus; i++) {
+      if (gus[i]) {
+        maskedGus.add(gus[i][0]);
+      }
+    }
+
+    return { maskedMats, maskedGus };
+  };
+
+  const { maskedMats, maskedGus } = getMaskedStatus(selectedRecipe);
 
   // Flatten the required Gus into an ordered list of slots
   const getRequiredSlots = () => {
@@ -221,6 +266,23 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     }, 2500);
   };
 
+  const hasEnoughManaForDeduction = player.current_mana >= 15;
+  const hasEnoughStonesForDeduction = player.primeval_stones >= 10;
+  const canDeduce = hasEnoughManaForDeduction && hasEnoughStonesForDeduction && !actionLoading && !isDeducing;
+
+  const handleDeduce = async () => {
+    if (!canDeduce || !selectedRecipe) return;
+
+    setIsDeducing(true);
+    try {
+      await deduceRecipe(selectedRecipe.id);
+    } catch (err: any) {
+      console.error("Lỗi khi thôi diễn: ", err);
+    } finally {
+      setIsDeducing(false);
+    }
+  };
+
   // Drag and Drop helpers
   const handleDragStart = (e: React.DragEvent, instanceId: string) => {
     e.dataTransfer.setData("instanceId", instanceId);
@@ -375,9 +437,16 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                 <Flame className={`w-5 h-5 text-rose-500 ${isRefining ? "animate-bounce" : ""}`} />
                 Lò Luyện Cổ (Refinement Crucible)
               </h3>
-              <span className="text-xs text-zinc-500 font-mono">
-                {selectedRecipe?.success_rate ? `Tỷ lệ: ${selectedRecipe.success_rate * 100}%` : ""}
-              </span>
+              <div className="flex items-center gap-3">
+                {selectedRecipe?.completion_rate !== undefined && selectedRecipe.completion_rate < 100.0 && (
+                  <span className="text-xs text-rose-400 font-mono bg-rose-950/30 border border-rose-900/30 px-2 py-0.5 rounded">
+                    Tàn Phương ({selectedRecipe.completion_rate}%)
+                  </span>
+                )}
+                <span className="text-xs text-zinc-500 font-mono">
+                  {selectedRecipe?.success_rate ? `Tỷ lệ: ${selectedRecipe.success_rate * 100}%` : ""}
+                </span>
+              </div>
             </div>
 
             {/* Recipe Selection Combobox */}
@@ -410,6 +479,29 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                       autoFocus
                     />
                   </div>
+                  <div className="flex border-b border-zinc-900 bg-zinc-950 text-xs px-2 py-1 gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setStatusTab("all"); }}
+                      className={`px-2 py-1 rounded transition-all cursor-pointer font-serif ${statusTab === "all" ? "bg-amber-500/10 text-amber-400 font-bold" : "text-zinc-500 hover:text-zinc-300"}`}
+                    >
+                      Tất cả
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setStatusTab("complete"); }}
+                      className={`px-2 py-1 rounded transition-all cursor-pointer font-serif ${statusTab === "complete" ? "bg-amber-500/10 text-amber-400 font-bold" : "text-zinc-500 hover:text-zinc-300"}`}
+                    >
+                      Hoàn chỉnh
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setStatusTab("incomplete"); }}
+                      className={`px-2 py-1 rounded transition-all cursor-pointer font-serif ${statusTab === "incomplete" ? "bg-amber-500/10 text-amber-400 font-bold" : "text-zinc-500 hover:text-zinc-300"}`}
+                    >
+                      Tàn phương
+                    </button>
+                  </div>
                   <div className="overflow-y-auto custom-scrollbar flex-1 p-1.5">
                     {filteredRecipes.length === 0 ? (
                       <div className="p-4 text-center text-xs text-zinc-500 italic">
@@ -433,9 +525,16 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                             }`}
                           >
                             <span className="font-serif">{targetGu.name}</span>
-                            <span className="text-[10px] font-mono opacity-50">
-                              {recipe.success_rate ? `${recipe.success_rate * 100}%` : ""}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              {recipe.completion_rate !== undefined && recipe.completion_rate < 100.0 && (
+                                <span className="text-[9px] text-rose-400 bg-rose-950/20 border border-rose-900/20 px-1.5 py-0.5 rounded font-mono">
+                                  Tàn Phương ({recipe.completion_rate}%)
+                                </span>
+                              )}
+                              <span className="text-[10px] font-mono opacity-50">
+                                {recipe.success_rate ? `${recipe.success_rate * 100}%` : ""}
+                              </span>
+                            </div>
                           </div>
                         );
                       })
@@ -471,6 +570,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                     const slottedGu = player.gu_inventory.find(
                       (g) => g.instance_id === slottedInstanceId
                     );
+                    const isMaskedSlot = maskedGus.has(slot.guId);
 
                     return (
                       <div
@@ -487,10 +587,10 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                         {slottedGu ? (
                           <div className="text-center space-y-1.5 w-full">
                             <span className="text-[9px] font-mono border border-amber-500/20 px-1 py-0.2 rounded text-amber-400 uppercase inline-block mx-auto">
-                              Rank {guDictionary[slottedGu.gu_id]?.rank || 1}
+                              {isMaskedSlot ? "Rank ???" : `Rank ${guDictionary[slottedGu.gu_id]?.rank || 1}`}
                             </span>
                             <div className="text-xs font-bold text-zinc-200 truncate font-serif">
-                              {guDictionary[slottedGu.gu_id]?.name || slottedGu.gu_id}
+                              {isMaskedSlot ? "Cổ Trùng Ẩn (Đã đặt)" : (guDictionary[slottedGu.gu_id]?.name || slottedGu.gu_id)}
                             </div>
                             <div className="text-[9px] text-zinc-500">
                               Độ no: {slottedGu.hunger}/100
@@ -504,7 +604,9 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                             <Zap className="w-5 h-5 text-zinc-700 mx-auto animate-pulse" />
                             <div className="text-[10px] text-zinc-500 font-semibold max-w-[80px] leading-tight">
                               Xếp vào:<br />
-                              <span className="text-amber-500/80 font-bold">{reqGuSpec.name}</span>
+                              <span className="text-amber-500/80 font-bold">
+                                {isMaskedSlot ? "Cổ Trùng Ẩn" : reqGuSpec.name}
+                              </span>
                             </div>
                           </div>
                         )}
@@ -542,6 +644,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                         const playerQty = player.materials_inventory?.[matId] || 0;
                         const hasEnough = playerQty >= qty;
                         const matDetails = getMaterialDetails(matId);
+                        const isMasked = maskedMats.has(matId);
 
                         return (
                           <div
@@ -549,17 +652,21 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                             className="flex items-center justify-between text-xs bg-zinc-950/50 border border-zinc-900/60 px-3 py-1.5 rounded-lg"
                           >
                             <div className="flex items-center gap-1.5">
-                              <span className={matDetails.colorClass}>{matDetails.name}</span>
+                              {isMasked ? (
+                                <span className="text-zinc-500 font-mono italic">??? (Phụ phẩm ẩn)</span>
+                              ) : (
+                                <span className={matDetails.colorClass}>{matDetails.name}</span>
+                              )}
                             </div>
                             <div className="flex items-center gap-1.5 font-mono">
-                              <span className={hasEnough ? "text-zinc-300" : "text-rose-400 font-bold"}>
-                                {playerQty}/{qty}
+                              <span className={isMasked ? "text-zinc-500" : (hasEnough ? "text-zinc-300" : "text-rose-400 font-bold")}>
+                                {isMasked ? `?/${qty}` : `${playerQty}/${qty}`}
                               </span>
-                              {hasEnough ? (
+                              {!isMasked && (hasEnough ? (
                                 <Check className="w-3.5 h-3.5 text-emerald-400" />
                               ) : (
                                 <X className="w-3.5 h-3.5 text-rose-500" />
-                              )}
+                              ))}
                             </div>
                           </div>
                         );
@@ -570,49 +677,119 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
 
                 {/* Stones cost and Execution button */}
                 <div className="flex flex-col justify-end space-y-3">
-                  <div className="flex justify-between items-center text-xs px-1">
-                    <span className="text-zinc-500 uppercase tracking-widest font-mono text-[10px] flex items-center gap-1">
-                      <Coins className="w-3.5 h-3.5 text-amber-500" />
-                      Nguyên thạch tiêu hao:
-                    </span>
-                    <span className={`font-bold font-mono ${hasEnoughStones ? "text-amber-400" : "text-rose-400 font-bold text-sm animate-pulse"}`}>
-                      {player.primeval_stones}/{selectedRecipe.primeval_stones_cost} viên
-                    </span>
-                  </div>
+                  {selectedRecipe.completion_rate !== undefined && selectedRecipe.completion_rate < 100.0 ? (
+                    // Incomplete (Tàn Phương) actions
+                    <div className="space-y-3">
+                      {/* Deduction section */}
+                      <div className="border border-zinc-800/80 bg-zinc-950/40 p-3 rounded-xl space-y-2">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-zinc-400 font-serif font-bold">Thôi Diễn Công Thức (Trí Đạo)</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500">
+                          <span>Phí: 15 Chân Nguyên & 10 Nguyên Thạch</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleDeduce}
+                          disabled={!canDeduce}
+                          className={`w-full py-2 px-3 rounded-lg text-xs font-bold font-serif transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                            canDeduce
+                              ? "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-zinc-100 shadow-md active:scale-[0.98]"
+                              : "bg-zinc-900 border border-zinc-800 text-zinc-650 cursor-not-allowed"
+                          }`}
+                        >
+                          {isDeducing ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Đang thôi diễn...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-3.5 h-3.5 text-violet-300 animate-pulse" />
+                              <span>THÔI DIỄN CỔ PHƯƠNG</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
 
-                  {selectedRecipe.immortal_essence_stones_cost > 0 && (
-                    <div className="flex justify-between items-center text-xs px-1">
-                      <span className="text-zinc-500 uppercase tracking-widest font-mono text-[10px] flex items-center gap-1">
-                        <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-                        Tiên Tinh Thạch tiêu hao:
-                      </span>
-                      <span className={`font-bold font-mono ${hasEnoughImmortalStones ? "text-violet-300" : "text-rose-400 font-bold text-sm animate-pulse"}`}>
-                        {player.immortal_stones.toFixed(1)}/{selectedRecipe.immortal_essence_stones_cost} viên
-                      </span>
+                      {/* Forced Refine section */}
+                      <div className="space-y-1">
+                        <div className="text-[9px] text-rose-400 font-mono text-center bg-rose-950/20 border border-rose-900/20 py-1.5 px-2 rounded-lg leading-snug">
+                          ⚠️ Ép Luyện có phản phệ cực lớn nếu thất bại (Sát thương HP, trừ Max Mana)!
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRefine}
+                          disabled={!canRefine}
+                          className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold tracking-wide font-serif transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                            canRefine
+                              ? "bg-gradient-to-r from-rose-600 to-red-650 hover:from-rose-500 hover:to-red-600 text-zinc-100 shadow-md active:scale-[0.98]"
+                              : "bg-zinc-900 border border-zinc-800 text-zinc-650 cursor-not-allowed"
+                          }`}
+                        >
+                          {isRefining ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin text-zinc-100" />
+                              <span>{furnaceStage}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Flame className="w-4 h-4 text-rose-300 animate-pulse" />
+                              <span>ÉP LUYỆN (RỦI RO CAO)</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
-                  )}
+                  ) : (
+                    // Complete (100% or default) actions (Original block)
+                    <>
+                      <div className="flex justify-between items-center text-xs px-1">
+                        <span className="text-zinc-500 uppercase tracking-widest font-mono text-[10px] flex items-center gap-1">
+                          <Coins className="w-3.5 h-3.5 text-amber-500" />
+                          Nguyên thạch tiêu hao:
+                        </span>
+                        <span className={`font-bold font-mono ${hasEnoughStones ? "text-amber-400" : "text-rose-400 font-bold text-sm animate-pulse"}`}>
+                          {player.primeval_stones}/{selectedRecipe.primeval_stones_cost} viên
+                        </span>
+                      </div>
 
-                  <button
-                    onClick={handleRefine}
-                    disabled={!canRefine}
-                    className={`w-full py-3 px-4 rounded-xl text-sm font-bold tracking-wide font-serif transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                      canRefine
-                        ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 shadow-lg shadow-amber-950/20 active:scale-[0.98]"
-                        : "bg-zinc-900 border border-zinc-800 text-zinc-500 cursor-not-allowed"
-                    }`}
-                  >
-                    {isRefining ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin text-zinc-950" />
-                        <span>{furnaceStage}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Flame className="w-4 h-4 text-zinc-950 animate-pulse" />
-                        <span>HỢP LUYỆN CỔ TRÙNG</span>
-                      </>
-                    )}
-                  </button>
+                      {selectedRecipe.immortal_essence_stones_cost > 0 && (
+                        <div className="flex justify-between items-center text-xs px-1">
+                          <span className="text-zinc-500 uppercase tracking-widest font-mono text-[10px] flex items-center gap-1">
+                            <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+                            Tiên Tinh Thạch tiêu hao:
+                          </span>
+                          <span className={`font-bold font-mono ${hasEnoughImmortalStones ? "text-violet-300" : "text-rose-400 font-bold text-sm animate-pulse"}`}>
+                            {player.immortal_stones.toFixed(1)}/{selectedRecipe.immortal_essence_stones_cost} viên
+                          </span>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleRefine}
+                        disabled={!canRefine}
+                        className={`w-full py-3 px-4 rounded-xl text-sm font-bold tracking-wide font-serif transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                          canRefine
+                            ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 shadow-lg shadow-amber-950/20 active:scale-[0.98]"
+                            : "bg-zinc-900 border border-zinc-800 text-zinc-500 cursor-not-allowed"
+                        }`}
+                      >
+                        {isRefining ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin text-zinc-950" />
+                            <span>{furnaceStage}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Flame className="w-4 h-4 text-zinc-950 animate-pulse" />
+                            <span>HỢP LUYỆN CỔ TRÙNG</span>
+                          </>
+                        )}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             )}

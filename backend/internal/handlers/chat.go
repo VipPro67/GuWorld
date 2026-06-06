@@ -189,11 +189,26 @@ func SendBaoHoangChat(c *gin.Context) {
 	}
 
 	globalUUID := "00000000-0000-0000-0000-000000000000"
+	var sectID sql.NullString
+	if req.Channel == "sect" {
+		var sID string
+		err = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, player.ID).Scan(&sID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa gia nhập tông môn nào, không thể gửi tin nhắn kênh tông môn!"})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+			}
+			return
+		}
+		sectID.String = sID
+		sectID.Valid = true
+	}
 
 	_, err = tx.Exec(`
-		INSERT INTO messages (sender_id, receiver_id, content, channel)
-		VALUES ($1, $2, $3, $4)
-	`, player.ID, globalUUID, req.Content, req.Channel)
+		INSERT INTO messages (sender_id, receiver_id, content, channel, sect_id)
+		VALUES ($1, $2, $3, $4, $5)
+	`, player.ID, globalUUID, req.Content, req.Channel, sectID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send chat"})
 		return
@@ -221,14 +236,44 @@ func GetBaoHoangMessages(c *gin.Context) {
 	channel := c.DefaultQuery("channel", "world")
 	globalUUID := "00000000-0000-0000-0000-000000000000"
 
-	rows, err := db.DB.Query(`
-		SELECT m.id, m.sender_id, p.username, m.content, m.created_at, m.channel
-		FROM messages m
-		JOIN players p ON m.sender_id = p.id
-		WHERE m.receiver_id = $1 AND m.channel = $2
-		ORDER BY m.created_at ASC
-		LIMIT 50
-	`, globalUUID, channel)
+	var rows *sql.Rows
+	var err error
+
+	if channel == "sect" {
+		playerID, exists := middleware.GetPlayerID(c)
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+		var sectID string
+		err = db.DB.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa gia nhập tông môn nào, không thể xem tin nhắn kênh tông môn!"})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+			}
+			return
+		}
+
+		rows, err = db.DB.Query(`
+			SELECT m.id, m.sender_id, p.username, m.content, m.created_at, m.channel
+			FROM messages m
+			JOIN players p ON m.sender_id = p.id
+			WHERE m.receiver_id = $1 AND m.channel = $2 AND m.sect_id = $3
+			ORDER BY m.created_at ASC
+			LIMIT 50
+		`, globalUUID, channel, sectID)
+	} else {
+		rows, err = db.DB.Query(`
+			SELECT m.id, m.sender_id, p.username, m.content, m.created_at, m.channel
+			FROM messages m
+			JOIN players p ON m.sender_id = p.id
+			WHERE m.receiver_id = $1 AND m.channel = $2
+			ORDER BY m.created_at ASC
+			LIMIT 50
+		`, globalUUID, channel)
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load global chat"})
 		return

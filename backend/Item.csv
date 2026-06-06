@@ -96,3 +96,14 @@ node_moon_orchid_field,Cơ sở Cánh Đồng Hoa Nguyệt Lan,Material,Cơ sở
 node_green_bamboo_grove,Cơ sở Rừng Trúc Thanh Trúc,Material,Cơ sở Tiên Khiếu dùng để sản sinh Rượu Thanh Trúc.,3,6,Wood Path,{},[]
 node_jade_stone_mine,Cơ sở Mỏ Ngọc Thạch Bản Địa,Material,Cơ sở Tiên Khiếu dùng để sản sinh Ngọc Thạch.,3,6,Earth Path,{},[]
 node_primeval_mine,Cơ sở Mạch Nguyên Thạch Tiên Khiếu,Material,Cơ sở Tiên Khiếu dùng để sản sinh Nguyên Thạch.,3,6,Rule Path,{},[]
+sword_leaf_grass,Cỏ Kiếm Diệp,Material,Cỏ có hình dạng kiếm diệp sắc bén dùng cho Kiếm đạo.,2,2,Sword Path,{},"[""material""]"
+spirit_deer_meat,Thịt Hươu Linh,Food,Thịt hươu có linh tính cao.,2,2,Food Path,{},"[""food""]"
+silver_wolf_pelt,Da Sói Bạc,Material,Tấm da từ sói bạc hoang dã.,3,3,Food Path,{},"[""material""]"
+hairy_man_slaves,Nô Lệ Người Lông,Material,Dị nhân người lông giỏi luyện Cổ.,3,6,Human Path,{},"[""material""]"
+featherman_feather,Lông Vũ Người Chim,Material,Lông vũ nhẹ nhàng từ dị nhân người lông vũ.,2,2,Human Path,{},"[""material""]"
+node_sword_leaf_grass,Cơ sở Đồng Cỏ Kiếm Diệp,Material,Cơ sở Tiên Khiếu dùng để sản sinh Cỏ Kiếm Diệp.,3,6,Sword Path,{},[]
+node_spirit_deer_pasture,Cơ sở Bãi Chăn Thả Hươu Linh,Material,Cơ sở Tiên Khiếu dùng để sản sinh Thịt Hươu Linh.,3,6,Food Path,{},[]
+node_silver_wolf_den,Cơ sở Hang Sói Bạc,Material,Cơ sở Tiên Khiếu dùng để sản sinh Da Sói Bạc.,3,6,Food Path,{},[]
+node_hairy_man_settlement,Cơ sở Bộ Lạc Người Lông,Material,Cơ sở Tiên Khiếu chiêu mộ dị nhân Người Lông.,3,6,Human Path,{},[]
+node_rockman_tribe,Cơ sở Bản Doanh Người Đá,Material,Cơ sở Tiên Khiếu chiêu mộ dị nhân Người Đá.,3,6,Human Path,{},[]
+node_featherman_canyon,Cơ sở Hẻm Núi Người Lông Vũ,Material,Cơ sở Tiên Khiếu chiêu mộ dị nhân Người Lông Vũ.,3,6,Human Path,{},[]

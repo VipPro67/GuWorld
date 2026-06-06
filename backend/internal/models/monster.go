@@ -1,5 +1,9 @@
 package models
 
+import (
+	"strings"
+)
+
 type MonsterTemplate struct {
 	ID            string             `json:"id"`
 	Name          string             `json:"name"`
@@ -74,17 +78,99 @@ type Combatant struct {
 	VirtualShield float64           `json:"virtual_shield"`
 }
 
+func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, monsterType string) (maxHP, attack, defense float64) {
+	rankMultiplier := 1.0
+	switch rank {
+	case 1:
+		rankMultiplier = 1.0
+	case 2:
+		rankMultiplier = 2.0
+	case 3:
+		rankMultiplier = 4.0
+	case 4:
+		rankMultiplier = 8.0
+	case 5:
+		rankMultiplier = 16.0
+	case 6:
+		rankMultiplier = 1000.0
+	case 7:
+		rankMultiplier = 3000.0
+	case 8:
+		rankMultiplier = 10000.0
+	case 9:
+		rankMultiplier = 50000.0
+	default:
+		if rank > 9 {
+			rankMultiplier = 50000.0
+		}
+	}
+
+	typeMultiplier := 1.0
+	switch strings.ToUpper(monsterType) {
+	case "NORMAL", "MONSTER":
+		typeMultiplier = 1.0
+	case "ELITE":
+		typeMultiplier = 2.0
+	case "BOSS":
+		typeMultiplier = 5.0
+	case "WORLDBOSS", "WORLD BOSS":
+		typeMultiplier = 25.0
+	case "TRIBULATION_MONSTER":
+		typeMultiplier = 3.0
+	case "TRIBULATION_BOSS":
+		typeMultiplier = 10.0
+	}
+
+	maxHP = baseMaxHP * rankMultiplier * typeMultiplier
+
+	// Scale attack and defense by flater multipliers for balance
+	atkMultiplier := 1.0
+	switch rank {
+	case 1:
+		atkMultiplier = 1.0
+	case 2:
+		atkMultiplier = 1.5
+	case 3:
+		atkMultiplier = 2.5
+	case 4:
+		atkMultiplier = 4.0
+	case 5:
+		atkMultiplier = 6.0
+	case 6:
+		atkMultiplier = 50.0
+	case 7:
+		atkMultiplier = 150.0
+	case 8:
+		atkMultiplier = 500.0
+	case 9:
+		atkMultiplier = 2000.0
+	default:
+		if rank > 9 {
+			atkMultiplier = 2000.0
+		}
+	}
+
+	attack = baseAttack * atkMultiplier * typeMultiplier
+	defense = baseDefense * atkMultiplier * typeMultiplier
+
+	if defense < 0 {
+		defense = 0
+	}
+	return
+}
+
 func BuildCombatStateFromMonster(mon MonsterTemplate) CombatState {
+	hp, atk, def := ScaleMonsterStats(mon.MaxHP, mon.BaseAttack, mon.BaseDefense, mon.Rank, mon.Type)
 	return CombatState{
 		EnemyTemplateID:    mon.ID,
 		EnemyName:          mon.Name,
 		EnemyType:          mon.Type,
-		EnemyHP:            mon.MaxHP,
-		EnemyMaxHP:         mon.MaxHP,
+		EnemyHP:            hp,
+		EnemyMaxHP:         hp,
 		EnemyMana:          mon.CurrentMana,
 		EnemyMaxMana:       mon.MaxMana,
-		EnemyDamage:        mon.BaseAttack,
-		EnemyDefense:       mon.BaseDefense,
+		EnemyDamage:        atk,
+		EnemyDefense:       def,
 		EnemyRank:          mon.Rank,
 		EnemySubRank:       mon.SubRank,
 		EnemyGuInventory:   mon.GuInventory,

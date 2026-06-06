@@ -118,6 +118,11 @@ type Player struct {
 	LastExploreReset    time.Time           `json:"last_explore_reset"`
 	ApertureStress      float64             `json:"aperture_stress"`
 	LastCultivateTime   time.Time           `json:"last_cultivate_time"`
+	SoulHP              int                 `json:"soul_hp"`
+	MaxSoul             int                 `json:"max_soul"`
+	SoulTier            string              `json:"soul_tier"`
+	NeedsSoulRefine     bool                `json:"needs_soul_refine"`
+	UnlockedRecipes     UnlockedRecipesList `json:"unlocked_recipes"`
 }
 
 type TempLoot struct {

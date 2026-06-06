@@ -134,7 +134,7 @@ export const Aperture: React.FC<ApertureProps> = ({
 
   const dashOffset = CIRC * (1 - percent / 100);
 
-  const [activeTab, setActiveTab] = useState<"aperture" | "stats" | "quests">("aperture");
+  const [activeTab, setActiveTab] = useState<"aperture" | "stats" | "quests" | "soul">("aperture");
 
   // Compute stats
   const stats = {
@@ -219,10 +219,11 @@ export const Aperture: React.FC<ApertureProps> = ({
   const radarPath = radarPoints.map((p) => `${p.x},${p.y}`).join(" ");
   const gridSteps = [0.2, 0.4, 0.6, 0.8, 1.0];
 
-  const immortalBaseRegen: Record<number, number> = { 6: 0.5, 7: 0.8, 8: 1.2, 9: 2.0 };
+  const aperture = store.aperture;
+  const essenceProd = aperture?.essence_production_per_year ?? 10;
+  const immortalRegen = (essenceProd / 20.0) * (1 + (Math.min(Math.max(subRank, 1), 4) - 1) * 0.15);
   const mortalRegen = aptitudeType === "Giáp" ? 8 : aptitudeType === "Ất" ? 6 : aptitudeType === "Bính" ? 4 : 2;
-  const immortalRegen = (immortalBaseRegen[rank] ?? 0.5 + (rank - 6) * 0.35) * (1 + (Math.min(Math.max(subRank, 1), 4) - 1) * 0.15);
-  const regenRate = (isImmortal ? immortalRegen : mortalRegen).toFixed(1);
+  const regenRate = (isImmortal ? immortalRegen : mortalRegen).toFixed(2);
 
   // Vital Gu
   const vitalGu   = guInventory.find((g) => g.is_vital);
@@ -359,6 +360,16 @@ export const Aperture: React.FC<ApertureProps> = ({
           >
             Nhiệm Vụ
           </button>
+          <button
+            onClick={() => setActiveTab("soul")}
+            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${
+              activeTab === "soul"
+                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            Hồn Phách
+          </button>
         </div>
 
         {/* Tab Content */}
@@ -471,7 +482,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                       {manaQuality}:
                     </div>
                     <div className="text-xl font-bold font-mono text-cyan-400">
-                      {player ? player.immortal_stones.toLocaleString() : "--"} viên
+                      {player ? Math.floor(player.current_mana).toLocaleString() : "--"} viên
                     </div>
                     <div className="text-[10px] text-zinc-400 mt-0.5 tracking-wider uppercase font-semibold">{energyPoolName}</div>
                     <div className="text-[10px] text-zinc-300 mt-2 font-mono" style={{ color: c.text }}>
@@ -745,6 +756,115 @@ export const Aperture: React.FC<ApertureProps> = ({
             <MainQuestsPanel />
           </div>
         )}
+
+        {activeTab === "soul" && (
+          <div className="w-full z-10 space-y-5">
+            {/* Soul Foundation info */}
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4">
+              <div className="flex justify-between items-center border-b border-zinc-900 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-indigo-400" />
+                  <span className="font-serif font-bold text-zinc-100 text-sm">Nội Tình Hồn Phách</span>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-indigo-950/50 text-indigo-300 border border-indigo-800/40">
+                  {player.soul_tier === "NHAN_HON" ? "Nhân Hồn" :
+                   player.soul_tier === "BACH_NHAN" ? "Bách Nhân Hồn" :
+                   player.soul_tier === "THIEN_NHAN" ? "Thiên Nhân Hồn" :
+                   player.soul_tier === "VAN_NHAN" ? "Vạn Nhân Hồn" :
+                   player.soul_tier === "BACH_VAN" ? "Bách Vạn Hồn" :
+                   player.soul_tier === "THIEN_VAN" ? "Thiên Vạn Hồn" : "Ức Nhân Hồn"}
+                </span>
+              </div>
+
+              {/* Progress HP bar */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center text-xs font-mono text-zinc-400">
+                  <span>Sức mạnh Linh hồn (Soul HP)</span>
+                  <span>{player.soul_hp} / {player.max_soul}</span>
+                </div>
+                <div className="w-full bg-zinc-950 rounded-full h-3 border border-zinc-900 overflow-hidden relative shadow-inner">
+                  <div
+                    className="bg-gradient-to-r from-indigo-600 to-purple-500 h-full rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min(100, (player.soul_hp / player.max_soul) * 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Warning if needs refinement */}
+              {player.needs_soul_refine ? (
+                <div className="bg-red-950/20 border border-red-800/30 rounded-xl p-3 flex flex-col gap-2">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldAlert className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+                    <div className="text-xs text-red-200">
+                      <strong className="font-semibold">Cảnh báo:</strong> Hồn phách đang bị phù nề! Đạo hữu không thể dùng Can Đảm Cổ để tráng hồn. Hãy tiến vào Cốc Lạc Phách để rèn luyện nén chặt hồn phách.
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => store.refineSoul()}
+                    className="w-full bg-red-900/30 hover:bg-red-900/50 border border-red-800/40 text-red-200 rounded-xl py-2 text-xs font-mono font-bold transition-all cursor-pointer"
+                  >
+                    Luyện Hồn (Cốc Lạc Phách) - Giảm 80% Soul HP
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => store.useGutsGu()}
+                    disabled={player.needs_soul_refine || (player.materials_inventory?.["guts_gu"] || 0) <= 0}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:opacity-40 disabled:border-zinc-800/40 border border-indigo-500/20 text-white rounded-xl py-2 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Tráng Hồn ({player.materials_inventory?.["guts_gu"] || 0} Cổ Can Đảm)
+                  </button>
+                  <button
+                    onClick={() => store.calmSoul()}
+                    disabled={player.soul_hp >= player.max_soul || player.primeval_stones < 50}
+                    className="flex-1 bg-purple-900/30 hover:bg-purple-900/50 disabled:bg-zinc-800 disabled:opacity-40 disabled:border-zinc-800/40 border border-purple-800/40 text-purple-200 rounded-xl py-2 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    An Hồn (50 Nguyên Thạch)
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Path Attainments */}
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner space-y-4">
+              <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
+                <Crown className="w-5 h-5 text-amber-400" />
+                <span className="font-serif font-bold text-zinc-100 text-sm">Cảnh Giới Lưu Phái (Attainment)</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {player.path_masteries && Object.keys(player.path_masteries).length > 0 ? (
+                  Object.entries(player.path_masteries).map(([path, level]) => (
+                    <div key={path} className="flex flex-col gap-1.5 bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
+                      <div className="flex justify-between items-center">
+                        <span className="text-zinc-300 font-mono text-xs font-bold capitalize">{path} Path</span>
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono ${
+                          level === "Supreme Grandmaster" ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" :
+                          level === "Great Grandmaster" ? "bg-red-950/50 text-red-300 border border-red-800/40" :
+                          level === "Grandmaster" ? "bg-amber-950/50 text-amber-300 border border-amber-800/40" :
+                          level === "Master" ? "bg-blue-950/50 text-blue-300 border border-blue-800/40" :
+                          "bg-zinc-800/50 text-zinc-400 border border-zinc-700/40"
+                        }`}>
+                          {level}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-zinc-500 leading-normal">
+                        {level === "Master" && "Trực giác chiến đấu hệ, nhận +10% hiệu quả kỹ năng."}
+                        {level === "Grandmaster" && "Bỏ qua hình phạt giảm 30% sức mạnh khi sử dụng Cổ trùng hệ này."}
+                        {level === "Great Grandmaster" && "Cộng hưởng Thiên Địa Đạo Ngân, +50% hiệu ứng tại map cùng hệ."}
+                        {level === "Supreme Grandmaster" && "Cảnh giới Vô Thượng tối cao, kiểm soát tuyệt đối đại đạo."}
+                        {level === "Ordinary" && "Đạt hiểu biết phổ thông cơ bản về đạo pháp."}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="col-span-2 text-center text-xs text-zinc-650 italic py-4">Chưa ngộ chân ý bất kỳ lưu phái nào. Hãy thám hiểm Mộng Cảnh!</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
@@ -995,6 +1115,7 @@ function BlessedLandControls() {
   const store = useGameStore();
   const player = store.player;
   const aperture = store.aperture;
+  const [rechargeStones, setRechargeStones] = React.useState<number>(10);
 
   React.useEffect(() => {
     store.fetchAperture();
@@ -1055,7 +1176,7 @@ function BlessedLandControls() {
 
               <div className="flex justify-between items-center text-xs">
                 <span className="text-zinc-400 font-medium">Tiên Nguyên trong khiếu:</span>
-                <span className="text-yellow-400 font-semibold">{aperture.immortal_essence} hạt</span>
+                <span className="text-yellow-400 font-semibold">{Math.floor(player.current_mana)} hạt</span>
               </div>
 
               <div className="space-y-1">
@@ -1083,6 +1204,52 @@ function BlessedLandControls() {
             <Sparkles className="w-4 h-4 animate-pulse" />
             Vào Tiên Khiếu Phúc Địa
           </button>
+        </div>
+
+        {/* Stones Recharge Section for Immortals */}
+        <div className="bg-zinc-950/50 border border-zinc-900 rounded-xl p-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] text-zinc-450 font-bold uppercase tracking-wider flex items-center gap-1.5">
+              <Coins className="w-3.5 h-3.5 text-cyan-400" />
+              Nạp Tiên Nguyên Thạch (Recharge)
+            </span>
+            <span className="text-[10px] text-cyan-400 font-mono font-bold">
+              Khả dụng: {player.immortal_stones.toLocaleString()} Tiên Nguyên Thạch
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <div className="relative flex-grow flex items-center bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus-within:border-cyan-500/50 rounded-xl px-3 transition-colors">
+              <input 
+                type="number" 
+                className="w-full py-2 bg-transparent text-sm text-zinc-100 font-semibold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                value={rechargeStones} 
+                onChange={(e) => setRechargeStones(Math.max(0, Number(e.target.value)))} 
+                min={0} 
+                max={player.immortal_stones} 
+              />
+              <span className="text-[10px] text-zinc-500 font-mono font-semibold ml-2">Tiên Nguyên Thạch</span>
+            </div>
+            <div className="flex gap-1.5">
+              <button 
+                type="button"
+                onClick={() => setRechargeStones(player.immortal_stones)}
+                className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded-xl text-[10px] text-zinc-300 font-bold transition-all active:scale-95 cursor-pointer font-mono"
+              >
+                MAX
+              </button>
+              <button 
+                type="button"
+                className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-950/20 active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wide" 
+                onClick={async () => {
+                  if (rechargeStones <= 0) return alert('Nhập số tiên nguyên thạch để nạp');
+                  const res = await store.rechargeWithStones(rechargeStones);
+                  if (res) alert(res.message);
+                }}
+              >
+                Luyện hóa Tiên Nguyên
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Dao Marks summary */}

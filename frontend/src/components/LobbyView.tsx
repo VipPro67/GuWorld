@@ -13,6 +13,7 @@ import {
   Send,
   Loader2,
   Sparkles,
+  Crown,
 } from "lucide-react";
 import { LogConsole } from "./LogConsole";
 
@@ -122,22 +123,22 @@ export const LobbyView: React.FC = () => {
     {
       id: "sect",
       label: "Tông Môn",
-      icon: Lock,
-      gradient: "from-zinc-800 to-zinc-950",
-      glow: "",
-      borderColor: "border-zinc-800",
-      iconColor: "text-zinc-600",
-      locked: true,
+      icon: Crown,
+      gradient: "from-blue-600 to-indigo-700",
+      glow: "group-hover:shadow-[0_0_25px_rgba(37,99,235,0.45)]",
+      borderColor: "border-blue-400/30",
+      iconColor: "text-blue-400",
+      locked: false,
     },
     {
       id: "dungeon",
       label: "Phó Bản",
-      icon: Lock,
-      gradient: "from-zinc-800 to-zinc-950",
-      glow: "",
-      borderColor: "border-zinc-800",
-      iconColor: "text-zinc-600",
-      locked: true,
+      icon: Compass,
+      gradient: "from-purple-500 to-indigo-600",
+      glow: "group-hover:shadow-[0_0_25px_rgba(139,92,246,0.45)]",
+      borderColor: "border-purple-400/30",
+      iconColor: "text-purple-400",
+      locked: false,
     },
     {
       id: "beasts",

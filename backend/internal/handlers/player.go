@@ -147,12 +147,12 @@ func RegisterPlayer(c *gin.Context) {
 		"green_bamboo_wine": 2,
 		"jade_stone":        1,
 	}
-
 	var player models.Player
+
 	query := `
-		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, max_lifespan, time_speed_multiplier, email, phone_number, completed_quests, temp_loot, explore_count, last_explore_reset)
-		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 0, 0, $8, $9, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, '[]'::jsonb, '{}'::jsonb, $10, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 100.0, 1.0, $11, $12, '[]'::jsonb, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW())
-		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, email, phone_number, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time
+		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, max_lifespan, time_speed_multiplier, email, phone_number, completed_quests, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes)
+		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 0, 0, $8, $9, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, '[]'::jsonb, '{}'::jsonb, $10, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 100.0, 1.0, $11, $12, '[]'::jsonb, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, '[{"recipe_id": "recipe_moon_raiment", "completion_rate": 100.0}, {"recipe_id": "recipe_white_jade", "completion_rate": 50.0}, {"recipe_id": "recipe_four_flavors_liquor", "completion_rate": 30.0}]'::jsonb)
+		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, email, phone_number, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes
 	`
 
 	var activeCombatBytes []byte
@@ -168,6 +168,7 @@ func RegisterPlayer(c *gin.Context) {
 		&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
 		&player.Email, &player.PhoneNumber, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
+		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes,
 	)
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
@@ -212,7 +213,7 @@ func LoginPlayer(c *gin.Context) {
 	var passwordHash string
 
 	query := `
-		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), COALESCE(phone_number, ''), completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time
+		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), COALESCE(phone_number, ''), completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes
 		FROM players
 		WHERE username = $1 OR email = $1 OR phone_number = $1
 	`
@@ -229,6 +230,7 @@ func LoginPlayer(c *gin.Context) {
 		&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
 		&player.Email, &player.PhoneNumber, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
+		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes,
 	)
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
@@ -349,7 +351,7 @@ func GetPlayerStatus(c *gin.Context) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player status"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player status: " + err.Error()})
 		return
 	}
 
@@ -389,7 +391,50 @@ func RechargeWithStones(c *gin.Context) {
 
 	// Cổ Tiên (Rank 6+) sử dụng Tiên Nguyên Thạch, không nạp bằng Nguyên Thạch phàm tục
 	if player.Rank >= 6 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ Tiên sử dụng Tiên Nguyên Thạch, không thể nạp bằng Nguyên Thạch phàm tục."})
+		if player.ImmortalStones < float64(req.Stones) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Tiên Nguyên Thạch."})
+			return
+		}
+
+		neededMana := player.MaxMana - player.CurrentMana
+		if neededMana <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Nguyên Hải đã đầy."})
+			return
+		}
+
+		stonesToUse := int(math.Min(float64(req.Stones), math.Ceil(neededMana)))
+		if stonesToUse <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Số lượng Tiên Nguyên Thạch nạp không hợp lệ."})
+			return
+		}
+
+		player.ImmortalStones -= float64(stonesToUse)
+		player.CurrentMana += float64(stonesToUse)
+		if player.CurrentMana > player.MaxMana {
+			player.CurrentMana = player.MaxMana
+		}
+
+		_, err = tx.Exec(`
+			UPDATE players 
+			SET current_mana = $1, immortal_stones = $2, last_mana_update = NOW()
+			WHERE id = $3
+		`, player.CurrentMana, player.ImmortalStones, player.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Tiên Nguyên"})
+			return
+		}
+
+		_, _ = tx.Exec(`UPDATE immortal_apertures SET immortal_essence = $1 WHERE player_id = $2`, int(player.CurrentMana), player.ID)
+
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": fmt.Sprintf("Luyện hóa thành công %d Tiên Nguyên Thạch thành %d hạt Tiên Nguyên!", stonesToUse, stonesToUse),
+			"player":  player,
+		})
 		return
 	}
 
@@ -598,15 +643,85 @@ func Explore(c *gin.Context) {
 		}
 	}
 
+	// Roll 5% chance to find a recipe (Tàn Phương)
+	rollRecipe := rand.Intn(100)
+	if rollRecipe < 5 {
+		// Fetch all recipe IDs from refining_recipes
+		var allRecipeIDs []string
+		rows, err := tx.Query(`SELECT id FROM refining_recipes`)
+		if err == nil {
+			for rows.Next() {
+				var rID string
+				if rows.Scan(&rID) == nil {
+					allRecipeIDs = append(allRecipeIDs, rID)
+				}
+			}
+			rows.Close()
+		}
+
+		if len(allRecipeIDs) > 0 {
+			// Find which ones player hasn't unlocked or isn't 100%
+			unlockedMap := make(map[string]float64)
+			for _, ur := range player.UnlockedRecipes {
+				unlockedMap[ur.RecipeID] = ur.CompletionRate
+			}
+
+			var candidates []string
+			for _, rID := range allRecipeIDs {
+				if rate, ok := unlockedMap[rID]; !ok || rate < 100.0 {
+					candidates = append(candidates, rID)
+				}
+			}
+
+			if len(candidates) > 0 {
+				chosenCandidate := candidates[rand.Intn(len(candidates))]
+				randomRate := float64(30 + rand.Intn(30)) // 30% to 60%
+
+				// Add or update
+				found := false
+				for i, ur := range player.UnlockedRecipes {
+					if ur.RecipeID == chosenCandidate {
+						if ur.CompletionRate < randomRate {
+							player.UnlockedRecipes[i].CompletionRate = randomRate
+						}
+						found = true
+						break
+					}
+				}
+				if !found {
+					player.UnlockedRecipes = append(player.UnlockedRecipes, models.UnlockedRecipe{
+						RecipeID:       chosenCandidate,
+						CompletionRate: randomRate,
+					})
+				}
+
+				// Find target Gu name
+				var targetGuName string
+				_ = tx.QueryRow(`
+					SELECT name FROM gu_dictionary 
+					WHERE id = (SELECT target_gu_id FROM refining_recipes WHERE id = $1)
+				`, chosenCandidate).Scan(&targetGuName)
+
+				if targetGuName == "" {
+					targetGuName = chosenCandidate
+				}
+
+				// Set capturedGuID as non-empty so we can append to logMsg below
+				capturedGuName = targetGuName // reuse variable to communicate name
+				capturedGuID = "RECIPE:" + chosenCandidate // mark as recipe
+			}
+		}
+	}
+
 	// 5. Persist changes
 	updateQuery := `
 		UPDATE players
-		SET current_mana = $1, primeval_stones = $2, materials_inventory = $3, gu_inventory = $4, last_mana_update = $5
-		WHERE id = $6
+		SET current_mana = $1, primeval_stones = $2, materials_inventory = $3, gu_inventory = $4, last_mana_update = $5, unlocked_recipes = $6
+		WHERE id = $7
 	`
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.MaterialsInventory, player.GuInventory, player.LastManaUpdate, player.ID)
+	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.MaterialsInventory, player.GuInventory, player.LastManaUpdate, player.UnlockedRecipes, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update explore progress"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update explore progress: " + err.Error()})
 		return
 	}
 
@@ -630,7 +745,11 @@ func Explore(c *gin.Context) {
 	}
 
 	if capturedGuID != "" {
-		logMsg = fmt.Sprintf("%s Và đạo hữu đã thu phục thành công một con %s hoang dã!", logMsg, capturedGuName)
+		if strings.HasPrefix(capturedGuID, "RECIPE:") {
+			logMsg = fmt.Sprintf("%s Ngoài ra, đạo hữu phát hiện một tờ Tàn Phương của %s!", logMsg, capturedGuName)
+		} else {
+			logMsg = fmt.Sprintf("%s Và đạo hữu đã thu phục thành công một con %s hoang dã!", logMsg, capturedGuName)
+		}
 	}
 
 	if inventoryFullMsg != "" {
@@ -781,7 +900,7 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	var player models.Player
 
 	query := `
-		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), COALESCE(phone_number, ''), completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time
+		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), COALESCE(phone_number, ''), completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes
 		FROM players
 		WHERE id = $1
 		FOR UPDATE
@@ -799,6 +918,7 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 		&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
 		&player.Email, &player.PhoneNumber, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
+		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes,
 	)
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
@@ -808,6 +928,16 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	}
 	if err != nil {
 		return player, err
+	}
+
+	// Initialize default unlocked recipes if empty
+	if len(player.UnlockedRecipes) == 0 {
+		player.UnlockedRecipes = models.UnlockedRecipesList{
+			{RecipeID: "recipe_moon_raiment", CompletionRate: 100.0},
+			{RecipeID: "recipe_white_jade", CompletionRate: 50.0},
+			{RecipeID: "recipe_four_flavors_liquor", CompletionRate: 30.0},
+		}
+		_, _ = tx.Exec(`UPDATE players SET unlocked_recipes = $1 WHERE id = $2`, player.UnlockedRecipes, player.ID)
 	}
 
 	// Initialize defaults for new fields if not set
@@ -828,9 +958,10 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 
 	poolChanged := normalizeEnergyPool(&player)
 
+	var essenceProd int = 10
 	if player.Rank >= 6 {
 		var timeRate float64
-		err = tx.QueryRow(`SELECT time_rate FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&timeRate)
+		err = tx.QueryRow(`SELECT time_rate, essence_production_per_year FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&timeRate, &essenceProd)
 		if err == nil && timeRate > 0 {
 			if player.TimeSpeedMultiplier != timeRate {
 				player.TimeSpeedMultiplier = timeRate
@@ -838,7 +969,21 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 			}
 		}
 	}
-	regenRatePerHour := energyRegenRatePerHour(&player)
+
+	var regenRatePerHour float64
+	if player.Rank >= 6 {
+		subRank := player.SubRank
+		if subRank < 1 {
+			subRank = 1
+		}
+		if subRank > 4 {
+			subRank = 4
+		}
+		subRankFactor := 1.0 + float64(subRank-1)*0.15
+		regenRatePerHour = (float64(essenceProd) / 20.0) * subRankFactor
+	} else {
+		regenRatePerHour = energyRegenRatePerHour(&player)
+	}
 
 	// Lão hóa: Giảm 50% tốc độ hồi mana nếu thọ nguyên cạn kiệt
 	if player.Lifespan <= 0 {
@@ -862,8 +1007,8 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 			poolChanged = true
 		}
 
-		// Lifespan decay (1 game year = 3600 subjective seconds)
-		yearsPassed := subjectiveSeconds / 3600.0
+		// Lifespan decay (1 game year = 20 subjective hours = 72000 subjective seconds)
+		yearsPassed := subjectiveSeconds / 72000.0
 		player.Lifespan -= yearsPassed
 		if player.Lifespan < 0 {
 			player.Lifespan = 0
@@ -900,6 +1045,10 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 		if err != nil {
 			return player, err
 		}
+	}
+
+	if player.Rank >= 6 {
+		_, _ = tx.Exec(`UPDATE immortal_apertures SET immortal_essence = $1 WHERE player_id = $2`, int(player.CurrentMana), player.ID)
 	}
 
 	return player, nil

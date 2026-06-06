@@ -84,3 +84,16 @@ type TribulationEnemy struct {
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
+
+type ApertureVariantHuman struct {
+	ID             string    `json:"id"`
+	ApertureID     string    `json:"aperture_id"`
+	Race           string    `json:"race"` // 'HAIRY_MAN', 'ROCKMAN', 'FEATHERMAN'
+	Population     int       `json:"population"`
+	Happiness      float64   `json:"happiness"`
+	Oppression     float64   `json:"oppression"`
+	RebellionRate  float64   `json:"rebellion_rate"`
+	LaborIntensity string    `json:"labor_intensity"` // 'LOW', 'NORMAL', 'HIGH', 'EXPLOIT'
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}

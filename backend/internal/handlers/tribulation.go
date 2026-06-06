@@ -237,7 +237,11 @@ func AttackTribulationEnemy(c *gin.Context) {
 		counterDmg = en.Attack * 2
 	}
 
-	player.HP -= float64(counterDmg) / 10.0 // Player takes 10% damage
+	playerHpDmg := float64(counterDmg) / 10.0
+	if player.Rank >= 6 {
+		playerHpDmg = float64(counterDmg) / 1000.0 // Protected by Dao Marks
+	}
+	player.HP -= playerHpDmg
 	if player.HP <= 0 {
 		player.HP = 1.0 // Prevent instant death in normal mode
 	}
@@ -573,9 +577,34 @@ func CheckAndTriggerTribulations() error {
 
 	for _, ap := range apertures {
 		// Advance internal year: 60s tick interval
-		// 1 year at time_rate 10 is 3600 real seconds.
-		// So years_passed += realSeconds * (time_rate / 10) / 3600
-		yearsPassed := 60.0 * (ap.TimeRate / 10.0) / 3600.0
+		yearsPassed := 60.0 * ap.TimeRate / 72000.0
+
+		// Deduct cultivator lifespan
+		var currentLifespan float64
+		errLifespan := db.DB.QueryRow(`SELECT lifespan FROM players WHERE id = $1`, ap.PlayerID).Scan(&currentLifespan)
+		if errLifespan == nil {
+			newLifespan := math.Max(0.0, currentLifespan-yearsPassed)
+			_, _ = db.DB.Exec(`UPDATE players SET lifespan = $1 WHERE id = $2`, newLifespan, ap.PlayerID)
+
+			if newLifespan <= 0.0 {
+				// Lifespan depleted! Freeze time flow, reduce HP, change state to DAMAGED
+				_, _ = db.DB.Exec(`
+					UPDATE immortal_apertures
+					SET time_rate = 1.0, aperture_hp = max_aperture_hp / 10, state = 'DAMAGED', updated_at = NOW()
+					WHERE id = $1
+				`, ap.ID)
+
+				// Send system message
+				_, _ = db.DB.Exec(`
+					INSERT INTO messages (sender, content, channel, player_id, created_at)
+					VALUES ('Thiên Địa Chí Tôn', 'Đạo hữu đã hết thọ nguyên! Tiên Khiếu suy kiệt, dòng thời gian ngưng trệ. Hãy mau kiếm Thọ Cổ để hồi sinh!', 'private', $1, NOW())
+				`, ap.PlayerID)
+
+				log.Printf("Player %s lifespan depleted, aperture %s frozen", ap.PlayerID, ap.ID)
+				continue // Skip the rest of the tick for this aperture
+			}
+		}
+
 		newYearsPassed := ap.InternalYearsPassed + yearsPassed
 
 		// Sync essence production: when crossing a year boundary, Cổ Tiên receives their annual essence
@@ -587,6 +616,177 @@ func CheckAndTriggerTribulations() error {
 				SET current_mana = LEAST(max_mana, current_mana + $1), last_mana_update = NOW()
 				WHERE id = $2
 			`, addedEssence, ap.PlayerID)
+
+			// 1. Ecosystem & Conflicts Tick
+			nodeRows, errNodes := db.DB.Query(`
+				SELECT id, node_type, path, hp, max_hp, x, y, is_destroyed 
+				FROM aperture_resource_nodes 
+				WHERE aperture_id = $1 AND is_destroyed = false
+			`, ap.ID)
+			if errNodes == nil {
+				var nodes []models.ApertureResourceNode
+				for nodeRows.Next() {
+					var nd models.ApertureResourceNode
+					if errScan := nodeRows.Scan(&nd.ID, &nd.NodeType, &nd.Path, &nd.X, &nd.Y, &nd.IsDestroyed); errScan == nil {
+						nodes = append(nodes, nd)
+					}
+				}
+				nodeRows.Close()
+
+				_, _, _, overgrazing, _, _ := EvaluateEcosystem(nodes)
+
+				for _, nd := range nodes {
+					decayDamage := 0
+					if CheckNodeConflict(nd, nodes) {
+						decayDamage += int(float64(nd.MaxHP) * 0.10 * float64(yearsDiff))
+					}
+					if overgrazing && (nd.NodeType == "MOON_ORCHID_FIELD" || nd.NodeType == "GREEN_BAMBOO_GROVE" || nd.NodeType == "SWORD_LEAF_GRASS") {
+						decayDamage += int(float64(nd.MaxHP) * 0.05 * float64(yearsDiff))
+					}
+
+					if decayDamage > 0 {
+						var curHP int
+						_ = db.DB.QueryRow(`SELECT hp FROM aperture_resource_nodes WHERE id = $1`, nd.ID).Scan(&curHP)
+						newHP := curHP - decayDamage
+						isDestroyed := false
+						if newHP <= 0 {
+							newHP = 0
+							isDestroyed = true
+						}
+						_, _ = db.DB.Exec(`
+							UPDATE aperture_resource_nodes 
+							SET hp = $1, is_destroyed = $2, updated_at = NOW() 
+							WHERE id = $3
+						`, newHP, isDestroyed, nd.ID)
+
+						if isDestroyed {
+							_, _ = db.DB.Exec(`
+								INSERT INTO messages (sender, content, channel, player_id, created_at)
+								VALUES ('Tiên Khiếu Hệ Thống', 'Điểm tài nguyên ' || $1 || ' đã bị phá hủy do bất ổn sinh thái hoặc xung đột Đạo ngân!', 'private', $2, NOW())
+							`, nd.Name, ap.PlayerID)
+						}
+					}
+				}
+
+				// 2. Variant Human Tick
+				type VHCheck struct {
+					ID             string
+					Race           string
+					Population     int
+					Happiness      float64
+					Oppression     float64
+					LaborIntensity string
+				}
+				vRows, errV := db.DB.Query(`
+					SELECT id, race, population, happiness, oppression, labor_intensity 
+					FROM aperture_variant_humans 
+					WHERE aperture_id = $1
+				`, ap.ID)
+				if errV == nil {
+					var vhs []VHCheck
+					for vRows.Next() {
+						var v VHCheck
+						if errScan := vRows.Scan(&v.ID, &v.Race, &v.Population, &v.Happiness, &v.Oppression, &v.LaborIntensity); errScan == nil {
+							vhs = append(vhs, v)
+						}
+					}
+					vRows.Close()
+
+					totalFoodProd := 0
+					for _, nd := range nodes {
+						if nd.NodeType == "MOON_ORCHID_FIELD" || nd.NodeType == "GREEN_BAMBOO_GROVE" || nd.NodeType == "SWORD_LEAF_GRASS" || nd.NodeType == "SPIRIT_DEER_PASTURE" {
+							totalFoodProd += nd.ProductionAmount
+						}
+					}
+
+					for _, v := range vhs {
+						happinessChange := 0.0
+						oppressionChange := 0.0
+
+						foodNeeded := float64(v.Population) / 100.0
+						if float64(totalFoodProd) < foodNeeded {
+							happinessChange -= 10.0 * float64(yearsDiff)
+						} else {
+							happinessChange += 2.0 * float64(yearsDiff)
+						}
+
+						switch v.LaborIntensity {
+						case "LOW":
+							happinessChange += 5.0 * float64(yearsDiff)
+							oppressionChange -= 5.0 * float64(yearsDiff)
+						case "NORMAL":
+							// No changes
+						case "HIGH":
+							happinessChange -= 10.0 * float64(yearsDiff)
+							oppressionChange += 10.0 * float64(yearsDiff)
+						case "EXPLOIT":
+							happinessChange -= 25.0 * float64(yearsDiff)
+							oppressionChange += 25.0 * float64(yearsDiff)
+						}
+
+						newHappiness := math.Max(0.0, math.Min(100.0, v.Happiness+happinessChange))
+						newOppression := math.Max(0.0, math.Min(100.0, v.Oppression+oppressionChange))
+
+						rebellionRisk := (100.0 - newHappiness + newOppression) / 4.0
+						if newHappiness < 30.0 || newOppression > 70.0 {
+							if rand.Float64() < (rebellionRisk / 100.0) {
+								v.Population = int(float64(v.Population) * 0.8)
+								_, _ = db.DB.Exec(`
+									UPDATE aperture_resource_nodes 
+									SET hp = hp / 2 
+									WHERE id IN (
+										SELECT id FROM aperture_resource_nodes 
+										WHERE aperture_id = $1 AND is_destroyed = false 
+										ORDER BY random() LIMIT 2
+									)
+								`, ap.ID)
+								ap.ApertureHP = int(math.Max(0.0, float64(ap.ApertureHP)-float64(ap.MaxApertureHP)*0.05))
+								_, _ = db.DB.Exec(`UPDATE immortal_apertures SET aperture_hp = $1 WHERE id = $2`, ap.ApertureHP, ap.ID)
+
+								_, _ = db.DB.Exec(`
+									INSERT INTO messages (sender, content, channel, player_id, created_at)
+									VALUES ('Tiên Khiếu Hệ Thống', 'Bộ tộc ' || $1 || ' trong Tiên Khiếu đã nổi loạn do bị áp bức dữ dội! Một số điểm tài nguyên và Tiên Khiếu đã bị hư hại.', 'private', $2, NOW())
+								`, v.Race, ap.PlayerID)
+							}
+						}
+
+						settlementCount := 0
+						targetSettlementType := ""
+						switch v.Race {
+						case "HAIRY_MAN":
+							targetSettlementType = "HAIRY_MAN_SETTLEMENT"
+						case "ROCKMAN":
+							targetSettlementType = "ROCKMAN_TRIBE"
+						case "FEATHERMAN":
+							targetSettlementType = "FEATHERMAN_CANYON"
+						}
+						for _, nd := range nodes {
+							if nd.NodeType == targetSettlementType {
+								settlementCount++
+							}
+						}
+
+						maxPop := 200 * settlementCount
+						newPop := v.Population
+						if settlementCount > 0 {
+							if newHappiness > 60.0 {
+								newPop = int(float64(v.Population) * math.Pow(1.05, float64(yearsDiff)))
+							}
+							if newPop > maxPop {
+								newPop = maxPop
+							}
+						} else {
+							newPop = int(float64(v.Population) * math.Pow(0.90, float64(yearsDiff)))
+						}
+
+						_, _ = db.DB.Exec(`
+							UPDATE aperture_variant_humans
+							SET population = $1, happiness = $2, oppression = $3, updated_at = NOW()
+							WHERE id = $4
+						`, newPop, newHappiness, newOppression, v.ID)
+					}
+				}
+			}
 		}
 
 		if newYearsPassed >= ap.NextTribulationYear {
@@ -694,35 +894,89 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	}
 
 	// Spawn Enemies
-	bossName := fmt.Sprintf("Địa Tai Hư Không Thú (%s Path)", strings.Title(path))
-	if tribulationType == "HEAVENLY_TRIBULATION" {
-		bossName = fmt.Sprintf("Thiên Kiếp Hoá Hình Nhân (%s Path)", strings.Title(path))
-	} else if tribulationType == "GRAND_TRIBULATION" {
-		bossName = fmt.Sprintf("Hạo Kiếp Thần Ma (%s Path)", strings.Title(path))
+	bossTemplateID := "monster_earth_calamity_boss"
+	switch tribulationType {
+	case "EARTH_CALAMITY":
+		bossTemplateID = "monster_earth_calamity_boss"
+	case "HEAVENLY_TRIBULATION":
+		bossTemplateID = "monster_heaven_tribulation_boss"
+	case "GRAND_TRIBULATION":
+		bossTemplateID = "monster_grand_calamity_boss"
+	case "MYRIAD_TRIBULATION":
+		bossTemplateID = "monster_myriad_tribulation_boss"
 	}
 
-	// Insert Boss
-	bossHP := 500 + difficulty*200
-	bossAtk := 100 + difficulty*30
-	bossDef := 10 + difficulty*5
+	var boss models.MonsterTemplate
+	var bossGu []byte
+	err = tx.QueryRow(`
+		SELECT id, name, type, rank, sub_rank, path, max_hp, base_attack, base_defense, max_mana, current_mana, gu_inventory, ai_profile, loot_table_id, description
+		FROM monster_templates WHERE id = $1
+	`, bossTemplateID).Scan(
+		&boss.ID, &boss.Name, &boss.Type, &boss.Rank, &boss.SubRank, &boss.Path,
+		&boss.MaxHP, &boss.BaseAttack, &boss.BaseDefense, &boss.MaxMana, &boss.CurrentMana,
+		&bossGu, &boss.AIProfile, &boss.LootTableID, &boss.Description,
+	)
+	if err != nil {
+		boss = models.MonsterTemplate{
+			ID:          bossTemplateID,
+			Name:        "Kiếp Nạn Thần Ma",
+			Type:        "Tribulation_Boss",
+			Rank:        6,
+			MaxHP:       500,
+			BaseAttack:  80,
+			BaseDefense: 10,
+		}
+	}
+
+	// Apply difficulty scaling
+	diffMultiplier := 1.0 + float64(difficulty)*0.2
+	scaledHP, scaledAtk, scaledDef := models.ScaleMonsterStats(boss.MaxHP, boss.BaseAttack, boss.BaseDefense, boss.Rank, boss.Type)
+	bossHP := int(scaledHP * diffMultiplier)
+	bossAtk := int(scaledAtk * diffMultiplier)
+	bossDef := int(scaledDef * diffMultiplier)
+
 	_, err = tx.Exec(`
 		INSERT INTO tribulation_enemies (event_id, name, enemy_type, path, hp, max_hp, attack, defense, x, y, is_boss, is_dead)
 		VALUES ($1, $2, 'BOSS', $3, $4, $4, $5, $6, $7, $8, true, false)
-	`, eventID, bossName, path, bossHP, bossAtk, bossDef, rand.Intn(20), rand.Intn(20))
+	`, eventID, fmt.Sprintf("%s (%s Path)", boss.Name, strings.Title(path)), path, bossHP, bossAtk, bossDef, rand.Intn(20), rand.Intn(20))
 	if err != nil {
 		return err
 	}
 
-	// Insert Minions
+	// Spawn Minions
+	var minion models.MonsterTemplate
+	var minionGu []byte
+	err = tx.QueryRow(`
+		SELECT id, name, type, rank, sub_rank, path, max_hp, base_attack, base_defense, max_mana, current_mana, gu_inventory, ai_profile, loot_table_id, description
+		FROM monster_templates WHERE id = 'monster_tribulation_beast'
+	`).Scan(
+		&minion.ID, &minion.Name, &minion.Type, &minion.Rank, &minion.SubRank, &minion.Path,
+		&minion.MaxHP, &minion.BaseAttack, &minion.BaseDefense, &minion.MaxMana, &minion.CurrentMana,
+		&minionGu, &minion.AIProfile, &minion.LootTableID, &minion.Description,
+	)
+	if err != nil {
+		minion = models.MonsterTemplate{
+			ID:          "monster_tribulation_beast",
+			Name:        "Kiếp Lực Ma Vật",
+			Type:        "Tribulation_Monster",
+			Rank:        6,
+			MaxHP:       100,
+			BaseAttack:  15,
+			BaseDefense: 2,
+		}
+	}
+
 	minionCount := 1 + rand.Intn(3)
 	for i := 0; i < minionCount; i++ {
-		mHP := 150 + difficulty*50
-		mAtk := 40 + difficulty*10
-		mDef := 2 + difficulty*2
+		scaledHPm, scaledAtkm, scaledDefm := models.ScaleMonsterStats(minion.MaxHP, minion.BaseAttack, minion.BaseDefense, minion.Rank, minion.Type)
+		mHP := int(scaledHPm * diffMultiplier)
+		mAtk := int(scaledAtkm * diffMultiplier)
+		mDef := int(scaledDefm * diffMultiplier)
+
 		_, err = tx.Exec(`
 			INSERT INTO tribulation_enemies (event_id, name, enemy_type, path, hp, max_hp, attack, defense, x, y, is_boss, is_dead)
 			VALUES ($1, $2, 'MINION', $3, $4, $4, $5, $6, $7, $8, false, false)
-		`, eventID, fmt.Sprintf("Kiếp Lực Ma Vật #%d", i+1), path, mHP, mAtk, mDef, rand.Intn(20), rand.Intn(20))
+		`, eventID, fmt.Sprintf("%s #%d", minion.Name, i+1), path, mHP, mAtk, mDef, rand.Intn(20), rand.Intn(20))
 		if err != nil {
 			return err
 		}
@@ -750,25 +1004,38 @@ func autoResolveEvent(eventID string, playerID string) {
 
 	var ev models.TribulationEvent
 	err = tx.QueryRow(`
-		SELECT id, aperture_id, player_id, tribulation_type, path, difficulty, started_at
+		SELECT id, aperture_id, player_id, tribulation_type, path, difficulty, started_at, aperture_hp_before
 		FROM tribulation_events WHERE id = $1 AND status = 'ACTIVE'
-	`, eventID).Scan(&ev.ID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType, &ev.Path, &ev.Difficulty, &ev.StartedAt)
+	`, eventID).Scan(&ev.ID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType, &ev.Path, &ev.Difficulty, &ev.StartedAt, &ev.ApertureHPBefore)
 	if err != nil {
 		return
 	}
 
 	// Offline failure (auto-resolve always defaults to fail/damaged status)
+	var feathermanPop int
+	_ = tx.QueryRow(`SELECT population FROM aperture_variant_humans WHERE aperture_id = $1 AND race = 'FEATHERMAN'`, ev.ApertureID).Scan(&feathermanPop)
+	reduction := float64(feathermanPop) * 0.001
+	if reduction > 0.5 {
+		reduction = 0.5
+	}
+	
+	hpFactor := 0.1 + 0.4*reduction // default 0.1, up to 0.3 if max feathermen
+	newHP := int(float64(ev.ApertureHPBefore) * hpFactor)
+	if newHP < 100 {
+		newHP = 100
+	}
+
 	_, _ = tx.Exec(`
 		UPDATE immortal_apertures 
-		SET state = 'DAMAGED', next_tribulation_year = next_tribulation_year + 10.0, aperture_hp = max_aperture_hp / 10
-		WHERE id = $1
-	`, ev.ApertureID)
+		SET state = 'DAMAGED', next_tribulation_year = next_tribulation_year + 10.0, aperture_hp = $1
+		WHERE id = $2
+	`, newHP, ev.ApertureID)
 
 	_, _ = tx.Exec(`
 		UPDATE tribulation_events
-		SET status = 'FAILED', aperture_hp_after = aperture_hp_before / 10, ended_at = NOW(), reward_dao_marks = 0
-		WHERE id = $1
-	`, ev.ID)
+		SET status = 'FAILED', aperture_hp_after = $1, ended_at = NOW(), reward_dao_marks = 0
+		WHERE id = $2
+	`, newHP, ev.ID)
 
 	// Destroy 2 resource nodes
 	_, _ = tx.Exec(`

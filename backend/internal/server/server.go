@@ -54,7 +54,7 @@ func SetupRouter() *gin.Engine {
 	{
 		// Public Dictionary Endpoint
 		api.GET("/dictionary", handlers.GetDictionary)
-		api.GET("/recipes", handlers.GetRecipes)
+		api.GET("/recipes", middleware.AuthRequired(), handlers.GetRecipes)
 
 		// Public Auth Endpoints
 		authGroup := api.Group("/auth")
@@ -129,6 +129,7 @@ func SetupRouter() *gin.Engine {
 		refining.Use(middleware.AuthRequired())
 		{
 			refining.POST("", handlers.RefineGu)
+			refining.POST("/deduce", handlers.DeduceRecipe)
 		}
 
 		// Protected Combat & Explore Node Endpoints
@@ -148,6 +149,10 @@ func SetupRouter() *gin.Engine {
 			aperture.POST("/nodes/:id/collect", handlers.CollectApertureResource)
 			aperture.POST("/nodes/:id/uninstall", handlers.UninstallApertureNode)
 			aperture.DELETE("/nodes/:id", handlers.DeleteApertureNode)
+			aperture.POST("/time-rate", handlers.SetApertureTimeRate)
+			aperture.POST("/labor", handlers.SetApertureLabor)
+			aperture.POST("/nodes/:id/repair", handlers.RepairApertureNode)
+			aperture.GET("/variant-humans", handlers.GetApertureVariantHumans)
 		}
 
 		// Protected Dao Marks Endpoints
@@ -201,6 +206,54 @@ func SetupRouter() *gin.Engine {
 			shop.POST("/bao-hoang/bid", handlers.PlaceBid)
 			shop.POST("/bao-hoang/cancel", handlers.CancelListing)
 			shop.POST("/bao-hoang/settle", handlers.SettleExpiredAuctions)
+		}
+
+		// Protected Soul Endpoints
+		soul := api.Group("/soul")
+		soul.Use(middleware.AuthRequired())
+		{
+			soul.POST("/use-guts", handlers.UseGutsGu)
+			soul.POST("/refine", handlers.RefineSoul)
+			soul.POST("/calm", handlers.CalmSoul)
+		}
+
+		// Protected Instance Endpoints
+		instance := api.Group("/instance")
+		instance.Use(middleware.AuthRequired())
+		{
+			instance.GET("/active", handlers.GetActiveInstance)
+			instance.POST("/enter", handlers.EnterInstance)
+			instance.POST("/action", handlers.ActionInstance)
+		}
+
+		// Protected Sect Endpoints
+		sect := api.Group("/sects")
+		sect.Use(middleware.AuthRequired())
+		{
+			sect.GET("", handlers.GetSects)
+			sect.POST("/:id/join", handlers.JoinSect)
+			sect.POST("/leave", handlers.LeaveSect)
+			sect.GET("/me", handlers.GetMySectStatus)
+			sect.POST("/promote", handlers.PromoteSectRank)
+			sect.POST("/donate/stones", handlers.DonateStones)
+			sect.POST("/donate/materials", handlers.DonateMaterials)
+			sect.POST("/donate/gu", handlers.DonateGu)
+			sect.POST("/vault/buy", handlers.BuyFromSectVault)
+			sect.GET("/missions", handlers.GetSectMissions)
+			sect.POST("/missions/:missionId/accept", handlers.AcceptSectMission)
+			sect.POST("/missions/:missionId/complete", handlers.CompleteSectMission)
+			sect.POST("/create", handlers.CreateSect)
+			sect.GET("/me/members", handlers.GetSectMembers)
+			sect.POST("/members/:memberId/rank", handlers.SetMemberRank)
+			sect.POST("/members/:memberId/kick", handlers.KickMember)
+			sect.POST("/missions/create", handlers.CreateCustomMission)
+			sect.POST("/vault/stock", handlers.StockSectVault)
+			sect.POST("/upgrade", handlers.UpgradeSect)
+			sect.POST("/toggle-approval", handlers.ToggleSectApproval)
+			sect.GET("/join-requests", handlers.GetJoinRequests)
+			sect.POST("/join-requests/:requestId/action", handlers.ActionJoinRequest)
+			sect.GET("/promotion-requests", handlers.GetPromotionRequests)
+			sect.POST("/promotion-requests/:requestId/action", handlers.ActionPromotionRequest)
 		}
 	}
 
