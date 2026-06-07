@@ -14,15 +14,21 @@ import (
 )
 
 func main() {
-	// Load environment variables (from backend/.env)
-	err := godotenv.Load(".env")
-	if err != nil {
-		// Try loading from parent or relative path if running from different directory
-		_ = godotenv.Load()
+	// Try loading .env from different possible locations depending on where the server is run from
+	var envLoaded bool
+	for _, envPath := range []string{".env", "backend/.env", "../.env", "../../.env"} {
+		if err := godotenv.Load(envPath); err == nil {
+			log.Printf("Loaded environment variables from %s", envPath)
+			envLoaded = true
+			break
+		}
+	}
+	if !envLoaded {
+		log.Println("Warning: No .env file loaded, using default system/environment variables")
 	}
 
 	// 1. Connect to Database
-	err = db.Connect()
+	err := db.Connect()
 	if err != nil {
 		log.Fatalf("Database connection failed: %v", err)
 	}

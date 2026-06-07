@@ -418,11 +418,12 @@ interface GameState {
   recipes: RefiningRecipe[];
   recipesLoaded: boolean;
   inspectedProfile: any | null;
+  inspectedUsernameQuery: string | null;
   profileLoading: boolean;
   fetchPlayerProfile: (username: string) => Promise<void>;
   clearInspectedProfile: () => void;
   updateProfileSettings: (settings: { 
-    email: string; 
+    username: string; 
     bio: string; 
     new_password?: string;
     fake_name?: string;
@@ -475,9 +476,19 @@ interface GameState {
   sellShopItem: (itemId: string, quantity: number, itemType: "Gu" | "Material") => Promise<boolean>;
   marketplaceListings: any[];
   fetchMarketplaceListings: () => Promise<void>;
-  createMarketplaceListing: (payload: { itemType: "Gu" | "Material"; guInstanceId?: string; itemId?: string; quantity: number; price: number; durationHours: number; currency: "primeval" | "immortal" }) => Promise<boolean>;
+  createMarketplaceListing: (payload: { itemType: "Gu" | "Material" | "Recipe"; guInstanceId?: string; itemId?: string; quantity: number; price: number; durationHours: number; currency: "primeval" | "immortal"; listingType: "MARKET" | "AUCTION" | "TRADE"; targetBuyerUsername?: string }) => Promise<boolean>;
   placeMarketplaceBid: (listingId: string, amount: number) => Promise<boolean>;
   cancelMarketplaceListing: (listingId: string) => Promise<boolean>;
+  buyMarketplaceListing: (listingId: string, quantity?: number) => Promise<boolean>;
+  activeTrade: any | null;
+  fetchActiveTrade: () => Promise<void>;
+  initiateTrade: (receiverUsername: string) => Promise<boolean>;
+  acceptTrade: (tradeId: string) => Promise<boolean>;
+  declineTrade: (tradeId: string) => Promise<boolean>;
+  cancelTrade: (tradeId: string) => Promise<boolean>;
+  updateTradeOffer: (tradeId: string, offer: { primeval_stones: number; immortal_stones: number; gus: string[]; materials: Record<string, number> }) => Promise<boolean>;
+  lockTrade: (tradeId: string) => Promise<boolean>;
+  confirmTrade: (tradeId: string) => Promise<boolean>;
 
   // Party State & Actions
   party: { id: string; leader_id: string; members: { id: string; username: string }[] } | null;
@@ -663,9 +674,11 @@ export const useGameStore = create<GameState>((set, get) => {
   recipes: [],
   recipesLoaded: false,
   inspectedProfile: null,
+  inspectedUsernameQuery: null,
   profileLoading: false,
   currentView: "dashboard",
   marketplaceListings: [],
+  activeTrade: null,
   party: null,
   arenaLeaderboard: [],
   inbox: [],
@@ -898,7 +911,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       const data = await response.json();
-      set({ inspectedProfile: data });
+      set({ inspectedProfile: data, inspectedUsernameQuery: username });
     } catch (err: any) {
       console.error("Profile fetch failed:", err.message);
       get().addToast(`Không thể trinh thám hồ sơ: ${err.message}`, "error");
@@ -907,7 +920,7 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
-  clearInspectedProfile: () => set({ inspectedProfile: null }),
+  clearInspectedProfile: () => set({ inspectedProfile: null, inspectedUsernameQuery: null }),
 
   updateProfileSettings: async (settings) => {
     const { token, actionLoading, addToast } = get();
@@ -1444,7 +1457,21 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token || actionLoading) return false;
     set({ actionLoading: true, error: null });
     try {
-      const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/listings`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ item_type: payload.itemType, gu_instance_id: payload.guInstanceId || "", item_id: payload.itemId || "", quantity: payload.quantity, price: payload.price, duration_hours: payload.durationHours, currency: payload.currency }) });
+      const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/listings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          item_type: payload.itemType,
+          gu_instance_id: payload.guInstanceId || "",
+          item_id: payload.itemId || "",
+          quantity: payload.quantity,
+          price: payload.price,
+          duration_hours: payload.durationHours,
+          currency: payload.currency,
+          listing_type: payload.listingType,
+          target_buyer_username: payload.targetBuyerUsername || "",
+        }),
+      });
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Đăng bán thất bại");
@@ -1489,6 +1516,190 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) { set({ error: err.message }); get().addLog(`Hủy listing thất bại: ${err.message}`); return false; } finally { set({ actionLoading: false }); }
   },
+
+  buyMarketplaceListing: async (listingId, quantity) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/buy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listing_id: listingId, quantity }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Mua hàng thất bại");
+      get().addLog(data.message || "Mua hàng thành công");
+      await get().initializeSession();
+      await get().fetchMarketplaceListings();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Mua hàng thất bại: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  fetchActiveTrade: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/trade/active`);
+      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (!response.ok) return;
+      const data = await response.json();
+      set({ activeTrade: data.trade });
+    } catch (err) {
+      console.error("Failed to fetch active trade", err);
+    }
+  },
+
+  initiateTrade: async (receiverUsername) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/trade/initiate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ receiver_username: receiverUsername }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Gửi yêu cầu giao dịch thất bại");
+      get().addLog(data.message || "Yêu cầu giao dịch đã được gửi!");
+      get().addToast(data.message || "Yêu cầu giao dịch đã được gửi!", "success");
+      await get().fetchActiveTrade();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      get().addLog(`Giao dịch thất bại: ${err.message}`);
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  acceptTrade: async (tradeId) => {
+    const { token, logout } = get();
+    if (!token) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/trade/accept/${tradeId}`, { method: "POST" });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Chấp nhận giao dịch thất bại");
+      get().addLog(data.message || "Đã chấp nhận giao dịch!");
+      get().addToast("Đã thiết lập kết nối Thông Thiên Cổ!", "success");
+      await get().fetchActiveTrade();
+      return true;
+    } catch (err: any) {
+      get().addToast(err.message, "error");
+      return false;
+    }
+  },
+
+  declineTrade: async (tradeId) => {
+    const { token, logout } = get();
+    if (!token) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/trade/decline/${tradeId}`, { method: "POST" });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Từ chối giao dịch thất bại");
+      get().addLog(data.message || "Đã từ chối giao dịch!");
+      set({ activeTrade: null });
+      return true;
+    } catch (err: any) {
+      get().addToast(err.message, "error");
+      return false;
+    }
+  },
+
+  cancelTrade: async (tradeId) => {
+    const { token, logout } = get();
+    if (!token) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/trade/cancel/${tradeId}`, { method: "POST" });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Hủy giao dịch thất bại");
+      get().addLog(data.message || "Đã hủy giao dịch!");
+      get().addToast("Đã hủy kết nối giao dịch.", "info");
+      set({ activeTrade: null });
+      return true;
+    } catch (err: any) {
+      get().addToast(err.message, "error");
+      return false;
+    }
+  },
+
+  updateTradeOffer: async (tradeId, offer) => {
+    const { token, logout } = get();
+    if (!token) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/trade/offer/${tradeId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(offer),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Cập nhật ưu đãi thất bại");
+      await get().fetchActiveTrade();
+      return true;
+    } catch (err: any) {
+      get().addToast(err.message, "error");
+      return false;
+    }
+  },
+
+  lockTrade: async (tradeId) => {
+    const { token, logout } = get();
+    if (!token) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/trade/lock/${tradeId}`, { method: "POST" });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Khóa giao dịch thất bại");
+      get().addLog("Đã khóa ưu đãi giao dịch!");
+      get().addToast("Đã khóa ưu đãi giao dịch!", "success");
+      await get().fetchActiveTrade();
+      return true;
+    } catch (err: any) {
+      get().addToast(err.message, "error");
+      return false;
+    }
+  },
+
+  confirmTrade: async (tradeId) => {
+    const { token, logout } = get();
+    if (!token) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/trade/confirm/${tradeId}`, { method: "POST" });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Xác nhận giao dịch thất bại");
+      
+      const bothConfirmed = data.sender_confirmed && data.receiver_confirmed;
+      if (bothConfirmed) {
+        get().addLog("Giao dịch thành công!");
+        get().addToast("Giao dịch thành công!", "success");
+        set({ activeTrade: null });
+        await get().initializeSession();
+      } else {
+        get().addLog("Đã xác nhận giao dịch. Chờ đối phương xác nhận...");
+        get().addToast("Đã xác nhận giao dịch. Chờ đối phương xác nhận...", "info");
+        await get().fetchActiveTrade();
+      }
+      return true;
+    } catch (err: any) {
+      get().addToast(err.message, "error");
+      return false;
+    }
+  },
+
   buyShopItem: async (itemId, quantity) => {
     const { player, token, actionLoading, logout } = get();
     if (!player || !token || actionLoading) return false;

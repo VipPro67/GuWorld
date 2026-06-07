@@ -103,7 +103,7 @@ export const LobbyView: React.FC = () => {
     },
     {
       id: "auction",
-      label: "Chợ (Bảo Hoàng)",
+      label: "Chợ, Đấu Giá",
       icon: Gem,
       gradient: "from-violet-500 to-purple-600",
       glow: "group-hover:shadow-[0_0_20px_rgba(139,92,246,0.4)]",
@@ -427,9 +427,9 @@ export const LobbyView: React.FC = () => {
         {/* Channel Tabs */}
         <div className="flex gap-2 border-b border-zinc-900 pb-3">
           {[
-            { id: "world", label: "Thế Giới (10 NT)" },
-            { id: "general", label: "Kênh Chung (1 NT)" },
-            { id: "sect", label: "Tông Môn (Miễn phí)" },
+            { id: "world", label: "Thế Giới (100 NT)" },
+            { id: "general", label: "Bảo Hoàng Thiên (Cần Cổ)" },
+            { id: "sect", label: "Bang Hội (Miễn phí)" },
           ].map((ch) => (
             <button
               key={ch.id}
@@ -465,8 +465,8 @@ export const LobbyView: React.FC = () => {
                 msg.channel === "world"
                   ? "[Thế Giới]"
                   : msg.channel === "general"
-                  ? "[Kênh Chung]"
-                  : "[Tông Môn]";
+                  ? "[Bảo Hoàng Thiên]"
+                  : "[Bang Hội]";
 
               return (
                 <div key={msg.id || index} className="flex items-start gap-1.5 leading-relaxed break-all">
@@ -498,10 +498,10 @@ export const LobbyView: React.FC = () => {
             onChange={(e) => setChatInput(e.target.value)}
             placeholder={
               activeChannel === "world"
-                ? "Gửi tin lên Hoàng Bảo Thiên (tốn 10 Nguyên Thạch)..."
+                ? "Gửi tin lên kênh Thế Giới (tốn 100 Nguyên Thạch)..."
                 : activeChannel === "general"
-                ? "Nhắn tin lên Kênh Chung (tốn 1 Nguyên Thạch)..."
-                : "Trò chuyện nội bộ Tông Môn (Miễn phí)..."
+                ? "Gửi tin lên Bảo Hoàng Thiên (Miễn phí, cần Thông Thiên Cổ & Thần Niệm Cổ)..."
+                : "Trò chuyện nội bộ Bang Hội (Miễn phí)..."
             }
             maxLength={100}
             className="flex-grow bg-zinc-950 border border-zinc-900 focus:border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-all font-mono"

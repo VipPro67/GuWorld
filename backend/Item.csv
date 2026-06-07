@@ -1,4 +1,4 @@
-id,name,item_type,description,rarity,rank,path,effects,tags
+﻿id,name,item_type,description,rarity,rank,path,effects,tags
 lifespan_gu,Thọ cổ,Consumable,Thức ăn của tiên cổ Trí Tuệ cửu chuyển.,3,9,,"{""lifespan_boost"": 10.0}","[""food""]"
 deer_god_fruit,Quả Thần hươu,Food,Sinh trưởng trên sừng hươu Quải Quả là thức ăn của tiên cổ Kim Cương Niệm.,2,5,,{},"[""food""]"
 amount_love_flower,Hoa Lượng Tình,Food,Thức ăn của tiên cổ Truy Niệm.,2,5,,{},"[""food""]"
@@ -107,3 +107,21 @@ node_silver_wolf_den,Cơ sở Hang Sói Bạc,Material,Cơ sở Tiên Khiếu d�
 node_hairy_man_settlement,Cơ sở Bộ Lạc Người Lông,Material,Cơ sở Tiên Khiếu chiêu mộ dị nhân Người Lông.,3,6,Human Path,{},[]
 node_rockman_tribe,Cơ sở Bản Doanh Người Đá,Material,Cơ sở Tiên Khiếu chiêu mộ dị nhân Người Đá.,3,6,Human Path,{},[]
 node_featherman_canyon,Cơ sở Hẻm Núi Người Lông Vũ,Material,Cơ sở Tiên Khiếu chiêu mộ dị nhân Người Lông Vũ.,3,6,Human Path,{},[]
+wind_honey,Phong mật,Food,Mật ong gió dùng nuôi Hùng Lực Cổ.,1,1,,{},"[""food""]"
+yellow_mud,Hoàng nê,Material,Đất bùn vàng màu mỡ dùng cho Lại Thổ Cáp Mô và luyện Hoàng Đồng Thiềm.,1,2,Earth Path,{},[]
+black_boar_tusk,Dã Trư Nha,Material,Nanh dã trư dùng hợp luyện Bạch Ngọc Cổ.,1,1,Strength Path,{},[]
+snake_tongue,Xà tín,Material,Vật liệu nhiệt cảm dùng cho Xà Tín Cổ.,1,2,,{},[]
+silver_stone,Ngân Thạch,Material,Đá bạc dùng hợp luyện Nguyệt Ngân Cổ.,1,1,Moon Path,{},[]
+whirlwind_seed,Toàn phong chủng,Material,Vật liệu phong đạo dùng hợp luyện Nguyệt Toàn Cổ.,1,1,Wind Path,{},[]
+water_defense_shell,Thủy hành phòng ngự xác,Material,Vật liệu thủy đạo dùng hợp luyện Thiên Bồng Cổ.,1,3,Water Path,{},[]
+hundred_year_lifespan_gu,Bách Niên Thọ Cổ,Material,Thọ cổ trăm năm dùng trong công thức Mộc Mị tiến giai.,2,4,,{},[]
+heaven_well_water,Thiên Tỉnh thủy,Material,Vật liệu phụ cho Thương Không Tỉnh Cổ.,2,5,Water Path,{},[]
+copper_spike,Đồng đinh,Material,Vật liệu đồng đạo cho Hoàng Đồng Thiềm.,1,3,Metal Path,{},[]
+nine_palace_flower,Cửu Cung Hoa,Material,Phụ liệu luyện Cốt Dực Cổ.,2,4,Bone Path,{},[]
+summit_stone,Vấn Đỉnh Thạch,Material,Đá phụ liệu luyện Cốt Dực Cổ.,2,4,Earth Path,{},[]
+golden_crow_meteor,Kim Ô Lưu Tinh,Material,Tinh thạch phụ liệu luyện Cốt Dực Cổ.,2,4,Fire Path,{},[]
+cold_ice_grass,Hàn Băng Thảo,Material,Thảo tài băng đạo phụ liệu luyện Cốt Dực Cổ.,2,4,Ice Path,{},[]
+earth_horse_hoof,Địa Mã Chi Đề,Material,Nguyên liệu chính của Độn Địa Cổ.,2,5,Earth Path,{},[]
+black_oil_refined,Hắc du tinh luyện,Material,Nguyên liệu chính luyện Thải Du Cổ.,2,5,,{},[]
+gold_dragonfish_scale,Kim long ngư lân,Material,Vảy kim long ngư dùng luyện Thải Du Cổ.,2,5,,{},[]
+blade_food,Đao khí tinh thiết,Food,Thức ăn mô phỏng cho Đan Đao Cổ.,3,6,Blade Path,{},"[""food""]"

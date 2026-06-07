@@ -23,7 +23,6 @@ import {
 
 interface ApertureProps {
   player: Player;
-  onLogout: () => void;
   guDictionary: Record<string, GuSpec>;
 }
 
@@ -109,7 +108,6 @@ const formatGuName = (name: string) => {
 
 export const Aperture: React.FC<ApertureProps> = ({
   player,
-  onLogout,
   guDictionary,
 }) => {
   const store = useGameStore();
@@ -141,18 +139,16 @@ export const Aperture: React.FC<ApertureProps> = ({
 
   // Disguise/stealth settings state
   const [isDisguised, setIsDisguised] = useState(player.is_disguised || false);
-  const [fakeName, setFakeName] = useState(player.fake_name || "");
   const [fakeRank, setFakeRank] = useState(player.fake_rank || player.rank);
   const [fakeSubRank, setFakeSubRank] = useState(player.fake_sub_rank || player.sub_rank);
   const [fakeVitalGu, setFakeVitalGu] = useState(player.fake_vital_gu || "GU_SHADOW");
 
   React.useEffect(() => {
     setIsDisguised(player.is_disguised || false);
-    setFakeName(player.fake_name || "");
     setFakeRank(player.fake_rank || player.rank);
     setFakeSubRank(player.fake_sub_rank || player.sub_rank);
     setFakeVitalGu(player.fake_vital_gu || "GU_SHADOW");
-  }, [player.is_disguised, player.fake_name, player.fake_rank, player.fake_sub_rank, player.fake_vital_gu, player.rank, player.sub_rank]);
+  }, [player.is_disguised, player.fake_rank, player.fake_sub_rank, player.fake_vital_gu, player.rank, player.sub_rank]);
 
   React.useEffect(() => {
     void store.fetchReferrals();
@@ -319,22 +315,6 @@ export const Aperture: React.FC<ApertureProps> = ({
       >
         {/* Decorative background grid pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(16,185,129,0.01)_1px,transparent_1px),linear-gradient(to_bottom,rgba(16,185,129,0.01)_1px,transparent_1px)] bg-[size:14px_24px] pointer-events-none" />
-
-        {/* Top Header Row: Coordinates and Logout */}
-        <div className="w-full flex justify-between items-center mb-4 z-10">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-            <span className="text-[9px] text-emerald-400 font-mono uppercase tracking-widest">
-              Tọa độ: ({player.x}, {player.y})
-            </span>
-          </div>
-          <button
-            onClick={onLogout}
-            className="text-[10px] text-zinc-500 hover:text-rose-450 transition-colors cursor-pointer border border-zinc-800 hover:border-rose-900/30 px-2 py-0.5 rounded bg-zinc-950/40 font-mono"
-          >
-            Đăng Xuất
-          </button>
-        </div>
 
         {/* Character Title */}
         <h3
@@ -1088,33 +1068,32 @@ export const Aperture: React.FC<ApertureProps> = ({
               
               <form onSubmit={async (e) => {
                 e.preventDefault();
-                const emailInput = (e.currentTarget.elements.namedItem("email") as HTMLInputElement).value;
+                const usernameInput = (e.currentTarget.elements.namedItem("username") as HTMLInputElement).value;
                 const bioInput = (e.currentTarget.elements.namedItem("bio") as HTMLTextAreaElement).value;
                 const newPasswordInput = (e.currentTarget.elements.namedItem("newPassword") as HTMLInputElement).value;
                 
                 const success = await store.updateProfileSettings({
-                  email: emailInput,
+                  username: usernameInput,
                   bio: bioInput,
                   new_password: newPasswordInput || undefined,
                   is_disguised: isDisguised,
-                  fake_name: fakeName,
                   fake_rank: Number(fakeRank),
                   fake_sub_rank: Number(fakeSubRank),
                   fake_vital_gu: fakeVitalGu,
                 });
                 if (success) {
                   // Clear password field
-                  (e.currentTarget.elements.namedItem("newPassword") as HTMLInputElement).value = "";
+                  (e.currentTarget?.elements.namedItem("newPassword") as HTMLInputElement).value = "";
                 }
               }} className="space-y-4">
-                {/* Email */}
+                {/* Username */}
                 <div className="flex flex-col gap-1.5">
-                  <label htmlFor="settings-email" className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Email</label>
+                  <label htmlFor="settings-username" className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Đạo Hiệu (Username)</label>
                   <input
-                    id="settings-email"
-                    name="email"
-                    type="email"
-                    defaultValue={player.email || ""}
+                    id="settings-username"
+                    name="username"
+                    type="text"
+                    defaultValue={player.username || ""}
                     required
                     className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3.5 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none transition-all font-mono"
                   />
@@ -1179,25 +1158,6 @@ export const Aperture: React.FC<ApertureProps> = ({
 
                   {hasConcealment && isDisguised && (
                     <div className="space-y-3 p-3 bg-zinc-950/40 border border-zinc-900 rounded-xl">
-                      {/* Fake Name */}
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex justify-between items-center">
-                          <label htmlFor="settings-fakeName" className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Tên Giả Hiển Thị</label>
-                          {!hasFaceChange && (
-                            <span className="text-[8px] bg-rose-950/40 text-rose-450 border border-rose-900/30 px-1.5 py-0.5 rounded font-mono font-semibold uppercase">Yêu cầu Biến Hóa/Thái Độ Cổ</span>
-                          )}
-                        </div>
-                        <input
-                          id="settings-fakeName"
-                          type="text"
-                          disabled={!hasFaceChange}
-                          placeholder={hasFaceChange ? "Nhập tên giả để che mắt người khác..." : player.username}
-                          value={fakeName}
-                          onChange={(e) => setFakeName(e.target.value)}
-                          className="w-full bg-zinc-950 disabled:bg-zinc-950/30 disabled:opacity-40 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none transition-all font-mono"
-                        />
-                      </div>
-
                       {/* Fake Rank & Sub Rank */}
                       <div className="grid grid-cols-2 gap-3">
                         <div className="flex flex-col gap-1.5">

@@ -121,7 +121,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
           <span className="text-xs font-mono text-zinc-500">Đang kiểm kê hàng hóa...</span>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2">
           {shopItems.map((item) => {
             const totalCost = item.price;
             const canAfford = player.primeval_stones >= totalCost;
@@ -151,7 +151,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                   </p>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-zinc-900/60 flex items-center justify-between">
+                <div className="border-t border-zinc-900/60 flex items-center justify-between">
                   <span className="text-[10px] text-zinc-600 font-mono">
                     Hiện có: {item.stock > 0 ? `${item.stock} cái` : "Vô hạn"}
                   </span>
@@ -174,25 +174,6 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
           })}
         </div>
       )}
-
-
-      <div className="border-t border-zinc-900 pt-4 space-y-3">
-        <h4 className="text-sm font-bold text-zinc-200 font-serif">Quầy Thu Mua</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-          {sellableMaterials.map(([id, qty]) => (
-            <button key={`m-${id}`} onClick={() => onSell(id, 1, "Material")} disabled={actionLoading}
-              className="text-left px-3 py-2 rounded-lg border border-zinc-800 hover:border-amber-500/40">
-              Bán 1x {id} (còn {qty})
-            </button>
-          ))}
-          {Object.entries(sellableGuCounts).map(([id, qty]) => (
-            <button key={`g-${id}`} onClick={() => onSell(id, 1, "Gu")} disabled={actionLoading}
-              className="text-left px-3 py-2 rounded-lg border border-zinc-800 hover:border-amber-500/40">
-              Bán 1x {id} (còn {qty})
-            </button>
-          ))}
-        </div>
-      </div>
 
       {/* Buy Quantity Modal */}
       {selectedItem && (

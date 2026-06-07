@@ -157,19 +157,6 @@ func SendBaoHoangChat(c *gin.Context) {
 		req.Channel = "world"
 	}
 
-	var fee int
-	switch req.Channel {
-	case "world":
-		fee = 10
-	case "general":
-		fee = 1
-	case "sect":
-		fee = 0
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Kênh chat không hợp lệ"})
-		return
-	}
-
 	tx, err := db.DB.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
@@ -180,6 +167,33 @@ func SendBaoHoangChat(c *gin.Context) {
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		return
+	}
+
+	var fee int
+	switch req.Channel {
+	case "world":
+		fee = 100
+	case "general":
+		fee = 0
+		hasConnectingHeaven := false
+		hasDivineSense := false
+		for _, gu := range player.GuInventory {
+			if gu.GuID == "GU_CONNECTING_HEAVEN" {
+				hasConnectingHeaven = true
+			}
+			if gu.GuID == "GU_DIVINE_SENSE" {
+				hasDivineSense = true
+			}
+		}
+		if !hasConnectingHeaven || !hasDivineSense {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Chat kênh Bảo Hoàng Thiên yêu cầu cần có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) và Thần Niệm Cổ (GU_DIVINE_SENSE) trong túi đồ!"})
+			return
+		}
+	case "sect":
+		fee = 0
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Kênh chat không hợp lệ"})
 		return
 	}
 

@@ -212,9 +212,24 @@ func SetupRouter() *gin.Engine {
 			shop.POST("/sell", handlers.SellShopItem)
 			shop.GET("/bao-hoang/listings", handlers.ListListings)
 			shop.POST("/bao-hoang/listings", handlers.CreateListing)
+			shop.POST("/bao-hoang/buy", handlers.BuyListing)
 			shop.POST("/bao-hoang/bid", handlers.PlaceBid)
 			shop.POST("/bao-hoang/cancel", handlers.CancelListing)
 			shop.POST("/bao-hoang/settle", handlers.SettleExpiredAuctions)
+		}
+
+		// Direct P2P Trade Endpoints
+		trade := api.Group("/trade")
+		trade.Use(middleware.AuthRequired())
+		{
+			trade.POST("/initiate", handlers.InitiateTrade)
+			trade.GET("/active", handlers.GetActiveTrade)
+			trade.POST("/accept/:id", handlers.AcceptTrade)
+			trade.POST("/decline/:id", handlers.DeclineTrade)
+			trade.POST("/cancel/:id", handlers.CancelTrade)
+			trade.POST("/offer/:id", handlers.UpdateTradeOffer)
+			trade.POST("/lock/:id", handlers.LockTrade)
+			trade.POST("/confirm/:id", handlers.ConfirmTrade)
 		}
 
 		// Protected Soul Endpoints

@@ -1,0 +1,720 @@
+package handlers
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/models"
+)
+
+type TradeOffer struct {
+	PrimevalStones int            `json:"primeval_stones"`
+	ImmortalStones float64        `json:"immortal_stones"`
+	Gus            []string       `json:"gus"`       // slice of Gu instance IDs
+	Materials      map[string]int `json:"materials"` // map of itemID -> quantity
+}
+
+type InitiateTradeRequest struct {
+	ReceiverUsername string `json:"receiver_username" binding:"required"`
+}
+
+func InitiateTrade(c *gin.Context) {
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var req InitiateTradeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tên người nhận là bắt buộc"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	// Load sender
+	sender, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sender details"})
+		return
+	}
+
+	// Verify sender has Connecting Heaven Gu
+	senderHasConnecting := false
+	for _, gu := range sender.GuInventory {
+		if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
+			senderHasConnecting = true
+			break
+		}
+	}
+	if !senderHasConnecting {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu cần có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để mở kết nối giao dịch!"})
+		return
+	}
+
+	// Find receiver
+	var receiverID uuid.UUID
+	err = tx.QueryRow(`SELECT id FROM players WHERE username = $1`, req.ReceiverUsername).Scan(&receiverID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy người nhận chỉ định"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu"})
+		}
+		return
+	}
+
+	if receiverID == sender.ID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể tự giao dịch với chính mình"})
+		return
+	}
+
+	// Load receiver
+	receiver, err := evaluateManaTx(tx, receiverID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load receiver details"})
+		return
+	}
+
+	// Verify receiver has Connecting Heaven Gu
+	receiverHasConnecting := false
+	for _, gu := range receiver.GuInventory {
+		if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
+			receiverHasConnecting = true
+			break
+		}
+	}
+	if !receiverHasConnecting {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đối phương không sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để kết nối giao dịch!"})
+		return
+	}
+
+	// Check if either player is already in an active trade (PENDING or ACCEPTED)
+	var activeExists bool
+	err = tx.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM trades 
+			WHERE (sender_id = $1 OR receiver_id = $1 OR sender_id = $2 OR receiver_id = $2) 
+			  AND status IN ('PENDING', 'ACCEPTED')
+		)
+	`, sender.ID, receiver.ID).Scan(&activeExists)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database check failed"})
+		return
+	}
+	if activeExists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Một trong hai bên đang bận giao dịch khác chưa hoàn tất"})
+		return
+	}
+
+	// Insert trade session
+	var tradeID uuid.UUID
+	err = tx.QueryRow(`
+		INSERT INTO trades (sender_id, receiver_id, status)
+		VALUES ($1, $2, 'PENDING')
+		RETURNING id
+	`, sender.ID, receiver.ID).Scan(&tradeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo phòng giao dịch"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit trade request"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Yêu cầu giao dịch đã được gửi!",
+		"trade_id": tradeID,
+	})
+}
+
+func GetActiveTrade(c *gin.Context) {
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var id, status string
+	var senderID, receiverID uuid.UUID
+	var senderOfferBytes, receiverOfferBytes []byte
+	var senderLocked, receiverLocked, senderConfirmed, receiverConfirmed bool
+	var senderUsername, receiverUsername string
+
+	// Find any PENDING or ACCEPTED trade involving this player
+	err := db.DB.QueryRow(`
+		SELECT t.id, t.sender_id, t.receiver_id, t.sender_offer, t.receiver_offer, 
+		       t.sender_locked, t.receiver_locked, t.sender_confirmed, t.receiver_confirmed, 
+		       t.status, p1.username, p2.username
+		FROM trades t
+		JOIN players p1 ON t.sender_id = p1.id
+		JOIN players p2 ON t.receiver_id = p2.id
+		WHERE (t.sender_id = $1 OR t.receiver_id = $1)
+		  AND t.status IN ('PENDING', 'ACCEPTED')
+		LIMIT 1
+	`, authID).Scan(&id, &senderID, &receiverID, &senderOfferBytes, &receiverOfferBytes,
+		&senderLocked, &receiverLocked, &senderConfirmed, &receiverConfirmed, &status,
+		&senderUsername, &receiverUsername)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusOK, gin.H{"trade": nil})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query active trade: " + err.Error()})
+		}
+		return
+	}
+
+	var senderOffer, receiverOffer TradeOffer
+	_ = json.Unmarshal(senderOfferBytes, &senderOffer)
+	_ = json.Unmarshal(receiverOfferBytes, &receiverOffer)
+
+	var senderGuInv models.GuInventory
+	var receiverGuInv models.GuInventory
+	_ = db.DB.QueryRow(`SELECT gu_inventory FROM players WHERE id = $1`, senderID).Scan(&senderGuInv)
+	_ = db.DB.QueryRow(`SELECT gu_inventory FROM players WHERE id = $1`, receiverID).Scan(&receiverGuInv)
+
+	guDetails := make(map[string]string)
+	for _, g := range senderGuInv {
+		guDetails[g.InstanceID] = g.GuID
+	}
+	for _, g := range receiverGuInv {
+		guDetails[g.InstanceID] = g.GuID
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"trade": gin.H{
+			"id":                 id,
+			"sender_id":          senderID,
+			"sender_username":    senderUsername,
+			"receiver_id":        receiverID,
+			"receiver_username":  receiverUsername,
+			"sender_offer":      senderOffer,
+			"receiver_offer":    receiverOffer,
+			"sender_locked":      senderLocked,
+			"receiver_locked":    receiverLocked,
+			"sender_confirmed":   senderConfirmed,
+			"receiver_confirmed": receiverConfirmed,
+			"status":             status,
+			"gu_details":         guDetails,
+		},
+	})
+}
+
+func AcceptTrade(c *gin.Context) {
+	tradeID := c.Param("id")
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	_, err := db.DB.Exec(`
+		UPDATE trades 
+		SET status = 'ACCEPTED', updated_at = NOW() 
+		WHERE id = $1 AND receiver_id = $2 AND status = 'PENDING'
+	`, tradeID, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chấp nhận giao dịch"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Đã chấp nhận giao dịch"})
+}
+
+func DeclineTrade(c *gin.Context) {
+	tradeID := c.Param("id")
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	_, err := db.DB.Exec(`
+		UPDATE trades 
+		SET status = 'DECLINED', updated_at = NOW() 
+		WHERE id = $1 AND receiver_id = $2 AND status = 'PENDING'
+	`, tradeID, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể từ chối giao dịch"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Đã từ chối giao dịch"})
+}
+
+func CancelTrade(c *gin.Context) {
+	tradeID := c.Param("id")
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	_, err := db.DB.Exec(`
+		UPDATE trades 
+		SET status = 'CANCELLED', updated_at = NOW() 
+		WHERE id = $1 AND (sender_id = $2 OR receiver_id = $2) AND status IN ('PENDING', 'ACCEPTED')
+	`, tradeID, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hủy giao dịch"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Đã hủy giao dịch"})
+}
+
+func UpdateTradeOffer(c *gin.Context) {
+	tradeID := c.Param("id")
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var offer TradeOffer
+	if err := c.ShouldBindJSON(&offer); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu vật phẩm giao dịch không hợp lệ"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	// 1. Load trade details
+	var senderID, receiverID uuid.UUID
+	var status string
+	var senderLocked, receiverLocked bool
+	err = tx.QueryRow(`
+		SELECT sender_id, receiver_id, status, sender_locked, receiver_locked 
+		FROM trades WHERE id = $1 FOR UPDATE
+	`, tradeID).Scan(&senderID, &receiverID, &status, &senderLocked, &receiverLocked)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phiên giao dịch"})
+		return
+	}
+
+	if status != "ACCEPTED" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Phiên giao dịch không ở trạng thái sẵn sàng để trao đổi"})
+		return
+	}
+
+	var isSender bool
+	if authID == senderID {
+		isSender = true
+		if senderLocked {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Giao dịch đã bị khóa, không thể chỉnh sửa"})
+			return
+		}
+	} else if authID == receiverID {
+		isSender = false
+		if receiverLocked {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Giao dịch đã bị khóa, không thể chỉnh sửa"})
+			return
+		}
+	} else {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Bạn không phải thành viên của phiên giao dịch này"})
+		return
+	}
+
+	// 2. Load player inventories & check assets
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player details"})
+		return
+	}
+
+	// Validate Stones
+	if offer.PrimevalStones < 0 || offer.ImmortalStones < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Số lượng đá giao dịch không hợp lệ"})
+		return
+	}
+	if player.PrimevalStones < offer.PrimevalStones {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn không đủ Nguyên Thạch"})
+		return
+	}
+	if player.ImmortalStones < offer.ImmortalStones {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn không đủ Tiên Nguyên Thạch"})
+		return
+	}
+
+	// Validate Gu instances
+	for _, instID := range offer.Gus {
+		found := false
+		var targetGu models.GuInstance
+		for _, g := range player.GuInventory {
+			if g.InstanceID == instID {
+				found = true
+				targetGu = g
+				break
+			}
+		}
+		if !found {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không tìm thấy Cổ trùng trong túi: %s", instID)})
+			return
+		}
+		if targetGu.IsVital {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể giao dịch Bản Mệnh Cổ: %s", targetGu.GuID)})
+			return
+		}
+		if targetGu.Equipped {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể giao dịch Cổ trùng đang trang bị: %s", targetGu.GuID)})
+			return
+		}
+	}
+
+	// Validate Materials
+	for matID, qty := range offer.Materials {
+		if qty < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Số lượng vật phẩm giao dịch không hợp lệ"})
+			return
+		}
+		availableQty := player.MaterialsInventory[matID]
+		if availableQty < qty {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ số lượng vật phẩm trong kho: %s", matID)})
+			return
+		}
+	}
+
+	// Serialize offer
+	offerJSON, err := json.Marshal(offer)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to serialize offer"})
+		return
+	}
+
+	// 3. Update DB
+	// Every time an offer is updated, we unlock both sides and unconfirm both sides to prevent bait-and-switch!
+	if isSender {
+		_, err = tx.Exec(`
+			UPDATE trades 
+			SET sender_offer = $1, sender_locked = false, receiver_locked = false, 
+			    sender_confirmed = false, receiver_confirmed = false, updated_at = NOW()
+			WHERE id = $2
+		`, offerJSON, tradeID)
+	} else {
+		_, err = tx.Exec(`
+			UPDATE trades 
+			SET receiver_offer = $1, sender_locked = false, receiver_locked = false, 
+			    sender_confirmed = false, receiver_confirmed = false, updated_at = NOW()
+			WHERE id = $2
+		`, offerJSON, tradeID)
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update trade offer"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật ưu đãi thành công, trạng thái khóa của 2 bên đã được đặt lại"})
+}
+
+func LockTrade(c *gin.Context) {
+	tradeID := c.Param("id")
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	var senderID, receiverID uuid.UUID
+	var status string
+	err = tx.QueryRow(`
+		SELECT sender_id, receiver_id, status FROM trades WHERE id = $1 FOR UPDATE
+	`, tradeID).Scan(&senderID, &receiverID, &status)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Giao dịch không tồn tại"})
+		return
+	}
+
+	if status != "ACCEPTED" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Trạng thái giao dịch không cho phép khóa"})
+		return
+	}
+
+	if authID == senderID {
+		_, err = tx.Exec(`UPDATE trades SET sender_locked = true, updated_at = NOW() WHERE id = $1`, tradeID)
+	} else if authID == receiverID {
+		_, err = tx.Exec(`UPDATE trades SET receiver_locked = true, updated_at = NOW() WHERE id = $1`, tradeID)
+	} else {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
+		return
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lock failed"})
+		return
+	}
+
+	tx.Commit()
+	c.JSON(http.StatusOK, gin.H{"message": "Đã khóa vật phẩm giao dịch"})
+}
+
+func ConfirmTrade(c *gin.Context) {
+	tradeID := c.Param("id")
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	var senderID, receiverID uuid.UUID
+	var status string
+	var senderOfferBytes, receiverOfferBytes []byte
+	var senderLocked, receiverLocked, senderConfirmed, receiverConfirmed bool
+
+	err = tx.QueryRow(`
+		SELECT sender_id, receiver_id, status, sender_offer, receiver_offer, 
+		       sender_locked, receiver_locked, sender_confirmed, receiver_confirmed
+		FROM trades WHERE id = $1 FOR UPDATE
+	`, tradeID).Scan(&senderID, &receiverID, &status, &senderOfferBytes, &receiverOfferBytes,
+		&senderLocked, &receiverLocked, &senderConfirmed, &receiverConfirmed)
+
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Giao dịch không tồn tại"})
+		return
+	}
+
+	if status != "ACCEPTED" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Giao dịch không ở trạng thái hoạt động"})
+		return
+	}
+
+	if !senderLocked || !receiverLocked {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Yêu cầu cả 2 bên phải khóa giao dịch trước khi xác nhận!"})
+		return
+	}
+
+	if authID == senderID {
+		senderConfirmed = true
+		_, err = tx.Exec(`UPDATE trades SET sender_confirmed = true, updated_at = NOW() WHERE id = $1`, tradeID)
+	} else if authID == receiverID {
+		receiverConfirmed = true
+		_, err = tx.Exec(`UPDATE trades SET receiver_confirmed = true, updated_at = NOW() WHERE id = $1`, tradeID)
+	} else {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
+		return
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Confirm update failed"})
+		return
+	}
+
+	// If both players have confirmed, execute the trade swap!
+	if senderConfirmed && receiverConfirmed {
+		var senderOffer, receiverOffer TradeOffer
+		_ = json.Unmarshal(senderOfferBytes, &senderOffer)
+		_ = json.Unmarshal(receiverOfferBytes, &receiverOffer)
+
+		// Load players
+		sender, err := evaluateManaTx(tx, senderID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sender details"})
+			return
+		}
+
+		receiver, err := evaluateManaTx(tx, receiverID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load receiver details"})
+			return
+		}
+
+		// Double-check Connecting Heaven Gu on both sides
+		senderConnecting := false
+		for _, gu := range sender.GuInventory {
+			if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
+				senderConnecting = true
+				break
+			}
+		}
+		receiverConnecting := false
+		for _, gu := range receiver.GuInventory {
+			if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
+				receiverConnecting = true
+				break
+			}
+		}
+		if !senderConnecting || !receiverConnecting {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Giao dịch thất bại! Cần phải có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để duy trì kết nối."})
+			return
+		}
+
+		// 1. Verify and deduct sender assets
+		if sender.PrimevalStones < senderOffer.PrimevalStones || sender.ImmortalStones < senderOffer.ImmortalStones {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Người gửi không đủ đá linh thạch"})
+			return
+		}
+		sender.PrimevalStones -= senderOffer.PrimevalStones
+		sender.ImmortalStones -= senderOffer.ImmortalStones
+
+		// Deduct sender Gu
+		for _, instID := range senderOffer.Gus {
+			idx := -1
+			for i, gu := range sender.GuInventory {
+				if gu.InstanceID == instID {
+					idx = i
+					break
+				}
+			}
+			if idx == -1 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Người gửi thiếu Cổ trùng trang bị trong ưu đãi"})
+				return
+			}
+			if sender.GuInventory[idx].IsVital {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể giao dịch Bản Mệnh Cổ"})
+				return
+			}
+			if sender.GuInventory[idx].Equipped {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể giao dịch Cổ trùng đang trang bị"})
+				return
+			}
+			// Add to receiver
+			receiver.GuInventory = append(receiver.GuInventory, sender.GuInventory[idx])
+			// Remove from sender
+			sender.GuInventory = append(sender.GuInventory[:idx], sender.GuInventory[idx+1:]...)
+		}
+
+		// Deduct sender materials
+		for matID, qty := range senderOffer.Materials {
+			avail := sender.MaterialsInventory[matID]
+			if avail < qty {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Người gửi thiếu vật phẩm: %s", matID)})
+				return
+			}
+			sender.MaterialsInventory[matID] -= qty
+			if sender.MaterialsInventory[matID] <= 0 {
+				delete(sender.MaterialsInventory, matID)
+			}
+			// Add to receiver
+			if receiver.MaterialsInventory == nil {
+				receiver.MaterialsInventory = map[string]int{}
+			}
+			receiver.MaterialsInventory[matID] += qty
+		}
+
+		// 2. Verify and deduct receiver assets
+		if receiver.PrimevalStones < receiverOffer.PrimevalStones || receiver.ImmortalStones < receiverOffer.ImmortalStones {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Người nhận không đủ đá linh thạch"})
+			return
+		}
+		receiver.PrimevalStones -= receiverOffer.PrimevalStones
+		receiver.ImmortalStones -= receiverOffer.ImmortalStones
+
+		// Deduct receiver Gu
+		for _, instID := range receiverOffer.Gus {
+			idx := -1
+			for i, gu := range receiver.GuInventory {
+				if gu.InstanceID == instID {
+					idx = i
+					break
+				}
+			}
+			if idx == -1 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Người nhận thiếu Cổ trùng trang bị trong ưu đãi"})
+				return
+			}
+			if receiver.GuInventory[idx].IsVital {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể giao dịch Bản Mệnh Cổ"})
+				return
+			}
+			if receiver.GuInventory[idx].Equipped {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể giao dịch Cổ trùng đang trang bị"})
+				return
+			}
+			// Add to sender
+			sender.GuInventory = append(sender.GuInventory, receiver.GuInventory[idx])
+			// Remove from receiver
+			receiver.GuInventory = append(receiver.GuInventory[:idx], receiver.GuInventory[idx+1:]...)
+		}
+
+		// Deduct receiver materials
+		for matID, qty := range receiverOffer.Materials {
+			avail := receiver.MaterialsInventory[matID]
+			if avail < qty {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Người nhận thiếu vật phẩm: %s", matID)})
+				return
+			}
+			receiver.MaterialsInventory[matID] -= qty
+			if receiver.MaterialsInventory[matID] <= 0 {
+				delete(receiver.MaterialsInventory, matID)
+			}
+			// Add to sender
+			if sender.MaterialsInventory == nil {
+				sender.MaterialsInventory = map[string]int{}
+			}
+			sender.MaterialsInventory[matID] += qty
+		}
+
+		// 3. Add swap items to balances
+		sender.PrimevalStones += receiverOffer.PrimevalStones
+		sender.ImmortalStones += receiverOffer.ImmortalStones
+		receiver.PrimevalStones += senderOffer.PrimevalStones
+		receiver.ImmortalStones += senderOffer.ImmortalStones
+
+		// Update both players in database
+		if err := updatePlayerInventory(tx, sender); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ người gửi"})
+			return
+		}
+		if err := updatePlayerInventory(tx, receiver); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ người nhận"})
+			return
+		}
+
+		// Update trade status to COMPLETED
+		_, err = tx.Exec(`UPDATE trades SET status = 'COMPLETED', updated_at = NOW() WHERE id = $1`, tradeID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update trade completion status"})
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":            "Xác nhận thành công",
+		"sender_confirmed":   senderConfirmed,
+		"receiver_confirmed": receiverConfirmed,
+	})
+}

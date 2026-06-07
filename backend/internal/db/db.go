@@ -293,6 +293,7 @@ func InitSchema() error {
 		highest_bidder_id UUID REFERENCES players(id) ON DELETE SET NULL,
 		end_time TIMESTAMP WITH TIME ZONE NOT NULL,
 		status VARCHAR(20) NOT NULL DEFAULT 'active',
+		listing_type VARCHAR(20) NOT NULL DEFAULT 'AUCTION',
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);
 	`
@@ -657,11 +658,10 @@ func InitSchema() error {
 		);`, "aperture_variant_humans"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS unlocked_recipes JSONB NOT NULL DEFAULT '[]';`, "unlocked_recipes"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT 'Hãy viết gì đó về bản thân...';`, "bio"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS fake_name VARCHAR(50) DEFAULT '';`, "fake_name"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS fake_rank INTEGER DEFAULT 1;`, "fake_rank"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS fake_sub_rank INTEGER DEFAULT 1;`, "fake_sub_rank"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS fake_vital_gu VARCHAR(50) DEFAULT '';`, "fake_vital_gu"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS is_disguised BOOLEAN DEFAULT false;`, "is_disguised"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS is_disguised BOOLEAN DEFAULT true;`, "is_disguised"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;`, "is_admin"},
 		{`CREATE TABLE IF NOT EXISTS feedback (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -721,6 +721,22 @@ func InitSchema() error {
 			milestone3_rewarded BOOLEAN NOT NULL DEFAULT false,
 			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 		);`, "create_referrals_table"},
+		{`ALTER TABLE auction ADD COLUMN IF NOT EXISTS listing_type VARCHAR(20) NOT NULL DEFAULT 'AUCTION';`, "add_listing_type_to_auction"},
+		{`ALTER TABLE auction ADD COLUMN IF NOT EXISTS target_buyer_id UUID DEFAULT NULL;`, "add_target_buyer_id_to_auction"},
+		{`CREATE TABLE IF NOT EXISTS trades (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			sender_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			receiver_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			sender_offer JSONB NOT NULL DEFAULT '{"primeval_stones":0,"immortal_stones":0,"gus":[],"materials":{}}',
+			receiver_offer JSONB NOT NULL DEFAULT '{"primeval_stones":0,"immortal_stones":0,"gus":[],"materials":{}}',
+			sender_locked BOOLEAN NOT NULL DEFAULT false,
+			receiver_locked BOOLEAN NOT NULL DEFAULT false,
+			sender_confirmed BOOLEAN NOT NULL DEFAULT false,
+			receiver_confirmed BOOLEAN NOT NULL DEFAULT false,
+			status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		);`, "create_trades_table"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {

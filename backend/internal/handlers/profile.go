@@ -104,7 +104,7 @@ func GetPlayerProfile(c *gin.Context) {
 	var targetDaoMarks models.DaoMarksMap
 
 	query := `
-		SELECT p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitude_percent, p.current_mana, p.max_mana, p.primeval_stones, p.immortal_stones, p.hp, p.base_hp, p.gu_inventory, p.path_masteries, p.dao_marks, COALESCE(p.bio, ''), COALESCE(p.fake_name, ''), p.fake_rank, p.fake_sub_rank, COALESCE(p.fake_vital_gu, ''), p.is_disguised
+		SELECT p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitude_percent, p.current_mana, p.max_mana, p.primeval_stones, p.immortal_stones, p.hp, p.base_hp, p.gu_inventory, p.path_masteries, p.dao_marks, COALESCE(p.bio, ''), p.fake_rank, p.fake_sub_rank, COALESCE(p.fake_vital_gu, ''), p.is_disguised
 		FROM players p
 		WHERE p.username = $1
 	`
@@ -112,7 +112,7 @@ func GetPlayerProfile(c *gin.Context) {
 		&target.ID, &target.Username, &target.Rank, &target.SubRank,
 		&target.AptitudeType, &target.AptitudePercent, &target.CurrentMana, &target.MaxMana,
 		&target.PrimevalStones, &target.ImmortalStones, &target.HP, &target.BaseHP, &target.GuInventory, &target.PathMasteries,
-		&targetDaoMarks, &target.Bio, &target.FakeName, &target.FakeRank, &target.FakeSubRank, &target.FakeVitalGu, &target.IsDisguised,
+		&targetDaoMarks, &target.Bio, &target.FakeRank, &target.FakeSubRank, &target.FakeVitalGu, &target.IsDisguised,
 	)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy cổ sư này!"})
@@ -283,10 +283,7 @@ func GetPlayerProfile(c *gin.Context) {
 
 		if target.IsDisguised {
 			// Return B's configured fake profile settings
-			resp.Username = target.FakeName
-			if resp.Username == "" {
-				resp.Username = "Ẩn Danh Cổ Sư"
-			}
+			resp.Username = target.Username
 			resp.Rank = target.FakeRank
 			resp.SubRank = target.FakeSubRank
 			resp.Bio = "Ta chỉ là một cổ sư bình thường tu luyện trong núi..."

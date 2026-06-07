@@ -22,6 +22,8 @@ import { SectView } from "@/components/SectView";
 import { WikiView } from "@/components/WikiView";
 import { PlayerProfileModal } from "@/components/PlayerProfileModal";
 import { FeedbackView } from "@/components/FeedbackView";
+import { TradeRoomModal } from "@/components/TradeRoomModal";
+import { Handshake } from "lucide-react";
 
 
 
@@ -66,7 +68,13 @@ export default function Home() {
     createMarketplaceListing,
     placeMarketplaceBid,
     cancelMarketplaceListing,
+    buyMarketplaceListing,
     inspectedProfile,
+    activeTrade,
+    fetchActiveTrade,
+    acceptTrade,
+    declineTrade,
+    cancelTrade,
   } = useGameStore();
 
   const [checkingSession, setCheckingSession] = useState(true);
@@ -90,6 +98,19 @@ export default function Home() {
 
     return () => clearInterval(interval);
   }, [player, fetchPlayerStatus]);
+
+  // 3. Trade Status Polling (Every 3 seconds) - Skip polling if actively in combat
+  useEffect(() => {
+    if (!player || player.active_combat) return;
+
+    void fetchActiveTrade();
+
+    const interval = setInterval(() => {
+      void fetchActiveTrade();
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [player, fetchActiveTrade]);
 
   const handleLogout = () => {
     logout();
@@ -122,8 +143,8 @@ export default function Home() {
               GuWorld
             </h1>
           </div>
-
-          {player && !inCombat && currentView !== "dashboard" && (
+        </div>
+        {player && !inCombat && currentView !== "dashboard" && (
             <button
               onClick={() => setView("dashboard")}
               className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-xs text-zinc-300 hover:text-white font-serif transition-colors border border-zinc-800 cursor-pointer flex items-center gap-1"
@@ -132,7 +153,6 @@ export default function Home() {
               <span>Trở về Sảnh</span>
             </button>
           )}
-        </div>
 
         <div className="flex items-center gap-2">
           {player && !inCombat && currentView !== "wiki" && (
@@ -145,16 +165,19 @@ export default function Home() {
             </button>
           )}
 
-          <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-zinc-500 border border-zinc-900 bg-zinc-950/20 px-2 sm:px-3 py-1.5 rounded-xl">
-            <HelpCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-zinc-600 shrink-0" />
-            <span className="hidden sm:inline">Bản Thử Nghiệm (Phase 4 & 5)</span>
-            <span className="sm:hidden">Beta</span>
-          </div>
+          {player && !inCombat && (
+            <button
+              onClick={handleLogout}
+              className="px-3 py-1.5 rounded-xl bg-red-900/40 hover:bg-red-900/60 text-xs text-red-400 hover:text-red-300 font-serif transition-colors border border-red-800/40 cursor-pointer"
+            >
+              Đăng Xuất
+            </button>
+          )}
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-grow flex items-start justify-center w-full mx-auto">
+      <main className="flex-grow flex items-start justify-center w-full max-w-6xl mx-auto">
         {!player ? (
           <div className="py-12 w-full flex justify-center">
             <Registration
@@ -184,7 +207,6 @@ export default function Home() {
           <div className="w-full">
               <Aperture
                 player={player}
-                onLogout={handleLogout}
                 guDictionary={guDictionary}
               />
           </div>
@@ -244,6 +266,7 @@ export default function Home() {
             onCreate={createMarketplaceListing}
             onBid={placeMarketplaceBid}
             onCancel={cancelMarketplaceListing}
+            onBuy={buyMarketplaceListing}
             guDictionary={guDictionary}
             itemDictionary={itemDictionary}
           />
@@ -286,6 +309,64 @@ export default function Home() {
 
       {/* Inspect Player Profile Modal */}
       {inspectedProfile && <PlayerProfileModal />}
+
+      {/* Direct Trade Overlays */}
+      {activeTrade && activeTrade.status === "PENDING" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-3xl p-6 shadow-2xl relative overflow-hidden text-center flex flex-col gap-5 animate-scale-up">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-xl pointer-events-none" />
+            
+            <div className="w-12 h-12 rounded-full bg-emerald-950/50 border border-emerald-500/20 flex items-center justify-center mx-auto">
+              <Handshake className="w-6 h-6 text-emerald-400 animate-pulse" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-lg font-serif font-bold text-zinc-100">
+                {player?.username === activeTrade.receiver_username ? "Yêu Cầu Giao Dịch" : "Đang Kết Nối"}
+              </h3>
+              <p className="text-xs text-zinc-400 font-serif leading-relaxed">
+                {player?.username === activeTrade.receiver_username ? (
+                  <>
+                    Cổ sư <span className="text-emerald-400 font-bold">{activeTrade.sender_username}</span> đang phát tín hiệu Thông Thiên Cổ muốn giao dịch trực tiếp với đạo hữu.
+                  </>
+                ) : (
+                  <>
+                    Đang thiết lập tần số giao dịch với cổ sư <span className="text-emerald-400 font-bold">{activeTrade.receiver_username}</span> qua Thông Thiên Cổ...
+                  </>
+                )}
+              </p>
+            </div>
+
+            <div className="flex gap-3 justify-center">
+              {player?.username === activeTrade.receiver_username ? (
+                <>
+                  <button
+                    onClick={() => declineTrade(activeTrade.id)}
+                    className="px-5 py-2.5 rounded-xl text-xs font-serif font-bold bg-zinc-900 hover:bg-red-950/20 text-zinc-400 hover:text-red-400 border border-zinc-800 hover:border-red-900/10 transition-colors cursor-pointer"
+                  >
+                    Từ Chối
+                  </button>
+                  <button
+                    onClick={() => acceptTrade(activeTrade.id)}
+                    className="px-5 py-2.5 rounded-xl text-xs font-serif font-bold bg-emerald-600 hover:bg-emerald-500 text-zinc-100 transition-colors cursor-pointer shadow-lg shadow-emerald-950/20 border border-emerald-500/25"
+                  >
+                    Chấp Nhận
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => cancelTrade(activeTrade.id)}
+                  className="px-5 py-2.5 rounded-xl text-xs font-serif font-bold bg-zinc-900 hover:bg-red-950/20 text-zinc-400 hover:text-red-400 border border-zinc-800 hover:border-red-900/10 transition-colors cursor-pointer"
+                >
+                  Hủy Yêu Cầu
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTrade && activeTrade.status === "ACCEPTED" && <TradeRoomModal />}
     </div>
   );
 }

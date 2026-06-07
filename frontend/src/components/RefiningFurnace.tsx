@@ -327,7 +327,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full max-w-5xl mx-auto relative">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full max-w-6xl mx-auto h-full relative">
       {/* 1. LEFT PANEL: Inventory List */}
       <div className="lg:col-span-5 glass-panel-gold rounded-3xl p-5 flex flex-col h-[580px] overflow-hidden">
         <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-4 shrink-0">

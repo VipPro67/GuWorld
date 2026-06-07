@@ -699,7 +699,7 @@ export const WikiView: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto bg-zinc-950/70 border border-zinc-900 rounded-3xl overflow-hidden shadow-2xl backdrop-blur-xl flex flex-col md:flex-row h-[680px]">
+    <div className="w-full max-w-6xl mx-auto bg-zinc-950/70 border border-zinc-900 rounded-3xl overflow-hidden shadow-2xl backdrop-blur-xl flex flex-col md:flex-row h-[680px]">
       {/* 1. LEFT SIDEBAR */}
       <aside className="w-full md:w-64 border-r border-zinc-900 flex flex-col shrink-0 bg-zinc-950/80">
         {/* Search Input Box */}

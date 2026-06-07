@@ -40,7 +40,7 @@ const translatePath = (path: string): string => {
 };
 
 export const PlayerProfileModal: React.FC = () => {
-  const { inspectedProfile, clearInspectedProfile, guDictionary } = useGameStore();
+  const { inspectedProfile, inspectedUsernameQuery, clearInspectedProfile, guDictionary, player, initiateTrade } = useGameStore();
 
   if (!inspectedProfile) return null;
 
@@ -388,6 +388,23 @@ export const PlayerProfileModal: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* Direct P2P Trade Action */}
+          {player && inspectedProfile && player.username !== username && (
+            <div className="sm:col-span-2 border-t border-zinc-900/40 pt-4 flex justify-end">
+              <button
+                onClick={() => {
+                  if (inspectedUsernameQuery) {
+                    initiateTrade(inspectedUsernameQuery);
+                  }
+                  clearInspectedProfile();
+                }}
+                className="w-full py-3 rounded-2xl font-serif font-bold text-sm bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-zinc-100 shadow-lg shadow-emerald-950/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer border border-emerald-500/20"
+              >
+                <Sparkles className="w-4 h-4" /> Bắt Đầu Giao Dịch
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
