@@ -16,6 +16,9 @@ import {
   Compass,
   Shield,
   Clock,
+  Eye,
+  EyeOff,
+  User,
 } from "lucide-react";
 
 interface ApertureProps {
@@ -134,7 +137,26 @@ export const Aperture: React.FC<ApertureProps> = ({
 
   const dashOffset = CIRC * (1 - percent / 100);
 
-  const [activeTab, setActiveTab] = useState<"aperture" | "stats" | "quests" | "soul">("aperture");
+  const [activeTab, setActiveTab] = useState<"aperture" | "stats" | "quests" | "soul" | "referrals" | "settings">("aperture");
+
+  // Disguise/stealth settings state
+  const [isDisguised, setIsDisguised] = useState(player.is_disguised || false);
+  const [fakeName, setFakeName] = useState(player.fake_name || "");
+  const [fakeRank, setFakeRank] = useState(player.fake_rank || player.rank);
+  const [fakeSubRank, setFakeSubRank] = useState(player.fake_sub_rank || player.sub_rank);
+  const [fakeVitalGu, setFakeVitalGu] = useState(player.fake_vital_gu || "GU_SHADOW");
+
+  React.useEffect(() => {
+    setIsDisguised(player.is_disguised || false);
+    setFakeName(player.fake_name || "");
+    setFakeRank(player.fake_rank || player.rank);
+    setFakeSubRank(player.fake_sub_rank || player.sub_rank);
+    setFakeVitalGu(player.fake_vital_gu || "GU_SHADOW");
+  }, [player.is_disguised, player.fake_name, player.fake_rank, player.fake_sub_rank, player.fake_vital_gu, player.rank, player.sub_rank]);
+
+  React.useEffect(() => {
+    void store.fetchReferrals();
+  }, []);
 
   // Compute stats
   const stats = {
@@ -232,6 +254,23 @@ export const Aperture: React.FC<ApertureProps> = ({
   // Equipped Gu (max 6)
   let equippedGus = guInventory.filter((g) => g.equipped && g.status !== "DEAD" && g.is_vital !== true);
   equippedGus = equippedGus.slice(0, 6);
+
+  // Compute disguise permissions based on active equipped Gu bugs
+  const equippedActiveGus = guInventory.filter((g) => g.equipped && g.status === "ACTIVE");
+  const hasShadow = equippedActiveGus.some((g) => g.gu_id === "GU_SHADOW");
+  const hasShadowSteps = equippedActiveGus.some((g) => g.gu_id === "GU_SHADOW_STEPS");
+  const hasStealthScales = equippedActiveGus.some((g) => g.gu_id === "GU_STEALTH_SCALES");
+  const hasChangeForm = equippedActiveGus.some((g) => g.gu_id === "GU_CHANGE_FORM");
+  const hasAttitude = equippedActiveGus.some((g) => g.gu_id === "GU_ATTITUDE");
+
+  const hasConcealment = hasShadow || hasShadowSteps || hasStealthScales || hasChangeForm || hasAttitude;
+  const hasFaceChange = hasChangeForm || hasAttitude;
+
+  // Owned Gu IDs for fake Vital Gu select dropdown
+  const ownedGuIds = Array.from(new Set([
+    "GU_SHADOW",
+    ...guInventory.map((g) => g.gu_id)
+  ]));
 
   // Orbit dot positions — evenly spaced, starting from top
   const orbitDots = equippedGus.map((g, i) => {
@@ -369,6 +408,29 @@ export const Aperture: React.FC<ApertureProps> = ({
             }`}
           >
             Hồn Phách
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab("referrals");
+              void store.fetchReferrals();
+            }}
+            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${
+              activeTab === "referrals"
+                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            Sư Đồ
+          </button>
+          <button
+            onClick={() => setActiveTab("settings")}
+            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${
+              activeTab === "settings"
+                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            Cài Đặt
           </button>
         </div>
 
@@ -862,6 +924,366 @@ export const Aperture: React.FC<ApertureProps> = ({
                   <div className="col-span-2 text-center text-xs text-zinc-650 italic py-4">Chưa ngộ chân ý bất kỳ lưu phái nào. Hãy thám hiểm Mộng Cảnh!</div>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "referrals" && (
+          <div className="w-full z-10 space-y-5 text-left">
+            {/* Master Referral Card */}
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4">
+              <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
+                <Crown className="w-5 h-5 text-amber-400" />
+                <span className="font-serif font-bold text-zinc-100 text-sm">Liên Kết Sư Đồ (Mời Đệ Tử)</span>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed font-serif">
+                Mời bằng hữu cùng tham gia thế giới Cổ Giới nghịch thiên cải mệnh. Khi đệ tử đạt tu vi cao hoặc nạp tiền, bạn sẽ nhận được phần thưởng Nguyên Thạch quý hiếm cùng Cổ trùng bản mệnh ngẫu nhiên!
+              </p>
+
+              {/* Referral Code & Link */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                <div className="bg-zinc-950/80 p-3.5 rounded-xl border border-zinc-800 flex flex-col gap-1">
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-zinc-500">Mã Sư Phụ</span>
+                  <span className="text-lg font-mono font-bold text-amber-400 tracking-wider">
+                    {store.referralsData?.ref_code || "CHƯA_CÓ"}
+                  </span>
+                </div>
+                <div className="bg-zinc-950/80 p-3.5 rounded-xl border border-zinc-800 flex flex-col gap-1 relative group">
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-zinc-500">Liên Kết Sư Đồ</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-mono text-zinc-300 truncate max-w-[200px]">
+                      {typeof window !== "undefined"
+                        ? `${window.location.origin}/?ref=${store.referralsData?.ref_code || ""}`
+                        : "---"}
+                    </span>
+                    <button
+                      onClick={() => {
+                        const link = typeof window !== "undefined"
+                          ? `${window.location.origin}/?ref=${store.referralsData?.ref_code || ""}`
+                          : "";
+                        if (link) {
+                          navigator.clipboard.writeText(link);
+                          alert("Đã sao chép Liên Kết Sư Đồ!");
+                        }
+                      }}
+                      className="text-[10px] font-mono font-bold text-zinc-950 bg-amber-400 hover:bg-amber-300 px-2.5 py-1 rounded transition-all cursor-pointer shadow-md"
+                    >
+                      Copy Link
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Simulated Purchase (Simulator Widget) */}
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-3">
+              <div className="flex items-center gap-2 border-b border-zinc-900 pb-2">
+                <Coins className="w-5 h-5 text-emerald-400" />
+                <span className="font-serif font-bold text-zinc-100 text-sm">Giả Lập Nạp Tiền (Test Milestone 3)</span>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed font-serif">
+                Giả lập nạp tiền bằng Thẻ Nguyên Thạch để kiểm nghiệm tính năng nhận hoa hồng sư đồ (10% giá trị nạp tiền sẽ được gửi trực tiếp cho sư phụ của bạn nếu đệ tử đã verified).
+              </p>
+              <div className="flex flex-wrap gap-2.5 mt-1">
+                <button
+                  onClick={() => store.simulateDeposit(100)}
+                  disabled={store.actionLoading}
+                  className="flex-1 min-w-[120px] py-2 bg-emerald-650 hover:bg-emerald-600 disabled:bg-zinc-800 text-zinc-100 font-mono text-xs rounded-xl transition-all cursor-pointer font-bold shadow-md border border-emerald-500/25"
+                >
+                  Nạp $1 (100 NT)
+                </button>
+                <button
+                  onClick={() => store.simulateDeposit(1000)}
+                  disabled={store.actionLoading}
+                  className="flex-1 min-w-[120px] py-2 bg-emerald-650 hover:bg-emerald-600 disabled:bg-zinc-800 text-zinc-100 font-mono text-xs rounded-xl transition-all cursor-pointer font-bold shadow-md border border-emerald-500/25"
+                >
+                  Nạp $10 (1000 NT)
+                </button>
+                <button
+                  onClick={() => store.simulateDeposit(5000)}
+                  disabled={store.actionLoading}
+                  className="flex-1 min-w-[120px] py-2 bg-emerald-650 hover:bg-emerald-600 disabled:bg-zinc-800 text-zinc-100 font-mono text-xs rounded-xl transition-all cursor-pointer font-bold shadow-md border border-emerald-500/25"
+                >
+                  Nạp $50 (5000 NT)
+                </button>
+              </div>
+            </div>
+
+            {/* Referees list */}
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4">
+              <div className="flex items-center justify-between border-b border-zinc-900 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <User className="w-5 h-5 text-amber-400" />
+                  <span className="font-serif font-bold text-zinc-100 text-sm">Danh Sách Đệ Tử ({store.referralsData?.total_ref || 0})</span>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs font-mono">
+                  <thead>
+                    <tr className="border-b border-zinc-800 text-zinc-500 uppercase tracking-wider text-[10px]">
+                      <th className="py-2.5">Đạo hiệu</th>
+                      <th className="py-2.5">Tu vi</th>
+                      <th className="py-2.5">IP/Thiết bị</th>
+                      <th className="py-2.5 text-center">Trạng Thái</th>
+                      <th className="py-2.5 text-right">Mốc Quà</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {store.referralsData?.referees && store.referralsData.referees.length > 0 ? (
+                      store.referralsData.referees.map((referee: any) => (
+                        <tr key={referee.id} className="border-b border-zinc-900 hover:bg-zinc-950/20">
+                          <td className="py-3 font-semibold text-zinc-200">{referee.username}</td>
+                          <td className="py-3 text-amber-500">{RANK_NAMES[referee.rank] || `Chuyển ${referee.rank}`}</td>
+                          <td className="py-3 text-[10px] text-zinc-500">
+                            {referee.ip || "Unknown"}
+                          </td>
+                          <td className="py-3 text-center">
+                            {referee.is_suspicious ? (
+                              <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded text-[10px]">
+                                ⚠️ Sybil Attack (Trùng IP)
+                              </span>
+                            ) : (
+                              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px]">
+                                Hợp lệ
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 text-right space-y-1">
+                            <div className="flex flex-col gap-1 items-end">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${referee.milestone1_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
+                                Mốc 1 (Rank 2): {referee.milestone1_rewarded ? "Đã nhận (500NT)" : "Chưa đạt"}
+                              </span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${referee.milestone2_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
+                                Mốc 2 (Rank 3): {referee.milestone2_rewarded ? "Đã nhận (Cổ trùng)" : "Chưa đạt"}
+                              </span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${referee.milestone3_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : referee.has_deposited ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
+                                Mốc 3 (Nạp thẻ): {referee.milestone3_rewarded ? "Đã nhận (10%)" : referee.has_deposited ? "Chờ verified..." : "Chưa nạp"}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-zinc-500 italic">
+                          Chưa chiêu mộ được đệ tử nào. Hãy gửi liên kết sư đồ cho bằng hữu!
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "settings" && (
+          <div className="w-full z-10 space-y-5">
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4 text-left">
+              <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
+                <Crown className="w-5 h-5 text-amber-400" />
+                <span className="font-serif font-bold text-zinc-100 text-sm">Thiết Lập Hồ Sơ</span>
+              </div>
+              
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const emailInput = (e.currentTarget.elements.namedItem("email") as HTMLInputElement).value;
+                const bioInput = (e.currentTarget.elements.namedItem("bio") as HTMLTextAreaElement).value;
+                const newPasswordInput = (e.currentTarget.elements.namedItem("newPassword") as HTMLInputElement).value;
+                
+                const success = await store.updateProfileSettings({
+                  email: emailInput,
+                  bio: bioInput,
+                  new_password: newPasswordInput || undefined,
+                  is_disguised: isDisguised,
+                  fake_name: fakeName,
+                  fake_rank: Number(fakeRank),
+                  fake_sub_rank: Number(fakeSubRank),
+                  fake_vital_gu: fakeVitalGu,
+                });
+                if (success) {
+                  // Clear password field
+                  (e.currentTarget.elements.namedItem("newPassword") as HTMLInputElement).value = "";
+                }
+              }} className="space-y-4">
+                {/* Email */}
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="settings-email" className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Email</label>
+                  <input
+                    id="settings-email"
+                    name="email"
+                    type="email"
+                    defaultValue={player.email || ""}
+                    required
+                    className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3.5 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none transition-all font-mono"
+                  />
+                </div>
+
+                {/* Lời giới thiệu / Bio */}
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="settings-bio" className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Lời giới thiệu (Bio)</label>
+                  <textarea
+                    id="settings-bio"
+                    name="bio"
+                    defaultValue={player.bio || ""}
+                    maxLength={150}
+                    placeholder="Viết lời giới thiệu về nhân vật của đạo hữu..."
+                    rows={3}
+                    className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3.5 py-2 text-xs text-zinc-200 placeholder-zinc-750 focus:outline-none transition-all font-mono resize-none leading-relaxed"
+                  />
+                </div>
+
+                {/* Đổi mật khẩu mới */}
+                <div className="flex flex-col gap-1.5 border-t border-zinc-900/60 pt-3.5">
+                  <label htmlFor="settings-newPassword" className="text-[10px] font-mono text-rose-400 uppercase tracking-wider">Mật khẩu mới (Bỏ trống nếu giữ nguyên)</label>
+                  <input
+                    id="settings-newPassword"
+                    name="newPassword"
+                    type="password"
+                    placeholder="Mật khẩu mới (tối thiểu 6 ký tự)"
+                    className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3.5 py-2 text-xs text-zinc-200 placeholder-zinc-750 focus:outline-none transition-all font-mono"
+                  />
+                </div>
+
+                {/* Ngụy Trang Khí Tức (Disguise System) */}
+                <div className="flex flex-col gap-4 border-t border-zinc-900/60 pt-4 mt-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {isDisguised ? (
+                        <EyeOff className="w-4 h-4 text-amber-500" />
+                      ) : (
+                        <Eye className="w-4 h-4 text-zinc-500" />
+                      )}
+                      <span className="text-xs font-mono font-bold text-zinc-200 uppercase tracking-wider">Ngụy Trang Hồ Sơ</span>
+                    </div>
+                    
+                    <label className="relative inline-flex items-center cursor-pointer select-none">
+                      <input 
+                        type="checkbox" 
+                        checked={isDisguised}
+                        disabled={!hasConcealment}
+                        onChange={(e) => setIsDisguised(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-zinc-950 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-700 after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-600 peer-checked:after:bg-amber-100 peer-disabled:opacity-20 peer-disabled:cursor-not-allowed"></div>
+                    </label>
+                  </div>
+
+                  {!hasConcealment && (
+                    <div className="p-3 bg-rose-950/20 border border-rose-500/20 rounded-xl text-[10px] text-rose-300 leading-relaxed font-sans">
+                      <ShieldAlert className="w-3.5 h-3.5 inline mr-1.5 shrink-0 align-text-top text-rose-450" />
+                      Đạo hữu không trang bị cổ trùng ngụy trang nào hoạt động! Hãy trang bị các cổ trùng như Ẩn Lân Cổ, Biến Hóa Cổ, Thái Độ Cổ... để kích hoạt tính năng Ngụy Trang.
+                    </div>
+                  )}
+
+                  {hasConcealment && isDisguised && (
+                    <div className="space-y-3 p-3 bg-zinc-950/40 border border-zinc-900 rounded-xl">
+                      {/* Fake Name */}
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex justify-between items-center">
+                          <label htmlFor="settings-fakeName" className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Tên Giả Hiển Thị</label>
+                          {!hasFaceChange && (
+                            <span className="text-[8px] bg-rose-950/40 text-rose-450 border border-rose-900/30 px-1.5 py-0.5 rounded font-mono font-semibold uppercase">Yêu cầu Biến Hóa/Thái Độ Cổ</span>
+                          )}
+                        </div>
+                        <input
+                          id="settings-fakeName"
+                          type="text"
+                          disabled={!hasFaceChange}
+                          placeholder={hasFaceChange ? "Nhập tên giả để che mắt người khác..." : player.username}
+                          value={fakeName}
+                          onChange={(e) => setFakeName(e.target.value)}
+                          className="w-full bg-zinc-950 disabled:bg-zinc-950/30 disabled:opacity-40 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none transition-all font-mono"
+                        />
+                      </div>
+
+                      {/* Fake Rank & Sub Rank */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1.5">
+                          <label htmlFor="settings-fakeRank" className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Tu Vi Giả</label>
+                          <select
+                            id="settings-fakeRank"
+                            value={fakeRank}
+                            onChange={(e) => setFakeRank(Number(e.target.value))}
+                            className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-2 py-2 text-xs text-zinc-200 focus:outline-none transition-all font-mono"
+                          >
+                            {Array.from({ length: hasAttitude ? 9 : player.rank }, (_, i) => i + 1).map((r) => (
+                              <option key={r} value={r}>
+                                {RANK_NAMES[r] || `${r} Chuyển`}
+                              </option>
+                            ))}
+                          </select>
+                          {!hasAttitude && (
+                            <span className="text-[8px] text-amber-500 font-mono leading-tight">
+                              * Chỉ giả yếu (&le; {RANK_NAMES[player.rank]}). Cần Thái Độ Cổ để giả mạnh!
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Fake Sub Rank */}
+                        <div className="flex flex-col gap-1.5">
+                          <label htmlFor="settings-fakeSubRank" className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Cảnh Giới Giả</label>
+                          <select
+                            id="settings-fakeSubRank"
+                            value={fakeSubRank}
+                            onChange={(e) => setFakeSubRank(Number(e.target.value))}
+                            className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-2 py-2 text-xs text-zinc-200 focus:outline-none transition-all font-mono"
+                          >
+                            {Object.entries(SUB_RANK_NAMES).map(([key, val]) => (
+                              <option key={key} value={key}>
+                                {val}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Fake Vital Gu */}
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex justify-between items-center">
+                          <label htmlFor="settings-fakeVitalGu" className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Bản Mệnh Cổ Giả</label>
+                          {!hasFaceChange && (
+                            <span className="text-[8px] bg-rose-950/40 text-rose-450 border border-rose-900/30 px-1.5 py-0.5 rounded font-mono font-semibold uppercase">Yêu cầu Biến Hóa/Thái Độ Cổ</span>
+                          )}
+                        </div>
+                        <select
+                          id="settings-fakeVitalGu"
+                          disabled={!hasFaceChange}
+                          value={fakeVitalGu}
+                          onChange={(e) => setFakeVitalGu(e.target.value)}
+                          className="w-full bg-zinc-950 disabled:bg-zinc-950/30 disabled:opacity-40 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none transition-all font-mono"
+                        >
+                          {ownedGuIds.map((guId) => {
+                            const name = guDictionary[guId]?.name || guId;
+                            return (
+                              <option key={guId} value={guId}>
+                                {name} ({guId})
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Submit button */}
+                <button
+                  type="submit"
+                  disabled={store.actionLoading}
+                  className="w-full mt-2 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-450 disabled:from-zinc-900 disabled:to-zinc-900 disabled:opacity-40 border border-amber-500/20 text-white rounded-xl py-2.5 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-98 shadow-md hover:shadow-orange-500/10"
+                >
+                  {store.actionLoading ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Đang lưu...</span>
+                    </>
+                  ) : (
+                    <span>Lưu Cài Đặt Hồ Sơ</span>
+                  )}
+                </button>
+              </form>
             </div>
           </div>
         )}

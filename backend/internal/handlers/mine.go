@@ -22,10 +22,10 @@ type MineRates struct {
 }
 
 var MineRarityRates = map[string]MineRates{
-	"Truyền Thuyết": {StonesPerMin: 30.0, QiPerMin: 15.0, ChestChance: 0.02},
-	"Sử Thi":        {StonesPerMin: 25.0, QiPerMin: 12.5, ChestChance: 0.015},
-	"Hiếm":          {StonesPerMin: 22.0, QiPerMin: 11.0, ChestChance: 0.012},
-	"Thường":        {StonesPerMin: 20.0, QiPerMin: 10.0, ChestChance: 0.01},
+	"Truyền Thuyết": {StonesPerMin: 30.0, QiPerMin: 7.5, ChestChance: 0.02},
+	"Sử Thi":        {StonesPerMin: 25.0, QiPerMin: 6.25, ChestChance: 0.015},
+	"Hiếm":          {StonesPerMin: 22.0, QiPerMin: 5.5, ChestChance: 0.012},
+	"Thường":        {StonesPerMin: 20.0, QiPerMin: 5.0, ChestChance: 0.01},
 }
 
 type MineSlotResponse struct {
@@ -91,8 +91,8 @@ func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int, qi flo
 
 	currentStones += stones
 	currentQi += qi
-	if currentQi > 1000.0 {
-		currentQi = 1000.0
+	if currentQi > 100000.0 {
+		currentQi = 100000.0
 	}
 
 	if chests > 0 {

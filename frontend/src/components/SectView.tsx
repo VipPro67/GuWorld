@@ -59,6 +59,7 @@ export const SectView: React.FC = () => {
     actionJoinRequest,
     fetchPromotionRequests,
     actionPromotionRequest,
+    fetchPlayerProfile,
   } = useGameStore();
 
   const [activeTab, setActiveTab] = useState<"lobby" | "missions" | "vault" | "donate" | "manage">("lobby");
@@ -1417,7 +1418,13 @@ export const SectView: React.FC = () => {
                       >
                         <div className="flex flex-col gap-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold text-zinc-100 truncate">{mInfo.username}</span>
+                            <span
+                              onClick={() => !isSelf && fetchPlayerProfile(mInfo.username)}
+                              className={`font-semibold text-zinc-100 truncate ${!isSelf ? "cursor-pointer hover:text-blue-450 hover:underline decoration-dotted" : ""}`}
+                              title={!isSelf ? "Bấm để trinh thám cổ sư" : undefined}
+                            >
+                              {mInfo.username}
+                            </span>
                             <span className={`px-2 py-0.5 text-[9px] font-mono rounded border ${getRankColor(mInfo.member_rank)}`}>
                               {getRankName(mInfo.member_rank)}
                             </span>
@@ -1506,7 +1513,13 @@ export const SectView: React.FC = () => {
                         className="bg-zinc-900/20 border border-zinc-900 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs"
                       >
                         <div className="flex flex-col gap-1 min-w-0">
-                          <span className="font-semibold text-zinc-100 truncate">{reqInfo.username}</span>
+                          <span
+                            onClick={() => reqInfo.username && fetchPlayerProfile(reqInfo.username)}
+                            className="font-semibold text-zinc-100 truncate cursor-pointer hover:text-blue-450 hover:underline decoration-dotted"
+                            title="Bấm để trinh thám cổ sư"
+                          >
+                            {reqInfo.username}
+                          </span>
                           <div className="text-[10px] text-zinc-500 font-mono">
                             Tu vi: Rank {reqInfo.player_rank} | Gửi lúc: {new Date(reqInfo.created_at).toLocaleString()}
                           </div>
@@ -1566,7 +1579,13 @@ export const SectView: React.FC = () => {
                         className="bg-zinc-900/20 border border-zinc-900 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs"
                       >
                         <div className="flex flex-col gap-1 min-w-0">
-                          <span className="font-semibold text-zinc-100 truncate">{reqInfo.username}</span>
+                          <span
+                            onClick={() => reqInfo.username && fetchPlayerProfile(reqInfo.username)}
+                            className="font-semibold text-zinc-100 truncate cursor-pointer hover:text-blue-450 hover:underline decoration-dotted"
+                            title="Bấm để trinh thám cổ sư"
+                          >
+                            {reqInfo.username}
+                          </span>
                           <div className="text-[10px] text-zinc-300 font-mono mt-0.5">
                             Cấp bậc: <span className="text-red-400 font-semibold">{getRankName(reqInfo.current_rank)}</span> &rarr;{" "}
                             <span className="text-emerald-400 font-semibold">{getRankName(reqInfo.target_rank)}</span>

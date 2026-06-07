@@ -28,6 +28,25 @@ interface HubItem {
   locked?: boolean;
 }
 
+const formatRelativeTime = (createdAtStr: string): string => {
+  if (!createdAtStr) return "";
+  const date = new Date(createdAtStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.max(0, Math.floor(diffMs / 1000));
+  
+  if (diffSec < 60) return "vừa xong";
+  
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}p trước`;
+  
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}g trước`;
+  
+  const diffDay = Math.floor(diffHour / 24);
+  return `${diffDay} ngày trước`;
+};
+
 export const LobbyView: React.FC = () => {
   const {
     player,
@@ -37,6 +56,7 @@ export const LobbyView: React.FC = () => {
     sendBaoHoangChat,
     fetchBaoHoangMessages,
     actionLoading,
+    fetchPlayerProfile,
   } = useGameStore();
 
   const [activeChannel, setActiveChannel] = useState<"world" | "general" | "sect">("world");
@@ -89,6 +109,15 @@ export const LobbyView: React.FC = () => {
       glow: "group-hover:shadow-[0_0_20px_rgba(139,92,246,0.4)]",
       borderColor: "border-violet-400/20",
       iconColor: "text-violet-100",
+    },
+    {
+      id: "feedback",
+      label: "Thỉnh Thiên Đạo",
+      icon: Sparkles,
+      gradient: "from-fuchsia-500 to-pink-600",
+      glow: "group-hover:shadow-[0_0_20px_rgba(217,70,239,0.4)]",
+      borderColor: "border-fuchsia-400/20",
+      iconColor: "text-fuchsia-100",
     },
   ];
 
@@ -425,6 +454,7 @@ export const LobbyView: React.FC = () => {
           ) : (
             baoHoangMessages.map((msg, index) => {
               // Color-coding based on channel
+              const isMe = msg.sender_username === player?.username;
               const labelColor =
                 msg.channel === "world"
                   ? "text-red-400"
@@ -441,7 +471,17 @@ export const LobbyView: React.FC = () => {
               return (
                 <div key={msg.id || index} className="flex items-start gap-1.5 leading-relaxed break-all">
                   <span className={`${labelColor} font-bold shrink-0`}>{label}</span>
-                  <span className="text-zinc-400 font-bold shrink-0">{msg.sender_username}:</span>
+                  <span
+                    onClick={() => !isMe && fetchPlayerProfile(msg.sender_username)}
+                    className="text-zinc-400 font-bold shrink-0 cursor-pointer hover:text-zinc-100 hover:underline decoration-dotted transition-colors"
+                    title={!isMe ? "Bấm để trinh thám cổ sư" : undefined}
+                  >
+                    {msg.sender_username}
+                    <span className="text-zinc-650 text-[10px] font-normal ml-1 normal-case select-none">
+                      ({formatRelativeTime(msg.created_at)})
+                    </span>
+                    :
+                  </span>
                   <span className="text-zinc-200">{msg.content}</span>
                 </div>
               );

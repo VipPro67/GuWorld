@@ -71,7 +71,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     players_on_map?: any[];
   } | null>(null);
 
-  const { fetchGrid, movePlayer, party, createParty, fetchPartyStatus, invitePlayer, leaveParty, retreat } = useGameStore();
+  const { fetchGrid, movePlayer, party, createParty, fetchPartyStatus, invitePlayer, leaveParty, retreat, fetchPlayerProfile } = useGameStore();
   const [inviteUsername, setInviteUsername] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [partyLoading, setPartyLoading] = useState(false);
@@ -438,7 +438,14 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                           Ta
                         </div>
                       ) : otherPlayersOnCell.length > 0 ? (
-                        <div className="w-5 h-5 rounded-full bg-purple-500/80 flex items-center justify-center text-[9px] text-zinc-100 font-bold border border-white/20 shadow-[0_0_8px_rgba(139,92,246,0.6)] animate-pulse">
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fetchPlayerProfile(otherPlayersOnCell[0].username);
+                          }}
+                          className="w-5 h-5 rounded-full bg-purple-500/80 flex items-center justify-center text-[9px] text-zinc-100 font-bold border border-white/20 shadow-[0_0_8px_rgba(139,92,246,0.6)] animate-pulse cursor-pointer hover:scale-110 transition-transform relative z-10"
+                          title={`Bấm để trinh thám cổ sư ${otherPlayersOnCell[0].username}`}
+                        >
                           {otherPlayersOnCell[0].username.slice(0, 2).toUpperCase()}
                         </div>
                       ) : (
@@ -520,13 +527,17 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                         key={member.id}
                         className="flex items-center justify-between bg-zinc-950/60 border border-zinc-900 rounded-lg p-2.5 text-xs"
                       >
-                        <div className="flex items-center gap-2">
+                        <div
+                          onClick={() => !isMe && fetchPlayerProfile(member.username)}
+                          className={`flex items-center gap-2 ${!isMe ? "cursor-pointer hover:text-white" : ""}`}
+                          title={!isMe ? "Bấm để trinh thám cổ sư" : undefined}
+                        >
                           <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[9px] ${
                             isMe ? "bg-emerald-500 text-zinc-950" : "bg-zinc-800 text-zinc-300"
                           }`}>
                             {member.username.slice(0, 2).toUpperCase()}
                           </div>
-                          <span className={`font-semibold ${isMe ? "text-emerald-400" : "text-zinc-300"}`}>
+                          <span className={`font-semibold ${isMe ? "text-emerald-400" : "text-zinc-300 hover:underline decoration-dotted"}`}>
                             {member.username} {isMe && "(Bạn)"}
                           </span>
                         </div>

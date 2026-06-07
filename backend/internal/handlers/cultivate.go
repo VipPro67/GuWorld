@@ -140,8 +140,8 @@ func BreakWall(c *gin.Context) {
 			}
 			// Increase human_qi by 30 for breakthrough
 			player.HumanQi += 30.0
-			if player.HumanQi > 1000.0 {
-				player.HumanQi = 1000.0
+			if player.HumanQi > 100000.0 {
+				player.HumanQi = 100000.0
 			}
 			msg = "Chúc mừng! Bạn đã trùng kích vỡ nát được một tầng khiếu, tiến lên tu vi cao hơn!"
 		}
@@ -156,6 +156,12 @@ func BreakWall(c *gin.Context) {
 	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.WallProgress, player.MaxMana, player.SubRank, player.Rank, player.LastManaUpdate, player.HumanQi, player.ApertureStress, player.LastCultivateTime, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save cultivation progress"})
+		return
+	}
+
+	err = CheckReferralMilestones(tx, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check referral milestones: " + err.Error()})
 		return
 	}
 
@@ -213,8 +219,8 @@ func UseRelicGu(c *gin.Context) {
 
 	// Increase human_qi by 30 for breakthrough
 	player.HumanQi += 30.0
-	if player.HumanQi > 1000.0 {
-		player.HumanQi = 1000.0
+	if player.HumanQi > 100000.0 {
+		player.HumanQi = 100000.0
 	}
 
 	updateQuery := `
@@ -224,6 +230,12 @@ func UseRelicGu(c *gin.Context) {
 	_, err = tx.Exec(updateQuery, player.MaterialsInventory, player.SubRank, player.Rank, player.WallProgress, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to apply Relic Gu"})
+		return
+	}
+
+	err = CheckReferralMilestones(tx, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check referral milestones: " + err.Error()})
 		return
 	}
 
@@ -324,6 +336,12 @@ func Ascension(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player after ascension"})
+		return
+	}
+
+	err = CheckReferralMilestones(tx, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check referral milestones: " + err.Error()})
 		return
 	}
 
@@ -515,8 +533,8 @@ func CompleteQuest(c *gin.Context) {
 
 	// Reward human_qi
 	player.HumanQi += 50.0
-	if player.HumanQi > 1000.0 {
-		player.HumanQi = 1000.0
+	if player.HumanQi > 100000.0 {
+		player.HumanQi = 100000.0
 	}
 	player.CompletedQuests = append(player.CompletedQuests, req.QuestID)
 
@@ -528,6 +546,12 @@ func CompleteQuest(c *gin.Context) {
 	_, err = tx.Exec(updateQuery, player.HumanQi, player.CompletedQuests, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update quest status"})
+		return
+	}
+
+	err = CheckReferralMilestones(tx, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check referral milestones: " + err.Error()})
 		return
 	}
 

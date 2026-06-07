@@ -7,7 +7,9 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -20,6 +22,12 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+
+func isValidEmail(email string) bool {
+	return emailRegex.MatchString(email)
+}
+
 // CreatePlayerRequest represents the incoming registration payload
 type CreatePlayerRequest struct {
 	Username       string `json:"username" binding:"required,min=3,max=30"`
@@ -27,7 +35,7 @@ type CreatePlayerRequest struct {
 	StartingRegion string `json:"starting_region" binding:"required"`
 	SetVitalNow    bool   `json:"set_vital_now"`
 	Email          string `json:"email" binding:"required,email"`
-	PhoneNumber    string `json:"phone_number" binding:"required"`
+	ReferralCode   string `json:"referral_code"`
 }
 
 // CreatePlayerResponse represents the output payload for registration/login
@@ -85,6 +93,12 @@ func RegisterPlayer(c *gin.Context) {
 	}
 	if !validRegions[req.StartingRegion] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Starting region không hợp lệ"})
+		return
+	}
+
+	// Email format verification
+	if !isValidEmail(req.Email) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Định dạng Email không hợp lệ!"})
 		return
 	}
 
@@ -147,16 +161,42 @@ func RegisterPlayer(c *gin.Context) {
 		"green_bamboo_wine": 2,
 		"jade_stone":        1,
 	}
-	var player models.Player
 
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	// Verify email uniqueness inside tx
+	var emailExists bool
+	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE email = $1)", req.Email).Scan(&emailExists)
+	if err == nil && emailExists {
+		c.JSON(http.StatusConflict, gin.H{"error": "Email này đã được đăng ký trong Cổ Giới!"})
+		return
+	}
+
+	// Verify username uniqueness inside tx
+	var usernameExists bool
+	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE username = $1)", req.Username).Scan(&usernameExists)
+	if err == nil && usernameExists {
+		c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu này đã tồn tại trong Cổ Giới!"})
+		return
+	}
+
+	// Generate unique referral code
+	refCode := "REF-" + strings.ToUpper(uuid.New().String()[:8])
+
+	var player models.Player
 	query := `
-		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, max_lifespan, time_speed_multiplier, email, phone_number, completed_quests, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes)
-		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 0, 0, $8, $9, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, '[]'::jsonb, '{}'::jsonb, $10, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 100.0, 1.0, $11, $12, '[]'::jsonb, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, '[{"recipe_id": "recipe_moon_raiment", "completion_rate": 100.0}, {"recipe_id": "recipe_white_jade", "completion_rate": 50.0}, {"recipe_id": "recipe_four_flavors_liquor", "completion_rate": 30.0}]'::jsonb)
-		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, email, phone_number, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes
+		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, max_lifespan, time_speed_multiplier, email, completed_quests, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, fake_name, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code)
+		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 0, 0, $8, $9, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, '[]'::jsonb, '{}'::jsonb, $10, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 100.0, 1.0, $11, '[]'::jsonb, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, '[{"recipe_id": "recipe_moon_raiment", "completion_rate": 100.0}, {"recipe_id": "recipe_white_jade", "completion_rate": 50.0}, {"recipe_id": "recipe_four_flavors_liquor", "completion_rate": 30.0}]'::jsonb, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $12)
+		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, fake_name, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code
 	`
 
 	var activeCombatBytes []byte
-	err = db.DB.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, starterGu, starterMaterials, req.StartingRegion, req.Email, req.PhoneNumber).Scan(
+	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, starterGu, starterMaterials, req.StartingRegion, req.Email, refCode).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
 		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
@@ -166,10 +206,15 @@ func RegisterPlayer(c *gin.Context) {
 		&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries, &activeCombatBytes,
 		&player.LastManaUpdate, &player.CreatedAt,
 		&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
-		&player.Email, &player.PhoneNumber, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+		&player.Email, &player.GoogleID, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
-		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes,
+		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeName, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode,
 	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create player: " + err.Error()})
+		return
+	}
+
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
 		if json.Unmarshal(activeCombatBytes, &cs) == nil {
@@ -177,8 +222,35 @@ func RegisterPlayer(c *gin.Context) {
 		}
 	}
 
-	if err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu, Email hoặc Số điện thoại đã tồn tại trong Cổ Giới!"})
+	// 3.5 Handle referral code logic
+	trimmedRef := strings.TrimSpace(req.ReferralCode)
+	if trimmedRef != "" {
+		var referrerID uuid.UUID
+		err = tx.QueryRow("SELECT id FROM players WHERE ref_code = $1", trimmedRef).Scan(&referrerID)
+		if err == nil {
+			// Do not allow self referral
+			if referrerID != player.ID {
+				clientIP := c.ClientIP()
+				userAgent := c.Request.UserAgent()
+				var count int
+				// Flag as suspicious if the same client IP and device is already referred
+				_ = tx.QueryRow("SELECT COUNT(*) FROM referrals WHERE referee_ip = $1 AND referee_device = $2", clientIP, userAgent).Scan(&count)
+				isSuspicious := count > 0
+
+				_, err = tx.Exec(`
+					INSERT INTO referrals (referrer_id, referee_id, referee_ip, referee_device, is_suspicious)
+					VALUES ($1, $2, $3, $4, $5)
+				`, referrerID, player.ID, clientIP, userAgent, isSuspicious)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record referral: " + err.Error()})
+					return
+				}
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player record: " + err.Error()})
 		return
 	}
 
@@ -213,9 +285,9 @@ func LoginPlayer(c *gin.Context) {
 	var passwordHash string
 
 	query := `
-		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), COALESCE(phone_number, ''), completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes
+		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, COALESCE(bio, ''), COALESCE(fake_name, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false)
 		FROM players
-		WHERE username = $1 OR email = $1 OR phone_number = $1
+		WHERE username = $1 OR email = $1
 	`
 	var activeCombatBytes []byte
 	err := db.DB.QueryRow(query, req.Username).Scan(
@@ -228,9 +300,9 @@ func LoginPlayer(c *gin.Context) {
 		&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries, &activeCombatBytes,
 		&player.LastManaUpdate, &player.CreatedAt,
 		&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
-		&player.Email, &player.PhoneNumber, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+		&player.Email, &player.GoogleID, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
-		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes,
+		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeName, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin,
 	)
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
@@ -900,7 +972,7 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	var player models.Player
 
 	query := `
-		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), COALESCE(phone_number, ''), completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes
+		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, COALESCE(bio, ''), COALESCE(fake_name, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), COALESCE(ref_code, '')
 		FROM players
 		WHERE id = $1
 		FOR UPDATE
@@ -916,9 +988,9 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 		&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries, &activeCombatBytes,
 		&player.LastManaUpdate, &player.CreatedAt,
 		&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
-		&player.Email, &player.PhoneNumber, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+		&player.Email, &player.GoogleID, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
-		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes,
+		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeName, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode,
 	)
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
@@ -1898,4 +1970,508 @@ func getRankName(rank int) string {
 		return name
 	}
 	return fmt.Sprintf("%d Chuyển", rank)
+}
+
+// UpdateProfileSettingsRequest represents settings data to update
+type UpdateProfileSettingsRequest struct {
+	Email       string `json:"email" binding:"required,email"`
+	Bio         string `json:"bio"`
+	NewPassword string `json:"new_password"`
+	FakeName    string `json:"fake_name"`
+	FakeRank    int    `json:"fake_rank"`
+	FakeSubRank int    `json:"fake_sub_rank"`
+	FakeVitalGu string `json:"fake_vital_gu"`
+	IsDisguised bool   `json:"is_disguised"`
+}
+
+// UpdateProfileSettings updates the current user's profile settings (email, bio, password, fake profile)
+func UpdateProfileSettings(c *gin.Context) {
+	authID, ok := middleware.GetPlayerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var req UpdateProfileSettingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		return
+	}
+
+	// Validate Disguise requirements if player wants to activate or configure disguise
+	hasConcealment := false
+	hasAttitude := false
+	hasFormChange := false
+	for _, gu := range player.GuInventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			switch gu.GuID {
+			case "GU_SHADOW", "GU_SHADOW_STEPS", "GU_STEALTH_SCALES":
+				hasConcealment = true
+			case "GU_CHANGE_FORM":
+				hasConcealment = true
+				hasFormChange = true
+			case "GU_ATTITUDE":
+				hasConcealment = true
+				hasAttitude = true
+			}
+		}
+	}
+
+	if req.IsDisguised {
+		if !hasConcealment {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không trang bị cổ trùng ngụy trang nào hoạt động! Cần trang bị các cổ trùng như Ẩn Lân Cổ, Biến Hóa Cổ, Thái Độ Cổ..."})
+			return
+		}
+
+		if req.FakeName != "" && req.FakeName != player.Username {
+			if !hasAttitude && !hasFormChange {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Cần trang bị Biến Hóa Cổ hoặc Thái Độ Cổ để đổi tên giả trên hồ sơ!"})
+				return
+			}
+		}
+
+		if req.FakeRank != player.Rank {
+			if !hasAttitude {
+				// Standard stealth only allows hiding/lowering rank ("giả yếu")
+				if req.FakeRank > player.Rank || req.FakeRank < 1 {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng hiện tại chỉ hỗ trợ giấu khí tức làm yếu đi, không thể giả làm cường giả mạnh hơn tu vi bản thân! Chỉ có Thái Độ Cổ mới đạt tới mức ngụy trang vô ngại."})
+					return
+				}
+			} else {
+				if req.FakeRank < 1 || req.FakeRank > 9 {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Tu vi giả chỉ có thể từ Nhất Chuyển (1) đến Cửu Chuyển (9)!"})
+					return
+				}
+			}
+		}
+
+		if req.FakeVitalGu != "" {
+			if !hasAttitude && !hasFormChange {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Cần trang bị Biến Hóa Cổ hoặc Thái Độ Cổ để tạo dựng Bản Mệnh Cổ giả!"})
+				return
+			}
+			// Optional: verify they own this Gu or it is a valid Gu ID in registry
+			found := false
+			for _, gu := range player.GuInventory {
+				if gu.GuID == req.FakeVitalGu {
+					found = true
+					break
+				}
+			}
+			if req.FakeVitalGu != "GU_SHADOW" && !found {
+				// Allow standard fakes or anything they actually own
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không sở hữu cổ trùng " + req.FakeVitalGu + " để thiết lập ngụy trang!"})
+				return
+			}
+		}
+	}
+
+	player.Email = req.Email
+	player.Bio = req.Bio
+	player.FakeName = req.FakeName
+	player.FakeRank = req.FakeRank
+	player.FakeSubRank = req.FakeSubRank
+	player.FakeVitalGu = req.FakeVitalGu
+	player.IsDisguised = req.IsDisguised
+
+	if req.NewPassword != "" {
+		if len(req.NewPassword) < 6 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Mật khẩu mới phải có ít nhất 6 ký tự"})
+			return
+		}
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi mã hóa mật khẩu"})
+			return
+		}
+		_, err = tx.Exec(`UPDATE players SET email = $1, bio = $2, fake_name = $3, fake_rank = $4, fake_sub_rank = $5, fake_vital_gu = $6, is_disguised = $7, password_hash = $8 WHERE id = $9`, player.Email, player.Bio, player.FakeName, player.FakeRank, player.FakeSubRank, player.FakeVitalGu, player.IsDisguised, string(hash), player.ID)
+		if err != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Email đã được sử dụng bởi cổ sư khác!"})
+			return
+		}
+	} else {
+		_, err = tx.Exec(`UPDATE players SET email = $1, bio = $2, fake_name = $3, fake_rank = $4, fake_sub_rank = $5, fake_vital_gu = $6, is_disguised = $7 WHERE id = $8`, player.Email, player.Bio, player.FakeName, player.FakeRank, player.FakeSubRank, player.FakeVitalGu, player.IsDisguised, player.ID)
+		if err != nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Email đã được sử dụng bởi cổ sư khác!"})
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save profile settings"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"player": player, "message": "Cập nhật hồ sơ thành công!"})
+}
+
+func getClientIDFromGoogleJSON() string {
+	data, err := os.ReadFile("google.json")
+	if err != nil {
+		// Try parent directory
+		data, err = os.ReadFile("../google.json")
+		if err != nil {
+			return ""
+		}
+	}
+	var config struct {
+		ClientID string `json:"client_id"`
+	}
+	if err := json.Unmarshal(data, &config); err != nil {
+		return ""
+	}
+	return config.ClientID
+}
+
+// GoogleLogin redirects user to Google OAuth2 consent page
+func GoogleLogin(c *gin.Context) {
+	clientID := os.Getenv("GOOGLE_CLIENT_ID")
+	if clientID == "" {
+		clientID = getClientIDFromGoogleJSON()
+	}
+	if clientID == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Google Client ID is not configured"})
+		return
+	}
+
+	redirectURI := os.Getenv("GOOGLE_REDIRECT_URI")
+	if redirectURI == "" {
+		redirectURI = "http://localhost:8080/api/auth/google/callback"
+	}
+
+	state := "google_oauth_state_secret"
+	refCode := c.Query("ref")
+	if refCode != "" {
+		state = "ref_" + refCode
+	}
+	googleURL := fmt.Sprintf("https://accounts.google.com/o/oauth2/v2/auth?client_id=%s&redirect_uri=%s&response_type=code&scope=openid+profile+email&state=%s",
+		clientID, url.QueryEscape(redirectURI), state)
+
+	c.Redirect(http.StatusTemporaryRedirect, googleURL)
+}
+
+// GoogleCallback handles authorization callback from Google
+func GoogleCallback(c *gin.Context) {
+	code := c.Query("code")
+	if code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Authorization code not found"})
+		return
+	}
+
+	state := c.Query("state")
+	var referralCode string
+	if strings.HasPrefix(state, "ref_") {
+		referralCode = strings.TrimPrefix(state, "ref_")
+	}
+
+	clientID := os.Getenv("GOOGLE_CLIENT_ID")
+	if clientID == "" {
+		clientID = getClientIDFromGoogleJSON()
+	}
+	if clientID == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Google Client ID is not configured"})
+		return
+	}
+
+	clientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
+	redirectURI := os.Getenv("GOOGLE_REDIRECT_URI")
+	if redirectURI == "" {
+		redirectURI = "http://localhost:8080/api/auth/google/callback"
+	}
+
+	// Exchange authorization code for token
+	tokenURL := "https://oauth2.googleapis.com/token"
+	data := url.Values{}
+	data.Set("code", code)
+	data.Set("client_id", clientID)
+	data.Set("client_secret", clientSecret)
+	data.Set("redirect_uri", redirectURI)
+	data.Set("grant_type", "authorization_code")
+
+	resp, err := http.PostForm(tokenURL, data)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to exchange authorization code: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var errData map[string]interface{}
+		_ = json.NewDecoder(resp.Body).Decode(&errData)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Google token exchange failed", "details": errData})
+		return
+	}
+
+	var tokenResp struct {
+		AccessToken string `json:"access_token"`
+		IDToken     string `json:"id_token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse token response"})
+		return
+	}
+
+	// Fetch user profile using access token
+	userinfoURL := "https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + tokenResp.AccessToken
+	userinfoResp, err := http.Get(userinfoURL)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user info: " + err.Error()})
+		return
+	}
+	defer userinfoResp.Body.Close()
+
+	if userinfoResp.StatusCode != http.StatusOK {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to retrieve user profile from Google"})
+		return
+	}
+
+	var googleUser struct {
+		ID    string `json:"id"`
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	}
+	if err := json.NewDecoder(userinfoResp.Body).Decode(&googleUser); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse user info"})
+		return
+	}
+
+	if googleUser.Email == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Google account is missing email details"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	var player models.Player
+	var hasPlayer bool
+
+	// 1. Try to search by google_id
+	err = tx.QueryRow(`
+		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, email, google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, fake_name, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, '')
+		FROM players
+		WHERE google_id = $1
+	`, googleUser.ID).Scan(
+		&player.ID, &player.Username, &player.Rank, &player.SubRank,
+		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
+		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
+		&player.WallProgress, &player.HumanQi, &player.NextTribulationTime, &player.TribulationCount,
+		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y, &player.ExploredCells,
+		&player.EquippedGus, &player.ClearedCells,
+		&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries,
+		&player.LastManaUpdate, &player.CreatedAt,
+		&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier,
+		&player.Email, &player.GoogleID, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+		&player.ApertureStress, &player.LastCultivateTime,
+		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeName, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode,
+	)
+
+	if err == nil {
+		hasPlayer = true
+	} else if err != sql.ErrNoRows {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking google_id: " + err.Error()})
+		return
+	}
+
+	if !hasPlayer {
+		// 2. Try to search by email (Merge Account!)
+		err = tx.QueryRow(`
+			SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, email, google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, fake_name, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, '')
+			FROM players
+			WHERE email = $1
+		`, googleUser.Email).Scan(
+			&player.ID, &player.Username, &player.Rank, &player.SubRank,
+			&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
+			&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
+			&player.WallProgress, &player.HumanQi, &player.NextTribulationTime, &player.TribulationCount,
+			&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y, &player.ExploredCells,
+			&player.EquippedGus, &player.ClearedCells,
+			&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries,
+			&player.LastManaUpdate, &player.CreatedAt,
+			&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier,
+			&player.Email, &player.GoogleID, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+			&player.ApertureStress, &player.LastCultivateTime,
+			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeName, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode,
+		)
+
+		if err == nil {
+			// Merge Account: update players table to link Google account ID
+			_, err = tx.Exec("UPDATE players SET google_id = $1 WHERE id = $2", googleUser.ID, player.ID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to merge account: " + err.Error()})
+				return
+			}
+			gID := googleUser.ID
+			player.GoogleID = &gID
+			hasPlayer = true
+		} else if err != sql.ErrNoRows {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking email: " + err.Error()})
+			return
+		}
+	}
+
+	if !hasPlayer {
+		// 3. Create a brand new player
+		username := googleUser.Name
+		if username == "" {
+			parts := strings.Split(googleUser.Email, "@")
+			username = parts[0]
+		}
+		username = strings.TrimSpace(username)
+		if len(username) < 3 {
+			username = "cultivator_" + strings.ToLower(uuid.New().String()[:6])
+		} else if len(username) > 30 {
+			username = username[:30]
+		}
+
+		// Check duplicate username and resolve
+		var exists bool
+		err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE username = $1)", username).Scan(&exists)
+		if err == nil && exists {
+			username = fmt.Sprintf("%s_%d", username, rand.Intn(9000)+1000)
+		}
+
+		roll := rand.Intn(100)
+		var aptitudeType string
+		var aptitudePercent int
+
+		if roll < 10 {
+			aptitudeType = "Giáp"
+			aptitudePercent = 80 + rand.Intn(20) // 80 - 99
+		} else if roll < 30 {
+			aptitudeType = "Ất"
+			aptitudePercent = 60 + rand.Intn(20) // 60 - 79
+		} else if roll < 60 {
+			aptitudeType = "Bính"
+			aptitudePercent = 40 + rand.Intn(20) // 40 - 59
+		} else {
+			aptitudeType = "Đinh"
+			aptitudePercent = 20 + rand.Intn(20) // 20 - 39
+		}
+
+		aptitudeGrade := 4
+		switch aptitudeType {
+		case "Giáp":
+			aptitudeGrade = 1
+		case "Ất":
+			aptitudeGrade = 2
+		case "Bính":
+			aptitudeGrade = 3
+		case "Đinh":
+			aptitudeGrade = 4
+		}
+
+		maxMana := float64(aptitudePercent)
+		currentMana := maxMana
+
+		starterGu := models.GuInventory{
+			{
+				InstanceID: uuid.New().String(),
+				GuID:       "GU_MOONLIGHT",
+				Hunger:     100,
+				Status:     "ACTIVE",
+				Equipped:   true,
+				IsVital:    true,
+			},
+		}
+		starterMaterials := models.MaterialsInventory{
+			"moon_orchid_petal": 5,
+			"green_bamboo_wine": 2,
+			"jade_stone":        1,
+		}
+
+		// Generate unique referral code
+		refCode := "REF-" + strings.ToUpper(uuid.New().String()[:8])
+
+		queryInsert := `
+			INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, max_lifespan, time_speed_multiplier, email, google_id, completed_quests, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, fake_name, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code)
+			VALUES ($1, '', 1, 1, $2, $3, $4, $5, $6, 0, 0, $7, $8, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, '[]'::jsonb, '{}'::jsonb, 'Southern_Border', '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 100.0, 1.0, $9, $10, '[]'::jsonb, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, '[{"recipe_id": "recipe_moon_raiment", "completion_rate": 100.0}, {"recipe_id": "recipe_white_jade", "completion_rate": 50.0}, {"recipe_id": "recipe_four_flavors_liquor", "completion_rate": 30.0}]'::jsonb, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $11)
+			RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, fake_name, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code
+		`
+
+		err = tx.QueryRow(queryInsert, username, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, starterGu, starterMaterials, googleUser.Email, googleUser.ID, refCode).Scan(
+			&player.ID, &player.Username, &player.Rank, &player.SubRank,
+			&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
+			&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
+			&player.WallProgress, &player.HumanQi, &player.NextTribulationTime, &player.TribulationCount,
+			&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y, &player.ExploredCells,
+			&player.EquippedGus, &player.ClearedCells,
+			&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries, &player.ActiveCombat,
+			&player.LastManaUpdate, &player.CreatedAt,
+			&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
+			&player.Email, &player.GoogleID, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+			&player.ApertureStress, &player.LastCultivateTime,
+			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeName, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create new player record: " + err.Error()})
+			return
+		}
+
+		// Handle referral code logic
+		if referralCode != "" {
+			var referrerID uuid.UUID
+			err = tx.QueryRow("SELECT id FROM players WHERE ref_code = $1", referralCode).Scan(&referrerID)
+			if err == nil {
+				if referrerID != player.ID {
+					clientIP := c.ClientIP()
+					userAgent := c.Request.UserAgent()
+					var count int
+					_ = tx.QueryRow("SELECT COUNT(*) FROM referrals WHERE referee_ip = $1 AND referee_device = $2", clientIP, userAgent).Scan(&count)
+					isSuspicious := count > 0
+
+					_, err = tx.Exec(`
+						INSERT INTO referrals (referrer_id, referee_id, referee_ip, referee_device, is_suspicious)
+						VALUES ($1, $2, $3, $4, $5)
+					`, referrerID, player.ID, clientIP, userAgent, isSuspicious)
+					if err != nil {
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record referral: " + err.Error()})
+						return
+					}
+				}
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Google login state"})
+		return
+	}
+
+	// Generate JWT session token
+	token, err := auth.GenerateToken(player.ID, player.Username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sign access token"})
+		return
+	}
+	setAuthCookie(c, token)
+
+	// Redirect to frontend
+	frontendURL := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
+	}
+	// Parse the first origin if multiple are defined
+	if strings.Contains(frontendURL, ",") {
+		frontendURL = strings.Split(frontendURL, ",")[0]
+	}
+
+	c.Redirect(http.StatusTemporaryRedirect, frontendURL)
 }

@@ -1256,8 +1256,8 @@ func CombatAttack(c *gin.Context) {
 
 			// Thất bại độ kiếp nhưng sống: +200 human_qi
 			player.HumanQi += 200.0
-			if player.HumanQi > 1000.0 {
-				player.HumanQi = 1000.0
+			if player.HumanQi > 100000.0 {
+				player.HumanQi = 100000.0
 			}
 			ctx.Logs = append(ctx.Logs, "Độ kiếp thất bại nhưng may mắn giữ được mạng sống! Nhân khí +200. Tiên Nguyên Thạch bị hao tổn 50% và reset số lần độ kiếp.")
 		}

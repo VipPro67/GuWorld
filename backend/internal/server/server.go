@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
@@ -59,10 +60,14 @@ func SetupRouter() *gin.Engine {
 		// Public Auth Endpoints
 		authGroup := api.Group("/auth")
 		{
-			authGroup.POST("/register", handlers.RegisterPlayer)
-			authGroup.POST("/login", handlers.LoginPlayer)
+			authGroup.POST("/register", middleware.RateLimit(5, time.Minute), handlers.RegisterPlayer)
+			authGroup.POST("/login", middleware.RateLimit(5, time.Minute), handlers.LoginPlayer)
 			authGroup.POST("/logout", handlers.LogoutPlayer)
 			authGroup.GET("/me", middleware.AuthRequired(), handlers.GetCurrentPlayer)
+
+			// Google OAuth2
+			authGroup.GET("/google/login", middleware.RateLimit(5, time.Minute), handlers.GoogleLogin)
+			authGroup.GET("/google/callback", middleware.RateLimit(10, time.Minute), handlers.GoogleCallback)
 		}
 
 		// Protected Cultivation Endpoints
@@ -75,6 +80,10 @@ func SetupRouter() *gin.Engine {
 			player.POST("/use-item", handlers.UseItem)
 			player.POST("/recharge", handlers.RechargeWithStones)
 			player.POST("/clear-stress", handlers.ClearStress)
+			player.GET("/profile/:username", handlers.GetPlayerProfile)
+			player.PUT("/profile/settings", handlers.UpdateProfileSettings)
+			player.GET("/referrals", handlers.GetReferralStats)
+			player.POST("/simulate-deposit", handlers.SimulateDeposit)
 		}
 
 		mine := api.Group("/mine")
@@ -254,6 +263,16 @@ func SetupRouter() *gin.Engine {
 			sect.POST("/join-requests/:requestId/action", handlers.ActionJoinRequest)
 			sect.GET("/promotion-requests", handlers.GetPromotionRequests)
 			sect.POST("/promotion-requests/:requestId/action", handlers.ActionPromotionRequest)
+		}
+
+		// Protected Feedback Endpoints
+		feedback := api.Group("/feedback")
+		feedback.Use(middleware.AuthRequired())
+		{
+			feedback.GET("", handlers.GetFeedbacks)
+			feedback.POST("", handlers.SubmitFeedback)
+			feedback.POST("/:id/vote", handlers.VoteFeedback)
+			feedback.PUT("/:id/status", handlers.UpdateFeedbackStatus)
 		}
 	}
 

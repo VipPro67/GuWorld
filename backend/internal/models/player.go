@@ -111,7 +111,8 @@ type Player struct {
 	PartyID             *uuid.UUID          `json:"party_id"`
 	ArenaRank           *int                `json:"arena_rank"`
 	Email               string              `json:"email"`
-	PhoneNumber         string              `json:"phone_number"`
+	GoogleID            *string             `json:"google_id,omitempty"`
+	RefCode             string              `json:"ref_code"`
 	CompletedQuests     CompletedQuestsList `json:"completed_quests"`
 	TempLoot            TempLoot            `json:"temp_loot"`
 	ExploreCount        int                 `json:"explore_count"`
@@ -123,6 +124,13 @@ type Player struct {
 	SoulTier            string              `json:"soul_tier"`
 	NeedsSoulRefine     bool                `json:"needs_soul_refine"`
 	UnlockedRecipes     UnlockedRecipesList `json:"unlocked_recipes"`
+	Bio                 string              `json:"bio"`
+	FakeName            string              `json:"fake_name"`
+	FakeRank            int                 `json:"fake_rank"`
+	FakeSubRank         int                 `json:"fake_sub_rank"`
+	FakeVitalGu         string              `json:"fake_vital_gu"`
+	IsDisguised         bool                `json:"is_disguised"`
+	IsAdmin             bool                `json:"is_admin"`
 }
 
 type TempLoot struct {

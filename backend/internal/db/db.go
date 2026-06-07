@@ -135,7 +135,10 @@ func InitSchema() error {
 		last_mana_update TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		aperture_stress DOUBLE PRECISION NOT NULL DEFAULT 0.0,
-		last_cultivate_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		last_cultivate_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		email VARCHAR(255) UNIQUE NOT NULL DEFAULT '',
+		google_id VARCHAR(255) UNIQUE NULL,
+		ref_code VARCHAR(50) UNIQUE NOT NULL DEFAULT ''
 	);
 	`
 	_, err = DB.Exec(query)
@@ -145,10 +148,30 @@ func InitSchema() error {
 
 	// Seed system player for global/world/sect chat channels
 	_, _ = DB.Exec(`
-		INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, hp, base_hp, current_region, x, y)
-		VALUES ('00000000-0000-0000-0000-000000000000', 'Bảo Hoàng Thiên', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'Southern_Border', 50, 50)
+		INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, hp, base_hp, current_region, x, y, email, ref_code)
+		VALUES ('00000000-0000-0000-0000-000000000000', 'Bảo Hoàng Thiên', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'Southern_Border', 50, 50, 'system@guworld.local', 'REF-SYSTEM')
 		ON CONFLICT (id) DO NOTHING;
 	`)
+
+	// Create referrals table
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS referrals (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		referrer_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		referee_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE UNIQUE,
+		referee_ip VARCHAR(50) NOT NULL DEFAULT '',
+		referee_device TEXT NOT NULL DEFAULT '',
+		is_suspicious BOOLEAN NOT NULL DEFAULT false,
+		has_deposited BOOLEAN NOT NULL DEFAULT false,
+		deposit_amount_stones INTEGER NOT NULL DEFAULT 0,
+		milestone1_rewarded BOOLEAN NOT NULL DEFAULT false,
+		milestone2_rewarded BOOLEAN NOT NULL DEFAULT false,
+		milestone3_rewarded BOOLEAN NOT NULL DEFAULT false,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create referrals table: %w", err)
+	}
 
 	// 5. Create immortal_apertures table
 	_, err = DB.Exec(`
@@ -633,11 +656,82 @@ func InitSchema() error {
 			UNIQUE(aperture_id, race)
 		);`, "aperture_variant_humans"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS unlocked_recipes JSONB NOT NULL DEFAULT '[]';`, "unlocked_recipes"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT 'Hãy viết gì đó về bản thân...';`, "bio"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS fake_name VARCHAR(50) DEFAULT '';`, "fake_name"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS fake_rank INTEGER DEFAULT 1;`, "fake_rank"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS fake_sub_rank INTEGER DEFAULT 1;`, "fake_sub_rank"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS fake_vital_gu VARCHAR(50) DEFAULT '';`, "fake_vital_gu"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS is_disguised BOOLEAN DEFAULT false;`, "is_disguised"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;`, "is_admin"},
+		{`CREATE TABLE IF NOT EXISTS feedback (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			user_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			title VARCHAR(255) NOT NULL,
+			description TEXT NOT NULL,
+			category VARCHAR(50) NOT NULL,
+			status VARCHAR(50) NOT NULL DEFAULT 'pending',
+			total_votes INTEGER NOT NULL DEFAULT 0,
+			developer_response TEXT DEFAULT NULL,
+			rewarded BOOLEAN NOT NULL DEFAULT false,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		);`, "feedback_table"},
+		{`CREATE TABLE IF NOT EXISTS feedback_votes (
+			feedback_id UUID NOT NULL REFERENCES feedback(id) ON DELETE CASCADE,
+			user_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			vote_type INTEGER NOT NULL,
+			PRIMARY KEY (feedback_id, user_id)
+		);`, "feedback_votes_table"},
+		{`UPDATE players SET email = 'system@guworld.local' WHERE id = '00000000-0000-0000-0000-000000000000' AND (email IS NULL OR email = '');`, "set_system_player_email"},
+		{`DROP INDEX IF EXISTS players_phone_number_idx;`, "drop_phone_number_idx"},
+		{`DROP INDEX IF EXISTS players_email_idx;`, "drop_email_idx"},
+		{`ALTER TABLE players ALTER COLUMN email SET DATA TYPE VARCHAR(255);`, "alter_email_type"},
+		{`UPDATE players SET email = 'placeholder_' || id || '@guworld.local' WHERE email IS NULL OR email = '';`, "fill_empty_emails"},
+		{`ALTER TABLE players ALTER COLUMN email SET NOT NULL;`, "make_email_not_null"},
+		{`ALTER TABLE players DROP CONSTRAINT IF EXISTS players_email_unique;`, "drop_email_unique_constraint"},
+		{`ALTER TABLE players ADD CONSTRAINT players_email_unique UNIQUE (email);`, "make_email_unique"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) NULL;`, "add_google_id"},
+		{`CREATE UNIQUE INDEX IF NOT EXISTS players_google_id_idx ON players (google_id) WHERE google_id IS NOT NULL AND google_id != '';`, "create_google_id_idx"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS ref_code VARCHAR(50) NULL;`, "add_ref_code_column"},
+		{`UPDATE players SET ref_code = 'REF-SYSTEM' WHERE id = '00000000-0000-0000-0000-000000000000' AND (ref_code IS NULL OR ref_code = '');`, "set_system_ref_code"},
+		{`UPDATE players SET ref_code = 'REF-' || UPPER(SUBSTRING(id::text, 1, 8)) WHERE ref_code IS NULL OR ref_code = '';`, "fill_empty_ref_codes"},
+		{`ALTER TABLE players ALTER COLUMN ref_code SET NOT NULL;`, "make_ref_code_not_null"},
+		{`ALTER TABLE players DROP CONSTRAINT IF EXISTS players_ref_code_unique;`, "drop_ref_code_unique_constraint"},
+		{`ALTER TABLE players ADD CONSTRAINT players_ref_code_unique UNIQUE (ref_code);`, "make_ref_code_unique"},
+		{`DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1 
+				FROM information_schema.columns 
+				WHERE table_name='referrals' AND column_name='referred_id'
+			) THEN
+				DROP TABLE referrals;
+			END IF;
+		END $$;`, "conditionally_drop_old_referrals_table"},
+		{`CREATE TABLE IF NOT EXISTS referrals (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			referrer_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			referee_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE UNIQUE,
+			referee_ip VARCHAR(50) NOT NULL DEFAULT '',
+			referee_device TEXT NOT NULL DEFAULT '',
+			is_suspicious BOOLEAN NOT NULL DEFAULT false,
+			has_deposited BOOLEAN NOT NULL DEFAULT false,
+			deposit_amount_stones INTEGER NOT NULL DEFAULT 0,
+			milestone1_rewarded BOOLEAN NOT NULL DEFAULT false,
+			milestone2_rewarded BOOLEAN NOT NULL DEFAULT false,
+			milestone3_rewarded BOOLEAN NOT NULL DEFAULT false,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		);`, "create_referrals_table"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {
-			return fmt.Errorf("failed to add column %s: %w", m.errMsg, err)
+			return fmt.Errorf("failed to run migration %s: %w", m.errMsg, err)
 		}
+	}
+
+	// Set is_admin = true for developer usernames
+	_, err = DB.Exec(`UPDATE players SET is_admin = true WHERE username IN ('admin', 'Bảo Hoàng Thiên')`)
+	if err != nil {
+		log.Printf("Warning: failed to update is_admin status: %v", err)
 	}
 
 	// Drop obsolete columns

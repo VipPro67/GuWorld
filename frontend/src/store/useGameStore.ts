@@ -98,6 +98,15 @@ export interface Player {
   soul_tier: string;
   needs_soul_refine: boolean;
   unlocked_recipes?: { recipe_id: string; completion_rate: number }[];
+  email?: string;
+  google_id?: string;
+  bio?: string;
+  fake_name?: string;
+  fake_rank?: number;
+  fake_sub_rank?: number;
+  fake_vital_gu?: string;
+  is_disguised?: boolean;
+  is_admin?: boolean;
 }
 
 export interface ImmortalAperture {
@@ -348,6 +357,21 @@ export interface SectMemberInfo {
   player_rank: number;
 }
 
+export interface Feedback {
+  id: string;
+  user_id: string;
+  username?: string;
+  title: string;
+  description: string;
+  category: string;
+  status: string;
+  total_votes: number;
+  developer_response: string | null;
+  rewarded: boolean;
+  created_at: string;
+  user_vote?: number | null;
+}
+
 interface AuthResponse {
   player: Player;
 }
@@ -393,8 +417,22 @@ interface GameState {
   dictionaryLoaded: boolean;
   recipes: RefiningRecipe[];
   recipesLoaded: boolean;
+  inspectedProfile: any | null;
+  profileLoading: boolean;
+  fetchPlayerProfile: (username: string) => Promise<void>;
+  clearInspectedProfile: () => void;
+  updateProfileSettings: (settings: { 
+    email: string; 
+    bio: string; 
+    new_password?: string;
+    fake_name?: string;
+    fake_rank?: number;
+    fake_sub_rank?: number;
+    fake_vital_gu?: string;
+    is_disguised?: boolean;
+  }) => Promise<boolean>;
   login: (username: string, password: string) => Promise<boolean>;
-  register: (username: string, password: string, email: string, phoneNumber: string, startingRegion: string, setVitalNow: boolean) => Promise<boolean>;
+  register: (username: string, password: string, email: string, startingRegion: string, setVitalNow: boolean, referralCode?: string) => Promise<boolean>;
   logout: () => void;
   clearError: () => void;
   fetchPlayerStatus: (id: string) => Promise<void>;
@@ -414,6 +452,13 @@ interface GameState {
   clearStress: () => Promise<{ success: boolean; message: string } | null>;
   exploreNode: (nodeId: string) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
   executeCombatTurn: (equippedGuIds: string[], isCharge?: boolean, targetId?: string, targetX?: number, targetY?: number) => Promise<{ player: Player; logs: string[]; enemy: CombatState | null; victory: boolean; defeat: boolean } | null>;
+  referralsData: {
+    ref_code: string;
+    referees: any[];
+    total_ref: number;
+  } | null;
+  fetchReferrals: () => Promise<void>;
+  simulateDeposit: (stones: number) => Promise<boolean>;
   addLog: (message: string) => void;
   currentView: string;
   setView: (view: string) => void;
@@ -539,6 +584,13 @@ interface GameState {
   actionJoinRequest: (requestId: string, action: 'approve' | 'reject') => Promise<boolean>;
   fetchPromotionRequests: () => Promise<void>;
   actionPromotionRequest: (requestId: string, action: 'approve' | 'reject') => Promise<boolean>;
+
+  // Feedback State & Actions
+  feedbacks: Feedback[];
+  fetchFeedbacks: (category?: string, status?: string) => Promise<void>;
+  submitFeedback: (title: string, description: string, category: string) => Promise<boolean>;
+  voteFeedback: (feedbackId: string, voteType: number) => Promise<boolean>;
+  updateFeedbackStatus: (feedbackId: string, status: string, developerResponse: string) => Promise<boolean>;
 }
 
 export interface MineSlot {
@@ -604,11 +656,14 @@ export const useGameStore = create<GameState>((set, get) => {
   actionLoading: false,
   error: null,
   logs: ["Chào mừng đạo hữu đến với Cổ Giới. Hãy tu luyện và sinh tồn."],
+  referralsData: null,
   guDictionary: {},
   itemDictionary: {},
   dictionaryLoaded: false,
   recipes: [],
   recipesLoaded: false,
+  inspectedProfile: null,
+  profileLoading: false,
   currentView: "dashboard",
   marketplaceListings: [],
   party: null,
@@ -629,6 +684,7 @@ export const useGameStore = create<GameState>((set, get) => {
   sectMembers: [],
   sectJoinRequests: [],
   sectPromotionRequests: [],
+  feedbacks: [],
   setView: (view) => set({ currentView: view }),
 
   toasts: [],
@@ -667,6 +723,7 @@ export const useGameStore = create<GameState>((set, get) => {
       localStorage.removeItem("gu_auth_token");
       localStorage.setItem("gu_player_id", data.player.id);
       
+      void get().fetchRecipes();
       get().addLog(`Đồng chí ${data.player.username} đã quy vị!`);
       return true;
     } catch (err: any) {
@@ -677,7 +734,7 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
-  register: async (username, password, email, phoneNumber, startingRegion, setVitalNow) => {
+  register: async (username, password, email, startingRegion, setVitalNow, referralCode) => {
     set({ isLoading: true, error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/auth/register`, {
@@ -687,9 +744,9 @@ export const useGameStore = create<GameState>((set, get) => {
           username,
           password,
           email,
-          phone_number: phoneNumber,
           starting_region: startingRegion,
           set_vital_now: setVitalNow,
+          referral_code: referralCode || "",
         }),
       });
 
@@ -703,6 +760,7 @@ export const useGameStore = create<GameState>((set, get) => {
       localStorage.removeItem("gu_auth_token");
       localStorage.setItem("gu_player_id", data.player.id);
 
+      void get().fetchRecipes();
       get().addLog(`Cổ sư ${data.player.username} khai mở Không Khiếu! Tư chất: ${data.player.aptitude_type} (${data.player.aptitude_percent}%)`);
       return true;
     } catch (err: any) {
@@ -715,13 +773,50 @@ export const useGameStore = create<GameState>((set, get) => {
 
   logout: () => {
     void authFetch(`${BACKEND_URL}/api/auth/logout`, { method: "POST" });
-    set({ player: null, token: null });
+    set({ player: null, token: null, recipes: [], recipesLoaded: true });
     localStorage.removeItem("gu_auth_token");
     localStorage.removeItem("gu_player_id");
     get().addLog("Đã rời khỏi thế giới Cổ sư.");
   },
 
   clearError: () => set({ error: null }),
+
+  fetchReferrals: async () => {
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/referrals`);
+      if (response.ok) {
+        const data = await response.json();
+        set({ referralsData: data });
+      }
+    } catch (err) {
+      console.error("Failed to fetch referrals", err);
+    }
+  },
+
+  simulateDeposit: async (stones) => {
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/simulate-deposit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stones }),
+      });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Giao dịch giả lập thất bại.");
+      }
+      const data = await response.json();
+      await get().fetchPlayerStatus(get().player?.id || "");
+      void get().fetchReferrals();
+      get().addLog(`[Giả Lập Nạp] Đã nạp thành công $10 (tặng ${stones} Nguyên Thạch)!`);
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
 
   addLog: (message) => {
     const formatted = translateIDs(message);
@@ -751,6 +846,7 @@ export const useGameStore = create<GameState>((set, get) => {
         localStorage.setItem("gu_player_id", player.id);
       }
       void get().fetchMySectStatus();
+      void get().fetchRecipes();
     } catch (err: any) {
       console.error("Session restore failed:", err.message);
       set({ player: null, token: null });
@@ -780,6 +876,68 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err: any) {
       console.error("Status fetch failed:", err.message);
+    }
+  },
+
+  fetchPlayerProfile: async (username) => {
+    const { token, logout } = get();
+    if (!token) return;
+
+    set({ profileLoading: true });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/profile/${encodeURIComponent(username)}`);
+
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        return;
+      }
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to load player profile");
+      }
+
+      const data = await response.json();
+      set({ inspectedProfile: data });
+    } catch (err: any) {
+      console.error("Profile fetch failed:", err.message);
+      get().addToast(`Không thể trinh thám hồ sơ: ${err.message}`, "error");
+    } finally {
+      set({ profileLoading: false });
+    }
+  },
+
+  clearInspectedProfile: () => set({ inspectedProfile: null }),
+
+  updateProfileSettings: async (settings) => {
+    const { token, actionLoading, addToast } = get();
+    if (!token || actionLoading) return false;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/profile/settings`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(settings),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to update profile settings");
+      }
+
+      set({ player: data.player });
+      addToast(data.message || "Cập nhật hồ sơ thành công!", "success");
+      return true;
+    } catch (err: any) {
+      console.error("Profile settings update failed:", err.message);
+      set({ error: err.message });
+      addToast(`Cập nhật thất bại: ${err.message}`, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
     }
   },
 
@@ -871,6 +1029,10 @@ export const useGameStore = create<GameState>((set, get) => {
   fetchRecipes: async () => {
     try {
       const response = await authFetch(`${BACKEND_URL}/api/recipes`);
+      if (response.status === 401 || response.status === 403) {
+        set({ recipes: [], recipesLoaded: true });
+        return;
+      }
       if (!response.ok) {
         throw new Error("Failed to load recipes");
       }
@@ -878,6 +1040,7 @@ export const useGameStore = create<GameState>((set, get) => {
       set({ recipes: data || [], recipesLoaded: true });
     } catch (err: any) {
       console.error("Recipes sync error:", err.message);
+      set({ recipesLoaded: true });
     }
   },
 
@@ -3017,6 +3180,131 @@ export const useGameStore = create<GameState>((set, get) => {
       get().addToast(data.message || "Thao tác thành công!", "success");
       await get().fetchPromotionRequests();
       await get().fetchSectMembers();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  fetchFeedbacks: async (category, status) => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      let url = `${BACKEND_URL}/api/feedback`;
+      const params = [];
+      if (category) params.push(`category=${encodeURIComponent(category)}`);
+      if (status) params.push(`status=${encodeURIComponent(status)}`);
+      if (params.length > 0) {
+        url += `?${params.join("&")}`;
+      }
+      const response = await authFetch(url);
+      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.ok) {
+        const data = await response.json();
+        set({ feedbacks: data || [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch feedbacks:", err);
+    }
+  },
+
+  submitFeedback: async (title, description, category) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, description, category }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Gửi góp ý thất bại.");
+      get().addToast(data.message || "Gửi góp ý thành công!", "success");
+      await get().fetchFeedbacks();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  voteFeedback: async (feedbackId, voteType) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+
+    // Optimistic UI update
+    const prevFeedbacks = [...get().feedbacks];
+    const updatedFeedbacks = prevFeedbacks.map((f) => {
+      if (f.id === feedbackId) {
+        const prevVote = f.user_vote;
+        let newTotal = f.total_votes;
+        if (prevVote === undefined || prevVote === null) {
+          newTotal += voteType;
+        } else if (prevVote === voteType) {
+          newTotal -= voteType; // Toggle off
+        } else {
+          newTotal += 2 * voteType; // Changed vote type
+        }
+        return {
+          ...f,
+          total_votes: newTotal,
+          user_vote: prevVote === voteType ? null : voteType,
+        };
+      }
+      return f;
+    });
+    set({ feedbacks: updatedFeedbacks });
+
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/feedback/${feedbackId}/vote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vote_type: voteType }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Bình chọn thất bại.");
+      get().addToast(data.message || "Bình chọn thành công!", "success");
+      // Update with exact values from server
+      set((state) => ({
+        feedbacks: state.feedbacks.map((f) =>
+          f.id === feedbackId ? { ...f, total_votes: data.total_votes, user_vote: data.user_vote } : f
+        ),
+      }));
+      return true;
+    } catch (err: any) {
+      // Revert on error
+      set({ feedbacks: prevFeedbacks, error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  updateFeedbackStatus: async (feedbackId, status, developerResponse) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/feedback/${feedbackId}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, developer_response: developerResponse }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Cập nhật trạng thái thất bại.");
+      get().addToast(data.message || "Cập nhật trạng thái thành công!", "success");
+      await get().fetchFeedbacks();
+      // Also refresh player stats in case they received a reward
+      if (get().player) {
+        await get().fetchPlayerStatus(get().player!.id);
+      }
       return true;
     } catch (err: any) {
       set({ error: err.message });

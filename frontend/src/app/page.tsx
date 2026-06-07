@@ -19,6 +19,10 @@ import { ToastContainer } from "@/components/ToastContainer";
 import { ImmortalApertureView } from "@/components/ImmortalApertureView";
 import { DungeonView } from "@/components/DungeonView";
 import { SectView } from "@/components/SectView";
+import { WikiView } from "@/components/WikiView";
+import { PlayerProfileModal } from "@/components/PlayerProfileModal";
+import { FeedbackView } from "@/components/FeedbackView";
+
 
 
 
@@ -62,6 +66,7 @@ export default function Home() {
     createMarketplaceListing,
     placeMarketplaceBid,
     cancelMarketplaceListing,
+    inspectedProfile,
   } = useGameStore();
 
   const [checkingSession, setCheckingSession] = useState(true);
@@ -129,10 +134,22 @@ export default function Home() {
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-zinc-500 border border-zinc-900 bg-zinc-950/20 px-2 sm:px-3 py-1.5 rounded-xl">
-          <HelpCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-zinc-600 shrink-0" />
-          <span className="hidden sm:inline">Bản Thử Nghiệm (Phase 4 & 5)</span>
-          <span className="sm:hidden">Beta</span>
+        <div className="flex items-center gap-2">
+          {player && !inCombat && currentView !== "wiki" && (
+            <button
+              onClick={() => setView("wiki")}
+              className="px-3 py-1.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 text-xs text-emerald-400 hover:text-emerald-300 font-serif transition-colors border border-emerald-800/40 cursor-pointer flex items-center gap-1"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span>Wiki Game</span>
+            </button>
+          )}
+
+          <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-zinc-500 border border-zinc-900 bg-zinc-950/20 px-2 sm:px-3 py-1.5 rounded-xl">
+            <HelpCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-zinc-600 shrink-0" />
+            <span className="hidden sm:inline">Bản Thử Nghiệm (Phase 4 & 5)</span>
+            <span className="sm:hidden">Beta</span>
+          </div>
         </div>
       </header>
 
@@ -246,6 +263,14 @@ export default function Home() {
           <div className="w-full">
             <SectView />
           </div>
+        ) : currentView === "wiki" ? (
+          <div className="w-full">
+            <WikiView />
+          </div>
+        ) : currentView === "feedback" ? (
+          <div className="w-full">
+            <FeedbackView />
+          </div>
         ) : (
           <div className="text-center py-12 text-zinc-500 font-mono">Giao diện không khả dụng</div>
         )}
@@ -258,6 +283,9 @@ export default function Home() {
 
       {/* Toast Notification Container */}
       <ToastContainer />
+
+      {/* Inspect Player Profile Modal */}
+      {inspectedProfile && <PlayerProfileModal />}
     </div>
   );
 }

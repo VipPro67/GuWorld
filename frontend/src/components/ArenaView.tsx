@@ -5,7 +5,7 @@ import { useGameStore } from "@/store/useGameStore";
 import { Swords, Trophy, ShieldAlert, Award, RefreshCw, Star } from "lucide-react";
 
 export const ArenaView: React.FC = () => {
-  const { player, arenaLeaderboard, fetchArenaLeaderboard, challengeArena, actionLoading } = useGameStore();
+  const { player, arenaLeaderboard, fetchArenaLeaderboard, challengeArena, actionLoading, fetchPlayerProfile } = useGameStore();
   const [loading, setLoading] = useState(false);
 
   const handleRefresh = async () => {
@@ -125,7 +125,11 @@ export const ArenaView: React.FC = () => {
                   
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className={`font-serif text-sm font-bold ${isMe ? "text-amber-400" : "text-zinc-200"}`}>
+                      <span
+                        onClick={() => !isMe && fetchPlayerProfile(row.username)}
+                        className={`font-serif text-sm font-bold ${isMe ? "text-amber-400" : "text-zinc-200 cursor-pointer hover:text-amber-400 hover:underline decoration-dotted transition-colors"}`}
+                        title={!isMe ? "Bấm để trinh thám cổ sư" : undefined}
+                      >
                         {row.username}
                       </span>
                       {isMe && (
