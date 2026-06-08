@@ -1,7 +1,6 @@
 "use client";
-import React, { useState } from "react";
-import { useGameStore } from "@/store/useGameStore";
-import { GuInstance, GuSpec, Player } from "@/store/useGameStore";
+import React, { useEffect, useState } from "react";
+import { estimateManaFromSnapshot, GuInstance, GuSpec, Player, useGameStore } from "@/store/useGameStore";
 import {
   Sparkles,
   ShieldAlert,
@@ -111,7 +110,23 @@ export const Aperture: React.FC<ApertureProps> = ({
   guDictionary,
 }) => {
   const store = useGameStore();
-  const currentMana = player.current_mana;
+  const manaSnapshot = store.manaSnapshot;
+  const [manaNow, setManaNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!manaSnapshot || manaSnapshot.player_id !== player.id || manaSnapshot.current_mana >= manaSnapshot.max_mana) return;
+
+    const interval = setInterval(() => {
+      setManaNow(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [manaSnapshot, player.id]);
+
+  const currentMana = estimateManaFromSnapshot(
+    manaSnapshot?.player_id === player.id ? manaSnapshot : null,
+    manaNow,
+  ) ?? player.current_mana;
   const maxMana = player.max_mana;
   const aptitudeType = player.aptitude_type;
   const aptitudePercent = player.aptitude_percent;
@@ -524,7 +539,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                       {manaQuality}:
                     </div>
                     <div className="text-xl font-bold font-mono text-cyan-400">
-                      {player ? Math.floor(player.current_mana).toLocaleString() : "--"} viên
+                      {player ? Math.floor(currentMana).toLocaleString() : "--"} viên
                     </div>
                     <div className="text-[10px] text-zinc-400 mt-0.5 tracking-wider uppercase font-semibold">{energyPoolName}</div>
                     <div className="text-[10px] text-zinc-300 mt-2 font-mono" style={{ color: c.text }}>

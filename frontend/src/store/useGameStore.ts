@@ -109,6 +109,73 @@ export interface Player {
   is_admin?: boolean;
 }
 
+export interface ManaSnapshot {
+  player_id: string;
+  current_mana: number;
+  max_mana: number;
+  last_mana_update: string;
+  time_speed_multiplier: number;
+  rank: number;
+  sub_rank: number;
+  aptitude_type?: string;
+  lifespan?: number;
+  essence_production_per_year?: number;
+  captured_at: number;
+}
+
+const getManaRegenRatePerHour = (snapshot: ManaSnapshot): number => {
+  if (snapshot.rank >= 6) {
+    const subRank = Math.min(4, Math.max(1, snapshot.sub_rank || 1));
+    const subRankFactor = 1.0 + (subRank - 1) * 0.15;
+    const essenceProduction = snapshot.essence_production_per_year ?? 10;
+    return (essenceProduction / 20.0) * subRankFactor;
+  }
+
+  switch (snapshot.aptitude_type) {
+    case "Giáp":
+      return 8.0;
+    case "Ất":
+      return 6.0;
+    case "Bính":
+      return 4.0;
+    case "Đinh":
+      return 2.0;
+    default:
+      return 2.0;
+  }
+};
+
+export const estimateManaFromSnapshot = (snapshot: ManaSnapshot | null, nowMs = Date.now()): number | null => {
+  if (!snapshot) return null;
+  if (snapshot.max_mana <= 0) return Math.max(0, snapshot.current_mana);
+
+  const lastUpdateMs = new Date(snapshot.last_mana_update).getTime();
+  if (!Number.isFinite(lastUpdateMs)) {
+    return Math.min(snapshot.max_mana, Math.max(0, snapshot.current_mana));
+  }
+
+  const elapsedSeconds = Math.max(0, (nowMs - lastUpdateMs) / 1000);
+  const multiplier = snapshot.time_speed_multiplier > 0 ? snapshot.time_speed_multiplier : 1;
+  const regenRatePerHour = getManaRegenRatePerHour(snapshot);
+  const lifespanModifier = snapshot.lifespan !== undefined && snapshot.lifespan <= 0 ? 0.5 : 1;
+  const regeneratedMana = ((elapsedSeconds * multiplier) / 3600) * regenRatePerHour * lifespanModifier;
+
+  return Math.min(snapshot.max_mana, Math.max(0, snapshot.current_mana + regeneratedMana));
+};
+
+const createManaSnapshotFromPlayer = (player: Player): ManaSnapshot => ({
+  player_id: player.id,
+  current_mana: player.current_mana,
+  max_mana: player.max_mana,
+  last_mana_update: player.last_mana_update,
+  time_speed_multiplier: player.time_speed_multiplier || 1,
+  rank: player.rank,
+  sub_rank: player.sub_rank,
+  aptitude_type: player.aptitude_type,
+  lifespan: player.lifespan,
+  captured_at: Date.now(),
+});
+
 export interface ImmortalAperture {
   id: string;
   player_id: string;
@@ -407,6 +474,7 @@ export interface ToastMessage {
 
 interface GameState {
   player: Player | null;
+  manaSnapshot: ManaSnapshot | null;
   token: string | null;
   isLoading: boolean;
   actionLoading: boolean;
@@ -436,6 +504,9 @@ interface GameState {
   register: (username: string, password: string, email: string, startingRegion: string, setVitalNow: boolean, referralCode?: string) => Promise<boolean>;
   logout: () => void;
   clearError: () => void;
+  updateManaSnapshot: (player: Player | null) => void;
+  setPlayerFromServer: (player: Player | null) => void;
+  getEstimatedMana: () => number | null;
   fetchPlayerStatus: (id: string) => Promise<void>;
   initializeSession: () => Promise<void>;
   explore: () => Promise<void>;
@@ -636,6 +707,15 @@ export const useGameStore = create<GameState>((set, get) => {
     return { ...player, gu_inventory: guInventory, equipped_gus: Array.from(equippedSet) };
   };
 
+  const setPlayerFromServer = (player: Player | null, extraState: Partial<GameState> = {}) => {
+    const normalizedPlayer = normalizePlayer(player);
+    set({
+      ...extraState,
+      player: normalizedPlayer,
+      manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer) : null,
+    });
+  };
+
   const translateIDs = (msg: string): string => {
     if (!msg) return "";
     let formatted = msg;
@@ -662,6 +742,7 @@ export const useGameStore = create<GameState>((set, get) => {
 
   return ({
   player: null,
+  manaSnapshot: null,
   token: null,
   isLoading: false,
   actionLoading: false,
@@ -732,7 +813,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       const data: AuthResponse = await response.json();
-      set({ player: normalizePlayer(data.player), token: AUTHENTICATED_SESSION });
+      setPlayerFromServer(data.player, { token: AUTHENTICATED_SESSION });
       localStorage.removeItem("gu_auth_token");
       localStorage.setItem("gu_player_id", data.player.id);
       
@@ -769,7 +850,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       const data: AuthResponse = await response.json();
-      set({ player: normalizePlayer(data.player), token: AUTHENTICATED_SESSION });
+      setPlayerFromServer(data.player, { token: AUTHENTICATED_SESSION });
       localStorage.removeItem("gu_auth_token");
       localStorage.setItem("gu_player_id", data.player.id);
 
@@ -786,13 +867,21 @@ export const useGameStore = create<GameState>((set, get) => {
 
   logout: () => {
     void authFetch(`${BACKEND_URL}/api/auth/logout`, { method: "POST" });
-    set({ player: null, token: null, recipes: [], recipesLoaded: true });
+    set({ player: null, manaSnapshot: null, token: null, recipes: [], recipesLoaded: true });
     localStorage.removeItem("gu_auth_token");
     localStorage.removeItem("gu_player_id");
     get().addLog("Đã rời khỏi thế giới Cổ sư.");
   },
 
   clearError: () => set({ error: null }),
+  updateManaSnapshot: (player) => {
+    const normalizedPlayer = normalizePlayer(player);
+    set({
+      manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer) : null,
+    });
+  },
+  setPlayerFromServer: (player) => setPlayerFromServer(player),
+  getEstimatedMana: () => estimateManaFromSnapshot(get().manaSnapshot),
 
   fetchReferrals: async () => {
     try {
@@ -846,7 +935,7 @@ export const useGameStore = create<GameState>((set, get) => {
     try {
       const response = await authFetch(`${BACKEND_URL}/api/auth/me`);
       if (response.status === 401 || response.status === 403) {
-        set({ player: null, token: null });
+        set({ player: null, manaSnapshot: null, token: null });
         return;
       }
       if (!response.ok) {
@@ -854,7 +943,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       const player: Player = await response.json();
-      set({ player: normalizePlayer(player), token: AUTHENTICATED_SESSION });
+      setPlayerFromServer(player, { token: AUTHENTICATED_SESSION });
       if (typeof window !== "undefined") {
         localStorage.setItem("gu_player_id", player.id);
       }
@@ -862,7 +951,7 @@ export const useGameStore = create<GameState>((set, get) => {
       void get().fetchRecipes();
     } catch (err: any) {
       console.error("Session restore failed:", err.message);
-      set({ player: null, token: null });
+      set({ player: null, manaSnapshot: null, token: null });
     }
   },
 
@@ -885,7 +974,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const player: Player = await response.json();
       const currentPlayer = get().player;
       if (currentPlayer && currentPlayer.id === id) {
-        set({ player: normalizePlayer(player) });
+        setPlayerFromServer(player);
       }
     } catch (err: any) {
       console.error("Status fetch failed:", err.message);
@@ -941,7 +1030,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Failed to update profile settings");
       }
 
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       addToast(data.message || "Cập nhật hồ sơ thành công!", "success");
       return true;
     } catch (err: any) {
@@ -975,7 +1064,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       const data: ExploreResponse = await response.json();
-      set({ player: normalizePlayer(data.player) });
+      setPlayerFromServer(data.player);
       get().addLog(data.log);
     } catch (err: any) {
       set({ error: err.message });
@@ -1010,7 +1099,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       const data: FeedResponse = await response.json();
-      set({ player: normalizePlayer(data.player) });
+      setPlayerFromServer(data.player);
       get().addLog(data.message);
       get().addToast(data.message, "success");
     } catch (err: any) {
@@ -1084,7 +1173,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Hợp luyện thất bại.");
       }
 
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       get().addLog(data.message);
       get().addToast(data.message, data.status === "success" ? "success" : "error");
       return data;
@@ -1124,7 +1213,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Thôi diễn thất bại.");
       }
 
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       // update completion rate in local recipes state
       set((state) => ({
         recipes: state.recipes.map((r) =>
@@ -1166,7 +1255,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Trùng kích thất bại."); }
 
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       get().addLog(data.message || "Trùng kích hoàn tất.");
       return { success: data.success, message: data.message };
     } catch (err: any) {
@@ -1191,7 +1280,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nạp nguyên thạch thất bại.");
 
-      set({ player: normalizePlayer(data.player) });
+      setPlayerFromServer(data.player);
       get().addLog(data.message || "Nạp nguyên thạch thành công.");
       return { success: true, message: data.message };
     } catch (err: any) {
@@ -1216,7 +1305,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Không thể dùng Cổ Xá Lợi."); }
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       get().addLog(data.message || "Đã sử dụng Cổ Xá Lợi.");
       return { success: true, message: data.message };
     } catch (err: any) {
@@ -1237,7 +1326,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Thăng tiên thất bại."); }
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       get().addLog(data.message || "Thăng tiên hoàn tất.");
       return { success: data.success, message: data.message };
     } catch (err: any) {
@@ -1260,7 +1349,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Không thể nhận thưởng nhiệm vụ."); }
-      set({ player: normalizePlayer(data.player) });
+      setPlayerFromServer(data.player);
       get().addLog(data.message || "Hoàn thành nhiệm vụ.");
       return { success: true, message: data.message };
     } catch (err: any) {
@@ -1281,7 +1370,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Không thể kích hoạt thiên kiếp."); }
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       get().addLog(data.message || "Thiên kiếp giáng lâm.");
       return { success: true, message: data.message };
     } catch (err: any) {
@@ -1318,7 +1407,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Khám phá thất bại.");
       }
 
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       get().addLog(data.log);
       return data;
     } catch (err: any) {
@@ -1348,7 +1437,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Tịnh hóa Không khiếu thất bại.");
 
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       get().addLog(data.message || "Tịnh hóa Không khiếu hoàn tất.");
       return { success: true, message: data.message };
     } catch (err: any) {
@@ -1391,7 +1480,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Tấn công thất bại.");
       }
 
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       if (data.logs && Array.isArray(data.logs)) {
         data.logs.forEach((logLine: string) => {
           get().addLog(logLine);
@@ -1427,7 +1516,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Rút lui thất bại.");
       }
 
-      set({ player: data.player, currentView: "dashboard" });
+      setPlayerFromServer(data.player, { currentView: "dashboard" });
       get().addLog(data.log || "Đạo hữu đã rút lui an toàn.");
     } catch (err: any) {
       set({ error: err.message });
@@ -1728,7 +1817,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Giao dịch thất bại.");
       }
 
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       get().addLog(data.message || "Mua hàng thành công!");
       return true;
     } catch (err: any) {
@@ -1754,7 +1843,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bán hàng thất bại.");
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       get().addLog(data.message || "Bán hàng thành công!");
       return true;
     } catch (err: any) {
@@ -1777,7 +1866,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Vứt Cổ thất bại.");
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       get().addLog(data.message || "Đã vứt Cổ trùng.");
       return true;
     } catch (err: any) {
@@ -1813,7 +1902,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Thao tác trang bị thất bại.");
       }
 
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       const successMsg = data.message || (equip ? "Trang bị Cổ trùng thành công!" : "Tháo Cổ trùng thành công!");
       get().addLog(successMsg);
       get().addToast(successMsg, "success");
@@ -1853,7 +1942,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Cập nhật trạng thái thất bại.");
       }
 
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       get().addLog(data.message || "Cập nhật trạng thái Cổ trùng thành công!");
     } catch (err: any) {
       set({ error: err.message });
@@ -1889,7 +1978,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Thiết lập Bản Mệnh Cổ thất bại.");
       }
 
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       const successMsg = data.message || "Thiết lập Bản Mệnh Cổ thành công!";
       get().addLog(successMsg);
       get().addToast(successMsg, "success");
@@ -1928,7 +2017,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Sử dụng Cổ trùng thất bại.");
       }
 
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       const successMsg = data.message || "Sử dụng Cổ trùng thành công!";
       get().addLog(successMsg);
       get().addToast(successMsg, "success");
@@ -1967,7 +2056,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Sử dụng vật phẩm thất bại.");
       }
 
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       const successMsg = data.message || "Sử dụng vật phẩm thành công!";
       get().addLog(successMsg);
       get().addToast(successMsg, "success");
@@ -2008,7 +2097,7 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Di chuyển thất bại.");
       }
 
-      set({ player: data.player });
+      setPlayerFromServer(data.player);
       get().addLog(data.log || "Di chuyển thành công.");
       return data;
     } catch (err: any) {
@@ -2153,7 +2242,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Khiêu chiến thất bại");
-      set({ player: data.player, currentView: "dashboard" }); // Force update player state which triggers combat screen
+      setPlayerFromServer(data.player, { currentView: "dashboard" }); // Force update player state which triggers combat screen
       get().addLog(data.message || "Đã thách đấu đối thủ!");
       return true;
     } catch (err: any) {
@@ -2731,7 +2820,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Sử dụng Cổ trùng Can Đảm thất bại.");
-      set({ player: normalizePlayer(data.player) });
+      setPlayerFromServer(data.player);
       get().addToast(data.message || "Tráng hồn thành công!", "success");
       get().addLog(data.message || "Đã sử dụng 1x Can Đảm Cổ để tráng đại linh hồn.");
       return true;
@@ -2751,7 +2840,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Luyện hồn thất bại.");
-      set({ player: normalizePlayer(data.player) });
+      setPlayerFromServer(data.player);
       get().addToast(data.message || "Luyện hồn thành công!", "success");
       get().addLog(data.message || "Đã luyện hồn tại Lạc Phách Cốc, nén ép linh hồn ngưng thực.");
       return true;
@@ -2771,7 +2860,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "An hồn thất bại.");
-      set({ player: normalizePlayer(data.player) });
+      setPlayerFromServer(data.player);
       get().addToast(data.message || "An hồn thành công!", "success");
       get().addLog(data.message || "Đã an ổn hồn phách bằng nước hồ An Hồn.");
       return true;
@@ -2849,7 +2938,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hành động phó bản thất bại.");
       
-      set({ player: normalizePlayer(data.player) });
+      setPlayerFromServer(data.player);
       if (data.session) {
         set({ activeInstanceSession: data.session });
         if (data.session.status !== "ACTIVE") {
