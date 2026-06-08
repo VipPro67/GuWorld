@@ -437,6 +437,9 @@ interface GameState {
   logout: () => void;
   clearError: () => void;
   fetchPlayerStatus: (id: string) => Promise<void>;
+  subscribePlayerEvents: () => void;
+  unsubscribePlayerEvents: () => void;
+  playerEventsConnected: boolean;
   initializeSession: () => Promise<void>;
   explore: () => Promise<void>;
   feedGu: (guInstanceId: string) => Promise<void>;
@@ -626,6 +629,24 @@ const authFetch = (input: RequestInfo | URL, init: RequestInit = {}) =>
     credentials: "include",
   });
 
+const PLAYER_EVENT_TYPES = [
+  "mana.snapshot",
+  "player.updated",
+  "combat.started",
+  "combat.ended",
+  "trade.updated",
+  "player.heartbeat",
+] as const;
+
+type PlayerEventType = (typeof PLAYER_EVENT_TYPES)[number];
+
+type PlayerRealtimeEvent = {
+  type: PlayerEventType;
+  data: Partial<Player> & { id: string; aperture_stress_level?: string };
+};
+
+let playerEventsSource: EventSource | null = null;
+
 export const useGameStore = create<GameState>((set, get) => {
   const normalizePlayer = (player: Player | null): Player | null => {
     if (!player) return null;
@@ -666,6 +687,7 @@ export const useGameStore = create<GameState>((set, get) => {
   isLoading: false,
   actionLoading: false,
   error: null,
+  playerEventsConnected: false,
   logs: ["Chào mừng đạo hữu đến với Cổ Giới. Hãy tu luyện và sinh tồn."],
   referralsData: null,
   guDictionary: {},
@@ -737,6 +759,7 @@ export const useGameStore = create<GameState>((set, get) => {
       localStorage.setItem("gu_player_id", data.player.id);
       
       void get().fetchRecipes();
+      get().subscribePlayerEvents();
       get().addLog(`Đồng chí ${data.player.username} đã quy vị!`);
       return true;
     } catch (err: any) {
@@ -774,6 +797,7 @@ export const useGameStore = create<GameState>((set, get) => {
       localStorage.setItem("gu_player_id", data.player.id);
 
       void get().fetchRecipes();
+      get().subscribePlayerEvents();
       get().addLog(`Cổ sư ${data.player.username} khai mở Không Khiếu! Tư chất: ${data.player.aptitude_type} (${data.player.aptitude_percent}%)`);
       return true;
     } catch (err: any) {
@@ -785,6 +809,7 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
   logout: () => {
+    get().unsubscribePlayerEvents();
     void authFetch(`${BACKEND_URL}/api/auth/logout`, { method: "POST" });
     set({ player: null, token: null, recipes: [], recipesLoaded: true });
     localStorage.removeItem("gu_auth_token");
@@ -793,6 +818,57 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
   clearError: () => set({ error: null }),
+
+  subscribePlayerEvents: () => {
+    if (typeof window === "undefined" || !get().token) return;
+
+    if (playerEventsSource) {
+      playerEventsSource.close();
+      playerEventsSource = null;
+    }
+
+    const source = new EventSource(`${BACKEND_URL}/api/player/events`, { withCredentials: true });
+    playerEventsSource = source;
+
+    const mergePlayerEvent = (event: MessageEvent<string>) => {
+      try {
+        const payload: PlayerRealtimeEvent = JSON.parse(event.data);
+        if (!payload?.data?.id) return;
+
+        const currentPlayer = get().player;
+        if (!currentPlayer || currentPlayer.id !== payload.data.id) return;
+
+        set({ player: normalizePlayer({ ...currentPlayer, ...payload.data }) });
+
+        if (payload.type === "combat.started") {
+          get().addLog("Chiến đấu realtime đã bắt đầu.");
+        } else if (payload.type === "combat.ended") {
+          get().addLog("Chiến đấu realtime đã kết thúc.");
+        } else if (payload.type === "trade.updated") {
+          void get().fetchActiveTrade();
+        }
+      } catch (err) {
+        console.error("Failed to process player realtime event", err);
+      }
+    };
+
+    PLAYER_EVENT_TYPES.forEach((eventType) => {
+      source.addEventListener(eventType, mergePlayerEvent as EventListener);
+    });
+
+    source.onopen = () => set({ playerEventsConnected: true });
+    source.onerror = () => {
+      set({ playerEventsConnected: false });
+    };
+  },
+
+  unsubscribePlayerEvents: () => {
+    if (playerEventsSource) {
+      playerEventsSource.close();
+      playerEventsSource = null;
+    }
+    set({ playerEventsConnected: false });
+  },
 
   fetchReferrals: async () => {
     try {
@@ -860,6 +936,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
       void get().fetchMySectStatus();
       void get().fetchRecipes();
+      get().subscribePlayerEvents();
     } catch (err: any) {
       console.error("Session restore failed:", err.message);
       set({ player: null, token: null });

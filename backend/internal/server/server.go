@@ -74,6 +74,7 @@ func SetupRouter() *gin.Engine {
 		player := api.Group("/player")
 		player.Use(middleware.AuthRequired())
 		{
+			player.GET("/events", handlers.StreamPlayerEvents)
 			player.GET("/status/:id", handlers.GetPlayerStatus)
 			player.GET("/stats", handlers.GetPlayerStatsHandler)
 			player.POST("/explore/:id", handlers.Explore)
