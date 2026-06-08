@@ -390,7 +390,7 @@ func GetCurrentPlayer(c *gin.Context) {
 	c.JSON(http.StatusOK, player)
 }
 
-// GetPlayerStatus retrieves the player and updates their mana via lazy evaluation
+// GetPlayerStatus retrieves a projected player status for UI refresh without persisting lazy state.
 func GetPlayerStatus(c *gin.Context) {
 	idStr := c.Param("id")
 	playerID, err := uuid.Parse(idStr)
@@ -406,25 +406,13 @@ func GetPlayerStatus(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	}
-	defer tx.Rollback()
-
-	player, err := evaluateManaTx(tx, playerID)
+	player, err := projectPlayerStatusTx(db.DB, playerID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Player not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to evaluate player status: " + err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to project player status: " + err.Error()})
 		}
-		return
-	}
-
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player status: " + err.Error()})
 		return
 	}
 
@@ -968,18 +956,25 @@ func FeedGu(c *gin.Context) {
 	})
 }
 
-// evaluateManaTx calculates and updates player mana within an active transaction
-func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
+type playerQueryRower interface {
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+// loadPlayerForStatus loads the complete player row used by mana/status projection.
+// Pass forUpdate=true only for authoritative mutation flows that must lock before writing.
+func loadPlayerForStatus(q playerQueryRower, id uuid.UUID, forUpdate bool) (models.Player, error) {
 	var player models.Player
 
 	query := `
 		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), COALESCE(ref_code, '')
 		FROM players
 		WHERE id = $1
-		FOR UPDATE
 	`
+	if forUpdate {
+		query += "\t\tFOR UPDATE\n"
+	}
 	var activeCombatBytes []byte
-	err := tx.QueryRow(query, id).Scan(
+	err := q.QueryRow(query, id).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
 		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
@@ -993,32 +988,35 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 		&player.ApertureStress, &player.LastCultivateTime,
 		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode,
 	)
-	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
+	if err != nil {
+		return player, err
+	}
+	if len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
 		if json.Unmarshal(activeCombatBytes, &cs) == nil {
 			player.ActiveCombat = &cs
 		}
 	}
-	if err != nil {
-		return player, err
-	}
 
-	// Initialize default unlocked recipes if empty
+	return player, nil
+}
+
+func setDefaultPlayerStatusFields(player *models.Player) {
+	// Initialize default unlocked recipes if empty. Projection callers keep this in memory only.
 	if len(player.UnlockedRecipes) == 0 {
 		player.UnlockedRecipes = models.UnlockedRecipesList{
 			{RecipeID: "recipe_moon_raiment", CompletionRate: 100.0},
 			{RecipeID: "recipe_white_jade", CompletionRate: 50.0},
 			{RecipeID: "recipe_four_flavors_liquor", CompletionRate: 30.0},
 		}
-		_, _ = tx.Exec(`UPDATE players SET unlocked_recipes = $1 WHERE id = $2`, player.UnlockedRecipes, player.ID)
 	}
 
-	// Initialize defaults for new fields if not set
+	// Initialize defaults for new fields if not set.
 	if player.MaxLifespan <= 0 {
 		player.MaxLifespan = 100.0
 	}
 	if player.Lifespan <= 0 && player.MaxLifespan > 0 {
-		// Only initialize lifespan if it was never set (i.e. <= 0)
+		// Only initialize lifespan if it was never set (i.e. <= 0).
 		player.Lifespan = player.MaxLifespan
 	}
 	if player.TimeSpeedMultiplier <= 0 {
@@ -1028,20 +1026,11 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 			player.TimeSpeedMultiplier = 1.0
 		}
 	}
+}
 
-	poolChanged := normalizeEnergyPool(&player)
-
-	var essenceProd int = 10
-	if player.Rank >= 6 {
-		var timeRate float64
-		err = tx.QueryRow(`SELECT time_rate, essence_production_per_year FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&timeRate, &essenceProd)
-		if err == nil && timeRate > 0 {
-			if player.TimeSpeedMultiplier != timeRate {
-				player.TimeSpeedMultiplier = timeRate
-				poolChanged = true
-			}
-		}
-	}
+func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time) (bool, bool) {
+	poolChanged := normalizeEnergyPool(player)
+	stressChanged := false
 
 	var regenRatePerHour float64
 	if player.Rank >= 6 {
@@ -1055,19 +1044,17 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 		subRankFactor := 1.0 + float64(subRank-1)*0.15
 		regenRatePerHour = (float64(essenceProd) / 20.0) * subRankFactor
 	} else {
-		regenRatePerHour = energyRegenRatePerHour(&player)
+		regenRatePerHour = energyRegenRatePerHour(player)
 	}
 
-	// Lão hóa: Giảm 50% tốc độ hồi mana nếu thọ nguyên cạn kiệt
+	// Lão hóa: Giảm 50% tốc độ hồi mana nếu thọ nguyên cạn kiệt.
 	if player.Lifespan <= 0 {
 		regenRatePerHour = regenRatePerHour * 0.5
 	}
 
-	now := time.Now()
 	secondsPassed := now.Sub(player.LastManaUpdate).Seconds()
-
 	if secondsPassed > 0 {
-		// Subjective time speed passed
+		// Subjective time speed passed.
 		subjectiveSeconds := secondsPassed * player.TimeSpeedMultiplier
 		earnedMana := (subjectiveSeconds / 3600.0) * regenRatePerHour
 		newMana := player.CurrentMana + earnedMana
@@ -1080,7 +1067,7 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 			poolChanged = true
 		}
 
-		// Lifespan decay (1 game year = 20 subjective hours = 72000 subjective seconds)
+		// Lifespan decay (1 game year = 20 subjective hours = 72000 subjective seconds).
 		yearsPassed := subjectiveSeconds / 72000.0
 		player.Lifespan -= yearsPassed
 		if player.Lifespan < 0 {
@@ -1089,7 +1076,7 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 		poolChanged = true
 	}
 
-	// Real-time Aperture Stress Decay: 10.0% per hour in real time
+	// Real-time Aperture Stress Decay: 10.0% per hour in real time.
 	if player.ApertureStress > 0 && !player.LastCultivateTime.IsZero() {
 		elapsedHours := now.Sub(player.LastCultivateTime).Hours()
 		if elapsedHours > 0 {
@@ -1100,15 +1087,75 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 			}
 			if newStress != player.ApertureStress {
 				player.ApertureStress = newStress
-				player.LastCultivateTime = now
 				poolChanged = true
+				stressChanged = true
 			}
 		}
 	}
 
-	if poolChanged {
-		player.LastManaUpdate = now
+	return poolChanged, stressChanged
+}
 
+func applyImmortalApertureProjection(q playerQueryRower, player *models.Player) (int, bool) {
+	essenceProd := 10
+	if player.Rank < 6 {
+		return essenceProd, false
+	}
+
+	var timeRate float64
+	if err := q.QueryRow(`SELECT time_rate, essence_production_per_year FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&timeRate, &essenceProd); err == nil && timeRate > 0 {
+		if player.TimeSpeedMultiplier != timeRate {
+			player.TimeSpeedMultiplier = timeRate
+			return essenceProd, true
+		}
+	}
+
+	return essenceProd, false
+}
+
+// projectPlayerStatusTx computes a read-only projected status for UI refreshes.
+// It intentionally uses SELECT without FOR UPDATE and never persists current_mana,
+// lifespan, aperture_stress, last_cultivate_time, or players.last_mana_update.
+func projectPlayerStatusTx(q playerQueryRower, id uuid.UUID) (models.Player, error) {
+	player, err := loadPlayerForStatus(q, id, false)
+	if err != nil {
+		return player, err
+	}
+
+	setDefaultPlayerStatusFields(&player)
+	essenceProd, _ := applyImmortalApertureProjection(q, &player)
+	applyProjectedStatus(&player, essenceProd, time.Now())
+
+	return player, nil
+}
+
+// evaluateManaTx is the authoritative status evaluator for mutation flows.
+// Keep this for actions that need a locked, authoritative status before mutating DB
+// (cultivate, recharge, combat, explore, refine, login/logout, or periodic sync).
+func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
+	player, err := loadPlayerForStatus(tx, id, true)
+	if err != nil {
+		return player, err
+	}
+
+	needsRecipePersist := len(player.UnlockedRecipes) == 0
+	setDefaultPlayerStatusFields(&player)
+	if needsRecipePersist {
+		_, _ = tx.Exec(`UPDATE players SET unlocked_recipes = $1 WHERE id = $2`, player.UnlockedRecipes, player.ID)
+	}
+
+	essenceProd, poolChanged := applyImmortalApertureProjection(tx, &player)
+	now := time.Now()
+	projectedChanged, stressChanged := applyProjectedStatus(&player, essenceProd, now)
+	if projectedChanged {
+		poolChanged = true
+		player.LastManaUpdate = now
+	}
+	if stressChanged {
+		player.LastCultivateTime = now
+	}
+
+	if poolChanged {
 		updateQuery := `
 			UPDATE players
 			SET current_mana = $1, max_mana = $2, last_mana_update = $3, lifespan = $4, max_lifespan = $5, time_speed_multiplier = $6, aperture_stress = $7, last_cultivate_time = $8
