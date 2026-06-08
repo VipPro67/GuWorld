@@ -88,13 +88,13 @@ export default function Home() {
     });
   }, [initializeSession, fetchDictionary, fetchRecipes]);
 
-  // 2. Real-time Status Polling (Every 5 seconds) - Skip polling if actively in combat to avoid lag/race conditions
+  // 2. Sparse authoritative status sync. Mana is rendered from a local snapshot between server actions.
   useEffect(() => {
     if (!player || player.active_combat) return;
 
     const interval = setInterval(() => {
       fetchPlayerStatus(player.id);
-    }, 5000);
+    }, 90000);
 
     return () => clearInterval(interval);
   }, [player, fetchPlayerStatus]);

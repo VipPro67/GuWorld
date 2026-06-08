@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useGameStore } from "@/store/useGameStore";
+import { estimateManaFromSnapshot, useGameStore } from "@/store/useGameStore";
 import {
   User,
   Briefcase,
@@ -50,6 +50,7 @@ const formatRelativeTime = (createdAtStr: string): string => {
 export const LobbyView: React.FC = () => {
   const {
     player,
+    manaSnapshot,
     logs,
     setView,
     baoHoangMessages,
@@ -61,7 +62,24 @@ export const LobbyView: React.FC = () => {
 
   const [activeChannel, setActiveChannel] = useState<"world" | "general" | "sect">("world");
   const [chatInput, setChatInput] = useState("");
+  const [manaNow, setManaNow] = useState(() => Date.now());
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!player || !manaSnapshot || manaSnapshot.current_mana >= manaSnapshot.max_mana) return;
+
+    const interval = setInterval(() => {
+      setManaNow(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [player, manaSnapshot]);
+
+  const displayedMana = player
+    ? estimateManaFromSnapshot(manaSnapshot?.player_id === player.id ? manaSnapshot : null, manaNow) ?? player.current_mana
+    : 0;
+  const displayedMaxMana = player?.max_mana || 0;
+  const displayedManaPercent = displayedMaxMana > 0 ? Math.min(100, (displayedMana / displayedMaxMana) * 100) : 0;
 
   // Management items (Removed "Truyền Tin" as requested)
   const managementItems: HubItem[] = [
@@ -282,13 +300,13 @@ export const LobbyView: React.FC = () => {
             <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
               <span>Chân Nguyên</span>
               <span>
-                {Math.round(player.current_mana)} / {Math.round(player.max_mana)}
+                {Math.round(displayedMana)} / {Math.round(displayedMaxMana)}
               </span>
             </div>
             <div className="w-full bg-zinc-950 rounded-full h-2.5 border border-zinc-900 overflow-hidden">
               <div
                 className="bg-gradient-to-r from-cyan-600 to-blue-500 h-full rounded-full transition-all duration-300"
-                style={{ width: `${Math.min(100, (player.current_mana / player.max_mana) * 100)}%` }}
+                style={{ width: `${displayedManaPercent}%` }}
               />
             </div>
           </div>
