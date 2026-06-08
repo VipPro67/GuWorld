@@ -10,6 +10,8 @@ import { RefiningFurnace } from "@/components/RefiningFurnace";
 import { ExplorationMap } from "@/components/ExplorationMap";
 import { CombatScreen } from "@/components/CombatScreen";
 import { CaravanShop } from "@/components/CaravanShop";
+import { TopupView } from "@/components/TopupView";
+import { PremiumShopView } from "@/components/PremiumShopView";
 import { Sparkles, HelpCircle } from "lucide-react";
 import { BaoHoangMarket } from "@/components/BaoHoangMarket";
 import { ArenaView } from "@/components/ArenaView";
@@ -243,6 +245,14 @@ export default function Home() {
               actionLoading={actionLoading}
               onRefine={refineGu}
             />
+          </div>
+        ) : currentView === "topup" ? (
+          <div className="w-full">
+            <TopupView />
+          </div>
+        ) : currentView === "premium-shop" ? (
+          <div className="w-full">
+            <PremiumShopView />
           </div>
         ) : currentView === "shop" ? (
           <div className="w-full">
