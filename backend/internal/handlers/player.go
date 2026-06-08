@@ -956,6 +956,145 @@ func FeedGu(c *gin.Context) {
 	})
 }
 
+// FeedGroupRequest represents payload for feeding all hungry Gu bugs of the same type
+type FeedGroupRequest struct {
+	GuID string `json:"gu_id" binding:"required"`
+}
+
+// FeedGroup feeds all hungry Gu bugs of the same type (gu_id) using available food
+func FeedGroup(c *gin.Context) {
+	var req FeedGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "gu_id is required"})
+		return
+	}
+
+	// Retrieve auth player ID
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	// 1. Fetch player details with FOR UPDATE lock
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		return
+	}
+
+	// 2. Find static specs in Dictionary
+	specs, found := models.GuRegistry[req.GuID]
+	if !found {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gu definition not found in registry"})
+		return
+	}
+
+	foodOptions := specs.FoodTypes
+	if len(foodOptions) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "This Gu bug does not require any food or has no food defined"})
+		return
+	}
+
+	// Helper to find food from materials inventory
+	getAvailableFood := func() string {
+		for _, food := range foodOptions {
+			if player.MaterialsInventory[food] > 0 {
+				itemSpec, ok := models.ItemRegistry[food]
+				if !ok {
+					continue
+				}
+				isFood := itemSpec.Type == "Food"
+				if !isFood {
+					for _, t := range itemSpec.Tags {
+						if t == "food" {
+							isFood = true
+							break
+						}
+					}
+				}
+				if isFood {
+					return food
+				}
+			}
+		}
+		return ""
+	}
+
+	fedCount := 0
+	foodConsumed := make(map[string]int)
+
+	// 3. Iterate over the player's Gu inventory and feed hungry ones of matching type
+	for i := range player.GuInventory {
+		gu := &player.GuInventory[i]
+		if gu.GuID == req.GuID && gu.Status != "DEAD" && gu.Status != "SEALED" && gu.Hunger < specs.MaxHunger {
+			chosenFood := getAvailableFood()
+			if chosenFood == "" {
+				break // No more food available
+			}
+
+			// Consume 1 food
+			player.MaterialsInventory[chosenFood]--
+			if player.MaterialsInventory[chosenFood] <= 0 {
+				delete(player.MaterialsInventory, chosenFood)
+			}
+			foodConsumed[chosenFood]++
+
+			// Restore hunger
+			gu.Hunger = specs.MaxHunger
+			gu.Status = "ACTIVE" // Wakes up from sleep (hibernation)
+			if gu.IsVital {
+				gu.Equipped = true
+			}
+			fedCount++
+		}
+	}
+
+	if fedCount == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có Cổ trùng nào cần cho ăn hoặc không có đủ thức ăn phù hợp"})
+		return
+	}
+
+	// 4. Update database
+	updateQuery := `
+		UPDATE players
+		SET gu_inventory = $1, materials_inventory = $2
+		WHERE id = $3
+	`
+	_, err = tx.Exec(updateQuery, player.GuInventory, player.MaterialsInventory, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		return
+	}
+
+	// Build success message
+	var foodDetails []string
+	for foodID, qty := range foodConsumed {
+		foodName := foodID
+		if itemSpec, ok := models.ItemRegistry[foodID]; ok {
+			foodName = itemSpec.Name
+		}
+		foodDetails = append(foodDetails, fmt.Sprintf("%dx %s", qty, foodName))
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"player":  player,
+		"message": fmt.Sprintf("Đã cho ăn thành công %d con %s! Tiêu hao: %s.", fedCount, specs.Name, strings.Join(foodDetails, ", ")),
+	})
+}
+
 type playerQueryRower interface {
 	QueryRow(query string, args ...any) *sql.Row
 }
@@ -1067,6 +1206,22 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 			poolChanged = true
 		}
 
+		// HP Regeneration: 5% of BaseHP per hour + healing stat
+		if player.HP > 0 && player.HP < player.BaseHP {
+			stats := CalculatePlayerStats(player)
+			healingStat := stats["healing"]
+			regenHPPerHour := (player.BaseHP * 0.05) + healingStat
+			earnedHP := (subjectiveSeconds / 3600.0) * regenHPPerHour
+			newHP := player.HP + earnedHP
+			if newHP > player.BaseHP {
+				newHP = player.BaseHP
+			}
+			if newHP != player.HP {
+				player.HP = newHP
+				poolChanged = true
+			}
+		}
+
 		// Lifespan decay (1 game year = 20 subjective hours = 72000 subjective seconds).
 		yearsPassed := subjectiveSeconds / 72000.0
 		player.Lifespan -= yearsPassed
@@ -1158,10 +1313,10 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	if poolChanged {
 		updateQuery := `
 			UPDATE players
-			SET current_mana = $1, max_mana = $2, last_mana_update = $3, lifespan = $4, max_lifespan = $5, time_speed_multiplier = $6, aperture_stress = $7, last_cultivate_time = $8
-			WHERE id = $9
+			SET current_mana = $1, max_mana = $2, last_mana_update = $3, lifespan = $4, max_lifespan = $5, time_speed_multiplier = $6, aperture_stress = $7, last_cultivate_time = $8, hp = $9
+			WHERE id = $10
 		`
-		_, err = tx.Exec(updateQuery, player.CurrentMana, player.MaxMana, player.LastManaUpdate, player.Lifespan, player.MaxLifespan, player.TimeSpeedMultiplier, player.ApertureStress, player.LastCultivateTime, player.ID)
+		_, err = tx.Exec(updateQuery, player.CurrentMana, player.MaxMana, player.LastManaUpdate, player.Lifespan, player.MaxLifespan, player.TimeSpeedMultiplier, player.ApertureStress, player.LastCultivateTime, player.HP, player.ID)
 		if err != nil {
 			return player, err
 		}

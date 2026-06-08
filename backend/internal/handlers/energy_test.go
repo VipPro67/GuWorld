@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"math"
 	"testing"
+	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -34,8 +36,8 @@ func TestNormalizeEnergyPoolExpandsImmortalApertureOnly(t *testing.T) {
 	if !normalizeEnergyPool(immortal) {
 		t.Fatal("immortal aperture should normalize to immortal capacity")
 	}
-	if immortal.MaxMana != 120 {
-		t.Fatalf("immortal max mana = %v, want 120", immortal.MaxMana)
+	if immortal.MaxMana != 999999999 {
+		t.Fatalf("immortal max mana = %v, want 999999999", immortal.MaxMana)
 	}
 }
 
@@ -53,5 +55,22 @@ func TestCalculateEnergyCostSeparatesMortalAndImmortalGu(t *testing.T) {
 	}
 	if got, want := calculateEnergyCost(immortal, immortalGu), 1.0; got != want {
 		t.Fatalf("immortal gu cost = %v, want %v", got, want)
+	}
+}
+
+func TestHPRegeneration(t *testing.T) {
+	player := &models.Player{
+		Rank:                3,
+		SubRank:             1,
+		HP:                  50.0,
+		BaseHP:              100.0,
+		LastManaUpdate:      time.Now().Add(-2 * time.Hour), // 2 hours ago
+		TimeSpeedMultiplier: 1.0,
+	}
+
+	applyProjectedStatus(player, 10, time.Now())
+
+	if math.Abs(player.HP-60.0) > 0.01 {
+		t.Fatalf("HP after 2 hours = %v, want 60.0", player.HP)
 	}
 }

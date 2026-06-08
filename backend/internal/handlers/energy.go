@@ -62,13 +62,9 @@ func normalizeEnergyPool(player *models.Player) bool {
 	}
 
 	changed := false
-	capacity := immortalApertureCapacity(player.Rank, player.SubRank)
-	if player.MaxMana < capacity {
-		player.MaxMana = capacity
-		changed = true
-	}
-	if player.CurrentMana > player.MaxMana {
-		player.CurrentMana = player.MaxMana
+	unlimitedMaxMana := 999999999.0
+	if player.MaxMana != unlimitedMaxMana {
+		player.MaxMana = unlimitedMaxMana
 		changed = true
 	}
 	return changed

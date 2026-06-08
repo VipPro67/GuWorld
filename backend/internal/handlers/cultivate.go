@@ -136,7 +136,7 @@ func BreakWall(c *gin.Context) {
 			player.WallProgress = 0.0
 			// If rank < 6 => mana not change, if rank 6+ then max mana is infinite so we don't need to adjust it
 			if player.Rank >= 6 {
-				player.MaxMana = math.Inf(1)
+				player.MaxMana = 999999999.0
 			}
 			// Increase human_qi by 30 for breakthrough
 			player.HumanQi += 30.0

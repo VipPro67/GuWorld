@@ -126,6 +126,7 @@ func SetupRouter() *gin.Engine {
 		inventory.Use(middleware.AuthRequired())
 		{
 			inventory.POST("/feed", handlers.FeedGu)
+			inventory.POST("/feed-group", handlers.FeedGroup)
 			inventory.POST("/equip", handlers.EquipGu)
 			inventory.POST("/status", handlers.UpdateGuStatus)
 			inventory.POST("/set-vital", handlers.SetVitalGu)

@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { estimateManaFromSnapshot, GuInstance, GuSpec, Player, useGameStore } from "@/store/useGameStore";
+import { estimateManaFromSnapshot, estimateHPFromSnapshot, GuInstance, GuSpec, Player, useGameStore } from "@/store/useGameStore";
 import {
   Sparkles,
   ShieldAlert,
@@ -114,7 +114,12 @@ export const Aperture: React.FC<ApertureProps> = ({
   const [manaNow, setManaNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (!manaSnapshot || manaSnapshot.player_id !== player.id || manaSnapshot.current_mana >= manaSnapshot.max_mana) return;
+    if (!player || !manaSnapshot) return;
+
+    const isManaFull = player.rank >= 6 ? false : (manaSnapshot.current_mana >= manaSnapshot.max_mana);
+    const isHPFull = manaSnapshot.hp >= manaSnapshot.base_hp;
+
+    if (isManaFull && isHPFull) return;
 
     const interval = setInterval(() => {
       setManaNow(Date.now());
@@ -144,7 +149,9 @@ export const Aperture: React.FC<ApertureProps> = ({
   const manaQuality = MANA_QUALITY[rank] ?? energyType;
   const c = RANK_COLORS[rank] ?? RANK_COLORS[1];
 
-  const currentHP = player?.hp ?? 0;
+  const currentHP = player
+    ? (estimateHPFromSnapshot(manaSnapshot?.player_id === player.id ? manaSnapshot : null, manaNow) ?? player.hp)
+    : 0;
   const maxHP = player?.base_hp ?? 0;
   const hpPercent = maxHP > 0 ? Math.min(100, Math.max(0, (currentHP / maxHP) * 100)) : 0;
 
@@ -1607,7 +1614,7 @@ function BlessedLandControls() {
         <div className="bg-zinc-950/50 border border-zinc-900 rounded-xl p-3">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] text-zinc-450 font-bold uppercase tracking-wider flex items-center gap-1.5">
-              <Coins className="w-3.5 h-3.5 text-cyan-400" />
+            <Sparkles className="w-4 h-4 text-violet-400" />
               Nạp Tiên Nguyên Thạch (Recharge)
             </span>
             <span className="text-[10px] text-cyan-400 font-mono font-bold">

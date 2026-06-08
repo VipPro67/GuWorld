@@ -107,7 +107,8 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
           <span>{player.primeval_stones} Nguyên Thạch</span>
         </div>
         <div className="flex items-center gap-1.5 text-xs text-cyan-300 font-mono font-bold bg-zinc-950/40 border border-cyan-500/20 px-3 py-1.5 rounded-xl">
-          <span>{(player.immortal_stones || 0).toFixed(2)} Tiên Nguyên Thạch</span>
+          <Sparkles className="w-4 h-4 text-violet-400" />
+          <span>{(player.immortal_stones || 0).toLocaleString()} Tiên Nguyên Thạch</span>
         </div>
       </div>
 

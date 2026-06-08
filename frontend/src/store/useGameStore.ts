@@ -121,6 +121,9 @@ export interface ManaSnapshot {
   lifespan?: number;
   essence_production_per_year?: number;
   captured_at: number;
+  hp: number;
+  base_hp: number;
+  healing_stat: number;
 }
 
 const getManaRegenRatePerHour = (snapshot: ManaSnapshot): number => {
@@ -147,10 +150,14 @@ const getManaRegenRatePerHour = (snapshot: ManaSnapshot): number => {
 
 export const estimateManaFromSnapshot = (snapshot: ManaSnapshot | null, nowMs = Date.now()): number | null => {
   if (!snapshot) return null;
-  if (snapshot.max_mana <= 0) return Math.max(0, snapshot.current_mana);
+  const isImmortal = snapshot.rank >= 6;
+  if (snapshot.max_mana <= 0 && !isImmortal) return Math.max(0, snapshot.current_mana);
 
   const lastUpdateMs = new Date(snapshot.last_mana_update).getTime();
   if (!Number.isFinite(lastUpdateMs)) {
+    if (isImmortal) {
+      return Math.max(0, snapshot.current_mana);
+    }
     return Math.min(snapshot.max_mana, Math.max(0, snapshot.current_mana));
   }
 
@@ -160,10 +167,48 @@ export const estimateManaFromSnapshot = (snapshot: ManaSnapshot | null, nowMs = 
   const lifespanModifier = snapshot.lifespan !== undefined && snapshot.lifespan <= 0 ? 0.5 : 1;
   const regeneratedMana = ((elapsedSeconds * multiplier) / 3600) * regenRatePerHour * lifespanModifier;
 
-  return Math.min(snapshot.max_mana, Math.max(0, snapshot.current_mana + regeneratedMana));
+  const newMana = snapshot.current_mana + regeneratedMana;
+  if (isImmortal) {
+    return Math.max(0, newMana);
+  }
+  return Math.min(snapshot.max_mana, Math.max(0, newMana));
 };
 
-const createManaSnapshotFromPlayer = (player: Player): ManaSnapshot => ({
+export const estimateHPFromSnapshot = (snapshot: ManaSnapshot | null, nowMs = Date.now()): number | null => {
+  if (!snapshot) return null;
+  if (snapshot.hp <= 0) return 0;
+  if (snapshot.hp >= snapshot.base_hp) return snapshot.base_hp;
+
+  const lastUpdateMs = new Date(snapshot.last_mana_update).getTime();
+  if (!Number.isFinite(lastUpdateMs)) {
+    return Math.min(snapshot.base_hp, Math.max(0, snapshot.hp));
+  }
+
+  const elapsedSeconds = Math.max(0, (nowMs - lastUpdateMs) / 1000);
+  const multiplier = snapshot.time_speed_multiplier > 0 ? snapshot.time_speed_multiplier : 1;
+  const regenHPPerHour = (snapshot.base_hp * 0.05) + (snapshot.healing_stat || 0);
+  const regeneratedHP = ((elapsedSeconds * multiplier) / 3600) * regenHPPerHour;
+
+  return Math.min(snapshot.base_hp, Math.max(0, snapshot.hp + regeneratedHP));
+};
+
+const calculateHealingStat = (player: Player, guDictionary: Record<string, GuSpec>): number => {
+  let healing = 0;
+  if (!player.gu_inventory) return healing;
+
+  player.gu_inventory.forEach((gu) => {
+    if (gu.equipped && gu.status === "ACTIVE") {
+      const spec = guDictionary[gu.gu_id];
+      if (spec && spec.effects) {
+        if (spec.effects.refine_mana_tier) healing += spec.effects.refine_mana_tier * 10;
+        if (spec.effects.cleansing_power) healing += spec.effects.cleansing_power * 15;
+      }
+    }
+  });
+  return healing;
+};
+
+const createManaSnapshotFromPlayer = (player: Player, guDictionary: Record<string, GuSpec>): ManaSnapshot => ({
   player_id: player.id,
   current_mana: player.current_mana,
   max_mana: player.max_mana,
@@ -174,6 +219,9 @@ const createManaSnapshotFromPlayer = (player: Player): ManaSnapshot => ({
   aptitude_type: player.aptitude_type,
   lifespan: player.lifespan,
   captured_at: Date.now(),
+  hp: player.hp,
+  base_hp: player.base_hp,
+  healing_stat: calculateHealingStat(player, guDictionary),
 });
 
 export interface ImmortalAperture {
@@ -518,6 +566,7 @@ interface GameState {
   initializeSession: () => Promise<void>;
   explore: () => Promise<void>;
   feedGu: (guInstanceId: string) => Promise<void>;
+  feedGuGroup: (guId: string) => Promise<void>;
   fetchDictionary: () => Promise<void>;
   fetchRecipes: () => Promise<void>;
   refineGu: (recipeId: string, selectedInstanceIds: string[]) => Promise<{ status: "success" | "failed"; message: string; new_gu?: GuInstance } | null>;
@@ -554,7 +603,7 @@ interface GameState {
   sellShopItem: (itemId: string, quantity: number, itemType: "Gu" | "Material") => Promise<boolean>;
   marketplaceListings: any[];
   fetchMarketplaceListings: () => Promise<void>;
-  createMarketplaceListing: (payload: { itemType: "Gu" | "Material" | "Recipe"; guInstanceId?: string; itemId?: string; quantity: number; price: number; durationHours: number; currency: "primeval" | "immortal"; listingType: "MARKET" | "AUCTION" | "TRADE"; targetBuyerUsername?: string }) => Promise<boolean>;
+  createMarketplaceListing: (payload: { itemType: "Gu" | "Material" | "Recipe"; guInstanceId?: string; guInstanceIds?: string[]; itemId?: string; quantity: number; price: number; durationHours: number; currency: "primeval" | "immortal"; listingType: "MARKET" | "AUCTION" | "TRADE"; targetBuyerUsername?: string }) => Promise<boolean>;
   placeMarketplaceBid: (listingId: string, amount: number) => Promise<boolean>;
   cancelMarketplaceListing: (listingId: string) => Promise<boolean>;
   buyMarketplaceListing: (listingId: string, quantity?: number) => Promise<boolean>;
@@ -739,7 +788,7 @@ export const useGameStore = create<GameState>((set, get) => {
     set({
       ...extraState,
       player: normalizedPlayer,
-      manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer) : null,
+      manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer, get().guDictionary) : null,
     });
   };
 
@@ -912,7 +961,7 @@ export const useGameStore = create<GameState>((set, get) => {
   updateManaSnapshot: (player) => {
     const normalizedPlayer = normalizePlayer(player);
     set({
-      manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer) : null,
+      manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer, get().guDictionary) : null,
     });
   },
   setPlayerFromServer: (player) => setPlayerFromServer(player),
@@ -1248,6 +1297,43 @@ export const useGameStore = create<GameState>((set, get) => {
     } catch (err: any) {
       set({ error: err.message });
       get().addLog(`Cho Cổ ăn thất bại: ${err.message}`);
+      get().addToast(err.message, "error");
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  feedGuGroup: async (guId) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/feed-group`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ gu_id: guId }),
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Không thể cho ăn hàng loạt.");
+      }
+
+      const data: FeedResponse = await response.json();
+      setPlayerFromServer(data.player);
+      get().addLog(data.message);
+      get().addToast(data.message, "success");
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Cho ăn hàng loạt thất bại: ${err.message}`);
       get().addToast(err.message, "error");
     } finally {
       set({ actionLoading: false });
@@ -1695,6 +1781,7 @@ export const useGameStore = create<GameState>((set, get) => {
         body: JSON.stringify({
           item_type: payload.itemType,
           gu_instance_id: payload.guInstanceId || "",
+          gu_instance_ids: payload.guInstanceIds || [],
           item_id: payload.itemId || "",
           quantity: payload.quantity,
           price: payload.price,

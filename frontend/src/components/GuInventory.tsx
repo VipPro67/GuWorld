@@ -2,11 +2,12 @@
 
 import React, { useState } from "react";
 import { Player, GuSpec, ItemSpec, GuInstance } from "@/store/useGameStore";
-import { Flower2, Wine, Gem, ShieldAlert, Sparkles, HelpCircle, Search, Shield, Zap } from "lucide-react";
+import { Flower2, Wine, Gem, ShieldAlert, Sparkles, HelpCircle, Search, Shield, Zap, ChevronDown, ChevronUp, Lock, Unlock } from "lucide-react";
 
 interface GuInventoryProps {
   player: Player;
   onFeed: (guInstanceId: string) => Promise<void>;
+  onFeedGroup?: (guId: string) => Promise<void>;
   actionLoading: boolean;
   guDictionary: Record<string, GuSpec>;
   itemDictionary: Record<string, ItemSpec>;
@@ -55,6 +56,7 @@ const FormatKey = (key: string): string => {
 export const GuInventory: React.FC<GuInventoryProps> = ({
   player,
   onFeed,
+  onFeedGroup,
   actionLoading,
   guDictionary,
   itemDictionary,
@@ -66,6 +68,8 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   onDropGu,
 }) => {
   const [feedingId, setFeedingId] = useState<string | null>(null);
+  const [feedingGroupGuId, setFeedingGroupGuId] = useState<string | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [equippingId, setEquippingId] = useState<string | null>(null);
   const [usingId, setUsingId] = useState<string | null>(null);
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
@@ -74,6 +78,20 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const [droppingId, setDroppingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTab, setSelectedTab] = useState<"gu" | "material">("gu");
+
+  const toggleGroupExpand = (guId: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [guId]: !prev[guId] }));
+  };
+
+  const handleFeedGroupClick = async (guId: string) => {
+    if (!onFeedGroup) return;
+    setFeedingGroupGuId(guId);
+    try {
+      await onFeedGroup(guId);
+    } finally {
+      setFeedingGroupGuId(null);
+    }
+  };
 
   const handleStatusUpdate = async (instanceId: string, status: string) => {
     if (!onUpdateStatus) return;
@@ -282,43 +300,20 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
             </div>
           ) : (
             (() => {
-              // 1. Phân loại Bản Mệnh Cổ và Cổ trùng thường
-              const vitalGus = filteredGus.filter(gu => gu.is_vital);
-              const normalGus = filteredGus.filter(gu => !gu.is_vital);
-
-              // Định nghĩa trọng số cho trạng thái để dễ sắp xếp (ACTIVE ưu tiên cao nhất, DEAD thấp nhất)
-              const statusPriority = {
-                'ACTIVE': 1,
-                'SLEEPING': 2,
-                'SEALED': 3,
-                'DYING': 4,
-                'DEAD': 5
-              };
-
-              // 2. Sắp xếp danh sách Cổ trùng thường
-              normalGus.sort((a, b) => {
-                const specA = guDictionary[a.gu_id] || {};
-                const specB = guDictionary[b.gu_id] || {};
-
-                // Ưu tiên 1 Equip
-                const equipA = a.equipped ? 1 : 0;
-                const equipB = b.equipped ? 1 : 0;
-                if (equipA !== equipB) return equipB - equipA;
-
-                // Ưu tiên 2: Trạng thái (ACTIVE > SLEEPING > SEALED...)
-                const pA = statusPriority[a.status as keyof typeof statusPriority];
-                const pB = statusPriority[b.status as keyof typeof statusPriority];
-                if (pA !== pB) return pA - pB;
-
-                // Ưu tiên 3: Độ no (Giảm dần từ No nhiều đến Đói)
-                return b.hunger - a.hunger;
+              // Group the filtered Gu instances by gu_id
+              const groupsMap: Record<string, GuInstance[]> = {};
+              filteredGus.forEach((gu) => {
+                if (!groupsMap[gu.gu_id]) {
+                  groupsMap[gu.gu_id] = [];
+                }
+                groupsMap[gu.gu_id].push(gu);
               });
 
-              // Hàm helper render từng card Cổ Trùng để tránh lặp lại code
-              const renderGuCard = (gu: GuInstance) => {
-                const spec = guDictionary[gu.gu_id] || {
-                  id: gu.gu_id,
-                  name: gu.gu_id,
+              // Construct list of groups with stats
+              const guGroups = Object.entries(groupsMap).map(([guId, instances]) => {
+                const spec = guDictionary[guId] || {
+                  id: guId,
+                  name: guId,
                   rank: 1,
                   path: "Unknown Path",
                   gu_type: "Phàm Cổ",
@@ -331,349 +326,366 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                   description: "Cổ trùng chưa được giải nghĩa.",
                 };
 
-                const hunger = gu.hunger;
-                const status = gu.status;
-                const isDead = status === "DEAD";
-                const isSleeping = status === "SLEEPING";
-                const isSealed = status === "SEALED";
-                const isEquipped = gu.equipped;
+                // Sort instances: Vital first, then Equipped first, then ACTIVE > SLEEPING > SEALED > Hunger (descending)
+                const statusPriority = {
+                  'ACTIVE': 1,
+                  'SLEEPING': 2,
+                  'SEALED': 3,
+                  'DYING': 4,
+                  'DEAD': 5
+                };
 
-                const preferredFoodId = spec.food_types[0] || "unknown";
-                const preferredFoodName = itemDictionary[preferredFoodId]?.name || preferredFoodId;
+                instances.sort((a, b) => {
+                  if (a.is_vital !== b.is_vital) return a.is_vital ? -1 : 1;
+                  if (a.equipped !== b.equipped) return a.equipped ? -1 : 1;
+                  const pA = statusPriority[a.status as keyof typeof statusPriority] || 9;
+                  const pB = statusPriority[b.status as keyof typeof statusPriority] || 9;
+                  if (pA !== pB) return pA - pB;
+                  return b.hunger - a.hunger;
+                });
 
-                const availableFoodId = spec.food_types.find(
-                    foodId => (materials[foodId] || 0) > 0
-                );
+                const hasVital = instances.some(inst => inst.is_vital);
+                const activeCount = instances.filter(inst => inst.status === "ACTIVE").length;
+                const sleepingCount = instances.filter(inst => inst.status === "SLEEPING").length;
+                const sealedCount = instances.filter(inst => inst.status === "SEALED").length;
+                const dyingCount = instances.filter(inst => inst.status === "DYING").length;
+                const deadCount = instances.filter(inst => inst.status === "DEAD").length;
+                const equippedCount = instances.filter(inst => inst.equipped).length;
 
-                const foodName = availableFoodId
-                    ? itemDictionary[availableFoodId]?.name || availableFoodId
-                    : preferredFoodName;
+                return {
+                  guId,
+                  spec,
+                  instances,
+                  hasVital,
+                  activeCount,
+                  sleepingCount,
+                  sealedCount,
+                  dyingCount,
+                  deadCount,
+                  equippedCount,
+                };
+              });
 
-                const availableFood = availableFoodId
-                    ? materials[availableFoodId]
-                    : 0;
-                const canFeed = availableFood > 0 && !isDead && !isSealed;
-                const isCurrentlyFeeding = feedingId === gu.instance_id;
-                const isCurrentlyEquipping = equippingId === gu.instance_id;
+              // Sort groups: hasVital first, then equipped first, then Rank descending, then Name ascending
+              guGroups.sort((a, b) => {
+                if (a.hasVital !== b.hasVital) return a.hasVital ? -1 : 1;
+                const aEquipped = a.equippedCount > 0;
+                const bEquipped = b.equippedCount > 0;
+                if (aEquipped !== bEquipped) return aEquipped ? -1 : 1;
+                if (b.spec.rank !== a.spec.rank) return b.spec.rank - a.spec.rank;
+                return a.spec.name.localeCompare(b.spec.name);
+              });
 
-                let barColor = "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]";
-                if (hunger <= 20) {
-                  barColor = "bg-rose-500 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.5)]";
-                } else if (hunger <= 50) {
-                  barColor = "bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.3)]";
-                }
+              return (
+                <div className="space-y-4">
+                  {guGroups.map(({
+                    guId,
+                    spec,
+                    instances,
+                    hasVital,
+                    activeCount,
+                    sleepingCount,
+                    sealedCount,
+                    dyingCount,
+                    deadCount,
+                    equippedCount,
+                  }) => {
+                    const isExpanded = !!expandedGroups[guId];
+                    const totalCount = instances.length;
+                    
+                    // Food info
+                    const preferredFoodId = spec.food_types[0] || "unknown";
+                    const preferredFoodName = itemDictionary[preferredFoodId]?.name || preferredFoodId;
+                    
+                    const availableFoodId = spec.food_types.find(
+                      foodId => (materials[foodId] || 0) > 0
+                    );
+                    const foodName = availableFoodId
+                      ? itemDictionary[availableFoodId]?.name || availableFoodId
+                      : preferredFoodName;
+                    const availableFood = availableFoodId
+                      ? materials[availableFoodId]
+                      : 0;
 
-                const isDying = status === "DYING";
+                    // Group feed status: are there hungry alive bugs that aren't sealed?
+                    const hungryBugsCount = instances.filter(
+                      inst => inst.status !== "DEAD" && inst.status !== "SEALED" && inst.hunger < spec.max_hunger
+                    ).length;
+                    const canFeedGroup = availableFood > 0 && hungryBugsCount > 0 && onFeedGroup;
+                    const isCurrentlyFeedingGroup = feedingGroupGuId === guId;
 
-                let cardStyle = "bg-zinc-950/60 border-zinc-900 hover:border-zinc-800";
-                if (isDead) {
-                  cardStyle = "bg-zinc-950/30 border-zinc-950 opacity-40 select-none";
-                } else if (isDying) {
-                  cardStyle = "border-rose-600 bg-rose-950/10 shadow-[inset_0_0_15px_rgba(220,38,38,0.1)] animate-pulse";
-                } else if (gu.is_vital) {
-                  cardStyle = "border-amber-400/80 bg-amber-950/5 shadow-[0_0_15px_rgba(245,158,11,0.15)]";
-                } else if (hunger <= 20) {
-                  cardStyle = "border-rose-500/80 bg-rose-950/5 shadow-[0_0_15px_rgba(239,68,68,0.2)] animate-pulse";
-                } else if (isSleeping) {
-                  cardStyle = "bg-zinc-950/70 border-amber-600/30 shadow-[inset_0_0_15px_rgba(245,158,11,0.05)]";
-                } else if (isSealed) {
-                  cardStyle = "bg-zinc-950/70 border-cyan-600/30 shadow-[inset_0_0_15px_rgba(34,211,238,0.05)]";
-                } else if (isEquipped) {
-                  cardStyle = "bg-emerald-950/5 border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.05)]";
-                }
+                    // Build dynamic styling based on group attributes
+                    let cardStyle = "bg-zinc-950/60 border-zinc-900 hover:border-zinc-800";
+                    if (hasVital) {
+                      cardStyle = "border-amber-400/60 bg-amber-950/5 shadow-[0_0_15px_rgba(245,158,11,0.1)] hover:border-amber-500/80";
+                    }
 
-                return (
-                  <div
-                    key={gu.instance_id}
-                    className={`relative p-4 rounded-2xl border transition-all flex flex-col justify-between min-h-[14rem] h-auto ${cardStyle}`}
-                  >
-                    {/* Top: Name and Type */}
-                    <div>
-                      <div className="flex justify-between items-start gap-1">
-                        <div className="flex flex-col gap-0.5">
-                          <h4 className="text-xs font-bold text-zinc-100 font-serif flex items-center gap-1.5 flex-wrap">
-                            {spec.name}
-                            {gu.is_vital && (
-                              <span className="text-[7px] font-bold text-amber-300 bg-amber-950/60 border border-amber-500/60 px-1 py-0.2 rounded uppercase tracking-wider shadow-[0_0_5px_rgba(245,158,11,0.4)] animate-pulse">
+                    // Tóm tắt trạng thái
+                    const statusTextParts: string[] = [];
+                    if (equippedCount > 0) statusTextParts.push(`${equippedCount} Xuất Trận`);
+                    const idleCount = totalCount - equippedCount - sleepingCount - sealedCount - deadCount - dyingCount;
+                    if (idleCount > 0) statusTextParts.push(`${idleCount} Chờ Lệnh`);
+                    if (sleepingCount > 0) statusTextParts.push(`${sleepingCount} Ngủ Đông`);
+                    if (sealedCount > 0) statusTextParts.push(`${sealedCount} Phong Ấn`);
+                    if (dyingCount > 0) statusTextParts.push(`${dyingCount} Hấp Hối`);
+                    if (deadCount > 0) statusTextParts.push(`${deadCount} Đã Chết`);
+                    const statusSummary = statusTextParts.join(", ");
+
+                    return (
+                      <div
+                        key={guId}
+                        className={`p-4 sm:p-5 rounded-2xl border transition-all ${cardStyle}`}
+                      >
+                        {/* Summary Header */}
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <h4 className="text-sm font-bold text-zinc-100 font-serif flex items-center gap-2">
+                              {spec.name}
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-405">
+                                x{totalCount}
+                              </span>
+                            </h4>
+                            {hasVital && (
+                              <span className="text-[7px] font-bold text-amber-300 bg-amber-950/60 border border-amber-500/60 px-1 py-0.2 rounded uppercase tracking-wider animate-pulse shadow-[0_0_5px_rgba(245,158,11,0.3)]">
                                 ⚡ Bản Mệnh
                               </span>
                             )}
-                          </h4>
-                          <div className="text-[8px] text-zinc-500 font-mono mt-0.5">{gu.gu_id}</div>
-                        </div>
-                        <span className="text-[8px] font-mono font-bold text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded uppercase shrink-0">
-                          Rank {spec.rank}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        <span className="text-[9px] text-zinc-500 font-mono">
-                          {spec.gu_type}
-                        </span>
-                        <span className={`text-[8px] font-mono px-1 rounded border leading-normal ${getPathColor(spec.path)}`}>
-                          {spec.path}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-zinc-400 mt-2 line-clamp-2 leading-relaxed">
-                        {spec.description}
-                      </p>
-
-                      {/* Effects and Mana Cost */}
-                      <div className="mt-2.5 pt-2 border-t border-zinc-900/40 text-[10px] space-y-1">
-                        {spec.base_mana_cost > 0 && (
-                          <div className="text-indigo-400 font-mono font-medium">
-                            Chân Nguyên: {spec.base_mana_cost}%
-                          </div>
-                        )}
-                        {spec.effects && Object.entries(spec.effects).map(([key, val]) => (
-                          <div key={key} className="text-zinc-300 font-mono flex justify-between">
-                            <span className="text-zinc-500">{FormatKey(key)}:</span>
-                            <span className="text-emerald-450 font-bold">+{val}</span>
-                          </div>
-                        ))}
-                        {spec.gu_type === "Passive" && (
-                          <div className="pt-1.5 mt-1.5 border-t border-dashed border-zinc-900/40 space-y-1">
-                            <div className="flex justify-between text-[9px] font-mono">
-                              <span className="text-zinc-505">Dung hợp Đạo Ngân:</span>
-                              <span className="text-amber-400 font-bold">
-                                {Math.round((gu.integration_time || 0) * 20)}%
-                              </span>
-                            </div>
-                            <div className="w-full bg-zinc-900 rounded-full h-1 overflow-hidden">
-                              <div
-                                className="bg-amber-500 h-full rounded-full transition-all duration-500 shadow-[0_0_4px_rgba(245,158,11,0.5)]"
-                                style={{ width: `${Math.min(100, (gu.integration_time || 0) * 20)}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Bottom: Hunger bar and Actions */}
-                    <div className="mt-4 space-y-2">
-                      {/* Hunger bar */}
-                      {!isDead && spec.gu_type !== "Consumable" && (
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[9px] font-mono">
-                            <span className="text-zinc-500">Độ no:</span>
-                            <span
-                              className={
-                                hunger <= 20
-                                  ? "text-rose-450 font-bold"
-                                  : hunger <= 50
-                                    ? "text-yellow-450"
-                                    : "text-emerald-450"
-                              }
-                            >
-                              {hunger}/{spec.max_hunger}
+                            <span className="text-[8px] font-mono font-bold text-amber-450 border border-amber-500/20 px-1 py-0.5 rounded uppercase">
+                              Rank {spec.rank}
+                            </span>
+                            <span className={`text-[8px] font-mono px-1 rounded border leading-normal ${getPathColor(spec.path)}`}>
+                              {spec.path}
                             </span>
                           </div>
-                          <div className="w-full bg-zinc-900 rounded-full h-1.5 overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                              style={{ width: `${(hunger / spec.max_hunger) * 100}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
 
-                      {/* Status Badge & Button */}
-                      <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-zinc-900">
-                        {/* Status display */}
-                        {isDead ? (
-                          <div className="flex items-center gap-1 text-[9px] text-rose-500 font-bold uppercase tracking-wider">
-                            <ShieldAlert className="w-3 h-3" />
-                            Đã Chết
-                          </div>
-                        ) : isDying ? (
-                          <span className="inline-block text-[8px] font-bold text-rose-500 uppercase bg-rose-950/20 border border-rose-500/20 px-1.5 py-0.5 rounded animate-pulse">
-                            Hấp Hối
-                          </span>
-                        ) : isEquipped ? (
-                          <span className="inline-block text-[8px] font-bold text-emerald-400 uppercase bg-emerald-950/20 border border-emerald-500/20 px-1.5 py-0.5 rounded">
-                            Xuất Trận
-                          </span>
-                        ) : isSleeping ? (
-                          <span className="inline-block text-[8px] font-bold text-amber-500 uppercase bg-amber-950/20 border border-amber-500/20 px-1.5 py-0.5 rounded animate-pulse">
-                            Ngủ Đông
-                          </span>
-                        ) : isSealed ? (
-                          <span className="inline-block text-[8px] font-bold text-cyan-400 uppercase bg-cyan-950/20 border border-cyan-500/20 px-1.5 py-0.5 rounded">
-                            Phong Ấn
-                          </span>
-                        ) : spec.gu_type === "Consumable" ? (
-                          <span className="inline-block text-[8px] font-bold text-rose-450 uppercase bg-rose-950/20 border border-rose-500/20 px-1.5 py-0.5 rounded animate-pulse">
-                            Tiêu Hao
-                          </span>
-                        ) : (
-                          <span className="inline-block text-[8px] font-bold text-zinc-500 uppercase bg-zinc-950/40 border border-zinc-900 px-1.5 py-0.5 rounded">
-                            Chờ Lệnh
-                          </span>
-                        )}
-
-                        {/* Equip & Feed Actions */}
-                        {!isDead && (
-                          <div className="flex gap-1.5">
-                            {spec.gu_type === "Consumable" ? (
+                          {/* Group actions */}
+                          <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
+                            {spec.gu_type !== "Consumable" && onFeedGroup && (
                               <button
                                 type="button"
-                                disabled={actionLoading || usingGuId === gu.instance_id}
-                                onClick={() => handleUseGu(gu.instance_id)}
-                                className="text-[9px] font-bold py-1 px-2.5 bg-rose-900/20 text-rose-400 border border-rose-900/40 hover:bg-rose-950/50 hover:border-rose-750 rounded font-mono transition-all cursor-pointer active:scale-[0.98]"
+                                disabled={actionLoading || !canFeedGroup || isCurrentlyFeedingGroup}
+                                onClick={() => handleFeedGroupClick(guId)}
+                                title={hungryBugsCount === 0 ? "Không có con nào đói" : `Cho ăn tất cả con đang đói. Cần: ${foodName} (Sở hữu: ${availableFood})`}
+                                className={`text-[9px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1 transition-all cursor-pointer font-mono ${
+                                  canFeedGroup
+                                    ? "bg-emerald-600 text-white hover:bg-emerald-500 active:scale-[0.96] shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                                    : "bg-zinc-900 text-zinc-650 border border-zinc-850 cursor-not-allowed"
+                                }`}
                               >
-                                {usingGuId === gu.instance_id ? "..." : "🔥 Sử Dụng"}
+                                {isCurrentlyFeedingGroup ? "..." : `Cho Ăn Nhóm (${hungryBugsCount} con)`}
                               </button>
-                            ) : (
-                              <>
-                                {onEquipToggle && status === "ACTIVE" && !gu.is_vital && (
-                                  <button
-                                    type="button"
-                                    disabled={actionLoading || isCurrentlyEquipping}
-                                    onClick={() => handleEquipClick(gu.instance_id, !isEquipped)}
-                                    className={`text-[9px] font-bold py-1 px-2.5 rounded-lg transition-all cursor-pointer font-mono ${isEquipped
-                                        ? "bg-amber-950/30 text-amber-400 border border-amber-900/40 hover:bg-amber-950/50"
-                                        : "bg-indigo-950/30 text-indigo-400 border border-indigo-900/40 hover:bg-indigo-950/50"
-                                      }`}
-                                  >
-                                    {isCurrentlyEquipping ? "..." : isEquipped ? "Tháo" : "Trang Bị"}
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  disabled={actionLoading || !canFeed || isCurrentlyFeeding}
-                                  onClick={() => handleFeedClick(gu.instance_id)}
-                                  title={status === "SEALED" ? "Cổ trùng đang bị phong ấn, không thể cho ăn" : `Yêu cầu thức ăn: 1x ${foodName} (Sở hữu: ${availableFood})`}
-                                  className={`text-[9px] font-bold py-1 px-2.5 rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer font-mono ${canFeed
-                                      ? "bg-emerald-600 text-white hover:bg-emerald-500 active:scale-[0.96]"
-                                      : "bg-zinc-900 text-zinc-600 border border-zinc-850 cursor-not-allowed"
-                                    }`}
-                                >
-                                  {isCurrentlyFeeding ? "..." : "Cho Ăn"}
-                                </button>
-                                {onDropGu && !gu.is_vital && (
-                                  <button
-                                    type="button"
-                                    disabled={actionLoading || droppingId === gu.instance_id}
-                                    onClick={async () => {
-                                      if (!confirm(`Vứt bỏ ${spec.name}?`)) return;
-                                      setDroppingId(gu.instance_id);
-                                      try { await onDropGu(gu.instance_id); } finally { setDroppingId(null); }
-                                    }}
-                                    className="text-[9px] font-bold py-1 px-2.5 rounded-lg transition-all cursor-pointer font-mono bg-rose-950/30 text-rose-400 border border-rose-900/40 hover:bg-rose-950/50"
-                                  >
-                                    {droppingId === gu.instance_id ? "..." : "Thả"}
-                                  </button>
-                                )}
-                              </>
                             )}
+
+                            <button
+                              type="button"
+                              onClick={() => toggleGroupExpand(guId)}
+                              className="text-[9px] py-1.5 px-3 bg-zinc-900 hover:bg-zinc-850 text-zinc-350 hover:text-zinc-150 border border-zinc-800 rounded-xl font-mono transition-all flex items-center gap-1 cursor-pointer"
+                            >
+                              <span>{isExpanded ? "Thu gọn" : "Chi tiết"}</span>
+                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Expanded detail list */}
+                        {isExpanded && (
+                          <div className="mt-4 pt-3 border-t border-zinc-900/80 animate-fade-in space-y-2">
+                            {instances.map((gu) => {
+                              const status = gu.status || "ACTIVE";
+                              const isDead = status === "DEAD";
+                              const hungerPercent = Math.min(100, Math.max(0, (gu.hunger / spec.max_hunger) * 100));
+                              const isHungry = gu.hunger < spec.max_hunger;
+                              const canFeedIndividual = availableFood > 0 && isHungry && !isDead && status !== "SEALED";
+
+                              return (
+                                <div
+                                  key={gu.instance_id}
+                                  className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 bg-zinc-950/40 rounded-xl border border-zinc-900/60"
+                                >
+                                  {/* Info */}
+                                  <div className="flex items-center gap-3 flex-wrap">
+                                    <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-850">
+                                      #{gu.instance_id.slice(0, 6)}
+                                    </span>
+                                    {gu.is_vital && (
+                                      <span className="text-[8px] font-bold text-amber-400 font-mono">👑 Bản Mệnh</span>
+                                    )}
+                                    {gu.equipped && (
+                                      <span className="text-[8px] font-bold text-emerald-400 font-mono bg-emerald-950/30 px-1 py-0.5 rounded border border-emerald-900/30">Xuất Trận</span>
+                                    )}
+                                    <span className={`text-[9px] font-mono font-medium ${
+                                      status === "ACTIVE" ? "text-emerald-450" :
+                                      status === "SLEEPING" ? "text-amber-500" :
+                                      status === "SEALED" ? "text-cyan-400" :
+                                      status === "DYING" ? "text-rose-500 animate-pulse font-bold" :
+                                      "text-zinc-650"
+                                    }`}>
+                                      {status === "ACTIVE" && "☀️ Hoạt Động"}
+                                      {status === "SLEEPING" && "💤 Ngủ Đông"}
+                                      {status === "SEALED" && "🔒 Phong Ấn"}
+                                      {status === "DYING" && "💀 Hấp Hối"}
+                                      {status === "DEAD" && "🪦 Đã Chết"}
+                                    </span>
+                                    {spec.gu_type !== "Consumable" && (
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-[9px] text-zinc-500 font-mono">Độ no:</span>
+                                        <div className="w-16 h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-850">
+                                          <div
+                                            className={`h-full rounded-full transition-all duration-300 ${
+                                              hungerPercent < 20
+                                                ? "bg-rose-500 animate-pulse"
+                                                : hungerPercent < 50
+                                                ? "bg-amber-505"
+                                                : "bg-emerald-500"
+                                            }`}
+                                            style={{ width: `${hungerPercent}%` }}
+                                          />
+                                        </div>
+                                        <span className="text-[9px] font-mono text-zinc-400">
+                                          {gu.hunger}/{spec.max_hunger}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Actions */}
+                                  <div className="flex items-center gap-1.5 justify-end flex-wrap">
+                                    {/* Feed Individual */}
+                                    {spec.gu_type !== "Consumable" && !isDead && status !== "SEALED" && (
+                                      <button
+                                        type="button"
+                                        disabled={actionLoading || !canFeedIndividual || feedingId === gu.instance_id}
+                                        onClick={() => handleFeedClick(gu.instance_id)}
+                                        className={`text-[9px] font-bold py-1 px-2.5 rounded font-mono transition-all cursor-pointer ${
+                                          canFeedIndividual
+                                            ? "bg-emerald-950/40 text-emerald-450 border border-emerald-900/40 hover:bg-emerald-950/60"
+                                            : "bg-zinc-900/40 text-zinc-600 border border-zinc-900/60 cursor-not-allowed"
+                                        }`}
+                                      >
+                                        {feedingId === gu.instance_id ? "..." : "Cho Ăn"}
+                                      </button>
+                                    )}
+
+                                    {/* Equip/Unequip */}
+                                    {spec.gu_type !== "Consumable" && !isDead && status !== "SEALED" && onEquipToggle && (
+                                      <button
+                                        type="button"
+                                        disabled={actionLoading || equippingId === gu.instance_id}
+                                        onClick={() => handleEquipClick(gu.instance_id, !gu.equipped)}
+                                        className="text-[9px] font-bold py-1 px-2.5 bg-indigo-950/30 text-indigo-400 border border-indigo-900/40 hover:bg-indigo-950/50 rounded font-mono cursor-pointer"
+                                      >
+                                        {equippingId === gu.instance_id ? "..." : gu.equipped ? "Tháo" : "Trang Bị"}
+                                      </button>
+                                    )}
+
+                                    {/* Use consumable */}
+                                    {spec.gu_type === "Consumable" && onUseGu && (
+                                      <button
+                                        type="button"
+                                        disabled={actionLoading || usingGuId === gu.instance_id}
+                                        onClick={() => handleUseGu(gu.instance_id)}
+                                        className="text-[9px] font-bold py-1 px-2.5 bg-amber-950/30 text-amber-400 border border-amber-900/40 hover:bg-amber-950/50 rounded font-mono cursor-pointer"
+                                      >
+                                        {usingGuId === gu.instance_id ? "..." : "Sử Dụng"}
+                                      </button>
+                                    )}
+
+                                    {/* Drop */}
+                                    {onDropGu && !gu.is_vital && !gu.equipped && (
+                                      <button
+                                        type="button"
+                                        disabled={actionLoading || droppingId === gu.instance_id}
+                                        onClick={async () => {
+                                          if (!confirm(`Xác nhận phóng sinh (thả) Cổ trùng này? Hành động này không thể hoàn tác.`)) return;
+                                          setDroppingId(gu.instance_id);
+                                          try {
+                                            await onDropGu(gu.instance_id);
+                                          } finally {
+                                            setDroppingId(null);
+                                          }
+                                        }}
+                                        className="text-[9px] font-bold py-1 px-2.5 bg-rose-950/30 text-rose-450 border border-rose-900/40 hover:bg-rose-950/50 rounded font-mono cursor-pointer"
+                                      >
+                                        {droppingId === gu.instance_id ? "..." : "Thả"}
+                                      </button>
+                                    )}
+
+                                    {/* Hóa Bản Mệnh */}
+                                    {!isDead && !gu.is_vital && onSetVital && (
+                                      <button
+                                        type="button"
+                                        disabled={actionLoading || settingVitalId === gu.instance_id}
+                                        onClick={() => handleSetVital(gu.instance_id, spec.name)}
+                                        className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-amber-400 border border-zinc-900 hover:bg-amber-950/20 hover:border-amber-500/50 rounded font-mono font-bold transition-all cursor-pointer"
+                                      >
+                                        {settingVitalId === gu.instance_id ? "..." : "👑 Bản Mệnh"}
+                                      </button>
+                                    )}
+
+                                    {/* Quản lý trạng thái (Ngủ / Tỉnh / Phong Ấn / Giải Ấn) */}
+                                    {onUpdateStatus && !gu.is_vital && !isDead && (
+                                      <>
+                                        {status === "ACTIVE" && (
+                                          <>
+                                            <button
+                                              type="button"
+                                              disabled={actionLoading || statusUpdatingId === gu.instance_id}
+                                              onClick={() => handleStatusUpdate(gu.instance_id, "SLEEPING")}
+                                              className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-amber-500 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer"
+                                            >
+                                              {statusUpdatingId === gu.instance_id ? "..." : "💤 Ngủ"}
+                                            </button>
+                                            <button
+                                              type="button"
+                                              disabled={actionLoading || statusUpdatingId === gu.instance_id}
+                                              onClick={() => handleStatusUpdate(gu.instance_id, "SEALED")}
+                                              className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-cyan-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer"
+                                            >
+                                              {statusUpdatingId === gu.instance_id ? "..." : "🔒 Phong Ấn"}
+                                            </button>
+                                          </>
+                                        )}
+                                        {status === "SLEEPING" && (
+                                          <>
+                                            <button
+                                              type="button"
+                                              disabled={actionLoading || statusUpdatingId === gu.instance_id}
+                                              onClick={() => handleStatusUpdate(gu.instance_id, "ACTIVE")}
+                                              className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-emerald-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer"
+                                            >
+                                              {statusUpdatingId === gu.instance_id ? "..." : "☀️ Tỉnh"}
+                                            </button>
+                                            <button
+                                              type="button"
+                                              disabled={actionLoading || statusUpdatingId === gu.instance_id}
+                                              onClick={() => handleStatusUpdate(gu.instance_id, "SEALED")}
+                                              className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-cyan-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer"
+                                            >
+                                              {statusUpdatingId === gu.instance_id ? "..." : "🔒 Phong Ấn"}
+                                            </button>
+                                          </>
+                                        )}
+                                        {status === "SEALED" && (
+                                          <button
+                                            type="button"
+                                            disabled={actionLoading || statusUpdatingId === gu.instance_id}
+                                            onClick={() => handleStatusUpdate(gu.instance_id, "ACTIVE")}
+                                            className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-emerald-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer"
+                                          >
+                                            {statusUpdatingId === gu.instance_id ? "..." : "🔓 Giải Ấn"}
+                                          </button>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
-
-                      {/* Status Transition & Vital Setup Buttons */}
-                      {!isDead && spec.gu_type !== "Consumable" && (
-                        <div className="flex gap-1.5 pt-1.5 border-t border-zinc-900/60 justify-end flex-wrap">
-                          {!gu.is_vital && onSetVital && (
-                            <button
-                              type="button"
-                              disabled={actionLoading || settingVitalId === gu.instance_id}
-                              onClick={() => handleSetVital(gu.instance_id, spec.name)}
-                              className="text-[8px] py-0.8 px-1.5 bg-zinc-950/40 text-amber-400 border border-zinc-900 hover:bg-amber-950/20 hover:border-amber-500/50 rounded font-mono font-bold transition-all cursor-pointer active:scale-[0.98]"
-                            >
-                              {settingVitalId === gu.instance_id ? "..." : "👑 Hóa Bản Mệnh"}
-                            </button>
-                          )}
-
-                          {onUpdateStatus && !gu.is_vital && (
-                            <>
-                              {status === "ACTIVE" && (
-                                <>
-                                  <button
-                                    type="button"
-                                    disabled={actionLoading || statusUpdatingId === gu.instance_id}
-                                    onClick={() => handleStatusUpdate(gu.instance_id, "SLEEPING")}
-                                    className="text-[8px] py-0.8 px-1.5 bg-zinc-950/40 text-amber-500 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer active:scale-[0.98]"
-                                  >
-                                    {statusUpdatingId === gu.instance_id ? "..." : "💤 Ngủ Đông"}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={actionLoading || statusUpdatingId === gu.instance_id}
-                                    onClick={() => handleStatusUpdate(gu.instance_id, "SEALED")}
-                                    className="text-[8px] py-0.8 px-1.5 bg-zinc-950/40 text-cyan-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer active:scale-[0.98]"
-                                  >
-                                    {statusUpdatingId === gu.instance_id ? "..." : "🔒 Phong Ấn"}
-                                  </button>
-                                </>
-                              )}
-                              {status === "SLEEPING" && (
-                                <>
-                                  <button
-                                    type="button"
-                                    disabled={actionLoading || statusUpdatingId === gu.instance_id}
-                                    onClick={() => handleStatusUpdate(gu.instance_id, "ACTIVE")}
-                                    className="text-[8px] py-0.8 px-1.5 bg-zinc-950/40 text-emerald-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer active:scale-[0.98]"
-                                  >
-                                    {statusUpdatingId === gu.instance_id ? "..." : "☀️ Thức Tỉnh"}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={actionLoading || statusUpdatingId === gu.instance_id}
-                                    onClick={() => handleStatusUpdate(gu.instance_id, "SEALED")}
-                                    className="text-[8px] py-0.8 px-1.5 bg-zinc-950/40 text-cyan-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer active:scale-[0.98]"
-                                  >
-                                    {statusUpdatingId === gu.instance_id ? "..." : "🔒 Phong Ấn"}
-                                  </button>
-                                </>
-                              )}
-                              {status === "SEALED" && (
-                                <button
-                                  type="button"
-                                  disabled={actionLoading || statusUpdatingId === gu.instance_id}
-                                  onClick={() => handleStatusUpdate(gu.instance_id, "ACTIVE")}
-                                  className="text-[8px] py-0.8 px-1.5 bg-zinc-950/40 text-emerald-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer active:scale-[0.98]"
-                                >
-                                  {statusUpdatingId === gu.instance_id ? "..." : "🔓 Giải Ấn"}
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              };
-
-              return (
-                <div className="space-y-6">
-                  {/* PHẦN 1: BẢN MỆNH CỔ */}
-                  {vitalGus.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="text-[9px] font-mono font-bold text-amber-400/80 uppercase tracking-wider flex items-center gap-1">
-                        <span>✦ Bản Mệnh Cổ</span>
-                        <div className="h-px flex-1 bg-gradient-to-r flow from-amber-500/20 to-transparent ml-2"></div>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
-                        {vitalGus.map(renderGuCard)}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* PHẦN 2: CỔ TRÙNG KHÁC */}
-                  {normalGus.length > 0 && (
-                    <div className="space-y-2">
-                      {vitalGus.length > 0 && (
-                        <div className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1 pt-2">
-                          <span>✦ Cổ Trùng Khác</span>
-                          <div className="h-px flex-1 bg-gradient-to-r from-zinc-800 to-transparent ml-2"></div>
-                        </div>
-                      )}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
-                        {normalGus.map(renderGuCard)}
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
               );
             })()

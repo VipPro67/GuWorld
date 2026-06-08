@@ -49,6 +49,7 @@ interface Props {
   onCreate: (payload: {
     itemType: "Gu" | "Material" | "Recipe";
     guInstanceId?: string;
+    guInstanceIds?: string[];
     itemId?: string;
     quantity: number;
     price: number;
@@ -86,7 +87,8 @@ export function BaoHoangMarket({
   // Sell form inputs
   const [price, setPrice] = useState(10);
   const [durationHours, setDurationHours] = useState(24);
-  const [selectedGu, setSelectedGu] = useState("");
+  const [selectedGuType, setSelectedGuType] = useState("");
+  const [selectedGus, setSelectedGus] = useState<string[]>([]);
   const [selectedMaterial, setSelectedMaterial] = useState("");
   const [selectedRecipe, setSelectedRecipe] = useState("");
   const [quantity, setQuantity] = useState(1);
@@ -155,8 +157,8 @@ export function BaoHoangMarket({
   const createListing = async () => {
     if (actionLoading) return;
 
-    if (itemType === "Gu" && !selectedGu) {
-      setMessage({ type: "error", text: "Vui lòng chọn Cổ trùng cần bán." });
+    if (itemType === "Gu" && selectedGus.length === 0) {
+      setMessage({ type: "error", text: "Vui lòng chọn ít nhất một Cổ trùng cần bán." });
       return;
     }
     if (itemType === "Material" && !selectedMaterial) {
@@ -180,41 +182,58 @@ export function BaoHoangMarket({
       return;
     }
 
-
-
     const upfrontFee = getUpfrontFee();
     if (player.primeval_stones < upfrontFee) {
       setMessage({ type: "error", text: `Đạo hữu không đủ Nguyên Thạch đóng phí cơ bản (cần ${upfrontFee} Nguyên Thạch).` });
       return;
     }
 
-    const ok = await onCreate({
-      itemType,
-      guInstanceId: itemType === "Gu" ? selectedGu : undefined,
-      itemId: itemType === "Material" ? selectedMaterial : itemType === "Recipe" ? selectedRecipe : undefined,
-      recipeId: itemType === "Recipe" ? selectedRecipe : undefined,
-      itemIdRecipe: itemType === "Recipe" ? selectedRecipe : undefined,
-      quantity: itemType === "Material" ? quantity : 1,
-      price,
-      durationHours,
-      currency: player.rank >= 6 ? currency : "primeval",
-      listingType,
-      targetBuyerUsername: undefined,
-    } as any);
+    if (itemType === "Gu") {
+      const ok = await onCreate({
+        itemType,
+        guInstanceIds: selectedGus,
+        quantity: selectedGus.length,
+        price,
+        durationHours,
+        currency: player.rank >= 6 ? currency : "primeval",
+        listingType,
+        targetBuyerUsername: undefined,
+      } as any);
 
-    if (ok) {
-      await onRefresh();
-      setSelectedGu("");
-      setSelectedMaterial("");
-      setSelectedRecipe("");
-      setTargetBuyerUsername("");
-      setQuantity(1);
-      setTab(listingType === "MARKET" ? "market" : "auction");
-      setMessage({ type: "success", text: "Đăng bán linh bảo thành công!" });
-      return;
+      if (ok) {
+        await onRefresh();
+        setSelectedGuType("");
+        setSelectedGus([]);
+        setTab(listingType === "MARKET" ? "market" : "auction");
+        setMessage({ type: "success", text: `Đã đăng bán thành công ${selectedGus.length} Cổ trùng!` });
+        return;
+      }
+      setMessage({ type: "error", text: "Đăng bán thất bại. Hãy kiểm tra số dư Nguyên Thạch của bạn." });
+    } else {
+      const ok = await onCreate({
+        itemType,
+        itemId: itemType === "Material" ? selectedMaterial : selectedRecipe,
+        recipeId: itemType === "Recipe" ? selectedRecipe : undefined,
+        itemIdRecipe: itemType === "Recipe" ? selectedRecipe : undefined,
+        quantity: itemType === "Material" ? quantity : 1,
+        price,
+        durationHours,
+        currency: player.rank >= 6 ? currency : "primeval",
+        listingType,
+        targetBuyerUsername: undefined,
+      } as any);
+
+      if (ok) {
+        await onRefresh();
+        setSelectedMaterial("");
+        setSelectedRecipe("");
+        setQuantity(1);
+        setTab(listingType === "MARKET" ? "market" : "auction");
+        setMessage({ type: "success", text: "Đăng bán thành công!" });
+        return;
+      }
+      setMessage({ type: "error", text: "Đăng bán thất bại. Hãy kiểm tra số dư Nguyên Thạch của bạn." });
     }
-
-    setMessage({ type: "error", text: "Đăng bán thất bại. Hãy kiểm tra số dư Nguyên Thạch của bạn." });
   };
 
   const handleBuy = async (
@@ -494,7 +513,8 @@ export function BaoHoangMarket({
                   value={itemType}
                   onChange={(e) => {
                     setItemType(e.target.value as any);
-                    setSelectedGu("");
+                    setSelectedGuType("");
+                    setSelectedGus([]);
                     setSelectedMaterial("");
                     setSelectedRecipe("");
                     setQuantity(1);
@@ -508,23 +528,114 @@ export function BaoHoangMarket({
               </label>
 
               {itemType === "Gu" && (
-                <label className="space-y-2 block">
+                <div className="space-y-2 block sm:col-span-2">
                   <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Chọn Cổ trùng đăng bán</span>
+                  
+                  {/* Select Gu Type */}
                   <select
-                    value={selectedGu}
-                    onChange={(e) => setSelectedGu(e.target.value)}
+                    value={selectedGuType}
+                    onChange={(e) => {
+                      setSelectedGuType(e.target.value);
+                      setSelectedGus([]);
+                    }}
                     className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-serif"
                   >
-                    <option value="">-- Chọn Cổ trùng ({guInventory.filter((g) => !g.is_vital && g.status !== "DEAD").length} khả dụng) --</option>
-                    {guInventory
-                      .filter((g) => !g.is_vital && g.status !== "DEAD")
-                      .map((g) => (
-                        <option key={g.instance_id} value={g.instance_id}>
-                          {guDictionary[g.gu_id]?.name || g.gu_id} [Rank {guDictionary[g.gu_id]?.rank || 1}] ({g.instance_id.slice(0, 6)})
-                        </option>
-                      ))}
+                    <option value="">-- Chọn loại Cổ trùng cần bán --</option>
+                    {(() => {
+                      const tradeable = guInventory.filter((g) => !g.is_vital && g.status !== "DEAD");
+                      const typesMap: Record<string, number> = {};
+                      tradeable.forEach((g) => {
+                        typesMap[g.gu_id] = (typesMap[g.gu_id] || 0) + 1;
+                      });
+                      return Object.entries(typesMap).map(([guId, count]) => {
+                        const name = guDictionary[guId]?.name || guId;
+                        const rank = guDictionary[guId]?.rank || 1;
+                        return (
+                          <option key={guId} value={guId}>
+                            {name} [Rank {rank}] ({count} con khả dụng)
+                          </option>
+                        );
+                      });
+                    })()}
                   </select>
-                </label>
+
+                  {/* If a Gu Type is selected, show the instances list with checkboxes */}
+                  {selectedGuType && (
+                    <div className="border border-zinc-900 rounded-xl p-3 bg-zinc-950/40 space-y-2">
+                      <div className="flex justify-between items-center pb-2 border-b border-zinc-900/60">
+                        <span className="text-[10px] text-zinc-400 font-mono">
+                          Đã chọn {selectedGus.length} con
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const insts = guInventory
+                                .filter((g) => g.gu_id === selectedGuType && !g.is_vital && g.status !== "DEAD")
+                                .map((g) => g.instance_id);
+                              setSelectedGus(insts);
+                            }}
+                            className="text-[9px] text-amber-400 hover:underline font-mono cursor-pointer"
+                          >
+                            Chọn tất cả
+                          </button>
+                          <span className="text-zinc-755 font-mono">|</span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedGus([])}
+                            className="text-[9px] text-zinc-500 hover:underline font-mono cursor-pointer"
+                          >
+                            Bỏ chọn
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                        {guInventory
+                          .filter((g) => g.gu_id === selectedGuType && !g.is_vital && g.status !== "DEAD")
+                          .map((g) => {
+                            const selected = selectedGus.includes(g.instance_id);
+                            const hungerText = `Độ no: ${g.hunger}/100`;
+                            const statusText = g.equipped ? "Xuất Trận" : g.status === "SLEEPING" ? "Ngủ Đông" : g.status === "SEALED" ? "Phong Ấn" : "Chờ Lệnh";
+                            
+                            return (
+                              <label
+                                key={g.instance_id}
+                                className={`flex items-center justify-between p-2.5 rounded-lg border text-xs font-mono transition-all cursor-pointer select-none ${
+                                  selected
+                                    ? "bg-amber-500/5 border-amber-500/30 text-amber-400"
+                                    : "bg-zinc-950/20 border-zinc-900/60 hover:border-zinc-800 text-zinc-400"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={selected}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedGus((prev) => [...prev, g.instance_id]);
+                                      } else {
+                                        setSelectedGus((prev) => prev.filter((id) => id !== g.instance_id));
+                                      }
+                                    }}
+                                    className="rounded border-zinc-800 bg-zinc-950 text-amber-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                                  />
+                                  <span className="font-bold">#{g.instance_id.slice(0, 6)}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px]">
+                                  <span className="text-zinc-500">{hungerText}</span>
+                                  <span className="text-zinc-650">•</span>
+                                  <span className={g.equipped ? "text-emerald-500 font-bold" : g.status === "SLEEPING" ? "text-amber-500/80" : g.status === "SEALED" ? "text-cyan-400" : "text-zinc-405"}>
+                                    {statusText}
+                                  </span>
+                                </div>
+                              </label>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
 
               {itemType === "Recipe" && (
@@ -676,15 +787,15 @@ export function BaoHoangMarket({
               <div className="bg-zinc-950 p-3.5 rounded-xl border border-zinc-900 space-y-1.5">
                 <div className="text-[10px] text-zinc-500 uppercase tracking-wider block">Giao Dịch Dự Kiến</div>
                 <div className="text-zinc-300 font-serif">
-                  {itemType === "Material" ? `${quantity}x ` : "1x "} 
+                  {itemType === "Material" ? `${quantity}x ` : itemType === "Gu" ? `${selectedGus.length}x ` : "1x "} 
                   <span className="font-bold text-zinc-100">
-                    {itemType === "Gu" && selectedGu ? getDisplayName({ item_type: "Gu", item_data: guInventory.find(g => g.instance_id === selectedGu)?.gu_id || "" } as any) : ""}
+                    {itemType === "Gu" && selectedGuType ? guDictionary[selectedGuType]?.name || selectedGuType : ""}
                     {itemType === "Material" && selectedMaterial ? itemDictionary[selectedMaterial]?.name || selectedMaterial : ""}
                     {itemType === "Recipe" && selectedRecipe ? getRecipeDisplayName(selectedRecipe) : ""}
                   </span>
                 </div>
                 <div className="text-[11px] text-amber-400 font-bold">
-                  Tổng thu thầu: {itemType === "Material" ? quantity * price : price} {currency === "primeval" ? "Nguyên Thạch" : "Tiên Nguyên"}
+                  Tổng thu thầu: {itemType === "Material" ? quantity * price : itemType === "Gu" ? selectedGus.length * price : price} {currency === "primeval" ? "Nguyên Thạch" : "Tiên Nguyên"}
                 </div>
               </div>
             </div>

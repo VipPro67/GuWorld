@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useGameStore } from "@/store/useGameStore";
+import { useGameStore, GuInstance } from "@/store/useGameStore";
 import { 
   X, Coins, Sparkles, Lock, Unlock, CheckCircle2, 
   Trash2, Plus, Minus, RefreshCw, User, ShieldAlert 
@@ -24,6 +24,10 @@ export const TradeRoomModal: React.FC = () => {
   const [selectedMat, setSelectedMat] = useState<string>("");
   const [selectedMatQty, setSelectedMatQty] = useState<number>(1);
   const [activeTab, setActiveTab] = useState<"stones" | "gus" | "materials">("stones");
+  const [expandedGus, setExpandedGus] = useState<Record<string, boolean>>({});
+  const toggleGuGroup = (guId: string) => {
+    setExpandedGus((prev) => ({ ...prev, [guId]: !prev[guId] }));
+  };
 
   // Safety checks
   if (!player || !activeTrade) return null;
@@ -422,27 +426,86 @@ export const TradeRoomModal: React.FC = () => {
                     {activeTab === "gus" && (
                       <div className="space-y-1.5">
                         {tradeableGus.length > 0 ? (
-                          tradeableGus.map((gu) => {
-                            const selected = (myOffer?.gus || []).includes(gu.instance_id);
-                            return (
-                              <button
-                                key={gu.instance_id}
-                                onClick={() => toggleGu(gu.instance_id)}
-                                className={`w-full text-left p-3 rounded-xl border text-xs font-serif flex justify-between items-center transition-all cursor-pointer ${
-                                  selected
-                                    ? "bg-emerald-950/20 border-emerald-500/40 text-emerald-400 shadow-md shadow-emerald-950/15"
-                                    : "bg-zinc-950 border-zinc-900 hover:border-zinc-800 text-zinc-300"
-                                }`}
-                              >
-                                <span>{getGuName(gu.instance_id)}</span>
-                                <span className="text-[10px] font-mono text-zinc-500">
-                                  {selected ? "Đã chọn" : "Chọn"}
-                                </span>
-                              </button>
-                            );
-                          })
+                          (() => {
+                            const grouped: Record<string, GuInstance[]> = {};
+                            tradeableGus.forEach((gu) => {
+                              if (!grouped[gu.gu_id]) grouped[gu.gu_id] = [];
+                              grouped[gu.gu_id].push(gu);
+                            });
+
+                            return Object.entries(grouped).map(([guId, list]) => {
+                              const name = guDictionary[guId]?.name || guId;
+                              const rank = guDictionary[guId]?.rank || 1;
+                              const isExpanded = !!expandedGus[guId];
+                              
+                              // Count how many instances in this group are already selected in myOffer
+                              const selectedCountInGroup = list.filter(g => (myOffer?.gus || []).includes(g.instance_id)).length;
+
+                              return (
+                                <div key={guId} className="border border-zinc-900 bg-zinc-950/40 rounded-xl overflow-hidden">
+                                  {/* Group Header Row */}
+                                  <div
+                                    onClick={() => toggleGuGroup(guId)}
+                                    className="p-3 flex justify-between items-center cursor-pointer hover:bg-zinc-950/80 transition-all select-none font-serif text-xs"
+                                  >
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-bold text-zinc-200">{name}</span>
+                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-zinc-900 border border-zinc-850 text-zinc-400">
+                                        x{list.length}
+                                      </span>
+                                      <span className="text-[8px] font-mono border border-amber-500/20 px-1 py-0.2 rounded text-amber-400 uppercase">
+                                        Rank {rank}
+                                      </span>
+                                      {selectedCountInGroup > 0 && (
+                                        <span className="text-[8px] font-mono font-bold text-emerald-450 bg-emerald-950/20 border border-emerald-500/25 px-1 py-0.2 rounded uppercase animate-pulse">
+                                          Đã chọn {selectedCountInGroup}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] font-mono text-zinc-500">
+                                      {isExpanded ? "Thu gọn" : "Xem cá thể"}
+                                    </span>
+                                  </div>
+
+                                  {/* Expandable list of instances */}
+                                  {isExpanded && (
+                                    <div className="bg-zinc-950 border-t border-zinc-900 p-2 space-y-1.5">
+                                      {list.map((gu) => {
+                                        const selected = (myOffer?.gus || []).includes(gu.instance_id);
+                                        const isSleeping = gu.status === "SLEEPING";
+                                        const isSealed = gu.status === "SEALED";
+                                        
+                                        return (
+                                          <button
+                                            type="button"
+                                            key={gu.instance_id}
+                                            onClick={() => toggleGu(gu.instance_id)}
+                                            className={`w-full text-left p-2.5 rounded-lg border text-xs font-mono flex justify-between items-center transition-all cursor-pointer ${
+                                              selected
+                                                ? "bg-emerald-950/20 border-emerald-500/40 text-emerald-400 shadow-md shadow-emerald-950/15"
+                                                : "bg-zinc-950 border-zinc-900 hover:border-zinc-850 text-zinc-300"
+                                            }`}
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              <span className="font-bold">#{gu.instance_id.slice(0, 6)}</span>
+                                              <span className="text-[10px] text-zinc-550">Độ no: {gu.hunger}/100</span>
+                                              {isSleeping && <span className="text-[8px] font-bold text-amber-500 uppercase bg-amber-955/20 px-1 rounded border border-amber-900/10">Ngủ</span>}
+                                              {isSealed && <span className="text-[8px] font-bold text-cyan-400 uppercase bg-cyan-955/20 px-1 rounded border border-cyan-900/10">Ấn</span>}
+                                            </div>
+                                            <span className="text-[9px] font-bold uppercase">
+                                              {selected ? "Hủy chọn" : "Tích chọn"}
+                                            </span>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            });
+                          })()
                         ) : (
-                          <p className="text-xs text-zinc-600 italic text-center py-4">Không có Cổ trùng nào có thể giao dịch</p>
+                          <p className="text-xs text-zinc-650 italic text-center py-4">Không có Cổ trùng nào có thể giao dịch</p>
                         )}
                       </div>
                     )}

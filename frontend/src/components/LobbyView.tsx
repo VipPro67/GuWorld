@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { estimateManaFromSnapshot, useGameStore } from "@/store/useGameStore";
+import { estimateManaFromSnapshot, estimateHPFromSnapshot, useGameStore } from "@/store/useGameStore";
 import {
   User,
   Briefcase,
@@ -67,7 +67,12 @@ export const LobbyView: React.FC = () => {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!player || !manaSnapshot || manaSnapshot.current_mana >= manaSnapshot.max_mana) return;
+    if (!player || !manaSnapshot) return;
+
+    const isManaFull = player.rank >= 6 ? false : (manaSnapshot.current_mana >= manaSnapshot.max_mana);
+    const isHPFull = manaSnapshot.hp >= manaSnapshot.base_hp;
+
+    if (isManaFull && isHPFull) return;
 
     const interval = setInterval(() => {
       setManaNow(Date.now());
@@ -81,6 +86,12 @@ export const LobbyView: React.FC = () => {
     : 0;
   const displayedMaxMana = player?.max_mana || 0;
   const displayedManaPercent = displayedMaxMana > 0 ? Math.min(100, (displayedMana / displayedMaxMana) * 100) : 0;
+
+  const displayedHP = player
+    ? estimateHPFromSnapshot(manaSnapshot?.player_id === player.id ? manaSnapshot : null, manaNow) ?? player.hp
+    : 0;
+  const displayedMaxHP = player?.base_hp || 0;
+  const displayedHPPercent = displayedMaxHP > 0 ? Math.min(100, (displayedHP / displayedMaxHP) * 100) : 0;
 
   // Management items (Removed "Truyền Tin" as requested)
   const managementItems: HubItem[] = [
@@ -284,27 +295,29 @@ export const LobbyView: React.FC = () => {
             <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
               <span>Máu (HP)</span>
               <span>
-                {Math.round(player.hp)} / {Math.round(player.base_hp)}
+                {Math.round(displayedHP)} / {Math.round(displayedMaxHP)}
               </span>
             </div>
             <div className="w-full bg-zinc-950 rounded-full h-2.5 border border-zinc-900 overflow-hidden">
               <div
                 className="bg-gradient-to-r from-red-600 to-rose-500 h-full rounded-full transition-all duration-300"
-                style={{ width: `${Math.min(100, (player.hp / player.base_hp) * 100)}%` }}
+                style={{ width: `${displayedHPPercent}%` }}
               />
             </div>
 
             {/* Mana Bar */}
             <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
-              <span>Chân Nguyên</span>
+              <span>{player.rank >= 6 ? "Tiên Nguyên" : "Chân Nguyên"}</span>
               <span>
-                {Math.round(displayedMana)} / {Math.round(displayedMaxMana)}
+                {player.rank >= 6
+                  ? `${Math.round(displayedMana)}`
+                  : `${Math.round(displayedMana)} / ${Math.round(displayedMaxMana)}`}
               </span>
             </div>
             <div className="w-full bg-zinc-950 rounded-full h-2.5 border border-zinc-900 overflow-hidden">
               <div
                 className="bg-gradient-to-r from-cyan-600 to-blue-500 h-full rounded-full transition-all duration-300"
-                style={{ width: `${displayedManaPercent}%` }}
+                style={{ width: `${player.rank >= 6 ? 100 : displayedManaPercent}%` }}
               />
             </div>
           </div>
@@ -325,9 +338,9 @@ export const LobbyView: React.FC = () => {
             <div className="flex flex-col items-center">
               <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">Tiên Nguyên</span>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <Gem className="w-4 h-4 text-purple-400" />
+                <Sparkles className="w-4 h-4 text-violet-400" />
                 <span className="text-sm font-bold text-purple-400 font-mono">
-                  {player.immortal_stones?.toFixed(0)}
+                  {player.immortal_stones.toLocaleString()}
                 </span>
               </div>
             </div>

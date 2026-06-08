@@ -29,8 +29,14 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   const [searchKeyword, setSearchKeyword] = useState("");
   const [customRecipes, setCustomRecipes] = useState<RefiningRecipe[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [statusTab, setStatusTab] = useState<"all" | "complete" | "incomplete">("all");
   const [isDeducing, setIsDeducing] = useState(false);
+
+  const toggleGroupExpand = (guId: string, event?: React.MouseEvent) => {
+    if (event) event.stopPropagation();
+    setExpandedGroups(prev => ({ ...prev, [guId]: !prev[guId] }));
+  };
   const deduceRecipe = useGameStore((state) => state.deduceRecipe);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -125,6 +131,26 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   const availableInventoryGus = (player.gu_inventory || []).filter(
     (gu) => gu.status !== "DEAD" && !slottedIds.includes(gu.instance_id)
   );
+
+  const getBestCandidateForRefine = (guId: string): GuInstance | undefined => {
+    const candidates = availableInventoryGus.filter(g => g.gu_id === guId);
+    if (candidates.length === 0) return undefined;
+    
+    // Sort: non-vital & non-equipped first, then lowest hunger, then sleeping
+    candidates.sort((a, b) => {
+      if (a.is_vital !== b.is_vital) return a.is_vital ? 1 : -1;
+      if (a.equipped !== b.equipped) return a.equipped ? 1 : -1;
+      return a.hunger - b.hunger;
+    });
+    return candidates[0];
+  };
+
+  const handleInventoryGroupClick = (guId: string) => {
+    const candidate = getBestCandidateForRefine(guId);
+    if (candidate) {
+      handleInventoryClick(candidate);
+    }
+  };
 
   // Handle slotting a Gu by instanceId into a target slot index
   const slotGu = (instanceId: string, targetSlotIndex: number) => {
@@ -348,65 +374,151 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
               Không có Cổ trùng phù hợp hoặc toàn bộ Cổ trùng đã được xếp vào lò.
             </div>
           ) : (
-            availableInventoryGus.map((gu) => {
-              const spec = guDictionary[gu.gu_id] || {
-                id: gu.gu_id,
-                name: gu.gu_id,
-                rank: 1,
-                path: "Unknown Path",
-                gu_type: "Phàm Cổ",
-                origin_region: "",
-                base_mana_cost: 0,
-                effects: {},
-                hunger_rate: 0,
-                food_type: "unknown",
-                max_hunger: 100,
-                description: "Cổ trùng chưa được giải nghĩa.",
-              };
-              const isSleeping = gu.status === "SLEEPING";
+            (() => {
+              // Group by gu_id
+              const groupsMap: Record<string, GuInstance[]> = {};
+              availableInventoryGus.forEach((gu) => {
+                if (!groupsMap[gu.gu_id]) {
+                  groupsMap[gu.gu_id] = [];
+                }
+                groupsMap[gu.gu_id].push(gu);
+              });
 
-              return (
-                <div
-                  key={gu.instance_id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, gu.instance_id)}
-                  onClick={() => handleInventoryClick(gu)}
-                  className={`p-3.5 rounded-xl border border-zinc-900 bg-zinc-950/40 hover:bg-zinc-950/80 hover:border-amber-500/30 cursor-grab active:cursor-grabbing transition-all select-none group text-left relative flex justify-between items-center`}
-                >
-                  <div className="space-y-1 max-w-[80%]">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-bold text-zinc-200 group-hover:text-amber-400 transition-colors font-serif">
-                        {spec.name}
-                      </span>
-                      <span className="text-[8px] font-mono border border-amber-500/20 px-1 py-0.2 rounded text-amber-400 uppercase">
-                        Rank {spec.rank}
-                      </span>
+              const groups = Object.entries(groupsMap).map(([guId, instances]) => {
+                const spec = guDictionary[guId] || {
+                  id: guId,
+                  name: guId,
+                  rank: 1,
+                  path: "Unknown Path",
+                  gu_type: "Phàm Cổ",
+                  origin_region: "",
+                  base_mana_cost: 0,
+                  effects: {},
+                  hunger_rate: 0,
+                  food_type: "unknown",
+                  max_hunger: 100,
+                  description: "Cổ trùng chưa được giải nghĩa.",
+                };
+                return { guId, spec, instances };
+              });
+
+              // Sort groups by rank descending, name ascending
+              groups.sort((a, b) => {
+                if (b.spec.rank !== a.spec.rank) return b.spec.rank - a.spec.rank;
+                return a.spec.name.localeCompare(b.spec.name);
+              });
+
+              return groups.map(({ guId, spec, instances }) => {
+                const isExpanded = !!expandedGroups[guId];
+                const totalAvailable = instances.length;
+                const bestCandidate = getBestCandidateForRefine(guId);
+
+                return (
+                  <div
+                    key={guId}
+                    className="border border-zinc-900 bg-zinc-950/40 rounded-xl overflow-hidden"
+                  >
+                    {/* Group Header Row */}
+                    <div
+                      draggable={!!bestCandidate}
+                      onDragStart={(e) => {
+                        if (bestCandidate) {
+                          handleDragStart(e, bestCandidate.instance_id);
+                        }
+                      }}
+                      onClick={() => handleInventoryGroupClick(guId)}
+                      className={`p-3 flex justify-between items-center cursor-grab active:cursor-grabbing hover:bg-zinc-950/80 transition-all select-none group text-left`}
+                    >
+                      <div className="space-y-0.5 max-w-[75%]">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-bold text-zinc-200 group-hover:text-amber-400 transition-colors font-serif">
+                            {spec.name}
+                          </span>
+                          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-zinc-900 border border-zinc-850 text-zinc-400">
+                            x{totalAvailable}
+                          </span>
+                          <span className="text-[8px] font-mono border border-amber-500/20 px-1 py-0.2 rounded text-amber-400 uppercase">
+                            Rank {spec.rank}
+                          </span>
+                        </div>
+                        <p className="text-[9px] text-zinc-500 line-clamp-1 leading-normal">
+                          {spec.description}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => toggleGroupExpand(guId, e)}
+                          className="text-[9px] py-1 px-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-450 rounded transition-all cursor-pointer font-mono"
+                        >
+                          {isExpanded ? "Ẩn" : `Hiện (${totalAvailable})`}
+                        </button>
+                      </div>
                     </div>
-                    <span className="text-[9px] text-zinc-500 font-mono block">
-                      {spec.gu_type}
-                    </span>
-                    <p className="text-[10px] text-zinc-400 line-clamp-1 leading-normal">
-                      {spec.description}
-                    </p>
-                  </div>
 
-                  <div className="flex flex-col items-end gap-2 shrink-0">
-                    <span className="text-[9px] text-zinc-500 font-mono">
-                      No: {gu.hunger}/100
-                    </span>
-                    {isSleeping ? (
-                      <span className="text-[8px] text-amber-500 font-bold bg-amber-950/20 border border-amber-500/20 px-1 rounded animate-pulse uppercase">
-                        Ngủ
-                      </span>
-                    ) : (
-                      <span className="text-[8px] text-emerald-400 font-bold bg-emerald-950/20 border border-emerald-500/20 px-1 rounded uppercase">
-                        Tỉnh
-                      </span>
+                    {/* Expandable detailed candidate list */}
+                    {isExpanded && (
+                      <div className="bg-zinc-950/85 border-t border-zinc-900 p-2 space-y-1.5">
+                        <div className="text-[9px] font-mono text-zinc-550 uppercase tracking-widest block font-bold border-b border-zinc-900 pb-1">
+                          Chọn cá thể:
+                        </div>
+                        <div className="space-y-1 max-h-[140px] overflow-y-auto custom-scrollbar">
+                          {instances.map((gu) => {
+                            const isSleeping = gu.status === "SLEEPING";
+                            const isEquipped = gu.equipped;
+                            const isVital = gu.is_vital;
+
+                            return (
+                              <div
+                                key={gu.instance_id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleInventoryClick(gu);
+                                }}
+                                className="p-2 rounded-lg bg-zinc-950 border border-zinc-900 hover:border-amber-500/30 flex justify-between items-center text-xs cursor-pointer transition-colors"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-mono font-bold text-zinc-405">
+                                    #{gu.instance_id.slice(0, 6)}
+                                  </span>
+                                  {isVital && (
+                                    <span className="text-[8px] font-bold text-amber-300 bg-amber-950/60 border border-amber-500/60 px-1 py-0.2 rounded uppercase">
+                                      Bản Mệnh
+                                    </span>
+                                  )}
+                                  {isEquipped && (
+                                    <span className="text-[8px] font-bold text-emerald-400 bg-emerald-950/20 border border-emerald-500/20 px-1 py-0.2 rounded uppercase">
+                                      Xuất Trận
+                                    </span>
+                                  )}
+                                  {isSleeping && (
+                                    <span className="text-[8px] font-bold text-amber-550 bg-amber-950/20 border border-amber-500/20 px-1 py-0.2 rounded uppercase">
+                                      Ngủ
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-[10px] font-mono text-zinc-500">
+                                    Đo no: {gu.hunger}/100
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="text-[9px] py-0.5 px-1.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded font-bold font-serif hover:bg-amber-500/20 transition-all cursor-pointer"
+                                  >
+                                    Xếp vào
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     )}
                   </div>
-                </div>
-              );
-            })
+                );
+              });
+            })()
           )}
         </div>
       </div>

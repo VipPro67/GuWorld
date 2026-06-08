@@ -16,15 +16,16 @@ import (
 )
 
 type CreateListingRequest struct {
-	ItemType            string  `json:"item_type" binding:"required"` // Gu|Material|Recipe
-	GuInstanceID        string  `json:"gu_instance_id"`
-	ItemID              string  `json:"item_id"`
-	Quantity            int     `json:"quantity"`
-	Price               float64 `json:"price" binding:"required"`
-	Currency            string  `json:"currency" binding:"required"` // primeval|immortal
-	DurationHours       int     `json:"duration_hours" binding:"required"`
-	ListingType         string  `json:"listing_type" binding:"required"` // MARKET|AUCTION|TRADE
-	TargetBuyerUsername string  `json:"target_buyer_username"`
+	ItemType            string   `json:"item_type" binding:"required"` // Gu|Material|Recipe
+	GuInstanceID        string   `json:"gu_instance_id"`
+	GuInstanceIDs       []string `json:"gu_instance_ids"`
+	ItemID              string   `json:"item_id"`
+	Quantity            int      `json:"quantity"`
+	Price               float64  `json:"price" binding:"required"`
+	Currency            string   `json:"currency" binding:"required"` // primeval|immortal
+	DurationHours       int      `json:"duration_hours" binding:"required"`
+	ListingType         string   `json:"listing_type" binding:"required"` // MARKET|AUCTION|TRADE
+	TargetBuyerUsername string   `json:"target_buyer_username"`
 }
 
 type PlaceBidRequest struct {
@@ -154,35 +155,64 @@ func CreateListing(c *gin.Context) {
 			return
 		}
 	} else if req.ItemType == "Gu" {
-		idx := -1
-		for i, gu := range player.GuInventory {
-			if gu.InstanceID == req.GuInstanceID {
-				idx = i
-				break
+		var guIDsToSell []string
+		if len(req.GuInstanceIDs) > 0 {
+			guIDsToSell = req.GuInstanceIDs
+		} else if req.GuInstanceID != "" {
+			guIDsToSell = []string{req.GuInstanceID}
+		}
+
+		if len(guIDsToSell) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không chỉ định Cổ trùng để đăng bán"})
+			return
+		}
+
+		// Find and remove all instances from player's inventory
+		var commonGuID string
+		guMap := make(map[string]bool)
+		for _, instID := range guIDsToSell {
+			guMap[instID] = true
+		}
+
+		var newInventory []models.GuInstance
+		var removedCount int
+
+		for _, gu := range player.GuInventory {
+			if guMap[gu.InstanceID] {
+				if gu.IsVital {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể bán Bản Mệnh Cổ"})
+					return
+				}
+				if gu.Status == "DEAD" {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể bán Cổ trùng đã chết"})
+					return
+				}
+				if commonGuID == "" {
+					commonGuID = gu.GuID
+				} else if commonGuID != gu.GuID {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Tất cả Cổ trùng trong đơn hàng gộp phải cùng loại"})
+					return
+				}
+				removedCount++
+			} else {
+				newInventory = append(newInventory, gu)
 			}
 		}
-		if idx == -1 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy Cổ trùng để đăng bán"})
+
+		if removedCount != len(guIDsToSell) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Một số Cổ trùng không tìm thấy hoặc không thuộc sở hữu của đạo hữu"})
 			return
 		}
-		if player.GuInventory[idx].IsVital {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đấu giá Bản Mệnh Cổ"})
-			return
-		}
-		itemData := player.GuInventory[idx].GuID
-		itemDataJSON, err = json.Marshal(itemData)
+
+		player.GuInventory = newInventory
+		req.Quantity = len(guIDsToSell)
+
+		itemDataJSON, err = json.Marshal(commonGuID)
 		if err != nil {
 			log.Printf("Failed to marshal Gu: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đăng bán Cổ trùng"})
 			return
 		}
-		newInv := player.GuInventory[:0]
-		for i, gu := range player.GuInventory {
-			if i != idx {
-				newInv = append(newInv, gu)
-			}
-		}
-		player.GuInventory = newInv
 	} else {
 		if req.Quantity <= 0 {
 			req.Quantity = 1
@@ -467,8 +497,8 @@ func BuyListing(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Số lượng yêu cầu (%d) vượt quá số lượng hiện có (%d)", purchaseQty, qty)})
 		return
 	}
-	if (itemType == "Gu" || itemType == "Recipe") && purchaseQty != 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể mua lẻ Cổ trùng hoặc Bí phương"})
+	if itemType == "Recipe" && purchaseQty != 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể mua lẻ Bí phương"})
 		return
 	}
 
@@ -667,7 +697,9 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 
 func addAuctionItemToPlayer(player *models.Player, itemType, itemData string, qty int) error {
 	if itemType == "Gu" {
-		player.GuInventory = append(player.GuInventory, mapGuFromRaw(itemData))
+		for i := 0; i < qty; i++ {
+			player.GuInventory = append(player.GuInventory, mapGuFromRaw(itemData))
+		}
 		return nil
 	}
 

@@ -41,6 +41,7 @@ export default function Home() {
     logout,
     explore,
     feedGu,
+    feedGuGroup,
     clearError,
     guDictionary,
     itemDictionary,
@@ -211,6 +212,7 @@ export default function Home() {
             <GuInventory
               player={player}
               onFeed={feedGu}
+              onFeedGroup={feedGuGroup}
               actionLoading={actionLoading}
               guDictionary={guDictionary}
               itemDictionary={itemDictionary}
