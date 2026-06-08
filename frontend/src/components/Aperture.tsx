@@ -18,6 +18,7 @@ import {
   Eye,
   EyeOff,
   User,
+  Camera,
 } from "lucide-react";
 
 interface ApertureProps {
@@ -1133,6 +1134,47 @@ export const Aperture: React.FC<ApertureProps> = ({
                     rows={3}
                     className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3.5 py-2 text-xs text-zinc-200 placeholder-zinc-750 focus:outline-none transition-all font-mono resize-none leading-relaxed"
                   />
+                </div>
+
+                {/* Ảnh đại diện / Avatar Upload */}
+                <div className="flex flex-col gap-2 border-t border-zinc-900/60 pt-3.5">
+                  <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Camera className="w-3 h-3" /> Ảnh Đại Diện
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-zinc-100 font-bold border-2 border-zinc-900 shrink-0 overflow-hidden">
+                      {player.avatar_url ? (
+                        <img src={player.avatar_url} alt={player.username} className="w-full h-full object-cover" />
+                      ) : (
+                        <User className="w-7 h-7" />
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2 flex-1">
+                      <label
+                        htmlFor="avatar-upload"
+                        className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-mono bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-zinc-100 border border-zinc-800 rounded-lg transition-all"
+                      >
+                        <Camera className="w-3.5 h-3.5" /> Chọn ảnh
+                      </label>
+                      <input
+                        id="avatar-upload"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 2 * 1024 * 1024) {
+                            store.addToast("Ảnh quá lớn! Tối đa 2MB.", "error");
+                            return;
+                          }
+                          await store.uploadAvatar(file);
+                          e.target.value = "";
+                        }}
+                      />
+                      <span className="text-[9px] text-zinc-600 font-mono">JPEG, PNG, WebP • Tối đa 2MB</span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Đổi mật khẩu mới */}

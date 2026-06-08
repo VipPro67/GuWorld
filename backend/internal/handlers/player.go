@@ -193,7 +193,7 @@ func RegisterPlayer(c *gin.Context) {
 	query := `
 		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, max_lifespan, time_speed_multiplier, email, completed_quests, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code)
 		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 0, 0, $8, $9, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, '[]'::jsonb, '{}'::jsonb, $10, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 100.0, 1.0, $11, '[]'::jsonb, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, '[{"recipe_id": "recipe_moon_raiment", "completion_rate": 100.0}, {"recipe_id": "recipe_white_jade", "completion_rate": 50.0}, {"recipe_id": "recipe_four_flavors_liquor", "completion_rate": 30.0}]'::jsonb, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $12)
-		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code
+		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, avatar_url
 	`
 
 	var activeCombatBytes []byte
@@ -209,7 +209,7 @@ func RegisterPlayer(c *gin.Context) {
 		&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
 		&player.Email, &player.GoogleID, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
-		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode,
+		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.AvatarURL,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create player: " + err.Error()})
@@ -286,7 +286,7 @@ func LoginPlayer(c *gin.Context) {
 	var passwordHash string
 
 	query := `
-		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false)
+		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), COALESCE(avatar_url, '')
 		FROM players
 		WHERE username = $1 OR email = $1
 	`
@@ -303,7 +303,7 @@ func LoginPlayer(c *gin.Context) {
 		&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
 		&player.Email, &player.GoogleID, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
-		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin,
+		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.AvatarURL,
 	)
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
@@ -1105,7 +1105,7 @@ func loadPlayerForStatus(q playerQueryRower, id uuid.UUID, forUpdate bool) (mode
 	var player models.Player
 
 	query := `
-		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), COALESCE(ref_code, '')
+		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), COALESCE(ref_code, ''), COALESCE(avatar_url, '')
 		FROM players
 		WHERE id = $1
 	`
@@ -1125,7 +1125,7 @@ func loadPlayerForStatus(q playerQueryRower, id uuid.UUID, forUpdate bool) (mode
 		&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
 		&player.Email, &player.GoogleID, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
-		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode,
+		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.AvatarURL,
 	)
 	if err != nil {
 		return player, err

@@ -737,6 +737,7 @@ func InitSchema() error {
 			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 		);`, "create_trades_table"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT '';`, "avatar_url"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {

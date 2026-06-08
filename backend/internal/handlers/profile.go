@@ -32,6 +32,7 @@ type PlayerProfileResponse struct {
 	DaoMarks        map[string]int    `json:"dao_marks"`
 	PathMasteries   map[string]string `json:"path_masteries"`
 	Bio             string            `json:"bio"`
+	AvatarURL       string            `json:"avatar_url"`
 }
 
 // getDominantPath determines the player's primary path based on Dao Marks or Path Masteries
@@ -104,7 +105,7 @@ func GetPlayerProfile(c *gin.Context) {
 	var targetDaoMarks models.DaoMarksMap
 
 	query := `
-		SELECT p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitude_percent, p.current_mana, p.max_mana, p.primeval_stones, p.immortal_stones, p.hp, p.base_hp, p.gu_inventory, p.path_masteries, p.dao_marks, COALESCE(p.bio, ''), p.fake_rank, p.fake_sub_rank, COALESCE(p.fake_vital_gu, ''), p.is_disguised
+		SELECT p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitude_percent, p.current_mana, p.max_mana, p.primeval_stones, p.immortal_stones, p.hp, p.base_hp, p.gu_inventory, p.path_masteries, p.dao_marks, COALESCE(p.bio, ''), COALESCE(p.avatar_url, ''), p.fake_rank, p.fake_sub_rank, COALESCE(p.fake_vital_gu, ''), p.is_disguised
 		FROM players p
 		WHERE p.username = $1
 	`
@@ -112,7 +113,7 @@ func GetPlayerProfile(c *gin.Context) {
 		&target.ID, &target.Username, &target.Rank, &target.SubRank,
 		&target.AptitudeType, &target.AptitudePercent, &target.CurrentMana, &target.MaxMana,
 		&target.PrimevalStones, &target.ImmortalStones, &target.HP, &target.BaseHP, &target.GuInventory, &target.PathMasteries,
-		&targetDaoMarks, &target.Bio, &target.FakeRank, &target.FakeSubRank, &target.FakeVitalGu, &target.IsDisguised,
+		&targetDaoMarks, &target.Bio, &target.AvatarURL, &target.FakeRank, &target.FakeSubRank, &target.FakeVitalGu, &target.IsDisguised,
 	)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy cổ sư này!"})
@@ -208,6 +209,7 @@ func GetPlayerProfile(c *gin.Context) {
 		// Full Success
 		resp.Username = target.Username
 		resp.Bio = target.Bio
+		resp.AvatarURL = target.AvatarURL
 		resp.Rank = target.Rank
 		resp.SubRank = target.SubRank
 		resp.AptitudeType = target.AptitudeType
@@ -236,6 +238,7 @@ func GetPlayerProfile(c *gin.Context) {
 		// Partial Success
 		resp.Username = target.Username
 		resp.Bio = target.Bio
+		resp.AvatarURL = target.AvatarURL
 		resp.Rank = target.Rank
 		resp.SubRank = target.SubRank
 		resp.AptitudeType = "???"

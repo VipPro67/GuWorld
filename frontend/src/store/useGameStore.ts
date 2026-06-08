@@ -107,6 +107,7 @@ export interface Player {
   fake_vital_gu?: string;
   is_disguised?: boolean;
   is_admin?: boolean;
+  avatar_url?: string;
 }
 
 export interface ManaSnapshot {
@@ -548,6 +549,7 @@ interface GameState {
     fake_vital_gu?: string;
     is_disguised?: boolean;
   }) => Promise<boolean>;
+  uploadAvatar: (file: File) => Promise<string | null>;
   login: (username: string, password: string) => Promise<boolean>;
   register: (username: string, password: string, email: string, startingRegion: string, setVitalNow: boolean, referralCode?: string) => Promise<boolean>;
   logout: () => void;
@@ -1230,6 +1232,42 @@ export const useGameStore = create<GameState>((set, get) => {
       set({ error: err.message });
       addToast(`Cập nhật thất bại: ${err.message}`, "error");
       return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  uploadAvatar: async (file: File) => {
+    const { token, actionLoading, addToast } = get();
+    if (!token || actionLoading) return null;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const formData = new FormData();
+      formData.append("avatar", file);
+
+      const response = await authFetch(`${BACKEND_URL}/api/player/avatar`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Upload thất bại");
+      }
+
+      // Update player avatar_url in store
+      const { player } = get();
+      if (player) {
+        set({ player: { ...player, avatar_url: data.avatar_url } });
+      }
+      addToast(data.message || "Cập nhật ảnh đại diện thành công!", "success");
+      return data.avatar_url as string;
+    } catch (err: any) {
+      console.error("Avatar upload failed:", err.message);
+      set({ error: err.message });
+      addToast(`Upload thất bại: ${err.message}`, "error");
+      return null;
     } finally {
       set({ actionLoading: false });
     }

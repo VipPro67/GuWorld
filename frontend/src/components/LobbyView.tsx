@@ -276,8 +276,12 @@ export const LobbyView: React.FC = () => {
         <div className="bg-zinc-950/60 border border-zinc-900 rounded-3xl p-4 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl backdrop-blur-md">
           {/* Left Block: Avatar & Name & Tu vi */}
           <div className="flex items-center gap-4 w-full md:w-auto">
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-zinc-100 font-bold border-2 border-zinc-900 shrink-0">
-              {getInitials(player.username)}
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-zinc-100 font-bold border-2 border-zinc-900 shrink-0 overflow-hidden">
+              {player.avatar_url ? (
+                <img src={player.avatar_url} alt={player.username} className="w-full h-full object-cover" />
+              ) : (
+                getInitials(player.username)
+              )}
             </div>
             <div className="flex flex-col min-w-0">
               <h2 className="text-base sm:text-lg font-serif font-bold text-zinc-100 truncate">

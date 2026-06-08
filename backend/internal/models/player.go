@@ -125,6 +125,7 @@ type Player struct {
 	NeedsSoulRefine     bool                `json:"needs_soul_refine"`
 	UnlockedRecipes     UnlockedRecipesList `json:"unlocked_recipes"`
 	Bio                 string              `json:"bio"`
+	AvatarURL           string              `json:"avatar_url"`
 	FakeRank            int                 `json:"fake_rank"`
 	FakeSubRank         int                 `json:"fake_sub_rank"`
 	FakeVitalGu         string              `json:"fake_vital_gu"`
