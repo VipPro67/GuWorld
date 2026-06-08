@@ -135,6 +135,7 @@ func InitiateTrade(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit trade request"})
 		return
 	}
+	notifyTradeParticipants(sender.ID, receiver.ID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "Yêu cầu giao dịch đã được gửi!",
@@ -149,70 +150,13 @@ func GetActiveTrade(c *gin.Context) {
 		return
 	}
 
-	var id, status string
-	var senderID, receiverID uuid.UUID
-	var senderOfferBytes, receiverOfferBytes []byte
-	var senderLocked, receiverLocked, senderConfirmed, receiverConfirmed bool
-	var senderUsername, receiverUsername string
-
-	// Find any PENDING or ACCEPTED trade involving this player
-	err := db.DB.QueryRow(`
-		SELECT t.id, t.sender_id, t.receiver_id, t.sender_offer, t.receiver_offer, 
-		       t.sender_locked, t.receiver_locked, t.sender_confirmed, t.receiver_confirmed, 
-		       t.status, p1.username, p2.username
-		FROM trades t
-		JOIN players p1 ON t.sender_id = p1.id
-		JOIN players p2 ON t.receiver_id = p2.id
-		WHERE (t.sender_id = $1 OR t.receiver_id = $1)
-		  AND t.status IN ('PENDING', 'ACCEPTED')
-		LIMIT 1
-	`, authID).Scan(&id, &senderID, &receiverID, &senderOfferBytes, &receiverOfferBytes,
-		&senderLocked, &receiverLocked, &senderConfirmed, &receiverConfirmed, &status,
-		&senderUsername, &receiverUsername)
-
+	trade, err := loadActiveTrade(authID)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusOK, gin.H{"trade": nil})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query active trade: " + err.Error()})
-		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query active trade: " + err.Error()})
 		return
 	}
 
-	var senderOffer, receiverOffer TradeOffer
-	_ = json.Unmarshal(senderOfferBytes, &senderOffer)
-	_ = json.Unmarshal(receiverOfferBytes, &receiverOffer)
-
-	var senderGuInv models.GuInventory
-	var receiverGuInv models.GuInventory
-	_ = db.DB.QueryRow(`SELECT gu_inventory FROM players WHERE id = $1`, senderID).Scan(&senderGuInv)
-	_ = db.DB.QueryRow(`SELECT gu_inventory FROM players WHERE id = $1`, receiverID).Scan(&receiverGuInv)
-
-	guDetails := make(map[string]string)
-	for _, g := range senderGuInv {
-		guDetails[g.InstanceID] = g.GuID
-	}
-	for _, g := range receiverGuInv {
-		guDetails[g.InstanceID] = g.GuID
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"trade": gin.H{
-			"id":                 id,
-			"sender_id":          senderID,
-			"sender_username":    senderUsername,
-			"receiver_id":        receiverID,
-			"receiver_username":  receiverUsername,
-			"sender_offer":      senderOffer,
-			"receiver_offer":    receiverOffer,
-			"sender_locked":      senderLocked,
-			"receiver_locked":    receiverLocked,
-			"sender_confirmed":   senderConfirmed,
-			"receiver_confirmed": receiverConfirmed,
-			"status":             status,
-			"gu_details":         guDetails,
-		},
-	})
+	c.JSON(http.StatusOK, gin.H{"trade": trade})
 }
 
 func AcceptTrade(c *gin.Context) {
@@ -223,7 +167,13 @@ func AcceptTrade(c *gin.Context) {
 		return
 	}
 
-	_, err := db.DB.Exec(`
+	senderID, receiverID, err := getTradeParticipants(tradeID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Giao dịch không tồn tại"})
+		return
+	}
+
+	_, err = db.DB.Exec(`
 		UPDATE trades 
 		SET status = 'ACCEPTED', updated_at = NOW() 
 		WHERE id = $1 AND receiver_id = $2 AND status = 'PENDING'
@@ -233,6 +183,7 @@ func AcceptTrade(c *gin.Context) {
 		return
 	}
 
+	notifyTradeParticipants(senderID, receiverID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã chấp nhận giao dịch"})
 }
 
@@ -244,7 +195,13 @@ func DeclineTrade(c *gin.Context) {
 		return
 	}
 
-	_, err := db.DB.Exec(`
+	senderID, receiverID, err := getTradeParticipants(tradeID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Giao dịch không tồn tại"})
+		return
+	}
+
+	_, err = db.DB.Exec(`
 		UPDATE trades 
 		SET status = 'DECLINED', updated_at = NOW() 
 		WHERE id = $1 AND receiver_id = $2 AND status = 'PENDING'
@@ -254,6 +211,7 @@ func DeclineTrade(c *gin.Context) {
 		return
 	}
 
+	notifyTradeParticipants(senderID, receiverID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã từ chối giao dịch"})
 }
 
@@ -265,7 +223,13 @@ func CancelTrade(c *gin.Context) {
 		return
 	}
 
-	_, err := db.DB.Exec(`
+	senderID, receiverID, err := getTradeParticipants(tradeID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Giao dịch không tồn tại"})
+		return
+	}
+
+	_, err = db.DB.Exec(`
 		UPDATE trades 
 		SET status = 'CANCELLED', updated_at = NOW() 
 		WHERE id = $1 AND (sender_id = $2 OR receiver_id = $2) AND status IN ('PENDING', 'ACCEPTED')
@@ -275,6 +239,7 @@ func CancelTrade(c *gin.Context) {
 		return
 	}
 
+	notifyTradeParticipants(senderID, receiverID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã hủy giao dịch"})
 }
 
@@ -428,6 +393,7 @@ func UpdateTradeOffer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+	notifyTradeParticipants(senderID, receiverID)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật ưu đãi thành công, trạng thái khóa của 2 bên đã được đặt lại"})
 }
@@ -476,7 +442,11 @@ func LockTrade(c *gin.Context) {
 		return
 	}
 
-	tx.Commit()
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+	notifyTradeParticipants(senderID, receiverID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã khóa vật phẩm giao dịch"})
 }
 
@@ -711,6 +681,7 @@ func ConfirmTrade(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+	notifyTradeParticipants(senderID, receiverID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":            "Xác nhận thành công",

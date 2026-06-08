@@ -55,7 +55,8 @@ export const LobbyView: React.FC = () => {
     setView,
     baoHoangMessages,
     sendBaoHoangChat,
-    fetchBaoHoangMessages,
+    subscribeBaoHoangMessages,
+    unsubscribeBaoHoangMessages,
     actionLoading,
     fetchPlayerProfile,
   } = useGameStore();
@@ -209,14 +210,11 @@ export const LobbyView: React.FC = () => {
     },
   ];
 
-  // Fetch messages for active channel
+  // Subscribe to Bao Hoang chat updates instead of polling /messages every 5 seconds.
   useEffect(() => {
-    fetchBaoHoangMessages(activeChannel);
-    const timer = setInterval(() => {
-      fetchBaoHoangMessages(activeChannel);
-    }, 5000); // Polling every 5s
-    return () => clearInterval(timer);
-  }, [activeChannel, fetchBaoHoangMessages]);
+    subscribeBaoHoangMessages(activeChannel);
+    return () => unsubscribeBaoHoangMessages();
+  }, [activeChannel, subscribeBaoHoangMessages, unsubscribeBaoHoangMessages]);
 
   // Scroll chat to bottom on new messages
   useEffect(() => {

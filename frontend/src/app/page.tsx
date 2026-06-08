@@ -71,7 +71,8 @@ export default function Home() {
     buyMarketplaceListing,
     inspectedProfile,
     activeTrade,
-    fetchActiveTrade,
+    subscribeTradeEvents,
+    unsubscribeTradeEvents,
     acceptTrade,
     declineTrade,
     cancelTrade,
@@ -99,18 +100,13 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [player, fetchPlayerStatus]);
 
-  // 3. Trade Status Polling (Every 3 seconds) - Skip polling if actively in combat
+  // 3. Trade realtime subscription. This replaces the old /api/trade/active polling loop.
   useEffect(() => {
-    if (!player || player.active_combat) return;
+    if (!player) return;
 
-    void fetchActiveTrade();
-
-    const interval = setInterval(() => {
-      void fetchActiveTrade();
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [player, fetchActiveTrade]);
+    subscribeTradeEvents();
+    return () => unsubscribeTradeEvents();
+  }, [player, subscribeTradeEvents, unsubscribeTradeEvents]);
 
   const handleLogout = () => {
     logout();
