@@ -197,6 +197,7 @@ func SetupRouter() *gin.Engine {
 			chat.GET("/mail/inbox", handlers.GetInbox)
 			chat.POST("/bao-hoang/send", handlers.SendBaoHoangChat)
 			chat.GET("/bao-hoang/messages", handlers.GetBaoHoangMessages)
+			chat.GET("/bao-hoang/events", handlers.SubscribeBaoHoangMessages)
 		}
 
 		api.POST("/explore", middleware.AuthRequired(), handlers.ExploreNode)
@@ -225,6 +226,7 @@ func SetupRouter() *gin.Engine {
 		{
 			trade.POST("/initiate", handlers.InitiateTrade)
 			trade.GET("/active", handlers.GetActiveTrade)
+			trade.GET("/events", handlers.SubscribeTradeEvents)
 			trade.POST("/accept/:id", handlers.AcceptTrade)
 			trade.POST("/decline/:id", handlers.DeclineTrade)
 			trade.POST("/cancel/:id", handlers.CancelTrade)

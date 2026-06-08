@@ -511,6 +511,10 @@ interface GameState {
   subscribePlayerEvents: () => void;
   unsubscribePlayerEvents: () => void;
   playerEventsConnected: boolean;
+  subscribeTradeEvents: () => void;
+  unsubscribeTradeEvents: () => void;
+  subscribeBaoHoangMessages: (channel: string) => void;
+  unsubscribeBaoHoangMessages: () => void;
   initializeSession: () => Promise<void>;
   explore: () => Promise<void>;
   feedGu: (guInstanceId: string) => Promise<void>;
@@ -717,6 +721,8 @@ type PlayerRealtimeEvent = {
 };
 
 let playerEventsSource: EventSource | null = null;
+let tradeEventsSource: EventSource | null = null;
+let baoHoangMessagesSource: EventSource | null = null;
 
 export const useGameStore = create<GameState>((set, get) => {
   const normalizePlayer = (player: Player | null): Player | null => {
@@ -841,6 +847,7 @@ export const useGameStore = create<GameState>((set, get) => {
       
       void get().fetchRecipes();
       get().subscribePlayerEvents();
+      get().subscribeTradeEvents();
       get().addLog(`Đồng chí ${data.player.username} đã quy vị!`);
       return true;
     } catch (err: any) {
@@ -879,6 +886,7 @@ export const useGameStore = create<GameState>((set, get) => {
 
       void get().fetchRecipes();
       get().subscribePlayerEvents();
+      get().subscribeTradeEvents();
       get().addLog(`Cổ sư ${data.player.username} khai mở Không Khiếu! Tư chất: ${data.player.aptitude_type} (${data.player.aptitude_percent}%)`);
       return true;
     } catch (err: any) {
@@ -891,6 +899,8 @@ export const useGameStore = create<GameState>((set, get) => {
 
   logout: () => {
     get().unsubscribePlayerEvents();
+    get().unsubscribeTradeEvents();
+    get().unsubscribeBaoHoangMessages();
     void authFetch(`${BACKEND_URL}/api/auth/logout`, { method: "POST" });
     set({ player: null, manaSnapshot: null, token: null, recipes: [], recipesLoaded: true });
     localStorage.removeItem("gu_auth_token");
@@ -933,8 +943,6 @@ export const useGameStore = create<GameState>((set, get) => {
           get().addLog("Chiến đấu realtime đã bắt đầu.");
         } else if (payload.type === "combat.ended") {
           get().addLog("Chiến đấu realtime đã kết thúc.");
-        } else if (payload.type === "trade.updated") {
-          void get().fetchActiveTrade();
         }
       } catch (err) {
         console.error("Failed to process player realtime event", err);
@@ -957,6 +965,63 @@ export const useGameStore = create<GameState>((set, get) => {
       playerEventsSource = null;
     }
     set({ playerEventsConnected: false });
+  },
+
+
+  subscribeTradeEvents: () => {
+    if (typeof window === "undefined" || !get().token) return;
+
+    if (tradeEventsSource) {
+      tradeEventsSource.close();
+      tradeEventsSource = null;
+    }
+
+    const source = new EventSource(`${BACKEND_URL}/api/trade/events`, { withCredentials: true });
+    tradeEventsSource = source;
+
+    source.addEventListener("trade.updated", (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent<string>).data);
+        set({ activeTrade: payload.trade ?? null });
+      } catch (err) {
+        console.error("Failed to process trade event", err);
+      }
+    });
+  },
+
+  unsubscribeTradeEvents: () => {
+    if (tradeEventsSource) {
+      tradeEventsSource.close();
+      tradeEventsSource = null;
+    }
+  },
+
+  subscribeBaoHoangMessages: (channel) => {
+    if (typeof window === "undefined" || !get().token) return;
+
+    if (baoHoangMessagesSource) {
+      baoHoangMessagesSource.close();
+      baoHoangMessagesSource = null;
+    }
+
+    const source = new EventSource(`${BACKEND_URL}/api/chat/bao-hoang/events?channel=${encodeURIComponent(channel)}`, { withCredentials: true });
+    baoHoangMessagesSource = source;
+
+    source.addEventListener("chat.messages", (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent<string>).data);
+        set({ baoHoangMessages: Array.isArray(payload.messages) ? payload.messages : [] });
+      } catch (err) {
+        console.error("Failed to process chat event", err);
+      }
+    });
+  },
+
+  unsubscribeBaoHoangMessages: () => {
+    if (baoHoangMessagesSource) {
+      baoHoangMessagesSource.close();
+      baoHoangMessagesSource = null;
+    }
   },
 
   fetchReferrals: async () => {
@@ -1026,6 +1091,7 @@ export const useGameStore = create<GameState>((set, get) => {
       void get().fetchMySectStatus();
       void get().fetchRecipes();
       get().subscribePlayerEvents();
+      get().subscribeTradeEvents();
     } catch (err: any) {
       console.error("Session restore failed:", err.message);
       set({ player: null, manaSnapshot: null, token: null });
@@ -2380,7 +2446,6 @@ export const useGameStore = create<GameState>((set, get) => {
       if (!response.ok) throw new Error(data.error || "Gửi tin nhắn thất bại");
       get().addLog(data.message || "Đã phát truyền tin nhắn!");
       await get().initializeSession(); // refresh player state (mana, inventory, etc)
-      await get().fetchBaoHoangMessages(channel);
       return true;
     } catch (err: any) {
       set({ error: err.message });
