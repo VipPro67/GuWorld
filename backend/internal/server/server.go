@@ -70,6 +70,14 @@ func SetupRouter() *gin.Engine {
 			authGroup.GET("/google/callback", middleware.RateLimit(10, time.Minute), handlers.GoogleCallback)
 		}
 
+		api.GET("/topup/packages", handlers.GetTopupPackages)
+		api.POST("/webhooks/payos", handlers.PayOSWebhook)
+		api.GET("/admin/topup-orders", middleware.AuthRequired(), handlers.AdminListTopupOrders)
+		api.GET("/admin/wallet-transactions", middleware.AuthRequired(), handlers.AdminListWalletTransactions)
+		api.GET("/wallet", middleware.AuthRequired(), handlers.GetWallet)
+		api.POST("/topup/orders", middleware.AuthRequired(), middleware.RateLimit(10, time.Minute), handlers.CreateTopupOrder)
+		api.GET("/topup/orders/:orderCode", middleware.AuthRequired(), handlers.GetTopupOrder)
+
 		// Protected Cultivation Endpoints
 		player := api.Group("/player")
 		player.Use(middleware.AuthRequired())
@@ -208,10 +216,12 @@ func SetupRouter() *gin.Engine {
 		api.POST("/explore/move", middleware.AuthRequired(), handlers.MovePlayer)
 
 		// Shop Endpoints
+		api.GET("/shop/packages", middleware.AuthRequired(), handlers.GetPremiumShopPackages)
 		api.GET("/shop/list", handlers.GetShopList)
 		shop := api.Group("/shop")
 		shop.Use(middleware.AuthRequired())
 		{
+			shop.POST("/buy-package", middleware.RateLimit(20, time.Minute), handlers.BuyPremiumPackage)
 			shop.POST("/buy", handlers.BuyShopItem)
 			shop.POST("/sell", handlers.SellShopItem)
 			shop.GET("/bao-hoang/listings", handlers.ListListings)

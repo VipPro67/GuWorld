@@ -566,6 +566,88 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create player_sect_missions table: %w", err)
 	}
 
+	// Premium wallet, top-up, and shop accounting tables
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS wallets (
+		user_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+		primeval_stone BIGINT NOT NULL DEFAULT 0,
+		immortal_essence_stone BIGINT NOT NULL DEFAULT 0,
+		immortal_jade BIGINT NOT NULL DEFAULT 0,
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create wallets table: %w", err)
+	}
+
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS topup_orders (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		user_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		order_code BIGINT NOT NULL UNIQUE,
+		amount_vnd BIGINT NOT NULL CHECK (amount_vnd > 0),
+		jade_amount BIGINT NOT NULL CHECK (jade_amount > 0),
+		status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'PAID', 'EXPIRED', 'FAILED', 'CANCELLED')),
+		provider VARCHAR(20) NOT NULL DEFAULT 'PAYOS',
+		checkout_url TEXT,
+		qr_code TEXT,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		paid_at TIMESTAMP WITH TIME ZONE NULL
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create topup_orders table: %w", err)
+	}
+
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS wallet_transactions (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		user_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		type VARCHAR(30) NOT NULL CHECK (type IN ('TOPUP', 'SPEND', 'REFUND', 'ADMIN_ADJUST', 'PACKAGE_REWARD')),
+		currency VARCHAR(40) NOT NULL CHECK (currency IN ('PRIMEVAL_STONE', 'IMMORTAL_ESSENCE_STONE', 'IMMORTAL_JADE')),
+		amount BIGINT NOT NULL,
+		balance_before BIGINT NOT NULL,
+		balance_after BIGINT NOT NULL,
+		ref_order_code BIGINT NULL,
+		ref_package_id VARCHAR(80) NULL,
+		note TEXT,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create wallet_transactions table: %w", err)
+	}
+
+	_, err = DB.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS wallet_transactions_topup_order_unique ON wallet_transactions (ref_order_code) WHERE type = 'TOPUP' AND ref_order_code IS NOT NULL;`)
+	if err != nil {
+		return fmt.Errorf("failed to create wallet topup transaction unique index: %w", err)
+	}
+
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS shop_package_purchases (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		user_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		package_id VARCHAR(80) NOT NULL,
+		price_jade BIGINT NOT NULL,
+		rewards_snapshot JSONB NOT NULL DEFAULT '{}',
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create shop_package_purchases table: %w", err)
+	}
+
+	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS shop_package_purchases_user_package_created_idx ON shop_package_purchases (user_id, package_id, created_at);`)
+	if err != nil {
+		return fmt.Errorf("failed to create shop package purchases index: %w", err)
+	}
+
+	_, err = DB.Exec(`
+		INSERT INTO wallets (user_id, primeval_stone, immortal_essence_stone, immortal_jade)
+		SELECT id, COALESCE(primeval_stones, 0)::BIGINT, FLOOR(COALESCE(immortal_stones, 0))::BIGINT, 0
+		FROM players
+		ON CONFLICT (user_id) DO NOTHING;
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to backfill wallets: %w", err)
+	}
+
 	// Backwards-compatible column migrations
 	migrations := []struct{ sql, errMsg string }{
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) NOT NULL DEFAULT '';`, "password_hash"},

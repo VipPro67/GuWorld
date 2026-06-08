@@ -1,0 +1,75 @@
+"use client";
+
+import React, { useCallback, useEffect, useState } from "react";
+import { Gem, Coins, Sparkles, RefreshCw } from "lucide-react";
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+
+export interface WalletBalance {
+  primevalStone: number;
+  immortalEssenceStone: number;
+  immortalJade: number;
+}
+
+interface PremiumWalletProps {
+  compact?: boolean;
+  onLoaded?: (wallet: WalletBalance) => void;
+}
+
+export const PremiumWallet: React.FC<PremiumWalletProps> = ({ compact = false, onLoaded }) => {
+  const [wallet, setWallet] = useState<WalletBalance | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const fetchWallet = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/wallet`, { credentials: "include" });
+      if (response.ok) {
+        const data = await response.json();
+        setWallet(data);
+        onLoaded?.(data);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [onLoaded]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void fetchWallet(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchWallet]);
+
+  if (!wallet) {
+    return (
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-xs text-zinc-500">
+        Đang tải ví...
+      </div>
+    );
+  }
+
+  const itemClass = compact
+    ? "flex items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-950/50 px-3 py-1.5 text-xs font-mono"
+    : "flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-950/50 px-4 py-3";
+
+  return (
+    <div className={compact ? "flex flex-wrap items-center gap-2" : "grid grid-cols-1 gap-3 md:grid-cols-3"}>
+      <div className={`${itemClass} text-amber-300`}>
+        <span className="flex items-center gap-1.5"><Coins className="h-4 w-4" /> Nguyên Thạch</span>
+        <b>{wallet.primevalStone.toLocaleString()}</b>
+      </div>
+      <div className={`${itemClass} text-violet-300`}>
+        <span className="flex items-center gap-1.5"><Sparkles className="h-4 w-4" /> Tiên Nguyên Thạch</span>
+        <b>{wallet.immortalEssenceStone.toLocaleString()}</b>
+      </div>
+      <div className={`${itemClass} text-emerald-300`}>
+        <span className="flex items-center gap-1.5"><Gem className="h-4 w-4" /> Tiên Ngọc</span>
+        <b>{wallet.immortalJade.toLocaleString()}</b>
+      </div>
+      {!compact && (
+        <button onClick={fetchWallet} disabled={loading} className="md:col-span-3 flex w-fit items-center gap-2 rounded-xl border border-emerald-700/40 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-300 hover:bg-emerald-900/40 disabled:opacity-60">
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Làm mới ví
+        </button>
+      )}
+    </div>
+  );
+};
