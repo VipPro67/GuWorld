@@ -320,8 +320,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         powerScale = effectiveRank / spec.rank;
       }
 
-      const baseDmg = spec.effects?.["damage"] || spec.effects?.["add_base_attack"] || 0;
-      const baseDef = spec.effects?.["defense"] || spec.effects?.["add_base_defense"] || 0;
+      const activeEffects = spec.effects?.active || {};
+      const baseDmg = activeEffects["damage"] || activeEffects["add_base_attack"] || 0;
+      const baseDef = activeEffects["defense"] || activeEffects["add_base_defense"] || 0;
 
       // Extract player's mastery for spec.path
       let masteryMultiplier = 1.0;
@@ -533,7 +534,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                       <span className={`text-[7px] px-1 rounded font-mono border leading-normal ${getPathColor(spec.path)}`}>
                         {spec.path}
                       </span>
-                      {spec.effects && Object.entries(spec.effects).map(([key, val]) => {
+                      {spec.effects?.active && Object.entries(spec.effects.active).map(([key, val]) => {
                         const isDmg = key === "damage" || key === "add_base_attack";
                         const isDef = key === "defense" || key === "add_base_defense";
                         const label = isDmg ? "Dmg" : isDef ? "Def" : FormatKey(key);

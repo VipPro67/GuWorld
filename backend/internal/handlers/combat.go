@@ -81,18 +81,18 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 	// Rule 2: Regional Suppression
 	powerScale := 1.0
 
-	// Extract base damage and base defense
+	activeEffects := models.GetGuEffectSection(*guSpec, "active")
 	var baseDmg float64
-	if dmg, ok := guSpec.Effects["damage"]; ok {
+	if dmg, ok := activeEffects["damage"]; ok {
 		baseDmg = dmg
-	} else if dmg, ok := guSpec.Effects["add_base_attack"]; ok {
+	} else if dmg, ok := activeEffects["add_base_attack"]; ok {
 		baseDmg = dmg
 	}
 
 	var baseDef float64
-	if def, ok := guSpec.Effects["defense"]; ok {
+	if def, ok := activeEffects["defense"]; ok {
 		baseDef = def
-	} else if def, ok := guSpec.Effects["add_base_defense"]; ok {
+	} else if def, ok := activeEffects["add_base_defense"]; ok {
 		baseDef = def
 	}
 
@@ -440,7 +440,7 @@ func applyDamageWithLogs(initiatorName, targetName string, target *models.Combat
 	if target.VirtualShield > 0 {
 		if target.VirtualShield >= damage {
 			target.VirtualShield -= damage
-			return fmt.Sprintf("-> %s gây %.1f sát thương lên %s (Bị hấp thụ hoàn toàn bởi Khiên ảo, còn %.1f Khiên).", 
+			return fmt.Sprintf("-> %s gây %.1f sát thương lên %s (Bị hấp thụ hoàn toàn bởi Khiên ảo, còn %.1f Khiên).",
 				initiatorName, damage, targetName, target.VirtualShield)
 		} else {
 			shieldDmg := target.VirtualShield
@@ -450,7 +450,7 @@ func applyDamageWithLogs(initiatorName, targetName string, target *models.Combat
 			if target.HP < 0 {
 				target.HP = 0
 			}
-			return fmt.Sprintf("-> %s gây %.1f sát thương lên %s (Lớp Khiên ảo bị đánh vỡ, %.1f sát thương trừ thẳng vào HP, còn %.1f HP).", 
+			return fmt.Sprintf("-> %s gây %.1f sát thương lên %s (Lớp Khiên ảo bị đánh vỡ, %.1f sát thương trừ thẳng vào HP, còn %.1f HP).",
 				initiatorName, damage, targetName, hpDmg, target.HP)
 		}
 	} else {
@@ -458,7 +458,7 @@ func applyDamageWithLogs(initiatorName, targetName string, target *models.Combat
 		if target.HP < 0 {
 			target.HP = 0
 		}
-		return fmt.Sprintf("-> %s gây %.1f sát thương lên %s (%.1f sát thương trừ thẳng vào HP, còn %.1f HP).", 
+		return fmt.Sprintf("-> %s gây %.1f sát thương lên %s (%.1f sát thương trừ thẳng vào HP, còn %.1f HP).",
 			initiatorName, damage, targetName, damage, target.HP)
 	}
 }
@@ -686,12 +686,13 @@ func CombatAttack(c *gin.Context) {
 						if errGu == nil && refCaster.CurrentMana >= cost {
 							refCaster.CurrentMana -= cost
 
-							isHealing := spec.Effects != nil && (spec.Effects["healing"] > 0 || spec.Effects["restore_hp"] > 0 || spec.Effects["heal_based_on_strength"] > 0 || spec.ID == "GU_NINE_LEAF_VITALITY_GRASS")
-							isDefense := spec.Type == "Defense" || spec.Effects["add_base_defense"] > 0 || spec.Effects["defense"] > 0
+							activeEffects := models.GetGuEffectSection(spec, "active")
+							isHealing := activeEffects["healing"] > 0 || activeEffects["restore_hp"] > 0 || activeEffects["heal_based_on_strength"] > 0 || spec.ID == "GU_NINE_LEAF_VITALITY_GRASS"
+							isDefense := spec.Type == "Defense" || activeEffects["add_base_defense"] > 0 || activeEffects["defense"] > 0
 
 							if isHealing {
 								healVal := def
-								if spec.Effects != nil && spec.Effects["heal_based_on_strength"] > 0 {
+								if activeEffects["heal_based_on_strength"] > 0 {
 									healVal = refCaster.BaseAttack * 1.5
 								}
 								if healVal <= 0 {
@@ -710,7 +711,7 @@ func CombatAttack(c *gin.Context) {
 								refCaster.VirtualShield += shieldVal
 								logs = append(logs, fmt.Sprintf("-> %s thi triển %s phòng thủ, nhận %.1f Khiên hộ thể (Virtual Shield: %.1f).", refCaster.Name, spec.Name, shieldVal, refCaster.VirtualShield))
 							} else {
-								hasBypass := spec.Effects != nil && (spec.Effects["assassination"] > 0 || spec.Effects["flying"] > 0)
+								hasBypass := activeEffects["assassination"] > 0 || activeEffects["flying"] > 0
 								targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, spec.TargetType, prefX, prefY, hasBypass)
 								if len(targetsIdx) > 0 {
 									logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s!", refCaster.Name, spec.Name))
@@ -809,7 +810,7 @@ func CombatAttack(c *gin.Context) {
 							if act.ManaCost > 0 && refEnemy.CurrentMana >= act.ManaCost {
 								refEnemy.CurrentMana -= act.ManaCost
 							}
-							
+
 							isHealing := act.Def > 0 && (act.IsUtility || (len(act.StatusEffects) == 0 && act.Dmg == 0))
 							if isHealing {
 								healVal := act.Def
@@ -958,7 +959,7 @@ func CombatAttack(c *gin.Context) {
 						if len(targetLootBytes) > 0 {
 							json.Unmarshal(targetLootBytes, &targetLoot)
 						}
-						
+
 						player.TempLoot.PrimevalStones += targetLoot.PrimevalStones
 						if player.TempLoot.MaterialsInventory == nil {
 							player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
@@ -972,11 +973,11 @@ func CombatAttack(c *gin.Context) {
 						emptyLoot := models.TempLoot{
 							GuInventory:        models.GuInventory{},
 							MaterialsInventory: models.MaterialsInventory{},
-							PrimevalStones:      0,
+							PrimevalStones:     0,
 						}
 
 						_, _ = tx.Exec("UPDATE players SET primeval_stones = $1, hp = $2, temp_loot = $3 WHERE id = $4", targetStones, targetHP, emptyLoot, targetUUID)
-						
+
 						ctx.Logs = append(ctx.Logs, fmt.Sprintf("Thu hoạch toàn bộ chiến lợi phẩm tạm thời của bại binh! Hút được %d Nguyên Thạch, %d Cổ trùng, và các nguyên liệu khác từ đối phương.", targetLoot.PrimevalStones, len(targetLoot.GuInventory)))
 					}
 
@@ -1137,7 +1138,7 @@ func CombatAttack(c *gin.Context) {
 									targetGuInv = append(targetGuInv, newGu)
 									_, _ = tx.Exec("UPDATE players SET gu_inventory = $1 WHERE id = $2", targetGuInv, winnerID)
 								}
-							ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, gID))
+								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, gID))
 							}
 						}
 					} else {
@@ -1238,7 +1239,7 @@ func CombatAttack(c *gin.Context) {
 		player.TempLoot = models.TempLoot{
 			GuInventory:        models.GuInventory{},
 			MaterialsInventory: models.MaterialsInventory{},
-			PrimevalStones:      0,
+			PrimevalStones:     0,
 		}
 
 		// Reset position to safe zone
@@ -1533,7 +1534,7 @@ func Retreat(c *gin.Context) {
 		player.TempLoot = models.TempLoot{
 			GuInventory:        models.GuInventory{},
 			MaterialsInventory: models.MaterialsInventory{},
-			PrimevalStones:      0,
+			PrimevalStones:     0,
 		}
 	} else {
 		// Safe exit: Transfer TempLoot to permanent inventory, splitting it if group exploration
@@ -1570,7 +1571,7 @@ func Retreat(c *gin.Context) {
 				shares[mID] = &models.TempLoot{
 					GuInventory:        models.GuInventory{},
 					MaterialsInventory: make(models.MaterialsInventory),
-					PrimevalStones:      0,
+					PrimevalStones:     0,
 				}
 			}
 
@@ -1721,7 +1722,7 @@ func Retreat(c *gin.Context) {
 		player.TempLoot = models.TempLoot{
 			GuInventory:        models.GuInventory{},
 			MaterialsInventory: models.MaterialsInventory{},
-			PrimevalStones:      0,
+			PrimevalStones:     0,
 		}
 	}
 

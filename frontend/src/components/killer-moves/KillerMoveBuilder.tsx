@@ -5,7 +5,19 @@ import { GuInstance, GuSpec, Player, useGameStore } from "@/store/useGameStore";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
+type KillerMoveSlotPreview = {
+  player_gu_id: string;
+  gu_id: string;
+  gu_name: string;
+  slot_type: "CORE" | "SUPPORT";
+  slot_index: number;
+  compatibility_score: number;
+  applied: boolean;
+  warnings: string[];
+};
+
 type KillerMovePreview = {
+  name?: string;
   path: string;
   move_type: string;
   rank_required: number;
@@ -17,6 +29,7 @@ type KillerMovePreview = {
   cast_time: number;
   effects: Record<string, number>;
   warnings: string[];
+  slot_results: KillerMoveSlotPreview[];
 };
 
 type BuilderSlot = {
@@ -188,6 +201,7 @@ function GuSlot({ slot, guDictionary, onDropGu, onClear }: { slot: BuilderSlot; 
     >
       <span className="text-xs uppercase tracking-widest opacity-70">{slot.type === "CORE" ? "Core Gu" : `Support ${slot.index + 1}`}</span>
       <strong className="text-sm">{slot.gu ? guName(slot.gu, guDictionary) : "Trống"}</strong>
+      {slot.gu && <EffectChips effects={(slot.type === "CORE" ? guDictionary[slot.gu.gu_id]?.effects?.active : guDictionary[slot.gu.gu_id]?.effects?.support) || {}} />}
     </button>
   );
 }
@@ -230,12 +244,24 @@ function KillerMovePreviewPanel({ preview, error, isCalculating, isSaving, saved
           <Stat label="Lưu phái" value={preview.path} />
           <Stat label="Loại" value={preview.move_type} />
           <Stat label="Cooldown" value={`${preview.cooldown} lượt`} />
-          <div>
-            <h3 className="mb-2 font-semibold text-amber-100">Effects</h3>
-            <div className="rounded-xl bg-slate-900 p-3 text-xs text-slate-300">
-              {Object.keys(preview.effects || {}).length === 0 ? "Không có hiệu ứng phụ." : JSON.stringify(preview.effects, null, 2)}
+          <EffectSection title="Applied Killer Move Effects" effects={preview.effects || {}} emptyText="Không có hiệu ứng được cộng." />
+          {preview.slot_results?.length > 0 && (
+            <div>
+              <h3 className="mb-2 font-semibold text-amber-100">Slot Compatibility</h3>
+              <div className="space-y-2">
+                {preview.slot_results.map((slot) => (
+                  <div key={`${slot.slot_type}-${slot.slot_index}-${slot.player_gu_id}`} className={`rounded-xl border p-3 text-xs ${slot.applied ? "border-emerald-500/30 bg-emerald-950/20" : "border-red-500/40 bg-red-950/30"}`}>
+                    <div className="flex justify-between gap-3 text-slate-100">
+                      <span>{slot.slot_type} · {slot.gu_name}</span>
+                      <strong>{slot.compatibility_score}</strong>
+                    </div>
+                    {!slot.applied && <p className="mt-1 text-red-200">Không cộng support effect.</p>}
+                    {slot.warnings.map((warning) => <p key={warning} className="mt-1 text-amber-200">{warning}</p>)}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           <button
             disabled={!canSave || isSaving}
             onClick={onSave}
@@ -255,6 +281,24 @@ function StabilityWarning({ stability }: { stability: number }) {
   const tone = stability >= 80 ? "border-emerald-400/50 bg-emerald-950/40 text-emerald-100" : stability >= 50 ? "border-yellow-400/50 bg-yellow-950/40 text-yellow-100" : "border-red-400/50 bg-red-950/40 text-red-100";
   const label = stability >= 80 ? "Ổn định" : stability >= 50 ? "Có rủi ro" : "Nguy hiểm";
   return <div className={`rounded-xl border p-4 ${tone}`}><strong>{label}</strong><span className="float-right">{stability.toFixed(1)}%</span></div>;
+}
+
+function EffectSection({ title, effects, emptyText }: { title: string; effects: Record<string, number>; emptyText: string }) {
+  const entries = Object.entries(effects);
+  return (
+    <div>
+      <h3 className="mb-2 font-semibold text-amber-100">{title}</h3>
+      <div className="flex flex-wrap gap-2 rounded-xl bg-slate-900 p-3 text-xs text-slate-300">
+        {entries.length === 0 ? emptyText : entries.map(([key, value]) => <span key={key} className="rounded-full border border-purple-400/30 bg-purple-950/30 px-2 py-1">{key}: {value}</span>)}
+      </div>
+    </div>
+  );
+}
+
+function EffectChips({ effects }: { effects: Record<string, number> }) {
+  const entries = Object.entries(effects).slice(0, 2);
+  if (entries.length === 0) return null;
+  return <span className="mt-1 text-[10px] text-slate-300">{entries.map(([key, value]) => `${key} ${value}`).join(" · ")}</span>;
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

@@ -80,12 +80,19 @@ func InitSchema() error {
 		path VARCHAR(50) NOT NULL DEFAULT 'Moon Path',
 		gu_type VARCHAR(50) NOT NULL,
 		base_mana_cost DOUBLE PRECISION NOT NULL DEFAULT 0,
-		effects JSONB NOT NULL DEFAULT '{}',
+		effects JSONB NOT NULL DEFAULT '{"active":{},"support":{},"passive":{},"house":{}}',
 		hunger_rate INTEGER NOT NULL,
 		food_types JSONB NOT NULL DEFAULT '[]',
 		max_hunger INTEGER DEFAULT 100,
 		description TEXT,
-		target_type VARCHAR(50) NOT NULL DEFAULT 'SINGLE'
+		target_type VARCHAR(50) NOT NULL DEFAULT 'SINGLE',
+		origin_region VARCHAR(50) NOT NULL DEFAULT 'Southern_Border',
+		rarity VARCHAR(50),
+		is_immortal BOOLEAN DEFAULT false,
+		primary_role VARCHAR(80),
+		combat_roles JSONB DEFAULT '[]',
+		combat_tags JSONB DEFAULT '[]',
+		support_tags JSONB DEFAULT '[]'
 	);`)
 	if err != nil {
 		return fmt.Errorf("failed to create gu_dictionary table: %w", err)
@@ -698,6 +705,29 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create killer_move_slots index: %w", err)
 	}
 
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS player_gu (
+		id VARCHAR(80) PRIMARY KEY,
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		gu_id VARCHAR(50) NOT NULL REFERENCES gu_dictionary(id),
+		rank INTEGER NOT NULL DEFAULT 1,
+		level INTEGER NOT NULL DEFAULT 1,
+		hunger DOUBLE PRECISION NOT NULL DEFAULT 100,
+		state VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
+		location VARCHAR(30) NOT NULL DEFAULT 'INVENTORY',
+		is_locked BOOLEAN NOT NULL DEFAULT false,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create player_gu table: %w", err)
+	}
+
+	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS player_gu_player_idx ON player_gu (player_id);`)
+	if err != nil {
+		return fmt.Errorf("failed to create player_gu index: %w", err)
+	}
+
 	// Backwards-compatible column migrations
 	migrations := []struct{ sql, errMsg string }{
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) NOT NULL DEFAULT '';`, "password_hash"},
@@ -720,8 +750,14 @@ func InitSchema() error {
 		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS origin_region VARCHAR(50) NOT NULL DEFAULT 'Southern_Border';`, "origin_region"},
 		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS path VARCHAR(50) NOT NULL DEFAULT 'Moon Path';`, "path"},
 		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS base_mana_cost DOUBLE PRECISION NOT NULL DEFAULT 0;`, "base_mana_cost"},
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{}';`, "effects"},
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS food_types JSONB NOT NULL DEFAULT '[]';`, "food_types"}, // Cultivation system columns
+		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{"active":{},"support":{},"passive":{},"house":{}}';`, "effects"},
+		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS food_types JSONB NOT NULL DEFAULT '[]';`, "food_types"},
+		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS rarity VARCHAR(50);`, "gu_dictionary.rarity"},
+		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS is_immortal BOOLEAN DEFAULT false;`, "gu_dictionary.is_immortal"},
+		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS primary_role VARCHAR(80);`, "gu_dictionary.primary_role"},
+		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS combat_roles JSONB DEFAULT '[]';`, "gu_dictionary.combat_roles"},
+		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS combat_tags JSONB DEFAULT '[]';`, "gu_dictionary.combat_tags"},
+		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS support_tags JSONB DEFAULT '[]';`, "gu_dictionary.support_tags"}, // Cultivation system columns
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS aptitude_grade INTEGER DEFAULT 4;`, "aptitude_grade"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS wall_progress DOUBLE PRECISION NOT NULL DEFAULT 0.0;`, "wall_progress"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS human_qi DOUBLE PRECISION NOT NULL DEFAULT 0.0;`, "human_qi"},
@@ -916,10 +952,13 @@ func SeedDictionaries() error {
 			return fmt.Errorf("hardcoded item seed failed: %w", err2)
 		}
 	}
-	if err := seedGusFromCSV("Gu.csv"); err != nil {
-		log.Printf("Warning: CSV Gu seed failed (%v), falling back to hardcoded seeds", err)
-		if err2 := seedGusHardcoded(); err2 != nil {
-			return fmt.Errorf("hardcoded Gu seed failed: %w", err2)
+	if err := seedGusFromCSV("Gu_optimized.csv"); err != nil {
+		err = seedGusFromCSV("Gu.csv")
+		if err != nil {
+			log.Printf("Warning: CSV Gu seed failed (%v), falling back to hardcoded seeds", err)
+			if err2 := seedGusHardcoded(); err2 != nil {
+				return fmt.Errorf("hardcoded Gu seed failed: %w", err2)
+			}
 		}
 	}
 	if err := seedRecipesFromCSV("Recipe.csv"); err != nil {
@@ -970,11 +1009,95 @@ func openCSV(filename string) (*os.File, *csv.Reader, []string, error) {
 // colIndex returns the index of a named column in a header slice, or -1.
 func colIndex(header []string, name string) int {
 	for i, h := range header {
-		if strings.TrimSpace(h) == name {
+		if strings.TrimPrefix(strings.TrimSpace(h), "\uFEFF") == name {
 			return i
 		}
 	}
 	return -1
+}
+
+func safeJSONObject(raw string, fallback string, rowLabel string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return fallback
+	}
+	var parsed interface{}
+	if err := json.Unmarshal([]byte(value), &parsed); err != nil {
+		log.Printf("Warning: invalid JSON object in %s: %v", rowLabel, err)
+		return fallback
+	}
+	if _, ok := parsed.(map[string]interface{}); !ok {
+		log.Printf("Warning: JSON object expected in %s", rowLabel)
+		return fallback
+	}
+	return value
+}
+
+func safeJSONArray(raw string, fallback string, rowLabel string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return fallback
+	}
+	var parsed interface{}
+	if err := json.Unmarshal([]byte(value), &parsed); err != nil {
+		log.Printf("Warning: invalid JSON array in %s: %v", rowLabel, err)
+		return fallback
+	}
+	if _, ok := parsed.([]interface{}); !ok {
+		log.Printf("Warning: JSON array expected in %s", rowLabel)
+		return fallback
+	}
+	return value
+}
+
+func normalizedGuEffectsJSON(raw string, rowLabel string) string {
+	value := safeJSONObject(raw, `{}`, rowLabel)
+	var parsed map[string]interface{}
+	_ = json.Unmarshal([]byte(value), &parsed)
+	sections := map[string]map[string]float64{
+		"active":  {},
+		"support": {},
+		"passive": {},
+		"house":   {},
+	}
+	sectionFound := false
+	for section := range sections {
+		if rawSection, ok := parsed[section]; ok {
+			sectionFound = true
+			if values, ok := rawSection.(map[string]interface{}); ok {
+				for key, value := range values {
+					switch v := value.(type) {
+					case float64:
+						sections[section][key] = v
+					case bool:
+						if v {
+							sections[section][key] = 1
+						} else {
+							sections[section][key] = 0
+						}
+					}
+				}
+			} else {
+				log.Printf("Warning: Gu effects section %s must be object in %s", section, rowLabel)
+			}
+		}
+	}
+	if !sectionFound {
+		for key, value := range parsed {
+			switch v := value.(type) {
+			case float64:
+				sections["active"][key] = v
+			case bool:
+				if v {
+					sections["active"][key] = 1
+				} else {
+					sections["active"][key] = 0
+				}
+			}
+		}
+	}
+	bytes, _ := json.Marshal(sections)
+	return string(bytes)
 }
 
 // seedItemsFromCSV reads Item.csv and upserts into item_dictionary.
@@ -1093,6 +1216,12 @@ func seedGusFromCSV(filename string) error {
 	pathIdx := col("path")
 	manaCostIdx := col("base_mana_cost")
 	effectsIdx := col("effects")
+	rarityIdx := col("rarity")
+	isImmortalIdx := col("is_immortal")
+	primaryRoleIdx := col("primary_role")
+	combatRolesIdx := col("combat_roles")
+	combatTagsIdx := col("combat_tags")
+	supportTagsIdx := col("support_tags")
 
 	if idIdx < 0 || nameIdx < 0 || rankIdx < 0 {
 		return fmt.Errorf("Gu.csv missing required columns (id, name, rank)")
@@ -1140,6 +1269,12 @@ func seedGusFromCSV(filename string) error {
 		path := get(row, pathIdx)
 		manaCostStr := get(row, manaCostIdx)
 		effectsRaw := get(row, effectsIdx)
+		rarity := get(row, rarityIdx)
+		isImmortalRaw := strings.ToLower(get(row, isImmortalIdx))
+		primaryRole := get(row, primaryRoleIdx)
+		combatRolesRaw := get(row, combatRolesIdx)
+		combatTagsRaw := get(row, combatTagsIdx)
+		supportTagsRaw := get(row, supportTagsIdx)
 
 		rank := 1
 		fmt.Sscanf(rankStr, "%d", &rank)
@@ -1156,22 +1291,28 @@ func seedGusFromCSV(filename string) error {
 		if path == "" {
 			path = "Moon Path"
 		}
-		if effectsRaw == "" {
-			effectsRaw = "{}"
-		}
-
-		// Build food_types JSON array from column value
+		effectsRaw = normalizedGuEffectsJSON(effectsRaw, fmt.Sprintf("%s effects", id))
 		foodTypesJSON := "[]"
 		if foodType != "" && foodType != "none" && foodType != "unknown" {
 			if strings.HasPrefix(foodType, "[") && strings.HasSuffix(foodType, "]") {
-				foodTypesJSON = foodType
+				foodTypesJSON = safeJSONArray(foodType, "[]", fmt.Sprintf("%s food_types", id))
 			} else {
 				foodTypesJSON = fmt.Sprintf(`["%s"]`, foodType)
 			}
 		}
+		combatRolesJSON := safeJSONArray(combatRolesRaw, "[]", fmt.Sprintf("%s combat_roles", id))
+		combatTagsJSON := safeJSONArray(combatTagsRaw, "[]", fmt.Sprintf("%s combat_tags", id))
+		supportTagsJSON := safeJSONArray(supportTagsRaw, "[]", fmt.Sprintf("%s support_tags", id))
+		isImmortal := isImmortalRaw == "true" || isImmortalRaw == "1" || isImmortalRaw == "yes"
 
-		var effMap map[string]interface{}
-		_ = json.Unmarshal([]byte(effectsRaw), &effMap)
+		var effEnvelope map[string]map[string]interface{}
+		_ = json.Unmarshal([]byte(effectsRaw), &effEnvelope)
+		effMap := map[string]interface{}{}
+		for _, values := range effEnvelope {
+			for key, value := range values {
+				effMap[key] = value
+			}
+		}
 
 		targetType := "SINGLE"
 		if effMap != nil {
@@ -1189,16 +1330,18 @@ func seedGusFromCSV(filename string) error {
 		}
 
 		_, err := DB.Exec(`
-			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, origin_region, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description, target_type)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10::jsonb, $11, $12, $13)
+			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, origin_region, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, is_immortal, primary_role, combat_roles, combat_tags, support_tags)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17::jsonb, $18::jsonb, $19::jsonb)
 			ON CONFLICT (id) DO UPDATE
 			SET name=EXCLUDED.name, rank=EXCLUDED.rank, path=EXCLUDED.path, gu_type=EXCLUDED.gu_type,
 			    origin_region=EXCLUDED.origin_region, base_mana_cost=EXCLUDED.base_mana_cost, effects=EXCLUDED.effects,
 			    hunger_rate=EXCLUDED.hunger_rate, food_types=EXCLUDED.food_types, max_hunger=EXCLUDED.max_hunger, description=EXCLUDED.description,
-			    target_type=EXCLUDED.target_type
-		`, id, name, rank, path, guType, origin, manaCost, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType)
+			    target_type=EXCLUDED.target_type, rarity=EXCLUDED.rarity, is_immortal=EXCLUDED.is_immortal, primary_role=EXCLUDED.primary_role,
+			    combat_roles=EXCLUDED.combat_roles, combat_tags=EXCLUDED.combat_tags, support_tags=EXCLUDED.support_tags
+		`, id, name, rank, path, guType, origin, manaCost, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType, rarity, isImmortal, primaryRole, combatRolesJSON, combatTagsJSON, supportTagsJSON)
 		if err != nil {
-			return fmt.Errorf("upsert gu %s: %w", id, err)
+			log.Printf("Warning: upsert gu %s failed: %v", id, err)
+			continue
 		}
 	}
 	log.Printf("Gu dictionary seeded from %s (%d unique entries)", filename, len(order))

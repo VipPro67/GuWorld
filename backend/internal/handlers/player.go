@@ -768,7 +768,7 @@ func Explore(c *gin.Context) {
 				}
 
 				// Set capturedGuID as non-empty so we can append to logMsg below
-				capturedGuName = targetGuName // reuse variable to communicate name
+				capturedGuName = targetGuName              // reuse variable to communicate name
 				capturedGuID = "RECIPE:" + chosenCandidate // mark as recipe
 			}
 		}
@@ -1381,7 +1381,7 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 				}
 			}
 
-			for effectKey := range spec.Effects {
+			for effectKey := range models.GetGuEffectSection(spec, "passive") {
 				if handler, ok := StatEffectRegistry[effectKey]; ok {
 					handler(player, &spec, stats)
 				}
@@ -2002,7 +2002,7 @@ func UseConsumableGu(c *gin.Context) {
 	player.CurrentMana -= cost
 
 	var logs []string
-	for effectKey := range specs.Effects {
+	for effectKey := range models.GetGuEffectSection(specs, "active") {
 		if handler, ok := ConsumableEffectRegistry[effectKey]; ok {
 			msg, err := handler(&player, *targetGu, specs)
 			if err != nil {
@@ -2113,7 +2113,7 @@ func UseSupportGu(c *gin.Context) {
 	player.CurrentMana -= cost
 
 	var logs []string
-	for effectKey := range specs.Effects {
+	for effectKey := range models.GetGuEffectSection(specs, "support") {
 		if handler, ok := OutCombatSupportRegistry[effectKey]; ok {
 			msg, err := handler(&player, specs)
 			if err != nil {
