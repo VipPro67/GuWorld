@@ -152,11 +152,23 @@ func SetupRouter() *gin.Engine {
 			refining.POST("/deduce", handlers.DeduceRecipe)
 		}
 
+		// Protected Killer Move Endpoints
+		killerMoves := api.Group("/killer-moves")
+		killerMoves.Use(middleware.AuthRequired())
+		{
+			killerMoves.POST("/calculate", handlers.CalculateKillerMove)
+			killerMoves.POST("", handlers.CreateKillerMove)
+			killerMoves.GET("", handlers.ListKillerMoves)
+			killerMoves.GET("/:id", handlers.GetKillerMove)
+			killerMoves.DELETE("/:id", handlers.DeleteKillerMove)
+		}
+
 		// Protected Combat & Explore Node Endpoints
 		combat := api.Group("/combat")
 		combat.Use(middleware.AuthRequired())
 		{
 			combat.POST("/attack", handlers.CombatAttack)
+			combat.POST("/cast-killer-move", handlers.CastKillerMove)
 		}
 
 		// Protected Immortal Aperture Endpoints
