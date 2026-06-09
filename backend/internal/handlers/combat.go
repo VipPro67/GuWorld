@@ -477,6 +477,22 @@ func findCombatant(combatState *models.CombatState, id string) (*models.Combatan
 	return nil, false, -1
 }
 
+func calculateLooseGuFailureChance(specs []models.GuDictionaryItem) float64 {
+	if len(specs) <= 1 {
+		return 0
+	}
+	paths := map[string]bool{}
+	for _, spec := range specs {
+		paths[spec.Path] = true
+	}
+	pathChaos := math.Max(0, float64(len(paths)-1)) * 0.08
+	chance := float64(len(specs)-1)*0.12 + pathChaos
+	if chance > 0.75 {
+		chance = 0.75
+	}
+	return chance
+}
+
 // CombatAttack handles PVE/PVP turns and execution of actions simultaneously
 func CombatAttack(c *gin.Context) {
 	var req CombatAttackRequest
@@ -549,6 +565,7 @@ func CombatAttack(c *gin.Context) {
 	var selectedGus []models.GuInstance
 	var selectedSpecs []models.GuDictionaryItem
 	totalManaCost := 0.0
+	looseGuFailureChance := 0.0
 
 	isChargingThisTurn := false
 	isUnleashingCharge := false
@@ -610,6 +627,7 @@ func CombatAttack(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": insufficientEnergyMessage(&player)})
 			return
 		}
+		looseGuFailureChance = calculateLooseGuFailureChance(selectedSpecs)
 	}
 
 	// Find the targeted enemy
@@ -634,7 +652,11 @@ func CombatAttack(c *gin.Context) {
 	}
 
 	var turnLogs []string
-	turnLogs = append(turnLogs, "=== KÍCH HOẠT SÁT CHIÊU ===")
+	if len(selectedSpecs) > 1 {
+		turnLogs = append(turnLogs, fmt.Sprintf("=== DÙNG CỔ RIÊNG LẺ (rủi ro hụt %.0f%%) ===", looseGuFailureChance*100))
+	} else {
+		turnLogs = append(turnLogs, "=== HÀNH ĐỘNG CHIẾN ĐẤU ===")
+	}
 
 	// Build the list of actions for this turn
 	type CombatAction struct {
@@ -681,6 +703,16 @@ func CombatAttack(c *gin.Context) {
 						logs = append(logs, fmt.Sprintf("-> %s kích hoạt Bộc Phá Sát Chiêu (Unleash Charge)!", refCaster.Name), dmgLog)
 					}
 				} else {
+					if looseGuFailureChance > 0 && rand.Float64() < looseGuFailureChance {
+						wastedMana := totalManaCost * 0.5
+						if wastedMana > refCaster.CurrentMana {
+							wastedMana = refCaster.CurrentMana
+						}
+						refCaster.CurrentMana -= wastedMana
+						logs = append(logs, fmt.Sprintf("-> %s cưỡng ép vận nhiều Cổ riêng lẻ, đạo ngân hỗn loạn khiến chiêu thất bại! Hao phí %.1f nguyên khí.", refCaster.Name, wastedMana))
+						return logs
+					}
+
 					for _, spec := range selectedSpecs {
 						dmg, def, cost, errGu := CalculateGuEffectForCombatant(refCaster, &spec)
 						if errGu == nil && refCaster.CurrentMana >= cost {
