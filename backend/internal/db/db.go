@@ -648,6 +648,56 @@ func InitSchema() error {
 		return fmt.Errorf("failed to backfill wallets: %w", err)
 	}
 
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS killer_moves (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		name VARCHAR(80) NOT NULL,
+		path VARCHAR(50) NOT NULL DEFAULT '',
+		move_type VARCHAR(30) NOT NULL DEFAULT 'UTILITY',
+		rank_required INTEGER NOT NULL DEFAULT 1,
+		core_player_gu_id VARCHAR(80) NOT NULL,
+		total_mana_cost DOUBLE PRECISION NOT NULL DEFAULT 0,
+		stability DOUBLE PRECISION NOT NULL DEFAULT 0,
+		damage_value DOUBLE PRECISION NOT NULL DEFAULT 0,
+		defense_value DOUBLE PRECISION NOT NULL DEFAULT 0,
+		cooldown INTEGER NOT NULL DEFAULT 0,
+		cast_time INTEGER NOT NULL DEFAULT 1,
+		effects JSONB NOT NULL DEFAULT '{}',
+		is_mastered BOOLEAN NOT NULL DEFAULT FALSE,
+		is_stable BOOLEAN NOT NULL DEFAULT FALSE,
+		is_instant_cast BOOLEAN NOT NULL DEFAULT FALSE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create killer_moves table: %w", err)
+	}
+
+	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS killer_moves_player_path_idx ON killer_moves (player_id, path);`)
+	if err != nil {
+		return fmt.Errorf("failed to create killer_moves index: %w", err)
+	}
+
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS killer_move_slots (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		killer_move_id UUID NOT NULL REFERENCES killer_moves(id) ON DELETE CASCADE,
+		player_gu_id VARCHAR(80) NOT NULL,
+		slot_type VARCHAR(20) NOT NULL CHECK (slot_type IN ('CORE','SUPPORT')),
+		slot_index INTEGER NOT NULL DEFAULT 0,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE (killer_move_id, slot_index)
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create killer_move_slots table: %w", err)
+	}
+
+	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS killer_move_slots_move_idx ON killer_move_slots (killer_move_id);`)
+	if err != nil {
+		return fmt.Errorf("failed to create killer_move_slots index: %w", err)
+	}
+
 	// Backwards-compatible column migrations
 	migrations := []struct{ sql, errMsg string }{
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) NOT NULL DEFAULT '';`, "password_hash"},
