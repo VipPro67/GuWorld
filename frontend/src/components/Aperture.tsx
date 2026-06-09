@@ -217,17 +217,16 @@ export const Aperture: React.FC<ApertureProps> = ({
           else if (mLevel === "Supreme Grandmaster") masteryMultiplier = 1.5;
         }
 
-        if (spec.effects) {
-          if (spec.effects.damage) stats.attack += spec.effects.damage * masteryMultiplier;
-          if (spec.effects.add_base_attack) stats.attack += spec.effects.add_base_attack * masteryMultiplier;
-          if (spec.effects.defense) stats.defense += spec.effects.defense * masteryMultiplier;
-          if (spec.effects.add_base_defense) stats.defense += spec.effects.add_base_defense * masteryMultiplier;
-          if (spec.effects.refine_mana_tier) stats.healing += spec.effects.refine_mana_tier * 10;
-          if (spec.effects.cleansing_power) stats.healing += spec.effects.cleansing_power * 15;
-          if (spec.effects.movement) stats.movement += spec.effects.movement;
-          if (spec.effects.investigation) stats.investigation += spec.effects.investigation;
-          if (spec.effects.storage) stats.storage += spec.effects.storage;
-        }
+        const passiveEffects = spec.effects?.passive || {};
+        if (passiveEffects.damage) stats.attack += passiveEffects.damage * masteryMultiplier;
+        if (passiveEffects.add_base_attack) stats.attack += passiveEffects.add_base_attack * masteryMultiplier;
+        if (passiveEffects.defense) stats.defense += passiveEffects.defense * masteryMultiplier;
+        if (passiveEffects.add_base_defense) stats.defense += passiveEffects.add_base_defense * masteryMultiplier;
+        if (passiveEffects.refine_mana_tier) stats.healing += passiveEffects.refine_mana_tier * 10;
+        if (passiveEffects.cleansing_power) stats.healing += passiveEffects.cleansing_power * 15;
+        if (passiveEffects.movement) stats.movement += passiveEffects.movement;
+        if (passiveEffects.investigation) stats.investigation += passiveEffects.investigation;
+        if (passiveEffects.storage) stats.storage += passiveEffects.storage;
       }
     }
   });

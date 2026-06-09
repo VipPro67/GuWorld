@@ -155,7 +155,8 @@ func BuildCombatAction(ctx *CombatContext, spec models.GuDictionaryItem) (Action
 		ManaCost: cost,
 	}
 
-	for effectKey := range spec.Effects {
+	activeEffects := models.GetGuEffectSection(spec, "active")
+	for effectKey := range activeEffects {
 		if effectKey == "damage" || effectKey == "add_base_attack" {
 			action.Dmg += dmg
 		} else if effectKey == "defense" || effectKey == "add_base_defense" {
@@ -203,11 +204,11 @@ func ApplyPostDamageEffects(ctx *CombatContext, playerAction *Action, enemyActio
 // ── PASSIVE EFFECT HANDLERS ──────────────────────────────────────────
 
 func addAttackStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["attack"] += spec.Effects["add_base_attack"] * getPathMasteryMultiplier(player, spec.Path)
+	stats["attack"] += guSectionValue(*spec, "passive", "add_base_attack") * getPathMasteryMultiplier(player, spec.Path)
 }
 
 func addDefenseStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["defense"] += spec.Effects["add_base_defense"] * getPathMasteryMultiplier(player, spec.Path)
+	stats["defense"] += guSectionValue(*spec, "passive", "add_base_defense") * getPathMasteryMultiplier(player, spec.Path)
 }
 
 func addDamageOnHitStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
@@ -215,39 +216,39 @@ func addDamageOnHitStat(player *models.Player, spec *models.GuDictionaryItem, st
 		return
 	}
 	missingHpRate := 1.0 - player.HP/player.BaseHP
-	stats["damage_multiplier"] += missingHpRate * spec.Effects["damage_multiplier_on_hit"]
+	stats["damage_multiplier"] += missingHpRate * guSectionValue(*spec, "passive", "damage_multiplier_on_hit")
 }
 
 func addSoulStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["soul"] += spec.Effects["soul_refinement"]
+	stats["soul"] += guSectionValue(*spec, "passive", "soul_refinement")
 }
 
 func addStorageStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["storage"] += spec.Effects["storage"]
+	stats["storage"] += guSectionValue(*spec, "passive", "storage")
 }
 
 func addMovementStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["movement"] += spec.Effects["movement"]
+	stats["movement"] += guSectionValue(*spec, "passive", "movement")
 }
 
 func addInvestigationStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["investigation"] += spec.Effects["investigation"]
+	stats["investigation"] += guSectionValue(*spec, "passive", "investigation")
 }
 
 func addHearingStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["hearing"] += spec.Effects["hearing"]
+	stats["hearing"] += guSectionValue(*spec, "passive", "hearing")
 }
 
 func addEvasionStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["evasion"] += spec.Effects["evasion"]
+	stats["evasion"] += guSectionValue(*spec, "passive", "evasion")
 }
 
 func addRefineManaTierStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["healing"] += spec.Effects["refine_mana_tier"] * 10.0
+	stats["healing"] += guSectionValue(*spec, "passive", "refine_mana_tier") * 10.0
 }
 
 func addCleansingPowerStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["healing"] += spec.Effects["cleansing_power"] * 15.0
+	stats["healing"] += guSectionValue(*spec, "passive", "cleansing_power") * 15.0
 }
 
 // ── ACTIVE COMBAT EFFECT HANDLERS ─────────────────────────────────────
@@ -271,7 +272,7 @@ func handleDefenseEffect(ctx *CombatContext, spec *models.GuDictionaryItem, acti
 }
 
 func handleRangeEffect(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	val := spec.Effects["range"]
+	val := guSectionValue(*spec, "active", "range")
 	action.Logs = append(action.Logs, fmt.Sprintf("%s kéo dài khoảng cách tấn công lên %.0f thước.", spec.Name, val))
 	return nil
 }
@@ -282,7 +283,7 @@ func handleCurveAttackEffect(ctx *CombatContext, spec *models.GuDictionaryItem, 
 }
 
 func handleManaRegen(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	value := spec.Effects["mana_regen"]
+	value := guSectionValue(*spec, "active", "mana_regen")
 	ctx.Attacker.CurrentMana += value
 	if ctx.Attacker.CurrentMana > ctx.Attacker.MaxMana {
 		ctx.Attacker.CurrentMana = ctx.Attacker.MaxMana
@@ -310,9 +311,9 @@ func handleReplicate(ctx *CombatContext, spec *models.GuDictionaryItem, action *
 }
 
 func handleBleedEffect(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	val := spec.Effects["bleed"]
+	val := guSectionValue(*spec, "active", "bleed")
 	if val == 0 {
-		val = spec.Effects["bleed_effect"]
+		val = guSectionValue(*spec, "active", "bleed_effect")
 	}
 	action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
 		Type:  "bleed",
@@ -324,12 +325,12 @@ func handleBleedEffect(ctx *CombatContext, spec *models.GuDictionaryItem, action
 }
 
 func handleLifeStealEffect(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	action.LifeStealRate += spec.Effects["lifesteal"]
+	action.LifeStealRate += guSectionValue(*spec, "active", "lifesteal")
 	return nil
 }
 
 func handleRefineManaTier(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	tier := spec.Effects["refine_mana_tier"]
+	tier := guSectionValue(*spec, "active", "refine_mana_tier")
 	boost := tier * 0.20
 	ctx.DamageBoost += boost
 	action.IsUtility = true
@@ -338,7 +339,7 @@ func handleRefineManaTier(ctx *CombatContext, spec *models.GuDictionaryItem, act
 }
 
 func handleDamageMultiplier(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	mult := spec.Effects["damage_multiplier"]
+	mult := guSectionValue(*spec, "active", "damage_multiplier")
 	boost := mult - 1.0
 	ctx.DamageBoost += boost
 	action.IsUtility = true
@@ -366,7 +367,7 @@ func handleGenerateGu(ctx *CombatContext, spec *models.GuDictionaryItem, action 
 // ── OUT-OF-COMBAT SUPPORT EFFECT HANDLERS ─────────────────────────────
 
 func handleIncreaseAptitude(player *models.Player, spec models.GuDictionaryItem) (string, error) {
-	value := int(spec.Effects["increase_aptitude"])
+	value := int(guSectionValue(spec, "support", "increase_aptitude"))
 	if value <= 0 {
 		value = 1
 	}
@@ -427,7 +428,7 @@ func handleAperturePetrification(player *models.Player, gu models.GuInstance, sp
 }
 
 func handleGiveStones(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem) (string, error) {
-	amount := int(spec.Effects["give_stones"])
+	amount := int(guSectionValue(spec, "support", "give_stones"))
 	if amount == 0 {
 		amount = 500
 	}
@@ -436,7 +437,7 @@ func handleGiveStones(player *models.Player, gu models.GuInstance, spec models.G
 }
 
 func handleSoulBoost(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem) (string, error) {
-	val := spec.Effects["soul_boost"]
+	val := guSectionValue(spec, "support", "soul_boost")
 	if player.DaoMarks == nil {
 		player.DaoMarks = make(models.DaoMarksMap)
 	}
@@ -459,7 +460,7 @@ func handleManaPollution(player *models.Player, gu models.GuInstance, spec model
 }
 
 func handleEnslaveBeastTier(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem) (string, error) {
-	tier := spec.Effects["enslave_beast_tier"]
+	tier := guSectionValue(spec, "support", "enslave_beast_tier")
 	return fmt.Sprintf("Luyện hóa thành công, thu phục thú nô cấp %.0f.", tier), nil
 }
 
@@ -499,4 +500,8 @@ func tickStatusEffects(player *models.Player, ctx *CombatContext) {
 		}
 	}
 	player.ActiveCombat.PlayerStatusEffects = nextPlayerEffects
+}
+
+func guSectionValue(spec models.GuDictionaryItem, section string, key string) float64 {
+	return models.GetGuEffectSection(spec, section)[key]
 }

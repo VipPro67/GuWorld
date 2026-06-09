@@ -195,11 +195,10 @@ func AttackTribulationEnemy(c *gin.Context) {
 	}
 
 	// 4. Calculate Player Damage (augmented by Dao Marks)
-	baseDmg := 35.0 // Base default attack
-	if spec.Effects != nil {
-		if d, hasDmg := spec.Effects["damage"]; hasDmg {
-			baseDmg = d
-		}
+	baseDmg := 35.0
+	activeEffects := models.GetGuEffectSection(spec, "active")
+	if d, hasDmg := activeEffects["damage"]; hasDmg {
+		baseDmg = d
 	}
 
 	// Fetch Dao Mark Multiplier
@@ -292,9 +291,9 @@ func AttackTribulationEnemy(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":    combatLog,
-		"enemy_hp":   en.HP,
-		"player_hp":  player.HP,
+		"message":     combatLog,
+		"enemy_hp":    en.HP,
+		"player_hp":   player.HP,
 		"player_mana": player.CurrentMana,
 	})
 }
@@ -991,7 +990,7 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	if err != nil {
 		return err
 	}
- 
+
 	return tx.Commit()
 }
 
@@ -1018,7 +1017,7 @@ func autoResolveEvent(eventID string, playerID string) {
 	if reduction > 0.5 {
 		reduction = 0.5
 	}
-	
+
 	hpFactor := 0.1 + 0.4*reduction // default 0.1, up to 0.3 if max feathermen
 	newHP := int(float64(ev.ApertureHPBefore) * hpFactor)
 	if newHP < 100 {

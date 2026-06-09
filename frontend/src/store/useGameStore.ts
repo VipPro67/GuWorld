@@ -201,8 +201,8 @@ const calculateHealingStat = (player: Player, guDictionary: Record<string, GuSpe
     if (gu.equipped && gu.status === "ACTIVE") {
       const spec = guDictionary[gu.gu_id];
       if (spec && spec.effects) {
-        if (spec.effects.refine_mana_tier) healing += spec.effects.refine_mana_tier * 10;
-        if (spec.effects.cleansing_power) healing += spec.effects.cleansing_power * 15;
+        if (spec.effects.active?.refine_mana_tier) healing += spec.effects.active?.refine_mana_tier * 10;
+        if (spec.effects.active?.cleansing_power) healing += spec.effects.active?.cleansing_power * 15;
       }
     }
   });
@@ -319,6 +319,13 @@ export interface TribulationEnemy {
   updated_at: string;
 }
 
+export interface GuEffects {
+  active?: Record<string, number>;
+  support?: Record<string, number>;
+  passive?: Record<string, number>;
+  house?: Record<string, number>;
+}
+
 export interface GuSpec {
   id: string;
   name: string;
@@ -327,11 +334,17 @@ export interface GuSpec {
   gu_type: string;
   origin_region: string;
   base_mana_cost: number;
-  effects: Record<string, number>;
+  effects: GuEffects;
   hunger_rate: number;
   food_types: string[];
   max_hunger: number;
   description: string;
+  rarity: string;
+  is_immortal: boolean;
+  primary_role: string;
+  combat_roles: string[];
+  combat_tags: string[];
+  support_tags: string[];
 }
 
 export interface ItemSpec {
