@@ -26,6 +26,7 @@ import { PlayerProfileModal } from "@/components/PlayerProfileModal";
 import { FeedbackView } from "@/components/FeedbackView";
 import { TradeRoomModal } from "@/components/TradeRoomModal";
 import { Handshake } from "lucide-react";
+import { KillerMoveBuilder } from "@/components/killer-moves/KillerMoveBuilder";
 
 
 
@@ -246,7 +247,10 @@ export default function Home() {
               onRefine={refineGu}
             />
           </div>
-        ) : currentView === "topup" ? (
+        ) : currentView === "kill-moves" ? (
+          <KillerMoveBuilder/>
+        ) 
+        : currentView === "topup" ? (
           <div className="w-full">
             <TopupView />
           </div>

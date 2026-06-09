@@ -14,6 +14,7 @@ import {
   Loader2,
   Sparkles,
   Crown,
+  Sword,
 } from "lucide-react";
 import { LogConsole } from "./LogConsole";
 
@@ -121,6 +122,15 @@ export const LobbyView: React.FC = () => {
       glow: "group-hover:shadow-[0_0_20px_rgba(245,158,11,0.4)]",
       borderColor: "border-amber-400/20",
       iconColor: "text-amber-100",
+    },
+    {
+      id: "kill-moves",
+      label: "Sát Chiêu",
+      icon: Sword,
+      gradient: "from-rose-500 to-red-600",
+      glow: "group-hover:shadow-[0_0_20px_rgba(239,68,68,0.4)]",
+      borderColor: "border-rose-400/20",
+      iconColor: "text-rose-100",
     },
     {
       id: "topup",
