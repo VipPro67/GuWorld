@@ -1,15 +1,28 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Player, CombatState, GuSpec, GuInstance, useGameStore } from "@/store/useGameStore";
-import { Flame, Shield, Heart, Zap, Sparkles, Award, Play } from "lucide-react";
+import { Player, CombatState, GuSpec, GuInstance, KillerMove, useGameStore } from "@/store/useGameStore";
+import { Flame, Sparkles, Play } from "lucide-react";
+
+type CombatGridMember = {
+  id: string;
+  name: string;
+  hp: number;
+  max_hp: number;
+  speed?: number;
+  grid_x?: number;
+  grid_y?: number;
+  virtual_shield?: number;
+  current_mana?: number;
+  max_mana?: number;
+};
 
 interface CombatScreenProps {
   player: Player;
   enemy: CombatState;
   guDictionary: Record<string, GuSpec>;
   actionLoading: boolean;
-  onAttack: (equippedGuIds: string[], isCharge?: boolean, targetId?: string, targetX?: number, targetY?: number) => Promise<any>;
+  onAttack: (equippedGuIds: string[], isCharge?: boolean, targetId?: string, targetX?: number, targetY?: number) => Promise<unknown>;
   onRetreat?: () => Promise<void>;
 }
 
@@ -52,13 +65,11 @@ const Grid3x3 = ({
   isAllyTeam,
   selectedId,
   onSelect,
-  guDictionary
 }: {
-  team: any[];
+  team: CombatGridMember[];
   isAllyTeam: boolean;
   selectedId: string;
-  onSelect?: (combatant: any) => void;
-  guDictionary: Record<string, GuSpec>;
+  onSelect?: (combatant: CombatGridMember) => void;
 }) => {
   const cols = isAllyTeam ? [3, 2, 1] : [1, 2, 3];
   const rows = [1, 2, 3];
@@ -110,17 +121,17 @@ const Grid3x3 = ({
                             style={{ width: `${(c.hp / c.max_hp) * 100}%` }}
                           />
                         </div>
-                        {c.virtual_shield > 0 && (
+                        {(c.virtual_shield || 0) > 0 && (
                           <div className="w-full bg-zinc-955 h-1 rounded-full overflow-hidden border border-zinc-900 relative">
                             <div
                               className="bg-cyan-400 h-full rounded-full transition-all duration-300 shadow-[0_0_4px_rgba(34,211,238,0.6)]"
-                              style={{ width: `${Math.min(100, (c.virtual_shield / 1000) * 100)}%` }}
+                              style={{ width: `${Math.min(100, ((c.virtual_shield || 0) / 1000) * 100)}%` }}
                             />
                           </div>
                         )}
                         <div className="flex justify-between text-[7px] font-mono text-zinc-400 leading-none">
                           <span>HP: {Math.round(c.hp)}</span>
-                          {c.virtual_shield > 0 && <span className="text-cyan-400">S: {Math.round(c.virtual_shield)}</span>}
+                          {(c.virtual_shield || 0) > 0 && <span className="text-cyan-400">S: {Math.round(c.virtual_shield || 0)}</span>}
                         </div>
                       </div>
                     )}
@@ -145,6 +156,50 @@ const Grid3x3 = ({
   );
 };
 
+const calculateGuFailureChance = (selectedIds: string[], eligibleGus: GuInstance[], guDictionary: Record<string, GuSpec>): number => {
+  if (selectedIds.length <= 1) return 0;
+  const selectedPaths = selectedIds
+    .map((id) => eligibleGus.find((gu) => gu.instance_id === id))
+    .map((gu) => (gu ? guDictionary[gu.gu_id]?.path : undefined))
+    .filter(Boolean);
+  const pathChaos = Math.max(0, new Set(selectedPaths).size - 1) * 8;
+  return Math.min(75, (selectedIds.length - 1) * 12 + pathChaos);
+};
+
+function SavedKillerMoveSelector({ moves, selectedId, onSelect }: { moves: KillerMove[]; selectedId: string; onSelect: (id: string) => void }) {
+  if (moves.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-purple-500/30 bg-purple-950/10 p-5 text-sm text-purple-200">
+        Chưa có sát chiêu đã lưu. Vào Sát Chiêu Đường để lắp Cổ hạch tâm/phụ trợ và lưu thành sát chiêu ổn định.
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {moves.map((move) => (
+        <button
+          key={move.id}
+          type="button"
+          onClick={() => onSelect(move.id)}
+          className={`rounded-xl border p-3 text-left transition ${selectedId === move.id ? "border-purple-400 bg-purple-500/15 text-purple-50" : "border-zinc-900 bg-zinc-950/40 text-zinc-300 hover:border-purple-500/40"}`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-xs font-bold font-serif">{move.name}</span>
+            <span className="rounded border border-purple-400/30 px-1.5 py-0.5 text-[8px] font-mono text-purple-200">{move.stability.toFixed(0)}%</span>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] font-mono text-zinc-400">
+            <span>{move.path}</span>
+            <span>{move.move_type}</span>
+            <span>Mana {move.total_mana_cost.toFixed(1)}</span>
+            <span>Dmg {move.damage_value.toFixed(1)}</span>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export const CombatScreen: React.FC<CombatScreenProps> = ({
   player,
   enemy,
@@ -159,22 +214,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const [selectedTargetY, setSelectedTargetY] = useState<number>(2);
   const [shouldFlashRed, setShouldFlashRed] = useState(false);
   const [shouldShake, setShouldShake] = useState(false);
+  const [combatMode, setCombatMode] = useState<"gu" | "killer">("gu");
+  const [selectedKillerMoveId, setSelectedKillerMoveId] = useState("");
   const logEndRef = useRef<HTMLDivElement | null>(null);
-
-  const isSelf = (ally: any) => {
-    if (!ally) return false;
-    return (
-      ally.id?.toLowerCase() === player.id?.toLowerCase() ||
-      ally.name === player.username
-    );
-  };
-
-  const selfCombatant = enemy.allies?.find(isSelf);
-  const currentHP = selfCombatant !== undefined ? selfCombatant.hp : player.hp;
-  const maxHP = selfCombatant !== undefined ? selfCombatant.max_hp : (player.base_hp || 100);
-  const currentMana = selfCombatant !== undefined ? selfCombatant.current_mana : player.current_mana;
-  const maxMana = selfCombatant !== undefined ? selfCombatant.max_mana : player.max_mana;
-  const alliesFiltered = enemy.allies ? enemy.allies.filter((ally) => !isSelf(ally)) : [];
 
   const alliesUnified = enemy.allies && enemy.allies.length > 0 ? enemy.allies : [
     {
@@ -210,7 +252,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   ].filter(c => c.hp > 0)
     .sort((a, b) => (b.speed || 0) - (a.speed || 0));
 
-  const handleSelectEnemy = (c: any) => {
+  const handleSelectEnemy = (c: CombatGridMember) => {
     setSelectedTargetID(c.id);
     setSelectedTargetX(c.grid_x || 1);
     setSelectedTargetY(c.grid_y || 2);
@@ -218,25 +260,35 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   // Initialize target
   useEffect(() => {
-    if (enemy.enemies && enemy.enemies.length > 0) {
-      const activeEnemy = enemy.enemies.find((e) => e.hp > 0);
-      if (activeEnemy) {
-        setSelectedTargetID(activeEnemy.id);
-        setSelectedTargetX(activeEnemy.grid_x || 1);
-        setSelectedTargetY(activeEnemy.grid_y || 2);
+    const timer = window.setTimeout(() => {
+      if (enemy.enemies && enemy.enemies.length > 0) {
+        const activeEnemy = enemy.enemies.find((e) => e.hp > 0);
+        if (activeEnemy) {
+          setSelectedTargetID(activeEnemy.id);
+          setSelectedTargetX(activeEnemy.grid_x || 1);
+          setSelectedTargetY(activeEnemy.grid_y || 2);
+        } else {
+          setSelectedTargetID(enemy.enemies[0].id);
+          setSelectedTargetX(enemy.enemies[0].grid_x || 1);
+          setSelectedTargetY(enemy.enemies[0].grid_y || 2);
+        }
       } else {
-        setSelectedTargetID(enemy.enemies[0].id);
-        setSelectedTargetX(enemy.enemies[0].grid_x || 1);
-        setSelectedTargetY(enemy.enemies[0].grid_y || 2);
+        setSelectedTargetID(enemy.enemy_template_id || "enemy");
+        setSelectedTargetX(1);
+        setSelectedTargetY(2);
       }
-    } else {
-      setSelectedTargetID(enemy.enemy_template_id || "enemy");
-      setSelectedTargetX(1);
-      setSelectedTargetY(2);
-    }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [enemy.enemy_name, enemy.enemies, enemy.enemy_template_id]);
 
   const logs = useGameStore((state) => state.logs);
+  const killerMoves = useGameStore((state) => state.killerMoves);
+  const fetchKillerMoves = useGameStore((state) => state.fetchKillerMoves);
+  const castKillerMove = useGameStore((state) => state.castKillerMove);
+
+  useEffect(() => {
+    void fetchKillerMoves();
+  }, [fetchKillerMoves]);
 
   // Auto-scroll combat logs to bottom on new log additions
   useEffect(() => {
@@ -288,7 +340,7 @@ const calculateEstimatedCosts = () => {
   let baseDamage = 0;
   let baseDefense = 0;
   let damageMultiplier = 1.0; // Tích lũy hệ số nhân sát thương
-  let defenseMultiplier = 1.0; // Tích lũy hệ số nhân phòng ngự
+  const defenseMultiplier = 1.0; // Tích lũy hệ số nhân phòng ngự
 
   let backlashRisk = false;
   let immortalGuWithoutEssence = false;
@@ -372,7 +424,7 @@ const calculateEstimatedCosts = () => {
     // Cần parse string từ CSV nếu nó đang ở dạng String, hoặc gọi trực tiếp nếu là Object
     let activeEffects = spec.effects;
     if (typeof activeEffects === 'string') {
-        try { activeEffects = JSON.parse(activeEffects); } catch(e) { activeEffects = {}; }
+        try { activeEffects = JSON.parse(activeEffects); } catch { activeEffects = {}; }
     }
 
     const baseDmg = activeEffects?.active?.["damage"] || activeEffects?.active?.["add_base_attack"] || 0;
@@ -409,8 +461,10 @@ const calculateEstimatedCosts = () => {
 };
 
   const { totalCost, expectedDamage, expectedDefense, backlashRisk } = calculateEstimatedCosts();
+  const selectedKillerMove = killerMoves.find((move) => move.id === selectedKillerMoveId) || null;
+  const guFailureChance = calculateGuFailureChance(selectedGuInstanceIds, eligibleGus, guDictionary);
 
-  const hasEnoughMana = player.current_mana >= totalCost;
+  const hasEnoughMana = combatMode === "killer" && selectedKillerMove ? player.current_mana >= selectedKillerMove.total_mana_cost : player.current_mana >= totalCost;
   const canAttack = !actionLoading && hasEnoughMana;
 
   const handleExecuteKillerMove = async () => {
@@ -422,6 +476,12 @@ const calculateEstimatedCosts = () => {
   const handleExecuteCharge = async () => {
     if (actionLoading) return;
     await onAttack([], true, selectedTargetID, selectedTargetX, selectedTargetY);
+    setSelectedGuInstanceIds([]);
+  };
+
+  const handleCastSavedKillerMove = async () => {
+    if (!canAttack || !selectedKillerMoveId) return;
+    await castKillerMove(selectedKillerMoveId, selectedTargetID, selectedGuInstanceIds.length > 0);
     setSelectedGuInstanceIds([]);
   };
 
@@ -476,7 +536,6 @@ const calculateEstimatedCosts = () => {
             team={alliesUnified}
             isAllyTeam={true}
             selectedId={selectedTargetID}
-            guDictionary={guDictionary}
           />
         </div>
 
@@ -497,7 +556,6 @@ const calculateEstimatedCosts = () => {
             isAllyTeam={false}
             selectedId={selectedTargetID}
             onSelect={handleSelectEnemy}
-            guDictionary={guDictionary}
           />
         </div>
       </div>
@@ -526,7 +584,7 @@ const calculateEstimatedCosts = () => {
       <div className="space-y-4">
         <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
           <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono">
-            Kết Hợp Sát Chiêu (Equipped Gu Bugs & Killer Moves)
+            Chiến Pháp: Cổ riêng lẻ / Sát chiêu đã luyện
           </span>
           {backlashRisk && (
             <span className="text-[9px] font-bold text-rose-500 border border-rose-500/20 bg-rose-950/20 px-2 py-0.5 rounded animate-pulse uppercase">
@@ -535,7 +593,29 @@ const calculateEstimatedCosts = () => {
           )}
         </div>
 
-        {eligibleGus.length === 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-2xl border border-zinc-900 bg-zinc-950/40 p-2">
+          <button
+            type="button"
+            onClick={() => setCombatMode("gu")}
+            className={`rounded-xl border px-4 py-3 text-left transition ${combatMode === "gu" ? "border-amber-500 bg-amber-500/10 text-amber-100" : "border-zinc-800 bg-black/20 text-zinc-400 hover:text-zinc-200"}`}
+          >
+            <div className="text-xs font-bold font-serif">Dùng Cổ riêng lẻ</div>
+            <div className="mt-1 text-[10px] font-mono">Chọn nhiều Cổ tùy ý; càng dùng lộn xộn càng tăng tỉ lệ hụt chiêu.</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setCombatMode("killer");
+              setSelectedGuInstanceIds([]);
+            }}
+            className={`rounded-xl border px-4 py-3 text-left transition ${combatMode === "killer" ? "border-purple-400 bg-purple-500/10 text-purple-100" : "border-zinc-800 bg-black/20 text-zinc-400 hover:text-zinc-200"}`}
+          >
+            <div className="text-xs font-bold font-serif">Dùng Sát Chiêu</div>
+            <div className="mt-1 text-[10px] font-mono">Thi triển sát chiêu đã lưu; rủi ro lấy từ độ ổn định có sẵn.</div>
+          </button>
+        </div>
+
+        {combatMode === "gu" && (eligibleGus.length === 0 ? (
           <div className="text-center py-6 border border-dashed border-zinc-800 rounded-2xl text-xs text-zinc-600 italic">
             Không có Cổ trùng hợp lệ để dùng trong chiến đấu bản đồ (chỉ nhận Cổ đang Xuất Trận và không phải Cổ nội tại).
           </div>
@@ -618,14 +698,33 @@ const calculateEstimatedCosts = () => {
               );
             })}
           </div>
+        ))}
+
+        {combatMode === "killer" && (
+          <SavedKillerMoveSelector
+            moves={killerMoves}
+            selectedId={selectedKillerMoveId}
+            onSelect={setSelectedKillerMoveId}
+          />
         )}
 
         {/* Action Button & Live estimate bar */}
         <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between pt-4 border-t border-zinc-900/60">
           <div className="flex gap-4 text-[10px] text-zinc-500 font-mono bg-zinc-950/40 border border-zinc-900 px-4 py-2.5 rounded-xl flex-1">
-            <div>Chân nguyên tiêu hao: <span className={`font-bold ${hasEnoughMana ? "text-emerald-400" : "text-rose-400 animate-pulse font-extrabold"}`}>{totalCost.toFixed(1)} / {player.current_mana.toFixed(1)}</span></div>
-            <div>Sát thương ước tính: <span className="text-amber-400 font-bold">{expectedDamage.toFixed(1)}</span></div>
-            {expectedDefense > 0 && <div>Lá chắn ước tính: <span className="text-blue-400 font-bold">{expectedDefense.toFixed(1)}</span></div>}
+            {combatMode === "killer" && selectedKillerMove ? (
+              <>
+                <div>Tiêu hao sát chiêu: <span className={`font-bold ${hasEnoughMana ? "text-emerald-400" : "text-rose-400 animate-pulse font-extrabold"}`}>{selectedKillerMove.total_mana_cost.toFixed(1)} / {player.current_mana.toFixed(1)}</span></div>
+                <div>Ổn định sẵn có: <span className="text-purple-300 font-bold">{selectedKillerMove.stability.toFixed(1)}%</span></div>
+                <div>Sát thương: <span className="text-amber-400 font-bold">{selectedKillerMove.damage_value.toFixed(1)}</span></div>
+              </>
+            ) : (
+              <>
+                <div>Chân nguyên tiêu hao: <span className={`font-bold ${hasEnoughMana ? "text-emerald-400" : "text-rose-400 animate-pulse font-extrabold"}`}>{totalCost.toFixed(1)} / {player.current_mana.toFixed(1)}</span></div>
+                <div>Tỉ lệ hụt do dùng nhiều Cổ: <span className={guFailureChance > 0 ? "text-rose-400 font-bold" : "text-emerald-400 font-bold"}>{guFailureChance.toFixed(0)}%</span></div>
+                <div>Sát thương ước tính: <span className="text-amber-400 font-bold">{expectedDamage.toFixed(1)}</span></div>
+                {expectedDefense > 0 && <div>Lá chắn ước tính: <span className="text-blue-400 font-bold">{expectedDefense.toFixed(1)}</span></div>}
+              </>
+            )}
           </div>
 
           <div className="flex gap-2 shrink-0">
@@ -650,15 +749,15 @@ const calculateEstimatedCosts = () => {
               {enemy.charge_points > 0 ? "BỘC PHÁ SÁT CHIÊU (RELEASE)" : "TÍCH TỤ CÔNG LỰC (CHARGE)"}
             </button>
             <button
-              onClick={handleExecuteKillerMove}
-              disabled={!canAttack || enemy.charge_points > 0}
-              className={`py-3 px-6 rounded-xl font-bold font-serif text-xs tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${canAttack && enemy.charge_points === 0
+              onClick={combatMode === "killer" ? handleCastSavedKillerMove : handleExecuteKillerMove}
+              disabled={!canAttack || enemy.charge_points > 0 || (combatMode === "killer" && !selectedKillerMoveId)}
+              className={`py-3 px-6 rounded-xl font-bold font-serif text-xs tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${canAttack && enemy.charge_points === 0 && (combatMode === "gu" || selectedKillerMoveId)
                   ? "bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-md shadow-rose-950/30 active:scale-[0.98]"
                   : "bg-zinc-900 border border-zinc-850 text-zinc-500 cursor-not-allowed"
                 }`}
             >
               <Play className="w-3.5 h-3.5" />
-              <span>KÍCH HOẠT SÁT CHIÊU</span>
+              <span>{combatMode === "killer" ? "THI TRIỂN SÁT CHIÊU" : "DÙNG CỔ RIÊNG LẺ"}</span>
             </button>
           </div>
         </div>

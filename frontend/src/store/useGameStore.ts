@@ -110,6 +110,39 @@ export interface Player {
   avatar_url?: string;
 }
 
+
+export interface KillerMoveSlot {
+  id: string;
+  killer_move_id: string;
+  player_gu_id: string;
+  slot_type: "CORE" | "SUPPORT" | string;
+  slot_index: number;
+  created_at: string;
+}
+
+export interface KillerMove {
+  id: string;
+  player_id: string;
+  name: string;
+  path: string;
+  move_type: string;
+  rank_required: number;
+  core_player_gu_id: string;
+  total_mana_cost: number;
+  stability: number;
+  damage_value: number;
+  defense_value: number;
+  cooldown: number;
+  cast_time: number;
+  effects?: Record<string, number> | string | null;
+  is_mastered: boolean;
+  is_stable: boolean;
+  is_instant_cast: boolean;
+  created_at: string;
+  updated_at: string;
+  slots?: KillerMoveSlot[];
+}
+
 export interface ManaSnapshot {
   player_id: string;
   current_mana: number;
@@ -547,6 +580,11 @@ interface GameState {
   dictionaryLoaded: boolean;
   recipes: RefiningRecipe[];
   recipesLoaded: boolean;
+  killerMoves: KillerMove[];
+  killerMovesLoaded: boolean;
+  fetchKillerMoves: () => Promise<void>;
+  deleteKillerMove: (id: string) => Promise<boolean>;
+  castKillerMove: (id: string, targetId?: string, usedExtraGuThisTurn?: boolean) => Promise<{ player: Player; logs: string[]; victory?: boolean; defeat?: boolean } | null>;
   inspectedProfile: any | null;
   inspectedUsernameQuery: string | null;
   profileLoading: boolean;
@@ -846,6 +884,8 @@ export const useGameStore = create<GameState>((set, get) => {
   dictionaryLoaded: false,
   recipes: [],
   recipesLoaded: false,
+  killerMoves: [],
+  killerMovesLoaded: false,
   inspectedProfile: null,
   inspectedUsernameQuery: null,
   profileLoading: false,
@@ -1724,6 +1764,82 @@ export const useGameStore = create<GameState>((set, get) => {
       set({ error: err.message });
       get().addLog(`Tịnh hóa lỗi: ${err.message}`);
       return { success: false, message: err.message };
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  fetchKillerMoves: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/killer-moves`);
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Không thể tải sát chiêu.");
+      set({ killerMoves: data.killer_moves || [], killerMovesLoaded: true });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Không thể tải sát chiêu.";
+      set({ error: message, killerMovesLoaded: true });
+      get().addLog(`Tải sát chiêu thất bại: ${message}`);
+    }
+  },
+
+  deleteKillerMove: async (id) => {
+    const { token, logout } = get();
+    if (!token) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/killer-moves/${id}`, { method: "DELETE" });
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Không thể xóa sát chiêu.");
+      set((state) => ({ killerMoves: state.killerMoves.filter((move) => move.id !== id) }));
+      get().addLog(data.message || "Đã xóa sát chiêu.");
+      return true;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Không thể xóa sát chiêu.";
+      set({ error: message });
+      get().addLog(`Xóa sát chiêu thất bại: ${message}`);
+      return false;
+    }
+  },
+
+  castKillerMove: async (id, targetId, usedExtraGuThisTurn = false) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return null;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/combat/cast-killer-move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          killer_move_id: id,
+          target_id: targetId || "",
+          used_extra_gu_this_turn: usedExtraGuThisTurn,
+        }),
+      });
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Thi triển sát chiêu thất bại.");
+      setPlayerFromServer(data.player);
+      if (data.logs && Array.isArray(data.logs)) {
+        data.logs.forEach((logLine: string) => get().addLog(logLine));
+      }
+      return data;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Thi triển sát chiêu thất bại.";
+      set({ error: message });
+      get().addLog(`Thi triển sát chiêu thất bại: ${message}`);
+      return null;
     } finally {
       set({ actionLoading: false });
     }

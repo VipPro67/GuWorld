@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { GuInstance, GuSpec, Player, useGameStore } from "@/store/useGameStore";
+import { GuInstance, GuSpec, KillerMove, Player, useGameStore } from "@/store/useGameStore";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -45,7 +45,15 @@ const apiFetch = (input: RequestInfo | URL, init: RequestInit = {}) =>
   });
 
 export function KillerMoveBuilder() {
-  const { player, guDictionary, initializeSession, fetchDictionary } = useGameStore();
+  const {
+    player,
+    guDictionary,
+    initializeSession,
+    fetchDictionary,
+    killerMoves,
+    fetchKillerMoves,
+    deleteKillerMove,
+  } = useGameStore();
   const [coreGu, setCoreGu] = useState<GuInstance | null>(null);
   const [supportGus, setSupportGus] = useState<(GuInstance | null)[]>(Array(8).fill(null));
   const [preview, setPreview] = useState<KillerMovePreview | null>(null);
@@ -58,7 +66,8 @@ export function KillerMoveBuilder() {
   useEffect(() => {
     void fetchDictionary();
     void initializeSession();
-  }, [fetchDictionary, initializeSession]);
+    void fetchKillerMoves();
+  }, [fetchDictionary, fetchKillerMoves, initializeSession]);
 
   const usableGus = useMemo(() => {
     const selectedIds = new Set([coreGu?.instance_id, ...supportGus.map((gu) => gu?.instance_id)].filter(Boolean));
@@ -116,6 +125,7 @@ export function KillerMoveBuilder() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Không thể lưu sát chiêu");
       setSavedMessage("Đã lưu sát chiêu vào đạo kho.");
+      void fetchKillerMoves();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không thể lưu sát chiêu");
     } finally {
@@ -167,16 +177,25 @@ export function KillerMoveBuilder() {
         </div>
       </section>
 
-      <KillerMovePreviewPanel
-        preview={preview}
-        error={error}
-        isCalculating={isCalculating}
-        isSaving={isSaving}
-        savedMessage={savedMessage}
-        canSave={Boolean(coreGu && preview)}
-        onSave={saveKillerMove}
-        player={player}
-      />
+      <div className="space-y-6">
+        <KillerMovePreviewPanel
+          preview={preview}
+          error={error}
+          isCalculating={isCalculating}
+          isSaving={isSaving}
+          savedMessage={savedMessage}
+          canSave={Boolean(coreGu && preview)}
+          onSave={saveKillerMove}
+          player={player}
+        />
+        <KillerMoveManagerPanel
+          moves={killerMoves}
+          guDictionary={guDictionary}
+          player={player}
+          onRefresh={fetchKillerMoves}
+          onDelete={deleteKillerMove}
+        />
+      </div>
     </div>
   );
 }
@@ -272,6 +291,88 @@ function KillerMovePreviewPanel({ preview, error, isCalculating, isSaving, saved
         </div>
       ) : (
         <p className="mt-5 text-sm text-slate-400">Kéo một Cổ vào slot hạch tâm để bắt đầu.</p>
+      )}
+    </aside>
+  );
+}
+
+function KillerMoveManagerPanel({ moves, guDictionary, player, onRefresh, onDelete }: { moves: KillerMove[]; guDictionary: Record<string, GuSpec>; player: Player; onRefresh: () => void; onDelete: (id: string) => Promise<boolean> }) {
+  const [selectedId, setSelectedId] = useState("");
+  const selectedMove = moves.find((move) => move.id === selectedId) || moves[0] || null;
+
+
+  return (
+    <aside className="rounded-3xl border border-purple-500/30 bg-slate-950/90 p-6 shadow-2xl shadow-purple-950/20">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.25em] text-purple-300">Quản lý</p>
+          <h2 className="text-2xl font-bold text-amber-100">Đạo kho sát chiêu</h2>
+        </div>
+        <button type="button" onClick={onRefresh} className="rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:border-purple-400">Làm mới</button>
+      </div>
+
+      {moves.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-slate-700 p-4 text-sm text-slate-400">Chưa lưu sát chiêu nào. Lắp hạch tâm/phụ trợ rồi bấm “Lưu sát chiêu”.</p>
+      ) : (
+        <div className="space-y-4">
+          <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+            {moves.map((move) => (
+              <button
+                key={move.id}
+                type="button"
+                onClick={() => setSelectedId(move.id)}
+                className={`w-full rounded-xl border p-3 text-left transition ${selectedMove?.id === move.id ? "border-amber-300 bg-amber-400/10" : "border-slate-800 bg-slate-900/60 hover:border-purple-400/60"}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <strong className="truncate text-amber-100">{move.name}</strong>
+                  <span className="rounded-full border border-purple-400/30 px-2 py-0.5 text-xs text-purple-200">{move.stability.toFixed(1)}%</span>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-400">
+                  <span>{move.path}</span>
+                  <span>{move.move_type}</span>
+                  <span>Mana {move.total_mana_cost.toFixed(1)}</span>
+                  <span>{move.slots?.length || 0} Cổ</span>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {selectedMove && (
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-200">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-bold text-amber-100">{selectedMove.name}</h3>
+                  <p className="text-xs text-slate-400">Sát chiêu có rủi ro sẵn theo độ ổn định; vào combat sẽ tách riêng khỏi dùng nhiều Cổ riêng lẻ.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void onDelete(selectedMove.id)}
+                  className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs text-red-200 hover:bg-red-950/40"
+                >
+                  Xóa
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Stat label="Chân/Tiên nguyên" value={`${selectedMove.total_mana_cost.toFixed(1)} / ${player.current_mana.toFixed(1)}`} />
+                <Stat label="Sát thương" value={selectedMove.damage_value.toFixed(1)} />
+                <Stat label="Phòng ngự" value={selectedMove.defense_value.toFixed(1)} />
+                <Stat label="Cooldown" value={`${selectedMove.cooldown} lượt`} />
+              </div>
+              <div className="mt-3 space-y-2">
+                {(selectedMove.slots || []).map((slot) => {
+                  const gu = player.gu_inventory.find((item) => item.instance_id === slot.player_gu_id);
+                  const name = gu ? guName(gu, guDictionary) : slot.player_gu_id;
+                  return (
+                    <div key={slot.id} className="flex justify-between rounded-lg bg-slate-950 px-3 py-2 text-xs">
+                      <span className="text-slate-400">{slot.slot_type} {slot.slot_index}</span>
+                      <strong className="text-slate-100">{name}</strong>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </aside>
   );
