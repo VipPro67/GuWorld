@@ -76,17 +76,16 @@ const Grid3x3 = ({
               <div
                 key={x}
                 onClick={() => c && !isDead && onSelect && onSelect(c)}
-                className={`relative flex flex-col justify-between p-2 rounded-xl border aspect-square text-left transition-all ${
-                  !c
+                className={`relative flex flex-col justify-between p-2 rounded-xl border aspect-square text-left transition-all ${!c
                     ? "border-zinc-950/40 bg-zinc-950/10 opacity-20"
                     : isDead
-                    ? "border-zinc-950 bg-black/60 opacity-40 cursor-not-allowed"
-                    : isSelected
-                    ? isAllyTeam
-                      ? "border-emerald-500 bg-emerald-950/20 shadow-[0_0_8px_rgba(16,185,129,0.35)] cursor-pointer scale-[1.02]"
-                      : "border-rose-500 bg-rose-950/20 shadow-[0_0_8px_rgba(239,68,68,0.35)] cursor-pointer scale-[1.02]"
-                    : "border-zinc-900 hover:border-zinc-800 bg-zinc-900/40 cursor-pointer"
-                }`}
+                      ? "border-zinc-950 bg-black/60 opacity-40 cursor-not-allowed"
+                      : isSelected
+                        ? isAllyTeam
+                          ? "border-emerald-500 bg-emerald-950/20 shadow-[0_0_8px_rgba(16,185,129,0.35)] cursor-pointer scale-[1.02]"
+                          : "border-rose-500 bg-rose-950/20 shadow-[0_0_8px_rgba(239,68,68,0.35)] cursor-pointer scale-[1.02]"
+                        : "border-zinc-900 hover:border-zinc-800 bg-zinc-900/40 cursor-pointer"
+                  }`}
               >
                 <span className="absolute top-1 right-1 text-[7px] text-zinc-650 font-mono">
                   {x},{y}
@@ -209,7 +208,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     ...alliesUnified,
     ...enemiesList
   ].filter(c => c.hp > 0)
-  .sort((a, b) => (b.speed || 0) - (a.speed || 0));
+    .sort((a, b) => (b.speed || 0) - (a.speed || 0));
 
   const handleSelectEnemy = (c: any) => {
     setSelectedTargetID(c.id);
@@ -283,77 +282,131 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     );
   };
 
-  // Compute estimated stats & mana costs
-  const calculateEstimatedCosts = () => {
-    let totalCost = 0;
-    let expectedDamage = 0;
-    let expectedDefense = 0;
-    let backlashRisk = false;
+const calculateEstimatedCosts = () => {
+  let totalCost = 0;
+  
+  let baseDamage = 0;
+  let baseDefense = 0;
+  let damageMultiplier = 1.0; // Tích lũy hệ số nhân sát thương
+  let defenseMultiplier = 1.0; // Tích lũy hệ số nhân phòng ngự
 
-    selectedGuInstanceIds.forEach((instId) => {
-      const guInst = player.gu_inventory.find((g) => g.instance_id === instId);
-      if (!guInst) return;
+  let backlashRisk = false;
+  let immortalGuWithoutEssence = false;
 
-      const spec = guDictionary[guInst.gu_id];
-      if (!spec) return;
+  if (!selectedGuInstanceIds || selectedGuInstanceIds.length === 0) {
+    return { totalCost, expectedDamage: 0, expectedDefense: 0, backlashRisk, immortalGuWithoutEssence };
+  }
 
-      // Check level penalty risk
-      if (player.rank < spec.rank) {
-        backlashRisk = true;
-      }
+  // Khái niệm: Cổ đầu tiên được chọn là Cổ Hạch Tâm (Core Gu)
+  const coreGuId = selectedGuInstanceIds[0];
+  const coreGuInst = player.gu_inventory.find((g) => g.instance_id === coreGuId);
+  const coreSpec = coreGuInst ? guDictionary[coreGuInst.gu_id] : null;
+  const corePath = coreSpec ? coreSpec.path : "strength"; 
 
-      // Base mana cost logic: BaseManaCost percentage or fallback to 10% player max mana
-      let baseManaPct = spec.base_mana_cost > 0.0 ? spec.base_mana_cost / 100.0 : 0.10;
-      let cost = baseManaPct * player.max_mana;
+  selectedGuInstanceIds.forEach((instId, index) => {
+    const guInst = player.gu_inventory.find((g) => g.instance_id === instId);
+    if (!guInst) return;
+
+    const spec = guDictionary[guInst.gu_id];
+    if (!spec) return;
+
+    const isCore = (index === 0);
+    const isImmortalGu = spec.rank >= 6;
+    const isMortalPlayer = player.rank < 6;
+    const isMortalGu = !isImmortalGu;
+    const isImmortalPlayer = !isMortalPlayer;
+
+    // 1. Phán đoán Đè cấp (Rank Suppression)
+    if (player.rank < spec.rank) {
+      backlashRisk = true;
+    }
+
+    // 2. Tính toán Năng lượng tiêu hao (Mana Cost)
+    let cost = 0;
+    if (isImmortalGu && isMortalPlayer) {
+      cost = 0;
+      immortalGuWithoutEssence = true;
+    } else if (isMortalGu && isImmortalPlayer) { // Nếu Cổ là Phàm Cổ nhưng người chơi đã đạt Tông Sư trở lên, miễn phí chi phí nhưng vẫn có rủi ro phản phệ nếu dùng Cổ khác hệ, sài quá nhiều Cổ Phàm sẽ dễ bị phản phệ
+      cost = 0;
+      
+    }
+    else {
+      cost = spec.base_mana_cost || 0;
+      // Trừ hao chi phí nếu Tu vi cao hơn Rank của Cổ
       if (player.rank > spec.rank) {
         cost /= Math.pow(10, player.rank - spec.rank);
       }
-      let divisor = Math.pow(2, player.sub_rank - 1);
+      const divisor = Math.pow(2, player.sub_rank - 1);
       cost /= divisor;
+    }
 
-      totalCost += cost;
+    // Logic Sát Chiêu: Cổ phụ trợ (Support Gu) được giảm 20% tiêu hao do cộng hưởng
+    totalCost += isCore ? cost : cost * 0.8;
 
-      // Power calculation with regional suppression
-      let powerScale = 1.0;
-      if (spec.origin_region !== player.current_region) {
-        const effectiveRank = Math.max(1, spec.rank - 1);
-        powerScale = effectiveRank / spec.rank;
+    // 3. Áp chế ngoại vực (Region Suppression)
+    let powerScale = 1.0;
+    if (spec.origin_region !== player.current_region) {
+      const effectiveRank = Math.max(1, spec.rank - 1);
+      powerScale = effectiveRank / spec.rank;
+    }
+
+    // 4. Hệ số Cảnh giới (Mastery Multiplier)
+    let masteryMultiplier = 1.0;
+    const mLevel = player.path_masteries?.[spec.path] || "Ordinary";
+    switch (mLevel) {
+      case "Ordinary": masteryMultiplier = 1.0; break;
+      case "Master": masteryMultiplier = 1.1; break;
+      case "Grandmaster": masteryMultiplier = 1.25; break;
+      case "Supreme Grandmaster": masteryMultiplier = 1.5; break;
+    }
+
+    // 5. Kiểm tra Xung đột Đạo ngân (Path Conflict) trong Sát Chiêu
+    if (!isCore && spec.path !== corePath) {
+      // Nếu không phải Tông Sư trở lên, mix Cổ khác hệ sẽ gây rủi ro phản phệ cực cao
+      if (mLevel !== "Grandmaster" && mLevel !== "Supreme Grandmaster") {
+        backlashRisk = true; 
       }
+    }
 
-      const activeEffects = spec.effects?.active || {};
-      const baseDmg = activeEffects["damage"] || activeEffects["add_base_attack"] || 0;
-      const baseDef = activeEffects["defense"] || activeEffects["add_base_defense"] || 0;
+    // 6. Tính toán Chỉ số gốc và Hệ số nhân (Base Stats & Multipliers)
+    // Cần parse string từ CSV nếu nó đang ở dạng String, hoặc gọi trực tiếp nếu là Object
+    let activeEffects = spec.effects;
+    if (typeof activeEffects === 'string') {
+        try { activeEffects = JSON.parse(activeEffects); } catch(e) { activeEffects = {}; }
+    }
 
-      // Extract player's mastery for spec.path
-      let masteryMultiplier = 1.0;
-      if (player.path_masteries && player.path_masteries[spec.path]) {
-        const mLevel = player.path_masteries[spec.path];
-        switch (mLevel) {
-          case "Ordinary":
-            masteryMultiplier = 1.0;
-            break;
-          case "Master":
-            masteryMultiplier = 1.1;
-            break;
-          case "Grandmaster":
-            masteryMultiplier = 1.25;
-            break;
-          case "Supreme Grandmaster":
-            masteryMultiplier = 1.5;
-            break;
-        }
-      }
+    const baseDmg = activeEffects?.active?.["damage"] || activeEffects?.active?.["add_base_attack"] || 0;
+    const baseDef = activeEffects?.active?.["virtual_shield"] || activeEffects?.active?.["defense"] || activeEffects?.active?.["add_base_defense"] || 0;
+    
+    // Thu thập Base Stat (Cộng dồn)
+    baseDamage += baseDmg * powerScale * masteryMultiplier;
+    baseDefense += baseDef * powerScale * masteryMultiplier;
 
-      expectedDamage += baseDmg * powerScale * masteryMultiplier;
-      expectedDefense += baseDef * powerScale * masteryMultiplier;
-    });
+    // Thu thập Multiplier từ Cổ Phụ Trợ (Nhân dồn) - Ví dụ: Công Bội Cổ, Tiểu Quang Cổ
+    const dmgMult = activeEffects?.active?.["damage_multiplier"] || activeEffects?.active?.["effect_multiplier"];
+    if (dmgMult) damageMultiplier *= dmgMult;
+  });
 
-    // Apply strength dao marks to damage estimate
-    const strengthMarks = player.dao_marks?.["strength"] || 0;
-    expectedDamage = expectedDamage * (1 + strengthMarks / 100);
+  // 7. Tổng hợp sức mạnh trước Đạo Ngân
+  let expectedDamage = baseDamage * damageMultiplier;
+  let expectedDefense = baseDefense * defenseMultiplier;
 
-    return { totalCost, expectedDamage, expectedDefense, backlashRisk };
+  // 8. Tăng phúc từ Đạo Ngân (Dao Marks) - Dựa theo Lưu phái của Cổ Hạch Tâm
+  // Cứ 100 Đạo ngân tăng 100% uy lực (Nhân đôi sát thương)
+  const corePathDaoMarks = player.dao_marks?.[corePath] || 0;
+  const daoMarkBonus = 1 + (corePathDaoMarks / 100); 
+
+  expectedDamage *= daoMarkBonus;
+  expectedDefense *= daoMarkBonus;
+
+  return {
+    totalCost,
+    expectedDamage,
+    expectedDefense,
+    backlashRisk,
+    immortalGuWithoutEssence,
   };
+};
 
   const { totalCost, expectedDamage, expectedDefense, backlashRisk } = calculateEstimatedCosts();
 
@@ -374,13 +427,11 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   return (
     <div
-      className={`glass-panel rounded-3xl p-5 w-full max-w-4xl mx-auto space-y-6 relative overflow-hidden transition-all duration-300 border ${
-        shouldShake ? "animate-shake" : ""
-      } ${
-        shouldFlashRed
+      className={`glass-panel rounded-3xl p-5 w-full max-w-4xl mx-auto space-y-6 relative overflow-hidden transition-all duration-300 border ${shouldShake ? "animate-shake" : ""
+        } ${shouldFlashRed
           ? "border-rose-500/80 shadow-[0_0_20px_rgba(239,68,68,0.3)] bg-rose-950/5"
           : "border-zinc-800"
-      }`}
+        }`}
     >
       {/* Turn Queue Order Header */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-zinc-900 scrollbar-none">
@@ -392,11 +443,10 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           return (
             <div
               key={c.id}
-              className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border flex items-center gap-1.5 shrink-0 transition-all ${
-                isAlly
+              className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border flex items-center gap-1.5 shrink-0 transition-all ${isAlly
                   ? "bg-emerald-950/20 border-emerald-500/20 text-emerald-450"
                   : "bg-rose-950/20 border-rose-500/20 text-rose-450"
-              }`}
+                }`}
             >
               <span className="font-mono bg-black/40 px-1 py-0.1 rounded text-[8px] text-zinc-500">
                 {idx + 1}
@@ -514,11 +564,10 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                 <div
                   key={gu.instance_id}
                   onClick={() => toggleGuSelection(gu.instance_id)}
-                  className={`p-3 rounded-xl border transition-all cursor-pointer text-left relative flex flex-col justify-between min-h-[7.5rem] h-auto ${
-                    isSelected
+                  className={`p-3 rounded-xl border transition-all cursor-pointer text-left relative flex flex-col justify-between min-h-[7.5rem] h-auto ${isSelected
                       ? "bg-amber-500/10 border-amber-500 shadow-md shadow-amber-950/15"
                       : "bg-zinc-950/40 border-zinc-900 hover:border-zinc-800 hover:bg-zinc-950/60"
-                  }`}
+                    }`}
                 >
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
@@ -538,11 +587,11 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                         const isDmg = key === "damage" || key === "add_base_attack";
                         const isDef = key === "defense" || key === "add_base_defense";
                         const label = isDmg ? "Dmg" : isDef ? "Def" : FormatKey(key);
-                        const color = isDmg 
-                          ? "bg-rose-950/20 border-rose-500/20 text-rose-400" 
-                          : isDef 
-                          ? "bg-blue-950/20 border-blue-500/20 text-blue-400" 
-                          : "bg-zinc-900 border-zinc-850 text-zinc-400";
+                        const color = isDmg
+                          ? "bg-rose-950/20 border-rose-500/20 text-rose-400"
+                          : isDef
+                            ? "bg-blue-950/20 border-blue-500/20 text-blue-400"
+                            : "bg-zinc-900 border-zinc-850 text-zinc-400";
                         return (
                           <span key={key} className={`text-[7px] px-1 rounded font-mono border leading-normal ${color}`}>
                             {label}: {val}
@@ -593,22 +642,20 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             <button
               onClick={handleExecuteCharge}
               disabled={actionLoading}
-              className={`py-3 px-5 rounded-xl font-bold font-serif text-xs tracking-wider border transition-all cursor-pointer active:scale-[0.98] ${
-                enemy.charge_points > 0 
-                  ? "bg-amber-600/20 border-amber-500 text-amber-400 hover:bg-amber-600/30" 
+              className={`py-3 px-5 rounded-xl font-bold font-serif text-xs tracking-wider border transition-all cursor-pointer active:scale-[0.98] ${enemy.charge_points > 0
+                  ? "bg-amber-600/20 border-amber-500 text-amber-400 hover:bg-amber-600/30"
                   : "border-amber-900/50 hover:bg-amber-950/30 text-amber-500"
-              }`}
+                }`}
             >
               {enemy.charge_points > 0 ? "BỘC PHÁ SÁT CHIÊU (RELEASE)" : "TÍCH TỤ CÔNG LỰC (CHARGE)"}
             </button>
             <button
               onClick={handleExecuteKillerMove}
               disabled={!canAttack || enemy.charge_points > 0}
-              className={`py-3 px-6 rounded-xl font-bold font-serif text-xs tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                canAttack && enemy.charge_points === 0
+              className={`py-3 px-6 rounded-xl font-bold font-serif text-xs tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${canAttack && enemy.charge_points === 0
                   ? "bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white shadow-md shadow-rose-950/30 active:scale-[0.98]"
                   : "bg-zinc-900 border border-zinc-850 text-zinc-500 cursor-not-allowed"
-              }`}
+                }`}
             >
               <Play className="w-3.5 h-3.5" />
               <span>KÍCH HOẠT SÁT CHIÊU</span>

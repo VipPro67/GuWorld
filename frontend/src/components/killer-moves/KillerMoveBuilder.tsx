@@ -256,7 +256,7 @@ function KillerMovePreviewPanel({ preview, error, isCalculating, isSaving, saved
                       <strong>{slot.compatibility_score}</strong>
                     </div>
                     {!slot.applied && <p className="mt-1 text-red-200">Không cộng support effect.</p>}
-                    {slot.warnings.map((warning) => <p key={warning} className="mt-1 text-amber-200">{warning}</p>)}
+                    {slot.warnings?.map((warning) => <p key={warning} className="mt-1 text-amber-200">{warning}</p>)}
                   </div>
                 ))}
               </div>
