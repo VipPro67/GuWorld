@@ -130,6 +130,19 @@ export const ImmortalApertureView: React.FC = () => {
     fetchVariantHumans();
   }, []);
 
+  // Auto-refresh when tribulation is active to show enemy movement
+  useEffect(() => {
+    if (aperture?.state === "TRIBULATION_ACTIVE") {
+      const interval = setInterval(() => {
+        fetchApertureNodes();
+        fetchActiveTribulation();
+        // Also fetch aperture to update aperture HP if taking damage
+        fetchAperture();
+      }, 15000);
+      return () => clearInterval(interval);
+    }
+  }, [aperture?.state]);
+
   const handleSetTimeRate = async () => {
     await setApertureTimeRate(sliderRate);
   };

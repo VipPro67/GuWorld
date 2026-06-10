@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"net/http"
 	"time"
@@ -32,7 +33,8 @@ type MineSlotResponse struct {
 	ID                int        `json:"id"`
 	Rarity            string     `json:"rarity"`
 	OccupierID        *string    `json:"occupier_id"`
-	OccupierName      string     `json:"occupier_name"`
+	OccupierName      *string    `json:"occupier_name"`
+	MonsterID         *string    `json:"monster_id"`
 	OccupiedAt        *time.Time `json:"occupied_at"`
 	LastClaimedAt     *time.Time `json:"last_claimed_at"`
 	AccumulatedStones int        `json:"accumulated_stones"`
@@ -114,7 +116,7 @@ func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int, qi flo
 
 func GetMineSlots(c *gin.Context) {
 	rows, err := db.DB.Query(`
-		SELECT m.id, m.rarity, m.occupier_id, m.occupied_at, m.last_claimed_at, p.username
+		SELECT m.id, m.rarity, m.occupier_id, m.monster_id, m.occupied_at, m.last_claimed_at, p.username
 		FROM mine_slots m
 		LEFT JOIN players p ON m.occupier_id = p.id
 		ORDER BY m.id
@@ -130,18 +132,19 @@ func GetMineSlots(c *gin.Context) {
 		var id int
 		var rarity string
 		var occupierID *string
+		var monsterID *string
 		var occupiedAt, lastClaimedAt *time.Time
 		var occupierName sql.NullString
 
-		err = rows.Scan(&id, &rarity, &occupierID, &occupiedAt, &lastClaimedAt, &occupierName)
+		err = rows.Scan(&id, &rarity, &occupierID, &monsterID, &occupiedAt, &lastClaimedAt, &occupierName)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan mine slots"})
 			return
 		}
 
-		var oName string
+		var name *string
 		if occupierName.Valid {
-			oName = occupierName.String
+			name = &occupierName.String
 		}
 
 		stones := 0
@@ -156,7 +159,8 @@ func GetMineSlots(c *gin.Context) {
 			ID:                id,
 			Rarity:            rarity,
 			OccupierID:        occupierID,
-			OccupierName:      oName,
+			OccupierName:      name,
+			MonsterID:         monsterID,
 			OccupiedAt:        occupiedAt,
 			LastClaimedAt:     lastClaimedAt,
 			AccumulatedStones: stones,
@@ -376,7 +380,7 @@ func AbandonMineSlot(c *gin.Context) {
 	// 3. Clear mine slot
 	_, err = tx.Exec(`
 		UPDATE mine_slots
-		SET occupier_id = NULL, occupied_at = NULL, last_claimed_at = NULL
+		SET occupier_id = NULL, occupied_at = NULL, last_claimed_at = NULL, abandoned_at = NOW()
 		WHERE id = $1
 	`, req.SlotID)
 	if err != nil {
@@ -455,7 +459,8 @@ func AttackMineSlot(c *gin.Context) {
 
 	// 3. Load slot info and occupier
 	var occupierIDStr *string
-	err = tx.QueryRow("SELECT occupier_id FROM mine_slots WHERE id = $1", req.SlotID).Scan(&occupierIDStr)
+	var monsterIDStr *string
+	err = tx.QueryRow("SELECT occupier_id, monster_id FROM mine_slots WHERE id = $1", req.SlotID).Scan(&occupierIDStr, &monsterIDStr)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ không tồn tại"})
@@ -464,32 +469,8 @@ func AttackMineSlot(c *gin.Context) {
 		}
 		return
 	}
-	if occupierIDStr == nil {
+	if occupierIDStr == nil && monsterIDStr == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Mỏ này trống, hãy dùng lệnh chiếm đóng thay vì tấn công!"})
-		return
-	}
-
-	occupierUUID, err := uuid.Parse(*occupierIDStr)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse occupier UUID"})
-		return
-	}
-
-	if occupierUUID == authID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thể tấn công mỏ của chính mình!"})
-		return
-	}
-
-	// 4. Load defender (occupier) details
-	var defender models.Player
-	err = tx.QueryRow(`
-		SELECT id, username, rank, sub_rank, hp, max_mana, path_masteries, gu_inventory, dao_marks, current_mana, base_hp
-		FROM players WHERE id = $1 FOR UPDATE`, occupierUUID).Scan(
-		&defender.ID, &defender.Username, &defender.Rank, &defender.SubRank,
-		&defender.HP, &defender.MaxMana, &defender.PathMasteries, &defender.GuInventory, &defender.DaoMarks, &defender.CurrentMana, &defender.BaseHP,
-	)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy thông tin đối thủ"})
 		return
 	}
 
@@ -501,31 +482,87 @@ func AttackMineSlot(c *gin.Context) {
 	attacker.CurrentMana = attackerCurrentMana
 	attacker.MaxMana = attackerMaxMana
 
-	defenderStats := CalculatePlayerStats(&defender)
+	var pvpCombat models.CombatState
 
-	enemyHP := defender.BaseHP
-	if enemyHP <= 0 {
-		enemyHP = 100.0
-	}
+	if monsterIDStr != nil {
+		// PVE Combat against Mine Guard Monster
+		monsterTemplate, err := db.LoadMonsterTemplate(tx, *monsterIDStr)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy dữ liệu quái vật canh giữ"})
+			return
+		}
+		maxHP, attack, defense := models.ScaleMonsterStats(monsterTemplate.MaxHP, monsterTemplate.BaseAttack, monsterTemplate.BaseDefense, monsterTemplate.Rank, monsterTemplate.Type)
 
-	// Build PVP Mine Combat State
-	pvpCombat := models.CombatState{
-		EnemyTemplateID:    defender.ID.String(),
-		EnemyName:          defender.Username,
-		EnemyType:          "PVP",
-		EnemyHP:            enemyHP,
-		EnemyMaxHP:         enemyHP,
-		EnemyMana:          defender.CurrentMana,
-		EnemyMaxMana:       defender.MaxMana,
-		EnemyDamage:        defenderStats["attack"],
-		EnemyDefense:       defenderStats["defense"],
-		EnemyRank:          defender.Rank,
-		EnemySubRank:       defender.SubRank,
-		EnemyGuInventory:   defender.GuInventory,
-		EnemyDaoMarks:      defender.DaoMarks,
-		EnemyPathMasteries: defender.PathMasteries,
-		TargetPlayerID:     defender.ID.String(),
-		MineSlotID:         req.SlotID,
+		pvpCombat = models.CombatState{
+			EnemyTemplateID:    monsterTemplate.ID,
+			EnemyName:          "Yêu Quái Canh Mỏ: " + monsterTemplate.Name,
+			EnemyType:          "MINE_PVE",
+			EnemyHP:            maxHP,
+			EnemyMaxHP:         maxHP,
+			EnemyDamage:        attack,
+			EnemyDefense:       defense,
+			EnemyRank:          monsterTemplate.Rank,
+			EnemySubRank:       monsterTemplate.SubRank,
+			EnemyGuInventory:   monsterTemplate.GuInventory,
+			EnemyDaoMarks:      monsterTemplate.DaoMarks,
+			EnemyPathMasteries: monsterTemplate.PathMasteries,
+			AIProfile:          monsterTemplate.AIProfile,
+			LootTableID:        monsterTemplate.LootTableID,
+			TargetPlayerID:     "monster", // Dummy
+			MineSlotID:         req.SlotID,
+		}
+	} else {
+		// PVP Combat against player occupier
+		occupierUUID, err := uuid.Parse(*occupierIDStr)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse occupier UUID"})
+			return
+		}
+
+		if occupierUUID == authID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thể tấn công mỏ của chính mình!"})
+			return
+		}
+
+		// 4. Load defender (occupier) details
+		var defender models.Player
+		err = tx.QueryRow(`
+			SELECT id, username, rank, sub_rank, hp, max_mana, path_masteries, gu_inventory, dao_marks, current_mana, base_hp
+			FROM players WHERE id = $1 FOR UPDATE`, occupierUUID).Scan(
+			&defender.ID, &defender.Username, &defender.Rank, &defender.SubRank,
+			&defender.HP, &defender.MaxMana, &defender.PathMasteries, &defender.GuInventory, &defender.DaoMarks, &defender.CurrentMana, &defender.BaseHP,
+		)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy thông tin đối thủ"})
+			return
+		}
+
+		defenderStats := CalculatePlayerStats(&defender)
+
+		enemyHP := defender.BaseHP
+		if enemyHP <= 0 {
+			enemyHP = 100.0
+		}
+
+		// Build PVP Mine Combat State
+		pvpCombat = models.CombatState{
+			EnemyTemplateID:    defender.ID.String(),
+			EnemyName:          defender.Username,
+			EnemyType:          "PVP",
+			EnemyHP:            enemyHP,
+			EnemyMaxHP:         enemyHP,
+			EnemyMana:          defender.CurrentMana,
+			EnemyMaxMana:       defender.MaxMana,
+			EnemyDamage:        defenderStats["attack"],
+			EnemyDefense:       defenderStats["defense"],
+			EnemyRank:          defender.Rank,
+			EnemySubRank:       defender.SubRank,
+			EnemyGuInventory:   defender.GuInventory,
+			EnemyDaoMarks:      defender.DaoMarks,
+			EnemyPathMasteries: defender.PathMasteries,
+			TargetPlayerID:     defender.ID.String(),
+			MineSlotID:         req.SlotID,
+		}
 	}
 
 	// Initialize and save
@@ -545,4 +582,90 @@ func AttackMineSlot(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Khởi động chiến đấu chiếm mỏ thành công!"})
+}
+
+// StartMineMonsterWorker runs periodically to assign monsters to abandoned mines
+func StartMineMonsterWorker() {
+	ticker := time.NewTicker(60 * time.Minute) // check every hour
+	go func() {
+		for range ticker.C {
+			AssignMonstersToMines()
+		}
+	}()
+	// Run once at startup
+	go AssignMonstersToMines()
+}
+
+func AssignMonstersToMines() {
+	tx, err := db.DB.Begin()
+	if err != nil {
+		return
+	}
+	defer tx.Rollback()
+
+	// Find abandoned mines
+	rows, err := tx.Query(`
+		SELECT id, rarity 
+		FROM mine_slots 
+		WHERE occupier_id IS NULL AND monster_id IS NULL 
+		AND abandoned_at < NOW() - INTERVAL '24 hours'
+	`)
+	if err != nil {
+		log.Printf("Error finding abandoned mines: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	type Slot struct {
+		ID     int
+		Rarity string
+	}
+	var abandonedSlots []Slot
+	for rows.Next() {
+		var s Slot
+		if err := rows.Scan(&s.ID, &s.Rarity); err == nil {
+			abandonedSlots = append(abandonedSlots, s)
+		}
+	}
+	rows.Close()
+
+	if len(abandonedSlots) == 0 {
+		return
+	}
+
+	for _, slot := range abandonedSlots {
+		var targetRank int
+		switch slot.Rarity {
+		case "Thường":
+			targetRank = 2 // or 3
+		case "Hiếm":
+			targetRank = 4 // or 5
+		case "Sử Thi":
+			targetRank = 5
+		case "Truyền Thuyết":
+			targetRank = 6
+		default:
+			targetRank = 2
+		}
+
+		// Find a monster template matching the target rank
+		var chosenMonsterID string
+		errSelect := tx.QueryRow("SELECT id FROM monster_templates WHERE rank = $1 AND is_active = TRUE ORDER BY RANDOM() LIMIT 1", targetRank).Scan(&chosenMonsterID)
+
+		if errSelect != nil || chosenMonsterID == "" {
+			// fallback
+			errSelect = tx.QueryRow("SELECT id FROM monster_templates WHERE is_active = TRUE ORDER BY RANDOM() LIMIT 1").Scan(&chosenMonsterID)
+		}
+
+		if chosenMonsterID != "" {
+			_, err = tx.Exec("UPDATE mine_slots SET monster_id = $1 WHERE id = $2", chosenMonsterID, slot.ID)
+			if err != nil {
+				log.Printf("Failed to assign monster to mine slot %d: %v", slot.ID, err)
+			} else {
+				log.Printf("Assigned monster %s to abandoned mine slot %d", chosenMonsterID, slot.ID)
+			}
+		}
+	}
+
+	_ = tx.Commit()
 }

@@ -67,6 +67,7 @@ type CombatState struct {
 	MineSlotID          int               `json:"mine_slot_id,omitempty"`
 	EnemyStatusEffects  []StatusEffect    `json:"enemy_status_effects,omitempty"`
 	PlayerStatusEffects []StatusEffect    `json:"player_status_effects,omitempty"`
+	SkillCooldowns      map[string]int    `json:"skill_cooldowns,omitempty"`
 	Allies              []Combatant       `json:"allies,omitempty"`
 	Enemies             []Combatant       `json:"enemies,omitempty"`
 }

@@ -1052,15 +1052,215 @@ func autoResolveEvent(eventID string, playerID string) {
 	_ = tx.Commit()
 }
 
+// ProcessActiveTribulationGrid moves tribulation enemies towards resource nodes and attacks them
+func ProcessActiveTribulationGrid() error {
+	tx, err := db.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// 1. Fetch all active tribulation events
+	rows, err := tx.Query(`
+		SELECT id, aperture_id, player_id 
+		FROM tribulation_events 
+		WHERE status = 'ACTIVE'
+	`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type ActiveEvent struct {
+		EventID    string
+		ApertureID string
+		PlayerID   string
+	}
+	var events []ActiveEvent
+	for rows.Next() {
+		var ev ActiveEvent
+		if err := rows.Scan(&ev.EventID, &ev.ApertureID, &ev.PlayerID); err == nil {
+			events = append(events, ev)
+		}
+	}
+	rows.Close()
+
+	for _, ev := range events {
+		// Fetch living enemies
+		enRows, err := tx.Query(`
+			SELECT id, name, x, y, attack 
+			FROM tribulation_enemies 
+			WHERE event_id = $1 AND is_dead = false
+		`, ev.EventID)
+		if err != nil {
+			continue
+		}
+
+		type TEnemy struct {
+			ID     string
+			Name   string
+			X      int
+			Y      int
+			Attack int
+		}
+		var enemies []TEnemy
+		for enRows.Next() {
+			var en TEnemy
+			if err := enRows.Scan(&en.ID, &en.Name, &en.X, &en.Y, &en.Attack); err == nil {
+				enemies = append(enemies, en)
+			}
+		}
+		enRows.Close()
+
+		if len(enemies) == 0 {
+			continue
+		}
+
+		// Fetch non-destroyed resource nodes
+		nodeRows, err := tx.Query(`
+			SELECT id, name, hp, x, y 
+			FROM aperture_resource_nodes 
+			WHERE aperture_id = $1 AND is_destroyed = false
+		`, ev.ApertureID)
+		if err != nil {
+			continue
+		}
+
+		type TNode struct {
+			ID   string
+			Name string
+			HP   int
+			X    int
+			Y    int
+		}
+		var nodes []TNode
+		for nodeRows.Next() {
+			var nd TNode
+			if err := nodeRows.Scan(&nd.ID, &nd.Name, &nd.HP, &nd.X, &nd.Y); err == nil {
+				nodes = append(nodes, nd)
+			}
+		}
+		nodeRows.Close()
+
+		if len(nodes) == 0 {
+			continue // No nodes to attack
+		}
+
+		// Process each enemy
+		for _, en := range enemies {
+			// Find nearest node
+			var nearestNode *TNode
+			minDist := 999999
+			for i := range nodes {
+				nd := &nodes[i]
+				dx := nd.X - en.X
+				if dx < 0 {
+					dx = -dx
+				}
+				dy := nd.Y - en.Y
+				if dy < 0 {
+					dy = -dy
+				}
+				dist := dx + dy
+				if dist < minDist {
+					minDist = dist
+					nearestNode = nd
+				}
+			}
+
+			if nearestNode == nil {
+				continue
+			}
+
+			dx := nearestNode.X - en.X
+			dy := nearestNode.Y - en.Y
+			absDx := dx
+			if absDx < 0 {
+				absDx = -absDx
+			}
+			absDy := dy
+			if absDy < 0 {
+				absDy = -absDy
+			}
+
+			if absDx <= 1 && absDy <= 1 {
+				// Enemy is adjacent or on top of the node, attack!
+				nearestNode.HP -= en.Attack
+				isDestroyed := false
+				if nearestNode.HP <= 0 {
+					nearestNode.HP = 0
+					isDestroyed = true
+				}
+				_, _ = tx.Exec(`
+					UPDATE aperture_resource_nodes 
+					SET hp = $1, is_destroyed = $2, updated_at = NOW() 
+					WHERE id = $3
+				`, nearestNode.HP, isDestroyed, nearestNode.ID)
+
+				if isDestroyed {
+					// Send system message
+					_, _ = tx.Exec(`
+						INSERT INTO messages (sender, content, channel, player_id, created_at)
+						VALUES ('Tiên Khiếu Hệ Thống', 'Tai kiếp đã phá hủy hoàn toàn ' || $1 || '!', 'private', $2, NOW())
+					`, nearestNode.Name, ev.PlayerID)
+					
+					// Remove from local list so other enemies target something else
+					var remainingNodes []TNode
+					for _, nd := range nodes {
+						if nd.ID != nearestNode.ID {
+							remainingNodes = append(remainingNodes, nd)
+						}
+					}
+					nodes = remainingNodes
+				}
+			} else {
+				// Move towards the node
+				if absDx > absDy {
+					if dx > 0 {
+						en.X++
+					} else {
+						en.X--
+					}
+				} else {
+					if dy > 0 {
+						en.Y++
+					} else {
+						en.Y--
+					}
+				}
+				_, _ = tx.Exec(`
+					UPDATE tribulation_enemies 
+					SET x = $1, y = $2, updated_at = NOW() 
+					WHERE id = $3
+				`, en.X, en.Y, en.ID)
+			}
+		}
+	}
+
+	return tx.Commit()
+}
+
 func StartTribulationWorker() {
-	ticker := time.NewTicker(60 * time.Second)
+	ticker60 := time.NewTicker(60 * time.Second)
+	ticker15 := time.NewTicker(15 * time.Second)
+
 	go func() {
-		for range ticker.C {
+		for range ticker60.C {
 			err := CheckAndTriggerTribulations()
 			if err != nil {
 				log.Printf("Tribulation background worker error: %v", err)
 			}
 		}
 	}()
-	log.Println("Tribulation and internal year worker started successfully (Interval: 60s)")
+
+	go func() {
+		for range ticker15.C {
+			err := ProcessActiveTribulationGrid()
+			if err != nil {
+				log.Printf("Tribulation grid worker error: %v", err)
+			}
+		}
+	}()
+
+	log.Println("Tribulation and internal year worker started successfully (Interval: 60s/15s)")
 }

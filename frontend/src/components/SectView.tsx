@@ -60,9 +60,13 @@ export const SectView: React.FC = () => {
     fetchPromotionRequests,
     actionPromotionRequest,
     fetchPlayerProfile,
+    sectMines,
+    fetchSectMines,
+    attackSectMine,
+    claimSectMineRewards,
   } = useGameStore();
 
-  const [activeTab, setActiveTab] = useState<"lobby" | "missions" | "vault" | "donate" | "manage">("lobby");
+  const [activeTab, setActiveTab] = useState<"lobby" | "missions" | "vault" | "donate" | "territory" | "manage">("lobby");
   const [selectedSectId, setSelectedSectId] = useState<string | null>(null);
 
   // Sect Creation Form
@@ -108,6 +112,12 @@ export const SectView: React.FC = () => {
       fetchSectMissions();
     }
   }, [mySectStatus?.in_sect, fetchSectMissions]);
+
+  useEffect(() => {
+    if (activeTab === "territory") {
+      fetchSectMines();
+    }
+  }, [activeTab, fetchSectMines]);
 
   useEffect(() => {
     if (activeTab === "manage") {
@@ -583,6 +593,14 @@ export const SectView: React.FC = () => {
         >
           Quyên Góp
         </button>
+        <button
+          onClick={() => setActiveTab("territory")}
+          className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${
+            activeTab === "territory" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          Lãnh Địa
+        </button>
         {member?.member_rank && (member.member_rank === "CHUONG_MON" || member.member_rank === "TRUONG_LAO") && (
           <button
             onClick={() => setActiveTab("manage")}
@@ -741,6 +759,95 @@ export const SectView: React.FC = () => {
                 ))
               ) : (
                 <div className="text-center py-6 text-zinc-600 text-xs font-mono">Chưa có thành viên nào xếp hạng</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "territory" && (
+        <div className="flex flex-col gap-6 animate-slide-up">
+          <div className="bg-zinc-950/40 border border-zinc-900 rounded-3xl p-5 backdrop-blur-md flex flex-col gap-4">
+            <h3 className="text-base font-serif font-bold text-zinc-200 flex items-center gap-2 border-b border-zinc-900/60 pb-3">
+              <Shield className="w-5 h-5 text-rose-400" />
+              Lãnh Địa Tông Môn (Tranh Đoạt)
+            </h3>
+            <p className="text-xs text-zinc-400 leading-relaxed mb-2">
+              Lãnh địa Tông môn là các mỏ tài nguyên quý giá sinh ra Quỹ tông môn và Linh tài mỗi giờ. 
+              Các đệ tử từ <strong>Nội Môn</strong> trở lên có thể khiêu chiến Hộ Phái Thần Thú để cướp đoạt mỏ cho Tông môn của mình.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sectMines.length === 0 ? (
+                <div className="sm:col-span-2 lg:col-span-3 text-center py-6 text-zinc-600 text-xs font-mono">Chưa có Lãnh địa nào xuất hiện.</div>
+              ) : (
+                sectMines.map((mine) => {
+                  const isMine = mine.occupier_sect_id === mySectStatus.sect?.id;
+                  const isShielded = mine.shield_until && new Date(mine.shield_until).getTime() > Date.now();
+                  
+                  return (
+                    <div key={mine.id} className={`bg-zinc-900/20 border ${isMine ? "border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.1)]" : "border-zinc-900"} rounded-2xl p-4 flex flex-col gap-3 relative overflow-hidden`}>
+                      {isMine && <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/10 rounded-bl-full -z-10" />}
+                      
+                      <div className="flex justify-between items-start">
+                        <h4 className="text-sm font-bold font-serif text-zinc-200">{mine.name}</h4>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                          mine.rarity === "Truyền Thuyết" ? "bg-amber-950/30 text-amber-400 border-amber-500/30" :
+                          mine.rarity === "Sử Thi" ? "bg-purple-950/30 text-purple-400 border-purple-500/30" :
+                          mine.rarity === "Hiếm" ? "bg-blue-950/30 text-blue-400 border-blue-500/30" :
+                          "bg-zinc-900/50 text-zinc-400 border-zinc-700"
+                        }`}>{mine.rarity}</span>
+                      </div>
+
+                      <div className="flex flex-col gap-1 text-xs font-mono">
+                        <div className="flex justify-between">
+                          <span className="text-zinc-500">Chiếm giữ bởi:</span>
+                          <span className={isMine ? "text-blue-400 font-bold" : "text-zinc-300"}>
+                            {mine.occupier_name || "Vô Chủ"}
+                          </span>
+                        </div>
+                        {mine.occupied_at && (
+                          <div className="flex justify-between">
+                            <span className="text-zinc-500">Từ lúc:</span>
+                            <span className="text-zinc-400">{new Date(mine.occupied_at).toLocaleTimeString()}</span>
+                          </div>
+                        )}
+                        {isShielded && (
+                          <div className="flex justify-between text-rose-400">
+                            <span>Đại Trận Bảo Hộ:</span>
+                            <span>{new Date(mine.shield_until!).toLocaleTimeString()}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="pt-3 mt-auto border-t border-zinc-900 flex gap-2">
+                        {isMine ? (
+                          (mySectStatus.member?.member_rank === "CHUONG_MON" || mySectStatus.member?.member_rank === "TRUONG_LAO") ? (
+                            <button
+                              onClick={() => claimSectMineRewards(mine.id)}
+                              disabled={actionLoading}
+                              className="w-full py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                            >
+                              Thu Hoạch Mỏ
+                            </button>
+                          ) : (
+                            <div className="w-full py-2 text-center text-emerald-500/70 text-xs font-mono border border-emerald-500/10 rounded-xl bg-emerald-950/10">
+                              Đang Khai Thác
+                            </div>
+                          )
+                        ) : (
+                          <button
+                            onClick={() => attackSectMine(mine.id)}
+                            disabled={actionLoading || isShielded || player.active_combat !== null}
+                            className="w-full py-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 disabled:opacity-50 disabled:border-zinc-800 disabled:bg-zinc-900 disabled:text-zinc-600 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                          >
+                            {isShielded ? "Đang Được Bảo Hộ" : player.active_combat ? "Đang Chiến Đấu" : "Công Kích Lãnh Địa"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>

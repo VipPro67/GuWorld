@@ -264,6 +264,14 @@ func CastKillerMove(c *gin.Context) {
 		return
 	}
 
+	if player.ActiveCombat.SkillCooldowns == nil {
+		player.ActiveCombat.SkillCooldowns = make(map[string]int)
+	}
+	if cd, exists := player.ActiveCombat.SkillCooldowns[req.KillerMoveID]; exists && cd > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Sát chiêu này đang trong thời gian hồi (%d lượt).", cd)})
+		return
+	}
+
 	supportIDs := make([]string, 0)
 	for _, slot := range slots {
 		if slot.SlotType == models.KillerMoveSlotSupport {
@@ -275,6 +283,14 @@ func CastKillerMove(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	
+	if move.IsMastered {
+		preview.Stability += 15.0
+		if preview.Stability > 100.0 {
+			preview.Stability = 100.0
+		}
+	}
+	
 	if player.CurrentMana < preview.TotalManaCost {
 		c.JSON(http.StatusBadRequest, gin.H{"error": insufficientEnergyMessage(&player)})
 		return
@@ -292,8 +308,18 @@ func CastKillerMove(c *gin.Context) {
 		player.HP = math.Max(0, player.HP-backlashDamage)
 		logs = append(logs, fmt.Sprintf("Sát chiêu mất ổn định (%.1f%%). Phản phệ gây %.1f sát thương.", preview.Stability, backlashDamage))
 	} else {
+		if !move.IsMastered {
+			move.UsageCount++
+			if move.UsageCount >= 50 {
+				move.IsMastered = true
+				logs = append(logs, "Sát chiêu đã đạt cảnh giới Đại Thành (Mastered)! Tăng độ ổn định cho các lần thi triển sau.")
+			}
+			_, _ = tx.Exec(`UPDATE killer_moves SET usage_count = $1, is_mastered = $2 WHERE id = $3`, move.UsageCount, move.IsMastered, move.ID)
+		}
+
 		logs = append(logs, fmt.Sprintf("Sát chiêu ổn định (%.1f%%), gây %.1f sát thương và tạo %.1f phòng ngự.", preview.Stability, preview.DamageValue, preview.DefenseValue))
-		applyKillerMoveToCombat(player.ActiveCombat, player.ID.String(), req.TargetID, preview.DamageValue, preview.DefenseValue, &logs)
+		applyKillerMoveToCombat(player.ActiveCombat, player.ID.String(), req.TargetID, preview.DamageValue, preview.DefenseValue, preview.Effects, &logs)
+		player.ActiveCombat.SkillCooldowns[req.KillerMoveID] = preview.Cooldown
 	}
 
 	combatJSON, _ := json.Marshal(player.ActiveCombat)
@@ -308,6 +334,7 @@ func CastKillerMove(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
+		"player":          player,
 		"event":           eventType,
 		"success":         succeeded,
 		"killer_move":     move,
@@ -575,7 +602,7 @@ func insertKillerMoveSlotsTx(tx *sql.Tx, moveID, coreID string, supportIDs []str
 	return nil
 }
 
-func applyKillerMoveToCombat(combat *models.CombatState, casterID, targetID string, damage, defense float64, logs *[]string) {
+func applyKillerMoveToCombat(combat *models.CombatState, casterID, targetID string, damage, defense float64, effects map[string]float64, logs *[]string) {
 	for i := range combat.Allies {
 		if combat.Allies[i].ID == casterID {
 			combat.Allies[i].VirtualShield += defense
@@ -590,6 +617,22 @@ func applyKillerMoveToCombat(combat *models.CombatState, casterID, targetID stri
 			finalDamage := math.Max(0, damage-combat.Enemies[i].BaseDefense*0.5)
 			combat.Enemies[i].HP = math.Max(0, combat.Enemies[i].HP-finalDamage)
 			*logs = append(*logs, fmt.Sprintf("%s chịu %.1f sát thương từ sát chiêu.", combat.Enemies[i].Name, finalDamage))
+			
+			// Apply debuffs
+			if effects != nil {
+				if poison, ok := effects["poison"]; ok && poison > 0 {
+					combat.Enemies[i].StatusEffects = append(combat.Enemies[i].StatusEffects, models.StatusEffect{Type: "poison", Value: poison, Turns: 3})
+					*logs = append(*logs, fmt.Sprintf("%s bị trúng độc!", combat.Enemies[i].Name))
+				}
+				if bleed, ok := effects["bleed"]; ok && bleed > 0 {
+					combat.Enemies[i].StatusEffects = append(combat.Enemies[i].StatusEffects, models.StatusEffect{Type: "bleed", Value: bleed, Turns: 3})
+					*logs = append(*logs, fmt.Sprintf("%s bị chảy máu!", combat.Enemies[i].Name))
+				}
+				if stun, ok := effects["stun"]; ok && stun > 0 {
+					combat.Enemies[i].StatusEffects = append(combat.Enemies[i].StatusEffects, models.StatusEffect{Type: "stun", Value: stun, Turns: 1})
+					*logs = append(*logs, fmt.Sprintf("%s bị choáng!", combat.Enemies[i].Name))
+				}
+			}
 			return
 		}
 	}

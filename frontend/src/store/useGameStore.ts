@@ -425,6 +425,17 @@ export interface PlayerInstanceSession {
   temp_inventory: any[];
 }
 
+export interface SectMine {
+  id: number;
+  name: string;
+  rarity: string;
+  occupier_sect_id: string | null;
+  occupier_name: string | null;
+  occupied_at: string | null;
+  shield_until: string | null;
+  last_claimed_at: string | null;
+}
+
 export interface SectVaultGuItem {
   id: string;
   cost: number;
@@ -743,6 +754,7 @@ interface GameState {
   sectMembers: SectMemberInfo[];
   sectJoinRequests: SectJoinRequest[];
   sectPromotionRequests: SectPromotionRequest[];
+  sectMines: SectMine[];
   fetchSects: () => Promise<void>;
   joinSect: (sectId: string) => Promise<boolean>;
   leaveSect: () => Promise<boolean>;
@@ -774,7 +786,10 @@ interface GameState {
   fetchJoinRequests: () => Promise<void>;
   actionJoinRequest: (requestId: string, action: 'approve' | 'reject') => Promise<boolean>;
   fetchPromotionRequests: () => Promise<void>;
-  actionPromotionRequest: (requestId: string, action: 'approve' | 'reject') => Promise<boolean>;
+  actionPromotionRequest: (requestId: string, action: "approve" | "reject") => Promise<boolean>;
+  fetchSectMines: () => Promise<void>;
+  attackSectMine: (slotId: number) => Promise<boolean>;
+  claimSectMineRewards: (slotId: number) => Promise<boolean>;
 
   // Feedback State & Actions
   feedbacks: Feedback[];
@@ -910,6 +925,7 @@ export const useGameStore = create<GameState>((set, get) => {
   sectMembers: [],
   sectJoinRequests: [],
   sectPromotionRequests: [],
+  sectMines: [],
   feedbacks: [],
   setView: (view) => set({ currentView: view }),
 
@@ -1159,6 +1175,70 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      toast.error(err.message);
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  // --- Sect Mines ---
+
+  fetchSectMines: async () => {
+    const { token } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/mines`, { method: "GET" });
+      if (!response.ok) throw new Error("Failed to fetch sect mines");
+      const data = await response.json();
+      set({ sectMines: data || [] });
+    } catch (err) {
+      console.error("Failed to fetch sect mines", err);
+    }
+  },
+
+  attackSectMine: async (slotId: number) => {
+    const { token, actionLoading, logout, addToast } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/mines/attack`, {
+        method: "POST",
+        body: JSON.stringify({ mine_id: slotId }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Lỗi khi tấn công Lãnh địa");
+      addToast(data.message || "Bắt đầu tấn công Lãnh địa Tông môn!", "success");
+      get().fetchPlayerProfile(); // To refresh combat state
+      get().fetchSectMines();
+      return true;
+    } catch (err: any) {
+      addToast(err.message || "Lỗi khi tấn công Lãnh địa", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  claimSectMineRewards: async (slotId: number) => {
+    const { token, actionLoading, logout, addToast } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/mines/claim`, {
+        method: "POST",
+        body: JSON.stringify({ mine_id: slotId }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Lỗi khi thu hoạch Lãnh địa");
+      addToast(data.message || "Thu hoạch Lãnh địa thành công!", "success");
+      get().fetchMySectStatus();
+      get().fetchSectMines();
+      return true;
+    } catch (err: any) {
+      addToast(err.message || "Lỗi khi thu hoạch Lãnh địa", "error");
       return false;
     } finally {
       set({ actionLoading: false });
@@ -1830,7 +1910,15 @@ export const useGameStore = create<GameState>((set, get) => {
       }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Thi triển sát chiêu thất bại.");
-      setPlayerFromServer(data.player);
+      const updatedPlayer = data.player
+        ? data.player
+        : {
+            ...player,
+            active_combat: data.active_combat ?? player.active_combat,
+            current_mana: typeof data.current_mana === "number" ? data.current_mana : player.current_mana,
+            hp: typeof data.hp === "number" ? data.hp : player.hp,
+          };
+      setPlayerFromServer(updatedPlayer);
       if (data.logs && Array.isArray(data.logs)) {
         data.logs.forEach((logLine: string) => get().addLog(logLine));
       }

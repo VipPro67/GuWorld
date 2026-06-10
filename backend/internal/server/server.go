@@ -305,6 +305,9 @@ func SetupRouter() *gin.Engine {
 			sect.POST("/join-requests/:requestId/action", handlers.ActionJoinRequest)
 			sect.GET("/promotion-requests", handlers.GetPromotionRequests)
 			sect.POST("/promotion-requests/:requestId/action", handlers.ActionPromotionRequest)
+			sect.GET("/mines", handlers.GetSectMines)
+			sect.POST("/mines/claim", handlers.ClaimSectMineRewards)
+			sect.POST("/mines/attack", handlers.AttackSectMine)
 		}
 
 		// Protected Feedback Endpoints

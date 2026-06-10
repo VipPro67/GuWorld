@@ -58,6 +58,9 @@ func main() {
 	// 2.6. Start Tribulation background worker
 	handlers.StartTribulationWorker()
 
+	// 2.7. Start Mine Monster Worker
+	handlers.StartMineMonsterWorker()
+
 	// 3. Setup router & run
 	r := server.SetupRouter()
 

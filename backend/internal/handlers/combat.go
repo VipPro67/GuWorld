@@ -538,6 +538,59 @@ func CombatAttack(c *gin.Context) {
 		player.ActiveCombat = InitializeCombatState(tx, player.ActiveCombat, &player)
 	}
 
+	// Process cooldowns
+	if player.ActiveCombat.SkillCooldowns != nil {
+		for k, v := range player.ActiveCombat.SkillCooldowns {
+			if v > 0 {
+				player.ActiveCombat.SkillCooldowns[k] = v - 1
+			}
+		}
+	}
+
+	var turnLogs []string
+
+	// Process Debuffs for Allies
+	for i := range player.ActiveCombat.Allies {
+		c := &player.ActiveCombat.Allies[i]
+		if c.HP <= 0 { continue }
+		var activeEffs []models.StatusEffect
+		for j := 0; j < len(c.StatusEffects); j++ {
+			eff := c.StatusEffects[j]
+			if eff.Turns > 0 {
+				if eff.Type == "poison" || eff.Type == "bleed" {
+					c.HP -= eff.Value
+					turnLogs = append(turnLogs, fmt.Sprintf("%s mất %.1f HP do %s (Còn %d lượt).", c.Name, eff.Value, eff.Type, eff.Turns))
+				}
+				eff.Turns--
+			}
+			if eff.Turns > 0 {
+				activeEffs = append(activeEffs, eff)
+			}
+		}
+		c.StatusEffects = activeEffs
+	}
+
+	// Process Debuffs for Enemies
+	for i := range player.ActiveCombat.Enemies {
+		c := &player.ActiveCombat.Enemies[i]
+		if c.HP <= 0 { continue }
+		var activeEffs []models.StatusEffect
+		for j := 0; j < len(c.StatusEffects); j++ {
+			eff := c.StatusEffects[j]
+			if eff.Turns > 0 {
+				if eff.Type == "poison" || eff.Type == "bleed" {
+					c.HP -= eff.Value
+					turnLogs = append(turnLogs, fmt.Sprintf("%s mất %.1f HP do %s (Còn %d lượt).", c.Name, eff.Value, eff.Type, eff.Turns))
+				}
+				eff.Turns--
+			}
+			if eff.Turns > 0 {
+				activeEffs = append(activeEffs, eff)
+			}
+		}
+		c.StatusEffects = activeEffs
+	}
+
 	// Find the caster inside Allies list and synchronize their current HP/Mana
 	var casterIdx = -1
 	for idx, ally := range player.ActiveCombat.Allies {
@@ -651,7 +704,6 @@ func CombatAttack(c *gin.Context) {
 		}
 	}
 
-	var turnLogs []string
 	if len(selectedSpecs) > 1 {
 		turnLogs = append(turnLogs, fmt.Sprintf("=== DÙNG CỔ RIÊNG LẺ (rủi ro hụt %.0f%%) ===", looseGuFailureChance*100))
 	} else {
@@ -686,6 +738,11 @@ func CombatAttack(c *gin.Context) {
 				refCaster, _, _ := findCombatant(player.ActiveCombat, player.ID.String())
 				if refCaster == nil || refCaster.HP <= 0 {
 					return nil
+				}
+				for _, eff := range refCaster.StatusEffects {
+					if eff.Type == "stun" && eff.Turns > 0 {
+						return []string{fmt.Sprintf("-> %s bị choáng và mất lượt!", refCaster.Name)}
+					}
 				}
 
 				if isChargingThisTurn {
@@ -792,6 +849,11 @@ func CombatAttack(c *gin.Context) {
 					if refAlly == nil || refAlly.HP <= 0 {
 						return nil
 					}
+					for _, eff := range refAlly.StatusEffects {
+						if eff.Type == "stun" && eff.Turns > 0 {
+							return []string{fmt.Sprintf("-> %s bị choáng và mất lượt!", refAlly.Name)}
+						}
+					}
 
 					targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, "SINGLE", 1, 2, false)
 					if len(targetsIdx) > 0 {
@@ -826,6 +888,11 @@ func CombatAttack(c *gin.Context) {
 					refEnemy, _, _ := findCombatant(player.ActiveCombat, enemyID)
 					if refEnemy == nil || refEnemy.HP <= 0 {
 						return nil
+					}
+					for _, eff := range refEnemy.StatusEffects {
+						if eff.Type == "stun" && eff.Turns > 0 {
+							return []string{fmt.Sprintf("-> %s bị choáng và mất lượt!", refEnemy.Name)}
+						}
 					}
 
 					targetsIdx := ResolveTargets(player.ActiveCombat.Allies, "SINGLE", 2, 2, false)
@@ -1205,7 +1272,7 @@ func CombatAttack(c *gin.Context) {
 				now := time.Now()
 				_, errUpdate := tx.Exec(`
 					UPDATE mine_slots
-					SET occupier_id = $1, occupied_at = $2, last_claimed_at = $3
+					SET occupier_id = $1, monster_id = NULL, occupied_at = $2, last_claimed_at = $3
 					WHERE id = $4
 				`, player.ID, now, now, slotID)
 				if errUpdate == nil {

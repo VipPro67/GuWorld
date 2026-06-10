@@ -28,6 +28,7 @@ type KillerMove struct {
 	IsMastered     bool             `json:"is_mastered"`
 	IsStable       bool             `json:"is_stable"`
 	IsInstantCast  bool             `json:"is_instant_cast"`
+	UsageCount     int              `json:"usage_count"`
 	CreatedAt      time.Time        `json:"created_at"`
 	UpdatedAt      time.Time        `json:"updated_at"`
 	Slots          []KillerMoveSlot `json:"slots,omitempty"`

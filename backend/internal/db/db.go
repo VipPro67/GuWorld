@@ -323,8 +323,10 @@ func InitSchema() error {
 		id INTEGER PRIMARY KEY,
 		rarity VARCHAR(50) NOT NULL,
 		occupier_id UUID REFERENCES players(id) ON DELETE SET NULL,
+		monster_id VARCHAR(50) NULL,
 		occupied_at TIMESTAMPTZ NULL,
-		last_claimed_at TIMESTAMPTZ NULL
+		last_claimed_at TIMESTAMPTZ NULL,
+		abandoned_at TIMESTAMPTZ DEFAULT NOW()
 	);`)
 	if err != nil {
 		return fmt.Errorf("failed to create mine_slots table: %w", err)
@@ -338,17 +340,20 @@ func InitSchema() error {
 			rarity := "Thường"
 			if i == 1 {
 				rarity = "Truyền Thuyết"
-			} else if i >= 2 && i <= 4 {
-				rarity = "Sử Thi"
-			} else if i >= 5 && i <= 10 {
+			} else if i <= 5 {
 				rarity = "Hiếm"
 			}
-			_, err = DB.Exec("INSERT INTO mine_slots (id, rarity) VALUES ($1, $2)", i, rarity)
+			_, err = DB.Exec("INSERT INTO mine_slots (id, rarity, abandoned_at) VALUES ($1, $2, NOW())", i, rarity)
 			if err != nil {
-				log.Printf("Warning: failed to seed mine slot %d: %v", i, err)
+				log.Printf("Failed to seed mine %d: %v", i, err)
 			}
 		}
+		log.Println("Seeded 20 initial world mine slots.")
 	}
+
+	// Migrate existing mine_slots to have monster_id and abandoned_at if not exist
+	_, _ = DB.Exec(`ALTER TABLE mine_slots ADD COLUMN IF NOT EXISTS monster_id VARCHAR(50) NULL;`)
+	_, _ = DB.Exec(`ALTER TABLE mine_slots ADD COLUMN IF NOT EXISTS abandoned_at TIMESTAMPTZ DEFAULT NOW();`)
 
 	// Create messages table
 	_, err = DB.Exec(`
@@ -906,6 +911,23 @@ func InitSchema() error {
 			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 		);`, "create_trades_table"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT '';`, "avatar_url"},
+		{`CREATE TABLE IF NOT EXISTS sect_mines (
+			id SERIAL PRIMARY KEY,
+			name VARCHAR(100) NOT NULL UNIQUE,
+			rarity VARCHAR(50) NOT NULL,
+			occupier_sect_id VARCHAR(50) REFERENCES sects(id) ON DELETE SET NULL,
+			occupied_at TIMESTAMP WITH TIME ZONE,
+			shield_until TIMESTAMP WITH TIME ZONE,
+			last_claimed_at TIMESTAMP WITH TIME ZONE
+		);`, "create_sect_mines_table"},
+		{`INSERT INTO sect_mines (name, rarity) VALUES 
+			('Thái Cổ Tinh Mạch', 'Truyền Thuyết'),
+			('Cửu U Huyết Mạch', 'Sử Thi'),
+			('Thiên Cương Linh Khí Mạch', 'Hiếm'),
+			('Huyền Vũ Thạch Động', 'Hiếm'),
+			('Bách Thảo Tiên Vực', 'Thường')
+			ON CONFLICT (name) DO NOTHING;`, "seed_sect_mines"},
+		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS usage_count INTEGER NOT NULL DEFAULT 0;`, "usage_count"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {
