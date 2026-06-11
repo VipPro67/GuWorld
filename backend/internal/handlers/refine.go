@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -24,7 +25,35 @@ type RefineRequest struct {
 func GetRecipes(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		tokenStr, err := c.Cookie("gu_auth_token")
+		if err == nil && tokenStr != "" {
+			claims, err := auth.ValidateToken(tokenStr)
+			if err == nil {
+				if parsedID, err := uuid.Parse(claims.PlayerID); err == nil {
+					playerID = parsedID
+					exists = true
+				}
+			}
+		} else {
+			authHeader := c.GetHeader("Authorization")
+			if authHeader != "" {
+				parts := strings.Split(authHeader, " ")
+				if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
+					claims, err := auth.ValidateToken(parts[1])
+					if err == nil {
+						if parsedID, err := uuid.Parse(claims.PlayerID); err == nil {
+							playerID = parsedID
+							exists = true
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if !exists {
+		// Return empty list of recipes for unauthenticated users, preventing 401
+		c.JSON(http.StatusOK, []models.RefiningRecipe{})
 		return
 	}
 

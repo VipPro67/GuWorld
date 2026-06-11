@@ -53,9 +53,9 @@ func SetupRouter() *gin.Engine {
 	// API routes
 	api := r.Group("/api")
 	{
-		// Public Dictionary Endpoint
+		// Public Dictionary and Recipes
 		api.GET("/dictionary", handlers.GetDictionary)
-		api.GET("/recipes", middleware.AuthRequired(), handlers.GetRecipes)
+		api.GET("/recipes", handlers.GetRecipes)
 
 		// Public Auth Endpoints
 		authGroup := api.Group("/auth")
@@ -310,11 +310,11 @@ func SetupRouter() *gin.Engine {
 			sect.POST("/mines/attack", handlers.AttackSectMine)
 		}
 
-		// Protected Feedback Endpoints
+		// Feedback Endpoints
+		api.GET("/feedback", handlers.GetFeedbacks)
 		feedback := api.Group("/feedback")
 		feedback.Use(middleware.AuthRequired())
 		{
-			feedback.GET("", handlers.GetFeedbacks)
 			feedback.POST("", handlers.SubmitFeedback)
 			feedback.POST("/:id/vote", handlers.VoteFeedback)
 			feedback.PUT("/:id/status", handlers.UpdateFeedbackStatus)

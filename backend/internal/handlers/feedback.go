@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -30,10 +31,33 @@ type UpdateFeedbackStatusRequest struct {
 
 // GetFeedbacks returns all feedbacks matching optional filters
 func GetFeedbacks(c *gin.Context) {
+	// Optional auth
 	authID, exists := middleware.GetPlayerID(c)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
+		tokenStr, err := c.Cookie("gu_auth_token")
+		if err == nil && tokenStr != "" {
+			claims, err := auth.ValidateToken(tokenStr)
+			if err == nil {
+				if parsedID, err := uuid.Parse(claims.PlayerID); err == nil {
+					authID = parsedID
+					exists = true
+				}
+			}
+		} else {
+			authHeader := c.GetHeader("Authorization")
+			if authHeader != "" {
+				parts := strings.Split(authHeader, " ")
+				if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
+					claims, err := auth.ValidateToken(parts[1])
+					if err == nil {
+						if parsedID, err := uuid.Parse(claims.PlayerID); err == nil {
+							authID = parsedID
+							exists = true
+						}
+					}
+				}
+			}
+		}
 	}
 
 	category := c.Query("category")
@@ -41,10 +65,17 @@ func GetFeedbacks(c *gin.Context) {
 
 	// Get player's admin status
 	var isAdmin bool
-	err := db.DB.QueryRow("SELECT COALESCE(is_admin, false) FROM players WHERE id = $1", authID).Scan(&isAdmin)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
-		return
+	if exists {
+		err := db.DB.QueryRow("SELECT COALESCE(is_admin, false) FROM players WHERE id = $1", authID).Scan(&isAdmin)
+		if err != nil && err != sql.ErrNoRows {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+			return
+		}
+	}
+
+	queryAuthID := authID
+	if !exists {
+		queryAuthID = uuid.Nil
 	}
 
 	// Base query
@@ -56,7 +87,7 @@ func GetFeedbacks(c *gin.Context) {
 		LEFT JOIN feedback_votes v ON f.id = v.feedback_id AND v.user_id = $1
 		WHERE 1=1
 	`
-	args := []interface{}{authID}
+	args := []interface{}{queryAuthID}
 	argCount := 1
 
 	// Filter by category
@@ -75,7 +106,11 @@ func GetFeedbacks(c *gin.Context) {
 
 	// If not admin, only show active/in_progress/completed/rejected OR user's own pending feedback
 	if !isAdmin {
-		query += " AND (f.status != 'pending' OR f.user_id = $1)"
+		if exists {
+			query += " AND (f.status != 'pending' OR f.user_id = $1)"
+		} else {
+			query += " AND f.status != 'pending'"
+		}
 	}
 
 	// Order by votes desc, then created_at desc
