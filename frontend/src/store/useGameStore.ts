@@ -1,3 +1,4 @@
+import { ToastContainer } from "@/components/ToastContainer";
 import { create } from "zustand";
 
 export interface GuInstance {
@@ -1175,7 +1176,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
-      toast.error(err.message);
+      get().addToast(err.message || "Giao dịch giả lập thất bại.", "error");
       return false;
     } finally {
       set({ actionLoading: false });
@@ -1210,7 +1211,9 @@ export const useGameStore = create<GameState>((set, get) => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Lỗi khi tấn công Lãnh địa");
       addToast(data.message || "Bắt đầu tấn công Lãnh địa Tông môn!", "success");
-      get().fetchPlayerProfile(); // To refresh combat state
+      get().fetchPlayerProfile(
+        get().player?.username || ""
+      ); // To refresh combat state
       get().fetchSectMines();
       return true;
     } catch (err: any) {
