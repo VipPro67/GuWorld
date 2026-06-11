@@ -1,0 +1,4 @@
+id,name,description,width,height,min_rank,max_rank,is_active
+qing_mao_mountain,Thanh Mao Sơn (Qing Mao Mountain),"Southern Border mountain containing Gu Yue, Bai, and Xiong clans.",100,100,1,5,True
+gu_luan_slope,Cổ Loạn Sườn (Gu Luan Slope),Southern Border region full of dangerous wild beast packs.,100,100,1,5,True
+three_kings_inheritance,Tam Vương Truyền Thừa (Three Kings Inheritance),An ancient inheritance ground with rich resources and relics.,100,100,1,5,True

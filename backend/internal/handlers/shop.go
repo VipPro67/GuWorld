@@ -21,28 +21,50 @@ type ShopItem struct {
 	Stock       int    `json:"stock"` // -1 for unlimited
 }
 
-// CaravanShopCatalog hardcodes starter items in the Caravan
-var CaravanShopCatalog = []ShopItem{
-	{ID: "grass_puppet", Name: "Hình nộm người cỏ", Description: "Hình nộm cỏ để tập luyện chiến đấu.", Type: "Material", Price: 3, Stock: 99},
-	{ID: "moon_orchid_petal", Name: "Cánh hoa Nguyệt Lan", Description: "Cánh hoa lan phát sáng vào ban đêm. Thức ăn của Nguyệt Quang Cổ.", Type: "Material", Price: 2, Stock: 99},
-	{ID: "boar_meat", Name: "Thịt heo rừng", Description: "Nguồn thức ăn giàu năng lượng. Thức ăn của Bạch Thỉ Cổ và Hắc Thỉ Cổ.", Type: "Material", Price: 3, Stock: 99},
-	{ID: "green_bamboo_wine", Name: "Rượu Thanh Trúc", Description: "Rượu trúc xanh thơm ngon. Thức ăn của Tửu Trùng.", Type: "Material", Price: 2, Stock: 99},
-	{ID: "heart_knowledge_grass", Name: "Cỏ Tri Tâm", Description: "Cỏ ngọt khai tâm trí. Thức ăn bổ trợ cho cổ trùng.", Type: "Material", Price: 2, Stock: 99},
-	{ID: "ginseng", Name: "Nhân Sâm", Description: "Nhân sâm quý hiếm. Thức ăn của Địa Thính Nhục Chi Nha.", Type: "Material", Price: 4, Stock: 99},
-	{ID: "GU_MOONLIGHT", Name: "Nguyệt Quang Cổ", Description: "Cổ trùng Rank 1 Nhất Chuyển, phóng ra nguyệt nhận sắc bén tấn công.", Type: "Gu", Price: 220, Stock: 5},
-	{ID: "GU_BLACK_BOAR", Name: "Hắc Thỉ Cổ", Description: "Cổ trùng Rank 1 Nhất Chuyển, cải tạo thể chất tăng lực lực lượng vĩnh viễn.", Type: "Gu", Price: 600, Stock: 2},
-	{ID: "GU_CLEANSING_WATER", Name: "Tịnh Thủy Cổ", Description: "Cổ trùng hỗ trợ tẩy rửa cặn bã Không khiếu và thanh trừ ý chí lạ.", Type: "Gu", Price: 640, Stock: 1},
-	{ID: "GU_SHADOW_STEPS", Name: "Ảnh Bộ Cổ", Description: "Cổ trùng di chuyển giúp thân pháp nhanh thoăn thoắt, nhảy vọt 2 ô.", Type: "Gu", Price: 600, Stock: 3},
-	{ID: "GU_EARTH_COMMUNICATION", Name: "Địa Thính Nhục Chi Nha", Description: "Cổ trùng trinh thám dưới lòng đất mở rộng tầm nhìn thêm 3 ô.", Type: "Gu", Price: 700, Stock: 2},
-	{ID: "GU_TUSITA_FLOWER", Name: "Thố Ti Hoa Cổ", Description: "Cổ trùng không gian tăng thêm 20 ô chứa đồ trong hành lý.", Type: "Gu", Price: 2500, Stock: 2},
-	{ID: "GU_RELIC", Name: "Xá Lợi Cổ (Relic Gu)", Description: "Cổ trùng tiêu hao nâng cao tu vi ngay lập tức thêm 1 Tiểu Chuyển.", Type: "Gu", Price: 2000, Stock: 2},
-	{ID: "GU_STONE_APERTURE", Name: "Thạch Khiếu Cổ (Stone Aperture Gu)", Description: "Cổ trùng tiêu hao hóa thạch Không khiếu nhận 500 Nguyên Thạch nhưng giảm 15 Chân Nguyên tối đa.", Type: "Gu", Price: 600, Stock: 3},
-	{ID: "GU_RED_STEEL_RELIC", Name: "Xích Thiết Xá Lợi Cổ", Description: "Tăng tu vi Nhị Chuyển lên một tiểu cảnh giới.", Type: "Gu", Price: 8500, Stock: 1},
+func loadCaravanShopCatalog() ([]ShopItem, error) {
+	rows, err := db.DB.Query(`
+		SELECT id, name, description, item_type, price, stock
+		FROM caravan_shop_items
+		WHERE is_active = TRUE
+		ORDER BY sort_order ASC, id ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := []ShopItem{}
+	for rows.Next() {
+		var item ShopItem
+		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.Type, &item.Price, &item.Stock); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
-// GetShopList returns the hardcoded shop inventory
+func findCaravanShopItem(itemID string) (*ShopItem, error) {
+	var item ShopItem
+	err := db.DB.QueryRow(`
+		SELECT id, name, description, item_type, price, stock
+		FROM caravan_shop_items
+		WHERE id = $1 AND is_active = TRUE
+	`, itemID).Scan(&item.ID, &item.Name, &item.Description, &item.Type, &item.Price, &item.Stock)
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+// GetShopList returns the database-backed shop inventory.
 func GetShopList(c *gin.Context) {
-	c.JSON(http.StatusOK, CaravanShopCatalog)
+	items, err := loadCaravanShopCatalog()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách Thương Đội"})
+		return
+	}
+	c.JSON(http.StatusOK, items)
 }
 
 // BuyShopRequest defines the request body for buying items
@@ -72,16 +94,9 @@ func BuyShopItem(c *gin.Context) {
 		return
 	}
 
-	// 1. Find product in catalog
-	var selectedItem *ShopItem
-	for _, item := range CaravanShopCatalog {
-		if item.ID == req.ItemID {
-			selectedItem = &item
-			break
-		}
-	}
-
-	if selectedItem == nil {
+	// 1. Find product in database-backed catalog
+	selectedItem, err := findCaravanShopItem(req.ItemID)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy vật phẩm này trong Thương Đội."})
 		return
 	}
@@ -225,13 +240,10 @@ func SellShopItem(c *gin.Context) {
 			delete(player.MaterialsInventory, req.ItemID)
 		}
 		price := 2
-		for _, it := range CaravanShopCatalog {
-			if it.ID == req.ItemID {
-				price = it.Price / 2
-				if price < 1 {
-					price = 1
-				}
-				break
+		if shopItem, err := findCaravanShopItem(req.ItemID); err == nil {
+			price = shopItem.Price / 2
+			if price < 1 {
+				price = 1
 			}
 		}
 		totalGain = price * req.Quantity
@@ -251,13 +263,10 @@ func SellShopItem(c *gin.Context) {
 		}
 		player.GuInventory = newInv
 		price := 10
-		for _, it := range CaravanShopCatalog {
-			if it.ID == req.ItemID {
-				price = it.Price / 2
-				if price < 1 {
-					price = 1
-				}
-				break
+		if shopItem, err := findCaravanShopItem(req.ItemID); err == nil {
+			price = shopItem.Price / 2
+			if price < 1 {
+				price = 1
 			}
 		}
 		totalGain = price * req.Quantity
