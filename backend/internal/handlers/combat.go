@@ -27,8 +27,8 @@ type CombatAttackRequest struct {
 	IsCharge      bool     `json:"is_charge"`       // Whether player clicked the charge button
 	TargetX       int      `json:"target_x"`
 	TargetY       int      `json:"target_y"`
-	ItemID        string   `json:"item_id"`         // Item used in combat
-	UseStones     string   `json:"use_stones"`      // 'primeval' or 'immortal'
+	ItemID        string   `json:"item_id"`    // Item used in combat
+	UseStones     string   `json:"use_stones"` // 'primeval' or 'immortal'
 }
 
 // ExploreRequest defines payload for map node exploration
@@ -557,7 +557,9 @@ func CombatAttack(c *gin.Context) {
 	// Process Debuffs for Allies
 	for i := range player.ActiveCombat.Allies {
 		c := &player.ActiveCombat.Allies[i]
-		if c.HP <= 0 { continue }
+		if c.HP <= 0 {
+			continue
+		}
 		var activeEffs []models.StatusEffect
 		for j := 0; j < len(c.StatusEffects); j++ {
 			eff := c.StatusEffects[j]
@@ -578,7 +580,9 @@ func CombatAttack(c *gin.Context) {
 	// Process Debuffs for Enemies
 	for i := range player.ActiveCombat.Enemies {
 		c := &player.ActiveCombat.Enemies[i]
-		if c.HP <= 0 { continue }
+		if c.HP <= 0 {
+			continue
+		}
 		var activeEffs []models.StatusEffect
 		for j := 0; j < len(c.StatusEffects); j++ {
 			eff := c.StatusEffects[j]
@@ -648,7 +652,7 @@ func CombatAttack(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vật phẩm đang hồi chiêu (còn %d lượt)", player.ActiveCombat.ItemCooldowns[req.ItemID])})
 			return
 		}
-		
+
 		qty, ok := player.MaterialsInventory[req.ItemID]
 		if !ok || qty <= 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm này trong túi đồ"})
@@ -820,15 +824,21 @@ func CombatAttack(c *gin.Context) {
 				} else if isUsingItem {
 					itemSpec := models.ItemRegistry[req.ItemID]
 					healVal := itemSpec.Effects["restore_hp"]
-					if healVal == 0 { healVal = 50.0 }
-					
+					if healVal == 0 {
+						healVal = 50.0
+					}
+
 					if refCaster.Rank >= 6 {
 						refCaster.ApertureDmg -= healVal
-						if refCaster.ApertureDmg < 0 { refCaster.ApertureDmg = 0 }
+						if refCaster.ApertureDmg < 0 {
+							refCaster.ApertureDmg = 0
+						}
 						logs = append(logs, fmt.Sprintf("-> %s sử dụng %s, giảm %.1f hư tổn tiên khiếu!", refCaster.Name, itemSpec.Name, healVal))
 					} else {
 						refCaster.HP += healVal
-						if refCaster.HP > refCaster.MaxHP { refCaster.HP = refCaster.MaxHP }
+						if refCaster.HP > refCaster.MaxHP {
+							refCaster.HP = refCaster.MaxHP
+						}
 						logs = append(logs, fmt.Sprintf("-> %s sử dụng %s, khôi phục %.1f HP (HP hiện tại: %.1f).", refCaster.Name, itemSpec.Name, healVal, refCaster.HP))
 					}
 				} else if isChargingThisTurn {
@@ -1581,33 +1591,18 @@ func ExploreNode(c *gin.Context) {
 		// 30% chance: Combat
 		combatTriggered = true
 
-		// Spawn enemy based on map node ID
+		// Spawn enemy based on DB-backed region monster tables.
 		monsterID, err := db.PickRandomMonsterFromRegion(tx, req.NodeID)
-		if err != nil {
-			monsterID = "monster_wild_boar"
+		if err != nil || monsterID == "" {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chọn quái vật từ cơ sở dữ liệu"})
+			return
 		}
 		monTemplate, err := db.LoadMonsterTemplate(tx, monsterID)
-		var enemy models.CombatState
 		if err != nil {
-			// fallback
-			enemy = models.CombatState{
-				EnemyTemplateID: "monster_wild_boar",
-				EnemyName:       "Dã Trĩ (Wild Boar)",
-				EnemyHP:         50,
-				EnemyMaxHP:      50,
-				EnemyDamage:     8,
-				EnemyDefense:    2,
-				EnemyType:       "Normal",
-				EnemyMana:       100,
-				EnemyMaxMana:    100,
-				EnemyRank:       1,
-				EnemySubRank:    1,
-				AIProfile:       "beast_basic",
-				LootTableID:     "loot_boar",
-			}
-		} else {
-			enemy = models.BuildCombatStateFromMonster(monTemplate)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải quái vật từ cơ sở dữ liệu"})
+			return
 		}
+		enemy := models.BuildCombatStateFromMonster(monTemplate)
 
 		player.ActiveCombat = StartCombat(tx, &enemy, &player)
 		logMsg = fmt.Sprintf("Nguy hiểm! Đột nhiên từ bụi cỏ rậm rạp tại %s, một con %s lao ra tấn công đạo hữu!", nodeName, enemy.EnemyName)

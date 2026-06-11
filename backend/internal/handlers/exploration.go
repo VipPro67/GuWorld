@@ -538,63 +538,18 @@ func MovePlayer(c *gin.Context) {
 		case "Monster", "Boss":
 			combatTriggered = true
 
-			// Load from database if possible
 			mon, err := db.LoadMonsterTemplate(tx, cell.Content)
-			if err == nil {
-				logMsg = fmt.Sprintf("Đạo hữu chạm trán %s tại tọa độ (%d, %d)! (Quái vật được tải từ cơ sở dữ liệu)", mon.Name, player.X, player.Y)
-				log.Println(logMsg)
-				combatState := models.BuildCombatStateFromMonster(mon)
-				player.ActiveCombat = &combatState
-				logMsg = fmt.Sprintf("Nguy hiểm! Đạo hữu chạm trán %s tại tọa độ (%d, %d)!", mon.Name, player.X, player.Y)
-			} else {
-				// Fallback to hardcoded stats based on content string
-				enemyHp := 60.0
-				enemyDmg := 10.0
-				enemyDef := 3.0
-				name := cell.Content
-
-				switch cell.Content {
-				case "monster_lava_python", "Mãng Xà Dung Nham (Lava Python)":
-					name = "Mãng Xà Dung Nham (Lava Python)"
-					enemyHp = 150.0
-					enemyDmg = 24.0
-					enemyDef = 10.0
-				case "monster_iron_bear", "Thiết Giáp Hùng (Iron Armored Bear)":
-					name = "Thiết Giáp Hùng (Iron Armored Bear)"
-					enemyHp = 200.0
-					enemyDmg = 18.0
-					enemyDef = 18.0
-				case "monster_wolf_leader", "Độc Lang Vương (Wolf Leader)":
-					name = "Độc Lang Vương (Wolf Leader)"
-					enemyHp = 100.0
-					enemyDmg = 15.0
-					enemyDef = 6.0
-				case "monster_boar_king", "Dã Trĩ Vương (Boar King)":
-					name = "Dã Trĩ Vương (Boar King)"
-					enemyHp = 120.0
-					enemyDmg = 12.0
-					enemyDef = 8.0
-				case "monster_stone_ape", "Thạch Hầu (Stone Ape)":
-					name = "Thạch Hầu (Stone Ape)"
-					enemyHp = 60.0
-					enemyDmg = 10.0
-					enemyDef = 3.0
-				case "monster_wild_boar", "Dã Trĩ (Wild Boar)":
-					name = "Dã Trĩ (Wild Boar)"
-					enemyHp = 50.0
-					enemyDmg = 8.0
-					enemyDef = 2.0
-				}
-
-				player.ActiveCombat = &models.CombatState{
-					EnemyName:    name,
-					EnemyHP:      enemyHp,
-					EnemyMaxHP:   enemyHp,
-					EnemyDamage:  enemyDmg,
-					EnemyDefense: enemyDef,
-				}
-				logMsg = fmt.Sprintf("Nguy hiểm! Đạo hữu chạm trán với mãnh thú phục kích: %s tại tọa độ (%d, %d)!", name, player.X, player.Y)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"})
+				return
 			}
+
+			logMsg = fmt.Sprintf("Đạo hữu chạm trán %s tại tọa độ (%d, %d)! (Quái vật được tải từ cơ sở dữ liệu)", mon.Name, player.X, player.Y)
+			log.Println(logMsg)
+			combatState := models.BuildCombatStateFromMonster(mon)
+			player.ActiveCombat = &combatState
+			logMsg = fmt.Sprintf("Nguy hiểm! Đạo hữu chạm trán %s tại tọa độ (%d, %d)!", mon.Name, player.X, player.Y)
+
 		case "PVP":
 			var targetPlayer models.Player
 			err := tx.QueryRow(`

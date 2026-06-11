@@ -1,0 +1,16 @@
+id,name,description,item_type,price,stock,sort_order,is_active
+grass_puppet,Hình nộm người cỏ,Hình nộm cỏ để tập luyện chiến đấu.,Material,3,99,0,True
+moon_orchid_petal,Cánh hoa Nguyệt Lan,Cánh hoa lan phát sáng vào ban đêm. Thức ăn của Nguyệt Quang Cổ.,Material,2,99,1,True
+boar_meat,Thịt heo rừng,Nguồn thức ăn giàu năng lượng. Thức ăn của Bạch Thỉ Cổ và Hắc Thỉ Cổ.,Material,3,99,2,True
+green_bamboo_wine,Rượu Thanh Trúc,Rượu trúc xanh thơm ngon. Thức ăn của Tửu Trùng.,Material,2,99,3,True
+heart_knowledge_grass,Cỏ Tri Tâm,Cỏ ngọt khai tâm trí. Thức ăn bổ trợ cho cổ trùng.,Material,2,99,4,True
+ginseng,Nhân Sâm,Nhân sâm quý hiếm. Thức ăn của Địa Thính Nhục Chi Nha.,Material,4,99,5,True
+GU_MOONLIGHT,Nguyệt Quang Cổ,"Cổ trùng Rank 1 Nhất Chuyển, phóng ra nguyệt nhận sắc bén tấn công.",Gu,220,5,6,True
+GU_BLACK_BOAR,Hắc Thỉ Cổ,"Cổ trùng Rank 1 Nhất Chuyển, cải tạo thể chất tăng lực lực lượng vĩnh viễn.",Gu,600,2,7,True
+GU_CLEANSING_WATER,Tịnh Thủy Cổ,Cổ trùng hỗ trợ tẩy rửa cặn bã Không khiếu và thanh trừ ý chí lạ.,Gu,640,1,8,True
+GU_SHADOW_STEPS,Ảnh Bộ Cổ,"Cổ trùng di chuyển giúp thân pháp nhanh thoăn thoắt, nhảy vọt 2 ô.",Gu,600,3,9,True
+GU_EARTH_COMMUNICATION,Địa Thính Nhục Chi Nha,Cổ trùng trinh thám dưới lòng đất mở rộng tầm nhìn thêm 3 ô.,Gu,700,2,10,True
+GU_TUSITA_FLOWER,Thố Ti Hoa Cổ,Cổ trùng không gian tăng thêm 20 ô chứa đồ trong hành lý.,Gu,2500,2,11,True
+GU_RELIC,Xá Lợi Cổ (Relic Gu),Cổ trùng tiêu hao nâng cao tu vi ngay lập tức thêm 1 Tiểu Chuyển.,Gu,2000,2,12,True
+GU_STONE_APERTURE,Thạch Khiếu Cổ (Stone Aperture Gu),Cổ trùng tiêu hao hóa thạch Không khiếu nhận 500 Nguyên Thạch nhưng giảm 15 Chân Nguyên tối đa.,Gu,600,3,13,True
+GU_RED_STEEL_RELIC,Xích Thiết Xá Lợi Cổ,Tăng tu vi Nhị Chuyển lên một tiểu cảnh giới.,Gu,8500,1,14,True

@@ -916,15 +916,7 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 		&bossGu, &boss.AIProfile, &boss.LootTableID, &boss.Description,
 	)
 	if err != nil {
-		boss = models.MonsterTemplate{
-			ID:          bossTemplateID,
-			Name:        "Kiếp Nạn Thần Ma",
-			Type:        "Tribulation_Boss",
-			Rank:        6,
-			MaxHP:       500,
-			BaseAttack:  80,
-			BaseDefense: 10,
-		}
+		return fmt.Errorf("load tribulation boss template %s from database: %w", bossTemplateID, err)
 	}
 
 	// Apply difficulty scaling
@@ -954,15 +946,7 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 		&minionGu, &minion.AIProfile, &minion.LootTableID, &minion.Description,
 	)
 	if err != nil {
-		minion = models.MonsterTemplate{
-			ID:          "monster_tribulation_beast",
-			Name:        "Kiếp Lực Ma Vật",
-			Type:        "Tribulation_Monster",
-			Rank:        6,
-			MaxHP:       100,
-			BaseAttack:  15,
-			BaseDefense: 2,
-		}
+		return fmt.Errorf("load tribulation minion template monster_tribulation_beast from database: %w", err)
 	}
 
 	minionCount := 1 + rand.Intn(3)
@@ -1203,7 +1187,7 @@ func ProcessActiveTribulationGrid() error {
 						INSERT INTO messages (sender, content, channel, player_id, created_at)
 						VALUES ('Tiên Khiếu Hệ Thống', 'Tai kiếp đã phá hủy hoàn toàn ' || $1 || '!', 'private', $2, NOW())
 					`, nearestNode.Name, ev.PlayerID)
-					
+
 					// Remove from local list so other enemies target something else
 					var remainingNodes []TNode
 					for _, nd := range nodes {

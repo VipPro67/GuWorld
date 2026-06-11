@@ -1,0 +1,2 @@
+region_id,monster_id,x,y,spawn_mode,chance,respawn_seconds,min_rank,max_rank,is_boss_spawn,is_active
+gu_luan_slope,boss_wolf_king,80,80,BossRoom,1.0,3600,1,9,True,True

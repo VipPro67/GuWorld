@@ -5,12 +5,14 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -42,12 +44,67 @@ type TopupPackage struct {
 	Jade      int64  `json:"jadeAmount"`
 }
 
-var topupPackages = []TopupPackage{
-	{ID: "jade_60", Name: "60 Tiên Ngọc", AmountVND: 10000, Jade: 60},
-	{ID: "jade_130", Name: "130 Tiên Ngọc", AmountVND: 20000, Jade: 130},
-	{ID: "jade_350", Name: "350 Tiên Ngọc", AmountVND: 50000, Jade: 350},
-	{ID: "jade_750", Name: "750 Tiên Ngọc", AmountVND: 100000, Jade: 750},
-	{ID: "jade_1600", Name: "1600 Tiên Ngọc", AmountVND: 200000, Jade: 1600},
+func handlerCSVPath(filename string) string {
+	candidates := []string{
+		filename,
+		filepath.Join("backend", filename),
+		filepath.Join("..", filename),
+		filepath.Join("..", "..", filename),
+	}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return filename
+}
+
+func loadTopupPackages() ([]TopupPackage, error) {
+	file, err := os.Open(handlerCSVPath("TopupPackage.csv"))
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	reader := csv.NewReader(file)
+	reader.TrimLeadingSpace = true
+	rows, err := reader.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) < 1 {
+		return []TopupPackage{}, nil
+	}
+	header := rows[0]
+	col := func(name string) int {
+		for i, h := range header {
+			if strings.TrimPrefix(strings.TrimSpace(h), "\uFEFF") == name {
+				return i
+			}
+		}
+		return -1
+	}
+	idIdx, nameIdx, amountIdx, jadeIdx := col("id"), col("name"), col("amount_vnd"), col("jade")
+	if idIdx < 0 || nameIdx < 0 || amountIdx < 0 || jadeIdx < 0 {
+		return nil, fmt.Errorf("TopupPackage.csv missing required columns")
+	}
+	get := func(row []string, idx int) string {
+		if idx < 0 || idx >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[idx])
+	}
+	packages := []TopupPackage{}
+	for _, row := range rows[1:] {
+		id := get(row, idIdx)
+		if id == "" {
+			continue
+		}
+		var amount, jade int64
+		fmt.Sscanf(get(row, amountIdx), "%d", &amount)
+		fmt.Sscanf(get(row, jadeIdx), "%d", &jade)
+		packages = append(packages, TopupPackage{ID: id, Name: get(row, nameIdx), AmountVND: amount, Jade: jade})
+	}
+	return packages, nil
 }
 
 type PackageReward struct {
@@ -85,52 +142,74 @@ type ShopPackageDTO struct {
 	RemainingPurchaseCount *int `json:"remainingPurchaseCount,omitempty"`
 }
 
-var premiumShopPackages = []PremiumShopPackage{
-	{
-		ID: "STARTER_CULTIVATION_PACK", Name: "Gói Tân Thủ Tu Luyện", PriceJade: 60,
-		Description: "Tài nguyên nhập môn để ổn định tu hành. TODO: thay green_bamboo_wine bằng MANA_RECOVERY_POTION khi seed item đó tồn tại.",
-		Rewards: []PackageReward{
-			{Currency: CurrencyPrimevalStone, Amount: 30000},
-			{ItemID: "green_bamboo_wine", ItemName: "Rượu Thanh Trúc", Quantity: 5},
-			{ItemID: "grass_puppet", ItemName: "Hình nộm người cỏ", Quantity: 3},
-		},
-		Limit: ShopLimit{Count: 1, Period: "ACCOUNT"},
-	},
-	{
-		ID: "MORTAL_ADVANCE_PACK", Name: "Gói Phàm Tu Tinh Tiến", PriceJade: 180,
-		Description: "Gói hỗ trợ phàm tu. TODO: RELIC_GU_SAME_RANK đang được biểu diễn bằng GU_RELIC nếu dictionary hỗ trợ.",
-		Rewards: []PackageReward{
-			{Currency: CurrencyPrimevalStone, Amount: 120000},
-			{ItemID: "moon_orchid_petal", ItemName: "Cánh hoa Nguyệt Lan", Quantity: 10},
-			{ItemID: "GU_RELIC", ItemName: "Xá Lợi Cổ", Quantity: 1, Note: "TODO: chỉ trao nếu Gu dictionary có GU_RELIC."},
-		},
-		Limit: ShopLimit{Count: 2, Period: "MONTH"},
-	},
-	{
-		ID: "ASCENSION_PREP_PACK", Name: "Gói Thăng Tiên Dự Bị", PriceJade: 680,
-		Description: "Chuẩn bị tài nguyên trước lúc thăng tiên. TODO: item tăng Nhân Khí chưa có seed riêng.",
-		Rewards: []PackageReward{
-			{Currency: CurrencyPrimevalStone, Amount: 500000},
-			{Currency: CurrencyImmortalEssenceStone, Amount: 1},
-			{ItemID: "azure_jade_bamboo", ItemName: "Ngọc Trúc Bích Không", Quantity: 5},
-		},
-		Requirements: &ShopRequirement{MinRank: 5},
-		Limit:        ShopLimit{Count: 1, Period: "MONTH"},
-	},
-	{
-		ID: "IMMORTAL_BEGINNER_PACK", Name: "Gói Tiên Nhân Sơ Cấp", PriceJade: 980,
-		Description: "Gói dành cho Cổ Tiên mới tấn thăng. TODO: item giảm tổn thất luyện Tiên Cổ chưa có seed riêng.",
-		Rewards: []PackageReward{
-			{Currency: CurrencyImmortalEssenceStone, Amount: 3},
-			{ItemID: "ice_tear", ItemName: "Lệ Băng", Quantity: 10},
-		},
-		Requirements: &ShopRequirement{MinRank: 6},
-		Limit:        ShopLimit{Count: 2, Period: "MONTH"},
-	},
+func loadPremiumShopPackages() ([]PremiumShopPackage, error) {
+	file, err := os.Open(handlerCSVPath("PremiumShopPackage.csv"))
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	reader := csv.NewReader(file)
+	reader.TrimLeadingSpace = true
+	rows, err := reader.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) < 1 {
+		return []PremiumShopPackage{}, nil
+	}
+	header := rows[0]
+	col := func(name string) int {
+		for i, h := range header {
+			if strings.TrimPrefix(strings.TrimSpace(h), "\uFEFF") == name {
+				return i
+			}
+		}
+		return -1
+	}
+	idIdx, nameIdx, priceIdx, rewardsIdx := col("id"), col("name"), col("price_jade"), col("rewards")
+	descIdx, minRankIdx, minSubRankIdx, limitCountIdx, limitPeriodIdx := col("description"), col("min_rank"), col("min_sub_rank"), col("limit_count"), col("limit_period")
+	if idIdx < 0 || nameIdx < 0 || priceIdx < 0 || rewardsIdx < 0 || limitCountIdx < 0 || limitPeriodIdx < 0 {
+		return nil, fmt.Errorf("PremiumShopPackage.csv missing required columns")
+	}
+	get := func(row []string, idx int) string {
+		if idx < 0 || idx >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[idx])
+	}
+	packages := []PremiumShopPackage{}
+	for _, row := range rows[1:] {
+		id := get(row, idIdx)
+		if id == "" {
+			continue
+		}
+		var price int64
+		var limitCount, minRank, minSubRank int
+		fmt.Sscanf(get(row, priceIdx), "%d", &price)
+		fmt.Sscanf(get(row, limitCountIdx), "%d", &limitCount)
+		fmt.Sscanf(get(row, minRankIdx), "%d", &minRank)
+		fmt.Sscanf(get(row, minSubRankIdx), "%d", &minSubRank)
+		rewards := []PackageReward{}
+		if raw := get(row, rewardsIdx); raw != "" {
+			if err := json.Unmarshal([]byte(raw), &rewards); err != nil {
+				return nil, fmt.Errorf("parse rewards for package %s: %w", id, err)
+			}
+		}
+		var req *ShopRequirement
+		if minRank > 0 || minSubRank > 0 {
+			req = &ShopRequirement{MinRank: minRank, MinSubRank: minSubRank}
+		}
+		packages = append(packages, PremiumShopPackage{ID: id, Name: get(row, nameIdx), PriceJade: price, Rewards: rewards, Requirements: req, Limit: ShopLimit{Count: limitCount, Period: get(row, limitPeriodIdx)}, Description: get(row, descIdx)})
+	}
+	return packages, nil
 }
 
 func findTopupPackage(id string) (TopupPackage, bool) {
-	for _, pkg := range topupPackages {
+	packages, err := loadTopupPackages()
+	if err != nil {
+		return TopupPackage{}, false
+	}
+	for _, pkg := range packages {
 		if pkg.ID == id {
 			return pkg, true
 		}
@@ -139,7 +218,11 @@ func findTopupPackage(id string) (TopupPackage, bool) {
 }
 
 func findPremiumShopPackage(id string) (PremiumShopPackage, bool) {
-	for _, pkg := range premiumShopPackages {
+	packages, err := loadPremiumShopPackages()
+	if err != nil {
+		return PremiumShopPackage{}, false
+	}
+	for _, pkg := range packages {
 		if pkg.ID == id {
 			return pkg, true
 		}
@@ -162,7 +245,12 @@ func GetWallet(c *gin.Context) {
 }
 
 func GetTopupPackages(c *gin.Context) {
-	c.JSON(http.StatusOK, topupPackages)
+	packages, err := loadTopupPackages()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải gói nạp"})
+		return
+	}
+	c.JSON(http.StatusOK, packages)
 }
 
 type createTopupOrderRequest struct {
@@ -307,8 +395,13 @@ func GetPremiumShopPackages(c *gin.Context) {
 	if authed {
 		playerID, _ = middleware.GetPlayerID(c)
 	}
-	result := make([]ShopPackageDTO, 0, len(premiumShopPackages))
-	for _, pkg := range premiumShopPackages {
+	packages, err := loadPremiumShopPackages()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải gói shop"})
+		return
+	}
+	result := make([]ShopPackageDTO, 0, len(packages))
+	for _, pkg := range packages {
 		dto := ShopPackageDTO{PremiumShopPackage: pkg}
 		if authed {
 			remaining, _ := remainingPurchases(db.DB, playerID, pkg)

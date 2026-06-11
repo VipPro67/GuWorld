@@ -71,6 +71,23 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create item_dictionary table: %w", err)
 	}
 
+	// 1.1. Create caravan_shop_items
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS caravan_shop_items (
+		id VARCHAR(50) PRIMARY KEY,
+		name VARCHAR(100) NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		item_type VARCHAR(30) NOT NULL,
+		price INTEGER NOT NULL,
+		stock INTEGER NOT NULL DEFAULT -1,
+		is_active BOOLEAN NOT NULL DEFAULT TRUE,
+		sort_order INTEGER NOT NULL DEFAULT 0,
+		updated_at TIMESTAMP DEFAULT NOW()
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create caravan_shop_items table: %w", err)
+	}
+
 	// 2. Create gu_dictionary
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS gu_dictionary (
@@ -965,29 +982,21 @@ func InitSchema() error {
 	return nil
 }
 
-// SeedDictionaries populates item_dictionary, gu_dictionary, and refining_recipes from CSV files.
-// Falls back to hardcoded seeds if CSV files are not found.
+// SeedDictionaries populates gameplay master data from CSV files.
 func SeedDictionaries() error {
 	if err := seedItemsFromCSV("Item.csv"); err != nil {
-		log.Printf("Warning: CSV item seed failed (%v), falling back to hardcoded seeds", err)
-		if err2 := seedItemsHardcoded(); err2 != nil {
-			return fmt.Errorf("hardcoded item seed failed: %w", err2)
-		}
+		return fmt.Errorf("CSV item seed failed: %w", err)
 	}
 	if err := seedGusFromCSV("Gu_optimized.csv"); err != nil {
-		err = seedGusFromCSV("Gu.csv")
-		if err != nil {
-			log.Printf("Warning: CSV Gu seed failed (%v), falling back to hardcoded seeds", err)
-			if err2 := seedGusHardcoded(); err2 != nil {
-				return fmt.Errorf("hardcoded Gu seed failed: %w", err2)
-			}
+		if err = seedGusFromCSV("Gu.csv"); err != nil {
+			return fmt.Errorf("CSV Gu seed failed: %w", err)
 		}
 	}
 	if err := seedRecipesFromCSV("Recipe.csv"); err != nil {
-		log.Printf("Warning: CSV recipe seed failed (%v), falling back to hardcoded seeds", err)
-		if err2 := seedRecipesHardcoded(); err2 != nil {
-			return fmt.Errorf("hardcoded recipe seed failed: %w", err2)
-		}
+		return fmt.Errorf("CSV recipe seed failed: %w", err)
+	}
+	if err := seedShopItemsFromCSV("ShopItem.csv"); err != nil {
+		return fmt.Errorf("CSV shop item seed failed: %w", err)
 	}
 	if err := SeedMonstersAndSpawns(); err != nil {
 		return fmt.Errorf("monster and spawn seeding failed: %w", err)
@@ -1454,121 +1463,66 @@ func seedRecipesFromCSV(filename string) error {
 	return nil
 }
 
-// ── Hardcoded fallback seeds ──────────────────────────────────────────────────
+// seedShopItemsFromCSV reads ShopItem.csv and upserts caravan shop inventory.
+func seedShopItemsFromCSV(filename string) error {
+	f, r, header, err := openCSV(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
 
-func seedItemsHardcoded() error {
-	type itemSeed struct {
-		ID, Name, Type, Path, Effects, Tags, Desc string
-		Rarity, Rank                              int
+	col := func(name string) int { return colIndex(header, name) }
+	idIdx, nameIdx, typeIdx, priceIdx := col("id"), col("name"), col("item_type"), col("price")
+	descIdx, stockIdx, sortIdx, activeIdx := col("description"), col("stock"), col("sort_order"), col("is_active")
+	if idIdx < 0 || nameIdx < 0 || typeIdx < 0 || priceIdx < 0 {
+		return fmt.Errorf("ShopItem.csv missing required columns (id, name, item_type, price)")
 	}
-	items := []itemSeed{
-		{"moon_orchid_petal", "Cánh Hoa Nguyệt Lan", "Consumable", "Moon Path", `{"restore_mana": 10, "mortal_only": 1}`, `["food", "moon_path_food"]`, "Cánh hoa chứa nguyệt hoa, dùng nuôi Nguyệt đạo Cổ hoặc luyện hóa Chân Nguyên.", 1, 1},
-		{"green_bamboo_wine", "Rượu Thanh Trúc", "Consumable", "Wood Path", `{"restore_mana": 20, "mortal_only": 1}`, `["food", "wine", "liquor_worm_food"]`, "Rượu trúc xanh, có thể khôi phục Chân Nguyên hoặc nuôi Tửu Trùng.", 1, 1},
-		{"jade_stone", "Ngọc Thạch", "Consumable", "Earth Path", `{"restore_hp": 20}`, `["material", "earth_path"]`, "Đá ngọc có linh khí, dùng dưỡng thương hoặc luyện Cổ phòng ngự.", 1, 1},
-		{"wild_boar_tusk", "Nanh Lợn Rừng", "Material", "None", `{}`, `[]`, "Vật phẩm phụ dùng trong hợp luyện Bạch Ngọc Cổ.", 1, 1},
-		{"boar_meat", "Thịt Lợn Rừng", "Food", "None", `{}`, `["food"]`, "Thức ăn của Bạch Thỉ cổ.", 1, 1},
-		{"sour_wine", "Rượu Chua", "Food", "None", `{}`, `["food"]`, "Loại rượu chua cần cho Tứ Vị Tửu Trùng.", 1, 1},
-		{"sweet_wine", "Rượu Ngọt", "Food", "None", `{}`, `["food"]`, "Loại rượu ngọt cần cho Tứ Vị Tửu Trùng.", 1, 1},
-		{"bitter_wine", "Rượu Đắng", "Food", "None", `{}`, `["food"]`, "Loại rượu đắng cần cho Tứ Vị Tửu Trùng.", 1, 1},
-		{"spicy_wine", "Rượu Cay", "Food", "None", `{}`, `["food"]`, "Loại rượu cay cần cho Tứ Vị Tửu Trùng.", 1, 1},
-		{"grass_puppet", "Hình nộm người cỏ", "Material", "None", `{}`, `[]`, "Vật phẩm luyện tập cơ bản.", 1, 1},
-		{"sword_leaf_grass", "Cỏ Kiếm Diệp", "Material", "Sword Path", `{}`, `["material"]`, "Cỏ có hình dạng kiếm diệp sắc bén dùng cho Kiếm đạo.", 2, 2},
-		{"spirit_deer_meat", "Thịt Hươu Linh", "Food", "Food Path", `{}`, `["food"]`, "Thịt hươu có linh tính cao.", 2, 2},
-		{"silver_wolf_pelt", "Da Sói Bạc", "Material", "Food Path", `{}`, `["material"]`, "Tấm da từ sói bạc hoang dã.", 3, 3},
-		{"hairy_man_slaves", "Nô Lệ Người Lông", "Material", "Human Path", `{}`, `["material"]`, "Dị nhân người lông giỏi luyện Cổ.", 3, 6},
-		{"featherman_feather", "Lông Vũ Người Chim", "Material", "Human Path", `{}`, `["material"]`, "Lông vũ nhẹ nhàng từ dị nhân người lông vũ.", 2, 2},
-		{"node_sword_leaf_grass", "Cơ sở Đồng Cỏ Kiếm Diệp", "Material", "Sword Path", `{}`, `[]`, "Cơ sở Tiên Khiếu dùng để sản sinh Cỏ Kiếm Diệp.", 3, 6},
-		{"node_spirit_deer_pasture", "Cơ sở Bãi Chăn Thả Hươu Linh", "Material", "Food Path", `{}`, `[]`, "Cơ sở Tiên Khiếu dùng để sản sinh Thịt Hươu Linh.", 3, 6},
-		{"node_silver_wolf_den", "Cơ sở Hang Sói Bạc", "Material", "Food Path", `{}`, `[]`, "Cơ sở Tiên Khiếu dùng để sản sinh Da Sói Bạc.", 3, 6},
-		{"node_hairy_man_settlement", "Cơ sở Bộ Lạc Người Lông", "Material", "Human Path", `{}`, `[]`, "Cơ sở Tiên Khiếu chiêu mộ dị nhân Người Lông.", 3, 6},
-		{"node_rockman_tribe", "Cơ sở Bản Doanh Người Đá", "Material", "Human Path", `{}`, `[]`, "Cơ sở Tiên Khiếu chiêu mộ dị nhân Người Đá.", 3, 6},
-		{"node_featherman_canyon", "Cơ sở Hẻm Núi Người Lông Vũ", "Material", "Human Path", `{}`, `[]`, "Cơ sở Tiên Khiếu chiêu mộ dị nhân Người Lông Vũ.", 3, 6},
-	}
-	for _, item := range items {
-		_, err := DB.Exec(`
-			INSERT INTO item_dictionary (id, name, item_type, rarity, rank, path, effects, tags, description)
-			VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9)
-			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, item_type=EXCLUDED.item_type, rarity=EXCLUDED.rarity,
-			rank=EXCLUDED.rank, path=EXCLUDED.path, effects=EXCLUDED.effects, tags=EXCLUDED.tags, description=EXCLUDED.description
-		`, item.ID, item.Name, item.Type, item.Rarity, item.Rank, item.Path, item.Effects, item.Tags, item.Desc)
-		if err != nil {
-			return fmt.Errorf("hardcoded item %s: %w", item.ID, err)
+	get := func(row []string, idx int) string {
+		if idx < 0 || idx >= len(row) {
+			return ""
 		}
+		return strings.TrimSpace(row[idx])
 	}
-	return nil
-}
-
-func seedGusHardcoded() error {
-	type guSeed struct {
-		ID, Name, Path, Type, Origin, Effects string
-		Rank, HungerRate, MaxHunger           int
-		BaseManaCost                          float64
-		FoodTypes                             []string
-		Desc                                  string
-	}
-	gus := []guSeed{
-		{"GU_MOONLIGHT", "Nguyệt Quang Cổ", "Moon Path", "Active", "Southern_Border", `{"damage": 25.0}`, 1, 5, 100, 10.0, []string{"moon_orchid_petal"}, "Bắn ra nguyệt nhận sắc lẹm màu xanh lam."},
-		{"GU_JADE_SKIN", "Ngọc Bì Cổ", "Earth Path", "Passive", "Southern_Border", `{"add_base_defense": 40.0}`, 1, 2, 100, 0.0, []string{"jade_stone"}, "Cải tạo bề mặt da trở nên cứng cáp như ngọc bích."},
-		{"GU_LIQUOR_WORM", "Tửu Trùng", "Refinement Path", "Support", "Southern_Border", `{"refine_mana_tier": 1.0}`, 1, 3, 100, 0.0, []string{"green_bamboo_wine"}, "Tinh luyện và nâng cao chất lượng Chân Nguyên."},
-		{"GU_WHITE_BOAR", "Bạch Thỉ Cổ", "Strength Path", "Passive", "Northern_Plains", `{"add_base_attack": 15.0, "add_base_defense": 5.0}`, 1, 6, 100, 0.0, []string{"boar_meat"}, "Cải tạo thể chất vĩnh viễn, tăng sức mạnh một con lợn rừng."},
-		{"GU_MOON_RAIMENT", "Nguyệt Nghê Thường", "Moon Path", "Defense", "Southern_Border", `{"add_base_defense": 75.0}`, 2, 4, 100, 15.0, []string{"moon_orchid_petal"}, "Tạo ra một bộ xiêm y bằng ánh trăng che chở cơ thể."},
-		{"GU_WHITE_JADE", "Bạch Ngọc Cổ", "Earth Path", "Defense", "Southern_Border", `{"add_base_attack": 10.0, "add_base_defense": 110.0}`, 2, 3, 100, 20.0, []string{"jade_stone"}, "Biến làn da toàn thân thành ngọc trắng cứng cáp che chắn."},
-		{"GU_FOUR_FLAVORS_LIQUOR", "Tứ Vị Tửu Trùng", "Refinement Path", "Support", "Southern_Border", `{"refine_mana_tier": 2.0}`, 2, 2, 100, 0.0, []string{"green_bamboo_wine"}, "Cổ trùng tinh luyện chân nguyên Nhị Chuyển tối thượng."},
-		{"GU_BLACK_BOAR", "Hắc Thỉ Cổ", "Strength Path", "Passive", "Southern_Border", `{"add_base_attack": 15.0, "add_base_defense": 5.0}`, 1, 6, 100, 0.0, []string{"boar_meat"}, "Cải tạo thể chất vĩnh viễn, tăng sức mạnh một con hắc thỉ."},
-		{"GU_CLEANSING_WATER", "Tịnh Thủy Cổ", "Water Path", "Support", "Southern_Border", `{"cleansing_power": 1.0}`, 1, 1, 100, 0.0, []string{"grass_puppet"}, "Sử dụng nước tinh khiết để rửa trôi các trạng thái tiêu cực."},
-		{"GU_TUSITA_FLOWER", "Thố Ti Hoa Cổ", "Wood Path", "Storage", "Southern_Border", `{"storage": 20.0}`, 1, 2, 100, 0.0, []string{"moon_orchid_petal"}, "Cổ trùng lưu trữ không gian phàm cấp, tăng thêm 20 ô hành lý."},
-		{"GU_RELIC", "Xá Lợi Cổ (Relic Gu)", "Refinement Path", "Consumable", "Southern_Border", `{"raise_cultivation": 1.0}`, 1, 0, 100, 0.0, []string{}, "Cổ trùng tiêu hao nâng cao tu vi ngay lập tức thêm 1 Tiểu Chuyển."},
-		{"GU_STONE_APERTURE", "Thạch Khiếu Cổ (Stone Aperture Gu)", "Earth Path", "Consumable", "Southern_Border", `{"give_stones": 500.0}`, 1, 0, 100, 0.0, []string{}, "Cổ trùng tiêu hao hóa thạch Không khiếu nhận 500 Nguyên Thạch nhưng giảm 15 Chân Nguyên tối đa."},
-	}
-	for _, gu := range gus {
-		foodTypesJSON := "[]"
-		if len(gu.FoodTypes) > 0 {
-			escaped := make([]string, len(gu.FoodTypes))
-			for i, t := range gu.FoodTypes {
-				escaped[i] = fmt.Sprintf(`"%s"`, t)
-			}
-			foodTypesJSON = fmt.Sprintf("[%s]", strings.Join(escaped, ","))
+	seeded := 0
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
 		}
-		_, err := DB.Exec(`
-			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, origin_region, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10::jsonb,$11,$12)
+		if err != nil || len(row) == 0 {
+			continue
+		}
+		id := get(row, idIdx)
+		if id == "" {
+			continue
+		}
+		price, stock, sortOrder := 0, -1, seeded
+		fmt.Sscanf(get(row, priceIdx), "%d", &price)
+		if stockRaw := get(row, stockIdx); stockRaw != "" {
+			fmt.Sscanf(stockRaw, "%d", &stock)
+		}
+		if sortRaw := get(row, sortIdx); sortRaw != "" {
+			fmt.Sscanf(sortRaw, "%d", &sortOrder)
+		}
+		isActive := true
+		activeRaw := strings.ToLower(get(row, activeIdx))
+		if activeRaw == "false" || activeRaw == "0" || activeRaw == "no" {
+			isActive = false
+		}
+		_, err = DB.Exec(`
+			INSERT INTO caravan_shop_items (id, name, description, item_type, price, stock, is_active, sort_order, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
 			ON CONFLICT (id) DO UPDATE
-			SET name=EXCLUDED.name, rank=EXCLUDED.rank, path=EXCLUDED.path, gu_type=EXCLUDED.gu_type,
-			    origin_region=EXCLUDED.origin_region, base_mana_cost=EXCLUDED.base_mana_cost, effects=EXCLUDED.effects,
-			    hunger_rate=EXCLUDED.hunger_rate, food_types=EXCLUDED.food_types, max_hunger=EXCLUDED.max_hunger, description=EXCLUDED.description
-		`, gu.ID, gu.Name, gu.Rank, gu.Path, gu.Type, gu.Origin, gu.BaseManaCost, gu.Effects, gu.HungerRate, foodTypesJSON, gu.MaxHunger, gu.Desc)
+			SET name=EXCLUDED.name, description=EXCLUDED.description, item_type=EXCLUDED.item_type,
+			    price=EXCLUDED.price, stock=EXCLUDED.stock, is_active=EXCLUDED.is_active,
+			    sort_order=EXCLUDED.sort_order, updated_at=NOW()
+		`, id, get(row, nameIdx), get(row, descIdx), get(row, typeIdx), price, stock, isActive, sortOrder)
 		if err != nil {
-			return fmt.Errorf("hardcoded gu %s: %w", gu.ID, err)
+			return fmt.Errorf("upsert shop item %s: %w", id, err)
 		}
+		seeded++
 	}
-	return nil
-}
-
-func seedRecipesHardcoded() error {
-	type recipeSeed struct {
-		ID, Target, ReqGus, ReqMats string
-		Rate                        float64
-		StoneCost                   int
-		ImmortalCost                float64
-	}
-	recipes := []recipeSeed{
-		{"recipe_moon_raiment", "GU_MOON_RAIMENT", `{"GU_MOONLIGHT":1,"GU_JADE_SKIN":1}`, `{}`, 0.85, 10, 0},
-		{"recipe_white_jade", "GU_WHITE_JADE", `{"GU_WHITE_BOAR":1,"GU_JADE_SKIN":1}`, `{"wild_boar_tusk":1}`, 0.80, 15, 0},
-		{"recipe_four_flavors_liquor", "GU_FOUR_FLAVORS_LIQUOR", `{"GU_LIQUOR_WORM":2}`, `{"sour_wine":1,"sweet_wine":1,"bitter_wine":1,"spicy_wine":1}`, 0.60, 30, 0},
-	}
-	for _, recipe := range recipes {
-		_, err := DB.Exec(`
-			INSERT INTO refining_recipes (id, target_gu_id, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost)
-			VALUES ($1,$2,$3,$4,$5,$6,$7)
-			ON CONFLICT (id) DO UPDATE
-			SET target_gu_id=EXCLUDED.target_gu_id, required_gus=EXCLUDED.required_gus,
-			    required_materials=EXCLUDED.required_materials, success_rate=EXCLUDED.success_rate,
-			    primeval_stones_cost=EXCLUDED.primeval_stones_cost, immortal_essence_stones_cost=EXCLUDED.immortal_essence_stones_cost
-		`, recipe.ID, recipe.Target, recipe.ReqGus, recipe.ReqMats, recipe.Rate, recipe.StoneCost, recipe.ImmortalCost)
-		if err != nil {
-			return fmt.Errorf("hardcoded recipe %s: %w", recipe.ID, err)
-		}
-	}
+	log.Printf("Shop items seeded from %s (%d seeded)", filename, seeded)
 	return nil
 }
 
@@ -1580,102 +1534,287 @@ func getEnv(key, fallback string) string {
 }
 
 func SeedMonstersAndSpawns() error {
-	// 1. Seed regions
-	regions := []struct{ ID, Name, Desc string }{
-		{"qing_mao_mountain", "Thanh Mao Sơn (Qing Mao Mountain)", "Southern Border mountain containing Gu Yue, Bai, and Xiong clans."},
-		{"gu_luan_slope", "Cổ Loạn Sườn (Gu Luan Slope)", "Southern Border region full of dangerous wild beast packs."},
-		{"three_kings_inheritance", "Tam Vương Truyền Thừa (Three Kings Inheritance)", "An ancient inheritance ground with rich resources and relics."},
+	if err := seedRegionsFromCSV("Region.csv"); err != nil {
+		return err
 	}
-	for _, r := range regions {
-		_, err := DB.Exec(`
-			INSERT INTO regions (id, name, description)
-			VALUES ($1, $2, $3)
-			ON CONFLICT (id) DO NOTHING
-		`, r.ID, r.Name, r.Desc)
-		if err != nil {
-			return fmt.Errorf("seed region %s: %w", r.ID, err)
-		}
+	if err := seedLootTablesFromCSV("LootTable.csv"); err != nil {
+		return err
 	}
+	if err := seedMonsterTemplatesFromCSV("Monster.csv"); err != nil {
+		return err
+	}
+	if err := seedMonsterSpawnsFromCSV("MonsterSpawn.csv"); err != nil {
+		return err
+	}
+	return nil
+}
 
-	// 2. Seed loot tables
-	lootTables := []struct {
-		ID, Name, Entries string
-	}{
-		{"loot_boar", "Loot Dã Trĩ", `[{"item_id": "boar_meat", "min_qty": 1, "max_qty": 1, "chance": 0.5}, {"item_id": "wild_boar_tusk", "min_qty": 1, "max_qty": 1, "chance": 0.1}]`},
-		{"loot_ape", "Loot Thạch Hầu", `[{"item_id": "jade_stone", "min_qty": 1, "max_qty": 1, "chance": 0.3}]`},
-		{"loot_boar_king", "Loot Dã Trĩ Vương", `[{"item_id": "boar_meat", "min_qty": 2, "max_qty": 4, "chance": 0.8}, {"item_id": "wild_boar_tusk", "min_qty": 1, "max_qty": 2, "chance": 0.5}, {"gu_id": "GU_WHITE_BOAR", "chance": 0.05}]`},
-		{"loot_wolf_leader", "Loot Độc Lang Vương", `[{"item_id": "jade_stone", "min_qty": 2, "max_qty": 5, "chance": 0.8}, {"gu_id": "GU_BLACK_BOAR", "chance": 0.05}]`},
-		{"loot_python", "Loot Mãng Xà Dung Nham", `[{"item_id": "jade_stone", "min_qty": 3, "max_qty": 6, "chance": 0.8}]`},
-		{"loot_bear", "Loot Thiết Giáp Hùng", `[{"item_id": "boar_meat", "min_qty": 3, "max_qty": 6, "chance": 0.8}]`},
-		{"loot_wandering", "Loot Cổ Sư Lang Thang", `[{"item_id": "primeval_stone", "min_qty": 50, "max_qty": 100, "chance": 1.0}]`},
-		{"loot_boss_wolf_king", "Loot Boss Độc Lang Vương", `[{"item_id": "jade_stone", "min_qty": 5, "max_qty": 10, "chance": 1.0}, {"gu_id": "GU_WHITE_BOAR", "chance": 0.15}]`},
-	}
-	for _, lt := range lootTables {
-		_, err := DB.Exec(`
-			INSERT INTO loot_tables (id, name, entries)
-			VALUES ($1, $2, $3::jsonb)
-			ON CONFLICT (id) DO UPDATE SET entries=EXCLUDED.entries
-		`, lt.ID, lt.Name, lt.Entries)
-		if err != nil {
-			return fmt.Errorf("seed loot table %s: %w", lt.ID, err)
-		}
-	}
-
-	// 3. Seed monster templates
-	monsters := []struct {
-		ID, Name, Type string
-		Rank, SubRank  int
-		Path           string
-		MaxHP, Attack  float64
-		Defense        float64
-		MaxMana        float64
-		GuInventory    string
-		AIProfile      string
-		LootTableID    string
-		Desc           string
-	}{
-		{"monster_wild_boar", "Dã Trĩ (Wild Boar)", "Normal", 1, 1, "None", 50, 8, 2, 100, "[]", "beast_basic", "loot_boar", "Thịt lợn hoang dã rất bổ dưỡng."},
-		{"monster_stone_ape", "Thạch Hầu (Stone Ape)", "Normal", 1, 1, "Earth Path", 60, 10, 3, 100, "[]", "beast_basic", "loot_ape", "Vượn đá sống ở vách núi."},
-		{"monster_boar_king", "Dã Trĩ Vương (Boar King)", "Elite", 1, 3, "Strength Path", 120, 12, 8, 100, "[]", "beast_basic", "loot_boar_king", "Lợn lòi đầu đàn hung tợn."},
-		{"monster_wolf_leader", "Độc Lang Vương (Wolf Leader)", "Elite", 1, 4, "Moon Path", 100, 15, 6, 100, "[]", "beast_basic", "loot_wolf_leader", "Sói hoang dã hung dữ."},
-		{"monster_lava_python", "Mãng Xà Dung Nham (Lava Python)", "Elite", 3, 1, "Fire Path", 150, 24, 10, 100, "[]", "beast_basic", "loot_python", "Mãng xà khổng lồ sống trong khe dung nham."},
-		{"monster_iron_bear", "Thiết Giáp Hùng (Iron Armored Bear)", "Elite", 3, 2, "Strength Path", 200, 18, 18, 100, "[]", "beast_basic", "loot_bear", "Gấu lớn da dày như thép."},
-		{"monster_wandering", "Cổ Sư Lang Thang (Wandering Cultivator)", "HumanCultivator", 1, 1, "Moon Path", 100, 15, 5, 100, "[]", "beast_basic", "loot_wandering", "Cổ sư lang thang nguy hiểm."},
-		{"boss_wolf_king", "Độc Lang Vương Boss (Boss Wolf Leader)", "Boss", 3, 4, "Moon Path", 500, 35, 18, 120, `[{"instance_id": "boss-moonlight", "gu_id": "GU_MOONLIGHT", "hunger": 100, "status": "ACTIVE", "equipped": true}]`, "boss_balanced", "loot_boss_wolf_king", "Lang vương thống lĩnh đàn sói đặc biệt nguy hiểm."},
-		{"monster_tribulation_beast", "Kiếp Lực Ma Vật (Tribulation Beast)", "Tribulation_Monster", 6, 1, "None", 100, 15, 2, 100, "[]", "beast_basic", "loot_boar", "Sinh vật sinh ra từ kiếp lực hoành hành."},
-		{"monster_earth_calamity_boss", "Địa Tai Thần Ma (Earth Calamity Boss)", "Tribulation_Boss", 6, 1, "Earth Path", 500, 80, 10, 100, "[]", "boss_balanced", "loot_boss_wolf_king", "Thần ma sinh ra từ Địa Tai."},
-		{"monster_heaven_tribulation_boss", "Thiên Kiếp Thần Ma (Heaven Calamity Boss)", "Tribulation_Boss", 6, 1, "Heaven Path", 600, 100, 12, 100, "[]", "boss_balanced", "loot_boss_wolf_king", "Thần ma ngưng tụ từ Thiên Kiếp."},
-		{"monster_grand_calamity_boss", "Hạo Kiếp Thần Ma (Grand Calamity Boss)", "Tribulation_Boss", 7, 1, "Rule Path", 1000, 150, 25, 100, "[]", "boss_balanced", "loot_boss_wolf_king", "Hạo kiếp chấn động vạn vật."},
-		{"monster_myriad_tribulation_boss", "Vạn Kiếp Thần Ma (Myriad Calamity Boss)", "Tribulation_Boss", 8, 1, "Chaos Path", 2000, 300, 50, 100, "[]", "boss_balanced", "loot_boss_wolf_king", "Vạn kiếp vô phục sinh."},
-	}
-	for _, m := range monsters {
-		_, err := DB.Exec(`
-			INSERT INTO monster_templates (
-				id, name, type, rank, sub_rank, path, max_hp, base_attack, base_defense,
-				max_mana, current_mana, gu_inventory, ai_profile, loot_table_id, description
-			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $11::jsonb, $12, $13, $14)
-			ON CONFLICT (id) DO UPDATE SET
-				name=EXCLUDED.name, type=EXCLUDED.type, rank=EXCLUDED.rank, sub_rank=EXCLUDED.sub_rank,
-				max_hp=EXCLUDED.max_hp, base_attack=EXCLUDED.base_attack, base_defense=EXCLUDED.base_defense,
-				gu_inventory=EXCLUDED.gu_inventory, ai_profile=EXCLUDED.ai_profile, loot_table_id=EXCLUDED.loot_table_id
-		`, m.ID, m.Name, m.Type, m.Rank, m.SubRank, m.Path, m.MaxHP, m.Attack, m.Defense, m.MaxMana, m.GuInventory, m.AIProfile, m.LootTableID, m.Desc)
-		if err != nil {
-			return fmt.Errorf("seed monster %s: %w", m.ID, err)
-		}
-	}
-
-	// 4. Seed spawns and special cells (Boss spawns)
-	// Seed fixed Boss spawn at Gu Luan Slope (80, 80)
-	_, err := DB.Exec(`
-		INSERT INTO monster_spawns (region_id, monster_id, x, y, spawn_mode, chance, respawn_seconds, is_boss_spawn)
-		VALUES ('gu_luan_slope', 'boss_wolf_king', 80, 80, 'BossRoom', 1.0, 3600, TRUE)
-		ON CONFLICT DO NOTHING
-	`)
+func seedRegionsFromCSV(filename string) error {
+	f, r, header, err := openCSV(filename)
 	if err != nil {
-		return fmt.Errorf("seed boss spawn: %w", err)
+		return err
 	}
+	defer f.Close()
+	col := func(name string) int { return colIndex(header, name) }
+	idIdx, nameIdx := col("id"), col("name")
+	descIdx, widthIdx, heightIdx, minRankIdx, maxRankIdx, activeIdx := col("description"), col("width"), col("height"), col("min_rank"), col("max_rank"), col("is_active")
+	if idIdx < 0 || nameIdx < 0 {
+		return fmt.Errorf("Region.csv missing required columns (id, name)")
+	}
+	get := func(row []string, idx int) string {
+		if idx < 0 || idx >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[idx])
+	}
+	seeded := 0
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil || len(row) == 0 {
+			continue
+		}
+		id := get(row, idIdx)
+		if id == "" {
+			continue
+		}
+		width, height, minRank, maxRank := 100, 100, 1, 5
+		if v := get(row, widthIdx); v != "" {
+			fmt.Sscanf(v, "%d", &width)
+		}
+		if v := get(row, heightIdx); v != "" {
+			fmt.Sscanf(v, "%d", &height)
+		}
+		if v := get(row, minRankIdx); v != "" {
+			fmt.Sscanf(v, "%d", &minRank)
+		}
+		if v := get(row, maxRankIdx); v != "" {
+			fmt.Sscanf(v, "%d", &maxRank)
+		}
+		active := true
+		av := strings.ToLower(get(row, activeIdx))
+		if av == "false" || av == "0" || av == "no" {
+			active = false
+		}
+		_, err = DB.Exec(`
+			INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description,
+			width=EXCLUDED.width, height=EXCLUDED.height, min_rank=EXCLUDED.min_rank, max_rank=EXCLUDED.max_rank,
+			is_active=EXCLUDED.is_active, updated_at=NOW()
+		`, id, get(row, nameIdx), get(row, descIdx), width, height, minRank, maxRank, active)
+		if err != nil {
+			return fmt.Errorf("upsert region %s: %w", id, err)
+		}
+		seeded++
+	}
+	log.Printf("Regions seeded from %s (%d seeded)", filename, seeded)
+	return nil
+}
 
+func seedLootTablesFromCSV(filename string) error {
+	f, r, header, err := openCSV(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	col := func(name string) int { return colIndex(header, name) }
+	idIdx, nameIdx, entriesIdx := col("id"), col("name"), col("entries")
+	if idIdx < 0 || nameIdx < 0 || entriesIdx < 0 {
+		return fmt.Errorf("LootTable.csv missing required columns (id, name, entries)")
+	}
+	get := func(row []string, idx int) string {
+		if idx < 0 || idx >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[idx])
+	}
+	seeded := 0
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil || len(row) == 0 {
+			continue
+		}
+		id := get(row, idIdx)
+		if id == "" {
+			continue
+		}
+		entries := safeJSONArray(get(row, entriesIdx), "[]", fmt.Sprintf("loot table %s entries", id))
+		_, err = DB.Exec(`INSERT INTO loot_tables (id, name, entries, updated_at) VALUES ($1,$2,$3::jsonb,NOW()) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, entries=EXCLUDED.entries, updated_at=NOW()`, id, get(row, nameIdx), entries)
+		if err != nil {
+			return fmt.Errorf("upsert loot table %s: %w", id, err)
+		}
+		seeded++
+	}
+	log.Printf("Loot tables seeded from %s (%d seeded)", filename, seeded)
+	return nil
+}
+
+func seedMonsterTemplatesFromCSV(filename string) error {
+	f, r, header, err := openCSV(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	col := func(name string) int { return colIndex(header, name) }
+	idIdx, nameIdx, typeIdx := col("id"), col("name"), col("type")
+	rankIdx, subRankIdx, pathIdx := col("rank"), col("sub_rank"), col("path")
+	hpIdx, attackIdx, defenseIdx := col("max_hp"), col("base_attack"), col("base_defense")
+	maxManaIdx, currentManaIdx := col("max_mana"), col("current_mana")
+	guIdx, itemIdx, daoIdx, masteryIdx := col("gu_inventory"), col("item_inventory"), col("dao_marks"), col("path_masteries")
+	aiIdx, lootIdx, descIdx, activeIdx := col("ai_profile"), col("loot_table_id"), col("description"), col("is_active")
+	if idIdx < 0 || nameIdx < 0 || typeIdx < 0 || hpIdx < 0 || attackIdx < 0 || defenseIdx < 0 {
+		return fmt.Errorf("Monster.csv missing required columns")
+	}
+	get := func(row []string, idx int) string {
+		if idx < 0 || idx >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[idx])
+	}
+	seeded := 0
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil || len(row) == 0 {
+			continue
+		}
+		id := get(row, idIdx)
+		if id == "" {
+			continue
+		}
+		rank, subRank := 1, 1
+		maxHP, attack, defense, maxMana, currentMana := 0.0, 0.0, 0.0, 100.0, 100.0
+		fmt.Sscanf(get(row, rankIdx), "%d", &rank)
+		fmt.Sscanf(get(row, subRankIdx), "%d", &subRank)
+		fmt.Sscanf(get(row, hpIdx), "%f", &maxHP)
+		fmt.Sscanf(get(row, attackIdx), "%f", &attack)
+		fmt.Sscanf(get(row, defenseIdx), "%f", &defense)
+		if v := get(row, maxManaIdx); v != "" {
+			fmt.Sscanf(v, "%f", &maxMana)
+		}
+		currentMana = maxMana
+		if v := get(row, currentManaIdx); v != "" {
+			fmt.Sscanf(v, "%f", &currentMana)
+		}
+		path := get(row, pathIdx)
+		ai := get(row, aiIdx)
+		if ai == "" {
+			ai = "beast_basic"
+		}
+		guInv := safeJSONArray(get(row, guIdx), "[]", fmt.Sprintf("monster %s gu_inventory", id))
+		itemInv := safeJSONObject(get(row, itemIdx), "{}", fmt.Sprintf("monster %s item_inventory", id))
+		daoMarks := safeJSONObject(get(row, daoIdx), "{}", fmt.Sprintf("monster %s dao_marks", id))
+		masteries := safeJSONObject(get(row, masteryIdx), "{}", fmt.Sprintf("monster %s path_masteries", id))
+		active := true
+		av := strings.ToLower(get(row, activeIdx))
+		if av == "false" || av == "0" || av == "no" {
+			active = false
+		}
+		_, err = DB.Exec(`
+			INSERT INTO monster_templates (id, name, type, rank, sub_rank, path, max_hp, base_attack, base_defense, max_mana, current_mana, gu_inventory, item_inventory, dao_marks, path_masteries, ai_profile, loot_table_id, description, is_active, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14::jsonb,$15::jsonb,$16,$17,$18,$19,NOW())
+			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, type=EXCLUDED.type, rank=EXCLUDED.rank, sub_rank=EXCLUDED.sub_rank, path=EXCLUDED.path,
+			max_hp=EXCLUDED.max_hp, base_attack=EXCLUDED.base_attack, base_defense=EXCLUDED.base_defense, max_mana=EXCLUDED.max_mana, current_mana=EXCLUDED.current_mana,
+			gu_inventory=EXCLUDED.gu_inventory, item_inventory=EXCLUDED.item_inventory, dao_marks=EXCLUDED.dao_marks, path_masteries=EXCLUDED.path_masteries,
+			ai_profile=EXCLUDED.ai_profile, loot_table_id=EXCLUDED.loot_table_id, description=EXCLUDED.description, is_active=EXCLUDED.is_active, updated_at=NOW()
+		`, id, get(row, nameIdx), get(row, typeIdx), rank, subRank, path, maxHP, attack, defense, maxMana, currentMana, guInv, itemInv, daoMarks, masteries, ai, get(row, lootIdx), get(row, descIdx), active)
+		if err != nil {
+			return fmt.Errorf("upsert monster %s: %w", id, err)
+		}
+		seeded++
+	}
+	log.Printf("Monster templates seeded from %s (%d seeded)", filename, seeded)
+	return nil
+}
+
+func seedMonsterSpawnsFromCSV(filename string) error {
+	f, r, header, err := openCSV(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	col := func(name string) int { return colIndex(header, name) }
+	regionIdx, monsterIdx := col("region_id"), col("monster_id")
+	xIdx, yIdx, modeIdx, chanceIdx := col("x"), col("y"), col("spawn_mode"), col("chance")
+	respawnIdx, minRankIdx, maxRankIdx, bossIdx, activeIdx := col("respawn_seconds"), col("min_rank"), col("max_rank"), col("is_boss_spawn"), col("is_active")
+	if regionIdx < 0 || monsterIdx < 0 {
+		return fmt.Errorf("MonsterSpawn.csv missing required columns (region_id, monster_id)")
+	}
+	get := func(row []string, idx int) string {
+		if idx < 0 || idx >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[idx])
+	}
+	seeded := 0
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil || len(row) == 0 {
+			continue
+		}
+		regionID, monsterID := get(row, regionIdx), get(row, monsterIdx)
+		if regionID == "" || monsterID == "" {
+			continue
+		}
+		var x, y interface{}
+		if v := get(row, xIdx); v != "" {
+			var n int
+			fmt.Sscanf(v, "%d", &n)
+			x = n
+		}
+		if v := get(row, yIdx); v != "" {
+			var n int
+			fmt.Sscanf(v, "%d", &n)
+			y = n
+		}
+		mode, chance, respawn, minRank, maxRank := get(row, modeIdx), 1.0, 300, 1, 9
+		if mode == "" {
+			mode = "Random"
+		}
+		if v := get(row, chanceIdx); v != "" {
+			fmt.Sscanf(v, "%f", &chance)
+		}
+		if v := get(row, respawnIdx); v != "" {
+			fmt.Sscanf(v, "%d", &respawn)
+		}
+		if v := get(row, minRankIdx); v != "" {
+			fmt.Sscanf(v, "%d", &minRank)
+		}
+		if v := get(row, maxRankIdx); v != "" {
+			fmt.Sscanf(v, "%d", &maxRank)
+		}
+		boss := false
+		bv := strings.ToLower(get(row, bossIdx))
+		if bv == "true" || bv == "1" || bv == "yes" {
+			boss = true
+		}
+		active := true
+		av := strings.ToLower(get(row, activeIdx))
+		if av == "false" || av == "0" || av == "no" {
+			active = false
+		}
+		_, err = DB.Exec(`
+			INSERT INTO monster_spawns (region_id, monster_id, x, y, spawn_mode, chance, respawn_seconds, min_rank, max_rank, is_boss_spawn, is_active)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+			ON CONFLICT DO NOTHING
+		`, regionID, monsterID, x, y, mode, chance, respawn, minRank, maxRank, boss, active)
+		if err != nil {
+			return fmt.Errorf("insert monster spawn %s/%s: %w", regionID, monsterID, err)
+		}
+		seeded++
+	}
+	log.Printf("Monster spawns seeded from %s (%d read)", filename, seeded)
 	return nil
 }
 
