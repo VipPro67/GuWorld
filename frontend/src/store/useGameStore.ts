@@ -613,7 +613,7 @@ interface GameState {
     is_disguised?: boolean;
   }) => Promise<boolean>;
   uploadAvatar: (file: File) => Promise<string | null>;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<boolean>;
   register: (username: string, password: string, email: string, startingRegion: string, setVitalNow: boolean, referralCode?: string) => Promise<boolean>;
   logout: () => void;
   clearError: () => void;
@@ -947,18 +947,18 @@ export const useGameStore = create<GameState>((set, get) => {
     }));
   },
 
-  login: async (username, password) => {
+  login: async (email, password) => {
     set({ isLoading: true, error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ email, password }),
       });
 
       if (!response.ok) {
         const errData = await response.json();
-        throw new Error(errData.error || "Mật khẩu hoặc Đạo Hiệu không chính xác.");
+        throw new Error(errData.error || "Mật khẩu hoặc Email không chính xác.");
       }
 
       const data: AuthResponse = await response.json();

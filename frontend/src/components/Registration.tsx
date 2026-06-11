@@ -5,7 +5,7 @@ import { Sparkles, Compass, ShieldAlert, KeyRound, User, Eye, EyeOff, Mail } fro
 
 interface RegistrationProps {
   onRegister: (username: string, password: string, email: string, startingRegion: string, setVitalNow: boolean, referralCode?: string) => Promise<boolean>;
-  onLogin: (username: string, password: string) => Promise<boolean>;
+  onLogin: (email: string, password: string) => Promise<boolean>;
   isLoading: boolean;
   error: string | null;
   onClearError: () => void;
@@ -39,12 +39,15 @@ export const Registration: React.FC<RegistrationProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim() || password.length < 6) return;
+    const usernameValue = username.trim();
+    const emailValue = email.trim();
 
     if (isLoginTab) {
-      await onLogin(username.trim(), password);
+      if (!emailValue || password.length < 6) return;
+      await onLogin(emailValue, password);
     } else {
-      await onRegister(username.trim(), password, email.trim(), startingRegion, setVitalNow, referralCode);
+      if (!usernameValue || !emailValue || password.length < 6) return;
+      await onRegister(usernameValue, password, emailValue, startingRegion, setVitalNow, referralCode);
     }
   };
 
@@ -53,6 +56,7 @@ export const Registration: React.FC<RegistrationProps> = ({
     onClearError();
     setPassword("");
     setEmail("");
+    setUsername("");
   };
 
   const handleGoogleLogin = () => {
@@ -114,7 +118,7 @@ export const Registration: React.FC<RegistrationProps> = ({
       {/* Text Description */}
       <p className="text-xs text-zinc-400 leading-relaxed text-center mb-6 font-serif h-12 flex items-center justify-center">
         {isLoginTab
-          ? "Đã có Tiên cốt Không Khiếu? Nhập Đạo hiệu cùng Mật mật mã để tiếp tục nghịch thiên hành trình."
+          ? "Đã có Tiên cốt Không Khiếu? Nhập Email cùng Mật mã để tiếp tục nghịch thiên hành trình."
           : '"Con người là vạn vật chi linh, Cổ là thiên địa chi tinh." Khai mở Đạo hiệu để gacha Tư chất (Giáp, Ất, Bính, Đinh).'}
       </p>
 
@@ -148,32 +152,63 @@ export const Registration: React.FC<RegistrationProps> = ({
             </label>
           </>
         )}
-        {/* Username */}
-        <div className="relative">
-          <label
-            htmlFor="username"
-            className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5"
-          >
-            {isLoginTab ? "Đạo Hiệu / Email" : "Đạo Hiệu (Character Name)"}
-          </label>
+        {/* Login email */}
+        {isLoginTab && (
           <div className="relative">
-            <User className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-600" />
-            <input
-              type="text"
-              id="username"
-              disabled={isLoading}
-              value={username}
-              onChange={(e) => {
-                onClearError();
-                setUsername(e.target.value);
-              }}
-              placeholder={isLoginTab ? "Nhập đạo hiệu hoặc email..." : "Nhập đạo hiệu..."}
-              className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-sm text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-amber-500/50 focus:shadow-[0_0_15px_rgba(234,179,8,0.1)] transition-all font-serif"
-              maxLength={50}
-              required
-            />
+            <label
+              htmlFor="login-email"
+              className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5"
+            >
+              Email (Thư điện tử)
+            </label>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-600" />
+              <input
+                type="email"
+                id="login-email"
+                disabled={isLoading}
+                value={email}
+                onChange={(e) => {
+                  onClearError();
+                  setEmail(e.target.value);
+                }}
+                placeholder="example@gmail.com"
+                className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-sm text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-amber-500/50 focus:shadow-[0_0_15px_rgba(234,179,8,0.1)] transition-all font-mono"
+                maxLength={255}
+                required
+              />
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Username - Only in registration */}
+        {!isLoginTab && (
+          <div className="relative">
+            <label
+              htmlFor="username"
+              className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5"
+            >
+              Đạo Hiệu (Character Name)
+            </label>
+            <div className="relative">
+              <User className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-600" />
+              <input
+                type="text"
+                id="username"
+                disabled={isLoading}
+                value={username}
+                onChange={(e) => {
+                  onClearError();
+                  setUsername(e.target.value);
+                }}
+                placeholder="Nhập đạo hiệu..."
+                className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-sm text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-amber-500/50 focus:shadow-[0_0_15px_rgba(234,179,8,0.1)] transition-all font-serif"
+                maxLength={50}
+                required
+              />
+            </div>
+          </div>
+        )}
 
         {/* Email - Only in registration */}
         {!isLoginTab && (
@@ -251,15 +286,13 @@ export const Registration: React.FC<RegistrationProps> = ({
           type="submit"
           disabled={
             isLoading ||
-            username.trim().length < 3 ||
-            password.length < 6 ||
-            (!isLoginTab && email.trim().length === 0)
+            (isLoginTab ? email.trim().length === 0 : username.trim().length < 3 || email.trim().length === 0) ||
+            password.length < 6
           }
           className={`w-full py-4 px-6 rounded-xl font-serif text-sm font-semibold tracking-wider transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-lg mt-6 ${
             isLoading ||
-            username.trim().length < 3 ||
-            password.length < 6 ||
-            (!isLoginTab && email.trim().length === 0)
+            (isLoginTab ? email.trim().length === 0 : username.trim().length < 3 || email.trim().length === 0) ||
+            password.length < 6
               ? "bg-zinc-900 text-zinc-600 border border-zinc-850 cursor-not-allowed"
               : "bg-gradient-to-r from-amber-600 to-yellow-600 text-zinc-950 font-bold hover:from-amber-500 hover:to-yellow-500 hover:shadow-[0_0_25px_rgba(234,179,8,0.25)] active:scale-[0.98]"
           }`}
