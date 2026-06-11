@@ -51,31 +51,54 @@ func authCookieDomain() string {
 	return os.Getenv("AUTH_COOKIE_DOMAIN")
 }
 
-func authCookieSecure(c *gin.Context) bool {
+func authCookieSecure(c *gin.Context, isSameSiteNone bool) bool {
 	secureEnv := os.Getenv("AUTH_COOKIE_SECURE")
 	if secureEnv != "" {
 		return strings.EqualFold(secureEnv, "true")
 	}
 
-	return c.Request.TLS != nil
+	if isSameSiteNone {
+		return true // SameSite=None strictly requires Secure=true in modern browsers
+	}
+
+	return c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https"
 }
 
 func setAuthCookie(c *gin.Context, token string) {
 	sameSite := http.SameSiteLaxMode
+	
+	// Auto-detect cross-origin requirements
+	origin := c.Request.Header.Get("Origin")
+	corsEnv := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if (origin != "" && !strings.Contains(origin, "localhost") && !strings.Contains(origin, c.Request.Host)) || 
+	   (corsEnv != "" && !strings.Contains(corsEnv, "localhost") && corsEnv != "*") {
+		sameSite = http.SameSiteNoneMode
+	}
+
 	switch strings.ToLower(os.Getenv("AUTH_COOKIE_SAMESITE")) {
 	case "strict":
 		sameSite = http.SameSiteStrictMode
 	case "none":
 		sameSite = http.SameSiteNoneMode
+	case "lax":
+		sameSite = http.SameSiteLaxMode
 	}
 
 	c.SetSameSite(sameSite)
-	c.SetCookie(authCookieName, token, authCookieMaxAge, "/", authCookieDomain(), authCookieSecure(c), true)
+	c.SetCookie(authCookieName, token, authCookieMaxAge, "/", authCookieDomain(), authCookieSecure(c, sameSite == http.SameSiteNoneMode), true)
 }
 
 func clearAuthCookie(c *gin.Context) {
-	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie(authCookieName, "", -1, "/", authCookieDomain(), authCookieSecure(c), true)
+	sameSite := http.SameSiteLaxMode
+	origin := c.Request.Header.Get("Origin")
+	corsEnv := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if (origin != "" && !strings.Contains(origin, "localhost") && !strings.Contains(origin, c.Request.Host)) || 
+	   (corsEnv != "" && !strings.Contains(corsEnv, "localhost") && corsEnv != "*") {
+		sameSite = http.SameSiteNoneMode
+	}
+
+	c.SetSameSite(sameSite)
+	c.SetCookie(authCookieName, "", -1, "/", authCookieDomain(), authCookieSecure(c, sameSite == http.SameSiteNoneMode), true)
 }
 
 // RegisterPlayer handles registering a new player, hashing password, and rolling their aptitude
