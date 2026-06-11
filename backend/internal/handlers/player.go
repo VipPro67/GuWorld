@@ -67,12 +67,12 @@ func authCookieSecure(c *gin.Context, isSameSiteNone bool) bool {
 
 func setAuthCookie(c *gin.Context, token string) {
 	sameSite := http.SameSiteLaxMode
-	
+
 	// Auto-detect cross-origin requirements
 	origin := c.Request.Header.Get("Origin")
 	corsEnv := os.Getenv("CORS_ALLOWED_ORIGINS")
-	if (origin != "" && !strings.Contains(origin, "localhost") && !strings.Contains(origin, c.Request.Host)) || 
-	   (corsEnv != "" && !strings.Contains(corsEnv, "localhost") && corsEnv != "*") {
+	if (origin != "" && !strings.Contains(origin, "localhost") && !strings.Contains(origin, c.Request.Host)) ||
+		(corsEnv != "" && !strings.Contains(corsEnv, "localhost") && corsEnv != "*") {
 		sameSite = http.SameSiteNoneMode
 	}
 
@@ -93,8 +93,8 @@ func clearAuthCookie(c *gin.Context) {
 	sameSite := http.SameSiteLaxMode
 	origin := c.Request.Header.Get("Origin")
 	corsEnv := os.Getenv("CORS_ALLOWED_ORIGINS")
-	if (origin != "" && !strings.Contains(origin, "localhost") && !strings.Contains(origin, c.Request.Host)) || 
-	   (corsEnv != "" && !strings.Contains(corsEnv, "localhost") && corsEnv != "*") {
+	if (origin != "" && !strings.Contains(origin, "localhost") && !strings.Contains(origin, c.Request.Host)) ||
+		(corsEnv != "" && !strings.Contains(corsEnv, "localhost") && corsEnv != "*") {
 		sameSite = http.SameSiteNoneMode
 	}
 
@@ -122,6 +122,7 @@ func RegisterPlayer(c *gin.Context) {
 	}
 
 	// Email format verification
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	if !isValidEmail(req.Email) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Định dạng Email không hợp lệ!"})
 		return
@@ -292,17 +293,34 @@ func RegisterPlayer(c *gin.Context) {
 	})
 }
 
-// LoginRequest represents credentials login payload
+// LoginRequest represents credentials login payload.
+// Email is the canonical login identifier; Username is accepted only as a
+// backwards-compatible JSON field for older clients that already send an email
+// value under "username".
 type LoginRequest struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // LoginPlayer validates cultivator credentials and signs a JWT token
 func LoginPlayer(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Username and password are required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Email và mật khẩu là bắt buộc"})
+		return
+	}
+
+	loginEmail := strings.ToLower(strings.TrimSpace(req.Email))
+	if loginEmail == "" {
+		loginEmail = strings.ToLower(strings.TrimSpace(req.Username))
+	}
+	if loginEmail == "" || req.Password == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Email và mật khẩu là bắt buộc"})
+		return
+	}
+	if !isValidEmail(loginEmail) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Vui lòng đăng nhập bằng email hợp lệ"})
 		return
 	}
 
@@ -312,10 +330,10 @@ func LoginPlayer(c *gin.Context) {
 	query := `
 		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), COALESCE(avatar_url, '')
 		FROM players
-		WHERE username = $1 OR email = $1
+		WHERE LOWER(email) = $1
 	`
 	var activeCombatBytes []byte
-	err := db.DB.QueryRow(query, req.Username).Scan(
+	err := db.DB.QueryRow(query, loginEmail).Scan(
 		&player.ID, &player.Username, &passwordHash, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
 		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
@@ -1736,7 +1754,7 @@ func UseItem(c *gin.Context) {
 			if msg != "" {
 				messages = append(messages, msg)
 			}
-			
+
 			// If it's a regen item, set Redis cache
 			if effectKey == "regen_hp_out_of_combat" {
 				redisKey := fmt.Sprintf("regen_buff:%s", player.ID.String())
@@ -2324,7 +2342,7 @@ func UpdateProfileSettings(c *gin.Context) {
 
 	if username != player.Username {
 		var exists bool
-		err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE username = $1)`, username).Scan(&exists)
+		err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE username = $1 AND id <> $2)`, username, player.ID).Scan(&exists)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 			return
@@ -2352,13 +2370,13 @@ func UpdateProfileSettings(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi mã hóa mật khẩu"})
 			return
 		}
-		_, err = tx.Exec(`UPDATE players SET username = $1, bio = $2, fake_rank = $4, fake_sub_rank = $5, fake_vital_gu = $6, is_disguised = $7, password_hash = $8 WHERE id = $9`, player.Username, player.Bio, player.FakeRank, player.FakeSubRank, player.FakeVitalGu, player.IsDisguised, string(hash), player.ID)
+		_, err = tx.Exec(`UPDATE players SET username = $1, bio = $2, fake_rank = $3, fake_sub_rank = $4, fake_vital_gu = $5, is_disguised = $6, password_hash = $7 WHERE id = $8`, player.Username, player.Bio, player.FakeRank, player.FakeSubRank, player.FakeVitalGu, player.IsDisguised, string(hash), player.ID)
 		if err != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu đã được sử dụng bởi cổ sư khác!"})
 			return
 		}
 	} else {
-		_, err = tx.Exec(`UPDATE players SET username = $1, bio = $2, fake_rank = $4, fake_sub_rank = $5, fake_vital_gu = $6, is_disguised = $7 WHERE id = $8`, player.Username, player.Bio, player.FakeRank, player.FakeSubRank, player.FakeVitalGu, player.IsDisguised, player.ID)
+		_, err = tx.Exec(`UPDATE players SET username = $1, bio = $2, fake_rank = $3, fake_sub_rank = $4, fake_vital_gu = $5, is_disguised = $6 WHERE id = $7`, player.Username, player.Bio, player.FakeRank, player.FakeSubRank, player.FakeVitalGu, player.IsDisguised, player.ID)
 		if err != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu đã được sử dụng bởi cổ sư khác!"})
 			return
