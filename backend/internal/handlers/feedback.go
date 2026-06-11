@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -76,6 +78,13 @@ func GetFeedbacks(c *gin.Context) {
 	queryAuthID := authID
 	if !exists {
 		queryAuthID = uuid.Nil
+	}
+
+	cacheKey := fmt.Sprintf("feedbacks_user_%s_cat_%s_status_%s", queryAuthID.String(), category, status)
+	var cachedFeedbacks []models.Feedback
+	if err := cache.GetJSON(cacheKey, &cachedFeedbacks); err == nil {
+		c.JSON(http.StatusOK, cachedFeedbacks)
+		return
 	}
 
 	// Base query
@@ -150,6 +159,7 @@ func GetFeedbacks(c *gin.Context) {
 		feedbacks = append(feedbacks, f)
 	}
 
+	_ = cache.SetJSON(cacheKey, feedbacks, 10*time.Second)
 	c.JSON(http.StatusOK, feedbacks)
 }
 

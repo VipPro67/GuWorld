@@ -7,10 +7,12 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -87,29 +89,35 @@ func GetRecipes(c *gin.Context) {
 		unlockedMap[ur.RecipeID] = ur.CompletionRate
 	}
 
-	// 2. Query global database
-	rows, err := db.DB.Query(`
-		SELECT id, target_gu_id, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost 
-		FROM refining_recipes
-	`)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query recipes catalog"})
-		return
+	// 2. Query global database or cache
+	var masterRecipes []models.RefiningRecipe
+	if err := cache.GetJSON("master_refining_recipes", &masterRecipes); err != nil {
+		rows, err := db.DB.Query(`
+			SELECT id, target_gu_id, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost 
+			FROM refining_recipes
+		`)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query recipes catalog"})
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var recipe models.RefiningRecipe
+			err = rows.Scan(
+				&recipe.ID, &recipe.TargetGuID, &recipe.RequiredGus,
+				&recipe.RequiredMaterials, &recipe.SuccessRate, &recipe.PrimevalStonesCost,
+				&recipe.ImmortalEssenceStonesCost,
+			)
+			if err == nil {
+				masterRecipes = append(masterRecipes, recipe)
+			}
+		}
+		_ = cache.SetJSON("master_refining_recipes", masterRecipes, 1*time.Hour)
 	}
-	defer rows.Close()
 
 	recipes := []models.RefiningRecipe{}
-	for rows.Next() {
-		var recipe models.RefiningRecipe
-		err = rows.Scan(
-			&recipe.ID, &recipe.TargetGuID, &recipe.RequiredGus,
-			&recipe.RequiredMaterials, &recipe.SuccessRate, &recipe.PrimevalStonesCost,
-			&recipe.ImmortalEssenceStonesCost,
-		)
-		if err != nil {
-			continue
-		}
-
+	for _, recipe := range masterRecipes {
 		// Only include if unlocked by the player
 		if rate, ok := unlockedMap[recipe.ID]; ok {
 			recipe.CompletionRate = rate

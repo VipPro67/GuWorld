@@ -6,9 +6,10 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
-	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/server"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
 )
@@ -38,6 +39,11 @@ func main() {
 	err = db.InitSchema()
 	if err != nil {
 		log.Fatalf("Database schema initialization failed: %v", err)
+	}
+
+	// Initialize Redis Cache
+	if err := cache.Connect(); err != nil {
+		log.Printf("Warning: Failed to connect to Redis: %v. Proceeding without caching.", err)
 	}
 
 	// 2.2. Load Gu registry cache from database Dictionaries

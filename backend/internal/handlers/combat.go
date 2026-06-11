@@ -27,6 +27,8 @@ type CombatAttackRequest struct {
 	IsCharge      bool     `json:"is_charge"`       // Whether player clicked the charge button
 	TargetX       int      `json:"target_x"`
 	TargetY       int      `json:"target_y"`
+	ItemID        string   `json:"item_id"`         // Item used in combat
+	UseStones     string   `json:"use_stones"`      // 'primeval' or 'immortal'
 }
 
 // ExploreRequest defines payload for map node exploration
@@ -434,7 +436,10 @@ func ResolveTargets(team []models.Combatant, targetType string, targetX, targetY
 
 func applyDamageWithLogs(initiatorName, targetName string, target *models.Combatant, damage float64) string {
 	if (target.Kind == "Player" || target.Kind == "Ally") && target.Rank >= 6 {
+		apertureDmg := damage * 0.5
+		target.ApertureDmg += apertureDmg
 		damage = damage / 200.0
+		// Optional: We can append text later, but returning string here is simple
 	}
 
 	if target.VirtualShield > 0 {
@@ -622,8 +627,51 @@ func CombatAttack(c *gin.Context) {
 
 	isChargingThisTurn := false
 	isUnleashingCharge := false
+	isUsingItem := false
+	isUsingStones := false
 
-	if req.IsCharge {
+	if req.UseStones != "" {
+		isUsingStones = true
+		player.ActiveCombat.ChargePoints = 0
+	} else if req.ItemID != "" {
+		isUsingItem = true
+		player.ActiveCombat.ChargePoints = 0
+
+		if player.ActiveCombat.ItemsUsedCount >= 3 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Chỉ được dùng tối đa 3 vật phẩm trong mỗi trận chiến!"})
+			return
+		}
+		if player.ActiveCombat.ItemCooldowns == nil {
+			player.ActiveCombat.ItemCooldowns = make(map[string]int)
+		}
+		if player.ActiveCombat.ItemCooldowns[req.ItemID] > 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vật phẩm đang hồi chiêu (còn %d lượt)", player.ActiveCombat.ItemCooldowns[req.ItemID])})
+			return
+		}
+		
+		qty, ok := player.MaterialsInventory[req.ItemID]
+		if !ok || qty <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm này trong túi đồ"})
+			return
+		}
+		item, ok := models.ItemRegistry[req.ItemID]
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại"})
+			return
+		}
+		if item.Type != "Consumable" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm này không thể dùng trong chiến đấu"})
+			return
+		}
+
+		player.MaterialsInventory[req.ItemID]--
+		if player.MaterialsInventory[req.ItemID] <= 0 {
+			delete(player.MaterialsInventory, req.ItemID)
+		}
+		player.ActiveCombat.ItemsUsedCount++
+		player.ActiveCombat.ItemCooldowns[req.ItemID] = 3 // 3 turns cooldown
+
+	} else if req.IsCharge {
 		player.ActiveCombat.ChargePoints++
 		if player.ActiveCombat.ChargePoints >= 2 {
 			isUnleashingCharge = true
@@ -745,7 +793,45 @@ func CombatAttack(c *gin.Context) {
 					}
 				}
 
-				if isChargingThisTurn {
+				if isUsingStones {
+					if req.UseStones == "immortal" {
+						if player.ImmortalStones >= 1 {
+							player.ImmortalStones -= 1
+							refCaster.CurrentMana += 100.0 // Giả định 100 tiên nguyên
+							if refCaster.CurrentMana > refCaster.MaxMana {
+								refCaster.CurrentMana = refCaster.MaxMana
+							}
+							logs = append(logs, fmt.Sprintf("-> %s nghiền nát 1 Tiên Nguyên Thạch, khôi phục mạnh mẽ tiên nguyên!", refCaster.Name))
+						} else {
+							logs = append(logs, fmt.Sprintf("-> %s định dùng Tiên Nguyên Thạch nhưng không đủ!", refCaster.Name))
+						}
+					} else {
+						if player.PrimevalStones >= 100 {
+							player.PrimevalStones -= 100
+							refCaster.CurrentMana += 50.0
+							if refCaster.CurrentMana > refCaster.MaxMana {
+								refCaster.CurrentMana = refCaster.MaxMana
+							}
+							logs = append(logs, fmt.Sprintf("-> %s hấp thu 100 Nguyên Thạch, khôi phục chân nguyên!", refCaster.Name))
+						} else {
+							logs = append(logs, fmt.Sprintf("-> %s định dùng Nguyên Thạch nhưng không đủ (cần 100)!", refCaster.Name))
+						}
+					}
+				} else if isUsingItem {
+					itemSpec := models.ItemRegistry[req.ItemID]
+					healVal := itemSpec.Effects["restore_hp"]
+					if healVal == 0 { healVal = 50.0 }
+					
+					if refCaster.Rank >= 6 {
+						refCaster.ApertureDmg -= healVal
+						if refCaster.ApertureDmg < 0 { refCaster.ApertureDmg = 0 }
+						logs = append(logs, fmt.Sprintf("-> %s sử dụng %s, giảm %.1f hư tổn tiên khiếu!", refCaster.Name, itemSpec.Name, healVal))
+					} else {
+						refCaster.HP += healVal
+						if refCaster.HP > refCaster.MaxHP { refCaster.HP = refCaster.MaxHP }
+						logs = append(logs, fmt.Sprintf("-> %s sử dụng %s, khôi phục %.1f HP (HP hiện tại: %.1f).", refCaster.Name, itemSpec.Name, healVal, refCaster.HP))
+					}
+				} else if isChargingThisTurn {
 					logs = append(logs, fmt.Sprintf("%s tích tụ Nguyên Khí, vận chuyển Chân Nguyên chuẩn bị cho Đại Sát Chiêu!", refCaster.Name))
 				} else if isUnleashingCharge {
 					targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, "SINGLE", prefX, prefY, false)

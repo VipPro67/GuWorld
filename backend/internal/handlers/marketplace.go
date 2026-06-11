@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -269,6 +270,17 @@ func ListListings(c *gin.Context) {
 	}
 
 	authID, ok := middleware.GetPlayerID(c)
+	cacheKey := "market_listings_public"
+	if ok {
+		cacheKey = "market_listings_user_" + authID.String()
+	}
+
+	var cachedOut []gin.H
+	if err := cache.GetJSON(cacheKey, &cachedOut); err == nil {
+		c.JSON(http.StatusOK, cachedOut)
+		return
+	}
+
 	var rows *sql.Rows
 	var err error
 	if ok {
@@ -339,6 +351,7 @@ func ListListings(c *gin.Context) {
 			"target_buyer_username": targetBuyerUsername.String,
 		})
 	}
+	_ = cache.SetJSON(cacheKey, out, 10*time.Second)
 	c.JSON(http.StatusOK, out)
 }
 

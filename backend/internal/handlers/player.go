@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -1735,6 +1736,12 @@ func UseItem(c *gin.Context) {
 			if msg != "" {
 				messages = append(messages, msg)
 			}
+			
+			// If it's a regen item, set Redis cache
+			if effectKey == "regen_hp_out_of_combat" {
+				redisKey := fmt.Sprintf("regen_buff:%s", player.ID.String())
+				cache.SetJSON(redisKey, item.ID, 10*time.Minute)
+			}
 		}
 	}
 
@@ -2737,4 +2744,72 @@ func GoogleCallback(c *gin.Context) {
 	}
 
 	c.Redirect(http.StatusTemporaryRedirect, frontendURL)
+}
+
+// TickRegen checks Redis for active regeneration buffs and heals the player
+func TickRegen(c *gin.Context) {
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	redisKey := fmt.Sprintf("regen_buff:%s", authID.String())
+	var itemID string
+	err := cache.GetJSON(redisKey, &itemID)
+	if err != nil {
+		// Key not found or expired
+		c.JSON(http.StatusOK, gin.H{"regen_active": false})
+		return
+	}
+
+	itemSpec, ok := models.ItemRegistry[itemID]
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid item in regen buff"})
+		return
+	}
+
+	healVal := itemSpec.Effects["regen_hp_out_of_combat"]
+	// Divide by 10 since it's meant for a 10-minute duration with 1 tick per minute
+	tickHeal := healVal / 10.0
+	if tickHeal < 1.0 {
+		tickHeal = 1.0
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		return
+	}
+
+	if player.HP >= player.BaseHP {
+		c.JSON(http.StatusOK, gin.H{"regen_active": true, "message": "HP đã đầy."})
+		return
+	}
+
+	player.HP += tickHeal
+	if player.HP > player.BaseHP {
+		player.HP = player.BaseHP
+	}
+
+	_, err = tx.Exec("UPDATE players SET hp = $1 WHERE id = $2", player.HP, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save HP"})
+		return
+	}
+
+	tx.Commit()
+	c.JSON(http.StatusOK, gin.H{
+		"regen_active": true,
+		"healed":       tickHeal,
+		"current_hp":   player.HP,
+		"max_hp":       player.BaseHP,
+	})
 }

@@ -94,6 +94,7 @@ func SetupRouter() *gin.Engine {
 			player.GET("/referrals", handlers.GetReferralStats)
 			player.POST("/simulate-deposit", handlers.SimulateDeposit)
 			player.POST("/avatar", handlers.UploadAvatar)
+			player.POST("/tick-regen", handlers.TickRegen)
 		}
 
 		mine := api.Group("/mine")

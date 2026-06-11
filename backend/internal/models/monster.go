@@ -76,6 +76,10 @@ type Combatant struct {
 	GridY         int               `json:"grid_y"` // 1 (Top), 2 (Mid), 3 (Bottom)
 	Speed         float64           `json:"speed"`
 	VirtualShield float64           `json:"virtual_shield"`
+	SoulHP        float64           `json:"soul_hp"`
+	MaxSoulHP     float64           `json:"max_soul_hp"`
+	DaoMarkDamage float64           `json:"dao_mark_damage"`
+	ApertureDmg   float64           `json:"aperture_dmg"`
 }
 
 func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, monsterType string) (maxHP, attack, defense float64) {
@@ -198,6 +202,10 @@ func CombatantFromPlayer(player *Player, stats map[string]float64) Combatant {
 		DaoMarks:      player.DaoMarks,
 		PathMasteries: player.PathMasteries,
 		StatusEffects: []StatusEffect{}, // Will be populated in combat loop
+		SoulHP:        float64(player.SoulHP),
+		MaxSoulHP:     float64(player.MaxSoul),
+		DaoMarkDamage: player.DaoMarkDamage,
+		ApertureDmg:   player.ApertureDamage,
 	}
 }
 

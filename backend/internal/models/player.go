@@ -68,6 +68,8 @@ type CombatState struct {
 	EnemyStatusEffects  []StatusEffect    `json:"enemy_status_effects,omitempty"`
 	PlayerStatusEffects []StatusEffect    `json:"player_status_effects,omitempty"`
 	SkillCooldowns      map[string]int    `json:"skill_cooldowns,omitempty"`
+	ItemsUsedCount      int               `json:"items_used_count"`
+	ItemCooldowns       map[string]int    `json:"item_cooldowns,omitempty"`
 	Allies              []Combatant       `json:"allies,omitempty"`
 	Enemies             []Combatant       `json:"enemies,omitempty"`
 }
@@ -132,6 +134,8 @@ type Player struct {
 	FakeVitalGu         string              `json:"fake_vital_gu"`
 	IsDisguised         bool                `json:"is_disguised"`
 	IsAdmin             bool                `json:"is_admin"`
+	DaoMarkDamage       float64             `json:"dao_mark_damage"`
+	ApertureDamage      float64             `json:"aperture_damage"`
 }
 
 type TempLoot struct {

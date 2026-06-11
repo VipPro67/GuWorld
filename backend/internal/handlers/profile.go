@@ -5,8 +5,10 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -81,6 +83,13 @@ func GetPlayerProfile(c *gin.Context) {
 	targetUsername := c.Param("username")
 	if targetUsername == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Username is required"})
+		return
+	}
+
+	cacheKey := "profile_" + viewerID.String() + "_viewing_" + targetUsername
+	var cachedResp PlayerProfileResponse
+	if err := cache.GetJSON(cacheKey, &cachedResp); err == nil {
+		c.JSON(http.StatusOK, cachedResp)
 		return
 	}
 
@@ -373,5 +382,6 @@ func GetPlayerProfile(c *gin.Context) {
 		}
 	}
 
+	_ = cache.SetJSON(cacheKey, resp, 60*time.Second)
 	c.JSON(http.StatusOK, resp)
 }

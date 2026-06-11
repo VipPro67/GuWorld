@@ -110,7 +110,18 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
 
   useEffect(() => {
     loadGrid();
-  }, [player.current_region, player.x, player.y]);
+    
+    let intervalId: NodeJS.Timeout;
+    if (isExploringActiveRegion) {
+      intervalId = setInterval(() => {
+        loadGrid();
+      }, 5000);
+    }
+    
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [player.current_region, player.x, player.y, isExploringActiveRegion]);
 
   const handleCreateParty = async () => {
     setPartyLoading(true);
@@ -433,24 +444,34 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                       </span>
 
                       {/* Cell Entity View */}
-                      {isPlayerCell ? (
-                        <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-[9px] text-zinc-950 font-bold border border-white/20 animate-bounce">
-                          Ta
-                        </div>
-                      ) : otherPlayersOnCell.length > 0 ? (
-                        <div
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            fetchPlayerProfile(otherPlayersOnCell[0].username);
-                          }}
-                          className="w-5 h-5 rounded-full bg-purple-500/80 flex items-center justify-center text-[9px] text-zinc-100 font-bold border border-white/20 shadow-[0_0_8px_rgba(139,92,246,0.6)] animate-pulse cursor-pointer hover:scale-110 transition-transform relative z-10"
-                          title={`Bấm để trinh thám cổ sư ${otherPlayersOnCell[0].username}`}
-                        >
-                          {otherPlayersOnCell[0].username.slice(0, 2).toUpperCase()}
-                        </div>
-                      ) : (
-                        getCellIcon(cell.cell_type, cell.content)
-                      )}
+                      <div className="flex gap-0.5 relative z-10">
+                        {isPlayerCell && (
+                          <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-[9px] text-zinc-950 font-bold border border-white/20 animate-bounce">
+                            Ta
+                          </div>
+                        )}
+                        {otherPlayersOnCell.length > 0 && (
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`Đạo hữu muốn khiêu chiến (PVP) với ${otherPlayersOnCell[0].username}?\n\nChọn [OK] để Tấn Công.\nChọn [Cancel] để Trinh Thám.`)) {
+                                movePlayer(cell.x, cell.y, otherPlayersOnCell[0].id).then(res => {
+                                  if (res?.combat_triggered) {
+                                    useGameStore.getState().setView("dashboard");
+                                  }
+                                });
+                              } else {
+                                fetchPlayerProfile(otherPlayersOnCell[0].username);
+                              }
+                            }}
+                            className="w-5 h-5 rounded-full bg-purple-500/80 flex items-center justify-center text-[9px] text-zinc-100 font-bold border border-white/20 shadow-[0_0_8px_rgba(139,92,246,0.6)] animate-pulse cursor-pointer hover:scale-110 transition-transform"
+                            title={`Bấm để Tấn Công / Trinh Thám cổ sư ${otherPlayersOnCell[0].username}`}
+                          >
+                            {otherPlayersOnCell[0].username.slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        {!isPlayerCell && otherPlayersOnCell.length === 0 && getCellIcon(cell.cell_type, cell.content)}
+                      </div>
 
                       {/* Tiny text label */}
                       {hasEntity && !isPlayerCell && otherPlayersOnCell.length === 0 && (

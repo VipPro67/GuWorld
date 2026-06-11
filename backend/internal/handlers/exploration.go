@@ -41,9 +41,6 @@ func GenerateCell(x, y int, region string) models.Cell {
 
 	// 70% chance empty/PVP
 	if roll < 70 {
-		if roll >= 67 {
-			return models.Cell{X: x, Y: y, Type: "PVP", Content: "cultivator"}
-		}
 		return models.Cell{X: x, Y: y, Type: "Empty", Content: ""}
 	} else if roll < 85 {
 		// Region-specific resources
@@ -332,7 +329,7 @@ func HasExplorationInventorySpace(player *models.Player, incomingCount int) bool
 			currentSize++
 		}
 	}
-	
+
 	currentSize += len(player.TempLoot.GuInventory)
 	for _, qty := range player.TempLoot.MaterialsInventory {
 		if qty > 0 {
@@ -400,7 +397,7 @@ func MovePlayer(c *gin.Context) {
 	dy := math.Abs(float64(req.Y - player.Y))
 	dist := int(math.Max(dx, dy))
 
-	if dist == 0 {
+	if dist == 0 && req.AttackTargetID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đang ở vị trí này rồi."})
 		return
 	}
