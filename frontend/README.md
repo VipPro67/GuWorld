@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GuWorld Frontend
 
-## Getting Started
+Frontend là ứng dụng Next.js App Router dùng React, TypeScript, Zustand và Tailwind/PostCSS.
 
-First, run the development server:
+## Chạy local
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Mở `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Script | Mục đích |
+| --- | --- |
+| `npm run dev` | Chạy Next.js dev server. |
+| `npm run build` | Build production. |
+| `npm run start` | Chạy production server sau khi build. |
+| `npm run lint` | Chạy ESLint. |
 
-## Learn More
+## Backend URL
 
-To learn more about Next.js, take a look at the following resources:
+Frontend gọi backend qua:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```text
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8080
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Nếu biến này không tồn tại, store dùng mặc định `http://localhost:8080`.
 
-## Deploy on Vercel
+## Cấu trúc chính
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Đường dẫn | Vai trò |
+| --- | --- |
+| `src/app/page.tsx` | Shell chính, login/register và điều hướng các view gameplay. |
+| `src/app/topup/page.tsx` | Trang nạp tiền. |
+| `src/app/topup/success/page.tsx` | Trang kết quả nạp thành công. |
+| `src/store/useGameStore.ts` | Zustand store, API calls, SSE subscriptions, derived mana/HP estimate. |
+| `src/components/Aperture.tsx` | View nhân vật/không khiếu, tu luyện, profile, quest. |
+| `src/components/GuInventory.tsx` | Inventory Cổ. |
+| `src/components/RefiningFurnace.tsx` | Luyện Cổ/suy diễn recipe. |
+| `src/components/killer-moves/KillerMoveBuilder.tsx` | Tạo/quản lý sát chiêu. |
+| `src/components/ExplorationMap.tsx` | Bản đồ khám phá. |
+| `src/components/CombatScreen.tsx` | Combat UI. |
+| `src/components/DungeonView.tsx` | Instance/phó bản. |
+| `src/components/ImmortalApertureView.tsx` | Tiên khiếu, node, tai kiếp. |
+| `src/components/SectView.tsx` | Môn phái. |
+| `src/components/BaoHoangMarket.tsx` | Marketplace/auction/trade listings. |
+| `src/components/TradeRoomModal.tsx` | Giao dịch P2P. |
+| `src/components/MineView.tsx` | Mỏ cá nhân. |
+| `src/components/ArenaView.tsx` | Arena. |
+| `src/components/PremiumShopView.tsx` / `TopupView.tsx` / `PremiumWallet.tsx` | Ví, premium shop, topup. |
+| `src/components/FeedbackView.tsx` | Feedback board. |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Ghi chú phát triển
+
+- API calls dùng `credentials: "include"`, backend cần CORS đúng origin frontend.
+- View mới nên đi qua `currentView` trong Zustand store nếu là tab chính.
+- Khi thêm route backend mới, cập nhật `docs/API.md` ở root repo.
+- Khi thêm state/action lớn trong store, cập nhật README này và `PROJECT.md` nếu là feature người dùng nhìn thấy.
