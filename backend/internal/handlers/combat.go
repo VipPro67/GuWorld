@@ -891,6 +891,7 @@ func CombatAttack(c *gin.Context) {
 							activeEffects := models.GetGuEffectSection(spec, "active")
 							isHealing := activeEffects["healing"] > 0 || activeEffects["restore_hp"] > 0 || activeEffects["heal_based_on_strength"] > 0 || spec.ID == "GU_NINE_LEAF_VITALITY_GRASS"
 							isDefense := spec.Type == "Defense" || activeEffects["add_base_defense"] > 0 || activeEffects["defense"] > 0
+							isAttack := activeEffects["damage"] > 0 || activeEffects["add_base_attack"] > 0 || spec.Type == "Attack" || spec.Type == "Active"
 
 							if isHealing {
 								healVal := def
@@ -912,7 +913,7 @@ func CombatAttack(c *gin.Context) {
 								}
 								refCaster.VirtualShield += shieldVal
 								logs = append(logs, fmt.Sprintf("-> %s thi triển %s phòng thủ, nhận %.1f Khiên hộ thể (Virtual Shield: %.1f).", refCaster.Name, spec.Name, shieldVal, refCaster.VirtualShield))
-							} else {
+							} else if isAttack {
 								hasBypass := activeEffects["assassination"] > 0 || activeEffects["flying"] > 0
 								targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, spec.TargetType, prefX, prefY, hasBypass)
 								if len(targetsIdx) > 0 {
@@ -927,6 +928,8 @@ func CombatAttack(c *gin.Context) {
 										logs = append(logs, dmgLog)
 									}
 								}
+							} else {
+								logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s (Hỗ trợ)!", refCaster.Name, spec.Name))
 							}
 						}
 					}
@@ -1037,6 +1040,8 @@ func CombatAttack(c *gin.Context) {
 							}
 
 							isHealing := act.Def > 0 && (act.IsUtility || (len(act.StatusEffects) == 0 && act.Dmg == 0))
+							isAttack := act.Dmg > 0 || len(act.StatusEffects) > 0
+
 							if isHealing {
 								healVal := act.Def
 								refEnemy.HP += healVal
@@ -1044,13 +1049,15 @@ func CombatAttack(c *gin.Context) {
 									refEnemy.HP = refEnemy.MaxHP
 								}
 								logs = append(logs, fmt.Sprintf("-> %s kích hoạt phòng ngự/trị liệu %s, hồi %.1f HP.", refEnemy.Name, act.Name, healVal))
-							} else {
+							} else if isAttack {
 								netDmg := act.Dmg - targetAlly.BaseDefense
 								if netDmg < 1.0 {
 									netDmg = 1.0
 								}
 								dmgLog := applyDamageWithLogs(refEnemy.Name, targetAlly.Name, targetAlly, netDmg)
 								logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s tấn công!", refEnemy.Name, act.Name), dmgLog)
+							} else {
+								logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s (Hỗ trợ)!", refEnemy.Name, act.Name))
 							}
 						} else {
 							dmgVal := refEnemy.BaseAttack
@@ -2100,7 +2107,7 @@ func BuildEnemyActions(ctx *CombatContext, enemy *models.Combatant) []Action {
 	}
 
 	virtualMana := enemy.CurrentMana
-	if enemy.Kind != "Player" {
+	if enemy.Kind != "Player" && enemy.Kind != "Ally" && !strings.Contains(enemy.Kind, "PVP") {
 		virtualMana = 99999.0 // Wild monsters use HP, not mana
 	}
 	selected := SelectActionsByAI(enemy.AIProfile, potentialActions, virtualMana)
