@@ -2100,3 +2100,38 @@ func SeedSects() error {
 
 	return nil
 }
+
+// CheckImmortalGuExists verifies if a specific Immortal Gu exists anywhere in the world.
+func CheckImmortalGuExists(tx *sql.Tx, guID string) (bool, error) {
+	// 1. Check player_gu
+	var exists bool
+	err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM player_gu WHERE gu_id = $1)", guID).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		return true, nil
+	}
+
+	// 2. Check auction
+	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM auction WHERE item_type = 'GU' AND item_data->>'gu_id' = $1 AND status = 'active')", guID).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		return true, nil
+	}
+
+	// 3. Check temp_loot
+	err = tx.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM players 
+			WHERE temp_loot->'gu_inventory' @> CONCAT('[{"gu_id": "', $1::text, '"}]')::jsonb
+		)
+	`, guID).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	
+	return exists, nil
+}

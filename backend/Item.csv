@@ -125,6 +125,7 @@ earth_horse_hoof,Địa Mã Chi Đề,Material,Nguyên liệu chính của Độ
 black_oil_refined,Hắc du tinh luyện,Material,Nguyên liệu chính luyện Thải Du Cổ.,2,5,,{},[]
 gold_dragonfish_scale,Kim long ngư lân,Material,Vảy kim long ngư dùng luyện Thải Du Cổ.,2,5,,{},[]
 blade_food,Đao khí tinh thiết,Food,Thức ăn mô phỏng cho Đan Đao Cổ.,3,6,Blade Path,{},"[""food""]"
+bat_wing,Cánh dơi, Material, Cánh của dơi, công dụng chưa rõ, 3,5,,{},[]
 ITEM_HEALING_PELLET_SMALL,Tiểu Hồi Huyết Đan,Consumable,Đan dược cấp thấp hồi phục sinh lực.,COMMON,1,Human Path,"{""restore_hp"": 30.0}","[""healing"",""pill""]"
 ITEM_HEALING_PELLET_MEDIUM,Trung Hồi Huyết Đan,Consumable,Đan dược cấp trung hồi phục sinh lực.,UNCOMMON,2,Human Path,"{""restore_hp"": 80.0}","[""healing"",""pill""]"
 ITEM_HEALING_PELLET_LARGE,Đại Hồi Huyết Đan,Consumable,Đan dược cấp cao hồi phục sinh lực.,RARE,3,Human Path,"{""restore_hp"": 200.0}","[""healing"",""pill""]"

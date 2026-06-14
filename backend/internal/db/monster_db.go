@@ -81,16 +81,19 @@ func FindFixedSpawn(tx *sql.Tx, regionID string, x, y int) (models.MonsterSpawn,
 }
 
 // PickRandomMonsterFromRegion picks a random active monster template mapped to a region
-func PickRandomMonsterFromRegion(tx *sql.Tx, regionID string) (string, error) {
+// Returns monsterID, minRank, maxRank, error
+func PickRandomMonsterFromRegion(tx *sql.Tx, regionID string) (string, int, int, error) {
 	var monsterID string
+	var minRank, maxRank int
+
 	query := `
-		SELECT monster_id
+		SELECT monster_id, min_rank, max_rank
 		FROM monster_spawns
-		WHERE region_id = $1 AND spawn_mode = 'Random' AND is_active = TRUE
+		WHERE region_id = $1 AND spawn_mode IN ('Roaming', 'Random') AND is_active = TRUE
 		ORDER BY RANDOM()
 		LIMIT 1
 	`
-	err := tx.QueryRow(query, regionID).Scan(&monsterID)
+	err := tx.QueryRow(query, regionID).Scan(&monsterID, &minRank, &maxRank)
 	if err == sql.ErrNoRows {
 		// Fallback to random Normal monster template if no random spawn configured
 		err = tx.QueryRow(`
@@ -99,14 +102,24 @@ func PickRandomMonsterFromRegion(tx *sql.Tx, regionID string) (string, error) {
 			ORDER BY RANDOM() LIMIT 1
 		`).Scan(&monsterID)
 		if err != nil {
-			return "", err
+			return "", 1, 1, err
 		}
-		return monsterID, nil
+
+		// Fetch region min/max rank for fallback
+		err = tx.QueryRow(`
+			SELECT min_rank, max_rank FROM regions WHERE id = $1
+		`, regionID).Scan(&minRank, &maxRank)
+		if err != nil {
+			minRank = 1
+			maxRank = 1
+		}
+
+		return monsterID, minRank, maxRank, nil
 	}
 	if err != nil {
-		return "", err
+		return "", 1, 1, err
 	}
-	return monsterID, nil
+	return monsterID, minRank, maxRank, nil
 }
 
 // LoadLootTable loads a loot table from DB by ID

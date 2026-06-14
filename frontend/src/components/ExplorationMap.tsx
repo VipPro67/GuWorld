@@ -12,45 +12,28 @@ interface ExplorationMapProps {
   onBack?: () => void;
 }
 
-interface MapNode {
-  id: string;
-  name: string;
-  region: string;
-  recommendedRank: string;
-  description: string;
-  colorClass: string;
-  bgGlow: string;
-}
+// Dynamic mapping based on array index instead of hardcoding
+const getColorClass = (index: number) => {
+  const colors = [
+    "text-emerald-400 border-emerald-500/20 hover:border-emerald-500/50 bg-emerald-950/10",
+    "text-blue-400 border-blue-500/20 hover:border-blue-500/50 bg-blue-950/10",
+    "text-purple-400 border-purple-500/20 hover:border-purple-500/50 bg-purple-950/10",
+    "text-amber-400 border-amber-500/20 hover:border-amber-500/50 bg-amber-950/10",
+    "text-rose-400 border-rose-500/20 hover:border-rose-500/50 bg-rose-950/10"
+  ];
+  return colors[index % colors.length];
+};
 
-const MAP_NODES: MapNode[] = [
-  {
-    id: "qing_mao_mountain",
-    name: "Thanh Mao Sơn",
-    region: "Southern Border (Nam Cương)",
-    recommendedRank: "Nhất Chuyển (Rank 1)",
-    description: "Ngọn núi phủ đầy trúc xanh, nơi có ba gia tộc lớn sinh sống. Có dã thú cấp thấp rình rập trong rừng sâu.",
-    colorClass: "text-emerald-400 border-emerald-500/20 hover:border-emerald-500/50 bg-emerald-950/10",
-    bgGlow: "from-emerald-500/5 to-transparent",
-  },
-  {
-    id: "gu_luan_slope",
-    name: "Cổ Loạn Sườn",
-    region: "Southern Border (Nam Cương)",
-    recommendedRank: "Nhất - Nhị Chuyển (Rank 1-2)",
-    description: "Khu vực núi đá hiểm trở hoang sơ, chứa nhiều bộ xương khô dã thú cổ đại và các bầy thú dữ lang thang.",
-    colorClass: "text-blue-400 border-blue-500/20 hover:border-blue-500/50 bg-blue-950/10",
-    bgGlow: "from-blue-500/5 to-transparent",
-  },
-  {
-    id: "three_kings_inheritance",
-    name: "Tam Vương Truyền Thừa",
-    region: "Southern Border (Nam Cương)",
-    recommendedRank: "Nhị - Tam Chuyển (Rank 2-3)",
-    description: "Bảo cảnh kế thừa của ba vị ma đạo cổ sư: Thiết Vương, Khương Vương, và Tín Vương. Vô cùng hung hiểm.",
-    colorClass: "text-purple-400 border-purple-500/20 hover:border-purple-500/50 bg-purple-950/10",
-    bgGlow: "from-purple-500/5 to-transparent",
-  },
-];
+const getBgGlow = (index: number) => {
+  const glows = [
+    "from-emerald-500/5 to-transparent",
+    "from-blue-500/5 to-transparent",
+    "from-purple-500/5 to-transparent",
+    "from-amber-500/5 to-transparent",
+    "from-rose-500/5 to-transparent"
+  ];
+  return glows[index % glows.length];
+};
 
 export const ExplorationMap: React.FC<ExplorationMapProps> = ({
   player,
@@ -94,10 +77,17 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     }
   };
 
-  const isExploringActiveRegion =
-    player.current_region === "qing_mao_mountain" ||
-    player.current_region === "gu_luan_slope" ||
-    player.current_region === "three_kings_inheritance";
+  const regions = useGameStore((state) => state.regions);
+  const regionsLoaded = useGameStore((state) => state.regionsLoaded);
+  const fetchRegions = useGameStore((state) => state.fetchRegions);
+
+  useEffect(() => {
+    if (!regionsLoaded) {
+      fetchRegions();
+    }
+  }, [regionsLoaded, fetchRegions]);
+
+  const isExploringActiveRegion = player.current_region !== "Southern_Border" && player.current_region !== "Lobby";
 
   const loadGrid = async () => {
     if (!isExploringActiveRegion) return;
@@ -157,14 +147,14 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     }
   };
 
-  const handleNodeClick = async (node: MapNode) => {
+  const handleNodeClick = async (nodeId: string) => {
     if (actionLoading || player.active_combat) return;
 
-    setActiveNode(node.id);
+    setActiveNode(nodeId);
     setLastLog(null);
 
     try {
-      const res = await onExplore(node.id);
+      const res = await onExplore(nodeId);
       if (res) {
         setLastLog(res.log);
         setShowRegionsList(false);
@@ -190,10 +180,6 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     const res = await movePlayer(cx, cy);
     if (res) {
       setLastLog(res.log);
-      if (res.combat_triggered) {
-        // Switch view to dashboard where combat renders
-        useGameStore.getState().setView("dashboard");
-      }
     }
   };
 
@@ -216,7 +202,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
   };
 
   const getMapTitle = (id: string): string => {
-    const node = MAP_NODES.find((n) => n.id === id);
+    const node = regions.find((n) => n.id === id);
     return node ? node.name : "Thế Giới Cổ Sư";
   };
 
@@ -263,21 +249,21 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
 
         {/* Grid Nodes */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {MAP_NODES.map((node) => {
+          {regions.map((node, index) => {
             const isCurrentExploring = activeNode === node.id;
             const hasMana = player.current_mana >= 5;
 
             return (
               <div
                 key={node.id}
-                className={`border rounded-2xl p-4 flex flex-col justify-between h-56 transition-all bg-gradient-to-b ${node.bgGlow} to-zinc-950 relative overflow-hidden group ${
-                  node.colorClass
+                className={`border rounded-2xl p-4 flex flex-col justify-between h-56 transition-all bg-gradient-to-b ${getBgGlow(index)} to-zinc-950 relative overflow-hidden group ${
+                  getColorClass(index)
                 } ${!!player.active_combat ? "opacity-40 cursor-not-allowed" : ""}`}
               >
                 <div className="space-y-2">
                   <div className="flex items-start justify-between">
                     <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">
-                      {node.region}
+                      Rank {node.min_rank} - {node.max_rank}
                     </span>
                     <MapPin className="w-3.5 h-3.5 opacity-60 group-hover:scale-110 transition-transform" />
                   </div>
@@ -286,21 +272,16 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                     {node.name}
                   </h4>
 
-                  <div className="flex items-center gap-1 text-[10px] text-zinc-500 font-mono">
-                    <Award className="w-3 h-3 text-amber-500" />
-                    Khuyên dùng: {node.recommendedRank}
-                  </div>
-
-                  <p className="text-[11px] text-zinc-400 leading-normal line-clamp-3">
+                  <div className="text-[10px] text-zinc-400 font-serif leading-relaxed line-clamp-3">
                     {node.description}
-                  </p>
+                  </div>
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-zinc-900/60">
                   <button
                     type="button"
                     disabled={actionLoading || !!player.active_combat || !hasMana}
-                    onClick={() => handleNodeClick(node)}
+                    onClick={() => handleNodeClick(node.id)}
                     className={`w-full py-2 px-3 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                       hasMana && !player.active_combat
                         ? "bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-200 active:scale-[0.98]"
@@ -455,11 +436,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                             onClick={(e) => {
                               e.stopPropagation();
                               if (window.confirm(`Đạo hữu muốn khiêu chiến (PVP) với ${otherPlayersOnCell[0].username}?\n\nChọn [OK] để Tấn Công.\nChọn [Cancel] để Trinh Thám.`)) {
-                                movePlayer(cell.x, cell.y, otherPlayersOnCell[0].id).then(res => {
-                                  if (res?.combat_triggered) {
-                                    useGameStore.getState().setView("dashboard");
-                                  }
-                                });
+                                movePlayer(cell.x, cell.y, otherPlayersOnCell[0].id);
                               } else {
                                 fetchPlayerProfile(otherPlayersOnCell[0].username);
                               }

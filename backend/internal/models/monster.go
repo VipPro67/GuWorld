@@ -82,7 +82,7 @@ type Combatant struct {
 	ApertureDmg   float64           `json:"aperture_dmg"`
 }
 
-func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, monsterType string) (maxHP, attack, defense float64) {
+func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, subRank int, monsterType string) (maxHP, attack, defense float64) {
 	rankMultiplier := 1.0
 	switch rank {
 	case 1:
@@ -90,22 +90,22 @@ func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, mon
 	case 2:
 		rankMultiplier = 2.0
 	case 3:
-		rankMultiplier = 4.0
+		rankMultiplier = 5.0
 	case 4:
-		rankMultiplier = 8.0
+		rankMultiplier = 20.0
 	case 5:
-		rankMultiplier = 16.0
+		rankMultiplier = 100.0
 	case 6:
 		rankMultiplier = 1000.0
 	case 7:
-		rankMultiplier = 3000.0
-	case 8:
 		rankMultiplier = 10000.0
+	case 8:
+		rankMultiplier = 100000.0
 	case 9:
-		rankMultiplier = 50000.0
+		rankMultiplier = 10000000.0
 	default:
 		if rank > 9 {
-			rankMultiplier = 50000.0
+			rankMultiplier = 10000000.0
 		}
 	}
 
@@ -125,37 +125,16 @@ func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, mon
 		typeMultiplier = 10.0
 	}
 
-	maxHP = baseMaxHP * rankMultiplier * typeMultiplier
-
-	// Scale attack and defense by flater multipliers for balance
-	atkMultiplier := 1.0
-	switch rank {
-	case 1:
-		atkMultiplier = 1.0
-	case 2:
-		atkMultiplier = 1.5
-	case 3:
-		atkMultiplier = 2.5
-	case 4:
-		atkMultiplier = 4.0
-	case 5:
-		atkMultiplier = 6.0
-	case 6:
-		atkMultiplier = 50.0
-	case 7:
-		atkMultiplier = 150.0
-	case 8:
-		atkMultiplier = 500.0
-	case 9:
-		atkMultiplier = 2000.0
-	default:
-		if rank > 9 {
-			atkMultiplier = 2000.0
-		}
+	// Each subRank above 1 gives a 20% multiplier boost.
+	subRankMultiplier := 1.0
+	if subRank > 1 {
+		subRankMultiplier = 1.0 + float64(subRank-1)*0.20
 	}
 
-	attack = baseAttack * atkMultiplier * typeMultiplier
-	defense = baseDefense * atkMultiplier * typeMultiplier
+	maxHP = baseMaxHP * rankMultiplier * typeMultiplier * subRankMultiplier
+
+	attack = baseAttack * rankMultiplier * typeMultiplier * subRankMultiplier
+	defense = baseDefense * rankMultiplier * typeMultiplier * subRankMultiplier
 
 	if defense < 0 {
 		defense = 0
@@ -164,7 +143,7 @@ func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, mon
 }
 
 func BuildCombatStateFromMonster(mon MonsterTemplate) CombatState {
-	hp, atk, def := ScaleMonsterStats(mon.MaxHP, mon.BaseAttack, mon.BaseDefense, mon.Rank, mon.Type)
+	hp, atk, def := ScaleMonsterStats(mon.MaxHP, mon.BaseAttack, mon.BaseDefense, mon.Rank, mon.SubRank, mon.Type)
 	return CombatState{
 		EnemyTemplateID:    mon.ID,
 		EnemyName:          mon.Name,

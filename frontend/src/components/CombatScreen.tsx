@@ -375,21 +375,36 @@ const calculateEstimatedCosts = () => {
 
     // 2. Tính toán Năng lượng tiêu hao (Mana Cost)
     let cost = 0;
-    if (isImmortalGu && isMortalPlayer) {
-      cost = 0;
-      immortalGuWithoutEssence = true;
-    } else if (isMortalGu && isImmortalPlayer) { // Nếu Cổ là Phàm Cổ nhưng người chơi đã đạt Tông Sư trở lên, miễn phí chi phí nhưng vẫn có rủi ro phản phệ nếu dùng Cổ khác hệ, sài quá nhiều Cổ Phàm sẽ dễ bị phản phệ
-      cost = 0;
-      
-    }
-    else {
-      cost = spec.base_mana_cost || 0;
-      // Trừ hao chi phí nếu Tu vi cao hơn Rank của Cổ
-      if (player.rank > spec.rank) {
-        cost /= Math.pow(10, player.rank - spec.rank);
+    if (isImmortalPlayer) {
+      if (isMortalGu) {
+        cost = 0.1;
+      } else {
+        cost = spec.base_mana_cost || 1.0;
+        if (player.rank > spec.rank) {
+          cost *= Math.pow(0.85, player.rank - spec.rank);
+        }
+        if (player.sub_rank > 1) {
+          cost *= Math.pow(0.92, player.sub_rank - 1);
+        }
+        if (cost < 0.1) cost = 0.1;
       }
-      const divisor = Math.pow(2, player.sub_rank - 1);
-      cost /= divisor;
+    } else {
+      if (isImmortalGu) {
+        cost = 0;
+        immortalGuWithoutEssence = true;
+      } else {
+        let baseManaPct = 0.10;
+        if (spec.base_mana_cost && spec.base_mana_cost > 0) {
+          baseManaPct = spec.base_mana_cost / 100.0;
+        }
+        cost = baseManaPct * (player.max_mana || 100);
+        
+        if (player.rank > spec.rank) {
+          cost /= Math.pow(10, player.rank - spec.rank);
+        }
+        const divisor = Math.pow(2, player.sub_rank - 1);
+        cost /= divisor;
+      }
     }
 
     // Logic Sát Chiêu: Cổ phụ trợ (Support Gu) được giảm 20% tiêu hao do cộng hưởng

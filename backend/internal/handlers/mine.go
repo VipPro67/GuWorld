@@ -491,7 +491,7 @@ func AttackMineSlot(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy dữ liệu quái vật canh giữ"})
 			return
 		}
-		maxHP, attack, defense := models.ScaleMonsterStats(monsterTemplate.MaxHP, monsterTemplate.BaseAttack, monsterTemplate.BaseDefense, monsterTemplate.Rank, monsterTemplate.Type)
+		maxHP, attack, defense := models.ScaleMonsterStats(monsterTemplate.MaxHP, monsterTemplate.BaseAttack, monsterTemplate.BaseDefense, monsterTemplate.Rank, monsterTemplate.SubRank, monsterTemplate.Type)
 
 		pvpCombat = models.CombatState{
 			EnemyTemplateID:    monsterTemplate.ID,

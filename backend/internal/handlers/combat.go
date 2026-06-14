@@ -316,7 +316,24 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 }
 
 func StartCombat(tx *sql.Tx, base *models.CombatState, player *models.Player) *models.CombatState {
+	// Filter out Immortal Gu (Rank >= 6) if they already exist in the world
+	if base.EnemyType != "PVP" && base.EnemyGuInventory != nil {
+		var filteredGu []models.GuInstance
+		for _, g := range base.EnemyGuInventory {
+			spec, ok := models.GuRegistry[g.GuID]
+			if ok && spec.Rank >= 6 {
+				exists, _ := db.CheckImmortalGuExists(tx, g.GuID)
+				if exists {
+					continue // Skip assigning this Immortal Gu because it already exists
+				}
+			}
+			filteredGu = append(filteredGu, g)
+		}
+		base.EnemyGuInventory = filteredGu
+	}
+
 	initialized := InitializeCombatState(tx, base, player)
+
 
 	// Sync this combat state to all allies in the database
 	combatBytes, err := json.Marshal(initialized)
@@ -1002,8 +1019,21 @@ func CombatAttack(c *gin.Context) {
 						enemyActions := BuildEnemyActions(enemyCtx, refEnemy)
 						if len(enemyActions) > 0 {
 							act := enemyActions[0]
-							if act.ManaCost > 0 && refEnemy.CurrentMana >= act.ManaCost {
-								refEnemy.CurrentMana -= act.ManaCost
+							if act.ManaCost > 0 {
+								if player.ActiveCombat.EnemyType != "PVP" && refEnemy.Kind != "Player" {
+									hpCost := refEnemy.MaxHP * 0.05
+									if hpCost < 1.0 {
+										hpCost = 1.0
+									}
+									refEnemy.HP -= hpCost
+									logs = append(logs, fmt.Sprintf("-> %s tiêu hao sinh lực (Mất %.1f HP) để thúc dục Cổ ký sinh!", refEnemy.Name, hpCost))
+									if refEnemy.HP <= 0 {
+										logs = append(logs, fmt.Sprintf("-> %s bị Cổ ký sinh vắt kiệt sinh mệnh đến chết!", refEnemy.Name))
+										return logs
+									}
+								} else if refEnemy.CurrentMana >= act.ManaCost {
+									refEnemy.CurrentMana -= act.ManaCost
+								}
 							}
 
 							isHealing := act.Def > 0 && (act.IsUtility || (len(act.StatusEffects) == 0 && act.Dmg == 0))
@@ -1194,13 +1224,18 @@ func CombatAttack(c *gin.Context) {
 			ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chiến thắng PVP vang dội! Đạo hữu cướp đoạt %d Nguyên Thạch từ đối phương!", stolenStones))
 		} else {
 			// PVE Victory
-			isExplore := player.CurrentRegion == "qing_mao_mountain" || player.CurrentRegion == "gu_luan_slope" || player.CurrentRegion == "three_kings_inheritance"
+			isExplore := player.CurrentRegion != "Southern_Border" && player.CurrentRegion != "Lobby"
 			if player.ActiveCombat != nil && player.ActiveCombat.LootTableID != "" {
 				lt, err := db.LoadLootTable(tx, player.ActiveCombat.LootTableID)
 				if err == nil {
 					loot := RollLoot(lt)
-					if loot.Items != nil {
-						delete(loot.Items, "primeval_stone")
+					if player.ActiveCombat.EnemyGuInventory != nil && len(player.ActiveCombat.EnemyGuInventory) > 0 {
+						for _, eg := range player.ActiveCombat.EnemyGuInventory {
+							if rand.Intn(100) < 10 { // 10% chance
+								loot.Gus = append(loot.Gus, eg.GuID)
+								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Cơ duyên! Đạo hữu bóc tách thành công cổ trùng ký sinh %s từ thi thể kẻ địch!", eg.GuID))
+							}
+						}
 					}
 					if len(partyMembers) > 1 {
 						ctx.Logs = append(ctx.Logs, "=== PHÂN CHIA CHIẾN LỢI PHẨM TỔ ĐỘI ===")
@@ -1347,43 +1382,43 @@ func CombatAttack(c *gin.Context) {
 				// No fallback stones in PVE victory as requested
 				ctx.Logs = append(ctx.Logs, "Chiến đấu thắng lợi vang dội!")
 			}
+		}
 
-			// If it is a mine slot challenge victory:
-			if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
-				slotID := player.ActiveCombat.MineSlotID
-				var rarity string
-				var currentOccupierStr *string
-				var lastClaimedAt *time.Time
-				err = tx.QueryRow("SELECT rarity, occupier_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &currentOccupierStr, &lastClaimedAt)
-				if err == nil && currentOccupierStr != nil {
-					currOccupierUUID, errParse := uuid.Parse(*currentOccupierStr)
-					if errParse == nil && lastClaimedAt != nil {
-						stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
-						if stones > 0 || qi > 0.0 || chests > 0 {
-							_ = AddMineRewardsToPlayerTx(tx, currOccupierUUID, stones, qi, chests)
-						}
+		// If it is a mine slot challenge victory:
+		if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
+			slotID := player.ActiveCombat.MineSlotID
+			var rarity string
+			var currentOccupierStr *string
+			var lastClaimedAt *time.Time
+			err = tx.QueryRow("SELECT rarity, occupier_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &currentOccupierStr, &lastClaimedAt)
+			if err == nil && currentOccupierStr != nil {
+				currOccupierUUID, errParse := uuid.Parse(*currentOccupierStr)
+				if errParse == nil && lastClaimedAt != nil {
+					stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
+					if stones > 0 || qi > 0.0 || chests > 0 {
+						_ = AddMineRewardsToPlayerTx(tx, currOccupierUUID, stones, qi, chests)
 					}
 				}
+			}
 
-				now := time.Now()
-				_, errUpdate := tx.Exec(`
+			now := time.Now()
+			_, errUpdate := tx.Exec(`
 					UPDATE mine_slots
 					SET occupier_id = $1, monster_id = NULL, occupied_at = $2, last_claimed_at = $3
 					WHERE id = $4
 				`, player.ID, now, now, slotID)
-				if errUpdate == nil {
-					ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chiếm lĩnh thành công mỏ phẩm chất %s #%d!", rarity, slotID))
-				} else {
-					log.Printf("Failed to update mine slot occupier in combat victory: %v", errUpdate)
-				}
+			if errUpdate == nil {
+				ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chiếm lĩnh thành công mỏ phẩm chất %s #%d!", rarity, slotID))
+			} else {
+				log.Printf("Failed to update mine slot occupier in combat victory: %v", errUpdate)
 			}
-
-			if player.ClearedCells == nil {
-				player.ClearedCells = make(models.ClearedCellsMap)
-			}
-			coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
-			player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
 		}
+
+		if player.ClearedCells == nil {
+			player.ClearedCells = make(models.ClearedCellsMap)
+		}
+		coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
+		player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
 
 		// Clear active combat for all allies
 		for _, ally := range player.ActiveCombat.Allies {
@@ -1592,7 +1627,7 @@ func ExploreNode(c *gin.Context) {
 		combatTriggered = true
 
 		// Spawn enemy based on DB-backed region monster tables.
-		monsterID, err := db.PickRandomMonsterFromRegion(tx, req.NodeID)
+		monsterID, minRank, maxRank, err := db.PickRandomMonsterFromRegion(tx, req.NodeID)
 		if err != nil || monsterID == "" {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chọn quái vật từ cơ sở dữ liệu"})
 			return
@@ -1602,6 +1637,14 @@ func ExploreNode(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải quái vật từ cơ sở dữ liệu"})
 			return
 		}
+
+		rank := minRank
+		if maxRank > minRank {
+			rank += rand.Intn(maxRank - minRank + 1)
+		}
+		monTemplate.Rank = rank
+		monTemplate.SubRank = rand.Intn(5) + 1
+
 		enemy := models.BuildCombatStateFromMonster(monTemplate)
 
 		player.ActiveCombat = StartCombat(tx, &enemy, &player)
@@ -1972,7 +2015,7 @@ func RollLoot(lt models.LootTable) RolledLoot {
 
 // ApplyLoot applies the rolled loot to the player's inventory and returns logs
 func ApplyLoot(player *models.Player, loot RolledLoot) []string {
-	isExplore := player.CurrentRegion == "qing_mao_mountain" || player.CurrentRegion == "gu_luan_slope" || player.CurrentRegion == "three_kings_inheritance"
+	isExplore := player.CurrentRegion != "Southern_Border" && player.CurrentRegion != "Lobby"
 	var logs []string
 	if !isExplore {
 		if player.MaterialsInventory == nil {
@@ -2056,7 +2099,11 @@ func BuildEnemyActions(ctx *CombatContext, enemy *models.Combatant) []Action {
 		}
 	}
 
-	selected := SelectActionsByAI(enemy.AIProfile, potentialActions, enemy.CurrentMana)
+	virtualMana := enemy.CurrentMana
+	if enemy.Kind != "Player" {
+		virtualMana = 99999.0 // Wild monsters use HP, not mana
+	}
+	selected := SelectActionsByAI(enemy.AIProfile, potentialActions, virtualMana)
 
 	if len(selected) == 0 {
 		return BuildBasicEnemyAction(enemy)
@@ -2238,8 +2285,8 @@ func checkAndIncrementExploreLimit(tx *sql.Tx, player *models.Player) error {
 	if err := resetIfNeeded(&player.ExploreCount, &player.LastExploreReset, player.ID); err != nil {
 		return err
 	}
-	if player.ExploreCount >= 5 {
-		return fmt.Errorf("Đạo hữu đã hết lượt khám phá hôm nay (tối đa 5 lượt/ngày).")
+	if player.ExploreCount >= 10 {
+		return fmt.Errorf("Đạo hữu đã hết lượt khám phá hôm nay (tối đa 10 lượt/ngày).")
 	}
 
 	// Check/reset party members if in a party

@@ -921,7 +921,7 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 
 	// Apply difficulty scaling
 	diffMultiplier := 1.0 + float64(difficulty)*0.2
-	scaledHP, scaledAtk, scaledDef := models.ScaleMonsterStats(boss.MaxHP, boss.BaseAttack, boss.BaseDefense, boss.Rank, boss.Type)
+	scaledHP, scaledAtk, scaledDef := models.ScaleMonsterStats(boss.MaxHP, boss.BaseAttack, boss.BaseDefense, boss.Rank, boss.SubRank, boss.Type)
 	bossHP := int(scaledHP * diffMultiplier)
 	bossAtk := int(scaledAtk * diffMultiplier)
 	bossDef := int(scaledDef * diffMultiplier)
@@ -951,7 +951,7 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 
 	minionCount := 1 + rand.Intn(3)
 	for i := 0; i < minionCount; i++ {
-		scaledHPm, scaledAtkm, scaledDefm := models.ScaleMonsterStats(minion.MaxHP, minion.BaseAttack, minion.BaseDefense, minion.Rank, minion.Type)
+		scaledHPm, scaledAtkm, scaledDefm := models.ScaleMonsterStats(minion.MaxHP, minion.BaseAttack, minion.BaseDefense, minion.Rank, minion.SubRank, minion.Type)
 		mHP := int(scaledHPm * diffMultiplier)
 		mAtk := int(scaledAtkm * diffMultiplier)
 		mDef := int(scaledDefm * diffMultiplier)

@@ -579,6 +579,17 @@ export interface ToastMessage {
   duration?: number;
 }
 
+export interface Region {
+  id: string;
+  name: string;
+  description: string;
+  width: number;
+  height: number;
+  min_rank: number;
+  max_rank: number;
+  is_active: boolean;
+}
+
 interface GameState {
   player: Player | null;
   manaSnapshot: ManaSnapshot | null;
@@ -592,6 +603,9 @@ interface GameState {
   dictionaryLoaded: boolean;
   recipes: RefiningRecipe[];
   recipesLoaded: boolean;
+  regions: Region[];
+  regionsLoaded: boolean;
+  fetchRegions: () => Promise<void>;
   killerMoves: KillerMove[];
   killerMovesLoaded: boolean;
   fetchKillerMoves: () => Promise<void>;
@@ -900,6 +914,8 @@ export const useGameStore = create<GameState>((set, get) => {
   dictionaryLoaded: false,
   recipes: [],
   recipesLoaded: false,
+  regions: [],
+  regionsLoaded: false,
   killerMoves: [],
   killerMovesLoaded: false,
   inspectedProfile: null,
@@ -1546,6 +1562,24 @@ export const useGameStore = create<GameState>((set, get) => {
     } catch (err: any) {
       console.error("Recipes sync error:", err.message);
       set({ recipesLoaded: true });
+    }
+  },
+
+  fetchRegions: async () => {
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/explore/regions`);
+      if (response.status === 401 || response.status === 403) {
+        set({ regions: [], regionsLoaded: true });
+        return;
+      }
+      if (!response.ok) {
+        throw new Error("Failed to load regions");
+      }
+      const data = await response.json();
+      set({ regions: data || [], regionsLoaded: true });
+    } catch (err: any) {
+      console.error("Regions sync error:", err.message);
+      set({ regionsLoaded: true });
     }
   },
 

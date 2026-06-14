@@ -39,98 +39,11 @@ func GenerateCell(x, y int, region string) models.Cell {
 	rng := rand.New(rand.NewSource(seed))
 	roll := rng.Intn(100)
 
-	// 70% chance empty/PVP
-	if roll < 70 {
+	// 80% chance empty/PVP, 20% Monster
+	if roll < 80 {
 		return models.Cell{X: x, Y: y, Type: "Empty", Content: ""}
-	} else if roll < 85 {
-		// Region-specific resources
-		var res string
-		switch region {
-		case "qing_mao_mountain":
-			if rng.Intn(10) < 8 {
-				res = "moon_orchid_petal"
-			} else {
-				res = "green_bamboo_wine"
-			}
-		case "gu_luan_slope":
-			if rng.Intn(10) < 6 {
-				res = "jade_stone"
-			} else {
-				res = "boar_meat"
-			}
-		case "three_kings_inheritance":
-			sub := rng.Intn(10)
-			if sub < 4 {
-				res = "wild_boar_tusk"
-			} else if sub < 7 {
-				res = "sour_wine"
-			} else {
-				res = "sweet_wine"
-			}
-		default:
-			res = "moon_orchid_petal"
-		}
-		return models.Cell{X: x, Y: y, Type: "Resource", Content: res}
-	} else if roll < 97 {
-		// Region-specific monsters
-		var monster string
-		switch region {
-		case "three_kings_inheritance":
-			if rng.Intn(2) == 0 {
-				monster = "Mãng Xà Dung Nham (Lava Python)"
-			} else {
-				monster = "Thiết Giáp Hùng (Iron Armored Bear)"
-			}
-		case "gu_luan_slope":
-			if rng.Intn(2) == 0 {
-				monster = "Độc Lang Vương (Wolf Leader)"
-			} else {
-				monster = "Dã Trĩ Vương (Boar King)"
-			}
-		default: // qing_mao_mountain
-			if rng.Intn(2) == 0 {
-				monster = "Dã Trĩ (Wild Boar)"
-			} else {
-				monster = "Thạch Hầu (Stone Ape)"
-			}
-		}
-		return models.Cell{X: x, Y: y, Type: "Monster", Content: monster}
 	} else {
-		// Region-specific Gu bugs
-		var gu string
-		switch region {
-		case "three_kings_inheritance":
-			sub := rng.Intn(3)
-			switch sub {
-			case 0:
-				gu = "GU_EARTH_COMMUNICATION"
-			case 1:
-				gu = "GU_TUSITA_FLOWER"
-			default:
-				gu = "GU_CLEANSING_WATER"
-			}
-		case "gu_luan_slope":
-			sub := rng.Intn(3)
-			switch sub {
-			case 0:
-				gu = "GU_WHITE_BOAR"
-			case 1:
-				gu = "GU_BLACK_BOAR"
-			default:
-				gu = "GU_SHADOW_STEPS"
-			}
-		default: // qing_mao_mountain
-			sub := rng.Intn(3)
-			switch sub {
-			case 0:
-				gu = "GU_MOONLIGHT"
-			case 1:
-				gu = "GU_JADE_SKIN"
-			default:
-				gu = "GU_LIQUOR_WORM"
-			}
-		}
-		return models.Cell{X: x, Y: y, Type: "WildGu", Content: gu}
+		return models.Cell{X: x, Y: y, Type: "Monster", Content: ""}
 	}
 }
 
@@ -142,15 +55,35 @@ func ResolveCell(tx *sql.Tx, region string, x int, y int) (models.Cell, error) {
 
 	spawn, ok, err := db.FindFixedSpawn(tx, region, x, y)
 	if err == nil && ok {
-		return models.Cell{X: x, Y: y, Type: "Monster", Content: spawn.MonsterID}, nil
+		t := "Monster"
+		if spawn.IsBossSpawn {
+			t = "Boss"
+		}
+		
+		rank := spawn.MinRank
+		if spawn.MaxRank > spawn.MinRank {
+			rank += rand.Intn(spawn.MaxRank - spawn.MinRank + 1)
+		}
+		subRank := rand.Intn(5) + 1
+
+		return models.Cell{X: x, Y: y, Type: t, Content: spawn.MonsterID, Rank: rank, SubRank: subRank}, nil
 	}
 
 	cell := GenerateCell(x, y, region)
 
-	if cell.Type == "Monster" {
-		monsterID, err := db.PickRandomMonsterFromRegion(tx, region)
+	if cell.Type == "Monster" || cell.Type == "Boss" {
+		monsterID, minRank, maxRank, err := db.PickRandomMonsterFromRegion(tx, region)
 		if err == nil && monsterID != "" {
 			cell.Content = monsterID
+			rank := minRank
+			if maxRank > minRank {
+				rank += rand.Intn(maxRank - minRank + 1)
+			}
+			cell.Rank = rank
+			cell.SubRank = rand.Intn(5) + 1
+		} else {
+			cell.Rank = 1
+			cell.SubRank = rand.Intn(5) + 1
 		}
 	}
 
@@ -266,7 +199,7 @@ func GetGrid(c *gin.Context) {
 				if err != nil {
 					cell = GenerateCell(cx, cy, player.CurrentRegion)
 				}
-				if isCellClearedRecently(&player, cx, cy, 2*time.Minute) && (cell.Type == "Resource" || cell.Type == "WildGu") {
+				if isCellClearedRecently(&player, cx, cy, 2*time.Minute) {
 					cell = models.Cell{X: cx, Y: cy, Type: "Empty", Content: ""}
 				}
 				cells = append(cells, cell)
@@ -543,6 +476,14 @@ func MovePlayer(c *gin.Context) {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"})
 				return
 			}
+			
+			// Override monster template stats with cell rank and subRank
+			if cell.Rank > 0 {
+				mon.Rank = cell.Rank
+			}
+			if cell.SubRank > 0 {
+				mon.SubRank = cell.SubRank
+			}
 
 			logMsg = fmt.Sprintf("Đạo hữu chạm trán %s tại tọa độ (%d, %d)! (Quái vật được tải từ cơ sở dữ liệu)", mon.Name, player.X, player.Y)
 			log.Println(logMsg)
@@ -594,11 +535,40 @@ func MovePlayer(c *gin.Context) {
 				if ax == 0 && ay == 0 {
 					continue
 				}
-				adj := GenerateCell(player.X+ax, player.Y+ay, player.CurrentRegion)
-				if adj.Type == "Monster" && rand.Intn(100) < 25 {
+				adjX := player.X + ax
+				adjY := player.Y + ay
+				
+				// check if already cleared
+				if isCellClearedRecently(&player, adjX, adjY, 2*time.Minute) {
+					continue
+				}
+
+				adj, err := ResolveCell(tx, player.CurrentRegion, adjX, adjY)
+				if err != nil {
+					adj = GenerateCell(adjX, adjY, player.CurrentRegion)
+				}
+
+				if (adj.Type == "Monster" || adj.Type == "Boss") && rand.Intn(100) < 5 { // 5% chance
 					combatTriggered = true
-					player.ActiveCombat = &models.CombatState{EnemyName: adj.Content, EnemyHP: 70, EnemyMaxHP: 70, EnemyDamage: 11, EnemyDefense: 4}
-					logMsg = fmt.Sprintf("Phục kích! %s chủ động lao ra tấn công đạo hữu tại (%d, %d)!", adj.Content, player.X, player.Y)
+					
+					mon, err := db.LoadMonsterTemplate(tx, adj.Content)
+					if err == nil {
+						if adj.Rank > 0 {
+							mon.Rank = adj.Rank
+						}
+						if adj.SubRank > 0 {
+							mon.SubRank = adj.SubRank
+						}
+						combatState := models.BuildCombatStateFromMonster(mon)
+						player.ActiveCombat = &combatState
+						logMsg = fmt.Sprintf("Phục kích! Quái thú %s lân cận (%d, %d) chủ động lao ra tấn công đạo hữu!", mon.Name, adjX, adjY)
+					}
+					// Mark the original monster cell as cleared
+					if player.ClearedCells == nil {
+						player.ClearedCells = make(models.ClearedCellsMap)
+					}
+					coordKeyAdj := fmt.Sprintf("%d,%d", adjX, adjY)
+					player.ClearedCells[coordKeyAdj] = time.Now().Format(time.RFC3339)
 				}
 			}
 		}
@@ -634,4 +604,31 @@ func MovePlayer(c *gin.Context) {
 		"combat_triggered": combatTriggered,
 		"stats":            newStats,
 	})
+}
+
+// GetRegions fetches all active regions from the database
+func GetRegions(c *gin.Context) {
+	query := `
+		SELECT id, name, description, width, height, min_rank, max_rank, is_active, created_at, updated_at
+		FROM regions
+		WHERE is_active = TRUE
+		ORDER BY min_rank ASC
+	`
+	rows, err := db.DB.Query(query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải dữ liệu bản đồ"})
+		return
+	}
+	defer rows.Close()
+
+	var regions []models.Region
+	for rows.Next() {
+		var r models.Region
+		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.Width, &r.Height, &r.MinRank, &r.MaxRank, &r.IsActive, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			continue
+		}
+		regions = append(regions, r)
+	}
+
+	c.JSON(http.StatusOK, regions)
 }

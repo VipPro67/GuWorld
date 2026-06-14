@@ -319,6 +319,19 @@ func RefineGu(c *gin.Context) {
 	var statusStr string
 
 	if success {
+		// Tiên cổ duy nhất check
+		spec, ok := models.GuRegistry[recipe.TargetGuID]
+		if ok && spec.Rank >= 6 {
+			exists, _ := db.CheckImmortalGuExists(tx, recipe.TargetGuID)
+			if exists {
+				success = false
+				statusStr = "failed"
+				statusMsg = "Tiên cổ là duy nhất, đã tồn tại trong thiên hạ, luyện chế thất bại!"
+			}
+		}
+	}
+
+	if success {
 		statusStr = "success"
 		statusMsg = "Hợp luyện thành công! Đạo hữu luyện chế được Cổ trùng mới."
 		

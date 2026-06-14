@@ -15,7 +15,7 @@ Browser / Next.js UI
 
 `backend/cmd/server/main.go` thực hiện theo thứ tự:
 
-1. Load `.env` từ `.env`, `backend/.env`, `../.env`, `../../.env` nếu có.
+1. Load `.env` từ `.env`, `backend/.env nếu có.
 2. Kết nối PostgreSQL qua `db.Connect()`.
 3. Gọi `db.InitSchema()` để tạo/migrate bảng và seed dữ liệu.
 4. Kết nối Redis qua `cache.Connect()` nếu cấu hình sẵn; lỗi Redis chỉ warning.

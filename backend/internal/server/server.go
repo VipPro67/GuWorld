@@ -226,6 +226,7 @@ func SetupRouter() *gin.Engine {
 		api.POST("/explore", middleware.AuthRequired(), handlers.ExploreNode)
 		api.POST("/explore/retreat/:id", middleware.AuthRequired(), handlers.Retreat)
 		api.GET("/explore/grid", middleware.AuthRequired(), handlers.GetGrid)
+		api.GET("/explore/regions", middleware.AuthRequired(), handlers.GetRegions)
 		api.POST("/explore/move", middleware.AuthRequired(), handlers.MovePlayer)
 
 		// Shop Endpoints
