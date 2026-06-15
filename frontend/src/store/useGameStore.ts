@@ -659,6 +659,7 @@ interface GameState {
   clearStress: () => Promise<{ success: boolean; message: string } | null>;
   exploreNode: (nodeId: string) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
   executeCombatTurn: (equippedGuIds: string[], isCharge?: boolean, targetId?: string, targetX?: number, targetY?: number) => Promise<{ player: Player; logs: string[]; enemy: CombatState | null; victory: boolean; defeat: boolean } | null>;
+  executeAutoCombat: (loadout: any) => Promise<{ logs: any[]; winner: string } | null>;
   referralsData: {
     ref_code: string;
     referees: any[];
@@ -2011,6 +2012,42 @@ export const useGameStore = create<GameState>((set, get) => {
     } catch (err: any) {
       set({ error: err.message });
       get().addLog(`Tấn công thất bại: ${err.message}`);
+      return null;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  executeAutoCombat: async (loadout: any) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return null;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/combat/start`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ loadout }),
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Bắt đầu mô phỏng thất bại.");
+      }
+
+      // We just return the logs and winner, we don't need to update player immediately
+      // The frontend handles the replay animation
+      return data;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Mô phỏng thất bại: ${err.message}`);
       return null;
     } finally {
       set({ actionLoading: false });

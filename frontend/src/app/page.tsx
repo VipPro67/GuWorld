@@ -195,7 +195,6 @@ export default function Home() {
               enemy={player.active_combat!}
               guDictionary={guDictionary}
               actionLoading={actionLoading}
-              onAttack={executeCombatTurn}
               onRetreat={retreat}
             />
           </div>

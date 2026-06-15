@@ -168,6 +168,7 @@ func SetupRouter() *gin.Engine {
 		combat := api.Group("/combat")
 		combat.Use(middleware.AuthRequired())
 		{
+			combat.POST("/start", handlers.AutoCombatStart)
 			combat.POST("/attack", handlers.CombatAttack)
 			combat.POST("/cast-killer-move", handlers.CastKillerMove)
 		}
