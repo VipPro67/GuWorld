@@ -1960,6 +1960,11 @@ export const useGameStore = create<GameState>((set, get) => {
       if (data.logs && Array.isArray(data.logs)) {
         data.logs.forEach((logLine: string) => get().addLog(logLine));
       }
+      if (data.compound_effects && Array.isArray(data.compound_effects)) {
+        data.compound_effects.forEach((ce: { name: string; description: string }) => {
+          get().addLog(`⟐ [${ce.name}] ${ce.description}`);
+        });
+      }
       return data;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Thi triển sát chiêu thất bại.";

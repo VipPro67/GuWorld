@@ -80,8 +80,26 @@ Người chơi có thể:
 
 ## 7. Sát chiêu
 
-- Người chơi có thể tạo sát chiêu từ Cổ core/support.
+- Người chơi có thể tạo sát chiêu từ Cổ core + tối đa 8 Cổ support.
 - Preview tính mana cost, stability, damage, defense, cooldown/cast time.
+- **Hiệu ứng dung hợp (Compound Effects):** khi Cổ core và support có các hiệu ứng tương đồng (VD: damage + bleed, defense + heal), chúng kết hợp thành hiệu ứng mới mạnh hơn thay vì cộng dồn đơn thuần:
+  - `damage + bleed → xuất huyết trọng thương`: sát thương + chảy máu mỗi lượt
+  - `defense + heal → khiên sinh mệnh`: khiên tự hồi phục
+  - `damage + poison → độc nhận phá thể`: vết thương nhiễm độc
+  - `damage + stun → chấn động`: sát thương kèm choáng
+  - `movement + evasion/stealth → huyễn ảnh bộ`: né tránh + tốc độ
+  - `damage + blood_drain → huyết lực`: hút máu theo sát thương
+  - `summon + damage → hư ảnh đại lực`: hư ảnh chiến đấu
+  - `damage + damage_multiplier → cuồng phong`: đánh liên hoàn
+  - `defense + damage → phản thương kích`: phản đòn sát thương
+  - `generate/replicate → tạo hóa chi lực`: tăng cường hiệu quả hỗ trợ
+- **Cổ trận liên hoàn (Synergy Recipes):** nếu core và support khớp với các công thức đặc biệt, sát chiêu sẽ kích hoạt hiệu ứng cộng hưởng riêng:
+  - Đại Lực Thần Quyền (GU_CHARGING_CRASH + GU_TEN_JUN_STRENGTH + GU_JUN_STRENGTH + GU_SELF_STRENGTH): xuyên phá 50% giáp
+  - Âm Dương Lưỡng Nghi (GU_MOONLIGHT + GU_LITTLE_LIGHT): sát thương gấp đôi
+  - Huyết Sát Trận (GU_BLOOD_MOON + GU_BLOOD_ASSET + GU_BLOOD_SKULL): tiêu hao 10% HP, tăng 50% sát thương
+  - Huyền Ảnh Sát (GU_BLOOD_MOON + GU_SHADOW + GU_SHADOW_STEPS): tấn công từ bóng tối không thể né
+  - Ngũ Hành Sơn Hà (GU_CANOPY + GU_IRON_BONE + GU_EARTH_WORM): phòng ngự +200%, miễn khống chế
+  - Tứ Hải Tửu Trận (GU_LIQUOR_WORM + GU_FOUR_FLAVORS_LIQUOR + GU_SEVEN_FRAGRANCES_LIQUOR + GU_NINE_EYES_LIQUOR): giảm 50% mana cost
 - Sát chiêu đã lưu có thể cast trong combat và có thể bị xóa.
 
 ## 8. Khám phá bản đồ

@@ -16,6 +16,14 @@ type KillerMoveSlotPreview = {
   warnings: string[];
 };
 
+type CompoundEffectInfo = {
+  name: string;
+  type: string;
+  value: number;
+  description: string;
+  sources: string[];
+};
+
 type KillerMovePreview = {
   name?: string;
   path: string;
@@ -30,6 +38,7 @@ type KillerMovePreview = {
   effects: Record<string, number>;
   warnings: string[];
   slot_results: KillerMoveSlotPreview[];
+  compound_effects?: CompoundEffectInfo[];
 };
 
 type BuilderSlot = {
@@ -125,6 +134,11 @@ export function KillerMoveBuilder() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Không thể lưu sát chiêu");
       setSavedMessage("Đã lưu sát chiêu vào đạo kho.");
+      // Clear builder state so user can create a new move
+      setCoreGu(null);
+      setSupportGus(Array(8).fill(null));
+      setName("");
+      setPreview(null);
       void fetchKillerMoves();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không thể lưu sát chiêu");
@@ -263,7 +277,23 @@ function KillerMovePreviewPanel({ preview, error, isCalculating, isSaving, saved
           <Stat label="Lưu phái" value={preview.path} />
           <Stat label="Loại" value={preview.move_type} />
           <Stat label="Cooldown" value={`${preview.cooldown} lượt`} />
-          <EffectSection title="Applied Killer Move Effects" effects={preview.effects || {}} emptyText="Không có hiệu ứng được cộng." />
+          <EffectSection title="Hiệu ứng dung hợp (Compound Effects)" effects={preview.effects || {}} emptyText="Không có hiệu ứng được cộng." />
+          {preview.compound_effects && preview.compound_effects.length > 0 && (
+            <div>
+              <h3 className="mb-2 font-semibold text-emerald-100">⟐ Dung hợp Đạo Ngân</h3>
+              <div className="space-y-2">
+                {preview.compound_effects.map((ce, i) => (
+                  <div key={i} className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-3 text-xs text-emerald-100">
+                    <div className="flex items-start justify-between gap-2">
+                      <strong className="text-sm">{ce.name}</strong>
+                      <span className="rounded-full border border-emerald-400/30 px-2 py-0.5 text-emerald-200">{ce.type}</span>
+                    </div>
+                    <p className="mt-1 text-slate-300">{ce.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {preview.slot_results?.length > 0 && (
             <div>
               <h3 className="mb-2 font-semibold text-amber-100">Slot Compatibility</h3>

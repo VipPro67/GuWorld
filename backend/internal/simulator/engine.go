@@ -2,24 +2,20 @@ package simulator
 
 import (
 	"fmt"
-	"math/rand"
+	"math"
 )
 
-// Target selection logic: Simple Frontline-first
 func getTarget(enemies []*CombatantAuto) *CombatantAuto {
-	// Priority 1: Frontline alive
 	for _, e := range enemies {
 		if e.GridRow == 1 && e.HP > 0 {
 			return e
 		}
 	}
-	// Priority 2: Backline alive
 	for _, e := range enemies {
 		if e.GridRow == 2 && e.HP > 0 {
 			return e
 		}
 	}
-	// Fallback to any alive
 	for _, e := range enemies {
 		if e.HP > 0 {
 			return e
@@ -28,12 +24,10 @@ func getTarget(enemies []*CombatantAuto) *CombatantAuto {
 	return nil
 }
 
-// Simulate runs the deterministic auto-battle engine until one side is wiped out or turn limit reached.
+// Simulate runs the deterministic auto-battle using pre-computed actions.
 func Simulate(state *CombatState) []CombatLog {
 	var logs []CombatLog
-	rng := rand.New(rand.NewSource(state.Seed))
 
-	// Pre-combat Initialization
 	logs = append(logs, CombatLog{
 		Turn:   0,
 		Action: "BATTLE_START",
@@ -56,44 +50,79 @@ func Simulate(state *CombatState) []CombatLog {
 
 	for turn := 1; turn <= maxTurns; turn++ {
 		state.Turn = turn
-		turnLogs := []CombatLog{}
+		var turnLogs []CombatLog
 		turnLogs = append(turnLogs, CombatLog{
 			Turn:   turn,
 			Action: "TURN_START",
 			Detail: fmt.Sprintf("=== LƯỢT %d ===", turn),
 		})
 
-		// 4-turn rotation logic
-		rotationPhase := turn % 4
-		if rotationPhase == 0 {
-			rotationPhase = 4
+		// ── Tick DoTs for all combatants ──
+		for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
+			for _, c := range combatants {
+				if c.HP <= 0 {
+					continue
+				}
+				turnLogs = append(turnLogs, tickDoTs(c, turn)...)
+			}
 		}
 
-		// Collect all actors to iterate
+		// ── Decrement stun durations ──
+		for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
+			for _, c := range combatants {
+				var kept []Effect
+				for _, eff := range c.ActiveEffects {
+					if eff.ID == "stun" {
+						eff.Duration--
+						if eff.Duration > 0 {
+							kept = append(kept, eff)
+						}
+					} else {
+						kept = append(kept, eff)
+					}
+				}
+				c.ActiveEffects = kept
+			}
+		}
+
+		// ── Process actors ──
 		var allActors []*CombatantAuto
 		allActors = append(allActors, state.Allies...)
 		allActors = append(allActors, state.Enemies...)
-
-		// Sort by speed if we had speed, but here we just process Allies then Enemies deterministically
-		// Do NOT use map iterations or goroutines here!
 
 		for _, actor := range allActors {
 			if actor.HP <= 0 || actor.IsDead {
 				continue
 			}
 
-			// Pre-action triggers
-			turnLogs = append(turnLogs, ProcessTriggers(state, actor, "HP_LOW", rng)...)
+			// Check stun
+			isStunned := false
+			for _, eff := range actor.ActiveEffects {
+				if eff.ID == "stun" && eff.Duration > 0 {
+					isStunned = true
+					break
+				}
+			}
+			if isStunned {
+				turnLogs = append(turnLogs, CombatLog{
+					Turn:      turn,
+					ActorId:   actor.ID,
+					ActorName: actor.Name,
+					Action:    "STUNNED",
+					Detail:    fmt.Sprintf("%s bị choáng, bỏ lượt!", actor.Name),
+				})
+				continue
+			}
 
+			// Determine target side
 			var targets []*CombatantAuto
-			var isAlly bool
+			isAlly := false
 			for _, a := range state.Allies {
 				if a.ID == actor.ID {
 					isAlly = true
 					break
 				}
 			}
-
 			if isAlly {
 				targets = state.Enemies
 			} else {
@@ -102,75 +131,204 @@ func Simulate(state *CombatState) []CombatLog {
 
 			target := getTarget(targets)
 			if target == nil {
-				// No targets left
 				continue
 			}
 
-			// Decide action based on rotation phase
-			actionName := ""
-			damageMultiplier := 1.0
-			attackPath := "" // E.g. "fire", "water" (simplified)
-
-			switch rotationPhase {
-			case 1:
-				// Turn 1: Basic attack / Buff
-				actionName = "Đánh thường"
-				damageMultiplier = 1.0
-			case 2:
-				// Turn 2: Killer Move 1 (Highest Damage)
-				actionName = "Sát Chiêu 1: Hủy Diệt"
-				damageMultiplier = 2.5
-				attackPath = "fire" // Just an example path for testing Dao Marks reduction
-			case 3:
-				// Turn 3: Basic attack
-				actionName = "Đánh thường"
-				damageMultiplier = 1.0
-			case 4:
-				// Turn 4: Killer Move 2 (CC/Heal)
-				actionName = "Sát Chiêu 2: Khống Chế"
-				damageMultiplier = 1.5
-				// Simplified CC apply logic
-				target.ActiveEffects = append(target.ActiveEffects, Effect{ID: "stun", Type: "debuff", Duration: 1})
-				turnLogs = append(turnLogs, CombatLog{
-					Turn:      turn,
-					ActorId:   actor.ID,
-					ActorName: actor.Name,
-					Action:    "CAST_CC",
-					TargetId:  target.ID,
-					Detail:    fmt.Sprintf("%s tung chiêu Khống Chế lên %s!", actor.Name, target.Name),
-				})
+			// ── Get next action (round-robin) ──
+			if len(actor.Actions) == 0 {
+				continue
 			}
+			idx := actor.nextActionIdx % len(actor.Actions)
+			actor.nextActionIdx++
+			action := actor.Actions[idx]
 
-			baseDamage := int(float64(actor.BaseDmg) * damageMultiplier)
-			
-			// If it's fire damage, check target's Thuy Trao Co trigger
-			if attackPath == "fire" {
-				turnLogs = append(turnLogs, ProcessTriggers(state, target, "FIRE_DAMAGE", rng)...)
-			}
-
-			actualDamage, calcLogs := CalculateDamage(actor, target, baseDamage, attackPath)
-			turnLogs = append(turnLogs, calcLogs...)
-
-			// Apply fatal blow check
-			if target.HP-actualDamage <= 0 {
-				fatalLogs := ProcessTriggers(state, target, "FATAL_BLOW", rng)
-				turnLogs = append(turnLogs, fatalLogs...)
-			}
-
-			if target.HP > 1 || len(ProcessTriggers(state, target, "FATAL_BLOW", rng)) == 0 { // Simple condition
-				target.HP -= actualDamage
-			}
-
+			// ── Resolve the action ──
 			turnLogs = append(turnLogs, CombatLog{
 				Turn:      turn,
 				ActorId:   actor.ID,
 				ActorName: actor.Name,
-				Action:    "ATTACK",
+				Action:    action.ActionType,
 				TargetId:  target.ID,
-				Damage:    actualDamage,
-				Detail:    fmt.Sprintf("%s dùng [%s] gây %d sát thương lên %s (Còn %d HP)", actor.Name, actionName, actualDamage, target.Name, target.HP),
+				Detail:    fmt.Sprintf("%s sử dụng [%s]", actor.Name, action.Name),
 			})
 
+			// Mana check: skip if insufficient mana
+			if action.ManaCost > 0 && float64(actor.Mana) < action.ManaCost {
+				turnLogs = append(turnLogs, CombatLog{
+					Turn:      turn,
+					ActorId:   actor.ID,
+					ActorName: actor.Name,
+					Action:    "INSUFFICIENT_MANA",
+					Detail:    fmt.Sprintf("%s không đủ mana để dùng [%s] (cần %.0f, có %d)", actor.Name, action.Name, action.ManaCost, actor.Mana),
+				})
+				continue
+			}
+			actor.Mana -= int(action.ManaCost)
+
+			// Apply shield to self
+			if action.Defense > 0 {
+				actor.VirtualShield += int(action.Defense)
+				turnLogs = append(turnLogs, CombatLog{
+					Turn:      turn,
+					ActorId:   actor.ID,
+					ActorName: actor.Name,
+					Action:    "SHIELD_GAIN",
+					Detail:    fmt.Sprintf("%s nhận %.0f Khiên Ảo!", actor.Name, action.Defense),
+				})
+			}
+
+			// Apply healing to self
+			if action.Healing > 0 {
+				heal := int(action.Healing)
+				actor.HP += heal
+				if actor.HP > actor.MaxHP {
+					actor.HP = actor.MaxHP
+				}
+				turnLogs = append(turnLogs, CombatLog{
+					Turn:      turn,
+					ActorId:   actor.ID,
+					ActorName: actor.Name,
+					Action:    "HEAL",
+					Detail:    fmt.Sprintf("%s hồi phục %d HP!", actor.Name, heal),
+				})
+			}
+
+			// ── Apply damage & compound effects ──
+			totalDamageDealt := 0
+
+			if action.ActionType == "BASIC_ATTACK" || action.Damage > 0 {
+				// Multi-hit
+				hitCount := action.MultiHit
+				if hitCount < 1 {
+					hitCount = 1
+				}
+				totalDmg := 0.0
+				for h := 0; h < hitCount; h++ {
+					hitDmg := action.Damage
+					if h > 0 {
+						hitDmg *= 0.7 // chain diminishing
+					}
+					// Defense mitigation
+					netDmg := hitDmg - float64(target.BaseDef)
+					if netDmg < 1 {
+						netDmg = 1
+					}
+					totalDmg += applyDamageToTarget(actor, target, netDmg, &turnLogs, turn)
+				}
+				totalDamageDealt = int(totalDmg)
+
+				// Log HP damage
+				if totalDamageDealt > 0 {
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "DAMAGE",
+						TargetId:  target.ID,
+						Damage:    totalDamageDealt,
+						Detail:    fmt.Sprintf("%s gây %d sát thương lên %s (còn %d HP)", actor.Name, totalDamageDealt, target.Name, target.HP),
+					})
+				}
+
+				if hitCount > 1 {
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "MULTI_HIT",
+						TargetId:  target.ID,
+						Detail:    fmt.Sprintf("%s trúng %d đòn liên hoàn!", actor.Name, hitCount),
+					})
+				}
+
+				// Phantom damage
+				if action.PhantomDmg > 0 {
+					phantomNet := math.Max(1, action.PhantomDmg-float64(target.BaseDef))
+					phantomDealt := applyDamageToTarget(actor, target, phantomNet, &turnLogs, turn)
+					totalDamageDealt += int(phantomDealt)
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "PHANTOM_ATTACK",
+						TargetId:  target.ID,
+						Damage:    int(phantomDealt),
+						Detail:    fmt.Sprintf("Hư ảnh tấn công thêm %.0f sát thương!", phantomDealt),
+					})
+				}
+
+				// Thorns (reflect) to attacker
+				if action.ThornsDmg > 0 && totalDamageDealt > 0 {
+					thornsNet := math.Max(1, action.ThornsDmg-float64(actor.BaseDef))
+					applyDamageToTarget(target, actor, thornsNet, &turnLogs, turn)
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "THORNS",
+						TargetId:  target.ID,
+						Damage:    int(thornsNet),
+						Detail:    fmt.Sprintf("Phản thương từ %s gây %.0f sát thương lên %s!", target.Name, thornsNet, actor.Name),
+					})
+				}
+
+				// Lifesteal
+				if action.LifeStealPct > 0 && totalDamageDealt > 0 {
+					healAmount := int(float64(totalDamageDealt) * action.LifeStealPct)
+					actor.HP += healAmount
+					if actor.HP > actor.MaxHP {
+						actor.HP = actor.MaxHP
+					}
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "LIFESTEAL",
+						Damage:    healAmount,
+						Detail:    fmt.Sprintf("%s hút %d máu từ sát chiêu!", actor.Name, healAmount),
+					})
+				}
+
+				// Apply status effects
+				if action.BleedPerTurn > 0 {
+					target.ActiveDoT = append(target.ActiveDoT, DoTEffect{
+						Type: "bleed", Value: action.BleedPerTurn, Turns: 3,
+					})
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   target.ID,
+						ActorName: target.Name,
+						Action:    "BLEED_APPLIED",
+						Detail:    fmt.Sprintf("%s bị chảy máu (%.0f/lượt trong 3 lượt)!", target.Name, action.BleedPerTurn),
+					})
+				}
+				if action.PoisonPerTurn > 0 {
+					target.ActiveDoT = append(target.ActiveDoT, DoTEffect{
+						Type: "poison", Value: action.PoisonPerTurn, Turns: 3,
+					})
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   target.ID,
+						ActorName: target.Name,
+						Action:    "POISON_APPLIED",
+						Detail:    fmt.Sprintf("%s bị trúng độc (%.0f/lượt trong 3 lượt)!", target.Name, action.PoisonPerTurn),
+					})
+				}
+				if action.StunTurns > 0 {
+					target.ActiveEffects = append(target.ActiveEffects, Effect{
+						ID: "stun", Type: "debuff", Value: action.StunTurns, Duration: action.StunTurns,
+					})
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   target.ID,
+						ActorName: target.Name,
+						Action:    "STUN_APPLIED",
+						Detail:    fmt.Sprintf("%s bị choáng trong %d lượt!", target.Name, action.StunTurns),
+					})
+				}
+			}
+
+			// Dying check
 			if target.HP <= 0 {
 				target.HP = 0
 				target.IsDead = true
@@ -183,16 +341,15 @@ func Simulate(state *CombatState) []CombatLog {
 				})
 			}
 
-			// Check boss transitions
+			// Boss phase transitions
 			if target.Kind == "Boss" {
-				bossLogs := CheckBossPhaseTransitions(state, target)
-				turnLogs = append(turnLogs, bossLogs...)
+				turnLogs = append(turnLogs, CheckBossPhaseTransitions(state, target)...)
 			}
 		}
 
 		logs = append(logs, turnLogs...)
 
-		// Check Win/Loss Condition
+		// ── Win/Loss check ──
 		alliesAlive := false
 		for _, a := range state.Allies {
 			if a.HP > 0 {
@@ -223,4 +380,45 @@ func Simulate(state *CombatState) []CombatLog {
 	}
 
 	return logs
+}
+
+func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]CombatLog, turn int) float64 {
+	if damage < 1 {
+		damage = 1
+	}
+
+	// Virtual shield absorption
+	if target.VirtualShield > 0 {
+		if float64(target.VirtualShield) >= damage {
+			target.VirtualShield -= int(damage)
+			*logs = append(*logs, CombatLog{
+				Turn:      turn,
+				ActorId:   target.ID,
+				ActorName: target.Name,
+				Action:    "SHIELD_ABSORB",
+				Damage:    int(damage),
+				Detail:    fmt.Sprintf("%s dùng Khiên Ảo hấp thụ %.0f sát thương (còn %d khiên)", target.Name, damage, target.VirtualShield),
+			})
+			return 0
+		} else {
+			absorbed := target.VirtualShield
+			damage -= float64(absorbed)
+			target.VirtualShield = 0
+			*logs = append(*logs, CombatLog{
+				Turn:      turn,
+				ActorId:   target.ID,
+				ActorName: target.Name,
+				Action:    "SHIELD_BREAK",
+				Damage:    absorbed,
+				Detail:    fmt.Sprintf("Khiên Ảo của %s bị phá vỡ sau khi chặn %d sát thương!", target.Name, absorbed),
+			})
+		}
+	}
+
+	// Direct HP damage
+	target.HP -= int(damage)
+	if target.HP < 0 {
+		target.HP = 0
+	}
+	return damage
 }

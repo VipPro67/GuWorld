@@ -9,13 +9,13 @@ import (
 
 func TestDeterministicSimulator(t *testing.T) {
 	loadout := simulator.CombatLoadout{
-		CoreGuId: "kim_giap_co",
+		CoreGuId: "GU_BLOOD_MOON",
 	}
 
 	createInitialState := func() *simulator.CombatState {
 		return &simulator.CombatState{
 			Turn: 0,
-			Seed: 12345, // Fixed seed for reproducibility
+			Seed: 12345,
 			Allies: []*simulator.CombatantAuto{
 				{
 					ID:            "player1",
@@ -29,20 +29,26 @@ func TestDeterministicSimulator(t *testing.T) {
 					VirtualShield: 1000,
 					DaoMarks:      simulator.DaoMarks{"fire": 10},
 					Loadout:       &loadout,
+					Actions: []simulator.SimAction{
+						{ActionType: "GU_SKILL", Name: "Huyết Nguyệt Cổ", Damage: 80, ManaCost: 10},
+						{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: 50, ManaCost: 0},
+					},
 				},
 			},
 			Enemies: []*simulator.CombatantAuto{
 				{
-					ID:            "boss1",
-					Name:          "Thái Cổ Hoang Thú",
-					Kind:          "Boss",
-					GridRow:       1,
-					MaxHP:         500,
-					HP:            500,
-					BaseDmg:       100,
-					BaseDef:       50,
-					VirtualShield: 500,
-					DaoMarks:      simulator.DaoMarks{},
+					ID:      "boss1",
+					Name:    "Thái Cổ Hoang Thú",
+					Kind:    "Boss",
+					GridRow: 1,
+					MaxHP:   500,
+					HP:      500,
+					BaseDmg: 100,
+					BaseDef: 50,
+					DaoMarks: simulator.DaoMarks{},
+					Actions: []simulator.SimAction{
+						{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: 100, ManaCost: 0},
+					},
 				},
 			},
 		}
@@ -54,12 +60,10 @@ func TestDeterministicSimulator(t *testing.T) {
 	state2 := createInitialState()
 	logs2 := simulator.Simulate(state2)
 
-	// Ensure exact length match
 	if len(logs1) != len(logs2) {
 		t.Fatalf("Mismatched log lengths: %d vs %d", len(logs1), len(logs2))
 	}
 
-	// Ensure exact content match
 	for i := range logs1 {
 		j1, _ := json.Marshal(logs1[i])
 		j2, _ := json.Marshal(logs2[i])

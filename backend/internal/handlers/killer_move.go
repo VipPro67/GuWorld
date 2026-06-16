@@ -50,24 +50,25 @@ type CastKillerMoveRequest struct {
 }
 
 type KillerMovePreview struct {
-	Name           string                  `json:"name,omitempty"`
-	Path           string                  `json:"path"`
-	MoveType       string                  `json:"move_type"`
-	RankRequired   int                     `json:"rank_required"`
-	CorePlayerGuID string                  `json:"core_player_gu_id"`
-	SupportGuIDs   []string                `json:"support_player_gu_ids"`
-	TotalManaCost  float64                 `json:"total_mana_cost"`
-	Stability      float64                 `json:"stability"`
-	DamageValue    float64                 `json:"damage_value"`
-	DefenseValue   float64                 `json:"defense_value"`
-	Cooldown       int                     `json:"cooldown"`
-	CastTime       int                     `json:"cast_time"`
-	Effects        map[string]float64      `json:"effects"`
-	IsStable       bool                    `json:"is_stable"`
-	IsInstantCast  bool                    `json:"is_instant_cast"`
-	Warnings       []string                `json:"warnings"`
-	SlotResults    []KillerMoveSlotPreview `json:"slot_results"`
-	Slots          []models.KillerMoveSlot `json:"slots,omitempty"`
+	Name            string                  `json:"name,omitempty"`
+	Path            string                  `json:"path"`
+	MoveType        string                  `json:"move_type"`
+	RankRequired    int                     `json:"rank_required"`
+	CorePlayerGuID  string                  `json:"core_player_gu_id"`
+	SupportGuIDs    []string                `json:"support_player_gu_ids"`
+	TotalManaCost   float64                 `json:"total_mana_cost"`
+	Stability       float64                 `json:"stability"`
+	DamageValue     float64                 `json:"damage_value"`
+	DefenseValue    float64                 `json:"defense_value"`
+	Cooldown        int                     `json:"cooldown"`
+	CastTime        int                     `json:"cast_time"`
+	Effects         map[string]float64      `json:"effects"`
+	IsStable        bool                    `json:"is_stable"`
+	IsInstantCast   bool                    `json:"is_instant_cast"`
+	Warnings        []string                `json:"warnings"`
+	SlotResults     []KillerMoveSlotPreview `json:"slot_results"`
+	Slots           []models.KillerMoveSlot `json:"slots,omitempty"`
+	CompoundEffects []CompoundEffectInfo    `json:"compound_effects,omitempty"`
 }
 
 type KillerMoveSlotPreview struct {
@@ -318,7 +319,15 @@ func CastKillerMove(c *gin.Context) {
 		}
 
 		logs = append(logs, fmt.Sprintf("Sát chiêu ổn định (%.1f%%), gây %.1f sát thương và tạo %.1f phòng ngự.", preview.Stability, preview.DamageValue, preview.DefenseValue))
-		applyKillerMoveToCombat(player.ActiveCombat, player.ID.String(), req.TargetID, preview.DamageValue, preview.DefenseValue, preview.Effects, &logs)
+
+		// Log compound effects
+		if len(preview.CompoundEffects) > 0 {
+			for _, ce := range preview.CompoundEffects {
+				logs = append(logs, fmt.Sprintf("⟐ Hiệu ứng dung hợp [%s]: %s", ce.Name, ce.Description))
+			}
+		}
+
+		applyKillerMoveToCombat(player.ActiveCombat, player.ID.String(), req.TargetID, preview.DamageValue, preview.DefenseValue, preview.Effects, preview.CompoundEffects, &logs)
 		player.ActiveCombat.SkillCooldowns[req.KillerMoveID] = preview.Cooldown
 	}
 
@@ -334,16 +343,17 @@ func CastKillerMove(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"player":          player,
-		"event":           eventType,
-		"success":         succeeded,
-		"killer_move":     move,
-		"preview":         preview,
-		"backlash_damage": backlashDamage,
-		"logs":            logs,
-		"active_combat":   player.ActiveCombat,
-		"current_mana":    player.CurrentMana,
-		"hp":              player.HP,
+		"player":           player,
+		"event":            eventType,
+		"success":          succeeded,
+		"killer_move":      move,
+		"preview":          preview,
+		"backlash_damage":  backlashDamage,
+		"logs":             logs,
+		"compound_effects": preview.CompoundEffects,
+		"active_combat":    player.ActiveCombat,
+		"current_mana":     player.CurrentMana,
+		"hp":               player.HP,
 	})
 }
 
@@ -388,6 +398,10 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 	compatibilityPenalty := 0.0
 	slotResults := []KillerMoveSlotPreview{{PlayerGuID: core.Instance.InstanceID, GuID: core.Instance.GuID, GuName: core.Spec.Name, SlotType: models.KillerMoveSlotCore, SlotIndex: 0, CompatibilityScore: 100, Applied: true}}
 
+	// Collect applied support specs and effects for compounding
+	var appliedSupportSpecs []*models.GuDictionaryItem
+	var appliedSupportEffects []map[string]float64
+
 	moveTypeSeed := inferMoveType(damageBase, defenseBase, effects)
 	for idx, support := range supports {
 		totalMana += support.Spec.BaseManaCost * killerMoveSupportCostRate
@@ -400,13 +414,31 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 			damageMultiplier *= 1 + effectValue(supportEffects, "damage_multiplier", "damage_boost")
 			defenseMultiplier *= 1 + effectValue(supportEffects, "defense_multiplier", "defense_boost")
 			mergeEffects(effects, supportEffects)
+			appliedSupportSpecs = append(appliedSupportSpecs, &support.Spec)
+			appliedSupportEffects = append(appliedSupportEffects, supportEffects)
 		} else {
 			compatibilityPenalty += float64(30 - compatibilityScore)
 		}
 		slotResults = append(slotResults, KillerMoveSlotPreview{PlayerGuID: support.Instance.InstanceID, GuID: support.Instance.GuID, GuName: support.Spec.Name, SlotType: models.KillerMoveSlotSupport, SlotIndex: idx + 1, CompatibilityScore: compatibilityScore, Applied: applied, Warnings: supportWarnings})
 	}
 
-	stability := killerMoveBaseStability - float64(len(supports))*killerMoveSupportPenalty - compatibilityPenalty + float64(attainmentLevel(player, core.Spec.Path))*killerMoveAttainmentBonus
+	// ── COMPOUND EFFECT DETECTION ──
+	allCompounds := detectCompounds(coreActive, appliedSupportEffects, effects)
+	synergyCompounds, synDmgBonus, synStabilityBonus, synSpecial := detectSynergy(&core.Spec, appliedSupportSpecs)
+	allCompounds = append(allCompounds, synergyCompounds...)
+
+	// Apply compound transforms to damage/defense/effects
+	// Synergy bonus multiplies final damage
+	if synDmgBonus > 0 {
+		damageMultiplier *= synDmgBonus
+	}
+	finalDamage, finalDefense, finalEffects := applyCompoundEffects(
+		damageBase, defenseBase, effects, allCompounds,
+		damageMultiplier, defenseMultiplier,
+	)
+
+	// ── STABILITY ──
+	stability := killerMoveBaseStability - float64(len(supports))*killerMoveSupportPenalty - compatibilityPenalty + float64(attainmentLevel(player, core.Spec.Path))*killerMoveAttainmentBonus + synStabilityBonus
 	if req.ApplyMultiTaskPenalty {
 		stability -= killerMoveMultiTaskPenalty
 	}
@@ -415,7 +447,11 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 	for _, slot := range slotResults {
 		warnings = append(warnings, slot.Warnings...)
 	}
-	moveType := inferMoveType(damageBase, defenseBase, effects)
+	if len(synergyCompounds) > 0 {
+		warnings = append(warnings, fmt.Sprintf("Kích hoạt Cổ trận liên hoàn: %s — %s", synergyCompounds[0].Name, synSpecial))
+	}
+
+	moveType := inferMoveType(finalDamage, finalDefense, finalEffects)
 	rankRequired := core.Spec.Rank
 	for _, support := range supports {
 		if support.Spec.Rank > rankRequired {
@@ -424,22 +460,23 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 	}
 
 	return &KillerMovePreview{
-		Path:           core.Spec.Path,
-		MoveType:       moveType,
-		RankRequired:   rankRequired,
-		CorePlayerGuID: core.Instance.InstanceID,
-		SupportGuIDs:   req.SupportPlayerGuIDs,
-		TotalManaCost:  round(totalMana),
-		Stability:      round(stability),
-		DamageValue:    round(damageBase * damageMultiplier),
-		DefenseValue:   round(defenseBase * defenseMultiplier),
-		Cooldown:       1 + len(supports)/3,
-		CastTime:       1,
-		Effects:        effects,
-		IsStable:       stability >= 80,
-		IsInstantCast:  len(supports) <= 2 && stability >= 80,
-		Warnings:       warnings,
-		SlotResults:    slotResults,
+		Path:            core.Spec.Path,
+		MoveType:        moveType,
+		RankRequired:    rankRequired,
+		CorePlayerGuID:  core.Instance.InstanceID,
+		SupportGuIDs:    req.SupportPlayerGuIDs,
+		TotalManaCost:   round(totalMana),
+		Stability:       round(stability),
+		DamageValue:     round(finalDamage),
+		DefenseValue:    round(finalDefense),
+		Cooldown:        1 + len(supports)/3,
+		CastTime:        1,
+		Effects:         finalEffects,
+		IsStable:        stability >= 80,
+		IsInstantCast:   len(supports) <= 2 && stability >= 80,
+		Warnings:        warnings,
+		SlotResults:     slotResults,
+		CompoundEffects: allCompounds,
 	}, nil
 }
 
@@ -602,37 +639,171 @@ func insertKillerMoveSlotsTx(tx *sql.Tx, moveID, coreID string, supportIDs []str
 	return nil
 }
 
-func applyKillerMoveToCombat(combat *models.CombatState, casterID, targetID string, damage, defense float64, effects map[string]float64, logs *[]string) {
+func applyKillerMoveToCombat(combat *models.CombatState, casterID, targetID string, damage, defense float64, effects map[string]float64, compounds []CompoundEffectInfo, logs *[]string) {
+	// Apply shield to caster
 	for i := range combat.Allies {
 		if combat.Allies[i].ID == casterID {
 			combat.Allies[i].VirtualShield += defense
 			break
 		}
 	}
+
+	// Track compound-derived special effects
+	hasIgnoreArmor := false
+	hasLifesteal := false
+	lifestealPct := 0.0
+	hasThorns := false
+	thornsDmg := 0.0
+	hasMultiHit := false
+	multiHitFactor := 1.0
+	hasPhantomAttack := false
+	phantomDmg := 0.0
+	hasRegen := false
+	regenVal := 0.0
+	hasHemorrhage := false
+	hemorrhageDmg := 0.0
+	hasToxicWound := false
+	toxicDmg := 0.0
+
+	for _, c := range compounds {
+		switch c.Type {
+		case "hemorrhage":
+			hasHemorrhage = true
+			hemorrhageDmg = c.Value * 0.3
+		case "regenerative_shield":
+			hasRegen = true
+			regenVal = c.Value * 0.15
+		case "toxic_wound":
+			hasToxicWound = true
+			toxicDmg = c.Value * 0.3
+		case "bloodthirsty_strength":
+			hasLifesteal = true
+			if effects["lifesteal"] > 0 {
+				lifestealPct = effects["lifesteal"]
+			} else {
+				lifestealPct = 15.0
+			}
+		case "chain_damage":
+			hasMultiHit = true
+			if v, ok := effects["multi_hit"]; ok && v > 0 {
+				multiHitFactor = 1.0 + v
+			}
+		case "counter_thorns":
+			hasThorns = true
+			if v, ok := effects["thorns_damage"]; ok && v > 0 {
+				thornsDmg = v
+			}
+		case "phantom_onslaught":
+			hasPhantomAttack = true
+			if v, ok := effects["phantom_attack"]; ok && v > 0 {
+				phantomDmg = v
+			}
+		case "concussive_blow":
+			if v, ok := effects["stun"]; ok && v > 0 {
+				combat.Enemies = applyStunToTargets(combat.Enemies, targetID, v, logs)
+			}
+		}
+	}
+
+	// Apply to enemies
 	for i := range combat.Enemies {
 		if combat.Enemies[i].HP <= 0 {
 			continue
 		}
 		if targetID == "" || combat.Enemies[i].ID == targetID {
-			finalDamage := math.Max(0, damage-combat.Enemies[i].BaseDefense*0.5)
-			combat.Enemies[i].HP = math.Max(0, combat.Enemies[i].HP-finalDamage)
-			*logs = append(*logs, fmt.Sprintf("%s chịu %.1f sát thương từ sát chiêu.", combat.Enemies[i].Name, finalDamage))
-			
-			// Apply debuffs
+			finalDamage := damage
+
+			// Armor penetration from compounds
+			if hasIgnoreArmor {
+				finalDamage -= combat.Enemies[i].BaseDefense * 0.2
+			} else {
+				finalDamage -= combat.Enemies[i].BaseDefense * 0.5
+			}
+			if finalDamage < 1.0 {
+				finalDamage = 1.0
+			}
+
+			// Multi-hit (chain damage)
+			if hasMultiHit && multiHitFactor > 1.0 {
+				hitCount := int(multiHitFactor)
+				if hitCount < 1 {
+					hitCount = 1
+				}
+				totalHitDmg := 0.0
+				for h := 0; h < hitCount; h++ {
+					hitDmg := finalDamage * 0.6
+					if h > 0 {
+						hitDmg *= 0.7 // diminishing on chain hits
+					}
+					combat.Enemies[i].HP = math.Max(0, combat.Enemies[i].HP-hitDmg)
+					totalHitDmg += hitDmg
+				}
+				*logs = append(*logs, fmt.Sprintf("%s trúng %d đòn liên hoàn, tổng %.1f sát thương!", combat.Enemies[i].Name, hitCount, totalHitDmg))
+				finalDamage = totalHitDmg
+			} else {
+				combat.Enemies[i].HP = math.Max(0, combat.Enemies[i].HP-finalDamage)
+				*logs = append(*logs, fmt.Sprintf("%s chịu %.1f sát thương từ sát chiêu.", combat.Enemies[i].Name, finalDamage))
+			}
+
+			// Phantom bonus attack
+			if hasPhantomAttack && phantomDmg > 0 {
+				combat.Enemies[i].HP = math.Max(0, combat.Enemies[i].HP-phantomDmg)
+				*logs = append(*logs, fmt.Sprintf("Hư ảnh tấn công thêm %.1f sát thương!", phantomDmg))
+				finalDamage += phantomDmg
+			}
+
+			// Lifesteal
+			if hasLifesteal && lifestealPct > 0 {
+				healAmount := finalDamage * (lifestealPct / 100.0)
+				for a := range combat.Allies {
+					if combat.Allies[a].ID == casterID {
+						combat.Allies[a].HP = math.Min(combat.Allies[a].MaxHP, combat.Allies[a].HP+healAmount)
+						*logs = append(*logs, fmt.Sprintf("%s hút %.1f máu từ sát chiêu!", combat.Allies[a].Name, healAmount))
+						break
+					}
+				}
+			}
+
+			// Thorns damage (reflect)
+			if hasThorns && thornsDmg > 0 {
+				*logs = append(*logs, fmt.Sprintf("Khiên phản thương gây %.1f sát thương lên %s!", thornsDmg, combat.Enemies[i].Name))
+			}
+
+			// Apply debuffs from effects
 			if effects != nil {
+				if hasHemorrhage && hemorrhageDmg > 0 {
+					combat.Enemies[i].StatusEffects = append(combat.Enemies[i].StatusEffects, models.StatusEffect{Type: "bleed", Value: hemorrhageDmg, Turns: 3})
+					*logs = append(*logs, fmt.Sprintf("%s bị xuất huyết trọng thương!", combat.Enemies[i].Name))
+				}
+				if hasToxicWound && toxicDmg > 0 {
+					combat.Enemies[i].StatusEffects = append(combat.Enemies[i].StatusEffects, models.StatusEffect{Type: "poison", Value: toxicDmg, Turns: 3})
+					*logs = append(*logs, fmt.Sprintf("%s bị trúng độc từ vết thương!", combat.Enemies[i].Name))
+				}
+				if bleed, ok := effects["bleed_effect"]; ok && bleed > 0 {
+					combat.Enemies[i].StatusEffects = append(combat.Enemies[i].StatusEffects, models.StatusEffect{Type: "bleed", Value: bleed, Turns: 3})
+					*logs = append(*logs, fmt.Sprintf("%s bị chảy máu!", combat.Enemies[i].Name))
+				}
 				if poison, ok := effects["poison"]; ok && poison > 0 {
 					combat.Enemies[i].StatusEffects = append(combat.Enemies[i].StatusEffects, models.StatusEffect{Type: "poison", Value: poison, Turns: 3})
 					*logs = append(*logs, fmt.Sprintf("%s bị trúng độc!", combat.Enemies[i].Name))
-				}
-				if bleed, ok := effects["bleed"]; ok && bleed > 0 {
-					combat.Enemies[i].StatusEffects = append(combat.Enemies[i].StatusEffects, models.StatusEffect{Type: "bleed", Value: bleed, Turns: 3})
-					*logs = append(*logs, fmt.Sprintf("%s bị chảy máu!", combat.Enemies[i].Name))
 				}
 				if stun, ok := effects["stun"]; ok && stun > 0 {
 					combat.Enemies[i].StatusEffects = append(combat.Enemies[i].StatusEffects, models.StatusEffect{Type: "stun", Value: stun, Turns: 1})
 					*logs = append(*logs, fmt.Sprintf("%s bị choáng!", combat.Enemies[i].Name))
 				}
 			}
+
+			// Regen to caster (from regenerative shield)
+			if hasRegen && regenVal > 0 {
+				for a := range combat.Allies {
+					if combat.Allies[a].ID == casterID {
+						combat.Allies[a].HP = math.Min(combat.Allies[a].MaxHP, combat.Allies[a].HP+regenVal)
+						break
+					}
+				}
+				*logs = append(*logs, fmt.Sprintf("Khiên sinh mệnh hồi phục %.1f HP.", regenVal))
+			}
+
 			return
 		}
 	}
@@ -753,6 +924,24 @@ func stabilityWarnings(stability float64) []string {
 	}
 	return []string{"Nguy hiểm: cấu trúc sát chiêu rất bất ổn"}
 }
+func applyStunToTargets(enemies []models.Combatant, targetID string, stunValue float64, logs *[]string) []models.Combatant {
+	stunTurns := 1
+	if stunValue > 50 {
+		stunTurns = 2
+	}
+	for i := range enemies {
+		if enemies[i].HP <= 0 {
+			continue
+		}
+		if targetID == "" || enemies[i].ID == targetID {
+			enemies[i].StatusEffects = append(enemies[i].StatusEffects, models.StatusEffect{Type: "stun", Value: stunValue, Turns: stunTurns})
+			*logs = append(*logs, fmt.Sprintf("%s bị choáng %d lượt!", enemies[i].Name, stunTurns))
+			return enemies
+		}
+	}
+	return enemies
+}
+
 func inferMoveType(damage, defense float64, effects map[string]float64) string {
 	if damage >= defense && damage > 0 {
 		return "ATTACK"
