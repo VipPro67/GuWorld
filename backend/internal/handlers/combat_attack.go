@@ -1,0 +1,1016 @@
+package handlers
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"math/rand"
+	"net/http"
+	"sort"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/models"
+)
+
+type CombatAttackRequest struct {
+	PlayerID      string   `json:"player_id" binding:"required"`
+	TargetID      string   `json:"target_id"`
+	EquippedGuIDs []string `json:"equipped_gu_ids"`
+	IsCharge      bool     `json:"is_charge"`
+	TargetX       int      `json:"target_x"`
+	TargetY       int      `json:"target_y"`
+	ItemID        string   `json:"item_id"`
+	UseStones     string   `json:"use_stones"`
+}
+
+func CombatAttack(c *gin.Context) {
+	var req CombatAttackRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		return
+	}
+
+	if player.ActiveCombat == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không trong trạng thái chiến đấu."})
+		return
+	}
+
+	if player.HP <= 0 && player.ActiveCombat.EnemyType != "PVP" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đã kiệt sức. Dưỡng thương trước khi chiến đấu."})
+		return
+	}
+
+	if len(player.ActiveCombat.Allies) == 0 {
+		player.ActiveCombat = InitializeCombatState(tx, player.ActiveCombat, &player)
+	}
+
+	if player.ActiveCombat.SkillCooldowns != nil {
+		for k, v := range player.ActiveCombat.SkillCooldowns {
+			if v > 0 {
+				player.ActiveCombat.SkillCooldowns[k] = v - 1
+			}
+		}
+	}
+
+	var turnLogs []string
+
+	for i := range player.ActiveCombat.Allies {
+		c := &player.ActiveCombat.Allies[i]
+		if c.HP <= 0 {
+			continue
+		}
+		var activeEffs []models.StatusEffect
+		for j := 0; j < len(c.StatusEffects); j++ {
+			eff := c.StatusEffects[j]
+			if eff.Turns > 0 {
+				if eff.Type == "poison" || eff.Type == "bleed" {
+					c.HP -= eff.Value
+					turnLogs = append(turnLogs, fmt.Sprintf("%s mất %.1f HP do %s (Còn %d lượt).", c.Name, eff.Value, eff.Type, eff.Turns))
+				}
+				eff.Turns--
+			}
+			if eff.Turns > 0 {
+				activeEffs = append(activeEffs, eff)
+			}
+		}
+		c.StatusEffects = activeEffs
+	}
+
+	for i := range player.ActiveCombat.Enemies {
+		c := &player.ActiveCombat.Enemies[i]
+		if c.HP <= 0 {
+			continue
+		}
+		var activeEffs []models.StatusEffect
+		for j := 0; j < len(c.StatusEffects); j++ {
+			eff := c.StatusEffects[j]
+			if eff.Turns > 0 {
+				if eff.Type == "poison" || eff.Type == "bleed" {
+					c.HP -= eff.Value
+					turnLogs = append(turnLogs, fmt.Sprintf("%s mất %.1f HP do %s (Còn %d lượt).", c.Name, eff.Value, eff.Type, eff.Turns))
+				}
+				eff.Turns--
+			}
+			if eff.Turns > 0 {
+				activeEffs = append(activeEffs, eff)
+			}
+		}
+		c.StatusEffects = activeEffs
+	}
+
+	var casterIdx = -1
+	for idx, ally := range player.ActiveCombat.Allies {
+		if ally.ID == player.ID.String() {
+			casterIdx = idx
+			if player.ActiveCombat.EnemyType != "PVP" {
+				player.ActiveCombat.Allies[idx].HP = player.HP
+			}
+			player.ActiveCombat.Allies[idx].CurrentMana = player.CurrentMana
+			break
+		}
+	}
+	if casterIdx == -1 {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find player in combatants"})
+		return
+	}
+
+	playerStats := CalculatePlayerStats(&player)
+	player.ActiveCombat.Allies[casterIdx].BaseAttack = playerStats["attack"]
+	player.ActiveCombat.Allies[casterIdx].BaseDefense = playerStats["defense"]
+
+	playerCombatant := player.ActiveCombat.Allies[casterIdx]
+
+	var selectedGus []models.GuInstance
+	var selectedSpecs []models.GuDictionaryItem
+	totalManaCost := 0.0
+	looseGuFailureChance := 0.0
+
+	isChargingThisTurn := false
+	isUnleashingCharge := false
+	isUsingItem := false
+	isUsingStones := false
+
+	if req.UseStones != "" {
+		isUsingStones = true
+		player.ActiveCombat.ChargePoints = 0
+	} else if req.ItemID != "" {
+		isUsingItem = true
+		player.ActiveCombat.ChargePoints = 0
+
+		if player.ActiveCombat.ItemsUsedCount >= 3 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Chỉ được dùng tối đa 3 vật phẩm trong mỗi trận chiến!"})
+			return
+		}
+		if player.ActiveCombat.ItemCooldowns == nil {
+			player.ActiveCombat.ItemCooldowns = make(map[string]int)
+		}
+		if player.ActiveCombat.ItemCooldowns[req.ItemID] > 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vật phẩm đang hồi chiêu (còn %d lượt)", player.ActiveCombat.ItemCooldowns[req.ItemID])})
+			return
+		}
+
+		qty, ok := player.MaterialsInventory[req.ItemID]
+		if !ok || qty <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm này trong túi đồ"})
+			return
+		}
+		item, ok := models.ItemRegistry[req.ItemID]
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại"})
+			return
+		}
+		if item.Type != "Consumable" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm này không thể dùng trong chiến đấu"})
+			return
+		}
+
+		player.MaterialsInventory[req.ItemID]--
+		if player.MaterialsInventory[req.ItemID] <= 0 {
+			delete(player.MaterialsInventory, req.ItemID)
+		}
+		player.ActiveCombat.ItemsUsedCount++
+		player.ActiveCombat.ItemCooldowns[req.ItemID] = 3
+
+	} else if req.IsCharge {
+		player.ActiveCombat.ChargePoints++
+		if player.ActiveCombat.ChargePoints >= 2 {
+			isUnleashingCharge = true
+			player.ActiveCombat.ChargePoints = 0
+		} else {
+			isChargingThisTurn = true
+		}
+	} else {
+		player.ActiveCombat.ChargePoints = 0
+
+		for _, instID := range req.EquippedGuIDs {
+			found := false
+			for _, inst := range player.GuInventory {
+				if inst.InstanceID == instID {
+					if inst.Status == "DEAD" {
+						c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể chiến đấu bằng Cổ trùng ĐÃ CHẾT: " + inst.GuID})
+						return
+					}
+					spec, ok := models.GuRegistry[inst.GuID]
+					if !ok {
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy định nghĩa của Cổ trùng: " + inst.GuID})
+						return
+					}
+
+					if player.CurrentRegion == "three_kings_inheritance" {
+						if spec.Path != "Moon Path" && spec.Path != "Earth Path" {
+							c.JSON(http.StatusBadRequest, gin.H{"error": "Bí cảnh Tam Vương Truyền Thừa áp chế Cổ trùng không thuộc Nguyệt đạo hoặc Thổ đạo: " + spec.Name})
+							return
+						}
+					}
+
+					selectedGus = append(selectedGus, inst)
+					selectedSpecs = append(selectedSpecs, spec)
+
+					_, _, cost, errVal := CalculateGuEffectForCombatant(&playerCombatant, &spec)
+					if errVal == nil {
+						totalManaCost += cost
+					}
+					found = true
+					break
+				}
+			}
+			if !found {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy Cổ trùng trong túi đồ: " + instID})
+				return
+			}
+		}
+
+		if playerCombatant.CurrentMana < totalManaCost {
+			c.JSON(http.StatusBadRequest, gin.H{"error": insufficientEnergyMessage(&player)})
+			return
+		}
+		looseGuFailureChance = calculateLooseGuFailureChance(selectedSpecs)
+	}
+
+	targetID := req.TargetID
+	targetIdx := -1
+	for idx, enemy := range player.ActiveCombat.Enemies {
+		if enemy.HP > 0 {
+			if targetID == "" || enemy.ID == targetID {
+				targetIdx = idx
+				break
+			}
+		}
+	}
+	if targetIdx == -1 {
+		for idx, enemy := range player.ActiveCombat.Enemies {
+			if enemy.HP > 0 {
+				targetIdx = idx
+				break
+			}
+		}
+	}
+
+	if len(selectedSpecs) > 1 {
+		turnLogs = append(turnLogs, fmt.Sprintf("=== DÙNG CỔ RIÊNG LẺ (rủi ro hụt %.0f%%) ===", looseGuFailureChance*100))
+	} else {
+		turnLogs = append(turnLogs, "=== HÀNH ĐỘNG CHIẾN ĐẤU ===")
+	}
+
+	type CombatAction struct {
+		InitiatorID string
+		Speed       float64
+		Execute     func() []string
+	}
+	var actions []CombatAction
+
+	if targetIdx != -1 {
+		casterCombatant := &player.ActiveCombat.Allies[casterIdx]
+		prefX := req.TargetX
+		prefY := req.TargetY
+		if prefX <= 0 {
+			prefX = 1
+		}
+		if prefY <= 0 {
+			prefY = 2
+		}
+
+		actions = append(actions, CombatAction{
+			InitiatorID: player.ID.String(),
+			Speed:       casterCombatant.Speed,
+			Execute: func() []string {
+				var logs []string
+				refCaster, _, _ := findCombatant(player.ActiveCombat, player.ID.String())
+				if refCaster == nil || refCaster.HP <= 0 {
+					return nil
+				}
+				for _, eff := range refCaster.StatusEffects {
+					if eff.Type == "stun" && eff.Turns > 0 {
+						return []string{fmt.Sprintf("-> %s bị choáng và mất lượt!", refCaster.Name)}
+					}
+				}
+
+				if isUsingStones {
+					if req.UseStones == "immortal" {
+						if player.ImmortalStones >= 1 {
+							player.ImmortalStones -= 1
+							refCaster.CurrentMana += 100.0
+							if refCaster.CurrentMana > refCaster.MaxMana {
+								refCaster.CurrentMana = refCaster.MaxMana
+							}
+							logs = append(logs, fmt.Sprintf("-> %s nghiền nát 1 Tiên Nguyên Thạch, khôi phục mạnh mẽ tiên nguyên!", refCaster.Name))
+						} else {
+							logs = append(logs, fmt.Sprintf("-> %s định dùng Tiên Nguyên Thạch nhưng không đủ!", refCaster.Name))
+						}
+					} else {
+						if player.PrimevalStones >= 100 {
+							player.PrimevalStones -= 100
+							refCaster.CurrentMana += 50.0
+							if refCaster.CurrentMana > refCaster.MaxMana {
+								refCaster.CurrentMana = refCaster.MaxMana
+							}
+							logs = append(logs, fmt.Sprintf("-> %s hấp thu 100 Nguyên Thạch, khôi phục chân nguyên!", refCaster.Name))
+						} else {
+							logs = append(logs, fmt.Sprintf("-> %s định dùng Nguyên Thạch nhưng không đủ (cần 100)!", refCaster.Name))
+						}
+					}
+				} else if isUsingItem {
+					itemSpec := models.ItemRegistry[req.ItemID]
+					healVal := itemSpec.Effects["restore_hp"]
+					if healVal == 0 {
+						healVal = 50.0
+					}
+
+					if refCaster.Rank >= 6 {
+						refCaster.ApertureDmg -= healVal
+						if refCaster.ApertureDmg < 0 {
+							refCaster.ApertureDmg = 0
+						}
+						logs = append(logs, fmt.Sprintf("-> %s sử dụng %s, giảm %.1f hư tổn tiên khiếu!", refCaster.Name, itemSpec.Name, healVal))
+					} else {
+						refCaster.HP += healVal
+						if refCaster.HP > refCaster.MaxHP {
+							refCaster.HP = refCaster.MaxHP
+						}
+						logs = append(logs, fmt.Sprintf("-> %s sử dụng %s, khôi phục %.1f HP (HP hiện tại: %.1f).", refCaster.Name, itemSpec.Name, healVal, refCaster.HP))
+					}
+				} else if isChargingThisTurn {
+					logs = append(logs, fmt.Sprintf("%s tích tụ Nguyên Khí, vận chuyển Chân Nguyên chuẩn bị cho Đại Sát Chiêu!", refCaster.Name))
+				} else if isUnleashingCharge {
+					targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, "SINGLE", prefX, prefY, false)
+					if len(targetsIdx) > 0 {
+						targetEnemy := &player.ActiveCombat.Enemies[targetsIdx[0]]
+						dmgValue := playerStats["attack"] * 2.5
+						netDmg := dmgValue - targetEnemy.BaseDefense
+						if netDmg < 1.0 {
+							netDmg = 1.0
+						}
+						dmgLog := applyDamageWithLogs(refCaster.Name, targetEnemy.Name, targetEnemy, netDmg)
+						logs = append(logs, fmt.Sprintf("-> %s kích hoạt Bộc Phá Sát Chiêu (Unleash Charge)!", refCaster.Name), dmgLog)
+					}
+				} else {
+					if looseGuFailureChance > 0 && rand.Float64() < looseGuFailureChance {
+						wastedMana := totalManaCost * 0.5
+						if wastedMana > refCaster.CurrentMana {
+							wastedMana = refCaster.CurrentMana
+						}
+						refCaster.CurrentMana -= wastedMana
+						logs = append(logs, fmt.Sprintf("-> %s cưỡng ép vận nhiều Cổ riêng lẻ, đạo ngân hỗn loạn khiến chiêu thất bại! Hao phí %.1f nguyên khí.", refCaster.Name, wastedMana))
+						return logs
+					}
+
+					for _, spec := range selectedSpecs {
+						dmg, def, cost, errGu := CalculateGuEffectForCombatant(refCaster, &spec)
+						if errGu == nil && refCaster.CurrentMana >= cost {
+							refCaster.CurrentMana -= cost
+
+							activeEffects := models.GetGuEffectSection(spec, "active")
+							isHealing := activeEffects["healing"] > 0 || activeEffects["restore_hp"] > 0 || activeEffects["heal_based_on_strength"] > 0 || spec.ID == "GU_NINE_LEAF_VITALITY_GRASS"
+							isDefense := spec.Type == "Defense" || activeEffects["add_base_defense"] > 0 || activeEffects["defense"] > 0
+							isAttack := activeEffects["damage"] > 0 || activeEffects["add_base_attack"] > 0 || spec.Type == "Attack" || spec.Type == "Active"
+
+							if isHealing {
+								healVal := def
+								if activeEffects["heal_based_on_strength"] > 0 {
+									healVal = refCaster.BaseAttack * 1.5
+								}
+								if healVal <= 0 {
+									healVal = 30.0
+								}
+								refCaster.HP += healVal
+								if refCaster.HP > refCaster.MaxHP {
+									refCaster.HP = refCaster.MaxHP
+								}
+								logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s, khôi phục %.1f HP bản thân (HP hiện tại: %.1f).", refCaster.Name, spec.Name, healVal, refCaster.HP))
+							} else if isDefense {
+								shieldVal := def * 10.0
+								if shieldVal <= 0 {
+									shieldVal = 150.0
+								}
+								refCaster.VirtualShield += shieldVal
+								logs = append(logs, fmt.Sprintf("-> %s thi triển %s phòng thủ, nhận %.1f Khiên hộ thể (Virtual Shield: %.1f).", refCaster.Name, spec.Name, shieldVal, refCaster.VirtualShield))
+							} else if isAttack {
+								hasBypass := activeEffects["assassination"] > 0 || activeEffects["flying"] > 0
+								targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, spec.TargetType, prefX, prefY, hasBypass)
+								if len(targetsIdx) > 0 {
+									logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s!", refCaster.Name, spec.Name))
+									for _, eIdx := range targetsIdx {
+										tEnemy := &player.ActiveCombat.Enemies[eIdx]
+										netDmg := dmg - tEnemy.BaseDefense
+										if netDmg < 1.0 {
+											netDmg = 1.0
+										}
+										dmgLog := applyDamageWithLogs(refCaster.Name, tEnemy.Name, tEnemy, netDmg)
+										logs = append(logs, dmgLog)
+									}
+								}
+							} else {
+								logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s (Hỗ trợ)!", refCaster.Name, spec.Name))
+							}
+						}
+					}
+					if len(selectedSpecs) == 0 {
+						targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, "SINGLE", prefX, prefY, false)
+						if len(targetsIdx) > 0 {
+							targetEnemy := &player.ActiveCombat.Enemies[targetsIdx[0]]
+							netDmg := 5.0 - targetEnemy.BaseDefense
+							if netDmg < 1.0 {
+								netDmg = 1.0
+							}
+							dmgLog := applyDamageWithLogs(refCaster.Name, targetEnemy.Name, targetEnemy, netDmg)
+							logs = append(logs, fmt.Sprintf("-> %s đánh thường (Basic Attack)!", refCaster.Name), dmgLog)
+						}
+					}
+				}
+				return logs
+			},
+		})
+	}
+
+	for aIdx := range player.ActiveCombat.Allies {
+		ally := &player.ActiveCombat.Allies[aIdx]
+		if ally.ID != player.ID.String() && ally.HP > 0 {
+			allyID := ally.ID
+			actions = append(actions, CombatAction{
+				InitiatorID: allyID,
+				Speed:       ally.Speed,
+				Execute: func() []string {
+					var logs []string
+					refAlly, _, _ := findCombatant(player.ActiveCombat, allyID)
+					if refAlly == nil || refAlly.HP <= 0 {
+						return nil
+					}
+					for _, eff := range refAlly.StatusEffects {
+						if eff.Type == "stun" && eff.Turns > 0 {
+							return []string{fmt.Sprintf("-> %s bị choáng và mất lượt!", refAlly.Name)}
+						}
+					}
+
+					targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, "SINGLE", 1, 2, false)
+					if len(targetsIdx) > 0 {
+						tEnemy := &player.ActiveCombat.Enemies[targetsIdx[0]]
+						dmgVal := refAlly.BaseAttack
+						if dmgVal <= 0 {
+							dmgVal = 8.0
+						}
+						netDmg := dmgVal - tEnemy.BaseDefense
+						if netDmg < 1.0 {
+							netDmg = 1.0
+						}
+						dmgLog := applyDamageWithLogs(refAlly.Name, tEnemy.Name, tEnemy, netDmg)
+						logs = append(logs, fmt.Sprintf("-> Đồng minh %s đánh thường lên %s.", refAlly.Name, tEnemy.Name), dmgLog)
+					}
+					return logs
+				},
+			})
+		}
+	}
+
+	for eIdx := range player.ActiveCombat.Enemies {
+		enemy := &player.ActiveCombat.Enemies[eIdx]
+		if enemy.HP > 0 {
+			enemyID := enemy.ID
+			actions = append(actions, CombatAction{
+				InitiatorID: enemyID,
+				Speed:       enemy.Speed,
+				Execute: func() []string {
+					var logs []string
+					refEnemy, _, _ := findCombatant(player.ActiveCombat, enemyID)
+					if refEnemy == nil || refEnemy.HP <= 0 {
+						return nil
+					}
+					for _, eff := range refEnemy.StatusEffects {
+						if eff.Type == "stun" && eff.Turns > 0 {
+							return []string{fmt.Sprintf("-> %s bị choáng và mất lượt!", refEnemy.Name)}
+						}
+					}
+
+					targetsIdx := ResolveTargets(player.ActiveCombat.Allies, "SINGLE", 2, 2, false)
+					if len(targetsIdx) > 0 {
+						targetAlly := &player.ActiveCombat.Allies[targetsIdx[0]]
+						enemyCtx := &CombatContext{
+							Attacker: refEnemy,
+							Defender: targetAlly,
+							Logs:     []string{},
+						}
+						enemyActions := BuildEnemyActions(enemyCtx, refEnemy)
+						if len(enemyActions) > 0 {
+							act := enemyActions[0]
+							if act.ManaCost > 0 {
+								if player.ActiveCombat.EnemyType != "PVP" && refEnemy.Kind != "Player" {
+									hpCost := refEnemy.MaxHP * 0.05
+									if hpCost < 1.0 {
+										hpCost = 1.0
+									}
+									refEnemy.HP -= hpCost
+									logs = append(logs, fmt.Sprintf("-> %s tiêu hao sinh lực (Mất %.1f HP) để thúc dục Cổ ký sinh!", refEnemy.Name, hpCost))
+									if refEnemy.HP <= 0 {
+										logs = append(logs, fmt.Sprintf("-> %s bị Cổ ký sinh vắt kiệt sinh mệnh đến chết!", refEnemy.Name))
+										return logs
+									}
+								} else if refEnemy.CurrentMana >= act.ManaCost {
+									refEnemy.CurrentMana -= act.ManaCost
+								}
+							}
+
+							isHealing := act.Def > 0 && (act.IsUtility || (len(act.StatusEffects) == 0 && act.Dmg == 0))
+							isAttack := act.Dmg > 0 || len(act.StatusEffects) > 0
+
+							if isHealing {
+								healVal := act.Def
+								refEnemy.HP += healVal
+								if refEnemy.HP > refEnemy.MaxHP {
+									refEnemy.HP = refEnemy.MaxHP
+								}
+								logs = append(logs, fmt.Sprintf("-> %s kích hoạt phòng ngự/trị liệu %s, hồi %.1f HP.", refEnemy.Name, act.Name, healVal))
+							} else if isAttack {
+								netDmg := act.Dmg - targetAlly.BaseDefense
+								if netDmg < 1.0 {
+									netDmg = 1.0
+								}
+								dmgLog := applyDamageWithLogs(refEnemy.Name, targetAlly.Name, targetAlly, netDmg)
+								logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s tấn công!", refEnemy.Name, act.Name), dmgLog)
+							} else {
+								logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s (Hỗ trợ)!", refEnemy.Name, act.Name))
+							}
+						} else {
+							dmgVal := refEnemy.BaseAttack
+							if dmgVal <= 0 {
+								dmgVal = 5.0
+							}
+							netDmg := dmgVal - targetAlly.BaseDefense
+							if netDmg < 1.0 {
+								netDmg = 1.0
+							}
+							dmgLog := applyDamageWithLogs(refEnemy.Name, targetAlly.Name, targetAlly, netDmg)
+							logs = append(logs, fmt.Sprintf("-> %s đánh thường!", refEnemy.Name), dmgLog)
+						}
+					}
+					return logs
+				},
+			})
+		}
+	}
+
+	sort.Slice(actions, func(i, j int) bool {
+		return actions[i].Speed > actions[j].Speed
+	})
+
+	for _, act := range actions {
+		refActor, _, _ := findCombatant(player.ActiveCombat, act.InitiatorID)
+		if refActor == nil || refActor.HP <= 0 {
+			continue
+		}
+		resLogs := act.Execute()
+		if len(resLogs) > 0 {
+			turnLogs = append(turnLogs, resLogs...)
+		}
+	}
+
+	if player.ActiveCombat.EnemyType != "PVP" {
+		player.HP = player.ActiveCombat.Allies[casterIdx].HP
+	}
+	player.CurrentMana = player.ActiveCombat.Allies[casterIdx].CurrentMana
+
+	for _, ally := range player.ActiveCombat.Allies {
+		if ally.ID != player.ID.String() {
+			allyUUID, errParse := uuid.Parse(ally.ID)
+			if errParse == nil {
+				allyHP := ally.HP
+				if allyHP < 0 {
+					allyHP = 0
+				}
+				if player.ActiveCombat.EnemyType != "PVP" {
+					_, _ = tx.Exec("UPDATE players SET hp = $1 WHERE id = $2", allyHP, allyUUID)
+				}
+			}
+		}
+	}
+
+	victory := true
+	for _, enemy := range player.ActiveCombat.Enemies {
+		if enemy.HP > 0 {
+			victory = false
+			break
+		}
+	}
+
+	defeat := player.HP <= 0
+	isPVP := player.ActiveCombat.TargetPlayerID != ""
+
+	ctx := &CombatContext{
+		Attacker: &playerCombatant,
+		Logs:     turnLogs,
+	}
+
+	if victory {
+		ctx.Logs = append(ctx.Logs, "=== CHIẾN THẮNG VANG DỘI ===")
+
+		IntegratePassiveGus(&player, &ctx.Logs)
+
+		var partyMembers []uuid.UUID
+		if player.PartyID != nil {
+			var membersRaw []byte
+			errPart := tx.QueryRow("SELECT members FROM parties WHERE id = $1", player.PartyID).Scan(&membersRaw)
+			if errPart == nil {
+				var members []PartyMember
+				json.Unmarshal(membersRaw, &members)
+				for _, m := range members {
+					mUUID, errParse := uuid.Parse(m.ID)
+					if errParse == nil {
+						var sameCell bool
+						errCell := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE id = $1 AND x = $2 AND y = $3 AND current_region = $4)", mUUID, player.X, player.Y, player.CurrentRegion).Scan(&sameCell)
+						if errCell == nil && sameCell {
+							partyMembers = append(partyMembers, mUUID)
+						}
+					}
+				}
+			}
+		}
+
+		if isPVP {
+			stolenStones := 10
+			if player.ActiveCombat.TargetPlayerID != "dummy" {
+				targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID)
+				if parseErr == nil {
+					var targetStones int
+					var targetHP float64
+					var targetLootBytes []byte
+					err = tx.QueryRow("SELECT primeval_stones, hp, temp_loot FROM players WHERE id = $1 FOR UPDATE", targetUUID).Scan(&targetStones, &targetHP, &targetLootBytes)
+					if err == nil {
+						stolenStones = int(float64(targetStones) * 0.10)
+						if stolenStones < 1 {
+							stolenStones = 1
+						}
+						if targetStones < stolenStones {
+							stolenStones = targetStones
+						}
+						targetStones -= stolenStones
+						targetHP -= 30.0
+						if targetHP < 10.0 {
+							targetHP = 10.0
+						}
+
+						var targetLoot models.TempLoot
+						if len(targetLootBytes) > 0 {
+							json.Unmarshal(targetLootBytes, &targetLoot)
+						}
+
+						player.TempLoot.PrimevalStones += targetLoot.PrimevalStones
+						if player.TempLoot.MaterialsInventory == nil {
+							player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
+						}
+						for matID, qty := range targetLoot.MaterialsInventory {
+							player.TempLoot.MaterialsInventory[matID] += qty
+						}
+						player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, targetLoot.GuInventory...)
+
+						emptyLoot := models.TempLoot{
+							GuInventory:        models.GuInventory{},
+							MaterialsInventory: models.MaterialsInventory{},
+							PrimevalStones:     0,
+						}
+
+						_, _ = tx.Exec("UPDATE players SET primeval_stones = $1, hp = $2, temp_loot = $3 WHERE id = $4", targetStones, targetHP, emptyLoot, targetUUID)
+
+						ctx.Logs = append(ctx.Logs, fmt.Sprintf("Thu hoạch toàn bộ chiến lợi phẩm tạm thời của bại binh! Hút được %d Nguyên Thạch, %d Cổ trùng, và các nguyên liệu khác từ đối phương.", targetLoot.PrimevalStones, len(targetLoot.GuInventory)))
+					}
+
+					var playerRank, targetRank int
+					errPR := tx.QueryRow("SELECT rank FROM arena_rankings WHERE player_id = $1", player.ID).Scan(&playerRank)
+					errTR := tx.QueryRow("SELECT rank FROM arena_rankings WHERE player_id = $1", targetUUID).Scan(&targetRank)
+					if errPR == nil && errTR == nil && playerRank > targetRank {
+						_, _ = tx.Exec("UPDATE arena_rankings SET rank = $1 WHERE player_id = $2", playerRank, targetUUID)
+						_, _ = tx.Exec("UPDATE arena_rankings SET rank = $1 WHERE player_id = $2", targetRank, player.ID)
+						_, _ = tx.Exec("UPDATE players SET arena_rank = $1 WHERE id = $2", playerRank, targetUUID)
+						_, _ = tx.Exec("UPDATE players SET arena_rank = $1 WHERE id = $2", targetRank, player.ID)
+						ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chúc mừng! Đạo hữu đã vượt cấp khiêu chiến thành công, thăng lên Hạng %d Võ Đài!", targetRank))
+					}
+				}
+			}
+			player.PrimevalStones += stolenStones
+			ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chiến thắng PVP vang dội! Đạo hữu cướp đoạt %d Nguyên Thạch từ đối phương!", stolenStones))
+		} else {
+			isExplore := player.CurrentRegion != "Southern_Border" && player.CurrentRegion != "Lobby"
+			if player.ActiveCombat != nil && player.ActiveCombat.LootTableID != "" {
+				lt, err := db.LoadLootTable(tx, player.ActiveCombat.LootTableID)
+				if err == nil {
+					loot := RollLoot(lt)
+					if player.ActiveCombat.EnemyGuInventory != nil && len(player.ActiveCombat.EnemyGuInventory) > 0 {
+						for _, eg := range player.ActiveCombat.EnemyGuInventory {
+							if rand.Intn(100) < 10 {
+								loot.Gus = append(loot.Gus, eg.GuID)
+								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Cơ duyên! Đạo hữu bóc tách thành công cổ trùng ký sinh %s từ thi thể kẻ địch!", eg.GuID))
+							}
+						}
+					}
+					if len(partyMembers) > 1 {
+						ctx.Logs = append(ctx.Logs, "=== PHÂN CHIA CHIẾN LỢI PHẨM TỔ ĐỘI ===")
+						stoneQty := loot.Items["primeval_stone"]
+						if stoneQty > 0 {
+							splitStones := stoneQty / len(partyMembers)
+							if splitStones < 1 {
+								splitStones = 1
+							}
+							for _, memberID := range partyMembers {
+								if memberID == player.ID {
+									if isExplore {
+										player.TempLoot.PrimevalStones += splitStones
+										ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch (giữ tạm thời).", splitStones))
+									} else {
+										player.PrimevalStones += splitStones
+										ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch.", splitStones))
+									}
+								} else {
+									if isExplore {
+										var targetLoot models.TempLoot
+										var targetLootBytes []byte
+										_ = tx.QueryRow("SELECT temp_loot FROM players WHERE id = $1 FOR UPDATE", memberID).Scan(&targetLootBytes)
+										if len(targetLootBytes) > 0 {
+											json.Unmarshal(targetLootBytes, &targetLoot)
+										}
+										targetLoot.PrimevalStones += splitStones
+										_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, memberID)
+									} else {
+										_, _ = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", splitStones, memberID)
+									}
+									var uname string
+									_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", memberID).Scan(&uname)
+									ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s nhận được %d Nguyên Thạch.", uname, splitStones))
+								}
+							}
+						}
+
+						for matID, qty := range loot.Items {
+							if matID == "primeval_stone" {
+								continue
+							}
+							for q := 0; q < qty; q++ {
+								winnerID := partyMembers[rand.Intn(len(partyMembers))]
+								if winnerID == player.ID {
+									if isExplore {
+										if player.TempLoot.MaterialsInventory == nil {
+											player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
+										}
+										player.TempLoot.MaterialsInventory[matID]++
+										ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhặt được 1x %s (giữ tạm thời).", matID))
+									} else {
+										if player.MaterialsInventory == nil {
+											player.MaterialsInventory = make(models.MaterialsInventory)
+										}
+										player.MaterialsInventory[matID]++
+										ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhặt được 1x %s.", matID))
+									}
+								} else {
+									var uname string
+									_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
+
+									if isExplore {
+										var targetLoot models.TempLoot
+										var targetLootBytes []byte
+										_ = tx.QueryRow("SELECT temp_loot FROM players WHERE id = $1 FOR UPDATE", winnerID).Scan(&targetLootBytes)
+										if len(targetLootBytes) > 0 {
+											json.Unmarshal(targetLootBytes, &targetLoot)
+										}
+										if targetLoot.MaterialsInventory == nil {
+											targetLoot.MaterialsInventory = make(models.MaterialsInventory)
+										}
+										targetLoot.MaterialsInventory[matID]++
+										_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, winnerID)
+									} else {
+										var targetInv models.MaterialsInventory
+										var targetInvBytes []byte
+										_ = tx.QueryRow("SELECT materials_inventory FROM players WHERE id = $1 FOR UPDATE", winnerID).Scan(&targetInvBytes)
+										if len(targetInvBytes) > 0 {
+											json.Unmarshal(targetInvBytes, &targetInv)
+										}
+										if targetInv == nil {
+											targetInv = make(models.MaterialsInventory)
+										}
+										targetInv[matID]++
+										_, _ = tx.Exec("UPDATE players SET materials_inventory = $1 WHERE id = $2", targetInv, winnerID)
+									}
+									ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s nhặt được 1x %s.", uname, matID))
+								}
+							}
+						}
+
+						for _, gID := range loot.Gus {
+							winnerID := partyMembers[rand.Intn(len(partyMembers))]
+							newGu := models.GuInstance{
+								InstanceID: uuid.New().String(),
+								GuID:       gID,
+								Hunger:     100,
+								Status:     "ACTIVE",
+								Equipped:   false,
+							}
+							if winnerID == player.ID {
+								if isExplore {
+									player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, newGu)
+									ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn bắt được 1x %s (giữ tạm thời)!", gID))
+								} else {
+									player.GuInventory = append(player.GuInventory, newGu)
+									ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn bắt được 1x %s!", gID))
+								}
+							} else {
+								var uname string
+								_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
+
+								if isExplore {
+									var targetLoot models.TempLoot
+									var targetLootBytes []byte
+									_ = tx.QueryRow("SELECT temp_loot FROM players WHERE id = $1 FOR UPDATE", winnerID).Scan(&targetLootBytes)
+									if len(targetLootBytes) > 0 {
+										json.Unmarshal(targetLootBytes, &targetLoot)
+									}
+									targetLoot.GuInventory = append(targetLoot.GuInventory, newGu)
+									_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, winnerID)
+								} else {
+									var targetGuInv models.GuInventory
+									var targetGuInvBytes []byte
+									_ = tx.QueryRow("SELECT gu_inventory FROM players WHERE id = $1 FOR UPDATE", winnerID).Scan(&targetGuInvBytes)
+									if len(targetGuInvBytes) > 0 {
+										json.Unmarshal(targetGuInvBytes, &targetGuInv)
+									}
+									targetGuInv = append(targetGuInv, newGu)
+									_, _ = tx.Exec("UPDATE players SET gu_inventory = $1 WHERE id = $2", targetGuInv, winnerID)
+								}
+								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, gID))
+							}
+						}
+					} else {
+						lootLogs := ApplyLoot(&player, loot)
+						ctx.Logs = append(ctx.Logs, lootLogs...)
+					}
+				} else {
+					log.Printf("Failed to load loot table %s: %v", player.ActiveCombat.LootTableID, err)
+				}
+			} else {
+				ctx.Logs = append(ctx.Logs, "Chiến đấu thắng lợi vang dội!")
+			}
+		}
+
+		if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
+			slotID := player.ActiveCombat.MineSlotID
+			var rarity string
+			var currentOccupierStr *string
+			var lastClaimedAt *time.Time
+			err = tx.QueryRow("SELECT rarity, occupier_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &currentOccupierStr, &lastClaimedAt)
+			if err == nil && currentOccupierStr != nil {
+				currOccupierUUID, errParse := uuid.Parse(*currentOccupierStr)
+				if errParse == nil && lastClaimedAt != nil {
+					stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
+					if stones > 0 || qi > 0.0 || chests > 0 {
+						_ = AddMineRewardsToPlayerTx(tx, currOccupierUUID, stones, qi, chests)
+					}
+				}
+			}
+
+			now := time.Now()
+			_, errUpdate := tx.Exec(`
+					UPDATE mine_slots
+					SET occupier_id = $1, monster_id = NULL, occupied_at = $2, last_claimed_at = $3
+					WHERE id = $4
+				`, player.ID, now, now, slotID)
+			if errUpdate == nil {
+				ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chiếm lĩnh thành công mỏ phẩm chất %s #%d!", rarity, slotID))
+			} else {
+				log.Printf("Failed to update mine slot occupier in combat victory: %v", errUpdate)
+			}
+		}
+
+		if player.ClearedCells == nil {
+			player.ClearedCells = make(models.ClearedCellsMap)
+		}
+		coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
+		player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
+
+		for _, ally := range player.ActiveCombat.Allies {
+			allyUUID, errParse := uuid.Parse(ally.ID)
+			if errParse == nil {
+				if allyUUID != player.ID {
+					_, _ = tx.Exec("UPDATE players SET active_combat = NULL WHERE id = $1", allyUUID)
+				}
+			}
+		}
+		player.ActiveCombat = nil
+	} else if defeat {
+		player.HP = 20.0
+		defeat = true
+		if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
+			ctx.Logs = append(ctx.Logs, "Thách đấu mỏ linh thạch thất bại, không thể chiếm lĩnh mỏ.")
+		} else {
+			ctx.Logs = append(ctx.Logs, "Đại bại! Đạo hữu bất tỉnh nhân sự trước áp lực của đối thủ. May mắn thoát chết nhưng rơi rớt mất sạch chiến lợi phẩm thu thập trong chuyến đi này.")
+		}
+
+		if isPVP && player.ActiveCombat.TargetPlayerID != "dummy" {
+			targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID)
+			if parseErr == nil {
+				var targetLootBytes []byte
+				errLoot := tx.QueryRow("SELECT temp_loot FROM players WHERE id = $1 FOR UPDATE", targetUUID).Scan(&targetLootBytes)
+				if errLoot == nil {
+					var targetLoot models.TempLoot
+					if len(targetLootBytes) > 0 {
+						json.Unmarshal(targetLootBytes, &targetLoot)
+					}
+					targetLoot.PrimevalStones += player.TempLoot.PrimevalStones
+					if targetLoot.MaterialsInventory == nil {
+						targetLoot.MaterialsInventory = make(models.MaterialsInventory)
+					}
+					for matID, qty := range player.TempLoot.MaterialsInventory {
+						targetLoot.MaterialsInventory[matID] += qty
+					}
+					targetLoot.GuInventory = append(targetLoot.GuInventory, player.TempLoot.GuInventory...)
+
+					_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, targetUUID)
+				}
+			}
+		}
+
+		player.TempLoot = models.TempLoot{
+			GuInventory:        models.GuInventory{},
+			MaterialsInventory: models.MaterialsInventory{},
+			PrimevalStones:     0,
+		}
+
+		player.CurrentRegion = "Southern_Border"
+		player.X = 50
+		player.Y = 50
+		player.ExploredCells = models.ExploredCellsList{"50,50"}
+
+		if player.ActiveCombat != nil && player.ActiveCombat.EnemyTemplateID == "monster_heavenly_tribulation" {
+			player.ImmortalStones = player.ImmortalStones * 0.5
+			player.TribulationCount = 0
+			nextTrib := time.Now().Add(10 * time.Minute)
+			player.NextTribulationTime = &nextTrib
+
+			player.HumanQi += 200.0
+			if player.HumanQi > 100000.0 {
+				player.HumanQi = 100000.0
+			}
+			ctx.Logs = append(ctx.Logs, "Độ kiếp thất bại nhưng may mắn giữ được mạng sống! Nhân khí +200. Tiên Nguyên Thạch bị hao tổn 50% và reset số lần độ kiếp.")
+		}
+
+		for _, ally := range player.ActiveCombat.Allies {
+			allyUUID, errParse := uuid.Parse(ally.ID)
+			if errParse == nil {
+				if allyUUID != player.ID {
+					_, _ = tx.Exec("UPDATE players SET active_combat = NULL WHERE id = $1", allyUUID)
+				}
+			}
+		}
+		player.ActiveCombat = nil
+	} else {
+		combatBytes, _ := json.Marshal(player.ActiveCombat)
+		for _, ally := range player.ActiveCombat.Allies {
+			allyUUID, errParse := uuid.Parse(ally.ID)
+			if errParse == nil && allyUUID != player.ID {
+				_, _ = tx.Exec("UPDATE players SET active_combat = $1 WHERE id = $2", combatBytes, allyUUID)
+			}
+		}
+	}
+
+	updateQuery := `
+		UPDATE players
+		SET hp = $1, current_mana = $2, primeval_stones = $3, materials_inventory = $4, gu_inventory = $5, cleared_cells = $6, active_combat = $7,
+		    temp_loot = $8, current_region = $9, x = $10, y = $11, explored_cells = $12
+		WHERE id = $13
+	`
+	_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.PrimevalStones, player.MaterialsInventory, player.GuInventory, player.ClearedCells, player.ActiveCombat,
+		player.TempLoot, player.CurrentRegion, player.X, player.Y, player.ExploredCells, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update combat results"})
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"player":  player,
+		"logs":    ctx.Logs,
+		"enemy":   player.ActiveCombat,
+		"victory": victory,
+		"defeat":  defeat,
+	})
+}

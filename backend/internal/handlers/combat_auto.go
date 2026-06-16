@@ -85,11 +85,31 @@ func AutoCombatStart(c *gin.Context) {
 		playerDaoMarks[k] = v
 	}
 
-	// Determine pre-combat virtual shield from loadout
-	// Very simple heuristic for demonstration based on the new logic
+	// Determine pre-combat virtual shield dynamically from loadout (Core and Support Gu)
 	virtualShield := 0
-	if req.Loadout.CoreGuId == "thuy_trao_co" || req.Loadout.CoreGuId == "kim_giap_co" {
-		virtualShield = 100000 // A huge shield as described
+	if coreGuData, ok := models.GuRegistry[req.Loadout.CoreGuId]; ok {
+		for section, effectMap := range coreGuData.Effects {
+			if section == "active" || section == "support" || section == "passive" || section == "house" {
+				for _, key := range []string{"virtual_shield", "orbit_shield", "team_shield"} {
+					if val, exists := effectMap[key]; exists {
+						virtualShield += int(val)
+					}
+				}
+			}
+		}
+	}
+	for _, supId := range req.Loadout.SupportGuIds {
+		if supData, ok := models.GuRegistry[supId]; ok {
+			for section, effectMap := range supData.Effects {
+				if section == "active" || section == "support" || section == "passive" || section == "house" {
+					for _, key := range []string{"virtual_shield", "orbit_shield", "team_shield"} {
+						if val, exists := effectMap[key]; exists {
+							virtualShield += int(val)
+						}
+					}
+				}
+			}
+		}
 	}
 
 	simPlayer := &simulator.CombatantAuto{
@@ -97,8 +117,8 @@ func AutoCombatStart(c *gin.Context) {
 		Name:          player.Username,
 		Kind:          "Player",
 		GridRow:       2, // Default Backline
-		MaxHP:         int(player.BaseHP),
-		HP:            int(player.BaseHP),
+		MaxHP:         100, // Cultivators have base HP fixed at 100; survival relies on Virtual Shield
+		HP:            int(player.HP),
 		MaxMana:       int(player.MaxMana),
 		Mana:          int(player.CurrentMana),
 		BaseDmg:       int(playerStats["attack"]),
@@ -108,10 +128,8 @@ func AutoCombatStart(c *gin.Context) {
 		Loadout:       &req.Loadout,
 		ActiveEffects: []simulator.Effect{},
 	}
-	// Normal players have low base HP
-	if simPlayer.HP <= 0 {
+	if simPlayer.HP <= 0 || simPlayer.HP > 100 {
 		simPlayer.HP = 100
-		simPlayer.MaxHP = 100
 	}
 
 	simState.Allies = append(simState.Allies, simPlayer)

@@ -90,7 +90,7 @@ func ProcessTriggers(state *CombatState, target *CombatantAuto, triggerType stri
 	case "HP_LOW":
 		// Thiết Huyết Cổ: Khi HP < 30% -> Hồi máu/Tạo khiên
 		if target.HP > 0 && float64(target.HP)/float64(target.MaxHP) <= 0.3 {
-			if hasGu("thiet_huyet_co") { // Using theoretical IDs
+			if hasGu("thiet_huyet_co") || hasGu("GU_BLOOD_REGENERATION") { // Using theoretical IDs and real recovery Gu
 				healAmount := int(float64(target.MaxHP) * 0.2)
 				target.HP += healAmount
 				if target.HP > target.MaxHP {
@@ -107,7 +107,7 @@ func ProcessTriggers(state *CombatState, target *CombatantAuto, triggerType stri
 		}
 	case "FATAL_BLOW":
 		// Kim Cang Cổ: Chặn đòn sát thủ (Giữ lại 1 HP)
-		if hasGu("kim_cang_co") {
+		if hasGu("kim_cang_co") || hasGu("GU_DIAMOND_THOUGHT") {
 			target.HP = 1
 			logs = append(logs, CombatLog{
 				ActorId:   target.ID,
@@ -119,7 +119,7 @@ func ProcessTriggers(state *CombatState, target *CombatantAuto, triggerType stri
 		}
 	case "CC_APPLIED":
 		// Thanh Tâm Cổ: Giải trừ khống chế
-		if hasGu("thanh_tam_co") {
+		if hasGu("thanh_tam_co") || hasGu("GU_CLEANSE_SOUL") {
 			// Remove debuffs
 			var newEffects []Effect
 			for _, eff := range target.ActiveEffects {
@@ -138,7 +138,7 @@ func ProcessTriggers(state *CombatState, target *CombatantAuto, triggerType stri
 		}
 	case "FIRE_DAMAGE":
 		// Thủy Tráo Cổ: Tỷ lệ 30% chặn sát thương hỏa
-		if hasGu("thuy_trao_co") {
+		if hasGu("thuy_trao_co") || hasGu("GU_WATER_SHIELD") {
 			if rng.Float64() <= 0.30 {
 				target.VirtualShield += 5000 // Add temporary shield
 				logs = append(logs, CombatLog{
