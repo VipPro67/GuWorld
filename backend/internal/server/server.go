@@ -95,6 +95,8 @@ func SetupRouter() *gin.Engine {
 			player.POST("/simulate-deposit", handlers.SimulateDeposit)
 			player.POST("/avatar", handlers.UploadAvatar)
 			player.POST("/tick-regen", handlers.TickRegen)
+			player.GET("/combat-settings", handlers.GetCombatSettings)
+			player.PUT("/combat-settings", handlers.UpdateCombatSettings)
 		}
 
 		mine := api.Group("/mine")

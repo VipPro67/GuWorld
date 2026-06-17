@@ -109,8 +109,32 @@ export interface Player {
   is_disguised?: boolean;
   is_admin?: boolean;
   avatar_url?: string;
+  combat_settings?: AutoCombatConfig;
 }
 
+
+export interface GuTactic {
+  gu_id: string;
+  priority: number;
+  use_condition: string;
+  condition_value: number;
+}
+
+export interface KillerMoveTactic {
+  killer_move_id: string;
+  priority: number;
+  use_condition: string;
+  condition_value: number;
+}
+
+export interface AutoCombatConfig {
+  auto_heal_hp: boolean;
+  heal_threshold: number;
+  auto_restore_mana: boolean;
+  mana_threshold: number;
+  gu_priorities: GuTactic[];
+  km_priorities: KillerMoveTactic[];
+}
 
 export interface KillerMoveSlot {
   id: string;
@@ -671,6 +695,10 @@ interface GameState {
   currentView: string;
   setView: (view: string) => void;
   retreat: () => Promise<void>;
+  combatSettings: AutoCombatConfig | null;
+  combatSettingsLoading: boolean;
+  fetchCombatSettings: () => Promise<void>;
+  saveCombatSettings: (settings: AutoCombatConfig) => Promise<boolean>;
   equipGu: (instanceId: string, equip: boolean) => Promise<void>;
   updateGuStatus: (instanceId: string, status: string) => Promise<void>;
   setVitalGu: (instanceId: string) => Promise<void>;
@@ -919,6 +947,8 @@ export const useGameStore = create<GameState>((set, get) => {
   regionsLoaded: false,
   killerMoves: [],
   killerMovesLoaded: false,
+  combatSettings: null,
+  combatSettingsLoading: false,
   inspectedProfile: null,
   inspectedUsernameQuery: null,
   profileLoading: false,
@@ -1903,6 +1933,52 @@ export const useGameStore = create<GameState>((set, get) => {
       const message = err instanceof Error ? err.message : "Không thể tải sát chiêu.";
       set({ error: message, killerMovesLoaded: true });
       get().addLog(`Tải sát chiêu thất bại: ${message}`);
+    }
+  },
+
+  fetchCombatSettings: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    set({ combatSettingsLoading: true });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/combat-settings`);
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Không thể tải cài đặt chiến đấu.");
+      set({ combatSettings: data.combat_settings || null, combatSettingsLoading: false });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Không thể tải cài đặt chiến đấu.";
+      set({ error: message, combatSettingsLoading: false });
+    }
+  },
+
+  saveCombatSettings: async (settings) => {
+    const { token, logout } = get();
+    if (!token) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/combat-settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ combat_settings: settings }),
+      });
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Lưu cài đặt thất bại.");
+      set({ combatSettings: data.combat_settings || settings, actionLoading: false });
+      get().addLog(data.message || "Đã lưu cài đặt chiến đấu.");
+      return true;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Lưu cài đặt thất bại.";
+      set({ error: message, actionLoading: false });
+      get().addLog(`Lưu cài đặt thất bại: ${message}`);
+      return false;
     }
   },
 

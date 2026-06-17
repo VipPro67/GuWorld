@@ -46,15 +46,34 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const [isReplaying, setIsReplaying] = useState(false);
   const [simulationWinner, setSimulationWinner] = useState<string | null>(null);
 
+  const [autoHealHP, setAutoHealHP] = useState(false);
+  const [healThreshold, setHealThreshold] = useState(30);
+  const [autoRestoreMana, setAutoRestoreMana] = useState(false);
+  const [manaThreshold, setManaThreshold] = useState(30);
+
   const executeAutoCombat = useGameStore((state) => state.executeAutoCombat);
   const fetchPlayerStatus = useGameStore((state) => state.fetchPlayerStatus);
   const killerMoves = useGameStore((state) => state.killerMoves);
   const fetchKillerMoves = useGameStore((state) => state.fetchKillerMoves);
+  const combatSettings = useGameStore((state) => state.combatSettings);
+  const fetchCombatSettings = useGameStore((state) => state.fetchCombatSettings);
   const logEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     void fetchKillerMoves();
   }, [fetchKillerMoves]);
+
+  // Pre-populate auto settings from persistent combat config
+  useEffect(() => {
+    if (!combatSettings) {
+      fetchCombatSettings();
+    } else {
+      setAutoHealHP(combatSettings.auto_heal_hp);
+      setHealThreshold(combatSettings.heal_threshold);
+      setAutoRestoreMana(combatSettings.auto_restore_mana);
+      setManaThreshold(combatSettings.mana_threshold);
+    }
+  }, [combatSettings]);
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -117,6 +136,10 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       SupportGuIds: supportGuIds.map(id => eligibleGus.find(g => g.instance_id === id)?.gu_id || id),
       KillerMoveIds: selectedKillerMoveIds,
       ImmortalGuId: null,
+      AutoHealHP: autoHealHP,
+      HealThreshold: healThreshold,
+      AutoRestoreMana: autoRestoreMana,
+      ManaThreshold: manaThreshold,
     };
 
     const result = await executeAutoCombat(loadout);
@@ -401,6 +424,51 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
               })}
             </div>
           )}
+        </div>
+
+        {/* Auto Combat Settings */}
+        <div className="mb-6 bg-zinc-900/40 border border-zinc-800 rounded-xl p-4">
+          <h3 className="text-sm font-bold text-zinc-300 mb-3 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            Tự Động Chiến Đấu
+          </h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={autoHealHP} onChange={e => setAutoHealHP(e.target.checked)} />
+                  <div className="w-9 h-5 bg-zinc-700 rounded-full peer peer-checked:bg-emerald-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all" />
+                </label>
+                <span className="text-xs text-zinc-300">Tự động dùng dược liệu hồi HP</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-zinc-500">HP &le;</span>
+                <input type="range" min="10" max="80" value={healThreshold} onChange={e => setHealThreshold(Number(e.target.value))} disabled={!autoHealHP} className="w-20 h-1 accent-emerald-500" />
+                <span className="text-xs text-zinc-300 w-8">{healThreshold}%</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={autoRestoreMana} onChange={e => setAutoRestoreMana(e.target.checked)} />
+                  <div className="w-9 h-5 bg-zinc-700 rounded-full peer peer-checked:bg-cyan-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all" />
+                </label>
+                <span className="text-xs text-zinc-300">Tự động dùng Nguyên Thạch hồi Mana</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-zinc-500">Mana &le;</span>
+                <input type="range" min="10" max="80" value={manaThreshold} onChange={e => setManaThreshold(Number(e.target.value))} disabled={!autoRestoreMana} className="w-20 h-1 accent-cyan-500" />
+                <span className="text-xs text-zinc-300 w-8">{manaThreshold}%</span>
+              </div>
+            </div>
+          </div>
+          <div className="mt-2 text-[10px] text-zinc-600">
+            {player.materials_inventory && Object.keys(player.materials_inventory).length > 0
+              ? `Dược liệu trong túi: ${Object.entries(player.materials_inventory).filter(([k]) => k !== "primeval_stone").length} loại`
+              : "Không có dược liệu trong túi"}
+            · Nguyên Thạch: {player.primeval_stones?.toLocaleString() || 0}
+            · Tiên Nguyên Thạch: {player.immortal_stones?.toLocaleString() || 0}
+          </div>
         </div>
 
         <div className="flex gap-4">

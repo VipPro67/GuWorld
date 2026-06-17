@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,6 +43,68 @@ type StatusEffect struct {
 	Type  string  `json:"type"`
 	Value float64 `json:"value"`
 	Turns int     `json:"turns"`
+}
+
+// GuTactic defines auto-combat behavior for a specific Gu.
+type GuTactic struct {
+	GuID           string  `json:"gu_id"`
+	Priority       int     `json:"priority"`
+	UseCondition   string  `json:"use_condition"`   // "always","hp_below","mana_above","enemy_hp_below"
+	ConditionValue float64 `json:"condition_value"`
+}
+
+// KillerMoveTactic defines auto-combat behavior for a specific killer move.
+type KillerMoveTactic struct {
+	KillerMoveID   string  `json:"killer_move_id"`
+	Priority       int     `json:"priority"`
+	UseCondition   string  `json:"use_condition"`
+	ConditionValue float64 `json:"condition_value"`
+}
+
+// AutoCombatConfig holds a player's persistent auto-combat settings.
+type AutoCombatConfig struct {
+	AutoHealHP      bool               `json:"auto_heal_hp"`
+	HealThreshold   float64            `json:"heal_threshold"`
+	AutoRestoreMana bool               `json:"auto_restore_mana"`
+	ManaThreshold   float64            `json:"mana_threshold"`
+	GuPriorities    []GuTactic         `json:"gu_priorities"`
+	KMPriorities    []KillerMoveTactic `json:"km_priorities"`
+}
+
+// Scan implements the sql.Scanner interface for AutoCombatConfig.
+func (c *AutoCombatConfig) Scan(value interface{}) error {
+	if value == nil {
+		*c = AutoCombatConfig{}
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		*c = AutoCombatConfig{}
+		log.Printf("AutoCombatConfig.Scan: unexpected type %T", value)
+		return nil
+	}
+	if len(bytes) == 0 || string(bytes) == "null" {
+		*c = AutoCombatConfig{}
+		return nil
+	}
+	return json.Unmarshal(bytes, c)
+}
+
+// Value implements the driver.Valuer interface for AutoCombatConfig.
+func (c AutoCombatConfig) Value() (driver.Value, error) {
+	return json.Marshal(c)
+}
+
+// DefaultAutoCombatConfig returns sensible defaults.
+func DefaultAutoCombatConfig() AutoCombatConfig {
+	return AutoCombatConfig{
+		AutoHealHP:      false,
+		HealThreshold:   30,
+		AutoRestoreMana: false,
+		ManaThreshold:   30,
+		GuPriorities:    []GuTactic{},
+		KMPriorities:    []KillerMoveTactic{},
+	}
 }
 
 // CombatState represents the PVE combat status with a wild beast.
@@ -136,6 +199,7 @@ type Player struct {
 	IsAdmin             bool                `json:"is_admin"`
 	DaoMarkDamage       float64             `json:"dao_mark_damage"`
 	ApertureDamage      float64             `json:"aperture_damage"`
+	CombatSettings      AutoCombatConfig    `json:"combat_settings"`
 }
 
 type TempLoot struct {

@@ -19,6 +19,7 @@ import {
   EyeOff,
   User,
   Camera,
+  Swords,
 } from "lucide-react";
 
 interface ApertureProps {
@@ -139,6 +140,8 @@ export const Aperture: React.FC<ApertureProps> = ({
   const rank = player.rank;
   const subRank = player.sub_rank;
   const guInventory = player.gu_inventory || [];
+  const eligibleGusForCombat = guInventory.filter(g => g.status === "ACTIVE" && g.equipped);
+  const killerMoves = store.killerMoves || [];
   const percent   = Math.min(100, Math.max(0, (currentMana / maxMana) * 100));
   const rankName  = RANK_NAMES[rank]    ?? `Rank ${rank}`;
   const subRankName = SUB_RANK_NAMES[subRank] ?? `Sub ${subRank}`;
@@ -165,6 +168,37 @@ export const Aperture: React.FC<ApertureProps> = ({
   const [fakeRank, setFakeRank] = useState(player.fake_rank || player.rank);
   const [fakeSubRank, setFakeSubRank] = useState(player.fake_sub_rank || player.sub_rank);
   const [fakeVitalGu, setFakeVitalGu] = useState(player.fake_vital_gu || "GU_SHADOW");
+
+  // Auto combat settings state
+  const defaults = { auto_heal_hp: false, heal_threshold: 30, auto_restore_mana: false, mana_threshold: 30, gu_priorities: [], km_priorities: [] };
+  const saved = player.combat_settings || store.combatSettings || defaults;
+  const [csAutoHealHP, setCsAutoHealHP] = useState(saved.auto_heal_hp);
+  const [csHealThreshold, setCsHealThreshold] = useState(saved.heal_threshold);
+  const [csAutoRestoreMana, setCsAutoRestoreMana] = useState(saved.auto_restore_mana);
+  const [csManaThreshold, setCsManaThreshold] = useState(saved.mana_threshold);
+  const [csGuPriorities, setCsGuPriorities] = useState(saved.gu_priorities || []);
+  const [csKMPriorities, setCsKMPriorities] = useState(saved.km_priorities || []);
+  const [combatSettingsLoaded, setCombatSettingsLoaded] = useState(false);
+
+  React.useEffect(() => {
+    if (!combatSettingsLoaded && !store.combatSettingsLoading) {
+      store.fetchCombatSettings().then(() => {
+        setCombatSettingsLoaded(true);
+      });
+    }
+  }, [combatSettingsLoaded]);
+
+  React.useEffect(() => {
+    const cs = store.combatSettings || saved;
+    if (combatSettingsLoaded && cs) {
+      setCsAutoHealHP(cs.auto_heal_hp);
+      setCsHealThreshold(cs.heal_threshold);
+      setCsAutoRestoreMana(cs.auto_restore_mana);
+      setCsManaThreshold(cs.mana_threshold);
+      setCsGuPriorities(cs.gu_priorities || []);
+      setCsKMPriorities(cs.km_priorities || []);
+    }
+  }, [store.combatSettings, combatSettingsLoaded]);
 
   React.useEffect(() => {
     setIsDisguised(player.is_disguised || false);
@@ -1289,6 +1323,205 @@ export const Aperture: React.FC<ApertureProps> = ({
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* Cài Đặt Chiến Đấu Tự Động */}
+                <div className="flex flex-col gap-4 border-t border-zinc-900/60 pt-4 mt-2">
+                  <div className="flex items-center gap-2">
+                    <Swords className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs font-mono font-bold text-zinc-200 uppercase tracking-wider">Cài Đặt Chiến Thuật Tự Động</span>
+                  </div>
+
+                  {/* Auto Heal HP */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" className="sr-only peer" checked={csAutoHealHP}
+                          onChange={e => setCsAutoHealHP(e.target.checked)} />
+                        <div className="w-9 h-5 bg-zinc-700 rounded-full peer peer-checked:bg-emerald-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all" />
+                      </label>
+                      <span className="text-xs text-zinc-300">Tự dùng dược liệu hồi HP</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-zinc-500">HP ≤</span>
+                      <input type="range" min="10" max="80" value={csHealThreshold}
+                        onChange={e => setCsHealThreshold(Number(e.target.value))}
+                        disabled={!csAutoHealHP} className="w-20 h-1 accent-emerald-500" />
+                      <span className="text-xs text-zinc-300 w-8">{csHealThreshold}%</span>
+                    </div>
+                  </div>
+
+                  {/* Auto Restore Mana */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" className="sr-only peer" checked={csAutoRestoreMana}
+                          onChange={e => setCsAutoRestoreMana(e.target.checked)} />
+                        <div className="w-9 h-5 bg-zinc-700 rounded-full peer peer-checked:bg-cyan-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all" />
+                      </label>
+                      <span className="text-xs text-zinc-300">Tự dùng Nguyên Thạch hồi Mana</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-zinc-500">Mana ≤</span>
+                      <input type="range" min="10" max="80" value={csManaThreshold}
+                        onChange={e => setCsManaThreshold(Number(e.target.value))}
+                        disabled={!csAutoRestoreMana} className="w-20 h-1 accent-cyan-500" />
+                      <span className="text-xs text-zinc-300 w-8">{csManaThreshold}%</span>
+                    </div>
+                  </div>
+
+                  {/* Gu Priorities */}
+                  <div className="border-t border-zinc-900/30 pt-3">
+                    <div className="text-[10px] text-zinc-400 font-bold mb-2">Cổ Trùng (sắp xếp theo độ ưu tiên)</div>
+                    {eligibleGusForCombat.length === 0 ? (
+                      <p className="text-[10px] text-zinc-600 italic">Chưa có cổ trùng nào được trang bị.</p>
+                    ) : (
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        {eligibleGusForCombat.map((gu, idx) => {
+                          const spec = guDictionary[gu.gu_id];
+                          const tactic = csGuPriorities.find(t => t.gu_id === gu.gu_id);
+                          const priority = tactic?.priority ?? idx + 1;
+                          const condition = tactic?.use_condition || "always";
+                          const condVal = tactic?.condition_value || 30;
+                          return (
+                            <div key={gu.instance_id} className="flex items-center gap-2 bg-zinc-950/50 rounded-lg px-2.5 py-1.5 border border-zinc-900">
+                              <span className="text-[10px] text-zinc-500 font-mono w-4">{priority}</span>
+                              <span className="text-[11px] text-zinc-200 flex-1 truncate">{spec?.name || gu.gu_id}</span>
+                              <select value={condition}
+                                onChange={e => {
+                                  const newList = csGuPriorities.filter(t => t.gu_id !== gu.gu_id);
+                                  newList.push({ gu_id: gu.gu_id, priority, use_condition: e.target.value, condition_value: condVal });
+                                  setCsGuPriorities(newList);
+                                }}
+                                className="bg-zinc-950 border border-zinc-800 rounded text-[9px] text-zinc-300 px-1.5 py-0.5 font-mono"
+                              >
+                                <option value="always">Luôn</option>
+                                <option value="hp_below">HP &lt; %</option>
+                                <option value="mana_above">Mana &gt; %</option>
+                                <option value="enemy_hp_below">Máu địch &lt; %</option>
+                              </select>
+                              {condition !== "always" && (
+                                <input type="number" min="1" max="99" value={condVal}
+                                  onChange={e => {
+                                    const newList = csGuPriorities.filter(t => t.gu_id !== gu.gu_id);
+                                    newList.push({ gu_id: gu.gu_id, priority, use_condition: condition, condition_value: Number(e.target.value) });
+                                    setCsGuPriorities(newList);
+                                  }}
+                                  className="w-12 bg-zinc-950 border border-zinc-800 rounded text-[9px] text-zinc-300 px-1.5 py-0.5 font-mono text-center"
+                                />
+                              )}
+                              <div className="flex gap-0.5">
+                                <button type="button"
+                                  onClick={() => {
+                                    const newList = csGuPriorities.map(t => t.gu_id === gu.gu_id ? { ...t, priority: Math.max(1, priority - 1) } : t);
+                                    setCsGuPriorities(newList);
+                                  }}
+                                  className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 rounded">▲</button>
+                                <button type="button"
+                                  onClick={() => {
+                                    const newList = csGuPriorities.map(t => t.gu_id === gu.gu_id ? { ...t, priority: priority + 1 } : t);
+                                    setCsGuPriorities(newList);
+                                  }}
+                                  className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 rounded">▼</button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Killer Move Priorities */}
+                  <div className="border-t border-zinc-900/30 pt-3">
+                    <div className="text-[10px] text-zinc-400 font-bold mb-2">Sát Chiêu (ưu tiên)</div>
+                    {killerMoves.length === 0 ? (
+                      <p className="text-[10px] text-zinc-600 italic">Chưa có sát chiêu nào. Vào Sát Chiêu Đường để tạo.</p>
+                    ) : (
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        {killerMoves.map((km, idx) => {
+                          const tactic = csKMPriorities.find(t => t.killer_move_id === km.id);
+                          const priority = tactic?.priority ?? idx + 1;
+                          const condition = tactic?.use_condition || "always";
+                          const condVal = tactic?.condition_value || 30;
+                          return (
+                            <div key={km.id} className="flex items-center gap-2 bg-zinc-950/50 rounded-lg px-2.5 py-1.5 border border-zinc-900">
+                              <span className="text-[10px] text-zinc-500 font-mono w-4">{priority}</span>
+                              <span className="text-[11px] text-zinc-200 flex-1 truncate">{km.name}</span>
+                              <select value={condition}
+                                onChange={e => {
+                                  const newList = csKMPriorities.filter(t => t.killer_move_id !== km.id);
+                                  newList.push({ killer_move_id: km.id, priority, use_condition: e.target.value, condition_value: condVal });
+                                  setCsKMPriorities(newList);
+                                }}
+                                className="bg-zinc-950 border border-zinc-800 rounded text-[9px] text-zinc-300 px-1.5 py-0.5 font-mono"
+                              >
+                                <option value="always">Luôn</option>
+                                <option value="hp_below">HP &lt; %</option>
+                                <option value="mana_above">Mana &gt; %</option>
+                                <option value="enemy_hp_below">Máu địch &lt; %</option>
+                              </select>
+                              {condition !== "always" && (
+                                <input type="number" min="1" max="99" value={condVal}
+                                  onChange={e => {
+                                    const newList = csKMPriorities.filter(t => t.killer_move_id !== km.id);
+                                    newList.push({ killer_move_id: km.id, priority, use_condition: condition, condition_value: Number(e.target.value) });
+                                    setCsKMPriorities(newList);
+                                  }}
+                                  className="w-12 bg-zinc-950 border border-zinc-800 rounded text-[9px] text-zinc-300 px-1.5 py-0.5 font-mono text-center"
+                                />
+                              )}
+                              <div className="flex gap-0.5">
+                                <button type="button"
+                                  onClick={() => {
+                                    const newList = csKMPriorities.map(t => t.killer_move_id === km.id ? { ...t, priority: Math.max(1, priority - 1) } : t);
+                                    setCsKMPriorities(newList);
+                                  }}
+                                  className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 rounded">▲</button>
+                                <button type="button"
+                                  onClick={() => {
+                                    const newList = csKMPriorities.map(t => t.killer_move_id === km.id ? { ...t, priority: priority + 1 } : t);
+                                    setCsKMPriorities(newList);
+                                  }}
+                                  className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 rounded">▼</button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Save Combat Settings */}
+                  <button
+                    type="button"
+                    disabled={store.actionLoading}
+                    onClick={async () => {
+                      const success = await store.saveCombatSettings({
+                        auto_heal_hp: csAutoHealHP,
+                        heal_threshold: csHealThreshold,
+                        auto_restore_mana: csAutoRestoreMana,
+                        mana_threshold: csManaThreshold,
+                        gu_priorities: csGuPriorities,
+                        km_priorities: csKMPriorities,
+                      });
+                      if (success) {
+                        store.addLog("Đã lưu cài đặt chiến thuật tự động.");
+                      }
+                    }}
+                    className="w-full bg-gradient-to-r from-emerald-700 to-teal-600 hover:from-emerald-600 hover:to-teal-500 disabled:from-zinc-900 disabled:to-zinc-900 disabled:opacity-40 border border-emerald-500/20 text-white rounded-xl py-2 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-98 shadow-md"
+                  >
+                    {store.actionLoading ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Đang lưu...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Swords className="w-3.5 h-3.5" />
+                        <span>Lưu Chiến Thuật</span>
+                      </>
+                    )}
+                  </button>
                 </div>
 
                 {/* Submit button */}

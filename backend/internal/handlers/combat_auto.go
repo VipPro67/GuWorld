@@ -70,6 +70,7 @@ func AutoCombatStart(c *gin.Context) {
 	// Core Gu
 	if coreSpec, ok := models.GuRegistry[req.Loadout.CoreGuId]; ok {
 		act := buildSimActionFromGu(&actor, &coreSpec, "GU_SKILL")
+		act.SourceID = req.Loadout.CoreGuId
 		allActions = append(allActions, act)
 	}
 
@@ -77,6 +78,7 @@ func AutoCombatStart(c *gin.Context) {
 	for _, supID := range req.Loadout.SupportGuIds {
 		if supSpec, ok := models.GuRegistry[supID]; ok {
 			act := buildSimActionFromGu(&actor, &supSpec, "GU_SKILL")
+			act.SourceID = supID
 			allActions = append(allActions, act)
 		}
 	}
@@ -88,6 +90,7 @@ func AutoCombatStart(c *gin.Context) {
 			continue
 		}
 		act := buildSimActionFromKillerMove(km, slots)
+		act.SourceID = kmID
 		allActions = append(allActions, act)
 	}
 
@@ -98,6 +101,36 @@ func AutoCombatStart(c *gin.Context) {
 		Damage:     playerStats["attack"],
 		ManaCost:   0,
 	})
+
+	// ── Apply persistent tactics (priority + conditions) to actions ──
+	settings := player.CombatSettings
+	for i := range allActions {
+		act := &allActions[i]
+		switch act.ActionType {
+		case "GU_SKILL":
+			for _, t := range settings.GuPriorities {
+				if t.GuID == act.SourceID {
+					act.Priority = t.Priority
+					act.UseCondition = t.UseCondition
+					act.ConditionValue = t.ConditionValue
+					break
+				}
+			}
+		case "KILLER_MOVE":
+			for _, t := range settings.KMPriorities {
+				if t.KillerMoveID == act.SourceID {
+					act.Priority = t.Priority
+					act.UseCondition = t.UseCondition
+					act.ConditionValue = t.ConditionValue
+					break
+				}
+			}
+		}
+		// BASIC_ATTACK always lowest priority
+		if act.ActionType == "BASIC_ATTACK" {
+			act.Priority = 999
+		}
+	}
 
 	// ── Virtual Shield from loadout ──
 	virtualShield := 0
@@ -125,6 +158,25 @@ func AutoCombatStart(c *gin.Context) {
 		playerDaoMarks[k] = v
 	}
 
+	// ── Scan inventory for healing items ──
+	healPotency := 0.0
+	healCharges := 0
+	for itemID, qty := range player.MaterialsInventory {
+		if qty <= 0 {
+			continue
+		}
+		item, ok := models.ItemRegistry[itemID]
+		if !ok || item.Type != "Consumable" {
+			continue
+		}
+		if healVal, ok := item.Effects["restore_hp"]; ok && healVal > 0 {
+			if healPotency == 0 {
+				healPotency = healVal
+			}
+			healCharges += qty
+		}
+	}
+
 	simPlayer := &simulator.CombatantAuto{
 		ID:            player.ID.String(),
 		Name:          player.Username,
@@ -140,6 +192,15 @@ func AutoCombatStart(c *gin.Context) {
 		DaoMarks:      playerDaoMarks,
 		Loadout:       &req.Loadout,
 		Actions:       allActions,
+
+		AutoHealHP:      req.Loadout.AutoHealHP,
+		HealThreshold:   req.Loadout.HealThreshold,
+		AutoRestoreMana: req.Loadout.AutoRestoreMana,
+		ManaThreshold:   req.Loadout.ManaThreshold,
+		HealCharges:     healCharges,
+		HealPotency:     healPotency,
+		PrimevalStones:  player.PrimevalStones,
+		ImmortalStones:  player.ImmortalStones,
 	}
 	if simPlayer.HP <= 0 || simPlayer.HP > 100 {
 		simPlayer.HP = 100
@@ -188,7 +249,7 @@ func AutoCombatStart(c *gin.Context) {
 	// 4. Run Simulator
 	logs := simulator.Simulate(simState)
 
-	// 5. Apply outcome to DB (unchanged)
+	// 5. Apply outcome to DB
 	var alliesAlive bool
 	var finalPlayerHP int
 	for _, a := range simState.Allies {
@@ -196,6 +257,64 @@ func AutoCombatStart(c *gin.Context) {
 			alliesAlive = (a.HP > 0)
 			finalPlayerHP = a.HP
 		}
+	}
+
+	// ── Deduct items used by simulator ──
+	itemsUsed := simPlayer.ItemsUsedInBattle
+	if itemsUsed > 0 {
+		remaining := itemsUsed
+		for itemID, qty := range player.MaterialsInventory {
+			if remaining <= 0 {
+				break
+			}
+			if qty <= 0 {
+				continue
+			}
+			item, ok := models.ItemRegistry[itemID]
+			if !ok || item.Type != "Consumable" {
+				continue
+			}
+			if _, hasHeal := item.Effects["restore_hp"]; hasHeal {
+				remove := qty
+				if remove > remaining {
+					remove = remaining
+				}
+				player.MaterialsInventory[itemID] -= remove
+				if player.MaterialsInventory[itemID] <= 0 {
+					delete(player.MaterialsInventory, itemID)
+				}
+				remaining -= remove
+			}
+		}
+	}
+
+	// ── Deduct stones used by simulator ──
+	stonesSpent := player.PrimevalStones - simPlayer.PrimevalStones
+	immortalStonesSpent := player.ImmortalStones - simPlayer.ImmortalStones
+	player.PrimevalStones = simPlayer.PrimevalStones
+	player.ImmortalStones = simPlayer.ImmortalStones
+
+	// ── Log item/mana usage ──
+	if itemsUsed > 0 {
+		logs = append(logs, simulator.CombatLog{
+			Turn:   simState.Turn,
+			Action: "AUTO_ITEM_USAGE",
+			Detail: fmt.Sprintf("Đã tự động dùng %d dược liệu hồi phục trong chiến đấu.", itemsUsed),
+		})
+	}
+	if stonesSpent > 0 {
+		logs = append(logs, simulator.CombatLog{
+			Turn:   simState.Turn,
+			Action: "AUTO_STONE_USAGE",
+			Detail: fmt.Sprintf("Đã tự động dùng %d Nguyên Thạch hồi phục chân nguyên.", stonesSpent),
+		})
+	}
+	if immortalStonesSpent > 0 {
+		logs = append(logs, simulator.CombatLog{
+			Turn:   simState.Turn,
+			Action: "AUTO_STONE_USAGE",
+			Detail: fmt.Sprintf("Đã tự động dùng %.0f Tiên Nguyên Thạch hồi phục tiên nguyên.", immortalStonesSpent),
+		})
 	}
 
 	var updateQuery string

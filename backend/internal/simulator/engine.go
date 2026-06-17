@@ -3,6 +3,7 @@ package simulator
 import (
 	"fmt"
 	"math"
+	"sort"
 )
 
 func getTarget(enemies []*CombatantAuto) *CombatantAuto {
@@ -114,6 +115,62 @@ func Simulate(state *CombatState) []CombatLog {
 				continue
 			}
 
+			// Auto-use healing items
+			if actor.AutoHealHP && actor.HP > 0 && actor.HealCharges > 0 && actor.ItemsUsedInBattle < 3 {
+				hpPct := float64(actor.HP) / float64(actor.MaxHP) * 100
+				if hpPct <= actor.HealThreshold {
+					healVal := int(actor.HealPotency)
+					actor.HP += healVal
+					if actor.HP > actor.MaxHP {
+						actor.HP = actor.MaxHP
+					}
+					actor.HealCharges--
+					actor.ItemsUsedInBattle++
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "ITEM_HEAL",
+						Damage:    healVal,
+						Detail:    fmt.Sprintf("%s tự động dùng dược liệu hồi phục %d HP! (đã dùng %d/3)", actor.Name, healVal, actor.ItemsUsedInBattle),
+					})
+				}
+			}
+
+			// Auto-restore mana using stones
+			if actor.AutoRestoreMana && actor.Mana < actor.MaxMana {
+				manaPct := float64(actor.Mana) / float64(actor.MaxMana) * 100
+				if manaPct <= actor.ManaThreshold {
+					if actor.ImmortalStones >= 1 {
+						actor.ImmortalStones -= 1
+						actor.Mana += 100
+						if actor.Mana > actor.MaxMana {
+							actor.Mana = actor.MaxMana
+						}
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    "MANA_RESTORE",
+							Detail:    fmt.Sprintf("%s tự động nghiền nát Tiên Nguyên Thạch, khôi phục 100 tiên nguyên!", actor.Name),
+						})
+					} else if actor.PrimevalStones >= 100 {
+						actor.PrimevalStones -= 100
+						actor.Mana += 50
+						if actor.Mana > actor.MaxMana {
+							actor.Mana = actor.MaxMana
+						}
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    "MANA_RESTORE",
+							Detail:    fmt.Sprintf("%s tự động hấp thu 100 Nguyên Thạch, khôi phục 50 chân nguyên!", actor.Name),
+						})
+					}
+				}
+			}
+
 			// Determine target side
 			var targets []*CombatantAuto
 			isAlly := false
@@ -134,13 +191,51 @@ func Simulate(state *CombatState) []CombatLog {
 				continue
 			}
 
-			// ── Get next action (round-robin) ──
+			// ── Select action by priority + conditions ──
 			if len(actor.Actions) == 0 {
 				continue
 			}
-			idx := actor.nextActionIdx % len(actor.Actions)
+			// Sort by priority once (stable, first use)
+			if actor.nextActionIdx == 0 {
+				sort.SliceStable(actor.Actions, func(i, j int) bool {
+					return actor.Actions[i].Priority < actor.Actions[j].Priority
+				})
+			}
 			actor.nextActionIdx++
-			action := actor.Actions[idx]
+
+			var selectedAction *SimAction
+			for i := range actor.Actions {
+				a := &actor.Actions[i]
+				if a.ManaCost > 0 && float64(actor.Mana) < a.ManaCost {
+					continue
+				}
+				if !checkActionCondition(a, actor, target) {
+					continue
+				}
+				selectedAction = a
+				break
+			}
+			if selectedAction == nil {
+				// Fallback: basic attack (zero mana, always usable)
+				for i := range actor.Actions {
+					if actor.Actions[i].ActionType == "BASIC_ATTACK" {
+						selectedAction = &actor.Actions[i]
+						break
+					}
+				}
+				if selectedAction == nil {
+					// Create a basic attack on-the-fly
+					ba := SimAction{
+						ActionType: "BASIC_ATTACK",
+						Name:       "Đánh thường",
+						Damage:     float64(actor.BaseDmg),
+						ManaCost:   0,
+					}
+					actor.Actions = append(actor.Actions, ba)
+					selectedAction = &actor.Actions[len(actor.Actions)-1]
+				}
+			}
+			action := *selectedAction
 
 			// ── Resolve the action ──
 			turnLogs = append(turnLogs, CombatLog{
@@ -152,17 +247,6 @@ func Simulate(state *CombatState) []CombatLog {
 				Detail:    fmt.Sprintf("%s sử dụng [%s]", actor.Name, action.Name),
 			})
 
-			// Mana check: skip if insufficient mana
-			if action.ManaCost > 0 && float64(actor.Mana) < action.ManaCost {
-				turnLogs = append(turnLogs, CombatLog{
-					Turn:      turn,
-					ActorId:   actor.ID,
-					ActorName: actor.Name,
-					Action:    "INSUFFICIENT_MANA",
-					Detail:    fmt.Sprintf("%s không đủ mana để dùng [%s] (cần %.0f, có %d)", actor.Name, action.Name, action.ManaCost, actor.Mana),
-				})
-				continue
-			}
 			actor.Mana -= int(action.ManaCost)
 
 			// Apply shield to self
@@ -421,4 +505,29 @@ func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]C
 		target.HP = 0
 	}
 	return damage
+}
+
+// checkActionCondition returns true if the action's use condition is met.
+func checkActionCondition(action *SimAction, actor, target *CombatantAuto) bool {
+	switch action.UseCondition {
+	case "":
+		return true
+	case "hp_below":
+		if actor.MaxHP <= 0 {
+			return true
+		}
+		return float64(actor.HP)/float64(actor.MaxHP)*100 <= action.ConditionValue
+	case "mana_above":
+		if actor.MaxMana <= 0 {
+			return true
+		}
+		return float64(actor.Mana)/float64(actor.MaxMana)*100 >= action.ConditionValue
+	case "enemy_hp_below":
+		if target == nil || target.MaxHP <= 0 {
+			return true
+		}
+		return float64(target.HP)/float64(target.MaxHP)*100 <= action.ConditionValue
+	default:
+		return true
+	}
 }

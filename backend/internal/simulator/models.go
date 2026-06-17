@@ -2,10 +2,15 @@ package simulator
 
 // CombatLoadout represents the input data from the player before the battle starts.
 type CombatLoadout struct {
-	CoreGuId      string
-	SupportGuIds  []string
-	KillerMoveIds []string
-	ImmortalGuId  *string
+	CoreGuId      string    `json:"CoreGuId"`
+	SupportGuIds  []string  `json:"SupportGuIds"`
+	KillerMoveIds []string  `json:"KillerMoveIds"`
+	ImmortalGuId  *string   `json:"ImmortalGuId,omitempty"`
+
+	AutoHealHP      bool    `json:"AutoHealHP"`
+	HealThreshold   float64 `json:"HealThreshold"`
+	AutoRestoreMana bool    `json:"AutoRestoreMana"`
+	ManaThreshold   float64 `json:"ManaThreshold"`
 }
 
 // SimAction is a pre-computed action from a Gu, killer move, or basic attack.
@@ -14,6 +19,7 @@ type CombatLoadout struct {
 type SimAction struct {
 	ActionType   string  // "BASIC_ATTACK" | "GU_SKILL" | "KILLER_MOVE" | "HEAL" | "SHIELD"
 	Name         string  // display name
+	SourceID     string  // GuID or KillerMoveID for tactic matching
 	Damage       float64 // raw damage before defense mitigation
 	Defense      float64 // shield value granted to self
 	Healing      float64 // HP restored to self
@@ -25,6 +31,13 @@ type SimAction struct {
 	MultiHit     int     // number of hits (chain_damage compound)
 	PhantomDmg   float64 // bonus phantom damage
 	ThornsDmg    float64 // reflect damage to attacker
+
+	// Priority (lower = higher priority, 0 = highest). Used by engine for action ordering.
+	Priority int
+
+	// Conditional-use fields. Empty condition = always use.
+	UseCondition   string  // "always","hp_below","mana_above","enemy_hp_below"
+	ConditionValue float64
 }
 
 // Effect represents an active buff or debuff on a combatant.
@@ -74,6 +87,21 @@ type CombatantAuto struct {
 
 	// Damage-over-time effects
 	ActiveDoT []DoTEffect
+
+	// Auto-use settings
+	AutoHealHP      bool
+	HealThreshold   float64
+	AutoRestoreMana bool
+	ManaThreshold   float64
+
+	// Battle inventory
+	HealCharges    int     // how many healing items available
+	HealPotency    float64 // how much HP each heal restores
+	PrimevalStones int
+	ImmortalStones float64
+
+	// Tracking
+	ItemsUsedInBattle int
 
 	// Internal action index for round-robin
 	nextActionIdx int

@@ -928,6 +928,7 @@ func InitSchema() error {
 			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 		);`, "create_trades_table"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT '';`, "avatar_url"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS combat_settings JSONB NOT NULL DEFAULT '{}';`, "combat_settings"},
 		{`CREATE TABLE IF NOT EXISTS sect_mines (
 			id SERIAL PRIMARY KEY,
 			name VARCHAR(100) NOT NULL UNIQUE,
