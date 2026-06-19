@@ -15,6 +15,7 @@ import {
   Sparkles,
   Crown,
   Sword,
+  History,
 } from "lucide-react";
 import { LogConsole } from "./LogConsole";
 
@@ -176,6 +177,15 @@ export const LobbyView: React.FC = () => {
       glow: "group-hover:shadow-[0_0_20px_rgba(217,70,239,0.4)]",
       borderColor: "border-fuchsia-400/20",
       iconColor: "text-fuchsia-100",
+    },
+    {
+      id: "combat-history",
+      label: "Lịch Sử Chiến Đấu",
+      icon: History,
+      gradient: "from-rose-500 to-red-600",
+      glow: "group-hover:shadow-[0_0_20px_rgba(239,68,68,0.4)]",
+      borderColor: "border-rose-400/20",
+      iconColor: "text-rose-100",
     },
   ];
 

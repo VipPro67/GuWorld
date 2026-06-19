@@ -317,6 +317,15 @@ func AutoCombatStart(c *gin.Context) {
 		})
 	}
 
+	// ── Grab final mana from sim ──
+	var finalMana int
+	for _, a := range simState.Allies {
+		if a.ID == player.ID.String() {
+			finalMana = a.Mana
+			break
+		}
+	}
+
 	var updateQuery string
 	var args []interface{}
 
@@ -394,11 +403,39 @@ func AutoCombatStart(c *gin.Context) {
 		matJSON, _ := json.Marshal(player.MaterialsInventory)
 		guJSON, _ := json.Marshal(player.GuInventory)
 
-		updateQuery = `UPDATE players SET hp = $1, active_combat = NULL, temp_loot = $2, primeval_stones = $3, materials_inventory = $4, gu_inventory = $5 WHERE id = $6`
-		args = append(args, finalPlayerHP, tempLootJSON, player.PrimevalStones, matJSON, guJSON, player.ID)
+		updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, primeval_stones = $4, materials_inventory = $5, gu_inventory = $6 WHERE id = $7`
+		args = append(args, finalPlayerHP, finalMana, tempLootJSON, player.PrimevalStones, matJSON, guJSON, player.ID)
 	} else {
-		updateQuery = `UPDATE players SET hp = $1, active_combat = NULL WHERE id = $2`
-		args = append(args, 0, player.ID)
+		// ── Defeat: same logic as manual combat ──
+		player.HP = 20.0
+		player.CurrentRegion = "Southern_Border"
+		player.X = 50
+		player.Y = 50
+		player.ExploredCells = models.ExploredCellsList{"50,50"}
+		player.TempLoot = models.TempLoot{
+			GuInventory:        models.GuInventory{},
+			MaterialsInventory: models.MaterialsInventory{},
+			PrimevalStones:     0,
+		}
+
+		// Clear allies' active combat
+		for _, ally := range player.ActiveCombat.Allies {
+			allyUUID, errParse := uuid.Parse(ally.ID)
+			if errParse == nil && allyUUID != player.ID {
+				_, _ = tx.Exec("UPDATE players SET active_combat = NULL WHERE id = $1", allyUUID)
+			}
+		}
+
+		logs = append(logs, simulator.CombatLog{
+			Turn:   simState.Turn,
+			Action: "BATTLE_END",
+			Detail: "Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất sạch chiến lợi phẩm và bị đưa về Nam Cương.",
+		})
+
+		tempLootJSON, _ := json.Marshal(player.TempLoot)
+		exploredJSON, _ := json.Marshal(player.ExploredCells)
+		updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, current_region = $4, x = $5, y = $6, explored_cells = $7 WHERE id = $8`
+		args = append(args, player.HP, finalMana, tempLootJSON, player.CurrentRegion, player.X, player.Y, exploredJSON, player.ID)
 	}
 
 	_, err = tx.Exec(updateQuery, args...)
@@ -416,6 +453,18 @@ func AutoCombatStart(c *gin.Context) {
 	if alliesAlive {
 		winner = "Phe Ta"
 	}
+
+	// ── Save combat history (non-critical) ──
+	enemyName := ""
+	enemyType := ""
+	if player.ActiveCombat != nil {
+		enemyName = player.ActiveCombat.EnemyName
+		enemyType = player.ActiveCombat.EnemyType
+	}
+	go func() {
+		summary := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, stonesSpent)
+		SaveCombatHistory(player.ID, winner, toInterfaceSlice(logs), summary, enemyName, enemyType, player.CurrentRegion)
+	}()
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Chiến đấu hoàn tất",

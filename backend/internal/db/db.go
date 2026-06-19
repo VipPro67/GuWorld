@@ -946,6 +946,17 @@ func InitSchema() error {
 			('Bách Thảo Tiên Vực', 'Thường')
 			ON CONFLICT (name) DO NOTHING;`, "seed_sect_mines"},
 		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS usage_count INTEGER NOT NULL DEFAULT 0;`, "usage_count"},
+		{`CREATE TABLE IF NOT EXISTS combat_history (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			winner VARCHAR(20) NOT NULL DEFAULT 'Phe Địch',
+			logs JSONB NOT NULL DEFAULT '[]',
+			summary JSONB NOT NULL DEFAULT '{}',
+			enemy_name VARCHAR(100) NOT NULL DEFAULT '',
+			enemy_type VARCHAR(50) NOT NULL DEFAULT '',
+			region VARCHAR(50) NOT NULL DEFAULT '',
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		);`, "create_combat_history_table"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {

@@ -173,6 +173,8 @@ func SetupRouter() *gin.Engine {
 			combat.POST("/start", handlers.AutoCombatStart)
 			combat.POST("/attack", handlers.CombatAttack)
 			combat.POST("/cast-killer-move", handlers.CastKillerMove)
+			combat.GET("/history", handlers.ListCombatHistory)
+			combat.GET("/history/:id", handlers.GetCombatHistory)
 		}
 
 		// Protected Immortal Aperture Endpoints

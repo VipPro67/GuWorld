@@ -50,6 +50,26 @@ export interface CombatState {
   enemy_sub_rank?: number;
 }
 
+export interface CombatHistoryEntry {
+  id: string;
+  player_id: string;
+  winner: string;
+  logs: any[];
+  summary: {
+    total_damage_dealt: number;
+    total_damage_taken: number;
+    shields_used: number;
+    final_player_hp: number;
+    items_used: number;
+    stones_used: number;
+    loot_count: number;
+  };
+  enemy_name: string;
+  enemy_type: string;
+  region: string;
+  created_at: string;
+}
+
 export interface Player {
   id: string;
   username: string;
@@ -684,6 +704,10 @@ interface GameState {
   exploreNode: (nodeId: string) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
   executeCombatTurn: (equippedGuIds: string[], isCharge?: boolean, targetId?: string, targetX?: number, targetY?: number) => Promise<{ player: Player; logs: string[]; enemy: CombatState | null; victory: boolean; defeat: boolean } | null>;
   executeAutoCombat: (loadout: any) => Promise<{ logs: any[]; winner: string } | null>;
+  combatHistory: CombatHistoryEntry[];
+  combatHistoryLoading: boolean;
+  fetchCombatHistory: () => Promise<void>;
+  fetchCombatHistoryEntry: (id: string) => Promise<CombatHistoryEntry | null>;
   referralsData: {
     ref_code: string;
     referees: any[];
@@ -949,6 +973,8 @@ export const useGameStore = create<GameState>((set, get) => {
   killerMovesLoaded: false,
   combatSettings: null,
   combatSettingsLoading: false,
+  combatHistory: [],
+  combatHistoryLoading: false,
   inspectedProfile: null,
   inspectedUsernameQuery: null,
   profileLoading: false,
@@ -2163,6 +2189,40 @@ export const useGameStore = create<GameState>((set, get) => {
     } finally {
       set({ actionLoading: false });
     }
+  },
+
+  fetchCombatHistory: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+
+    set({ combatHistoryLoading: true });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/combat/history`, { method: "GET" });
+      if (response.status === 401 || response.status === 403) { logout(); return; }
+      const data = await response.json();
+      if (response.ok) {
+        set({ combatHistory: data.entries || [] });
+      }
+    } catch {
+      // Non-critical
+    } finally {
+      set({ combatHistoryLoading: false });
+    }
+  },
+
+  fetchCombatHistoryEntry: async (id: string) => {
+    const { token, logout } = get();
+    if (!token) return null;
+
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/combat/history/${id}`, { method: "GET" });
+      if (response.status === 401 || response.status === 403) { logout(); return null; }
+      const data = await response.json();
+      if (response.ok) return data;
+    } catch {
+      // Non-critical
+    }
+    return null;
   },
 
 

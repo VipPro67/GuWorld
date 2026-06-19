@@ -17,7 +17,7 @@ ice_tear,Lệ Băng,Material,Nước mắt người tuyết mang lại giá tr�
 snow_lotus_essence,Tuyết Liên Hoa Tinh,Material,Tiên tài Băng Tuyết đạo thượng hạng của tộc Người Tuyết.,2,5,,{},[]
 stone_man_rice,Mễ Khảm,Material,Sản vật khoáng thạch đặc trưng của Người Đá.,1,1,,{},[]
 sludge,Hi Nê,Material,Tiên tài Thổ đạo dùng để luyện tiên cổ Hi Nê.,2,5,Earth Path,{},[]
-jade_stone,Ngọc Thạch,Consumable,"Đá ngọc có linh khí, dùng dưỡng thương hoặc luyện Cổ phòng ngự.",1,1,Earth Path,"{""restore_hp"": 20}","[""material"", ""earth_path""]"
+jade_stone,Ngọc Thạch,Food,"Đá ngọc có linh khí, dùng dưỡng thương hoặc luyện Cổ phòng ngự.",1,1,Earth Path,"{""restore_hp"": 20}","[""material"", ""earth_path""]"
 wild_boar_tusk,Nanh Lợn Rừng,Material,Vật phẩm phụ dùng trong hợp luyện Bạch Ngọc Cổ.,1,1,,{},[]
 sour_wine,Rượu Dương Mai,Food,Loại rượu chua cần cho Tứ Vị Tửu Trùng.,1,1,,{},"[""food""]"
 sweet_wine,Rượu Mật Hoàng Kim,Food,Loại rượu ngọt cần cho Tứ Vị Tửu Trùng.,1,1,,{},"[""food""]"
@@ -49,8 +49,8 @@ black_oil,Dầu đen,Material,Tiên tài Thực đạo khai thác dưới biển
 dragon_scale_soil,Đất Long Lân,Material,Bùn đất nơi hoang long sinh sống dùng để nuôi cá Long Ngư.,2,5,,{},[]
 jade_celery_soil,Đất Ngọc Cần,Material,Đất lạnh buốt bóp thành ngọc dùng để nuôi Cá Bong Bóng.,2,5,,{},[]
 floating_tea_grass,Cỏ Phù Cầu Trà,Material,Cỏ sinh trưởng trên không trung dùng làm vật liệu của trà Vân Yên.,1,1,,{},[]
-moon_orchid_petal,Cánh hoa Nguyệt Lan,Consumable,"Cánh hoa chứa nguyệt hoa, dùng nuôi Nguyệt đạo Cổ hoặc luyện hóa Chân Nguyên.",1,1,Moon Path,"{""mortal_only"": 1, ""restore_mana"": 10}","[""food"", ""moon_path_food""]"
-green_bamboo_wine,Rượu Thanh Trúc,Consumable,"Rượu trúc xanh, có thể khôi phục Chân Nguyên hoặc nuôi Tửu Trùng.",1,1,Wood Path,"{""mortal_only"": 1, ""restore_mana"": 20}","[""food"", ""wine"", ""liquor_worm_food""]"
+moon_orchid_petal,Cánh hoa Nguyệt Lan,Food,"Cánh hoa chứa nguyệt hoa, dùng nuôi Nguyệt đạo Cổ hoặc luyện hóa Chân Nguyên.",1,1,Moon Path,"{""mortal_only"": 1, ""restore_mana"": 10}","[""food"", ""moon_path_food""]"
+green_bamboo_wine,Rượu Thanh Trúc,Food,"Rượu trúc xanh, có thể khôi phục Chân Nguyên hoặc nuôi Tửu Trùng.",1,1,Wood Path,"{""mortal_only"": 1, ""restore_mana"": 20}","[""food"", ""wine"", ""liquor_worm_food""]"
 boar_meat,Thịt Lợn Rừng,Food,Thức ăn của Bạch Thỉ cổ và Hắc Thỉ cổ.,1,1,,{},"[""food""]"
 grass_puppet,Hình nộm người cỏ,Material,Vật phẩm luyện tập cơ bản của cổ sư.,1,1,,{},[]
 time_river_water,Nước sông thời gian,Food,Thức ăn của Xuân Thu Thiền và cổ Niên.,1,1,,{},"[""food""]"
@@ -125,7 +125,7 @@ earth_horse_hoof,Địa Mã Chi Đề,Material,Nguyên liệu chính của Độ
 black_oil_refined,Hắc du tinh luyện,Material,Nguyên liệu chính luyện Thải Du Cổ.,2,5,,{},[]
 gold_dragonfish_scale,Kim long ngư lân,Material,Vảy kim long ngư dùng luyện Thải Du Cổ.,2,5,,{},[]
 blade_food,Đao khí tinh thiết,Food,Thức ăn mô phỏng cho Đan Đao Cổ.,3,6,Blade Path,{},"[""food""]"
-bat_wing,Cánh dơi, Material, Cánh của dơi, công dụng chưa rõ, 3,5,,{},[]
+bat_wing,Cánh dơi, Material, Cánh của dơi công dụng chưa rõ, 3,5,,{},[]
 ITEM_HEALING_PELLET_SMALL,Tiểu Hồi Huyết Đan,Consumable,Đan dược cấp thấp hồi phục sinh lực.,COMMON,1,Human Path,"{""restore_hp"": 30.0}","[""healing"",""pill""]"
 ITEM_HEALING_PELLET_MEDIUM,Trung Hồi Huyết Đan,Consumable,Đan dược cấp trung hồi phục sinh lực.,UNCOMMON,2,Human Path,"{""restore_hp"": 80.0}","[""healing"",""pill""]"
 ITEM_HEALING_PELLET_LARGE,Đại Hồi Huyết Đan,Consumable,Đan dược cấp cao hồi phục sinh lực.,RARE,3,Human Path,"{""restore_hp"": 200.0}","[""healing"",""pill""]"

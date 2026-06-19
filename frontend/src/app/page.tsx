@@ -22,6 +22,7 @@ import { ImmortalApertureView } from "@/components/ImmortalApertureView";
 import { DungeonView } from "@/components/DungeonView";
 import { SectView } from "@/components/SectView";
 import { WikiView } from "@/components/WikiView";
+import { CombatHistoryView } from "@/components/CombatHistoryView";
 import { PlayerProfileModal } from "@/components/PlayerProfileModal";
 import { FeedbackView } from "@/components/FeedbackView";
 import { TradeRoomModal } from "@/components/TradeRoomModal";
@@ -300,6 +301,10 @@ export default function Home() {
         ) : currentView === "wiki" ? (
           <div className="w-full">
             <WikiView />
+          </div>
+        ) : currentView === "combat-history" ? (
+          <div className="w-full">
+            <CombatHistoryView />
           </div>
         ) : currentView === "feedback" ? (
           <div className="w-full">
