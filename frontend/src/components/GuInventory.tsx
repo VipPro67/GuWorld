@@ -76,6 +76,9 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const [usingGuId, setUsingGuId] = useState<string | null>(null);
   const [settingVitalId, setSettingVitalId] = useState<string | null>(null);
   const [droppingId, setDroppingId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState<Record<string, boolean>>({});
+  const [itemDetailOpen, setItemDetailOpen] = useState<Record<string, boolean>>({});
+  const [advancedOpen, setAdvancedOpen] = useState<Record<string, boolean>>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTab, setSelectedTab] = useState<"gu" | "material">("gu");
 
@@ -258,26 +261,100 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
               {filteredMaterials.map(({ key, spec, qty }) => {
                 const isConsumable = spec.item_type === "Consumable" || spec.type === "Consumable";
                 const isUsing = usingId === key;
+                const isDetailOpen = !!itemDetailOpen[key];
+                const itemRarityLabel = (r?: number) => {
+                  if (!r) return "";
+                  const labels = ["", "Phàm", "Linh", "Bảo", "Tiên", "Thánh"];
+                  return labels[r] || `Cấp ${r}`;
+                };
                 return (
                   <div
                     key={key}
-                    className="flex justify-between items-center bg-zinc-950/70 border border-zinc-900 px-3.5 py-2.5 rounded-xl"
-                    title={spec.description}
+                    className="flex flex-col bg-zinc-950/70 border border-zinc-900 rounded-xl overflow-hidden"
                   >
-                    <div className="flex items-center gap-2">
-                      <div className="text-left">
-                        <div className="text-xs font-semibold text-zinc-200">{spec.name}</div>
-                        <div className="text-[9px] text-zinc-500 font-mono">x{qty} sở hữu</div>
+                    <div className="flex justify-between items-center px-3.5 py-2.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="text-left min-w-0">
+                          <div className="text-xs font-semibold text-zinc-200 truncate">{spec.name}</div>
+                          <div className="text-[9px] text-zinc-500 font-mono">x{qty} sở hữu</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {isConsumable && onUseItem && (
+                          <button
+                            onClick={() => handleUseItemClick(key)}
+                            disabled={actionLoading || isUsing}
+                            className="text-[9px] py-1 px-2 bg-emerald-950/30 text-emerald-450 border border-emerald-900/40 hover:bg-emerald-950/50 hover:border-emerald-800 rounded font-mono transition-all cursor-pointer font-bold"
+                          >
+                            {isUsing ? "..." : "Sử Dụng"}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setItemDetailOpen(prev => ({...prev, [key]: !prev[key]}))}
+                          className="text-[9px] py-1 px-1.5 bg-zinc-950/50 text-zinc-400 border border-zinc-800 hover:bg-zinc-900 hover:text-zinc-300 rounded font-mono transition-all cursor-pointer"
+                          title="Xem chi tiết"
+                        >
+                          {isDetailOpen ? "▲" : "▼"}
+                        </button>
                       </div>
                     </div>
-                    {isConsumable && onUseItem && (
-                      <button
-                        onClick={() => handleUseItemClick(key)}
-                        disabled={actionLoading || isUsing}
-                        className="text-[9px] py-1 px-2.5 bg-emerald-950/30 text-emerald-450 border border-emerald-900/40 hover:bg-emerald-950/50 hover:border-emerald-800 rounded font-mono active:scale-[0.98] transition-all cursor-pointer font-bold"
-                      >
-                        {isUsing ? "..." : "Sử Dụng"}
-                      </button>
+
+                    {isDetailOpen && (
+                      <div className="px-3.5 pb-3 pt-0 border-t border-zinc-900/60 grid grid-cols-2 gap-2 text-[10px]">
+                        {spec.rank && spec.rank > 0 && (
+                          <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
+                            <span className="text-zinc-600 font-mono block mb-0.5">Cấp</span>
+                            <span className="text-zinc-300">{itemRarityLabel(spec.rank) || spec.rank}</span>
+                          </div>
+                        )}
+                        {spec.path && (
+                          <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
+                            <span className="text-zinc-600 font-mono block mb-0.5">Đường</span>
+                            <span className={getPathColor(spec.path)}>{spec.path}</span>
+                          </div>
+                        )}
+                        {spec.rarity && spec.rarity > 0 && (
+                          <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
+                            <span className="text-zinc-600 font-mono block mb-0.5">Độ hiếm</span>
+                            <span className="text-zinc-300">{spec.rarity}</span>
+                          </div>
+                        )}
+                        <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
+                          <span className="text-zinc-600 font-mono block mb-0.5">Loại</span>
+                          <span className="text-zinc-300">{spec.item_type || spec.type || "?"}</span>
+                        </div>
+                        {spec.effects && Object.keys(spec.effects).length > 0 && (
+                          <div className="col-span-2 bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
+                            <span className="text-zinc-600 font-mono block mb-0.5">Hiệu Ứng</span>
+                            <div className="flex flex-wrap items-center gap-1">
+                              {Object.entries(spec.effects).map(([k, v]) => (
+                                <span key={k} className="bg-zinc-900/60 px-1.5 py-0.5 rounded border border-zinc-800/50 text-zinc-300 whitespace-nowrap">
+                                  {FormatKey(k)}: {String(v)}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {spec.tags && spec.tags.length > 0 && (
+                          <div className="col-span-2 bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
+                            <span className="text-zinc-600 font-mono block mb-0.5">Tags</span>
+                            <div className="flex flex-wrap gap-1">
+                              {spec.tags.map(tag => (
+                                <span key={tag} className="bg-zinc-900/60 px-1.5 py-0.5 rounded border border-zinc-800/50 text-zinc-400 text-[9px]">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {spec.description && (
+                          <div className="col-span-2 bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
+                            <span className="text-zinc-600 font-mono block mb-0.5">Mô Tả</span>
+                            <span className="text-zinc-400 italic">{spec.description}</span>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 );
@@ -590,94 +667,175 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                       </button>
                                     )}
 
-                                    {/* Drop */}
-                                    {onDropGu && !gu.is_vital && !gu.equipped && (
+                                    {/* Detail toggle */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setDetailOpen(prev => ({...prev, [gu.instance_id]: !prev[gu.instance_id]}))}
+                                      className="text-[9px] py-1 px-2 bg-zinc-950/50 text-zinc-400 border border-zinc-800 hover:bg-zinc-900 hover:text-zinc-300 rounded font-mono transition-all cursor-pointer"
+                                      title="Xem chi tiết"
+                                    >
+                                      {detailOpen[gu.instance_id] ? "▲" : "▼"}
+                                    </button>
+
+                                    {/* Advanced actions toggle */}
+                                    {spec.gu_type !== "Consumable" && (
                                       <button
                                         type="button"
-                                        disabled={actionLoading || droppingId === gu.instance_id}
-                                        onClick={async () => {
-                                          if (!confirm(`Xác nhận phóng sinh (thả) Cổ trùng này? Hành động này không thể hoàn tác.`)) return;
-                                          setDroppingId(gu.instance_id);
-                                          try {
-                                            await onDropGu(gu.instance_id);
-                                          } finally {
-                                            setDroppingId(null);
-                                          }
-                                        }}
-                                        className="text-[9px] font-bold py-1 px-2.5 bg-rose-950/30 text-rose-450 border border-rose-900/40 hover:bg-rose-950/50 rounded font-mono cursor-pointer"
+                                        onClick={() => setAdvancedOpen(prev => ({...prev, [gu.instance_id]: !prev[gu.instance_id]}))}
+                                        className="text-[9px] py-1 px-1.5 bg-zinc-950/50 text-zinc-500 border border-zinc-800 hover:bg-zinc-900 hover:text-zinc-300 rounded font-mono transition-all cursor-pointer"
                                       >
-                                        {droppingId === gu.instance_id ? "..." : "Thả"}
+                                        {advancedOpen[gu.instance_id] ? "..." : "···"}
                                       </button>
                                     )}
 
-                                    {/* Hóa Bản Mệnh */}
-                                    {!isDead && !gu.is_vital && onSetVital && (
-                                      <button
-                                        type="button"
-                                        disabled={actionLoading || settingVitalId === gu.instance_id}
-                                        onClick={() => handleSetVital(gu.instance_id, spec.name)}
-                                        className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-amber-400 border border-zinc-900 hover:bg-amber-950/20 hover:border-amber-500/50 rounded font-mono font-bold transition-all cursor-pointer"
-                                      >
-                                        {settingVitalId === gu.instance_id ? "..." : "👑 Bản Mệnh"}
-                                      </button>
-                                    )}
-
-                                    {/* Quản lý trạng thái (Ngủ / Tỉnh / Phong Ấn / Giải Ấn) */}
-                                    {onUpdateStatus && !gu.is_vital && !isDead && (
-                                      <>
-                                        {status === "ACTIVE" && (
-                                          <>
-                                            <button
-                                              type="button"
-                                              disabled={actionLoading || statusUpdatingId === gu.instance_id}
-                                              onClick={() => handleStatusUpdate(gu.instance_id, "SLEEPING")}
-                                              className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-amber-500 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer"
-                                            >
-                                              {statusUpdatingId === gu.instance_id ? "..." : "💤 Ngủ"}
-                                            </button>
-                                            <button
-                                              type="button"
-                                              disabled={actionLoading || statusUpdatingId === gu.instance_id}
-                                              onClick={() => handleStatusUpdate(gu.instance_id, "SEALED")}
-                                              className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-cyan-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer"
-                                            >
-                                              {statusUpdatingId === gu.instance_id ? "..." : "🔒 Phong Ấn"}
-                                            </button>
-                                          </>
-                                        )}
-                                        {status === "SLEEPING" && (
-                                          <>
-                                            <button
-                                              type="button"
-                                              disabled={actionLoading || statusUpdatingId === gu.instance_id}
-                                              onClick={() => handleStatusUpdate(gu.instance_id, "ACTIVE")}
-                                              className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-emerald-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer"
-                                            >
-                                              {statusUpdatingId === gu.instance_id ? "..." : "☀️ Tỉnh"}
-                                            </button>
-                                            <button
-                                              type="button"
-                                              disabled={actionLoading || statusUpdatingId === gu.instance_id}
-                                              onClick={() => handleStatusUpdate(gu.instance_id, "SEALED")}
-                                              className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-cyan-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer"
-                                            >
-                                              {statusUpdatingId === gu.instance_id ? "..." : "🔒 Phong Ấn"}
-                                            </button>
-                                          </>
-                                        )}
-                                        {status === "SEALED" && (
+                                    {/* Advanced actions panel */}
+                                    {advancedOpen[gu.instance_id] && (
+                                      <div className="w-full flex items-center gap-1.5 justify-end flex-wrap pt-1.5 mt-1.5 border-t border-zinc-900/60">
+                                        {/* Drop */}
+                                        {onDropGu && !gu.is_vital && !gu.equipped && (
                                           <button
                                             type="button"
-                                            disabled={actionLoading || statusUpdatingId === gu.instance_id}
-                                            onClick={() => handleStatusUpdate(gu.instance_id, "ACTIVE")}
-                                            className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-emerald-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer"
+                                            disabled={actionLoading || droppingId === gu.instance_id}
+                                            onClick={async () => {
+                                              if (!confirm(`Xác nhận phóng sinh (thả) Cổ trùng này? Hành động này không thể hoàn tác.`)) return;
+                                              setDroppingId(gu.instance_id);
+                                              try {
+                                                await onDropGu(gu.instance_id);
+                                              } finally {
+                                                setDroppingId(null);
+                                              }
+                                            }}
+                                            className="text-[9px] font-bold py-1 px-2.5 bg-rose-950/30 text-rose-450 border border-rose-900/40 hover:bg-rose-950/50 rounded font-mono cursor-pointer"
                                           >
-                                            {statusUpdatingId === gu.instance_id ? "..." : "🔓 Giải Ấn"}
+                                            {droppingId === gu.instance_id ? "..." : "Thả"}
                                           </button>
                                         )}
-                                      </>
+
+                                        {/* Hóa Bản Mệnh */}
+                                        {!isDead && !gu.is_vital && onSetVital && (
+                                          <button
+                                            type="button"
+                                            disabled={actionLoading || settingVitalId === gu.instance_id}
+                                            onClick={() => handleSetVital(gu.instance_id, spec.name)}
+                                            className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-amber-400 border border-zinc-900 hover:bg-amber-950/20 hover:border-amber-500/50 rounded font-mono font-bold transition-all cursor-pointer"
+                                          >
+                                            {settingVitalId === gu.instance_id ? "..." : "👑 Bản Mệnh"}
+                                          </button>
+                                        )}
+
+                                        {/* Quản lý trạng thái (Ngủ / Tỉnh / Phong Ấn / Giải Ấn) */}
+                                        {onUpdateStatus && !gu.is_vital && !isDead && (
+                                          <>
+                                            {status === "ACTIVE" && (
+                                              <>
+                                                <button
+                                                  type="button"
+                                                  disabled={actionLoading || statusUpdatingId === gu.instance_id}
+                                                  onClick={() => handleStatusUpdate(gu.instance_id, "SLEEPING")}
+                                                  className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-amber-500 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer"
+                                                >
+                                                  {statusUpdatingId === gu.instance_id ? "..." : "💤 Ngủ"}
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  disabled={actionLoading || statusUpdatingId === gu.instance_id}
+                                                  onClick={() => handleStatusUpdate(gu.instance_id, "SEALED")}
+                                                  className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-cyan-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer"
+                                                >
+                                                  {statusUpdatingId === gu.instance_id ? "..." : "🔒 Phong Ấn"}
+                                                </button>
+                                              </>
+                                            )}
+                                            {status === "SLEEPING" && (
+                                              <>
+                                                <button
+                                                  type="button"
+                                                  disabled={actionLoading || statusUpdatingId === gu.instance_id}
+                                                  onClick={() => handleStatusUpdate(gu.instance_id, "ACTIVE")}
+                                                  className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-emerald-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer"
+                                                >
+                                                  {statusUpdatingId === gu.instance_id ? "..." : "☀️ Tỉnh"}
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  disabled={actionLoading || statusUpdatingId === gu.instance_id}
+                                                  onClick={() => handleStatusUpdate(gu.instance_id, "SEALED")}
+                                                  className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-cyan-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer"
+                                                >
+                                                  {statusUpdatingId === gu.instance_id ? "..." : "🔒 Phong Ấn"}
+                                                </button>
+                                              </>
+                                            )}
+                                            {status === "SEALED" && (
+                                              <button
+                                                type="button"
+                                                disabled={actionLoading || statusUpdatingId === gu.instance_id}
+                                                onClick={() => handleStatusUpdate(gu.instance_id, "ACTIVE")}
+                                                className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-emerald-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono font-medium transition-all cursor-pointer"
+                                              >
+                                                {statusUpdatingId === gu.instance_id ? "..." : "🔓 Giải Ấn"}
+                                              </button>
+                                            )}
+                                          </>
+                                        )}
+                                      </div>
                                     )}
                                   </div>
+
+                                  {/* Detail panel */}
+                                  {detailOpen[gu.instance_id] && (
+                                    <div className="w-full mt-2 pt-2 border-t border-zinc-900/60 grid grid-cols-2 md:grid-cols-3 gap-2 text-[10px]">
+                                      <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
+                                        <span className="text-zinc-600 font-mono block mb-1">Loại Cổ</span>
+                                        <span className="text-zinc-300">{spec.gu_type}</span>
+                                      </div>
+                                      <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
+                                        <span className="text-zinc-600 font-mono block mb-1">Đường</span>
+                                        <span className={getPathColor(spec.path)}>{spec.path}</span>
+                                      </div>
+                                      <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
+                                        <span className="text-zinc-600 font-mono block mb-1">Độ hiếm</span>
+                                        <span className="text-zinc-300">{spec.rarity || "?"}</span>
+                                      </div>
+                                      <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
+                                        <span className="text-zinc-600 font-mono block mb-1">Thức Ăn</span>
+                                        <span className="text-zinc-300">{preferredFoodName}</span>
+                                      </div>
+                                      <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
+                                        <span className="text-zinc-600 font-mono block mb-1">Độ đói mỗi giờ</span>
+                                        <span className="text-zinc-300">{spec.hunger_rate}/h</span>
+                                      </div>
+                                      <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
+                                        <span className="text-zinc-600 font-mono block mb-1">Vùng xuất xứ</span>
+                                        <span className="text-zinc-300">{spec.origin_region || "?"}</span>
+                                      </div>
+                                      {spec.effects && Object.keys(spec.effects).length > 0 && (
+                                        <div className="col-span-2 md:col-span-3 bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
+                                          <span className="text-zinc-600 font-mono block mb-1">Hiệu Ứng</span>
+                                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                            {Object.entries(spec.effects).map(([section, effects]) =>
+                                              effects && typeof effects === 'object' && Object.keys(effects).length > 0 && (
+                                                <span key={section} className="inline-flex items-center gap-1">
+                                                  <span className="text-zinc-500 font-mono text-[9px] uppercase">{section}:</span>
+                                                  {Object.entries(effects).map(([k, v]) => (
+                                                    <span key={k} className="bg-zinc-900/60 px-1.5 py-0.5 rounded border border-zinc-800/50 whitespace-nowrap">
+                                                      {FormatKey(k)}: {String(v)}
+                                                    </span>
+                                                  ))}
+                                                </span>
+                                              )
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
+                                      {spec.description && (
+                                        <div className="col-span-2 md:col-span-3 bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
+                                          <span className="text-zinc-600 font-mono block mb-1">Mô Tả</span>
+                                          <span className="text-zinc-400 italic">{spec.description}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}

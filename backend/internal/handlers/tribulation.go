@@ -576,7 +576,7 @@ func CheckAndTriggerTribulations() error {
 
 	for _, ap := range apertures {
 		// Advance internal year: 60s tick interval
-		yearsPassed := 60.0 * ap.TimeRate / 72000.0
+		yearsPassed := 60.0 * ap.TimeRate / 432000.0
 
 		// Deduct cultivator lifespan
 		var currentLifespan float64

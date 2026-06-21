@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"strings"
 
@@ -139,14 +140,34 @@ func removeNegativeStatusEffect(player *models.Player, item models.ItemSpec) (st
 }
 
 func openMineChestEffect(player *models.Player, item models.ItemSpec) (string, error) {
-	stones := 200 + rand.Intn(301)
-	player.PrimevalStones += stones
+	// Drop rate (tỉ lệ ra): higher rank/rarity = lower rate = fewer but better items.
+	//   R5 = 1000, R6 = 1, decreasing by factor 1000 per rank:
+	//   rate = 1000 * 10^(-3*(rank-5))
+	rankDrop := math.Pow(10, -3.0*float64(item.Rank-5))
+	rate := 1000.0 * rankDrop
+	rate /= math.Max(1.0, float64(item.Rarity))
+	rel := rate / 1000.0 // relative to R5 baseline (R5=1, R6=0.001)
 
+	// Stones: quantity × sqrt(rel) so R5 gives 200-500, R6 gives ~6-22
+	stones := int(float64(200+rand.Intn(301)) * math.Sqrt(rel))
+	if stones < 1 {
+		stones = 1 + rand.Intn(5)
+	}
+	player.PrimevalStones += stones
 	msg := fmt.Sprintf("Mở %s thành công!\n- Nhận được %d Nguyên Thạch\n", item.Name, stones)
 
+	// Materials pool — higher-rank chests only yield higher-tier materials
 	var materials []string
+	minMatRank := 1
+	if item.Rank >= 6 {
+		minMatRank = item.Rank - 3 // R6: rank≥3, R7: rank≥4, etc.
+	} else if item.Rank >= 4 {
+		minMatRank = item.Rank - 1 // R4: rank≥3, R5: rank≥4
+	} else if item.Rank >= 2 {
+		minMatRank = item.Rank // R2: rank≥2
+	}
 	for id, spec := range models.ItemRegistry {
-		if spec.Type == "Material" {
+		if spec.Type == "Material" && spec.Rank >= minMatRank {
 			materials = append(materials, id)
 		}
 	}
@@ -154,7 +175,14 @@ func openMineChestEffect(player *models.Player, item models.ItemSpec) (string, e
 		materials = []string{"wild_boar_tusk", "jade_stone", "nine_beast_kings_eyes", "stone_man_rice"}
 	}
 
-	numMats := 1 + rand.Intn(3)
+	// Number of material drops: fewer at higher rank
+	numMats := int(float64(1+rand.Intn(3)) * rel)
+	if numMats < 1 {
+		numMats = 0
+		if rand.Float64() < rel*1000 { // R6: ~0.1% – extremely rare
+			numMats = 1
+		}
+	}
 	if player.MaterialsInventory == nil {
 		player.MaterialsInventory = make(models.MaterialsInventory)
 	}
@@ -168,10 +196,28 @@ func openMineChestEffect(player *models.Player, item models.ItemSpec) (string, e
 		msg += fmt.Sprintf("- Nhận được 1x %s\n", matName)
 	}
 
-	if rand.Float64() < 0.05 {
+	// Gu drop chance: scales with rate
+	guChance := 0.05 * rel
+	if guChance > 0.05 {
+		guChance = 0.05
+	}
+	if rand.Float64() < guChance {
 		var guIDs []string
-		for id := range models.GuRegistry {
-			guIDs = append(guIDs, id)
+		minGuRank := 1
+		if item.Rank >= 6 {
+			minGuRank = item.Rank - 2 // R6: Gu rank≥4, R7: rank≥5, etc.
+		} else if item.Rank >= 4 {
+			minGuRank = item.Rank - 1 // R4: rank≥3, R5: rank≥4
+		}
+		for id, spec := range models.GuRegistry {
+			if spec.Rank >= minGuRank {
+				guIDs = append(guIDs, id)
+			}
+		}
+		if len(guIDs) == 0 {
+			for id := range models.GuRegistry {
+				guIDs = append(guIDs, id)
+			}
 		}
 		if len(guIDs) > 0 {
 			guID := guIDs[rand.Intn(len(guIDs))]

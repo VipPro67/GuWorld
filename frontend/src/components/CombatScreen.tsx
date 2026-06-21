@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { Player, CombatState, GuSpec, GuInstance, KillerMove, useGameStore } from "@/store/useGameStore";
-import { Flame, Sparkles, Play, FastForward, ShieldAlert, Swords, Eye, Skull, Shield, Heart, Sword, Target, MapPin } from "lucide-react";
+import { Player, CombatState, Combatant, GuSpec, GuInstance, KillerMove, useGameStore } from "@/store/useGameStore";
+import { Flame, Sparkles, Play, FastForward, ShieldAlert, Swords, Eye, Skull, Shield, Heart } from "lucide-react";
 
 interface CombatScreenProps {
   player: Player;
@@ -27,6 +27,15 @@ const typeColor = (t?: string) => {
     case "Normal":
     case "MONSTER": return "text-zinc-400 border-zinc-700 bg-zinc-900/50";
     default: return "text-zinc-400 border-zinc-700 bg-zinc-900/50";
+  }
+};
+
+const gridXLabel = (x?: number) => {
+  switch (x) {
+    case 1: return "Tiền";
+    case 2: return "Trung";
+    case 3: return "Hậu";
+    default: return "?";
   }
 };
 
@@ -106,21 +115,12 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   const investigationLevel = useMemo(() => computeInvestigation(), [player.gu_inventory, guDictionary]);
 
-  const enemyCount = useMemo(() => {
-    let n = 0;
-    if (enemy.enemies) n += enemy.enemies.length;
-    else n = 1;
-    return n;
-  }, [enemy]);
-
   const enemyInfoRevealed = useMemo(() => {
     const inv = investigationLevel;
     const hpRange = enemy.enemy_max_hp > 10000 ? "Cao" : enemy.enemy_max_hp > 1000 ? "Trung bình" : "Thấp";
     return {
-      showRank: inv >= 2,
-      showHP: inv >= 3,
-      showNumEnemies: inv >= 2,
-      showStats: inv >= 5,
+      showHP: inv >= 2,
+      showStats: inv >= 4,
       showLootHints: inv >= 8,
     };
   }, [investigationLevel, enemy]);
@@ -225,66 +225,82 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     return { totalDmgDealt, totalDmgTaken, shieldsUsed, finalPlayerHP, lootItems, hpChanged };
   };
 
-  const renderEnemyIntel = () => (
-    <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-4 mb-6">
-      <div className="flex items-center gap-2 mb-3">
-        <Eye className={`w-4 h-4 ${investigationLevel >= 5 ? 'text-emerald-400' : 'text-zinc-500'}`} />
-        <h3 className="text-sm font-bold text-zinc-300">Thông Tin Địch</h3>
-        <span className="text-[10px] text-zinc-600 ml-auto">
-          {investigationLevel >= 5 ? 'Trinh sát cấp cao' : investigationLevel >= 3 ? 'Trinh sát trung bình' : 'Trinh sát thấp'} ({investigationLevel.toFixed(1)})
-        </span>
-      </div>
+  const renderCombatantList = (title: string, combatants: Combatant[], icon: React.ReactNode, isEnemy: boolean) => {
+    if (!combatants || combatants.length === 0) return null;
+    const frontRow = combatants.filter(c => c.grid_x === 1);
+    const midRow = combatants.filter(c => c.grid_x === 2);
+    const backRow = combatants.filter(c => c.grid_x === 3);
+    const borderColor = isEnemy ? "border-rose-800" : "border-emerald-800";
+    const headerBg = isEnemy ? "bg-rose-950/20" : "bg-emerald-950/20";
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex items-center gap-2 text-xs text-zinc-400">
-          <Target className="w-3.5 h-3.5 text-zinc-500" />
-          <span>{enemy.enemy_name || "Kẻ địch"}</span>
-          <span className={`px-1.5 py-0.5 rounded text-[10px] border ${typeColor(enemy.enemy_type)}`}>
-            {enemy.enemy_type || "MONSTER"}
+    return (
+      <div className={`bg-zinc-900/60 border ${borderColor} rounded-xl p-4 mb-4`}>
+        <div className="flex items-center gap-2 mb-3">
+          {icon}
+          <h3 className="text-sm font-bold text-zinc-300">{title}</h3>
+          <span className="text-[10px] text-zinc-600 ml-auto">
+            {combatants.length} mục tiêu
           </span>
         </div>
 
-        {enemyInfoRevealed.showNumEnemies && (
-          <div className="flex items-center gap-2 text-xs text-zinc-400">
-            <Skull className="w-3.5 h-3.5 text-zinc-500" />
-            <span>Số lượng: {enemyCount}</span>
+        <div className="grid grid-cols-3 gap-2 mb-3 text-center text-[10px]">
+          <div className={`rounded-lg py-1.5 ${headerBg} text-zinc-400 border ${borderColor}/30`}>
+            Hàng Tiền: {frontRow.length}
           </div>
-        )}
-
-        {enemyInfoRevealed.showRank && (
-          <div className="flex items-center gap-2 text-xs text-zinc-400">
-            <Shield className="w-3.5 h-3.5 text-zinc-500" />
-            <span>Cảnh giới: {rankLabel(enemy.enemy_rank || 1)} {subRankLabel(enemy.enemy_sub_rank || 1)}</span>
+          <div className={`rounded-lg py-1.5 ${headerBg} text-zinc-400 border ${borderColor}/30`}>
+            Hàng Trung: {midRow.length}
           </div>
-        )}
-
-        <div className="flex items-center gap-2 text-xs text-zinc-400">
-          <MapPin className="w-3.5 h-3.5 text-zinc-500" />
-          <span>Khu vực: {player.current_region}</span>
+          <div className={`rounded-lg py-1.5 ${headerBg} text-zinc-400 border ${borderColor}/30`}>
+            Hàng Hậu: {backRow.length}
+          </div>
         </div>
 
-        {enemyInfoRevealed.showHP && (
-          <div className="flex items-center gap-2 text-xs text-zinc-400">
-            <Heart className="w-3.5 h-3.5 text-rose-500" />
-            <span>Máu: {enemy.enemy_max_hp?.toLocaleString() || "???"}</span>
-          </div>
-        )}
-
-        {enemyInfoRevealed.showStats && (
-          <>
-            <div className="flex items-center gap-2 text-xs text-zinc-400">
-              <Sword className="w-3.5 h-3.5 text-amber-500" />
-              <span>Tấn công: {enemy.enemy_damage?.toLocaleString() || "???"}</span>
+        <div className="space-y-1.5">
+          {combatants.map(c => (
+            <div key={c.id} className="flex items-center gap-2 text-xs bg-zinc-950/40 border border-zinc-800/50 rounded-lg px-3 py-2">
+              <span className="text-zinc-200 font-medium truncate flex-1">{c.name}</span>
+              <span className="text-zinc-400 shrink-0">{rankLabel(c.rank)}</span>
+              <span className="text-zinc-500 shrink-0">{subRankLabel(c.sub_rank)}</span>
+              <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${c.grid_x === 1 ? 'text-rose-400 bg-rose-950/40' : c.grid_x === 2 ? 'text-amber-400 bg-amber-950/40' : 'text-cyan-400 bg-cyan-950/40'}`}>
+                {gridXLabel(c.grid_x)}
+              </span>
+              {enemyInfoRevealed.showHP && (
+                <span className="text-zinc-500 shrink-0">
+                  {c.max_hp?.toLocaleString() || "?"} HP
+                </span>
+              )}
+              {isEnemy && c.kind && (
+                <span className={`px-1.5 py-0.5 rounded text-[10px] border ${typeColor(c.kind)} shrink-0`}>
+                  {c.kind}
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-2 text-xs text-zinc-400">
-              <ShieldAlert className="w-3.5 h-3.5 text-blue-500" />
-              <span>Phòng thủ: {enemy.enemy_defense?.toLocaleString() || "???"}</span>
-            </div>
-          </>
-        )}
+          ))}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
+
+  const renderEnemyIntel = () => {
+    const allEnemies = enemy.enemies && enemy.enemies.length > 0 ? enemy.enemies : [];
+    return renderCombatantList(
+      "Thông Tin Địch",
+      allEnemies,
+      <Eye className={`w-4 h-4 ${investigationLevel >= 5 ? 'text-emerald-400' : 'text-rose-400'}`} />,
+      true
+    );
+  };
+
+  const renderAllyIntel = () => {
+    const allAllies = enemy.allies && enemy.allies.length > 0 ? enemy.allies : [];
+    if (allAllies.length === 0) return null;
+    return renderCombatantList(
+      "Đồng Đội",
+      allAllies,
+      <Shield className="w-4 h-4 text-emerald-400" />,
+      false
+    );
+  };
 
   const renderResultSummary = () => {
     const summary = parseResultSummary();
@@ -340,6 +356,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     <div className="flex flex-col gap-6">
       {/* Enemy Intel Panel */}
       {renderEnemyIntel()}
+
+      {/* Ally Intel Panel */}
+      {renderAllyIntel()}
 
       <div className="bg-black/40 border border-zinc-800 p-6 rounded-2xl">
         <h2 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 mb-4 flex items-center gap-2">

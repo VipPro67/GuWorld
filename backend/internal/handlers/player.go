@@ -1223,7 +1223,7 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 			subRank = 4
 		}
 		subRankFactor := 1.0 + float64(subRank-1)*0.15
-		regenRatePerHour = (float64(essenceProd) / 20.0) * subRankFactor
+		regenRatePerHour = (float64(essenceProd) / 120.0) * subRankFactor
 	} else {
 		regenRatePerHour = energyRegenRatePerHour(player)
 	}
@@ -1264,8 +1264,8 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 			}
 		}
 
-		// Lifespan decay (1 game year = 20 subjective hours = 72000 subjective seconds).
-		yearsPassed := subjectiveSeconds / 72000.0
+		// Lifespan decay (1 game year = 5 days = 120 subjective hours = 432000 subjective seconds).
+		yearsPassed := subjectiveSeconds / 432000.0
 		player.Lifespan -= yearsPassed
 		if player.Lifespan < 0 {
 			player.Lifespan = 0
