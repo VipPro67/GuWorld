@@ -19,14 +19,14 @@ type KillerMove struct {
 	RankRequired   int              `json:"rank_required"`
 	CorePlayerGuID string           `json:"core_player_gu_id" gorm:"not null"`
 	TotalManaCost  float64          `json:"total_mana_cost"`
-	Stability      float64          `json:"stability"`
+	SuccessRate    float64          `json:"success_rate"`
 	DamageValue    float64          `json:"damage_value"`
 	DefenseValue   float64          `json:"defense_value"`
 	Cooldown       int              `json:"cooldown"`
-	CastTime       int              `json:"cast_time"`
+	ChannelTime    int              `json:"channel_time"`
 	Effects        json.RawMessage  `json:"effects"`
 	IsMastered     bool             `json:"is_mastered"`
-	IsStable       bool             `json:"is_stable"`
+	IsReliable     bool             `json:"is_reliable"`
 	IsInstantCast  bool             `json:"is_instant_cast"`
 	UsageCount     int              `json:"usage_count"`
 	CreatedAt      time.Time        `json:"created_at"`

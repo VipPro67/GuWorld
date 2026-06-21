@@ -151,6 +151,7 @@ type Player struct {
 	MaxMana             float64             `json:"max_mana"`         // Max Primeval Essence (equals AptitudePercent)
 	PrimevalStones      int                 `json:"primeval_stones"`  // Game currency
 	ImmortalStones      float64             `json:"immortal_stones"`
+	Wisdom              float64             `json:"wisdom"`
 	GuInventory         GuInventory         `json:"gu_inventory"`
 	MaterialsInventory  MaterialsInventory  `json:"materials_inventory"`
 	WallProgress        float64             `json:"wall_progress"` // 0.0..1.0 progress to next sub-rank for mortals

@@ -51,8 +51,7 @@ var ActiveEffectRegistry = map[string]CombatEffectHandler{
 	"blood_drain":         handleBloodDrain,
 	"replicate":           handleReplicate,
 	"bleed":               handleBleedEffect,
-	"bleed_effect":        handleBleedEffect,
-	"lifesteal":           handleLifeStealEffect,
+	"life_steal":          handleLifeStealEffect,
 	"refine_mana_tier":    handleRefineManaTier,
 	"damage_multiplier":   handleDamageMultiplier,
 	"cleansing_power":     handleCleansingPower,
@@ -312,9 +311,6 @@ func handleReplicate(ctx *CombatContext, spec *models.GuDictionaryItem, action *
 
 func handleBleedEffect(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
 	val := guSectionValue(*spec, "active", "bleed")
-	if val == 0 {
-		val = guSectionValue(*spec, "active", "bleed_effect")
-	}
 	action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
 		Type:  "bleed",
 		Value: val,
@@ -325,7 +321,11 @@ func handleBleedEffect(ctx *CombatContext, spec *models.GuDictionaryItem, action
 }
 
 func handleLifeStealEffect(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	action.LifeStealRate += guSectionValue(*spec, "active", "lifesteal")
+	val := guSectionValue(*spec, "active", "life_steal")
+	if val == 0 {
+		val = guSectionValue(*spec, "active", "lifesteal")
+	}
+	action.LifeStealRate += val
 	return nil
 }
 

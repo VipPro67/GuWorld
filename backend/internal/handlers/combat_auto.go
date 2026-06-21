@@ -500,22 +500,20 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		if v, ok := m["bleed"]; ok {
 			act.BleedPerTurn += v
 		}
-		if v, ok := m["bleed_effect"]; ok {
-			act.BleedPerTurn += v
-		}
+
 		if v, ok := m["poison"]; ok {
 			act.PoisonPerTurn += v
 		}
 		if v, ok := m["stun"]; ok {
 			act.StunTurns = int(v)
 		}
-		if v, ok := m["lifesteal"]; ok {
+		if v, ok := m["life_steal"]; ok {
 			act.LifeStealPct += v / 100.0
 		}
 		if v, ok := m["blood_drain"]; ok {
 			act.LifeStealPct += v / 100.0
 		}
-		if v, ok := m["healing"]; ok {
+		if v, ok := m["heal"]; ok {
 			act.Healing += v
 		}
 	}
@@ -534,7 +532,7 @@ func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlo
 
 	var effects map[string]float64
 	if err := json.Unmarshal(km.Effects, &effects); err == nil {
-		if v, ok := effects["bleed_effect"]; ok {
+		if v, ok := effects["bleed"]; ok {
 			act.BleedPerTurn += v
 		}
 		if v, ok := effects["poison"]; ok {
@@ -543,7 +541,7 @@ func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlo
 		if v, ok := effects["stun"]; ok {
 			act.StunTurns = int(v)
 		}
-		if v, ok := effects["lifesteal"]; ok {
+		if v, ok := effects["life_steal"]; ok {
 			act.LifeStealPct += v / 100.0
 		}
 		if v, ok := effects["blood_drain"]; ok {
@@ -558,7 +556,7 @@ func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlo
 		if v, ok := effects["thorns_damage"]; ok {
 			act.ThornsDmg += v
 		}
-		if v, ok := effects["healing"]; ok {
+		if v, ok := effects["heal"]; ok {
 			act.Healing += v
 		}
 	}

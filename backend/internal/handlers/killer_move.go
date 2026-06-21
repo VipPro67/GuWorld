@@ -18,22 +18,23 @@ import (
 )
 
 const (
-	killerMoveSupportCostRate       = 0.8
-	killerMoveBaseStability         = 95.0
-	killerMoveSupportPenalty        = 8.0
-	killerMovePathConflictPenalty   = 20.0
-	killerMoveAttainmentBonus       = 5.0
-	killerMoveMinStability          = 5.0
-	killerMoveMaxStability          = 100.0
-	killerMoveBacklashRate          = 1.5
-	killerMoveMultiTaskPenalty      = 30.0
-	killerMoveGrandmasterAttainment = 2
+	killerMoveSupportCostRate         = 0.8
+	killerMoveBaseSuccessRate         = 95.0
+	killerMoveSupportCountPenalty     = 5.0
+	killerMoveWisdomBonusFactor       = 0.2
+	killerMoveAttainmentBonusFactor   = 2.0
+	killerMovePathConflictPenaltyBase = 10.0
+	killerMovePathOppositionPenalty   = 20.0
+	killerMoveMinSuccessRate          = 5.0
+	killerMoveMaxSuccessRate          = 100.0
+	killerMoveBacklashManaFactor      = 0.5
+	killerMoveMasteryBonus            = 15.0
+	killerMoveMaxSupport              = 8
 )
 
 type CalculateKillerMoveRequest struct {
-	CorePlayerGuID        string   `json:"core_player_gu_id" binding:"required"`
-	SupportPlayerGuIDs    []string `json:"support_player_gu_ids"`
-	ApplyMultiTaskPenalty bool     `json:"apply_multi_task_penalty"`
+	CorePlayerGuID     string   `json:"core_player_gu_id" binding:"required"`
+	SupportPlayerGuIDs []string `json:"support_player_gu_ids"`
 }
 
 type CreateKillerMoveRequest struct {
@@ -44,9 +45,8 @@ type CreateKillerMoveRequest struct {
 }
 
 type CastKillerMoveRequest struct {
-	KillerMoveID        string `json:"killer_move_id" binding:"required"`
-	TargetID            string `json:"target_id"`
-	UsedExtraGuThisTurn bool   `json:"used_extra_gu_this_turn"`
+	KillerMoveID string `json:"killer_move_id" binding:"required"`
+	TargetID     string `json:"target_id"`
 }
 
 type KillerMovePreview struct {
@@ -57,13 +57,13 @@ type KillerMovePreview struct {
 	CorePlayerGuID  string                  `json:"core_player_gu_id"`
 	SupportGuIDs    []string                `json:"support_player_gu_ids"`
 	TotalManaCost   float64                 `json:"total_mana_cost"`
-	Stability       float64                 `json:"stability"`
+	SuccessRate     float64                 `json:"success_rate"`
 	DamageValue     float64                 `json:"damage_value"`
 	DefenseValue    float64                 `json:"defense_value"`
 	Cooldown        int                     `json:"cooldown"`
-	CastTime        int                     `json:"cast_time"`
+	ChannelTime     int                     `json:"channel_time"`
 	Effects         map[string]float64      `json:"effects"`
-	IsStable        bool                    `json:"is_stable"`
+	IsReliable      bool                    `json:"is_reliable"`
 	IsInstantCast   bool                    `json:"is_instant_cast"`
 	Warnings        []string                `json:"warnings"`
 	SlotResults     []KillerMoveSlotPreview `json:"slot_results"`
@@ -150,9 +150,9 @@ func CreateKillerMove(c *gin.Context) {
 	defer tx.Rollback()
 
 	_, err = tx.Exec(`
-		INSERT INTO killer_moves (id, player_id, name, path, move_type, rank_required, core_player_gu_id, total_mana_cost, stability, damage_value, defense_value, cooldown, cast_time, effects, is_mastered, is_stable, is_instant_cast)
+		INSERT INTO killer_moves (id, player_id, name, path, move_type, rank_required, core_player_gu_id, total_mana_cost, success_rate, damage_value, defense_value, cooldown, channel_time, effects, is_mastered, is_reliable, is_instant_cast)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,false,$15,$16)
-	`, moveID, playerID, name, preview.Path, preview.MoveType, preview.RankRequired, preview.CorePlayerGuID, preview.TotalManaCost, preview.Stability, preview.DamageValue, preview.DefenseValue, preview.Cooldown, preview.CastTime, effectsJSON, preview.IsStable, preview.IsInstantCast)
+	`, moveID, playerID, name, preview.Path, preview.MoveType, preview.RankRequired, preview.CorePlayerGuID, preview.TotalManaCost, preview.SuccessRate, preview.DamageValue, preview.DefenseValue, preview.Cooldown, preview.ChannelTime, effectsJSON, preview.IsReliable, preview.IsInstantCast)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu sát chiêu"})
 		return
@@ -279,19 +279,42 @@ func CastKillerMove(c *gin.Context) {
 			supportIDs = append(supportIDs, slot.PlayerGuID)
 		}
 	}
-	preview, err := calculateKillerMoveStatsForPlayer(CalculateKillerMoveRequest{CorePlayerGuID: move.CorePlayerGuID, SupportPlayerGuIDs: supportIDs, ApplyMultiTaskPenalty: req.UsedExtraGuThisTurn}, &player, tx)
+	preview, err := calculateKillerMoveStatsForPlayer(CalculateKillerMoveRequest{CorePlayerGuID: move.CorePlayerGuID, SupportPlayerGuIDs: supportIDs}, &player, tx)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	if move.IsMastered {
-		preview.Stability += 15.0
-		if preview.Stability > 100.0 {
-			preview.Stability = 100.0
+		preview.SuccessRate += killerMoveMasteryBonus
+		if preview.SuccessRate > killerMoveMaxSuccessRate {
+			preview.SuccessRate = killerMoveMaxSuccessRate
 		}
 	}
-	
+
+	// V2: Channeling check
+	if preview.ChannelTime > 0 {
+		// Check if player is stunned/frozen/silenced (handled by combat state)
+		hasChannelBlock := false
+		if player.ActiveCombat != nil {
+			for _, ally := range player.ActiveCombat.Allies {
+				if ally.ID == player.ID.String() {
+					for _, se := range ally.StatusEffects {
+						if se.Type == "stun" || se.Type == "freeze" || se.Type == "silence" {
+							hasChannelBlock = true
+							break
+						}
+					}
+					break
+				}
+			}
+		}
+		if hasChannelBlock {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể tụ lực sát chiêu khi đang bị khống chế!"})
+			return
+		}
+	}
+
 	if player.CurrentMana < preview.TotalManaCost {
 		c.JSON(http.StatusBadRequest, gin.H{"error": insufficientEnergyMessage(&player)})
 		return
@@ -300,14 +323,20 @@ func CastKillerMove(c *gin.Context) {
 	player.CurrentMana -= preview.TotalManaCost
 	logs := []string{fmt.Sprintf("Thi triển sát chiêu %s: -%.1f %s.", move.Name, preview.TotalManaCost, energyName(&player))}
 	eventType := "KILLER_MOVE_CASTED"
-	succeeded := rand.Float64()*100 <= preview.Stability
+	succeeded := rand.Float64()*100 <= preview.SuccessRate
 	backlashDamage := 0.0
 
 	if !succeeded {
 		eventType = "KILLER_MOVE_FAILED"
-		backlashDamage = preview.TotalManaCost * killerMoveBacklashRate
+		supportCount := len(supportIDs)
+		backlashDamage = preview.TotalManaCost * killerMoveBacklashManaFactor * float64(supportCount)
+		if backlashDamage < 1.0 {
+			backlashDamage = preview.TotalManaCost * 0.5
+		}
 		player.HP = math.Max(0, player.HP-backlashDamage)
-		logs = append(logs, fmt.Sprintf("Sát chiêu mất ổn định (%.1f%%). Phản phệ gây %.1f sát thương.", preview.Stability, backlashDamage))
+		// V2: Aperture damage on backlash
+		player.ApertureDamage += backlashDamage * 0.1
+		logs = append(logs, fmt.Sprintf("Sát chiêu thất bại (%.1f%%). Phản phệ gây %.1f sát thương, tổn thương Không Khiếu.", preview.SuccessRate, backlashDamage))
 	} else {
 		if !move.IsMastered {
 			move.UsageCount++
@@ -318,7 +347,7 @@ func CastKillerMove(c *gin.Context) {
 			_, _ = tx.Exec(`UPDATE killer_moves SET usage_count = $1, is_mastered = $2 WHERE id = $3`, move.UsageCount, move.IsMastered, move.ID)
 		}
 
-		logs = append(logs, fmt.Sprintf("Sát chiêu ổn định (%.1f%%), gây %.1f sát thương và tạo %.1f phòng ngự.", preview.Stability, preview.DamageValue, preview.DefenseValue))
+		logs = append(logs, fmt.Sprintf("Sát chiêu ổn định (%.1f%%), gây %.1f sát thương và tạo %.1f phòng ngự.", preview.SuccessRate, preview.DamageValue, preview.DefenseValue))
 
 		// Log compound effects
 		if len(preview.CompoundEffects) > 0 {
@@ -389,46 +418,71 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 
 	coreActive := models.GetGuEffectSection(core.Spec, "active")
 	totalMana := core.Spec.BaseManaCost
-	damageBase := effectValue(coreActive, "damage", "base_damage", "add_base_attack")
-	defenseBase := effectValue(coreActive, "defense", "base_defense", "add_base_defense")
+
+	// V2: DamageBase = CoreGu.base_damage_bonus, DefenseBase = CoreGu.base_defense_bonus
+	damageBase := effectValue(coreActive, "base_damage_bonus", "damage")
+	defenseBase := effectValue(coreActive, "base_defense_bonus", "defense", "add_base_defense")
 	damageMultiplier := 1.0
 	defenseMultiplier := 1.0
 	effects := map[string]float64{}
 	mergeEffects(effects, coreActive)
-	compatibilityPenalty := 0.0
-	slotResults := []KillerMoveSlotPreview{{PlayerGuID: core.Instance.InstanceID, GuID: core.Instance.GuID, GuName: core.Spec.Name, SlotType: models.KillerMoveSlotCore, SlotIndex: 0, CompatibilityScore: 100, Applied: true}}
+	slotResults := []KillerMoveSlotPreview{{
+		PlayerGuID: core.Instance.InstanceID,
+		GuID:       core.Instance.GuID,
+		GuName:     core.Spec.Name,
+		SlotType:   models.KillerMoveSlotCore,
+		SlotIndex:  0,
+		Applied:    true,
+	}}
 
-	// Collect applied support specs and effects for compounding
 	var appliedSupportSpecs []*models.GuDictionaryItem
 	var appliedSupportEffects []map[string]float64
 
-	moveTypeSeed := inferMoveType(damageBase, defenseBase, effects)
+	pathConflictPenalty := 0.0
+	successRateBonus := 0.0
+	channelTime := int(effectValue(coreActive, "channel_time", "channeling"))
+
 	for idx, support := range supports {
 		totalMana += support.Spec.BaseManaCost * killerMoveSupportCostRate
 		supportEffects := models.GetGuEffectSection(support.Spec, "support")
-		compatibilityScore, supportWarnings := calculateSupportCompatibility(core.Spec, support.Spec, moveTypeSeed)
-		applied := compatibilityScore >= 30
-		if applied {
-			damageBase += effectValue(supportEffects, "flat_damage", "damage", "add_base_attack")
-			defenseBase += effectValue(supportEffects, "flat_defense", "defense", "add_base_defense")
-			damageMultiplier *= 1 + effectValue(supportEffects, "damage_multiplier", "damage_boost")
-			defenseMultiplier *= 1 + effectValue(supportEffects, "defense_multiplier", "defense_boost")
-			mergeEffects(effects, supportEffects)
-			appliedSupportSpecs = append(appliedSupportSpecs, &support.Spec)
-			appliedSupportEffects = append(appliedSupportEffects, supportEffects)
-		} else {
-			compatibilityPenalty += float64(30 - compatibilityScore)
+
+		// V2: Path Conflict Penalty
+		conflictPct, isOpposing := calculatePathConflict(core.Spec, support.Spec)
+		pathConflictPenalty += conflictPct
+		slotWarnings := []string{}
+		if isOpposing {
+			slotWarnings = append(slotWarnings, fmt.Sprintf("%s %s đối nghịch với %s! Phạt +%.0f%% thất bại.", support.Spec.Name, support.Spec.Path, core.Spec.Path, conflictPct))
+		} else if conflictPct > 0 {
+			slotWarnings = append(slotWarnings, fmt.Sprintf("%s %s khác với %s. Phạt +%.0f%% thất bại.", support.Spec.Name, support.Spec.Path, core.Spec.Path, conflictPct))
 		}
-		slotResults = append(slotResults, KillerMoveSlotPreview{PlayerGuID: support.Instance.InstanceID, GuID: support.Instance.GuID, GuName: support.Spec.Name, SlotType: models.KillerMoveSlotSupport, SlotIndex: idx + 1, CompatibilityScore: compatibilityScore, Applied: applied, Warnings: supportWarnings})
+
+		// V2: All supports apply (no threshold)
+		damageBase += effectValue(supportEffects, "base_damage_bonus", "flat_damage", "damage")
+		defenseBase += effectValue(supportEffects, "base_defense_bonus", "flat_defense", "defense")
+		damageMultiplier *= 1 + effectValue(supportEffects, "damage_multiplier", "damage_boost")
+		defenseMultiplier *= 1 + effectValue(supportEffects, "defense_multiplier", "defense_boost", "shield_multiplier")
+		successRateBonus += effectValue(supportEffects, "success_rate_bonus", "stability_bonus")
+		successRateBonus -= effectValue(supportEffects, "stability_penalty")
+		channelTime += int(effectValue(supportEffects, "channeling_reduction"))
+		mergeEffects(effects, supportEffects)
+		appliedSupportSpecs = append(appliedSupportSpecs, &support.Spec)
+		appliedSupportEffects = append(appliedSupportEffects, supportEffects)
+
+		slotResults = append(slotResults, KillerMoveSlotPreview{
+			PlayerGuID: support.Instance.InstanceID,
+			GuID:       support.Instance.GuID,
+			GuName:     support.Spec.Name,
+			SlotType:   models.KillerMoveSlotSupport,
+			SlotIndex:  idx + 1,
+			Applied:    true,
+			Warnings:   slotWarnings,
+		})
 	}
 
 	// ── COMPOUND EFFECT DETECTION ──
 	allCompounds := detectCompounds(coreActive, appliedSupportEffects, effects)
-	synergyCompounds, synDmgBonus, synStabilityBonus, synSpecial := detectSynergy(&core.Spec, appliedSupportSpecs)
+	synergyCompounds, synDmgBonus, synSuccessBonus, synSpecial := detectSynergy(&core.Spec, appliedSupportSpecs)
 	allCompounds = append(allCompounds, synergyCompounds...)
-
-	// Apply compound transforms to damage/defense/effects
-	// Synergy bonus multiplies final damage
 	if synDmgBonus > 0 {
 		damageMultiplier *= synDmgBonus
 	}
@@ -437,13 +491,32 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 		damageMultiplier, defenseMultiplier,
 	)
 
-	// ── STABILITY ──
-	stability := killerMoveBaseStability - float64(len(supports))*killerMoveSupportPenalty - compatibilityPenalty + float64(attainmentLevel(player, core.Spec.Path))*killerMoveAttainmentBonus + synStabilityBonus
-	if req.ApplyMultiTaskPenalty {
-		stability -= killerMoveMultiTaskPenalty
+	// ── V2: DaoBonus ──
+	daoMarks := 0.0
+	if player.DaoMarks != nil {
+		daoMarks = float64(player.DaoMarks[normalizePath(core.Spec.Path)])
 	}
-	stability = clamp(stability, killerMoveMinStability, killerMoveMaxStability)
-	warnings := stabilityWarnings(stability)
+	daoBonus := 1.0 + daoMarks/100.0
+	finalDamage *= daoBonus
+	finalDefense *= daoBonus
+
+	// ── V2: SUCCESS RATE ──
+	wisdom := player.Wisdom
+	attainment := float64(attainmentLevel(player, core.Spec.Path))
+	successRate := killerMoveBaseSuccessRate +
+		wisdom*killerMoveWisdomBonusFactor +
+		attainment*killerMoveAttainmentBonusFactor +
+		successRateBonus -
+		float64(len(supports))*killerMoveSupportCountPenalty -
+		pathConflictPenalty +
+		synSuccessBonus
+	successRate = clamp(successRate, killerMoveMinSuccessRate, killerMoveMaxSuccessRate)
+
+	if channelTime < 0 {
+		channelTime = 0
+	}
+
+	warnings := successRateWarnings(successRate)
 	for _, slot := range slotResults {
 		warnings = append(warnings, slot.Warnings...)
 	}
@@ -466,14 +539,14 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 		CorePlayerGuID:  core.Instance.InstanceID,
 		SupportGuIDs:    req.SupportPlayerGuIDs,
 		TotalManaCost:   round(totalMana),
-		Stability:       round(stability),
+		SuccessRate:     round(successRate),
 		DamageValue:     round(finalDamage),
 		DefenseValue:    round(finalDefense),
 		Cooldown:        1 + len(supports)/3,
-		CastTime:        1,
+		ChannelTime:     channelTime,
 		Effects:         finalEffects,
-		IsStable:        stability >= 80,
-		IsInstantCast:   len(supports) <= 2 && stability >= 80,
+		IsReliable:      successRate >= 80,
+		IsInstantCast:   channelTime <= 0 && successRate >= 80,
 		Warnings:        warnings,
 		SlotResults:     slotResults,
 		CompoundEffects: allCompounds,
@@ -481,8 +554,8 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 }
 
 func resolveKillerMoveGu(req CalculateKillerMoveRequest, player *models.Player, tx *sql.Tx) (ownedGu, []ownedGu, error) {
-	if len(req.SupportPlayerGuIDs) > 8 {
-		return ownedGu{}, nil, fmt.Errorf("Sát chiêu chỉ hỗ trợ tối đa 8 Cổ phụ trợ")
+	if len(req.SupportPlayerGuIDs) > killerMoveMaxSupport {
+		return ownedGu{}, nil, fmt.Errorf("Sát chiêu chỉ hỗ trợ tối đa %d Cổ phụ trợ", killerMoveMaxSupport)
 	}
 	seen := map[string]bool{req.CorePlayerGuID: true}
 	core, err := findUsableOwnedGu(player, req.CorePlayerGuID, tx)
@@ -552,7 +625,7 @@ func isGuLockedForExchange(tx *sql.Tx, playerID uuid.UUID, instanceID string) (b
 }
 
 func loadKillerMoves(playerID uuid.UUID) ([]models.KillerMove, error) {
-	rows, err := db.DB.Query(`SELECT id, player_id, name, path, move_type, rank_required, core_player_gu_id, total_mana_cost, stability, damage_value, defense_value, cooldown, cast_time, effects, is_mastered, is_stable, is_instant_cast, created_at, updated_at FROM killer_moves WHERE player_id = $1 ORDER BY updated_at DESC`, playerID)
+	rows, err := db.DB.Query(`SELECT id, player_id, name, path, move_type, rank_required, core_player_gu_id, total_mana_cost, success_rate, damage_value, defense_value, cooldown, channel_time, effects, is_mastered, is_reliable, is_instant_cast, created_at, updated_at FROM killer_moves WHERE player_id = $1 ORDER BY updated_at DESC`, playerID)
 	if err != nil {
 		return nil, err
 	}
@@ -572,7 +645,7 @@ func loadKillerMoves(playerID uuid.UUID) ([]models.KillerMove, error) {
 }
 
 func loadKillerMove(playerID uuid.UUID, id string) (models.KillerMove, error) {
-	row := db.DB.QueryRow(`SELECT id, player_id, name, path, move_type, rank_required, core_player_gu_id, total_mana_cost, stability, damage_value, defense_value, cooldown, cast_time, effects, is_mastered, is_stable, is_instant_cast, created_at, updated_at FROM killer_moves WHERE id = $1 AND player_id = $2`, id, playerID)
+	row := db.DB.QueryRow(`SELECT id, player_id, name, path, move_type, rank_required, core_player_gu_id, total_mana_cost, success_rate, damage_value, defense_value, cooldown, channel_time, effects, is_mastered, is_reliable, is_instant_cast, created_at, updated_at FROM killer_moves WHERE id = $1 AND player_id = $2`, id, playerID)
 	m, err := scanKillerMove(row)
 	if err != nil {
 		return m, err
@@ -582,7 +655,7 @@ func loadKillerMove(playerID uuid.UUID, id string) (models.KillerMove, error) {
 }
 
 func loadKillerMoveTx(tx *sql.Tx, playerID uuid.UUID, id string) (models.KillerMove, []models.KillerMoveSlot, error) {
-	row := tx.QueryRow(`SELECT id, player_id, name, path, move_type, rank_required, core_player_gu_id, total_mana_cost, stability, damage_value, defense_value, cooldown, cast_time, effects, is_mastered, is_stable, is_instant_cast, created_at, updated_at FROM killer_moves WHERE id = $1 AND player_id = $2 FOR UPDATE`, id, playerID)
+	row := tx.QueryRow(`SELECT id, player_id, name, path, move_type, rank_required, core_player_gu_id, total_mana_cost, success_rate, damage_value, defense_value, cooldown, channel_time, effects, is_mastered, is_reliable, is_instant_cast, created_at, updated_at FROM killer_moves WHERE id = $1 AND player_id = $2 FOR UPDATE`, id, playerID)
 	m, err := scanKillerMove(row)
 	if err != nil {
 		return m, nil, err
@@ -600,7 +673,7 @@ type rowScanner interface{ Scan(dest ...any) error }
 
 func scanKillerMove(row rowScanner) (models.KillerMove, error) {
 	var m models.KillerMove
-	err := row.Scan(&m.ID, &m.PlayerID, &m.Name, &m.Path, &m.MoveType, &m.RankRequired, &m.CorePlayerGuID, &m.TotalManaCost, &m.Stability, &m.DamageValue, &m.DefenseValue, &m.Cooldown, &m.CastTime, &m.Effects, &m.IsMastered, &m.IsStable, &m.IsInstantCast, &m.CreatedAt, &m.UpdatedAt)
+	err := row.Scan(&m.ID, &m.PlayerID, &m.Name, &m.Path, &m.MoveType, &m.RankRequired, &m.CorePlayerGuID, &m.TotalManaCost, &m.SuccessRate, &m.DamageValue, &m.DefenseValue, &m.Cooldown, &m.ChannelTime, &m.Effects, &m.IsMastered, &m.IsReliable, &m.IsInstantCast, &m.CreatedAt, &m.UpdatedAt)
 	return m, err
 }
 
@@ -678,8 +751,8 @@ func applyKillerMoveToCombat(combat *models.CombatState, casterID, targetID stri
 			toxicDmg = c.Value * 0.3
 		case "bloodthirsty_strength":
 			hasLifesteal = true
-			if effects["lifesteal"] > 0 {
-				lifestealPct = effects["lifesteal"]
+			if v := effectValue(effects, "life_steal", "lifesteal"); v > 0 {
+				lifestealPct = v
 			} else {
 				lifestealPct = 15.0
 			}
@@ -779,7 +852,7 @@ func applyKillerMoveToCombat(combat *models.CombatState, casterID, targetID stri
 					combat.Enemies[i].StatusEffects = append(combat.Enemies[i].StatusEffects, models.StatusEffect{Type: "poison", Value: toxicDmg, Turns: 3})
 					*logs = append(*logs, fmt.Sprintf("%s bị trúng độc từ vết thương!", combat.Enemies[i].Name))
 				}
-				if bleed, ok := effects["bleed_effect"]; ok && bleed > 0 {
+				if bleed, ok := effects["bleed"]; ok && bleed > 0 {
 					combat.Enemies[i].StatusEffects = append(combat.Enemies[i].StatusEffects, models.StatusEffect{Type: "bleed", Value: bleed, Turns: 3})
 					*logs = append(*logs, fmt.Sprintf("%s bị chảy máu!", combat.Enemies[i].Name))
 				}
@@ -822,62 +895,35 @@ func mergeEffects(dst map[string]float64, src map[string]float64) {
 		dst[k] += v
 	}
 }
-func calculateSupportCompatibility(core models.GuDictionaryItem, support models.GuDictionaryItem, moveType string) (int, []string) {
-	score := 50
-	sharedTags := sharedStringCount(append(core.CombatTags, core.SupportTags...), append(support.CombatTags, support.SupportTags...))
-	if normalizePath(support.Path) == normalizePath(core.Path) {
-		score += 30
-	} else {
-		score -= 20
+
+// V2: Path Conflict — returns (penalty, isOpposing)
+func calculatePathConflict(core models.GuDictionaryItem, support models.GuDictionaryItem) (float64, bool) {
+	corePath := normalizePath(core.Path)
+	supportPath := normalizePath(support.Path)
+	if corePath == supportPath {
+		return 0, false
 	}
-	if sharedTags > 0 {
-		score += sharedTags * 10
-	} else {
-		score -= 15
+	if isOpposingPath(corePath, supportPath) {
+		return killerMovePathOppositionPenalty, true
 	}
-	if supportRoleMatchesMoveType(support, moveType) {
-		score += 20
-	} else {
-		score -= 25
-	}
-	warnings := []string{}
-	if score < 30 {
-		warnings = append(warnings, fmt.Sprintf("%s không phù hợp với sát chiêu %s %s. Hiệu ứng phụ trợ không được cộng vào sát chiêu này.", support.Name, core.Path, moveType))
-	}
-	return score, warnings
+	return killerMovePathConflictPenaltyBase, false
 }
 
-func sharedStringCount(left []string, right []string) int {
-	seen := map[string]bool{}
-	for _, value := range left {
-		key := strings.ToLower(strings.TrimSpace(value))
-		if key != "" {
-			seen[key] = true
-		}
+func isOpposingPath(a, b string) bool {
+	opposingPairs := [][2]string{
+		{"fire", "water"},
+		{"strength", "wisdom"},
+		{"metal", "wood"},
+		{"light", "dark"},
+		{"lightning", "earth"},
+		{"moon", "sun"},
+		{"creation", "destruction"},
+		{"life", "death"},
 	}
-	count := 0
-	for _, value := range right {
-		key := strings.ToLower(strings.TrimSpace(value))
-		if seen[key] {
-			count++
-			seen[key] = false
-		}
-	}
-	return count
-}
-
-func supportRoleMatchesMoveType(support models.GuDictionaryItem, moveType string) bool {
-	move := strings.ToUpper(strings.TrimSpace(moveType))
-	role := strings.ToUpper(strings.TrimSpace(support.PrimaryRole))
-	if role == "" || move == "UTILITY" {
-		return true
-	}
-	if strings.Contains(role, move) || strings.Contains(role, "SUPPORT") || strings.Contains(role, "BOOST") {
-		return true
-	}
-	for _, combatRole := range support.CombatRoles {
-		normalized := strings.ToUpper(strings.TrimSpace(combatRole))
-		if strings.Contains(normalized, move) || strings.Contains(normalized, "SUPPORT") || strings.Contains(normalized, "BOOST") {
+	a = strings.ToLower(strings.TrimSpace(a))
+	b = strings.ToLower(strings.TrimSpace(b))
+	for _, pair := range opposingPairs {
+		if (a == pair[0] && b == pair[1]) || (a == pair[1] && b == pair[0]) {
 			return true
 		}
 	}
@@ -915,11 +961,11 @@ func clamp(v, min, max float64) float64 {
 	return v
 }
 func round(v float64) float64 { return math.Round(v*100) / 100 }
-func stabilityWarnings(stability float64) []string {
-	if stability >= 80 {
+func successRateWarnings(successRate float64) []string {
+	if successRate >= 80 {
 		return []string{"Ổn định"}
 	}
-	if stability >= 50 {
+	if successRate >= 50 {
 		return []string{"Có rủi ro: sát chiêu có thể phản phệ"}
 	}
 	return []string{"Nguy hiểm: cấu trúc sát chiêu rất bất ổn"}

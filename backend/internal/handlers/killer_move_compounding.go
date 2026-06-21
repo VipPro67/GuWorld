@@ -31,8 +31,8 @@ type compoundRule struct {
 var compoundRules = []compoundRule{
 	{
 		Name: "xuất huyết trọng thương", Type: "hemorrhage",
-		Requires: []string{"damage", "bleed_effect", "bleed"},
-		Boosts:   []string{"dot_multiplier"},
+		Requires: []string{"damage", "bleed"},
+		Boosts:   []string{"damage_multiplier"},
 		MinCount: 2,
 		Description: "Sát thương kết hợp với tổn thương máu tạo thành vết thương xuất huyết không ngừng. " +
 			"Mỗi Cổ phụ trợ có hiệu ứng chảy máu gia tăng cường độ xuất huyết.",
@@ -48,8 +48,8 @@ var compoundRules = []compoundRule{
 	},
 	{
 		Name: "khiên sinh mệnh", Type: "regenerative_shield",
-		Requires: []string{"add_base_defense", "defense", "healing", "restore_hp", "heal_based_on_strength"},
-		Boosts:   []string{"defense_multiplier", "healing_multiplier"},
+		Requires: []string{"add_base_defense", "defense", "heal", "restore_hp", "heal_based_on_strength"},
+		Boosts:   []string{"defense_multiplier", "heal_multiplier"},
 		MinCount: 2,
 		Description: "Phòng ngự kết hợp sinh lực tạo thành lá chắn tự hồi phục. " +
 			"Mỗi Cổ phụ trợ gia tăng khả năng tái tạo của khiên.",
@@ -67,7 +67,7 @@ var compoundRules = []compoundRule{
 	{
 		Name: "độc nhận phá thể", Type: "toxic_wound",
 		Requires: []string{"damage", "poison"},
-		Boosts:   []string{"dot_multiplier", "damage_multiplier"},
+		Boosts:   []string{"damage_multiplier"},
 		MinCount: 2,
 		Description: "Sát thương tẩm độc ăn mòn đối thủ cả về thể xác lẫn chân nguyên. " +
 			"Hiệu quả tăng theo số Cổ phụ trợ có thuộc tính độc.",
@@ -288,12 +288,12 @@ func detectCompounds(coreEffects map[string]float64, supportEffects []map[string
 		for k, v := range se {
 			allKeys[k] += v
 		}
-		// also check for damage/attack keywords in support flat_damage
-		if flatDmg, ok := se["flat_damage"]; ok && flatDmg > 0 {
-			allKeys["damage"] += flatDmg
+		// also check for damage/attack keywords in support base_damage_bonus
+		if baseDmg, ok := se["base_damage_bonus"]; ok && baseDmg > 0 {
+			allKeys["damage"] += baseDmg
 		}
-		if flatDef, ok := se["flat_defense"]; ok && flatDef > 0 {
-			allKeys["defense"] += flatDef
+		if baseDef, ok := se["base_defense_bonus"]; ok && baseDef > 0 {
+			allKeys["defense"] += baseDef
 		}
 	}
 	// also include compounded/active effects
@@ -434,7 +434,7 @@ func applyCompoundEffects(baseDamage, baseDefense float64, effects map[string]fl
 		case "hemorrhage":
 			finalDamage += c.Value * 0.3
 			finalEffects["hemorrhage"] = c.Value * 0.7
-			finalEffects["bleed_effect"] = c.Value * 0.5
+			finalEffects["bleed"] = c.Value * 0.5
 		case "regenerative_shield":
 			finalDefense += c.Value * 0.6
 			finalEffects["regen_per_turn"] = c.Value * 0.4
@@ -449,7 +449,7 @@ func applyCompoundEffects(baseDamage, baseDefense float64, effects map[string]fl
 			finalEffects["speed_boost"] = c.Value * 0.4
 		case "bloodthirsty_strength":
 			finalDamage += c.Value
-			finalEffects["lifesteal"] = c.Value * 0.1
+			finalEffects["life_steal"] = c.Value * 0.1
 		case "phantom_onslaught":
 			finalDamage += c.Value
 			finalEffects["phantom_attack"] = c.Value
