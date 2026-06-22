@@ -342,6 +342,7 @@ func (d DaoMarksMap) Value() (driver.Value, error) {
 // Scan implements the sql.Scanner interface for CombatState pointer
 func (c *CombatState) Scan(value interface{}) error {
 	if value == nil {
+		*c = CombatState{}
 		return nil
 	}
 	b, ok := value.([]byte)

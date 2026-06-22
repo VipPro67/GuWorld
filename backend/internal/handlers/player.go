@@ -819,10 +819,10 @@ func Explore(c *gin.Context) {
 	// 5. Persist changes
 	updateQuery := `
 		UPDATE players
-		SET current_mana = $1, primeval_stones = $2, materials_inventory = $3, gu_inventory = $4, last_mana_update = $5, unlocked_recipes = $6
-		WHERE id = $7
+		SET current_mana = $1, primeval_stones = $2, materials_inventory = $3, gu_inventory = $4, last_mana_update = $5, unlocked_recipes = $6, explored_cells = $7
+		WHERE id = $8
 	`
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.MaterialsInventory, player.GuInventory, player.LastManaUpdate, player.UnlockedRecipes, player.ID)
+	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.MaterialsInventory, player.GuInventory, player.LastManaUpdate, player.UnlockedRecipes, player.ExploredCells, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update explore progress: " + err.Error()})
 		return

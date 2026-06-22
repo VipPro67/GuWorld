@@ -10,7 +10,7 @@ import (
 
 func getSoulTierLimit(tier string) int {
 	switch tier {
-	case "NHAN_HON":
+	case "", "NHAN_HON":
 		return 100
 	case "BACH_NHAN":
 		return 1000
@@ -23,13 +23,13 @@ func getSoulTierLimit(tier string) int {
 	case "THIEN_VAN":
 		return 100000000
 	default:
-		return 1000000000
+		return 100
 	}
 }
 
 func getNextSoulTier(tier string) string {
 	switch tier {
-	case "NHAN_HON":
+	case "", "NHAN_HON":
 		return "BACH_NHAN"
 	case "BACH_NHAN":
 		return "THIEN_NHAN"
@@ -42,7 +42,7 @@ func getNextSoulTier(tier string) string {
 	case "THIEN_VAN":
 		return "UC_NHAN"
 	default:
-		return "UC_NHAN"
+		return "BACH_NHAN"
 	}
 }
 

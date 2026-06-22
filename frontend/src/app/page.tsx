@@ -106,12 +106,15 @@ export default function Home() {
   }, [player, fetchPlayerStatus]);
 
   // 3. Trade realtime subscription. This replaces the old /api/trade/active polling loop.
+  const isPlayerReady = !!player;
   useEffect(() => {
-    if (!player) return;
+    if (!isPlayerReady) return;
 
     subscribeTradeEvents();
     return () => unsubscribeTradeEvents();
-  }, [player, subscribeTradeEvents, unsubscribeTradeEvents]);
+    // Only subscribe once when player becomes available, not on every player state change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlayerReady]);
 
   const handleLogout = () => {
     logout();

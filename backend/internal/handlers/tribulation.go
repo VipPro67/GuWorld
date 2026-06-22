@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -1224,24 +1225,38 @@ func ProcessActiveTribulationGrid() error {
 	return tx.Commit()
 }
 
-func StartTribulationWorker() {
+func StartTribulationWorker(ctx context.Context) {
 	ticker60 := time.NewTicker(60 * time.Second)
 	ticker15 := time.NewTicker(15 * time.Second)
 
 	go func() {
-		for range ticker60.C {
-			err := CheckAndTriggerTribulations()
-			if err != nil {
-				log.Printf("Tribulation background worker error: %v", err)
+		defer ticker60.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("Tribulation worker (60s) stopped")
+				return
+			case <-ticker60.C:
+				err := CheckAndTriggerTribulations()
+				if err != nil {
+					log.Printf("Tribulation background worker error: %v", err)
+				}
 			}
 		}
 	}()
 
 	go func() {
-		for range ticker15.C {
-			err := ProcessActiveTribulationGrid()
-			if err != nil {
-				log.Printf("Tribulation grid worker error: %v", err)
+		defer ticker15.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("Tribulation worker (15s) stopped")
+				return
+			case <-ticker15.C:
+				err := ProcessActiveTribulationGrid()
+				if err != nil {
+					log.Printf("Tribulation grid worker error: %v", err)
+				}
 			}
 		}
 	}()

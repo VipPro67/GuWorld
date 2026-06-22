@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -38,6 +39,10 @@ func Connect() error {
 	if err != nil {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
+
+	DB.SetMaxOpenConns(25)
+	DB.SetMaxIdleConns(10)
+	DB.SetConnMaxLifetime(5 * time.Minute)
 
 	log.Println("Successfully connected to the database")
 	return nil
@@ -971,10 +976,14 @@ func InitSchema() error {
 		}
 	}
 
-	// Set is_admin = true for developer usernames
-	_, err = DB.Exec(`UPDATE players SET is_admin = true WHERE username IN ('admin', 'Bảo Hoàng Thiên')`)
-	if err != nil {
-		log.Printf("Warning: failed to update is_admin status: %v", err)
+	// Set is_admin = true only if no admin exists yet (first deploy)
+	var adminCount int
+	_ = DB.QueryRow(`SELECT COUNT(*) FROM players WHERE is_admin = true`).Scan(&adminCount)
+	if adminCount == 0 {
+		_, err = DB.Exec(`UPDATE players SET is_admin = true WHERE username IN ('admin', 'Bảo Hoàng Thiên')`)
+		if err != nil {
+			log.Printf("Warning: failed to update is_admin status: %v", err)
+		}
 	}
 
 	// Drop obsolete columns
@@ -2104,13 +2113,11 @@ func SeedSects() error {
 		},
 	}
 
-	// Clean existing and re-seed to avoid duplicates
-	_, _ = DB.Exec(`DELETE FROM sect_missions`)
-
 	for _, m := range missions {
 		_, err := DB.Exec(`
 			INSERT INTO sect_missions (sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			ON CONFLICT DO NOTHING
 		`, m.SectID, m.Title, m.Description, m.MissionType, m.TargetID, m.TargetAmount, m.RewardContribution, m.RequiredMemberRank)
 		if err != nil {
 			return fmt.Errorf("failed to seed mission %s: %w", m.Title, err)
@@ -2145,7 +2152,7 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string) (bool, error) {
 	err = tx.QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM players 
-			WHERE temp_loot->'gu_inventory' @> CONCAT('[{"gu_id": "', $1::text, '"}]')::jsonb
+			WHERE temp_loot->'gu_inventory' @> jsonb_build_array(jsonb_build_object('gu_id', $1::text))
 		)
 	`, guID).Scan(&exists)
 	if err != nil {

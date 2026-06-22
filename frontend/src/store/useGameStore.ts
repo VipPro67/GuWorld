@@ -682,6 +682,7 @@ interface GameState {
   subscribePlayerEvents: () => void;
   unsubscribePlayerEvents: () => void;
   playerEventsConnected: boolean;
+  playerEventsRetries: number;
   subscribeTradeEvents: () => void;
   unsubscribeTradeEvents: () => void;
   subscribeBaoHoangMessages: (channel: string) => void;
@@ -960,6 +961,7 @@ export const useGameStore = create<GameState>((set, get) => {
   actionLoading: false,
   error: null,
   playerEventsConnected: false,
+  playerEventsRetries: 0,
   logs: ["Chào mừng đạo hữu đến với Cổ Giới. Hãy tu luyện và sinh tồn."],
   referralsData: null,
   guDictionary: {},
@@ -1131,7 +1133,15 @@ export const useGameStore = create<GameState>((set, get) => {
         const currentPlayer = get().player;
         if (!currentPlayer || currentPlayer.id !== payload.data.id) return;
 
-        set({ player: normalizePlayer({ ...currentPlayer, ...payload.data }) });
+        // Only merge scalar fields from SSE to avoid overwriting arrays with stale data
+        const { active_combat, ...rest } = payload.data;
+        set({
+          player: normalizePlayer({
+            ...currentPlayer,
+            ...rest,
+            ...(active_combat !== undefined ? { active_combat } : {}),
+          }),
+        });
 
         if (payload.type === "combat.started") {
           get().addLog("Chiến đấu realtime đã bắt đầu.");
@@ -1147,9 +1157,19 @@ export const useGameStore = create<GameState>((set, get) => {
       source.addEventListener(eventType, mergePlayerEvent as EventListener);
     });
 
-    source.onopen = () => set({ playerEventsConnected: true });
+    source.onopen = () => {
+      set({ playerEventsConnected: true, playerEventsRetries: 0 });
+    };
     source.onerror = () => {
       set({ playerEventsConnected: false });
+      source.close();
+      // Auto-reconnect with exponential backoff
+      const retries = get().playerEventsRetries || 0;
+      const delay = Math.min(1000 * Math.pow(2, retries), 30000);
+      set({ playerEventsRetries: retries + 1 });
+      setTimeout(() => {
+        if (get().token) get().subscribePlayerEvents();
+      }, delay);
     };
   },
 
@@ -1601,6 +1621,7 @@ export const useGameStore = create<GameState>((set, get) => {
       });
     } catch (err: any) {
       console.error("Dictionary sync error:", err.message);
+      set({ dictionaryLoaded: true }); // Don't block the app on dictionary failure
     }
   },
 

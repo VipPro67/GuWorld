@@ -28,16 +28,16 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 - **No migrations.** Schema is `CREATE TABLE IF NOT EXISTS` in `backend/internal/db/db.go`. Modify SQL there and re-run.
 - **CSV seed is append-only.** New rows inserted once on first run. Updates require CSV edit + restart.
 - **Registries cached in memory** on startup (`models.GuRegistry`, `models.ItemRegistry`). Changing CSV requires app restart.
-- **Workers are goroutine polling loops**, not job queues. Hunger, tribulation, mine monsters.
+- **Workers are goroutine polling loops**, not job queues. Hunger, tribulation, mine monsters. All workers accept `context.Context` for graceful shutdown.
 - **Redis is optional.** Failure logs warning, server continues.
-- **JSONB fields** use `interface{}` with custom `Scan`/`Value`. Watch for type assertion panics.
+- **JSONB fields** use `interface{}` with custom `Scan`/`Value`. Watch for type assertion panics. `CombatState.Scan` now returns empty struct (not nil) on null.
 - **Handlers return errors** to Gin; no panic recovery middleware.
 
 ## Frontend Conventions
 
 - **Zustand store is both state + API client.** `frontend/src/store/useGameStore.ts` has no separate service/API layer. Methods like `store.attackEnemy()` call fetch + update state.
 - **Optimistic updates** in combat and some actions; handle rollback on failure.
-- **SSE subscriptions** in Zustand for player events, trade, chat. If backend restarts, SSE dies — reconnect logic needed.
+- **SSE subscriptions** in Zustand for player events, trade, chat. Player events now have auto-reconnect with exponential backoff.
 - **Next.js 16 has breaking changes.** Check `node_modules/next/dist/docs/` before writing framework-specific code.
 
 ## Documentation (update when changing code)

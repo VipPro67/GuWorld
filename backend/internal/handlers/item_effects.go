@@ -143,7 +143,12 @@ func openMineChestEffect(player *models.Player, item models.ItemSpec) (string, e
 	// Drop rate (tỉ lệ ra): higher rank/rarity = lower rate = fewer but better items.
 	//   R5 = 1000, R6 = 1, decreasing by factor 1000 per rank:
 	//   rate = 1000 * 10^(-3*(rank-5))
-	rankDrop := math.Pow(10, -3.0*float64(item.Rank-5))
+	//   Clamp effective rank to >= 5 to avoid exponential explosion for low-rank chests
+	effectiveRank := item.Rank
+	if effectiveRank < 5 {
+		effectiveRank = 5
+	}
+	rankDrop := math.Pow(10, -3.0*float64(effectiveRank-5))
 	rate := 1000.0 * rankDrop
 	rate /= math.Max(1.0, float64(item.Rarity))
 	rel := rate / 1000.0 // relative to R5 baseline (R5=1, R6=0.001)

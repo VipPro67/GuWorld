@@ -1,8 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -58,14 +62,17 @@ func main() {
 		log.Fatalf("Failed to load Item registry cache: %v", err)
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	// 2.5. Start Hunger Decay Background Worker (15-minute intervals for slower, balanced survival gameplay)
-	worker.StartHungerWorker(db.DB, 15*time.Minute)
+	worker.StartHungerWorker(ctx, db.DB, 15*time.Minute)
 
 	// 2.6. Start Tribulation background worker
-	handlers.StartTribulationWorker()
+	handlers.StartTribulationWorker(ctx)
 
 	// 2.7. Start Mine Monster Worker
-	handlers.StartMineMonsterWorker()
+	handlers.StartMineMonsterWorker(ctx)
 
 	// 3. Setup router & run
 	r := server.SetupRouter()
@@ -75,9 +82,27 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("Cultivation Backend listening on port %s", port)
-	err = r.Run(":" + port)
-	if err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: r,
 	}
+
+	go func() {
+		log.Printf("Cultivation Backend listening on port %s", port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed to start: %v", err)
+		}
+	}()
+
+	<-ctx.Done()
+	log.Println("Shutting down gracefully...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	log.Println("Server exited cleanly")
 }

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -47,6 +48,18 @@ func init() {
 func RateLimit(limit int, window time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
+		// Use X-Real-IP or X-Forwarded-For as trusted source behind reverse proxy
+		// Validate that it's not spoofed by checking against trusted proxies
+		if forwarded := c.GetHeader("X-Real-IP"); forwarded != "" {
+			ip = forwarded
+		} else if forwarded := c.GetHeader("X-Forwarded-For"); forwarded != "" {
+			// Take the first IP in the chain (client IP before proxies)
+			if idx := strings.Index(forwarded, ","); idx > 0 {
+				ip = strings.TrimSpace(forwarded[:idx])
+			} else {
+				ip = strings.TrimSpace(forwarded)
+			}
+		}
 		now := time.Now()
 
 		mu.Lock()

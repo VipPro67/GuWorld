@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -15,6 +16,7 @@ var secretKey []byte
 func init() {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
+		log.Println("WARNING: JWT_SECRET not set! Using default insecure secret. Set JWT_SECRET in production.")
 		secret = "guworld_cultivation_secret_key_change_me"
 	}
 	secretKey = []byte(secret)

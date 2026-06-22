@@ -108,18 +108,22 @@ func writePlayerSnapshotEvent(c *gin.Context, playerID uuid.UUID, eventType stri
 }
 
 func loadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, error) {
-	tx, err := db.DB.Begin()
+	var player models.Player
+	err := db.DB.QueryRow(`
+		SELECT id, username, rank, sub_rank, current_mana, max_mana, last_mana_update,
+			time_speed_multiplier, active_combat, aperture_stress, hp, base_hp,
+			primeval_stones, immortal_stones, wall_progress, human_qi,
+			lifespan, max_lifespan, x, y, current_region
+		FROM players WHERE id = $1
+	`, playerID).Scan(
+		&player.ID, &player.Username, &player.Rank, &player.SubRank,
+		&player.CurrentMana, &player.MaxMana, &player.LastManaUpdate,
+		&player.TimeSpeedMultiplier, &player.ActiveCombat, &player.ApertureStress,
+		&player.HP, &player.BaseHP, &player.PrimevalStones, &player.ImmortalStones,
+		&player.WallProgress, &player.HumanQi, &player.Lifespan, &player.MaxLifespan,
+		&player.X, &player.Y, &player.CurrentRegion,
+	)
 	if err != nil {
-		return PlayerRealtimeSnapshot{}, err
-	}
-	defer tx.Rollback()
-
-	player, err := evaluateManaTx(tx, playerID)
-	if err != nil {
-		return PlayerRealtimeSnapshot{}, err
-	}
-
-	if err := tx.Commit(); err != nil {
 		return PlayerRealtimeSnapshot{}, err
 	}
 

@@ -38,7 +38,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | GET | `/player/profile/:username` |
 | PUT | `/player/profile/settings` |
 | GET | `/player/referrals` |
-| POST | `/player/simulate-deposit` |
+| POST | `/player/simulate-deposit` | Admin only. |
 | POST | `/player/avatar` |
 | POST | `/player/tick-regen` |
 

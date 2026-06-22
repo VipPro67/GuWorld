@@ -73,10 +73,12 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   }, [fetchKillerMoves]);
 
   // Pre-populate auto settings from persistent combat config
+  const combatSettingsFetched = useRef(false);
   useEffect(() => {
-    if (!combatSettings) {
+    if (!combatSettings && !combatSettingsFetched.current) {
+      combatSettingsFetched.current = true;
       fetchCombatSettings();
-    } else {
+    } else if (combatSettings) {
       setAutoHealHP(combatSettings.auto_heal_hp);
       setHealThreshold(combatSettings.heal_threshold);
       setAutoRestoreMana(combatSettings.auto_restore_mana);

@@ -31,7 +31,7 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
   const { message, type } = toast;
 
   // Configuration based on toast type
-  const config = {
+  const configs = {
     success: {
       borderColor: "border-emerald-500/30",
       shadowColor: "shadow-emerald-950/20",
@@ -56,7 +56,8 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
       iconColor: "text-violet-400",
       icon: Info,
     },
-  }[type || "info"];
+  };
+  const config = configs[type] || configs.info;
 
   const Icon = config.icon;
 

@@ -190,6 +190,9 @@ type SimulateDepositRequest struct {
 
 // SimulateDeposit simulates referee purchasing Primeval Stones
 func SimulateDeposit(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})

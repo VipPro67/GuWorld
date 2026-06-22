@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -585,14 +586,21 @@ func AttackMineSlot(c *gin.Context) {
 }
 
 // StartMineMonsterWorker runs periodically to assign monsters to abandoned mines
-func StartMineMonsterWorker() {
+func StartMineMonsterWorker(ctx context.Context) {
 	ticker := time.NewTicker(60 * time.Minute) // check every hour
 	go func() {
-		for range ticker.C {
-			AssignMonstersToMines()
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("Mine Monster Worker stopped")
+				return
+			case <-ticker.C:
+				AssignMonstersToMines()
+			}
 		}
 	}()
-	// Run once at startup
+	// Run once at startup (in background)
 	go AssignMonstersToMines()
 }
 

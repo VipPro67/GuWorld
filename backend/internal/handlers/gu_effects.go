@@ -105,12 +105,8 @@ func ValidateGuUsable(player *models.Player, gu *models.GuInstance, spec *models
 		return fmt.Errorf("Cổ trùng chưa được trang bị: %s", spec.Name)
 	}
 
-	// Rule 1: Level Penalty (Backlash)
+	// Rule 1: Level Penalty (Backlash) — return error BEFORE applying damage
 	if player.Rank < spec.Rank {
-		player.HP -= 50
-		if player.HP < 0 {
-			player.HP = 0
-		}
 		return fmt.Errorf("Backlash: Cổ trùng Rank %d phản phệ Không Khiếu Rank %d! (Trừ 50 HP)", spec.Rank, player.Rank)
 	}
 
@@ -377,9 +373,12 @@ func handleIncreaseAptitude(player *models.Player, spec models.GuDictionaryItem)
 		player.AptitudePercent = 99
 	}
 
-	player.MaxMana = float64(player.AptitudePercent)
-	if player.CurrentMana > player.MaxMana {
-		player.CurrentMana = player.MaxMana
+	delta := float64(value)
+	if delta > 0 {
+		player.MaxMana += delta
+		if player.CurrentMana > player.MaxMana {
+			player.CurrentMana = player.MaxMana
+		}
 	}
 
 	return fmt.Sprintf("Tăng tư chất Không khiếu lên %d%%.", player.AptitudePercent), nil
@@ -475,6 +474,9 @@ func tickStatusEffects(player *models.Player, ctx *CombatContext) {
 		if se.Turns > 0 {
 			if se.Type == "bleed" || se.Type == "poison" {
 				player.ActiveCombat.EnemyHP -= se.Value
+				if player.ActiveCombat.EnemyHP < 0 {
+					player.ActiveCombat.EnemyHP = 0
+				}
 				ctx.Logs = append(ctx.Logs, fmt.Sprintf("-> Địch chịu %.1f sát thương từ hiệu ứng %s (còn %d lượt).", se.Value, se.Type, se.Turns-1))
 			}
 			se.Turns--
@@ -491,6 +493,9 @@ func tickStatusEffects(player *models.Player, ctx *CombatContext) {
 		if se.Turns > 0 {
 			if se.Type == "bleed" || se.Type == "poison" {
 				player.HP -= se.Value
+				if player.HP < 0 {
+					player.HP = 0
+				}
 				ctx.Logs = append(ctx.Logs, fmt.Sprintf("-> Đạo hữu chịu %.1f sát thương từ hiệu ứng %s (còn %d lượt).", se.Value, se.Type, se.Turns-1))
 			}
 			se.Turns--

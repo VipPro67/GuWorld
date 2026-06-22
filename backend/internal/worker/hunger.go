@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"log"
@@ -11,12 +12,19 @@ import (
 )
 
 // StartHungerWorker begins the background process for depleting Gu bug hunger.
-func StartHungerWorker(db *sql.DB, interval time.Duration) {
+func StartHungerWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	go func() {
 		log.Printf("Starting background Hunger Worker with tick interval of %v", interval)
-		for range ticker.C {
-			processHungerDecay(db)
+		for {
+			select {
+			case <-ctx.Done():
+				ticker.Stop()
+				log.Println("Hunger Worker stopped")
+				return
+			case <-ticker.C:
+				processHungerDecay(db)
+			}
 		}
 	}()
 }

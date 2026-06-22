@@ -88,6 +88,9 @@ func CombatAttack(c *gin.Context) {
 			if eff.Turns > 0 {
 				if eff.Type == "poison" || eff.Type == "bleed" {
 					c.HP -= eff.Value
+					if c.HP < 0 {
+						c.HP = 0
+					}
 					turnLogs = append(turnLogs, fmt.Sprintf("%s mất %.1f HP do %s (Còn %d lượt).", c.Name, eff.Value, eff.Type, eff.Turns))
 				}
 				eff.Turns--
@@ -110,6 +113,9 @@ func CombatAttack(c *gin.Context) {
 			if eff.Turns > 0 {
 				if eff.Type == "poison" || eff.Type == "bleed" {
 					c.HP -= eff.Value
+					if c.HP < 0 {
+						c.HP = 0
+					}
 					turnLogs = append(turnLogs, fmt.Sprintf("%s mất %.1f HP do %s (Còn %d lượt).", c.Name, eff.Value, eff.Type, eff.Turns))
 				}
 				eff.Turns--
