@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 type CreateListingRequest struct {
@@ -259,6 +260,12 @@ func CreateListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "marketplace.create_listing", EntityType: "auction",
+		EntityID: listingID,
+		RequestSummary: fmt.Sprintf("%s | %s | sl=%d | %.0f %s | loại=%s", req.ItemType, req.ItemID, req.Quantity, req.Price, req.Currency, req.ListingType),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đăng bán thành công", "listing_id": listingID})
 }
 
@@ -432,6 +439,12 @@ func PlaceBid(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "marketplace.bid", EntityType: "auction",
+		EntityID: req.ListingID,
+		RequestSummary: fmt.Sprintf("giá=%.0f | hiện tại=%.0f", req.Amount, current),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đặt giá thành công"})
 }
 
@@ -598,6 +611,12 @@ func BuyListing(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "marketplace.buy", EntityType: "auction",
+		EntityID: req.ListingID,
+		RequestSummary: fmt.Sprintf("seller=%s | sl=%d | %.0f %s", sellerID, purchaseQty, totalPrice, currency),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Mua hàng thành công", "player": buyer})
 }
 
@@ -705,6 +724,21 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 		}
 	}
 
+	if highestBidderID.Valid {
+		bidderUUID, _ := uuid.Parse(highestBidderID.String)
+		auditlog.Log(tx, auditlog.Entry{
+			PlayerID: &bidderUUID, Action: "marketplace.settle_auction_win", EntityType: "auction",
+			EntityID: auctionID,
+			RequestSummary: fmt.Sprintf("seller=%s | %.0f %s | sl=%d", sellerID, currentPrice, currency, qty),
+			Success: true,
+		})
+	} else {
+		auditlog.Log(tx, auditlog.Entry{
+			PlayerID: &sellerID, Action: "marketplace.settle_auction_expired", EntityType: "auction",
+			EntityID: auctionID, RequestSummary: "Không ai đặt giá",
+			Success: true,
+		})
+	}
 	return tx.Commit()
 }
 
@@ -813,6 +847,11 @@ func CancelListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "marketplace.cancel_listing", EntityType: "auction",
+		EntityID: req.ListingID, RequestSummary: itemType + " | sl=" + fmt.Sprint(qty),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã hủy listing và hoàn trả vật phẩm"})
 }
 

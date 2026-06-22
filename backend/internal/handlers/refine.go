@@ -16,6 +16,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 type RefineRequest struct {
@@ -430,6 +431,12 @@ func RefineGu(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "refine.gu", EntityType: "refining_recipe",
+		EntityID: req.RecipeID,
+		RequestSummary: fmt.Sprintf("recipe=%s target=%s success=%v isForced=%v", req.RecipeID, recipe.TargetGuID, success, isForcedRefine),
+		IPAddress: c.ClientIP(), Success: success,
+	})
 	// Return response
 	if success {
 		c.JSON(http.StatusOK, gin.H{
@@ -561,6 +568,11 @@ func DeduceRecipe(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "refine.deduce_recipe", EntityType: "refining_recipe",
+		EntityID: req.RecipeID, RequestSummary: fmt.Sprintf("improvement=%.1f%% rate=%.1f%% inspiration=%v", improvement, player.UnlockedRecipes[foundIdx].CompletionRate, inspirationFlash),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"message":         message,
 		"inspiration":     inspirationFlash,

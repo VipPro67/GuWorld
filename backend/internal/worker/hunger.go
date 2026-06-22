@@ -8,7 +8,9 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 // StartHungerWorker begins the background process for depleting Gu bug hunger.
@@ -56,6 +58,7 @@ func processHungerDecay(db *sql.DB) {
 }
 
 func updatePlayerGuHunger(db *sql.DB, playerID string) error {
+	pUUID, _ := uuid.Parse(playerID)
 	tx, err := db.Begin()
 	if err != nil {
 		return err
@@ -110,7 +113,11 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 					gu.Status = "DEAD"
 					log.Printf("Cultivation Log: Player %s's VITAL Gu %s (%s) starved and DIED — HP backlash incoming", username, specs.Name, gu.InstanceID[:8])
 					playerHPBacklash += 80.0
-					// Dead Gu is deleted — do not append
+					auditlog.Log(tx, auditlog.Entry{
+						PlayerID: &pUUID, Action: "gu.starve_vital_death", EntityType: "gu_instance",
+						EntityID: gu.InstanceID, RequestSummary: specs.Name + " | bản mệnh Cổ chết đói",
+						Success: false, ErrorMessage: "Chết đói",
+					})
 				} else {
 					// Roll for sleep vs death (20% Hibernation, 80% Dead)
 					roll := rand.Intn(100)
@@ -121,7 +128,11 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 					} else {
 						gu.Status = "DEAD"
 						log.Printf("Cultivation Log: Player %s's Gu %s (%s) starved and DIED", username, specs.Name, gu.InstanceID[:8])
-						// Dead Gu is deleted, so we do not append it to newInventory
+						auditlog.Log(tx, auditlog.Entry{
+							PlayerID: &pUUID, Action: "gu.starve_death", EntityType: "gu_instance",
+							EntityID: gu.InstanceID, RequestSummary: specs.Name + " | Cổ chết đói",
+							Success: false, ErrorMessage: "Chết đói",
+						})
 					}
 				}
 			} else {

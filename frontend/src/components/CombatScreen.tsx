@@ -433,8 +433,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="font-bold text-sm text-zinc-200">{move.name}</div>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${move.stability >= 80 ? 'bg-emerald-900/50 text-emerald-300' : move.stability >= 50 ? 'bg-yellow-900/50 text-yellow-300' : 'bg-red-900/50 text-red-300'}`}>
-                        {move.stability.toFixed(0)}%
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${(move.stability ?? 0) >= 80 ? 'bg-emerald-900/50 text-emerald-300' : (move.stability ?? 0) >= 50 ? 'bg-yellow-900/50 text-yellow-300' : 'bg-red-900/50 text-red-300'}`}>
+                        {(move.stability ?? 0).toFixed(0)}%
                       </span>
                     </div>
                     <div className="text-[10px] text-zinc-500 mt-1">

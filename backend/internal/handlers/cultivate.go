@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 // BreakWallRequest - mortals choose amount of mana and stones to attempt breaking their aperture wall
@@ -170,6 +172,17 @@ func BreakWall(c *gin.Context) {
 		return
 	}
 
+	actionName := "cultivate.break_wall"
+	if cracked {
+		actionName = "cultivate.wall_cracked"
+	} else if success {
+		actionName = "cultivate.breakthrough"
+	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: actionName,
+		RequestSummary: fmt.Sprintf("rank=%d sub=%d progress=%.2f stress=%.0f manaSpent=%.0f", player.Rank, player.SubRank, player.WallProgress, player.ApertureStress, req.ManaSpend),
+		IPAddress: c.ClientIP(), Success: success && !cracked,
+	})
 	c.JSON(http.StatusOK, BreakWallResponse{Player: player, Success: success && !cracked, Message: msg})
 }
 

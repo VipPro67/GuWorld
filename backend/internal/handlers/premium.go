@@ -23,6 +23,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 const (
@@ -312,6 +313,12 @@ func CreateTopupOrder(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "topup.create_order", EntityType: "topup_order",
+		EntityID: strconv.FormatInt(orderCode, 10),
+		RequestSummary: fmt.Sprintf("Gói %s | %d VND | %d Tiên Ngọc", req.PackageID, pkg.AmountVND, pkg.Jade),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"orderCode": orderCode, "amountVnd": pkg.AmountVND, "jadeAmount": pkg.Jade, "checkoutUrl": checkoutURL, "qrCode": qrCode, "status": "PENDING"})
 }
 
@@ -383,9 +390,21 @@ func PayOSWebhook(c *gin.Context) {
 	}
 
 	if err = applyPaidTopup(orderCode, amount); err != nil {
+		auditlog.Log(db.DB, auditlog.Entry{
+			Action: "topup.webhook_failed", EntityType: "topup_order",
+			EntityID: fmt.Sprint(orderCode),
+			RequestSummary: fmt.Sprintf("orderCode=%d amount=%d err=%s", orderCode, amount, err.Error()),
+			IPAddress: c.ClientIP(), Success: false, ErrorMessage: err.Error(),
+		})
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		Action: "topup.webhook_applied", EntityType: "topup_order",
+		EntityID: fmt.Sprint(orderCode),
+		RequestSummary: fmt.Sprintf("orderCode=%d amount=%d", orderCode, amount),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -535,6 +554,13 @@ func BuyPremiumPackage(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "shop.buy_package", EntityType: "premium_package",
+		EntityID: pkg.ID,
+		RequestSummary: fmt.Sprintf("Gói %s | giá %d Tiên Ngọc | %d phần thưởng", pkg.ID, pkg.PriceJade, len(pkg.Rewards)),
+		Metadata: map[string]interface{}{"price_jade": pkg.PriceJade, "jade_before": jadeBefore, "jade_after": wallet.ImmortalJade},
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Mua gói thành công", "wallet": wallet, "rewards": pkg.Rewards})
 }
 

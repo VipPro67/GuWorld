@@ -11,6 +11,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 type TradeOffer struct {
@@ -136,7 +137,12 @@ func InitiateTrade(c *gin.Context) {
 		return
 	}
 	notifyTradeParticipants(sender.ID, receiver.ID)
-
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "trade.initiate", EntityType: "trade",
+		EntityID: tradeID.String(),
+		RequestSummary: fmt.Sprintf("người gửi=%s → người nhận=%s", authID, receiverID),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "Yêu cầu giao dịch đã được gửi!",
 		"trade_id": tradeID,
@@ -184,6 +190,10 @@ func AcceptTrade(c *gin.Context) {
 	}
 
 	notifyTradeParticipants(senderID, receiverID)
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "trade.accept", EntityType: "trade",
+		EntityID: tradeID, IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã chấp nhận giao dịch"})
 }
 
@@ -212,6 +222,10 @@ func DeclineTrade(c *gin.Context) {
 	}
 
 	notifyTradeParticipants(senderID, receiverID)
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "trade.decline", EntityType: "trade",
+		EntityID: tradeID, IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã từ chối giao dịch"})
 }
 
@@ -240,6 +254,10 @@ func CancelTrade(c *gin.Context) {
 	}
 
 	notifyTradeParticipants(senderID, receiverID)
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "trade.cancel", EntityType: "trade",
+		EntityID: tradeID, IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã hủy giao dịch"})
 }
 
@@ -447,6 +465,10 @@ func LockTrade(c *gin.Context) {
 		return
 	}
 	notifyTradeParticipants(senderID, receiverID)
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "trade.lock", EntityType: "trade",
+		EntityID: tradeID, IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã khóa vật phẩm giao dịch"})
 }
 
@@ -682,7 +704,14 @@ func ConfirmTrade(c *gin.Context) {
 		return
 	}
 	notifyTradeParticipants(senderID, receiverID)
-
+	action := "trade.confirm"
+	if senderConfirmed && receiverConfirmed {
+		action = "trade.complete"
+	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: action, EntityType: "trade",
+		EntityID: tradeID, IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"message":            "Xác nhận thành công",
 		"sender_confirmed":   senderConfirmed,

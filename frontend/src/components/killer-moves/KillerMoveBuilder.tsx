@@ -355,12 +355,12 @@ function KillerMoveManagerPanel({ moves, guDictionary, player, onRefresh, onDele
               >
                 <div className="flex items-center justify-between gap-2">
                   <strong className="truncate text-amber-100">{move.name}</strong>
-                  <span className="rounded-full border border-purple-400/30 px-2 py-0.5 text-xs text-purple-200">{move.stability.toFixed(1)}%</span>
+                  <span className="rounded-full border border-purple-400/30 px-2 py-0.5 text-xs text-purple-200">{(move.stability ?? 0).toFixed(1)}%</span>
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-400">
                   <span>{move.path}</span>
                   <span>{move.move_type}</span>
-                  <span>Mana {move.total_mana_cost.toFixed(1)}</span>
+                  <span>Mana {(move.total_mana_cost ?? 0).toFixed(1)}</span>
                   <span>{move.slots?.length || 0} Cổ</span>
                 </div>
               </button>

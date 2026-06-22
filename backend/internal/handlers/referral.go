@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 // CheckReferralMilestones evaluates and awards rewards to the referrer if the referee is verified
@@ -278,6 +279,12 @@ func SimulateDeposit(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "deposit.simulate", EntityType: "player",
+		RequestSummary: fmt.Sprintf("nạp %d Nguyên Thạch (admin simulated)", req.Stones),
+		Metadata: map[string]interface{}{"stones": req.Stones, "new_stones": currentStones},
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"message":         "Nạp Nguyên Thạch thành công (Simulated)!",
 		"deposited_stones": req.Stones,

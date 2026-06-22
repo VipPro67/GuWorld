@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 // ShopItem represents a product in the shop
@@ -186,6 +188,12 @@ func BuyShopItem(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "shop.buy", EntityType: "shop_item",
+		EntityID: selectedItem.ID,
+		RequestSummary: fmt.Sprintf("%s x%d | %d Nguyên Thạch", selectedItem.Name, req.Quantity, totalCost),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"player":  player,
 		"message": "Giao dịch thành công!",
@@ -291,5 +299,11 @@ func SellShopItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "shop.sell", EntityType: "shop_item",
+		EntityID: req.ItemID,
+		RequestSummary: fmt.Sprintf("%s x%d | nhận %d Nguyên Thạch", req.ItemID, req.Quantity, totalGain),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"player": player, "message": "Bán thành công, nhận Nguyên Thạch!"})
 }

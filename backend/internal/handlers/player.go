@@ -21,6 +21,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -87,6 +88,12 @@ func setAuthCookie(c *gin.Context, token string) {
 
 	c.SetSameSite(sameSite)
 	c.SetCookie(authCookieName, token, authCookieMaxAge, "/", authCookieDomain(), authCookieSecure(c, sameSite == http.SameSiteNoneMode), true)
+
+	// Set CSRF token cookie (non-HttpOnly so JS can read it for header)
+	csrfToken, err := middleware.GenerateCSRFToken()
+	if err == nil {
+		middleware.SetCSRFCookie(c, csrfToken)
+	}
 }
 
 func clearAuthCookie(c *gin.Context) {
@@ -100,6 +107,7 @@ func clearAuthCookie(c *gin.Context) {
 
 	c.SetSameSite(sameSite)
 	c.SetCookie(authCookieName, "", -1, "/", authCookieDomain(), authCookieSecure(c, sameSite == http.SameSiteNoneMode), true)
+	middleware.ClearCSRFCookie(c)
 }
 
 // RegisterPlayer handles registering a new player, hashing password, and rolling their aptitude
@@ -1909,6 +1917,12 @@ func SetVitalGu(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "gu.set_vital", EntityType: "gu_instance",
+		EntityID: req.GuInstanceID,
+		RequestSummary: fmt.Sprintf("Thiết lập %s thành Bản Mệnh Cổ | hadVital=%v", targetGu.GuID, hadVital),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"player":  player,
 		"message": fmt.Sprintf("Thiết lập %s thành Bản Mệnh Cổ thành công!%s", targetGu.GuID, backlashMessage),
@@ -1981,6 +1995,11 @@ func DropGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "gu.drop", EntityType: "gu_instance",
+		EntityID: req.GuInstanceID, RequestSummary: "Vứt bỏ Cổ trùng khỏi túi đồ",
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"player": player, "message": "Đã vứt bỏ Cổ trùng khỏi túi đồ."})
 }
 
@@ -2089,6 +2108,11 @@ func UseConsumableGu(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "gu.use_consumable", EntityType: "gu_instance",
+		EntityID: req.GuInstanceID, RequestSummary: logMsg,
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"player":  player,
 		"message": logMsg,

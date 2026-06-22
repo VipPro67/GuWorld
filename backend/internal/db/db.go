@@ -969,6 +969,19 @@ func InitSchema() error {
 			region VARCHAR(50) NOT NULL DEFAULT '',
 			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 		);`, "create_combat_history_table"},
+		{`CREATE TABLE IF NOT EXISTS audit_logs (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			player_id UUID REFERENCES players(id) ON DELETE SET NULL,
+			action TEXT NOT NULL,
+			entity_type TEXT,
+			entity_id TEXT,
+			request_summary TEXT,
+			metadata JSONB DEFAULT '{}',
+			ip_address TEXT,
+			success BOOLEAN NOT NULL DEFAULT false,
+			error_message TEXT,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);`, "create_audit_logs_table"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {
@@ -990,6 +1003,46 @@ func InitSchema() error {
 	_, _ = DB.Exec(`ALTER TABLE gu_dictionary DROP COLUMN IF EXISTS base_power;`)
 	_, _ = DB.Exec(`ALTER TABLE gu_dictionary DROP COLUMN IF EXISTS base_damage;`)
 	_, _ = DB.Exec(`ALTER TABLE gu_dictionary DROP COLUMN IF EXISTS base_defense;`)
+
+	// 4b. Create indexes for frequently queried foreign key columns
+	indexes := []struct {
+		name   string
+		table  string
+		column string
+	}{
+		{"idx_combat_history_player", "combat_history", "player_id"},
+		{"idx_messages_sender", "messages", "sender_id"},
+		{"idx_messages_receiver", "messages", "receiver_id"},
+		{"idx_messages_sect", "messages", "sect_id"},
+		{"idx_topup_orders_user", "topup_orders", "user_id"},
+		{"idx_topup_orders_status", "topup_orders", "status"},
+		{"idx_wallet_transactions_user", "wallet_transactions", "user_id"},
+		{"idx_player_gu_gu_id", "player_gu", "gu_id"},
+		{"idx_auction_seller", "auction", "seller_id"},
+		{"idx_auction_bidder", "auction", "highest_bidder_id"},
+		{"idx_auction_status", "auction", "status"},
+		{"idx_trades_sender", "trades", "sender_id"},
+		{"idx_trades_receiver", "trades", "receiver_id"},
+		{"idx_trades_status", "trades", "status"},
+		{"idx_monster_spawns_region", "monster_spawns", "region_id"},
+		{"idx_monster_spawns_monster", "monster_spawns", "monster_id"},
+		{"idx_sect_members_sect", "sect_members", "sect_id"},
+		{"idx_sect_missions_sect", "sect_missions", "sect_id"},
+		{"idx_referrals_referrer", "referrals", "referrer_id"},
+		{"idx_parties_leader", "parties", "leader_id"},
+		{"idx_mine_slots_occupier", "mine_slots", "occupier_id"},
+		{"idx_feedback_user", "feedback", "user_id"},
+		{"idx_feedback_status", "feedback", "status"},
+		{"idx_audit_logs_player", "audit_logs", "player_id"},
+		{"idx_audit_logs_action", "audit_logs", "action"},
+		{"idx_audit_logs_created", "audit_logs", "created_at"},
+	}
+	for _, idx := range indexes {
+		_, err := DB.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s (%s)", idx.name, idx.table, idx.column))
+		if err != nil {
+			log.Printf("Warning: failed to create index %s: %v", idx.name, err)
+		}
+	}
 
 	// 5. Seed master data
 	if err = SeedDictionaries(); err != nil {

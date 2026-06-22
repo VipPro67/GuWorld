@@ -884,11 +884,58 @@ export interface MineSlot {
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 const AUTHENTICATED_SESSION = "cookie-session";
 
-const authFetch = (input: RequestInfo | URL, init: RequestInit = {}) =>
-  fetch(input, {
+const getCookie = (name: string): string | null => {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+};
+
+// Track latest request timestamp per URL to reject stale responses
+const pendingTimestamps = new Map<string, number>();
+const getAbortSignal = (key: string, timeoutMs = 30000): AbortSignal => {
+  const controller = new AbortController();
+  const id = Date.now();
+  pendingTimestamps.set(key, id);
+  setTimeout(() => controller.abort(), timeoutMs);
+  // Attach cleanup to signal
+  const originalAddEventListener = controller.signal.addEventListener.bind(controller.signal);
+  controller.signal.addEventListener = (type: string, listener: EventListenerOrEventListenerObject, options?: AddEventListenerOptions | boolean) => {
+    if (type === "abort") {
+      originalAddEventListener("abort", () => {
+        if (pendingTimestamps.get(key) === id) pendingTimestamps.delete(key);
+      });
+    }
+    originalAddEventListener(type, listener, options);
+  };
+  return controller.signal;
+};
+
+const authFetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
+  const csrfToken = getCookie("gu_csrf_token");
+  const headers: Record<string, string> = {};
+  if (init.headers) {
+    // Flatten headers
+    if (Array.isArray(init.headers)) {
+      for (const [k, v] of init.headers) headers[k] = v;
+    } else if (init.headers instanceof Headers) {
+      init.headers.forEach((v, k) => { headers[k] = v; });
+    } else {
+      Object.assign(headers, init.headers);
+    }
+  }
+  if (csrfToken && init.method && init.method !== "GET" && init.method !== "HEAD") {
+    headers["X-CSRF-Token"] = csrfToken;
+  }
+  // Add abort signal with 30s timeout, keyed by URL string
+  const key = typeof input === "string" ? input : input.toString();
+  const signal = getAbortSignal(key);
+  return fetch(input, {
     ...init,
+    headers,
     credentials: "include",
+    signal,
   });
+};
 
 const PLAYER_EVENT_TYPES = [
   "mana.snapshot",

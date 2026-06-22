@@ -9,6 +9,27 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 )
 
+func csrfProtection(c *gin.Context) {
+	if c.Request.Method == "GET" || c.Request.Method == "HEAD" || c.Request.Method == "OPTIONS" {
+		return
+	}
+	csrfCookie, err := c.Cookie("gu_csrf_token")
+	if err != nil || csrfCookie == "" {
+		// First visit or missing cookie — generate and set it, allow the request
+		token, genErr := GenerateCSRFToken()
+		if genErr == nil {
+			SetCSRFCookie(c, token)
+		}
+		return
+	}
+	csrfHeader := c.GetHeader("X-CSRF-Token")
+	if csrfHeader == "" || csrfHeader != csrfCookie {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Invalid CSRF token"})
+		c.Abort()
+		return
+	}
+}
+
 // AuthRequired is a Gin middleware that enforces authentication
 func AuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -47,6 +68,11 @@ func AuthRequired() gin.HandlerFunc {
 		// Store variables in context
 		c.Set("player_id", playerID)
 		c.Set("username", claims.Username)
+
+		csrfProtection(c)
+		if c.IsAborted() {
+			return
+		}
 
 		c.Next()
 	}

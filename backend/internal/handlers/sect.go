@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 type Sect struct {
@@ -563,6 +564,11 @@ func DonateStones(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.donate_stones", EntityType: "sect",
+		EntityID: m.SectID, RequestSummary: fmt.Sprintf("%d Nguyên Thạch → %d điểm cống hiến", req.Amount, req.Amount),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"message":             "Quyên góp thành công!",
 		"primeval_stones":     player.PrimevalStones,
@@ -684,6 +690,11 @@ func DonateMaterials(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.donate_materials", EntityType: "sect",
+		EntityID: m.SectID, RequestSummary: fmt.Sprintf("%s x%d → %d điểm", req.MaterialID, req.Amount, gainedContribution),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"message":             "Quyên góp linh tài thành công!",
 		"materials_inventory": player.MaterialsInventory,
@@ -826,6 +837,11 @@ func DonateGu(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.donate_gu", EntityType: "sect",
+		EntityID: m.SectID, RequestSummary: fmt.Sprintf("%s → %d điểm", guInstance.GuID, gainedContribution),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"message":             "Quyên góp Cổ trùng thành công!",
 		"gu_inventory":        player.GuInventory,
@@ -882,6 +898,7 @@ func BuyFromSectVault(c *gin.Context) {
 		return
 	}
 
+	var cost int
 	if strings.ToLower(req.ItemType) == "gu" {
 		var vaultGus []SectVaultGuItem
 		if err := json.Unmarshal(s.VaultGu, &vaultGus); err != nil {
@@ -907,7 +924,7 @@ func BuyFromSectVault(c *gin.Context) {
 			return
 		}
 
-		cost := vaultGus[targetIdx].Cost
+		cost = vaultGus[targetIdx].Cost
 		if m.ContributionPoints < cost {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Điểm cống hiến!"})
 			return
@@ -955,7 +972,7 @@ func BuyFromSectVault(c *gin.Context) {
 			return
 		}
 
-		cost := 20 // Default material cost
+		cost = 20 // Default material cost
 		if req.ItemID == "guts_gu" {
 			cost = 50
 		}
@@ -1008,7 +1025,7 @@ func BuyFromSectVault(c *gin.Context) {
 			return
 		}
 
-		cost := 120
+		cost = 120
 		if m.ContributionPoints < cost {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Điểm cống hiến!"})
 			return
@@ -1033,6 +1050,12 @@ func BuyFromSectVault(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.buy_vault", EntityType: "sect",
+		EntityID: m.SectID,
+		RequestSummary: fmt.Sprintf("%s | %s | giá %d điểm cống hiến", req.ItemType, req.ItemID, cost),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Đổi vật phẩm thành công!",
 		"player":  player,

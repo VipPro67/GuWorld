@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 func getSoulTierLimit(tier string) int {
@@ -132,6 +134,11 @@ func UseGutsGu(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "soul.fortify",
+		RequestSummary: fmt.Sprintf("maxSoul=%d soulHP=%d tier=%s", player.MaxSoul, player.SoulHP, player.SoulTier),
+		Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Tráng Hồn thành công! Hồn phách tăng thêm 10 điểm.",
 		"player":  player,
@@ -191,6 +198,11 @@ func RefineSoul(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "soul.refine",
+		RequestSummary: fmt.Sprintf("tier %s → %s", oldTier, newTier),
+		Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Luyện Hồn thành công! Hồn phách đột phá lên " + newTier + ", nhưng bị suy yếu do gió Lạc Phách (Soul HP giảm mạnh). Hãy dưỡng hồn để khôi phục.",
 		"player":  player,
@@ -246,6 +258,11 @@ func CalmSoul(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "soul.calm",
+		RequestSummary: fmt.Sprintf("maxSoul=%d soulHP=%d", player.MaxSoul, player.SoulHP),
+		Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"message": "An Hồn thành công! Hồn phách tĩnh dưỡng hồi phục đầy sinh lực.",
 		"player":  player,
