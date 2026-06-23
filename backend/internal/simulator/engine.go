@@ -29,10 +29,18 @@ func getTarget(enemies []*CombatantAuto) *CombatantAuto {
 func Simulate(state *CombatState) []CombatLog {
 	var logs []CombatLog
 
+	totalShield := 0
+	for _, p := range state.Allies {
+		totalShield += p.VirtualShield
+	}
+	shieldMsg := "không có Khiên Ảo"
+	if totalShield > 0 {
+		shieldMsg = fmt.Sprintf("tổng cộng %d Khiên Ảo", totalShield)
+	}
 	logs = append(logs, CombatLog{
 		Turn:   0,
 		Action: "BATTLE_START",
-		Detail: "Trận chiến bắt đầu. Kích hoạt Giáp Ảo trước trận...",
+		Detail: fmt.Sprintf("Trận chiến bắt đầu. Kích hoạt Giáp Ảo trước trận... (%s)", shieldMsg),
 	})
 
 	for _, p := range state.Allies {
@@ -191,175 +199,61 @@ func Simulate(state *CombatState) []CombatLog {
 				continue
 			}
 
-			// ── Select action by priority + conditions ──
+			// ── Multi-action per turn: execute all valid actions ──
 			if len(actor.Actions) == 0 {
 				continue
 			}
-			// Sort by priority once (stable, first use)
+			// Sort by priority once
 			if actor.nextActionIdx == 0 {
 				sort.SliceStable(actor.Actions, func(i, j int) bool {
 					return actor.Actions[i].Priority < actor.Actions[j].Priority
 				})
+				actor.nextActionIdx = 1
 			}
-			actor.nextActionIdx++
 
-			var selectedAction *SimAction
-			for i := range actor.Actions {
-				a := &actor.Actions[i]
+			var enemyTargets []*CombatantAuto
+			if isAlly {
+				enemyTargets = state.Enemies
+			} else {
+				enemyTargets = state.Allies
+			}
+
+			hasExecutedAny := false
+			for ai := range actor.Actions {
+				a := &actor.Actions[ai]
+
 				if a.ManaCost > 0 && float64(actor.Mana) < a.ManaCost {
 					continue
 				}
+
+				target := getTarget(enemyTargets)
+				if target == nil {
+					break
+				}
+
 				if !checkActionCondition(a, actor, target) {
 					continue
 				}
-				selectedAction = a
-				break
-			}
-			if selectedAction == nil {
-				// Fallback: basic attack (zero mana, always usable)
-				for i := range actor.Actions {
-					if actor.Actions[i].ActionType == "BASIC_ATTACK" {
-						selectedAction = &actor.Actions[i]
-						break
-					}
-				}
-				if selectedAction == nil {
-					// Create a basic attack on-the-fly
-					ba := SimAction{
-						ActionType: "BASIC_ATTACK",
-						Name:       "Đánh thường",
-						Damage:     float64(actor.BaseDmg),
-						ManaCost:   0,
-					}
-					actor.Actions = append(actor.Actions, ba)
-					selectedAction = &actor.Actions[len(actor.Actions)-1]
-				}
-			}
-			action := *selectedAction
 
-			// ── Resolve the action ──
-			turnLogs = append(turnLogs, CombatLog{
-				Turn:      turn,
-				ActorId:   actor.ID,
-				ActorName: actor.Name,
-				Action:    action.ActionType,
-				TargetId:  target.ID,
-				Detail:    fmt.Sprintf("%s sử dụng [%s]", actor.Name, action.Name),
-			})
+				hasExecutedAny = true
+				actor.Mana -= int(a.ManaCost)
 
-			actor.Mana -= int(action.ManaCost)
-
-			// Apply shield to self
-			if action.Defense > 0 {
-				actor.VirtualShield += int(action.Defense)
-				turnLogs = append(turnLogs, CombatLog{
-					Turn:      turn,
-					ActorId:   actor.ID,
-					ActorName: actor.Name,
-					Action:    "SHIELD_GAIN",
-					Detail:    fmt.Sprintf("%s nhận %.0f Khiên Ảo!", actor.Name, action.Defense),
-				})
-			}
-
-			// Apply healing to self
-			if action.Healing > 0 {
-				heal := int(action.Healing)
-				actor.HP += heal
-				if actor.HP > actor.MaxHP {
-					actor.HP = actor.MaxHP
-				}
-				turnLogs = append(turnLogs, CombatLog{
-					Turn:      turn,
-					ActorId:   actor.ID,
-					ActorName: actor.Name,
-					Action:    "HEAL",
-					Detail:    fmt.Sprintf("%s hồi phục %d HP!", actor.Name, heal),
-				})
-			}
-
-			// ── Apply damage & compound effects ──
-			totalDamageDealt := 0
-
-			if action.ActionType == "BASIC_ATTACK" || action.Damage > 0 {
-				// Multi-hit
-				hitCount := action.MultiHit
-				if hitCount < 1 {
-					hitCount = 1
-				}
-				totalDmg := 0.0
-				for h := 0; h < hitCount; h++ {
-					hitDmg := action.Damage
-					if h > 0 {
-						hitDmg *= 0.7 // chain diminishing
-					}
-					// Defense mitigation
-					netDmg := hitDmg - float64(target.BaseDef)
-					if netDmg < 1 {
-						netDmg = 1
-					}
-					totalDmg += applyDamageToTarget(actor, target, netDmg, &turnLogs, turn)
-				}
-				totalDamageDealt = int(totalDmg)
-
-				// Log HP damage
-				if totalDamageDealt > 0 {
+				// Apply shield to self
+				if a.Defense > 0 {
+					actor.VirtualShield += int(a.Defense)
 					turnLogs = append(turnLogs, CombatLog{
 						Turn:      turn,
 						ActorId:   actor.ID,
 						ActorName: actor.Name,
-						Action:    "DAMAGE",
-						TargetId:  target.ID,
-						Damage:    totalDamageDealt,
-						Detail:    fmt.Sprintf("%s gây %d sát thương lên %s (còn %d HP)", actor.Name, totalDamageDealt, target.Name, target.HP),
+						Action:    "SHIELD_GAIN",
+						Detail:    fmt.Sprintf("%s nhận %.0f Khiên Ảo!", actor.Name, a.Defense),
 					})
 				}
 
-				if hitCount > 1 {
-					turnLogs = append(turnLogs, CombatLog{
-						Turn:      turn,
-						ActorId:   actor.ID,
-						ActorName: actor.Name,
-						Action:    "MULTI_HIT",
-						TargetId:  target.ID,
-						Detail:    fmt.Sprintf("%s trúng %d đòn liên hoàn!", actor.Name, hitCount),
-					})
-				}
-
-				// Phantom damage
-				if action.PhantomDmg > 0 {
-					phantomNet := math.Max(1, action.PhantomDmg-float64(target.BaseDef))
-					phantomDealt := applyDamageToTarget(actor, target, phantomNet, &turnLogs, turn)
-					totalDamageDealt += int(phantomDealt)
-					turnLogs = append(turnLogs, CombatLog{
-						Turn:      turn,
-						ActorId:   actor.ID,
-						ActorName: actor.Name,
-						Action:    "PHANTOM_ATTACK",
-						TargetId:  target.ID,
-						Damage:    int(phantomDealt),
-						Detail:    fmt.Sprintf("Hư ảnh tấn công thêm %.0f sát thương!", phantomDealt),
-					})
-				}
-
-				// Thorns (reflect) to attacker
-				if action.ThornsDmg > 0 && totalDamageDealt > 0 {
-					thornsNet := math.Max(1, action.ThornsDmg-float64(actor.BaseDef))
-					applyDamageToTarget(target, actor, thornsNet, &turnLogs, turn)
-					turnLogs = append(turnLogs, CombatLog{
-						Turn:      turn,
-						ActorId:   actor.ID,
-						ActorName: actor.Name,
-						Action:    "THORNS",
-						TargetId:  target.ID,
-						Damage:    int(thornsNet),
-						Detail:    fmt.Sprintf("Phản thương từ %s gây %.0f sát thương lên %s!", target.Name, thornsNet, actor.Name),
-					})
-				}
-
-				// Lifesteal
-				if action.LifeStealPct > 0 && totalDamageDealt > 0 {
-					healAmount := int(float64(totalDamageDealt) * action.LifeStealPct)
-					actor.HP += healAmount
+				// Apply healing to self
+				if a.Healing > 0 {
+					heal := int(a.Healing)
+					actor.HP += heal
 					if actor.HP > actor.MaxHP {
 						actor.HP = actor.MaxHP
 					}
@@ -367,67 +261,198 @@ func Simulate(state *CombatState) []CombatLog {
 						Turn:      turn,
 						ActorId:   actor.ID,
 						ActorName: actor.Name,
-						Action:    "LIFESTEAL",
-						Damage:    healAmount,
-						Detail:    fmt.Sprintf("%s hút %d máu từ sát chiêu!", actor.Name, healAmount),
+						Action:    "HEAL",
+						Detail:    fmt.Sprintf("%s hồi phục %d HP!", actor.Name, heal),
 					})
 				}
 
-				// Apply status effects
-				if action.BleedPerTurn > 0 {
-					target.ActiveDoT = append(target.ActiveDoT, DoTEffect{
-						Type: "bleed", Value: action.BleedPerTurn, Turns: 3,
-					})
+				// ── Apply damage & compound effects ──
+				totalDamageDealt := 0
+
+				if a.ActionType == "BASIC_ATTACK" || a.Damage > 0 {
+					hitCount := a.MultiHit
+					if hitCount < 1 {
+						hitCount = 1
+					}
+					totalDmg := 0.0
+					for h := 0; h < hitCount; h++ {
+						hitDmg := a.Damage
+						if h > 0 {
+							hitDmg *= 0.7
+						}
+						netDmg := hitDmg - float64(target.BaseDef)
+						if netDmg < 1 {
+							netDmg = 1
+						}
+						totalDmg += applyDamageToTarget(actor, target, netDmg, &turnLogs, turn)
+					}
+					totalDamageDealt = int(totalDmg)
+
+					if totalDamageDealt > 0 {
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    a.ActionType,
+							TargetId:  target.ID,
+							Damage:    totalDamageDealt,
+							Detail:    fmt.Sprintf("%s dùng [%s] lên %s, gây %d sát thương (còn %d HP)", actor.Name, a.Name, target.Name, totalDamageDealt, target.HP),
+						})
+					}
+
+					if hitCount > 1 {
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    "MULTI_HIT",
+							TargetId:  target.ID,
+							Detail:    fmt.Sprintf("%s trúng %d đòn liên hoàn!", actor.Name, hitCount),
+						})
+					}
+
+					if a.PhantomDmg > 0 {
+						phantomNet := math.Max(1, a.PhantomDmg-float64(target.BaseDef))
+						phantomDealt := applyDamageToTarget(actor, target, phantomNet, &turnLogs, turn)
+						totalDamageDealt += int(phantomDealt)
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    "PHANTOM_ATTACK",
+							TargetId:  target.ID,
+							Damage:    int(phantomDealt),
+							Detail:    fmt.Sprintf("Hư ảnh tấn công thêm %.0f sát thương!", phantomDealt),
+						})
+					}
+
+					if a.ThornsDmg > 0 && totalDamageDealt > 0 {
+						thornsNet := math.Max(1, a.ThornsDmg-float64(actor.BaseDef))
+						applyDamageToTarget(target, actor, thornsNet, &turnLogs, turn)
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    "THORNS",
+							TargetId:  target.ID,
+							Damage:    int(thornsNet),
+							Detail:    fmt.Sprintf("Phản thương từ %s gây %.0f sát thương lên %s!", target.Name, thornsNet, actor.Name),
+						})
+					}
+
+					if a.LifeStealPct > 0 && totalDamageDealt > 0 {
+						healAmount := int(float64(totalDamageDealt) * a.LifeStealPct)
+						actor.HP += healAmount
+						if actor.HP > actor.MaxHP {
+							actor.HP = actor.MaxHP
+						}
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    "LIFESTEAL",
+							Damage:    healAmount,
+							Detail:    fmt.Sprintf("%s hút %d máu từ sát chiêu!", actor.Name, healAmount),
+						})
+					}
+
+					if a.BleedPerTurn > 0 {
+						target.ActiveDoT = append(target.ActiveDoT, DoTEffect{
+							Type: "bleed", Value: a.BleedPerTurn, Turns: 3,
+						})
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   target.ID,
+							ActorName: target.Name,
+							Action:    "BLEED_APPLIED",
+							Detail:    fmt.Sprintf("%s bị chảy máu (%.0f/lượt trong 3 lượt)!", target.Name, a.BleedPerTurn),
+						})
+					}
+					if a.PoisonPerTurn > 0 {
+						target.ActiveDoT = append(target.ActiveDoT, DoTEffect{
+							Type: "poison", Value: a.PoisonPerTurn, Turns: 3,
+						})
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   target.ID,
+							ActorName: target.Name,
+							Action:    "POISON_APPLIED",
+							Detail:    fmt.Sprintf("%s bị trúng độc (%.0f/lượt trong 3 lượt)!", target.Name, a.PoisonPerTurn),
+						})
+					}
+					if a.StunTurns > 0 {
+						target.ActiveEffects = append(target.ActiveEffects, Effect{
+							ID: "stun", Type: "debuff", Value: a.StunTurns, Duration: a.StunTurns,
+						})
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   target.ID,
+							ActorName: target.Name,
+							Action:    "STUN_APPLIED",
+							Detail:    fmt.Sprintf("%s bị choáng trong %d lượt!", target.Name, a.StunTurns),
+						})
+					}
+				} else {
 					turnLogs = append(turnLogs, CombatLog{
 						Turn:      turn,
-						ActorId:   target.ID,
-						ActorName: target.Name,
-						Action:    "BLEED_APPLIED",
-						Detail:    fmt.Sprintf("%s bị chảy máu (%.0f/lượt trong 3 lượt)!", target.Name, action.BleedPerTurn),
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    a.ActionType,
+						TargetId:  target.ID,
+						Detail:    fmt.Sprintf("%s dùng [%s]", actor.Name, a.Name),
 					})
 				}
-				if action.PoisonPerTurn > 0 {
-					target.ActiveDoT = append(target.ActiveDoT, DoTEffect{
-						Type: "poison", Value: action.PoisonPerTurn, Turns: 3,
-					})
+
+				// If target died, getTarget will find the next one
+			}
+
+			// Fallback: basic attack if no valid action
+			if !hasExecutedAny {
+				target := getTarget(enemyTargets)
+				if target != nil {
+					ba := SimAction{
+						ActionType: "BASIC_ATTACK",
+						Name:       "Đánh thường",
+						Damage:     float64(actor.BaseDmg),
+						ManaCost:   0,
+					}
+					netDmg := ba.Damage - float64(target.BaseDef)
+					if netDmg < 1 {
+						netDmg = 1
+					}
+					applied := applyDamageToTarget(actor, target, netDmg, &turnLogs, turn)
 					turnLogs = append(turnLogs, CombatLog{
 						Turn:      turn,
-						ActorId:   target.ID,
-						ActorName: target.Name,
-						Action:    "POISON_APPLIED",
-						Detail:    fmt.Sprintf("%s bị trúng độc (%.0f/lượt trong 3 lượt)!", target.Name, action.PoisonPerTurn),
-					})
-				}
-				if action.StunTurns > 0 {
-					target.ActiveEffects = append(target.ActiveEffects, Effect{
-						ID: "stun", Type: "debuff", Value: action.StunTurns, Duration: action.StunTurns,
-					})
-					turnLogs = append(turnLogs, CombatLog{
-						Turn:      turn,
-						ActorId:   target.ID,
-						ActorName: target.Name,
-						Action:    "STUN_APPLIED",
-						Detail:    fmt.Sprintf("%s bị choáng trong %d lượt!", target.Name, action.StunTurns),
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "BASIC_ATTACK",
+						TargetId:  target.ID,
+						Damage:    int(applied),
+						Detail:    fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %d HP)", actor.Name, ba.Name, target.Name, applied, target.HP),
 					})
 				}
 			}
 
-			// Dying check
-			if target.HP <= 0 {
-				target.HP = 0
-				target.IsDead = true
-				turnLogs = append(turnLogs, CombatLog{
-					Turn:      turn,
-					ActorId:   target.ID,
-					ActorName: target.Name,
-					Action:    "DIED",
-					Detail:    fmt.Sprintf("%s đã gục ngã!", target.Name),
-				})
+			// Dying checks for all enemies
+			for _, tgt := range enemyTargets {
+				if tgt.HP <= 0 && !tgt.IsDead {
+					tgt.HP = 0
+					tgt.IsDead = true
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   tgt.ID,
+						ActorName: tgt.Name,
+						Action:    "DIED",
+						Detail:    fmt.Sprintf("%s đã gục ngã!", tgt.Name),
+					})
+				}
 			}
 
 			// Boss phase transitions
-			if target.Kind == "Boss" {
-				turnLogs = append(turnLogs, CheckBossPhaseTransitions(state, target)...)
+			for _, tgt := range enemyTargets {
+				if tgt.Kind == "Boss" {
+					turnLogs = append(turnLogs, CheckBossPhaseTransitions(state, tgt)...)
+				}
 			}
 		}
 

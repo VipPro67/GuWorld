@@ -18,6 +18,7 @@ type CombatHistoryEntry struct {
 	Winner     string          `json:"winner"`
 	Logs       json.RawMessage `json:"logs"`
 	Summary    json.RawMessage `json:"summary"`
+	Combatants json.RawMessage `json:"combatants"`
 	EnemyName  string          `json:"enemy_name"`
 	EnemyType  string          `json:"enemy_type"`
 	Region     string          `json:"region"`
@@ -35,17 +36,18 @@ type CombatSummary struct {
 }
 
 // SaveCombatHistory persists a completed combat result to the combat_history table.
-func SaveCombatHistory(playerID uuid.UUID, winner string, logs []interface{}, summary CombatSummary, enemyName, enemyType, region string) {
+func SaveCombatHistory(playerID uuid.UUID, winner string, logs []interface{}, summary CombatSummary, combatants []interface{}, enemyName, enemyType, region string) {
 	if db.DB == nil {
 		return
 	}
 
 	logsJSON, _ := json.Marshal(logs)
 	summaryJSON, _ := json.Marshal(summary)
+	combatantsJSON, _ := json.Marshal(combatants)
 
 	_, err := db.DB.Exec(
-		`INSERT INTO combat_history (player_id, winner, logs, summary, enemy_name, enemy_type, region) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		playerID, winner, logsJSON, summaryJSON, enemyName, enemyType, region,
+		`INSERT INTO combat_history (player_id, winner, logs, summary, combatants, enemy_name, enemy_type, region) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		playerID, winner, logsJSON, summaryJSON, combatantsJSON, enemyName, enemyType, region,
 	)
 	if err != nil {
 		// Non-critical, just log
@@ -98,7 +100,7 @@ func ListCombatHistory(c *gin.Context) {
 	}
 
 	rows, err := db.DB.Query(
-		`SELECT id, player_id, winner, logs, summary, enemy_name, enemy_type, region, created_at
+		`SELECT id, player_id, winner, logs, summary, combatants, enemy_name, enemy_type, region, created_at
 		 FROM combat_history WHERE player_id = $1 ORDER BY created_at DESC LIMIT 20`,
 		authID,
 	)
@@ -111,7 +113,7 @@ func ListCombatHistory(c *gin.Context) {
 	var entries []CombatHistoryEntry
 	for rows.Next() {
 		var e CombatHistoryEntry
-		if err := rows.Scan(&e.ID, &e.PlayerID, &e.Winner, &e.Logs, &e.Summary, &e.EnemyName, &e.EnemyType, &e.Region, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.PlayerID, &e.Winner, &e.Logs, &e.Summary, &e.Combatants, &e.EnemyName, &e.EnemyType, &e.Region, &e.CreatedAt); err != nil {
 			continue
 		}
 		entries = append(entries, e)
@@ -140,10 +142,10 @@ func GetCombatHistory(c *gin.Context) {
 
 	var e CombatHistoryEntry
 	err := db.DB.QueryRow(
-		`SELECT id, player_id, winner, logs, summary, enemy_name, enemy_type, region, created_at
+		`SELECT id, player_id, winner, logs, summary, combatants, enemy_name, enemy_type, region, created_at
 		 FROM combat_history WHERE id = $1 AND player_id = $2`,
 		id, authID,
-	).Scan(&e.ID, &e.PlayerID, &e.Winner, &e.Logs, &e.Summary, &e.EnemyName, &e.EnemyType, &e.Region, &e.CreatedAt)
+	).Scan(&e.ID, &e.PlayerID, &e.Winner, &e.Logs, &e.Summary, &e.Combatants, &e.EnemyName, &e.EnemyType, &e.Region, &e.CreatedAt)
 
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Combat history not found"})

@@ -64,6 +64,7 @@ export interface CombatHistoryEntry {
     stones_used: number;
     loot_count: number;
   };
+  combatants: any[];
   enemy_name: string;
   enemy_type: string;
   region: string;
@@ -704,7 +705,7 @@ interface GameState {
   clearStress: () => Promise<{ success: boolean; message: string } | null>;
   exploreNode: (nodeId: string) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
   executeCombatTurn: (equippedGuIds: string[], isCharge?: boolean, targetId?: string, targetX?: number, targetY?: number) => Promise<{ player: Player; logs: string[]; enemy: CombatState | null; victory: boolean; defeat: boolean } | null>;
-  executeAutoCombat: (loadout: any) => Promise<{ logs: any[]; winner: string } | null>;
+  executeAutoCombat: (loadout: any) => Promise<{ logs: any[]; winner: string; combatants?: any[] } | null>;
   combatHistory: CombatHistoryEntry[];
   combatHistoryLoading: boolean;
   fetchCombatHistory: () => Promise<void>;

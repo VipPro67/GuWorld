@@ -21,6 +21,18 @@ type AutoCombatStartRequest struct {
 	Loadout simulator.CombatLoadout `json:"loadout" binding:"required"`
 }
 
+// CombatantInfo returned to frontend for visual replay
+type CombatantInfo struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Kind    string `json:"kind"`
+	MaxHP   int    `json:"max_hp"`
+	HP      int    `json:"hp"`
+	MaxMana int    `json:"max_mana"`
+	Mana    int    `json:"mana"`
+	GridRow int    `json:"grid_row"`
+}
+
 // AutoCombatStart initializes and fully simulates a combat, returning the deterministic log.
 func AutoCombatStart(c *gin.Context) {
 	var req AutoCombatStartRequest
@@ -69,17 +81,21 @@ func AutoCombatStart(c *gin.Context) {
 
 	// Core Gu
 	if coreSpec, ok := models.GuRegistry[req.Loadout.CoreGuId]; ok {
-		act := buildSimActionFromGu(&actor, &coreSpec, "GU_SKILL")
-		act.SourceID = req.Loadout.CoreGuId
-		allActions = append(allActions, act)
+		if hasCombatActiveEffects(&coreSpec) {
+			act := buildSimActionFromGu(&actor, &coreSpec, "GU_SKILL")
+			act.SourceID = req.Loadout.CoreGuId
+			allActions = append(allActions, act)
+		}
 	}
 
 	// Support Gu
 	for _, supID := range req.Loadout.SupportGuIds {
 		if supSpec, ok := models.GuRegistry[supID]; ok {
-			act := buildSimActionFromGu(&actor, &supSpec, "GU_SKILL")
-			act.SourceID = supID
-			allActions = append(allActions, act)
+			if hasCombatActiveEffects(&supSpec) {
+				act := buildSimActionFromGu(&actor, &supSpec, "GU_SKILL")
+				act.SourceID = supID
+				allActions = append(allActions, act)
+			}
 		}
 	}
 
@@ -101,6 +117,28 @@ func AutoCombatStart(c *gin.Context) {
 		Damage:     playerStats["attack"],
 		ManaCost:   0,
 	})
+
+	// ── Apply global damage multipliers from loadout Gus (e.g. Thái Độ Cổ) ──
+	globalMultiplier := 1.0
+	scanMultiplier := func(spec models.GuDictionaryItem) {
+		activeEff := models.GetGuEffectSection(spec, "active")
+		if v, ok := activeEff["damage_multiplier"]; ok && v > 1.0 {
+			globalMultiplier *= v
+		}
+	}
+	if coreSpec, ok := models.GuRegistry[req.Loadout.CoreGuId]; ok {
+		scanMultiplier(coreSpec)
+	}
+	for _, supID := range req.Loadout.SupportGuIds {
+		if supSpec, ok := models.GuRegistry[supID]; ok {
+			scanMultiplier(supSpec)
+		}
+	}
+	if globalMultiplier > 1.0 {
+		for i := range allActions {
+			allActions[i].Damage *= globalMultiplier
+		}
+	}
 
 	// ── Apply persistent tactics (priority + conditions) to actions ──
 	settings := player.CombatSettings
@@ -244,6 +282,43 @@ func AutoCombatStart(c *gin.Context) {
 			{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: float64(simEnemy.BaseDmg), ManaCost: 0},
 		}
 		simState.Enemies = append(simState.Enemies, simEnemy)
+	}
+
+	// ── Build combatant info for frontend replay ──
+	var combatantInfos []CombatantInfo
+	combatantInfos = append(combatantInfos, CombatantInfo{
+		ID:      simPlayer.ID,
+		Name:    simPlayer.Name,
+		Kind:    "ally",
+		MaxHP:   simPlayer.MaxHP,
+		HP:      simPlayer.HP,
+		MaxMana: simPlayer.MaxMana,
+		Mana:    simPlayer.Mana,
+		GridRow: simPlayer.GridRow,
+	})
+	for _, a := range player.ActiveCombat.Allies {
+		combatantInfos = append(combatantInfos, CombatantInfo{
+			ID:      a.ID,
+			Name:    a.Name,
+			Kind:    "ally",
+			MaxHP:   int(a.MaxHP),
+			HP:      int(a.HP),
+			MaxMana: int(a.MaxMana),
+			Mana:    int(a.CurrentMana),
+			GridRow: a.GridX,
+		})
+	}
+	for _, e := range player.ActiveCombat.Enemies {
+		combatantInfos = append(combatantInfos, CombatantInfo{
+			ID:      e.ID,
+			Name:    e.Name,
+			Kind:    "enemy",
+			MaxHP:   int(e.MaxHP),
+			HP:      int(e.HP),
+			MaxMana: int(e.MaxMana),
+			Mana:    int(e.CurrentMana),
+			GridRow: e.GridX,
+		})
 	}
 
 	// 4. Run Simulator
@@ -463,13 +538,18 @@ func AutoCombatStart(c *gin.Context) {
 	}
 	go func() {
 		summary := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, stonesSpent)
-		SaveCombatHistory(player.ID, winner, toInterfaceSlice(logs), summary, enemyName, enemyType, player.CurrentRegion)
+		combatantInfosIface := make([]interface{}, len(combatantInfos))
+		for i, ci := range combatantInfos {
+			combatantInfosIface[i] = ci
+		}
+		SaveCombatHistory(player.ID, winner, toInterfaceSlice(logs), summary, combatantInfosIface, enemyName, enemyType, player.CurrentRegion)
 	}()
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Chiến đấu hoàn tất",
-		"logs":    logs,
-		"winner":  winner,
+		"message":    "Chiến đấu hoàn tất",
+		"logs":       logs,
+		"winner":     winner,
+		"combatants": combatantInfos,
 	})
 }
 
@@ -519,6 +599,27 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 	}
 
 	return act
+}
+
+// hasCombatActiveEffects returns true if the Gu's active effects produce a meaningful combat action.
+func hasCombatActiveEffects(spec *models.GuDictionaryItem) bool {
+	active := models.GetGuEffectSection(*spec, "active")
+	if len(active) == 0 {
+		return false
+	}
+	combatKeys := []string{
+		"damage", "add_base_attack", "base_damage_bonus",
+		"defense", "add_base_defense", "base_defense_bonus",
+		"shield", "virtual_shield",
+		"bleed", "poison", "stun",
+		"life_steal", "blood_drain", "heal",
+	}
+	for _, k := range combatKeys {
+		if _, ok := active[k]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlot) simulator.SimAction {

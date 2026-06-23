@@ -50,12 +50,16 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 		baseDmg = dmg
 	} else if dmg, ok := activeEffects["add_base_attack"]; ok {
 		baseDmg = dmg
+	} else if dmg, ok := activeEffects["base_damage_bonus"]; ok {
+		baseDmg = dmg
 	}
 
 	var baseDef float64
 	if def, ok := activeEffects["defense"]; ok {
 		baseDef = def
 	} else if def, ok := activeEffects["add_base_defense"]; ok {
+		baseDef = def
+	} else if def, ok := activeEffects["base_defense_bonus"]; ok {
 		baseDef = def
 	}
 

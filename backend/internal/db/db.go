@@ -969,6 +969,7 @@ func InitSchema() error {
 			region VARCHAR(50) NOT NULL DEFAULT '',
 			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 		);`, "create_combat_history_table"},
+		{`ALTER TABLE combat_history ADD COLUMN IF NOT EXISTS combatants JSONB NOT NULL DEFAULT '[]';`, "add_combatants_to_history"},
 		{`CREATE TABLE IF NOT EXISTS audit_logs (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			player_id UUID REFERENCES players(id) ON DELETE SET NULL,

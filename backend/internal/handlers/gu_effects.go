@@ -151,12 +151,19 @@ func BuildCombatAction(ctx *CombatContext, spec models.GuDictionaryItem) (Action
 	}
 
 	activeEffects := models.GetGuEffectSection(spec, "active")
+
+	// First pass: set base damage and defense
 	for effectKey := range activeEffects {
-		if effectKey == "damage" || effectKey == "add_base_attack" {
+		if effectKey == "damage" || effectKey == "add_base_attack" || effectKey == "base_damage_bonus" {
 			action.Dmg += dmg
-		} else if effectKey == "defense" || effectKey == "add_base_defense" {
+		} else if effectKey == "defense" || effectKey == "add_base_defense" || effectKey == "base_defense_bonus" {
 			action.Def += def
-		} else if handler, ok := ActiveEffectRegistry[effectKey]; ok {
+		}
+	}
+
+	// Second pass: run effect handlers (ensures damage_multiplier sees action.Dmg already set)
+	for effectKey := range activeEffects {
+		if handler, ok := ActiveEffectRegistry[effectKey]; ok {
 			if err := handler(ctx, &spec, &action); err != nil {
 				return Action{}, err
 			}
@@ -327,19 +334,22 @@ func handleLifeStealEffect(ctx *CombatContext, spec *models.GuDictionaryItem, ac
 
 func handleRefineManaTier(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
 	tier := guSectionValue(*spec, "active", "refine_mana_tier")
-	boost := tier * 0.20
-	ctx.DamageBoost += boost
+	if tier > 0 {
+		boost := tier * 0.20
+		action.Dmg += action.Dmg * boost
+	}
 	action.IsUtility = true
-	action.Logs = append(action.Logs, fmt.Sprintf("Kích hoạt %s nâng phẩm Chân Nguyên (+%.0f%% Sát thương).", spec.Name, boost*100))
+	action.Logs = append(action.Logs, fmt.Sprintf("Kích hoạt %s nâng phẩm Chân Nguyên (+%.0f%% Sát thương).", spec.Name, tier*20))
 	return nil
 }
 
 func handleDamageMultiplier(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
 	mult := guSectionValue(*spec, "active", "damage_multiplier")
-	boost := mult - 1.0
-	ctx.DamageBoost += boost
+	if mult > 1.0 {
+		action.Dmg *= mult
+	}
 	action.IsUtility = true
-	action.Logs = append(action.Logs, fmt.Sprintf("Kích hoạt %s, tăng uy lực (+%.0f%% Sát thương).", spec.Name, boost*100))
+	action.Logs = append(action.Logs, fmt.Sprintf("Kích hoạt %s, tăng uy lực (x%.0f sát thương).", spec.Name, mult))
 	return nil
 }
 

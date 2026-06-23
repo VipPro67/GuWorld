@@ -390,8 +390,8 @@ func CombatAttack(c *gin.Context) {
 
 							activeEffects := models.GetGuEffectSection(spec, "active")
 							isHealing := activeEffects["heal"] > 0 || activeEffects["restore_hp"] > 0 || activeEffects["heal_based_on_strength"] > 0 || spec.ID == "GU_NINE_LEAF_VITALITY_GRASS"
-							isDefense := spec.Type == "Defense" || activeEffects["add_base_defense"] > 0 || activeEffects["defense"] > 0
-							isAttack := activeEffects["damage"] > 0 || activeEffects["add_base_attack"] > 0 || spec.Type == "Attack" || spec.Type == "Active"
+							isDefense := spec.Type == "Defense" || activeEffects["add_base_defense"] > 0 || activeEffects["defense"] > 0 || activeEffects["base_defense_bonus"] > 0
+							isAttack := activeEffects["damage"] > 0 || activeEffects["add_base_attack"] > 0 || activeEffects["base_damage_bonus"] > 0 || spec.Type == "Attack" || spec.Type == "Active"
 
 							if isHealing {
 								healVal := def

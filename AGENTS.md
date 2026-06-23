@@ -56,5 +56,6 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 - `backend/internal/server/server.go` — all `/api/*` routes registered here
 - `backend/internal/db/db.go` — schema SQL + CSV seed logic
 - `backend/internal/handlers/*.go` — all feature logic (no service layer)
+- `backend/internal/simulator/engine.go` — deterministic auto-battle loop, combat log format
 - `frontend/src/store/useGameStore.ts` — Zustand + API client + SSE
 - `frontend/src/app/` — Next.js App Router pages
