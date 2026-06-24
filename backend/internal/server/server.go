@@ -124,6 +124,7 @@ func SetupRouter() *gin.Engine {
 		quest := api.Group("/quest")
 		quest.Use(middleware.AuthRequired())
 		{
+			quest.GET("", handlers.ListQuests)
 			quest.POST("/complete", handlers.CompleteQuest)
 		}
 

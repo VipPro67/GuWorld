@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { defaultQuests, formatRewards } from "@/data/quests";
 import { estimateManaFromSnapshot, estimateHPFromSnapshot, GuInstance, GuSpec, Player, useGameStore } from "@/store/useGameStore";
 import {
   Sparkles,
@@ -13,7 +14,6 @@ import {
   Heart,
   Activity,
   Compass,
-  Shield,
   Clock,
   Eye,
   EyeOff,
@@ -28,6 +28,7 @@ interface ApertureProps {
 }
 
 const RANK_NAMES: Record<number, string> = {
+  0: "Phàm Nhân",
   1: "Nhất Chuyển",
   2: "Nhị Chuyển",
   3: "Tam Chuyển",
@@ -62,24 +63,24 @@ const RANK_COLORS: Record<number, {
   from: string; to: string; glow: string; ring: string;
   text: string; waveSolid: string; waveAlpha: string;
 }> = {
-  1: { from: "#1b4332", to: "#081c15", glow: "rgba(52,211,153,0.35)",  ring: "#2d6a4f", text: "#6ee7b7", waveSolid: "#10b981", waveAlpha: "rgba(16,185,129,0.4)" },
-  2: { from: "#450a0a", to: "#1a0505", glow: "rgba(239,68,68,0.35)",   ring: "#b91c1c", text: "#fca5a5", waveSolid: "#ef4444", waveAlpha: "rgba(239,68,68,0.4)"  },
-  3: { from: "#0f172a", to: "#020617", glow: "rgba(59,130,246,0.35)",  ring: "#2563eb", text: "#93c5fd", waveSolid: "#3b82f6", waveAlpha: "rgba(59,130,246,0.4)" },
-  4: { from: "#3b1f00", to: "#1c0f00", glow: "rgba(245,158,11,0.35)",  ring: "#d97706", text: "#fde68a", waveSolid: "#f59e0b", waveAlpha: "rgba(245,158,11,0.4)" },
-  5: { from: "#2e1065", to: "#12002f", glow: "rgba(139,92,246,0.4)",   ring: "#7c3aed", text: "#c4b5fd", waveSolid: "#8b5cf6", waveAlpha: "rgba(139,92,246,0.4)" },
-  6: { from: "#083344", to: "#02151e", glow: "rgba(6,182,212,0.4)",    ring: "#0891b2", text: "#67e8f9", waveSolid: "#06b6d4", waveAlpha: "rgba(6,182,212,0.4)"  },
-  7: { from: "#500724", to: "#25000f", glow: "rgba(236,72,153,0.4)",   ring: "#db2777", text: "#f9a8d4", waveSolid: "#ec4899", waveAlpha: "rgba(236,72,153,0.4)" },
-  8: { from: "#1c1917", to: "#0c0a09", glow: "rgba(168,162,158,0.4)",  ring: "#a8a29e", text: "#e7e5e4", waveSolid: "#a8a29e", waveAlpha: "rgba(168,162,158,0.4)" },
-  9: { from: "#78350f", to: "#2d0f00", glow: "rgba(251,191,36,0.55)",  ring: "#fbbf24", text: "#fef08a", waveSolid: "#fbbf24", waveAlpha: "rgba(251,191,36,0.5)"  },
+  1: { from: "#1b4332", to: "#081c15", glow: "rgba(52,211,153,0.35)", ring: "#2d6a4f", text: "#6ee7b7", waveSolid: "#10b981", waveAlpha: "rgba(16,185,129,0.4)" },
+  2: { from: "#450a0a", to: "#1a0505", glow: "rgba(239,68,68,0.35)", ring: "#b91c1c", text: "#fca5a5", waveSolid: "#ef4444", waveAlpha: "rgba(239,68,68,0.4)" },
+  3: { from: "#0f172a", to: "#020617", glow: "rgba(59,130,246,0.35)", ring: "#2563eb", text: "#93c5fd", waveSolid: "#3b82f6", waveAlpha: "rgba(59,130,246,0.4)" },
+  4: { from: "#3b1f00", to: "#1c0f00", glow: "rgba(245,158,11,0.35)", ring: "#d97706", text: "#fde68a", waveSolid: "#f59e0b", waveAlpha: "rgba(245,158,11,0.4)" },
+  5: { from: "#2e1065", to: "#12002f", glow: "rgba(139,92,246,0.4)", ring: "#7c3aed", text: "#c4b5fd", waveSolid: "#8b5cf6", waveAlpha: "rgba(139,92,246,0.4)" },
+  6: { from: "#083344", to: "#02151e", glow: "rgba(6,182,212,0.4)", ring: "#0891b2", text: "#67e8f9", waveSolid: "#06b6d4", waveAlpha: "rgba(6,182,212,0.4)" },
+  7: { from: "#500724", to: "#25000f", glow: "rgba(236,72,153,0.4)", ring: "#db2777", text: "#f9a8d4", waveSolid: "#ec4899", waveAlpha: "rgba(236,72,153,0.4)" },
+  8: { from: "#1c1917", to: "#0c0a09", glow: "rgba(168,162,158,0.4)", ring: "#a8a29e", text: "#e7e5e4", waveSolid: "#a8a29e", waveAlpha: "rgba(168,162,158,0.4)" },
+  9: { from: "#78350f", to: "#2d0f00", glow: "rgba(251,191,36,0.55)", ring: "#fbbf24", text: "#fef08a", waveSolid: "#fbbf24", waveAlpha: "rgba(251,191,36,0.5)" },
 };
 
 // SVG layout constants — expanded to 300 viewBox to prevent text clipping
-const VB   = 300;          
-const CX   = 150;          
-const CY   = 150;          
-const R    = 80;           
+const VB = 300;
+const CX = 150;
+const CY = 150;
+const R = 80;
 const CIRC = 2 * Math.PI * R;
-const ORBIT_R = 114;       
+const ORBIT_R = 114;
 
 // Build a sinusoidal wave path that spans 3× the orb width
 function buildWavePath(amplitude: number, wavelength: number, phase: number): string {
@@ -142,8 +143,8 @@ export const Aperture: React.FC<ApertureProps> = ({
   const guInventory = player.gu_inventory || [];
   const eligibleGusForCombat = guInventory.filter(g => g.status === "ACTIVE" && g.equipped);
   const killerMoves = store.killerMoves || [];
-  const percent   = Math.min(100, Math.max(0, (currentMana / maxMana) * 100));
-  const rankName  = RANK_NAMES[rank]    ?? `Rank ${rank}`;
+  const percent = Math.min(100, Math.max(0, (currentMana / maxMana) * 100));
+  const rankName = RANK_NAMES[rank] ?? `Rank ${rank}`;
   const subRankName = SUB_RANK_NAMES[subRank] ?? `Sub ${subRank}`;
   const isImmortal = rank >= 6;
   const energyType = isImmortal ? "Tiên Nguyên" : "Chân Nguyên";
@@ -211,88 +212,6 @@ export const Aperture: React.FC<ApertureProps> = ({
     void store.fetchReferrals();
   }, []);
 
-  // Compute stats
-  const stats = {
-    attack: 10 + (rank - 1) * 10 + (subRank - 1) * 2 + (player.dao_marks?.["strength"] || 0) / 10,
-    defense: 5 + (rank - 1) * 5 + (subRank - 1) * 1,
-    healing: 0,
-    movement: 1,
-    investigation: 1,
-    storage: 20,
-  };
-
-  // Add passive permanent body modifications buffs
-  if (player.body_mods) {
-    player.body_mods.forEach((mod) => {
-      switch (mod) {
-        case "Iron Bone":
-          stats.defense += 15;
-          stats.attack += 5;
-          break;
-        case "Jade Skin Mod":
-          stats.defense += 25;
-          break;
-        case "Wind Walk":
-          stats.movement += 1;
-          break;
-      }
-    });
-  }
-
-  guInventory.forEach((gu) => {
-    if (gu.equipped && gu.status === "ACTIVE") {
-      const spec = guDictionary[gu.gu_id];
-      if (spec) {
-        let masteryMultiplier = 1.0;
-        if (player.path_masteries && player.path_masteries[spec.path]) {
-          const mLevel = player.path_masteries[spec.path];
-          if (mLevel === "Master") masteryMultiplier = 1.1;
-          else if (mLevel === "Grandmaster") masteryMultiplier = 1.25;
-          else if (mLevel === "Supreme Grandmaster") masteryMultiplier = 1.5;
-        }
-
-        const passiveEffects = spec.effects?.passive || {};
-        if (passiveEffects.damage) stats.attack += passiveEffects.damage * masteryMultiplier;
-        if (passiveEffects.add_base_attack) stats.attack += passiveEffects.add_base_attack * masteryMultiplier;
-        if (passiveEffects.defense) stats.defense += passiveEffects.defense * masteryMultiplier;
-        if (passiveEffects.add_base_defense) stats.defense += passiveEffects.add_base_defense * masteryMultiplier;
-        if (passiveEffects.refine_mana_tier) stats.healing += passiveEffects.refine_mana_tier * 10;
-        if (passiveEffects.cleansing_power) stats.healing += passiveEffects.cleansing_power * 15;
-        if (passiveEffects.movement) stats.movement += passiveEffects.movement;
-        if (passiveEffects.investigation) stats.investigation += passiveEffects.investigation;
-        if (passiveEffects.storage) stats.storage += passiveEffects.storage;
-      }
-    }
-  });
-
-  if (rank >= 6) {
-    stats.storage = 999;
-  }
-
-  // Generate SVG Radar Chart points
-  const statsCenter = 100;
-  const statsAxes = [
-    { key: "attack", angle: -Math.PI / 2, max: 100, label: "Tấn Công" },
-    { key: "defense", angle: -Math.PI / 6, max: 100, label: "Phòng Thủ" },
-    { key: "healing", angle: Math.PI / 6, max: 100, label: "Trị Liệu" },
-    { key: "movement", angle: Math.PI / 2, max: 5, label: "Tốc Độ" },
-    { key: "investigation", angle: (5 * Math.PI) / 6, max: 5, label: "Tầm Nhìn" },
-    { key: "storage", angle: (7 * Math.PI) / 6, max: 100, label: "Hộp Trữ" },
-  ];
-
-  const radarPoints = statsAxes.map((axis) => {
-    const rawVal = stats[axis.key as keyof typeof stats] || 0;
-    const val = Math.min(axis.max, rawVal);
-    const ratio = val / axis.max;
-    const radius = 15 + ratio * 65; // radius from 15 to 80
-    const x = statsCenter + radius * Math.cos(axis.angle);
-    const y = statsCenter + radius * Math.sin(axis.angle);
-    return { x, y, label: axis.label, val: rawVal, angle: axis.angle };
-  });
-
-  const radarPath = radarPoints.map((p) => `${p.x},${p.y}`).join(" ");
-  const gridSteps = [0.2, 0.4, 0.6, 0.8, 1.0];
-
   const aperture = store.aperture;
   const essenceProd = aperture?.essence_production_per_year ?? 10;
   const immortalRegen = (essenceProd / 20.0) * (1 + (Math.min(Math.max(subRank, 1), 4) - 1) * 0.15);
@@ -300,7 +219,7 @@ export const Aperture: React.FC<ApertureProps> = ({
   const regenRate = (isImmortal ? immortalRegen : mortalRegen).toFixed(2);
 
   // Vital Gu
-  const vitalGu   = guInventory.find((g) => g.is_vital);
+  const vitalGu = guInventory.find((g) => g.is_vital);
   const vitalSpec = vitalGu ? guDictionary[vitalGu.gu_id] : null;
 
   // Equipped Gu (max 6)
@@ -342,10 +261,10 @@ export const Aperture: React.FC<ApertureProps> = ({
   const wave1 = buildWavePath(4, 55, 0);
   const wave2 = buildWavePath(3, 40, 15);
 
-  const gradId   = `orbGrad-${rank}`;
-  const clipId   = `orbClip-${rank}`;
-  const animId1  = `aperture-wave1-${rank}`;
-  const animId2  = `aperture-wave2-${rank}`;
+  const gradId = `orbGrad-${rank}`;
+  const clipId = `orbClip-${rank}`;
+  const animId1 = `aperture-wave1-${rank}`;
+  const animId2 = `aperture-wave2-${rank}`;
 
   return (
     <>
@@ -362,9 +281,9 @@ export const Aperture: React.FC<ApertureProps> = ({
         .wave-group-2-${rank} { animation: ${animId2} 6.5s linear infinite; }
       `}</style>
 
-      <div 
+      <div
         className="flex flex-col items-center justify-center p-5 glass-panel-gold rounded-3xl w-full border border-amber-500/20 transition-all duration-300 relative overflow-hidden group"
-        style={{ 
+        style={{
           boxShadow: `0 8px 32px 0 rgba(0, 0, 0, 0.45), 0 0 25px ${c.glow}20`,
           borderColor: c.ring + "2a"
         }}
@@ -407,41 +326,28 @@ export const Aperture: React.FC<ApertureProps> = ({
         <div className="flex gap-2 w-full bg-zinc-950/60 p-1.5 rounded-2xl border border-zinc-900 mb-5 z-10">
           <button
             onClick={() => setActiveTab("aperture")}
-            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${
-              activeTab === "aperture"
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                : "text-zinc-500 hover:text-zinc-300"
-            }`}
+            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${activeTab === "aperture"
+              ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+              : "text-zinc-500 hover:text-zinc-300"
+              }`}
           >
             Không Khiếu
           </button>
           <button
-            onClick={() => setActiveTab("stats")}
-            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${
-              activeTab === "stats"
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                : "text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            Thuộc Tính
-          </button>
-          <button
             onClick={() => setActiveTab("quests")}
-            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${
-              activeTab === "quests"
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                : "text-zinc-500 hover:text-zinc-300"
-            }`}
+            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${activeTab === "quests"
+              ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+              : "text-zinc-500 hover:text-zinc-300"
+              }`}
           >
             Nhiệm Vụ
           </button>
           <button
             onClick={() => setActiveTab("soul")}
-            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${
-              activeTab === "soul"
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                : "text-zinc-500 hover:text-zinc-300"
-            }`}
+            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${activeTab === "soul"
+              ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+              : "text-zinc-500 hover:text-zinc-300"
+              }`}
           >
             Hồn Phách
           </button>
@@ -450,21 +356,19 @@ export const Aperture: React.FC<ApertureProps> = ({
               setActiveTab("referrals");
               void store.fetchReferrals();
             }}
-            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${
-              activeTab === "referrals"
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                : "text-zinc-500 hover:text-zinc-300"
-            }`}
+            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${activeTab === "referrals"
+              ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+              : "text-zinc-500 hover:text-zinc-300"
+              }`}
           >
             Sư Đồ
           </button>
           <button
             onClick={() => setActiveTab("settings")}
-            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${
-              activeTab === "settings"
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                : "text-zinc-500 hover:text-zinc-300"
-            }`}
+            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${activeTab === "settings"
+              ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+              : "text-zinc-500 hover:text-zinc-300"
+              }`}
           >
             Cài Đặt
           </button>
@@ -529,9 +433,9 @@ export const Aperture: React.FC<ApertureProps> = ({
                   </g>
 
                   {/* Glass shine crescent overlay */}
-                  <path 
-                    d={`M ${CX - R * 0.7} ${CY - R * 0.7} A ${R} ${R} 0 0 1 ${CX + R * 0.7} ${CY - R * 0.7} A ${R * 0.95} ${R * 0.9} 0 0 0 ${CX - R * 0.7} ${CY - R * 0.7} Z`} 
-                    fill="rgba(255,255,255,0.12)" 
+                  <path
+                    d={`M ${CX - R * 0.7} ${CY - R * 0.7} A ${R} ${R} 0 0 1 ${CX + R * 0.7} ${CY - R * 0.7} A ${R * 0.95} ${R * 0.9} 0 0 0 ${CX - R * 0.7} ${CY - R * 0.7} Z`}
+                    fill="rgba(255,255,255,0.12)"
                   />
 
                   {/* Orbit dots track (faint) */}
@@ -558,12 +462,12 @@ export const Aperture: React.FC<ApertureProps> = ({
                       <circle cx={x} cy={y} r={11} fill="#0d0d12" stroke={c.ring} strokeWidth="1.5" opacity="0.95" />
                       <circle cx={x} cy={y} r={5} fill={c.waveSolid} opacity="0.9" className="animate-pulse" />
                       {/* Unclipped name tag */}
-                      <text 
-                        x={x} 
-                        y={y + 19} 
-                        textAnchor="middle" 
-                        fontSize="8.5" 
-                        fill="#e4e4e7" 
+                      <text
+                        x={x}
+                        y={y + 19}
+                        textAnchor="middle"
+                        fontSize="8.5"
+                        fill="#e4e4e7"
                         fontWeight="bold"
                         className="font-sans drop-shadow-[0_1px_3px_rgba(0,0,0,0.95)]"
                       >
@@ -589,7 +493,6 @@ export const Aperture: React.FC<ApertureProps> = ({
                   </div>
                 </div>
               )}
-
               {/* Center text for mortals */}
               {!isImmortal && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 select-none">
@@ -626,16 +529,15 @@ export const Aperture: React.FC<ApertureProps> = ({
                       {vitalSpec ? vitalSpec.name : vitalGu.gu_id}
                     </span>
                   </div>
-                  <span className={`text-[9px] font-mono px-2 py-0.5 rounded-lg font-bold border ${
-                    vitalGu.status === "ACTIVE" 
-                      ? "bg-emerald-950/20 text-emerald-450 border-emerald-500/20"
-                      : vitalGu.status === "SLEEPING" 
+                  <span className={`text-[9px] font-mono px-2 py-0.5 rounded-lg font-bold border ${vitalGu.status === "ACTIVE"
+                    ? "bg-emerald-950/20 text-emerald-450 border-emerald-500/20"
+                    : vitalGu.status === "SLEEPING"
                       ? "bg-amber-950/20 text-amber-400 border-amber-500/20"
                       : "bg-rose-950/20 text-rose-450 border-rose-500/20"
-                  }`}>
+                    }`}>
                     {vitalGu.status === "ACTIVE" ? "ACTIVE"
                       : vitalGu.status === "SLEEPING" ? "SLEEPING"
-                      : "DEAD"}
+                        : "DEAD"}
                   </span>
                 </div>
               ) : (
@@ -688,167 +590,6 @@ export const Aperture: React.FC<ApertureProps> = ({
             )}
           </div>
         )}
-
-        {activeTab === "stats" && (
-          <div className="w-full space-y-4 z-10">
-            {/* Stats Grid */}
-            <div className="grid grid-cols-2 gap-2.5 text-xs text-left">
-              <div className="bg-zinc-950/40 p-2.5 rounded-xl border border-zinc-900">
-                <div className="flex items-center gap-1 text-zinc-500 mb-0.5">
-                  <Award className="w-3 h-3 text-amber-500" />
-                  <span className="text-[8px] uppercase tracking-wider">Tấn Công (Attack)</span>
-                </div>
-                <span className="text-xs font-semibold text-zinc-300 block">
-                  {stats.attack.toFixed(0)} Sức mạnh
-                </span>
-              </div>
-
-              <div className="bg-zinc-950/40 p-2.5 rounded-xl border border-zinc-900">
-                <div className="flex items-center gap-1 text-zinc-500 mb-0.5">
-                  <Shield className="w-3 h-3 text-emerald-500" />
-                  <span className="text-[8px] uppercase tracking-wider">Phòng Thủ (Defense)</span>
-                </div>
-                <span className="text-xs font-semibold text-zinc-300 block">
-                  {stats.defense.toFixed(0)} Giáp ảo
-                </span>
-              </div>
-
-              <div className="bg-zinc-950/40 p-2.5 rounded-xl border border-zinc-900">
-                <div className="flex items-center gap-1 text-zinc-500 mb-0.5">
-                  <Heart className="w-3 h-3 text-rose-500" />
-                  <span className="text-[8px] uppercase tracking-wider">Thọ Nguyên (Lifespan)</span>
-                </div>
-                <span className="text-xs font-semibold text-zinc-300 block">
-                  {player.lifespan !== undefined ? player.lifespan.toFixed(1) : "0"}/{player.max_lifespan !== undefined ? player.max_lifespan.toFixed(0) : "100"} năm
-                </span>
-              </div>
-
-              <div className="bg-zinc-950/40 p-2.5 rounded-xl border border-zinc-900">
-                <div className="flex items-center gap-1 text-zinc-500 mb-0.5">
-                  <Clock className="w-3 h-3 text-cyan-400" />
-                  <span className="text-[8px] uppercase tracking-wider">Lưu Tốc Tiên Khiếu</span>
-                </div>
-                <span className="text-xs font-semibold text-zinc-300 block">
-                  Nhanh gấp x{player.time_speed_multiplier !== undefined ? player.time_speed_multiplier.toFixed(0) : "1"} lần
-                </span>
-              </div>
-            </div>
-
-            {/* SVG Radar Chart Display */}
-            <div className="flex justify-center items-center py-2 relative">
-              <svg viewBox="0 0 200 200" className="w-full max-w-[200px] overflow-visible">
-                {/* Concentric grid lines */}
-                {gridSteps.map((step, idx) => {
-                  const r = 15 + step * 65;
-                  const gridPoints = statsAxes.map((axis) => {
-                    const gx = statsCenter + r * Math.cos(axis.angle);
-                    const gy = statsCenter + r * Math.sin(axis.angle);
-                    return `${gx},${gy}`;
-                  }).join(" ");
-                  return (
-                    <polygon
-                      key={idx}
-                      points={gridPoints}
-                      className="stroke-zinc-800/60 fill-none"
-                      strokeWidth="0.5"
-                    />
-                  );
-                })}
-
-                {/* Radial lines */}
-                {statsAxes.map((axis, idx) => {
-                  const lx = statsCenter + 80 * Math.cos(axis.angle);
-                  const ly = statsCenter + 80 * Math.sin(axis.angle);
-                  return (
-                    <line
-                      key={idx}
-                      x1={statsCenter}
-                      y1={statsCenter}
-                      x2={lx}
-                      y2={ly}
-                      className="stroke-zinc-900"
-                      strokeWidth="0.5"
-                    />
-                  );
-                })}
-
-                {/* Glowing outer boundary */}
-                <polygon
-                  points={statsAxes.map((axis) => `${statsCenter + 80 * Math.cos(axis.angle)},${statsCenter + 80 * Math.sin(axis.angle)}`).join(" ")}
-                  className="stroke-zinc-800/80 fill-none"
-                  strokeWidth="1"
-                />
-
-                {/* Actual stats polygon */}
-                <polygon
-                  points={radarPath}
-                  className="fill-emerald-500/10 stroke-emerald-500 shadow-lg"
-                  strokeWidth="1.5"
-                />
-
-                {/* Vertices circles */}
-                {radarPoints.map((p, idx) => (
-                  <circle
-                    key={idx}
-                    cx={p.x}
-                    cy={p.y}
-                    r="3.5"
-                    className="fill-emerald-450 stroke-zinc-950"
-                    strokeWidth="1"
-                  >
-                    <title>{`${p.label}: ${p.val.toFixed(0)}`}</title>
-                  </circle>
-                ))}
-
-                {/* Labels */}
-                {statsAxes.map((axis, idx) => {
-                  const lx = statsCenter + 95 * Math.cos(axis.angle);
-                  const ly = statsCenter + 95 * Math.sin(axis.angle);
-                  const cos = Math.cos(axis.angle);
-                  const anchor = Math.abs(cos) < 0.1 ? "middle" : cos > 0 ? "start" : "end";
-                  return (
-                    <text
-                      key={idx}
-                      x={lx}
-                      y={ly + 3}
-                      textAnchor={anchor}
-                      className="fill-zinc-400 font-mono font-bold text-[8px]"
-                    >
-                      {axis.label} ({stats[axis.key as keyof typeof stats].toFixed(0)})
-                    </text>
-                  );
-                })}
-              </svg>
-            </div>
-
-            {/* Path Masteries Section */}
-            <div className="w-full text-left pt-2">
-              <span className="text-[9px] text-zinc-500 uppercase tracking-wider block mb-2 font-mono">
-                Lĩnh Ngộ Lưu Phái (Path Masteries)
-              </span>
-              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                {player.path_masteries && Object.keys(player.path_masteries).length > 0 ? (
-                  Object.entries(player.path_masteries).map(([path, level]) => (
-                    <div key={path} className="flex justify-between items-center bg-zinc-950/30 px-2.5 py-1.5 rounded-lg border border-zinc-900/50 text-xs">
-                      <span className="text-zinc-400 font-medium">{path}</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold font-mono ${
-                        level === "Supreme Grandmaster" ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" :
-                        level === "Grandmaster" ? "bg-amber-950/50 text-amber-300 border border-amber-800/40" :
-                        level === "Master" ? "bg-blue-950/50 text-blue-300 border border-blue-800/40" :
-                        "bg-zinc-800/50 text-zinc-400 border border-zinc-700/40"
-                      }`}>
-                        {level}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-[10px] text-zinc-655 italic">Chưa có lĩnh ngộ lưu phái đặc thù.</div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
         {activeTab === "quests" && (
           <div className="w-full z-10">
             <MainQuestsPanel />
@@ -866,11 +607,11 @@ export const Aperture: React.FC<ApertureProps> = ({
                 </div>
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-indigo-950/50 text-indigo-300 border border-indigo-800/40">
                   {player.soul_tier === "NHAN_HON" ? "Nhân Hồn" :
-                   player.soul_tier === "BACH_NHAN" ? "Bách Nhân Hồn" :
-                   player.soul_tier === "THIEN_NHAN" ? "Thiên Nhân Hồn" :
-                   player.soul_tier === "VAN_NHAN" ? "Vạn Nhân Hồn" :
-                   player.soul_tier === "BACH_VAN" ? "Bách Vạn Hồn" :
-                   player.soul_tier === "THIEN_VAN" ? "Thiên Vạn Hồn" : "Ức Nhân Hồn"}
+                    player.soul_tier === "BACH_NHAN" ? "Bách Nhân Hồn" :
+                      player.soul_tier === "THIEN_NHAN" ? "Thiên Nhân Hồn" :
+                        player.soul_tier === "VAN_NHAN" ? "Vạn Nhân Hồn" :
+                          player.soul_tier === "BACH_VAN" ? "Bách Vạn Hồn" :
+                            player.soul_tier === "THIEN_VAN" ? "Thiên Vạn Hồn" : "Ức Nhân Hồn"}
                 </span>
               </div>
 
@@ -937,13 +678,12 @@ export const Aperture: React.FC<ApertureProps> = ({
                     <div key={path} className="flex flex-col gap-1.5 bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
                       <div className="flex justify-between items-center">
                         <span className="text-zinc-300 font-mono text-xs font-bold capitalize">{path} Path</span>
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono ${
-                          level === "Supreme Grandmaster" ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" :
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono ${level === "Supreme Grandmaster" ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" :
                           level === "Great Grandmaster" ? "bg-red-950/50 text-red-300 border border-red-800/40" :
-                          level === "Grandmaster" ? "bg-amber-950/50 text-amber-300 border border-amber-800/40" :
-                          level === "Master" ? "bg-blue-950/50 text-blue-300 border border-blue-800/40" :
-                          "bg-zinc-800/50 text-zinc-400 border border-zinc-700/40"
-                        }`}>
+                            level === "Grandmaster" ? "bg-amber-950/50 text-amber-300 border border-amber-800/40" :
+                              level === "Master" ? "bg-blue-950/50 text-blue-300 border border-blue-800/40" :
+                                "bg-zinc-800/50 text-zinc-400 border border-zinc-700/40"
+                          }`}>
                           {level}
                         </span>
                       </div>
@@ -1121,13 +861,13 @@ export const Aperture: React.FC<ApertureProps> = ({
                 <Crown className="w-5 h-5 text-amber-400" />
                 <span className="font-serif font-bold text-zinc-100 text-sm">Thiết Lập Hồ Sơ</span>
               </div>
-              
+
               <form onSubmit={async (e) => {
                 e.preventDefault();
                 const usernameInput = (e.currentTarget.elements.namedItem("username") as HTMLInputElement).value;
                 const bioInput = (e.currentTarget.elements.namedItem("bio") as HTMLTextAreaElement).value;
                 const newPasswordInput = (e.currentTarget.elements.namedItem("newPassword") as HTMLInputElement).value;
-                
+
                 const success = await store.updateProfileSettings({
                   username: usernameInput,
                   bio: bioInput,
@@ -1233,10 +973,10 @@ export const Aperture: React.FC<ApertureProps> = ({
                       )}
                       <span className="text-xs font-mono font-bold text-zinc-200 uppercase tracking-wider">Ngụy Trang Hồ Sơ</span>
                     </div>
-                    
+
                     <label className="relative inline-flex items-center cursor-pointer select-none">
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         checked={isDisguised}
                         disabled={!hasConcealment}
                         onChange={(e) => setIsDisguised(e.target.checked)}
@@ -1565,16 +1305,16 @@ function WallControls() {
             Cơ Hội Thăng Tiên
           </div>
           <div className="text-[10.5px] text-zinc-400 mb-3 text-center leading-relaxed">
-            Ngươi đã đạt tới Ngũ Chuyển Đỉnh Phong. Nhân khí tích lũy: <span className="font-bold text-amber-400 font-mono">{player.human_qi?.toFixed(1) || 0}/1000</span> <br/>
+            Ngươi đã đạt tới Ngũ Chuyển Đỉnh Phong. Nhân khí tích lũy: <span className="font-bold text-amber-400 font-mono">{player.human_qi?.toFixed(1) || 0}/1000</span> <br />
             Thăng Tiên là quá trình độ kiếp cực kỳ nguy hiểm, nếu thất bại tu vi sẽ vỡ nát!
           </div>
-          <button 
+          <button
             className="px-5 py-2.5 bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 text-white font-bold text-xs rounded-xl shadow-[0_0_15px_rgba(244,3,94,0.45)] cursor-pointer transition-all active:scale-95 uppercase tracking-wider"
             onClick={async () => {
-               if(confirm("Thăng tiên là cửu tử nhất sinh! Ngươi đã chuẩn bị kỹ?")) {
-                 const res = await store.ascension();
-                 if(res) alert(res.message);
-               }
+              if (confirm("Thăng tiên là cửu tử nhất sinh! Ngươi đã chuẩn bị kỹ?")) {
+                const res = await store.ascension();
+                if (res) alert(res.message);
+              }
             }}
           >
             Liều Mạng Thăng Tiên
@@ -1594,27 +1334,27 @@ function WallControls() {
           </div>
           <div className="flex gap-2">
             <div className="relative flex-grow flex items-center bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus-within:border-cyan-500/50 rounded-xl px-3 transition-colors">
-              <input 
-                type="number" 
-                className="w-full py-2 bg-transparent text-sm text-zinc-100 font-semibold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
-                value={rechargeStones} 
-                onChange={(e) => setRechargeStones(Math.max(0, Number(e.target.value)))} 
-                min={0} 
-                max={player.primeval_stones} 
+              <input
+                type="number"
+                className="w-full py-2 bg-transparent text-sm text-zinc-100 font-semibold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                value={rechargeStones}
+                onChange={(e) => setRechargeStones(Math.max(0, Number(e.target.value)))}
+                min={0}
+                max={player.primeval_stones}
               />
               <span className="text-[10px] text-zinc-500 font-mono font-semibold ml-2">Nguyên Thạch</span>
             </div>
             <div className="flex gap-1.5">
-              <button 
+              <button
                 type="button"
                 onClick={() => setRechargeStones(player.primeval_stones)}
                 className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded-xl text-[10px] text-zinc-300 font-bold transition-all active:scale-95 cursor-pointer font-mono"
               >
                 MAX
               </button>
-              <button 
+              <button
                 type="button"
-                className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-950/20 active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wide" 
+                className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-950/20 active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wide"
                 onClick={async () => {
                   if (rechargeStones <= 0) return alert('Nhập số nguyên thạch để nạp');
                   const res = await store.rechargeWithStones(rechargeStones);
@@ -1645,27 +1385,27 @@ function WallControls() {
         </div>
         <div className="flex gap-2">
           <div className="relative flex-grow flex items-center bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus-within:border-emerald-500/50 rounded-xl px-3 transition-colors">
-            <input 
-              type="number" 
-              className="w-full py-2 bg-transparent text-sm text-zinc-100 font-semibold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
-              value={manaSpend} 
-              onChange={(e) => setManaSpend(Math.max(0, Number(e.target.value)))} 
-              min={0} 
-              max={Math.floor(player.current_mana)} 
+            <input
+              type="number"
+              className="w-full py-2 bg-transparent text-sm text-zinc-100 font-semibold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              value={manaSpend}
+              onChange={(e) => setManaSpend(Math.max(0, Number(e.target.value)))}
+              min={0}
+              max={Math.floor(player.current_mana)}
             />
             <span className="text-[10px] text-zinc-500 font-mono font-semibold ml-2">Mana</span>
           </div>
           <div className="flex gap-1.5">
-            <button 
+            <button
               type="button"
               onClick={() => setManaSpend(Math.floor(player.current_mana))}
               className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded-xl text-[10px] text-zinc-300 font-bold transition-all active:scale-95 cursor-pointer font-mono"
             >
               MAX
             </button>
-            <button 
+            <button
               type="button"
-              className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-emerald-950/20 active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wide" 
+              className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-emerald-950/20 active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wide"
               onClick={async () => {
                 if (manaSpend <= 0) return alert('Nhập lượng mana cần dùng');
                 const res = await store.breakWall(manaSpend);
@@ -1691,27 +1431,27 @@ function WallControls() {
         </div>
         <div className="flex gap-2">
           <div className="relative flex-grow flex items-center bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus-within:border-cyan-500/50 rounded-xl px-3 transition-colors">
-            <input 
-              type="number" 
-              className="w-full py-2 bg-transparent text-sm text-zinc-100 font-semibold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
-              value={rechargeStones} 
-              onChange={(e) => setRechargeStones(Math.max(0, Number(e.target.value)))} 
-              min={0} 
-              max={player.primeval_stones} 
+            <input
+              type="number"
+              className="w-full py-2 bg-transparent text-sm text-zinc-100 font-semibold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              value={rechargeStones}
+              onChange={(e) => setRechargeStones(Math.max(0, Number(e.target.value)))}
+              min={0}
+              max={player.primeval_stones}
             />
             <span className="text-[10px] text-zinc-500 font-mono font-semibold ml-2">Nguyên Thạch</span>
           </div>
           <div className="flex gap-1.5">
-            <button 
+            <button
               type="button"
               onClick={() => setRechargeStones(player.primeval_stones)}
               className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded-xl text-[10px] text-zinc-300 font-bold transition-all active:scale-95 cursor-pointer font-mono"
             >
               MAX
             </button>
-            <button 
+            <button
               type="button"
-              className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-950/20 active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wide" 
+              className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-950/20 active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wide"
               onClick={async () => {
                 if (rechargeStones <= 0) return alert('Nhập số nguyên thạch để nạp');
                 const res = await store.rechargeWithStones(rechargeStones);
@@ -1727,7 +1467,12 @@ function WallControls() {
       <div className="text-[10px] text-zinc-500 text-center font-mono font-semibold">
         Tiến độ phá vách khiếu: <span className="text-emerald-400 font-bold">{((player.wall_progress ?? 0) * 100).toFixed(1)}%</span>
       </div>
-
+      <div className="flex justify-between items-center text-xs">
+        <span className="text-zinc-400 font-medium">Thọ Nguyên Còn Lại:</span>
+        <span className="text-xs font-semibold text-zinc-300 block">
+          {(player.max_lifespan - player.lifespan).toFixed(1)} năm
+        </span>
+      </div>
       {/* Aperture Stress Level */}
       <div className="mt-3.5 p-3 bg-zinc-950/70 border border-zinc-900 rounded-xl">
         <div className="flex items-center justify-between mb-2">
@@ -1735,11 +1480,10 @@ function WallControls() {
             <Activity className="w-3.5 h-3.5 text-rose-450 animate-pulse" />
             Áp Lực Không Khiếu (Aperture Stress)
           </span>
-          <span className={`text-xs font-mono font-bold ${
-            (player.aperture_stress ?? 0) >= 80 ? "text-rose-500 animate-pulse font-extrabold" :
+          <span className={`text-xs font-mono font-bold ${(player.aperture_stress ?? 0) >= 80 ? "text-rose-500 animate-pulse font-extrabold" :
             (player.aperture_stress ?? 0) >= 50 ? "text-amber-500" :
-            "text-emerald-400"
-          }`}>
+              "text-emerald-400"
+            }`}>
             {(player.aperture_stress ?? 0).toFixed(1)}%
           </span>
         </div>
@@ -1747,11 +1491,10 @@ function WallControls() {
         {/* Dial / Progress Bar */}
         <div className="relative w-full h-3.5 bg-zinc-900/80 rounded-full overflow-hidden border border-zinc-850 p-[2px]">
           <div
-            className={`h-full rounded-full transition-all duration-300 ${
-              (player.aperture_stress ?? 0) >= 80 ? "bg-gradient-to-r from-red-600 via-rose-500 to-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]" :
+            className={`h-full rounded-full transition-all duration-300 ${(player.aperture_stress ?? 0) >= 80 ? "bg-gradient-to-r from-red-600 via-rose-500 to-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]" :
               (player.aperture_stress ?? 0) >= 50 ? "bg-gradient-to-r from-amber-600 to-amber-400" :
-              "bg-gradient-to-r from-emerald-600 to-emerald-400"
-            }`}
+                "bg-gradient-to-r from-emerald-600 to-emerald-400"
+              }`}
             style={{ width: `${Math.min(100, player.aperture_stress ?? 0)}%` }}
           />
         </div>
@@ -1847,6 +1590,13 @@ function BlessedLandControls() {
 
           {aperture && (
             <>
+              {/* Stats Grid */}
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-zinc-400 font-medium">Thọ Nguyên Còn Lại:</span>
+                <span className="text-xs font-semibold text-zinc-300 block">
+                  {(player.max_lifespan - player.lifespan).toFixed(1)} năm
+                </span>
+              </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-zinc-400 font-medium">Lưu tốc thời gian:</span>
                 <span className="text-cyan-400 font-semibold">x{aperture.time_rate} lần</span>
@@ -1888,7 +1638,7 @@ function BlessedLandControls() {
         <div className="bg-zinc-950/50 border border-zinc-900 rounded-xl p-3">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] text-zinc-450 font-bold uppercase tracking-wider flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-violet-400" />
+              <Sparkles className="w-4 h-4 text-violet-400" />
               Nạp Tiên Nguyên Thạch (Recharge)
             </span>
             <span className="text-[10px] text-cyan-400 font-mono font-bold">
@@ -1897,27 +1647,27 @@ function BlessedLandControls() {
           </div>
           <div className="flex gap-2">
             <div className="relative flex-grow flex items-center bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus-within:border-cyan-500/50 rounded-xl px-3 transition-colors">
-              <input 
-                type="number" 
-                className="w-full py-2 bg-transparent text-sm text-zinc-100 font-semibold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
-                value={rechargeStones} 
-                onChange={(e) => setRechargeStones(Math.max(0, Number(e.target.value)))} 
-                min={0} 
-                max={player.immortal_stones} 
+              <input
+                type="number"
+                className="w-full py-2 bg-transparent text-sm text-zinc-100 font-semibold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                value={rechargeStones}
+                onChange={(e) => setRechargeStones(Math.max(0, Number(e.target.value)))}
+                min={0}
+                max={player.immortal_stones}
               />
               <span className="text-[10px] text-zinc-500 font-mono font-semibold ml-2">Tiên Nguyên Thạch</span>
             </div>
             <div className="flex gap-1.5">
-              <button 
+              <button
                 type="button"
                 onClick={() => setRechargeStones(player.immortal_stones)}
                 className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded-xl text-[10px] text-zinc-300 font-bold transition-all active:scale-95 cursor-pointer font-mono"
               >
                 MAX
               </button>
-              <button 
+              <button
                 type="button"
-                className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-950/20 active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wide" 
+                className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-950/20 active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wide"
                 onClick={async () => {
                   if (rechargeStones <= 0) return alert('Nhập số tiên nguyên thạch để nạp');
                   const res = await store.rechargeWithStones(rechargeStones);
@@ -1944,6 +1694,30 @@ function BlessedLandControls() {
             )}
           </div>
         </div>
+        {/* Path Masteries Section */}
+        <div className="w-full text-left pt-2">
+          <span className="text-[9px] text-zinc-500 uppercase tracking-wider block mb-2 font-mono">
+            Lĩnh Ngộ Lưu Phái (Path Masteries)
+          </span>
+          <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+            {player.path_masteries && Object.keys(player.path_masteries).length > 0 ? (
+              Object.entries(player.path_masteries).map(([path, level]) => (
+                <div key={path} className="flex justify-between items-center bg-zinc-950/30 px-2.5 py-1.5 rounded-lg border border-zinc-900/50 text-xs">
+                  <span className="text-zinc-400 font-medium">{path}</span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-semibold font-mono ${level === "Supreme Grandmaster" ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" :
+                    level === "Grandmaster" ? "bg-amber-950/50 text-amber-300 border border-amber-800/40" :
+                      level === "Master" ? "bg-blue-950/50 text-blue-300 border border-blue-800/40" :
+                        "bg-zinc-800/50 text-zinc-400 border border-zinc-700/40"
+                    }`}>
+                    {level}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="text-[10px] text-zinc-655 italic">Chưa có lĩnh ngộ lưu phái đặc thù.</div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1956,66 +1730,31 @@ function MainQuestsPanel() {
 
   const completed = player.completed_quests || [];
 
-  const quests = [
-    {
-      id: "quest_1_awaken",
-      title: "Giác Tỉnh Không Khiếu",
-      desc: "Khai mở không khiếu thành công",
-      req: "Cảnh giới Nhất Chuyển Sơ Giai trở lên",
-      check: () => player.rank >= 1,
-    },
-    {
-      id: "quest_2_vital_gu",
-      title: "Cổ Trùng Bản Mệnh",
-      desc: "Luyện hóa hoặc trang bị Cổ trùng",
-      req: "Đang trang bị hoặc có Cổ trùng bản mệnh",
-      check: () => player.gu_inventory?.some(g => g.is_vital || g.equipped),
-    },
-    {
-      id: "quest_3_rank_2",
-      title: "Trùng Kích Nhị Chuyển",
-      desc: "Đột phá vách khiếu thăng Nhị Chuyển",
-      req: "Tu vi đạt Nhị Chuyển",
-      check: () => player.rank >= 2,
-    },
-    {
-      id: "quest_4_refine_gu",
-      title: "Luyện Chế Cổ Trùng Nhị Chuyển",
-      desc: "Luyện thành công Cổ trùng bậc 2 trở lên",
-      req: "Có Cổ trùng bậc 2 trở lên",
-      check: () => {
-        return player.gu_inventory?.some(g => {
-          const spec = store.guDictionary?.[g.gu_id];
-          return spec && spec.rank >= 2;
-        });
-      },
-    },
-    {
-      id: "quest_5_fame",
-      title: "Danh Chấn Thanh Bản Thôn",
-      desc: "Chiến thắng quái thú dọn sạch 5 địa khu",
-      req: `Đã quét dọn ${Object.keys(player.cleared_cells || {}).length}/5 ô`,
-      check: () => Object.keys(player.cleared_cells || {}).length >= 5,
-    },
-    {
-      id: "quest_6_rank_5",
-      title: "Đỉnh Phong Chuẩn Bị",
-      desc: "Tu vi đỉnh phong, sẵn sàng độ kiếp thăng tiên",
-      req: "Tu vi đạt Ngũ Chuyển",
-      check: () => player.rank >= 5,
-    },
-  ];
+  const checkCtx = {
+    rank: player.rank,
+    guInventory: player.gu_inventory || [],
+    clearedCells: player.cleared_cells || {},
+    guDictionary: store.guDictionary || {},
+  };
+  const quests = defaultQuests(checkCtx);
 
-  const getQuestIcon = (id: string) => {
-    switch (id) {
-      case "quest_1_awaken": return <Sparkles className="w-3.5 h-3.5 text-emerald-400" />;
-      case "quest_2_vital_gu": return <Flame className="w-3.5 h-3.5 text-amber-500 animate-pulse" />;
-      case "quest_3_rank_2": return <Zap className="w-3.5 h-3.5 text-cyan-400" />;
-      case "quest_4_refine_gu": return <Atom className="w-3.5 h-3.5 text-purple-450" />;
-      case "quest_5_fame": return <Crown className="w-3.5 h-3.5 text-yellow-500 animate-bounce" />;
-      case "quest_6_rank_5": return <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />;
+  const getQuestIcon = (icon: string) => {
+    switch (icon) {
+      case "sparkles": return <Sparkles className="w-3.5 h-3.5 text-emerald-400" />;
+      case "flame": return <Flame className="w-3.5 h-3.5 text-amber-500 animate-pulse" />;
+      case "zap": return <Zap className="w-3.5 h-3.5 text-cyan-400" />;
+      case "atom": return <Atom className="w-3.5 h-3.5 text-purple-450" />;
+      case "crown": return <Crown className="w-3.5 h-3.5 text-yellow-500 animate-bounce" />;
+      case "shield_alert": return <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />;
       default: return <Award className="w-3.5 h-3.5 text-zinc-400" />;
     }
+  };
+
+  const buttonLabel = (q: typeof quests[0], isDone: boolean, canClaim: boolean) => {
+    if (isDone) return "ĐÃ NHẬN";
+    if (!canClaim) return "CHƯA ĐẠT";
+    const rewardStr = formatRewards(q.rewards);
+    return `NHẬN${rewardStr ? " " + rewardStr : ""}`;
   };
 
   return (
@@ -2028,25 +1767,24 @@ function MainQuestsPanel() {
         {quests.map((q) => {
           const isDone = completed.includes(q.id);
           const canClaim = !isDone && q.check();
-          
+
           return (
-            <div 
-              key={q.id} 
-              className={`p-2.5 rounded-xl border text-xs flex justify-between items-center transition-all duration-300 hover:scale-[1.01] ${
-                isDone ? "bg-emerald-950/10 border-emerald-950/20 opacity-70" :
+            <div
+              key={q.id}
+              className={`p-2.5 rounded-xl border text-xs flex justify-between items-center transition-all duration-300 hover:scale-[1.01] ${isDone ? "bg-emerald-950/10 border-emerald-950/20 opacity-70" :
                 canClaim ? "bg-amber-950/15 border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.08)] animate-pulse" :
-                "bg-zinc-950/40 border-zinc-900"
-              }`}
+                  "bg-zinc-950/40 border-zinc-900"
+                }`}
             >
               <div className="text-left flex-1 min-w-0 mr-3">
                 <div className={`font-semibold flex items-center gap-2 ${isDone ? "text-emerald-450 line-through" : "text-zinc-200"}`}>
-                  {getQuestIcon(q.id)}
+                  {getQuestIcon(q.icon)}
                   <span className="truncate">{q.title}</span>
                 </div>
                 <div className="text-[10px] text-zinc-500 mt-0.5 truncate">{q.desc}</div>
-                <div className="text-[9px] text-zinc-400 mt-0.5 italic font-mono">{q.req}</div>
+                <div className="text-[9px] text-zinc-400 mt-0.5 italic font-mono">{q.req_desc}</div>
               </div>
-              
+
               <button
                 disabled={isDone || !canClaim || store.actionLoading}
                 onClick={async () => {
@@ -2055,15 +1793,14 @@ function MainQuestsPanel() {
                     alert(res.message);
                   }
                 }}
-                className={`px-3 py-1.5 rounded-xl text-[10px] font-bold font-mono transition-all shrink-0 cursor-pointer ${
-                  isDone 
-                    ? "bg-zinc-900/60 text-zinc-650 border border-zinc-950 cursor-not-allowed" 
-                    : canClaim 
-                    ? "bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-zinc-950 shadow-[0_0_10px_rgba(245,158,11,0.3)] active:scale-95" 
+                className={`px-3 py-1.5 rounded-xl text-[10px] font-bold font-mono transition-all shrink-0 cursor-pointer ${isDone
+                  ? "bg-zinc-900/60 text-zinc-650 border border-zinc-950 cursor-not-allowed"
+                  : canClaim
+                    ? "bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-zinc-950 shadow-[0_0_10px_rgba(245,158,11,0.3)] active:scale-95"
                     : "bg-zinc-900 text-zinc-600 border border-zinc-850 cursor-not-allowed"
-                }`}
+                  }`}
               >
-                {isDone ? "ĐÃ NHẬN" : canClaim ? "NHẬN +50" : "CHƯA ĐẠT"}
+                {buttonLabel(q, isDone, canClaim)}
               </button>
             </div>
           );
