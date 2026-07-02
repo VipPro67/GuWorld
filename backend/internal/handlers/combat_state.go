@@ -76,7 +76,7 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 		}
 	}
 
-	if base.TargetPlayerID == "" && base.EnemyTemplateID != "monster_heavenly_tribulation" && base.EnemyHP < 1000 {
+	if base.TargetPlayerID == "" && base.MineSlotID == 0 && base.EnemyTemplateID != "monster_heavenly_tribulation" && base.EnemyHP < 1000 {
 		numMinions := rand.Intn(3)
 		for i := 0; i < numMinions; i++ {
 			minion := models.Combatant{

@@ -878,15 +878,14 @@ func CombatAttack(c *gin.Context) {
 			slotID := player.ActiveCombat.MineSlotID
 			var rarity string
 			var currentOccupierStr *string
+			var monsterIDStr *string
 			var lastClaimedAt *time.Time
-			err = tx.QueryRow("SELECT rarity, occupier_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &currentOccupierStr, &lastClaimedAt)
-			if err == nil && currentOccupierStr != nil {
-				currOccupierUUID, errParse := uuid.Parse(*currentOccupierStr)
-				if errParse == nil && lastClaimedAt != nil {
-					stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
-					if stones > 0 || qi > 0.0 || chests > 0 {
-						_ = AddMineRewardsToPlayerTx(tx, currOccupierUUID, stones, qi, chests)
-					}
+			err = tx.QueryRow("SELECT rarity, occupier_id, monster_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &currentOccupierStr, &monsterIDStr, &lastClaimedAt)
+			if err == nil && currentOccupierStr != nil && lastClaimedAt != nil {
+				// PVP: winner gets half the accumulated resources
+				stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
+				if stones > 0 || qi > 0.0 || chests > 0 {
+					_ = AddMineRewardsToPlayerTx(tx, player.ID, stones/2, qi/2.0, chests/2)
 				}
 			}
 

@@ -144,7 +144,7 @@ export default function Home() {
               <Sparkles className="w-4 h-4 text-emerald-400" />
             </div>
             <h1 className="text-lg sm:text-xl font-bold font-serif tracking-wider text-zinc-100 bg-gradient-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">
-              GuWorld
+              Cổ Giới
             </h1>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
-import { Sword, LogOut, Coins, Flame, Gift, Clock, User, ShieldAlert, Loader2 } from "lucide-react";
+import { Sword, LogOut, Coins, Flame, Gift, Clock, User, ShieldAlert, Loader2, Skull } from "lucide-react";
 
 export const MineView: React.FC = () => {
   const {
@@ -177,6 +177,7 @@ export const MineView: React.FC = () => {
           const styles = getRarityStyles(slot.rarity);
           const isOwnSlot = slot.occupier_id === player?.id;
           const isOccupied = !!slot.occupier_id;
+          const hasMonster = !!slot.monster_id && !slot.occupier_id;
 
           return (
             <div
@@ -215,7 +216,11 @@ export const MineView: React.FC = () => {
 
                 {/* Occupier Avatar in the center of crystal */}
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-full border-2 border-zinc-950/80 shadow-inner overflow-hidden flex items-center justify-center">
-                  {isOccupied ? (
+                  {hasMonster ? (
+                    <div className="w-full h-full bg-red-950/80 flex items-center justify-center">
+                      <Skull className="w-7 h-7 text-red-400" />
+                    </div>
+                  ) : isOccupied ? (
                     <div
                       className={`w-full h-full bg-gradient-to-br ${getAvatarBg(
                         slot.occupier_name || ""
@@ -238,14 +243,14 @@ export const MineView: React.FC = () => {
                   {slot.rarity}
                 </h3>
                 <span className="text-[11px] text-zinc-400 font-mono">
-                  {isOccupied ? slot.occupier_name : "Trống"}
+                  {hasMonster ? "Yêu Quái canh giữ" : isOccupied ? slot.occupier_name : "Trống"}
                 </span>
               </div>
 
               {/* Occupied Timer */}
               <div className="text-xs text-zinc-500 font-mono mb-4 flex items-center gap-1.5 justify-center">
                 <Clock className="w-3.5 h-3.5 text-zinc-600" />
-                {isOccupied ? formatDuration(slot.occupied_at) : "Đang mở cửa"}
+                {hasMonster ? "Có quái thủ giữ" : isOccupied ? formatDuration(slot.occupied_at) : "Đang mở cửa"}
               </div>
 
               {/* Rewards Indicators */}
@@ -279,6 +284,14 @@ export const MineView: React.FC = () => {
                   >
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     Đang xử lý...
+                  </button>
+                ) : hasMonster ? (
+                  <button
+                    onClick={() => attackMineSlot(slot.id)}
+                    className="w-full bg-red-950/60 border border-red-500/20 hover:bg-red-900/60 hover:border-red-500/40 text-red-400 hover:text-red-300 py-2.5 px-4 rounded-xl text-xs font-serif font-bold tracking-wider transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Skull className="w-3.5 h-3.5" />
+                    Thách Đấu
                   </button>
                 ) : !isOccupied ? (
                   <button

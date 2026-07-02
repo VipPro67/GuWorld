@@ -955,7 +955,7 @@ export const WikiView: React.FC = () => {
             <Info className="w-3.5 h-3.5 text-zinc-700" />
             Bản dịch & Tổng hợp theo nguyên tác Cổ Chân Nhân.
           </span>
-          <span>GuWorld Wiki v1.0</span>
+          <span>Cổ Giới Wiki v1.0</span>
         </div>
 
       </main>

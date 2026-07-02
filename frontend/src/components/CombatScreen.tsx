@@ -64,6 +64,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   const executeAutoCombat = useGameStore((state) => state.executeAutoCombat);
   const fetchPlayerStatus = useGameStore((state) => state.fetchPlayerStatus);
+  const fetchMineSlots = useGameStore((state) => state.fetchMineSlots);
   const killerMoves = useGameStore((state) => state.killerMoves);
   const fetchKillerMoves = useGameStore((state) => state.fetchKillerMoves);
   const combatSettings = useGameStore((state) => state.combatSettings);
@@ -224,6 +225,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   const handleExitSimulation = async () => {
     await fetchPlayerStatus(player.id);
+    fetchMineSlots();
   };
 
   // ── Recommendation helpers ──

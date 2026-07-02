@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"net/http"
 	"time"
@@ -215,13 +216,28 @@ func AutoCombatStart(c *gin.Context) {
 		}
 	}
 
+	simMaxHP := 100
+	if player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP" {
+		simMaxHP = int(player.BaseHP)
+		if simMaxHP <= 0 {
+			simMaxHP = 100
+		}
+	}
+	simHP := int(player.HP)
+	if simHP > simMaxHP {
+		simHP = simMaxHP
+	}
+	if simHP <= 0 {
+		simHP = simMaxHP
+	}
+
 	simPlayer := &simulator.CombatantAuto{
 		ID:            player.ID.String(),
 		Name:          player.Username,
 		Kind:          "Player",
 		GridRow:       2,
-		MaxHP:         100,
-		HP:            int(player.HP),
+		MaxHP:         simMaxHP,
+		HP:            simHP,
 		MaxMana:       int(player.MaxMana),
 		Mana:          int(player.CurrentMana),
 		BaseDmg:       int(playerStats["attack"]),
@@ -239,9 +255,6 @@ func AutoCombatStart(c *gin.Context) {
 		HealPotency:     healPotency,
 		PrimevalStones:  player.PrimevalStones,
 		ImmortalStones:  player.ImmortalStones,
-	}
-	if simPlayer.HP <= 0 || simPlayer.HP > 100 {
-		simPlayer.HP = 100
 	}
 
 	simState.Allies = append(simState.Allies, simPlayer)
@@ -404,6 +417,22 @@ func AutoCombatStart(c *gin.Context) {
 	var updateQuery string
 	var args []interface{}
 
+	// ── Combat type label for logs ──
+	enemyTypeName := "Dã ngoại"
+	if player.ActiveCombat != nil {
+		switch player.ActiveCombat.EnemyType {
+		case "MINE_PVE":
+			enemyTypeName = "Mỏ Linh Thạch (Yêu quái)"
+		case "PVP":
+			enemyTypeName = "Đấu trường / PVP"
+		}
+	}
+	logs = append([]simulator.CombatLog{{
+		Turn:   0,
+		Action: "COMBAT_TYPE",
+		Detail: fmt.Sprintf("=== %s ===", enemyTypeName),
+	}}, logs...)
+
 	var lootMsg string
 	if alliesAlive {
 		isExplore := player.CurrentRegion != "Southern_Border" && player.CurrentRegion != "Lobby"
@@ -472,6 +501,38 @@ func AutoCombatStart(c *gin.Context) {
 				Action: "LOOT",
 				Detail: lootMsg,
 			})
+		}
+
+		// ── Mine combat victory: occupy mine + remove monster ──
+		if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
+			slotID := player.ActiveCombat.MineSlotID
+			var rarity string
+			var currentOccupierStr *string
+			var monsterIDStr *string
+			var lastClaimedAt *time.Time
+			err = tx.QueryRow("SELECT rarity, occupier_id, monster_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &currentOccupierStr, &monsterIDStr, &lastClaimedAt)
+			if err == nil && currentOccupierStr != nil && lastClaimedAt != nil {
+				stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
+				if stones > 0 || qi > 0.0 || chests > 0 {
+					_ = AddMineRewardsToPlayerTx(tx, player.ID, stones/2, qi/2.0, chests/2)
+				}
+			}
+
+			now := time.Now()
+			_, errUpdate := tx.Exec(`
+				UPDATE mine_slots
+				SET occupier_id = $1, monster_id = NULL, occupied_at = $2, last_claimed_at = $3
+				WHERE id = $4
+			`, player.ID, now, now, slotID)
+			if errUpdate == nil {
+				logs = append(logs, simulator.CombatLog{
+					Turn:   simState.Turn,
+					Action: "MINE_OCCUPY",
+					Detail: fmt.Sprintf("Chiếm lĩnh thành công mỏ phẩm chất %s #%d!", rarity, slotID),
+				})
+			} else {
+				log.Printf("Failed to update mine slot in auto combat victory: %v", errUpdate)
+			}
 		}
 
 		tempLootJSON, _ := json.Marshal(player.TempLoot)

@@ -74,6 +74,9 @@ func main() {
 	// 2.7. Start Mine Monster Worker
 	handlers.StartMineMonsterWorker(ctx)
 
+	// 2.8. Start Midnight Mine Worker (daily 00:00 reset)
+	handlers.StartMidnightMineWorker(ctx)
+
 	// 3. Setup router & run
 	r := server.SetupRouter()
 

@@ -874,6 +874,7 @@ export interface MineSlot {
   rarity: string;
   occupier_id?: string;
   occupier_name?: string;
+  monster_id?: string;
   occupied_at?: string;
   last_claimed_at?: string;
   accumulated_stones: number;

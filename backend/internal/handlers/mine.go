@@ -24,10 +24,10 @@ type MineRates struct {
 }
 
 var MineRarityRates = map[string]MineRates{
-	"Truyền Thuyết": {StonesPerMin: 30.0, QiPerMin: 7.5, ChestChance: 0.02},
-	"Sử Thi":        {StonesPerMin: 25.0, QiPerMin: 6.25, ChestChance: 0.015},
-	"Hiếm":          {StonesPerMin: 22.0, QiPerMin: 5.5, ChestChance: 0.012},
-	"Thường":        {StonesPerMin: 20.0, QiPerMin: 5.0, ChestChance: 0.01},
+	"Truyền Thuyết": {StonesPerMin: 15.0, QiPerMin: 3.75, ChestChance: 0.01},
+	"Sử Thi":        {StonesPerMin: 12.5, QiPerMin: 3.125, ChestChance: 0.0075},
+	"Hiếm":          {StonesPerMin: 11.0, QiPerMin: 2.75, ChestChance: 0.006},
+	"Thường":        {StonesPerMin: 10.0, QiPerMin: 2.5, ChestChance: 0.005},
 }
 
 type MineSlotResponse struct {
@@ -222,7 +222,8 @@ func OccupyMineSlot(c *gin.Context) {
 	// 3. Verify slot is empty and load its info
 	var rarity string
 	var occupierID *string
-	err = tx.QueryRow("SELECT rarity, occupier_id FROM mine_slots WHERE id = $1 FOR UPDATE", req.SlotID).Scan(&rarity, &occupierID)
+	var monsterIDCheck *string
+	err = tx.QueryRow("SELECT rarity, occupier_id, monster_id FROM mine_slots WHERE id = $1 FOR UPDATE", req.SlotID).Scan(&rarity, &occupierID, &monsterIDCheck)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ không tồn tại"})
@@ -233,6 +234,10 @@ func OccupyMineSlot(c *gin.Context) {
 	}
 	if occupierID != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Mỏ này đã bị người khác chiếm giữ!"})
+		return
+	}
+	if monsterIDCheck != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Mỏ có yêu quái canh giữ! Hãy đánh bại nó trước khi chiếm đóng."})
 		return
 	}
 
@@ -509,7 +514,7 @@ func AttackMineSlot(c *gin.Context) {
 			EnemyPathMasteries: monsterTemplate.PathMasteries,
 			AIProfile:          monsterTemplate.AIProfile,
 			LootTableID:        monsterTemplate.LootTableID,
-			TargetPlayerID:     "monster", // Dummy
+			TargetPlayerID:     "",
 			MineSlotID:         req.SlotID,
 		}
 	} else {
@@ -645,13 +650,13 @@ func AssignMonstersToMines() {
 		var targetRank int
 		switch slot.Rarity {
 		case "Thường":
-			targetRank = 2 // or 3
+			targetRank = 2
 		case "Hiếm":
-			targetRank = 4 // or 5
+			targetRank = 3
 		case "Sử Thi":
-			targetRank = 5
+			targetRank = 4
 		case "Truyền Thuyết":
-			targetRank = 6
+			targetRank = 5
 		default:
 			targetRank = 2
 		}
@@ -671,6 +676,112 @@ func AssignMonstersToMines() {
 				log.Printf("Failed to assign monster to mine slot %d: %v", slot.ID, err)
 			} else {
 				log.Printf("Assigned monster %s to abandoned mine slot %d", chosenMonsterID, slot.ID)
+			}
+		}
+	}
+
+	_ = tx.Commit()
+}
+
+// StartMidnightMineWorker runs daily at 00:00 to assign monsters to empty mines
+func StartMidnightMineWorker(ctx context.Context) {
+	go func() {
+		log.Println("Midnight Mine Worker - initial run at startup")
+		AssignMonstersToEmptyMines()
+
+		now := time.Now()
+		nextMidnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+		durationUntilMidnight := nextMidnight.Sub(now)
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(durationUntilMidnight):
+		}
+
+		log.Println("Midnight Mine Worker - daily reset at 00:00")
+		AssignMonstersToEmptyMines()
+
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("Midnight Mine Worker stopped")
+				return
+			case <-ticker.C:
+				log.Println("Midnight Mine Worker - daily reset at 00:00")
+				AssignMonstersToEmptyMines()
+			}
+		}
+	}()
+}
+
+// AssignMonstersToEmptyMines assigns monsters to all empty mine slots (no time condition)
+func AssignMonstersToEmptyMines() {
+	tx, err := db.DB.Begin()
+	if err != nil {
+		return
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.Query(`
+		SELECT id, rarity 
+		FROM mine_slots 
+		WHERE occupier_id IS NULL AND monster_id IS NULL
+	`)
+	if err != nil {
+		log.Printf("Error finding empty mines: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	type Slot struct {
+		ID     int
+		Rarity string
+	}
+	var emptySlots []Slot
+	for rows.Next() {
+		var s Slot
+		if err := rows.Scan(&s.ID, &s.Rarity); err == nil {
+			emptySlots = append(emptySlots, s)
+		}
+	}
+	rows.Close()
+
+	if len(emptySlots) == 0 {
+		return
+	}
+
+	for _, slot := range emptySlots {
+		var targetRank int
+		switch slot.Rarity {
+		case "Thường":
+			targetRank = 2
+		case "Hiếm":
+			targetRank = 3
+		case "Sử Thi":
+			targetRank = 4
+		case "Truyền Thuyết":
+			targetRank = 5
+		default:
+			targetRank = 2
+		}
+
+		var chosenMonsterID string
+		errSelect := tx.QueryRow("SELECT id FROM monster_templates WHERE rank = $1 AND is_active = TRUE ORDER BY RANDOM() LIMIT 1", targetRank).Scan(&chosenMonsterID)
+
+		if errSelect != nil || chosenMonsterID == "" {
+			errSelect = tx.QueryRow("SELECT id FROM monster_templates WHERE is_active = TRUE ORDER BY RANDOM() LIMIT 1").Scan(&chosenMonsterID)
+		}
+
+		if chosenMonsterID != "" {
+			_, err = tx.Exec("UPDATE mine_slots SET monster_id = $1, abandoned_at = NOW() WHERE id = $2", chosenMonsterID, slot.ID)
+			if err != nil {
+				log.Printf("Failed to assign monster to mine slot %d: %v", slot.ID, err)
+			} else {
+				log.Printf("[Midnight] Assigned monster %s to empty mine slot %d", chosenMonsterID, slot.ID)
 			}
 		}
 	}
