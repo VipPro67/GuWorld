@@ -277,7 +277,7 @@ function KillerMovePreviewPanel({ preview, error, isCalculating, isSaving, saved
           <Stat label="Lưu phái" value={preview.path} />
           <Stat label="Loại" value={preview.move_type} />
           <Stat label="Cooldown" value={`${preview.cooldown} lượt`} />
-          <EffectSection title="Hiệu ứng dung hợp (Compound Effects)" effects={preview.effects || {}} emptyText="Không có hiệu ứng được cộng." />
+          <EffectSection title="Hiệu ứng dung hợp" effects={preview.effects || {}} emptyText="Không có hiệu ứng được cộng." />
           {preview.compound_effects && preview.compound_effects.length > 0 && (
             <div>
               <h3 className="mb-2 font-semibold text-emerald-100">⟐ Dung hợp Đạo Ngân</h3>

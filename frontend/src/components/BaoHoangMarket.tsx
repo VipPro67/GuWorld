@@ -523,7 +523,7 @@ export function BaoHoangMarket({
                 >
                   <option value="Material">Nguyên Liệu / Vật Phẩm</option>
                   <option value="Gu">Cổ Trùng</option>
-                  <option value="Recipe">Bí Phương (Refining Recipe)</option>
+                  <option value="Recipe">Bí Phương</option>
                 </select>
               </label>
 
@@ -737,7 +737,7 @@ export function BaoHoangMarket({
                         : "text-zinc-500 hover:text-zinc-300"
                     }`}
                   >
-                    Nguyên Thạch (Primeval Stones)
+                    Nguyên Thạch
                   </button>
                   <button
                     type="button"
@@ -748,7 +748,7 @@ export function BaoHoangMarket({
                         : "text-zinc-500 hover:text-zinc-300"
                     }`}
                   >
-                    Tiên Nguyên Thạch (Immortal Stones)
+                    Tiên Nguyên Thạch
                   </button>
                 </div>
               )}

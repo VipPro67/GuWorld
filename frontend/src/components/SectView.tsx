@@ -364,8 +364,8 @@ export const SectView: React.FC = () => {
                       ? "Đang Chờ Duyệt..."
                       : "Đã Đăng Ký Phái Khác"
                     : sect.require_approval
-                    ? "Xin Gia Nhập (Cần Duyệt)"
-                    : "Gia Nhập Môn Phái (Tự Động)"}
+                    ? "Xin Gia Nhập (Cần duyệt)"
+                    : "Gia Nhập Môn Phái"}
                 </button>
               </div>
 
@@ -421,12 +421,12 @@ export const SectView: React.FC = () => {
           <p className="text-xs text-zinc-400 leading-relaxed">
             Trở thành thủy tổ của một phái, tự định quy chế, thu nhận đệ tử, tự thiết lập bảng nhiệm vụ và thống trị giang sơn!
             <br />
-            <strong className="text-yellow-500 font-mono">Yêu cầu: Tu vi Ngũ Chuyển (Rank 5+) & Chi phí lập phái: 50,000 Nguyên Thạch.</strong>
+            <strong className="text-yellow-500 font-mono">Yêu cầu: Tu vi Ngũ Chuyển trở lên & Chi phí lập phái: 50,000 Nguyên Thạch.</strong>
           </p>
 
           {player.rank < 5 ? (
             <div className="p-3 bg-red-950/15 border border-red-500/20 rounded-xl text-xs text-red-400 font-mono">
-              ⚠️ Đạo hữu chưa đủ tu vi! Cần đạt Rank 5 (Ngũ Chuyển) để khai sơn lập tổ (Tu vi hiện tại: Rank {player.rank}).
+              ⚠️ Đạo hữu chưa đủ tu vi! Cần đạt Ngũ Chuyển để khai sơn lập tổ (Tu vi hiện tại: Cấp {player.rank}).
             </div>
           ) : player.primeval_stones < 50000 ? (
             <div className="p-3 bg-red-950/15 border border-red-500/20 rounded-xl text-xs text-red-400 font-mono">
@@ -460,11 +460,11 @@ export const SectView: React.FC = () => {
                     onChange={(e) => setCreateSectRegion(e.target.value)}
                     className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-yellow-500/50"
                   >
-                    <option value="Central_Continent">Trung Châu (Central Continent)</option>
-                    <option value="Southern_Border">Nam Cương (Southern Border)</option>
-                    <option value="Northern_Plains">Bắc Nguyên (Northern Plains)</option>
-                    <option value="Western_Desert">Tây Mạc (Western Desert)</option>
-                    <option value="Eastern_Sea">Đông Hải (Eastern Sea)</option>
+                    <option value="Central_Continent">Trung Châu</option>
+                    <option value="Southern_Border">Nam Cương</option>
+                    <option value="Northern_Plains">Bắc Nguyên</option>
+                    <option value="Western_Desert">Tây Mạc</option>
+                    <option value="Eastern_Sea">Đông Hải</option>
                   </select>
                 </div>
 
@@ -1601,7 +1601,7 @@ export const SectView: React.FC = () => {
                 <div className="flex justify-between items-center border-b border-zinc-900 pb-2">
                   <h4 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2">
                     <Shield className="w-4 h-4 text-emerald-400" />
-                    Yêu Cầu Gia Nhập Tông Môn (Join Requests)
+                    Yêu Cầu Gia Nhập Tông Môn
                   </h4>
                   <button
                     type="button"
@@ -1667,7 +1667,7 @@ export const SectView: React.FC = () => {
                 <div className="flex justify-between items-center border-b border-zinc-900 pb-2">
                   <h4 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2">
                     <Award className="w-4 h-4 text-yellow-400" />
-                    Yêu Cầu Thăng Chức (Promotion Requests)
+                    Yêu Cầu Thăng Chức
                   </h4>
                   <button
                     type="button"
@@ -1869,7 +1869,7 @@ export const SectView: React.FC = () => {
                       }}
                       className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none cursor-pointer"
                     >
-                      <option value="gu">Cổ Trùng (Gu Bug)</option>
+                      <option value="gu">Cổ Trùng</option>
                       <option value="material">Linh Tài (Material)</option>
                     </select>
                   </div>
@@ -1980,7 +1980,7 @@ export const SectView: React.FC = () => {
                 <div>
                   <h4 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-1.5">
                     <Sparkles className="w-4 h-4 text-yellow-500" />
-                    Thăng Cấp Tông Môn (Upgrade Level)
+                    Thăng Cấp Tông Môn
                   </h4>
                   <p className="text-xs text-zinc-500 mt-1">
                     Nâng cao vị thế và uy danh của thế lực tông môn trên tiên giới.

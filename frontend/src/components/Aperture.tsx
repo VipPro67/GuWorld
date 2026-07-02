@@ -148,7 +148,7 @@ export const Aperture: React.FC<ApertureProps> = ({
   const subRankName = SUB_RANK_NAMES[subRank] ?? `Sub ${subRank}`;
   const isImmortal = rank >= 6;
   const energyType = isImmortal ? "Tiên Nguyên" : "Chân Nguyên";
-  const apertureName = isImmortal ? "Tiên Khiếu (Immortal Aperture)" : "Không Khiếu (Aperture)";
+  const apertureName = isImmortal ? "Tiên Khiếu" : "Không Khiếu";
   const energyPoolName = isImmortal ? "Tiên Nguyên Hải" : "Chân Nguyên Hải";
   const regenLabel = isImmortal ? "Tiên Khiếu ngưng tụ" : "Tốc độ hồi phục";
   const manaQuality = MANA_QUALITY[rank] ?? energyType;
@@ -513,7 +513,7 @@ export const Aperture: React.FC<ApertureProps> = ({
             <div className="w-full mb-4 bg-zinc-950/40 border border-zinc-900 rounded-2xl p-3">
               <div className="text-[9px] text-zinc-550 uppercase tracking-widest text-center mb-2 font-bold font-mono flex items-center justify-center gap-1.5">
                 <Flame className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-                Bản Mệnh Cổ (Vital Gu)
+                Bản Mệnh Cổ
               </div>
               {vitalGu ? (
                 <div
@@ -618,7 +618,7 @@ export const Aperture: React.FC<ApertureProps> = ({
               {/* Progress HP bar */}
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center text-xs font-mono text-zinc-400">
-                  <span>Sức mạnh Linh hồn (Soul HP)</span>
+                  <span>Sức mạnh Linh hồn</span>
                   <span>{player.soul_hp} / {player.max_soul}</span>
                 </div>
                 <div className="w-full bg-zinc-950 rounded-full h-3 border border-zinc-900 overflow-hidden relative shadow-inner">
@@ -642,7 +642,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                     onClick={() => store.refineSoul()}
                     className="w-full bg-red-900/30 hover:bg-red-900/50 border border-red-800/40 text-red-200 rounded-xl py-2 text-xs font-mono font-bold transition-all cursor-pointer"
                   >
-                    Luyện Hồn (Cốc Lạc Phách) - Giảm 80% Soul HP
+                    Luyện Hồn (Cốc Lạc Phách) - Giảm 80% Sức Mạnh Linh Hồn
                   </button>
                 </div>
               ) : (
@@ -670,7 +670,7 @@ export const Aperture: React.FC<ApertureProps> = ({
             <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner space-y-4">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
                 <Crown className="w-5 h-5 text-amber-400" />
-                <span className="font-serif font-bold text-zinc-100 text-sm">Cảnh Giới Lưu Phái (Attainment)</span>
+                <span className="font-serif font-bold text-zinc-100 text-sm">Cảnh Giới Lưu Phái</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 {player.path_masteries && Object.keys(player.path_masteries).length > 0 ? (
@@ -710,7 +710,7 @@ export const Aperture: React.FC<ApertureProps> = ({
             <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
                 <Crown className="w-5 h-5 text-amber-400" />
-                <span className="font-serif font-bold text-zinc-100 text-sm">Liên Kết Sư Đồ (Mời Đệ Tử)</span>
+                <span className="font-serif font-bold text-zinc-100 text-sm">Liên Kết Sư Đồ</span>
               </div>
               <p className="text-xs text-zinc-400 leading-relaxed font-serif">
                 Mời bằng hữu cùng tham gia thế giới Cổ Giới nghịch thiên cải mệnh. Khi đệ tử đạt tu vi cao hoặc nạp tiền, bạn sẽ nhận được phần thưởng Nguyên Thạch quý hiếm cùng Cổ trùng bản mệnh ngẫu nhiên!
@@ -755,7 +755,7 @@ export const Aperture: React.FC<ApertureProps> = ({
             <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-3">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2">
                 <Coins className="w-5 h-5 text-emerald-400" />
-                <span className="font-serif font-bold text-zinc-100 text-sm">Giả Lập Nạp Tiền (Test Milestone 3)</span>
+                <span className="font-serif font-bold text-zinc-100 text-sm">Giả Lập Nạp Tiền</span>
               </div>
               <p className="text-xs text-zinc-400 leading-relaxed font-serif">
                 Giả lập nạp tiền bằng Thẻ Nguyên Thạch để kiểm nghiệm tính năng nhận hoa hồng sư đồ (10% giá trị nạp tiền sẽ được gửi trực tiếp cho sư phụ của bạn nếu đệ tử đã verified).
@@ -812,12 +812,12 @@ export const Aperture: React.FC<ApertureProps> = ({
                           <td className="py-3 font-semibold text-zinc-200">{referee.username}</td>
                           <td className="py-3 text-amber-500">{RANK_NAMES[referee.rank] || `Chuyển ${referee.rank}`}</td>
                           <td className="py-3 text-[10px] text-zinc-500">
-                            {referee.ip || "Unknown"}
+                            {referee.ip || "Không rõ"}
                           </td>
                           <td className="py-3 text-center">
                             {referee.is_suspicious ? (
                               <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded text-[10px]">
-                                ⚠️ Sybil Attack (Trùng IP)
+                                ⚠️ Trùng IP
                               </span>
                             ) : (
                               <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px]">
@@ -828,10 +828,10 @@ export const Aperture: React.FC<ApertureProps> = ({
                           <td className="py-3 text-right space-y-1">
                             <div className="flex flex-col gap-1 items-end">
                               <span className={`text-[10px] px-1.5 py-0.5 rounded ${referee.milestone1_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
-                                Mốc 1 (Rank 2): {referee.milestone1_rewarded ? "Đã nhận (500NT)" : "Chưa đạt"}
+                                Mốc 1 (Cấp 2): {referee.milestone1_rewarded ? "Đã nhận 500 NT" : "Chưa đạt"}
                               </span>
                               <span className={`text-[10px] px-1.5 py-0.5 rounded ${referee.milestone2_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
-                                Mốc 2 (Rank 3): {referee.milestone2_rewarded ? "Đã nhận (Cổ trùng)" : "Chưa đạt"}
+                                Mốc 2 (Cấp 3): {referee.milestone2_rewarded ? "Đã nhận Cổ trùng" : "Chưa đạt"}
                               </span>
                               <span className={`text-[10px] px-1.5 py-0.5 rounded ${referee.milestone3_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : referee.has_deposited ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
                                 Mốc 3 (Nạp thẻ): {referee.milestone3_rewarded ? "Đã nhận (10%)" : referee.has_deposited ? "Chờ verified..." : "Chưa nạp"}
@@ -1377,7 +1377,7 @@ function WallControls() {
         <div className="flex items-center justify-between mb-2">
           <span className="text-[10px] text-zinc-450 font-bold uppercase tracking-wider flex items-center gap-1.5">
             <Zap className="w-3.5 h-3.5 text-emerald-400" />
-            Trùng Kích Vách Khiếu (Mana Shock)
+            Trùng Kích Vách Khiếu
           </span>
           <span className="text-[10px] text-emerald-400 font-mono font-bold">
             Khả dụng: {Math.floor(player.current_mana)}
@@ -1478,7 +1478,7 @@ function WallControls() {
         <div className="flex items-center justify-between mb-2">
           <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
             <Activity className="w-3.5 h-3.5 text-rose-450 animate-pulse" />
-            Áp Lực Không Khiếu (Aperture Stress)
+            Áp Lực Không Khiếu
           </span>
           <span className={`text-xs font-mono font-bold ${(player.aperture_stress ?? 0) >= 80 ? "text-rose-500 animate-pulse font-extrabold" :
             (player.aperture_stress ?? 0) >= 50 ? "text-amber-500" :
@@ -1697,7 +1697,7 @@ function BlessedLandControls() {
         {/* Path Masteries Section */}
         <div className="w-full text-left pt-2">
           <span className="text-[9px] text-zinc-500 uppercase tracking-wider block mb-2 font-mono">
-            Lĩnh Ngộ Lưu Phái (Path Masteries)
+            Lĩnh Ngộ Lưu Phái
           </span>
           <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
             {player.path_masteries && Object.keys(player.path_masteries).length > 0 ? (

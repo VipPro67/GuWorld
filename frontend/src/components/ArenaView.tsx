@@ -45,7 +45,7 @@ export const ArenaView: React.FC = () => {
             <Trophy className="w-5 h-5 text-amber-400 animate-pulse" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-zinc-100 font-serif">Đấu Kỹ Võ Đài (The Arena Rankings)</h3>
+            <h3 className="text-lg font-bold text-zinc-100 font-serif">Đấu Kỹ Võ Đài</h3>
             <p className="text-xs text-zinc-500">Nơi tranh đoạt hư danh, so tài cao thấp, hoán đổi thứ tự Thiên địa bảng.</p>
           </div>
         </div>

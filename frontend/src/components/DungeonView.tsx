@@ -260,7 +260,7 @@ export const DungeonView: React.FC = () => {
                   </button>
                 ) : (
                   <div className="w-full text-center py-2.5 rounded-xl bg-zinc-900/40 border border-zinc-900 text-zinc-650 text-xs font-mono">
-                    Khóa (Chưa Đạt Cảnh Giới Cần Thiết)
+                    Khóa
                   </div>
                 )}
               </div>

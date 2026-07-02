@@ -335,7 +335,7 @@ export const LobbyView: React.FC = () => {
           <div className="flex flex-col gap-2.5 w-full md:w-80 grow max-w-md">
             {/* HP Bar */}
             <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
-              <span>Máu (HP)</span>
+              <span>Máu</span>
               <span>
                 {Math.round(displayedHP)} / {Math.round(displayedMaxHP)}
               </span>
@@ -409,7 +409,7 @@ export const LobbyView: React.FC = () => {
       <div className="flex flex-col gap-5">
         <div className="flex items-center justify-between border-b border-zinc-900/60 pb-2">
           <h2 className="text-xs uppercase tracking-widest text-zinc-500 font-mono font-semibold">
-            Chức năng chính (Management)
+            Chức năng chính
           </h2>
           <span className="text-[10px] text-zinc-600 font-mono">
             {managementItems.length} chức năng
@@ -443,7 +443,7 @@ export const LobbyView: React.FC = () => {
       <div className="flex flex-col gap-5">
         <div className="flex items-center justify-between border-b border-zinc-900/60 pb-2">
           <h2 className="text-xs uppercase tracking-widest text-zinc-500 font-mono font-semibold">
-            Hoạt động thế giới (Activities)
+            Hoạt động thế giới
           </h2>
           <span className="text-[10px] text-zinc-600 font-mono">
             {activityItems.length} hoạt động

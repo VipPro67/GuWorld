@@ -207,7 +207,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
         <div className="flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" />
           <h3 className="text-lg font-bold text-zinc-100 font-serif tracking-wide">
-            Bách Bảo Nang (Inventory & Gu Bags)
+            Bách Bảo Nang
           </h3>
         </div>
       </div>
@@ -252,7 +252,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
       {showMaterials && (
         <div className="space-y-2 text-left">
           <span className="text-[10px] font-mono text-zinc-505 uppercase tracking-widest block font-bold">
-            Nguyên Liệu Sở Hữu (Materials Inventory)
+            Nguyên Liệu Sở Hữu
           </span>
           {filteredMaterials.length === 0 ? (
             <div className="text-[10px] text-zinc-600 italic">Hộp nguyên liệu trống.</div>
@@ -368,7 +368,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
       {showGus && (
         <div className="space-y-6 text-left">
           <span className="text-[10px] font-mono text-zinc-505 uppercase tracking-widest block font-bold">
-            Cổ Trùng Sở Hữu (My Gu Bugs)
+            Cổ Trùng Sở Hữu
           </span>
 
           {filteredGus.length === 0 ? (

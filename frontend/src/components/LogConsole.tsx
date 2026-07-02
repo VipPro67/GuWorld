@@ -23,7 +23,7 @@ export const LogConsole: React.FC<LogConsoleProps> = ({ logs }) => {
       <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-4">
         <Terminal className="w-4 h-4 text-emerald-400" />
         <span className="text-xs font-mono uppercase tracking-widest text-zinc-400 font-semibold">
-          Ký Sự Tu Hành (Cultivation Log)
+          Ký Sự Tu Hành
         </span>
       </div>
 

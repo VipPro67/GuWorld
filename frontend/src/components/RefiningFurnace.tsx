@@ -359,7 +359,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
         <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-4 shrink-0">
           <Sparkles className="w-5 h-5 text-amber-500 animate-pulse" />
           <h3 className="text-md font-bold text-zinc-100 font-serif">
-            Linh Khí Túi (Gu Bugs For Refining)
+            Linh Khí Túi
           </h3>
         </div>
 
@@ -547,7 +547,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
             <div className="flex justify-between items-center border-b border-zinc-900 pb-3">
               <h3 className="text-md font-bold text-zinc-100 font-serif flex items-center gap-1.5">
                 <Flame className={`w-5 h-5 text-rose-500 ${isRefining ? "animate-bounce" : ""}`} />
-                Lò Luyện Cổ (Refinement Crucible)
+                Lò Luyện Cổ
               </h3>
               <div className="flex items-center gap-3">
                 {selectedRecipe?.completion_rate !== undefined && selectedRecipe.completion_rate < 100.0 && (
@@ -664,7 +664,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                 {/* Target Gu Header */}
                 <div className="text-center space-y-1">
                   <span className="text-[10px] text-amber-500 uppercase tracking-widest font-mono font-bold block">
-                    Sản Vật Hợp Thành (Target Product)
+                    Sản Vật Hợp Thành
                   </span>
                   <h4 className="text-lg font-bold text-zinc-100 font-serif">
                     {guDictionary[selectedRecipe.target_gu_id]?.name || selectedRecipe.target_gu_id}
@@ -745,7 +745,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                 {/* Requirements check list */}
                 <div className="space-y-2">
                   <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono block">
-                    Phụ Gia Vật Phẩm (Required Materials)
+                    Phụ Gia Vật Phẩm
                   </span>
 
                   {Object.keys(selectedRecipe.required_materials).length === 0 ? (

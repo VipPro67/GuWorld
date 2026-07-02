@@ -489,12 +489,12 @@ export const ImmortalApertureView: React.FC = () => {
                 </div>
 
                 <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800/80">
-                  <div className="text-slate-400 text-xs font-semibold">Gia Tốc Thời Gian (Time Rate)</div>
+                  <div className="text-slate-400 text-xs font-semibold">Gia Tốc Thời Gian</div>
                   <div className="text-lg font-bold text-cyan-400 mt-1">x{aperture.time_rate} lần</div>
                 </div>
 
                 <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800/80">
-                  <div className="text-slate-400 text-xs font-semibold">{manaName} (Dự Trữ)</div>
+                  <div className="text-slate-400 text-xs font-semibold">{manaName} Dự Trữ</div>
                   <div className="text-lg font-bold text-yellow-400 mt-1 flex items-center gap-1">
                     <Coins className="w-5 h-5 text-yellow-500" />
                     {Math.floor(player.current_mana)} hạt
@@ -518,7 +518,7 @@ export const ImmortalApertureView: React.FC = () => {
               {/* Integrity HP Bar */}
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-400 font-medium">Độ Ổn Định Linh Khiếu (HP)</span>
+                  <span className="text-slate-400 font-medium">Độ Ổn Định Linh Khiếu</span>
                   <span className="text-slate-200 font-bold">
                     {aperture.aperture_hp} / {aperture.max_aperture_hp}
                   </span>
@@ -537,7 +537,7 @@ export const ImmortalApertureView: React.FC = () => {
                   <div>
                     <h3 className="text-md font-bold text-slate-200 flex items-center gap-1.5">
                       <Hourglass className="w-4 h-4 text-cyan-400" />
-                      Điều Chỉnh Dòng Thời Gian (Time Rate)
+                      Điều Chỉnh Dòng Thời Gian
                     </h3>
                     <p className="text-xs text-slate-400 mt-0.5">
                       Gia tốc dòng thời gian giúp sản xuất tài nguyên cực nhanh, nhưng tiêu tốn Thọ Nguyên tương ứng.
@@ -1115,7 +1115,7 @@ export const ImmortalApertureView: React.FC = () => {
             </h2>
 
             <p className="text-sm text-slate-400 leading-relaxed">
-              Đạo ngân là dấu vết quy tắc tiên thiên khắc sâu vào Tiên Khiếu khi vượt kiếp nạn. Đạo ngân tích lũy giúp tăng cường vĩnh viễn sát thương và phòng thủ của Cổ sư khi sử dụng thuộc tính tương ứng. Khi vượt quá 10,000 Đạo Ngân hệ sẽ bị giới hạn gia tăng (Soft Cap).
+              Đạo ngân là dấu vết quy tắc tiên thiên khắc sâu vào Tiên Khiếu khi vượt kiếp nạn. Đạo ngân tích lũy giúp tăng cường vĩnh viễn sát thương và phòng thủ của Cổ sư khi sử dụng thuộc tính tương ứng. Khi vượt quá 10,000 Đạo Ngân hệ sẽ bị giới hạn gia tăng.
             </p>
 
             {daoMarks.length === 0 ? (
@@ -1311,7 +1311,7 @@ export const ImmortalApertureView: React.FC = () => {
                       Nếu đã tiêu diệt hết, việc kết toán sẽ đảm bảo **Thắng lợi tuyệt đối** và nhận toàn bộ Đạo Ngân.
                     </p>
                     <p className="text-xs text-amber-500 font-medium">
-                      ⚠️ Cảnh báo: Nếu bạn cố tình nhấn Kết toán khi vẫn còn kẻ thù còn sống, hệ thống sẽ thực hiện giải quyết khẩn cấp (Offline Resolve) với cơ hội thành công cực thấp (25%-50%), và có nguy cơ bị phá hủy mỏ tài nguyên nặng nề!
+                      ⚠️ Cảnh báo: Nếu bạn cố tình nhấn Kết toán khi vẫn còn kẻ thù còn sống, hệ thống sẽ thực hiện giải quyết khẩn cấp với cơ hội thành công cực thấp (25%-50%), và có nguy cơ bị phá hủy mỏ tài nguyên nặng nề!
                     </p>
 
                     <button
@@ -1605,7 +1605,7 @@ export const ImmortalApertureView: React.FC = () => {
                   }[] = [
                     {
                       race: "HAIRY_MAN",
-                      name: "Tộc Người Lông (Hairy Men)",
+                      name: "Tộc Người Lông",
                       desc: "Kẻ lập dị giỏi luyện Cổ trùng. Dân số sinh ra nô lệ giúp giảm thời gian và chi phí luyện Cổ.",
                       icon: "🧔",
                       settlementType: "HAIRY_MAN_SETTLEMENT",
@@ -1613,7 +1613,7 @@ export const ImmortalApertureView: React.FC = () => {
                     },
                     {
                       race: "ROCKMAN",
-                      name: "Tộc Người Đá (Rockmen)",
+                      name: "Tộc Người Đá",
                       desc: "Tộc nhân sống sâu dưới lòng đất. Dân số gia tăng sản lượng khai khoáng của mỏ Ngọc Thạch & Nguyên Thạch.",
                       icon: "🗿",
                       settlementType: "ROCKMAN_TRIBE",
@@ -1621,7 +1621,7 @@ export const ImmortalApertureView: React.FC = () => {
                     },
                     {
                       race: "FEATHERMAN",
-                      name: "Tộc Người Lông Vũ (Feathermen)",
+                      name: "Tộc Người Lông Vũ",
                       desc: "Bộ tộc tự do có cánh trên lưng. Giúp giảm thiểu sát thương của thiên địa tai kiếp lên Tiên Khiếu.",
                       icon: "🦅",
                       settlementType: "FEATHERMAN_CANYON",

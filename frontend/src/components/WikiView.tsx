@@ -70,7 +70,7 @@ export const WikiView: React.FC = () => {
               <div className="relative">
                 <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
                 <h4 className="font-serif font-bold text-zinc-200 flex items-center gap-2">
-                  <span>Phase 4 & 5 (Hiện tại)</span>
+                  <span>Giai Đoạn 4 & 5 (Hiện tại)</span>
                   <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono text-[9px]">Hoàn thành</span>
                 </h4>
                 <p className="text-zinc-500 mt-1 leading-relaxed">
@@ -85,7 +85,7 @@ export const WikiView: React.FC = () => {
                   <span className="px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-400 font-mono text-[9px]">Đang phát triển</span>
                 </h4>
                 <p className="text-zinc-400 mt-1 leading-relaxed">
-                  Hoàn thiện cơ chế <strong>Thăng Tiên (Rank 5 đỉnh phong thăng lên Rank 6)</strong> và <strong>Độ Kiếp (Cổ Tiên vượt Địa Tai, Thiên Kiếp)</strong>. Xây dựng sinh thái Tiên Khiếu Blessed Land, trồng trọt chăn nuôi và khai thác dị nhân.
+                  Hoàn thiện cơ chế <strong>Thăng Tiên (Cấp 5 đỉnh phong thăng lên Cấp 6)</strong> và <strong>Độ Kiếp (Cổ Tiên vượt Địa Tai, Thiên Kiếp)</strong>. Xây dựng sinh thái Tiên Khiếu, trồng trọt chăn nuôi và khai thác dị nhân.
                 </p>
               </div>
 
@@ -121,7 +121,7 @@ export const WikiView: React.FC = () => {
                 <h4 className="text-sm font-serif font-bold text-zinc-200">Nguyên Thạch</h4>
               </div>
               <p className="text-[11px] text-zinc-500 leading-relaxed mt-1">
-                Tiền tệ phổ biến của phàm nhân (Rank 1-5). Chứa chân nguyên tự nhiên để hồi phục Mana cho Cổ sư và là nguyên liệu bắt buộc để kích hoạt/tăng hiệu suất trùng kích vách khiếu.
+                Tiền tệ phổ biến của phàm nhân (Cấp 1-5). Chứa chân nguyên tự nhiên để hồi phục năng lượng cho Cổ sư và là nguyên liệu bắt buộc để kích hoạt/tăng hiệu suất trùng kích vách khiếu.
               </p>
             </div>
 
@@ -258,9 +258,9 @@ export const WikiView: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-zinc-900 text-zinc-300 bg-zinc-950/20">
                   <tr>
-                    <td className="p-3 font-bold text-zinc-200">Rank (Cảnh Giới)</td>
-                    <td className="p-3">Đại cảnh giới tu vi của nhân vật, từ Rank 1 đến Rank 9.</td>
-                    <td className="p-3">Mở khóa tính năng mới (Rank 6 mở Tiên Khiếu, v.v.).</td>
+                    <td className="p-3 font-bold text-zinc-200">Cảnh Giới</td>
+                    <td className="p-3">Đại cảnh giới tu vi của nhân vật, từ Cấp 1 đến Cấp 9.</td>
+                    <td className="p-3">Mở khóa tính năng mới (Cấp 6 mở Tiên Khiếu, v.v.).</td>
                   </tr>
                   <tr>
                     <td className="p-3 font-bold text-zinc-200">Sub-Rank</td>
@@ -268,7 +268,7 @@ export const WikiView: React.FC = () => {
                     <td className="p-3">Mốc để trùng kích vách khiếu đột phá lên cấp mới.</td>
                   </tr>
                   <tr>
-                    <td className="p-3 font-bold text-zinc-200">HP (Sinh Lực)</td>
+                    <td className="p-3 font-bold text-zinc-200">Sinh Lực</td>
                     <td className="p-3">Sức chịu đựng của cơ thể. Phàm nhân mặc định cố định ở mức rất thấp (100 HP).</td>
                     <td className="p-3">Nếu tụt về 0 trong chiến đấu, bạn sẽ bị trọng thương hoặc chết vĩnh viễn.</td>
                   </tr>
@@ -303,7 +303,7 @@ export const WikiView: React.FC = () => {
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono">Hệ thống áp lực (Aperture Stress)</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono">Hệ thống áp lực</h3>
             <ul className="list-disc list-inside text-xs text-zinc-400 space-y-2 leading-relaxed">
               <li>Mỗi lần click nút <strong>Trùng Kích Vách Khiếu</strong>, thanh áp lực tăng thêm <strong>20%</strong>.</li>
               <li>Thanh áp lực tự động giảm dần theo thời gian thực (ví dụ: giảm 10% mỗi giờ đời thật).</li>
@@ -374,7 +374,7 @@ export const WikiView: React.FC = () => {
       content: (
         <div className="space-y-6">
           <p className="text-xs text-zinc-400 leading-relaxed">
-            Cảnh giới lưu phái (Path Attainment) thể hiện sự thấu hiểu của linh hồn bạn đối với quy luật vạn vật thế gian. Tích lũy cảnh giới lưu phái thông qua việc rèn luyện sát chiêu chiến đấu hoặc hấp thu Chân Ý khi thám hiểm Mộng Cảnh.
+            Cảnh giới lưu phái thể hiện sự thấu hiểu của linh hồn bạn đối với quy luật vạn vật thế gian. Tích lũy cảnh giới lưu phái thông qua việc rèn luyện sát chiêu chiến đấu hoặc hấp thu Chân Ý khi thám hiểm Mộng Cảnh.
           </p>
 
           <div className="space-y-4">
@@ -383,7 +383,7 @@ export const WikiView: React.FC = () => {
             <div className="space-y-3">
               <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-900 text-xs">
                 <h4 className="font-bold text-zinc-200 flex items-center gap-2">
-                  <span>1. Chuẩn Đại Sư / Đại Sư (Master)</span>
+                  <span>1. Chuẩn Đại Sư / Đại Sư</span>
                 </h4>
                 <p className="text-zinc-500 mt-1 leading-relaxed">
                   Trực giác siêu nhạy bén. Trong chiến đấu, nếu đối phương sử dụng sát chiêu thuộc hệ phái bạn là Đại Sư, giao diện sẽ hiển thị gợi ý né tránh hoặc chỉ ra nhược điểm của chiêu đó.
@@ -392,7 +392,7 @@ export const WikiView: React.FC = () => {
 
               <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-900 text-xs">
                 <h4 className="font-bold text-indigo-300 flex items-center gap-2">
-                  <span>2. Chuẩn Tông Sư / Tông Sư (Grandmaster)</span>
+                  <span>2. Chuẩn Tông Sư / Tông Sư</span>
                 </h4>
                 <p className="text-zinc-500 mt-1 leading-relaxed">
                   Đạt khả năng &quot;Loại suy&quot;. Loại bỏ hoàn toàn hình phạt mâu thuẫn giảm nửa sát thương khi sử dụng chéo hệ Cổ trùng (Ví dụ: Cổ sư Lực đạo dùng Cổ Thủy đạo vẫn nhận 100% hiệu năng).
@@ -401,7 +401,7 @@ export const WikiView: React.FC = () => {
 
               <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-900 text-xs">
                 <h4 className="font-bold text-yellow-500 flex items-center gap-2">
-                  <span>3. Chuẩn Đại Tông Sư / Đại Tông Sư (Great Grandmaster)</span>
+                  <span>3. Chuẩn Đại Tông Sư / Đại Tông Sư</span>
                 </h4>
                 <p className="text-zinc-500 mt-1 leading-relaxed">
                   Cộng hưởng hoàn hảo với Đạo ngân của thiên nhiên. Tự động nhận thêm 50% sát thương/phòng ngự khi chiến đấu tại địa hình tương đồng hệ phái của bạn mà không cần kích hoạt cổ buff.
@@ -410,7 +410,7 @@ export const WikiView: React.FC = () => {
 
               <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-900 text-xs">
                 <h4 className="font-bold text-red-400 flex items-center gap-2">
-                  <span>4. Vô Thượng Đại Tông Sư (Supreme Grandmaster)</span>
+                  <span>4. Vô Thượng Đại Tông Sư</span>
                 </h4>
                 <p className="text-zinc-500 mt-1 leading-relaxed">
                   Cảnh giới cao nhất. Sát chiêu tự động vận hành trong Tiên khiếu, mở khóa tính năng đặc biệt: Nuốt (thôn tính) Tiên khiếu của Cổ Tiên khác để tăng năng suất và né tránh tai kiếp.
@@ -434,13 +434,13 @@ export const WikiView: React.FC = () => {
           </p>
 
           <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono">Sát Chiêu Phối Hợp (Killer Moves)</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono">Sát Chiêu Phối Hợp</h3>
             <p className="text-xs text-zinc-500 leading-relaxed">
               Bằng cách trang bị và kích hoạt đồng thời một nhóm Cổ trùng bổ trợ nhau trong lượt đánh, bạn sẽ tạo ra sát chiêu cộng hưởng sức mạnh khủng khiếp:
             </p>
             <div className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-900 text-xs space-y-2 text-zinc-400 leading-relaxed">
               <li>💥 <strong>Lực Đạo combo:</strong> Trang bị đồng thời <strong>Toàn Lực Ứng Phó Cổ</strong> (kích hoạt 100% thú ảnh) và <strong>Khổ Lực Cổ</strong> (tăng sát thương dựa trên HP đã mất) để tối đa lượng damage bộc phát.</li>
-              <li>❤️ <strong>Trị liệu combo:</strong> Sử dụng <strong>Tự Lực Cánh Sinh Cổ</strong> hồi phục HP dựa trên chỉ số Sức mạnh thể chất (Body Mods) của bạn. Sức mạnh càng lớn hồi máu càng nhiều.</li>
+              <li>❤️ <strong>Trị liệu combo:</strong> Sử dụng <strong>Tự Lực Cánh Sinh Cổ</strong> hồi phục sinh lực dựa trên chỉ số Sức mạnh thể chất của bạn. Sức mạnh càng lớn hồi máu càng nhiều.</li>
             </div>
           </div>
         </div>
@@ -454,13 +454,13 @@ export const WikiView: React.FC = () => {
       content: (
         <div className="space-y-6">
           <p className="text-xs text-zinc-400 leading-relaxed">
-            Cổ trùng được chia làm 9 Chuyển (Rank). Rank 1-5 là Phàm Cổ, Rank 6-9 là Tiên Cổ (độc nhất vô nhị). Chúng được chia thành các nhóm chính: Công kích, Phòng ngự, Trinh sát, Trị liệu, Phụ trợ và Di động.
+            Cổ trùng được chia làm 9 Chuyển. Cấp 1-5 là Phàm Cổ, Cấp 6-9 là Tiên Cổ (độc nhất vô nhị). Chúng được chia thành các nhóm chính: Công kích, Phòng ngự, Trinh sát, Trị liệu, Phụ trợ và Di động.
           </p>
 
           <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono">Hệ thống nuôi Cổ trùng (Hunger System)</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono">Hệ thống nuôi Cổ trùng</h3>
             <div className="p-4 rounded-2xl bg-rose-950/20 border border-rose-500/10 text-xs text-rose-300 leading-relaxed">
-              ⚠️ <strong>Lưu ý cực kỳ quan trọng:</strong> Mỗi con Cổ trang bị đều có thanh độ no (Hunger). Độ no giảm dần sau mỗi lượt chiến đấu hoặc theo thời gian thực tế. Nếu độ no về 0, Cổ sẽ rơi vào trạng thái <strong>Hấp Hối (Starving)</strong> và sẽ <strong>chết vĩnh viễn</strong> nếu không được cho ăn kịp thời!
+              ⚠️ <strong>Lưu ý cực kỳ quan trọng:</strong> Mỗi con Cổ trang bị đều có thanh độ no. Độ no giảm dần sau mỗi lượt chiến đấu hoặc theo thời gian thực tế. Nếu độ no về 0, Cổ sẽ rơi vào trạng thái <strong>Hấp Hối</strong> và sẽ <strong>chết vĩnh viễn</strong> nếu không được cho ăn kịp thời!
             </div>
             
             <p className="text-xs text-zinc-500 leading-relaxed mt-2">
@@ -492,7 +492,7 @@ export const WikiView: React.FC = () => {
                     <td className="p-3">Săn bắn dã ngoại hoang dã</td>
                   </tr>
                   <tr>
-                    <td className="p-3 font-bold text-zinc-200">Tiên Cổ Thái Độ (Attitude)</td>
+                    <td className="p-3 font-bold text-zinc-200">Tiên Cổ Thái Độ</td>
                     <td className="p-3">Quả Lưu Quang (số lượng lớn)</td>
                     <td className="p-3">Khai thác tại các bí cảnh tiên đạo cực nam</td>
                   </tr>
@@ -520,19 +520,19 @@ export const WikiView: React.FC = () => {
               Bạn có thể xếp quân ở Tiền tuyến (X=1), Trung tuyến (X=2) hoặc Hậu phương (X=3). Trừ khi kỹ năng có tầm đánh đặc thù, các sát chiêu đơn mục tiêu bắt buộc phải đánh trúng và dọn sạch hàng Tiền tuyến của đối phương trước mới có thể đánh vào hàng sau.
             </p>
             <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-900 text-xs space-y-2 text-zinc-400">
-              <li>💥 <strong>Đánh Ngang (Row):</strong> Quét sạch 3 ô nằm trên cùng một hàng ngang X.</li>
-              <li>💥 <strong>Đánh Dọc (Column):</strong> Xuyên từ trước ra sau trên cùng một cột dọc Y.</li>
+              <li>💥 <strong>Đánh Ngang:</strong> Quét sạch 3 ô nằm trên cùng một hàng ngang X.</li>
+              <li>💥 <strong>Đánh Dọc:</strong> Xuyên từ trước ra sau trên cùng một cột dọc Y.</li>
               <li>💥 <strong>Toàn bản đồ:</strong> Tác động đồng thời lên cả 9 ô của kẻ địch.</li>
             </div>
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono">2. Khiên ảo (Virtual Shield) & Speed</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono">2. Khiên ảo & Tốc độ</h3>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Sinh mạng cơ bản của Cổ sư cực kỳ mong manh (chỉ 100 HP). Do đó, bạn bắt buộc phải trang bị Cổ phòng ngự để nhận được lớp <strong>Khiên ảo (Virtual Shield)</strong> lớn. Khi bị tấn công, sát thương trừ vào khiên trước, khiên vỡ mới tính vào HP cơ thể.
+              Sinh mạng cơ bản của Cổ sư cực kỳ mong manh (chỉ 100 Sinh Lực). Do đó, bạn bắt buộc phải trang bị Cổ phòng ngự để nhận được lớp <strong>Khiên ảo</strong> lớn. Khi bị tấn công, sát thương trừ vào khiên trước, khiên vỡ mới tính vào sinh lực cơ thể.
             </p>
             <div className="p-4 rounded-2xl bg-indigo-950/20 border border-indigo-500/10 text-xs leading-relaxed text-indigo-300">
-              ⚡ <strong>Tốc độ lượt đấu:</strong> Lượt đánh của toàn bộ mục tiêu được sắp xếp theo chỉ số Tốc độ (Speed) từ cao tới thấp. Nếu mục tiêu của bạn bị tiêu diệt trước bởi đồng đội có tốc độ cao hơn, lượt đánh của bạn sẽ bị hủy bỏ hoặc chuyển hướng ngẫu nhiên.
+              ⚡ <strong>Tốc độ lượt đấu:</strong> Lượt đánh của toàn bộ mục tiêu được sắp xếp theo chỉ số Tốc độ từ cao tới thấp. Nếu mục tiêu của bạn bị tiêu diệt trước bởi đồng đội có tốc độ cao hơn, lượt đánh của bạn sẽ bị hủy bỏ hoặc chuyển hướng ngẫu nhiên.
             </div>
           </div>
         </div>
@@ -546,19 +546,19 @@ export const WikiView: React.FC = () => {
       content: (
         <div className="space-y-6">
           <p className="text-xs text-zinc-400 leading-relaxed">
-            Luyện Cổ (Refine Path) là con đường chế tạo Cổ trùng thông qua Lò Luyện Cổ nhân tạo hoặc dựa vào linh khí thiên địa.
+            Luyện Cổ là con đường chế tạo Cổ trùng thông qua Lò Luyện Cổ nhân tạo hoặc dựa vào linh khí thiên địa.
           </p>
 
           <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono">Cơ chế Lò Luyện (Furnace)</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono">Cơ chế Lò Luyện</h3>
             <p className="text-xs text-zinc-500 leading-relaxed">
-              Mỗi con Cổ nâng cấp hoặc hợp thành đều cần một bản vẽ <strong>Cổ Phương (Recipe)</strong> cụ thể. Bạn cần đưa Cổ trùng nguyên liệu chính và các nguyên liệu phụ trợ (Hàn Ngọc, Địa Tinh, Quặng Sắt...) kèm theo lượng lớn Nguyên Thạch để kích hoạt.
+              Mỗi con Cổ nâng cấp hoặc hợp thành đều cần một bản vẽ <strong>Cổ Phương</strong> cụ thể. Bạn cần đưa Cổ trùng nguyên liệu chính và các nguyên liệu phụ trợ (Hàn Ngọc, Địa Tinh, Quặng Sắt...) kèm theo lượng lớn Nguyên Thạch để kích hoạt.
             </p>
             <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/10 text-xs text-amber-300 leading-relaxed">
               ⚠️ <strong>Rủi ro luyện cổ:</strong> Mọi quá trình luyện cổ đều có tỷ lệ thất bại tự nhiên. Khi thất bại, bạn sẽ mất toàn bộ nguyên liệu phụ và có xác suất bị hư hỏng hoặc mất vĩnh viễn Cổ trùng nguyên liệu chính!
             </div>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Nâng cao cảnh giới <strong>Luyện Đạo Attainment</strong> hoặc thu phục chủng tộc dị nhân <strong>Người Lông</strong> làm việc trong Tiên Khiếu sẽ giúp gia tăng tỉ lệ thành công đáng kể.
+              Nâng cao cảnh giới <strong>Luyện Đạo</strong> hoặc thu phục chủng tộc dị nhân <strong>Người Lông</strong> làm việc trong Tiên Khiếu sẽ giúp gia tăng tỉ lệ thành công đáng kể.
             </p>
           </div>
         </div>
@@ -576,12 +576,12 @@ export const WikiView: React.FC = () => {
           </p>
 
           <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono">Các phó bản đặc thù (Dungeon Types)</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono">Các phó bản đặc thù</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-900 space-y-2">
                 <h4 className="font-serif font-bold text-zinc-200 flex items-center gap-1.5">
                   <Compass className="w-4 h-4 text-emerald-400" />
-                  <span>Truyền Thừa (Inheritances)</span>
+                  <span>Truyền Thừa</span>
                 </h4>
                 <p className="text-zinc-500 leading-relaxed">
                   Phó bản solo giải đố dành cho phàm nhân. Bạn phải đối mặt với các cạm bẫy, câu đố chữ hoặc yêu cầu sử dụng đúng thuộc tính Cổ trùng nhất định để vượt qua.
@@ -591,10 +591,10 @@ export const WikiView: React.FC = () => {
               <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-900 space-y-2">
                 <h4 className="font-serif font-bold text-zinc-200 flex items-center gap-1.5">
                   <Flame className="w-4 h-4 text-purple-400" />
-                  <span>Mộng Cảnh (Dream Realms)</span>
+                  <span>Mộng Cảnh</span>
                 </h4>
                 <p className="text-zinc-500 leading-relaxed">
-                  Vượt ải sinh tồn tinh thần. Khi vào, tu vi và đồ của bạn bị khóa, bạn phải dùng chỉ số Hồn Phách (Soul HP) để di chuyển. Trả lời sai hoặc thua trận sẽ trực tiếp trừ Hồn Phách. Thành công nhận về <strong>Chân Ý</strong> tăng mạnh Cảnh Giới lưu phái.
+                  Vượt ải sinh tồn tinh thần. Khi vào, tu vi và đồ của bạn bị khóa, bạn phải dùng chỉ số Hồn Phách để di chuyển. Trả lời sai hoặc thua trận sẽ trực tiếp trừ Hồn Phách. Thành công nhận về <strong>Chân Ý</strong> tăng mạnh Cảnh Giới lưu phái.
                 </p>
               </div>
             </div>
@@ -610,13 +610,13 @@ export const WikiView: React.FC = () => {
       content: (
         <div className="space-y-6">
           <p className="text-xs text-zinc-400 leading-relaxed">
-            Nô Đạo (Enslavement Path) là lưu phái sử dụng linh hồn và các cổ trùng khống chế để hiệu lệnh, dẫn dắt đại quân hoang thú chiến đấu thay bản thân mình.
+            Nô Đạo là lưu phái sử dụng linh hồn và các cổ trùng khống chế để hiệu lệnh, dẫn dắt đại quân hoang thú chiến đấu thay bản thân mình.
           </p>
 
           <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-300 font-mono">Giới hạn khống chế & Hồn Phách</h3>
             <p className="text-xs text-zinc-500 leading-relaxed">
-              Bạn không thể dẫn dắt một quân đội vô hạn. Sức chịu đựng tinh thần của bạn phụ thuộc hoàn toàn vào điểm số <strong>Nội tình Hồn Phách (Soul Foundation)</strong>:
+              Bạn không thể dẫn dắt một quân đội vô hạn. Sức chịu đựng tinh thần của bạn phụ thuộc hoàn toàn vào điểm số <strong>Nội tình Hồn Phách</strong>:
             </p>
             <div className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-900 text-xs space-y-3 text-zinc-400">
               <div className="flex justify-between border-b border-zinc-800 pb-2">
@@ -644,26 +644,26 @@ export const WikiView: React.FC = () => {
       content: (
         <div className="space-y-6">
           <p className="text-xs text-zinc-400 leading-relaxed">
-            Thế giới ngoài loài người còn tồn tại 10 chủng tộc dị nhân (Variant Humans). Khi lên làm Cổ Tiên, bạn có thể chiêu mộ và thả các dị nhân vào Tiên Khiếu để làm việc sản xuất.
+            Thế giới ngoài loài người còn tồn tại 10 chủng tộc dị nhân. Khi lên làm Cổ Tiên, bạn có thể chiêu mộ và thả các dị nhân vào Tiên Khiếu để làm việc sản xuất.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-900 space-y-2 text-xs">
-              <h4 className="font-bold text-zinc-200">Người Lông (Hairy Men)</h4>
+              <h4 className="font-bold text-zinc-200">Người Lông</h4>
               <p className="text-zinc-500 leading-relaxed">
                 Thiên phú luyện Cổ bẩm sinh. Nuôi dưỡng Người Lông trong Tiên Khiếu giúp tăng mạnh tốc độ sản xuất và tăng tỉ lệ thành công khi luyện cổ trùng tự động.
               </p>
             </div>
 
             <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-900 space-y-2 text-xs">
-              <h4 className="font-bold text-zinc-200">Người Đá (Rockmen)</h4>
+              <h4 className="font-bold text-zinc-200">Người Đá</h4>
               <p className="text-zinc-500 leading-relaxed">
                 Thân hình cứng rắn, ngủ sâu nuôi dưỡng hồn phách. Rất thích hợp làm lao động đào quặng dưới lòng đất Tiên Khiếu, giúp tăng sản lượng khai thác quặng nguyên thạch.
               </p>
             </div>
 
             <div className="p-4 rounded-xl bg-zinc-900/30 border border-zinc-900 space-y-2 text-xs">
-              <h4 className="font-bold text-zinc-200">Người Tuyết (Snowmen)</h4>
+              <h4 className="font-bold text-zinc-200">Người Tuyết</h4>
               <p className="text-zinc-500 leading-relaxed">
                 Tộc nhân sinh sống tại băng nguyên. Khóc ra Lệ Băng (tiên tài trân quý Băng đạo) dùng để luyện các loại Tiên Cổ hệ Băng Tuyết.
               </p>

@@ -99,7 +99,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
         <div className="flex items-center gap-2">
           <ShoppingBag className="w-5 h-5 text-amber-500 animate-pulse" />
           <h3 className="text-lg font-bold text-zinc-100 font-serif">
-            Giả Gia Thương Đội (Caravan Beginner Shop)
+            Giả Gia Thương Đội
           </h3>
         </div>
         <div className="flex items-center gap-1.5 text-xs text-amber-400 font-mono font-bold bg-zinc-950/40 border border-amber-500/20 px-3 py-1.5 rounded-xl">

@@ -211,12 +211,12 @@ export const FeedbackView: React.FC = () => {
         /* Form dâng sớ mới */
         <div className="bg-zinc-950/50 border border-zinc-900 rounded-3xl p-6 backdrop-blur-md flex flex-col gap-5">
           <h3 className="text-sm uppercase tracking-widest text-zinc-400 font-mono font-bold border-b border-zinc-900 pb-2">
-            Thỉnh Nguyện Chi Sớ (Tạo góp ý mới)
+            Thỉnh Nguyện Chi Sớ
           </h3>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <label className="text-xs text-zinc-500 font-mono">Đầu Đề (Tiêu đề góp ý)</label>
+              <label className="text-xs text-zinc-500 font-mono">Đầu Đề</label>
               <input
                 type="text"
                 required
@@ -236,7 +236,7 @@ export const FeedbackView: React.FC = () => {
                   onChange={(e) => setCategory(e.target.value)}
                   className="bg-zinc-950 border border-zinc-900 focus:border-zinc-800 rounded-xl px-4 py-3 text-xs text-zinc-200 focus:outline-none transition-all font-mono"
                 >
-                  <option value="BUG">Lỗi game (Bug)</option>
+                  <option value="BUG">Lỗi game</option>
                   <option value="GU">Thêm Cổ Trùng hoang dã mới</option>
                   <option value="ITEM">Thêm vật phẩm tu luyện mới</option>
                   <option value="RECIPE">Thêm công thức luyện cổ mới</option>
@@ -253,7 +253,7 @@ export const FeedbackView: React.FC = () => {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-xs text-zinc-500 font-mono">Sớ Trình Chi Tiết (Nội dung đóng góp)</label>
+              <label className="text-xs text-zinc-500 font-mono">Sớ Trình Chi Tiết</label>
               <textarea
                 required
                 value={description}
@@ -423,7 +423,7 @@ export const FeedbackView: React.FC = () => {
                           <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/3 rounded-full blur-xl pointer-events-none" />
                           <div className="flex items-center gap-1.5 mb-1.5 text-[10px] font-bold text-amber-500/90 font-mono">
                             <Shield className="w-3.5 h-3.5 text-amber-500" />
-                            <span>THIÊN ĐẠO PHẢN HỒI (Developer Response)</span>
+                            <span>THIÊN ĐẠO PHẢN HỒI</span>
                           </div>
                           <p className="text-[11px] text-zinc-300 font-serif leading-relaxed italic">
                             "{f.developer_response}"
@@ -437,7 +437,7 @@ export const FeedbackView: React.FC = () => {
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-bold text-fuchsia-400 font-mono flex items-center gap-1">
                               <Shield className="w-3.5 h-3.5 text-fuchsia-400" />
-                              Duyệt Ý Kiến (Quyền Thiên Đạo)
+                              Duyệt Ý Kiến
                             </span>
                             {modifyingFeedbackId !== f.id && (
                               <button

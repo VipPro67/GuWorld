@@ -32,23 +32,23 @@ export const ExploreCard: React.FC<ExploreCardProps> = ({
           </div>
           <div>
             <span className="text-[10px] text-amber-500 uppercase tracking-widest font-mono">
-              Địa Danh (Map Node)
+              Địa Danh
             </span>
             <h3 className="text-xl font-bold text-zinc-100 font-serif">
-              Thanh Mao Sơn (Qing Mao Mountain)
+              Thanh Mao Sơn
             </h3>
           </div>
         </div>
 
         <p className="text-sm text-zinc-400 leading-relaxed mb-6 font-serif">
-          Thanh Mao Sơn trải dài hàng ngàn dặm, rừng trúc xanh biếc bạt ngàn, linh khí dư dật. Cổ sư có thể tiêu hao Chân nguyên của bản thân để thâm nhập sâu vào các khe đá, tìm kiếm **Nguyên Thạch (Primeval Stones)** và nguyên liệu tu luyện quý giá.
+          Thanh Mao Sơn trải dài hàng ngàn dặm, rừng trúc xanh biếc bạt ngàn, linh khí dư dật. Cổ sư có thể tiêu hao Chân nguyên của bản thân để thâm nhập sâu vào các khe đá, tìm kiếm **Nguyên Thạch** và nguyên liệu tu luyện quý giá.
         </p>
 
         <div className="bg-zinc-950/60 rounded-2xl p-4 border border-zinc-900 mb-6 space-y-2">
           <div className="flex justify-between text-xs">
             <span className="text-zinc-500">Chi phí tiêu hao:</span>
             <span className="text-emerald-400 font-semibold font-mono">
-              10.0 Chân Nguyên (Mana)
+              10.0 Chân Nguyên
             </span>
           </div>
           <div className="flex justify-between text-xs">

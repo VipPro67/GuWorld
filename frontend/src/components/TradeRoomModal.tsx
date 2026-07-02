@@ -237,7 +237,7 @@ export const TradeRoomModal: React.FC = () => {
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-serif font-bold text-zinc-300 flex items-center gap-1.5">
                 <User className="w-4 h-4 text-emerald-400" />
-                Đạo Hữu (Bạn)
+                Đạo Hữu
               </h4>
               <div className="flex items-center gap-1.5">
                 {myLocked ? (

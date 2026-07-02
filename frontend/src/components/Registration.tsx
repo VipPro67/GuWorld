@@ -159,7 +159,7 @@ export const Registration: React.FC<RegistrationProps> = ({
               htmlFor="login-email"
               className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5"
             >
-              Email (Thư điện tử)
+              Email
             </label>
             <div className="relative">
               <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-600" />
@@ -188,7 +188,7 @@ export const Registration: React.FC<RegistrationProps> = ({
               htmlFor="username"
               className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5"
             >
-              Đạo Hiệu (Character Name)
+              Đạo Hiệu
             </label>
             <div className="relative">
               <User className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-600" />
@@ -217,7 +217,7 @@ export const Registration: React.FC<RegistrationProps> = ({
               htmlFor="email"
               className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5"
             >
-              Email (Thư điện tử)
+              Email
             </label>
             <div className="relative">
               <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-600" />
@@ -244,7 +244,7 @@ export const Registration: React.FC<RegistrationProps> = ({
             htmlFor="password"
             className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5"
           >
-            Mật Mã (Password - Min 6 chars)
+            Mật Mã (Tối thiểu 6 ký tự)
           </label>
           <div className="relative">
             <KeyRound className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-600" />

@@ -214,7 +214,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
           <div className="flex items-center gap-2">
             <Compass className="w-5 h-5 text-amber-500 animate-spin" />
             <h3 className="text-lg font-bold text-zinc-100 font-serif">
-              Chọn Lưu Vực Du Ngoạn (Select Region Map)
+              Chọn Lưu Vực Du Ngoạn
             </h3>
           </div>
           <div className="flex items-center gap-4">
