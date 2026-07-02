@@ -918,7 +918,7 @@ func CombatAttack(c *gin.Context) {
 		}
 		player.ActiveCombat = nil
 	} else if defeat {
-		player.HP = 20.0
+		player.HP = 1.0
 		defeat = true
 		if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
 			ctx.Logs = append(ctx.Logs, "Thách đấu mỏ linh thạch thất bại, không thể chiếm lĩnh mỏ.")

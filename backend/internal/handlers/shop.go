@@ -18,7 +18,7 @@ type ShopItem struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	Type        string `json:"type"` // "Gu" or "Material"
+	Type        string `json:"type"` // "Gu", "Material", or "Consumable"
 	Price       int    `json:"price"`
 	Stock       int    `json:"stock"` // -1 for unlimited
 }
@@ -168,6 +168,11 @@ func BuyShopItem(c *gin.Context) {
 			player.MaterialsInventory = make(models.MaterialsInventory)
 		}
 		player.MaterialsInventory[selectedItem.ID] += req.Quantity
+	case "Consumable":
+		if player.MaterialsInventory == nil {
+			player.MaterialsInventory = make(models.MaterialsInventory)
+		}
+		player.MaterialsInventory[selectedItem.ID] += req.Quantity
 	}
 
 	// 6. Save player state
@@ -237,7 +242,7 @@ func SellShopItem(c *gin.Context) {
 	}
 
 	totalGain := 0
-	if req.ItemType == "Material" {
+	if req.ItemType == "Material" || req.ItemType == "Consumable" {
 		qty := player.MaterialsInventory[req.ItemID]
 		if qty < req.Quantity {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ vật phẩm để bán"})

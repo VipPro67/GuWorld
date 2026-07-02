@@ -14,3 +14,10 @@ GU_TUSITA_FLOWER,Thố Ti Hoa Cổ,Cổ trùng không gian tăng thêm 20 ô ch�
 GU_RELIC,Xá Lợi Cổ (Relic Gu),Cổ trùng tiêu hao nâng cao tu vi ngay lập tức thêm 1 Tiểu Chuyển.,Gu,2000,2,12,True
 GU_STONE_APERTURE,Thạch Khiếu Cổ (Stone Aperture Gu),Cổ trùng tiêu hao hóa thạch Không khiếu nhận 500 Nguyên Thạch nhưng giảm 15 Chân Nguyên tối đa.,Gu,600,3,13,True
 GU_RED_STEEL_RELIC,Xích Thiết Xá Lợi Cổ,Tăng tu vi Nhị Chuyển lên một tiểu cảnh giới.,Gu,8500,1,14,True
+ITEM_HEALING_PELLET_SMALL,Tiểu Hồi Huyết Đan,Hồi 30 máu tức thì.,Consumable,5,99,15,True
+ITEM_HEALING_PELLET_MEDIUM,Trung Hồi Huyết Đan,Hồi 80 máu tức thì.,Consumable,10,50,16,True
+ITEM_MEDICINAL_PASTE,Kim Sang Dược,Bôi ngoài da hồi 50 máu.,Consumable,8,99,17,True
+ITEM_HERBAL_SOUP,Linh Thảo Thang,Hồi 40 máu + 20 mana.,Consumable,8,99,18,True
+ITEM_BLOOD_GINSENG,Huyết Sâm,Dược liệu quý hồi 150 máu.,Consumable,20,50,19,True
+ITEM_HEALING_PELLET_LARGE,Đại Hồi Huyết Đan,Hồi 200 máu tức thì.,Consumable,30,20,20,True
+ITEM_LIFE_SAVING_PILL,Cứu Mệnh Đan,Hồi 500 máu tức thì.,Consumable,80,5,21,True

@@ -543,7 +543,7 @@ func AutoCombatStart(c *gin.Context) {
 		args = append(args, finalPlayerHP, finalMana, tempLootJSON, player.PrimevalStones, matJSON, guJSON, player.ID)
 	} else {
 		// ── Defeat: same logic as manual combat ──
-		player.HP = 20.0
+		player.HP = 1.0
 		player.CurrentRegion = "Southern_Border"
 		player.X = 50
 		player.Y = 50

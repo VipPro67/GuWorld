@@ -32,6 +32,9 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
   const [buyQuantity, setBuyQuantity] = useState(1);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [shopTab, setShopTab] = useState<"Gu" | "Material" | "Consumable">("Gu");
+
+  const filteredItems = shopItems.filter((item) => item.type === shopTab);
 
   const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -116,14 +119,36 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
         * Thương đội của Giả gia đi ngang qua Thanh Mao Sơn thôn trại, bán các nhu yếu phẩm cơ bản cho tân thủ cổ sư sinh tồn và tu luyện.
       </div>
 
+      {/* Tab filter */}
+      <div className="flex gap-2 bg-zinc-950/80 p-1.5 rounded-xl border border-zinc-900">
+        {(["Gu", "Material", "Consumable"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setShopTab(tab)}
+            className={`flex-1 text-xs py-1.5 rounded-lg font-mono font-medium transition-all ${
+              shopTab === tab
+                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            {tab === "Gu" ? "Cổ Trùng" : tab === "Material" ? "Nguyên Liệu" : "Tiêu Hao"}
+          </button>
+        ))}
+      </div>
+
       {fetchingList ? (
         <div className="py-12 flex flex-col items-center justify-center gap-3">
           <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
           <span className="text-xs font-mono text-zinc-500">Đang kiểm kê hàng hóa...</span>
         </div>
+      ) : filteredItems.length === 0 ? (
+        <div className="py-12 flex flex-col items-center justify-center gap-2 text-zinc-600">
+          <ShoppingBag className="w-8 h-8 text-zinc-700" />
+          <span className="text-xs font-mono">Không có vật phẩm nào trong mục này.</span>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2">
-          {shopItems.map((item) => {
+          {filteredItems.map((item) => {
             const totalCost = item.price;
             const canAfford = player.primeval_stones >= totalCost;
 
@@ -135,7 +160,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                 <div className="space-y-2">
                   <div className="flex justify-between items-start">
                     <span className="text-[9px] font-mono border border-zinc-800 px-2 py-0.5 rounded text-zinc-500 uppercase tracking-wider">
-                      {item.type === "Gu" ? "Cổ Trùng" : "Nguyên Liệu"}
+                      {item.type === "Gu" ? "Cổ Trùng" : item.type === "Material" ? "Nguyên Liệu" : "Tiêu Hao"}
                     </span>
                     <span className="text-xs font-mono font-bold text-amber-400 flex items-center gap-1">
                       <Coins className="w-3.5 h-3.5 text-amber-500" />
@@ -196,7 +221,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
               </span>
             </div>
 
-            {selectedItem.type === "Material" ? (
+            {selectedItem.type !== "Gu" ? (
               <div className="space-y-1.5">
                 <label className="text-[10px] font-mono text-zinc-500 uppercase">
                   Số lượng cần mua:
