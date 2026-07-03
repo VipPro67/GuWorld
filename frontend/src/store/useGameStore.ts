@@ -1,6 +1,8 @@
 import { ToastContainer } from "@/components/ToastContainer";
 import { create } from "zustand";
 
+let confirmResolve: ((value: boolean) => void) | null = null;
+
 export interface GuInstance {
   instance_id: string;
   gu_id: string;
@@ -784,6 +786,11 @@ interface GameState {
   addToast: (message: string, type?: "success" | "error" | "info", duration?: number) => void;
   removeToast: (id: string) => void;
 
+  // Confirm Dialog
+  confirmDialog: { open: boolean; message: string; confirmText: string; cancelText: string };
+  showConfirm: (message: string, options?: { confirmText?: string; cancelText?: string }) => Promise<boolean>;
+  closeConfirm: (result: boolean) => void;
+
   // Immortal Aperture State & Actions
   aperture: ImmortalAperture | null;
   daoMarks: DaoMark[];
@@ -1069,6 +1076,28 @@ export const useGameStore = create<GameState>((set, get) => {
     set((state) => ({
       toasts: state.toasts.filter((t) => t.id !== id),
     }));
+  },
+
+  confirmDialog: { open: false, message: "", confirmText: "Xác nhận", cancelText: "Hủy" },
+  showConfirm: async (message, options) => {
+    return new Promise((resolve) => {
+      confirmResolve = resolve;
+      set({
+        confirmDialog: {
+          open: true,
+          message,
+          confirmText: options?.confirmText || "Xác nhận",
+          cancelText: options?.cancelText || "Hủy",
+        },
+      });
+    });
+  },
+  closeConfirm: (result) => {
+    if (confirmResolve) {
+      confirmResolve(result);
+      confirmResolve = null;
+    }
+    set({ confirmDialog: { open: false, message: "", confirmText: "Xác nhận", cancelText: "Hủy" } });
   },
 
   login: async (email, password) => {
@@ -1577,6 +1606,7 @@ export const useGameStore = create<GameState>((set, get) => {
     } catch (err: any) {
       set({ error: err.message });
       get().addLog(`Khám phá thất bại: ${err.message}`);
+      get().addToast(err.message, "error");
     } finally {
       set({ actionLoading: false });
     }
@@ -1977,6 +2007,7 @@ export const useGameStore = create<GameState>((set, get) => {
     } catch (err: any) {
       set({ error: err.message });
       get().addLog(`Khám phá thất bại: ${err.message}`);
+      get().addToast(err.message, "error");
       return null;
     } finally {
       set({ actionLoading: false });
@@ -3129,6 +3160,7 @@ export const useGameStore = create<GameState>((set, get) => {
     } catch (err: any) {
       set({ error: err.message });
       get().addLog(`Chiếm mỏ lỗi: ${err.message}`);
+      get().addToast(err.message, "error");
       return false;
     } finally { set({ actionLoading: false }); }
   },
@@ -3153,6 +3185,7 @@ export const useGameStore = create<GameState>((set, get) => {
     } catch (err: any) {
       set({ error: err.message });
       get().addLog(`Nhận thưởng mỏ lỗi: ${err.message}`);
+      get().addToast(err.message, "error");
       return false;
     } finally { set({ actionLoading: false }); }
   },
@@ -3177,6 +3210,7 @@ export const useGameStore = create<GameState>((set, get) => {
     } catch (err: any) {
       set({ error: err.message });
       get().addLog(`Rời mỏ lỗi: ${err.message}`);
+      get().addToast(err.message, "error");
       return false;
     } finally { set({ actionLoading: false }); }
   },
@@ -3200,6 +3234,7 @@ export const useGameStore = create<GameState>((set, get) => {
     } catch (err: any) {
       set({ error: err.message });
       get().addLog(`Tấn công mỏ lỗi: ${err.message}`);
+      get().addToast(err.message, "error");
       return false;
     } finally { set({ actionLoading: false }); }
   },

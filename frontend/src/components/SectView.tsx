@@ -64,6 +64,8 @@ export const SectView: React.FC = () => {
     fetchSectMines,
     attackSectMine,
     claimSectMineRewards,
+    addToast,
+    showConfirm,
   } = useGameStore();
 
   const [activeTab, setActiveTab] = useState<"lobby" | "missions" | "vault" | "donate" | "territory" | "manage">("lobby");
@@ -707,7 +709,7 @@ export const SectView: React.FC = () => {
               </div>
               <button
                 onClick={async () => {
-                  if (window.confirm("Đạo hữu có chắc chắn muốn rời khỏi tông môn? Điểm cống hiến sẽ hoàn toàn biến mất!")) {
+                  if (await showConfirm("Đạo hữu có chắc chắn muốn rời khỏi tông môn? Điểm cống hiến sẽ hoàn toàn biến mất!")) {
                     await leaveSect();
                   }
                 }}
@@ -1283,7 +1285,7 @@ export const SectView: React.FC = () => {
               <button
                 onClick={async () => {
                   if (donateStones <= 0 || donateStones > player.primeval_stones) {
-                    alert("Số lượng đá quyên góp không hợp lệ hoặc vượt quá tài sản hiện có!");
+                    addToast("Số lượng đá quyên góp không hợp lệ hoặc vượt quá tài sản hiện có!", "error");
                     return;
                   }
                   await donateSectStones(donateStones);
@@ -1350,7 +1352,7 @@ export const SectView: React.FC = () => {
                     <button
                       onClick={async () => {
                         if (donateMatAmount <= 0 || donateMatAmount > maxQty) {
-                          alert("Số lượng quyên góp không hợp lệ!");
+                          addToast("Số lượng quyên góp không hợp lệ!", "error");
                           return;
                         }
                         const ok = await donateSectMaterials(selectedMatId, donateMatAmount);
@@ -1551,7 +1553,7 @@ export const SectView: React.FC = () => {
                                 value={mInfo.member_rank}
                                 onChange={async (e) => {
                                   const targetRank = e.target.value;
-                                  if (targetRank === "CHUONG_MON" && !window.confirm("⚠️ CẢNH BÁO: Phong đệ tử này làm Chưởng Môn sẽ nhường lại ngôi vị của đạo hữu và giáng đạo hữu xuống Trưởng Lão! Xác nhận?")) {
+                                  if (targetRank === "CHUONG_MON" && !await showConfirm("⚠️ CẢNH BÁO: Phong đệ tử này làm Chưởng Môn sẽ nhường lại ngôi vị của đạo hữu và giáng đạo hữu xuống Trưởng Lão! Xác nhận?")) {
                                     return;
                                   }
                                   await setMemberRank(mInfo.player_id, targetRank);
@@ -1572,7 +1574,7 @@ export const SectView: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={async () => {
-                                  if (window.confirm(`Xác nhận trục xuất đệ tử "${mInfo.username}" khỏi tông môn?`)) {
+                                  if (await showConfirm(`Xác nhận trục xuất đệ tử "${mInfo.username}" khỏi tông môn?`)) {
                                     await kickMember(mInfo.player_id);
                                   }
                                 }}

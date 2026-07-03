@@ -59,7 +59,7 @@ func ResolveCell(tx *sql.Tx, region string, x int, y int) (models.Cell, error) {
 		if spawn.IsBossSpawn {
 			t = "Boss"
 		}
-		
+
 		rank := spawn.MinRank
 		if spawn.MaxRank > spawn.MinRank {
 			rank += rand.Intn(spawn.MaxRank - spawn.MinRank + 1)
@@ -476,7 +476,7 @@ func MovePlayer(c *gin.Context) {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"})
 				return
 			}
-			
+
 			// Override monster template stats with cell rank and subRank
 			if cell.Rank > 0 {
 				mon.Rank = cell.Rank
@@ -485,8 +485,6 @@ func MovePlayer(c *gin.Context) {
 				mon.SubRank = cell.SubRank
 			}
 
-			logMsg = fmt.Sprintf("Đạo hữu chạm trán %s tại tọa độ (%d, %d)! (Quái vật được tải từ cơ sở dữ liệu)", mon.Name, player.X, player.Y)
-			log.Println(logMsg)
 			combatState := models.BuildCombatStateFromMonster(mon)
 			player.ActiveCombat = &combatState
 			logMsg = fmt.Sprintf("Nguy hiểm! Đạo hữu chạm trán %s tại tọa độ (%d, %d)!", mon.Name, player.X, player.Y)
@@ -537,7 +535,7 @@ func MovePlayer(c *gin.Context) {
 				}
 				adjX := player.X + ax
 				adjY := player.Y + ay
-				
+
 				// check if already cleared
 				if isCellClearedRecently(&player, adjX, adjY, 2*time.Minute) {
 					continue
@@ -550,7 +548,7 @@ func MovePlayer(c *gin.Context) {
 
 				if (adj.Type == "Monster" || adj.Type == "Boss") && rand.Intn(100) < 5 { // 5% chance
 					combatTriggered = true
-					
+
 					mon, err := db.LoadMonsterTemplate(tx, adj.Content)
 					if err == nil {
 						if adj.Rank > 0 {

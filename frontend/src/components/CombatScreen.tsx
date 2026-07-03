@@ -69,6 +69,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const fetchKillerMoves = useGameStore((state) => state.fetchKillerMoves);
   const combatSettings = useGameStore((state) => state.combatSettings);
   const fetchCombatSettings = useGameStore((state) => state.fetchCombatSettings);
+  const addToast = useGameStore((state) => state.addToast);
 
   useEffect(() => {
     void fetchKillerMoves();
@@ -150,7 +151,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   const handleStartSimulation = async () => {
     if (!coreGuId) {
-      alert("Vui lòng chọn ít nhất 1 Cổ Hạch Tâm!");
+      addToast("Vui lòng chọn ít nhất 1 Cổ Hạch Tâm!", "error");
       return;
     }
 
@@ -178,7 +179,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       setSupportGuIds(supportGuIds.filter(i => i !== id));
     } else {
       if (supportGuIds.length >= 6) {
-        alert("Chỉ được mang tối đa 6 Cổ Phụ Trợ!");
+        addToast("Chỉ được mang tối đa 6 Cổ Phụ Trợ!", "error");
         return;
       }
       setSupportGuIds([...supportGuIds, id]);
@@ -304,8 +305,24 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
     setSupportGuIds(supportCandidates.slice(0, 6).map(s => s.gu.instance_id));
 
-    // Pick killer moves matching the core path
-    const matchingKMs = killerMoves.filter(km => {
+    // Pick killer moves matching the core path (only valid ones)
+    const validKMs = (() => {
+      const activeGuIds = new Set(
+        (player.gu_inventory || [])
+          .filter(gu => gu.status === "ACTIVE")
+          .map(gu => gu.instance_id)
+      );
+      return killerMoves.filter(move => {
+        if (!activeGuIds.has(move.core_player_gu_id)) return false;
+        if (move.slots) {
+          for (const slot of move.slots) {
+            if (!activeGuIds.has(slot.player_gu_id)) return false;
+          }
+        }
+        return true;
+      });
+    })();
+    const matchingKMs = validKMs.filter(km => {
       if (!corePath) return true;
       return km.path === corePath;
     });
@@ -313,6 +330,24 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   }, [eligibleGus, guDictionary, bestPath, player.dao_marks, player.path_masteries, killerMoves]);
 
   // Sorting for Gu list
+  // Only show killer moves whose component Gus are all ACTIVE
+  const validKillerMoves = useMemo(() => {
+    const activeGuIds = new Set(
+      (player.gu_inventory || [])
+        .filter(gu => gu.status === "ACTIVE")
+        .map(gu => gu.instance_id)
+    );
+    return killerMoves.filter(move => {
+      if (!activeGuIds.has(move.core_player_gu_id)) return false;
+      if (move.slots) {
+        for (const slot of move.slots) {
+          if (!activeGuIds.has(slot.player_gu_id)) return false;
+        }
+      }
+      return true;
+    });
+  }, [killerMoves, player.gu_inventory]);
+
   const sortedEligibleGus = useMemo(() => {
     const gus = [...eligibleGus];
     if (guSortMode === "rank") {
@@ -606,11 +641,11 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             </h3>
             <span className="text-[10px] text-zinc-600">{selectedKillerMoveIds.length} đã chọn</span>
           </div>
-          {killerMoves.length === 0 ? (
-            <p className="text-sm text-zinc-500 italic">Chưa có sát chiêu nào. Vào Sát Chiêu Đường để tạo.</p>
+          {validKillerMoves.length === 0 ? (
+            <p className="text-sm text-zinc-500 italic">Chưa có sát chiêu hợp lệ (cần đầy đủ Cổ trùng thành phần).</p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {killerMoves.map(move => {
+              {validKillerMoves.map(move => {
                 const isSelected = selectedKillerMoveIds.includes(move.id);
                 const coreSpec = coreGuId ? guDictionary[eligibleGus.find(g => g.instance_id === coreGuId)?.gu_id || ""] : null;
                 const pathMatch = coreSpec ? move.path === coreSpec.path : move.path === bestPath;
@@ -698,7 +733,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
           >
             <Play className="w-5 h-5" />
-            BẮT ĐẦU MÔ PHỎNG
+            BẮT ĐẦU
           </button>
           {onRetreat && (
             <button

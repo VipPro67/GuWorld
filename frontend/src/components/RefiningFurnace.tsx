@@ -38,6 +38,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     setExpandedGroups(prev => ({ ...prev, [guId]: !prev[guId] }));
   };
   const deduceRecipe = useGameStore((state) => state.deduceRecipe);
+  const addToast = useGameStore((state) => state.addToast);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -190,7 +191,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
       if (matchingGu) {
         slotGu(matchingGu.instance_id, slot.index);
       } else {
-        alert("Không có cổ trùng phù hợp trong túi đồ!");
+        addToast("Không có cổ trùng phù hợp trong túi đồ!", "error");
       }
     }
   };

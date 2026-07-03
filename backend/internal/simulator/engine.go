@@ -50,6 +50,7 @@ func Simulate(state *CombatState) []CombatLog {
 				ActorId:   p.ID,
 				ActorName: p.Name,
 				Action:    "PRE_COMBAT_BARRIER",
+				Damage:    p.VirtualShield,
 				Detail:    fmt.Sprintf("%s được bao bọc bởi %d Giáp Ảo!", p.Name, p.VirtualShield),
 			})
 		}
@@ -238,16 +239,21 @@ func Simulate(state *CombatState) []CombatLog {
 				hasExecutedAny = true
 				actor.Mana -= int(a.ManaCost)
 
+				// Buffer shield/heal logs — emit after action name
+				var shieldLog, healLog *CombatLog
+
 				// Apply shield to self
 				if a.Defense > 0 {
 					actor.VirtualShield += int(a.Defense)
-					turnLogs = append(turnLogs, CombatLog{
+					sl := CombatLog{
 						Turn:      turn,
 						ActorId:   actor.ID,
 						ActorName: actor.Name,
 						Action:    "SHIELD_GAIN",
+						Damage:    int(a.Defense),
 						Detail:    fmt.Sprintf("%s nhận %.0f Khiên Ảo!", actor.Name, a.Defense),
-					})
+					}
+					shieldLog = &sl
 				}
 
 				// Apply healing to self
@@ -257,13 +263,15 @@ func Simulate(state *CombatState) []CombatLog {
 					if actor.HP > actor.MaxHP {
 						actor.HP = actor.MaxHP
 					}
-					turnLogs = append(turnLogs, CombatLog{
+					hl := CombatLog{
 						Turn:      turn,
 						ActorId:   actor.ID,
 						ActorName: actor.Name,
 						Action:    "HEAL",
+						Damage:    heal,
 						Detail:    fmt.Sprintf("%s hồi phục %d HP!", actor.Name, heal),
-					})
+					}
+					healLog = &hl
 				}
 
 				// ── Apply damage & compound effects ──
@@ -298,6 +306,13 @@ func Simulate(state *CombatState) []CombatLog {
 							Damage:    totalDamageDealt,
 							Detail:    fmt.Sprintf("%s dùng [%s] lên %s, gây %d sát thương (còn %d HP)", actor.Name, a.Name, target.Name, totalDamageDealt, target.HP),
 						})
+					}
+
+					if shieldLog != nil {
+						turnLogs = append(turnLogs, *shieldLog)
+					}
+					if healLog != nil {
+						turnLogs = append(turnLogs, *healLog)
 					}
 
 					if hitCount > 1 {
@@ -401,6 +416,13 @@ func Simulate(state *CombatState) []CombatLog {
 						TargetId:  target.ID,
 						Detail:    fmt.Sprintf("%s dùng [%s]", actor.Name, a.Name),
 					})
+
+					if shieldLog != nil {
+						turnLogs = append(turnLogs, *shieldLog)
+					}
+					if healLog != nil {
+						turnLogs = append(turnLogs, *healLog)
+					}
 				}
 
 				// If target died, getTarget will find the next one
@@ -486,6 +508,14 @@ func Simulate(state *CombatState) []CombatLog {
 			})
 			break
 		}
+
+		if turn == maxTurns {
+			logs = append(logs, CombatLog{
+				Turn:   turn,
+				Action: "BATTLE_END",
+				Detail: "Hết thời gian! Người thách đấu đã thua.",
+			})
+		}
 	}
 
 	return logs
@@ -496,35 +526,40 @@ func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]C
 		damage = 1
 	}
 
-	// Virtual shield absorption
 	if target.VirtualShield > 0 {
 		if float64(target.VirtualShield) >= damage {
 			target.VirtualShield -= int(damage)
 			*logs = append(*logs, CombatLog{
 				Turn:      turn,
-				ActorId:   target.ID,
-				ActorName: target.Name,
+				ActorId:   actor.ID,
+				ActorName: actor.Name,
 				Action:    "SHIELD_ABSORB",
 				Damage:    int(damage),
-				Detail:    fmt.Sprintf("%s dùng Khiên Ảo hấp thụ %.0f sát thương (còn %d khiên)", target.Name, damage, target.VirtualShield),
+				Detail:    fmt.Sprintf("%s tấn công %s gây %.0f sát thương (còn %d khiên, %d HP)", actor.Name, target.Name, damage, target.VirtualShield, target.HP),
 			})
 			return 0
-		} else {
-			absorbed := target.VirtualShield
-			damage -= float64(absorbed)
-			target.VirtualShield = 0
-			*logs = append(*logs, CombatLog{
-				Turn:      turn,
-				ActorId:   target.ID,
-				ActorName: target.Name,
-				Action:    "SHIELD_BREAK",
-				Damage:    absorbed,
-				Detail:    fmt.Sprintf("Khiên Ảo của %s bị phá vỡ sau khi chặn %d sát thương!", target.Name, absorbed),
-			})
 		}
+
+		absorbed := target.VirtualShield
+		damage -= float64(absorbed)
+		target.VirtualShield = 0
+		target.HP -= int(damage)
+		if target.HP < 0 {
+			target.HP = 0
+		}
+		totalDmg := float64(absorbed) + damage
+		*logs = append(*logs, CombatLog{
+			Turn:      turn,
+			ActorId:   actor.ID,
+			ActorName: actor.Name,
+			Action:    "SHIELD_BREAK",
+			Damage:    int(totalDmg),
+			Detail:    fmt.Sprintf("%s tấn công %s gây %.0f sát thương (vỡ khiên, còn %d HP)", actor.Name, target.Name, totalDmg, target.HP),
+		})
+		return totalDmg
 	}
 
-	// Direct HP damage
+	// Direct HP damage (no shield)
 	target.HP -= int(damage)
 	if target.HP < 0 {
 		target.HP = 0

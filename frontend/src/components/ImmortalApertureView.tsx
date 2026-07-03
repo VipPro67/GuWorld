@@ -90,6 +90,7 @@ export const ImmortalApertureView: React.FC = () => {
     attackTribulationEnemy,
     resolveTribulation,
     setView,
+    showConfirm,
   } = useGameStore();
 
   const [activeTab, setActiveTab] = useState<"overview" | "map" | "dao" | "tribulation" | "ecosystem" | "variant_humans">("overview");
@@ -248,7 +249,7 @@ export const ImmortalApertureView: React.FC = () => {
 
   const handleUninstall = async () => {
     if (!selectedNode) return;
-    if (window.confirm(`Đạo hữu có chắc chắn muốn tháo dỡ ${selectedNode.name}? Mỏ sẽ được thu hồi thành vật phẩm cất vào túi đồ.`)) {
+    if (await showConfirm(`Đạo hữu có chắc chắn muốn tháo dỡ ${selectedNode.name}? Mỏ sẽ được thu hồi thành vật phẩm cất vào túi đồ.`)) {
       const success = await uninstallApertureNode(selectedNode.id);
       if (success) {
         setSelectedCell(null);
@@ -262,7 +263,7 @@ export const ImmortalApertureView: React.FC = () => {
     const confirmMsg = selectedNode.is_destroyed
       ? `Mỏ này đã bị phá hủy. Đạo hữu muốn dọn dẹp phế tích và san phẳng ô đất chứ?`
       : `CẢNH BÁO: Đạo hữu có chắc chắn muốn san phẳng ${selectedNode.name}? Hành động này sẽ xóa vĩnh viễn mỏ và KHÔNG hoàn trả lại mô hình mỏ.`;
-    if (window.confirm(confirmMsg)) {
+    if (await showConfirm(confirmMsg)) {
       const success = await deleteApertureNode(selectedNode.id);
       if (success) {
         setSelectedCell(null);
@@ -1673,7 +1674,7 @@ export const ImmortalApertureView: React.FC = () => {
                         confirmText = `💥 CẢNH BÁO CỰC KỲ NGUY HIỂM: Thiết lập cường độ 'Bóc Lột' (x2.0 sản lượng) sẽ khiến tộc nhân bị kiệt quệ, giảm 25 Hạnh phúc và tăng 25 Áp bức mỗi năm! Tỷ lệ nổi loạn phá hủy Tiên Khiếu sẽ tăng vọt! Đạo hữu có chắc chắn?`;
                       }
                       
-                      if (window.confirm(confirmText)) {
+                      if (await showConfirm(confirmText)) {
                         await handleSetLabor(raceInfo.race, intensity);
                       }
                     };

@@ -44,22 +44,7 @@ func Retreat(c *gin.Context) {
 	logMsg := "Đạo hữu trở về an toàn từ hành trình."
 
 	if player.ActiveCombat != nil {
-		penaltyHP := 8.0
-		penaltyStones := 10
-
-		player.HP -= penaltyHP
-		if player.HP < 1.0 {
-			player.HP = 1.0
-		}
-
-		if player.PrimevalStones >= penaltyStones {
-			player.PrimevalStones -= penaltyStones
-		} else {
-			player.PrimevalStones = 0
-		}
-
-		logMsg = fmt.Sprintf("Đạo hữu hốt hoảng tháo chạy khỏi %s! Bị phản phệ %.1f HP và mất %d Nguyên Thạch do vứt bỏ vật tư khi đào tẩu.",
-			player.ActiveCombat.EnemyName, penaltyHP, penaltyStones)
+		logMsg = fmt.Sprintf("Đạo hữu rút lui khỏi %s.", player.ActiveCombat.EnemyName)
 
 		player.ActiveCombat = nil
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Player, GuSpec, ItemSpec, GuInstance } from "@/store/useGameStore";
+import { Player, GuSpec, ItemSpec, GuInstance, useGameStore } from "@/store/useGameStore";
 import { Flower2, Wine, Gem, ShieldAlert, Sparkles, HelpCircle, Search, Shield, Zap, ChevronDown, ChevronUp, Lock, Unlock } from "lucide-react";
 
 interface GuInventoryProps {
@@ -123,7 +123,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
       ? `Cảnh báo: Đạo hữu đang sở hữu một Bản Mệnh Cổ. Thiết lập Cổ trùng "${name}" làm Bản Mệnh Cổ mới sẽ hủy Bản Mệnh cũ và gây phản phệ khiến đạo hữu mất 50 HP!\n\nĐạo hữu chắc chắn muốn tiếp tục?`
       : `Đạo hữu muốn chọn Cổ trùng "${name}" làm Bản Mệnh Cổ chứ?`;
 
-    if (confirm(confirmMsg)) {
+    if (await useGameStore.getState().showConfirm(confirmMsg)) {
       setSettingVitalId(instanceId);
       try {
         await onSetVital(instanceId);
@@ -697,7 +697,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                             type="button"
                                             disabled={actionLoading || droppingId === gu.instance_id}
                                             onClick={async () => {
-                                              if (!confirm(`Xác nhận phóng sinh (thả) Cổ trùng này? Hành động này không thể hoàn tác.`)) return;
+                                              if (!await useGameStore.getState().showConfirm(`Xác nhận phóng sinh (thả) Cổ trùng này? Hành động này không thể hoàn tác.`)) return;
                                               setDroppingId(gu.instance_id);
                                               try {
                                                 await onDropGu(gu.instance_id);

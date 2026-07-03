@@ -123,8 +123,12 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 		}
 	}
 
-	effectiveDamage = baseDmg * powerScale * masteryMultiplier * daoMultiplier
+	// Gu skill damage scales with player's base attack so it stays relevant vs basic attack
+	effectiveDamage = (baseDmg + actor.BaseAttack) * powerScale * masteryMultiplier * daoMultiplier
 	effectiveDefense = baseDef * powerScale * masteryMultiplier * daoMultiplier
+	if baseDef > 0 {
+		effectiveDefense += actor.BaseDefense * powerScale * masteryMultiplier * daoMultiplier
+	}
 
 	cost := calculateEnergyCostForCombatant(actor, guSpec)
 

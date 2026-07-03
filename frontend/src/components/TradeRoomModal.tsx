@@ -16,7 +16,8 @@ export const TradeRoomModal: React.FC = () => {
     lockTrade, 
     confirmTrade, 
     guDictionary, 
-    itemDictionary 
+    itemDictionary,
+    showConfirm,
   } = useGameStore();
 
   const [primevalInput, setPrimevalInput] = useState<number>(0);
@@ -217,8 +218,8 @@ export const TradeRoomModal: React.FC = () => {
             </div>
           </div>
           <button
-            onClick={() => {
-              if (window.confirm("Đạo hữu có chắc chắn muốn hủy kết nối giao dịch này không?")) {
+            onClick={async () => {
+              if (await showConfirm("Đạo hữu có chắc chắn muốn hủy kết nối giao dịch này không?")) {
                 cancelTrade(activeTrade.id);
               }
             }}

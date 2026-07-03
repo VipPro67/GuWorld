@@ -54,7 +54,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     players_on_map?: any[];
   } | null>(null);
 
-  const { fetchGrid, movePlayer, party, createParty, fetchPartyStatus, invitePlayer, leaveParty, retreat, fetchPlayerProfile } = useGameStore();
+  const { fetchGrid, movePlayer, party, createParty, fetchPartyStatus, invitePlayer, leaveParty, retreat, fetchPlayerProfile, showConfirm } = useGameStore();
   const [inviteUsername, setInviteUsername] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [partyLoading, setPartyLoading] = useState(false);
@@ -64,7 +64,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
 
   const handleExitMap = async () => {
     if (isExploringActiveRegion) {
-      if (window.confirm("Đạo hữu có chắc chắn muốn rời khỏi bản đồ khám phá? Tất cả Nguyên Thạch, Cổ trùng và tài nguyên thu thập tạm thời sẽ được thu hoạch an toàn về túi đồ.")) {
+      if (await showConfirm("Đạo hữu có chắc chắn muốn rời khỏi bản đồ khám phá? Tất cả Nguyên Thạch, Cổ trùng và tài nguyên thu thập tạm thời sẽ được thu hoạch an toàn về túi đồ.")) {
         await retreat();
         if (onBack) {
           onBack();
@@ -433,9 +433,9 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                         )}
                         {otherPlayersOnCell.length > 0 && (
                           <div
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              if (window.confirm(`Đạo hữu muốn khiêu chiến (PVP) với ${otherPlayersOnCell[0].username}?\n\nChọn [OK] để Tấn Công.\nChọn [Cancel] để Trinh Thám.`)) {
+                              if (await showConfirm(`Đạo hữu muốn khiêu chiến (PVP) với ${otherPlayersOnCell[0].username}?\n\nChọn [OK] để Tấn Công.\nChọn [Cancel] để Trinh Thám.`)) {
                                 movePlayer(cell.x, cell.y, otherPlayersOnCell[0].id);
                               } else {
                                 fetchPlayerProfile(otherPlayersOnCell[0].username);

@@ -32,6 +32,7 @@ type CombatantInfo struct {
 	MaxMana int    `json:"max_mana"`
 	Mana    int    `json:"mana"`
 	GridRow int    `json:"grid_row"`
+	Shield  int    `json:"shield"`
 }
 
 // AutoCombatStart initializes and fully simulates a combat, returning the deterministic log.
@@ -100,10 +101,32 @@ func AutoCombatStart(c *gin.Context) {
 		}
 	}
 
+	// ── Build active Gu set for killer move component validation ──
+	activeGuSet := make(map[string]bool)
+	for _, gu := range player.GuInventory {
+		if gu.Status == "ACTIVE" {
+			activeGuSet[gu.InstanceID] = true
+		}
+	}
+
 	// Killer moves
 	for _, kmID := range req.Loadout.KillerMoveIds {
 		km, slots, err := loadKillerMoveTx(tx, player.ID, kmID)
 		if err != nil {
+			continue
+		}
+		// Skip killer move if any component Gu is missing or inactive
+		if !activeGuSet[km.CorePlayerGuID] {
+			continue
+		}
+		allSlotsValid := true
+		for _, slot := range slots {
+			if !activeGuSet[slot.PlayerGuID] {
+				allSlotsValid = false
+				break
+			}
+		}
+		if !allSlotsValid {
 			continue
 		}
 		act := buildSimActionFromKillerMove(km, slots)
@@ -308,6 +331,7 @@ func AutoCombatStart(c *gin.Context) {
 		MaxMana: simPlayer.MaxMana,
 		Mana:    simPlayer.Mana,
 		GridRow: simPlayer.GridRow,
+		Shield:  virtualShield,
 	})
 	for _, a := range player.ActiveCombat.Allies {
 		combatantInfos = append(combatantInfos, CombatantInfo{
@@ -638,6 +662,9 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 	}
 
 	for _, m := range []map[string]float64{active, support} {
+		if v, ok := m["shield"]; ok {
+			act.Defense += v
+		}
 		if v, ok := m["bleed"]; ok {
 			act.BleedPerTurn += v
 		}
@@ -671,7 +698,7 @@ func hasCombatActiveEffects(spec *models.GuDictionaryItem) bool {
 	combatKeys := []string{
 		"damage", "add_base_attack", "base_damage_bonus",
 		"defense", "add_base_defense", "base_defense_bonus",
-		"shield", "virtual_shield",
+		"shield",
 		"bleed", "poison", "stun",
 		"life_steal", "blood_drain", "heal",
 	}

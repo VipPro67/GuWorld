@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { GuInstance, Player, GuSpec, ItemSpec } from "@/store/useGameStore";
+import { GuInstance, Player, GuSpec, ItemSpec, useGameStore } from "@/store/useGameStore";
 import {
   AlertCircle,
   ShoppingCart,
@@ -270,7 +270,7 @@ export function BaoHoangMarket({
     if (!skipConfirm) {
       const currencyText = currType === "primeval" ? "Nguyên Thạch" : "Tiên Nguyên Thạch";
       const confirmMsg = `Đạo hữu có chắc chắn muốn dùng ${totalPrice} ${currencyText} để mua ngay "${displayName}" không?`;
-      if (!window.confirm(confirmMsg)) {
+      if (!await useGameStore.getState().showConfirm(confirmMsg)) {
         return;
       }
     }
@@ -304,7 +304,7 @@ export function BaoHoangMarket({
 
     if (!skipConfirm) {
       const confirmMsg = `Đạo hữu có chắc chắn muốn đặt giá thầu ${amount} Nguyên Thạch cho "${displayName}" không?`;
-      if (!window.confirm(confirmMsg)) {
+      if (!await useGameStore.getState().showConfirm(confirmMsg)) {
         return;
       }
     }

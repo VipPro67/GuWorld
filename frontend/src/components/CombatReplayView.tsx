@@ -29,6 +29,7 @@ interface CombatantReplayInfo {
   max_mana: number;
   mana: number;
   grid_row: number;
+  shield?: number;
 }
 
 interface CombatReplayViewProps {
@@ -74,7 +75,8 @@ type ReplayAction =
   | { type: "STOP" }
   | { type: "CLEAR_HIGHLIGHTS" }
   | { type: "SET_EVENTS"; events: FloatingEvent[] }
-  | { type: "SET_TURN"; turn: number };
+  | { type: "SET_TURN"; turn: number }
+  | { type: "UPDATE_STATES"; combatants: Record<string, CombatantState> };
 
 const TURN_REGEX = /=== LƯỢT (\d+) ===/;
 
@@ -86,7 +88,7 @@ function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
       return {
         combatantStates: action.combatants,
         currentIndex: 0,
-        isPlaying: false,
+        isPlaying: true,
         currentTurn: 0,
         highlightedActor: null,
         highlightedTarget: null,
@@ -103,7 +105,7 @@ function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
         if (["HEAL", "ITEM_HEAL", "LIFESTEAL"].includes(log.action)) {
           actor.hp = Math.min(actor.maxHp, actor.hp + (log.damage || 0));
         }
-        if (log.action === "SHIELD_GAIN") {
+        if (log.action === "SHIELD_GAIN" || log.action === "PRE_COMBAT_BARRIER") {
           actor.shield += log.damage || 0;
         }
         if (log.action === "SHIELD_BREAK") {
@@ -204,6 +206,9 @@ function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
     case "SET_TURN":
       return { ...state, currentTurn: action.turn };
 
+    case "UPDATE_STATES":
+      return { ...state, combatantStates: action.combatants };
+
     default:
       return state;
   }
@@ -261,7 +266,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           kind: c.kind,
           maxHp: c.max_hp || 100,
           hp: c.hp || (c.max_hp || 100),
-          shield: 0,
+          shield: c.shield || 0,
         };
       }
       return map;
@@ -404,13 +409,10 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
       const action: ReplayAction = { type: "ADVANCE", log };
       current = replayReducer(current, action);
     }
-    // Set final state
+    // Set final state without resetting currentIndex
+    dispatch({ type: "UPDATE_STATES", combatants: current.combatantStates });
     dispatch({ type: "SET_INDEX", index: logs.length - 1 });
     dispatch({ type: "STOP" });
-    // Apply final combatant states
-    if (current.combatantStates) {
-      dispatch({ type: "INIT", combatants: current.combatantStates });
-    }
   }, [state, logs]);
 
   const isCompleted = state.currentIndex >= logs.length - 1;
@@ -662,7 +664,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
                 <div key={idx} className="flex items-center gap-2 py-2">
                   <div className="flex-1 h-px bg-zinc-800" />
                   <span className="text-[10px] text-amber-500 font-bold bg-amber-950/20 px-3 py-0.5 rounded-full border border-amber-800/30">
-                    LƯỢT {state.currentTurn}
+                    LƯỢT {log.turn}
                   </span>
                   <div className="flex-1 h-px bg-zinc-800" />
                 </div>

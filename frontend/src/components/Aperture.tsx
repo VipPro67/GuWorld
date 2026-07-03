@@ -739,7 +739,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                           : "";
                         if (link) {
                           navigator.clipboard.writeText(link);
-                          alert("Đã sao chép Liên Kết Sư Đồ!");
+                          store.addToast("Đã sao chép Liên Kết Sư Đồ!", "success");
                         }
                       }}
                       className="text-[10px] font-mono font-bold text-zinc-950 bg-amber-400 hover:bg-amber-300 px-2.5 py-1 rounded transition-all cursor-pointer shadow-md"
@@ -1311,9 +1311,9 @@ function WallControls() {
           <button
             className="px-5 py-2.5 bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 text-white font-bold text-xs rounded-xl shadow-[0_0_15px_rgba(244,3,94,0.45)] cursor-pointer transition-all active:scale-95 uppercase tracking-wider"
             onClick={async () => {
-              if (confirm("Thăng tiên là cửu tử nhất sinh! Ngươi đã chuẩn bị kỹ?")) {
+              if (await store.showConfirm("Thăng tiên là cửu tử nhất sinh! Ngươi đã chuẩn bị kỹ?")) {
                 const res = await store.ascension();
-                if (res) alert(res.message);
+                if (res) store.addToast(res.message, "success");
               }
             }}
           >
@@ -1356,9 +1356,9 @@ function WallControls() {
                 type="button"
                 className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-950/20 active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wide"
                 onClick={async () => {
-                  if (rechargeStones <= 0) return alert('Nhập số nguyên thạch để nạp');
+                  if (rechargeStones <= 0) return store.addToast('Nhập số nguyên thạch để nạp', "error");
                   const res = await store.rechargeWithStones(rechargeStones);
-                  if (res) alert(res.message);
+                  if (res) store.addToast(res.message, "success");
                 }}
               >
                 Nạp Chân Nguyên
@@ -1407,9 +1407,9 @@ function WallControls() {
               type="button"
               className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-emerald-950/20 active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wide"
               onClick={async () => {
-                if (manaSpend <= 0) return alert('Nhập lượng mana cần dùng');
+                if (manaSpend <= 0) return store.addToast('Nhập lượng mana cần dùng', "error");
                 const res = await store.breakWall(manaSpend);
-                if (res) alert(res.message);
+                if (res) store.addToast(res.message, "success");
               }}
             >
               Trùng Kích
@@ -1453,9 +1453,9 @@ function WallControls() {
               type="button"
               className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-950/20 active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wide"
               onClick={async () => {
-                if (rechargeStones <= 0) return alert('Nhập số nguyên thạch để nạp');
+                if (rechargeStones <= 0) return store.addToast('Nhập số nguyên thạch để nạp', "error");
                 const res = await store.rechargeWithStones(rechargeStones);
-                if (res) alert(res.message);
+                if (res) store.addToast(res.message, "success");
               }}
             >
               Nạp Chân Nguyên
@@ -1515,11 +1515,11 @@ function WallControls() {
             className="px-3 py-1.5 bg-gradient-to-r from-purple-700 to-violet-600 hover:from-purple-600 hover:to-violet-500 text-white font-bold rounded-lg text-[10px] shadow-md shadow-purple-950/20 active:scale-95 transition-all cursor-pointer uppercase tracking-wider flex items-center gap-1"
             onClick={async () => {
               if (player.primeval_stones < 100) {
-                return alert("Không đủ Nguyên Thạch (Cần 100 Nguyên Thạch)");
+                return store.addToast("Không đủ Nguyên Thạch (Cần 100 Nguyên Thạch)", "error");
               }
-              if (confirm("Dùng 100 Nguyên Thạch để tịnh hóa Không khiếu, giảm 50% áp lực?")) {
+              if (await store.showConfirm("Dùng 100 Nguyên Thạch để tịnh hóa Không khiếu, giảm 50% áp lực?")) {
                 const res = await store.clearStress();
-                if (res) alert(res.message);
+                if (res) store.addToast(res.message, "success");
               }
             }}
           >
@@ -1669,9 +1669,9 @@ function BlessedLandControls() {
                 type="button"
                 className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-950/20 active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wide"
                 onClick={async () => {
-                  if (rechargeStones <= 0) return alert('Nhập số tiên nguyên thạch để nạp');
+                  if (rechargeStones <= 0) return store.addToast('Nhập số tiên nguyên thạch để nạp', "error");
                   const res = await store.rechargeWithStones(rechargeStones);
-                  if (res) alert(res.message);
+                  if (res) store.addToast(res.message, "success");
                 }}
               >
                 Luyện hóa Tiên Nguyên
@@ -1790,7 +1790,7 @@ function MainQuestsPanel() {
                 onClick={async () => {
                   const res = await store.completeQuest(q.id);
                   if (res && res.success) {
-                    alert(res.message);
+                    store.addToast(res.message, "success");
                   }
                 }}
                 className={`px-3 py-1.5 rounded-xl text-[10px] font-bold font-mono transition-all shrink-0 cursor-pointer ${isDone
