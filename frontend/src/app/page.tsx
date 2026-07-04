@@ -13,6 +13,7 @@ import { CaravanShop } from "@/components/CaravanShop";
 import { TopupView } from "@/components/TopupView";
 import { PremiumShopView } from "@/components/PremiumShopView";
 import { Sparkles, HelpCircle } from "lucide-react";
+import Link from "next/link";
 import { BaoHoangMarket } from "@/components/BaoHoangMarket";
 import { ArenaView } from "@/components/ArenaView";
 import { MineView } from "@/components/MineView";
@@ -161,13 +162,15 @@ export default function Home() {
 
         <div className="flex items-center gap-2">
           {player && !inCombat && currentView !== "wiki" && (
-            <button
-              onClick={() => setView("wiki")}
-              className="px-3 py-1.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 text-xs text-emerald-400 hover:text-emerald-300 font-serif transition-colors border border-emerald-800/40 cursor-pointer flex items-center gap-1"
+            <Link
+              href="/wiki"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 text-xs text-emerald-400 hover:text-emerald-300 font-serif transition-colors border border-emerald-800/40 inline-flex items-center gap-1"
             >
               <HelpCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               <span>Wiki Game</span>
-            </button>
+            </Link>
           )}
 
           {player && !inCombat && (

@@ -4,6 +4,8 @@ Base path: `/api`.
 
 Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequired()` trừ khi ghi public.
 
+> **SEO routes:** `robots.txt`, `sitemap.xml`, `/wiki`, `/wiki/[guId]` do Next.js frontend xử lý (SSG/ISR). Xem `frontend/src/app/`.
+
 ## Public / auth / payment entrypoints
 
 | Method | Path | Ghi chú |

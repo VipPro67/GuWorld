@@ -1,20 +1,57 @@
 @import "tailwindcss";
 
-:root {
-  --background: #060d0a;
-  --foreground: #e2e8f0;
+:root,
+[data-theme="dark"] {
+  --bg-primary: #050505;
+  --bg-secondary: #090e0c;
+  --bg-card: #0f1412;
+  --bg-elevated: #1a1f1d;
+  --text-primary: #e2e8f0;
+  --text-secondary: #a1a1aa;
+  --text-muted: #52525b;
+  --border: #181c1a;
+  --border-hover: #272b29;
+  --brand: #10b981;
+  --brand-dim: rgba(16, 185, 129, 0.1);
+  --surface: #0a0f0d;
+}
+
+[data-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-elevated: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --border: #e2e8f0;
+  --border-hover: #cbd5e1;
+  --brand: #059669;
+  --brand-dim: rgba(5, 150, 105, 0.08);
+  --surface: #ffffff;
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+[data-theme="dark"] body {
   background-image: 
     radial-gradient(circle at 10% 20%, rgba(16, 185, 129, 0.08) 0%, transparent 40%),
     radial-gradient(circle at 90% 80%, rgba(234, 179, 8, 0.05) 0%, transparent 45%),
     radial-gradient(circle at 50% 50%, rgba(9, 18, 14, 1) 0%, rgba(4, 8, 6, 1) 100%);
   background-attachment: fixed;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  min-height: 100vh;
+}
+
+[data-theme="light"] body {
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(5, 150, 105, 0.04) 0%, transparent 40%),
+    radial-gradient(circle at 90% 80%, rgba(234, 179, 8, 0.03) 0%, transparent 45%);
+  background-attachment: fixed;
 }
 
 /* Wavy liquid animation */
