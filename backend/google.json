@@ -1,1 +1,16 @@
-{"web":{"client_id":"786077551106-qdcg3sg2buii65m9ruig3fos57ij3jn4.apps.googleusercontent.com","project_id":"novelvip","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"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","redirect_uris":["http://localhost:20128/api/auth/callback/google/"],"javascript_origins":["http://localhost:20128"]}}
+{
+    "web": {
+        "client_id": "786077551106-qdcg3sg2buii65m9ruig3fos57ij3jn4.apps.googleusercontent.com",
+        "project_id": "novelvip",
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+        "client_secret": "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",
+        "redirect_uris": [
+            "https://guworld.onrender.com/api/auth/google/callback"
+        ],
+        "javascript_origins": [
+            "http://localhost:20128"
+        ]
+    }
+}

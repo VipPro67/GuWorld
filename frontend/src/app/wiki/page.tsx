@@ -171,7 +171,7 @@ export default async function WikiIndexPage() {
 
         {gus.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-[var(--text-muted)] font-mono text-sm">Đang kết nối tàng kinh các...</p>
+            <p className="text-[var(--text-muted)] font-mono text-sm">Không tìm thấy dữ liệu Cổ Trùng</p>
           </div>
         ) : (
           <div className="space-y-8">
