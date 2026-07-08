@@ -675,7 +675,17 @@ interface GameState {
   }) => Promise<boolean>;
   uploadAvatar: (file: File) => Promise<string | null>;
   login: (email: string, password: string) => Promise<boolean>;
-  register: (username: string, password: string, email: string, startingRegion: string, setVitalNow: boolean, referralCode?: string) => Promise<boolean>;
+  register: (
+    username: string,
+    password: string,
+    email: string,
+    startingRegion: string,
+    setVitalNow: boolean,
+    referralCode?: string,
+    attackGuId?: string,
+    defenseGuId?: string,
+    vitalGuChoice?: string
+  ) => Promise<boolean>;
   logout: () => void;
   clearError: () => void;
   updateManaSnapshot: (player: Player | null) => void;
@@ -696,6 +706,8 @@ interface GameState {
   feedGuGroup: (guId: string) => Promise<void>;
   fetchDictionary: () => Promise<void>;
   fetchRecipes: () => Promise<void>;
+  quests: any[];
+  fetchQuests: () => Promise<void>;
   refineGu: (recipeId: string, selectedInstanceIds: string[]) => Promise<{ status: "success" | "failed"; message: string; new_gu?: GuInstance } | null>;
   deduceRecipe: (recipeId: string) => Promise<{ success: boolean; message: string; completion_rate: number } | null>;
   breakWall: (manaSpend: number) => Promise<{ success: boolean; message: string } | null>;
@@ -1025,6 +1037,7 @@ export const useGameStore = create<GameState>((set, get) => {
   dictionaryLoaded: false,
   recipes: [],
   recipesLoaded: false,
+  quests: [],
   regions: [],
   regionsLoaded: false,
   killerMoves: [],
@@ -1132,7 +1145,17 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
-  register: async (username, password, email, startingRegion, setVitalNow, referralCode) => {
+  register: async (
+    username,
+    password,
+    email,
+    startingRegion,
+    setVitalNow,
+    referralCode,
+    attackGuId,
+    defenseGuId,
+    vitalGuChoice
+  ) => {
     set({ isLoading: true, error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/auth/register`, {
@@ -1145,6 +1168,9 @@ export const useGameStore = create<GameState>((set, get) => {
           starting_region: startingRegion,
           set_vital_now: setVitalNow,
           referral_code: referralCode || "",
+          attack_gu_id: attackGuId,
+          defense_gu_id: defenseGuId,
+          vital_gu_choice: vitalGuChoice,
         }),
       });
 
@@ -1176,7 +1202,7 @@ export const useGameStore = create<GameState>((set, get) => {
     get().unsubscribeTradeEvents();
     get().unsubscribeBaoHoangMessages();
     void authFetch(`${BACKEND_URL}/api/auth/logout`, { method: "POST" });
-    set({ player: null, manaSnapshot: null, token: null, recipes: [], recipesLoaded: true });
+    set({ player: null, manaSnapshot: null, token: null, recipes: [], recipesLoaded: true, quests: [] });
     localStorage.removeItem("gu_auth_token");
     localStorage.removeItem("gu_player_id");
     get().addLog("Đã rời khỏi thế giới Cổ sư.");
@@ -1719,6 +1745,23 @@ export const useGameStore = create<GameState>((set, get) => {
     } catch (err: any) {
       console.error("Recipes sync error:", err.message);
       set({ recipesLoaded: true });
+    }
+  },
+
+  fetchQuests: async () => {
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/quest`);
+      if (response.status === 401 || response.status === 403) {
+        set({ quests: [] });
+        return;
+      }
+      if (!response.ok) {
+        throw new Error("Failed to load quests");
+      }
+      const data = await response.json();
+      set({ quests: data.quests || [] });
+    } catch (err: any) {
+      console.error("Quests sync error:", err.message);
     }
   },
 

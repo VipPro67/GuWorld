@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import { Registration } from "@/components/Registration";
 import { Aperture } from "@/components/Aperture";
@@ -51,11 +51,10 @@ export default function Home() {
     clearError,
     guDictionary,
     itemDictionary,
-    dictionaryLoaded,
     fetchDictionary,
     recipes,
-    recipesLoaded,
     fetchRecipes,
+    fetchQuests,
     refineGu,
     exploreNode,
     retreat,
@@ -85,16 +84,13 @@ export default function Home() {
     cancelTrade,
   } = useGameStore();
 
-  const [checkingSession, setCheckingSession] = useState(true);
-
   // 1. Session Restoration on Mount
   useEffect(() => {
     fetchDictionary();
     fetchRecipes();
-    initializeSession().finally(() => {
-      setCheckingSession(false);
-    });
-  }, [initializeSession, fetchDictionary, fetchRecipes]);
+    fetchQuests();
+    initializeSession();
+  }, [initializeSession, fetchDictionary, fetchRecipes, fetchQuests]);
 
   // 2. Sparse authoritative status sync. Mana is rendered from a local snapshot between server actions.
   useEffect(() => {
@@ -121,17 +117,6 @@ export default function Home() {
   const handleLogout = () => {
     logout();
   };
-
-  if (checkingSession || !dictionaryLoaded || !recipesLoaded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center flex-col gap-4">
-        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm font-mono text-zinc-500 uppercase tracking-widest animate-pulse">
-          Cổ Giới
-        </p>
-      </div>
-    );
-  }
 
   // Force combat view if player is actively in combat
   const inCombat = player && player.active_combat;

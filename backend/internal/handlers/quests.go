@@ -2,8 +2,13 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/csv"
+	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -40,230 +45,153 @@ type questResponse struct {
 
 var questRegistry []QuestDefinition
 
-func init() {
-	questRegistry = []QuestDefinition{
-		// === CÁC NHIỆM VỤ GỐC CỦA BẠN ===
-		{
-			ID:      "quest_1_awaken",
-			Title:   "Giác Tỉnh Không Khiếu",
-			Desc:    "Khai mở không khiếu thành công",
-			ReqDesc: "Cảnh giới Nhất Chuyển Sơ Giai trở lên",
-			Message: "Hoàn thành nhiệm vụ 'Giác Tỉnh Không Khiếu'! Đạo hải dâng trào.",
-			Check:   func(p *models.Player) bool { return p.Rank >= 1 },
-			Rewards: []QuestReward{
-				{Type: "gu", ID: "GU_GREEN_SILK", Amount: 1, Label: "Thanh Ti Cổ"},
-				{Type: "item", ID: "ITEM_HEALING_PELLET_SMALL", Amount: 3, Label: "3 Tiểu Hồi Huyết Đan"},
-			},
-		},
-		{
-			ID:      "quest_2_vital_gu",
-			Title:   "Cổ Trùng Bản Mệnh",
-			Desc:    "Luyện hóa hoặc trang bị Cổ trùng",
-			ReqDesc: "Đang trang bị hoặc có Cổ trùng bản mệnh",
-			Message: "Hoàn thành nhiệm vụ 'Kích Hoạt Cổ Trùng Bản Mệnh'! Sức mạnh liên kết.",
-			Check: func(p *models.Player) bool {
-				for _, g := range p.GuInventory {
-					if g.IsVital || g.Equipped {
-						return true
-					}
-				}
-				return false
-			},
-			Rewards: []QuestReward{
-				{Type: "gu", ID: "GU_WHITE_JADE", Amount: 1, Label: "Bạch Ngọc Cổ"},
-				{Type: "item", ID: "ITEM_MEDICINAL_PASTE", Amount: 2, Label: "2 Kim Sang Dược"},
-			},
-		},
-		{
-			ID:      "quest_3_rank_2",
-			Title:   "Trùng Kích Nhị Chuyển",
-			Desc:    "Đột phá vách khiếu thăng Nhị Chuyển",
-			ReqDesc: "Tu vi đạt Nhị Chuyển",
-			Message: "Hoàn thành nhiệm vụ 'Đột Phá Nhị Chuyển'! Danh vọng vang xa.",
-			Check:   func(p *models.Player) bool { return p.Rank >= 2 },
-			Rewards: []QuestReward{
-				{Type: "gu", ID: "GU_WATER_SHIELD", Amount: 1, Label: "Thủy Tráo Cổ"},
-				{Type: "item", ID: "ITEM_HEALING_PELLET_MEDIUM", Amount: 3, Label: "3 Trung Hồi Huyết Đan"},
-			},
-		},
-		{
-			ID:      "quest_4_refine_gu",
-			Title:   "Luyện Chế Cổ Trùng Nhị Chuyển",
-			Desc:    "Luyện thành công Cổ trùng bậc 2 trở lên",
-			ReqDesc: "Có Cổ trùng bậc 2 trở lên",
-			Message: "Hoàn thành nhiệm vụ 'Hợp Luyện Nhị Chuyển Cổ'! Kỳ tích luyện đạo.",
-			Check: func(p *models.Player) bool {
-				for _, g := range p.GuInventory {
-					if spec, ok := models.GuRegistry[g.GuID]; ok && spec.Rank >= 2 {
-						return true
-					}
-				}
-				return false
-			},
-			Rewards: []QuestReward{
-				{Type: "gu", ID: "GU_CANOPY", Amount: 1, Label: "Thiên Bồng Cổ"},
-				{Type: "item", ID: "ITEM_BLOOD_GINSENG", Amount: 2, Label: "2 Huyết Sâm"},
-			},
-		},
-		{
-			ID:      "quest_5_fame",
-			Title:   "Danh Chấn Thanh Bản Thôn",
-			Desc:    "Chiến thắng quái thú dọn sạch 5 địa khu",
-			ReqDesc: "Đã quét dọn 5/5 ô bản đồ",
-			Message: "Hoàn thành nhiệm vụ 'Danh Chấn Thanh Bản Thôn'! Người người kính ngưỡng.",
-			Check:   func(p *models.Player) bool { return len(p.ClearedCells) >= 5 },
-			Rewards: []QuestReward{
-				{Type: "gu", ID: "GU_FLYING_BONE_SHIELD", Amount: 1, Label: "Phi Cốt Thuẫn Cổ"},
-				{Type: "item", ID: "mine_chest", Amount: 3, Label: "3 Rương Mỏ Linh Thạch"},
-			},
-		},
-		{
-			ID:      "quest_6_rank_5",
-			Title:   "Đỉnh Phong Chuẩn Bị",
-			Desc:    "Tu vi đỉnh phong, sẵn sàng độ kiếp thăng tiên",
-			ReqDesc: "Tu vi đạt Ngũ Chuyển",
-			Message: "Hoàn thành nhiệm vụ 'Đỉnh Phong Chuẩn Bị'! Cận kề thăng tiên.",
-			Check:   func(p *models.Player) bool { return p.Rank >= 5 },
-			Rewards: []QuestReward{
-				{Type: "gu", ID: "GU_GOLDEN_BELL_SHIELD", Amount: 1, Label: "Kim Chung Tráo Cổ"},
-				{Type: "item", ID: "ITEM_BLOOD_GINSENG", Amount: 5, Label: "5 Huyết Sâm"},
-			},
-		},
-
-		// ==========================================
-		// NHIỆM VỤ LINH THẠCH / NGUYÊN THẠCH (PRIMEVAL & IMMORTAL STONES)
-		// ==========================================
-		{
-			ID:      "quest_7_stone_hoarder",
-			Title:   "Tích Lũy Nguyên Thạch",
-			Desc:    "Tích lũy vốn liếng ban đầu để bảo đảm hậu cần sinh tồn",
-			ReqDesc: "Trong người sở hữu từ 5,000 Nguyên Thạch trở lên",
-			Message: "Hoàn thành nhiệm vụ 'Tích Lũy Nguyên Thạch'! Cơ sở tài chính sống còn vững chắc.",
-			Check:   func(p *models.Player) bool { return p.PrimevalStones >= 5000 },
-			Rewards: []QuestReward{
-				{Type: "item", ID: "ruou_thanh_truc", Amount: 5, Label: "5 Rượu Thanh Trúc"}, // Thức ăn cho Tửu Trùng
-			},
-		},
-		{
-			ID:      "quest_8_immortal_capital",
-			Title:   "Nội Tình Tiên Khiếu",
-			Desc:    "Tích lũy tài sản chiến lược để giao dịch trên Bảo Hoàng Thiên",
-			ReqDesc: "Sở hữu từ 100 viên Tiên Nguyên Thạch trở lên",
-			Message: "Hoàn thành nhiệm vụ 'Nội Tình Tiên Khiếu'! Thạch lượng dồi dào, bắt đầu có tiếng nói giữa các Cổ Tiên.",
-			Check:   func(p *models.Player) bool { return p.ImmortalStones >= 100.0 },
-			Rewards: []QuestReward{
-				{Type: "dao_mark", ID: "refinement_path", Amount: 10, Label: "10 Đạo Ngân Luyện Đạo"},
-			},
-		},
-
-		// ==========================================
-		// NHIỆM VỤ CỔ TRÙNG (GU INVENTORY MECHANICALS)
-		// ==========================================
-		{
-			ID:      "quest_9_liquor_worm",
-			Title:   "Săn Tìm Tửu Trùng",
-			Desc:    "Thu thập thần trùng có khả năng tinh luyện chân nguyên tiểu cảnh giới",
-			ReqDesc: "Sở hữu Cổ trùng 'Tửu Trùng' (GU_LIQUOR_WORM) trong Không Khiếu",
-			Message: "Hoàn thành nhiệm vụ 'Săn Tìm Tửu Trùng'! Chân nguyên được tinh luyện vượt cấp!",
-			Check: func(p *models.Player) bool {
-				for _, g := range p.GuInventory {
-					if g.GuID == "GU_LIQUOR_WORM" {
-						return true
-					}
-				}
-				return false
-			},
-			Rewards: []QuestReward{
-				{Type: "gu", ID: "GU_RIB_SHIELD", Amount: 1, Label: "Lặc Cốt Thuẫn Cổ"},
-				{Type: "item", ID: "ITEM_HEALING_PELLET_MEDIUM", Amount: 5, Label: "5 Trung Hồi Huyết Đan"},
-			},
-		},
-		{
-			ID:      "quest_10_storage_tusita",
-			Title:   "Khai Mở Hoa Đâu Suất",
-			Desc:    "Sở hữu Cổ tồn trữ để giải quyết bài toán giới hạn không gian túi đồ",
-			ReqDesc: "Sở hữu Cổ trùng 'Đâu Suất Hoa' (GU_TUSITA_FLOWER) trong Không Khiếu",
-			Message: "Hoàn thành nhiệm vụ 'Khai Mở Hoa Đâu Suất'! Sức chứa túi đồ tăng mạnh, thoải mái tích trữ tài nguyên.",
-			Check: func(p *models.Player) bool {
-				for _, g := range p.GuInventory {
-					if g.GuID == "GU_TUSITA_FLOWER" {
-						return true
-					}
-				}
-				return false
-			},
-			Rewards: []QuestReward{
-				{Type: "primeval_stones", Amount: 1000, Label: "1000 Nguyên Thạch"},
-			},
-		},
-		{
-			ID:      "quest_11_gu_collector",
-			Title:   "Vạn Vật Chi Linh",
-			Desc:    "Nuôi dưỡng và thu thập một hệ sinh thái Cổ trùng đa dạng",
-			ReqDesc: "Sở hữu từ 10 Cổ trùng trở lên trong cơ thể",
-			Message: "Hoàn thành nhiệm vụ 'Vạn Vật Chi Linh'! Không khiếu của ngươi vô cùng phong phú.",
-			Check:   func(p *models.Player) bool { return len(p.GuInventory) >= 10 },
-			Rewards: []QuestReward{
-				{Type: "gu", ID: "GU_IRON_BONE", Amount: 1, Label: "Thiết Cốt Cổ"},
-				{Type: "item", ID: "mine_chest", Amount: 5, Label: "5 Rương Mỏ Linh Thạch"},
-			},
-		},
-		{
-			ID:      "quest_12_immortal_gu_owner",
-			Title:   "Tiên Cổ Độc Nhất",
-			Desc:    "Bứt phá phàm nhân, luyện hóa chí bảo chứa đựng một Đạo hoàn chỉnh",
-			ReqDesc: "Sở hữu ít nhất 1 con Tiên Cổ (Phẩm cấp/Rank >= 6 trở lên)",
-			Message: "Hoàn thành nhiệm vụ 'Tiên Cổ Độc Nhất'! Thiên địa rung chuyển, Tiên cổ duy nhất xuất thế!",
-			Check: func(p *models.Player) bool {
-				for _, g := range p.GuInventory {
-					if spec, ok := models.GuRegistry[g.GuID]; ok && spec.Rank >= 6 {
-						return true
-					}
-				}
-				return false
-			},
-			Rewards: []QuestReward{
-				{Type: "immortal_stones", Amount: 20, Label: "20 Tiên Nguyên Thạch"},
-				{Type: "dao_mark", ID: "luck_path", Amount: 5, Label: "5 Đạo Ngân Vận Đạo"},
-			},
-		},
-
-		// ==========================================
-		// NHIỆM VỤ VẬT PHẨM / NGUYÊN LIỆU (MATERIALS INVENTORY)
-		// ==========================================
-		{
-			ID:      "quest_13_gather_lan_flower",
-			Title:   "Tích Trữ Nguyệt Lan Hoa",
-			Desc:    "Thu thập cánh hoa nguyệt lan làm thức ăn tiêu hao định kỳ cho Nguyệt Quang Cổ",
-			ReqDesc: "Túi đồ (MaterialsInventory) có ít nhất 50 Nguyệt Lan Hoa (nguyet_lan_hoa)",
-			Message: "Hoàn thành nhiệm vụ 'Tích Trữ Nguyệt Lan Hoa'! Giải quyết thành công bài toán nuôi Cổ trùng sống sót.",
-			Check: func(p *models.Player) bool {
-				if p.MaterialsInventory == nil {
-					return false
-				}
-				return p.MaterialsInventory["nguyet_lan_hoa"] >= 50
-			},
-			Rewards: []QuestReward{
-				{Type: "primeval_stones", Amount: 500, Label: "500 Nguyên Thạch"},
-			},
-		},
-		{
-			ID:      "quest_14_immortal_material",
-			Title:   "Thu Hoạch Thất Chuyển Tiên Tài",
-			Desc:    "Khám phá hiểm cảnh, thu thập nguyên liệu cao cấp chứa đựng Đạo Ngân dồi dào",
-			ReqDesc: "Trong túi đồ sở hữu từ 1 'Tử Kim Thần Bí' (tu_kim_than_bi) trở lên",
-			Message: "Hoàn thành nhiệm vụ 'Thu Hoạch Thất Chuyển Tiên Tài'! Khối tử kim thạch này là phôi báu tuyệt vời để luyện Tiên Cổ.",
-			Check: func(p *models.Player) bool {
-				if p.MaterialsInventory == nil {
-					return false
-				}
-				return p.MaterialsInventory["tu_kim_than_bi"] >= 1
-			},
-			Rewards: []QuestReward{
-				{Type: "immortal_stones", Amount: 10, Label: "10 Tiên Nguyên Thạch"},
-			},
-		},
+func csvPath(filename string) string {
+	candidates := []string{
+		filename,
+		filepath.Join("backend", filename),
+		filepath.Join("..", filename),
+		filepath.Join("..", "..", filename),
 	}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return filename
+}
+
+func CheckQuest(questID string, p *models.Player) bool {
+	switch questID {
+	case "quest_1_awaken":
+		return p.Rank >= 1
+	case "quest_2_vital_gu":
+		for _, g := range p.GuInventory {
+			if g.IsVital || g.Equipped {
+				return true
+			}
+		}
+		return false
+	case "quest_3_rank_2":
+		return p.Rank >= 2
+	case "quest_4_refine_gu":
+		for _, g := range p.GuInventory {
+			if spec, ok := models.GuRegistry[g.GuID]; ok && spec.Rank >= 2 {
+				return true
+			}
+		}
+		return false
+	case "quest_5_fame":
+		return len(p.ClearedCells) >= 5
+	case "quest_6_rank_5":
+		return p.Rank >= 5
+	case "quest_7_stone_hoarder":
+		return p.PrimevalStones >= 5000
+	case "quest_8_immortal_capital":
+		return p.ImmortalStones >= 100.0
+	case "quest_9_liquor_worm":
+		for _, g := range p.GuInventory {
+			if g.GuID == "GU_LIQUOR_WORM" {
+				return true
+			}
+		}
+		return false
+	case "quest_10_storage_tusita":
+		for _, g := range p.GuInventory {
+			if g.GuID == "GU_TUSITA_FLOWER" {
+				return true
+			}
+		}
+		return false
+	case "quest_11_gu_collector":
+		return len(p.GuInventory) >= 10
+	case "quest_12_immortal_gu_owner":
+		for _, g := range p.GuInventory {
+			if spec, ok := models.GuRegistry[g.GuID]; ok && spec.Rank >= 6 {
+				return true
+			}
+		}
+		return false
+	case "quest_13_gather_lan_flower":
+		if p.MaterialsInventory == nil {
+			return false
+		}
+		return p.MaterialsInventory["nguyet_lan_hoa"] >= 50
+	case "quest_14_immortal_material":
+		if p.MaterialsInventory == nil {
+			return false
+		}
+		return p.MaterialsInventory["tu_kim_than_bi"] >= 1
+	default:
+		return false
+	}
+}
+
+func LoadQuestRegistry() error {
+	path := csvPath("Quest.csv")
+	file, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("failed to open Quest.csv: %w", err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return fmt.Errorf("failed to read Quest.csv: %w", err)
+	}
+
+	if len(records) < 2 {
+		return fmt.Errorf("Quest.csv is empty or missing headers")
+	}
+
+	headers := records[0]
+	headerMap := make(map[string]int)
+	for i, h := range headers {
+		headerMap[strings.TrimSpace(h)] = i
+	}
+
+	requiredCols := []string{"id", "title", "desc", "req_desc", "message", "rewards"}
+	for _, col := range requiredCols {
+		if _, ok := headerMap[col]; !ok {
+			return fmt.Errorf("Quest.csv missing required column: %s", col)
+		}
+	}
+
+	var loadedQuests []QuestDefinition
+	for i := 1; i < len(records); i++ {
+		row := records[i]
+		id := row[headerMap["id"]]
+		title := row[headerMap["title"]]
+		desc := row[headerMap["desc"]]
+		reqDesc := row[headerMap["req_desc"]]
+		message := row[headerMap["message"]]
+		rewardsStr := row[headerMap["rewards"]]
+
+		var rewards []QuestReward
+		if rewardsStr != "" {
+			err = json.Unmarshal([]byte(rewardsStr), &rewards)
+			if err != nil {
+				return fmt.Errorf("failed to parse rewards JSON on line %d: %w", i+1, err)
+			}
+		}
+
+		qID := id
+		loadedQuests = append(loadedQuests, QuestDefinition{
+			ID:      qID,
+			Title:   title,
+			Desc:    desc,
+			ReqDesc: reqDesc,
+			Message: message,
+			Rewards: rewards,
+			Check: func(p *models.Player) bool {
+				return CheckQuest(qID, p)
+			},
+		})
+	}
+
+	questRegistry = loadedQuests
+	log.Printf("Successfully loaded %d quests from Quest.csv", len(questRegistry))
+	return nil
 }
 
 func GetQuestDefinitions() []QuestDefinition {

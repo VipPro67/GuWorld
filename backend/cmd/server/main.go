@@ -62,6 +62,12 @@ func main() {
 		log.Fatalf("Failed to load Item registry cache: %v", err)
 	}
 
+	// 2.4. Load Quest registry from CSV
+	err = handlers.LoadQuestRegistry()
+	if err != nil {
+		log.Fatalf("Failed to load Quest registry: %v", err)
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 

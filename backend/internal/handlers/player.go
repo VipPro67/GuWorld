@@ -39,6 +39,9 @@ type CreatePlayerRequest struct {
 	SetVitalNow    bool   `json:"set_vital_now"`
 	Email          string `json:"email" binding:"required,email"`
 	ReferralCode   string `json:"referral_code"`
+	AttackGuID     string `json:"attack_gu_id"`
+	DefenseGuID    string `json:"defense_gu_id"`
+	VitalGuChoice  string `json:"vital_gu_choice"`
 }
 
 // CreatePlayerResponse represents the output payload for registration/login
@@ -136,6 +139,36 @@ func RegisterPlayer(c *gin.Context) {
 		return
 	}
 
+	// Validate selected starting Gu
+	if req.AttackGuID == "" {
+		req.AttackGuID = "GU_MOONLIGHT"
+	}
+	if req.DefenseGuID == "" {
+		req.DefenseGuID = "GU_STONE_SKIN"
+	}
+
+	validAttackGus := map[string]bool{
+		"GU_MOONLIGHT":  true,
+		"GU_STREAM":     true,
+		"GU_BONE_SPEAR": true,
+	}
+	validDefenseGus := map[string]bool{
+		"GU_GREEN_SILK": true,
+		"GU_STONE_SKIN": true,
+		"GU_IRON_SKIN":  true,
+		"GU_BEAST_SKIN": true,
+		"GU_FISH_SCALE": true,
+	}
+
+	if !validAttackGus[req.AttackGuID] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng tấn công không hợp lệ"})
+		return
+	}
+	if !validDefenseGus[req.DefenseGuID] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng phòng thủ không hợp lệ"})
+		return
+	}
+
 	// 1. Hash password with bcrypt
 	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -179,15 +212,42 @@ func RegisterPlayer(c *gin.Context) {
 	maxMana := float64(aptitudePercent)
 	currentMana := maxMana
 
+	isAttackVital := false
+	isDefenseVital := false
+
+	if req.VitalGuChoice == "ATTACK" {
+		isAttackVital = true
+	} else if req.VitalGuChoice == "DEFENSE" {
+		isDefenseVital = true
+	} else if req.VitalGuChoice == "NONE" {
+		// both false
+	} else {
+		// fallback to SetVitalNow
+		if req.SetVitalNow {
+			isAttackVital = true // default to attack
+		}
+	}
+
+	attackGuInstanceID := uuid.New().String()
+	defenseGuInstanceID := uuid.New().String()
+
 	// 3. Initialize starter inventory for Phase 2
 	starterGu := models.GuInventory{
 		{
-			InstanceID: uuid.New().String(),
-			GuID:       "GU_MOONLIGHT",
+			InstanceID: attackGuInstanceID,
+			GuID:       req.AttackGuID,
 			Hunger:     100,
 			Status:     "ACTIVE",
 			Equipped:   true,
-			IsVital:    req.SetVitalNow,
+			IsVital:    isAttackVital,
+		},
+		{
+			InstanceID: defenseGuInstanceID,
+			GuID:       req.DefenseGuID,
+			Hunger:     100,
+			Status:     "ACTIVE",
+			Equipped:   true,
+			IsVital:    isDefenseVital,
 		},
 	}
 	starterMaterials := models.MaterialsInventory{
@@ -195,6 +255,8 @@ func RegisterPlayer(c *gin.Context) {
 		"green_bamboo_wine": 2,
 		"jade_stone":        1,
 	}
+
+	equippedGus := models.EquippedGusList{attackGuInstanceID, defenseGuInstanceID}
 
 	tx, err := db.DB.Begin()
 	if err != nil {
@@ -225,12 +287,12 @@ func RegisterPlayer(c *gin.Context) {
 	var player models.Player
 	query := `
 		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, max_lifespan, time_speed_multiplier, email, completed_quests, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, avatar_url, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code)
-		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 0, 0, $8, $9, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, '[]'::jsonb, '{}'::jsonb, $10, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 100.0, 1.0, $11, '[]'::jsonb, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, '[{"recipe_id": "recipe_moon_raiment", "completion_rate": 100.0}, {"recipe_id": "recipe_white_jade", "completion_rate": 50.0}, {"recipe_id": "recipe_four_flavors_liquor", "completion_rate": 30.0}]'::jsonb, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $12)
+		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 20, 0, $8, $9, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, $13, '{}'::jsonb, $10, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 100.0, 1.0, $11, '[]'::jsonb, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, '[{"recipe_id": "recipe_moon_raiment", "completion_rate": 100.0}, {"recipe_id": "recipe_white_jade", "completion_rate": 50.0}, {"recipe_id": "recipe_four_flavors_liquor", "completion_rate": 30.0}]'::jsonb, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $12)
 		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, avatar_url
 	`
 
 	var activeCombatBytes []byte
-	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, starterGu, starterMaterials, req.StartingRegion, req.Email, refCode).Scan(
+	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, starterGu, starterMaterials, req.StartingRegion, req.Email, refCode, equippedGus).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
 		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
@@ -2693,14 +2755,25 @@ func GoogleCallback(c *gin.Context) {
 		maxMana := float64(aptitudePercent)
 		currentMana := maxMana
 
+		attackGuInstanceID := uuid.New().String()
+		defenseGuInstanceID := uuid.New().String()
+
 		starterGu := models.GuInventory{
 			{
-				InstanceID: uuid.New().String(),
+				InstanceID: attackGuInstanceID,
 				GuID:       "GU_MOONLIGHT",
 				Hunger:     100,
 				Status:     "ACTIVE",
 				Equipped:   true,
 				IsVital:    true,
+			},
+			{
+				InstanceID: defenseGuInstanceID,
+				GuID:       "GU_STONE_SKIN",
+				Hunger:     100,
+				Status:     "ACTIVE",
+				Equipped:   true,
+				IsVital:    false,
 			},
 		}
 		starterMaterials := models.MaterialsInventory{
@@ -2709,16 +2782,18 @@ func GoogleCallback(c *gin.Context) {
 			"jade_stone":        1,
 		}
 
+		equippedGus := models.EquippedGusList{attackGuInstanceID, defenseGuInstanceID}
+
 		// Generate unique referral code
 		refCode := "REF-" + strings.ToUpper(uuid.New().String()[:8])
 
 		queryInsert := `
 			INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, max_lifespan, time_speed_multiplier, email, google_id, completed_quests, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code)
-			VALUES ($1, '', 1, 1, $2, $3, $4, $5, $6, 0, 0, $7, $8, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, '[]'::jsonb, '{}'::jsonb, 'Southern_Border', '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 100.0, 1.0, $9, $10, '[]'::jsonb, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, '[{"recipe_id": "recipe_moon_raiment", "completion_rate": 100.0}, {"recipe_id": "recipe_white_jade", "completion_rate": 50.0}, {"recipe_id": "recipe_four_flavors_liquor", "completion_rate": 30.0}]'::jsonb, 'Hãy viết gì đó về bản thân...', 1, 1, '', false, $11)
+			VALUES ($1, '', 1, 1, $2, $3, $4, $5, $6, 20, 0, $7, $8, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, $12, '{}'::jsonb, 'Southern_Border', '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 100.0, 1.0, $9, $10, '[]'::jsonb, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, '[{"recipe_id": "recipe_moon_raiment", "completion_rate": 100.0}, {"recipe_id": "recipe_white_jade", "completion_rate": 50.0}, {"recipe_id": "recipe_four_flavors_liquor", "completion_rate": 30.0}]'::jsonb, 'Hãy viết gì đó về bản thân...', 1, 1, '', false, $11)
 			RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code
 		`
 
-		err = tx.QueryRow(queryInsert, username, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, starterGu, starterMaterials, googleUser.Email, googleUser.ID, refCode).Scan(
+		err = tx.QueryRow(queryInsert, username, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, starterGu, starterMaterials, googleUser.Email, googleUser.ID, refCode, equippedGus).Scan(
 			&player.ID, &player.Username, &player.Rank, &player.SubRank,
 			&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
 			&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
