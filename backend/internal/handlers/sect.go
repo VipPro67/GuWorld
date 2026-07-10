@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
 type Sect struct {
@@ -620,22 +621,13 @@ func DonateMaterials(c *gin.Context) {
 		return
 	}
 
-	// Calculate value
-	pointsPerItem := 10
-	switch req.MaterialID {
-	case "guts_gu":
-		pointsPerItem = 50
-	case "moon_orchid_petal":
-		pointsPerItem = 15
-	case "green_bamboo_wine":
-		pointsPerItem = 25
-	case "jade_stone":
-		pointsPerItem = 35
-	case "wild_boar_tusk":
-		pointsPerItem = 20
-	case "boar_meat":
-		pointsPerItem = 15
+	// Calculate value dynamically from item_dictionary.base_price + rank (via pricing package)
+	var dbBasePrice, matRank int
+	if err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, req.MaterialID).Scan(&dbBasePrice, &matRank); err != nil {
+		matRank = 1
+		dbBasePrice = 0
 	}
+	pointsPerItem := pricing.DonatePoints(pricing.ItemBasePrice(dbBasePrice, matRank))
 
 	gainedContribution := pointsPerItem * req.Amount
 	player.MaterialsInventory[req.MaterialID] -= req.Amount
@@ -763,14 +755,17 @@ func DonateGu(c *gin.Context) {
 		return
 	}
 
-	// Fetch Gu Rank for cost calculation
-	var guRank int
-	err = tx.QueryRow(`SELECT rank FROM gu_dictionary WHERE id = $1`, guInstance.GuID).Scan(&guRank)
+	// Fetch Gu base_price + rank for contribution calculation
+	var guRank, guBasePrice int
+	err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1`, guInstance.GuID).Scan(&guBasePrice, &guRank)
 	if err != nil {
 		guRank = 1
+		guBasePrice = 0
 	}
 
-	gainedContribution := guRank * 80
+	effectiveBase := pricing.GuBasePrice(guBasePrice, guRank)
+	gainedContribution := pricing.DonatePoints(effectiveBase)
+	vaultItemCost := pricing.VaultCost(effectiveBase)
 
 	// Add to sect vault
 	var vaultGuRaw json.RawMessage
@@ -797,7 +792,7 @@ func DonateGu(c *gin.Context) {
 	if !donatedGuFound {
 		vaultGus = append(vaultGus, SectVaultGuItem{
 			ID:       guInstance.GuID,
-			Cost:     guRank * 100,
+			Cost:     vaultItemCost,
 			Quantity: 1,
 		})
 	}
@@ -972,9 +967,11 @@ func BuyFromSectVault(c *gin.Context) {
 			return
 		}
 
-		cost = 20 // Default material cost
-		if req.ItemID == "guts_gu" {
-			cost = 50
+		// Dynamic cost from item_dictionary base_price + rank via pricing package
+		{
+			var matBasePrice, matRank int
+			_ = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, req.ItemID).Scan(&matBasePrice, &matRank)
+			cost = pricing.VaultCost(pricing.ItemBasePrice(matBasePrice, matRank))
 		}
 
 		if m.ContributionPoints < cost {
@@ -1025,7 +1022,12 @@ func BuyFromSectVault(c *gin.Context) {
 			return
 		}
 
-		cost = 120
+		// Dynamic recipe cost based on target Gu rank via pricing package
+		{
+			var targetGuRank int
+			_ = tx.QueryRow(`SELECT COALESCE(gd.rank,1) FROM refining_recipes rr JOIN gu_dictionary gd ON gd.id=rr.target_gu_id WHERE rr.id=$1`, req.ItemID).Scan(&targetGuRank)
+			cost = pricing.RecipeCostByGuRank(targetGuRank)
+		}
 		if m.ContributionPoints < cost {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Điểm cống hiến!"})
 			return
@@ -1318,9 +1320,9 @@ func CompleteSectMission(c *gin.Context) {
 				if len(vaultGuRaw) > 0 {
 					_ = json.Unmarshal(vaultGuRaw, &vaultGus)
 				}
-				// Look up Gu rank for cost calculation
-				var donatedGuRank int
-				_ = tx.QueryRow(`SELECT rank FROM gu_dictionary WHERE id = $1`, donatedGuID).Scan(&donatedGuRank)
+				// Look up Gu base_price + rank for vault cost calculation
+				var donatedGuRank, donatedGuBase int
+				_ = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1`, donatedGuID).Scan(&donatedGuBase, &donatedGuRank)
 				if donatedGuRank == 0 {
 					donatedGuRank = 1
 				}
@@ -1335,7 +1337,7 @@ func CompleteSectMission(c *gin.Context) {
 				if !missionGuFound {
 					vaultGus = append(vaultGus, SectVaultGuItem{
 						ID:       donatedGuID,
-						Cost:     donatedGuRank * 100,
+						Cost:     pricing.VaultCost(pricing.GuBasePrice(donatedGuBase, donatedGuRank)),
 						Quantity: 1,
 					})
 				}
@@ -1933,15 +1935,15 @@ func StockSectVault(c *gin.Context) {
 		}
 
 		if !found {
-			// Cost for members is Rank * 100 points
-			var guRank int
-			_ = tx.QueryRow(`SELECT rank FROM gu_dictionary WHERE id = $1`, req.ItemID).Scan(&guRank)
+			// Cost for members to buy from vault uses pricing package
+			var guRank, guBasePrice int
+			_ = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1`, req.ItemID).Scan(&guBasePrice, &guRank)
 			if guRank == 0 {
 				guRank = 1
 			}
 			vaultGus = append(vaultGus, SectVaultGuItem{
 				ID:       req.ItemID,
-				Cost:     guRank * 100,
+				Cost:     pricing.VaultCost(pricing.GuBasePrice(guBasePrice, guRank)),
 				Quantity: req.Quantity,
 			})
 		}

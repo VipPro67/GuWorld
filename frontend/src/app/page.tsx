@@ -10,8 +10,7 @@ import { RefiningFurnace } from "@/components/RefiningFurnace";
 import { ExplorationMap } from "@/components/ExplorationMap";
 import { CombatScreen } from "@/components/CombatScreen";
 import { CaravanShop } from "@/components/CaravanShop";
-import { TopupView } from "@/components/TopupView";
-import { PremiumShopView } from "@/components/PremiumShopView";
+import { PremiumStoreView } from "@/components/PremiumStoreView";
 import { Sparkles, HelpCircle } from "lucide-react";
 import Link from "next/link";
 import { BaoHoangMarket } from "@/components/BaoHoangMarket";
@@ -30,6 +29,7 @@ import { FeedbackView } from "@/components/FeedbackView";
 import { TradeRoomModal } from "@/components/TradeRoomModal";
 import { Handshake } from "lucide-react";
 import { KillerMoveBuilder } from "@/components/killer-moves/KillerMoveBuilder";
+import { AuditLogsView } from "@/components/AuditLogsView";
 
 
 
@@ -244,11 +244,11 @@ export default function Home() {
         ) 
         : currentView === "topup" ? (
           <div className="w-full">
-            <TopupView />
+            <PremiumStoreView defaultTab="topup" />
           </div>
-        ) : currentView === "premium-shop" ? (
+        ) : (currentView === "premium-shop" || currentView === "premium-store") ? (
           <div className="w-full">
-            <PremiumShopView />
+            <PremiumStoreView defaultTab="packages" />
           </div>
         ) : currentView === "shop" ? (
           <div className="w-full">
@@ -301,6 +301,10 @@ export default function Home() {
         ) : currentView === "feedback" ? (
           <div className="w-full">
             <FeedbackView />
+          </div>
+        ) : currentView === "audit-logs" ? (
+          <div className="w-full">
+            <AuditLogsView />
           </div>
         ) : (
           <div className="text-center py-12 text-zinc-500 font-mono">Giao diện không khả dụng</div>

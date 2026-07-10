@@ -117,6 +117,34 @@ func ExploreNode(c *gin.Context) {
 
 		player.ActiveCombat = StartCombat(tx, &enemy, &player)
 		logMsg = fmt.Sprintf("Nguy hiểm! Đột nhiên từ bụi cỏ rậm rạp tại %s, một con %s lao ra tấn công đạo hữu!", nodeName, enemy.EnemyName)
+
+		hasHeavenSecret := false
+		for _, gu := range player.GuInventory {
+			if gu.GuID == "GU_HEAVEN_SECRET" && gu.Equipped && gu.Status == "ACTIVE" {
+				hasHeavenSecret = true
+				break
+			}
+		}
+		if hasHeavenSecret && monTemplate.LootTableID != "" {
+			lt, errLt := db.LoadLootTable(tx, monTemplate.LootTableID)
+			if errLt == nil {
+				extraLootMsg := " [Thiên Cơ hiển lộ - Tỉ lệ rơi đồ: "
+				first := true
+				for _, entry := range lt.Entries {
+					if !first {
+						extraLootMsg += ", "
+					}
+					if entry.ItemID != "" {
+						extraLootMsg += fmt.Sprintf("%s (%.1f%%)", entry.ItemID, entry.Chance*100)
+					} else if entry.GuID != "" {
+						extraLootMsg += fmt.Sprintf("%s (%.1f%%)", entry.GuID, entry.Chance*100)
+					}
+					first = false
+				}
+				extraLootMsg += "]"
+				logMsg += extraLootMsg
+			}
+		}
 	} else if roll < 90 {
 		foods := []string{"moon_orchid_petal", "green_bamboo_wine", "jade_stone", "boar_meat"}
 		foodNames := []string{"Cánh hoa Nguyệt Lan", "Rượu Thanh Trúc", "Ngọc Thạch", "Thịt Lợn Rừng"}
@@ -139,7 +167,15 @@ func ExploreNode(c *gin.Context) {
 	player.CurrentRegion = req.NodeID
 	player.X = 50
 	player.Y = 50
-	addExploredCells(&player, 1)
+
+	exploreRadius := 1
+	for _, gu := range player.GuInventory {
+		if gu.GuID == "GU_HEAVEN_SECRET" && gu.Equipped && gu.Status == "ACTIVE" {
+			exploreRadius = 2
+			break
+		}
+	}
+	addExploredCells(&player, exploreRadius)
 
 	updateQuery := `
 		UPDATE players

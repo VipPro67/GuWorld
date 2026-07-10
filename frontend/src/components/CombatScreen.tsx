@@ -260,9 +260,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const multiPathPenalty = useMemo(() => {
     const selectedIds = [coreGuId, ...supportGuIds].filter(Boolean);
     if (selectedIds.length <= 1) return 0;
-    const paths = new Set(selectedIds.map(id => {
+    const paths = new Set(selectedIds.flatMap(id => {
       const gu = eligibleGus.find(g => g.instance_id === id);
-      return gu ? guDictionary[gu.gu_id]?.path || "" : "";
+      return gu ? guDictionary[gu.gu_id]?.path || [] : [];
     }).filter(Boolean));
     const uniquePaths = paths.size;
     return Math.min(0.75, (selectedIds.length - 1) * 0.12 + (uniquePaths - 1) * 0.08);
@@ -278,11 +278,21 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     const scored = gus.map(gu => {
       const spec = guDictionary[gu.gu_id];
       if (!spec) return { gu, score: 0, pathMatch: false };
-      const pathMatch = spec.path === effectivePath;
-      const hasDaoMark = (player.dao_marks?.[spec.path] || 0) > 0;
-      const masteryLevel = ["Ordinary", "Master", "Grandmaster", "Great Grandmaster", "Supreme Grandmaster"]
-        .indexOf(player.path_masteries?.[spec.path] || "Ordinary");
-      const score = spec.rank * 100 + (pathMatch ? 500 : 0) + (hasDaoMark ? spec.rank * 50 : 0) + masteryLevel * 100;
+      const pathMatch = spec.path && spec.path.some(p => p.toLowerCase().includes(effectivePath.toLowerCase()));
+      let maxDaoMark = 0;
+      let maxMastery = 0;
+      if (spec.path) {
+        spec.path.forEach(p => {
+          const cleanP = p.trim().toLowerCase().replace(" path", "");
+          const daoVal = player.dao_marks?.[cleanP] || player.dao_marks?.[p] || 0;
+          if (daoVal > maxDaoMark) maxDaoMark = daoVal;
+
+          const levelStr = player.path_masteries?.[cleanP] || player.path_masteries?.[p] || "Ordinary";
+          const levelIdx = ["Ordinary", "Master", "Grandmaster", "Great Grandmaster", "Supreme Grandmaster"].indexOf(levelStr);
+          if (levelIdx > maxMastery) maxMastery = levelIdx;
+        });
+      }
+      const score = spec.rank * 100 + (pathMatch ? 500 : 0) + (maxDaoMark > 0 ? spec.rank * 50 : 0) + maxMastery * 100;
       return { gu, score, pathMatch };
     });
 
@@ -294,12 +304,14 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     setCoreGuId(bestCore.gu.instance_id);
 
     // Pick supports sharing the same path as core to minimize multi-path penalty
-    const corePath = guDictionary[bestCore.gu.gu_id]?.path || "";
+    const corePathList = guDictionary[bestCore.gu.gu_id]?.path || [];
     const supportCandidates = scored
       .filter(s => s.gu.instance_id !== bestCore.gu.instance_id)
       .sort((a, b) => {
-        const aPathMatch = guDictionary[a.gu.gu_id]?.path === corePath ? 1 : 0;
-        const bPathMatch = guDictionary[b.gu.gu_id]?.path === corePath ? 1 : 0;
+        const aSpec = guDictionary[a.gu.gu_id];
+        const bSpec = guDictionary[b.gu.gu_id];
+        const aPathMatch = aSpec?.path && corePathList.some(p => aSpec.path.includes(p)) ? 1 : 0;
+        const bPathMatch = bSpec?.path && corePathList.some(p => bSpec.path.includes(p)) ? 1 : 0;
         return (bPathMatch * 1000 + b.score) - (aPathMatch * 1000 + a.score);
       });
 
@@ -323,8 +335,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       });
     })();
     const matchingKMs = validKMs.filter(km => {
-      if (!corePath) return true;
-      return km.path === corePath;
+      if (corePathList.length === 0) return true;
+      return corePathList.includes(km.path);
     });
     setSelectedKillerMoveIds(matchingKMs.slice(0, 3).map(km => km.id));
   }, [eligibleGus, guDictionary, bestPath, player.dao_marks, player.path_masteries, killerMoves]);
@@ -552,7 +564,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
               {sortedEligibleGus.map(gu => {
                 const spec = guDictionary[gu.gu_id];
                 const isSelected = coreGuId === gu.instance_id;
-                const pathMatch = spec?.path === bestPath;
+                const pathMatch = spec?.path && spec.path.some(p => p.toLowerCase().includes(bestPath.toLowerCase()));
                 return (
                   <div
                     key={gu.instance_id}
@@ -566,13 +578,13 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                     <div className="font-bold text-sm text-zinc-200 truncate">{spec?.name || gu.gu_id}</div>
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                       <span className="text-[10px] text-zinc-500">R{spec?.rank}</span>
-                      {spec?.path && (
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
-                          spec.path === bestPath ? 'bg-emerald-900/40 text-emerald-300' : 'bg-zinc-800 text-zinc-500'
+                      {spec?.path && spec.path.map(p => (
+                        <span key={p} className={`text-[9px] px-1.5 py-0.5 rounded-full ${
+                          p.toLowerCase().includes(bestPath.toLowerCase()) ? 'bg-emerald-900/40 text-emerald-300' : 'bg-zinc-800 text-zinc-500'
                         }`}>
-                          {pathLabel(spec.path)}
+                          {pathLabel(p)}
                         </span>
-                      )}
+                      ))}
                       {spec?.primary_role && (
                         <span className="text-[9px] text-zinc-600">{spec.primary_role}</span>
                       )}
@@ -598,7 +610,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                 const spec = guDictionary[gu.gu_id];
                 const isSelected = supportGuIds.includes(gu.instance_id);
                 const coreSpec = coreGuId ? guDictionary[eligibleGus.find(g => g.instance_id === coreGuId)?.gu_id || ""] : null;
-                const pathMatch = coreSpec ? spec?.path === coreSpec.path : spec?.path === bestPath;
+                const pathMatch = coreSpec?.path && spec?.path && spec.path.some(p => coreSpec.path.includes(p));
                 return (
                   <div
                     key={gu.instance_id}
@@ -612,13 +624,13 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                     <div className="font-bold text-sm text-zinc-200 truncate">{spec?.name || gu.gu_id}</div>
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                       <span className="text-[10px] text-zinc-500">R{spec?.rank}</span>
-                      {spec?.path && (
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
-                          pathMatch ? 'bg-emerald-900/40 text-emerald-300' : 'bg-zinc-800 text-zinc-500'
+                      {spec?.path && spec.path.map(p => (
+                        <span key={p} className={`text-[9px] px-1.5 py-0.5 rounded-full ${
+                          coreSpec?.path?.includes(p) ? 'bg-emerald-900/40 text-emerald-300' : 'bg-zinc-800 text-zinc-500'
                         }`}>
-                          {pathLabel(spec.path)}
+                          {pathLabel(p)}
                         </span>
-                      )}
+                      ))}
                     </div>
                     {isSelected && (
                       <div className="absolute top-1 right-1 w-4 h-4 bg-cyan-500 rounded-full flex items-center justify-center">
@@ -648,7 +660,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
               {validKillerMoves.map(move => {
                 const isSelected = selectedKillerMoveIds.includes(move.id);
                 const coreSpec = coreGuId ? guDictionary[eligibleGus.find(g => g.instance_id === coreGuId)?.gu_id || ""] : null;
-                const pathMatch = coreSpec ? move.path === coreSpec.path : move.path === bestPath;
+                const pathMatch = coreSpec?.path ? coreSpec.path.includes(move.path) : move.path === bestPath;
                 return (
                   <div
                     key={move.id}

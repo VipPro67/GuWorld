@@ -152,6 +152,25 @@ func ChallengeArena(c *gin.Context) {
 		enemyHP = 100.0
 	}
 
+	enemyGuInventory := targetPlayer.GuInventory
+	enemyRank := targetPlayer.Rank
+	enemySubRank := targetPlayer.SubRank
+
+	hasAttitudeGu := false
+	for _, gu := range targetPlayer.GuInventory {
+		if gu.GuID == "GU_ATTITUDE_GU" && gu.Equipped && gu.Status == "ACTIVE" {
+			hasAttitudeGu = true
+			break
+		}
+	}
+	if hasAttitudeGu {
+		enemyRank = 1
+		enemySubRank = 1
+		enemyGuInventory = models.GuInventory{
+			{InstanceID: "attitude_mask", GuID: "GU_MOONLIGHT", Hunger: 0, Status: "ACTIVE", Equipped: true},
+		}
+	}
+
 	// Build PVP Combat State
 	pvpCombat := models.CombatState{
 		EnemyTemplateID:    targetPlayer.ID.String(),
@@ -163,9 +182,9 @@ func ChallengeArena(c *gin.Context) {
 		EnemyMaxMana:       targetPlayer.MaxMana,
 		EnemyDamage:        targetStats["attack"],
 		EnemyDefense:       targetStats["defense"],
-		EnemyRank:          targetPlayer.Rank,
-		EnemySubRank:       targetPlayer.SubRank,
-		EnemyGuInventory:   targetPlayer.GuInventory,
+		EnemyRank:          enemyRank,
+		EnemySubRank:       enemySubRank,
+		EnemyGuInventory:   enemyGuInventory,
 		EnemyDaoMarks:      targetPlayer.DaoMarks,
 		EnemyPathMasteries: targetPlayer.PathMasteries,
 		TargetPlayerID:     targetPlayer.ID.String(),

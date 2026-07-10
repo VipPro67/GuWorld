@@ -92,6 +92,7 @@ func SetupRouter() *gin.Engine {
 			player.POST("/use-item", handlers.UseItem)
 			player.POST("/recharge", handlers.RechargeWithStones)
 			player.POST("/clear-stress", handlers.ClearStress)
+			player.POST("/sacrifice", handlers.SacrificeNPC)
 			player.GET("/profile/:username", handlers.GetPlayerProfile)
 			player.PUT("/profile/settings", handlers.UpdateProfileSettings)
 			player.GET("/referrals", handlers.GetReferralStats)
@@ -100,6 +101,7 @@ func SetupRouter() *gin.Engine {
 			player.POST("/tick-regen", handlers.TickRegen)
 			player.GET("/combat-settings", handlers.GetCombatSettings)
 			player.PUT("/combat-settings", handlers.UpdateCombatSettings)
+			player.GET("/audit-logs", handlers.GetMyAuditLogs)
 		}
 
 		mine := api.Group("/mine")

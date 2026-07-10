@@ -13,9 +13,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"time"
 )
 
 type QuestReward struct {
@@ -306,6 +308,14 @@ func buildQuestUpdateQuery(player *models.Player) (string, []interface{}) {
 }
 
 func ListQuests(c *gin.Context) {
+	var cachedResp gin.H
+	cacheKey := "game_quests_list"
+
+	if err := cache.GetJSON(cacheKey, &cachedResp); err == nil && cachedResp != nil {
+		c.JSON(http.StatusOK, cachedResp)
+		return
+	}
+
 	resp := make([]questResponse, 0, len(questRegistry))
 	for _, q := range questRegistry {
 		resp = append(resp, questResponse{
@@ -316,7 +326,10 @@ func ListQuests(c *gin.Context) {
 			Rewards: q.Rewards,
 		})
 	}
-	c.JSON(http.StatusOK, gin.H{"quests": resp})
+
+	cachedResp = gin.H{"quests": resp}
+	_ = cache.SetJSON(cacheKey, cachedResp, 24*time.Hour)
+	c.JSON(http.StatusOK, cachedResp)
 }
 
 func CompleteQuest(c *gin.Context) {

@@ -226,7 +226,14 @@ func CombatAttack(c *gin.Context) {
 					}
 
 					if player.CurrentRegion == "three_kings_inheritance" {
-						if spec.Path != "Moon Path" && spec.Path != "Earth Path" {
+						hasAllowedPath := false
+						for _, p := range spec.Path {
+							if p == "Moon Path" || p == "Earth Path" {
+								hasAllowedPath = true
+								break
+							}
+						}
+						if !hasAllowedPath {
 							c.JSON(http.StatusBadRequest, gin.H{"error": "Bí cảnh Tam Vương Truyền Thừa áp chế Cổ trùng không thuộc Nguyệt đạo hoặc Thổ đạo: " + spec.Name})
 							return
 						}

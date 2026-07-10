@@ -9,7 +9,7 @@ export interface GuDictionaryItem {
   id: string;
   name: string;
   rank: number;
-  path: string;
+  path: string[];
   gu_type: string;
   base_mana_cost: number;
   effects: GuEffects;
@@ -17,7 +17,6 @@ export interface GuDictionaryItem {
   hunger_rate: number;
   max_hunger: number;
   description: string;
-  origin_region: string;
   rarity: string;
   is_immortal: boolean;
   primary_role: string;

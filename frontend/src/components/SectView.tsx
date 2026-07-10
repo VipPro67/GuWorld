@@ -66,6 +66,7 @@ export const SectView: React.FC = () => {
     claimSectMineRewards,
     addToast,
     showConfirm,
+    recipes,
   } = useGameStore();
 
   const [activeTab, setActiveTab] = useState<"lobby" | "missions" | "vault" | "donate" | "territory" | "manage">("lobby");
@@ -256,18 +257,41 @@ export const SectView: React.FC = () => {
   // Donation Gu listing (Filter out Vital Gu and equipped Gu)
   const playerDonatableGus = (player.gu_inventory || []).filter(g => !g.is_vital && !g.equipped && g.status !== "DEAD");
 
-  // Get material contribution points value
-  const getMaterialValue = (matId: string): number => {
-    switch (matId) {
-      case "guts_gu": return 50;
-      case "moon_orchid_petal": return 15;
-      case "green_bamboo_wine": return 25;
-      case "jade_stone": return 35;
-      case "wild_boar_tusk": return 20;
-      case "boar_meat": return 15;
-      default: return 10;
-    }
+  // Pricing helpers matching backend/pkg/pricing
+  const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 10000, 25000, 60000, 150000];
+  const itemRankBasePrice = [0, 5, 15, 30, 60, 120, 250, 500, 1000, 2500];
+
+  const getItemBasePrice = (matId: string): number => {
+    const spec = itemDictionary[matId];
+    if (!spec) return 5;
+    if (spec.base_price && spec.base_price > 0) return spec.base_price;
+    return itemRankBasePrice[spec.rank || 1] || 5;
   };
+
+  const getGuBasePrice = (guId: string): number => {
+    const spec = guDictionary[guId];
+    if (!spec) return 200;
+    if (spec.base_price && spec.base_price > 0) return spec.base_price;
+    return guRankBasePrice[spec.rank || 1] || 200;
+  };
+
+  // DonatePoints = basePrice * 0.50 (DonateRatio), minimum 1
+  const getDonatePoints = (basePrice: number): number => Math.max(1, Math.floor(basePrice * 0.50));
+
+  // VaultCost = DonatePoints * 1.50 (VaultMarkup), minimum 1
+  const getVaultCost = (basePrice: number): number => Math.max(1, Math.floor(getDonatePoints(basePrice) * 1.50));
+
+  // RecipeCostByGuRank = GuBasePriceByRank(rank) / 10, minimum 20
+  const getRecipeCost = (targetGuRank: number): number => {
+    const p = Math.floor(guRankBasePrice[targetGuRank] / 10);
+    return Math.max(20, p);
+  };
+
+  // Get material contribution points value (DonateRatio = 50%)
+  const getMaterialValue = (matId: string): number => getDonatePoints(getItemBasePrice(matId));
+
+  // Get Gu contribution points value (DonateRatio = 50%)
+  const getGuValue = (guId: string): number => getDonatePoints(getGuBasePrice(guId));
 
   // 1. STATE: NOT IN SECT
   if (!mySectStatus?.in_sect) {
@@ -1116,7 +1140,7 @@ export const SectView: React.FC = () => {
                 {sect?.vault_materials && Object.entries(sect.vault_materials).length > 0 ? (
                   Object.entries(sect.vault_materials).map(([matId, qty]) => {
                     const spec = itemDictionary[matId];
-                    const cost = matId === "guts_gu" ? 50 : 20;
+                    const cost = getVaultCost(getItemBasePrice(matId));
                     const unaffordable = (member?.contribution_points || 0) < cost;
                     
                     return (
@@ -1164,8 +1188,9 @@ export const SectView: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {sect?.vault_recipes && (sect.vault_recipes as string[]).length > 0 ? (
                   (sect.vault_recipes as string[]).map((recipeId) => {
-                    // Cost for recipe is fixed 120 points
-                    const cost = 120;
+                    const recipeInfo = recipes?.find(r => r.id === recipeId);
+                    const targetGuSpec = recipeInfo ? guDictionary[recipeInfo.target_gu_id] : null;
+                    const cost = getRecipeCost(targetGuSpec?.rank || 1);
                     const unaffordable = (member?.contribution_points || 0) < cost;
                     
                     return (
@@ -1384,7 +1409,7 @@ export const SectView: React.FC = () => {
                   {playerDonatableGus.map((g) => {
                     const spec = guDictionary[g.gu_id];
                     const rank = spec?.rank || 1;
-                    const val = rank * 80;
+                    const val = getGuValue(g.gu_id);
                     return (
                       <option key={g.instance_id} value={g.instance_id}>
                         {spec?.name || g.gu_id} (Rank: {rank} | Nhận: {val} Pts)
@@ -1401,7 +1426,7 @@ export const SectView: React.FC = () => {
                 const targetGu = playerDonatableGus.find(g => g.instance_id === selectedGuInstId);
                 if (!targetGu) return null;
                 const spec = guDictionary[targetGu.gu_id];
-                const value = (spec?.rank || 1) * 80;
+                const value = getGuValue(targetGu.gu_id);
 
                 return (
                   <button

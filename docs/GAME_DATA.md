@@ -6,7 +6,7 @@ Nguồn dữ liệu chính nằm trong các file CSV ở `backend/`. Khi backend
 
 | File | Số dòng dữ liệu | Nội dung |
 | --- | ---: | --- |
-| `backend/Gu.csv` | 214 | Dictionary Cổ: rank, path, type, mana cost, effects, hunger, food, targeting, rarity, role/tags. |
+| `backend/Gu.csv` | 227 | Dictionary Cổ: rank, path, type, mana cost, effects, hunger, food, targeting, rarity, role/tags. |
 | `backend/Item.csv` | 136 | Vật phẩm, nguyên liệu, tiền tệ, consumable, effects/tags/description. |
 | `backend/Recipe.csv` | 31 | Công thức luyện Cổ: target, Cổ/nguyên liệu yêu cầu, success rate, cost. |
 | `backend/Monster.csv` | 13 | Monster templates: chỉ số, Gu inventory, loot table, AI profile. |
@@ -30,7 +30,7 @@ Nguồn dữ liệu chính nằm trong các file CSV ở `backend/`. Khi backend
 
 Các trường quan trọng trong dictionary:
 
-- `id`, `name`, `rank`, `path`, `gu_type`, `origin_region`.
+- `id`, `name`, `rank`, `path` (mảng JSON các Đạo học), `gu_type`.
 - `base_mana_cost`.
 - `effects` JSON: active/passive/combat/support tuỳ Cổ.
 - `hunger_rate`, `food_types`, `max_hunger`.

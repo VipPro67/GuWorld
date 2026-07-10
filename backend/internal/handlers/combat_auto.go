@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -361,6 +363,35 @@ func AutoCombatStart(c *gin.Context) {
 	// 4. Run Simulator
 	logs := simulator.Simulate(simState)
 
+	// Scan logs for Love Gu penalties
+	loveAptitudePenalty := 0
+	loveLifespanPenalty := 0.0
+	loveStonesPenalty := false
+	for _, logMsg := range logs {
+		if logMsg.Action == "CHAOS_GAMBLE" {
+			if strings.Contains(logMsg.Detail, "Trừ 10% Tư chất gốc vĩnh viễn") {
+				loveAptitudePenalty += 10
+			} else if strings.Contains(logMsg.Detail, "Trừ 5 năm tuổi thọ vĩnh viễn") {
+				loveLifespanPenalty += 5.0
+			} else if strings.Contains(logMsg.Detail, "Trừ 50% Nguyên thạch hiện tại") {
+				loveStonesPenalty = true
+			}
+		}
+	}
+
+	if loveAptitudePenalty > 0 {
+		player.AptitudePercent -= loveAptitudePenalty
+		if player.AptitudePercent < 1 {
+			player.AptitudePercent = 1
+		}
+	}
+	if loveLifespanPenalty > 0 {
+		player.Lifespan = math.Max(1.0, player.Lifespan-loveLifespanPenalty)
+	}
+	if loveStonesPenalty {
+		player.PrimevalStones = player.PrimevalStones / 2
+	}
+
 	// 5. Apply outcome to DB
 	var alliesAlive bool
 	var finalPlayerHP int
@@ -563,8 +594,8 @@ func AutoCombatStart(c *gin.Context) {
 		matJSON, _ := json.Marshal(player.MaterialsInventory)
 		guJSON, _ := json.Marshal(player.GuInventory)
 
-		updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, primeval_stones = $4, materials_inventory = $5, gu_inventory = $6 WHERE id = $7`
-		args = append(args, finalPlayerHP, finalMana, tempLootJSON, player.PrimevalStones, matJSON, guJSON, player.ID)
+		updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, primeval_stones = $4, materials_inventory = $5, gu_inventory = $6, aptitude_percent = $7, lifespan = $8 WHERE id = $9`
+		args = append(args, finalPlayerHP, finalMana, tempLootJSON, player.PrimevalStones, matJSON, guJSON, player.AptitudePercent, player.Lifespan, player.ID)
 	} else {
 		// ── Defeat: same logic as manual combat ──
 		player.HP = 1.0
@@ -594,8 +625,8 @@ func AutoCombatStart(c *gin.Context) {
 
 		tempLootJSON, _ := json.Marshal(player.TempLoot)
 		exploredJSON, _ := json.Marshal(player.ExploredCells)
-		updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, current_region = $4, x = $5, y = $6, explored_cells = $7 WHERE id = $8`
-		args = append(args, player.HP, finalMana, tempLootJSON, player.CurrentRegion, player.X, player.Y, exploredJSON, player.ID)
+		updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, current_region = $4, x = $5, y = $6, explored_cells = $7, aptitude_percent = $8, lifespan = $9, primeval_stones = $10 WHERE id = $11`
+		args = append(args, player.HP, finalMana, tempLootJSON, player.CurrentRegion, player.X, player.Y, exploredJSON, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.ID)
 	}
 
 	_, err = tx.Exec(updateQuery, args...)

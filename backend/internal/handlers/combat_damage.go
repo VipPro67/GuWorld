@@ -46,7 +46,9 @@ func calculateLooseGuFailureChance(specs []models.GuDictionaryItem) float64 {
 	}
 	paths := map[string]bool{}
 	for _, spec := range specs {
-		paths[spec.Path] = true
+		for _, p := range spec.Path {
+			paths[p] = true
+		}
 	}
 	pathChaos := math.Max(0, float64(len(paths)-1)) * 0.08
 	chance := float64(len(specs)-1)*0.12 + pathChaos

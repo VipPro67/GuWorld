@@ -200,7 +200,7 @@ export default async function WikiIndexPage() {
                                 {gu.name}
                               </h3>
                               <p className="text-[10px] text-[var(--text-muted)] font-mono truncate">
-                                {pathLabels[gu.path] || gu.path} · {gu.gu_type}
+                                {gu.path && gu.path.map(p => pathLabels[p] || p).join(" / ")} · {gu.gu_type}
                               </p>
                             </div>
                           </div>

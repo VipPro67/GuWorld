@@ -20,6 +20,10 @@ type ImmortalAperture struct {
 	State                    string    `json:"state"` // 'STABLE' | 'TRIBULATION_PENDING' | 'TRIBULATION_ACTIVE' | 'DAMAGED' | 'DESTROYED'
 	CreatedAt                time.Time `json:"created_at"`
 	UpdatedAt                time.Time `json:"updated_at"`
+	Temperature              float64   `json:"temperature,omitempty"`
+	Humidity                 float64   `json:"humidity,omitempty"`
+	Qi                       float64   `json:"qi,omitempty"`
+	Terrain                  string    `json:"terrain,omitempty"`
 }
 
 type DaoMark struct {

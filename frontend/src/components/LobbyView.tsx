@@ -134,19 +134,10 @@ export const LobbyView: React.FC = () => {
       iconColor: "text-rose-100",
     },
     {
-      id: "topup",
-      label: "Nạp Tiên Ngọc",
-      icon: Gem,
-      gradient: "from-emerald-500 to-green-600",
-      glow: "group-hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]",
-      borderColor: "border-emerald-400/20",
-      iconColor: "text-emerald-100",
-    },
-    {
-      id: "premium-shop",
-      label: "Gói Tu Luyện",
+      id: "premium-store",
+      label: "Cát Bảo Các",
       icon: Sparkles,
-      gradient: "from-violet-500 to-fuchsia-600",
+      gradient: "from-violet-500 to-emerald-600",
       glow: "group-hover:shadow-[0_0_20px_rgba(139,92,246,0.4)]",
       borderColor: "border-violet-400/20",
       iconColor: "text-violet-100",
@@ -186,6 +177,15 @@ export const LobbyView: React.FC = () => {
       glow: "group-hover:shadow-[0_0_20px_rgba(239,68,68,0.4)]",
       borderColor: "border-rose-400/20",
       iconColor: "text-rose-100",
+    },
+    {
+      id: "audit-logs",
+      label: "Ký Sự Tu Hành",
+      icon: History,
+      gradient: "from-blue-500 to-indigo-600",
+      glow: "group-hover:shadow-[0_0_20px_rgba(59,130,246,0.4)]",
+      borderColor: "border-blue-400/20",
+      iconColor: "text-blue-100",
     },
   ];
 

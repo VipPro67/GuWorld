@@ -9,22 +9,28 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
-func getActorPathMasteryMultiplier(actor *models.Combatant, path string) float64 {
+func getActorPathMasteryMultiplier(actor *models.Combatant, paths []string) float64 {
 	masteryMultiplier := 1.0
 	if actor.PathMasteries != nil {
-		cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-		if mLevel, ok := actor.PathMasteries[cleanPath]; ok {
-			switch mLevel {
-			case "Ordinary":
-				masteryMultiplier = 1.0
-			case "Master":
-				masteryMultiplier = 1.1
-			case "Grandmaster":
-				masteryMultiplier = 1.25
-			case "Great Grandmaster":
-				masteryMultiplier = 1.4
-			case "Supreme Grandmaster":
-				masteryMultiplier = 1.5
+		for _, path := range paths {
+			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
+			if mLevel, ok := actor.PathMasteries[cleanPath]; ok {
+				mult := 1.0
+				switch mLevel {
+				case "Ordinary":
+					mult = 1.0
+				case "Master":
+					mult = 1.1
+				case "Grandmaster":
+					mult = 1.25
+				case "Great Grandmaster":
+					mult = 1.4
+				case "Supreme Grandmaster":
+					mult = 1.5
+				}
+				if mult > masteryMultiplier {
+					masteryMultiplier = mult
+				}
 			}
 		}
 	}
@@ -63,22 +69,27 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 		baseDef = def
 	}
 
-	cleanPath := strings.TrimSuffix(strings.ToLower(guSpec.Path), " path")
-
 	attainmentLevel := 0
 	if actor.PathMasteries != nil {
-		if mLevel, ok := actor.PathMasteries[cleanPath]; ok {
-			switch mLevel {
-			case "Ordinary":
-				attainmentLevel = 0
-			case "Master":
-				attainmentLevel = 1
-			case "Grandmaster":
-				attainmentLevel = 2
-			case "Great Grandmaster":
-				attainmentLevel = 3
-			case "Supreme Grandmaster":
-				attainmentLevel = 4
+		for _, path := range guSpec.Path {
+			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
+			if mLevel, ok := actor.PathMasteries[cleanPath]; ok {
+				lvl := 0
+				switch mLevel {
+				case "Ordinary":
+					lvl = 0
+				case "Master":
+					lvl = 1
+				case "Grandmaster":
+					lvl = 2
+				case "Great Grandmaster":
+					lvl = 3
+				case "Supreme Grandmaster":
+					lvl = 4
+				}
+				if lvl > attainmentLevel {
+					attainmentLevel = lvl
+				}
 			}
 		}
 	}
@@ -93,17 +104,30 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 			_ = db.DB.QueryRow(`SELECT current_region FROM players WHERE id = $1`, playerUUID).Scan(&currentRegion)
 		}
 		isResonant := false
-		switch strings.ToLower(currentRegion) {
-		case "eastern_sea":
-			isResonant = (cleanPath == "water")
-		case "western_desert":
-			isResonant = (cleanPath == "fire")
-		case "northern_plains":
-			isResonant = (cleanPath == "wind")
-		case "southern_border":
-			isResonant = (cleanPath == "earth")
-		case "central_continent":
-			isResonant = (cleanPath == "qi")
+		for _, path := range guSpec.Path {
+			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
+			switch strings.ToLower(currentRegion) {
+			case "eastern_sea":
+				if cleanPath == "water" {
+					isResonant = true
+				}
+			case "western_desert":
+				if cleanPath == "fire" {
+					isResonant = true
+				}
+			case "northern_plains":
+				if cleanPath == "wind" {
+					isResonant = true
+				}
+			case "southern_border":
+				if cleanPath == "earth" {
+					isResonant = true
+				}
+			case "central_continent":
+				if cleanPath == "qi" {
+					isResonant = true
+				}
+			}
 		}
 		if isResonant {
 			powerScale *= 1.50
@@ -114,13 +138,22 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 
 	daoMultiplier := 1.0
 	if actor.DaoMarks != nil {
-		if amt, ok := actor.DaoMarks[cleanPath]; ok && amt > 0 {
-			if amt <= 10000 {
-				daoMultiplier = 1.0 + float64(amt)/100.0
-			} else {
-				daoMultiplier = 1.0 + 100.0 + float64(amt-10000)/500.0
+		maxDaoMultiplier := 1.0
+		for _, path := range guSpec.Path {
+			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
+			if amt, ok := actor.DaoMarks[cleanPath]; ok && amt > 0 {
+				var mult float64
+				if amt <= 10000 {
+					mult = 1.0 + float64(amt)/100.0
+				} else {
+					mult = 1.0 + 100.0 + float64(amt-10000)/500.0
+				}
+				if mult > maxDaoMultiplier {
+					maxDaoMultiplier = mult
+				}
 			}
 		}
+		daoMultiplier = maxDaoMultiplier
 	}
 
 	// Gu skill damage scales with player's base attack so it stays relevant vs basic attack

@@ -442,12 +442,40 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 	successRateBonus := 0.0
 	channelTime := int(effectValue(coreActive, "channel_time", "channeling"))
 
+	hasSovereignFetus := false
+	for _, gu := range player.GuInventory {
+		if gu.GuID == "GU_SOVEREIGN_FETUS" && gu.Equipped && gu.Status == "ACTIVE" {
+			hasSovereignFetus = true
+			break
+		}
+	}
+
+	attainment := float64(attainmentLevel(player, core.Spec.Path))
+
+	conflictingMarks := 0
+	if player.DaoMarks != nil && !hasSovereignFetus && attainment < 4 {
+		for path, amount := range player.DaoMarks {
+			if !isPathInGu(core.Spec.Path, path) {
+				conflictingMarks += amount
+			}
+		}
+		if attainment >= 3 {
+			conflictingMarks = int(float64(conflictingMarks) * 0.5)
+		}
+	}
+
 	for idx, support := range supports {
 		totalMana += support.Spec.BaseManaCost * killerMoveSupportCostRate
 		supportEffects := models.GetGuEffectSection(support.Spec, "support")
 
 		// V2: Path Conflict Penalty
 		conflictPct, isOpposing := calculatePathConflict(core.Spec, support.Spec)
+		if hasSovereignFetus || attainment >= 4 {
+			conflictPct = 0.0
+			isOpposing = false
+		} else if attainment >= 3 {
+			conflictPct *= 0.5
+		}
 		pathConflictPenalty += conflictPct
 		slotWarnings := []string{}
 		if isOpposing {
@@ -494,7 +522,14 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 	// ── V2: DaoBonus ──
 	daoMarks := 0.0
 	if player.DaoMarks != nil {
-		daoMarks = float64(player.DaoMarks[normalizePath(core.Spec.Path)])
+		maxDao := 0.0
+		for _, path := range core.Spec.Path {
+			dMark := float64(player.DaoMarks[normalizePath(path)])
+			if dMark > maxDao {
+				maxDao = dMark
+			}
+		}
+		daoMarks = maxDao
 	}
 	daoBonus := 1.0 + daoMarks/100.0
 	finalDamage *= daoBonus
@@ -502,11 +537,18 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 
 	// ── V2: SUCCESS RATE ──
 	wisdom := player.Wisdom
-	attainment := float64(attainmentLevel(player, core.Spec.Path))
+	if attainment >= 2 {
+		successRateBonus += 5.0
+	}
+	successPenalty := 0.0
+	if conflictingMarks > 0 {
+		successPenalty = math.Min(30.0, float64(conflictingMarks)/500.0)
+	}
 	successRate := killerMoveBaseSuccessRate +
 		wisdom*killerMoveWisdomBonusFactor +
 		attainment*killerMoveAttainmentBonusFactor +
 		successRateBonus -
+		successPenalty -
 		float64(len(supports))*killerMoveSupportCountPenalty -
 		pathConflictPenalty +
 		synSuccessBonus
@@ -514,6 +556,21 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 
 	if channelTime < 0 {
 		channelTime = 0
+	}
+
+	// ── V2: MANA COST & COOLDOWN ADJUSTMENTS ──
+	if attainment >= 2 {
+		totalMana *= 0.85
+	}
+	if conflictingMarks > 0 {
+		costMultiplier := 1.0 + float64(conflictingMarks)/20000.0
+		totalMana *= costMultiplier
+	}
+
+	cooldown := 1 + len(supports)/3
+	if conflictingMarks > 0 {
+		cooldownMultiplier := 1.0 + float64(conflictingMarks)/40000.0
+		cooldown = int(math.Ceil(float64(cooldown) * cooldownMultiplier))
 	}
 
 	warnings := successRateWarnings(successRate)
@@ -533,7 +590,12 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 	}
 
 	return &KillerMovePreview{
-		Path:            core.Spec.Path,
+		Path: func() string {
+			if len(core.Spec.Path) > 0 {
+				return core.Spec.Path[0]
+			}
+			return "Moon Path"
+		}(),
 		MoveType:        moveType,
 		RankRequired:    rankRequired,
 		CorePlayerGuID:  core.Instance.InstanceID,
@@ -542,7 +604,7 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 		SuccessRate:     round(successRate),
 		DamageValue:     round(finalDamage),
 		DefenseValue:    round(finalDefense),
-		Cooldown:        1 + len(supports)/3,
+		Cooldown:        cooldown,
 		ChannelTime:     channelTime,
 		Effects:         finalEffects,
 		IsReliable:      successRate >= 80,
@@ -898,15 +960,34 @@ func mergeEffects(dst map[string]float64, src map[string]float64) {
 
 // V2: Path Conflict — returns (penalty, isOpposing)
 func calculatePathConflict(core models.GuDictionaryItem, support models.GuDictionaryItem) (float64, bool) {
-	corePath := normalizePath(core.Path)
-	supportPath := normalizePath(support.Path)
-	if corePath == supportPath {
-		return 0, false
+	hasMatch := false
+	hasOpposition := false
+	hasDifference := false
+
+	for _, cp := range core.Path {
+		cPath := normalizePath(cp)
+		for _, sp := range support.Path {
+			sPath := normalizePath(sp)
+			if cPath == sPath {
+				hasMatch = true
+			} else if isOpposingPath(cPath, sPath) {
+				hasOpposition = true
+			} else {
+				hasDifference = true
+			}
+		}
 	}
-	if isOpposingPath(corePath, supportPath) {
+
+	if hasOpposition {
 		return killerMovePathOppositionPenalty, true
 	}
-	return killerMovePathConflictPenaltyBase, false
+	if hasMatch {
+		return 0, false
+	}
+	if hasDifference {
+		return killerMovePathConflictPenaltyBase, false
+	}
+	return 0, false
 }
 
 func isOpposingPath(a, b string) bool {
@@ -933,23 +1014,30 @@ func isOpposingPath(a, b string) bool {
 func normalizePath(path string) string {
 	return strings.TrimSpace(strings.TrimSuffix(strings.ToLower(path), " path"))
 }
-func attainmentLevel(player *models.Player, path string) int {
+func attainmentLevel(player *models.Player, paths []string) int {
 	if player.PathMasteries == nil {
 		return 0
 	}
-	level := player.PathMasteries[normalizePath(path)]
-	switch strings.ToLower(level) {
-	case "master", "đại sư", "dai su":
-		return 1
-	case "grandmaster", "tông sư", "tong su":
-		return 2
-	case "great grandmaster", "đại tông sư", "dai tong su":
-		return 3
-	case "supreme grandmaster", "vô thượng đại tông sư", "vo thuong dai tong su":
-		return 4
-	default:
-		return 0
+	maxLvl := 0
+	for _, path := range paths {
+		clean := normalizePath(path)
+		level := player.PathMasteries[clean]
+		lvl := 0
+		switch strings.ToLower(level) {
+		case "master", "đại sư", "dai su":
+			lvl = 1
+		case "grandmaster", "tông sư", "tong su":
+			lvl = 2
+		case "great grandmaster", "đại tông sư", "dai tong su":
+			lvl = 3
+		case "supreme grandmaster", "vô thượng đại tông sư", "vo thuong dai tong su":
+			lvl = 4
+		}
+		if lvl > maxLvl {
+			maxLvl = lvl
+		}
 	}
+	return maxLvl
 }
 func clamp(v, min, max float64) float64 {
 	if v < min {

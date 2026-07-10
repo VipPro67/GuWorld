@@ -278,33 +278,54 @@ func RefineGu(c *gin.Context) {
 	}
 
 	// 8. RNG Roll
-	var targetGuPath string
-	err = tx.QueryRow(`SELECT path FROM gu_dictionary WHERE id = $1`, recipe.TargetGuID).Scan(&targetGuPath)
+	var pathRaw []byte
+	err = tx.QueryRow(`SELECT path FROM gu_dictionary WHERE id = $1`, recipe.TargetGuID).Scan(&pathRaw)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query target Gu path: " + err.Error()})
 		return
 	}
 
-	cleanPath := strings.TrimSuffix(strings.ToLower(targetGuPath), " path")
+	var paths []string
+	if err := json.Unmarshal(pathRaw, &paths); err != nil {
+		paths = []string{string(pathRaw)}
+	}
+
 	attainmentBonus := 0.0
 	if player.PathMasteries != nil {
-		if mLevel, ok := player.PathMasteries[cleanPath]; ok {
-			switch mLevel {
-			case "Ordinary":
-				attainmentBonus = 0.0
-			case "Master":
-				attainmentBonus = 0.05
-			case "Grandmaster":
-				attainmentBonus = 0.10
-			case "Great Grandmaster":
-				attainmentBonus = 0.15
-			case "Supreme Grandmaster":
-				attainmentBonus = 0.25
+		for _, path := range paths {
+			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
+			if mLevel, ok := player.PathMasteries[cleanPath]; ok {
+				bonus := 0.0
+				switch mLevel {
+				case "Ordinary":
+					bonus = 0.0
+				case "Master":
+					bonus = 0.05
+				case "Grandmaster":
+					bonus = 0.10
+				case "Great Grandmaster":
+					bonus = 0.15
+				case "Supreme Grandmaster":
+					bonus = 0.20
+				}
+				if bonus > attainmentBonus {
+					attainmentBonus = bonus
+				}
 			}
 		}
 	}
 
 	finalSuccessRate := recipe.SuccessRate + attainmentBonus
+	hasWisdomGu := false
+	for _, gu := range player.GuInventory {
+		if gu.GuID == "GU_WISDOM_GU" && gu.Equipped && gu.Status == "ACTIVE" {
+			hasWisdomGu = true
+			break
+		}
+	}
+	if hasWisdomGu {
+		finalSuccessRate += 0.30
+	}
 	if isForcedRefine {
 		finalSuccessRate = finalSuccessRate * (unlockedRate / 100.0)
 	}
@@ -431,10 +452,22 @@ func RefineGu(c *gin.Context) {
 		return
 	}
 
+	targetName := recipe.TargetGuID
+	if targetSpec, ok := models.GuRegistry[recipe.TargetGuID]; ok {
+		targetName = targetSpec.Name
+	}
+
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "refine.gu", EntityType: "refining_recipe",
 		EntityID: req.RecipeID,
-		RequestSummary: fmt.Sprintf("recipe=%s target=%s success=%v isForced=%v", req.RecipeID, recipe.TargetGuID, success, isForcedRefine),
+		RequestSummary: fmt.Sprintf("Luyện Cổ: công thức %s -> %s | Thành công: %v | Ép luyện: %v", req.RecipeID, targetName, success, isForcedRefine),
+		Metadata: map[string]interface{}{
+			"recipe_id":      req.RecipeID,
+			"target_gu_id":   recipe.TargetGuID,
+			"target_gu_name": targetName,
+			"success":        success,
+			"is_forced":      isForcedRefine,
+		},
 		IPAddress: c.ClientIP(), Success: success,
 	})
 	// Return response
@@ -513,12 +546,24 @@ func DeduceRecipe(c *gin.Context) {
 	manaCost := 15.0
 	stoneCost := 10
 
+	hasWisdomGu := false
+	for _, gu := range player.GuInventory {
+		if gu.GuID == "GU_WISDOM_GU" && gu.Equipped && gu.Status == "ACTIVE" {
+			hasWisdomGu = true
+			break
+		}
+	}
+	if hasWisdomGu {
+		manaCost = 7.5
+		stoneCost = 5
+	}
+
 	if player.CurrentMana < manaCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Chân Nguyên (cần 15)"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Chân Nguyên (cần %.1f)", manaCost)})
 		return
 	}
 	if player.PrimevalStones < stoneCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch (cần 10)"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch (cần %d)", stoneCost)})
 		return
 	}
 
@@ -527,7 +572,11 @@ func DeduceRecipe(c *gin.Context) {
 	player.PrimevalStones -= stoneCost
 
 	// Roll for deduction outcome
-	inspirationFlash := rand.Float64() < 0.03
+	inspirationFlashChance := 0.03
+	if hasWisdomGu {
+		inspirationFlashChance += 0.30
+	}
+	inspirationFlash := rand.Float64() < inspirationFlashChance
 	var improvement float64
 	var message string
 
@@ -538,6 +587,9 @@ func DeduceRecipe(c *gin.Context) {
 	} else {
 		// improve by 10% - 25%
 		improvement = 10.0 + rand.Float64()*15.0
+		if hasWisdomGu {
+			improvement *= 1.3
+		}
 		// round to 1 decimal place for neatness
 		improvement = float64(int(improvement*10)) / 10.0
 

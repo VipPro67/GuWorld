@@ -151,9 +151,11 @@ function GuPageContent({ gu }: { gu: GuDictionaryItem }) {
               <span className="px-2 py-0.5 rounded-md bg-[var(--bg-card)] text-[11px] text-[var(--text-secondary)] font-mono border border-[var(--border)]">
                 Chuyển {gu.rank}
               </span>
-              <span className="px-2 py-0.5 rounded-md bg-[var(--bg-card)] text-[11px] text-[var(--text-secondary)] font-mono border border-[var(--border)]">
-                {pathLabels[gu.path] || gu.path}
-              </span>
+              {gu.path && gu.path.map(p => (
+                <span key={p} className="px-2 py-0.5 rounded-md bg-[var(--bg-card)] text-[11px] text-[var(--text-secondary)] font-mono border border-[var(--border)]">
+                  {pathLabels[p] || p}
+                </span>
+              ))}
               <span className="px-2 py-0.5 rounded-md bg-[var(--bg-card)] text-[11px] text-[var(--text-secondary)] font-mono border border-[var(--border)]">
                 {gu.gu_type}
               </span>
@@ -185,10 +187,6 @@ function GuPageContent({ gu }: { gu: GuDictionaryItem }) {
                 <div className="flex items-center gap-2 text-xs">
                   <span className="w-24 text-[var(--text-secondary)] font-mono shrink-0">No tối đa</span>
                   <span className="text-[var(--text-primary)] font-mono">{gu.max_hunger}</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="w-24 text-[var(--text-secondary)] font-mono shrink-0">Vùng xuất hiện</span>
-                  <span className="text-[var(--text-primary)] font-mono">{gu.origin_region}</span>
                 </div>
               </div>
             </section>
@@ -320,7 +318,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const gu = await fetchGuById(guId);
   if (!gu) return { title: "Cổ Trùng Không Tìm Thấy" };
 
-  const pathName = pathLabels[gu.path] || gu.path;
+  const pathName = gu.path && gu.path.length > 0 ? gu.path.map(p => pathLabels[p] || p).join(" / ") : "Không có";
 
   return {
     title: gu.name,

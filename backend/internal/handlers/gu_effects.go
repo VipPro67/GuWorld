@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -73,23 +74,35 @@ var ConsumableEffectRegistry = map[string]ConsumableEffectHandler{
 	"force_rank_up":          handleForceRankUp,
 	"mana_pollution":         handleManaPollution,
 	"enslave_beast_tier":     handleEnslaveBeastTier,
+	"add_lifespan_years":     handleLifespanBoost,
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────
 
-func getPathMasteryMultiplier(player *models.Player, path string) float64 {
+func getPathMasteryMultiplier(player *models.Player, paths []string) float64 {
 	masteryMultiplier := 1.0
 	if player.PathMasteries != nil {
-		if mLevel, ok := player.PathMasteries[path]; ok {
-			switch mLevel {
-			case "Ordinary":
-				masteryMultiplier = 1.0
-			case "Master":
-				masteryMultiplier = 1.1
-			case "Grandmaster":
-				masteryMultiplier = 1.25
-			case "Supreme Grandmaster":
-				masteryMultiplier = 1.5
+		for _, path := range paths {
+			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
+			mLevel, ok := player.PathMasteries[cleanPath]
+			if !ok {
+				mLevel, ok = player.PathMasteries[path]
+			}
+			if ok {
+				mult := 1.0
+				switch mLevel {
+				case "Ordinary":
+					mult = 1.0
+				case "Master":
+					mult = 1.1
+				case "Grandmaster":
+					mult = 1.25
+				case "Supreme Grandmaster":
+					mult = 1.5
+				}
+				if mult > masteryMultiplier {
+					masteryMultiplier = mult
+				}
 			}
 		}
 	}
@@ -471,6 +484,17 @@ func handleManaPollution(player *models.Player, gu models.GuInstance, spec model
 func handleEnslaveBeastTier(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem) (string, error) {
 	tier := guSectionValue(spec, "support", "enslave_beast_tier")
 	return fmt.Sprintf("Luyện hóa thành công, thu phục thú nô cấp %.0f.", tier), nil
+}
+
+func handleLifespanBoost(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem) (string, error) {
+	val, ok := models.GetGuEffectSection(spec, "active")["add_lifespan_years"]
+	if !ok {
+		return "", fmt.Errorf("không tìm thấy thuộc tính add_lifespan_years trong cấu hình của Cổ trùng")
+	}
+	years := val
+	player.Lifespan += years
+	player.MaxLifespan += years
+	return fmt.Sprintf("Cổ trùng Thọ Nguyên hòa tan vào không khiếu! Đạo hữu được ban thêm vĩnh viễn %.0f năm thọ mệnh.", years), nil
 }
 
 func tickStatusEffects(player *models.Player, ctx *CombatContext) {

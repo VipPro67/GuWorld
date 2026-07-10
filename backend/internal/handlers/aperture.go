@@ -221,6 +221,7 @@ func GetImmortalAperture(c *gin.Context) {
 
 	ap.CreatedAt = createdAt
 	ap.UpdatedAt = updatedAt
+	FillApertureEnvironment(&ap, player.DaoMarks)
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction failure"})
@@ -638,9 +639,25 @@ func CollectApertureResource(c *gin.Context) {
 	_ = tx.QueryRow(`SELECT amount FROM dao_marks WHERE player_id = $1 AND path = $2`, playerID, n.Path).Scan(&daoMarks)
 	daoMultiplier := 1.0 + float64(daoMarks)*0.005
 
+	// Check if player has Tiên Thai Chí Tôn (ignore Dao conflicts)
+	hasSovereignFetus := false
+	var guJSON []byte
+	errGu := tx.QueryRow(`SELECT gu_inventory FROM players WHERE id = $1`, playerID).Scan(&guJSON)
+	if errGu == nil {
+		var guInv models.GuInventory
+		if json.Unmarshal(guJSON, &guInv) == nil {
+			for _, gu := range guInv {
+				if gu.GuID == "GU_SOVEREIGN_FETUS" && gu.Equipped && gu.Status == "ACTIVE" {
+					hasSovereignFetus = true
+					break
+				}
+			}
+		}
+	}
+
 	// 2. Conflict multiplier
 	conflictMultiplier := 1.0
-	if CheckNodeConflict(n, allNodes) {
+	if CheckNodeConflict(n, allNodes) && !hasSovereignFetus {
 		conflictMultiplier = 0.5
 	}
 
@@ -722,11 +739,63 @@ func CollectApertureResource(c *gin.Context) {
 		}
 	}
 
+	// Calculate dynamic environment parameters from player's Dao Marks
+	var daoJSON []byte
+	var daoMap models.DaoMarksMap
+	_ = tx.QueryRow(`SELECT dao_marks FROM players WHERE id = $1`, playerID).Scan(&daoJSON)
+	if daoJSON != nil {
+		_ = json.Unmarshal(daoJSON, &daoMap)
+	}
+	if daoMap == nil {
+		daoMap = make(models.DaoMarksMap)
+	}
+
+	tempFire := daoMap["fire"]
+	tempIce := daoMap["ice"]
+	tempMoon := daoMap["moon"]
+	temperature := 25.0 + float64(tempFire)/500.0 - float64(tempIce+tempMoon)/500.0
+
+	tempWater := daoMap["water"]
+	humidity := 50.0 + float64(tempWater)/200.0 - float64(tempFire)/200.0
+	if humidity < 0 {
+		humidity = 0
+	}
+	if humidity > 100 {
+		humidity = 100
+	}
+
+	suitabilityMultiplier := 1.0
+	cleanNodePath := strings.TrimSuffix(strings.ToLower(n.Path), " path")
+	switch cleanNodePath {
+	case "moon":
+		if temperature > 40.0 || temperature < 10.0 {
+			suitabilityMultiplier *= 0.6
+		}
+		if humidity < 30.0 {
+			suitabilityMultiplier *= 0.7
+		}
+	case "wood":
+		if temperature < 5.0 {
+			suitabilityMultiplier *= 0.5
+		}
+		if humidity < 25.0 {
+			suitabilityMultiplier *= 0.6
+		}
+	case "fire":
+		if temperature < 20.0 {
+			suitabilityMultiplier *= 0.5
+		}
+	case "water":
+		if humidity < 40.0 {
+			suitabilityMultiplier *= 0.5
+		}
+	}
+
 	baseReward := n.ProductionAmount * multiples
 	
 	// Apply area size production multiplier
 	areaMultiplier := 1.0 + float64(areaSize)/10000000.0
-	totalReward := int(float64(baseReward) * areaMultiplier * daoMultiplier * conflictMultiplier * ecoMultiplier * variantBonus * laborMultiplier)
+	totalReward := int(float64(baseReward) * areaMultiplier * daoMultiplier * conflictMultiplier * ecoMultiplier * variantBonus * laborMultiplier * suitabilityMultiplier)
 	if totalReward < 1 && baseReward > 0 {
 		totalReward = 1
 	}
@@ -779,6 +848,10 @@ func CollectApertureResource(c *gin.Context) {
 	} else {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Loại sản phẩm không hợp lệ"})
 		return
+	}
+
+	if suitabilityMultiplier < 1.0 {
+		rewardMsg += " (Sản lượng bị giảm do sinh cảnh Tiên Khiếu không tương thích!)"
 	}
 
 	// 4. Update node timer
@@ -1260,5 +1333,63 @@ func GetApertureVariantHumans(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, list)
+}
+
+func FillApertureEnvironment(ap *models.ImmortalAperture, daoMarks models.DaoMarksMap) {
+	if daoMarks == nil {
+		daoMarks = make(models.DaoMarksMap)
+	}
+	fire := daoMarks["fire"]
+	ice := daoMarks["ice"]
+	moon := daoMarks["moon"]
+	ap.Temperature = 25.0 + float64(fire)/500.0 - float64(ice+moon)/500.0
+
+	water := daoMarks["water"]
+	humidity := 50.0 + float64(water)/200.0 - float64(fire)/200.0
+	if humidity < 0 {
+		humidity = 0
+	}
+	if humidity > 100 {
+		humidity = 100
+	}
+	ap.Humidity = humidity
+
+	qi := daoMarks["qi"]
+	rule := daoMarks["rule"]
+	ap.Qi = 100.0 + float64(qi+rule)/100.0
+
+	maxAmount := 0
+	dominantPath := ""
+	for path, amount := range daoMarks {
+		if amount > maxAmount {
+			maxAmount = amount
+			dominantPath = path
+		}
+	}
+
+	if maxAmount > 100000 {
+		ap.Terrain = fmt.Sprintf("Bí Cảnh %s Đạo", strings.Title(dominantPath))
+	} else if maxAmount > 20000 {
+		ap.Terrain = fmt.Sprintf("Địa Mạch %s Đạo", strings.Title(dominantPath))
+	} else if maxAmount > 5000 {
+		switch dominantPath {
+		case "fire":
+			ap.Terrain = "Vùng Núi Lửa Hoạt Động"
+		case "water":
+			ap.Terrain = "Vùng Biển Sâu Tiên Khiếu"
+		case "earth":
+			ap.Terrain = "Vùng Núi Non Trùng Điệp"
+		case "wood":
+			ap.Terrain = "Linh Hải Đại Sâm Lâm"
+		case "wind":
+			ap.Terrain = "Phong Nha Cốc Tiên Khiếu"
+		case "lightning":
+			ap.Terrain = "Lôi Điện Hải Vực"
+		default:
+			ap.Terrain = fmt.Sprintf("Vùng Đặc Thù %s Đạo", strings.Title(dominantPath))
+		}
+	} else {
+		ap.Terrain = "Thảo Nguyên Trù Phú"
+	}
 }
 

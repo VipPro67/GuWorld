@@ -9,13 +9,13 @@ import (
 	"time"
 )
 
-type GuEffects map[string]map[string]float64
+type GuEffects map[string]map[string]interface{}
 
 type GuDictionaryItem struct {
 	ID           string    `json:"id"`
 	Name         string    `json:"name"`
 	Rank         int       `json:"rank"`
-	Path         string    `json:"path"`
+	Path         []string  `json:"path"`
 	Type         string    `json:"gu_type"`
 	BaseManaCost float64   `json:"base_mana_cost"`
 	Effects      GuEffects `json:"effects"`
@@ -23,7 +23,6 @@ type GuDictionaryItem struct {
 	HungerRate   int       `json:"hunger_rate"`
 	MaxHunger    int       `json:"max_hunger"`
 	Description  string    `json:"description"`
-	OriginRegion string    `json:"origin_region"`
 	Rarity       string    `json:"rarity"`
 	IsImmortal   bool      `json:"is_immortal"`
 	PrimaryRole  string    `json:"primary_role"`
@@ -31,6 +30,7 @@ type GuDictionaryItem struct {
 	CombatTags   []string  `json:"combat_tags"`
 	SupportTags  []string  `json:"support_tags"`
 	TargetType   string    `json:"target_type"`
+	BasePrice    int       `json:"base_price"`
 }
 
 type Gu = GuDictionaryItem
@@ -59,32 +59,28 @@ func (g *GuEffects) Scan(value interface{}) error {
 		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 	}
 
-	var nested map[string]map[string]json.RawMessage
+	var nested map[string]map[string]interface{}
 	if err := json.Unmarshal(b, &nested); err == nil && hasGuEffectSection(nested) {
 		effects := defaultGuEffects()
 		for section, values := range nested {
 			if !validGuEffectSection(section) {
 				continue
 			}
-			for key, raw := range values {
-				if number, ok := rawEffectNumber(raw); ok {
-					effects[section][key] = number
-				}
+			for key, val := range values {
+				effects[section][key] = val
 			}
 		}
 		*g = effects
 		return nil
 	}
 
-	var flat map[string]json.RawMessage
+	var flat map[string]interface{}
 	if err := json.Unmarshal(b, &flat); err != nil {
 		return err
 	}
 	effects := defaultGuEffects()
-	for key, raw := range flat {
-		if number, ok := rawEffectNumber(raw); ok {
-			effects["active"][key] = number
-		}
+	for key, val := range flat {
+		effects["active"][key] = val
 	}
 	*g = effects
 	return nil
@@ -107,25 +103,47 @@ func GetGuEffectSection(gu Gu, section string) map[string]float64 {
 	}
 	result := make(map[string]float64, len(values))
 	for k, v := range values {
-		result[k] = v
+		switch val := v.(type) {
+		case float64:
+			result[k] = val
+		case float32:
+			result[k] = float64(val)
+		case int:
+			result[k] = float64(val)
+		case int64:
+			result[k] = float64(val)
+		case bool:
+			if val {
+				result[k] = 1.0
+			} else {
+				result[k] = 0.0
+			}
+		}
 	}
 	return result
 }
 
 func defaultGuEffects() GuEffects {
-	return GuEffects{"active": map[string]float64{}, "support": map[string]float64{}, "passive": map[string]float64{}, "house": map[string]float64{}}
+	return GuEffects{
+		"active":     map[string]interface{}{},
+		"support":    map[string]interface{}{},
+		"passive":    map[string]interface{}{},
+		"house":      map[string]interface{}{},
+		"explore":    map[string]interface{}{},
+		"refinement": map[string]interface{}{},
+	}
 }
 
 func validGuEffectSection(section string) bool {
 	switch section {
-	case "active", "support", "passive", "house":
+	case "active", "support", "passive", "house", "explore", "refinement":
 		return true
 	default:
 		return false
 	}
 }
 
-func hasGuEffectSection(values map[string]map[string]json.RawMessage) bool {
+func hasGuEffectSection(values map[string]map[string]interface{}) bool {
 	for section := range values {
 		if validGuEffectSection(section) {
 			return true
@@ -153,7 +171,7 @@ var GuRegistry = make(map[string]GuDictionaryItem)
 
 func LoadGuRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
-		SELECT id, name, rank, path, gu_type, base_mana_cost, effects, food_types, hunger_rate, max_hunger, description, target_type, origin_region, rarity, is_immortal, primary_role, combat_roles, combat_tags, support_tags
+		SELECT id, name, rank, path, gu_type, base_mana_cost, effects, food_types, hunger_rate, max_hunger, description, target_type, rarity, is_immortal, primary_role, combat_roles, combat_tags, support_tags, COALESCE(base_price, 0)
 		FROM gu_dictionary
 	`)
 	if err != nil {
@@ -166,20 +184,24 @@ func LoadGuRegistry(db *sql.DB) error {
 
 	for rows.Next() {
 		var item GuDictionaryItem
-		var foodTypesRaw, combatRolesRaw, combatTagsRaw, supportTagsRaw []byte
+		var pathRaw, foodTypesRaw, combatRolesRaw, combatTagsRaw, supportTagsRaw []byte
 		err = rows.Scan(
-			&item.ID, &item.Name, &item.Rank, &item.Path,
+			&item.ID, &item.Name, &item.Rank, &pathRaw,
 			&item.Type, &item.BaseManaCost,
 			&item.Effects, &foodTypesRaw, &item.HungerRate,
 			&item.MaxHunger, &item.Description, &item.TargetType,
-			&item.OriginRegion, &item.Rarity, &item.IsImmortal, &item.PrimaryRole,
-			&combatRolesRaw, &combatTagsRaw, &supportTagsRaw,
+			&item.Rarity, &item.IsImmortal, &item.PrimaryRole,
+			&combatRolesRaw, &combatTagsRaw, &supportTagsRaw, &item.BasePrice,
 		)
 		if err != nil {
 			log.Printf("Warning: failed to scan Gu spec row: %v", err)
 			continue
 		}
 
+		if err := json.Unmarshal(pathRaw, &item.Path); err != nil {
+			// fallback to single string in array if unmarshal fails (legacy)
+			item.Path = []string{string(pathRaw)}
+		}
 		_ = json.Unmarshal(foodTypesRaw, &item.FoodTypes)
 		_ = json.Unmarshal(combatRolesRaw, &item.CombatRoles)
 		_ = json.Unmarshal(combatTagsRaw, &item.CombatTags)

@@ -99,7 +99,7 @@ func InitSchema() error {
 		id VARCHAR(50) PRIMARY KEY,
 		name VARCHAR(100) NOT NULL,
 		rank INTEGER NOT NULL,
-		path VARCHAR(50) NOT NULL DEFAULT 'Moon Path',
+		path JSONB NOT NULL DEFAULT '[]'::jsonb,
 		gu_type VARCHAR(50) NOT NULL,
 		base_mana_cost DOUBLE PRECISION NOT NULL DEFAULT 0,
 		effects JSONB NOT NULL DEFAULT '{"active":{},"support":{},"passive":{},"house":{}}',
@@ -108,7 +108,6 @@ func InitSchema() error {
 		max_hunger INTEGER DEFAULT 100,
 		description TEXT,
 		target_type VARCHAR(50) NOT NULL DEFAULT 'SINGLE',
-		origin_region VARCHAR(50) NOT NULL DEFAULT 'Southern_Border',
 		rarity VARCHAR(50),
 		is_immortal BOOLEAN DEFAULT false,
 		primary_role VARCHAR(80),
@@ -223,21 +222,6 @@ func InitSchema() error {
 	);`)
 	if err != nil {
 		return fmt.Errorf("failed to create immortal_apertures table: %w", err)
-	}
-
-	// 6. Create dao_marks table
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS dao_marks (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		path VARCHAR(50) NOT NULL,
-		amount INTEGER NOT NULL DEFAULT 0,
-		created_at TIMESTAMP DEFAULT now(),
-		updated_at TIMESTAMP DEFAULT now(),
-		UNIQUE(player_id, path)
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create dao_marks table: %w", err)
 	}
 
 	// 7. Create aperture_resource_nodes table
@@ -600,6 +584,20 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create player_sect_missions table: %w", err)
 	}
 
+	// 4.16. Create npcs
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS npcs (
+		id VARCHAR(50) PRIMARY KEY,
+		name VARCHAR(100) NOT NULL,
+		sect_id VARCHAR(50) REFERENCES sects(id) ON DELETE SET NULL,
+		role VARCHAR(50) DEFAULT 'DISCIPLE',
+		aptitude_percent INTEGER DEFAULT 50,
+		created_at TIMESTAMP DEFAULT now()
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create npcs table: %w", err)
+	}
+
 	// Premium wallet, top-up, and shop accounting tables
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS wallets (
@@ -774,8 +772,7 @@ func InitSchema() error {
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS cleared_cells JSONB NOT NULL DEFAULT '{}';`, "cleared_cells"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS immortal_stones DOUBLE PRECISION NOT NULL DEFAULT 0;`, "immortal_stones"},
 		{`ALTER TABLE refining_recipes ADD COLUMN IF NOT EXISTS immortal_essence_stones_cost DOUBLE PRECISION NOT NULL DEFAULT 0;`, "immortal_essence_stones_cost"},
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS origin_region VARCHAR(50) NOT NULL DEFAULT 'Southern_Border';`, "origin_region"},
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS path VARCHAR(50) NOT NULL DEFAULT 'Moon Path';`, "path"},
+		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS path JSONB NOT NULL DEFAULT '[]'::jsonb;`, "path"},
 		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS base_mana_cost DOUBLE PRECISION NOT NULL DEFAULT 0;`, "base_mana_cost"},
 		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{"active":{},"support":{},"passive":{},"house":{}}';`, "effects"},
 		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS food_types JSONB NOT NULL DEFAULT '[]';`, "food_types"},
@@ -983,6 +980,9 @@ func InitSchema() error {
 			error_message TEXT,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);`, "create_audit_logs_table"},
+		// Unified pricing: base_price column as single source of truth for all pricing calculations
+		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS base_price INTEGER NOT NULL DEFAULT 0;`, "gu_dictionary.base_price"},
+		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS base_price INTEGER NOT NULL DEFAULT 0;`, "item_dictionary.base_price"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {
@@ -1004,6 +1004,19 @@ func InitSchema() error {
 	_, _ = DB.Exec(`ALTER TABLE gu_dictionary DROP COLUMN IF EXISTS base_power;`)
 	_, _ = DB.Exec(`ALTER TABLE gu_dictionary DROP COLUMN IF EXISTS base_damage;`)
 	_, _ = DB.Exec(`ALTER TABLE gu_dictionary DROP COLUMN IF EXISTS base_defense;`)
+	_, _ = DB.Exec(`ALTER TABLE gu_dictionary DROP COLUMN IF EXISTS origin_region;`)
+
+	// Migrations for path column in gu_dictionary (varchar to jsonb)
+	var dataType string
+	_ = DB.QueryRow(`
+		SELECT data_type FROM information_schema.columns 
+		WHERE table_name = 'gu_dictionary' AND column_name = 'path'
+	`).Scan(&dataType)
+	if dataType == "character varying" {
+		log.Println("Migrating gu_dictionary.path from VARCHAR to JSONB...")
+		_, _ = DB.Exec(`ALTER TABLE gu_dictionary ALTER COLUMN path TYPE JSONB USING jsonb_build_array(path);`)
+		_, _ = DB.Exec(`ALTER TABLE gu_dictionary ALTER COLUMN path SET DEFAULT '[]'::jsonb;`)
+	}
 
 	// 4b. Create indexes for frequently queried foreign key columns
 	indexes := []struct {
@@ -1058,6 +1071,11 @@ func InitSchema() error {
 	// 5c. Seed tông môn / sects data
 	if err = SeedSects(); err != nil {
 		return fmt.Errorf("database sects seeding failed: %w", err)
+	}
+
+	// 5d. Seed NPCs cho Huyết Sọ Cổ hiến tế
+	if err = seedNPCs(); err != nil {
+		return fmt.Errorf("database npcs seeding failed: %w", err)
 	}
 
 	log.Println("Database schema initialized successfully")
@@ -1167,11 +1185,13 @@ func normalizedGuEffectsJSON(raw string, rowLabel string) string {
 	value := safeJSONObject(raw, `{}`, rowLabel)
 	var parsed map[string]interface{}
 	_ = json.Unmarshal([]byte(value), &parsed)
-	sections := map[string]map[string]float64{
-		"active":  {},
-		"support": {},
-		"passive": {},
-		"house":   {},
+	sections := map[string]map[string]interface{}{
+		"active":     {},
+		"support":    {},
+		"passive":    {},
+		"house":      {},
+		"explore":    {},
+		"refinement": {},
 	}
 	sectionFound := false
 	for section := range sections {
@@ -1179,16 +1199,7 @@ func normalizedGuEffectsJSON(raw string, rowLabel string) string {
 			sectionFound = true
 			if values, ok := rawSection.(map[string]interface{}); ok {
 				for key, value := range values {
-					switch v := value.(type) {
-					case float64:
-						sections[section][key] = v
-					case bool:
-						if v {
-							sections[section][key] = 1
-						} else {
-							sections[section][key] = 0
-						}
-					}
+					sections[section][key] = value
 				}
 			} else {
 				log.Printf("Warning: Gu effects section %s must be object in %s", section, rowLabel)
@@ -1197,16 +1208,7 @@ func normalizedGuEffectsJSON(raw string, rowLabel string) string {
 	}
 	if !sectionFound {
 		for key, value := range parsed {
-			switch v := value.(type) {
-			case float64:
-				sections["active"][key] = v
-			case bool:
-				if v {
-					sections["active"][key] = 1
-				} else {
-					sections["active"][key] = 0
-				}
-			}
+			sections["active"][key] = value
 		}
 	}
 	bytes, _ := json.Marshal(sections)
@@ -1230,6 +1232,7 @@ func seedItemsFromCSV(filename string) error {
 	effectsIdx := colIndex(header, "effects")
 	tagsIdx := colIndex(header, "tags")
 	descIdx := colIndex(header, "description")
+	basePriceIdx := colIndex(header, "base_price")
 
 	if idIdx < 0 || nameIdx < 0 || typeIdx < 0 {
 		return fmt.Errorf("Item.csv missing required columns (id, name, item_type)")
@@ -1289,13 +1292,19 @@ func seedItemsFromCSV(filename string) error {
 			desc = strings.TrimSpace(row[descIdx])
 		}
 
+		basePrice := 0
+		if basePriceIdx >= 0 && basePriceIdx < len(row) {
+			fmt.Sscanf(strings.TrimSpace(row[basePriceIdx]), "%d", &basePrice)
+		}
+
 		_, err = DB.Exec(`
-			INSERT INTO item_dictionary (id, name, item_type, rarity, rank, path, effects, tags, description)
-			VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9)
+			INSERT INTO item_dictionary (id, name, item_type, rarity, rank, path, effects, tags, description, base_price)
+			VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10)
 			ON CONFLICT (id) DO UPDATE
 			SET name=EXCLUDED.name, item_type=EXCLUDED.item_type, rarity=EXCLUDED.rarity, rank=EXCLUDED.rank,
-			    path=EXCLUDED.path, effects=EXCLUDED.effects, tags=EXCLUDED.tags, description=EXCLUDED.description
-		`, id, name, itemType, rarity, rank, path, effects, tags, desc)
+			    path=EXCLUDED.path, effects=EXCLUDED.effects, tags=EXCLUDED.tags, description=EXCLUDED.description,
+			    base_price=CASE WHEN EXCLUDED.base_price > 0 THEN EXCLUDED.base_price ELSE item_dictionary.base_price END
+		`, id, name, itemType, rarity, rank, path, effects, tags, desc, basePrice)
 		if err != nil {
 			return fmt.Errorf("upsert item %s: %w", id, err)
 		}
@@ -1325,7 +1334,6 @@ func seedGusFromCSV(filename string) error {
 	}
 	maxHungerIdx := col("max_hunger")
 	descIdx := col("description")
-	originIdx := col("origin_region")
 	pathIdx := col("path")
 	manaCostIdx := col("base_mana_cost")
 	effectsIdx := col("effects")
@@ -1335,6 +1343,7 @@ func seedGusFromCSV(filename string) error {
 	combatRolesIdx := col("combat_roles")
 	combatTagsIdx := col("combat_tags")
 	supportTagsIdx := col("support_tags")
+	basePriceIdx := col("base_price")
 
 	if idIdx < 0 || nameIdx < 0 || rankIdx < 0 {
 		return fmt.Errorf("Gu.csv missing required columns (id, name, rank)")
@@ -1378,7 +1387,6 @@ func seedGusFromCSV(filename string) error {
 		foodType := get(row, foodIdx)
 		maxHungerStr := get(row, maxHungerIdx)
 		desc := get(row, descIdx)
-		origin := get(row, originIdx)
 		path := get(row, pathIdx)
 		manaCostStr := get(row, manaCostIdx)
 		effectsRaw := get(row, effectsIdx)
@@ -1388,6 +1396,9 @@ func seedGusFromCSV(filename string) error {
 		combatRolesRaw := get(row, combatRolesIdx)
 		combatTagsRaw := get(row, combatTagsIdx)
 		supportTagsRaw := get(row, supportTagsIdx)
+		basePriceStr := get(row, basePriceIdx)
+		basePrice := 0
+		fmt.Sscanf(basePriceStr, "%d", &basePrice)
 
 		rank := 1
 		fmt.Sscanf(rankStr, "%d", &rank)
@@ -1398,11 +1409,15 @@ func seedGusFromCSV(filename string) error {
 		manaCost := 0.0
 		fmt.Sscanf(manaCostStr, "%f", &manaCost)
 
-		if origin == "" {
-			origin = "Southern_Border"
-		}
-		if path == "" {
-			path = "Moon Path"
+		pathJSON := "[]"
+		if path != "" {
+			if strings.HasPrefix(path, "[") && strings.HasSuffix(path, "]") {
+				pathJSON = safeJSONArray(path, "[]", fmt.Sprintf("%s path", id))
+			} else {
+				pathJSON = fmt.Sprintf(`["%s"]`, path)
+			}
+		} else {
+			pathJSON = `["Moon Path"]`
 		}
 		effectsRaw = normalizedGuEffectsJSON(effectsRaw, fmt.Sprintf("%s effects", id))
 		foodTypesJSON := "[]"
@@ -1443,15 +1458,16 @@ func seedGusFromCSV(filename string) error {
 		}
 
 		_, err := DB.Exec(`
-			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, origin_region, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, is_immortal, primary_role, combat_roles, combat_tags, support_tags)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17::jsonb, $18::jsonb, $19::jsonb)
+			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, is_immortal, primary_role, combat_roles, combat_tags, support_tags, base_price)
+			VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8, $9::jsonb, $10, $11, $12, $13, $14, $15, $16::jsonb, $17::jsonb, $18::jsonb, $19)
 			ON CONFLICT (id) DO UPDATE
 			SET name=EXCLUDED.name, rank=EXCLUDED.rank, path=EXCLUDED.path, gu_type=EXCLUDED.gu_type,
-			    origin_region=EXCLUDED.origin_region, base_mana_cost=EXCLUDED.base_mana_cost, effects=EXCLUDED.effects,
+			    base_mana_cost=EXCLUDED.base_mana_cost, effects=EXCLUDED.effects,
 			    hunger_rate=EXCLUDED.hunger_rate, food_types=EXCLUDED.food_types, max_hunger=EXCLUDED.max_hunger, description=EXCLUDED.description,
 			    target_type=EXCLUDED.target_type, rarity=EXCLUDED.rarity, is_immortal=EXCLUDED.is_immortal, primary_role=EXCLUDED.primary_role,
-			    combat_roles=EXCLUDED.combat_roles, combat_tags=EXCLUDED.combat_tags, support_tags=EXCLUDED.support_tags
-		`, id, name, rank, path, guType, origin, manaCost, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType, rarity, isImmortal, primaryRole, combatRolesJSON, combatTagsJSON, supportTagsJSON)
+			    combat_roles=EXCLUDED.combat_roles, combat_tags=EXCLUDED.combat_tags, support_tags=EXCLUDED.support_tags,
+			    base_price=CASE WHEN EXCLUDED.base_price > 0 THEN EXCLUDED.base_price ELSE gu_dictionary.base_price END
+		`, id, name, rank, pathJSON, guType, manaCost, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType, rarity, isImmortal, primaryRole, combatRolesJSON, combatTagsJSON, supportTagsJSON, basePrice)
 		if err != nil {
 			log.Printf("Warning: upsert gu %s failed: %v", id, err)
 			continue
@@ -2212,6 +2228,41 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	
+
 	return exists, nil
+}
+
+func seedNPCs() error {
+	var count int
+	err := DB.QueryRow("SELECT COUNT(*) FROM npcs").Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		npcs := []struct {
+			id              string
+			name            string
+			sectID          string
+			role            string
+			aptitudePercent int
+		}{
+			{"npc_disciple_1", "Thạch Hạo (Đệ tử)", "gu_yue_clan", "DISCIPLE", 65},
+			{"npc_disciple_2", "Lâm Động (Đệ tử)", "gu_yue_clan", "DISCIPLE", 55},
+			{"npc_disciple_3", "Tiêu Viêm (Đệ tử)", "gu_yue_clan", "DISCIPLE", 70},
+			{"npc_clansman_1", "Cổ Nguyệt Đạt (Tộc nhân)", "gu_yue_clan", "CLANSMAN", 45},
+			{"npc_clansman_2", "Cổ Nguyệt Đạo (Tộc nhân)", "gu_yue_clan", "CLANSMAN", 50},
+		}
+		for _, npc := range npcs {
+			_, err = DB.Exec(`
+				INSERT INTO npcs (id, name, sect_id, role, aptitude_percent)
+				VALUES ($1, $2, $3, $4, $5)
+				ON CONFLICT (id) DO NOTHING
+			`, npc.id, npc.name, npc.sectID, npc.role, npc.aptitudePercent)
+			if err != nil {
+				return err
+			}
+		}
+		log.Println("Seeded initial NPCs for Huyết Sọ Cổ hiến tế.")
+	}
+	return nil
 }

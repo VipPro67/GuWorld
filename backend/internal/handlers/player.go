@@ -1062,6 +1062,23 @@ func FeedGu(c *gin.Context) {
 		foodName = itemSpec.Name
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "gu.feed",
+		EntityType:     "gu_instance",
+		EntityID:       req.GuInstanceID,
+		RequestSummary: fmt.Sprintf("Cho Cổ trùng %s (Instance ID: %s) ăn %s", specs.Name, req.GuInstanceID[:8], foodName),
+		Metadata: map[string]interface{}{
+			"gu_id":      targetGu.GuID,
+			"gu_name":    specs.Name,
+			"food_id":    chosenFood,
+			"food_name":  foodName,
+			"new_hunger": targetGu.Hunger,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
+
 	c.JSON(http.StatusOK, gin.H{
 		"player":  player,
 		"message": fmt.Sprintf("Cho %s ăn thành công! Tiêu hao 1 %s.", specs.Name, foodName),
@@ -1201,6 +1218,22 @@ func FeedGroup(c *gin.Context) {
 		foodDetails = append(foodDetails, fmt.Sprintf("%dx %s", qty, foodName))
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "gu.feed_group",
+		EntityType:     "gu_dictionary",
+		EntityID:       req.GuID,
+		RequestSummary: fmt.Sprintf("Cho ăn hàng loạt %d con %s. Tiêu hao: %s", fedCount, specs.Name, strings.Join(foodDetails, ", ")),
+		Metadata: map[string]interface{}{
+			"gu_id":         req.GuID,
+			"gu_name":       specs.Name,
+			"fed_count":     fedCount,
+			"food_consumed": foodConsumed,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
+
 	c.JSON(http.StatusOK, gin.H{
 		"player":  player,
 		"message": fmt.Sprintf("Đã cho ăn thành công %d con %s! Tiêu hao: %s.", fedCount, specs.Name, strings.Join(foodDetails, ", ")),
@@ -1217,7 +1250,7 @@ func loadPlayerForStatus(q playerQueryRower, id uuid.UUID, forUpdate bool) (mode
 	var player models.Player
 
 	query := `
-		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), COALESCE(ref_code, ''), COALESCE(avatar_url, '')
+		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, max_lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), COALESCE(ref_code, ''), COALESCE(avatar_url, ''), combat_settings
 		FROM players
 		WHERE id = $1
 	`
@@ -1238,6 +1271,7 @@ func loadPlayerForStatus(q playerQueryRower, id uuid.UUID, forUpdate bool) (mode
 		&player.Email, &player.GoogleID, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
 		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.AvatarURL,
+		&player.CombatSettings,
 	)
 	if err != nil {
 		return player, err
@@ -1488,7 +1522,14 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 
 			// Ràng buộc Bí cảnh (Secret Realm): Chỉ dùng Moon Path hoặc Earth Path
 			if player.CurrentRegion == "three_kings_inheritance" {
-				if spec.Path != "Moon Path" && spec.Path != "Earth Path" {
+				hasAllowedPath := false
+				for _, p := range spec.Path {
+					if p == "Moon Path" || p == "Earth Path" {
+						hasAllowedPath = true
+						break
+					}
+				}
+				if !hasAllowedPath {
 					continue
 				}
 			}
@@ -1981,9 +2022,9 @@ func SetVitalGu(c *gin.Context) {
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "gu.set_vital", EntityType: "gu_instance",
-		EntityID: req.GuInstanceID,
+		EntityID:       req.GuInstanceID,
 		RequestSummary: fmt.Sprintf("Thiết lập %s thành Bản Mệnh Cổ | hadVital=%v", targetGu.GuID, hadVital),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"player":  player,

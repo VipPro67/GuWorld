@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"log"
+	"fmt"
 	"os"
 	"time"
 
@@ -16,19 +16,6 @@ var Ctx = context.Background()
 
 // Connect initializes the Redis connection using REDIS_URL
 func Connect() error {
-	/*
-		REDIS_HOST=large-sheep-19195.upstash.io
-
-		REDIS_PORT=6379
-
-		REDIS_USERNAME=default
-
-		REDIS_PASSWORD=AUr7AAIncDJmNWFjOGNlZWE0NzU0ODM3OTVkY2NjZGIxNDk0ZGU0MXAyMTkxOTU
-
-		REDIS_SSL=true
-
-		REDIS_TIMEOUT=10000
-	*/
 	redisHost := os.Getenv("REDIS_HOST")
 	redisPort := os.Getenv("REDIS_PORT")
 	redisUsername := os.Getenv("REDIS_USERNAME")
@@ -43,7 +30,7 @@ func Connect() error {
 	}
 
 	if redisHost == "" || redisPort == "" {
-		log.Println("Redis host or port not configured, skipping Redis connection")
+		fmt.Println("Redis host or port not configured, skipping Redis connection")
 		return nil
 	}
 
@@ -65,12 +52,12 @@ func Connect() error {
 
 	// Test the connection
 	if err := Client.Ping(Ctx).Err(); err != nil {
-		log.Printf("Failed to connect to Redis: %v", err)
+		fmt.Printf("Failed to connect to Redis: %v", err)
 		Client = nil // Set to nil to indicate Redis is not available
 		return err
 	}
 
-	log.Println("Successfully connected to Redis")
+	fmt.Println("Successfully connected to Redis")
 	return nil
 }
 

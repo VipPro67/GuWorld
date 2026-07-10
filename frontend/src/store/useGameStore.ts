@@ -322,6 +322,10 @@ export interface ImmortalAperture {
   state: 'STABLE' | 'TRIBULATION_PENDING' | 'TRIBULATION_ACTIVE' | 'DAMAGED' | 'DESTROYED';
   created_at: string;
   updated_at: string;
+  temperature?: number;
+  humidity?: number;
+  qi?: number;
+  terrain?: string;
 }
 
 export interface DaoMark {
@@ -411,9 +415,8 @@ export interface GuSpec {
   id: string;
   name: string;
   rank: number;
-  path: string;
+  path: string[];
   gu_type: string;
-  origin_region: string;
   base_mana_cost: number;
   effects: GuEffects;
   hunger_rate: number;
@@ -426,6 +429,7 @@ export interface GuSpec {
   combat_roles: string[];
   combat_tags: string[];
   support_tags: string[];
+  base_price?: number;
 }
 
 export interface ItemSpec {
@@ -439,6 +443,7 @@ export interface ItemSpec {
   effects?: Record<string, number>;
   tags?: string[];
   description: string;
+  base_price?: number;
 }
 
 export interface InstanceOption {
@@ -717,6 +722,7 @@ interface GameState {
   completeQuest: (questId: string) => Promise<{ success: boolean; message: string } | null>;
   rechargeWithStones: (stones: number) => Promise<{ success: boolean; message: string } | null>;
   clearStress: () => Promise<{ success: boolean; message: string } | null>;
+  sacrificeNPC: (npcId: string) => Promise<{ success: boolean; message: string } | null>;
   exploreNode: (nodeId: string) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
   executeCombatTurn: (equippedGuIds: string[], isCharge?: boolean, targetId?: string, targetX?: number, targetY?: number) => Promise<{ player: Player; logs: string[]; enemy: CombatState | null; victory: boolean; defeat: boolean } | null>;
   executeAutoCombat: (loadout: any) => Promise<{ logs: any[]; winner: string; combatants?: any[] } | null>;
@@ -724,6 +730,9 @@ interface GameState {
   combatHistoryLoading: boolean;
   fetchCombatHistory: () => Promise<void>;
   fetchCombatHistoryEntry: (id: string) => Promise<CombatHistoryEntry | null>;
+  auditLogs: any[];
+  auditLogsLoading: boolean;
+  fetchAuditLogs: (filters?: { action?: string; entity_type?: string; success?: boolean; limit?: number; offset?: number }) => Promise<void>;
   referralsData: {
     ref_code: string;
     referees: any[];
@@ -2087,6 +2096,43 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
+  sacrificeNPC: async (npcId: string) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return null;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/sacrifice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ npc_id: npcId }),
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Hiến tế thất bại.");
+
+      const updatedPlayer = { ...get().player };
+      if (updatedPlayer) {
+        updatedPlayer.aptitude_percent = data.new_aptitude;
+        updatedPlayer.aptitude_type = data.aptitude_type;
+        updatedPlayer.aperture_stress = data.aperture_stress;
+        set({ player: updatedPlayer as any });
+      }
+
+      get().addLog(data.message || "Hiến tế hoàn tất.");
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Hiến tế lỗi: ${err.message}`);
+      return { success: false, message: err.message };
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
   fetchKillerMoves: async () => {
     const { token, logout } = get();
     if (!token) return;
@@ -2364,9 +2410,42 @@ export const useGameStore = create<GameState>((set, get) => {
       const data = await response.json();
       if (response.ok) return data;
     } catch {
-      // Non-critical
+      return null;
     }
-    return null;
+  },
+
+  auditLogs: [],
+  auditLogsLoading: false,
+  fetchAuditLogs: async (filters) => {
+    const { token, logout } = get();
+    if (!token) return;
+
+    set({ auditLogsLoading: true });
+    try {
+      let url = `${BACKEND_URL}/api/player/audit-logs`;
+      const queryParams: string[] = [];
+      if (filters) {
+        if (filters.action) queryParams.push(`action=${encodeURIComponent(filters.action)}`);
+        if (filters.entity_type) queryParams.push(`entity_type=${encodeURIComponent(filters.entity_type)}`);
+        if (filters.success !== undefined) queryParams.push(`success=${filters.success}`);
+        if (filters.limit !== undefined) queryParams.push(`limit=${filters.limit}`);
+        if (filters.offset !== undefined) queryParams.push(`offset=${filters.offset}`);
+      }
+      if (queryParams.length > 0) {
+        url += `?${queryParams.join("&")}`;
+      }
+
+      const response = await authFetch(url, { method: "GET" });
+      if (response.status === 401 || response.status === 403) { logout(); return; }
+      const data = await response.json();
+      if (response.ok) {
+        set({ auditLogs: data || [] });
+      }
+    } catch {
+      // Non-critical
+    } finally {
+      set({ auditLogsLoading: false });
+    }
   },
 
 

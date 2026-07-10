@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { TopupView } from "@/components/TopupView";
+import { PremiumStoreView } from "@/components/PremiumStoreView";
 
 export const metadata: Metadata = {
   title: "Nạp Nguyên Thạch",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 export default function TopupPage() {
   return (
     <main className="min-h-screen bg-[var(--bg-primary)] px-4 py-8 text-[var(--text-primary)]">
-      <TopupView />
+      <PremiumStoreView defaultTab="topup" />
     </main>
   );
 }

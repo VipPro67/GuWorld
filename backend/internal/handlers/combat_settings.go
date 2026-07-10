@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -32,10 +33,7 @@ func GetCombatSettings(c *gin.Context) {
 	}
 
 	settings := player.CombatSettings
-	if settings.HealThreshold == 0 && !settings.AutoHealHP {
-		settings = models.DefaultAutoCombatConfig()
-	}
-
+	log.Printf("Retrieved combat settings for player %d: %+v", authID, settings)
 	c.JSON(http.StatusOK, gin.H{"combat_settings": settings})
 }
 

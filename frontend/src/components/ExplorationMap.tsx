@@ -651,7 +651,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                           </div>
                           <div>
                             <span className="font-semibold text-zinc-300 block leading-tight">{spec.name}</span>
-                            <span className="text-[8px] text-zinc-550 font-mono">{spec.path}</span>
+                            <span className="text-[8px] text-zinc-550 font-mono">{spec.path && spec.path.join(" / ")}</span>
                           </div>
                         </div>
                         <span className="text-[8px] font-mono text-emerald-450 bg-emerald-950/20 border border-emerald-900/30 px-1 py-0.5 rounded uppercase tracking-wide shrink-0">

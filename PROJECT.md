@@ -89,7 +89,7 @@ GuWorld là web RPG text-based có backend Go/Gin và frontend Next.js. Gameplay
 
 Dữ liệu runtime được seed từ CSV trong `backend/`:
 
-- `Gu.csv`: 214 Cổ.
+- `Gu.csv`: 227 Cổ (bổ sung 13 Cổ trùng đặc biệt).
 - `Item.csv`: 136 vật phẩm/nguyên liệu/tiền tệ.
 - `Recipe.csv`: 31 công thức luyện.
 - `Monster.csv`: 13 template quái.

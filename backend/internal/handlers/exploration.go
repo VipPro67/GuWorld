@@ -335,7 +335,15 @@ func MovePlayer(c *gin.Context) {
 		return
 	}
 
-	if dist > movementRange {
+	hasFixedImmortalTravel := false
+	for _, gu := range player.GuInventory {
+		if gu.GuID == "GU_FIXED_IMMORTAL_TRAVEL" && gu.Equipped && gu.Status == "ACTIVE" {
+			hasFixedImmortalTravel = true
+			break
+		}
+	}
+
+	if dist > movementRange && !hasFixedImmortalTravel {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vị trí quá xa! Thân pháp hiện tại chỉ di chuyển tối đa %d ô.", movementRange)})
 		return
 	}
@@ -348,6 +356,16 @@ func MovePlayer(c *gin.Context) {
 	visionRadius := int(stats["investigation"])
 	if visionRadius < 1 {
 		visionRadius = 1
+	}
+	hasHeavenSecret := false
+	for _, gu := range player.GuInventory {
+		if gu.GuID == "GU_HEAVEN_SECRET" && gu.Equipped && gu.Status == "ACTIVE" {
+			hasHeavenSecret = true
+			break
+		}
+	}
+	if hasHeavenSecret {
+		visionRadius *= 2
 	}
 	addExploredCells(&player, visionRadius)
 
@@ -488,6 +506,34 @@ func MovePlayer(c *gin.Context) {
 			combatState := models.BuildCombatStateFromMonster(mon)
 			player.ActiveCombat = &combatState
 			logMsg = fmt.Sprintf("Nguy hiểm! Đạo hữu chạm trán %s tại tọa độ (%d, %d)!", mon.Name, player.X, player.Y)
+
+			hasHeavenSecret := false
+			for _, gu := range player.GuInventory {
+				if gu.GuID == "GU_HEAVEN_SECRET" && gu.Equipped && gu.Status == "ACTIVE" {
+					hasHeavenSecret = true
+					break
+				}
+			}
+			if hasHeavenSecret && mon.LootTableID != "" {
+				lt, errLt := db.LoadLootTable(tx, mon.LootTableID)
+				if errLt == nil {
+					extraLootMsg := " [Thiên Cơ hiển lộ - Tỉ lệ rơi đồ: "
+					first := true
+					for _, entry := range lt.Entries {
+						if !first {
+							extraLootMsg += ", "
+						}
+						if entry.ItemID != "" {
+							extraLootMsg += fmt.Sprintf("%s (%.1f%%)", entry.ItemID, entry.Chance*100)
+						} else if entry.GuID != "" {
+							extraLootMsg += fmt.Sprintf("%s (%.1f%%)", entry.GuID, entry.Chance*100)
+						}
+						first = false
+					}
+					extraLootMsg += "]"
+					logMsg += extraLootMsg
+				}
+			}
 
 		case "PVP":
 			var targetPlayer models.Player

@@ -11,7 +11,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 func Retreat(c *gin.Context) {
@@ -255,11 +254,11 @@ func Retreat(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &authID, Action: "combat.retreat",
-		RequestSummary: fmt.Sprintf("hadCombat=%v stones=%d gus=%d mats=%d", player.ActiveCombat != nil, player.TempLoot.PrimevalStones, len(player.TempLoot.GuInventory), len(player.TempLoot.MaterialsInventory)),
-		IPAddress: c.ClientIP(), Success: true,
-	})
+	// auditlog.Log(db.DB, auditlog.Entry{
+	// 	PlayerID: &authID, Action: "combat.retreat",
+	// 	RequestSummary: fmt.Sprintf("hadCombat=%v stones=%d gus=%d mats=%d", player.ActiveCombat != nil, player.TempLoot.PrimevalStones, len(player.TempLoot.GuInventory), len(player.TempLoot.MaterialsInventory)),
+	// 	IPAddress: c.ClientIP(), Success: true,
+	// })
 	c.JSON(http.StatusOK, gin.H{
 		"player": player,
 		"log":    logMsg,

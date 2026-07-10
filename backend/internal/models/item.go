@@ -44,6 +44,7 @@ type ItemSpec struct {
 	Effects     ItemEffects `json:"effects"`
 	Tags        []string    `json:"tags"`
 	Description string      `json:"description"`
+	BasePrice   int         `json:"base_price"`
 }
 
 // ItemRegistry holds the memory map cache of all Item specifications.
@@ -52,7 +53,7 @@ var ItemRegistry = make(map[string]ItemSpec)
 // LoadItemRegistry queries the database and populates the in-memory cache
 func LoadItemRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
-		SELECT id, name, item_type, rarity, rank, path, effects, tags, description 
+		SELECT id, name, item_type, rarity, rank, path, effects, tags, description, COALESCE(base_price, 0)
 		FROM item_dictionary
 	`)
 	if err != nil {
@@ -70,7 +71,7 @@ func LoadItemRegistry(db *sql.DB) error {
 		err = rows.Scan(
 			&item.ID, &item.Name, &item.Type, &item.Rarity,
 			&item.Rank, &item.Path, &item.Effects, &tagsRaw,
-			&item.Description,
+			&item.Description, &item.BasePrice,
 		)
 		if err != nil {
 			log.Printf("Warning: failed to scan Item spec row: %v", err)

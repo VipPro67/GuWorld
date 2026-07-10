@@ -516,6 +516,47 @@ export const ImmortalApertureView: React.FC = () => {
                 </div>
               </div>
 
+              {/* Sinh Cảnh Tiên Khiếu */}
+              <div className="border-t border-slate-800/60 pt-4 space-y-3">
+                <h3 className="text-sm font-bold text-slate-350 flex items-center gap-2 uppercase tracking-wider font-mono">
+                  🌍 Sinh cảnh & Khí hậu Tiên Khiếu
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-left">
+                  <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800/60 flex flex-col justify-between">
+                    <span className="text-slate-500 font-mono block mb-1">Nhiệt độ</span>
+                    <span className={`text-sm font-bold font-mono ${
+                      (aperture.temperature ?? 25.0) > 35 ? 'text-rose-400' :
+                      (aperture.temperature ?? 25.0) < 15 ? 'text-blue-400' :
+                      'text-emerald-450'
+                    }`}>
+                      {(aperture.temperature ?? 25.0).toFixed(1)}°C
+                    </span>
+                  </div>
+                  <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800/60 flex flex-col justify-between">
+                    <span className="text-slate-500 font-mono block mb-1">Độ ẩm</span>
+                    <span className={`text-sm font-bold font-mono ${
+                      (aperture.humidity ?? 50.0) > 70 ? 'text-blue-400' :
+                      (aperture.humidity ?? 50.0) < 30 ? 'text-amber-500' :
+                      'text-cyan-450'
+                    }`}>
+                      {(aperture.humidity ?? 50.0).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800/60 flex flex-col justify-between">
+                    <span className="text-slate-500 font-mono block mb-1">Tiên Khí</span>
+                    <span className="text-sm font-bold text-purple-400 font-mono">
+                      {Math.round(aperture.qi ?? 100.0)}
+                    </span>
+                  </div>
+                  <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800/60 flex flex-col justify-between">
+                    <span className="text-slate-500 font-mono block mb-1">Địa Hình</span>
+                    <span className="text-[11px] font-bold text-amber-300 leading-tight">
+                      {aperture.terrain || "Thảo Nguyên Trù Phú"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               {/* Integrity HP Bar */}
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">

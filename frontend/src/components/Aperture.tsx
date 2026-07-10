@@ -1244,6 +1244,9 @@ export const Aperture: React.FC<ApertureProps> = ({
                       });
                       if (success) {
                         store.addLog("Đã lưu cài đặt chiến thuật tự động.");
+                        store.addToast("Đã lưu cài đặt chiến thuật tự động thành công!", "success");
+                      } else {
+                        store.addToast("Lưu cài đặt chiến thuật tự động thất bại!", "error");
                       }
                     }}
                     className="w-full bg-gradient-to-r from-emerald-700 to-teal-600 hover:from-emerald-600 hover:to-teal-500 disabled:from-zinc-900 disabled:to-zinc-900 disabled:opacity-40 border border-emerald-500/20 text-white rounded-xl py-2 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-98 shadow-md"

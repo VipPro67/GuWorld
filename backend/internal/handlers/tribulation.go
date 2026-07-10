@@ -203,19 +203,24 @@ func AttackTribulationEnemy(c *gin.Context) {
 	}
 
 	// Fetch Dao Mark Multiplier
-	var daoAmount int
-	cleanPath := strings.TrimSuffix(strings.ToLower(spec.Path), " path")
-	_ = tx.QueryRow(`
-		SELECT amount FROM dao_marks WHERE player_id = $1 AND path = $2
-	`, playerID, cleanPath).Scan(&daoAmount)
-
-	// Dao mark soft cap formula
 	daoMultiplier := 1.0
-	if daoAmount > 0 {
-		if daoAmount <= 10000 {
-			daoMultiplier = 1.0 + float64(daoAmount)/100.0
-		} else {
-			daoMultiplier = 1.0 + 100.0 + float64(daoAmount-10000)/500.0
+	for _, path := range spec.Path {
+		cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
+		var daoAmount int
+		_ = tx.QueryRow(`
+			SELECT amount FROM dao_marks WHERE player_id = $1 AND path = $2
+		`, playerID, cleanPath).Scan(&daoAmount)
+
+		mult := 1.0
+		if daoAmount > 0 {
+			if daoAmount <= 10000 {
+				mult = 1.0 + float64(daoAmount)/100.0
+			} else {
+				mult = 1.0 + 100.0 + float64(daoAmount-10000)/500.0
+			}
+		}
+		if mult > daoMultiplier {
+			daoMultiplier = mult
 		}
 	}
 

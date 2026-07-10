@@ -186,13 +186,13 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
     const spec = guDictionary[gu.gu_id] || {
       name: gu.gu_id,
       description: "Cổ trùng chưa được giải nghĩa.",
-      path: "",
+      path: [] as string[],
       gu_type: "",
     };
     return (
       spec.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       spec.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (spec.path && spec.path.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (spec.path && spec.path.some(p => p.toLowerCase().includes(searchTerm.toLowerCase()))) ||
       (spec.gu_type && spec.gu_type.toLowerCase().includes(searchTerm.toLowerCase()))
     );
   });
@@ -311,7 +311,15 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         {spec.path && (
                           <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
                             <span className="text-zinc-600 font-mono block mb-0.5">Đường</span>
-                            <span className={getPathColor(spec.path)}>{spec.path}</span>
+                            <div className="flex flex-wrap gap-1">
+                              {Array.isArray(spec.path) ? (
+                                spec.path.map(p => (
+                                  <span key={p} className={getPathColor(p)}>{p}</span>
+                                ))
+                              ) : (
+                                <span className={getPathColor(spec.path as string)}>{spec.path as string}</span>
+                              )}
+                            </div>
                           </div>
                         )}
                         {spec.rarity && spec.rarity > 0 && (
@@ -392,9 +400,8 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                   id: guId,
                   name: guId,
                   rank: 1,
-                  path: "Unknown Path",
+                  path: ["Unknown Path"],
                   gu_type: "Phàm Cổ",
-                  origin_region: "Unknown Region",
                   base_mana_cost: 0,
                   effects: {},
                   hunger_rate: 0,
@@ -530,9 +537,11 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                             <span className="text-[8px] font-mono font-bold text-amber-450 border border-amber-500/20 px-1 py-0.5 rounded uppercase">
                               Rank {spec.rank}
                             </span>
-                            <span className={`text-[8px] font-mono px-1 rounded border leading-normal ${getPathColor(spec.path)}`}>
-                              {spec.path}
-                            </span>
+                            {spec.path && spec.path.map(p => (
+                              <span key={p} className={`text-[8px] font-mono px-1 rounded border leading-normal ${getPathColor(p)}`}>
+                                {p}
+                              </span>
+                            ))}
                           </div>
 
                           {/* Group actions */}
@@ -791,7 +800,11 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                       </div>
                                       <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
                                         <span className="text-zinc-600 font-mono block mb-1">Đường</span>
-                                        <span className={getPathColor(spec.path)}>{spec.path}</span>
+                                        <div className="flex flex-wrap gap-1">
+                                          {spec.path && spec.path.map(p => (
+                                            <span key={p} className={getPathColor(p)}>{p}</span>
+                                          ))}
+                                        </div>
                                       </div>
                                       <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
                                         <span className="text-zinc-600 font-mono block mb-1">Độ hiếm</span>
@@ -804,10 +817,6 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                       <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
                                         <span className="text-zinc-600 font-mono block mb-1">Độ đói mỗi giờ</span>
                                         <span className="text-zinc-300">{spec.hunger_rate}/h</span>
-                                      </div>
-                                      <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
-                                        <span className="text-zinc-600 font-mono block mb-1">Vùng xuất xứ</span>
-                                        <span className="text-zinc-300">{spec.origin_region || "?"}</span>
                                       </div>
                                       {spec.effects && Object.keys(spec.effects).length > 0 && (
                                         <div className="col-span-2 md:col-span-3 bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">

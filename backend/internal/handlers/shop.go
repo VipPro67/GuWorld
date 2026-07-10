@@ -7,10 +7,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/pricing"
+	"time"
 )
 
 // ShopItem represents a product in the shop
@@ -59,13 +62,23 @@ func findCaravanShopItem(itemID string) (*ShopItem, error) {
 	return &item, nil
 }
 
-// GetShopList returns the database-backed shop inventory.
+// GetShopList returns the database-backed shop inventory, cached in Redis.
 func GetShopList(c *gin.Context) {
+	var items []ShopItem
+	cacheKey := "caravan_shop_catalog"
+
+	if err := cache.GetJSON(cacheKey, &items); err == nil && len(items) > 0 {
+		c.JSON(http.StatusOK, items)
+		return
+	}
+
 	items, err := loadCaravanShopCatalog()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách Thương Đội"})
 		return
 	}
+
+	_ = cache.SetJSON(cacheKey, items, 10*time.Minute)
 	c.JSON(http.StatusOK, items)
 }
 
@@ -252,14 +265,16 @@ func SellShopItem(c *gin.Context) {
 		if player.MaterialsInventory[req.ItemID] <= 0 {
 			delete(player.MaterialsInventory, req.ItemID)
 		}
-		price := 2
+		// Resolve sell price: prefer shop catalog price, fallback to item_dictionary rank
+		var unitSellPrice int
 		if shopItem, err := findCaravanShopItem(req.ItemID); err == nil {
-			price = shopItem.Price / 2
-			if price < 1 {
-				price = 1
-			}
+			unitSellPrice = pricing.SellPrice(shopItem.Price)
+		} else {
+			var dbBasePrice, rank int
+			_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, req.ItemID).Scan(&dbBasePrice, &rank)
+			unitSellPrice = pricing.SellPrice(pricing.ItemBasePrice(dbBasePrice, rank))
 		}
-		totalGain = price * req.Quantity
+		totalGain = unitSellPrice * req.Quantity
 	} else if req.ItemType == "Gu" {
 		removed := 0
 		newInv := models.GuInventory{}
@@ -275,14 +290,16 @@ func SellShopItem(c *gin.Context) {
 			return
 		}
 		player.GuInventory = newInv
-		price := 10
+		// Resolve sell price: prefer shop catalog price, fallback to gu_dictionary rank
+		var unitSellPrice int
 		if shopItem, err := findCaravanShopItem(req.ItemID); err == nil {
-			price = shopItem.Price / 2
-			if price < 1 {
-				price = 1
-			}
+			unitSellPrice = pricing.SellPrice(shopItem.Price)
+		} else {
+			var dbBasePrice, rank int
+			_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1`, req.ItemID).Scan(&dbBasePrice, &rank)
+			unitSellPrice = pricing.SellPrice(pricing.GuBasePrice(dbBasePrice, rank))
 		}
-		totalGain = price * req.Quantity
+		totalGain = unitSellPrice * req.Quantity
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "item_type phải là Gu hoặc Material"})
 		return

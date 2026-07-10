@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"math"
+	"strings"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -187,6 +188,23 @@ func calculateEnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuD
 			cost *= math.Pow(0.92, float64(actor.SubRank-1))
 		}
 		if cost < 0.1 {
+			cost = 0.1
+		}
+
+		// Apply conflicting Dao Marks penalty
+		if actor.DaoMarks != nil && !hasSovereignFetus(actor) {
+			conflictingMarks := 0
+			for path, amount := range actor.DaoMarks {
+				if !isPathInGu(guSpec.Path, path) {
+					conflictingMarks += amount
+				}
+			}
+			if conflictingMarks > 0 {
+				costMultiplier := 1.0 + float64(conflictingMarks)/20000.0
+				cost *= costMultiplier
+			}
+		}
+		if cost < 0.1 {
 			return 0.1
 		}
 		return cost
@@ -209,5 +227,39 @@ func calculateEnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuD
 		divisor *= 2
 	}
 	cost /= float64(divisor)
+
+	// Apply conflicting Dao Marks penalty
+	if actor.DaoMarks != nil && !hasSovereignFetus(actor) {
+		conflictingMarks := 0
+		for path, amount := range actor.DaoMarks {
+			if !isPathInGu(guSpec.Path, path) {
+				conflictingMarks += amount
+			}
+		}
+		if conflictingMarks > 0 {
+			costMultiplier := 1.0 + float64(conflictingMarks)/20000.0
+			cost *= costMultiplier
+		}
+	}
 	return cost
+}
+
+func hasSovereignFetus(actor *models.Combatant) bool {
+	for _, gu := range actor.GuInventory {
+		if gu.GuID == "GU_SOVEREIGN_FETUS" && gu.Equipped && gu.Status == "ACTIVE" {
+			return true
+		}
+	}
+	return false
+}
+
+func isPathInGu(paths []string, path string) bool {
+	cleanPath := strings.TrimSpace(strings.TrimSuffix(strings.ToLower(path), " path"))
+	for _, p := range paths {
+		cleanP := strings.TrimSpace(strings.TrimSuffix(strings.ToLower(p), " path"))
+		if cleanP == cleanPath {
+			return true
+		}
+	}
+	return false
 }
