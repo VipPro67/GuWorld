@@ -10,9 +10,10 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 
 | Method | Path | Ghi chú |
 | --- | --- | --- |
-| GET | `/dictionary` | Public Gu + item dictionary. |
+| GET | `/dictionary` | Public Gu + item + monster dictionary. |
 | GET | `/recipes` | Public refining recipes. |
-| POST | `/auth/register` | Rate limited. |
+| POST | `/auth/send-otp` | Send OTP via email to register. |
+| POST | `/auth/register` | Rate limited. Requires valid OTP. |
 | POST | `/auth/login` | Rate limited. |
 | POST | `/auth/logout` | Public logout endpoint. |
 | GET | `/auth/me` | Current player, protected. |

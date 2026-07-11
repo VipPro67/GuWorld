@@ -42,6 +42,7 @@ type CreatePlayerRequest struct {
 	AttackGuID     string `json:"attack_gu_id"`
 	DefenseGuID    string `json:"defense_gu_id"`
 	VitalGuChoice  string `json:"vital_gu_choice"`
+	OTP            string `json:"otp" binding:"required"`
 }
 
 // CreatePlayerResponse represents the output payload for registration/login
@@ -264,6 +265,32 @@ func RegisterPlayer(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+
+	// Verify email OTP inside tx
+	var dbOTP string
+	var expiresAt time.Time
+	err = tx.QueryRow("SELECT otp, expires_at FROM email_otps WHERE email = $1", req.Email).Scan(&dbOTP, &expiresAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Mã xác thực OTP chưa được gửi hoặc đã bị xóa!"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi xác thực OTP"})
+		}
+		return
+	}
+
+	if time.Now().After(expiresAt) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Mã OTP đã hết hạn! Vui lòng yêu cầu mã mới."})
+		return
+	}
+
+	if dbOTP != req.OTP {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Mã OTP không chính xác!"})
+		return
+	}
+
+	// Delete OTP to prevent reuse
+	_, _ = tx.Exec("DELETE FROM email_otps WHERE email = $1", req.Email)
 
 	// Verify email uniqueness inside tx
 	var emailExists bool
@@ -2767,18 +2794,26 @@ func GoogleCallback(c *gin.Context) {
 		var aptitudeType string
 		var aptitudePercent int
 
-		if roll < 10 {
+		// if roll < 10 {
+		// 	aptitudeType = "Giáp"
+		// 	aptitudePercent = 80 + rand.Intn(20) // 80 - 99
+		// } else if roll < 30 {
+		// 	aptitudeType = "Ất"
+		// 	aptitudePercent = 60 + rand.Intn(20) // 60 - 79
+		// } else if roll < 60 {
+		// 	aptitudeType = "Bính"
+		// 	aptitudePercent = 40 + rand.Intn(20) // 40 - 59
+		// } else {
+		// 	aptitudeType = "Đinh"
+		// 	aptitudePercent = 20 + rand.Intn(20) // 20 - 39
+		// }
+
+		if roll < 50 {
 			aptitudeType = "Giáp"
 			aptitudePercent = 80 + rand.Intn(20) // 80 - 99
-		} else if roll < 30 {
+		} else {
 			aptitudeType = "Ất"
 			aptitudePercent = 60 + rand.Intn(20) // 60 - 79
-		} else if roll < 60 {
-			aptitudeType = "Bính"
-			aptitudePercent = 40 + rand.Intn(20) // 40 - 59
-		} else {
-			aptitudeType = "Đinh"
-			aptitudePercent = 20 + rand.Intn(20) // 20 - 39
 		}
 
 		aptitudeGrade := 4

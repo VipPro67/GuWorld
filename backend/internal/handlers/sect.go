@@ -682,9 +682,15 @@ func DonateMaterials(c *gin.Context) {
 		return
 	}
 
+	materialName := req.MaterialID
+	_ = db.DB.QueryRow(`SELECT name FROM item_dictionary WHERE id = $1`, req.MaterialID).Scan(&materialName)
+	if materialName == "" {
+		materialName = req.MaterialID
+	}
+
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.donate_materials", EntityType: "sect",
-		EntityID: m.SectID, RequestSummary: fmt.Sprintf("%s x%d → %d điểm", req.MaterialID, req.Amount, gainedContribution),
+		EntityID: m.SectID, RequestSummary: fmt.Sprintf("%s x%d → %d điểm", materialName, req.Amount, gainedContribution),
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{
@@ -832,9 +838,14 @@ func DonateGu(c *gin.Context) {
 		return
 	}
 
+	guName := guInstance.GuID
+	if spec, ok := models.GuRegistry[guInstance.GuID]; ok {
+		guName = spec.Name
+	}
+
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.donate_gu", EntityType: "sect",
-		EntityID: m.SectID, RequestSummary: fmt.Sprintf("%s → %d điểm", guInstance.GuID, gainedContribution),
+		EntityID: m.SectID, RequestSummary: fmt.Sprintf("%s → %d điểm", guName, gainedContribution),
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{
@@ -1052,10 +1063,22 @@ func BuyFromSectVault(c *gin.Context) {
 		return
 	}
 
+	itemName := req.ItemID
+	if req.ItemType == "Gu" {
+		if spec, ok := models.GuRegistry[req.ItemID]; ok {
+			itemName = spec.Name
+		}
+	} else {
+		_ = db.DB.QueryRow(`SELECT name FROM item_dictionary WHERE id = $1`, req.ItemID).Scan(&itemName)
+	}
+	if itemName == "" {
+		itemName = req.ItemID
+	}
+
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.buy_vault", EntityType: "sect",
 		EntityID: m.SectID,
-		RequestSummary: fmt.Sprintf("%s | %s | giá %d điểm cống hiến", req.ItemType, req.ItemID, cost),
+		RequestSummary: fmt.Sprintf("%s | %s | giá %d điểm cống hiến", req.ItemType, itemName, cost),
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{

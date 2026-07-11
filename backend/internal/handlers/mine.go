@@ -466,7 +466,8 @@ func AttackMineSlot(c *gin.Context) {
 	// 3. Load slot info and occupier
 	var occupierIDStr *string
 	var monsterIDStr *string
-	err = tx.QueryRow("SELECT occupier_id, monster_id FROM mine_slots WHERE id = $1", req.SlotID).Scan(&occupierIDStr, &monsterIDStr)
+	var monsterRank, monsterSubRank int
+	err = tx.QueryRow("SELECT occupier_id, monster_id, monster_rank, monster_sub_rank FROM mine_slots WHERE id = $1", req.SlotID).Scan(&occupierIDStr, &monsterIDStr, &monsterRank, &monsterSubRank)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ không tồn tại"})
@@ -497,7 +498,7 @@ func AttackMineSlot(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy dữ liệu quái vật canh giữ"})
 			return
 		}
-		maxHP, attack, defense := models.ScaleMonsterStats(monsterTemplate.MaxHP, monsterTemplate.BaseAttack, monsterTemplate.BaseDefense, monsterTemplate.Rank, monsterTemplate.SubRank, monsterTemplate.Type)
+		maxHP, attack, defense := models.ScaleMonsterStats(monsterTemplate.MaxHP, monsterTemplate.BaseAttack, monsterTemplate.BaseDefense, monsterRank, monsterSubRank, monsterTemplate.Type)
 
 		pvpCombat = models.CombatState{
 			EnemyTemplateID:    monsterTemplate.ID,
@@ -507,8 +508,8 @@ func AttackMineSlot(c *gin.Context) {
 			EnemyMaxHP:         maxHP,
 			EnemyDamage:        attack,
 			EnemyDefense:       defense,
-			EnemyRank:          monsterTemplate.Rank,
-			EnemySubRank:       monsterTemplate.SubRank,
+			EnemyRank:          monsterRank,
+			EnemySubRank:       monsterSubRank,
 			EnemyGuInventory:   monsterTemplate.GuInventory,
 			EnemyDaoMarks:      monsterTemplate.DaoMarks,
 			EnemyPathMasteries: monsterTemplate.PathMasteries,
@@ -661,17 +662,12 @@ func AssignMonstersToMines() {
 			targetRank = 2
 		}
 
-		// Find a monster template matching the target rank
+		// Find a monster template
 		var chosenMonsterID string
-		errSelect := tx.QueryRow("SELECT id FROM monster_templates WHERE rank = $1 AND is_active = TRUE ORDER BY RANDOM() LIMIT 1", targetRank).Scan(&chosenMonsterID)
-
-		if errSelect != nil || chosenMonsterID == "" {
-			// fallback
-			errSelect = tx.QueryRow("SELECT id FROM monster_templates WHERE is_active = TRUE ORDER BY RANDOM() LIMIT 1").Scan(&chosenMonsterID)
-		}
+		_ = tx.QueryRow("SELECT id FROM monster_templates WHERE is_active = TRUE ORDER BY RANDOM() LIMIT 1").Scan(&chosenMonsterID)
 
 		if chosenMonsterID != "" {
-			_, err = tx.Exec("UPDATE mine_slots SET monster_id = $1 WHERE id = $2", chosenMonsterID, slot.ID)
+			_, err = tx.Exec("UPDATE mine_slots SET monster_id = $1, monster_rank = $2, monster_sub_rank = $3 WHERE id = $4", chosenMonsterID, targetRank, 1, slot.ID)
 			if err != nil {
 				log.Printf("Failed to assign monster to mine slot %d: %v", slot.ID, err)
 			} else {
@@ -770,14 +766,10 @@ func AssignMonstersToEmptyMines() {
 		}
 
 		var chosenMonsterID string
-		errSelect := tx.QueryRow("SELECT id FROM monster_templates WHERE rank = $1 AND is_active = TRUE ORDER BY RANDOM() LIMIT 1", targetRank).Scan(&chosenMonsterID)
-
-		if errSelect != nil || chosenMonsterID == "" {
-			errSelect = tx.QueryRow("SELECT id FROM monster_templates WHERE is_active = TRUE ORDER BY RANDOM() LIMIT 1").Scan(&chosenMonsterID)
-		}
+		_ = tx.QueryRow("SELECT id FROM monster_templates WHERE is_active = TRUE ORDER BY RANDOM() LIMIT 1").Scan(&chosenMonsterID)
 
 		if chosenMonsterID != "" {
-			_, err = tx.Exec("UPDATE mine_slots SET monster_id = $1, abandoned_at = NOW() WHERE id = $2", chosenMonsterID, slot.ID)
+			_, err = tx.Exec("UPDATE mine_slots SET monster_id = $1, monster_rank = $2, monster_sub_rank = $3, abandoned_at = NOW() WHERE id = $4", chosenMonsterID, targetRank, 1, slot.ID)
 			if err != nil {
 				log.Printf("Failed to assign monster to mine slot %d: %v", slot.ID, err)
 			} else {

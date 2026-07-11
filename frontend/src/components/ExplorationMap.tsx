@@ -61,6 +61,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
   const logs = useGameStore((state) => state.logs);
   const guDictionary = useGameStore((state) => state.guDictionary);
   const itemDictionary = useGameStore((state) => state.itemDictionary);
+  const monsterDictionary = useGameStore((state) => state.monsterDictionary);
 
   const handleExitMap = async () => {
     if (isExploringActiveRegion) {
@@ -181,6 +182,19 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     if (res) {
       setLastLog(res.log);
     }
+  };
+
+  const getEntityName = (type: string, content: string) => {
+    if (type === "Monster" || type === "Boss") {
+      return monsterDictionary[content]?.name || content.split(" ")[0];
+    }
+    if (type === "Resource") {
+      return itemDictionary[content]?.name || content.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+    }
+    if (type === "WildGu") {
+      return guDictionary[content]?.name || content;
+    }
+    return content;
   };
 
   // Helper to format map cell content icon
@@ -414,6 +428,18 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                       title={`Tọa độ: (${cell.x}, ${cell.y}) ${
                         isPlayerCell ? "[Vị trí của bạn]" : ""
                       }${
+                        cell.cell_type !== "Empty"
+                          ? ` | ${
+                              cell.cell_type === "Monster" || cell.cell_type === "Boss"
+                                ? "Quái vật"
+                                : cell.cell_type === "Resource"
+                                ? "Linh tài"
+                                : cell.cell_type === "WildGu"
+                                ? "Cổ trùng hoang dã"
+                                : cell.cell_type
+                            }: ${getEntityName(cell.cell_type, cell.content)}`
+                          : ""
+                      }${
                         otherPlayersOnCell.length > 0
                           ? ` | Cổ sư: ${otherPlayersOnCell.map((p: any) => p.username).join(", ")}`
                           : ""
@@ -453,9 +479,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                       {/* Tiny text label */}
                       {hasEntity && !isPlayerCell && otherPlayersOnCell.length === 0 && (
                         <span className="text-[7px] font-mono text-zinc-400 absolute bottom-1 px-1 truncate max-w-full text-center">
-                          {cell.cell_type === "Resource" 
-                            ? cell.content.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) 
-                            : cell.content.split(" ")[0]}
+                          {getEntityName(cell.cell_type, cell.content)}
                         </span>
                       )}
                     </div>

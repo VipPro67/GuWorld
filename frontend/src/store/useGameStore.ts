@@ -446,6 +446,24 @@ export interface ItemSpec {
   base_price?: number;
 }
 
+export interface MonsterSpec {
+  id: string;
+  name: string;
+  type: string;
+  rank: number;
+  sub_rank: number;
+  path: string;
+  max_hp: number;
+  base_attack: number;
+  base_defense: number;
+  max_mana: number;
+  current_mana: number;
+  ai_profile: string;
+  loot_table_id: string;
+  description: string;
+}
+
+
 export interface InstanceOption {
   text: string;
   next_stage: number;
@@ -652,6 +670,7 @@ interface GameState {
   logs: string[];
   guDictionary: Record<string, GuSpec>;
   itemDictionary: Record<string, ItemSpec>;
+  monsterDictionary: Record<string, MonsterSpec>;
   dictionaryLoaded: boolean;
   recipes: RefiningRecipe[];
   recipesLoaded: boolean;
@@ -680,6 +699,7 @@ interface GameState {
   }) => Promise<boolean>;
   uploadAvatar: (file: File) => Promise<string | null>;
   login: (email: string, password: string) => Promise<boolean>;
+  sendOTP: (email: string) => Promise<boolean>;
   register: (
     username: string,
     password: string,
@@ -689,7 +709,8 @@ interface GameState {
     referralCode?: string,
     attackGuId?: string,
     defenseGuId?: string,
-    vitalGuChoice?: string
+    vitalGuChoice?: string,
+    otp?: string
   ) => Promise<boolean>;
   logout: () => void;
   clearError: () => void;
@@ -1009,7 +1030,7 @@ export const useGameStore = create<GameState>((set, get) => {
   const translateIDs = (msg: string): string => {
     if (!msg) return "";
     let formatted = msg;
-    const { guDictionary, itemDictionary } = get();
+    const { guDictionary, itemDictionary, monsterDictionary } = get();
 
     // Replace Gu IDs
     Object.keys(guDictionary || {}).forEach((id) => {
@@ -1022,6 +1043,14 @@ export const useGameStore = create<GameState>((set, get) => {
     // Replace Item IDs
     Object.keys(itemDictionary || {}).forEach((id) => {
       const name = itemDictionary[id]?.name;
+      if (name) {
+        formatted = formatted.split(id).join(name);
+      }
+    });
+
+    // Replace Monster IDs
+    Object.keys(monsterDictionary || {}).forEach((id) => {
+      const name = monsterDictionary[id]?.name;
       if (name) {
         formatted = formatted.split(id).join(name);
       }
@@ -1043,6 +1072,7 @@ export const useGameStore = create<GameState>((set, get) => {
   referralsData: null,
   guDictionary: {},
   itemDictionary: {},
+  monsterDictionary: {},
   dictionaryLoaded: false,
   recipes: [],
   recipesLoaded: false,
@@ -1154,6 +1184,29 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
+  sendOTP: async (email) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/auth/send-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Gửi OTP thất bại.");
+      }
+
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      return false;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
   register: async (
     username,
     password,
@@ -1163,7 +1216,8 @@ export const useGameStore = create<GameState>((set, get) => {
     referralCode,
     attackGuId,
     defenseGuId,
-    vitalGuChoice
+    vitalGuChoice,
+    otp
   ) => {
     set({ isLoading: true, error: null });
     try {
@@ -1180,6 +1234,7 @@ export const useGameStore = create<GameState>((set, get) => {
           attack_gu_id: attackGuId,
           defense_gu_id: defenseGuId,
           vital_gu_choice: vitalGuChoice,
+          otp: otp || "",
         }),
       });
 
@@ -1731,6 +1786,7 @@ export const useGameStore = create<GameState>((set, get) => {
       set({
         guDictionary: data.gu || {},
         itemDictionary: data.items || {},
+        monsterDictionary: data.monsters || {},
         dictionaryLoaded: true,
       });
     } catch (err: any) {

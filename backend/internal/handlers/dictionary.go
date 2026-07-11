@@ -10,8 +10,9 @@ import (
 )
 
 type DictionaryResponse struct {
-	Gu    interface{} `json:"gu"`
-	Items interface{} `json:"items"`
+	Gu       interface{} `json:"gu"`
+	Items    interface{} `json:"items"`
+	Monsters interface{} `json:"monsters"`
 }
 
 // GetDictionary returns the unified Gu and Item master catalogs, cached in Redis
@@ -25,8 +26,9 @@ func GetDictionary(c *gin.Context) {
 	}
 
 	resp = DictionaryResponse{
-		Gu:    models.GuRegistry,
-		Items: models.ItemRegistry,
+		Gu:       models.GuRegistry,
+		Items:    models.ItemRegistry,
+		Monsters: models.MonsterRegistry,
 	}
 
 	_ = cache.SetJSON(cacheKey, resp, 24*time.Hour)

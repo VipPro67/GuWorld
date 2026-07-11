@@ -110,10 +110,9 @@ func ExploreNode(c *gin.Context) {
 		if maxRank > minRank {
 			rank += rand.Intn(maxRank - minRank + 1)
 		}
-		monTemplate.Rank = rank
-		monTemplate.SubRank = rand.Intn(5) + 1
+		subRank := rand.Intn(5) + 1
 
-		enemy := models.BuildCombatStateFromMonster(monTemplate)
+		enemy := models.BuildCombatStateFromMonster(monTemplate, rank, subRank)
 
 		player.ActiveCombat = StartCombat(tx, &enemy, &player)
 		logMsg = fmt.Sprintf("Nguy hiểm! Đột nhiên từ bụi cỏ rậm rạp tại %s, một con %s lao ra tấn công đạo hữu!", nodeName, enemy.EnemyName)

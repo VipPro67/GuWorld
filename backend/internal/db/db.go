@@ -360,6 +360,8 @@ func InitSchema() error {
 	// Migrate existing mine_slots to have monster_id and abandoned_at if not exist
 	_, _ = DB.Exec(`ALTER TABLE mine_slots ADD COLUMN IF NOT EXISTS monster_id VARCHAR(50) NULL;`)
 	_, _ = DB.Exec(`ALTER TABLE mine_slots ADD COLUMN IF NOT EXISTS abandoned_at TIMESTAMPTZ DEFAULT NOW();`)
+	_, _ = DB.Exec(`ALTER TABLE mine_slots ADD COLUMN IF NOT EXISTS monster_rank INT NOT NULL DEFAULT 1;`)
+	_, _ = DB.Exec(`ALTER TABLE mine_slots ADD COLUMN IF NOT EXISTS monster_sub_rank INT NOT NULL DEFAULT 1;`)
 
 	// Create messages table
 	_, err = DB.Exec(`
@@ -424,14 +426,9 @@ func InitSchema() error {
 		id VARCHAR(50) PRIMARY KEY,
 		name VARCHAR(100) NOT NULL,
 		type VARCHAR(50) NOT NULL,
-		rank INT NOT NULL DEFAULT 1,
-		sub_rank INT NOT NULL DEFAULT 1,
-		path VARCHAR(50),
 		max_hp DOUBLE PRECISION NOT NULL,
 		base_attack DOUBLE PRECISION NOT NULL,
 		base_defense DOUBLE PRECISION NOT NULL,
-		max_mana DOUBLE PRECISION NOT NULL DEFAULT 100,
-		current_mana DOUBLE PRECISION NOT NULL DEFAULT 100,
 		gu_inventory JSONB NOT NULL DEFAULT '[]',
 		item_inventory JSONB NOT NULL DEFAULT '{}',
 		dao_marks JSONB NOT NULL DEFAULT '{}',
@@ -446,6 +443,16 @@ func InitSchema() error {
 	if err != nil {
 		return fmt.Errorf("failed to create monster_templates table: %w", err)
 	}
+
+	// Drop old columns if they exist
+	_, _ = DB.Exec(`
+		ALTER TABLE monster_templates 
+		DROP COLUMN IF EXISTS rank, 
+		DROP COLUMN IF EXISTS sub_rank, 
+		DROP COLUMN IF EXISTS path, 
+		DROP COLUMN IF EXISTS max_mana, 
+		DROP COLUMN IF EXISTS current_mana;
+	`)
 
 	// 4.8. Create monster_spawns
 	_, err = DB.Exec(`
@@ -983,6 +990,12 @@ func InitSchema() error {
 		// Unified pricing: base_price column as single source of truth for all pricing calculations
 		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS base_price INTEGER NOT NULL DEFAULT 0;`, "gu_dictionary.base_price"},
 		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS base_price INTEGER NOT NULL DEFAULT 0;`, "item_dictionary.base_price"},
+		{`CREATE TABLE IF NOT EXISTS email_otps (
+			email VARCHAR(255) PRIMARY KEY,
+			otp VARCHAR(10) NOT NULL,
+			expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+		);`, "create_email_otps_table"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {
@@ -1761,9 +1774,7 @@ func seedMonsterTemplatesFromCSV(filename string) error {
 	defer f.Close()
 	col := func(name string) int { return colIndex(header, name) }
 	idIdx, nameIdx, typeIdx := col("id"), col("name"), col("type")
-	rankIdx, subRankIdx, pathIdx := col("rank"), col("sub_rank"), col("path")
 	hpIdx, attackIdx, defenseIdx := col("max_hp"), col("base_attack"), col("base_defense")
-	maxManaIdx, currentManaIdx := col("max_mana"), col("current_mana")
 	guIdx, itemIdx, daoIdx, masteryIdx := col("gu_inventory"), col("item_inventory"), col("dao_marks"), col("path_masteries")
 	aiIdx, lootIdx, descIdx, activeIdx := col("ai_profile"), col("loot_table_id"), col("description"), col("is_active")
 	if idIdx < 0 || nameIdx < 0 || typeIdx < 0 || hpIdx < 0 || attackIdx < 0 || defenseIdx < 0 {
@@ -1788,21 +1799,10 @@ func seedMonsterTemplatesFromCSV(filename string) error {
 		if id == "" {
 			continue
 		}
-		rank, subRank := 1, 1
-		maxHP, attack, defense, maxMana, currentMana := 0.0, 0.0, 0.0, 100.0, 100.0
-		fmt.Sscanf(get(row, rankIdx), "%d", &rank)
-		fmt.Sscanf(get(row, subRankIdx), "%d", &subRank)
+		maxHP, attack, defense := 0.0, 0.0, 0.0
 		fmt.Sscanf(get(row, hpIdx), "%f", &maxHP)
 		fmt.Sscanf(get(row, attackIdx), "%f", &attack)
 		fmt.Sscanf(get(row, defenseIdx), "%f", &defense)
-		if v := get(row, maxManaIdx); v != "" {
-			fmt.Sscanf(v, "%f", &maxMana)
-		}
-		currentMana = maxMana
-		if v := get(row, currentManaIdx); v != "" {
-			fmt.Sscanf(v, "%f", &currentMana)
-		}
-		path := get(row, pathIdx)
 		ai := get(row, aiIdx)
 		if ai == "" {
 			ai = "beast_basic"
@@ -1817,13 +1817,13 @@ func seedMonsterTemplatesFromCSV(filename string) error {
 			active = false
 		}
 		_, err = DB.Exec(`
-			INSERT INTO monster_templates (id, name, type, rank, sub_rank, path, max_hp, base_attack, base_defense, max_mana, current_mana, gu_inventory, item_inventory, dao_marks, path_masteries, ai_profile, loot_table_id, description, is_active, updated_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14::jsonb,$15::jsonb,$16,$17,$18,$19,NOW())
-			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, type=EXCLUDED.type, rank=EXCLUDED.rank, sub_rank=EXCLUDED.sub_rank, path=EXCLUDED.path,
-			max_hp=EXCLUDED.max_hp, base_attack=EXCLUDED.base_attack, base_defense=EXCLUDED.base_defense, max_mana=EXCLUDED.max_mana, current_mana=EXCLUDED.current_mana,
+			INSERT INTO monster_templates (id, name, type, max_hp, base_attack, base_defense, gu_inventory, item_inventory, dao_marks, path_masteries, ai_profile, loot_table_id, description, is_active, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12,$13,$14,NOW())
+			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, type=EXCLUDED.type,
+			max_hp=EXCLUDED.max_hp, base_attack=EXCLUDED.base_attack, base_defense=EXCLUDED.base_defense,
 			gu_inventory=EXCLUDED.gu_inventory, item_inventory=EXCLUDED.item_inventory, dao_marks=EXCLUDED.dao_marks, path_masteries=EXCLUDED.path_masteries,
 			ai_profile=EXCLUDED.ai_profile, loot_table_id=EXCLUDED.loot_table_id, description=EXCLUDED.description, is_active=EXCLUDED.is_active, updated_at=NOW()
-		`, id, get(row, nameIdx), get(row, typeIdx), rank, subRank, path, maxHP, attack, defense, maxMana, currentMana, guInv, itemInv, daoMarks, masteries, ai, get(row, lootIdx), get(row, descIdx), active)
+		`, id, get(row, nameIdx), get(row, typeIdx), maxHP, attack, defense, guInv, itemInv, daoMarks, masteries, ai, get(row, lootIdx), get(row, descIdx), active)
 		if err != nil {
 			return fmt.Errorf("upsert monster %s: %w", id, err)
 		}

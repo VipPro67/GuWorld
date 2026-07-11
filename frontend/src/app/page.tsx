@@ -42,6 +42,7 @@ export default function Home() {
     error,
     login,
     register,
+    sendOTP,
     fetchPlayerStatus,
     initializeSession,
     logout,
@@ -176,6 +177,7 @@ export default function Home() {
             <Registration
               onRegister={register}
               onLogin={login}
+              onSendOTP={sendOTP}
               isLoading={isLoading}
               error={error}
               onClearError={clearError}

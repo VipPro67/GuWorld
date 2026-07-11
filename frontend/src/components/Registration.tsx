@@ -108,9 +108,11 @@ interface RegistrationProps {
     referralCode?: string,
     attackGuId?: string,
     defenseGuId?: string,
-    vitalGuChoice?: string
+    vitalGuChoice?: string,
+    otp?: string
   ) => Promise<boolean>;
   onLogin: (email: string, password: string) => Promise<boolean>;
+  onSendOTP: (email: string) => Promise<boolean>;
   isLoading: boolean;
   error: string | null;
   onClearError: () => void;
@@ -119,6 +121,7 @@ interface RegistrationProps {
 export const Registration: React.FC<RegistrationProps> = ({
   onRegister,
   onLogin,
+  onSendOTP,
   isLoading,
   error,
   onClearError,
@@ -127,6 +130,9 @@ export const Registration: React.FC<RegistrationProps> = ({
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [otpSuccessMessage, setOtpSuccessMessage] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [startingRegion, setStartingRegion] = useState("Southern_Border");
   const [setVitalNow, setSetVitalNow] = useState(true);
@@ -145,6 +151,24 @@ export const Registration: React.FC<RegistrationProps> = ({
     }
   }, []);
 
+  useEffect(() => {
+    if (otpCooldown > 0) {
+      const timer = setTimeout(() => setOtpCooldown(otpCooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [otpCooldown]);
+
+  const handleSendOTP = async () => {
+    const emailValue = email.trim();
+    if (!emailValue) return;
+    setOtpSuccessMessage(null);
+    const ok = await onSendOTP(emailValue);
+    if (ok) {
+      setOtpCooldown(60);
+      setOtpSuccessMessage("Mã xác thực OTP đã được gửi đến email của đạo hữu!");
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const usernameValue = username.trim();
@@ -154,7 +178,7 @@ export const Registration: React.FC<RegistrationProps> = ({
       if (!emailValue || password.length < 6) return;
       await onLogin(emailValue, password);
     } else {
-      if (!usernameValue || !emailValue || password.length < 6) return;
+      if (!usernameValue || !emailValue || password.length < 6 || !otp.trim()) return;
       await onRegister(
         usernameValue,
         password,
@@ -164,7 +188,8 @@ export const Registration: React.FC<RegistrationProps> = ({
         referralCode,
         attackGu,
         defenseGu,
-        vitalChoice
+        vitalChoice,
+        otp.trim()
       );
     }
   };
@@ -175,6 +200,8 @@ export const Registration: React.FC<RegistrationProps> = ({
     setPassword("");
     setEmail("");
     setUsername("");
+    setOtp("");
+    setOtpSuccessMessage(null);
   };
 
   const handleGoogleLogin = () => {
@@ -202,9 +229,9 @@ export const Registration: React.FC<RegistrationProps> = ({
         <h2 className="text-3xl font-bold text-zinc-100 font-serif tracking-wide">
           CỔ THẾ GIỚI
         </h2>
-        <p className="text-xs text-amber-500 uppercase tracking-widest font-mono mt-1">
-          {isLoginTab ? "Đại Điện Tu Hành" : "Khai mở Bản Mệnh"}
-        </p>
+        <h3 className="text-xs uppercase tracking-widest font-mono mt-1 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]">
+          !!! Thiên địa ưu ái, tư chất Giáp, Ất. !!!
+        </h3>
       </div>
 
       {/* Tabs */}
@@ -412,22 +439,67 @@ export const Registration: React.FC<RegistrationProps> = ({
             >
               Email
             </label>
+            <div className="flex gap-2">
+              <div className="relative flex-grow">
+                <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-600" />
+                <input
+                  type="email"
+                  id="email"
+                  disabled={isLoading}
+                  value={email}
+                  onChange={(e) => {
+                    onClearError();
+                    setEmail(e.target.value);
+                  }}
+                  placeholder="example@gmail.com"
+                  className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-sm text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-amber-500/50 focus:shadow-[0_0_15px_rgba(234,179,8,0.1)] transition-all font-mono"
+                  required
+                />
+              </div>
+              <button
+                type="button"
+                disabled={isLoading || otpCooldown > 0 || email.trim().length === 0}
+                onClick={handleSendOTP}
+                className="px-4 py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-900 disabled:text-zinc-600 border border-amber-500/30 rounded-xl text-xs font-serif text-amber-100 transition-colors shrink-0 cursor-pointer min-w-[80px]"
+              >
+                {otpCooldown > 0 ? `${otpCooldown}s` : "Gửi Mã"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* OTP - Only in registration */}
+        {!isLoginTab && (
+          <div className="relative">
+            <label
+              htmlFor="otp"
+              className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5"
+            >
+              Mã Xác Thực (OTP)
+            </label>
             <div className="relative">
-              <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-600" />
+              <Sparkles className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-600" />
               <input
-                type="email"
-                id="email"
+                type="text"
+                id="otp"
                 disabled={isLoading}
-                value={email}
+                value={otp}
                 onChange={(e) => {
                   onClearError();
-                  setEmail(e.target.value);
+                  setOtp(e.target.value);
                 }}
-                placeholder="example@gmail.com"
-                className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-sm text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-amber-500/50 focus:shadow-[0_0_15px_rgba(234,179,8,0.1)] transition-all font-mono"
+                placeholder="Nhập mã OTP 6 chữ số..."
+                className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-sm text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-amber-500/50 focus:shadow-[0_0_15px_rgba(234,179,8,0.1)] transition-all font-mono tracking-[0.2em] text-center"
+                maxLength={6}
                 required
               />
             </div>
+          </div>
+        )}
+
+        {otpSuccessMessage && (
+          <div className="text-[11px] text-emerald-400 font-serif bg-emerald-950/30 border border-emerald-500/20 p-2 rounded-xl text-center">
+            {otpSuccessMessage}
           </div>
         )}
 
@@ -479,12 +551,16 @@ export const Registration: React.FC<RegistrationProps> = ({
           type="submit"
           disabled={
             isLoading ||
-            (isLoginTab ? email.trim().length === 0 : username.trim().length < 3 || email.trim().length === 0) ||
+            (isLoginTab
+              ? email.trim().length === 0
+              : username.trim().length < 3 || email.trim().length === 0 || otp.trim().length < 6) ||
             password.length < 6
           }
           className={`w-full py-4 px-6 rounded-xl font-serif text-sm font-semibold tracking-wider transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-lg mt-6 ${
             isLoading ||
-            (isLoginTab ? email.trim().length === 0 : username.trim().length < 3 || email.trim().length === 0) ||
+            (isLoginTab
+              ? email.trim().length === 0
+              : username.trim().length < 3 || email.trim().length === 0 || otp.trim().length < 6) ||
             password.length < 6
               ? "bg-zinc-900 text-zinc-600 border border-zinc-850 cursor-not-allowed"
               : "bg-gradient-to-r from-amber-600 to-yellow-600 text-zinc-950 font-bold hover:from-amber-500 hover:to-yellow-500 hover:shadow-[0_0_25px_rgba(234,179,8,0.25)] active:scale-[0.98]"

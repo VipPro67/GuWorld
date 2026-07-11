@@ -495,15 +495,16 @@ func MovePlayer(c *gin.Context) {
 				return
 			}
 
-			// Override monster template stats with cell rank and subRank
+			rank := 1
 			if cell.Rank > 0 {
-				mon.Rank = cell.Rank
+				rank = cell.Rank
 			}
+			subRank := 1
 			if cell.SubRank > 0 {
-				mon.SubRank = cell.SubRank
+				subRank = cell.SubRank
 			}
 
-			combatState := models.BuildCombatStateFromMonster(mon)
+			combatState := models.BuildCombatStateFromMonster(mon, rank, subRank)
 			player.ActiveCombat = &combatState
 			logMsg = fmt.Sprintf("Nguy hiểm! Đạo hữu chạm trán %s tại tọa độ (%d, %d)!", mon.Name, player.X, player.Y)
 
@@ -597,13 +598,15 @@ func MovePlayer(c *gin.Context) {
 
 					mon, err := db.LoadMonsterTemplate(tx, adj.Content)
 					if err == nil {
+						rank := 1
 						if adj.Rank > 0 {
-							mon.Rank = adj.Rank
+							rank = adj.Rank
 						}
+						subRank := 1
 						if adj.SubRank > 0 {
-							mon.SubRank = adj.SubRank
+							subRank = adj.SubRank
 						}
-						combatState := models.BuildCombatStateFromMonster(mon)
+						combatState := models.BuildCombatStateFromMonster(mon, rank, subRank)
 						player.ActiveCombat = &combatState
 						logMsg = fmt.Sprintf("Phục kích! Quái thú %s lân cận (%d, %d) chủ động lao ra tấn công đạo hữu!", mon.Name, adjX, adjY)
 					}

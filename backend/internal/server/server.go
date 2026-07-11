@@ -63,6 +63,7 @@ func SetupRouter() *gin.Engine {
 		// Public Auth Endpoints
 		authGroup := api.Group("/auth")
 		{
+			authGroup.POST("/send-otp", middleware.RateLimit(5, time.Minute), handlers.SendOTP)
 			authGroup.POST("/register", middleware.RateLimit(5, time.Minute), handlers.RegisterPlayer)
 			authGroup.POST("/login", middleware.RateLimit(5, time.Minute), handlers.LoginPlayer)
 			authGroup.POST("/logout", handlers.LogoutPlayer)

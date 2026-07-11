@@ -19,6 +19,7 @@ Các biến thường dùng:
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSLMODE` | Kết nối PostgreSQL; có default local trong `db.Connect()`. |
 | `CORS_ALLOWED_ORIGINS` | Danh sách origin frontend, mặc định `http://localhost:3000`. |
 | `JWT_SECRET` | Ký token/cookie auth. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `MAIL_FROM` | Cấu hình SMTP (ví dụ: Brevo) để gửi mã OTP đăng ký. |
 | `REDIS_ADDR`/Redis config | Optional cache/worker support nếu được cấu hình. |
 | Google OAuth vars | Dùng cho `/auth/google/*` nếu bật Google login. |
 | PayOS vars | Dùng cho topup/webhook nếu bật payment thật. |

@@ -321,10 +321,22 @@ func SellShopItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+	itemName := req.ItemID
+	if req.ItemType == "Gu" {
+		if spec, ok := models.GuRegistry[req.ItemID]; ok {
+			itemName = spec.Name
+		}
+	} else {
+		_ = db.DB.QueryRow(`SELECT name FROM item_dictionary WHERE id = $1`, req.ItemID).Scan(&itemName)
+	}
+	if itemName == "" {
+		itemName = req.ItemID
+	}
+
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "shop.sell", EntityType: "shop_item",
 		EntityID: req.ItemID,
-		RequestSummary: fmt.Sprintf("%s x%d | nhận %d Nguyên Thạch", req.ItemID, req.Quantity, totalGain),
+		RequestSummary: fmt.Sprintf("%s x%d | nhận %d Nguyên Thạch", itemName, req.Quantity, totalGain),
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"player": player, "message": "Bán thành công, nhận Nguyên Thạch!"})

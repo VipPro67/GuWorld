@@ -1,21 +1,20 @@
 package models
 
 import (
+	"database/sql"
+	"encoding/json"
+	"log"
 	"strings"
 )
+
 
 type MonsterTemplate struct {
 	ID            string             `json:"id"`
 	Name          string             `json:"name"`
 	Type          string             `json:"type"`
-	Rank          int                `json:"rank"`
-	SubRank       int                `json:"sub_rank"`
-	Path          string             `json:"path"`
 	MaxHP         float64            `json:"max_hp"`
 	BaseAttack    float64            `json:"base_attack"`
 	BaseDefense   float64            `json:"base_defense"`
-	MaxMana       float64            `json:"max_mana"`
-	CurrentMana   float64            `json:"current_mana"`
 	GuInventory   GuInventory        `json:"gu_inventory"`
 	ItemInventory MaterialsInventory `json:"item_inventory"`
 	DaoMarks      map[string]int     `json:"dao_marks"`
@@ -142,20 +141,20 @@ func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, sub
 	return
 }
 
-func BuildCombatStateFromMonster(mon MonsterTemplate) CombatState {
-	hp, atk, def := ScaleMonsterStats(mon.MaxHP, mon.BaseAttack, mon.BaseDefense, mon.Rank, mon.SubRank, mon.Type)
+func BuildCombatStateFromMonster(mon MonsterTemplate, rank int, subRank int) CombatState {
+	hp, atk, def := ScaleMonsterStats(mon.MaxHP, mon.BaseAttack, mon.BaseDefense, rank, subRank, mon.Type)
 	return CombatState{
 		EnemyTemplateID:    mon.ID,
 		EnemyName:          mon.Name,
 		EnemyType:          mon.Type,
 		EnemyHP:            hp,
 		EnemyMaxHP:         hp,
-		EnemyMana:          mon.CurrentMana,
-		EnemyMaxMana:       mon.MaxMana,
+		EnemyMana:          100.0,
+		EnemyMaxMana:       100.0,
 		EnemyDamage:        atk,
 		EnemyDefense:       def,
-		EnemyRank:          mon.Rank,
-		EnemySubRank:       mon.SubRank,
+		EnemyRank:          rank,
+		EnemySubRank:       subRank,
 		EnemyGuInventory:   mon.GuInventory,
 		EnemyDaoMarks:      mon.DaoMarks,
 		EnemyPathMasteries: mon.PathMasteries,
@@ -209,3 +208,47 @@ func CombatantFromActiveCombat(cs *CombatState) Combatant {
 		StatusEffects: cs.EnemyStatusEffects,
 	}
 }
+
+var MonsterRegistry = make(map[string]MonsterTemplate)
+
+func LoadMonsterRegistry(db *sql.DB) error {
+	rows, err := db.Query(`
+		SELECT id, name, type, max_hp, base_attack, base_defense, gu_inventory, item_inventory, dao_marks, path_masteries, ai_profile, loot_table_id, description
+		FROM monster_templates
+		WHERE is_active = true
+	`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	newRegistry := make(map[string]MonsterTemplate)
+	count := 0
+
+	for rows.Next() {
+		var mon MonsterTemplate
+		var guInvRaw, itemInvRaw, daoMarksRaw, masteriesRaw []byte
+		err = rows.Scan(
+			&mon.ID, &mon.Name, &mon.Type,
+			&mon.MaxHP, &mon.BaseAttack, &mon.BaseDefense,
+			&guInvRaw, &itemInvRaw, &daoMarksRaw, &masteriesRaw, &mon.AIProfile, &mon.LootTableID, &mon.Description,
+		)
+		if err != nil {
+			log.Printf("Warning: failed to scan monster template row: %v", err)
+			continue
+		}
+
+		_ = json.Unmarshal(guInvRaw, &mon.GuInventory)
+		_ = json.Unmarshal(itemInvRaw, &mon.ItemInventory)
+		_ = json.Unmarshal(daoMarksRaw, &mon.DaoMarks)
+		_ = json.Unmarshal(masteriesRaw, &mon.PathMasteries)
+
+		newRegistry[mon.ID] = mon
+		count++
+	}
+
+	MonsterRegistry = newRegistry
+	log.Printf("Loaded %d monster templates from database registry into memory cache", count)
+	return nil
+}
+

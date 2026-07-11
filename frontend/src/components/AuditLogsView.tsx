@@ -16,7 +16,25 @@ import {
 } from "lucide-react";
 
 export const AuditLogsView: React.FC = () => {
-  const { auditLogs, auditLogsLoading, fetchAuditLogs } = useGameStore();
+  const { auditLogs, auditLogsLoading, fetchAuditLogs, guDictionary, itemDictionary, monsterDictionary } = useGameStore();
+
+  const formatRequestSummary = (msg: string): string => {
+    if (!msg) return "";
+    let formatted = msg;
+    Object.keys(guDictionary || {}).forEach((id) => {
+      const name = guDictionary[id]?.name;
+      if (name) formatted = formatted.split(id).join(name);
+    });
+    Object.keys(itemDictionary || {}).forEach((id) => {
+      const name = itemDictionary[id]?.name;
+      if (name) formatted = formatted.split(id).join(name);
+    });
+    Object.keys(monsterDictionary || {}).forEach((id) => {
+      const name = monsterDictionary[id]?.name;
+      if (name) formatted = formatted.split(id).join(name);
+    });
+    return formatted;
+  };
 
   const [selectedAction, setSelectedAction] = useState<string>("");
   const [selectedSuccess, setSelectedSuccess] = useState<string>("");
@@ -215,7 +233,7 @@ export const AuditLogsView: React.FC = () => {
                         </span>
                       </div>
                       <p className="text-xs sm:text-sm font-semibold text-slate-200">
-                        {log.request_summary || "Hành động tu luyện không xác định"}
+                        {formatRequestSummary(log.request_summary) || "Hành động tu luyện không xác định"}
                       </p>
                     </div>
                   </div>
@@ -238,14 +256,24 @@ export const AuditLogsView: React.FC = () => {
                       📋 Thuộc tính chi tiết (Metadata)
                     </div>
                     <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 font-mono text-[11px] text-slate-350 grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
-                      {Object.entries(log.metadata).map(([key, val]) => (
-                        <div key={key} className="flex justify-between border-b border-slate-900/60 pb-1">
-                          <span className="text-slate-500 font-semibold">{key}:</span>
-                          <span className="text-slate-200 text-right max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap">
-                            {typeof val === "object" ? JSON.stringify(val) : String(val)}
-                          </span>
-                        </div>
-                      ))}
+                      {Object.entries(log.metadata).map(([key, val]) => {
+                        let displayVal = typeof val === "object" ? JSON.stringify(val) : String(val);
+                        if (key === "item_id" || key === "material_id") {
+                          displayVal = itemDictionary[displayVal]?.name || displayVal;
+                        } else if (key === "gu_id" || key === "gu_instance_id") {
+                          displayVal = guDictionary[displayVal]?.name || displayVal;
+                        } else if (key === "monster_id") {
+                          displayVal = monsterDictionary[displayVal]?.name || displayVal;
+                        }
+                        return (
+                          <div key={key} className="flex justify-between border-b border-slate-900/60 pb-1">
+                            <span className="text-slate-500 font-semibold">{key}:</span>
+                            <span className="text-slate-200 text-right max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap" title={displayVal}>
+                              {displayVal}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                     {log.error_message && (
                       <div className="bg-rose-950/20 border border-rose-900/40 p-3 rounded-lg text-xs text-rose-350 font-mono">

@@ -13,15 +13,15 @@ func LoadMonsterTemplate(tx *sql.Tx, id string) (models.MonsterTemplate, error) 
 	var guInvRaw, itemInvRaw, daoMarksRaw, pathMasteriesRaw []byte
 
 	query := `
-		SELECT id, name, type, rank, sub_rank, path, max_hp, base_attack, base_defense,
-		       max_mana, current_mana, gu_inventory, item_inventory, dao_marks,
+		SELECT id, name, type, max_hp, base_attack, base_defense,
+		       gu_inventory, item_inventory, dao_marks,
 		       path_masteries, ai_profile, loot_table_id, description
 		FROM monster_templates
 		WHERE id = $1 AND is_active = TRUE
 	`
 	err := tx.QueryRow(query, id).Scan(
-		&mon.ID, &mon.Name, &mon.Type, &mon.Rank, &mon.SubRank, &mon.Path,
-		&mon.MaxHP, &mon.BaseAttack, &mon.BaseDefense, &mon.MaxMana, &mon.CurrentMana,
+		&mon.ID, &mon.Name, &mon.Type,
+		&mon.MaxHP, &mon.BaseAttack, &mon.BaseDefense,
 		&guInvRaw, &itemInvRaw, &daoMarksRaw, &pathMasteriesRaw, &mon.AIProfile,
 		&mon.LootTableID, &mon.Description,
 	)

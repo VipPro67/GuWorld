@@ -911,14 +911,25 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 		bossTemplateID = "monster_myriad_tribulation_boss"
 	}
 
+	bossRank := 6
+	switch tribulationType {
+	case "EARTH_CALAMITY", "HEAVENLY_TRIBULATION":
+		bossRank = 6
+	case "GRAND_TRIBULATION":
+		bossRank = 7
+	case "MYRIAD_TRIBULATION":
+		bossRank = 8
+	}
+	bossSubRank := 1
+
 	var boss models.MonsterTemplate
 	var bossGu []byte
 	err = tx.QueryRow(`
-		SELECT id, name, type, rank, sub_rank, path, max_hp, base_attack, base_defense, max_mana, current_mana, gu_inventory, ai_profile, loot_table_id, description
+		SELECT id, name, type, max_hp, base_attack, base_defense, gu_inventory, ai_profile, loot_table_id, description
 		FROM monster_templates WHERE id = $1
 	`, bossTemplateID).Scan(
-		&boss.ID, &boss.Name, &boss.Type, &boss.Rank, &boss.SubRank, &boss.Path,
-		&boss.MaxHP, &boss.BaseAttack, &boss.BaseDefense, &boss.MaxMana, &boss.CurrentMana,
+		&boss.ID, &boss.Name, &boss.Type,
+		&boss.MaxHP, &boss.BaseAttack, &boss.BaseDefense,
 		&bossGu, &boss.AIProfile, &boss.LootTableID, &boss.Description,
 	)
 	if err != nil {
@@ -927,7 +938,7 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 
 	// Apply difficulty scaling
 	diffMultiplier := 1.0 + float64(difficulty)*0.2
-	scaledHP, scaledAtk, scaledDef := models.ScaleMonsterStats(boss.MaxHP, boss.BaseAttack, boss.BaseDefense, boss.Rank, boss.SubRank, boss.Type)
+	scaledHP, scaledAtk, scaledDef := models.ScaleMonsterStats(boss.MaxHP, boss.BaseAttack, boss.BaseDefense, bossRank, bossSubRank, boss.Type)
 	bossHP := int(scaledHP * diffMultiplier)
 	bossAtk := int(scaledAtk * diffMultiplier)
 	bossDef := int(scaledDef * diffMultiplier)
@@ -944,11 +955,11 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	var minion models.MonsterTemplate
 	var minionGu []byte
 	err = tx.QueryRow(`
-		SELECT id, name, type, rank, sub_rank, path, max_hp, base_attack, base_defense, max_mana, current_mana, gu_inventory, ai_profile, loot_table_id, description
+		SELECT id, name, type, max_hp, base_attack, base_defense, gu_inventory, ai_profile, loot_table_id, description
 		FROM monster_templates WHERE id = 'monster_tribulation_beast'
 	`).Scan(
-		&minion.ID, &minion.Name, &minion.Type, &minion.Rank, &minion.SubRank, &minion.Path,
-		&minion.MaxHP, &minion.BaseAttack, &minion.BaseDefense, &minion.MaxMana, &minion.CurrentMana,
+		&minion.ID, &minion.Name, &minion.Type,
+		&minion.MaxHP, &minion.BaseAttack, &minion.BaseDefense,
 		&minionGu, &minion.AIProfile, &minion.LootTableID, &minion.Description,
 	)
 	if err != nil {
@@ -957,14 +968,14 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 
 	minionCount := 1 + rand.Intn(3)
 	for i := 0; i < minionCount; i++ {
-		scaledHPm, scaledAtkm, scaledDefm := models.ScaleMonsterStats(minion.MaxHP, minion.BaseAttack, minion.BaseDefense, minion.Rank, minion.SubRank, minion.Type)
+		scaledHPm, scaledAtkm, scaledDefm := models.ScaleMonsterStats(minion.MaxHP, minion.BaseAttack, minion.BaseDefense, bossRank, bossSubRank, minion.Type)
 		mHP := int(scaledHPm * diffMultiplier)
 		mAtk := int(scaledAtkm * diffMultiplier)
 		mDef := int(scaledDefm * diffMultiplier)
 
 		_, err = tx.Exec(`
-			INSERT INTO tribulation_enemies (event_id, name, enemy_type, path, hp, max_hp, attack, defense, x, y, is_boss, is_dead)
-			VALUES ($1, $2, 'MINION', $3, $4, $4, $5, $6, $7, $8, false, false)
+			INSERT INTO tribulation_enemies (event_id, name, enemy_type, path, hp, max_hp, attack, defense, x, y, is_dead)
+			VALUES ($1, $2, 'MINION', $3, $4, $4, $5, $6, $7, $8, false)
 		`, eventID, fmt.Sprintf("%s #%d", minion.Name, i+1), path, mHP, mAtk, mDef, rand.Intn(20), rand.Intn(20))
 		if err != nil {
 			return err
