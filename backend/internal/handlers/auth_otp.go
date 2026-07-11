@@ -40,6 +40,19 @@ func SendOTP(c *gin.Context) {
 		return
 	}
 
+	// 1.5. Prevent email bombing: Check if OTP was sent to this email less than 1 minute ago
+	var existingExpiresAt time.Time
+	err = db.DB.QueryRow("SELECT expires_at FROM email_otps WHERE email = $1", req.Email).Scan(&existingExpiresAt)
+	if err == nil {
+		// OTP lifetime is 5 minutes. If remaining time > 4 minutes, it was sent < 1 minute ago.
+		if existingExpiresAt.Sub(time.Now()) > 4*time.Minute {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error": "Yêu cầu OTP quá nhanh. Vui lòng đợi 1 phút trước khi yêu cầu gửi lại!",
+			})
+			return
+		}
+	}
+
 	// 2. Generate OTP
 	otp, err := auth.GenerateOTP()
 	if err != nil {
