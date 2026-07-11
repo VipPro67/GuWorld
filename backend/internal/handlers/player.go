@@ -2790,30 +2790,28 @@ func GoogleCallback(c *gin.Context) {
 			username = fmt.Sprintf("%s_%d", username, rand.Intn(9000)+1000)
 		}
 
-		roll := rand.Intn(100)
+		var prod_env = os.Getenv("PROD_ENV") == "test"
+		var roll int
+		if prod_env {
+			roll = rand.Intn(30) // 0-29
+		} else {
+			roll = rand.Intn(100) // 0-99
+		}
 		var aptitudeType string
 		var aptitudePercent int
 
-		// if roll < 10 {
-		// 	aptitudeType = "Giáp"
-		// 	aptitudePercent = 80 + rand.Intn(20) // 80 - 99
-		// } else if roll < 30 {
-		// 	aptitudeType = "Ất"
-		// 	aptitudePercent = 60 + rand.Intn(20) // 60 - 79
-		// } else if roll < 60 {
-		// 	aptitudeType = "Bính"
-		// 	aptitudePercent = 40 + rand.Intn(20) // 40 - 59
-		// } else {
-		// 	aptitudeType = "Đinh"
-		// 	aptitudePercent = 20 + rand.Intn(20) // 20 - 39
-		// }
-
-		if roll < 50 {
+		if roll < 10 {
 			aptitudeType = "Giáp"
 			aptitudePercent = 80 + rand.Intn(20) // 80 - 99
-		} else {
+		} else if roll < 30 {
 			aptitudeType = "Ất"
 			aptitudePercent = 60 + rand.Intn(20) // 60 - 79
+		} else if roll < 60 {
+			aptitudeType = "Bính"
+			aptitudePercent = 40 + rand.Intn(20) // 40 - 59
+		} else {
+			aptitudeType = "Đinh"
+			aptitudePercent = 20 + rand.Intn(20) // 20 - 39
 		}
 
 		aptitudeGrade := 4
