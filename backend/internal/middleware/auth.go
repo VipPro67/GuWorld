@@ -41,8 +41,10 @@ func csrfProtection(c *gin.Context) {
 // AuthRequired is a Gin middleware that enforces authentication
 func AuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		usedCookie := true
 		tokenStr, err := c.Cookie("gu_auth_token")
 		if err != nil || tokenStr == "" {
+			usedCookie = false
 			authHeader := c.GetHeader("Authorization")
 			if authHeader == "" {
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication cookie or Authorization header required"})
@@ -77,9 +79,11 @@ func AuthRequired() gin.HandlerFunc {
 		c.Set("player_id", playerID)
 		c.Set("username", claims.Username)
 
-		csrfProtection(c)
-		if c.IsAborted() {
-			return
+		if usedCookie {
+			csrfProtection(c)
+			if c.IsAborted() {
+				return
+			}
 		}
 
 		c.Next()

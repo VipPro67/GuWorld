@@ -50,6 +50,7 @@ type CreatePlayerRequest struct {
 // CreatePlayerResponse represents the output payload for registration/login
 type CreatePlayerResponse struct {
 	Player models.Player `json:"player"`
+	Token  string        `json:"token,omitempty"`
 }
 
 const authCookieName = "gu_auth_token"
@@ -75,12 +76,38 @@ func authCookieSecure(c *gin.Context, isSameSiteNone bool) bool {
 func setAuthCookie(c *gin.Context, token string) {
 	sameSite := http.SameSiteLaxMode
 
-	// Auto-detect cross-origin requirements
+	// Tự động phát hiện yêu cầu cross-origin/cross-site
 	origin := c.Request.Header.Get("Origin")
 	corsEnv := os.Getenv("CORS_ALLOWED_ORIGINS")
-	if (origin != "" && !strings.Contains(origin, "localhost") && !strings.Contains(origin, c.Request.Host)) ||
-		(corsEnv != "" && !strings.Contains(corsEnv, "localhost") && corsEnv != "*") {
-		sameSite = http.SameSiteNoneMode
+	
+	originHost := ""
+	if origin != "" {
+		if u, err := url.Parse(origin); err == nil {
+			originHost = u.Hostname()
+		}
+	} else if corsEnv != "" {
+		firstCors := corsEnv
+		if strings.Contains(corsEnv, ",") {
+			firstCors = strings.Split(corsEnv, ",")[0]
+		}
+		if u, err := url.Parse(firstCors); err == nil {
+			originHost = u.Hostname()
+		}
+	}
+
+	requestHost := c.Request.Host
+	if strings.Contains(requestHost, ":") {
+		requestHost = strings.Split(requestHost, ":")[0]
+	}
+
+	// Nếu host của frontend khác host của backend, chúng là cross-site
+	// Ngoại lệ: Nếu cả hai đều chạy trên localhost, SameSite Lax vẫn được chấp nhận
+	if originHost != "" && originHost != requestHost {
+		if originHost == "localhost" && requestHost == "localhost" {
+			sameSite = http.SameSiteLaxMode
+		} else {
+			sameSite = http.SameSiteNoneMode
+		}
 	}
 
 	switch strings.ToLower(os.Getenv("AUTH_COOKIE_SAMESITE")) {
@@ -389,6 +416,7 @@ func RegisterPlayer(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, CreatePlayerResponse{
 		Player: player,
+		Token:  token,
 	})
 }
 
@@ -489,6 +517,7 @@ func LoginPlayer(c *gin.Context) {
 
 	c.JSON(http.StatusOK, CreatePlayerResponse{
 		Player: player,
+		Token:  token,
 	})
 }
 
@@ -2963,7 +2992,14 @@ func GoogleCallback(c *gin.Context) {
 		frontendURL = strings.Split(frontendURL, ",")[0]
 	}
 
-	c.Redirect(http.StatusTemporaryRedirect, frontendURL)
+	redirectURL := frontendURL
+	if strings.Contains(redirectURL, "?") {
+		redirectURL += "&token=" + token
+	} else {
+		redirectURL += "?token=" + token
+	}
+
+	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
 
 // TickRegen checks Redis for active regeneration buffs and heals the player

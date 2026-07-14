@@ -977,6 +977,12 @@ const authFetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (csrfToken && init.method && init.method !== "GET" && init.method !== "HEAD") {
     headers["X-CSRF-Token"] = csrfToken;
   }
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("gu_auth_token");
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
   // Add abort signal with 30s timeout, keyed by URL string
   const key = typeof input === "string" ? input : input.toString();
   const signal = getAbortSignal(key);
@@ -1168,7 +1174,9 @@ export const useGameStore = create<GameState>((set, get) => {
 
       const data: AuthResponse = await response.json();
       setPlayerFromServer(data.player, { token: AUTHENTICATED_SESSION });
-      localStorage.removeItem("gu_auth_token");
+      if (data.token) {
+        localStorage.setItem("gu_auth_token", data.token);
+      }
       localStorage.setItem("gu_player_id", data.player.id);
       
       void get().fetchRecipes();
@@ -1245,7 +1253,9 @@ export const useGameStore = create<GameState>((set, get) => {
 
       const data: AuthResponse = await response.json();
       setPlayerFromServer(data.player, { token: AUTHENTICATED_SESSION });
-      localStorage.removeItem("gu_auth_token");
+      if (data.token) {
+        localStorage.setItem("gu_auth_token", data.token);
+      }
       localStorage.setItem("gu_player_id", data.player.id);
 
       void get().fetchRecipes();
@@ -1518,7 +1528,13 @@ export const useGameStore = create<GameState>((set, get) => {
 
   initializeSession: async () => {
     if (typeof window !== "undefined") {
-      localStorage.removeItem("gu_auth_token");
+      const urlParams = new URLSearchParams(window.location.search);
+      const tokenFromUrl = urlParams.get("token");
+      if (tokenFromUrl) {
+        localStorage.setItem("gu_auth_token", tokenFromUrl);
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
     }
 
     try {
