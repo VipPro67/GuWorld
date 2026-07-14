@@ -959,9 +959,6 @@ func InitSchema() error {
 		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS success_rate DOUBLE PRECISION NOT NULL DEFAULT 0;`, "add_success_rate"},
 		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS channel_time INTEGER NOT NULL DEFAULT 1;`, "add_channel_time"},
 		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS is_reliable BOOLEAN NOT NULL DEFAULT FALSE;`, "add_is_reliable"},
-		{`UPDATE killer_moves SET success_rate = stability WHERE stability IS NOT NULL AND success_rate = 0;`, "migrate_stability_data"},
-		{`UPDATE killer_moves SET channel_time = cast_time WHERE cast_time IS NOT NULL AND channel_time = 1;`, "migrate_cast_time_data"},
-		{`UPDATE killer_moves SET is_reliable = is_stable WHERE is_stable IS NOT NULL AND is_reliable = FALSE;`, "migrate_is_stable_data"},
 		{`CREATE TABLE IF NOT EXISTS combat_history (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
