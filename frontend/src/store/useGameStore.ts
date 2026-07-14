@@ -1301,7 +1301,7 @@ export const useGameStore = create<GameState>((set, get) => {
       playerEventsSource = null;
     }
 
-    const source = new EventSource(`${BACKEND_URL}/api/player/events`, { withCredentials: true });
+    const source = new EventSource(`${BACKEND_URL}/api/player/events?token=${encodeURIComponent(get().token!)}`);
     playerEventsSource = source;
 
     const mergePlayerEvent = (event: MessageEvent<string>) => {
@@ -1369,7 +1369,7 @@ export const useGameStore = create<GameState>((set, get) => {
       tradeEventsSource = null;
     }
 
-    const source = new EventSource(`${BACKEND_URL}/api/trade/events`, { withCredentials: true });
+    const source = new EventSource(`${BACKEND_URL}/api/trade/events?token=${encodeURIComponent(get().token!)}`);
     tradeEventsSource = source;
 
     source.addEventListener("trade.updated", (event) => {
@@ -1397,7 +1397,7 @@ export const useGameStore = create<GameState>((set, get) => {
       baoHoangMessagesSource = null;
     }
 
-    const source = new EventSource(`${BACKEND_URL}/api/chat/bao-hoang/events?channel=${encodeURIComponent(channel)}`, { withCredentials: true });
+    const source = new EventSource(`${BACKEND_URL}/api/chat/bao-hoang/events?channel=${encodeURIComponent(channel)}&token=${encodeURIComponent(get().token!)}`);
     baoHoangMessagesSource = source;
 
     source.addEventListener("chat.messages", (event) => {
