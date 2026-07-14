@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	crypto_rand "crypto/rand"
+	"encoding/hex"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -2594,11 +2596,18 @@ func GoogleLogin(c *gin.Context) {
 		redirectURI = "http://localhost:8080/api/auth/google/callback"
 	}
 
-	state := "google_oauth_state_secret"
-	refCode := c.Query("ref")
-	if refCode != "" {
-		state = "ref_" + refCode
+	stateToken := make([]byte, 16)
+	if _, err := crypto_rand.Read(stateToken); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate security state"})
+		return
 	}
+	stateStr := hex.EncodeToString(stateToken)
+
+	// Set state cookie valid for 5 minutes
+	c.SetCookie("google_oauth_state", stateStr, 300, "/api/auth/google", "", authCookieSecure(c, false), true)
+
+	refCode := c.Query("ref")
+	state := stateStr + ":" + refCode
 	googleURL := fmt.Sprintf("https://accounts.google.com/o/oauth2/v2/auth?client_id=%s&redirect_uri=%s&response_type=code&scope=openid+profile+email&state=%s",
 		clientID, url.QueryEscape(redirectURI), state)
 
@@ -2614,9 +2623,29 @@ func GoogleCallback(c *gin.Context) {
 	}
 
 	state := c.Query("state")
+	if state == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Security state parameter not found"})
+		return
+	}
+
+	stateCookie, err := c.Cookie("google_oauth_state")
+	if err != nil || stateCookie == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Security state cookie not found or expired"})
+		return
+	}
+
+	// Xóa cookie ngay lập tức
+	c.SetCookie("google_oauth_state", "", -1, "/api/auth/google", "", authCookieSecure(c, false), true)
+
+	parts := strings.SplitN(state, ":", 2)
+	if len(parts) == 0 || parts[0] != stateCookie {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid security state mismatch"})
+		return
+	}
+
 	var referralCode string
-	if strings.HasPrefix(state, "ref_") {
-		referralCode = strings.TrimPrefix(state, "ref_")
+	if len(parts) == 2 {
+		referralCode = parts[1]
 	}
 
 	clientID := os.Getenv("GOOGLE_CLIENT_ID")

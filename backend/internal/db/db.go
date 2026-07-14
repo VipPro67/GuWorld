@@ -2199,9 +2199,15 @@ func SeedSects() error {
 
 // CheckImmortalGuExists verifies if a specific Immortal Gu exists anywhere in the world.
 func CheckImmortalGuExists(tx *sql.Tx, guID string) (bool, error) {
-	// 1. Check player_gu
 	var exists bool
-	err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM player_gu WHERE gu_id = $1)", guID).Scan(&exists)
+
+	// 1. Kiểm tra trong rương đồ gu_inventory của tất cả người chơi
+	err := tx.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM players 
+			WHERE gu_inventory @> jsonb_build_array(jsonb_build_object('gu_id', $1::text))
+		)
+	`, guID).Scan(&exists)
 	if err != nil {
 		return false, err
 	}
@@ -2209,8 +2215,8 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string) (bool, error) {
 		return true, nil
 	}
 
-	// 2. Check auction
-	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM auction WHERE item_type = 'GU' AND item_data->>'gu_id' = $1 AND status = 'active')", guID).Scan(&exists)
+	// 1b. Kiểm tra trong bảng phụ player_gu (phòng hờ)
+	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM player_gu WHERE gu_id = $1)", guID).Scan(&exists)
 	if err != nil {
 		return false, err
 	}
@@ -2218,7 +2224,23 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string) (bool, error) {
 		return true, nil
 	}
 
-	// 3. Check temp_loot
+	// 2. Kiểm tra trên sàn giao dịch/đấu giá (auction)
+	err = tx.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM auction 
+			WHERE item_type = 'Gu' 
+			  AND status = 'ACTIVE' 
+			  AND item_data @> jsonb_build_array(jsonb_build_object('gu_id', $1::text))
+		)
+	`, guID).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		return true, nil
+	}
+
+	// 3. Kiểm tra trong rương tạm temp_loot
 	err = tx.QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM players 

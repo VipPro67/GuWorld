@@ -177,6 +177,7 @@ func CreateListing(c *gin.Context) {
 		}
 
 		var newInventory []models.GuInstance
+		var gusToSell []models.GuInstance
 		var removedCount int
 
 		for _, gu := range player.GuInventory {
@@ -195,6 +196,7 @@ func CreateListing(c *gin.Context) {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Tất cả Cổ trùng trong đơn hàng gộp phải cùng loại"})
 					return
 				}
+				gusToSell = append(gusToSell, gu)
 				removedCount++
 			} else {
 				newInventory = append(newInventory, gu)
@@ -209,7 +211,7 @@ func CreateListing(c *gin.Context) {
 		player.GuInventory = newInventory
 		req.Quantity = len(guIDsToSell)
 
-		itemDataJSON, err = json.Marshal(commonGuID)
+		itemDataJSON, err = json.Marshal(gusToSell)
 		if err != nil {
 			log.Printf("Failed to marshal Gu: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đăng bán Cổ trùng"})
@@ -576,12 +578,25 @@ func BuyListing(c *gin.Context) {
 		seller.ImmortalStones += payout
 	}
 
-	var itemData string
-	if err := json.Unmarshal(rawItemData, &itemData); err != nil {
-		itemData = string(rawItemData)
+	var itemDataToSend string
+	if itemType == "Gu" {
+		var gus []models.GuInstance
+		if err := json.Unmarshal(rawItemData, &gus); err == nil && len(gus) >= purchaseQty {
+			purchasedGus := gus[:purchaseQty]
+			purchasedJSON, _ := json.Marshal(purchasedGus)
+			itemDataToSend = string(purchasedJSON)
+		} else {
+			itemDataToSend = string(rawItemData)
+		}
+	} else {
+		var itemData string
+		if err := json.Unmarshal(rawItemData, &itemData); err != nil {
+			itemData = string(rawItemData)
+		}
+		itemDataToSend = itemData
 	}
 
-	if err := addAuctionItemToPlayer(&buyer, itemType, itemData, purchaseQty); err != nil {
+	if err := addAuctionItemToPlayer(&buyer, itemType, itemDataToSend, purchaseQty); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển giao vật phẩm"})
 		return
 	}
@@ -599,7 +614,18 @@ func BuyListing(c *gin.Context) {
 	if purchaseQty == qty {
 		_, err = tx.Exec(`UPDATE auction SET status='COMPLETED' WHERE id=$1`, req.ListingID)
 	} else {
-		_, err = tx.Exec(`UPDATE auction SET quantity=quantity-$1 WHERE id=$2`, purchaseQty, req.ListingID)
+		if itemType == "Gu" {
+			var gus []models.GuInstance
+			if err := json.Unmarshal(rawItemData, &gus); err == nil && len(gus) >= purchaseQty {
+				remainingGus := gus[purchaseQty:]
+				remainingJSON, _ := json.Marshal(remainingGus)
+				_, err = tx.Exec(`UPDATE auction SET quantity=quantity-$1, item_data=$2 WHERE id=$3`, purchaseQty, remainingJSON, req.ListingID)
+			} else {
+				_, err = tx.Exec(`UPDATE auction SET quantity=quantity-$1 WHERE id=$2`, purchaseQty, req.ListingID)
+			}
+		} else {
+			_, err = tx.Exec(`UPDATE auction SET quantity=quantity-$1 WHERE id=$2`, purchaseQty, req.ListingID)
+		}
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật trạng thái đơn hàng"})
@@ -744,8 +770,24 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 
 func addAuctionItemToPlayer(player *models.Player, itemType, itemData string, qty int) error {
 	if itemType == "Gu" {
-		for i := 0; i < qty; i++ {
-			player.GuInventory = append(player.GuInventory, mapGuFromRaw(itemData))
+		var gus []models.GuInstance
+		if err := json.Unmarshal([]byte(itemData), &gus); err == nil {
+			if qty > len(gus) {
+				qty = len(gus)
+			}
+			for i := 0; i < qty; i++ {
+				gu := gus[i]
+				gu.InstanceID = uuid.New().String() // Tạo ID mới để tránh trùng lặp
+				gu.Status = "SLEEPING"
+				gu.Equipped = false
+				gu.IsVital = false
+				player.GuInventory = append(player.GuInventory, gu)
+			}
+		} else {
+			// Tương thích ngược với định dạng cũ (chỉ lưu string guID)
+			for i := 0; i < qty; i++ {
+				player.GuInventory = append(player.GuInventory, mapGuFromRaw(itemData))
+			}
 		}
 		return nil
 	}

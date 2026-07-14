@@ -25,8 +25,11 @@ func SetupRouter() *gin.Engine {
 
 		origin := c.Request.Header.Get("Origin")
 		isAllowed := false
+		isWildcardAllowed := false
 		for _, o := range allowedOrigins {
-			if o == origin || o == "*" {
+			if o == "*" {
+				isWildcardAllowed = true
+			} else if o == origin {
 				isAllowed = true
 				break
 			}
@@ -34,13 +37,11 @@ func SetupRouter() *gin.Engine {
 
 		if isAllowed {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		} else if isWildcardAllowed {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		} else if allowedOriginsStr == "*" {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		}
-
-		// Only set credentials when origin is specific (not wildcard)
-		if origin != "" && allowedOriginsStr != "*" {
-			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
