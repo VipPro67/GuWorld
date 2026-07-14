@@ -618,6 +618,7 @@ export interface Feedback {
 
 interface AuthResponse {
   player: Player;
+  token?: string;
 }
 
 interface ExploreResponse {
