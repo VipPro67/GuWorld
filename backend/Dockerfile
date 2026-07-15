@@ -11,8 +11,13 @@ RUN go mod download
 COPY . .
 
 # Build clean static binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o guworld_server ./cmd/server
+# syntax=docker/dockerfile:1.7
 
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux \
+    go build -o guworld_server ./cmd/server
+    
 # Stage 2: Create the runner container
 FROM alpine:latest
 
