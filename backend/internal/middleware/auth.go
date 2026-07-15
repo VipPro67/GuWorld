@@ -10,8 +10,14 @@ import (
 )
 
 func csrfProtection(c *gin.Context) {
-	csrfCookie, err := c.Cookie("gu_csrf_token")
-	if err != nil || csrfCookie == "" {
+	var csrfCookies []string
+	for _, cookie := range c.Request.Cookies() {
+		if cookie.Name == "gu_csrf_token" && cookie.Value != "" {
+			csrfCookies = append(csrfCookies, cookie.Value)
+		}
+	}
+
+	if len(csrfCookies) == 0 {
 		// Nếu là request an toàn (GET/HEAD/OPTIONS), tự sinh mới cookie nếu thiếu
 		if c.Request.Method == "GET" || c.Request.Method == "HEAD" || c.Request.Method == "OPTIONS" {
 			token, genErr := GenerateCSRFToken()
@@ -31,7 +37,21 @@ func csrfProtection(c *gin.Context) {
 	}
 
 	csrfHeader := c.GetHeader("X-CSRF-Token")
-	if csrfHeader == "" || csrfHeader != csrfCookie {
+	if csrfHeader == "" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Invalid CSRF token"})
+		c.Abort()
+		return
+	}
+
+	matched := false
+	for _, cookieVal := range csrfCookies {
+		if csrfHeader == cookieVal {
+			matched = true
+			break
+		}
+	}
+
+	if !matched {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Invalid CSRF token"})
 		c.Abort()
 		return
