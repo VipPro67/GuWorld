@@ -255,7 +255,7 @@ export const PlayerProfileModal: React.FC = () => {
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
                 <span className="flex items-center gap-1">
-                  <Heart className="w-3.5 h-3.5 text-rose-500" /> Sinh Mệnh (HP)
+                  <Heart className="w-3.5 h-3.5 text-rose-500" /> Sinh Mệnh
                 </span>
                 <span>
                   {base_hp === 0 || base_hp === -1 ? "???" : `${Math.round(hp)} / ${Math.round(base_hp)}`}

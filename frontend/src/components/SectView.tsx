@@ -688,7 +688,7 @@ export const SectView: React.FC = () => {
                         </span>
                       </div>
                       <div className="flex justify-between font-mono">
-                        <span>Tu vi của Cổ sư (Rank):</span>
+                        <span>Tu vi của Cổ sư:</span>
                         <span className={player.rank >= promotionReq.reqRank ? "text-emerald-400 font-semibold" : "text-red-400"}>
                           Rank {player.rank} / Rank {promotionReq.reqRank}
                         </span>
@@ -1796,13 +1796,13 @@ export const SectView: React.FC = () => {
                     onChange={(e) => setMMissionType(e.target.value)}
                     className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none"
                   >
-                    <option value="GATHER">Thu thập Linh tài (GATHER)</option>
-                    <option value="DONATE">Cống hiến Cổ trùng (DONATE)</option>
+                    <option value="GATHER">Thu thập Linh tài</option>
+                    <option value="DONATE">Cống hiến Cổ trùng</option>
                   </select>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-zinc-400 font-serif font-bold">Mã Mục Tiêu (Target ID)</label>
+                  <label className="text-xs text-zinc-400 font-serif font-bold">Mã Mục Tiêu</label>
                   <input
                     type="text"
                     required
@@ -1897,7 +1897,7 @@ export const SectView: React.FC = () => {
                       className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none cursor-pointer"
                     >
                       <option value="gu">Cổ Trùng</option>
-                      <option value="material">Linh Tài (Material)</option>
+                      <option value="material">Linh Tài</option>
                     </select>
                   </div>
 

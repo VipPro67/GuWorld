@@ -355,7 +355,7 @@ export const Registration: React.FC<RegistrationProps> = ({
             {/* Thiết Lập Cổ Bản Mệnh */}
             <div>
               <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5">
-                Khai Mở Bản Mệnh Cổ (Vital Gu)
+                Khai Mở Bản Mệnh Cổ
               </label>
               <select
                 value={vitalChoice}
