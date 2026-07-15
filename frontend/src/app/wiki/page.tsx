@@ -5,10 +5,10 @@ import { wikiPages } from "@/lib/wiki-pages";
 
 export const metadata: Metadata = {
   title: "Thư Viện Cổ Trùng",
-  description: "Tra cứu toàn bộ Cổ Trùng trong Cổ Thế Giới: thuộc tính, hệ phái, tác dụng, cách nuôi dưỡng và sát chiêu phối hợp.",
+  description: "Tra cứu toàn bộ Cổ Trùng trong Cổ Giới: thuộc tính, hệ phái, tác dụng, cách nuôi dưỡng và sát chiêu phối hợp.",
   openGraph: {
-    title: "Thư Viện Cổ Trùng | Cổ Thế Giới",
-    description: "Tra cứu toàn bộ Cổ Trùng trong Cổ Thế Giới.",
+    title: "Thư Viện Cổ Trùng | Cổ Giới",
+    description: "Tra cứu toàn bộ Cổ Trùng trong Cổ Giới.",
   },
 };
 

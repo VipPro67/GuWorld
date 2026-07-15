@@ -324,11 +324,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: gu.name,
     description: `${gu.name} - Cổ Trùng Chuyển ${gu.rank} hệ ${pathName} (${gu.gu_type}). ${gu.description}`,
     openGraph: {
-      title: `${gu.name} | Cổ Thế Giới`,
+      title: `${gu.name} | Cổ Giới`,
       description: gu.description,
       type: "article",
       locale: "vi_VN",
-      siteName: "Cổ Thế Giới",
+      siteName: "Cổ Giới",
     },
     twitter: {
       card: "summary",

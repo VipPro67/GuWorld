@@ -19,13 +19,13 @@ const siteUrl = process.env.NEXT_PUBLIC_BACKEND_URL
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Cổ Thế Giới",
-    template: "%s | Cổ Thế Giới",
+    default: "Cổ Giới",
+    template: "%s | Cổ Giới",
   },
-  description: "Khai mở Không Khiếu, thâm nhập Thanh Mao Sơn, tích lũy Nguyên Thạch, luyện hóa Cổ Trùng. Trò chơi nhập vai tu tiên mô phỏng theo tiểu thuyết Cổ Chân Nhân.",
-  keywords: ["Cổ Thế Giới", "Cổ Chân Nhân", "web game", "tu tiên", "nhập vai", "Cổ Trùng", "Nguyên Thạch", "Thanh Mao Sơn"],
-  authors: [{ name: "Cổ Thế Giới Development" }],
-  applicationName: "Cổ Thế Giới",
+  description: "Khai mở Không Khiếu, thâm nhập Thế Giới, tích lũy Nguyên Thạch, luyện hóa Cổ Trùng. Trò chơi nhập vai tu tiên mô phỏng theo tiểu thuyết Cổ Chân Nhân.",
+  keywords: ["Cổ Giới", "Cổ Chân Nhân", "web game", "tu tiên", "nhập vai", "Cổ Trùng", "Nguyên Thạch", "Thanh Mao Sơn"],
+  authors: [{ name: "Cổ Giới Development" }],
+  applicationName: "Cổ Giới",
   generator: "Next.js",
   referrer: "origin-when-cross-origin",
   robots: {
@@ -42,14 +42,14 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "vi_VN",
-    siteName: "Cổ Thế Giới",
-    title: "Cổ Thế Giới",
+    siteName: "Cổ Giới",
+    title: "Cổ Giới",
     description: "Khai mở Không Khiếu, thâm nhập Thanh Mao Sơn, tích lũy Nguyên Thạch, luyện hóa Cổ Trùng. Trò chơi nhập vai tu tiên mô phỏng theo tiểu thuyết Cổ Chân Nhân.",
     url: "/",
   },
   twitter: {
     card: "summary",
-    title: "Cổ Thế Giới",
+    title: "Cổ Giới",
     description: "Khai mở Không Khiếu, thâm nhập Thanh Mao Sơn, tích lũy Nguyên Thạch, luyện hóa Cổ Trùng.",
   },
   icons: {

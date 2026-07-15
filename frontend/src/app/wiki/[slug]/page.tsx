@@ -30,24 +30,24 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!page) return { title: "Không Tìm Thấy" };
 
   return {
-    title: `${page.title} | Cổ Thế Giới`,
-    description: `Hướng dẫn ${page.title.toLowerCase()} trong Cổ Thế Giới - Wiki game Cổ Chân Nhân.`,
+    title: `${page.title} | Cổ Giới`,
+    description: `Hướng dẫn ${page.title.toLowerCase()} trong Cổ Giới - Wiki game Cổ Chân Nhân.`,
     openGraph: {
-      title: `${page.title} | Cổ Thế Giới`,
-      description: `Hướng dẫn ${page.title.toLowerCase()} trong Cổ Thế Giới.`,
+      title: `${page.title} | Cổ Giới`,
+      description: `Hướng dẫn ${page.title.toLowerCase()} trong Cổ Giới.`,
       type: "article",
       locale: "vi_VN",
-      siteName: "Cổ Thế Giới",
+      siteName: "Cổ Giới",
     },
     twitter: {
       card: "summary",
       title: page.title,
-      description: `Hướng dẫn ${page.title.toLowerCase()} trong Cổ Thế Giới.`,
+      description: `Hướng dẫn ${page.title.toLowerCase()} trong Cổ Giới.`,
     },
     keywords: [
       page.title,
       ...page.keywords,
-      "Cổ Thế Giới",
+      "Cổ Giới",
       "GuWorld",
       "hướng dẫn",
       "wiki",
@@ -131,7 +131,7 @@ function WikiPageContent({ page }: { page: WikiPage }) {
               "@context": "https://schema.org",
               "@type": "Article",
               name: page.title,
-              description: `Hướng dẫn ${page.title.toLowerCase()} trong Cổ Thế Giới`,
+              description: `Hướng dẫn ${page.title.toLowerCase()} trong Cổ Giới`,
               genre: "GameGuide",
               keywords: page.keywords.join(", "),
               inLanguage: "vi-VN",

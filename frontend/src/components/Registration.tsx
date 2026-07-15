@@ -227,7 +227,7 @@ export const Registration: React.FC<RegistrationProps> = ({
           <Compass className="w-6 h-6" />
         </div>
         <h2 className="text-3xl font-bold text-zinc-100 font-serif tracking-wide">
-          CỔ THẾ GIỚI
+          CỔ GIỚI
         </h2>
         <h3 className="text-xs uppercase tracking-widest font-mono mt-1 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]">
           !!! Thiên địa ưu ái, tư chất Giáp, Ất. !!!

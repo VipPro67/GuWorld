@@ -3,7 +3,7 @@ import { PremiumStoreView } from "@/components/PremiumStoreView";
 
 export const metadata: Metadata = {
   title: "Nạp Nguyên Thạch Thành Công",
-  description: "Giao dịch nạp Nguyên Thạch thành công. Cảm ơn đạo hữu đã ủng hộ Cổ Thế Giới!",
+  description: "Giao dịch nạp Nguyên Thạch thành công. Cảm ơn đạo hữu đã ủng hộ Cổ Giới!",
   robots: {
     index: false,
     follow: false,

@@ -3,14 +3,14 @@ import { PremiumStoreView } from "@/components/PremiumStoreView";
 
 export const metadata: Metadata = {
   title: "Nạp Nguyên Thạch",
-  description: "Nạp Nguyên Thạch, Tiên Nguyên Thạch để tiếp tục hành trình tu tiên tại Cổ Thế Giới. Hỗ trợ thanh toán qua PayOS.",
+  description: "Nạp Nguyên Thạch, Tiên Nguyên Thạch để tiếp tục hành trình tu tiên tại Cổ Giới. Hỗ trợ thanh toán qua PayOS.",
   robots: {
     index: false,
     follow: false,
   },
   openGraph: {
-    title: "Nạp Nguyên Thạch | Cổ Thế Giới",
-    description: "Nạp Nguyên Thạch, Tiên Nguyên Thạch để tiếp tục hành trình tu tiên tại Cổ Thế Giới.",
+    title: "Nạp Nguyên Thạch | Cổ Giới",
+    description: "Nạp Nguyên Thạch, Tiên Nguyên Thạch để tiếp tục hành trình tu tiên tại Cổ Giới.",
   },
 };
 
