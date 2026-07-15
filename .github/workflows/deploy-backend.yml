@@ -7,6 +7,7 @@ on:
     paths:
       - 'backend/**'
       - 'docker-compose.yml'
+      - 'Caddyfile'
 
 jobs:
   deploy:
@@ -30,5 +31,5 @@ jobs:
             # Đồng bộ code mới nhất
             git pull origin master
             
-            # Rebuild và khởi động lại container backend
-            docker compose up -d --build backend
+            # Khởi chạy/Rebuild lại toàn bộ dịch vụ (Caddy, Backend, Redis, DB) nếu có thay đổi
+            docker compose up -d --build

@@ -33,7 +33,7 @@ Frontend:
 
 ## Run with Docker Compose
 
-Bạn có thể khởi chạy nhanh toàn bộ môi trường backend (bao gồm Go app, PostgreSQL và Redis) bằng Docker Compose:
+Bạn có thể khởi chạy nhanh toàn bộ môi trường backend (bao gồm Go app, PostgreSQL, Redis và Caddy làm reverse proxy) bằng Docker Compose:
 
 ```bash
 docker-compose up --build
@@ -42,9 +42,10 @@ docker-compose up --build
 Lệnh này sẽ tự động:
 1. Tải và cấu hình PostgreSQL (`gu_db`) và Redis.
 2. Build Go backend dựa trên `backend/Dockerfile` và sao chép các file CSV dữ liệu đi kèm.
-3. Sử dụng cơ chế healthcheck để trì hoãn khởi động Go app cho đến khi PostgreSQL đã hoàn toàn sẵn sàng nhận kết nối.
+3. Khởi chạy Caddy Server để làm reverse proxy và tự động cấp chứng chỉ SSL (HTTPS) cho tên miền `api.cogioi.io.vn` (cấu hình trong `Caddyfile`).
+4. Sử dụng cơ chế healthcheck để trì hoãn khởi động Go app cho đến khi PostgreSQL đã hoàn toàn sẵn sàng nhận kết nối.
 
-API backend sau đó sẽ lắng nghe tại `http://localhost:8080`.
+API backend sau đó sẽ lắng nghe tại `http://localhost:8080` (truy cập cục bộ từ host) và được expose ra ngoài qua Caddy tại `https://api.cogioi.io.vn`.
 
 ## Run backend (Manual)
 

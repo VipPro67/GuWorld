@@ -33,7 +33,7 @@ services:
     container_name: guworld-backend
     restart: always
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"  # Chỉ cho phép truy cập cục bộ trên host, ngoài internet sẽ đi qua Caddy
     env_file:
       - ./backend/.env
     environment:
@@ -48,13 +48,30 @@ services:
       - REDIS_PORT=6379
       - REDIS_SSL=false
       - JWT_SECRET=guworld_cultivation_secret_key_change_me
-      - CORS_ALLOWED_ORIGINS=http://localhost:3000
+      - CORS_ALLOWED_ORIGINS=https://www.cogioi.io.vn
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
 
+  caddy:
+    image: caddy:2-alpine
+    container_name: guworld-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # Hỗ trợ HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+
 volumes:
   postgres_data:
   redis_data:
+  caddy_data:
+  caddy_config:
