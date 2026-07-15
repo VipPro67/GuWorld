@@ -22,7 +22,17 @@ Các file phase/fix/design rời rạc cũ đã được gom lại hoặc loại
 
 ## Chạy nhanh local
 
-### Backend
+### Docker Compose (Khuyên dùng cho Backend)
+
+```bash
+docker-compose up --build
+```
+
+Lệnh này sẽ tự động khởi chạy Go backend, PostgreSQL và Redis. Backend sẽ nghe tại `:8080`, tự khởi tạo schema và seed dữ liệu từ CSV.
+
+### Thủ công (Manual)
+
+#### Backend
 
 ```bash
 cd backend

@@ -31,7 +31,22 @@ Frontend:
 | --- | --- |
 | `NEXT_PUBLIC_BACKEND_URL` | Backend base URL; mặc định `http://localhost:8080`. |
 
-## Run backend
+## Run with Docker Compose
+
+Bạn có thể khởi chạy nhanh toàn bộ môi trường backend (bao gồm Go app, PostgreSQL và Redis) bằng Docker Compose:
+
+```bash
+docker-compose up --build
+```
+
+Lệnh này sẽ tự động:
+1. Tải và cấu hình PostgreSQL (`gu_db`) và Redis.
+2. Build Go backend dựa trên `backend/Dockerfile` và sao chép các file CSV dữ liệu đi kèm.
+3. Sử dụng cơ chế healthcheck để trì hoãn khởi động Go app cho đến khi PostgreSQL đã hoàn toàn sẵn sàng nhận kết nối.
+
+API backend sau đó sẽ lắng nghe tại `http://localhost:8080`.
+
+## Run backend (Manual)
 
 ```bash
 cd backend

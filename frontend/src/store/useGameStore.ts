@@ -1174,7 +1174,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       const data: AuthResponse = await response.json();
-      setPlayerFromServer(data.player, { token: AUTHENTICATED_SESSION });
+      setPlayerFromServer(data.player, { token: data.token || AUTHENTICATED_SESSION });
       if (data.token) {
         localStorage.setItem("gu_auth_token", data.token);
       }
@@ -1253,7 +1253,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       const data: AuthResponse = await response.json();
-      setPlayerFromServer(data.player, { token: AUTHENTICATED_SESSION });
+      setPlayerFromServer(data.player, { token: data.token || AUTHENTICATED_SESSION });
       if (data.token) {
         localStorage.setItem("gu_auth_token", data.token);
       }
@@ -1549,7 +1549,8 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       const player: Player = await response.json();
-      setPlayerFromServer(player, { token: AUTHENTICATED_SESSION });
+      const localToken = (typeof window !== "undefined" ? localStorage.getItem("gu_auth_token") : null) || AUTHENTICATED_SESSION;
+      setPlayerFromServer(player, { token: localToken });
       if (typeof window !== "undefined") {
         localStorage.setItem("gu_player_id", player.id);
       }
