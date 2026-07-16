@@ -30,10 +30,7 @@ import { TradeRoomModal } from "@/components/TradeRoomModal";
 import { Handshake } from "lucide-react";
 import { KillerMoveBuilder } from "@/components/killer-moves/KillerMoveBuilder";
 import { AuditLogsView } from "@/components/AuditLogsView";
-
-
-
-
+import { ThemeToggle } from "@/components/ThemeToggle";
 export default function Home() {
   const {
     player,
@@ -134,9 +131,6 @@ export default function Home() {
             <h1 className="text-lg sm:text-xl font-bold font-serif tracking-wider text-zinc-100 bg-gradient-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">
               Cổ Giới
             </h1>
-            <span className="px-2 py-0.5 text-[9px] font-semibold font-mono tracking-wide rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 uppercase shrink-0">
-              Đang ở Bản Beta sẽ reset dữ liệu khi ra mắt chính thức
-            </span>
           </div>
         </div>
         {player && !inCombat && currentView !== "dashboard" && (
@@ -170,6 +164,7 @@ export default function Home() {
               Đăng Xuất
             </button>
           )}
+          <ThemeToggle />
         </div>
       </header>
 
@@ -317,8 +312,11 @@ export default function Home() {
       </main>
 
       {/* Footer Details */}
-      <footer className="max-w-7xl w-full mx-auto text-center mt-8 pt-4 border-t border-zinc-950 text-xs text-zinc-600 font-mono">
-        <p>Cổ Chân Nhân Web Game © 2026 • Thiết Kế Trực Quan Sinh Động</p>
+      <footer className="max-w-7xl w-full mx-auto text-center mt-8 pt-4 border-t border-zinc-950 flex flex-col items-center gap-2">
+        <span className="px-2 py-0.5 text-[9px] sm:text-xs font-semibold font-mono tracking-wide rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 uppercase">
+          Đang ở Bản Beta sẽ reset dữ liệu khi ra mắt chính thức
+        </span>
+        <p className="text-xs text-zinc-600 font-mono">Cổ Chân Nhân Web Game © 2026 • Thiết Kế Trực Quan Sinh Động</p>
       </footer>
 
       {/* Toast Notification Container */}

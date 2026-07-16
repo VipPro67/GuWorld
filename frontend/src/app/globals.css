@@ -1,22 +1,35 @@
 @import "tailwindcss";
 
-:root,
-[data-theme="dark"] {
-  --bg-primary: #050505;
-  --bg-secondary: #090e0c;
-  --bg-card: #0f1412;
-  --bg-elevated: #1a1f1d;
-  --text-primary: #e2e8f0;
-  --text-secondary: #a1a1aa;
-  --text-muted: #52525b;
-  --border: #181c1a;
-  --border-hover: #272b29;
-  --brand: #10b981;
-  --brand-dim: rgba(16, 185, 129, 0.1);
-  --surface: #0a0f0d;
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-zinc-950: var(--th-zinc-950);
+  --color-zinc-900: var(--th-zinc-900);
+  --color-zinc-800: var(--th-zinc-800);
+  --color-zinc-700: var(--th-zinc-700);
+  --color-zinc-600: var(--th-zinc-600);
+  --color-zinc-500: var(--th-zinc-500);
+  --color-zinc-400: var(--th-zinc-400);
+  --color-zinc-300: var(--th-zinc-300);
+  --color-zinc-200: var(--th-zinc-200);
+  --color-zinc-100: var(--th-zinc-100);
+  --color-zinc-50: var(--th-zinc-50);
 }
 
-[data-theme="light"] {
+:root {
+  /* LIGHT MODE (reversing zinc colors) */
+  --th-zinc-950: #f8fafc;
+  --th-zinc-900: #f1f5f9;
+  --th-zinc-800: #e2e8f0;
+  --th-zinc-700: #cbd5e1;
+  --th-zinc-600: #94a3b8;
+  --th-zinc-500: #64748b;
+  --th-zinc-400: #475569;
+  --th-zinc-300: #334155;
+  --th-zinc-200: #1e293b;
+  --th-zinc-100: #0f172a;
+  --th-zinc-50: #020617;
+  
   --bg-primary: #f8fafc;
   --bg-secondary: #ffffff;
   --bg-card: #ffffff;
@@ -31,6 +44,44 @@
   --surface: #ffffff;
 }
 
+:root.dark {
+  /* DARK MODE (original zinc colors) */
+  --th-zinc-950: #09090b;
+  --th-zinc-900: #18181b;
+  --th-zinc-800: #27272a;
+  --th-zinc-700: #3f3f46;
+  --th-zinc-600: #52525b;
+  --th-zinc-500: #71717a;
+  --th-zinc-400: #a1a1aa;
+  --th-zinc-300: #d4d4d8;
+  --th-zinc-200: #e4e4e7;
+  --th-zinc-100: #f4f4f5;
+  --th-zinc-50: #fafafa;
+  
+  --bg-primary: #050505;
+  --bg-secondary: #090e0c;
+  --bg-card: #0f1412;
+  --bg-elevated: #1a1f1d;
+  --text-primary: #e2e8f0;
+  --text-secondary: #a1a1aa;
+  --text-muted: #52525b;
+  --border: #181c1a;
+  --border-hover: #272b29;
+  --brand: #10b981;
+  --brand-dim: rgba(16, 185, 129, 0.1);
+  --surface: #0a0f0d;
+}
+
+html {
+  font-size: 18px; /* Increase overall font size */
+}
+
+@media (max-width: 640px) {
+  html {
+    font-size: 16px; /* Keep it slightly smaller on mobile, or wait, they said "chữ nhỏ và ui ko hợp cho mobile. tăng size chữ." So maybe mobile needs to be bigger? Let's make it 18px everywhere! */
+  }
+}
+
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
@@ -39,7 +90,7 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-[data-theme="dark"] body {
+:root.dark body {
   background-image: 
     radial-gradient(circle at 10% 20%, rgba(16, 185, 129, 0.08) 0%, transparent 40%),
     radial-gradient(circle at 90% 80%, rgba(234, 179, 8, 0.05) 0%, transparent 45%),
@@ -47,7 +98,7 @@ body {
   background-attachment: fixed;
 }
 
-[data-theme="light"] body {
+:root:not(.dark) body {
   background-image: 
     radial-gradient(circle at 10% 20%, rgba(5, 150, 105, 0.04) 0%, transparent 40%),
     radial-gradient(circle at 90% 80%, rgba(234, 179, 8, 0.03) 0%, transparent 45%);
@@ -112,6 +163,18 @@ body {
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.7), 0 0 15px rgba(234, 179, 8, 0.04);
 }
 
+:root:not(.dark) .glass-panel {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.1);
+}
+
+:root:not(.dark) .glass-panel-gold {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.1), 0 0 15px rgba(234, 179, 8, 0.1);
+}
+
 /* Custom scrollbar for logs */
 .custom-scrollbar::-webkit-scrollbar {
   width: 5px;
@@ -125,6 +188,10 @@ body {
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(16, 185, 129, 0.45);
+}
+
+:root:not(.dark) .custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 /* Gacha Suspense Furnace Animations */
@@ -196,5 +263,4 @@ body {
 .animate-toast-in {
   animation: slide-in-right 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
-
 
