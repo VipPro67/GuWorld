@@ -66,7 +66,6 @@ export const LobbyView: React.FC = () => {
   const [activeChannel, setActiveChannel] = useState<"world" | "general" | "sect">("world");
   const [chatInput, setChatInput] = useState("");
   const [manaNow, setManaNow] = useState(() => Date.now());
-  const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!player || !manaSnapshot) return;
@@ -265,9 +264,13 @@ export const LobbyView: React.FC = () => {
     return () => unsubscribeBaoHoangMessages();
   }, [activeChannel, subscribeBaoHoangMessages, unsubscribeBaoHoangMessages]);
 
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
   // Scroll chat to bottom on new messages
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
   }, [baoHoangMessages]);
 
   const handleItemClick = (item: HubItem) => {
@@ -517,7 +520,10 @@ export const LobbyView: React.FC = () => {
         </div>
 
         {/* Message View Area */}
-        <div className="bg-zinc-950/80 border border-zinc-900/60 rounded-2xl p-3 h-44 overflow-y-auto flex flex-col gap-2.5 font-mono text-[11px] sm:text-xs">
+        <div 
+          ref={chatContainerRef}
+          className="bg-zinc-950/80 border border-zinc-900/60 rounded-2xl p-3 h-44 overflow-y-auto flex flex-col gap-2.5 font-mono text-[11px] sm:text-xs"
+        >
           {baoHoangMessages.length === 0 ? (
             <div className="text-zinc-600 text-center py-12">
               Kênh chat trống. Hãy gửi tin nhắn đầu tiên!
@@ -558,7 +564,6 @@ export const LobbyView: React.FC = () => {
               );
             })
           )}
-          <div ref={chatEndRef} />
         </div>
 
         {/* Chat input form */}

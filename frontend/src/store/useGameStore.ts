@@ -1408,6 +1408,12 @@ export const useGameStore = create<GameState>((set, get) => {
         console.error("Failed to process chat event", err);
       }
     });
+
+    source.onerror = (err) => {
+      console.error("EventSource connection error:", err);
+      // We don't want to spam toasts on every reconnect attempt, but we can log it.
+      // If it's completely failing, it might be a CORS or URL issue.
+    };
   },
 
   unsubscribeBaoHoangMessages: () => {

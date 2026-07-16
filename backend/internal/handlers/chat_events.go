@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"sync"
 
@@ -188,6 +189,8 @@ func loadBaoHoangMessages(channel string, sectID sql.NullString) ([]ChatItem, er
 		var m ChatItem
 		if errScan := rows.Scan(&m.ID, &m.SenderID, &m.SenderUsername, &m.Content, &m.CreatedAt, &m.Channel); errScan == nil {
 			messages = append(messages, m)
+		} else {
+			log.Printf("loadBaoHoangMessages scan error: %v", errScan)
 		}
 	}
 	return messages, rows.Err()
