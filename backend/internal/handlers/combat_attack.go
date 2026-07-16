@@ -893,6 +893,14 @@ func CombatAttack(c *gin.Context) {
 				stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
 				if stones > 0 || qi > 0.0 || chests > 0 {
 					_ = AddMineRewardsToPlayerTx(tx, player.ID, stones/2, qi/2.0, chests/2)
+					player.PrimevalStones += stones / 2
+					if chests/2 > 0 {
+						if player.MaterialsInventory == nil {
+							player.MaterialsInventory = make(models.MaterialsInventory)
+						}
+						player.MaterialsInventory["mine_chest"] += chests / 2
+					}
+					ctx.Logs = append(ctx.Logs, fmt.Sprintf("Cướp được %d Nguyên Thạch và %d rương từ đối thủ!", stones/2, chests/2))
 				}
 			}
 

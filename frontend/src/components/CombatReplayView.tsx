@@ -253,6 +253,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
   playerName,
 }) => {
   const [speed, setSpeed] = React.useState(1);
+  const logContainerRef = useRef<HTMLDivElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   // Parse initial combatant states
@@ -377,9 +378,16 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
     return () => clearTimeout(timer);
   }, [state.events]);
 
-  // Scroll log
+  // Scroll log without jumping the whole page
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (logContainerRef.current) {
+      const container = logContainerRef.current;
+      // Only auto-scroll if we are relatively close to the bottom to allow manual scrolling
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+      if (isNearBottom || state.currentIndex <= 2) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }
   }, [state.currentIndex]);
 
   const handleTogglePlay = useCallback(() => {
@@ -650,7 +658,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             {actionLogs.length} sự kiện
           </span>
         </div>
-        <div className="overflow-y-auto max-h-[350px] p-3 space-y-1 font-mono text-xs">
+        <div ref={logContainerRef} className="overflow-y-auto max-h-[350px] p-3 space-y-1 font-mono text-xs">
           {visibleLogs.length === 0 && (
             <div className="text-zinc-700 text-center py-8 italic">Chưa có dữ liệu</div>
           )}
