@@ -27,6 +27,7 @@ func SetupRouter() *gin.Engine {
 		isAllowed := false
 		isWildcardAllowed := false
 		for _, o := range allowedOrigins {
+			o = strings.TrimSpace(o)
 			if o == "*" {
 				isWildcardAllowed = true
 			} else if o == origin {
