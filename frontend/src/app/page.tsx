@@ -120,7 +120,7 @@ export default function Home() {
   const inCombat = player && player.active_combat;
 
   return (
-    <div className="min-h-screen flex flex-col py-4 sm:py-8 px-3 sm:px-6 lg:px-8 relative">
+    <div className="min-h-screen flex flex-col py-2 sm:py-8 px-2 sm:px-6 lg:px-8 relative">
       {/* Top Header Navigation */}
       <header className="max-w-7xl w-full mx-auto flex justify-between items-center pb-4 border-b border-zinc-900/50 mb-4">
         <div className="flex items-center gap-4">

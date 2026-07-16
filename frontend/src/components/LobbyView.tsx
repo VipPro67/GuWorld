@@ -311,13 +311,13 @@ export const LobbyView: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-4 flex flex-col gap-8">
+    <div className="w-full max-w-4xl mx-auto px-2 sm:px-4 py-2 sm:py-4 flex flex-col gap-4 sm:gap-8">
       {/* 1. CHARACTER & RESOURCE HUD */}
       {player && (
-        <div className="bg-zinc-950/60 border border-zinc-900 rounded-3xl p-4 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl backdrop-blur-md">
+        <div className="bg-zinc-950/60 border border-zinc-900 rounded-2xl sm:rounded-3xl p-3 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-6 shadow-xl backdrop-blur-md">
           {/* Left Block: Avatar & Name & Tu vi */}
-          <div className="flex items-center gap-4 w-full md:w-auto">
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-zinc-100 font-bold border-2 border-zinc-900 shrink-0 overflow-hidden">
+          <div className="flex items-center gap-3 sm:gap-4 w-full md:w-auto">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-zinc-100 font-bold border-2 border-zinc-900 shrink-0 overflow-hidden">
               {player.avatar_url ? (
                 <img src={player.avatar_url} alt={player.username} className="w-full h-full object-cover" />
               ) : (
@@ -409,7 +409,7 @@ export const LobbyView: React.FC = () => {
       </div>
 
       {/* 2. Category: CHỨC NĂNG */}
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-3 sm:gap-5">
         <div className="flex items-center justify-between border-b border-zinc-900/60 pb-2">
           <h2 className="text-xs uppercase tracking-widest text-zinc-500 font-mono font-semibold">
             Chức năng chính
@@ -419,7 +419,7 @@ export const LobbyView: React.FC = () => {
           </span>
         </div>
 
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-6 justify-center">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 sm:gap-6 justify-center">
           {managementItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -443,7 +443,7 @@ export const LobbyView: React.FC = () => {
       </div>
 
       {/* 3. Category: HOẠT ĐỘNG */}
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-3 sm:gap-5">
         <div className="flex items-center justify-between border-b border-zinc-900/60 pb-2">
           <h2 className="text-xs uppercase tracking-widest text-zinc-500 font-mono font-semibold">
             Hoạt động thế giới
@@ -453,7 +453,7 @@ export const LobbyView: React.FC = () => {
           </span>
         </div>
 
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-6 justify-center">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-6 justify-center">
           {activityItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -497,7 +497,7 @@ export const LobbyView: React.FC = () => {
       </div>
 
       {/* 4. CHAT PANEL (WORLD, GENERAL, SECT) */}
-      <div className="bg-zinc-950/45 border border-zinc-900 rounded-3xl p-4 sm:p-5 flex flex-col gap-4 shadow-xl backdrop-blur-md">
+      <div className="bg-zinc-950/45 border border-zinc-900 rounded-2xl sm:rounded-3xl p-3 sm:p-5 flex flex-col gap-3 sm:gap-4 shadow-xl backdrop-blur-md">
         {/* Channel Tabs */}
         <div className="flex gap-2 border-b border-zinc-900 pb-3">
           {[

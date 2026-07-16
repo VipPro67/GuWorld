@@ -19,8 +19,8 @@ export const LogConsole: React.FC<LogConsoleProps> = ({ logs }) => {
   }, [logs]);
 
   return (
-    <div className="glass-panel rounded-3xl p-4 sm:p-6 w-full flex flex-col h-[220px] sm:h-[280px]">
-      <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-4">
+    <div className="glass-panel rounded-2xl sm:rounded-3xl p-3 sm:p-6 w-full flex flex-col h-[220px] sm:h-[280px]">
+      <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-2 mb-3 sm:pb-3 sm:mb-4">
         <Terminal className="w-4 h-4 text-emerald-400" />
         <span className="text-xs font-mono uppercase tracking-widest text-zinc-400 font-semibold">
           Ký Sự Tu Hành

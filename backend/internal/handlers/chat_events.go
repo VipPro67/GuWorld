@@ -162,21 +162,27 @@ func loadBaoHoangMessages(channel string, sectID sql.NullString) ([]ChatItem, er
 
 	if channel == "sect" {
 		rows, err = db.DB.Query(`
-			SELECT m.id, m.sender_id, p.username, m.content, m.created_at, m.channel
-			FROM messages m
-			JOIN players p ON m.sender_id = p.id
-			WHERE m.receiver_id = $1 AND m.channel = $2 AND m.sect_id = $3
-			ORDER BY m.created_at ASC
-			LIMIT 50
+			SELECT * FROM (
+				SELECT m.id, m.sender_id, p.username, m.content, m.created_at, m.channel
+				FROM messages m
+				JOIN players p ON m.sender_id = p.id
+				WHERE m.receiver_id = $1 AND m.channel = $2 AND m.sect_id = $3
+				ORDER BY m.created_at DESC
+				LIMIT 50
+			) sub
+			ORDER BY sub.created_at ASC
 		`, globalUUID, channel, sectID.String)
 	} else {
 		rows, err = db.DB.Query(`
-			SELECT m.id, m.sender_id, p.username, m.content, m.created_at, m.channel
-			FROM messages m
-			JOIN players p ON m.sender_id = p.id
-			WHERE m.receiver_id = $1 AND m.channel = $2
-			ORDER BY m.created_at ASC
-			LIMIT 50
+			SELECT * FROM (
+				SELECT m.id, m.sender_id, p.username, m.content, m.created_at, m.channel
+				FROM messages m
+				JOIN players p ON m.sender_id = p.id
+				WHERE m.receiver_id = $1 AND m.channel = $2
+				ORDER BY m.created_at DESC
+				LIMIT 50
+			) sub
+			ORDER BY sub.created_at ASC
 		`, globalUUID, channel)
 	}
 	if err != nil {
