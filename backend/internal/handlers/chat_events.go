@@ -125,7 +125,7 @@ func resolveChatChannelKey(c *gin.Context, channel string) (string, bool) {
 		return "", false
 	}
 
-	if channel != "sect" {
+	if channel == "world" {
 		return chatChannelKey(channel, sql.NullString{}), true
 	}
 
@@ -133,6 +133,34 @@ func resolveChatChannelKey(c *gin.Context, channel string) (string, bool) {
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return "", false
+	}
+
+	if channel == "general" {
+		var hasConnectingHeaven, hasDivineSense bool
+		rows, err := db.DB.Query(`
+			SELECT gu_id FROM player_gu 
+			WHERE player_id = $1 AND UPPER(state) != 'DEAD' AND gu_id IN ('GU_CONNECTING_HEAVEN', 'GU_DIVINE_SENSE')
+		`, playerID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+			return "", false
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var guID string
+			if err := rows.Scan(&guID); err == nil {
+				if guID == "GU_CONNECTING_HEAVEN" {
+					hasConnectingHeaven = true
+				} else if guID == "GU_DIVINE_SENSE" {
+					hasDivineSense = true
+				}
+			}
+		}
+		if !hasConnectingHeaven || !hasDivineSense {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu cần sở hữu Thông Thiên Cổ (GU_CONNECTING_HEAVEN) và Thần Niệm Cổ (GU_DIVINE_SENSE) để xem tin nhắn kênh Bảo Hoàng Thiên!"})
+			return "", false
+		}
+		return chatChannelKey(channel, sql.NullString{}), true
 	}
 
 	var sectID string

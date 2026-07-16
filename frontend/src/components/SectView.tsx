@@ -20,6 +20,8 @@ import {
   RefreshCw,
   Gift,
   Flame,
+  Search,
+  X,
 } from "lucide-react";
 
 export const SectView: React.FC = () => {
@@ -71,6 +73,12 @@ export const SectView: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<"lobby" | "missions" | "vault" | "donate" | "territory" | "manage">("lobby");
   const [selectedSectId, setSelectedSectId] = useState<string | null>(null);
+
+  // Search & Pagination States
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRegion, setSelectedRegion] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
 
   // Sect Creation Form
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -144,6 +152,10 @@ export const SectView: React.FC = () => {
       }
     }
   }, [mgmtTab, stockItemType, guDictionary, itemDictionary, stockItemId]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedRegion]);
 
   const handleCreateSect = async () => {
     if (!createSectName.trim() || !createSectDesc.trim()) return;
@@ -293,6 +305,20 @@ export const SectView: React.FC = () => {
   // Get Gu contribution points value (DonateRatio = 50%)
   const getGuValue = (guId: string): number => getDonatePoints(getGuBasePrice(guId));
 
+  // Filter sects
+  const filteredSects = (sects || []).filter((sect) => {
+    const matchesSearch =
+      sect.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      sect.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesRegion = selectedRegion === "all" || sect.region === selectedRegion;
+    return matchesSearch && matchesRegion;
+  });
+
+  // Pagination calculation
+  const totalPages = Math.ceil(filteredSects.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedSects = filteredSects.slice(startIndex, startIndex + itemsPerPage);
+
   // 1. STATE: NOT IN SECT
   if (!mySectStatus?.in_sect) {
     return (
@@ -315,121 +341,224 @@ export const SectView: React.FC = () => {
           )}
         </div>
 
-        {/* Sects Directory */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {sects.map((sect) => (
-            <div
-              key={sect.id}
-              onClick={() => setSelectedSectId(sect.id)}
-              className={`group bg-zinc-950/40 hover:bg-zinc-950/80 border ${
-                selectedSectId === sect.id ? "border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.15)]" : "border-zinc-900 hover:border-zinc-800"
-              } rounded-3xl p-5 flex flex-col justify-between transition-all duration-300 cursor-pointer backdrop-blur-md`}
+        {/* Search & Filter Controls */}
+        <div className="flex flex-col sm:flex-row gap-4 bg-zinc-950/40 p-4 border border-zinc-900 rounded-2xl backdrop-blur-md">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+            <input
+              type="text"
+              placeholder="Tìm kiếm tông môn theo tên hoặc mô tả..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-900 rounded-xl pl-10 pr-4 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-500/50"
+            />
+          </div>
+          <div className="w-full sm:w-48">
+            <select
+              value={selectedRegion}
+              onChange={(e) => setSelectedRegion(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-500/50 cursor-pointer"
             >
-              <div>
-                <div className="flex justify-between items-start mb-4">
-                  <div className="px-3 py-1 text-[10px] font-mono font-semibold uppercase tracking-wider rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800">
-                    {getRegionName(sect.region)}
-                  </div>
-                  {sect.require_approval ? (
-                    <span className="text-[9px] font-mono bg-amber-950/40 text-amber-400 border border-amber-500/20 rounded-md px-1.5 py-0.5">
-                      Cần Duyệt
-                    </span>
-                  ) : (
-                    <span className="text-[9px] font-mono bg-emerald-950/40 text-emerald-400 border border-emerald-500/20 rounded-md px-1.5 py-0.5">
-                      Tự Do
-                    </span>
-                  )}
-                </div>
-
-                <h3 className="text-lg font-serif font-bold text-zinc-100 mb-2 group-hover:text-blue-400 transition-colors">
-                  {sect.name}
-                </h3>
-                <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3 mb-4">
-                  {sect.description}
-                </p>
-              </div>
-
-              <div className="pt-4 border-t border-zinc-900/60 flex items-center justify-between mt-auto">
-                <span className="text-[10px] text-zinc-500 font-mono">Bảo Khố: Cực Phẩm</span>
-                <span className="text-xs text-blue-400 flex items-center gap-1 font-semibold group-hover:translate-x-1 transition-transform">
-                  Chi tiết <ArrowRight className="w-3.5 h-3.5" />
-                </span>
-              </div>
-            </div>
-          ))}
+              <option value="all">Tất cả Vực Giới</option>
+              <option value="Central_Continent">Trung Châu</option>
+              <option value="Southern_Border">Nam Cương</option>
+              <option value="Northern_Plains">Bắc Nguyên</option>
+              <option value="Western_Desert">Tây Mạc</option>
+              <option value="Eastern_Sea">Đông Hải</option>
+            </select>
+          </div>
         </div>
 
-        {/* Selected Sect Detail & Join Panel */}
+        {/* Sects Directory */}
+        {paginatedSects.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {paginatedSects.map((sect) => (
+              <div
+                key={sect.id}
+                onClick={() => setSelectedSectId(sect.id)}
+                className={`group bg-zinc-950/40 hover:bg-zinc-950/80 border ${
+                  selectedSectId === sect.id ? "border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.15)]" : "border-zinc-900 hover:border-zinc-800"
+                } rounded-3xl p-5 flex flex-col justify-between transition-all duration-300 cursor-pointer backdrop-blur-md`}
+              >
+                <div>
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="px-3 py-1 text-[10px] font-mono font-semibold uppercase tracking-wider rounded-lg bg-zinc-900 text-zinc-400 border border-zinc-800">
+                      {getRegionName(sect.region)}
+                    </div>
+                    {sect.require_approval ? (
+                      <span className="text-[9px] font-mono bg-amber-950/40 text-amber-400 border border-amber-500/20 rounded-md px-1.5 py-0.5">
+                        Cần Duyệt
+                      </span>
+                    ) : (
+                      <span className="text-[9px] font-mono bg-emerald-950/40 text-emerald-400 border border-emerald-500/20 rounded-md px-1.5 py-0.5">
+                        Tự Do
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="text-lg font-serif font-bold text-zinc-100 mb-2 group-hover:text-blue-400 transition-colors">
+                    {sect.name}
+                  </h3>
+                  <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3 mb-4">
+                    {sect.description}
+                  </p>
+                </div>
+
+                <div className="pt-4 border-t border-zinc-900/60 flex items-center justify-between mt-auto">
+                  <span className="text-[10px] text-zinc-500 font-mono">Bảo Khố: Cực Phẩm</span>
+                  <span className="text-xs text-blue-400 flex items-center gap-1 font-semibold group-hover:translate-x-1 transition-transform">
+                    Chi tiết <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="py-12 bg-zinc-950/30 border border-zinc-900 rounded-3xl text-center text-xs text-zinc-500 font-mono">
+            Không tìm thấy tông môn nào phù hợp điều kiện tìm kiếm.
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center gap-2 mt-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 disabled:opacity-30 disabled:hover:bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+            >
+              Trang trước
+            </button>
+            
+            {Array.from({ length: totalPages }).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrentPage(i + 1)}
+                className={`w-8 h-8 rounded-xl text-xs font-mono font-bold border transition-colors cursor-pointer ${
+                  currentPage === i + 1
+                    ? "bg-blue-600 border-blue-500 text-white"
+                    : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                }`}
+              >
+                {i + 1}
+              </button>
+            ))}
+
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 disabled:opacity-30 disabled:hover:bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+            >
+              Trang sau
+            </button>
+          </div>
+        )}
+
+        {/* Selected Sect Detail Popup Modal */}
         {selectedSectId && (() => {
           const sect = sects.find(s => s.id === selectedSectId);
           if (!sect) return null;
           return (
-            <div className="bg-zinc-950/60 border border-zinc-900 rounded-3xl p-6 backdrop-blur-md animate-slide-up flex flex-col gap-6">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-zinc-900 pb-4">
-                <div>
-                  <h3 className="text-xl font-serif font-bold text-zinc-100 flex items-center gap-2">
-                    <Award className="w-6 h-6 text-blue-400" />
-                    {sect.name}
-                  </h3>
-                  <p className="text-xs text-zinc-500 font-mono mt-1">
-                    Vực giới quản hạt: {getRegionName(sect.region)} | Trụ sở thế lực
-                  </p>
+            <div
+              onClick={() => setSelectedSectId(null)}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm transition-opacity animate-fade-in cursor-pointer"
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-2xl bg-zinc-950 border border-zinc-900 rounded-3xl p-6 shadow-[0_0_30px_rgba(59,130,246,0.2)] flex flex-col gap-6 animate-scale-up cursor-default relative overflow-hidden max-h-[90vh] overflow-y-auto"
+              >
+                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -z-10" />
+                
+                {/* Modal Header */}
+                <div className="flex justify-between items-start border-b border-zinc-900 pb-4">
+                  <div>
+                    <h3 className="text-xl font-serif font-bold text-zinc-100 flex items-center gap-2">
+                      <Award className="w-6 h-6 text-blue-400" />
+                      {sect.name}
+                    </h3>
+                    <p className="text-xs text-zinc-500 font-mono mt-1">
+                      Vực giới quản hạt: {getRegionName(sect.region)} | Trụ sở thế lực
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedSectId(null)}
+                    className="p-1.5 rounded-lg bg-zinc-900/60 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors border border-zinc-900/60 cursor-pointer"
+                    title="Đóng"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                <button
-                  onClick={async () => {
-                    const ok = await joinSect(sect.id);
-                    if (ok) setSelectedSectId(null);
-                  }}
-                  disabled={actionLoading || mySectStatus?.has_pending_join}
-                  className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50 border border-transparent text-white rounded-xl font-semibold shadow-lg shadow-blue-500/20 hover:shadow-blue-500/35 transition-all text-sm cursor-pointer"
-                >
-                  {actionLoading
-                    ? "Đang gia nhập..."
-                    : mySectStatus?.has_pending_join
-                    ? mySectStatus.pending_sect_id === sect.id
-                      ? "Đang Chờ Duyệt..."
-                      : "Đã Đăng Ký Phái Khác"
-                    : sect.require_approval
-                    ? "Xin Gia Nhập (Cần duyệt)"
-                    : "Gia Nhập Môn Phái"}
-                </button>
-              </div>
 
-              <div>
-                <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2">Truyền thuyết tông môn</h4>
-                <p className="text-sm text-zinc-300 leading-relaxed">{sect.description}</p>
-              </div>
+                {/* Modal Body */}
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2 font-serif">Truyền thuyết tông môn</h4>
+                    <p className="text-sm text-zinc-300 leading-relaxed font-mono whitespace-pre-wrap">{sect.description}</p>
+                  </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-4">
-                  <h5 className="text-xs font-semibold text-zinc-400 mb-2">Đặc trưng bảo khố</h5>
-                  <div className="flex flex-wrap gap-2">
-                    {sect.vault_gu && (sect.vault_gu as any[]).map((g: any) => {
-                      const spec = guDictionary[g.id];
-                      return (
-                        <span key={g.id} className="text-xs bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800 text-zinc-300">
-                          {spec?.name || g.id}
-                        </span>
-                      );
-                    })}
-                    {sect.vault_materials && Object.keys(sect.vault_materials).map((matId) => {
-                      const spec = itemDictionary[matId];
-                      return (
-                        <span key={matId} className="text-xs bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800 text-zinc-300">
-                          {spec?.name || matId}
-                        </span>
-                      );
-                    })}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-4">
+                      <h5 className="text-xs font-semibold text-zinc-400 mb-2 font-serif">Đặc trưng bảo khố</h5>
+                      <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                        {sect.vault_gu && (sect.vault_gu as any[]).map((g: any) => {
+                          const spec = guDictionary[g.id];
+                          return (
+                            <span key={g.id} className="text-xs bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800 text-zinc-300">
+                              {spec?.name || g.id}
+                            </span>
+                          );
+                        })}
+                        {sect.vault_materials && Object.keys(sect.vault_materials).map((matId) => {
+                          const spec = itemDictionary[matId];
+                          return (
+                            <span key={matId} className="text-xs bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800 text-zinc-300">
+                              {spec?.name || matId}
+                            </span>
+                          );
+                        })}
+                        {(!sect.vault_gu || (sect.vault_gu as any[]).length === 0) && (!sect.vault_materials || Object.keys(sect.vault_materials).length === 0) && (
+                          <span className="text-xs text-zinc-500 font-mono">Bảo khố trống</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-4">
+                      <h5 className="text-xs font-semibold text-zinc-400 mb-2 font-serif">Đệ tử Quy chế</h5>
+                      <ul className="text-xs text-zinc-400 space-y-1.5 list-disc list-inside">
+                        <li>Gia nhập nhận thân phận <strong className="text-zinc-300">Ngoại môn đệ tử</strong>.</li>
+                        <li>Có thể thăng cấp qua các kỳ khảo hạch tu vi.</li>
+                        <li>Rời khỏi tông môn sẽ <strong className="text-red-400">mất sạch</strong> điểm cống hiến.</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
 
-                <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-4">
-                  <h5 className="text-xs font-semibold text-zinc-400 mb-2">Đệ tử Quy chế</h5>
-                  <ul className="text-xs text-zinc-400 space-y-1.5 list-disc list-inside">
-                    <li>Gia nhập nhận thân phận <strong className="text-zinc-300">Ngoại môn đệ tử</strong>.</li>
-                    <li>Có thể thăng cấp qua các kỳ khảo hạch tu vi.</li>
-                    <li>Rời khỏi tông môn sẽ <strong className="text-red-400">mất sạch</strong> điểm cống hiến.</li>
-                  </ul>
+                {/* Modal Footer */}
+                <div className="flex justify-end gap-3 border-t border-zinc-900 pt-4 mt-2">
+                  <button
+                    onClick={() => setSelectedSectId(null)}
+                    className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const ok = await joinSect(sect.id);
+                      if (ok) setSelectedSectId(null);
+                    }}
+                    disabled={actionLoading || mySectStatus?.has_pending_join}
+                    className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50 border border-transparent text-white rounded-xl font-semibold shadow-lg shadow-blue-500/20 hover:shadow-blue-500/35 transition-all text-sm cursor-pointer"
+                  >
+                    {actionLoading
+                      ? "Đang gia nhập..."
+                      : mySectStatus?.has_pending_join
+                      ? mySectStatus.pending_sect_id === sect.id
+                        ? "Đang Chờ Duyệt..."
+                        : "Đã Đăng Ký Phái Khác"
+                      : sect.require_approval
+                      ? "Xin Gia Nhập (Cần duyệt)"
+                      : "Gia Nhập Môn Phái"}
+                  </button>
                 </div>
               </div>
             </div>

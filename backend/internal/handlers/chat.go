@@ -173,7 +173,7 @@ func SendBaoHoangChat(c *gin.Context) {
 	var fee int
 	switch req.Channel {
 	case "world":
-		fee = 100
+		fee = 10
 	case "general":
 		fee = 0
 		hasConnectingHeaven := false
