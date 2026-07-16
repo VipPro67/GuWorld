@@ -61,17 +61,17 @@ const MANA_QUALITY: Record<number, string> = {
 
 const RANK_COLORS: Record<number, {
   from: string; to: string; glow: string; ring: string;
-  text: string; waveSolid: string; waveAlpha: string;
+  text: string; textLight: string; waveSolid: string; waveAlpha: string;
 }> = {
-  1: { from: "#1b4332", to: "#081c15", glow: "rgba(52,211,153,0.35)", ring: "#2d6a4f", text: "#6ee7b7", waveSolid: "#10b981", waveAlpha: "rgba(16,185,129,0.4)" },
-  2: { from: "#450a0a", to: "#1a0505", glow: "rgba(239,68,68,0.35)", ring: "#b91c1c", text: "#fca5a5", waveSolid: "#ef4444", waveAlpha: "rgba(239,68,68,0.4)" },
-  3: { from: "#0f172a", to: "#020617", glow: "rgba(59,130,246,0.35)", ring: "#2563eb", text: "#93c5fd", waveSolid: "#3b82f6", waveAlpha: "rgba(59,130,246,0.4)" },
-  4: { from: "#3b1f00", to: "#1c0f00", glow: "rgba(245,158,11,0.35)", ring: "#d97706", text: "#fde68a", waveSolid: "#f59e0b", waveAlpha: "rgba(245,158,11,0.4)" },
-  5: { from: "#2e1065", to: "#12002f", glow: "rgba(139,92,246,0.4)", ring: "#7c3aed", text: "#c4b5fd", waveSolid: "#8b5cf6", waveAlpha: "rgba(139,92,246,0.4)" },
-  6: { from: "#083344", to: "#02151e", glow: "rgba(6,182,212,0.4)", ring: "#0891b2", text: "#67e8f9", waveSolid: "#06b6d4", waveAlpha: "rgba(6,182,212,0.4)" },
-  7: { from: "#500724", to: "#25000f", glow: "rgba(236,72,153,0.4)", ring: "#db2777", text: "#f9a8d4", waveSolid: "#ec4899", waveAlpha: "rgba(236,72,153,0.4)" },
-  8: { from: "#1c1917", to: "#0c0a09", glow: "rgba(168,162,158,0.4)", ring: "#a8a29e", text: "#e7e5e4", waveSolid: "#a8a29e", waveAlpha: "rgba(168,162,158,0.4)" },
-  9: { from: "#78350f", to: "#2d0f00", glow: "rgba(251,191,36,0.55)", ring: "#fbbf24", text: "#fef08a", waveSolid: "#fbbf24", waveAlpha: "rgba(251,191,36,0.5)" },
+  1: { from: "#1b4332", to: "#081c15", glow: "rgba(52,211,153,0.35)", ring: "#2d6a4f", text: "var(--rank-1-text)", textLight: "#6ee7b7", waveSolid: "#10b981", waveAlpha: "rgba(16,185,129,0.4)" },
+  2: { from: "#450a0a", to: "#1a0505", glow: "rgba(239,68,68,0.35)", ring: "#b91c1c", text: "var(--rank-2-text)", textLight: "#fca5a5", waveSolid: "#ef4444", waveAlpha: "rgba(239,68,68,0.4)" },
+  3: { from: "#0f172a", to: "#020617", glow: "rgba(59,130,246,0.35)", ring: "#2563eb", text: "var(--rank-3-text)", textLight: "#93c5fd", waveSolid: "#3b82f6", waveAlpha: "rgba(59,130,246,0.4)" },
+  4: { from: "#3b1f00", to: "#1c0f00", glow: "rgba(245,158,11,0.35)", ring: "#d97706", text: "var(--rank-4-text)", textLight: "#fde68a", waveSolid: "#f59e0b", waveAlpha: "rgba(245,158,11,0.4)" },
+  5: { from: "#2e1065", to: "#12002f", glow: "rgba(139,92,246,0.4)", ring: "#7c3aed", text: "var(--rank-5-text)", textLight: "#c4b5fd", waveSolid: "#8b5cf6", waveAlpha: "rgba(139,92,246,0.4)" },
+  6: { from: "#083344", to: "#02151e", glow: "rgba(6,182,212,0.4)", ring: "#0891b2", text: "var(--rank-6-text)", textLight: "#67e8f9", waveSolid: "#06b6d4", waveAlpha: "rgba(6,182,212,0.4)" },
+  7: { from: "#500724", to: "#25000f", glow: "rgba(236,72,153,0.4)", ring: "#db2777", text: "var(--rank-7-text)", textLight: "#f9a8d4", waveSolid: "#ec4899", waveAlpha: "rgba(236,72,153,0.4)" },
+  8: { from: "#1c1917", to: "#0c0a09", glow: "rgba(168,162,158,0.4)", ring: "#a8a29e", text: "var(--rank-8-text)", textLight: "#e7e5e4", waveSolid: "#a8a29e", waveAlpha: "rgba(168,162,158,0.4)" },
+  9: { from: "#78350f", to: "#2d0f00", glow: "rgba(251,191,36,0.55)", ring: "#fbbf24", text: "var(--rank-9-text)", textLight: "#fef08a", waveSolid: "#fbbf24", waveAlpha: "rgba(251,191,36,0.5)" },
 };
 
 // SVG layout constants — expanded to 300 viewBox to prevent text clipping
@@ -480,14 +480,14 @@ export const Aperture: React.FC<ApertureProps> = ({
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
                   <div className="flex flex-col items-center gap-1.5 p-4 bg-zinc-950/40 border border-cyan-500/10 rounded-3xl backdrop-blur-sm">
                     <span className="text-3xl animate-bounce">💎</span>
-                    <div className="text-sm font-bold text-zinc-100 font-mono tracking-wide" style={{ color: c.text }}>
+                    <div className="text-sm font-bold text-zinc-100 font-mono tracking-wide" style={{ color: c.textLight }}>
                       {manaQuality}:
                     </div>
                     <div className="text-xl font-bold font-mono text-cyan-400">
                       {player ? Math.floor(currentMana).toLocaleString() : "--"} viên
                     </div>
                     <div className="text-[10px] text-zinc-400 mt-0.5 tracking-wider uppercase font-semibold">{energyPoolName}</div>
-                    <div className="text-[10px] text-zinc-300 mt-2 font-mono" style={{ color: c.text }}>
+                    <div className="text-[10px] text-zinc-300 mt-2 font-mono" style={{ color: c.textLight }}>
                       Tốc lưu tiên khiếu: +{Math.round(Number(regenRate) * 24)} viên/ngày
                     </div>
                   </div>
@@ -496,10 +496,10 @@ export const Aperture: React.FC<ApertureProps> = ({
               {/* Center text for mortals */}
               {!isImmortal && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 select-none">
-                  <span className="text-3xl font-extrabold tracking-wide drop-shadow-[0_2px_8px_rgba(0,0,0,0.98)] font-mono" style={{ color: c.text }}>
+                  <span className="text-3xl font-extrabold tracking-wide drop-shadow-[0_2px_8px_rgba(0,0,0,0.98)] font-mono" style={{ color: c.textLight }}>
                     {percent.toFixed(1)}%
                   </span>
-                  <span className="text-xs font-bold mt-1 drop-shadow-[0_1.5px_4px_rgba(0,0,0,0.95)] font-mono" style={{ color: c.text }}>
+                  <span className="text-xs font-bold mt-1 drop-shadow-[0_1.5px_4px_rgba(0,0,0,0.95)] font-mono" style={{ color: c.textLight }}>
                     {currentMana.toFixed(1)} / {maxMana.toFixed(0)}
                   </span>
                   <span className="text-[9px] mt-1 text-zinc-400 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] uppercase font-semibold tracking-wider font-mono">
@@ -530,10 +530,10 @@ export const Aperture: React.FC<ApertureProps> = ({
                     </span>
                   </div>
                   <span className={`text-[9px] font-mono px-2 py-0.5 rounded-lg font-bold border ${vitalGu.status === "ACTIVE"
-                    ? "bg-emerald-950/20 text-emerald-450 border-emerald-500/20"
+                    ? "bg-emerald-950/20 text-emerald-400 border-emerald-500/20"
                     : vitalGu.status === "SLEEPING"
                       ? "bg-amber-950/20 text-amber-400 border-amber-500/20"
-                      : "bg-rose-950/20 text-rose-450 border-rose-500/20"
+                      : "bg-rose-950/20 text-rose-400 border-rose-500/20"
                     }`}>
                     {vitalGu.status === "ACTIVE" ? "ACTIVE"
                       : vitalGu.status === "SLEEPING" ? "SLEEPING"
@@ -913,7 +913,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                     <Camera className="w-3 h-3" /> Ảnh Đại Diện
                   </label>
                   <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-zinc-100 font-bold border-2 border-zinc-900 shrink-0 overflow-hidden">
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold border-2 border-zinc-900 shrink-0 overflow-hidden">
                       {player.avatar_url ? (
                         <img src={player.avatar_url} alt={player.username} className="w-full h-full object-cover" />
                       ) : (
@@ -986,7 +986,7 @@ export const Aperture: React.FC<ApertureProps> = ({
 
                   {!hasConcealment && (
                     <div className="p-3 bg-rose-950/20 border border-rose-500/20 rounded-xl text-[10px] text-rose-300 leading-relaxed font-sans">
-                      <ShieldAlert className="w-3.5 h-3.5 inline mr-1.5 shrink-0 align-text-top text-rose-450" />
+                      <ShieldAlert className="w-3.5 h-3.5 inline mr-1.5 shrink-0 align-text-top text-rose-400" />
                       Đạo hữu không trang bị cổ trùng ngụy trang nào hoạt động! Hãy trang bị các cổ trùng như Ẩn Lân Cổ, Biến Hóa Cổ, Thái Độ Cổ... để kích hoạt tính năng Ngụy Trang.
                     </div>
                   )}
@@ -1039,7 +1039,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                         <div className="flex justify-between items-center">
                           <label htmlFor="settings-fakeVitalGu" className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Bản Mệnh Cổ Giả</label>
                           {!hasFaceChange && (
-                            <span className="text-[8px] bg-rose-950/40 text-rose-450 border border-rose-900/30 px-1.5 py-0.5 rounded font-mono font-semibold uppercase">Yêu cầu Biến Hóa/Thái Độ Cổ</span>
+                            <span className="text-[8px] bg-rose-950/40 text-rose-400 border border-rose-900/30 px-1.5 py-0.5 rounded font-mono font-semibold uppercase">Yêu cầu Biến Hóa/Thái Độ Cổ</span>
                           )}
                         </div>
                         <select
@@ -1269,7 +1269,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                 <button
                   type="submit"
                   disabled={store.actionLoading}
-                  className="w-full mt-2 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-450 disabled:from-zinc-900 disabled:to-zinc-900 disabled:opacity-40 border border-amber-500/20 text-white rounded-xl py-2.5 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-98 shadow-md hover:shadow-orange-500/10"
+                  className="w-full mt-2 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 disabled:from-zinc-900 disabled:to-zinc-900 disabled:opacity-40 border border-amber-500/20 text-white rounded-xl py-2.5 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-98 shadow-md hover:shadow-orange-500/10"
                 >
                   {store.actionLoading ? (
                     <>
@@ -1301,7 +1301,7 @@ function WallControls() {
     return (
       <div className="w-full space-y-3.5">
         <div className="w-full flex flex-col items-center justify-center p-4 border border-rose-950 bg-rose-950/20 rounded-2xl shadow-[inset_0_0_12px_rgba(244,63,94,0.1)]">
-          <div className="text-rose-450 font-bold mb-1 text-center text-sm tracking-wide uppercase flex items-center gap-1.5">
+          <div className="text-rose-400 font-bold mb-1 text-center text-sm tracking-wide uppercase flex items-center gap-1.5">
             <ShieldAlert className="w-4 h-4 text-rose-500 animate-bounce" />
             Cơ Hội Thăng Tiên
           </div>
@@ -1325,7 +1325,7 @@ function WallControls() {
         {/* Stones Recharge Section */}
         <div className="bg-zinc-950/50 border border-zinc-900 rounded-xl p-3">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] text-zinc-450 font-bold uppercase tracking-wider flex items-center gap-1.5">
+            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5 font-mono">
               <Coins className="w-3.5 h-3.5 text-cyan-400" />
               Nạp Nguyên Thạch (Recharge)
             </span>
@@ -1376,7 +1376,7 @@ function WallControls() {
       {/* Mana Shock Section */}
       <div className="bg-zinc-950/50 border border-zinc-900 rounded-xl p-3">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] text-zinc-450 font-bold uppercase tracking-wider flex items-center gap-1.5">
+          <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5 font-mono">
             <Zap className="w-3.5 h-3.5 text-emerald-400" />
             Trùng Kích Vách Khiếu
           </span>
@@ -1422,7 +1422,7 @@ function WallControls() {
       {/* Stones Recharge Section */}
       <div className="bg-zinc-950/50 border border-zinc-900 rounded-xl p-3">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] text-zinc-450 font-bold uppercase tracking-wider flex items-center gap-1.5">
+          <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5 font-mono">
             <Coins className="w-3.5 h-3.5 text-cyan-400" />
             Nạp Nguyên Thạch (Recharge)
           </span>
@@ -1477,8 +1477,8 @@ function WallControls() {
       {/* Aperture Stress Level */}
       <div className="mt-3.5 p-3 bg-zinc-950/70 border border-zinc-900 rounded-xl">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
-            <Activity className="w-3.5 h-3.5 text-rose-450 animate-pulse" />
+          <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5 font-mono">
+            <Activity className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
             Áp Lực Không Khiếu
           </span>
           <span className={`text-xs font-mono font-bold ${(player.aperture_stress ?? 0) >= 80 ? "text-rose-500 animate-pulse font-extrabold" :
@@ -1525,7 +1525,7 @@ function WallControls() {
             }}
           >
             <Sparkles className="w-3 h-3" />
-            Tịnh Hóa (-50% Stress) [100 💸]
+            Tịnh Hóa
           </button>
         </div>
       </div>
@@ -1638,7 +1638,7 @@ function BlessedLandControls() {
         {/* Stones Recharge Section for Immortals */}
         <div className="bg-zinc-950/50 border border-zinc-900 rounded-xl p-3">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] text-zinc-450 font-bold uppercase tracking-wider flex items-center gap-1.5">
+            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5 font-mono">
               <Sparkles className="w-4 h-4 text-violet-400" />
               Nạp Tiên Nguyên Thạch (Recharge)
             </span>
@@ -1737,7 +1737,7 @@ function MainQuestsPanel() {
       case "quest_1_awaken": return <Sparkles className="w-3.5 h-3.5 text-emerald-400" />;
       case "quest_2_vital_gu": return <Flame className="w-3.5 h-3.5 text-amber-500 animate-pulse" />;
       case "quest_3_rank_2": return <Zap className="w-3.5 h-3.5 text-cyan-400" />;
-      case "quest_4_refine_gu": return <Atom className="w-3.5 h-3.5 text-purple-450" />;
+      case "quest_4_refine_gu": return <Atom className="w-3.5 h-3.5 text-purple-400" />;
       case "quest_5_fame": return <Crown className="w-3.5 h-3.5 text-yellow-500 animate-bounce" />;
       case "quest_6_rank_5": return <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />;
       default: return <Award className="w-3.5 h-3.5 text-zinc-400" />;
@@ -1778,7 +1778,7 @@ function MainQuestsPanel() {
                     }`}
                 >
                   <div className="text-left flex-1 min-w-0 mr-3">
-                    <div className={`font-semibold flex items-center gap-2 ${isDone ? "text-emerald-450 line-through" : "text-zinc-200"}`}>
+                    <div className={`font-semibold flex items-center gap-2 ${isDone ? "text-emerald-600 dark:text-emerald-400 line-through" : "text-zinc-200"}`}>
                       {getQuestIcon(q.id)}
                       <span className="truncate">{q.title}</span>
                     </div>

@@ -284,7 +284,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                           <button
                             onClick={() => handleUseItemClick(key)}
                             disabled={actionLoading || isUsing}
-                            className="text-[9px] py-1 px-2 bg-emerald-950/30 text-emerald-450 border border-emerald-900/40 hover:bg-emerald-950/50 hover:border-emerald-800 rounded font-mono transition-all cursor-pointer font-bold"
+                            className="text-[9px] py-1 px-2 bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 hover:bg-emerald-950/50 hover:border-emerald-800 rounded font-mono transition-all cursor-pointer font-bold"
                           >
                             {isUsing ? "..." : "Sử Dụng"}
                           </button>
@@ -534,7 +534,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                 ⚡ Bản Mệnh
                               </span>
                             )}
-                            <span className="text-[8px] font-mono font-bold text-amber-450 border border-amber-500/20 px-1 py-0.5 rounded uppercase">
+                            <span className="text-[8px] font-mono font-bold text-amber-600 dark:text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded uppercase">
                               Rank {spec.rank}
                             </span>
                             {spec.path && spec.path.map(p => (
@@ -600,10 +600,10 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                       <span className="text-[8px] font-bold text-emerald-400 font-mono bg-emerald-950/30 px-1 py-0.5 rounded border border-emerald-900/30">Xuất Trận</span>
                                     )}
                                     <span className={`text-[9px] font-mono font-medium ${
-                                      status === "ACTIVE" ? "text-emerald-450" :
-                                      status === "SLEEPING" ? "text-amber-500" :
-                                      status === "SEALED" ? "text-cyan-400" :
-                                      status === "DYING" ? "text-rose-500 animate-pulse font-bold" :
+                                      status === "ACTIVE" ? "text-emerald-600 dark:text-emerald-400" :
+                                      status === "SLEEPING" ? "text-amber-600 dark:text-amber-400" :
+                                      status === "SEALED" ? "text-cyan-600 dark:text-cyan-400" :
+                                      status === "DYING" ? "text-rose-600 dark:text-rose-400 animate-pulse font-bold" :
                                       "text-zinc-650"
                                     }`}>
                                       {status === "ACTIVE" && "☀️ Hoạt Động"}
@@ -644,7 +644,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                         onClick={() => handleFeedClick(gu.instance_id)}
                                         className={`text-[9px] font-bold py-1 px-2.5 rounded font-mono transition-all cursor-pointer ${
                                           canFeedIndividual
-                                            ? "bg-emerald-950/40 text-emerald-450 border border-emerald-900/40 hover:bg-emerald-950/60"
+                                            ? "bg-emerald-950/40 text-emerald-400 border border-emerald-900/40 hover:bg-emerald-950/60"
                                             : "bg-zinc-900/40 text-zinc-600 border border-zinc-900/60 cursor-not-allowed"
                                         }`}
                                       >
@@ -714,7 +714,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                                 setDroppingId(null);
                                               }
                                             }}
-                                            className="text-[9px] font-bold py-1 px-2.5 bg-rose-950/30 text-rose-450 border border-rose-900/40 hover:bg-rose-950/50 rounded font-mono cursor-pointer"
+                                            className="text-[9px] font-bold py-1 px-2.5 bg-rose-950/30 text-rose-400 border border-rose-900/40 hover:bg-rose-950/50 rounded font-mono cursor-pointer"
                                           >
                                             {droppingId === gu.instance_id ? "..." : "Thả"}
                                           </button>

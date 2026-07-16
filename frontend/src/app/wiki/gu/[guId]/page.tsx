@@ -34,11 +34,11 @@ const rarityLabels: Record<string, string> = {
 
 const rarityColors: Record<string, string> = {
   COMMON: "text-[var(--text-secondary)] border-zinc-700",
-  UNCOMMON: "text-emerald-400 border-emerald-500/30",
-  RARE: "text-sky-400 border-sky-500/30",
-  EPIC: "text-purple-400 border-purple-500/30",
-  LEGENDARY: "text-amber-400 border-amber-500/30",
-  MYTHIC: "text-rose-400 border-rose-500/30",
+  UNCOMMON: "text-[var(--rarity-uncommon)] border-emerald-500/30",
+  RARE: "text-[var(--rarity-rare)] border-sky-500/30",
+  EPIC: "text-[var(--rarity-epic)] border-purple-500/30",
+  LEGENDARY: "text-[var(--rarity-legendary)] border-amber-500/30",
+  MYTHIC: "text-[var(--rarity-mythic)] border-rose-500/30",
 };
 
 const tagLabels: Record<string, string> = {

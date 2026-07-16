@@ -57,20 +57,10 @@ export const LobbyView: React.FC = () => {
     manaSnapshot,
     logs,
     setView,
-    baoHoangMessages,
-    sendBaoHoangChat,
-    actionLoading,
     fetchPlayerProfile,
     mySectStatus,
     addToast,
-    activeChannel,
-    setActiveChannel,
-    chatOpen,
-    setChatOpen,
-    unreadChannels,
-    subscribeAllBaoHoangMessages,
   } = useGameStore();
-  const [chatInput, setChatInput] = useState("");
   const [manaNow, setManaNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -264,31 +254,9 @@ export const LobbyView: React.FC = () => {
     },
   ];
 
-  useEffect(() => {
-    subscribeAllBaoHoangMessages();
-  }, [subscribeAllBaoHoangMessages]);
-
-  const chatContainerRef = useRef<HTMLDivElement>(null);
-
-  // Scroll chat to bottom on new messages
-  useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-    }
-  }, [baoHoangMessages]);
-
   const handleItemClick = (item: HubItem) => {
     if (item.locked) return;
     setView(item.id);
-  };
-
-  const handleSendChat = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInput.trim()) return;
-    const success = await sendBaoHoangChat(chatInput.trim(), activeChannel);
-    if (success) {
-      setChatInput("");
-    }
   };
 
   const getRankName = (rank: number, sub: number): string => {
@@ -321,7 +289,7 @@ export const LobbyView: React.FC = () => {
         <div className="bg-zinc-950/60 border border-zinc-900 rounded-2xl sm:rounded-3xl p-3 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-6 shadow-xl backdrop-blur-md">
           {/* Left Block: Avatar & Name & Tu vi */}
           <div className="flex items-center gap-3 sm:gap-4 w-full md:w-auto">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-zinc-100 font-bold border-2 border-zinc-900 shrink-0 overflow-hidden">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold border-2 border-zinc-900 shrink-0 overflow-hidden">
               {player.avatar_url ? (
                 <img src={player.avatar_url} alt={player.username} className="w-full h-full object-cover" />
               ) : (
@@ -498,171 +466,6 @@ export const LobbyView: React.FC = () => {
             );
           })}
         </div>
-      </div>
-
-      {/* 4. FLOATING MESSAGE BUTTON & CHAT OVERLAY */}
-      <div className="fixed bottom-6 right-6 z-50">
-        {/* Toggle Button */}
-        {!chatOpen && (
-          <button
-            onClick={() => setChatOpen(true)}
-            className="w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300 border relative bg-gradient-to-br from-emerald-600 to-teal-700 border-emerald-500/30 text-white hover:scale-105 hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-95 cursor-pointer"
-          >
-            <MessageSquare className="w-6 h-6" />
-
-            {/* Red dot notification */}
-            {(unreadChannels.world || unreadChannels.general || unreadChannels.sect) && (
-              <span className="absolute top-0.5 right-0.5 flex h-3.5 w-3.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500"></span>
-              </span>
-            )}
-          </button>
-        )}
-
-        {/* Chat Overlay Panel */}
-        {chatOpen && (
-          <div className="absolute bottom-0 right-0 w-[320px] sm:w-[420px] md:w-[480px] lg:w-[540px] max-w-[calc(100vw-2rem)] h-[420px] sm:h-[500px] md:h-[550px] lg:h-[600px] flex flex-col bg-zinc-950/95 border border-zinc-900 rounded-3xl p-4 sm:p-5 gap-3 sm:gap-4 shadow-2xl backdrop-blur-lg animate-in fade-in slide-in-from-bottom-5 duration-200">
-            {/* Header with Integrated Close Button */}
-            <div className="flex items-center justify-between border-b border-zinc-900/60 pb-2">
-              <div className="flex items-center gap-2">
-                <h3 className="font-serif font-bold text-sm sm:text-base md:text-lg text-zinc-200 tracking-wide">Truyền Âm Đại Điện</h3>
-                <span className="text-[9px] sm:text-[10px] text-zinc-500 font-mono">Bảo Hoàng Thiên</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setChatOpen(false)}
-                className="p-1 rounded-lg hover:bg-zinc-900 text-zinc-500 hover:text-zinc-200 transition-all cursor-pointer"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-            </div>
-
-            {/* Channel Tabs */}
-            <div className="flex gap-1.5 border-b border-zinc-900 pb-2.5">
-              {[
-                { id: "world", label: "Thế Giới" },
-                { id: "general", label: "Bảo Hoàng" },
-                { id: "sect", label: "Bang Hội" },
-              ].map((ch) => {
-                const isSectActive = ch.id === "sect";
-                const isGeneralActive = ch.id === "general";
-                const label = isSectActive
-                  ? "Bang Hội"
-                  : isGeneralActive
-                  ? "Bảo Hoàng"
-                  : "Thế Giới";
-
-                return (
-                  <button
-                    key={ch.id}
-                    onClick={() => {
-                      if (ch.id === "sect" && (!mySectStatus || !mySectStatus.in_sect)) {
-                        addToast("Đạo hữu chưa gia nhập tông môn nào, không thể xem tin nhắn kênh tông môn!", "error");
-                        return;
-                      }
-                      if (ch.id === "general") {
-                        const hasConnectingHeaven = player?.gu_inventory?.some(g => g.gu_id === "GU_CONNECTING_HEAVEN" && g.status !== "DEAD") ?? false;
-                        const hasDivineSense = player?.gu_inventory?.some(g => g.gu_id === "GU_DIVINE_SENSE" && g.status !== "DEAD") ?? false;
-                        if (!hasConnectingHeaven || !hasDivineSense) {
-                          addToast("Đạo hữu cần sở hữu Thông Thiên Cổ và Thần Niệm Cổ để xem tin nhắn kênh Bảo Hoàng Thiên!", "error");
-                          return;
-                        }
-                      }
-                      setActiveChannel(ch.id as any);
-                    }}
-                    className={`px-2.5 py-1.5 rounded-xl font-serif text-[10px] sm:text-[11px] font-semibold transition-all border cursor-pointer flex items-center gap-1 ${
-                      activeChannel === ch.id
-                        ? "bg-zinc-900 text-zinc-100 border-zinc-800"
-                        : "bg-transparent text-zinc-500 border-transparent hover:text-zinc-300"
-                    }`}
-                  >
-                    <span>{label}</span>
-                    {/* Channel specific red dot */}
-                    {unreadChannels[ch.id as "world" | "general" | "sect"] && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Message View Area */}
-            <div
-              ref={chatContainerRef}
-              className="bg-zinc-950/80 border border-zinc-900/60 rounded-2xl p-3 flex-grow overflow-y-auto flex flex-col gap-2.5 font-mono text-[11px] sm:text-xs md:text-sm"
-            >
-              {baoHoangMessages.length === 0 ? (
-                <div className="text-zinc-600 text-center py-16">
-                  Kênh chat trống. Hãy gửi tin nhắn đầu tiên!
-                </div>
-              ) : (
-                baoHoangMessages.map((msg, index) => {
-                  const isMe = msg.sender_username === player?.username;
-                  const labelColor =
-                    msg.channel === "world"
-                      ? "text-red-400"
-                      : msg.channel === "general"
-                      ? "text-cyan-400"
-                      : "text-emerald-400";
-                  const chLabel =
-                    msg.channel === "world"
-                      ? "[Thế Giới]"
-                      : msg.channel === "general"
-                      ? "[Bảo Hoàng]"
-                      : "[Bang Hội]";
-
-                  return (
-                    <div key={msg.id || index} className="flex items-start gap-1.5 leading-relaxed break-all">
-                      <span className={`${labelColor} font-bold shrink-0`}>{chLabel}</span>
-                      <span
-                        onClick={() => !isMe && fetchPlayerProfile(msg.sender_username)}
-                        className="text-zinc-400 font-bold shrink-0 cursor-pointer hover:text-zinc-100 hover:underline decoration-dotted transition-colors"
-                        title={!isMe ? "Bấm để trinh thám cổ sư" : undefined}
-                      >
-                        {msg.sender_username}
-                        <span className="text-zinc-650 text-[9px] font-normal ml-1 normal-case select-none">
-                          ({formatRelativeTime(msg.created_at)})
-                        </span>
-                        :
-                      </span>
-                      <span className="text-zinc-200">{msg.content}</span>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Chat input form */}
-            <form onSubmit={handleSendChat} className="flex gap-2">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder={
-                  activeChannel === "world"
-                    ? "Kênh Thế Giới (tốn 10 NT)..."
-                    : activeChannel === "general"
-                    ? "Bảo Hoàng Thiên..."
-                    : "Nội bộ Bang Hội..."
-                }
-                maxLength={100}
-                className="flex-grow bg-zinc-950 border border-zinc-900 focus:border-zinc-800 rounded-xl px-3 py-2 text-xs md:text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none transition-all font-mono"
-              />
-              <button
-                type="submit"
-                disabled={actionLoading || !chatInput.trim()}
-                className="bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 hover:border-zinc-700 disabled:bg-zinc-950 disabled:border-zinc-900 disabled:text-zinc-750 text-zinc-300 hover:text-white px-3.5 py-2 md:px-5 md:py-2.5 rounded-xl transition-all flex items-center justify-center shrink-0 cursor-pointer active:scale-95"
-              >
-                {actionLoading ? (
-                  <Loader2 className="w-3.5 h-3.5 md:w-4 md:h-4 animate-spin text-zinc-500" />
-                ) : (
-                  <Send className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                )}
-              </button>
-            </form>
-          </div>
-        )}
       </div>
     </div>
   );

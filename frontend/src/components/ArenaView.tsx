@@ -81,14 +81,14 @@ export const ArenaView: React.FC = () => {
           </div>
           <div className="text-left bg-zinc-950/80 px-4 py-2 border border-zinc-900 rounded-xl">
             <div className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">Tu vi đạo hạnh</div>
-            <span className="text-sm font-bold text-emerald-450">Rank {player.rank} - {player.sub_rank}</span>
+            <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">Rank {player.rank} - {player.sub_rank}</span>
           </div>
         </div>
       </div>
 
       <div className="text-[10px] text-zinc-550 font-mono max-w-xl">
         * Quy tắc Võ Đài: Cổ sư có quyền khiêu chiến hình chiếu của đối thủ có thứ hạng lệch không quá <span className="text-amber-500 font-bold">5 hạng</span>.
-        Nếu chiến thắng kẻ có hạng cao hơn, hai bên sẽ <span className="text-emerald-450 font-bold">hoán đổi vị trí xếp hạng</span> cho nhau.
+        Nếu chiến thắng kẻ có hạng cao hơn, hai bên sẽ <span className="text-emerald-600 dark:text-emerald-400 font-bold">hoán đổi vị trí xếp hạng</span> cho nhau.
       </div>
 
       {/* Leaderboard list */}
@@ -177,7 +177,7 @@ export const ArenaView: React.FC = () => {
         <div className="bg-rose-950/20 border border-rose-900/40 rounded-2xl p-4 flex items-center gap-3 relative z-10 animate-pulse">
           <ShieldAlert className="w-5 h-5 text-rose-500 shrink-0" />
           <div className="text-left text-xs">
-            <span className="font-bold text-rose-450 font-serif block">Đang ở trong trạng thái chiến đấu!</span>
+            <span className="font-bold text-rose-600 dark:text-rose-400 font-serif block">Đang ở trong trạng thái chiến đấu!</span>
             <span className="text-zinc-550 block">Hãy hoàn thành trận chiến dã thú hiện tại trước khi tỷ đấu võ đài.</span>
           </div>
         </div>

@@ -458,7 +458,7 @@ export const TradeRoomModal: React.FC = () => {
                                         Rank {rank}
                                       </span>
                                       {selectedCountInGroup > 0 && (
-                                        <span className="text-[8px] font-mono font-bold text-emerald-450 bg-emerald-950/20 border border-emerald-500/25 px-1 py-0.2 rounded uppercase animate-pulse">
+                                        <span className="text-[8px] font-mono font-bold text-emerald-400 bg-emerald-950/20 border border-emerald-500/25 px-1 py-0.2 rounded uppercase animate-pulse">
                                           Đã chọn {selectedCountInGroup}
                                         </span>
                                       )}

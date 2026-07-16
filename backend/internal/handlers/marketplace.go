@@ -262,6 +262,23 @@ func CreateListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+
+	// Trigger System Chat Notification on Bảo Hoàng Thiên channel
+	if req.ListingType == "MARKET" || req.ListingType == "AUCTION" {
+		itemName := GetItemName(req.ItemType, itemDataJSON)
+		currencyName := "Nguyên Thạch"
+		if req.Currency == "immortal" {
+			currencyName = "Tiên Nguyên Thạch"
+		}
+		var msgContent string
+		if req.ListingType == "AUCTION" {
+			msgContent = fmt.Sprintf("Đạo hữu %s vừa đưa lên đấu giá %d %s với mức giá khởi điểm là %.0f %s tại Bảo Hoàng Thiên!", player.Username, req.Quantity, itemName, req.Price, currencyName)
+		} else {
+			msgContent = fmt.Sprintf("Đạo hữu %s vừa treo bán %d %s với giá %.0f %s tại Bảo Hoàng Thiên!", player.Username, req.Quantity, itemName, req.Price, currencyName)
+		}
+		_ = SendSystemMessage("general", sql.NullString{}, msgContent)
+	}
+
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.create_listing", EntityType: "auction",
 		EntityID: listingID,
@@ -899,4 +916,38 @@ func CancelListing(c *gin.Context) {
 
 func mapGuFromRaw(guID string) models.GuInstance {
 	return models.GuInstance{InstanceID: uuid.New().String(), GuID: guID, Hunger: 100, Status: "SLEEPING", Equipped: false, IsVital: false}
+}
+
+// GetItemName returns a user-friendly name for listed/auctioned items
+func GetItemName(itemType string, itemDataJSON []byte) string {
+	if itemType == "Gu" {
+		var gus []models.GuInstance
+		if err := json.Unmarshal(itemDataJSON, &gus); err == nil && len(gus) > 0 {
+			if spec, ok := models.GuRegistry[gus[0].GuID]; ok {
+				return spec.Name
+			}
+			return gus[0].GuID
+		}
+	} else if itemType == "Material" {
+		var matID string
+		if err := json.Unmarshal(itemDataJSON, &matID); err == nil {
+			if spec, ok := models.ItemRegistry[matID]; ok {
+				return spec.Name
+			}
+			return matID
+		}
+	} else if itemType == "Recipe" {
+		var rec models.UnlockedRecipe
+		if err := json.Unmarshal(itemDataJSON, &rec); err == nil {
+			var targetGuID string
+			err := db.DB.QueryRow(`SELECT target_gu_id FROM refining_recipes WHERE id = $1`, rec.RecipeID).Scan(&targetGuID)
+			if err == nil {
+				if spec, ok := models.GuRegistry[targetGuID]; ok {
+					return fmt.Sprintf("Phương thức phối chế %s", spec.Name)
+				}
+			}
+			return fmt.Sprintf("Phương thức %s", rec.RecipeID)
+		}
+	}
+	return "Vật phẩm không rõ"
 }

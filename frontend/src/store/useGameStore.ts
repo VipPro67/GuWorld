@@ -1507,40 +1507,37 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     }
 
-    // 3. Sect Channel
-    const mySect = get().mySectStatus;
-    if (mySect && mySect.in_sect) {
-      if (!sectMessagesSource) {
-        const source = new EventSource(`${BACKEND_URL}/api/chat/bao-hoang/events?channel=sect&token=${encodeURIComponent(get().token!)}`);
-        sectMessagesSource = source;
-        source.addEventListener("chat.messages", (event) => {
-          try {
-            const payload = JSON.parse((event as MessageEvent<string>).data);
-            const messages = Array.isArray(payload.messages) ? payload.messages : [];
-            set((state) => {
-              const active = state.activeChannel || "world";
-              const open = state.chatOpen;
-              const isCurrent = active === "sect" && open;
-              const newUnread = { ...state.unreadChannels };
-              if (!isCurrent) {
-                newUnread.sect = true;
-              }
-              return {
-                chatMessages: { ...state.chatMessages, sect: messages },
-                unreadChannels: newUnread,
-                baoHoangMessages: active === "sect" ? messages : state.baoHoangMessages,
-              };
-            });
-          } catch (err) {
-            console.error("Failed to process sect chat event", err);
-          }
-        });
-      }
-    } else {
-      if (sectMessagesSource) {
-        sectMessagesSource.close();
+    // 3. Sect Channel – always try to connect; backend validates membership
+    if (!sectMessagesSource) {
+      const source = new EventSource(`${BACKEND_URL}/api/chat/bao-hoang/events?channel=sect&token=${encodeURIComponent(get().token!)}`);
+      sectMessagesSource = source;
+      source.addEventListener("chat.messages", (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent<string>).data);
+          const messages = Array.isArray(payload.messages) ? payload.messages : [];
+          set((state) => {
+            const active = state.activeChannel || "world";
+            const open = state.chatOpen;
+            const isCurrent = active === "sect" && open;
+            const newUnread = { ...state.unreadChannels };
+            if (!isCurrent) {
+              newUnread.sect = true;
+            }
+            return {
+              chatMessages: { ...state.chatMessages, sect: messages },
+              unreadChannels: newUnread,
+              baoHoangMessages: active === "sect" ? messages : state.baoHoangMessages,
+            };
+          });
+        } catch (err) {
+          console.error("Failed to process sect chat event", err);
+        }
+      });
+      source.addEventListener("error", () => {
+        // Backend rejected (not in sect) – clean up silently
+        source.close();
         sectMessagesSource = null;
-      }
+      });
     }
   },
 

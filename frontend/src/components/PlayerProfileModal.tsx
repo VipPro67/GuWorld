@@ -171,7 +171,7 @@ export const PlayerProfileModal: React.FC = () => {
         {/* Profile Header Details */}
         <div className="flex items-center gap-4 border-b border-zinc-900/60 pb-5">
           <div className="relative shrink-0">
-            <div className={`w-16 h-16 rounded-full flex items-center justify-center font-bold text-lg border-2 border-zinc-900 bg-gradient-to-br ${avatarBg} text-zinc-100 overflow-hidden`}>
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center font-bold text-lg border-2 border-zinc-900 bg-gradient-to-br ${avatarBg} text-white overflow-hidden`}>
               {avatar_url ? (
                 <img src={avatar_url} alt={username} className="w-full h-full object-cover" />
               ) : (

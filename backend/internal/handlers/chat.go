@@ -270,3 +270,20 @@ func GetBaoHoangMessages(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"messages": messages})
 }
+
+// SendSystemMessage broadcasts a system message from NPC "Hệ thống"
+func SendSystemMessage(channel string, sectID sql.NullString, content string) error {
+	globalUUID := "00000000-0000-0000-0000-000000000000"
+	systemUUID := "11111111-1111-1111-1111-111111111111"
+
+	_, err := db.DB.Exec(`
+		INSERT INTO messages (sender_id, receiver_id, content, channel, sect_id)
+		VALUES ($1, $2, $3, $4, $5)
+	`, systemUUID, globalUUID, content, channel, sectID)
+	if err != nil {
+		return err
+	}
+
+	notifyBaoHoangMessages(channel, sectID)
+	return nil
+}

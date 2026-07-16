@@ -344,7 +344,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
       else if (matId === "spicy_wine") colorClass = "text-orange-400";
     } else if (matId === "wild_boar_tusk") {
       icon = <Trophy className="w-4 h-4" />;
-      colorClass = "text-stone-300";
+      colorClass = "text-zinc-300";
     } else if (matId === "boar_meat") {
       icon = <Flame className="w-4 h-4 text-orange-400" />;
       colorClass = "text-orange-300";
@@ -450,7 +450,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                         <button
                           type="button"
                           onClick={(e) => toggleGroupExpand(guId, e)}
-                          className="text-[9px] py-1 px-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-450 rounded transition-all cursor-pointer font-mono"
+                          className="text-[9px] py-1 px-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-400 rounded transition-all cursor-pointer font-mono"
                         >
                           {isExpanded ? "Ẩn" : `Hiện (${totalAvailable})`}
                         </button>

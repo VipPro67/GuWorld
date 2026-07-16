@@ -201,7 +201,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
   const getCellIcon = (type: string, content: string) => {
     switch (type) {
       case "Resource":
-        if (content === "moon_orchid_petal") return <Flower2 className="w-5 h-5 text-emerald-450" />;
+        if (content === "moon_orchid_petal") return <Flower2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />;
         if (content === "green_bamboo_wine" || content.includes("wine")) return <Wine className="w-5 h-5 text-amber-500" />;
         return <Gem className="w-5 h-5 text-cyan-400" />;
       case "Monster":
@@ -235,7 +235,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
             {isExploringActiveRegion && (
               <button
                 onClick={() => setShowRegionsList(false)}
-                className="py-1 px-3 border border-zinc-800 rounded-xl text-[10px] text-zinc-450 hover:bg-zinc-900 cursor-pointer font-mono"
+                className="py-1 px-3 border border-zinc-800 rounded-xl text-[10px] text-zinc-400 hover:bg-zinc-900 cursor-pointer font-mono"
               >
                 Về Bản Đồ Hiện Tại
               </button>
@@ -247,8 +247,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                 disabled={actionLoading}
                 className={`py-1 px-3 border rounded-xl text-[10px] cursor-pointer font-mono font-bold transition-all ${
                   isExploringActiveRegion
-                    ? "bg-emerald-950/40 text-emerald-450 border-emerald-900/60 hover:bg-emerald-950/60 hover:border-emerald-700 shadow-[0_0_10px_rgba(16,185,129,0.1)]"
-                    : "border-zinc-800 text-zinc-450 hover:bg-zinc-900"
+                    ? "bg-emerald-950/40 text-emerald-400 border-emerald-900/60 hover:bg-emerald-950/60 hover:border-emerald-700 shadow-[0_0_10px_rgba(16,185,129,0.1)]"
+                    : "border-zinc-800 text-zinc-400 hover:bg-zinc-900"
                 }`}
               >
                 {isExploringActiveRegion ? "Thoát & Nhận Đồ" : "Trở Về"}
@@ -375,7 +375,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
           {onBack && (
             <button
               onClick={handleExitMap}
-              className="py-1.5 px-3 bg-emerald-950/40 text-emerald-450 border border-emerald-900/60 hover:bg-emerald-950/60 hover:border-emerald-700 rounded-xl text-[10px] cursor-pointer font-mono font-bold transition-all shadow-[0_0_10px_rgba(16,185,129,0.1)]"
+              className="py-1.5 px-3 bg-emerald-950/40 text-emerald-400 border border-emerald-900/60 hover:bg-emerald-950/60 hover:border-emerald-700 rounded-xl text-[10px] cursor-pointer font-mono font-bold transition-all shadow-[0_0_10px_rgba(16,185,129,0.1)]"
             >
               Thoát & Nhận Đồ
             </button>
@@ -532,7 +532,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                   type="button"
                   onClick={handleCreateParty}
                   disabled={partyLoading}
-                  className="w-full py-2 bg-emerald-950/30 border border-emerald-500/30 text-emerald-450 hover:bg-emerald-950/50 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer"
+                  className="w-full py-2 bg-emerald-950/30 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-950/50 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer"
                 >
                   {partyLoading ? "Đang lập tổ..." : "Lập Tổ Đội Mới"}
                 </button>
@@ -600,7 +600,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                       </button>
                     </div>
                     {inviteError && (
-                      <p className="text-[9px] text-rose-450 font-mono">{inviteError}</p>
+                      <p className="text-[9px] text-rose-600 dark:text-rose-400 font-mono">{inviteError}</p>
                     )}
                   </div>
                 )}
@@ -621,7 +621,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
           {/* Temporary Loot Panel */}
           <div className="bg-zinc-950/40 border border-zinc-900 rounded-3xl p-5 space-y-4">
             <div className="flex items-center justify-between border-b border-zinc-900/60 pb-2">
-              <h4 className="font-serif font-bold text-sm text-emerald-450 flex items-center gap-1.5">
+              <h4 className="font-serif font-bold text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                 <Package className="w-4 h-4 text-emerald-400" /> CHIẾN LỢI PHẨM TẠM THỜI
               </h4>
               <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest bg-emerald-950/30 border border-emerald-900/40 px-1.5 py-0.5 rounded">
@@ -678,7 +678,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                             <span className="text-[8px] text-zinc-550 font-mono">{spec.path && spec.path.join(" / ")}</span>
                           </div>
                         </div>
-                        <span className="text-[8px] font-mono text-emerald-450 bg-emerald-950/20 border border-emerald-900/30 px-1 py-0.5 rounded uppercase tracking-wide shrink-0">
+                        <span className="text-[8px] font-mono text-emerald-400 bg-emerald-950/20 border border-emerald-900/30 px-1 py-0.5 rounded uppercase tracking-wide shrink-0">
                           Cổ trùng
                         </span>
                       </div>
@@ -700,7 +700,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                               {matId.includes("wine") ? (
                                 <Wine className="w-3.5 h-3.5 text-amber-500" />
                               ) : matId.includes("petal") || matId.includes("flower") ? (
-                                <Flower2 className="w-3.5 h-3.5 text-emerald-450" />
+                                <Flower2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                               ) : (
                                 <Gem className="w-3.5 h-3.5 text-cyan-400" />
                               )}

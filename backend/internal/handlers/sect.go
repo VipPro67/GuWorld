@@ -203,6 +203,12 @@ func JoinSect(c *gin.Context) {
 		return
 	}
 
+	var username string
+	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
+	if username != "" {
+		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("Chào mừng đạo hữu %s đã gia nhập tông môn!", username))
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "Gia nhập tông môn thành công!"})
 }
 
@@ -221,6 +227,19 @@ func LeaveSect(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
+	// Get player username and sect ID before deleting
+	var sectID, username string
+	err = tx.QueryRow(`
+		SELECT m.sect_id, p.username 
+		FROM sect_members m
+		JOIN players p ON m.player_id = p.id
+		WHERE m.player_id = $1
+	`, playerID).Scan(&sectID, &username)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
+		return
+	}
+
 	// Delete membership
 	_, err = tx.Exec(`DELETE FROM sect_members WHERE player_id = $1`, playerID)
 	if err != nil {
@@ -235,6 +254,9 @@ func LeaveSect(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
 	}
+
+	// Trigger System Chat Notification on Sect channel
+	_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("Đạo hữu %s đã rời khỏi tông môn.", username))
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã rời khỏi tông môn, tổn thất toàn bộ điểm cống hiến."})
 }
@@ -565,6 +587,9 @@ func DonateStones(c *gin.Context) {
 		return
 	}
 
+	// Trigger System Chat Notification on Sect channel
+	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("Đạo hữu %s đã quyên góp %d Nguyên Thạch cho tông môn.", player.Username, req.Amount))
+
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.donate_stones", EntityType: "sect",
 		EntityID: m.SectID, RequestSummary: fmt.Sprintf("%d Nguyên Thạch → %d điểm cống hiến", req.Amount, req.Amount),
@@ -687,6 +712,9 @@ func DonateMaterials(c *gin.Context) {
 	if materialName == "" {
 		materialName = req.MaterialID
 	}
+
+	// Trigger System Chat Notification on Sect channel
+	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("Đạo hữu %s đã quyên góp %d %s cho tông môn.", player.Username, req.Amount, materialName))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.donate_materials", EntityType: "sect",
@@ -842,6 +870,9 @@ func DonateGu(c *gin.Context) {
 	if spec, ok := models.GuRegistry[guInstance.GuID]; ok {
 		guName = spec.Name
 	}
+
+	// Trigger System Chat Notification on Sect channel
+	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("Đạo hữu %s đã quyên góp Cổ trùng %s cho tông môn.", player.Username, guName))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.donate_gu", EntityType: "sect",
@@ -1543,6 +1574,9 @@ func CreateSect(c *gin.Context) {
 		return
 	}
 
+	// Trigger System Chat Notification on Sect channel
+	_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("Chúc mừng đạo hữu %s đã lập phái thành công! Tông môn %s chính thức được thành lập.", player.Username, req.Name))
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Khai tông lập phái thành công! Chào mừng Chưởng môn của \"" + req.Name + "\"!",
 		"player":  player,
@@ -1761,6 +1795,9 @@ func KickMember(c *gin.Context) {
 		return
 	}
 
+	var targetUsername string
+	_ = tx.QueryRow(`SELECT username FROM players WHERE id = $1`, targetMemberID).Scan(&targetUsername)
+
 	// Delete member
 	_, err = tx.Exec(`DELETE FROM sect_members WHERE player_id = $1`, targetMemberID)
 	if err != nil {
@@ -1774,6 +1811,10 @@ func KickMember(c *gin.Context) {
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
 		return
+	}
+
+	if targetUsername != "" {
+		_ = SendSystemMessage("sect", sql.NullString{String: targetSectID, Valid: true}, fmt.Sprintf("Đạo hữu %s đã bị trục xuất khỏi tông môn.", targetUsername))
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã trục xuất thành viên ra khỏi tông môn!"})
@@ -1996,6 +2037,27 @@ func StockSectVault(c *gin.Context) {
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
+	}
+
+	// Trigger System Chat Notification on Sect channel
+	rankName := "Chưởng Môn"
+	if callerRank == "TRUONG_LAO" {
+		rankName = "Trưởng Lão"
+	}
+	var username string
+	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
+	itemName := req.ItemID
+	if itemType == "gu" {
+		if spec, ok := models.GuRegistry[req.ItemID]; ok {
+			itemName = spec.Name
+		}
+	} else if itemType == "material" {
+		if spec, ok := models.ItemRegistry[req.ItemID]; ok {
+			itemName = spec.Name
+		}
+	}
+	if username != "" {
+		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("%s %s đã nhập thêm %d %s vào bảo khố tông môn.", rankName, username, req.Quantity, itemName))
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -2276,6 +2338,11 @@ func ActionJoinRequest(c *gin.Context) {
 	msg := "Đã từ chối yêu cầu gia nhập!"
 	if strings.ToLower(req.Action) == "approve" {
 		msg = "Đã đồng ý cho đệ tử gia nhập tông môn!"
+		var username string
+		_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, targetPlayerID).Scan(&username)
+		if username != "" {
+			_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("Chào mừng đạo hữu %s đã gia nhập tông môn!", username))
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": msg})

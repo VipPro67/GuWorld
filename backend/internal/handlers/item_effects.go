@@ -2,12 +2,12 @@ package handlers
 
 import (
 	"fmt"
-	"math"
 	"math/rand"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/db"
 )
 
 type ItemEffectHandler func(player *models.Player, item models.ItemSpec) (string, error)
@@ -140,108 +140,291 @@ func removeNegativeStatusEffect(player *models.Player, item models.ItemSpec) (st
 }
 
 func openMineChestEffect(player *models.Player, item models.ItemSpec) (string, error) {
-	// Drop rate (tỉ lệ ra): higher rank/rarity = lower rate = fewer but better items.
-	//   R5 = 1000, R6 = 1, decreasing by factor 1000 per rank:
-	//   rate = 1000 * 10^(-3*(rank-5))
-	//   Clamp effective rank to >= 5 to avoid exponential explosion for low-rank chests
-	effectiveRank := item.Rank
-	if effectiveRank < 5 {
-		effectiveRank = 5
-	}
-	rankDrop := math.Pow(10, -3.0*float64(effectiveRank-5))
-	rate := 1000.0 * rankDrop
-	rate /= math.Max(1.0, float64(item.Rarity))
-	rel := rate / 1000.0 // relative to R5 baseline (R5=1, R6=0.001)
+	msg := fmt.Sprintf("Mở %s thành công!\n", item.Name)
 
-	// Stones: quantity × sqrt(rel) so R5 gives 200-500, R6 gives ~6-22
-	stones := int(float64(200+rand.Intn(301)) * math.Sqrt(rel))
-	if stones < 1 {
-		stones = 1 + rand.Intn(5)
-	}
-	player.PrimevalStones += stones
-	msg := fmt.Sprintf("Mở %s thành công!\n- Nhận được %d Nguyên Thạch\n", item.Name, stones)
+	// ── 50 % → Nguyên Thạch  |  50 % → Vật phẩm (vật liệu / cổ trùng / bí phương)
+	if rand.Float64() < 0.50 {
+		// ── STONES: 100-500
+		stones := 100 + rand.Intn(401)
+		player.PrimevalStones += stones
+		msg += fmt.Sprintf("- 💎 Nhận được %d Nguyên Thạch\n", stones)
+	} else {
+		// ── ITEM POOL ──
+		// Roll type: Material 92.5%, Gu 5%, Recipe 2.5%
+		roll := rand.Float64() * 100.0
 
-	// Materials pool — higher-rank chests only yield higher-tier materials
-	var materials []string
-	minMatRank := 1
-	if item.Rank >= 6 {
-		minMatRank = item.Rank - 3 // R6: rank≥3, R7: rank≥4, etc.
-	} else if item.Rank >= 4 {
-		minMatRank = item.Rank - 1 // R4: rank≥3, R5: rank≥4
-	} else if item.Rank >= 2 {
-		minMatRank = item.Rank // R2: rank≥2
-	}
-	for id, spec := range models.ItemRegistry {
-		if spec.Type == "Material" && spec.Rank >= minMatRank {
-			materials = append(materials, id)
-		}
-	}
-	if len(materials) == 0 {
-		materials = []string{"wild_boar_tusk", "jade_stone", "nine_beast_kings_eyes", "stone_man_rice"}
-	}
-
-	// Number of material drops: fewer at higher rank
-	numMats := int(float64(1+rand.Intn(3)) * rel)
-	if numMats < 1 {
-		numMats = 0
-		if rand.Float64() < rel*1000 { // R6: ~0.1% – extremely rare
-			numMats = 1
-		}
-	}
-	if player.MaterialsInventory == nil {
-		player.MaterialsInventory = make(models.MaterialsInventory)
-	}
-	for i := 0; i < numMats; i++ {
-		matID := materials[rand.Intn(len(materials))]
-		player.MaterialsInventory[matID]++
-		matName := matID
-		if spec, ok := models.ItemRegistry[matID]; ok {
-			matName = spec.Name
-		}
-		msg += fmt.Sprintf("- Nhận được 1x %s\n", matName)
-	}
-
-	// Gu drop chance: scales with rate
-	guChance := 0.05 * rel
-	if guChance > 0.05 {
-		guChance = 0.05
-	}
-	if rand.Float64() < guChance {
-		var guIDs []string
-		minGuRank := 1
-		if item.Rank >= 6 {
-			minGuRank = item.Rank - 2 // R6: Gu rank≥4, R7: rank≥5, etc.
-		} else if item.Rank >= 4 {
-			minGuRank = item.Rank - 1 // R4: rank≥3, R5: rank≥4
-		}
-		for id, spec := range models.GuRegistry {
-			if spec.Rank >= minGuRank {
-				guIDs = append(guIDs, id)
+		if roll < 5.0 {
+			// ── GU DROP (5%) ──
+			guMsg := rollGuDrop(player, item)
+			if guMsg != "" {
+				msg += guMsg
+			} else {
+				// Fallback to materials if no valid Gu found
+				msg += rollMaterialDrop(player, item)
 			}
-		}
-		if len(guIDs) == 0 {
-			for id := range models.GuRegistry {
-				guIDs = append(guIDs, id)
+		} else if roll < 7.5 {
+			// ── RECIPE DROP (2.5%) ──
+			recipeMsg := rollRecipeDrop(player, item)
+			if recipeMsg != "" {
+				msg += recipeMsg
+			} else {
+				msg += rollMaterialDrop(player, item)
 			}
-		}
-		if len(guIDs) > 0 {
-			guID := guIDs[rand.Intn(len(guIDs))]
-			newInstance := models.GuInstance{
-				InstanceID: "gu-" + uuid.New().String(),
-				GuID:       guID,
-				Hunger:     100,
-				Status:     "ACTIVE",
-				Equipped:   false,
-			}
-			player.GuInventory = append(player.GuInventory, newInstance)
-			guName := guID
-			if spec, ok := models.GuRegistry[guID]; ok {
-				guName = spec.Name
-			}
-			msg += fmt.Sprintf("- Cơ duyên xảo hợp! Đạo hữu nhận thêm Cổ trùng: [%s]!\n", guName)
+		} else {
+			// ── MATERIAL DROP (92.5%) ──
+			msg += rollMaterialDrop(player, item)
 		}
 	}
 
 	return msg, nil
+}
+
+// guRarityWeight maps Gu rarity string → weight (lower = rarer = less likely)
+func guRarityWeight(rarity string) float64 {
+	switch rarity {
+	case "COMMON":
+		return 100.0
+	case "UNCOMMON":
+		return 60.0
+	case "RARE":
+		return 30.0
+	case "EPIC":
+		return 12.0
+	case "LEGENDARY":
+		return 4.0
+	case "MYTHIC":
+		return 1.0
+	case "IMMORTAL":
+		return 0.5
+	case "IMMORTAL_6":
+		return 0.2
+	case "IMMORTAL_7":
+		return 0.08
+	case "IMMORTAL_8":
+		return 0.03
+	case "IMMORTAL_9":
+		return 0.01
+	default:
+		return 50.0
+	}
+}
+
+// rankDropMultiplier returns a weight multiplier for Gu/material of a given rank.
+// Higher chest rank → lower multiplier → rarer drops. Rank ≥ 6 is extremely low.
+func rankDropMultiplier(rank int) float64 {
+	switch {
+	case rank <= 1:
+		return 1.0
+	case rank == 2:
+		return 0.8
+	case rank == 3:
+		return 0.5
+	case rank == 4:
+		return 0.25
+	case rank == 5:
+		return 0.10
+	case rank == 6:
+		return 0.005
+	case rank == 7:
+		return 0.001
+	case rank == 8:
+		return 0.0002
+	default: // 9+
+		return 0.00005
+	}
+}
+
+// itemRarityWeight maps item rarity int → weight
+func itemRarityWeight(rarity int) float64 {
+	switch {
+	case rarity <= 1:
+		return 100.0
+	case rarity == 2:
+		return 50.0
+	case rarity == 3:
+		return 20.0
+	case rarity == 4:
+		return 5.0
+	default:
+		return 1.0
+	}
+}
+
+func rollMaterialDrop(player *models.Player, item models.ItemSpec) string {
+	// Build weighted pool of materials
+	type weightedMat struct {
+		id     string
+		weight float64
+	}
+	var pool []weightedMat
+	var totalWeight float64
+
+	for id, spec := range models.ItemRegistry {
+		if spec.Type != "Material" {
+			continue
+		}
+		w := rankDropMultiplier(spec.Rank) * itemRarityWeight(spec.Rarity)
+		if w > 0 {
+			pool = append(pool, weightedMat{id: id, weight: w})
+			totalWeight += w
+		}
+	}
+
+	if len(pool) == 0 || totalWeight <= 0 {
+		return "- Hòm trống rỗng, không có gì đặc biệt.\n"
+	}
+
+	// Weighted random pick
+	r := rand.Float64() * totalWeight
+	var chosen string
+	for _, m := range pool {
+		r -= m.weight
+		if r <= 0 {
+			chosen = m.id
+			break
+		}
+	}
+	if chosen == "" {
+		chosen = pool[0].id
+	}
+
+	if player.MaterialsInventory == nil {
+		player.MaterialsInventory = make(models.MaterialsInventory)
+	}
+	player.MaterialsInventory[chosen]++
+	matName := chosen
+	if spec, ok := models.ItemRegistry[chosen]; ok {
+		matName = spec.Name
+	}
+	return fmt.Sprintf("- Nhận được 1x %s\n", matName)
+}
+
+func rollGuDrop(player *models.Player, item models.ItemSpec) string {
+	type weightedGu struct {
+		id     string
+		weight float64
+	}
+	var pool []weightedGu
+	var totalWeight float64
+
+	for id, spec := range models.GuRegistry {
+		w := rankDropMultiplier(spec.Rank) * guRarityWeight(spec.Rarity)
+		if w > 0 {
+			pool = append(pool, weightedGu{id: id, weight: w})
+			totalWeight += w
+		}
+	}
+
+	if len(pool) == 0 || totalWeight <= 0 {
+		return ""
+	}
+
+	// Weighted random pick
+	r := rand.Float64() * totalWeight
+	var chosenID string
+	for _, g := range pool {
+		r -= g.weight
+		if r <= 0 {
+			chosenID = g.id
+			break
+		}
+	}
+	if chosenID == "" {
+		chosenID = pool[0].id
+	}
+
+	// Hunger: random 0-10%
+	hunger := rand.Intn(11) // 0 to 10
+
+	newInstance := models.GuInstance{
+		InstanceID: "gu-" + uuid.New().String(),
+		GuID:       chosenID,
+		Hunger:     hunger,
+		Status:     "ACTIVE",
+		Equipped:   false,
+	}
+	player.GuInventory = append(player.GuInventory, newInstance)
+
+	guName := chosenID
+	isImmortal := false
+	if spec, ok := models.GuRegistry[chosenID]; ok {
+		guName = spec.Name
+		isImmortal = spec.IsImmortal
+	}
+
+	if isImmortal {
+		return fmt.Sprintf("- Thiên đại cơ duyên! Đạo hữu nhận được Tiên Cổ: [%s]! (Độ no: %d%%)\n", guName, hunger)
+	}
+	return fmt.Sprintf("- Cơ duyên xảo hợp! Đạo hữu nhận được Cổ trùng: [%s] (Độ no: %d%%)\n", guName, hunger)
+}
+
+func rollRecipeDrop(player *models.Player, _ models.ItemSpec) string {
+	// Query all recipe IDs from DB
+	rows, err := db.DB.Query(`SELECT id, target_gu_id FROM refining_recipes`)
+	if err != nil {
+		return ""
+	}
+	defer rows.Close()
+
+	type recipeInfo struct {
+		id         string
+		targetGuID string
+	}
+	var allRecipes []recipeInfo
+	for rows.Next() {
+		var ri recipeInfo
+		if err := rows.Scan(&ri.id, &ri.targetGuID); err == nil {
+			allRecipes = append(allRecipes, ri)
+		}
+	}
+	if len(allRecipes) == 0 {
+		return ""
+	}
+
+	// Build map of already-unlocked recipes
+	unlockedMap := make(map[string]float64)
+	for _, ur := range player.UnlockedRecipes {
+		unlockedMap[ur.RecipeID] = ur.CompletionRate
+	}
+
+	// Filter to candidates: not yet unlocked, or unlocked but < 100%
+	var candidates []recipeInfo
+	for _, ri := range allRecipes {
+		if rate, ok := unlockedMap[ri.id]; !ok || rate < 100.0 {
+			candidates = append(candidates, ri)
+		}
+	}
+	if len(candidates) == 0 {
+		return "" // All recipes at 100%
+	}
+
+	chosen := candidates[rand.Intn(len(candidates))]
+	completionRate := float64(rand.Intn(81)) // 0-80%
+
+	// Find target Gu name for display
+	targetGuName := chosen.targetGuID
+	if spec, ok := models.GuRegistry[chosen.targetGuID]; ok {
+		targetGuName = spec.Name
+	}
+
+	// Add or update recipe
+	found := false
+	for i, ur := range player.UnlockedRecipes {
+		if ur.RecipeID == chosen.id {
+			if completionRate > ur.CompletionRate {
+				player.UnlockedRecipes[i].CompletionRate = completionRate
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		player.UnlockedRecipes = append(player.UnlockedRecipes, models.UnlockedRecipe{
+			RecipeID:       chosen.id,
+			CompletionRate: completionRate,
+		})
+	}
+
+	return fmt.Sprintf("- Lĩnh ngộ bí phương: [%s] (Độ hoàn thiện: %.0f%%)\n", targetGuName, completionRate)
 }
 

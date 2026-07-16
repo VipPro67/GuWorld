@@ -1943,12 +1943,15 @@ func UseItem(c *gin.Context) {
 
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET materials_inventory = $1, current_mana = $2, max_mana = $3, hp = $4, base_hp = $5, dao_marks = $6
-		WHERE id = $7`,
-		player.MaterialsInventory, player.CurrentMana, player.MaxMana, player.HP, player.BaseHP, player.DaoMarks, player.ID,
+		SET materials_inventory = $1, current_mana = $2, max_mana = $3, hp = $4, base_hp = $5, dao_marks = $6,
+		primeval_stones = $7, gu_inventory = $8, unlocked_recipes = $9, lifespan = $10, max_lifespan = $11
+		WHERE id = $12`,
+		player.MaterialsInventory, player.CurrentMana, player.MaxMana, player.HP, player.BaseHP, player.DaoMarks,
+		player.PrimevalStones, player.GuInventory, player.UnlockedRecipes, player.Lifespan, player.MaxLifespan,
+		player.ID,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state" + err.Error()})
 		return
 	}
 

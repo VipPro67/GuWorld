@@ -21,3 +21,4 @@ ITEM_HERBAL_SOUP,Linh Thảo Thang,Hồi 40 máu + 20 mana.,Consumable,8,99,18,T
 ITEM_BLOOD_GINSENG,Huyết Sâm,Dược liệu quý hồi 150 máu.,Consumable,20,50,19,True
 ITEM_HEALING_PELLET_LARGE,Đại Hồi Huyết Đan,Hồi 200 máu tức thì.,Consumable,30,20,20,True
 ITEM_LIFE_SAVING_PILL,Cứu Mệnh Đan,Hồi 500 máu tức thì.,Consumable,80,5,21,True
+mine_chest,Rương Mỏ Linh Thạch,Rương chứa nhiều tài nguyên quý giá từ mỏ linh thạch.,Consumable,1,1000,22,True

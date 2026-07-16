@@ -31,7 +31,7 @@ export const wikiPages: WikiPage[] = [
           <div>
             <h4 className="text-sm font-serif font-bold text-indigo-200">Định hướng cốt lõi</h4>
             <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
-              GuWorld hướng tới việc tái hiện trọn vẹn sự tàn khốc, triết lý và tư duy sinh tồn trong bối cảnh tiểu thuyết <strong>Cổ Chân Nhân</strong>. Lộ trình phát triển được phân chia theo các giai đoạn nâng cấp đồng bộ cả hệ thống dữ liệu lẫn trải nghiệm nghe nhìn của người chơi.
+              GuWorld hướng tới việc tái hiện trọn vẹn sự tàn khốc, triết lý và tư duy sinh tồn trong bối cảnh tiểu thuyết <strong>Cổ Chân Nhân</strong>. Lộ trình phát triển được phân chia theo các giai đoạn nâng cấp đồng bộ cả hệ thống dữ liệu lẫn trải nghiệm của người chơi.
             </p>
           </div>
         </div>
@@ -43,30 +43,101 @@ export const wikiPages: WikiPage[] = [
             <div className="relative">
               <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
               <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <span>Giai Đoạn 4 & 5 (Hiện tại)</span>
+                <span>Phase 1, 2 & 3 (Khởi Đầu)</span>
                 <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono text-[9px]">Hoàn thành</span>
               </h4>
               <p className="text-[var(--text-muted)] mt-1 leading-relaxed">
-                Xây dựng hệ thống phàm nhân cơ bản, trùng kích vách khiếu, các cổ trùng rank 1-5, thương đội caravan, lò luyện cổ và hệ thống đấu giá Bảo Hoàng Thiên.
+                Thiết lập nền tảng cốt lõi của thế giới Cổ sư, hệ thống tài khoản, giao diện cơ bản và các cơ chế chiến đấu phàm nhân sơ cấp.
+              </p>
+            </div>
+
+            <div className="relative">
+              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
+              <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <span>Phase 4 & 5 (Mở Rộng Sinh Thái)</span>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono text-[9px]">Hoàn thành</span>
+              </h4>
+              <p className="text-[var(--text-muted)] mt-1 leading-relaxed">
+                Xây dựng hệ thống phàm nhân cơ bản, trùng kích vách khiếu, các cổ trùng rank 1-5, thương đội Caravan, lò luyện cổ và chợ đấu giá Bảo Hoàng Thiên.
+              </p>
+            </div>
+
+            <div className="relative">
+              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
+              <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <span>Tối Ưu Trải Nghiệm (Song Song)</span>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono text-[9px]">Đang thực hiện</span>
+              </h4>
+              <p className="text-[var(--text-secondary)] mt-1 leading-relaxed">
+                Tối ưu hóa các tính năng đang có, cải tiến giao diện người dùng (như chế độ sáng/tối, khung chat toàn cục, thu phóng kích thước), đồng bộ thông báo tự động từ NPC Hệ Thống. Lắng nghe phản hồi và tiếp thu các yêu cầu thiết thực từ người chơi để nâng cấp game.
               </p>
             </div>
 
             <div className="relative">
               <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-indigo-500 border-2 border-zinc-950" />
               <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <span>Phase 6 & 7 (Sắp tới)</span>
+                <span>Phase 6 (Cơ Chế Sát Chiêu)</span>
                 <span className="px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-400 font-mono text-[9px]">Đang phát triển</span>
               </h4>
               <p className="text-[var(--text-secondary)] mt-1 leading-relaxed">
-                Hoàn thiện cơ chế <strong>Thăng Tiên (Cấp 5 đỉnh phong thăng lên Cấp 6)</strong> và <strong>Độ Kiếp (Cổ Tiên vượt Địa Tai, Thiên Kiếp)</strong>. Xây dựng sinh thái Tiên Khiếu, trồng trọt chăn nuôi và khai thác dị nhân.
+                Hoàn thiện cơ chế <strong>Sát Chiêu</strong> (các chiêu thức đặc biệt của Cổ trùng).
+              </p>
+            </div>
+
+            <div className="relative">
+              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-indigo-500 border-2 border-zinc-950" />
+              <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <span>Phase 7 (Thăng Tiên & Độ Kiếp)</span>
+              </h4>
+              <p className="text-[var(--text-secondary)] mt-1 leading-relaxed">
+                Hoàn thiện cơ chế <strong>Thăng Tiên (Cấp 5 đỉnh phong thăng lên Cấp 6)</strong> và <strong>Độ Kiếp (Cổ Tiên vượt Địa Tai, Thiên Kiếp)</strong>. Xây dựng sinh thái Tiên Khiếu độc lập, chăn nuôi, trồng trọt và khai thác dị nhân.
               </p>
             </div>
 
             <div className="relative">
               <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-zinc-700 border-2 border-zinc-950" />
-              <h4 className="font-serif font-bold text-[var(--text-secondary)]">Phase 8 & 9</h4>
+              <h4 className="font-serif font-bold text-[var(--text-secondary)]">Phase 8 & 9 (Mộng Cảnh & Hồn Phách)</h4>
               <p className="text-[var(--text-muted)] mt-1 leading-relaxed">
                 Bổ sung phó bản <strong>Mộng Cảnh</strong> đầy đủ, nâng cấp hệ thống <strong>Hồn Phách</strong> (Tráng Hồn ở núi Đãng Hồn, Luyện Hồn ở cốc Lạc Phách). Mở rộng PvP đấu trường liên lục địa.
+              </p>
+            </div>
+
+            <div className="relative">
+              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-zinc-700 border-2 border-zinc-950" />
+              <h4 className="font-serif font-bold text-[var(--text-secondary)]">Phase 10 (Tiên cổ phòng)</h4>
+              <p className="text-[var(--text-muted)] mt-1 leading-relaxed">
+                Hoàn thiện cơ chế <strong>Tiên Cổ Phòng</strong>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4 pt-4 border-t border-zinc-900">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Nhật Ký Cập Nhật</h3>
+          
+          <div className="relative border-l border-zinc-800 pl-5 ml-2.5 space-y-6 text-xs">
+            <div className="relative">
+              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
+              <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <span>Phiên Bản v0.6.7 (Hiện tại)</span>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono text-[9px]">Mới nhất</span>
+              </h4>
+              <ul className="list-disc list-inside text-[var(--text-secondary)] mt-1.5 space-y-1.5 leading-relaxed">
+                <li><strong>NPC Hệ Thống:</strong> Gửi tin nhắn sự kiện thời gian thực lên kênh Bảo Hoàng Thiên (khi có vật phẩm mới rao bán/đấu giá) và kênh Tông Môn (khi lập tông, xin gia nhập, rời tông, bị trục xuất, quyên góp tài sản hoặc nhập hàng bảo khố).</li>
+                <li><strong>Khung Chat Toàn Cục (Global Chat):</strong> Di chuyển khung chat ra ngoài trang chính, cho phép chat liền mạch xuyên suốt tất cả các tính năng mà không bị ngắt kết nối.</li>
+                <li><strong>Thu Phóng Khung Chat:</strong> Thêm tính năng thay đổi chiều ngang (↔) và chiều cao (↕) linh hoạt cho khung chat.</li>
+                <li><strong>Nâng Cấp Giao Diện Sáng (Light Mode):</strong> Điều chỉnh tông màu chữ, viền và hình nền dịu hơn, tăng độ tương phản giúp đạo hữu dễ dàng đọc tin nhắn.</li>
+                <li><strong>Tải Tin Nhắn Tức Thì:</strong> Tự động kéo dữ liệu tin nhắn cũ qua REST API ngay khi click mở tab để loại bỏ độ trễ của kết nối SSE.</li>
+              </ul>
+            </div>
+            
+            <div className="relative">
+              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-zinc-700 border-2 border-zinc-950" />
+              <h4 className="font-serif font-bold text-[var(--text-secondary)] flex items-center gap-2">
+                <span>Phiên Bản v0.6.0</span>
+              </h4>
+              <p className="text-[var(--text-muted)] mt-1 leading-relaxed">
+                Khởi chạy tính năng Tông môn bản thử nghiệm, Quyên góp, Quản lý tài nguyên bang hội và mở rộng đấu giá Bảo Hoàng Thiên.
               </p>
             </div>
           </div>

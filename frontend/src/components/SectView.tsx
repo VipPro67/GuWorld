@@ -1683,7 +1683,7 @@ export const SectView: React.FC = () => {
                           <div className="flex items-center gap-2">
                             <span
                               onClick={() => !isSelf && fetchPlayerProfile(mInfo.username)}
-                              className={`font-semibold text-zinc-100 truncate ${!isSelf ? "cursor-pointer hover:text-blue-450 hover:underline decoration-dotted" : ""}`}
+                              className={`font-semibold text-zinc-100 truncate ${!isSelf ? "cursor-pointer hover:text-blue-400 hover:underline decoration-dotted" : ""}`}
                               title={!isSelf ? "Bấm để trinh thám cổ sư" : undefined}
                             >
                               {mInfo.username}
@@ -1778,7 +1778,7 @@ export const SectView: React.FC = () => {
                         <div className="flex flex-col gap-1 min-w-0">
                           <span
                             onClick={() => reqInfo.username && fetchPlayerProfile(reqInfo.username)}
-                            className="font-semibold text-zinc-100 truncate cursor-pointer hover:text-blue-450 hover:underline decoration-dotted"
+                            className="font-semibold text-zinc-100 truncate cursor-pointer hover:text-blue-400 hover:underline decoration-dotted"
                             title="Bấm để trinh thám cổ sư"
                           >
                             {reqInfo.username}
@@ -1844,7 +1844,7 @@ export const SectView: React.FC = () => {
                         <div className="flex flex-col gap-1 min-w-0">
                           <span
                             onClick={() => reqInfo.username && fetchPlayerProfile(reqInfo.username)}
-                            className="font-semibold text-zinc-100 truncate cursor-pointer hover:text-blue-450 hover:underline decoration-dotted"
+                            className="font-semibold text-zinc-100 truncate cursor-pointer hover:text-blue-400 hover:underline decoration-dotted"
                             title="Bấm để trinh thám cổ sư"
                           >
                             {reqInfo.username}

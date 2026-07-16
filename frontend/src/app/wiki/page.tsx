@@ -14,11 +14,11 @@ export const metadata: Metadata = {
 
 const rarityColors: Record<string, string> = {
   COMMON: "text-[var(--text-secondary)]",
-  UNCOMMON: "text-emerald-400",
-  RARE: "text-sky-400",
-  EPIC: "text-purple-400",
-  LEGENDARY: "text-amber-400",
-  MYTHIC: "text-rose-400",
+  UNCOMMON: "text-[var(--rarity-uncommon)]",
+  RARE: "text-[var(--rarity-rare)]",
+  EPIC: "text-[var(--rarity-epic)]",
+  LEGENDARY: "text-[var(--rarity-legendary)]",
+  MYTHIC: "text-[var(--rarity-mythic)]",
 };
 
 const rarityLabels: Record<string, string> = {

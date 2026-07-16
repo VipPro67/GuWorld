@@ -42,6 +42,24 @@
   --brand: #059669;
   --brand-dim: rgba(5, 150, 105, 0.08);
   --surface: #ffffff;
+
+  /* Rank Text Colors - Light Mode (darker, high contrast) */
+  --rank-1-text: #047857;
+  --rank-2-text: #b91c1c;
+  --rank-3-text: #1d4ed8;
+  --rank-4-text: #b45309;
+  --rank-5-text: #6d28d9;
+  --rank-6-text: #0e7490;
+  --rank-7-text: #be185d;
+  --rank-8-text: #44403c;
+  --rank-9-text: #854d0e;
+
+  /* Rarity Text Colors - Light Mode (darker, high contrast) */
+  --rarity-uncommon: #059669;
+  --rarity-rare: #0284c7;
+  --rarity-epic: #7c3aed;
+  --rarity-legendary: #d97706;
+  --rarity-mythic: #e11d48;
 }
 
 :root.dark {
@@ -70,6 +88,24 @@
   --brand: #10b981;
   --brand-dim: rgba(16, 185, 129, 0.1);
   --surface: #0a0f0d;
+
+  /* Rank Text Colors - Dark Mode (bright, glowing) */
+  --rank-1-text: #6ee7b7;
+  --rank-2-text: #fca5a5;
+  --rank-3-text: #93c5fd;
+  --rank-4-text: #fde68a;
+  --rank-5-text: #c4b5fd;
+  --rank-6-text: #67e8f9;
+  --rank-7-text: #f9a8d4;
+  --rank-8-text: #e7e5e4;
+  --rank-9-text: #fef08a;
+
+  /* Rarity Text Colors - Dark Mode (bright, glowing) */
+  --rarity-uncommon: #34d399;
+  --rarity-rare: #38bdf8;
+  --rarity-epic: #c084fc;
+  --rarity-legendary: #fbbf24;
+  --rarity-mythic: #f43f5e;
 }
 
 html {

@@ -103,12 +103,10 @@ func BreakWall(c *gin.Context) {
 	if player.ApertureStress >= 100.0 {
 		cracked = true
 		player.ApertureStress = 50.0
-		// Crack penalty: lose permanent 5% MaxMana (clamped at minimum 20.0)
 		player.MaxMana = math.Max(20.0, math.Round(player.MaxMana*0.95))
 		if player.CurrentMana > player.MaxMana {
 			player.CurrentMana = player.MaxMana
 		}
-		// Demote sub-rank by 1 (or rank by 1 if sub-rank was 1)
 		if player.SubRank > 1 {
 			player.SubRank -= 1
 		} else if player.Rank > 1 {
@@ -124,7 +122,41 @@ func BreakWall(c *gin.Context) {
 	if cracked {
 		msg = "Cảnh báo: Áp lực Không Khiếu vượt quá giới hạn (100%), Không khiếu bị nứt vỡ! Đạo hữu bị rớt tu vi và tổn thất vĩnh viễn 5% chân nguyên tối đa!"
 	} else if success {
-		// Advance sub-rank
+		chance := GetBreakthroughChance(player.Rank, player.AptitudeType)
+
+		if rand.Float64() > chance {
+			player.CurrentMana *= 0.8                                  // mất 20% chân nguyên
+			player.WallProgress = math.Max(0, player.WallProgress-0.1) // mất 10% tiến độ
+
+			msg = fmt.Sprintf(
+				"Trùng kích thất bại! Xác suất %.0f%%. Vách không khiếu bị phản chấn, mất 20%% chân nguyên.",
+				chance*100,
+			)
+
+			_, err := tx.Exec(`
+				UPDATE players
+				SET current_mana = $1,
+					wall_progress = $2
+				WHERE id = $3
+			`, player.CurrentMana, player.WallProgress, player.ID)
+
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật"})
+				return
+			}
+
+			tx.Commit()
+
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"chance":  chance,
+				"message": msg,
+				"player":  player,
+			})
+
+			return
+		}
+
 		if player.Rank == 5 && player.SubRank == 4 {
 			player.WallProgress = 1.0
 			msg = "Bạn đã mài mòn vách không khiếu đến cực hạn Ngũ Chuyển Đỉnh Phong. Muốn tiến lên Lục Chuyển cần thực hiện Thăng Tiên, không thể dùng trùng kích thường."
@@ -134,14 +166,10 @@ func BreakWall(c *gin.Context) {
 				player.SubRank = 1
 				player.Rank += 1
 			}
-			// On success reset progress
 			player.WallProgress = 0.0
-			// If rank < 6 => mana not change, if rank 6+ then max mana is infinite so we don't need to adjust it
 			if player.Rank >= 6 {
 				player.MaxMana = 999999999.0
 			}
-			// Increase human_qi by 30 for breakthrough
-			player.HumanQi += 30.0
 			if player.HumanQi > 100000.0 {
 				player.HumanQi = 100000.0
 			}
@@ -149,7 +177,6 @@ func BreakWall(c *gin.Context) {
 		}
 	}
 
-	// Persist changes
 	updateQuery := `
         UPDATE players 
         SET current_mana = $1, primeval_stones = $2, wall_progress = $3, max_mana = $4, sub_rank = $5, rank = $6, last_mana_update = $7, human_qi = $8, aperture_stress = $9, last_cultivate_time = $10
@@ -181,9 +208,53 @@ func BreakWall(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: actionName,
 		RequestSummary: fmt.Sprintf("rank=%d sub=%d progress=%.2f stress=%.0f manaSpent=%.0f", player.Rank, player.SubRank, player.WallProgress, player.ApertureStress, req.ManaSpend),
-		IPAddress: c.ClientIP(), Success: success && !cracked,
+		IPAddress:      c.ClientIP(), Success: success && !cracked,
 	})
 	c.JSON(http.StatusOK, BreakWallResponse{Player: player, Success: success && !cracked, Message: msg})
+}
+
+func GetBreakthroughChance(rank int, aptitude string) float64 {
+	// Xác suất nền theo tư chất
+	var baseChance float64
+
+	switch aptitude {
+	case "A", "Giáp":
+		baseChance = 0.98
+	case "B", "Ất":
+		baseChance = 0.92
+	case "C", "Bính":
+		baseChance = 0.85
+	case "D", "Đinh":
+		baseChance = 0.70
+	default:
+		baseChance = 0.60
+	}
+
+	// Rank càng cao càng khó
+	rankPenalty := map[int]float64{
+		1: 0.00, // Nhất -> Nhị
+		2: 0.05, // Nhị -> Tam
+		3: 0.10, // Tam -> Tứ
+		4: 0.20, // Tứ -> Ngũ
+		5: 0.35, // Ngũ -> Lục (chỉ dùng nếu sau này có)
+	}
+
+	chance := baseChance
+
+	if penalty, ok := rankPenalty[rank]; ok {
+		chance -= penalty
+	}
+
+	// Giới hạn
+	if chance > 0.99 {
+		chance = 0.99
+	}
+
+	if chance < 0.05 {
+		chance = 0.05
+	}
+
+	return chance
 }
 
 // UseRelicGu consumes a relic item to instantly increase sub-rank

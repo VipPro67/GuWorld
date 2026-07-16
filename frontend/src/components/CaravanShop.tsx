@@ -254,7 +254,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
             }}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-mono font-bold rounded-xl transition-all cursor-pointer ${
               mode === "sell"
-                ? "bg-rose-600/20 text-rose-450 border border-rose-500/30 shadow-lg"
+                ? "bg-rose-600/10 dark:bg-rose-600/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 shadow-lg"
                 : "text-zinc-400 hover:text-zinc-200"
             }`}
           >
@@ -406,7 +406,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
               >
                 <div className="space-y-2 mb-3">
                   <div className="flex justify-between items-start">
-                    <span className="text-[9px] font-mono border border-zinc-900 px-2 py-0.5 rounded text-rose-450 bg-rose-950/10">
+                    <span className="text-[9px] font-mono border border-zinc-900 px-2 py-0.5 rounded text-rose-600 dark:text-rose-400 bg-rose-950/10">
                       Sở hữu: {item.owned}x
                     </span>
                     <span className="text-xs font-mono font-bold text-emerald-400 flex items-center gap-1">
@@ -504,14 +504,14 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
 
             {/* Messages */}
             {errorMessage && (
-              <div className="bg-rose-950/20 border border-rose-900/40 rounded-xl p-3 flex items-start gap-2 text-[11px] text-rose-450 leading-normal font-mono animate-shake">
+              <div className="bg-rose-950/20 border border-rose-900/40 rounded-xl p-3 flex items-start gap-2 text-[11px] text-rose-400 leading-normal font-mono animate-shake">
                 <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
                 <span>{errorMessage}</span>
               </div>
             )}
 
             {successMessage && (
-              <div className="bg-emerald-950/20 border border-emerald-900/40 rounded-xl p-3 flex items-start gap-2 text-[11px] text-emerald-450 leading-normal font-mono">
+              <div className="bg-emerald-950/20 border border-emerald-900/40 rounded-xl p-3 flex items-start gap-2 text-[11px] text-emerald-400 leading-normal font-mono">
                 <Sparkles className="w-4 h-4 text-emerald-500 shrink-0 animate-bounce" />
                 <span>{successMessage}</span>
               </div>

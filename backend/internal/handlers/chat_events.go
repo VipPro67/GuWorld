@@ -136,24 +136,25 @@ func resolveChatChannelKey(c *gin.Context, channel string) (string, bool) {
 	}
 
 	if channel == "general" {
-		var hasConnectingHeaven, hasDivineSense bool
-		rows, err := db.DB.Query(`
-			SELECT gu_id FROM player_gu 
-			WHERE player_id = $1 AND UPPER(state) != 'DEAD' AND gu_id IN ('GU_CONNECTING_HEAVEN', 'GU_DIVINE_SENSE')
-		`, playerID)
+		tx, err := db.DB.Begin()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 			return "", false
 		}
-		defer rows.Close()
-		for rows.Next() {
-			var guID string
-			if err := rows.Scan(&guID); err == nil {
-				if guID == "GU_CONNECTING_HEAVEN" {
-					hasConnectingHeaven = true
-				} else if guID == "GU_DIVINE_SENSE" {
-					hasDivineSense = true
-				}
+		defer tx.Rollback()
+		var hasConnectingHeaven, hasDivineSense bool
+			player, err := evaluateManaTx(tx, playerID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+				return "", false
+			}
+
+		for _, gu := range player.GuInventory {
+			if gu.GuID == "GU_CONNECTING_HEAVEN" {
+				hasConnectingHeaven = true
+			}
+			if gu.GuID == "GU_DIVINE_SENSE" {
+				hasDivineSense = true
 			}
 		}
 		if !hasConnectingHeaven || !hasDivineSense {
