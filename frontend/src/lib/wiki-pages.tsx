@@ -114,13 +114,40 @@ export const wikiPages: WikiPage[] = [
 
         <div className="space-y-4 pt-4 border-t border-zinc-900">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Nhật Ký Cập Nhật</h3>
-          
+
           <div className="relative border-l border-zinc-800 pl-5 ml-2.5 space-y-6 text-xs">
+
             <div className="relative">
               <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
               <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <span>Phiên Bản v0.6.7 (Hiện tại)</span>
-                <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono text-[9px]">Mới nhất</span>
+                <span>Phiên Bản v0.6.7.1 (Hiện tại)</span>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono text-[9px]">
+                  Mới nhất
+                </span>
+              </h4>
+
+              <ul className="list-disc list-inside text-[var(--text-secondary)] mt-1.5 space-y-1.5 leading-relaxed">
+                <li>
+                  <strong>Tối Ưu Đăng Ký Nhân Vật:</strong> Tinh gọn giao diện tạo nhân vật, giúp quá trình khởi tạo trực quan hơn.
+                </li>
+
+                <li>
+                  <strong>Cải Tiến Hướng Dẫn Tân Thủ:</strong> Refactor luồng onboarding, tối ưu quản lý trạng thái và bổ sung cơ chế đánh dấu hoàn tất hướng dẫn sau khi người chơi thiết lập nhân vật.
+                </li>
+
+                <li>
+                  <strong>Tông Môn:</strong> Refactor giao diện quản lý Tông Môn (Sect View), cải thiện cấu trúc mã nguồn, tăng khả năng bảo trì và thống nhất logic sắp xếp dữ liệu.
+                </li>
+
+                <li>
+                  <strong>Tối Ưu Mã Nguồn:</strong> Dọn dẹp các đoạn mã không còn sử dụng, giúp giảm độ phức tạp, cải thiện hiệu năng và thuận tiện cho việc phát triển các phiên bản tiếp theo.
+                </li>
+              </ul>
+            </div>
+            <div className="relative">
+              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
+              <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <span>Phiên Bản v0.6.7</span>
               </h4>
               <ul className="list-disc list-inside text-[var(--text-secondary)] mt-1.5 space-y-1.5 leading-relaxed">
                 <li><strong>NPC Hệ Thống:</strong> Gửi tin nhắn sự kiện thời gian thực lên kênh Bảo Hoàng Thiên (khi có vật phẩm mới rao bán/đấu giá) và kênh Tông Môn (khi lập tông, xin gia nhập, rời tông, bị trục xuất, quyên góp tài sản hoặc nhập hàng bảo khố).</li>
@@ -130,7 +157,7 @@ export const wikiPages: WikiPage[] = [
                 <li><strong>Tải Tin Nhắn Tức Thì:</strong> Tự động kéo dữ liệu tin nhắn cũ qua REST API ngay khi click mở tab để loại bỏ độ trễ của kết nối SSE.</li>
               </ul>
             </div>
-            
+
             <div className="relative">
               <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-zinc-700 border-2 border-zinc-950" />
               <h4 className="font-serif font-bold text-[var(--text-secondary)] flex items-center gap-2">
