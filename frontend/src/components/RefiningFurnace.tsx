@@ -354,9 +354,9 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full max-w-6xl mx-auto h-full relative">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full max-w-6xl mx-auto relative">
       {/* 1. LEFT PANEL: Inventory List */}
-      <div className="lg:col-span-5 glass-panel-gold rounded-3xl p-5 flex flex-col h-[580px] overflow-hidden">
+      <div className="lg:col-span-5 glass-panel-gold rounded-3xl p-5 flex flex-col max-h-[580px] overflow-hidden">
         <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-4 shrink-0">
           <Sparkles className="w-5 h-5 text-amber-500 animate-pulse" />
           <h3 className="text-md font-bold text-zinc-100 font-serif">
@@ -525,7 +525,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
 
       {/* 2. RIGHT PANEL: Furnace Crucible */}
       <div
-        className={`lg:col-span-7 glass-panel rounded-3xl p-5 flex flex-col h-[580px] justify-between relative overflow-hidden transition-all duration-300 ${
+        className={`lg:col-span-7 glass-panel rounded-3xl p-5 flex flex-col max-h-[600px] overflow-y-auto custom-scrollbar relative transition-all duration-300 ${
           isRefining ? "animate-shake border-rose-500/30" : "border-zinc-800/80"
         }`}
       >
@@ -541,7 +541,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
           </>
         )}
 
-        <div className="z-10 flex flex-col h-full justify-between">
+        <div className="z-10 flex flex-col gap-4">
           {/* Header & Tabs */}
           <div className="shrink-0 space-y-4">
             <div className="flex justify-between items-center border-b border-zinc-900 pb-3">
@@ -658,7 +658,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
           </div>
 
           {/* Central Furnace Slots Area */}
-          <div className="flex-1 flex flex-col justify-center items-center py-6 relative z-10">
+          <div className="flex flex-col justify-center items-center py-4 relative z-10">
             {selectedRecipe ? (
               <div className="w-full space-y-6">
                 {/* Target Gu Header */}
@@ -675,7 +675,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                 </div>
 
                 {/* Slots Crucible Row */}
-                <div className="flex justify-center items-center gap-6 py-2">
+                <div className="flex flex-wrap justify-center items-center gap-3 py-2">
                   {requiredSlots.map((slot) => {
                     const reqGuSpec = guDictionary[slot.guId] || { name: slot.guId };
                     const slottedInstanceId = slottedGus[slot.index];
@@ -739,7 +739,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
           </div>
 
           {/* Footer Details: Costs, Materials, Action Button */}
-          <div className="shrink-0 space-y-4 pt-4 border-t border-zinc-900/60 z-10">
+          <div className="space-y-4 pt-4 border-t border-zinc-900/60 z-10">
             {selectedRecipe && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Requirements check list */}
