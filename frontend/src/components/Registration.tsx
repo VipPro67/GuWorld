@@ -10,93 +10,7 @@ import {
   Eye,
   EyeOff,
   Mail,
-  Moon,
-  Droplet,
-  Skull,
-  Shield,
-  Leaf,
-  Gem,
-  Swords,
-  HelpCircle,
 } from "lucide-react";
-
-const STARTING_ATTACK_GUS = [
-  {
-    id: "GU_MOONLIGHT",
-    name: "Nguyệt Quang Cổ",
-    path: "Moon Path",
-    description: "Bắn ra nguyệt nhận sắc lẹm màu xanh lam. Tiêu hao ít chân nguyên, gây chảy máu nhẹ.",
-    color: "text-blue-400 border-blue-500/20 bg-blue-950/20",
-    activeColor: "border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)] bg-blue-950/40 text-blue-300",
-    icon: Moon
-  },
-  {
-    id: "GU_STREAM",
-    name: "Khê Lưu Cổ",
-    path: "Water Path",
-    description: "Thủy đạo cổ trùng, phun trào dòng nước mạnh mẽ gây sát thương và đẩy lui địch.",
-    color: "text-cyan-400 border-cyan-500/20 bg-cyan-950/20",
-    activeColor: "border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)] bg-cyan-950/40 text-cyan-300",
-    icon: Droplet
-  },
-  {
-    id: "GU_BONE_SPEAR",
-    name: "Cốt Thương Cổ",
-    path: "Bone Path",
-    description: "Ngưng kết thương xương trắng đâm xuyên kẻ địch. Sát thương tốt kèm độc tố nhẹ.",
-    color: "text-zinc-300 border-zinc-500/20 bg-zinc-950/20",
-    activeColor: "border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)] bg-zinc-900/40 text-zinc-100",
-    icon: Skull
-  }
-];
-
-const STARTING_DEFENSE_GUS = [
-  {
-    id: "GU_STONE_SKIN",
-    name: "Thạch Bì Cổ",
-    path: "Earth Path",
-    description: "Tạo lớp da đá cứng cáp bao phủ cơ thể, tăng đáng kể phòng ngự vật lý.",
-    color: "text-amber-500 border-amber-500/20 bg-amber-950/20",
-    activeColor: "border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)] bg-amber-950/40 text-amber-300",
-    icon: Gem
-  },
-  {
-    id: "GU_IRON_SKIN",
-    name: "Thiết Bì Cổ",
-    path: "Metal Path",
-    description: "Cường hóa lớp biểu bì cứng cáp như thép nguội, chịu đòn cực tốt.",
-    color: "text-slate-400 border-slate-500/20 bg-slate-900/20",
-    activeColor: "border-slate-400 shadow-[0_0_15px_rgba(148,163,184,0.3)] bg-slate-950/40 text-slate-200",
-    icon: Shield
-  },
-  {
-    id: "GU_GREEN_SILK",
-    name: "Thanh Ti Cổ",
-    path: "Wood Path",
-    description: "Dệt lớp tơ gỗ xanh dai nhách bao phủ toàn thân, giảm nhẹ sát thương nhận vào.",
-    color: "text-emerald-400 border-emerald-500/20 bg-emerald-950/20",
-    activeColor: "border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)] bg-emerald-950/40 text-emerald-300",
-    icon: Leaf
-  },
-  {
-    id: "GU_BEAST_SKIN",
-    name: "Thú Bì Cổ",
-    path: "Transformation Path",
-    description: "Tạo lớp thú bì bảo vệ cơ thể, có thể thăng luyện lên nhiều hướng khác nhau.",
-    color: "text-orange-400 border-orange-500/20 bg-orange-950/20",
-    activeColor: "border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)] bg-orange-950/40 text-orange-300",
-    icon: Compass
-  },
-  {
-    id: "GU_FISH_SCALE",
-    name: "Ngư Lân Cổ",
-    path: "Water Path",
-    description: "Trải đều một lớp vảy cá trơn trượt trên da, giảm lực tấn công vật lý.",
-    color: "text-teal-400 border-teal-500/20 bg-teal-950/20",
-    activeColor: "border-teal-500 shadow-[0_0_15px_rgba(20,184,166,0.3)] bg-teal-950/40 text-teal-300",
-    icon: Droplet
-  }
-];
 
 interface RegistrationProps {
   onRegister: (
@@ -134,12 +48,7 @@ export const Registration: React.FC<RegistrationProps> = ({
   const [otpCooldown, setOtpCooldown] = useState(0);
   const [otpSuccessMessage, setOtpSuccessMessage] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [startingRegion, setStartingRegion] = useState("Southern_Border");
-  const [setVitalNow, setSetVitalNow] = useState(true);
   const [referralCode, setReferralCode] = useState("");
-  const [attackGu, setAttackGu] = useState("GU_MOONLIGHT");
-  const [defenseGu, setDefenseGu] = useState("GU_STONE_SKIN");
-  const [vitalChoice, setVitalChoice] = useState("ATTACK");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -183,12 +92,12 @@ export const Registration: React.FC<RegistrationProps> = ({
         usernameValue,
         password,
         emailValue,
-        startingRegion,
-        setVitalNow,
+        "Southern_Border",
+        true,
         referralCode,
-        attackGu,
-        defenseGu,
-        vitalChoice,
+        "GU_MOONLIGHT",
+        "GU_STONE_SKIN",
+        "ATTACK",
         otp.trim()
       );
     }
@@ -269,109 +178,6 @@ export const Registration: React.FC<RegistrationProps> = ({
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-4">
-        {!isLoginTab && (
-          <>
-            <div>
-              <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5">
-                Khu Vực Khởi Đầu
-              </label>
-              <select
-                value={startingRegion}
-                onChange={(e) => setStartingRegion(e.target.value)}
-                className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-zinc-100"
-              >
-                <option value="Southern_Border">Nam Cương</option>
-                <option value="Central_Continent">Trung Châu</option>
-                <option value="Northern_Plains">Bắc Nguyên</option>
-                <option value="Western_Desert">Tây Mạc</option>
-                <option value="Eastern_Sea">Đông Hải</option>
-              </select>
-            </div>
-            {/* Cổ Tấn Công Selection */}
-            <div>
-              <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">
-                Chọn Cổ Trùng Tấn Công (Cấp 1)
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {STARTING_ATTACK_GUS.map((item) => {
-                  const IconComponent = item.icon;
-                  const isSelected = attackGu === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setAttackGu(item.id)}
-                      className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                        isSelected
-                          ? item.activeColor
-                          : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:text-zinc-300 hover:border-zinc-700"
-                      }`}
-                    >
-                      <IconComponent className="w-5 h-5" />
-                      <span className="text-[11px] font-semibold font-serif">{item.name.replace(" Cổ", "")}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-[10px] text-zinc-500 font-serif mt-1.5 italic min-h-[28px]">
-                💡 {STARTING_ATTACK_GUS.find(g => g.id === attackGu)?.description}
-              </p>
-            </div>
-
-            {/* Cổ Phòng Thủ Selection */}
-            <div>
-              <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">
-                Chọn Cổ Trùng Phòng Thủ (Cấp 1)
-              </label>
-              <div className="grid grid-cols-5 gap-1.5">
-                {STARTING_DEFENSE_GUS.map((item) => {
-                  const IconComponent = item.icon;
-                  const isSelected = defenseGu === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setDefenseGu(item.id)}
-                      title={item.name}
-                      className={`flex flex-col items-center gap-1 p-2 rounded-xl border text-center transition-all cursor-pointer ${
-                        isSelected
-                          ? item.activeColor
-                          : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:text-zinc-300 hover:border-zinc-700"
-                      }`}
-                    >
-                      <IconComponent className="w-4 h-4" />
-                      <span className="text-[9px] font-semibold font-serif whitespace-nowrap overflow-hidden text-ellipsis w-full">
-                        {item.name.replace(" Cổ", "")}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-[10px] text-zinc-500 font-serif mt-1.5 italic min-h-[28px]">
-                💡 {STARTING_DEFENSE_GUS.find(g => g.id === defenseGu)?.description}
-              </p>
-            </div>
-
-            {/* Thiết Lập Cổ Bản Mệnh */}
-            <div>
-              <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5">
-                Khai Mở Bản Mệnh Cổ
-              </label>
-              <select
-                value={vitalChoice}
-                onChange={(e) => {
-                  setVitalChoice(e.target.value);
-                  setSetVitalNow(e.target.value !== "NONE");
-                }}
-                className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-3 px-4 text-sm text-zinc-100 focus:outline-none focus:border-amber-500/50 transition-all cursor-pointer"
-              >
-                <option value="ATTACK">Đặt Cổ Tấn Công làm Bản Mệnh</option>
-                <option value="DEFENSE">Đặt Cổ Phòng Thủ làm Bản Mệnh</option>
-                <option value="NONE">Chưa thiết lập (Để chọn sau)</option>
-              </select>
-            </div>
-          </>
-        )}
         {/* Login email */}
         {isLoginTab && (
           <div className="relative">

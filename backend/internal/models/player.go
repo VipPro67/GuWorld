@@ -201,6 +201,7 @@ type Player struct {
 	DaoMarkDamage       float64             `json:"dao_mark_damage"`
 	ApertureDamage      float64             `json:"aperture_damage"`
 	CombatSettings      AutoCombatConfig    `json:"combat_settings"`
+	NeedsOnboarding     bool                `json:"needs_onboarding"`
 }
 
 type TempLoot struct {

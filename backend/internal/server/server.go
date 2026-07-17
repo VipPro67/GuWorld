@@ -102,6 +102,7 @@ func SetupRouter() *gin.Engine {
 			player.POST("/simulate-deposit", handlers.SimulateDeposit)
 			player.POST("/avatar", handlers.UploadAvatar)
 			player.POST("/tick-regen", handlers.TickRegen)
+			player.POST("/complete-onboarding", handlers.CompleteOnboarding)
 			player.GET("/combat-settings", handlers.GetCombatSettings)
 			player.PUT("/combat-settings", handlers.UpdateCombatSettings)
 			player.GET("/audit-logs", handlers.GetMyAuditLogs)

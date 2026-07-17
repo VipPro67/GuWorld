@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import { Registration } from "@/components/Registration";
+import { OnboardingModal } from "@/components/OnboardingModal";
 import { Aperture } from "@/components/Aperture";
 import { LogConsole } from "@/components/LogConsole";
 import { GuInventory } from "@/components/GuInventory";
@@ -41,6 +42,7 @@ export default function Home() {
     login,
     register,
     sendOTP,
+    completeOnboarding,
     fetchPlayerStatus,
     initializeSession,
     logout,
@@ -181,6 +183,10 @@ export default function Home() {
               error={error}
               onClearError={clearError}
             />
+          </div>
+        ) : player.needs_onboarding ? (
+          <div className="py-12 w-full flex justify-center">
+            <OnboardingModal onComplete={completeOnboarding} />
           </div>
         ) : inCombat ? (
           <div className="w-full">

@@ -963,6 +963,7 @@ func InitSchema() error {
 			ON CONFLICT (name) DO NOTHING;`, "seed_sect_mines"},
 		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS usage_count INTEGER NOT NULL DEFAULT 0;`, "usage_count"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS wisdom DOUBLE PRECISION NOT NULL DEFAULT 0;`, "wisdom"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS needs_onboarding BOOLEAN NOT NULL DEFAULT false;`, "needs_onboarding"},
 		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS success_rate DOUBLE PRECISION NOT NULL DEFAULT 0;`, "add_success_rate"},
 		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS channel_time INTEGER NOT NULL DEFAULT 1;`, "add_channel_time"},
 		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS is_reliable BOOLEAN NOT NULL DEFAULT FALSE;`, "add_is_reliable"},
@@ -2056,202 +2057,121 @@ func SeedInstanceTemplates() error {
 }
 
 func SeedSects() error {
-	type SectSeed struct {
-		ID             string
-		Name           string
-		Description    string
-		Region         string
-		VaultGu        string
-		VaultMaterials string
-		VaultRecipes   string
+	if err := seedSectsFromCSV("Sect.csv"); err != nil {
+		return err
 	}
-
-	seeds := []SectSeed{
-		{
-			ID:             "hu_ca_sect",
-			Name:           "Hồ Ca Phái",
-			Description:    "Tông môn danh tiếng tại Trung Châu, chuyên tu Hồn đạo và Luyện đạo, sở hữu Đãng Hồn Sơn và tài nguyên Can Đảm Cổ phong phú.",
-			Region:         "Central_Continent",
-			VaultGu:        `[{"id": "GU_LIQUOR_WORM", "cost": 150, "quantity": 5}, {"id": "GU_JADE_SKIN", "cost": 100, "quantity": 5}, {"id": "GU_WHITE_BOAR", "cost": 120, "quantity": 5}]`,
-			VaultMaterials: `{"guts_gu": 100, "green_bamboo_wine": 20}`,
-			VaultRecipes:   `["recipe_liquor_worm"]`,
-		},
-		{
-			ID:             "gu_yue_clan",
-			Name:           "Cổ Nguyệt Gia Tộc",
-			Description:    "Thế lực gia tộc lâu đời tại Nam Cương, chuyên tu Nguyệt đạo và Huyết đạo, ngự trị trên ngọn núi Thanh Mao Sơn hiểm trở.",
-			Region:         "Southern_Border",
-			VaultGu:        `[{"id": "GU_MOONLIGHT", "cost": 80, "quantity": 5}, {"id": "GU_WHITE_BOAR", "cost": 120, "quantity": 5}, {"id": "GU_JADE_SKIN", "cost": 100, "quantity": 5}]`,
-			VaultMaterials: `{"moon_orchid_petal": 50, "jade_stone": 30}`,
-			VaultRecipes:   `[]`,
-		},
-		{
-			ID:             "wan_hang_sect",
-			Name:           "Vạn Hằng Tông",
-			Description:    "Tông môn hùng mạnh tại Bắc Nguyên, nổi tiếng với đệ tử chuyên tu Phong đạo và Kiếm đạo, hành tung tựa như gió tự do.",
-			Region:         "Northern_Plains",
-			VaultGu:        `[{"id": "GU_WHITE_BOAR", "cost": 120, "quantity": 5}, {"id": "GU_MOONLIGHT", "cost": 100, "quantity": 5}]`,
-			VaultMaterials: `{"wild_boar_tusk": 40, "green_bamboo_wine": 10}`,
-			VaultRecipes:   `[]`,
-		},
-		{
-			ID:             "shang_clan",
-			Name:           "Thương Gia",
-			Description:    "Thế lực thương hội khổng lồ ngự trị trên núi Thương Lượng Nam Cương, có nền tảng tài chính vô địch, nổi tiếng với việc thu mua và giao dịch cổ trùng khắp năm vực.",
-			Region:         "Southern_Border",
-			VaultGu:        `[{"id": "GU_TUSITA_FLOWER", "cost": 2000, "quantity": 10}, {"id": "GU_BIG_BELLY_TOAD", "cost": 400, "quantity": 15}, {"id": "GU_STARGATE", "cost": 4500, "quantity": 2}, {"id": "GU_FIRE_CLOAK", "cost": 4000, "quantity": 3}]`,
-			VaultMaterials: `{"primeval_stones": 15000, "nectar": 300, "black_oil": 120}`,
-			VaultRecipes:   `["recipe_tusita_flower", "recipe_stargate"]`,
-		},
-		{
-			ID:             "tie_clan",
-			Name:           "Thiết Gia",
-			Description:    "Gia tộc chính đạo đệ nhất Nam Cương, sở hữu Trấn Ma Tháp giam giữ ma đầu, chuyên tu Kim đạo và Luật đạo với tinh thần kỷ luật sắt đá.",
-			Region:         "Southern_Border",
-			VaultGu:        `[{"id": "GU_IRON_BONE", "cost": 1000, "quantity": 8}, {"id": "GU_IRON_SKIN", "cost": 150, "quantity": 12}, {"id": "GU_GOLDEN_BELL_SHIELD", "cost": 2200, "quantity": 4}, {"id": "GU_IRON_HAND_CAPTURE", "cost": 4500, "quantity": 2}]`,
-			VaultMaterials: `{"iron_ore": 200, "beast_bones": 80}`,
-			VaultRecipes:   `["recipe_iron_skin", "recipe_golden_bell_shield"]`,
-		},
-		{
-			ID:             "xian_he_sect",
-			Name:           "Tiên Hạc Môn",
-			Description:    "Một trong mười đại cổ phái Trung Châu, sở hữu di sản khổng lồ về Nô đạo (ngự hạc) và Luyện đạo, luôn khao khát chiếm đoạt phúc địa Hồ Tiên.",
-			Region:         "Central_Continent",
-			VaultGu:        `[{"id": "GU_WOLF_ENSLAVEMENT_2", "cost": 400, "quantity": 8}, {"id": "GU_FOUR_FLAVORS_LIQUOR", "cost": 400, "quantity": 6}, {"id": "GU_BOOKWORM", "cost": 150, "quantity": 10}, {"id": "GU_NINE_LEAF_VITALITY_GRASS", "cost": 450, "quantity": 5}]`,
-			VaultMaterials: `{"green_bamboo_wine": 50, "paper_pulp": 100}`,
-			VaultRecipes:   `["recipe_four_flavors_liquor"]`,
-		},
-		{
-			ID:             "da_tuyet_son",
-			Name:           "Đại Tuyết Sơn",
-			Description:    "Thánh địa liên minh Ma đạo tại Bắc Nguyên, quy tụ các ma đầu tàn nhẫn hiểm ác, chuyên tu Băng đạo, Tuyết đạo và Vận đạo nghịch thiên.",
-			Region:         "Northern_Plains",
-			VaultGu:        `[{"id": "GU_BLUE_BIRD_ICE_COFFIN", "cost": 1000, "quantity": 5}, {"id": "GU_ICE_MUSCLE", "cost": 1000, "quantity": 4}, {"id": "GU_FROST_DEMON", "cost": 1100, "quantity": 3}, {"id": "GU_CONNECT_LUCK", "cost": 8500, "quantity": 1}]`,
-			VaultMaterials: `{"ice_tear": 100, "snow_lotus_essence": 40}`,
-			VaultRecipes:   `["recipe_blue_bird_ice_coffin", "recipe_frost_demon"]`,
-		},
-		{
-			ID:             "phong_gia",
-			Name:           "Phòng Gia",
-			Description:    "Gia tộc siêu cấp tại Tây Mạc, danh tiếng hiển hách về Trận đạo và cổ phòng, chuyên tu Thổ đạo và Mộc đạo để kiến tạo lâu đài giữa bão cát.",
-			Region:         "Western_Desert",
-			VaultGu:        `[{"id": "GU_FORMATION_HEART", "cost": 150, "quantity": 25}, {"id": "GU_MUD", "cost": 150, "quantity": 15}, {"id": "GU_EARTH_COMMUNICATION", "cost": 400, "quantity": 8}, {"id": "GU_NINE_LEAF_VITALITY_GRASS", "cost": 450, "quantity": 6}]`,
-			VaultMaterials: `{"yellow_mud": 150, "ginseng": 60}`,
-			VaultRecipes:   `["recipe_formation_heart"]`,
-		},
-		{
-			ID:             "giao_nhan_court",
-			Name:           "Giao Nhân Vương Đình",
-			Description:    "Thế lực dị nhân hải ngoại khổng lồ thống trị biển cả Đông Hải, chuyên tu Thủy đạo, Âm đạo và Thực đạo, ẩn mình trong cõi yên vui sâu thẳm.",
-			Region:         "Eastern_Sea",
-			VaultGu:        `[{"id": "GU_STREAM", "cost": 150, "quantity": 20}, {"id": "GU_FISH_SCALE", "cost": 150, "quantity": 25}, {"id": "GU_WATER_SHIELD", "cost": 400, "quantity": 12}, {"id": "GU_PULLING_WATER", "cost": 8500, "quantity": 1}]`,
-			VaultMaterials: `{"fish_scales": 250, "spirit_spring_water": 120}`,
-			VaultRecipes:   `["recipe_stream", "recipe_water_shield"]`,
-		},
+	if err := seedSectMissionsFromCSV("SectMission.csv"); err != nil {
+		return err
 	}
+	return nil
+}
 
-	for _, s := range seeds {
-		_, err := DB.Exec(`
+func seedSectsFromCSV(filename string) error {
+	f, r, header, err := openCSV(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	col := func(name string) int { return colIndex(header, name) }
+	idIdx, nameIdx := col("id"), col("name")
+	descIdx, regionIdx := col("description"), col("region")
+	vaultGuIdx, vaultMatIdx, vaultRecIdx := col("vault_gu"), col("vault_materials"), col("vault_recipes")
+	if idIdx < 0 || nameIdx < 0 {
+		return fmt.Errorf("Sect.csv missing required columns (id, name)")
+	}
+	get := func(row []string, idx int) string {
+		if idx < 0 || idx >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[idx])
+	}
+	seeded := 0
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil || len(row) == 0 {
+			continue
+		}
+		id := get(row, idIdx)
+		if id == "" {
+			continue
+		}
+		vaultGu := safeJSONArray(get(row, vaultGuIdx), "[]", "Sect.csv:"+id+":vault_gu")
+		vaultMat := safeJSONObject(get(row, vaultMatIdx), "{}", "Sect.csv:"+id+":vault_materials")
+		vaultRec := safeJSONArray(get(row, vaultRecIdx), "[]", "Sect.csv:"+id+":vault_recipes")
+		_, err = DB.Exec(`
 			INSERT INTO sects (id, name, description, region, vault_gu, vault_materials, vault_recipes)
 			VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb)
 			ON CONFLICT (id) DO UPDATE SET
 				name=EXCLUDED.name, description=EXCLUDED.description, region=EXCLUDED.region,
 				vault_gu=EXCLUDED.vault_gu, vault_materials=EXCLUDED.vault_materials, vault_recipes=EXCLUDED.vault_recipes
-		`, s.ID, s.Name, s.Description, s.Region, s.VaultGu, s.VaultMaterials, s.VaultRecipes)
+		`, id, get(row, nameIdx), get(row, descIdx), get(row, regionIdx), vaultGu, vaultMat, vaultRec)
 		if err != nil {
-			return fmt.Errorf("failed to seed sect %s: %w", s.ID, err)
+			return fmt.Errorf("failed to seed sect %s: %w", id, err)
 		}
+		seeded++
 	}
+	log.Printf("Seeded %d sects from %s", seeded, filename)
+	return nil
+}
 
-	// Seed missions
-	type MissionSeed struct {
-		SectID             string
-		Title              string
-		Description        string
-		MissionType        string
-		TargetID           string
-		TargetAmount       int
-		RewardContribution int
-		RequiredMemberRank string
+func seedSectMissionsFromCSV(filename string) error {
+	f, r, header, err := openCSV(filename)
+	if err != nil {
+		return err
 	}
-
-	missions := []MissionSeed{
-		// Hu Ca Sect
-		{
-			SectID:             "hu_ca_sect",
-			Title:              "Thu thập Rượu Thanh Trúc",
-			Description:        "Nộp 3 bình Rượu Xanh (green_bamboo_wine) đóng góp cho đan lâu tông môn bồi dưỡng sinh cơ.",
-			MissionType:        "GATHER",
-			TargetID:           "green_bamboo_wine",
-			TargetAmount:       3,
-			RewardContribution: 150,
-			RequiredMemberRank: "NGOAI_MON",
-		},
-		{
-			SectID:             "hu_ca_sect",
-			Title:              "Chinh phạt Lợn Rừng Dã Ngoại",
-			Description:        "Bảo vệ lối vào Đãng Hồn Sơn, tiêu diệt 2x Lợn Rừng Đột Biến (wild_boar_tusk) để thu thập nanh thú chế tác Cổ trận.",
-			MissionType:        "GATHER",
-			TargetID:           "wild_boar_tusk",
-			TargetAmount:       2,
-			RewardContribution: 250,
-			RequiredMemberRank: "NOI_MON",
-		},
-		{
-			SectID:             "hu_ca_sect",
-			Title:              "Cống hiến Ngọc Bì Cổ",
-			Description:        "Nộp 1x Ngọc Bì Cổ (GU_JADE_SKIN) hỗ trợ hộ pháp đệ tử chân truyền thăng hạng.",
-			MissionType:        "DONATE",
-			TargetID:           "GU_JADE_SKIN",
-			TargetAmount:       1,
-			RewardContribution: 500,
-			RequiredMemberRank: "TINH_ANH",
-		},
-		// Gu Yue Clan
-		{
-			SectID:             "gu_yue_clan",
-			Title:              "Hái cánh hoa Nguyệt Lan",
-			Description:        "Thu thập 5x Cánh hoa Nguyệt Lan (moon_orchid_petal) cho Đường chủ dược đường chế tạo bột trị thương.",
-			MissionType:        "GATHER",
-			TargetID:           "moon_orchid_petal",
-			TargetAmount:       5,
-			RewardContribution: 100,
-			RequiredMemberRank: "NGOAI_MON",
-		},
-		{
-			SectID:             "gu_yue_clan",
-			Title:              "Thu phục Bạch Thỉ Cổ",
-			Description:        "Bắt và cống hiến 1x Bạch Thỉ Cổ (GU_WHITE_BOAR) để cấp phát cho đệ tử xuất chúng mới khai mở Không Khiếu.",
-			MissionType:        "DONATE",
-			TargetID:           "GU_WHITE_BOAR",
-			TargetAmount:       1,
-			RewardContribution: 400,
-			RequiredMemberRank: "NOI_MON",
-		},
-		// Wan Hang Sect
-		{
-			SectID:             "wan_hang_sect",
-			Title:              "Đóng góp Nanh Lợn Rừng",
-			Description:        "Thu thập và đóng góp 3x Nanh Lợn Rừng (wild_boar_tusk) chế tạo giáo mác cho đệ tử canh gác biên giới.",
-			MissionType:        "GATHER",
-			TargetID:           "wild_boar_tusk",
-			TargetAmount:       3,
-			RewardContribution: 120,
-			RequiredMemberRank: "NGOAI_MON",
-		},
+	defer f.Close()
+	col := func(name string) int { return colIndex(header, name) }
+	sectIdIdx, titleIdx := col("sect_id"), col("title")
+	descIdx, typeIdx := col("description"), col("mission_type")
+	targetIdIdx, targetAmtIdx := col("target_id"), col("target_amount")
+	rewardIdx, rankIdx := col("reward_contribution"), col("required_member_rank")
+	if sectIdIdx < 0 || titleIdx < 0 {
+		return fmt.Errorf("SectMission.csv missing required columns (sect_id, title)")
 	}
-
-	for _, m := range missions {
-		_, err := DB.Exec(`
+	get := func(row []string, idx int) string {
+		if idx < 0 || idx >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[idx])
+	}
+	getInt := func(row []string, idx int, def int) int {
+		v := get(row, idx)
+		if v == "" {
+			return def
+		}
+		n := def
+		fmt.Sscanf(v, "%d", &n)
+		return n
+	}
+	seeded := 0
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil || len(row) == 0 {
+			continue
+		}
+		sectId := get(row, sectIdIdx)
+		if sectId == "" {
+			continue
+		}
+		_, err = DB.Exec(`
 			INSERT INTO sect_missions (sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			ON CONFLICT DO NOTHING
-		`, m.SectID, m.Title, m.Description, m.MissionType, m.TargetID, m.TargetAmount, m.RewardContribution, m.RequiredMemberRank)
+		`, sectId, get(row, titleIdx), get(row, descIdx), get(row, typeIdx),
+			get(row, targetIdIdx), getInt(row, targetAmtIdx, 1),
+			getInt(row, rewardIdx, 0), get(row, rankIdx))
 		if err != nil {
-			return fmt.Errorf("failed to seed mission %s: %w", m.Title, err)
+			return fmt.Errorf("failed to seed mission %s: %w", get(row, titleIdx), err)
 		}
+		seeded++
 	}
-
+	log.Printf("Seeded %d sect missions from %s", seeded, filename)
 	return nil
 }
 

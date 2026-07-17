@@ -133,6 +133,7 @@ export interface Player {
   is_admin?: boolean;
   avatar_url?: string;
   combat_settings?: AutoCombatConfig;
+  needs_onboarding?: boolean;
 }
 
 
@@ -715,6 +716,12 @@ interface GameState {
   ) => Promise<boolean>;
   logout: () => void;
   clearError: () => void;
+  completeOnboarding: (data: {
+    starting_region: string;
+    attack_gu_id: string;
+    defense_gu_id: string;
+    vital_gu_choice: string;
+  }) => Promise<boolean>;
   updateManaSnapshot: (player: Player | null) => void;
   setPlayerFromServer: (player: Player | null) => void;
   getEstimatedMana: () => number | null;
@@ -1280,6 +1287,32 @@ export const useGameStore = create<GameState>((set, get) => {
       get().subscribePlayerEvents();
       get().subscribeTradeEvents();
       get().addLog(`Cổ sư ${data.player.username} khai mở Không Khiếu! Tư chất: ${data.player.aptitude_type} (${data.player.aptitude_percent}%)`);
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      return false;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  completeOnboarding: async (data) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/complete-onboarding`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Không thể hoàn tất thiết lập.");
+      }
+
+      const player: Player = await response.json();
+      setPlayerFromServer(player);
+      get().addLog(`Thiết lập ban đầu hoàn tất! Khu vực: ${player.current_region}`);
       return true;
     } catch (err: any) {
       set({ error: err.message });

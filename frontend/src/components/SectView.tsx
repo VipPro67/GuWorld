@@ -85,7 +85,7 @@ export const SectView: React.FC = () => {
   const [createSectName, setCreateSectName] = useState("");
   const [createSectDesc, setCreateSectDesc] = useState("");
   const [createSectRegion, setCreateSectRegion] = useState("Central_Continent");
-  
+
   // Vault state
   const [vaultTab, setVaultTab] = useState<"gu" | "material" | "recipe">("gu");
 
@@ -147,11 +147,11 @@ export const SectView: React.FC = () => {
         // Sort by rank ascending, exclude rank>=6
         const sorted = Object.entries(guDictionary || {})
           .filter(([, spec]) => (spec.rank || 1) < 6)
-          .sort(([,a],[,b]) => (a.rank||1)-(b.rank||1));
+          .sort(([, a], [, b]) => (a.rank || 1) - (b.rank || 1));
         if (sorted.length > 0) setStockItemId(sorted[0][0]);
       } else {
         const sorted = Object.entries(itemDictionary || {})
-          .sort(([,a],[,b]) => (a.rank||1)-(b.rank||1));
+          .sort(([, a], [, b]) => (a.rank || 1) - (b.rank || 1));
         if (sorted.length > 0) setStockItemId(sorted[0][0]);
       }
     }
@@ -335,7 +335,7 @@ export const SectView: React.FC = () => {
             Gia Nhập Tông Môn
           </h2>
           <p className="text-sm text-zinc-400 max-w-xl mx-auto mt-2 leading-relaxed">
-            Nguyên Thủy Tiên Tôn sáng lập Tông môn chế độ, phá vỡ xiềng xích gia tộc huyết thống. 
+            Nguyên Thủy Tiên Tôn sáng lập Tông môn chế độ, phá vỡ xiềng xích gia tộc huyết thống.
             Nơi đây lấy cống hiến đo tài nguyên, bái sư học nghệ, mượn cổ trùng quý hiếm, cùng tranh phong thiên hạ!
           </p>
           {mySectStatus?.has_pending_join && (
@@ -380,9 +380,8 @@ export const SectView: React.FC = () => {
               <div
                 key={sect.id}
                 onClick={() => setSelectedSectId(sect.id)}
-                className={`group bg-zinc-950/40 hover:bg-zinc-950/80 border ${
-                  selectedSectId === sect.id ? "border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.15)]" : "border-zinc-900 hover:border-zinc-800"
-                } rounded-3xl p-5 flex flex-col justify-between transition-all duration-300 cursor-pointer backdrop-blur-md`}
+                className={`group bg-zinc-950/40 hover:bg-zinc-950/80 border ${selectedSectId === sect.id ? "border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.15)]" : "border-zinc-900 hover:border-zinc-800"
+                  } rounded-3xl p-5 flex flex-col justify-between transition-all duration-300 cursor-pointer backdrop-blur-md`}
               >
                 <div>
                   <div className="flex justify-between items-start mb-4">
@@ -433,16 +432,15 @@ export const SectView: React.FC = () => {
             >
               Trang trước
             </button>
-            
+
             {Array.from({ length: totalPages }).map((_, i) => (
               <button
                 key={i}
                 onClick={() => setCurrentPage(i + 1)}
-                className={`w-8 h-8 rounded-xl text-xs font-mono font-bold border transition-colors cursor-pointer ${
-                  currentPage === i + 1
+                className={`w-8 h-8 rounded-xl text-xs font-mono font-bold border transition-colors cursor-pointer ${currentPage === i + 1
                     ? "bg-blue-600 border-blue-500 text-white"
                     : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-                }`}
+                  }`}
               >
                 {i + 1}
               </button>
@@ -472,7 +470,7 @@ export const SectView: React.FC = () => {
                 className="w-full max-w-2xl bg-zinc-950 border border-zinc-900 rounded-3xl p-6 shadow-[0_0_30px_rgba(59,130,246,0.2)] flex flex-col gap-6 animate-scale-up cursor-default relative overflow-hidden max-h-[90vh] overflow-y-auto"
               >
                 <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -z-10" />
-                
+
                 {/* Modal Header */}
                 <div className="flex justify-between items-start border-b border-zinc-900 pb-4">
                   <div>
@@ -556,12 +554,12 @@ export const SectView: React.FC = () => {
                     {actionLoading
                       ? "Đang gia nhập..."
                       : mySectStatus?.has_pending_join
-                      ? mySectStatus.pending_sect_id === sect.id
-                        ? "Đang Chờ Duyệt..."
-                        : "Đã Đăng Ký Phái Khác"
-                      : sect.require_approval
-                      ? "Xin Gia Nhập (Cần duyệt)"
-                      : "Gia Nhập Môn Phái"}
+                        ? mySectStatus.pending_sect_id === sect.id
+                          ? "Đang Chờ Duyệt..."
+                          : "Đã Đăng Ký Phái Khác"
+                        : sect.require_approval
+                          ? "Xin Gia Nhập (Cần duyệt)"
+                          : "Gia Nhập Môn Phái"}
                   </button>
                 </div>
               </div>
@@ -669,7 +667,7 @@ export const SectView: React.FC = () => {
       {/* Sect Banner HUD */}
       <div className="bg-zinc-950/60 border border-zinc-900 rounded-3xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-5 shadow-xl backdrop-blur-md relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl -z-10" />
-        
+
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center border border-blue-400/20 shadow-lg">
             <Shield className="w-6 h-6 text-white" />
@@ -719,59 +717,54 @@ export const SectView: React.FC = () => {
       </div>
 
       {/* Tabs Menu */}
-      <div className="flex bg-zinc-950/50 p-1.5 rounded-2xl border border-zinc-900/60 backdrop-blur-sm self-start w-full sm:w-auto">
-        <button
-          onClick={() => setActiveTab("lobby")}
-          className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${
-            activeTab === "lobby" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
-          }`}
-        >
-          Môn Đường
-        </button>
-        <button
-          onClick={() => setActiveTab("missions")}
-          className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${
-            activeTab === "missions" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
-          }`}
-        >
-          Bảng Nhiệm Vụ
-        </button>
-        <button
-          onClick={() => setActiveTab("vault")}
-          className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${
-            activeTab === "vault" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
-          }`}
-        >
-          Bảo Khố Tông Môn
-        </button>
-        <button
-          onClick={() => setActiveTab("donate")}
-          className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${
-            activeTab === "donate" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
-          }`}
-        >
-          Quyên Góp
-        </button>
-        <button
-          onClick={() => setActiveTab("territory")}
-          className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${
-            activeTab === "territory" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
-          }`}
-        >
-          Lãnh Địa
-        </button>
-        {member?.member_rank && (member.member_rank === "CHUONG_MON" || member.member_rank === "TRUONG_LAO") && (
+      <div className="overflow-x-auto">
+        <div className="flex bg-zinc-950/50 p-1.5 rounded-2xl border border-zinc-900/60 backdrop-blur-sm self-start w-full sm:w-auto">
           <button
-            onClick={() => setActiveTab("manage")}
-            className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${
-              activeTab === "manage" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
-            }`}
+            onClick={() => setActiveTab("lobby")}
+            className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${activeTab === "lobby" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
+              }`}
           >
-            Quản Lý
+            Sảnh
           </button>
-        )}
+          <button
+            onClick={() => setActiveTab("missions")}
+            className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${activeTab === "missions" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
+              }`}
+          >
+            Nhiệm Vụ
+          </button>
+          <button
+            onClick={() => setActiveTab("vault")}
+            className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${activeTab === "vault" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
+              }`}
+          >
+            Bảo Khố
+          </button>
+          <button
+            onClick={() => setActiveTab("donate")}
+            className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${activeTab === "donate" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
+              }`}
+          >
+            Quyên Góp
+          </button>
+          <button
+            onClick={() => setActiveTab("territory")}
+            className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${activeTab === "territory" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
+              }`}
+          >
+            Lãnh Địa
+          </button>
+          {member?.member_rank && (member.member_rank === "CHUONG_MON" || member.member_rank === "TRUONG_LAO") && (
+            <button
+              onClick={() => setActiveTab("manage")}
+              className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${activeTab === "manage" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
+                }`}
+            >
+              Quản Lý
+            </button>
+          )}
+        </div>
       </div>
-
       {/* Tab Panels */}
       {activeTab === "lobby" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-slide-up">
@@ -843,10 +836,10 @@ export const SectView: React.FC = () => {
                     {actionLoading
                       ? "Đang tiến hành khảo hạch..."
                       : mySectStatus?.has_pending_promotion
-                      ? "Yêu Cầu Thăng Cấp Đang Chờ Duyệt..."
-                      : canPromote
-                      ? "Bắt Đầu Khảo Hạch Thăng Cấp"
-                      : "Chưa Đạt Yêu Cầu Khảo Hạch"}
+                        ? "Yêu Cầu Thăng Cấp Đang Chờ Duyệt..."
+                        : canPromote
+                          ? "Bắt Đầu Khảo Hạch Thăng Cấp"
+                          : "Chưa Đạt Yêu Cầu Khảo Hạch"}
                   </button>
                 </div>
               ) : (
@@ -894,11 +887,10 @@ export const SectView: React.FC = () => {
                 leaderboard.map((entry, idx) => (
                   <div
                     key={idx}
-                    className={`flex justify-between items-center p-3 rounded-2xl border text-xs ${
-                      entry.username === player.username
+                    className={`flex justify-between items-center p-3 rounded-2xl border text-xs ${entry.username === player.username
                         ? "bg-blue-950/20 border-blue-500/20 text-blue-100"
                         : "bg-zinc-900/20 border-zinc-900 text-zinc-300"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span className="font-mono font-bold text-[10px] text-zinc-500 w-4">
@@ -932,7 +924,7 @@ export const SectView: React.FC = () => {
               Lãnh Địa Tông Môn (Tranh Đoạt)
             </h3>
             <p className="text-xs text-zinc-400 leading-relaxed mb-2">
-              Lãnh địa Tông môn là các mỏ tài nguyên quý giá sinh ra Quỹ tông môn và Linh tài mỗi giờ. 
+              Lãnh địa Tông môn là các mỏ tài nguyên quý giá sinh ra Quỹ tông môn và Linh tài mỗi giờ.
               Các đệ tử từ <strong>Nội Môn</strong> trở lên có thể khiêu chiến Hộ Phái Thần Thú để cướp đoạt mỏ cho Tông môn của mình.
             </p>
 
@@ -943,19 +935,18 @@ export const SectView: React.FC = () => {
                 sectMines.map((mine) => {
                   const isMine = mine.occupier_sect_id === mySectStatus.sect?.id;
                   const isShielded = mine.shield_until && new Date(mine.shield_until).getTime() > Date.now();
-                  
+
                   return (
                     <div key={mine.id} className={`bg-zinc-900/20 border ${isMine ? "border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.1)]" : "border-zinc-900"} rounded-2xl p-4 flex flex-col gap-3 relative overflow-hidden`}>
                       {isMine && <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/10 rounded-bl-full -z-10" />}
-                      
+
                       <div className="flex justify-between items-start">
                         <h4 className="text-sm font-bold font-serif text-zinc-200">{mine.name}</h4>
-                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-                          mine.rarity === "Truyền Thuyết" ? "bg-amber-950/30 text-amber-400 border-amber-500/30" :
-                          mine.rarity === "Sử Thi" ? "bg-purple-950/30 text-purple-400 border-purple-500/30" :
-                          mine.rarity === "Hiếm" ? "bg-blue-950/30 text-blue-400 border-blue-500/30" :
-                          "bg-zinc-900/50 text-zinc-400 border-zinc-700"
-                        }`}>{mine.rarity}</span>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${mine.rarity === "Truyền Thuyết" ? "bg-amber-950/30 text-amber-400 border-amber-500/30" :
+                            mine.rarity === "Sử Thi" ? "bg-purple-950/30 text-purple-400 border-purple-500/30" :
+                              mine.rarity === "Hiếm" ? "bg-blue-950/30 text-blue-400 border-blue-500/30" :
+                                "bg-zinc-900/50 text-zinc-400 border-zinc-700"
+                          }`}>{mine.rarity}</span>
                       </div>
 
                       <div className="flex flex-col gap-1 text-xs font-mono">
@@ -1025,7 +1016,7 @@ export const SectView: React.FC = () => {
             {mySectStatus.has_active && mySectStatus.active_mission ? (() => {
               const am = mySectStatus.active_mission;
               const progress = mySectStatus.active_progress || 0;
-              
+
               // Find if gather requirements are met
               let isReadyToComplete = false;
               if (am.mission_type === "GATHER") {
@@ -1045,7 +1036,7 @@ export const SectView: React.FC = () => {
                     </span>
                     <h4 className="text-base font-serif font-bold text-zinc-100">{am.title}</h4>
                     <p className="text-xs text-zinc-400 leading-relaxed max-w-xl">{am.description}</p>
-                    
+
                     {/* Mission Requirements Display */}
                     <div className="mt-2 text-xs font-mono text-zinc-300">
                       {am.mission_type === "GATHER" && (() => {
@@ -1126,9 +1117,8 @@ export const SectView: React.FC = () => {
                   return (
                     <div
                       key={mission.id}
-                      className={`bg-zinc-900/20 border ${
-                        rankTooLow ? "border-zinc-950 opacity-60" : "border-zinc-900 hover:border-zinc-800"
-                      } rounded-2xl p-4 flex flex-col justify-between gap-4 transition-all duration-300`}
+                      className={`bg-zinc-900/20 border ${rankTooLow ? "border-zinc-950 opacity-60" : "border-zinc-900 hover:border-zinc-800"
+                        } rounded-2xl p-4 flex flex-col justify-between gap-4 transition-all duration-300`}
                     >
                       <div>
                         <div className="flex justify-between items-start mb-2">
@@ -1192,25 +1182,22 @@ export const SectView: React.FC = () => {
             <div className="flex bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/60 self-start sm:self-auto">
               <button
                 onClick={() => setVaultTab("gu")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  vaultTab === "gu" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
-                }`}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${vaultTab === "gu" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                  }`}
               >
                 Cổ Trùng
               </button>
               <button
                 onClick={() => setVaultTab("material")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  vaultTab === "material" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
-                }`}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${vaultTab === "material" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                  }`}
               >
                 Linh Tài
               </button>
               <button
                 onClick={() => setVaultTab("recipe")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  vaultTab === "recipe" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
-                }`}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${vaultTab === "recipe" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                  }`}
               >
                 Cổ Phương
               </button>
@@ -1290,7 +1277,7 @@ export const SectView: React.FC = () => {
                     const spec = itemDictionary[matId];
                     const cost = getVaultCost(getItemBasePrice(matId));
                     const unaffordable = (member?.contribution_points || 0) < cost;
-                    
+
                     return (
                       <div
                         key={matId}
@@ -1340,7 +1327,7 @@ export const SectView: React.FC = () => {
                     const targetGuSpec = recipeInfo ? guDictionary[recipeInfo.target_gu_id] : null;
                     const cost = getRecipeCost(targetGuSpec?.rank || 1);
                     const unaffordable = (member?.contribution_points || 0) < cost;
-                    
+
                     return (
                       <div
                         key={recipeId}
@@ -1401,25 +1388,22 @@ export const SectView: React.FC = () => {
             <div className="flex bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/60 self-start sm:self-auto">
               <button
                 onClick={() => setDonateType("stones")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  donateType === "stones" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
-                }`}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${donateType === "stones" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                  }`}
               >
                 Nguyên Thạch
               </button>
               <button
                 onClick={() => setDonateType("materials")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  donateType === "materials" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
-                }`}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${donateType === "materials" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                  }`}
               >
                 Linh Tài
               </button>
               <button
                 onClick={() => setDonateType("gu")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  donateType === "gu" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
-                }`}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${donateType === "gu" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                  }`}
               >
                 Cổ Trùng
               </button>
@@ -1615,14 +1599,12 @@ export const SectView: React.FC = () => {
                       await toggleSectApproval(!mySectStatus?.sect?.require_approval);
                     }}
                     disabled={actionLoading}
-                    className={`w-9 h-5 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-300 ${
-                      mySectStatus?.sect?.require_approval ? "bg-emerald-600" : "bg-zinc-800"
-                    }`}
+                    className={`w-9 h-5 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-300 ${mySectStatus?.sect?.require_approval ? "bg-emerald-600" : "bg-zinc-800"
+                      }`}
                   >
                     <div
-                      className={`bg-white w-3 h-3 rounded-full shadow-md transform transition-transform duration-300 ${
-                        mySectStatus?.sect?.require_approval ? "translate-x-4" : "translate-x-0"
-                      }`}
+                      className={`bg-white w-3 h-3 rounded-full shadow-md transform transition-transform duration-300 ${mySectStatus?.sect?.require_approval ? "translate-x-4" : "translate-x-0"
+                        }`}
                     />
                   </button>
                 </div>
@@ -1632,34 +1614,30 @@ export const SectView: React.FC = () => {
             <div className="flex flex-wrap bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/60 self-start sm:self-auto gap-1">
               <button
                 onClick={() => setMgmtTab("members")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  mgmtTab === "members" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
-                }`}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${mgmtTab === "members" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                  }`}
               >
                 Đệ Tử Danh Sách
               </button>
               <button
                 onClick={() => setMgmtTab("missions")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  mgmtTab === "missions" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
-                }`}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${mgmtTab === "missions" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                  }`}
               >
                 Tạo Nhiệm Vụ
               </button>
               <button
                 onClick={() => setMgmtTab("stock")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                  mgmtTab === "stock" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
-                }`}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${mgmtTab === "stock" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                  }`}
               >
                 Nhập Kho & Tăng Cấp
               </button>
               {(mySectStatus?.member?.member_rank === "CHUONG_MON" || mySectStatus?.member?.member_rank === "TRUONG_LAO") && (
                 <button
                   onClick={() => setMgmtTab("requests")}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer relative ${
-                    mgmtTab === "requests" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
-                  }`}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer relative ${mgmtTab === "requests" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                    }`}
                 >
                   Duyệt Yêu Cầu
                   {((sectJoinRequests?.length || 0) + (sectPromotionRequests?.length || 0)) > 0 && (
@@ -1692,7 +1670,7 @@ export const SectView: React.FC = () => {
                     const isSelf = mInfo.player_id === player.id;
                     const callerIsLeader = member?.member_rank === "CHUONG_MON";
                     const targetIsElderOrLeader = mInfo.member_rank === "CHUONG_MON" || mInfo.member_rank === "TRUONG_LAO";
-                    
+
                     return (
                       <div
                         key={mInfo.player_id}
@@ -2036,11 +2014,11 @@ export const SectView: React.FC = () => {
                         const sectLvl = sect?.level || 1;
                         if (type === "gu") {
                           // sorted by rank, exclude rank>=6
-                          const sorted = Object.entries(guDictionary || {}).sort(([,a],[,b]) => (a.rank||1)-(b.rank||1));
+                          const sorted = Object.entries(guDictionary || {}).sort(([, a], [, b]) => (a.rank || 1) - (b.rank || 1));
                           const firstAvailable = sorted.find(([, spec]) => (spec.rank || 1) <= sectLvl && (spec.rank || 1) < 6);
                           setStockItemId(firstAvailable ? firstAvailable[0] : "");
                         } else {
-                          const sorted = Object.entries(itemDictionary || {}).sort(([,a],[,b]) => (a.rank||1)-(b.rank||1));
+                          const sorted = Object.entries(itemDictionary || {}).sort(([, a], [, b]) => (a.rank || 1) - (b.rank || 1));
                           const firstAvailable = sorted.find(([, spec]) => (spec.rank || 1) <= sectLvl);
                           setStockItemId(firstAvailable ? firstAvailable[0] : "");
                         }
@@ -2065,7 +2043,7 @@ export const SectView: React.FC = () => {
                         // Sort by rank ascending, exclude rank>=6
                         Object.entries(guDictionary || {})
                           .filter(([, spec]) => (spec.rank || 1) < 6)
-                          .sort(([,a],[,b]) => (a.rank||1)-(b.rank||1))
+                          .sort(([, a], [, b]) => (a.rank || 1) - (b.rank || 1))
                           .map(([id, spec]) => {
                             const locked = (spec.rank || 1) > (sect?.level || 1);
                             return (
@@ -2076,7 +2054,7 @@ export const SectView: React.FC = () => {
                           })
                       ) : (
                         Object.entries(itemDictionary || {})
-                          .sort(([,a],[,b]) => (a.rank||1)-(b.rank||1))
+                          .sort(([, a], [, b]) => (a.rank || 1) - (b.rank || 1))
                           .map(([id, spec]) => {
                             const locked = (spec.rank || 1) > (sect?.level || 1);
                             return (
