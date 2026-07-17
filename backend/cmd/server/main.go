@@ -77,8 +77,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// 2.5. Start Hunger Decay Background Worker (15-minute intervals for slower, balanced survival gameplay)
-	worker.StartHungerWorker(ctx, db.DB, 15*time.Minute)
+	// 2.5. Start Hunger Decay Background Worker (3-hour intervals for slower, balanced survival gameplay)
+	worker.StartHungerWorker(ctx, db.DB, 3*time.Hour)
 
 	// 2.6. Start Tribulation background worker
 	handlers.StartTribulationWorker(ctx)
