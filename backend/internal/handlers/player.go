@@ -13,6 +13,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"strconv"
 	"time"
 	"unicode"
 
@@ -1108,6 +1109,35 @@ type FeedRequest struct {
 }
 
 // FeedGu consumes a matching material and resets a Gu instance's hunger status
+
+func getFoodNutrition(foodID string) int {
+	if strings.HasPrefix(foodID, "GU_LIFESPAN_") {
+		yearsStr := strings.TrimPrefix(foodID, "GU_LIFESPAN_")
+		years, err := strconv.Atoi(yearsStr)
+		if err == nil {
+			return years * 1000
+		}
+	}
+	if spec, ok := models.GuRegistry[foodID]; ok {
+		return spec.Rank * 1000
+	}
+	if spec, ok := models.ItemRegistry[foodID]; ok {
+		switch spec.Rank {
+		case 1: return 100
+		case 2: return 200
+		case 3: return 500
+		case 4: return 1000
+		case 5: return 2000
+		case 6: return 5000
+		case 7: return 10000
+		case 8: return 50000
+		case 9: return 100000
+		default: return 100
+		}
+	}
+	return 100
+}
+
 func FeedGu(c *gin.Context) {
 	var req FeedRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1163,45 +1193,92 @@ func FeedGu(c *gin.Context) {
 		return
 	}
 
-	// 4. Check food availability
+	// 4. Loop consuming food until full
 	foodOptions := specs.FoodTypes
-	chosenFood := ""
-	for _, food := range foodOptions {
-		if player.MaterialsInventory[food] > 0 {
-			itemSpec, ok := models.ItemRegistry[food]
-			if !ok {
-				continue
-			}
-			// Check if item is food
-			isFood := itemSpec.Type == "Food"
-			if !isFood {
-				for _, t := range itemSpec.Tags {
-					if t == "food" {
-						isFood = true
+	foodConsumed := make(map[string]int)
+	
+	if targetGu.Hunger >= specs.MaxHunger {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng đã no, không cần ăn thêm."})
+		return
+	}
+
+	for targetGu.Hunger < specs.MaxHunger {
+		chosenFoodItem := ""
+		consumedGuIndex := -1
+
+		for _, food := range foodOptions {
+			if player.MaterialsInventory[food] > 0 {
+				itemSpec, ok := models.ItemRegistry[food]
+				if ok {
+					isFood := itemSpec.Type == "Food"
+					if !isFood {
+						for _, t := range itemSpec.Tags {
+							if t == "food" {
+								isFood = true
+								break
+							}
+						}
+					}
+					if isFood {
+						chosenFoodItem = food
 						break
 					}
 				}
 			}
-			if isFood {
-				chosenFood = food
-				break
+			if strings.HasPrefix(food, "GU_") {
+				for i, invGu := range player.GuInventory {
+					if invGu.GuID == food && invGu.InstanceID != targetGu.InstanceID && invGu.Status != "DEAD" {
+						consumedGuIndex = i
+						break
+					}
+				}
+				if consumedGuIndex != -1 {
+					break
+				}
 			}
 		}
+
+		if chosenFoodItem == "" && consumedGuIndex == -1 {
+			break // No more food
+		}
+
+		foodID := ""
+		if chosenFoodItem != "" {
+			player.MaterialsInventory[chosenFoodItem]--
+			if player.MaterialsInventory[chosenFoodItem] <= 0 {
+				delete(player.MaterialsInventory, chosenFoodItem)
+			}
+			foodID = chosenFoodItem
+		} else {
+			consumedGu := player.GuInventory[consumedGuIndex]
+			foodID = consumedGu.GuID
+			player.GuInventory = append(player.GuInventory[:consumedGuIndex], player.GuInventory[consumedGuIndex+1:]...)
+			
+			// Re-find targetGu since slice changed
+			guIndex = -1
+			for i, gu := range player.GuInventory {
+				if gu.InstanceID == req.GuInstanceID {
+					guIndex = i
+					break
+				}
+			}
+			targetGu = &player.GuInventory[guIndex]
+		}
+		
+		foodConsumed[foodID]++
+		nutrition := getFoodNutrition(foodID)
+		targetGu.Hunger += nutrition
+		if targetGu.Hunger > specs.MaxHunger {
+			targetGu.Hunger = specs.MaxHunger
+		}
 	}
-	if chosenFood == "" {
+
+	if len(foodConsumed) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không có thức ăn phù hợp cho %s. Cần một trong: %v", specs.Name, foodOptions)})
 		return
 	}
 
-	// 5. Consume 1 food and restore hunger
-	player.MaterialsInventory[chosenFood]--
-	if player.MaterialsInventory[chosenFood] <= 0 {
-		delete(player.MaterialsInventory, chosenFood)
-	}
-	targetGu.Hunger = specs.MaxHunger
 	targetGu.Status = "ACTIVE" // Wakes up from sleep (hibernation)
-
-	// Vital Gu must always be equipped and active
 	if targetGu.IsVital {
 		targetGu.Equipped = true
 	}
@@ -1223,22 +1300,28 @@ func FeedGu(c *gin.Context) {
 		return
 	}
 
-	foodName := chosenFood
-	if itemSpec, ok := models.ItemRegistry[chosenFood]; ok {
-		foodName = itemSpec.Name
+	var foodDetails []string
+	for fID, qty := range foodConsumed {
+		fName := fID
+		if itemSpec, ok := models.ItemRegistry[fID]; ok {
+			fName = itemSpec.Name
+		} else if guSpec, ok := models.GuRegistry[fID]; ok {
+			fName = guSpec.Name
+		}
+		foodDetails = append(foodDetails, fmt.Sprintf("%dx %s", qty, fName))
 	}
+	foodStr := strings.Join(foodDetails, ", ")
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "gu.feed",
 		EntityType:     "gu_instance",
 		EntityID:       req.GuInstanceID,
-		RequestSummary: fmt.Sprintf("Cho Cổ trùng %s (Instance ID: %s) ăn %s", specs.Name, req.GuInstanceID[:8], foodName),
+		RequestSummary: fmt.Sprintf("Cho Cổ trùng %s (Instance ID: %s) ăn %s", specs.Name, req.GuInstanceID[:8], foodStr),
 		Metadata: map[string]interface{}{
 			"gu_id":      targetGu.GuID,
 			"gu_name":    specs.Name,
-			"food_id":    chosenFood,
-			"food_name":  foodName,
+			"food_consumed": foodConsumed,
 			"new_hunger": targetGu.Hunger,
 		},
 		IPAddress: c.ClientIP(),
@@ -1247,7 +1330,7 @@ func FeedGu(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"player":  player,
-		"message": fmt.Sprintf("Cho %s ăn thành công! Tiêu hao 1 %s.", specs.Name, foodName),
+		"message": fmt.Sprintf("Cho %s ăn thành công! Đã khôi phục tới %d độ no. Tiêu hao: %s.", specs.Name, targetGu.Hunger, foodStr),
 	})
 }
 
@@ -1298,57 +1381,96 @@ func FeedGroup(c *gin.Context) {
 		return
 	}
 
-	// Helper to find food from materials inventory
 	getAvailableFood := func() string {
 		for _, food := range foodOptions {
 			if player.MaterialsInventory[food] > 0 {
 				itemSpec, ok := models.ItemRegistry[food]
-				if !ok {
-					continue
-				}
-				isFood := itemSpec.Type == "Food"
-				if !isFood {
-					for _, t := range itemSpec.Tags {
-						if t == "food" {
-							isFood = true
-							break
+				if ok {
+					isFood := itemSpec.Type == "Food"
+					if !isFood {
+						for _, t := range itemSpec.Tags {
+							if t == "food" {
+								isFood = true
+								break
+							}
 						}
 					}
-				}
-				if isFood {
-					return food
+					if isFood {
+						return food
+					}
 				}
 			}
 		}
 		return ""
 	}
 
+	getAvailableGuFood := func(skipInstanceID string) int {
+		for _, food := range foodOptions {
+			if strings.HasPrefix(food, "GU_") {
+				for i, invGu := range player.GuInventory {
+					if invGu.GuID == food && invGu.InstanceID != skipInstanceID && invGu.Status != "DEAD" {
+						return i
+					}
+				}
+			}
+		}
+		return -1
+	}
+
 	fedCount := 0
 	foodConsumed := make(map[string]int)
 
 	// 3. Iterate over the player's Gu inventory and feed hungry ones of matching type
-	for i := range player.GuInventory {
+	for i := 0; i < len(player.GuInventory); i++ {
 		gu := &player.GuInventory[i]
 		if gu.GuID == req.GuID && gu.Status != "DEAD" && gu.Status != "SEALED" && gu.Hunger < specs.MaxHunger {
-			chosenFood := getAvailableFood()
-			if chosenFood == "" {
-				break // No more food available
-			}
+			fedThisGu := false
+			for gu.Hunger < specs.MaxHunger {
+				chosenFood := getAvailableFood()
+				consumedGuIndex := -1
+				if chosenFood == "" {
+					consumedGuIndex = getAvailableGuFood(gu.InstanceID)
+				}
 
-			// Consume 1 food
-			player.MaterialsInventory[chosenFood]--
-			if player.MaterialsInventory[chosenFood] <= 0 {
-				delete(player.MaterialsInventory, chosenFood)
-			}
-			foodConsumed[chosenFood]++
+				if chosenFood == "" && consumedGuIndex == -1 {
+					break // No more food available
+				}
 
-			// Restore hunger
-			gu.Hunger = specs.MaxHunger
-			gu.Status = "ACTIVE" // Wakes up from sleep (hibernation)
-			if gu.IsVital {
-				gu.Equipped = true
+				foodID := ""
+				// Consume food
+				if chosenFood != "" {
+					player.MaterialsInventory[chosenFood]--
+					if player.MaterialsInventory[chosenFood] <= 0 {
+						delete(player.MaterialsInventory, chosenFood)
+					}
+					foodID = chosenFood
+					foodConsumed[chosenFood]++
+				} else {
+					consumedGu := player.GuInventory[consumedGuIndex]
+					foodID = consumedGu.GuID
+					foodConsumed[consumedGu.GuID]++
+					player.GuInventory = append(player.GuInventory[:consumedGuIndex], player.GuInventory[consumedGuIndex+1:]...)
+					if consumedGuIndex <= i {
+						i--
+					}
+					gu = &player.GuInventory[i] // refetch pointer
+				}
+
+				nutrition := getFoodNutrition(foodID)
+				gu.Hunger += nutrition
+				if gu.Hunger > specs.MaxHunger {
+					gu.Hunger = specs.MaxHunger
+				}
+				fedThisGu = true
 			}
-			fedCount++
+			
+			if fedThisGu {
+				gu.Status = "ACTIVE"
+				if gu.IsVital {
+					gu.Equipped = true
+				}
+				fedCount++
+			}
 		}
 	}
 
@@ -1380,6 +1502,8 @@ func FeedGroup(c *gin.Context) {
 		foodName := foodID
 		if itemSpec, ok := models.ItemRegistry[foodID]; ok {
 			foodName = itemSpec.Name
+		} else if guSpec, ok := models.GuRegistry[foodID]; ok {
+			foodName = guSpec.Name
 		}
 		foodDetails = append(foodDetails, fmt.Sprintf("%dx %s", qty, foodName))
 	}
@@ -1701,10 +1825,23 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 				}
 			}
 
-			for effectKey := range models.GetGuEffectSection(spec, "passive") {
-				if handler, ok := StatEffectRegistry[effectKey]; ok {
-					handler(player, &spec, stats)
+						if spec.Effects.Passive != nil {
+				passive := spec.Effects.Passive
+				mult := getPathMasteryMultiplier(player, spec.Path)
+				stats["attack"] += passive.StatBaseAttack * mult
+				stats["defense"] += passive.StatBaseDefense * mult
+				if player.BaseHP > 0 {
+					missingHpRate := 1.0 - player.HP/player.BaseHP
+					stats["damage_multiplier"] += missingHpRate * passive.DamageMultiplierOnHit
 				}
+				stats["soul"] += passive.SoulRefinement
+				stats["storage"] += passive.StorageCapacity
+				stats["movement"] += passive.Movement
+				stats["investigation"] += passive.Investigation
+				stats["hearing"] += passive.Hearing
+				stats["evasion"] += passive.Evasion
+				stats["healing"] += passive.RefineManaTier * 10.0
+				stats["healing"] += passive.CleansingPower * 15.0
 			}
 		}
 	}
@@ -2341,16 +2478,18 @@ func UseConsumableGu(c *gin.Context) {
 	cost := calculateEnergyCost(&player, &specs)
 	player.CurrentMana -= cost
 
-	var logs []string
-	for effectKey := range models.GetGuEffectSection(specs, "active") {
-		if handler, ok := ConsumableEffectRegistry[effectKey]; ok {
-			msg, err := handler(&player, *targetGu, specs)
-			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-				return
-			}
-			if msg != "" {
-				logs = append(logs, msg)
+		var logs []string
+	if specs.Effects.Other != nil {
+		for _, mechanic := range specs.Effects.Other {
+			if mechanic.EventTrigger == "ON_CONSUME" {
+				msg, err := HandleConsumeEvent(&player, *targetGu, specs, mechanic)
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+					return
+				}
+				if msg != "" {
+					logs = append(logs, msg)
+				}
 			}
 		}
 	}
@@ -2457,16 +2596,18 @@ func UseSupportGu(c *gin.Context) {
 	cost := calculateEnergyCost(&player, &specs)
 	player.CurrentMana -= cost
 
-	var logs []string
-	for effectKey := range models.GetGuEffectSection(specs, "support") {
-		if handler, ok := OutCombatSupportRegistry[effectKey]; ok {
-			msg, err := handler(&player, specs)
-			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-				return
-			}
-			if msg != "" {
-				logs = append(logs, msg)
+		var logs []string
+	if specs.Effects.Other != nil {
+		for _, mechanic := range specs.Effects.Other {
+			if mechanic.EventTrigger == "ON_CONSUME" {
+				msg, err := HandleConsumeEvent(&player, *targetGu, specs, mechanic)
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+					return
+				}
+				if msg != "" {
+					logs = append(logs, msg)
+				}
 			}
 		}
 	}

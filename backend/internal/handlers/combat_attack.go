@@ -395,14 +395,18 @@ func CombatAttack(c *gin.Context) {
 						if errGu == nil && refCaster.CurrentMana >= cost {
 							refCaster.CurrentMana -= cost
 
-							activeEffects := models.GetGuEffectSection(spec, "active")
-							isHealing := activeEffects["heal"] > 0 || activeEffects["restore_hp"] > 0 || activeEffects["heal_based_on_strength"] > 0 || spec.ID == "GU_NINE_LEAF_VITALITY_GRASS"
-							isDefense := spec.Type == "Defense" || activeEffects["add_base_defense"] > 0 || activeEffects["defense"] > 0 || activeEffects["base_defense_bonus"] > 0
-							isAttack := activeEffects["damage"] > 0 || activeEffects["add_base_attack"] > 0 || activeEffects["base_damage_bonus"] > 0 || spec.Type == "Attack" || spec.Type == "Active"
+							isHealing := false
+							isDefense := spec.Type == "Defense"
+							isAttack := spec.Type == "Attack" || spec.Type == "Active"
+							if spec.Effects.Active != nil {
+								isHealing = spec.Effects.Active.HealFlat > 0 || spec.ID == "GU_NINE_LEAF_VITALITY_GRASS"
+								if spec.Effects.Active.ShieldFlat > 0 { isDefense = true }
+								if spec.Effects.Active.DamageFlat > 0 || spec.Effects.Active.DamageMult > 0 { isAttack = true }
+							}
 
 							if isHealing {
 								healVal := def
-								if activeEffects["heal_based_on_strength"] > 0 {
+								if false {
 									healVal = refCaster.BaseAttack * 1.5
 								}
 								if healVal <= 0 {
@@ -421,7 +425,7 @@ func CombatAttack(c *gin.Context) {
 								refCaster.VirtualShield += shieldVal
 								logs = append(logs, fmt.Sprintf("-> %s thi triển %s phòng thủ, nhận %.1f Khiên hộ thể (Virtual Shield: %.1f).", refCaster.Name, spec.Name, shieldVal, refCaster.VirtualShield))
 							} else if isAttack {
-								hasBypass := activeEffects["assassination"] > 0 || activeEffects["flying"] > 0
+								hasBypass := spec.Effects.Active != nil && spec.Effects.Active.CurveAttack
 								targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, spec.TargetType, prefX, prefY, hasBypass)
 								if len(targetsIdx) > 0 {
 									logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s!", refCaster.Name, spec.Name))

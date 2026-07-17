@@ -1,22 +1,10 @@
 id,name,item_type,description,rarity,rank,path,effects,tags,base_price
-lifespan_gu,Thọ cổ,Consumable,Thức ăn của tiên cổ Trí Tuệ cửu chuyển.,3,9,,"{""lifespan_boost"": 10.0}","[""food""]",2500
-deer_god_fruit,Quả Thần hươu,Food,Sinh trưởng trên sừng hươu Quải Quả là thức ăn của tiên cổ Kim Cương Niệm.,2,5,,{},"[""food""]",120
-amount_love_flower,Hoa Lượng Tình,Food,Thức ăn của tiên cổ Truy Niệm.,2,5,,{},"[""food""]",120
-dragonfish,Long ngư,Food,Thức ăn của tiên cổ Lưỡi Đao thất chuyển.,2,7,,{},"[""food""]",500
-immortal_essence,Tiên nguyên,Food,Thức ăn nuôi dưỡng Tiên cổ Định Tiên Du.,3,6,,{},"[""food""]",250
-hope_and_fear,Hy vọng và Sợ hãi,Food,Thức ăn của tiên cổ Yêu Thương.,2,5,,{},"[""food""]",120
+water,Nước Sạch,Food,Nước tinh khiết.,1,0,Water Path,{},"[""food""]",5
 nine_beast_kings_eyes,Mắt chín bách thú vương,Material,Nguyên liệu phụ dùng để hợp luyện Tửu Trùng Cửu Nhãn.,1,1,,{},[],5
 stone_monkey_fur,Lông tơ khỉ đá,Material,Vật liệu vô cùng khan hiếm để luyện cổ Quần Lực.,1,1,,{},[],5
-azure_jade_bamboo,Ngọc Trúc Bích Không,Material,Trúc lấy ở Thanh Thiên dùng làm vật liệu luyện Định Tiên Du.,2,5,,{},[],120
-glory_of_the_immemorial_light,Ánh sáng vinh quang Thái cổ,Material,Cần thiết để luyện Định Tiên Du do cổ Thái Quang phát ra.,2,5,,{},[],120
 stinky_fart_gu,Cổ Xú Thí,Material,Phàm cổ tỏa mùi hôi thối dùng làm tài liệu luyện chế cổ A Thỉ.,1,1,,{},[],5
 black_lacquer_mud,Bùn Hắc Tất Mã Hồ,Material,Bùn đầm lầy hôi thối dùng làm tài liệu phụ trợ luyện cổ A Thỉ.,1,1,,{},[],5
-guts_gu,Cổ Can Đảm,Material,Dùng để tráng kiện hồn phách an toàn không tác dụng phụ.,2,5,Soul Path,{},[],120
-soul_core,Hồn hạch,Material,Tinh túy kết tinh sau khi Hồn thú chết dùng sản xuất cổ Can Đảm.,2,5,Soul Path,{},[],120
-ice_tear,Lệ Băng,Material,Nước mắt người tuyết mang lại giá trị tiên tài cao.,2,5,,{},[],120
-snow_lotus_essence,Tuyết Liên Hoa Tinh,Material,Tiên tài Băng Tuyết đạo thượng hạng của tộc Người Tuyết.,2,5,,{},[],120
 stone_man_rice,Mễ Khảm,Material,Sản vật khoáng thạch đặc trưng của Người Đá.,1,1,,{},[],5
-sludge,Hi Nê,Material,Tiên tài Thổ đạo dùng để luyện tiên cổ Hi Nê.,2,5,Earth Path,{},[],120
 jade_stone,Ngọc Thạch,Food,"Đá ngọc có linh khí, dùng dưỡng thương hoặc luyện Cổ phòng ngự.",1,1,Earth Path,"{""restore_hp"": 20}","[""material"", ""earth_path""]",5
 wild_boar_tusk,Nanh Lợn Rừng,Material,Vật phẩm phụ dùng trong hợp luyện Bạch Ngọc Cổ.,1,1,,{},[],5
 sour_wine,Rượu Dương Mai,Food,Loại rượu chua cần cho Tứ Vị Tửu Trùng.,1,1,,{},"[""food""]",5
@@ -29,110 +17,121 @@ heart_knowledge_grass,Cỏ Tri Tâm,Food,Phụ gia thức ăn dùng chung với 
 ginseng,Nhân sâm,Food,Thức ăn của Địa Thính Nhục Nhĩ Thảo.,1,1,,{},"[""food""]",5
 fresh_blood,Máu tươi,Food,Thức ăn của Huyết Nguyệt cổ.,1,1,,{},"[""food""]",5
 earth_qi,Hơi đất,Food,Thức ăn của Địa Tàng Hoa cổ.,1,1,,{},"[""food""]",5
-white_lotus_giant_silkworm,Cổ Bạch Liên Cự Tằm,Food,Thức ăn chuyên dụng để nuôi tiên cổ Tịnh Hồn.,3,6,Soul Path,{},"[""food"", ""immortal_gu_food"", ""soul_path_food""]",250
-womans_heart,Trái tim phụ nữ,Food,Thức ăn để nuôi dưỡng tiên cổ Độc đạo Phụ Nhân Tâm.,3,6,Poison Path,{},"[""food"", ""immortal_gu_food"", ""poison_path_food""]",250
-heavy_gold_ore,Quặng vàng nặng,Food,Thức ăn của tiên cổ Khí Lực.,3,6,Strength Path,{},"[""food"", ""immortal_gu_food"", ""strength_path_food""]",250
 star_shoot_grass,Cỏ Tinh Tiết,Food,Thức ăn và tổ ấm của bầy côn trùng Tinh Huỳnh.,1,1,,{},"[""food""]",5
 starlight_firefly,Côn trùng Tinh Huỳnh,Food,Thức ăn chuyên dụng của cổ Tinh Môn.,1,1,,{},"[""food""]",5
 arrow_bamboo_water,Nước rừng trúc tiễn,Food,Thức ăn của cổ Tinh Tiêu.,1,1,,{},"[""food""]",5
-six_headed_snake_blood,Máu rắn sáu đầu,Food,Thức ăn của tiên cổ Chiêu Tai.,2,5,Poison Path,{},"[""food""]",120
-deep_sea_lightning_eel,Cá chình điện biển sâu,Food,Thức ăn của tiên cổ Lưu Lạc Thiên Nhai.,2,5,,{},"[""food""]",120
-cloud_dragon_scale,Vảy rồng mây,Food,Thức ăn của tiên cổ Một Bước Lên Mây.,2,5,,{},"[""food""]",120
-wind_weasel_bird_eye,Tròng mắt chim Phong Liêm,Food,Thức ăn của tiên cổ Một Bước Lên Mây.,2,5,,{},"[""food""]",120
-overlord_ba_lan_flower,Hoa Ban Lan Bá Vương,Food,Thức ăn của tiên cổ Tuệ Kiếm bát chuyển.,3,8,Wisdom Path,{},"[""food""]",1000
-regret_pool_fog_flower,Hoa Vụ Thái Trạch,Food,Thức ăn của tiên cổ Hối Hận bát chuyển.,3,8,,{},"[""food""]",1000
-dan_qing_incense,Đan Thanh Hương,Food,Sương mù có mùi mực xen lẫn mùi cỏ là thức ăn của tiên cổ Đổi Hồn.,2,5,Soul Path,{},"[""food""]",120
-thread_water,Nước Châu Tuyến,Food,Nước bọt nhện nước Thái cổ là thức ăn của tiên cổ Luật đạo Gia.,2,5,Rule Path,{},"[""food""]",120
-heavenly_crystal,Thiên Tinh,Food,Tiên tài lơ lửng trên không là thức ăn của Thượng Cực Thiên Ưng.,3,8,,{},"[""food""]",1000
-star_fragment,Mảnh Kim Cương Bát Giác,Material,Mảnh sao ở Lam Thiên dùng làm vật liệu luyện Định Tiên Du.,2,5,,{},[],120
-black_oil,Dầu đen,Material,Tiên tài Thực đạo khai thác dưới biển để trì hoãn vỡ vụn tử khiếu tiên cương.,2,5,,{},[],120
-dragon_scale_soil,Đất Long Lân,Material,Bùn đất nơi hoang long sinh sống dùng để nuôi cá Long Ngư.,2,5,,{},[],120
-jade_celery_soil,Đất Ngọc Cần,Material,Đất lạnh buốt bóp thành ngọc dùng để nuôi Cá Bong Bóng.,2,5,,{},[],120
 floating_tea_grass,Cỏ Phù Cầu Trà,Material,Cỏ sinh trưởng trên không trung dùng làm vật liệu của trà Vân Yên.,1,1,,{},[],5
 moon_orchid_petal,Cánh hoa Nguyệt Lan,Food,"Cánh hoa chứa nguyệt hoa, dùng nuôi Nguyệt đạo Cổ hoặc luyện hóa Chân Nguyên.",1,1,Moon Path,"{""mortal_only"": 1, ""restore_mana"": 10}","[""food"", ""moon_path_food""]",5
 green_bamboo_wine,Rượu Thanh Trúc,Food,"Rượu trúc xanh, có thể khôi phục Chân Nguyên hoặc nuôi Tửu Trùng.",1,1,Wood Path,"{""mortal_only"": 1, ""restore_mana"": 20}","[""food"", ""wine"", ""liquor_worm_food""]",5
 boar_meat,Thịt Lợn Rừng,Food,Thức ăn của Bạch Thỉ cổ và Hắc Thỉ cổ.,1,1,,{},"[""food""]",5
 grass_puppet,Hình nộm người cỏ,Material,Vật phẩm luyện tập cơ bản của cổ sư.,1,1,,{},[],5
 time_river_water,Nước sông thời gian,Food,Thức ăn của Xuân Thu Thiền và cổ Niên.,1,1,,{},"[""food""]",5
-sand_gull_soil,Đất Sa Âu,Food,Cát thấm máu Thiên Địa Sa Âu là thức ăn của tiên cổ Liên Vận.,3,6,Luck Path,{},"[""food"", ""immortal_gu_food"", ""luck_path_food""]",250
-flying_bear_meat,Huyết nhục phi hùng,Food,Thức ăn của tiên cổ Phi Hùng Hư Tượng.,2,5,Strength Path,{},"[""food""]",120
-mountain_water_qi_laughing_stone,Sơn khí thủy khí và đá Cười,Food,Thức ăn của tiên cổ Nhạc Sơn Nhạc Thủy.,2,5,,{},"[""food""]",120
-underworld_jellyfish,Sứa U Minh,Food,Thức ăn của tiên cổ Lưu Lạc Thiên Nhai.,2,5,,{},"[""food""]",120
-flowing_light_apple,Quả Lưu Quang,Food,Ngưng kết từ cực quang là thức ăn của tiên cổ bát chuyển Thái Độ.,3,8,,{},"[""food""]",1000
-dark_ink_seaweed,Rong biển Mặc Hải,Food,Thức ăn của tiên cổ Mai Rùa Bói Toán.,2,5,,{},"[""food""]",120
 mine_chest,Rương Mỏ Linh Thạch,Consumable,Rương chứa nhiều tài nguyên quý giá từ mỏ linh thạch.,3,1,,"{""open_mine_chest"": 1.0}",[],5
 bitter_water,Nước Đắng,Food,"Nước có vị đắng chát, thức ăn của Khổ Lực Cổ.",1,1,Water Path,{},"[""food""]",5
 water_weed,Tảo Nước,Food,"Tảo thủy sinh thông thường, thức ăn của Thủy Tráo Cổ.",1,1,Water Path,{},"[""food""]",5
-stone_man_heart,Trái Tim Thạch Nhân,Food,"Trái tim của người đá (Thạch Nhân), thức ăn của Toàn Lực Ứng Phó Cổ.",3,3,Earth Path,{},"[""food""]",30
-immortal_blood,Tiên Huyết,Food,"Máu của Cổ Tiên, chứa đạo ngân.",4,6,Blood Path,{},"[""food""]",250
 beast_blood,Huyết Thú,Food,Máu dã thú thông thường.,1,1,Blood Path,{},"[""food""]",5
 beast_bones,Xương Thú,Food,Xương của dã thú.,1,1,Bone Path,{},"[""food""]",5
-lightning_pearl,Lôi Châu,Food,Viên ngọc ngưng tụ sét.,2,3,Lightning Path,{},"[""food""]",30
-poisonous_flesh,Thịt Độc,Food,Thịt của độc vật.,2,2,Poison Path,{},"[""food""]",15
 tree_sap,Nhựa Cây,Food,Nhựa cây thông thường.,1,1,Wood Path,{},"[""food""]",5
 copper_ore,Quặng Đồng,Food,Quặng kim loại đồng.,1,1,Metal Path,{},"[""food""]",5
-wolf_soul,Hồn Lang,Food,Linh hồn của sói.,2,2,Soul Path,{},"[""food""]",15
-twin_blood,Máu Song Sinh,Food,Máu của cặp song sinh.,3,3,Blood Path,{},"[""food""]",30
-sword_qi,Kiếm Khí,Food,Khí tức sắc bén của kiếm.,2,3,Sword Path,{},"[""food""]",30
 meat,Thịt Tươi,Food,Thịt tươi sống.,1,1,Food Path,{},"[""food""]",5
 iron_ore,Quặng Sắt,Food,Quặng sắt thô.,1,1,Metal Path,{},"[""food""]",5
-regret_water,Nước Hối Hận,Food,Nước mang ý chí hối hận.,4,6,Water Path,{},"[""food""]",250
 wolf_bone,Xương Lang,Food,Xương của loài sói.,1,1,Bone Path,{},"[""food""]",5
 nectar,Mật Hoa,Food,Mật hoa tự nhiên.,1,1,Wood Path,{},"[""food""]",5
-sun_flame,Thái Dương Hỏa,Food,Ngọn lửa chứa khí tức mặt trời.,3,4,Fire Path,{},"[""food""]",60
 iron,Sắt vụn,Food,Mảnh sắt thông thường.,1,1,Metal Path,{},"[""food""]",5
-spirit_spring_water,Nước Linh Tuyền,Food,Nước suối nguyên thạch.,2,2,Water Path,{},"[""food""]",15
-soul_qi,Hồn Khí,Food,Khí tức của linh hồn.,2,2,Soul Path,{},"[""food""]",15
-water,Nước Sạch,Food,Nước tinh khiết.,1,1,Water Path,{},"[""food""]",5
-dream_material,Tài Liệu Mộng Đạo,Material,Vật liệu sinh ra từ cõi mộng.,4,5,Dream Path,{},"[""food"", ""material""]",120
 beast_meat,Thịt Thú,Food,Thịt dã thú.,1,1,Food Path,{},"[""food""]",5
 fish_scales,Vảy Cá,Food,Vảy các loài cá.,1,1,Water Path,{},"[""food""]",5
-four_flavors_wine,Tứ Vị Tửu,Food,"Rượu chứa 4 vị chua, cay, mặn, đắng.",3,3,Food Path,{},"[""food""]",30
 light,Ánh Sáng,Food,Ánh sáng tự nhiên.,1,1,Light Path,{},"[""food""]",5
 blood,Máu,Food,Máu tươi.,1,1,Blood Path,{},"[""food""]",5
+wind_honey,Phong mật,Food,Mật ong gió dùng nuôi Hùng Lực Cổ.,1,1,,{},"[""food""]",5
+black_boar_tusk,Dã Trư Nha,Material,Nanh dã trư dùng hợp luyện Bạch Ngọc Cổ.,1,1,Strength Path,{},[],5
+silver_stone,Ngân Thạch,Material,Đá bạc dùng hợp luyện Nguyệt Ngân Cổ.,1,1,Moon Path,{},[],5
+whirlwind_seed,Toàn phong chủng,Material,Vật liệu phong đạo dùng hợp luyện Nguyệt Toàn Cổ.,1,1,Wind Path,{},[],5
+ITEM_HEALING_PELLET_SMALL,Tiểu Hồi Huyết Đan,Consumable,Đan dược cấp thấp hồi phục sinh lực.,COMMON,1,Human Path,"{""restore_hp"": 30.0}","[""healing"",""pill""]",5
+ITEM_MEDICINAL_PASTE,Kim Sang Dược,Consumable,Thuốc mỡ trị thương ngoài chiến đấu.,COMMON,1,Human Path,"{""restore_hp"": 50.0}","[""healing"",""paste""]",5
+ITEM_HERBAL_SOUP,Linh Thảo Thang,Consumable,"Súp thảo mộc thanh tâm, dưỡng thần.",COMMON,1,Human Path,"{""restore_hp"": 40.0,""restore_mana"":20.0}","[""healing"",""soup""]",5
+poisonous_flesh,Thịt Độc,Food,Thịt của độc vật.,2,2,Poison Path,{},"[""food""]",15
+wolf_soul,Hồn Lang,Food,Linh hồn của sói.,2,2,Soul Path,{},"[""food""]",15
+spirit_spring_water,Nước Linh Tuyền,Food,Nước suối nguyên thạch.,2,2,Water Path,{},"[""food""]",15
+soul_qi,Hồn Khí,Food,Khí tức của linh hồn.,2,2,Soul Path,{},"[""food""]",15
+sword_leaf_grass,Cỏ Kiếm Diệp,Material,Cỏ có hình dạng kiếm diệp sắc bén dùng cho Kiếm đạo.,2,2,Sword Path,{},"[""material""]",15
+spirit_deer_meat,Thịt Hươu Linh,Food,Thịt hươu có linh tính cao.,2,2,Food Path,{},"[""food""]",15
+featherman_feather,Lông Vũ Người Chim,Material,Lông vũ nhẹ nhàng từ dị nhân người lông vũ.,2,2,Human Path,{},"[""material""]",15
+yellow_mud,Hoàng nê,Material,Đất bùn vàng màu mỡ dùng cho Lại Thổ Cáp Mô và luyện Hoàng Đồng Thiềm.,1,2,Earth Path,{},[],15
+snake_tongue,Xà tín,Material,Vật liệu nhiệt cảm dùng cho Xà Tín Cổ.,1,2,,{},[],15
+ITEM_HEALING_PELLET_MEDIUM,Trung Hồi Huyết Đan,Consumable,Đan dược cấp trung hồi phục sinh lực.,UNCOMMON,2,Human Path,"{""restore_hp"": 80.0}","[""healing"",""pill""]",15
+ITEM_BLOOD_GINSENG,Huyết Sâm,Consumable,Dược liệu quý hiếm hồi máu số lượng lớn.,UNCOMMON,2,Wood Path,"{""restore_hp"": 150.0}","[""healing"",""herb""]",15
+stone_man_heart,Trái Tim Thạch Nhân,Food,"Trái tim của người đá (Thạch Nhân), thức ăn của Toàn Lực Ứng Phó Cổ.",3,3,Earth Path,{},"[""food""]",30
+lightning_pearl,Lôi Châu,Food,Viên ngọc ngưng tụ sét.,2,3,Lightning Path,{},"[""food""]",30
+twin_blood,Máu Song Sinh,Food,Máu của cặp song sinh.,3,3,Blood Path,{},"[""food""]",30
+sword_qi,Kiếm Khí,Food,Khí tức sắc bén của kiếm.,2,3,Sword Path,{},"[""food""]",30
+four_flavors_wine,Tứ Vị Tửu,Food,"Rượu chứa 4 vị chua, cay, mặn, đắng.",3,3,Food Path,{},"[""food""]",30
+silver_wolf_pelt,Da Sói Bạc,Material,Tấm da từ sói bạc hoang dã.,3,3,Food Path,{},"[""material""]",30
+water_defense_shell,Thủy hành phòng ngự xác,Material,Vật liệu thủy đạo dùng hợp luyện Thiên Bồng Cổ.,1,3,Water Path,{},[],30
+copper_spike,Đồng đinh,Material,Vật liệu đồng đạo cho Hoàng Đồng Thiềm.,1,3,Metal Path,{},[],30
+ITEM_HEALING_PELLET_LARGE,Đại Hồi Huyết Đan,Consumable,Đan dược cấp cao hồi phục sinh lực.,RARE,3,Human Path,"{""restore_hp"": 200.0}","[""healing"",""pill""]",30
+ITEM_VITALITY_DEW,Sinh Cơ Linh Lộ,Consumable,Dược dịch hồi phục liên tục theo thời gian.,RARE,3,Wood Path,"{""regen_hp_out_of_combat"": 300.0}","[""healing"",""liquid""]",30
+sun_flame,Thái Dương Hỏa,Food,Ngọn lửa chứa khí tức mặt trời.,3,4,Fire Path,{},"[""food""]",60
 heaven_qi,Thiên Khí,Food,Khí tức của bầu trời.,3,4,Heaven Path,{},"[""food""]",60
+hundred_year_lifespan_gu,Bách Niên Thọ Cổ,Material,Thọ cổ trăm năm dùng trong công thức Mộc Mị tiến giai.,2,4,,{},[],60
+nine_palace_flower,Cửu Cung Hoa,Material,Phụ liệu luyện Cốt Dực Cổ.,2,4,Bone Path,{},[],60
+summit_stone,Vấn Đỉnh Thạch,Material,Đá phụ liệu luyện Cốt Dực Cổ.,2,4,Earth Path,{},[],60
+golden_crow_meteor,Kim Ô Lưu Tinh,Material,Tinh thạch phụ liệu luyện Cốt Dực Cổ.,2,4,Fire Path,{},[],60
+cold_ice_grass,Hàn Băng Thảo,Material,Thảo tài băng đạo phụ liệu luyện Cốt Dực Cổ.,2,4,Ice Path,{},[],60
+ITEM_LIFE_SAVING_PILL,Cứu Mệnh Đan,Consumable,Đan dược cứu nguy khi trọng thương.,EPIC,4,Human Path,"{""restore_hp"": 500.0}","[""healing"",""pill""]",60
+deer_god_fruit,Quả Thần hươu,Food,Sinh trưởng trên sừng hươu Quải Quả là thức ăn của tiên cổ Kim Cương Niệm.,2,5,,{},"[""food""]",120
+amount_love_flower,Hoa Lượng Tình,Food,Thức ăn của tiên cổ Truy Niệm.,2,5,,{},"[""food""]",120
+hope_and_fear,Hy vọng và Sợ hãi,Food,Thức ăn của tiên cổ Yêu Thương.,2,5,,{},"[""food""]",120
+azure_jade_bamboo,Ngọc Trúc Bích Không,Material,Trúc lấy ở Thanh Thiên dùng làm vật liệu luyện Định Tiên Du.,2,5,,{},[],120
+glory_of_the_immemorial_light,Ánh sáng vinh quang Thái cổ,Material,Cần thiết để luyện Định Tiên Du do cổ Thái Quang phát ra.,2,5,,{},[],120
+guts_gu,Cổ Can Đảm,Material,Dùng để tráng kiện hồn phách an toàn không tác dụng phụ.,2,5,Soul Path,{},[],120
+soul_core,Hồn hạch,Material,Tinh túy kết tinh sau khi Hồn thú chết dùng sản xuất cổ Can Đảm.,2,5,Soul Path,{},[],120
+ice_tear,Lệ Băng,Material,Nước mắt người tuyết mang lại giá trị tiên tài cao.,2,5,,{},[],120
+snow_lotus_essence,Tuyết Liên Hoa Tinh,Material,Tiên tài Băng Tuyết đạo thượng hạng của tộc Người Tuyết.,2,5,,{},[],120
+sludge,Hi Nê,Material,Tiên tài Thổ đạo dùng để luyện tiên cổ Hi Nê.,2,5,Earth Path,{},[],120
+six_headed_snake_blood,Máu rắn sáu đầu,Food,Thức ăn của tiên cổ Chiêu Tai.,2,5,Poison Path,{},"[""food""]",120
+deep_sea_lightning_eel,Cá chình điện biển sâu,Food,Thức ăn của tiên cổ Lưu Lạc Thiên Nhai.,2,5,,{},"[""food""]",120
+cloud_dragon_scale,Vảy rồng mây,Food,Thức ăn của tiên cổ Một Bước Lên Mây.,2,5,,{},"[""food""]",120
+wind_weasel_bird_eye,Tròng mắt chim Phong Liêm,Food,Thức ăn của tiên cổ Một Bước Lên Mây.,2,5,,{},"[""food""]",120
+dan_qing_incense,Đan Thanh Hương,Food,Sương mù có mùi mực xen lẫn mùi cỏ là thức ăn của tiên cổ Đổi Hồn.,2,5,Soul Path,{},"[""food""]",120
+thread_water,Nước Châu Tuyến,Food,Nước bọt nhện nước Thái cổ là thức ăn của tiên cổ Luật đạo Gia.,2,5,Rule Path,{},"[""food""]",120
+star_fragment,Mảnh Kim Cương Bát Giác,Material,Mảnh sao ở Lam Thiên dùng làm vật liệu luyện Định Tiên Du.,2,5,,{},[],120
+black_oil,Dầu đen,Material,Tiên tài Thực đạo khai thác dưới biển để trì hoãn vỡ vụn tử khiếu tiên cương.,2,5,,{},[],120
+dragon_scale_soil,Đất Long Lân,Material,Bùn đất nơi hoang long sinh sống dùng để nuôi cá Long Ngư.,2,5,,{},[],120
+jade_celery_soil,Đất Ngọc Cần,Material,Đất lạnh buốt bóp thành ngọc dùng để nuôi Cá Bong Bóng.,2,5,,{},[],120
+flying_bear_meat,Huyết nhục phi hùng,Food,Thức ăn của tiên cổ Phi Hùng Hư Tượng.,2,5,Strength Path,{},"[""food""]",120
+mountain_water_qi_laughing_stone,Sơn khí thủy khí và đá Cười,Food,Thức ăn của tiên cổ Nhạc Sơn Nhạc Thủy.,2,5,,{},"[""food""]",120
+underworld_jellyfish,Sứa U Minh,Food,Thức ăn của tiên cổ Lưu Lạc Thiên Nhai.,2,5,,{},"[""food""]",120
+dark_ink_seaweed,Rong biển Mặc Hải,Food,Thức ăn của tiên cổ Mai Rùa Bói Toán.,2,5,,{},"[""food""]",120
+dream_material,Tài Liệu Mộng Đạo,Material,Vật liệu sinh ra từ cõi mộng.,4,5,Dream Path,{},"[""food"", ""material""]",120
 luck_path_material,Tài Liệu Vận Đạo,Material,Tài liệu mang thuộc tính may mắn.,4,5,Luck Path,{},"[""food"", ""material""]",120
+heaven_well_water,Thiên Tỉnh thủy,Material,Vật liệu phụ cho Thương Không Tỉnh Cổ.,2,5,Water Path,{},[],120
+earth_horse_hoof,Địa Mã Chi Đề,Material,Nguyên liệu chính của Độn Địa Cổ.,2,5,Earth Path,{},[],120
+black_oil_refined,Hắc du tinh luyện,Material,Nguyên liệu chính luyện Thải Du Cổ.,2,5,,{},[],120
+gold_dragonfish_scale,Kim long ngư lân,Material,Vảy kim long ngư dùng luyện Thải Du Cổ.,2,5,,{},[],120
+bat_wing,Cánh dơi, Material, Cánh của dơi công dụng chưa rõ, 3,5,,{},[],120
+immortal_essence,Tiên nguyên,Food,Thức ăn nuôi dưỡng Tiên cổ Định Tiên Du.,3,6,,{},"[""food""]",250
+white_lotus_giant_silkworm,Cổ Bạch Liên Cự Tằm,Food,Thức ăn chuyên dụng để nuôi tiên cổ Tịnh Hồn.,3,6,Soul Path,{},"[""food"", ""immortal_gu_food"", ""soul_path_food""]",250
+womans_heart,Trái tim phụ nữ,Food,Thức ăn để nuôi dưỡng tiên cổ Độc đạo Phụ Nhân Tâm.,3,6,Poison Path,{},"[""food"", ""immortal_gu_food"", ""poison_path_food""]",250
+heavy_gold_ore,Quặng vàng nặng,Food,Thức ăn của tiên cổ Khí Lực.,3,6,Strength Path,{},"[""food"", ""immortal_gu_food"", ""strength_path_food""]",250
+sand_gull_soil,Đất Sa Âu,Food,Cát thấm máu Thiên Địa Sa Âu là thức ăn của tiên cổ Liên Vận.,3,6,Luck Path,{},"[""food"", ""immortal_gu_food"", ""luck_path_food""]",250
+immortal_blood,Tiên Huyết,Food,"Máu của Cổ Tiên, chứa đạo ngân.",4,6,Blood Path,{},"[""food""]",250
+regret_water,Nước Hối Hận,Food,Nước mang ý chí hối hận.,4,6,Water Path,{},"[""food""]",250
 node_moon_orchid_field,Cơ sở Cánh Đồng Hoa Nguyệt Lan,Material,Cơ sở Tiên Khiếu dùng để sản sinh Cánh Hoa Nguyệt Lan.,3,6,Moon Path,{},[],250
 node_green_bamboo_grove,Cơ sở Rừng Trúc Thanh Trúc,Material,Cơ sở Tiên Khiếu dùng để sản sinh Rượu Thanh Trúc.,3,6,Wood Path,{},[],250
 node_jade_stone_mine,Cơ sở Mỏ Ngọc Thạch Bản Địa,Material,Cơ sở Tiên Khiếu dùng để sản sinh Ngọc Thạch.,3,6,Earth Path,{},[],250
 node_primeval_mine,Cơ sở Mạch Nguyên Thạch Tiên Khiếu,Material,Cơ sở Tiên Khiếu dùng để sản sinh Nguyên Thạch.,3,6,Rule Path,{},[],250
-sword_leaf_grass,Cỏ Kiếm Diệp,Material,Cỏ có hình dạng kiếm diệp sắc bén dùng cho Kiếm đạo.,2,2,Sword Path,{},"[""material""]",15
-spirit_deer_meat,Thịt Hươu Linh,Food,Thịt hươu có linh tính cao.,2,2,Food Path,{},"[""food""]",15
-silver_wolf_pelt,Da Sói Bạc,Material,Tấm da từ sói bạc hoang dã.,3,3,Food Path,{},"[""material""]",30
 hairy_man_slaves,Nô Lệ Người Lông,Material,Dị nhân người lông giỏi luyện Cổ.,3,6,Human Path,{},"[""material""]",250
-featherman_feather,Lông Vũ Người Chim,Material,Lông vũ nhẹ nhàng từ dị nhân người lông vũ.,2,2,Human Path,{},"[""material""]",15
 node_sword_leaf_grass,Cơ sở Đồng Cỏ Kiếm Diệp,Material,Cơ sở Tiên Khiếu dùng để sản sinh Cỏ Kiếm Diệp.,3,6,Sword Path,{},[],250
 node_spirit_deer_pasture,Cơ sở Bãi Chăn Thả Hươu Linh,Material,Cơ sở Tiên Khiếu dùng để sản sinh Thịt Hươu Linh.,3,6,Food Path,{},[],250
 node_silver_wolf_den,Cơ sở Hang Sói Bạc,Material,Cơ sở Tiên Khiếu dùng để sản sinh Da Sói Bạc.,3,6,Food Path,{},[],250
 node_hairy_man_settlement,Cơ sở Bộ Lạc Người Lông,Material,Cơ sở Tiên Khiếu chiêu mộ dị nhân Người Lông.,3,6,Human Path,{},[],250
 node_rockman_tribe,Cơ sở Bản Doanh Người Đá,Material,Cơ sở Tiên Khiếu chiêu mộ dị nhân Người Đá.,3,6,Human Path,{},[],250
 node_featherman_canyon,Cơ sở Hẻm Núi Người Lông Vũ,Material,Cơ sở Tiên Khiếu chiêu mộ dị nhân Người Lông Vũ.,3,6,Human Path,{},[],250
-wind_honey,Phong mật,Food,Mật ong gió dùng nuôi Hùng Lực Cổ.,1,1,,{},"[""food""]",5
-yellow_mud,Hoàng nê,Material,Đất bùn vàng màu mỡ dùng cho Lại Thổ Cáp Mô và luyện Hoàng Đồng Thiềm.,1,2,Earth Path,{},[],15
-black_boar_tusk,Dã Trư Nha,Material,Nanh dã trư dùng hợp luyện Bạch Ngọc Cổ.,1,1,Strength Path,{},[],5
-snake_tongue,Xà tín,Material,Vật liệu nhiệt cảm dùng cho Xà Tín Cổ.,1,2,,{},[],15
-silver_stone,Ngân Thạch,Material,Đá bạc dùng hợp luyện Nguyệt Ngân Cổ.,1,1,Moon Path,{},[],5
-whirlwind_seed,Toàn phong chủng,Material,Vật liệu phong đạo dùng hợp luyện Nguyệt Toàn Cổ.,1,1,Wind Path,{},[],5
-water_defense_shell,Thủy hành phòng ngự xác,Material,Vật liệu thủy đạo dùng hợp luyện Thiên Bồng Cổ.,1,3,Water Path,{},[],30
-hundred_year_lifespan_gu,Bách Niên Thọ Cổ,Material,Thọ cổ trăm năm dùng trong công thức Mộc Mị tiến giai.,2,4,,{},[],60
-heaven_well_water,Thiên Tỉnh thủy,Material,Vật liệu phụ cho Thương Không Tỉnh Cổ.,2,5,Water Path,{},[],120
-copper_spike,Đồng đinh,Material,Vật liệu đồng đạo cho Hoàng Đồng Thiềm.,1,3,Metal Path,{},[],30
-nine_palace_flower,Cửu Cung Hoa,Material,Phụ liệu luyện Cốt Dực Cổ.,2,4,Bone Path,{},[],60
-summit_stone,Vấn Đỉnh Thạch,Material,Đá phụ liệu luyện Cốt Dực Cổ.,2,4,Earth Path,{},[],60
-golden_crow_meteor,Kim Ô Lưu Tinh,Material,Tinh thạch phụ liệu luyện Cốt Dực Cổ.,2,4,Fire Path,{},[],60
-cold_ice_grass,Hàn Băng Thảo,Material,Thảo tài băng đạo phụ liệu luyện Cốt Dực Cổ.,2,4,Ice Path,{},[],60
-earth_horse_hoof,Địa Mã Chi Đề,Material,Nguyên liệu chính của Độn Địa Cổ.,2,5,Earth Path,{},[],120
-black_oil_refined,Hắc du tinh luyện,Material,Nguyên liệu chính luyện Thải Du Cổ.,2,5,,{},[],120
-gold_dragonfish_scale,Kim long ngư lân,Material,Vảy kim long ngư dùng luyện Thải Du Cổ.,2,5,,{},[],120
 blade_food,Đao khí tinh thiết,Food,Thức ăn mô phỏng cho Đan Đao Cổ.,3,6,Blade Path,{},"[""food""]",250
-bat_wing,Cánh dơi, Material, Cánh của dơi công dụng chưa rõ, 3,5,,{},[],120
-ITEM_HEALING_PELLET_SMALL,Tiểu Hồi Huyết Đan,Consumable,Đan dược cấp thấp hồi phục sinh lực.,COMMON,1,Human Path,"{""restore_hp"": 30.0}","[""healing"",""pill""]",5
-ITEM_HEALING_PELLET_MEDIUM,Trung Hồi Huyết Đan,Consumable,Đan dược cấp trung hồi phục sinh lực.,UNCOMMON,2,Human Path,"{""restore_hp"": 80.0}","[""healing"",""pill""]",15
-ITEM_HEALING_PELLET_LARGE,Đại Hồi Huyết Đan,Consumable,Đan dược cấp cao hồi phục sinh lực.,RARE,3,Human Path,"{""restore_hp"": 200.0}","[""healing"",""pill""]",30
-ITEM_LIFE_SAVING_PILL,Cứu Mệnh Đan,Consumable,Đan dược cứu nguy khi trọng thương.,EPIC,4,Human Path,"{""restore_hp"": 500.0}","[""healing"",""pill""]",60
 ITEM_IMMORTAL_RECOVERY_PILL,Tiên Nguyên Hồi Sinh Đan,Consumable,Tiên đan chữa thương cấp bậc Cổ Tiên.,LEGENDARY,6,Human Path,"{""restore_hp"": 1000.0,""heal_aperture"":100.0}","[""healing"",""pill"",""immortal""]",250
-ITEM_MEDICINAL_PASTE,Kim Sang Dược,Consumable,Thuốc mỡ trị thương ngoài chiến đấu.,COMMON,1,Human Path,"{""restore_hp"": 50.0}","[""healing"",""paste""]",5
-ITEM_HERBAL_SOUP,Linh Thảo Thang,Consumable,"Súp thảo mộc thanh tâm, dưỡng thần.",COMMON,1,Human Path,"{""restore_hp"": 40.0,""restore_mana"":20.0}","[""healing"",""soup""]",5
-ITEM_BLOOD_GINSENG,Huyết Sâm,Consumable,Dược liệu quý hiếm hồi máu số lượng lớn.,UNCOMMON,2,Wood Path,"{""restore_hp"": 150.0}","[""healing"",""herb""]",15
-ITEM_VITALITY_DEW,Sinh Cơ Linh Lộ,Consumable,Dược dịch hồi phục liên tục theo thời gian.,RARE,3,Wood Path,"{""regen_hp_out_of_combat"": 300.0}","[""healing"",""liquid""]",30
 ITEM_IMMORTAL_SPRING_WATER,Tiên Tuyền Thủy,Consumable,Nước suối tiên khôi phục cả đạo ngân và tiên khiếu.,LEGENDARY,6,Water Path,"{""restore_hp"": 500.0,""heal_aperture"":500.0}","[""healing"",""liquid"",""immortal""]",250
+dragonfish,Long ngư,Food,Thức ăn của tiên cổ Lưỡi Đao thất chuyển.,2,7,,{},"[""food""]",500
+overlord_ba_lan_flower,Hoa Ban Lan Bá Vương,Food,Thức ăn của tiên cổ Tuệ Kiếm bát chuyển.,3,8,Wisdom Path,{},"[""food""]",1000
+regret_pool_fog_flower,Hoa Vụ Thái Trạch,Food,Thức ăn của tiên cổ Hối Hận bát chuyển.,3,8,,{},"[""food""]",1000
+heavenly_crystal,Thiên Tinh,Food,Tiên tài lơ lửng trên không là thức ăn của Thượng Cực Thiên Ưng.,3,8,,{},"[""food""]",1000
+flowing_light_apple,Quả Lưu Quang,Food,Ngưng kết từ cực quang là thức ăn của tiên cổ bát chuyển Thái Độ.,3,8,,{},"[""food""]",1000

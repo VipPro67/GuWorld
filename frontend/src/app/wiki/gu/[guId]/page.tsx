@@ -99,9 +99,9 @@ function renderSingleValue(key: string, value: number): string {
   return `${label}: ${value}`;
 }
 
-function formatEffectsSection(section: Record<string, number> | undefined): string[] {
+function formatEffectsSection(section: any): string[] {
   if (!section || Object.keys(section).length === 0) return [];
-  return Object.entries(section).map(([k, v]) => renderSingleValue(k, v));
+  return Object.entries(section).map(([k, v]) => renderSingleValue(k, v as number));
 }
 
 function GuStatBar({ label, value, max }: { label: string; value: number; max: number }) {

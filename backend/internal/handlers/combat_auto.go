@@ -147,9 +147,8 @@ func AutoCombatStart(c *gin.Context) {
 	// ── Apply global damage multipliers from loadout Gus (e.g. Thái Độ Cổ) ──
 	globalMultiplier := 1.0
 	scanMultiplier := func(spec models.GuDictionaryItem) {
-		activeEff := models.GetGuEffectSection(spec, "active")
-		if v, ok := activeEff["damage_multiplier"]; ok && v > 1.0 {
-			globalMultiplier *= v
+		if spec.Effects.Active != nil && spec.Effects.Active.DamageMult > 1.0 {
+			globalMultiplier *= spec.Effects.Active.DamageMult
 		}
 	}
 	if coreSpec, ok := models.GuRegistry[req.Loadout.CoreGuId]; ok {
@@ -199,13 +198,8 @@ func AutoCombatStart(c *gin.Context) {
 	// ── Virtual Shield from loadout ──
 	virtualShield := 0
 	scanShield := func(spec models.GuDictionaryItem) {
-		for _, section := range []string{"active", "support", "passive", "house"} {
-			eff := models.GetGuEffectSection(spec, section)
-			for _, key := range []string{"virtual_shield", "orbit_shield", "team_shield"} {
-				if val, exists := eff[key]; exists {
-					virtualShield += int(val)
-				}
-			}
+		if spec.Effects.Active != nil && spec.Effects.Active.ShieldFlat > 0 {
+			virtualShield += int(spec.Effects.Active.ShieldFlat)
 		}
 	}
 	if coreSpec, ok := models.GuRegistry[req.Loadout.CoreGuId]; ok {
@@ -693,9 +687,6 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		}
 	}
 
-	active := models.GetGuEffectSection(*spec, "active")
-	support := models.GetGuEffectSection(*spec, "support")
-
 	act := simulator.SimAction{
 		ActionType: actionType,
 		Name:       spec.Name,
@@ -704,28 +695,22 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		ManaCost:   cost,
 	}
 
-	for _, m := range []map[string]float64{active, support} {
-		if v, ok := m["shield"]; ok {
-			act.Defense += v
+	if spec.Effects.Active != nil {
+		active := spec.Effects.Active
+		if active.ShieldFlat > 0 {
+			act.Defense += active.ShieldFlat
 		}
-		if v, ok := m["bleed"]; ok {
-			act.BleedPerTurn += v
+		if active.ApplyStatus == "BLEED" {
+			act.BleedPerTurn += active.StatusTickDamage
 		}
-
-		if v, ok := m["poison"]; ok {
-			act.PoisonPerTurn += v
+		if active.LifeStealRate > 0 {
+			act.LifeStealPct += active.LifeStealRate
 		}
-		if v, ok := m["stun"]; ok {
-			act.StunTurns = int(v)
+		if active.HealFlat > 0 {
+			act.Healing += active.HealFlat
 		}
-		if v, ok := m["life_steal"]; ok {
-			act.LifeStealPct += v / 100.0
-		}
-		if v, ok := m["blood_drain"]; ok {
-			act.LifeStealPct += v / 100.0
-		}
-		if v, ok := m["heal"]; ok {
-			act.Healing += v
+		if active.BloodDrain {
+			act.LifeStealPct += 0.5
 		}
 	}
 
@@ -734,23 +719,11 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 
 // hasCombatActiveEffects returns true if the Gu's active effects produce a meaningful combat action.
 func hasCombatActiveEffects(spec *models.GuDictionaryItem) bool {
-	active := models.GetGuEffectSection(*spec, "active")
-	if len(active) == 0 {
+	if spec.Effects.Active == nil {
 		return false
 	}
-	combatKeys := []string{
-		"damage", "add_base_attack", "base_damage_bonus",
-		"defense", "add_base_defense", "base_defense_bonus",
-		"shield",
-		"bleed", "poison", "stun",
-		"life_steal", "blood_drain", "heal",
-	}
-	for _, k := range combatKeys {
-		if _, ok := active[k]; ok {
-			return true
-		}
-	}
-	return false
+	active := spec.Effects.Active
+	return active.DamageFlat > 0 || active.DamageMult > 0 || active.ShieldFlat > 0 || active.ApplyStatus != "" || active.LifeStealRate > 0 || active.HealFlat > 0 || active.BloodDrain
 }
 
 func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlot) simulator.SimAction {

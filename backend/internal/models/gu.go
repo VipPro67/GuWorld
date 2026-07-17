@@ -9,7 +9,63 @@ import (
 	"time"
 )
 
-type GuEffects map[string]map[string]interface{}
+type ActiveEffect struct {
+	DamageFlat          float64 `json:"damage_flat,omitempty"`
+	DamagePath          string  `json:"damage_path,omitempty"`
+	HealFlat            float64 `json:"heal_flat,omitempty"`
+	ShieldFlat          float64 `json:"shield_flat,omitempty"`
+	ApplyStatus         string  `json:"apply_status,omitempty"`
+	StatusTickDamage    float64 `json:"status_tick_damage,omitempty"`
+	StatusDurationTicks int     `json:"status_duration_ticks,omitempty"`
+	TargetSelector      string  `json:"target_selector,omitempty"`
+	TargetCount         int     `json:"target_count,omitempty"`
+	SummonMonsterID     string  `json:"summon_monster_id,omitempty"`
+	SummonPosition      string  `json:"summon_position,omitempty"`
+	InheritStatsPercent float64 `json:"inherit_stats_percent,omitempty"`
+	
+	Range               float64 `json:"range,omitempty"`
+	CurveAttack         bool    `json:"curve_attack,omitempty"`
+	ManaRegen           float64 `json:"mana_regen,omitempty"`
+	WoodTransformation  bool    `json:"wood_transformation,omitempty"`
+	BloodDrain          bool    `json:"blood_drain,omitempty"`
+	Replicate           bool    `json:"replicate,omitempty"`
+	LifeStealRate       float64 `json:"lifesteal_rate,omitempty"`
+	RefineManaTier      float64 `json:"refine_mana_tier,omitempty"`
+	DamageMult          float64 `json:"damage_mult,omitempty"`
+	CleansingPower      float64 `json:"cleansing_power,omitempty"`
+	SummonPhantom       bool    `json:"summon_phantom,omitempty"`
+	GenerateGu          bool    `json:"generate_gu,omitempty"`
+}
+
+type PassiveEffect struct {
+	StatBaseAttack        float64 `json:"stat_base_attack,omitempty"`
+	StatBaseDefense       float64 `json:"stat_base_defense,omitempty"`
+	StatBaseHP            float64 `json:"stat_base_hp,omitempty"`
+	ManaRegenMult         float64 `json:"mana_regen_mult,omitempty"`
+	PathConflictReduction float64 `json:"path_conflict_reduction,omitempty"`
+
+	DamageMultiplierOnHit float64 `json:"damage_multiplier_on_hit,omitempty"`
+	SoulRefinement        float64 `json:"soul_refinement,omitempty"`
+	StorageCapacity       float64 `json:"storage_capacity,omitempty"`
+	Movement              float64 `json:"movement,omitempty"`
+	Investigation         float64 `json:"investigation,omitempty"`
+	Hearing               float64 `json:"hearing,omitempty"`
+	Evasion               float64 `json:"evasion,omitempty"`
+	RefineManaTier        float64 `json:"refine_mana_tier,omitempty"`
+	CleansingPower        float64 `json:"cleansing_power,omitempty"`
+}
+
+type SpecialMechanic struct {
+	EventTrigger string          `json:"event_trigger"`
+	ActionCode   string          `json:"action_code"`
+	Params       json.RawMessage `json:"params"`
+}
+
+type GuEffects struct {
+	Active  *ActiveEffect     `json:"active"`
+	Passive *PassiveEffect    `json:"passive"`
+	Other   []SpecialMechanic `json:"other"`
+}
 
 type GuDictionaryItem struct {
 	ID           string    `json:"id"`
@@ -51,105 +107,47 @@ type PlayerGu struct {
 
 func (g *GuEffects) Scan(value interface{}) error {
 	if value == nil {
-		*g = defaultGuEffects()
+		*g = GuEffects{}
 		return nil
 	}
 	b, ok := value.([]byte)
 	if !ok {
 		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 	}
-
-	var nested map[string]map[string]interface{}
-	if err := json.Unmarshal(b, &nested); err == nil && hasGuEffectSection(nested) {
-		effects := defaultGuEffects()
-		for section, values := range nested {
-			if !validGuEffectSection(section) {
-				continue
-			}
-			for key, val := range values {
-				effects[section][key] = val
-			}
-		}
-		*g = effects
-		return nil
-	}
-
-	var flat map[string]interface{}
-	if err := json.Unmarshal(b, &flat); err != nil {
+	
+	// Khởi tạo Other là mảng rỗng thay vì nil để dễ dùng
+	if err := json.Unmarshal(b, g); err != nil {
 		return err
 	}
-	effects := defaultGuEffects()
-	for key, val := range flat {
-		effects["active"][key] = val
+	if g.Other == nil {
+		g.Other = []SpecialMechanic{}
 	}
-	*g = effects
 	return nil
 }
 
 func (g GuEffects) Value() (driver.Value, error) {
-	if g == nil {
-		return json.Marshal(defaultGuEffects())
-	}
 	return json.Marshal(g)
 }
 
-func GetGuEffectSection(gu Gu, section string) map[string]float64 {
-	if !validGuEffectSection(section) || gu.Effects == nil {
-		return map[string]float64{}
+func GetFlatGuEffects(gu Gu) map[string]float64 {
+	res := make(map[string]float64)
+	if gu.Effects.Active != nil {
+		if gu.Effects.Active.DamageFlat > 0 { res["damage"] = gu.Effects.Active.DamageFlat }
+		if gu.Effects.Active.ShieldFlat > 0 { res["defense"] = gu.Effects.Active.ShieldFlat }
+		if gu.Effects.Active.DamageMult > 0 { res["damage_multiplier"] = gu.Effects.Active.DamageMult }
+		if gu.Effects.Active.ApplyStatus == "BLEED" { res["bleed"] = gu.Effects.Active.StatusTickDamage }
+		if gu.Effects.Active.LifeStealRate > 0 { res["lifesteal"] = gu.Effects.Active.LifeStealRate }
+		if gu.Effects.Active.HealFlat > 0 { res["heal"] = gu.Effects.Active.HealFlat }
+		if gu.Effects.Active.BloodDrain { res["blood_drain"] = 1.0 }
+		res["channel_time"] = 0 // default
 	}
-	values, ok := gu.Effects[section]
-	if !ok || values == nil {
-		return map[string]float64{}
+	if gu.Effects.Passive != nil {
+		if gu.Effects.Passive.StatBaseAttack > 0 { res["flat_damage"] = gu.Effects.Passive.StatBaseAttack }
+		if gu.Effects.Passive.StatBaseDefense > 0 { res["flat_defense"] = gu.Effects.Passive.StatBaseDefense }
+		if gu.Effects.Passive.Investigation > 0 { res["success_rate_bonus"] = gu.Effects.Passive.Investigation }
+		if gu.Effects.Passive.PathConflictReduction > 0 { res["path_conflict_reduction"] = gu.Effects.Passive.PathConflictReduction }
 	}
-	result := make(map[string]float64, len(values))
-	for k, v := range values {
-		switch val := v.(type) {
-		case float64:
-			result[k] = val
-		case float32:
-			result[k] = float64(val)
-		case int:
-			result[k] = float64(val)
-		case int64:
-			result[k] = float64(val)
-		case bool:
-			if val {
-				result[k] = 1.0
-			} else {
-				result[k] = 0.0
-			}
-		}
-	}
-	return result
-}
-
-func defaultGuEffects() GuEffects {
-	return GuEffects{
-		"active":     map[string]interface{}{},
-		"support":    map[string]interface{}{},
-		"passive":    map[string]interface{}{},
-		"house":      map[string]interface{}{},
-		"explore":    map[string]interface{}{},
-		"refinement": map[string]interface{}{},
-	}
-}
-
-func validGuEffectSection(section string) bool {
-	switch section {
-	case "active", "support", "passive", "house", "explore", "refinement":
-		return true
-	default:
-		return false
-	}
-}
-
-func hasGuEffectSection(values map[string]map[string]interface{}) bool {
-	for section := range values {
-		if validGuEffectSection(section) {
-			return true
-		}
-	}
-	return false
+	return res
 }
 
 func rawEffectNumber(raw json.RawMessage) (float64, bool) {

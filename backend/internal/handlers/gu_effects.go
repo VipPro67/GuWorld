@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -18,63 +19,6 @@ type Action struct {
 	LifeStealRate float64
 	StatusEffects []models.StatusEffect
 	Logs          []string
-}
-
-// ── REGISTRIES ────────────────────────────────────────────────────────
-
-type StatEffectHandler func(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64)
-type CombatEffectHandler func(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error
-type SupportEffectHandler func(player *models.Player, spec models.GuDictionaryItem) (string, error)
-type ConsumableEffectHandler func(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem) (string, error)
-
-var StatEffectRegistry = map[string]StatEffectHandler{
-	"add_base_attack":          addAttackStat,
-	"add_base_defense":         addDefenseStat,
-	"damage_multiplier_on_hit": addDamageOnHitStat,
-	"soul_refinement":          addSoulStat,
-	"storage":                  addStorageStat,
-	"movement":                 addMovementStat,
-	"investigation":            addInvestigationStat,
-	"hearing":                  addHearingStat,
-	"evasion":                  addEvasionStat,
-	"refine_mana_tier":         addRefineManaTierStat,
-	"cleansing_power":          addCleansingPowerStat,
-}
-
-var ActiveEffectRegistry = map[string]CombatEffectHandler{
-	"damage":              handleDamageEffect,
-	"add_base_attack":     handleDamageEffect,
-	"add_base_defense":    handleDefenseEffect,
-	"range":               handleRangeEffect,
-	"curve_attack":        handleCurveAttackEffect,
-	"mana_regen":          handleManaRegen,
-	"wood_transformation": handleWoodTransformation,
-	"blood_drain":         handleBloodDrain,
-	"replicate":           handleReplicate,
-	"bleed":               handleBleedEffect,
-	"life_steal":          handleLifeStealEffect,
-	"refine_mana_tier":    handleRefineManaTier,
-	"damage_multiplier":   handleDamageMultiplier,
-	"cleansing_power":     handleCleansingPower,
-	"summon_phantom":      handleSummonPhantom,
-	"generate_gu":         handleGenerateGu,
-}
-
-var OutCombatSupportRegistry = map[string]SupportEffectHandler{
-	"increase_aptitude": handleIncreaseAptitude,
-	"share_cultivation": handleShareCultivation,
-}
-
-var ConsumableEffectRegistry = map[string]ConsumableEffectHandler{
-	"rank_progress":          handleRankProgress,
-	"raise_cultivation":      handleRankProgress,
-	"aperture_petrification": handleAperturePetrification,
-	"give_stones":            handleGiveStones,
-	"soul_boost":             handleSoulBoost,
-	"force_rank_up":          handleForceRankUp,
-	"mana_pollution":         handleManaPollution,
-	"enslave_beast_tier":     handleEnslaveBeastTier,
-	"add_lifespan_years":     handleLifespanBoost,
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────
@@ -118,7 +62,7 @@ func ValidateGuUsable(player *models.Player, gu *models.GuInstance, spec *models
 		return fmt.Errorf("Cổ trùng chưa được trang bị: %s", spec.Name)
 	}
 
-	// Rule 1: Level Penalty (Backlash) — return error BEFORE applying damage
+	// Rule 1: Level Penalty (Backlash)
 	if player.Rank < spec.Rank {
 		return fmt.Errorf("Backlash: Cổ trùng Rank %d phản phệ Không Khiếu Rank %d! (Trừ 50 HP)", spec.Rank, player.Rank)
 	}
@@ -163,24 +107,76 @@ func BuildCombatAction(ctx *CombatContext, spec models.GuDictionaryItem) (Action
 		ManaCost: cost,
 	}
 
-	activeEffects := models.GetGuEffectSection(spec, "active")
+	if spec.Effects.Active == nil {
+		return action, nil
+	}
+	
+	active := spec.Effects.Active
 
-	// First pass: set base damage and defense
-	for effectKey := range activeEffects {
-		if effectKey == "damage" || effectKey == "add_base_attack" || effectKey == "base_damage_bonus" {
-			action.Dmg += dmg
-		} else if effectKey == "defense" || effectKey == "add_base_defense" || effectKey == "base_defense_bonus" {
-			action.Def += def
-		}
+	if active.DamageFlat > 0 {
+		action.Dmg += dmg
+	}
+	if active.ShieldFlat > 0 {
+		action.Def += def
 	}
 
-	// Second pass: run effect handlers (ensures damage_multiplier sees action.Dmg already set)
-	for effectKey := range activeEffects {
-		if handler, ok := ActiveEffectRegistry[effectKey]; ok {
-			if err := handler(ctx, &spec, &action); err != nil {
-				return Action{}, err
-			}
+	if active.Range > 0 {
+		action.Logs = append(action.Logs, fmt.Sprintf("%s kéo dài khoảng cách tấn công lên %.0f thước.", spec.Name, active.Range))
+	}
+	if active.CurveAttack {
+		action.Logs = append(action.Logs, fmt.Sprintf("%s uốn lượn đường bay tấn công vòng qua phòng ngự trực diện.", spec.Name))
+	}
+	if active.ManaRegen > 0 {
+		ctx.Attacker.CurrentMana += active.ManaRegen
+		if ctx.Attacker.CurrentMana > ctx.Attacker.MaxMana {
+			ctx.Attacker.CurrentMana = ctx.Attacker.MaxMana
 		}
+		action.IsUtility = true
+		action.Logs = append(action.Logs, fmt.Sprintf("%s hồi phục %.1f Chân Nguyên.", spec.Name, active.ManaRegen))
+	}
+	if active.WoodTransformation {
+		action.Def += 30.0
+		action.Logs = append(action.Logs, fmt.Sprintf("%s hóa thân thành yêu tinh cây, tăng thêm phòng ngự (+30.0 Thủ).", spec.Name))
+	}
+	if active.BloodDrain {
+		action.LifeStealRate += 0.5
+		action.Logs = append(action.Logs, fmt.Sprintf("%s kích hoạt cơ chế hút máu từ địch.", spec.Name))
+	}
+	if active.Replicate {
+		action.Logs = append(action.Logs, fmt.Sprintf("%s sinh sản nhân bản ma cổ.", spec.Name))
+	}
+	if active.ApplyStatus == "BLEED" {
+		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
+			Type:  "bleed",
+			Value: active.StatusTickDamage,
+			Turns: active.StatusDurationTicks,
+		})
+		action.Logs = append(action.Logs, fmt.Sprintf("%s gây trạng thái xuất huyết (trừ %.1f HP mỗi lượt).", spec.Name, active.StatusTickDamage))
+	}
+	if active.LifeStealRate > 0 {
+		action.LifeStealRate += active.LifeStealRate
+	}
+	if active.RefineManaTier > 0 {
+		boost := active.RefineManaTier * 0.20
+		action.Dmg += action.Dmg * boost
+		action.IsUtility = true
+		action.Logs = append(action.Logs, fmt.Sprintf("Kích hoạt %s nâng phẩm Chân Nguyên (+%.0f%% Sát thương).", spec.Name, active.RefineManaTier*20))
+	}
+	if active.DamageMult > 1.0 {
+		action.Dmg *= active.DamageMult
+		action.IsUtility = true
+		action.Logs = append(action.Logs, fmt.Sprintf("Kích hoạt %s, tăng uy lực (x%.0f sát thương).", spec.Name, active.DamageMult))
+	}
+	if active.CleansingPower > 0 {
+		action.IsUtility = true
+		action.Logs = append(action.Logs, fmt.Sprintf("Kích hoạt %s! Thanh tẩy dị lực và loại bỏ tạp chất trong Không khiếu.", spec.Name))
+	}
+	if active.SummonPhantom {
+		action.Dmg += ctx.Attacker.BaseAttack
+		action.Logs = append(action.Logs, fmt.Sprintf("%s triệu hồi thú lực hư ảnh, gây %.1f sát thương lực đạo.", spec.Name, ctx.Attacker.BaseAttack))
+	}
+	if active.GenerateGu {
+		action.Logs = append(action.Logs, fmt.Sprintf("%s bắt đầu ngưng tụ Sinh Cơ Diệp.", spec.Name))
 	}
 
 	return action, nil
@@ -216,285 +212,80 @@ func ApplyPostDamageEffects(ctx *CombatContext, playerAction *Action, enemyActio
 	}
 }
 
-// ── PASSIVE EFFECT HANDLERS ──────────────────────────────────────────
+// ── OUT-OF-COMBAT EVENT HANDLERS ────────────────────────────────────────
 
-func addAttackStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["attack"] += guSectionValue(*spec, "passive", "add_base_attack") * getPathMasteryMultiplier(player, spec.Path)
-}
-
-func addDefenseStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["defense"] += guSectionValue(*spec, "passive", "add_base_defense") * getPathMasteryMultiplier(player, spec.Path)
-}
-
-func addDamageOnHitStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	if player.BaseHP <= 0 {
-		return
+func HandleConsumeEvent(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem, mechanic models.SpecialMechanic) (string, error) {
+	var params map[string]interface{}
+	if len(mechanic.Params) > 0 {
+		_ = json.Unmarshal(mechanic.Params, &params)
 	}
-	missingHpRate := 1.0 - player.HP/player.BaseHP
-	stats["damage_multiplier"] += missingHpRate * guSectionValue(*spec, "passive", "damage_multiplier_on_hit")
-}
-
-func addSoulStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["soul"] += guSectionValue(*spec, "passive", "soul_refinement")
-}
-
-func addStorageStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["storage"] += guSectionValue(*spec, "passive", "storage")
-}
-
-func addMovementStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["movement"] += guSectionValue(*spec, "passive", "movement")
-}
-
-func addInvestigationStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["investigation"] += guSectionValue(*spec, "passive", "investigation")
-}
-
-func addHearingStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["hearing"] += guSectionValue(*spec, "passive", "hearing")
-}
-
-func addEvasionStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["evasion"] += guSectionValue(*spec, "passive", "evasion")
-}
-
-func addRefineManaTierStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["healing"] += guSectionValue(*spec, "passive", "refine_mana_tier") * 10.0
-}
-
-func addCleansingPowerStat(player *models.Player, spec *models.GuDictionaryItem, stats map[string]float64) {
-	stats["healing"] += guSectionValue(*spec, "passive", "cleansing_power") * 15.0
-}
-
-// ── ACTIVE COMBAT EFFECT HANDLERS ─────────────────────────────────────
-
-func handleDamageEffect(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	dmg, _, _, err := CalculateGuEffectForCombatant(ctx.Attacker, spec)
-	if err != nil {
-		return err
-	}
-	action.Dmg += dmg
-	return nil
-}
-
-func handleDefenseEffect(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	_, def, _, err := CalculateGuEffectForCombatant(ctx.Attacker, spec)
-	if err != nil {
-		return err
-	}
-	action.Def += def
-	return nil
-}
-
-func handleRangeEffect(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	val := guSectionValue(*spec, "active", "range")
-	action.Logs = append(action.Logs, fmt.Sprintf("%s kéo dài khoảng cách tấn công lên %.0f thước.", spec.Name, val))
-	return nil
-}
-
-func handleCurveAttackEffect(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	action.Logs = append(action.Logs, fmt.Sprintf("%s uốn lượn đường bay tấn công vòng qua phòng ngự trực diện.", spec.Name))
-	return nil
-}
-
-func handleManaRegen(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	value := guSectionValue(*spec, "active", "mana_regen")
-	ctx.Attacker.CurrentMana += value
-	if ctx.Attacker.CurrentMana > ctx.Attacker.MaxMana {
-		ctx.Attacker.CurrentMana = ctx.Attacker.MaxMana
-	}
-	action.IsUtility = true
-	action.Logs = append(action.Logs, fmt.Sprintf("%s hồi phục %.1f Chân Nguyên.", spec.Name, value))
-	return nil
-}
-
-func handleWoodTransformation(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	action.Def += 30.0
-	action.Logs = append(action.Logs, fmt.Sprintf("%s hóa thân thành yêu tinh cây, tăng thêm phòng ngự (+30.0 Thủ).", spec.Name))
-	return nil
-}
-
-func handleBloodDrain(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	action.LifeStealRate += 0.5
-	action.Logs = append(action.Logs, fmt.Sprintf("%s kích hoạt cơ chế hút máu từ địch.", spec.Name))
-	return nil
-}
-
-func handleReplicate(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	action.Logs = append(action.Logs, fmt.Sprintf("%s sinh sản nhân bản ma cổ.", spec.Name))
-	return nil
-}
-
-func handleBleedEffect(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	val := guSectionValue(*spec, "active", "bleed")
-	action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
-		Type:  "bleed",
-		Value: val,
-		Turns: 3,
-	})
-	action.Logs = append(action.Logs, fmt.Sprintf("%s gây trạng thái xuất huyết (trừ %.1f HP mỗi lượt).", spec.Name, val))
-	return nil
-}
-
-func handleLifeStealEffect(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	val := guSectionValue(*spec, "active", "life_steal")
-	if val == 0 {
-		val = guSectionValue(*spec, "active", "lifesteal")
-	}
-	action.LifeStealRate += val
-	return nil
-}
-
-func handleRefineManaTier(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	tier := guSectionValue(*spec, "active", "refine_mana_tier")
-	if tier > 0 {
-		boost := tier * 0.20
-		action.Dmg += action.Dmg * boost
-	}
-	action.IsUtility = true
-	action.Logs = append(action.Logs, fmt.Sprintf("Kích hoạt %s nâng phẩm Chân Nguyên (+%.0f%% Sát thương).", spec.Name, tier*20))
-	return nil
-}
-
-func handleDamageMultiplier(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	mult := guSectionValue(*spec, "active", "damage_multiplier")
-	if mult > 1.0 {
-		action.Dmg *= mult
-	}
-	action.IsUtility = true
-	action.Logs = append(action.Logs, fmt.Sprintf("Kích hoạt %s, tăng uy lực (x%.0f sát thương).", spec.Name, mult))
-	return nil
-}
-
-func handleCleansingPower(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	action.IsUtility = true
-	action.Logs = append(action.Logs, fmt.Sprintf("Kích hoạt %s! Thanh tẩy dị lực và loại bỏ tạp chất trong Không khiếu.", spec.Name))
-	return nil
-}
-
-func handleSummonPhantom(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	action.Dmg += ctx.Attacker.BaseAttack
-	action.Logs = append(action.Logs, fmt.Sprintf("%s triệu hồi thú lực hư ảnh, gây %.1f sát thương lực đạo.", spec.Name, ctx.Attacker.BaseAttack))
-	return nil
-}
-
-func handleGenerateGu(ctx *CombatContext, spec *models.GuDictionaryItem, action *Action) error {
-	action.Logs = append(action.Logs, fmt.Sprintf("%s bắt đầu ngưng tụ Sinh Cơ Diệp.", spec.Name))
-	return nil
-}
-
-// ── OUT-OF-COMBAT SUPPORT EFFECT HANDLERS ─────────────────────────────
-
-func handleIncreaseAptitude(player *models.Player, spec models.GuDictionaryItem) (string, error) {
-	value := int(guSectionValue(spec, "support", "increase_aptitude"))
-	if value <= 0 {
-		value = 1
-	}
-
-	player.AptitudePercent += value
-	if player.AptitudePercent > 99 {
-		player.AptitudePercent = 99
-	}
-
-	delta := float64(value)
-	if delta > 0 {
-		player.MaxMana += delta
-		if player.CurrentMana > player.MaxMana {
-			player.CurrentMana = player.MaxMana
+	actionCode := mechanic.ActionCode
+	switch actionCode {
+	case "INCREASE_APTITUDE":
+		val, _ := params["value"].(float64)
+		value := int(val)
+		if value <= 0 {
+			value = 1
 		}
+		player.AptitudePercent += value
+		if player.AptitudePercent > 99 {
+			player.AptitudePercent = 99
+		}
+		delta := float64(value)
+		if delta > 0 {
+			player.MaxMana += delta
+			if player.CurrentMana > player.MaxMana {
+				player.CurrentMana = player.MaxMana
+			}
+		}
+		return fmt.Sprintf("Tăng tư chất Không khiếu lên %d%%.", player.AptitudePercent), nil
+	case "RANK_PROGRESS":
+		if spec.Rank != player.Rank {
+			return "", fmt.Errorf("%s chỉ dùng cho %s", spec.Name, getRankName(spec.Rank))
+		}
+		if player.SubRank >= 4 {
+			return "", fmt.Errorf("Xá Lợi Cổ không thể đột phá đại cảnh giới")
+		}
+		player.SubRank++
+		stageNames := map[int]string{1: "Sơ Giai", 2: "Trung Giai", 3: "Cao Giai", 4: "Đỉnh Phong"}
+		return fmt.Sprintf("Đột phá! Đạo hữu luyện hóa %s, tu vi nâng cao lên %s %s!", spec.Name, getRankName(player.Rank), stageNames[player.SubRank]), nil
+	case "APERTURE_PETRIFICATION":
+		player.SubRank = 4
+		player.MaxMana -= 15
+		if player.MaxMana < 20 { player.MaxMana = 20 }
+		if player.CurrentMana > player.MaxMana { player.CurrentMana = player.MaxMana }
+		return fmt.Sprintf("%s đẩy tu vi lên Đỉnh Phong nhưng làm Không khiếu hóa đá.", spec.Name), nil
+	case "GIVE_STONES":
+		val, _ := params["value"].(float64)
+		amount := int(val)
+		if amount == 0 { amount = 500 }
+		player.PrimevalStones += amount
+		return fmt.Sprintf("Nhận ngay %d Nguyên Thạch.", amount), nil
+	case "SOUL_BOOST":
+		val, _ := params["value"].(float64)
+		if player.DaoMarks == nil { player.DaoMarks = make(models.DaoMarksMap) }
+		player.DaoMarks["soul"] += int(val)
+		return fmt.Sprintf("Hồn phách của đạo hữu được tráng kiện (+%.0f điểm Hồn lực).", val), nil
+	case "FORCE_RANK_UP":
+		player.SubRank = 1
+		player.Rank++
+		return fmt.Sprintf("Đột phá đại cảnh giới lên %s Sơ Giai!", getRankName(player.Rank)), nil
+	case "MANA_POLLUTION":
+		player.MaxMana = math.Round(player.MaxMana * 0.90) // lose 10%
+		if player.CurrentMana > player.MaxMana { player.CurrentMana = player.MaxMana }
+		return "Chân Nguyên bị ô nhiễm nặng nề (giảm 10% Chân Nguyên tối đa)!", nil
+	case "ENSLAVE_BEAST_TIER":
+		val, _ := params["value"].(float64)
+		return fmt.Sprintf("Luyện hóa thành công, thu phục thú nô cấp %.0f.", val), nil
+	case "ADD_LIFESPAN_YEARS":
+		val, _ := params["value"].(float64)
+		years := val
+		player.Lifespan += years
+		player.MaxLifespan += years
+		return fmt.Sprintf("Cổ trùng Thọ Nguyên hòa tan vào không khiếu! Đạo hữu được ban thêm vĩnh viễn %.0f năm thọ mệnh.", years), nil
+	default:
+		return "", fmt.Errorf("Chưa hỗ trợ action code: %s", actionCode)
 	}
-
-	return fmt.Sprintf("Tăng tư chất Không khiếu lên %d%%.", player.AptitudePercent), nil
-}
-
-func handleShareCultivation(player *models.Player, spec models.GuDictionaryItem) (string, error) {
-	return fmt.Sprintf("Kích hoạt %s, sẵn sàng chia sẻ tu vi.", spec.Name), nil
-}
-
-// ── CONSUMABLE EFFECT HANDLERS ────────────────────────────────────────
-
-func handleRankProgress(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem) (string, error) {
-	if spec.Rank != player.Rank {
-		return "", fmt.Errorf("%s chỉ dùng cho %s", spec.Name, getRankName(spec.Rank))
-	}
-
-	if player.SubRank >= 4 {
-		return "", fmt.Errorf("Xá Lợi Cổ không thể đột phá đại cảnh giới")
-	}
-
-	player.SubRank++
-
-	stageNames := map[int]string{
-		1: "Sơ Giai",
-		2: "Trung Giai",
-		3: "Cao Giai",
-		4: "Đỉnh Phong",
-	}
-
-	return fmt.Sprintf("Đột phá! Đạo hữu luyện hóa %s, tu vi nâng cao lên %s %s!", spec.Name, getRankName(player.Rank), stageNames[player.SubRank]), nil
-}
-
-func handleAperturePetrification(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem) (string, error) {
-	player.SubRank = 4
-	player.MaxMana -= 15
-
-	if player.MaxMana < 20 {
-		player.MaxMana = 20
-	}
-
-	if player.CurrentMana > player.MaxMana {
-		player.CurrentMana = player.MaxMana
-	}
-
-	return fmt.Sprintf("%s đẩy tu vi lên Đỉnh Phong nhưng làm Không khiếu hóa đá.", spec.Name), nil
-}
-
-func handleGiveStones(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem) (string, error) {
-	amount := int(guSectionValue(spec, "support", "give_stones"))
-	if amount == 0 {
-		amount = 500
-	}
-	player.PrimevalStones += amount
-	return fmt.Sprintf("Nhận ngay %d Nguyên Thạch.", amount), nil
-}
-
-func handleSoulBoost(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem) (string, error) {
-	val := guSectionValue(spec, "support", "soul_boost")
-	if player.DaoMarks == nil {
-		player.DaoMarks = make(models.DaoMarksMap)
-	}
-	player.DaoMarks["soul"] += int(val)
-	return fmt.Sprintf("Hồn phách của đạo hữu được tráng kiện (+%.0f điểm Hồn lực).", val), nil
-}
-
-func handleForceRankUp(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem) (string, error) {
-	player.SubRank = 1
-	player.Rank++
-	return fmt.Sprintf("Đột phá đại cảnh giới lên %s Sơ Giai!", getRankName(player.Rank)), nil
-}
-
-func handleManaPollution(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem) (string, error) {
-	player.MaxMana = math.Round(player.MaxMana * 0.90) // lose 10%
-	if player.CurrentMana > player.MaxMana {
-		player.CurrentMana = player.MaxMana
-	}
-	return "Chân Nguyên bị ô nhiễm nặng nề (giảm 10% Chân Nguyên tối đa)!", nil
-}
-
-func handleEnslaveBeastTier(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem) (string, error) {
-	tier := guSectionValue(spec, "support", "enslave_beast_tier")
-	return fmt.Sprintf("Luyện hóa thành công, thu phục thú nô cấp %.0f.", tier), nil
-}
-
-func handleLifespanBoost(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem) (string, error) {
-	val, ok := models.GetGuEffectSection(spec, "active")["add_lifespan_years"]
-	if !ok {
-		return "", fmt.Errorf("không tìm thấy thuộc tính add_lifespan_years trong cấu hình của Cổ trùng")
-	}
-	years := val
-	player.Lifespan += years
-	player.MaxLifespan += years
-	return fmt.Sprintf("Cổ trùng Thọ Nguyên hòa tan vào không khiếu! Đạo hữu được ban thêm vĩnh viễn %.0f năm thọ mệnh.", years), nil
 }
 
 func tickStatusEffects(player *models.Player, ctx *CombatContext) {
@@ -539,8 +330,4 @@ func tickStatusEffects(player *models.Player, ctx *CombatContext) {
 		}
 	}
 	player.ActiveCombat.PlayerStatusEffects = nextPlayerEffects
-}
-
-func guSectionValue(spec models.GuDictionaryItem, section string, key string) float64 {
-	return models.GetGuEffectSection(spec, section)[key]
 }

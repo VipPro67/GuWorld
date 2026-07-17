@@ -416,7 +416,7 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 		return nil, err
 	}
 
-	coreActive := models.GetGuEffectSection(core.Spec, "active")
+	coreActive := models.GetFlatGuEffects(core.Spec)
 	totalMana := core.Spec.BaseManaCost
 
 	// V2: DamageBase = CoreGu.base_damage_bonus, DefenseBase = CoreGu.base_defense_bonus
@@ -466,7 +466,7 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 
 	for idx, support := range supports {
 		totalMana += support.Spec.BaseManaCost * killerMoveSupportCostRate
-		supportEffects := models.GetGuEffectSection(support.Spec, "support")
+		supportEffects := models.GetFlatGuEffects(support.Spec)
 
 		// V2: Path Conflict Penalty
 		conflictPct, isOpposing := calculatePathConflict(core.Spec, support.Spec)

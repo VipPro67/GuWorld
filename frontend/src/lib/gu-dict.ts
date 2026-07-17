@@ -1,8 +1,53 @@
+export interface ActiveEffect {
+  damage_flat?: number;
+  damage_mult?: number;
+  shield_flat?: number;
+  range?: number;
+  mana_regen?: number;
+  wood_transformation?: boolean;
+  blood_drain?: boolean;
+  replicate?: boolean;
+  apply_status?: string;
+  status_tick_damage?: number;
+  status_duration_ticks?: number;
+  lifesteal_rate?: number;
+  heal_flat?: number;
+  refine_mana_tier?: number;
+  cleansing_power?: number;
+  summon_phantom?: boolean;
+  generate_gu?: boolean;
+  curve_attack?: boolean;
+  [key: string]: any;
+}
+
+export interface PassiveEffect {
+  stat_base_attack?: number;
+  stat_base_defense?: number;
+  soul_refinement?: number;
+  storage_capacity?: number;
+  movement?: number;
+  investigation?: number;
+  hearing?: number;
+  evasion?: number;
+  refine_mana_tier?: number;
+  cleansing_power?: number;
+  damage_multiplier_on_hit?: number;
+  path_conflict_reduction?: number;
+  [key: string]: any;
+}
+
+export interface SpecialMechanic {
+  event_trigger: string;
+  action_code: string;
+  params: Record<string, any>;
+  chance: number;
+}
+
 export interface GuEffects {
-  active: Record<string, number>;
-  support: Record<string, number>;
-  passive: Record<string, number>;
-  house: Record<string, number>;
+  active?: ActiveEffect | null;
+  passive?: PassiveEffect | null;
+  other?: SpecialMechanic[] | null;
+  [key: string]: any;
 }
 
 export interface GuDictionaryItem {

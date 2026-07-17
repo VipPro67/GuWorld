@@ -50,23 +50,11 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 
 	powerScale := 1.0
 
-	activeEffects := models.GetGuEffectSection(*guSpec, "active")
 	var baseDmg float64
-	if dmg, ok := activeEffects["damage"]; ok {
-		baseDmg = dmg
-	} else if dmg, ok := activeEffects["add_base_attack"]; ok {
-		baseDmg = dmg
-	} else if dmg, ok := activeEffects["base_damage_bonus"]; ok {
-		baseDmg = dmg
-	}
-
 	var baseDef float64
-	if def, ok := activeEffects["defense"]; ok {
-		baseDef = def
-	} else if def, ok := activeEffects["add_base_defense"]; ok {
-		baseDef = def
-	} else if def, ok := activeEffects["base_defense_bonus"]; ok {
-		baseDef = def
+	if guSpec.Effects.Active != nil {
+		baseDmg = guSpec.Effects.Active.DamageFlat
+		baseDef = guSpec.Effects.Active.ShieldFlat
 	}
 
 	attainmentLevel := 0

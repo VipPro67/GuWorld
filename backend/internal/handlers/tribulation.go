@@ -197,7 +197,7 @@ func AttackTribulationEnemy(c *gin.Context) {
 
 	// 4. Calculate Player Damage (augmented by Dao Marks)
 	baseDmg := 35.0
-	activeEffects := models.GetGuEffectSection(spec, "active")
+	activeEffects := models.GetFlatGuEffects(spec)
 	if d, hasDmg := activeEffects["damage"]; hasDmg {
 		baseDmg = d
 	}
