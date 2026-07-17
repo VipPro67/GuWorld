@@ -390,6 +390,8 @@ func InitSchema() error {
 		player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
 		rank INTEGER UNIQUE NOT NULL,
 		points INTEGER DEFAULT 1000,
+		daily_challenges INTEGER NOT NULL DEFAULT 0,
+		last_challenge_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);`)
 	if err != nil {
@@ -818,6 +820,8 @@ func InitSchema() error {
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS completed_quests JSONB NOT NULL DEFAULT '[]';`, "completed_quests"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS temp_loot JSONB NOT NULL DEFAULT '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}';`, "temp_loot"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS explore_count INTEGER NOT NULL DEFAULT 0;`, "explore_count"},
+		{`ALTER TABLE arena_rankings ADD COLUMN IF NOT EXISTS daily_challenges INTEGER NOT NULL DEFAULT 0;`, "arena_rankings.daily_challenges"},
+		{`ALTER TABLE arena_rankings ADD COLUMN IF NOT EXISTS last_challenge_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;`, "arena_rankings.last_challenge_at"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS last_explore_reset TIMESTAMP NOT NULL DEFAULT NOW();`, "last_explore_reset"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS aperture_stress DOUBLE PRECISION NOT NULL DEFAULT 0.0;`, "aperture_stress"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS last_cultivate_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;`, "last_cultivate_time"},

@@ -225,6 +225,8 @@ func SetupRouter() *gin.Engine {
 		{
 			arena.GET("/leaderboard", handlers.GetArenaLeaderboard)
 			arena.POST("/challenge", handlers.ChallengeArena)
+			arena.GET("/shop", handlers.GetArenaShop)
+			arena.POST("/shop/buy", handlers.BuyArenaShopItem)
 		}
 
 		// Chat / Mail Endpoints

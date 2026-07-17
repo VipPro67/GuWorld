@@ -2,11 +2,13 @@
 
 import React, { useEffect, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
-import { Swords, Trophy, ShieldAlert, Award, RefreshCw, Star } from "lucide-react";
+import { Swords, Trophy, ShieldAlert, Award, RefreshCw, Star, Store } from "lucide-react";
+import { ArenaShopView } from "./ArenaShopView";
 
 export const ArenaView: React.FC = () => {
-  const { player, arenaLeaderboard, fetchArenaLeaderboard, challengeArena, actionLoading, fetchPlayerProfile } = useGameStore();
+  const { player, arenaLeaderboard, arenaDailyChallenges, fetchArenaLeaderboard, challengeArena, actionLoading, fetchPlayerProfile } = useGameStore();
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'ranking' | 'shop'>('ranking');
 
   const handleRefresh = async () => {
     setLoading(true);
@@ -50,14 +52,28 @@ export const ArenaView: React.FC = () => {
           </div>
         </div>
 
-        <button
-          onClick={handleRefresh}
-          disabled={loading || actionLoading}
-          className="p-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-950 hover:bg-zinc-900 rounded-xl text-zinc-455 hover:text-zinc-200 transition-all cursor-pointer font-mono shrink-0 flex items-center gap-1.5 text-xs font-semibold"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-amber-400" : ""}`} />
-          Tải lại
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab(activeTab === 'ranking' ? 'shop' : 'ranking')}
+            className={`p-2 border rounded-xl transition-all cursor-pointer font-mono shrink-0 flex items-center gap-1.5 text-xs font-semibold ${
+              activeTab === 'shop' 
+                ? "bg-amber-950/40 border-amber-500/50 text-amber-500" 
+                : "border-zinc-800 hover:border-zinc-700 bg-zinc-950 hover:bg-zinc-900 text-zinc-455 hover:text-zinc-200"
+            }`}
+          >
+            <Store className="w-3.5 h-3.5" />
+            {activeTab === 'ranking' ? 'Bảo Các' : 'Xếp Hạng'}
+          </button>
+
+          <button
+            onClick={handleRefresh}
+            disabled={loading || actionLoading}
+            className="p-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-950 hover:bg-zinc-900 rounded-xl text-zinc-455 hover:text-zinc-200 transition-all cursor-pointer font-mono shrink-0 flex items-center gap-1.5 text-xs font-semibold"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-amber-400" : ""}`} />
+            Tải lại
+          </button>
+        </div>
       </div>
 
       {/* Player ranking summary banner */}
@@ -69,15 +85,15 @@ export const ArenaView: React.FC = () => {
               {player.arena_rank ? `#${player.arena_rank}` : "Vô Danh"}
             </span>
             <span className="text-xs text-zinc-400 font-mono">
-              (Thách đấu đối thủ lệch tối đa 5 hạng)
+              (Lượt khiêu chiến hôm nay: {Math.max(0, 3 - (arenaDailyChallenges || 0))}/3)
             </span>
           </div>
         </div>
 
         <div className="flex gap-4">
           <div className="text-left bg-zinc-950/80 px-4 py-2 border border-zinc-900 rounded-xl">
-            <div className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">Tích điểm Võ Đài</div>
-            <span className="text-sm font-bold text-zinc-200 font-mono">1000 điểm</span>
+            <div className="text-[9px] text-amber-500/80 uppercase tracking-widest font-mono">Xu Đấu Trường</div>
+            <span className="text-sm font-bold text-amber-400 font-mono">{player.materials_inventory?.arena_coin || 0} xu</span>
           </div>
           <div className="text-left bg-zinc-950/80 px-4 py-2 border border-zinc-900 rounded-xl">
             <div className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">Tu vi đạo hạnh</div>
@@ -87,12 +103,17 @@ export const ArenaView: React.FC = () => {
       </div>
 
       <div className="text-[10px] text-zinc-550 font-mono max-w-xl">
-        * Quy tắc Võ Đài: Cổ sư có quyền khiêu chiến hình chiếu của đối thủ có thứ hạng lệch không quá <span className="text-amber-500 font-bold">5 hạng</span>.
+        * Quy tắc Võ Đài: Cổ sư có thể khiêu chiến <span className="text-amber-500 font-bold">tự do</span>, tối đa 3 lần/ngày.
         Nếu chiến thắng kẻ có hạng cao hơn, hai bên sẽ <span className="text-emerald-600 dark:text-emerald-400 font-bold">hoán đổi vị trí xếp hạng</span> cho nhau.
+        Kết toán phát Xu Đấu Trường mỗi 22:00 hằng ngày.
       </div>
 
-      {/* Leaderboard list */}
-      <div className="space-y-2 relative z-10 max-h-[420px] overflow-y-auto pr-1">
+      {activeTab === 'shop' ? (
+        <ArenaShopView />
+      ) : (
+        <>
+          {/* Leaderboard list */}
+          <div className="space-y-2 relative z-10 max-h-[420px] overflow-y-auto pr-1">
         {arenaLeaderboard.length === 0 ? (
           <div className="text-center py-12 text-zinc-650 italic text-xs">
             Chưa có cổ sư nào ghi tên trên bảng võ đài. Hãy là người đầu tiên!
@@ -100,8 +121,7 @@ export const ArenaView: React.FC = () => {
         ) : (
           arenaLeaderboard.map((row) => {
             const isMe = row.player_id === player.id;
-            const diff = playerRank - row.rank;
-            const canChallenge = !isMe && diff >= -5 && diff <= 5;
+            const canChallenge = !isMe && arenaDailyChallenges < 3;
             
             return (
               <div
@@ -159,7 +179,7 @@ export const ArenaView: React.FC = () => {
                     </button>
                   ) : !isMe ? (
                     <span className="text-[10px] text-zinc-600 font-mono italic select-none">
-                      (Chênh lệch quá 5 hạng)
+                      (Đã hết lượt)
                     </span>
                   ) : (
                     <span className="text-[10px] text-amber-500 font-serif font-bold flex items-center gap-1">
@@ -172,6 +192,8 @@ export const ArenaView: React.FC = () => {
           })
         )}
       </div>
+      </>
+      )}
 
       {player.active_combat && (
         <div className="bg-rose-950/20 border border-rose-900/40 rounded-2xl p-4 flex items-center gap-3 relative z-10 animate-pulse">

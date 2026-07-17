@@ -812,8 +812,12 @@ interface GameState {
 
   // Arena State & Actions
   arenaLeaderboard: any[];
+  arenaDailyChallenges: number;
+  arenaShopItems: any[];
   fetchArenaLeaderboard: () => Promise<void>;
+  fetchArenaShop: () => Promise<void>;
   challengeArena: (targetPlayerId: string) => Promise<boolean>;
+  buyArenaItem: (itemId: string) => Promise<boolean>;
 
   // Chat/Mail State & Actions
   inbox: any[];
@@ -1093,6 +1097,8 @@ export const useGameStore = create<GameState>((set, get) => {
   isLoading: false,
   actionLoading: false,
   error: null,
+  arenaDailyChallenges: 0,
+  arenaShopItems: [],
   playerEventsConnected: false,
   playerEventsRetries: 0,
   logs: ["Chào mừng đạo hữu đến với Cổ Giới. Hãy tu luyện và sinh tồn."],
@@ -3392,9 +3398,58 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/arena/leaderboard`);
       if (response.status === 401 || response.status === 403) { logout(); return; }
       const data = await response.json();
-      set({ arenaLeaderboard: Array.isArray(data.leaderboard) ? data.leaderboard : [] });
+      set({ 
+        arenaLeaderboard: Array.isArray(data.leaderboard) ? data.leaderboard : [],
+        arenaDailyChallenges: data.daily_challenges || 0 
+      });
     } catch (err) {
       console.error("fetch arena leaderboard failed", err);
+    }
+  },
+
+  fetchArenaShop: async () => {
+    const { token } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/arena/shop`);
+      if (response.ok) {
+        const data = await response.json();
+        set({ arenaShopItems: data.items || [] });
+      }
+    } catch (err) {
+      console.error("fetch arena shop failed", err);
+    }
+  },
+
+  buyArenaItem: async (itemId) => {
+    const { token, actionLoading } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/arena/shop/buy`, {
+        method: "POST",
+        body: JSON.stringify({ item_id: itemId }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        get().addLog(`Đổi vật phẩm thành công! Đã tiêu hao ${data.cost} Xu Đấu Trường.`);
+        // @ts-ignore
+        get().addToast(data.message, "success");
+        await get().fetchPlayerStatus(get().player!.id);
+        return true;
+      } else {
+        set({ error: data.error });
+        // @ts-ignore
+        get().addToast(data.error || "Lỗi giao dịch", "error");
+        return false;
+      }
+    } catch (err: any) {
+      set({ error: err.message });
+      // @ts-ignore
+      get().addToast("Lỗi kết nối", "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
     }
   },
 

@@ -13,11 +13,13 @@ import (
 )
 
 type ArenaRanking struct {
-	PlayerID  string    `json:"player_id"`
-	Username  string    `json:"username"`
-	Rank      int       `json:"rank"`
-	Points    int       `json:"points"`
-	UpdatedAt time.Time `json:"updated_at"`
+	PlayerID        string    `json:"player_id"`
+	Username        string    `json:"username"`
+	Rank            int       `json:"rank"`
+	Points          int       `json:"points"`
+	DailyChallenges int       `json:"daily_challenges"`
+	LastChallengeAt time.Time `json:"last_challenge_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 func EnsurePlayerArenaRanking(tx *sql.Tx, playerID uuid.UUID) (int, error) {
@@ -78,7 +80,19 @@ func GetArenaLeaderboard(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"leaderboard": leaderboard})
+	var dailyChallenges int
+	var lastChallengeAt time.Time
+	_ = db.DB.QueryRow("SELECT daily_challenges, last_challenge_at FROM arena_rankings WHERE player_id = $1", authID).Scan(&dailyChallenges, &lastChallengeAt)
+	
+	now := time.Now()
+	if lastChallengeAt.YearDay() != now.YearDay() || lastChallengeAt.Year() != now.Year() {
+		dailyChallenges = 0
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"leaderboard": leaderboard,
+		"daily_challenges": dailyChallenges,
+	})
 }
 
 type ChallengeRequest struct {
@@ -123,14 +137,28 @@ func ChallengeArena(c *gin.Context) {
 	}
 
 	// Ensure rankings
-	pRank, _ := EnsurePlayerArenaRanking(tx, player.ID)
-	tRank, _ := EnsurePlayerArenaRanking(tx, targetUUID)
+	_, _ = EnsurePlayerArenaRanking(tx, player.ID)
+	_, _ = EnsurePlayerArenaRanking(tx, targetUUID)
 
-	// In arena, you can only challenge players within 5 ranks above you or below you
-	diff := pRank - tRank
-	if diff > 5 || diff < -5 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đối thủ ở thứ hạng quá xa, chỉ thách đấu được lệch tối đa 5 hạng!"})
-		return
+	// Check daily challenges limit
+	var dailyChallenges int
+	var lastChallengeAt time.Time
+	err = tx.QueryRow("SELECT daily_challenges, last_challenge_at FROM arena_rankings WHERE player_id = $1", player.ID).Scan(&dailyChallenges, &lastChallengeAt)
+	if err == nil {
+		now := time.Now()
+		if lastChallengeAt.YearDay() != now.YearDay() || lastChallengeAt.Year() != now.Year() {
+			dailyChallenges = 0
+		}
+		if dailyChallenges >= 3 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Hôm nay đạo hữu đã hết lượt khiêu chiến Võ Đài (Tối đa 3 lần/ngày)!"})
+			return
+		}
+		
+		_, err = tx.Exec("UPDATE arena_rankings SET daily_challenges = $1, last_challenge_at = $2 WHERE player_id = $3", dailyChallenges+1, now, player.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật lượt khiêu chiến"})
+			return
+		}
 	}
 
 	var targetPlayer models.Player

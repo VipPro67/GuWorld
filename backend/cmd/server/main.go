@@ -89,6 +89,9 @@ func main() {
 	// 2.8. Start Midnight Mine Worker (daily 00:00 reset)
 	handlers.StartMidnightMineWorker(ctx)
 
+	// 2.9. Start Arena Settlement Worker (daily 22:00)
+	handlers.StartArenaSettlementWorker(ctx)
+
 	// 3. Setup router & run
 	r := server.SetupRouter()
 
