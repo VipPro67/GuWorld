@@ -617,7 +617,7 @@ export const SectView: React.FC = () => {
                   <select
                     value={createSectRegion}
                     onChange={(e) => setCreateSectRegion(e.target.value)}
-                    className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-yellow-500/50"
+                    className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-yellow-500/50"
                   >
                     <option value="Central_Continent">Trung Châu</option>
                     <option value="Southern_Border">Nam Cương</option>
@@ -1731,7 +1731,7 @@ export const SectView: React.FC = () => {
                                   }
                                   await setMemberRank(mInfo.player_id, targetRank);
                                 }}
-                                className="bg-zinc-950 border border-zinc-900 rounded-xl px-2.5 py-1 text-[11px] text-zinc-300 focus:outline-none focus:border-yellow-500/50"
+                                className="max-w-[180px] bg-zinc-950 border border-zinc-900 rounded-xl px-2.5 py-1 text-[11px] text-zinc-300 focus:outline-none focus:border-yellow-500/50"
                               >
                                 <option value="NGOAI_MON">Ngoại Môn</option>
                                 <option value="NOI_MON">Nội Môn</option>
@@ -1942,7 +1942,7 @@ export const SectView: React.FC = () => {
                   <select
                     value={mMissionType}
                     onChange={(e) => setMMissionType(e.target.value)}
-                    className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none"
+                    className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none"
                   >
                     <option value="GATHER">Thu thập Linh tài</option>
                     <option value="DONATE">Cống hiến Cổ trùng</option>
@@ -1990,7 +1990,7 @@ export const SectView: React.FC = () => {
                   <select
                     value={mRequiredRank}
                     onChange={(e) => setMRequiredRank(e.target.value)}
-                    className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none"
+                    className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none"
                   >
                     <option value="NGOAI_MON">Đệ Tử Ngoại Môn</option>
                     <option value="NOI_MON">Đệ Tử Nội Môn</option>
@@ -2045,7 +2045,7 @@ export const SectView: React.FC = () => {
                           setStockItemId(firstAvailable ? firstAvailable[0] : "");
                         }
                       }}
-                      className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none cursor-pointer"
+                      className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none cursor-pointer"
                     >
                       <option value="gu">Cổ Trùng</option>
                       <option value="material">Linh Tài</option>
@@ -2059,7 +2059,7 @@ export const SectView: React.FC = () => {
                     <select
                       value={stockItemId}
                       onChange={(e) => setStockItemId(e.target.value)}
-                      className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none cursor-pointer"
+                      className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none cursor-pointer"
                     >
                       {stockItemType === "gu" ? (
                         // Sort by rank ascending, exclude rank>=6

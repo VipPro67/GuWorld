@@ -378,7 +378,7 @@ export function BaoHoangMarket({
       </div>
 
       {/* Navigation tabs & Actions */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-6">
+      <div className="flex flex-col items-stretch gap-3 mb-6">
         <div className="flex bg-zinc-950/80 p-1.5 rounded-2xl border border-zinc-900 gap-1.5 flex-wrap">
           <button
             onClick={() => setTab("market")}
@@ -416,25 +416,25 @@ export function BaoHoangMarket({
         </div>
 
         {tab !== "sell" && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={onRefresh}
               disabled={actionLoading}
-              className="bg-zinc-950/80 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-100 p-2 rounded-xl text-zinc-400 transition-all cursor-pointer"
+              className="bg-zinc-950/80 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-100 p-2 rounded-xl text-zinc-400 transition-all cursor-pointer shrink-0"
               title="Làm mới"
             >
               <RefreshCw className={`w-4 h-4 ${actionLoading ? "animate-spin" : ""}`} />
             </button>
             
             {/* Search Input */}
-            <div className="relative">
+            <div className="relative flex-1 min-w-[140px]">
               <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 placeholder="Tìm tên bảo vật..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-zinc-950/80 border border-zinc-850 hover:border-zinc-700 focus:border-amber-500/30 text-xs text-zinc-200 pl-9 pr-4 py-2 rounded-xl focus:outline-none focus:ring-0 w-48 transition-all placeholder:text-zinc-600 font-serif"
+                className="w-full bg-zinc-950/80 border border-zinc-850 hover:border-zinc-700 focus:border-amber-500/30 text-xs text-zinc-200 pl-9 pr-4 py-2 rounded-xl focus:outline-none focus:ring-0 transition-all placeholder:text-zinc-600 font-serif"
               />
             </div>
 
@@ -442,7 +442,7 @@ export function BaoHoangMarket({
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value as any)}
-              className="bg-zinc-950/80 border border-zinc-850 hover:border-zinc-700 text-xs text-zinc-400 px-3 py-2 rounded-xl focus:outline-none focus:ring-0 font-serif"
+              className="bg-zinc-950/80 border border-zinc-850 hover:border-zinc-700 text-xs text-zinc-400 px-3 py-2 rounded-xl focus:outline-none focus:ring-0 font-serif shrink-0"
             >
               <option value="all">Tất cả loại</option>
               <option value="Gu">Cổ Trùng</option>
