@@ -144,11 +144,15 @@ export const SectView: React.FC = () => {
   useEffect(() => {
     if (mgmtTab === "stock" && !stockItemId) {
       if (stockItemType === "gu") {
-        const guKeys = Object.keys(guDictionary || {});
-        if (guKeys.length > 0) setStockItemId(guKeys[0]);
+        // Sort by rank ascending, exclude rank>=6
+        const sorted = Object.entries(guDictionary || {})
+          .filter(([, spec]) => (spec.rank || 1) < 6)
+          .sort(([,a],[,b]) => (a.rank||1)-(b.rank||1));
+        if (sorted.length > 0) setStockItemId(sorted[0][0]);
       } else {
-        const itemKeys = Object.keys(itemDictionary || {});
-        if (itemKeys.length > 0) setStockItemId(itemKeys[0]);
+        const sorted = Object.entries(itemDictionary || {})
+          .sort(([,a],[,b]) => (a.rank||1)-(b.rank||1));
+        if (sorted.length > 0) setStockItemId(sorted[0][0]);
       }
     }
   }, [mgmtTab, stockItemType, guDictionary, itemDictionary, stockItemId]);
@@ -1218,46 +1222,61 @@ export const SectView: React.FC = () => {
             {vaultTab === "gu" && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {sect?.vault_gu && (sect.vault_gu as any[]).length > 0 ? (
-                  (sect.vault_gu as any[]).map((vg: any) => {
-                    const spec = guDictionary[vg.id];
-                    const outOfStock = vg.quantity !== undefined && vg.quantity <= 0;
-                    const unaffordable = (member?.contribution_points || 0) < vg.cost;
-                    
-                    return (
-                      <div
-                        key={vg.id}
-                        className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex items-center justify-between gap-4 transition-all duration-300"
-                      >
-                        <div className="flex flex-col min-w-0">
-                          <h4 className="text-sm font-serif font-bold text-zinc-100">
-                            {spec?.name || vg.id}
-                          </h4>
-                          <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
-                            Phân loại: {spec?.gu_type || "Cổ"} | Rank: {spec?.rank || 1} | Số lượng: {vg.quantity !== undefined ? `${vg.quantity} con` : "Vô hạn"}
-                          </span>
-                          <p className="text-xs text-zinc-500 leading-snug line-clamp-2 mt-1.5">
-                            {spec?.description || "Không có mô tả bí thuật..."}
-                          </p>
-                        </div>
-
-                        <div className="flex flex-col items-end gap-2 shrink-0">
-                          <div className="text-right">
-                            <span className="text-[9px] text-zinc-500 font-mono block">Cống hiến cần</span>
-                            <span className="text-xs font-mono font-bold text-yellow-500">{vg.cost} Pts</span>
+                  (() => {
+                    // Deduplicate by id (merge quantities), then sort by rank ascending
+                    const merged: Record<string, any> = {};
+                    for (const vg of sect.vault_gu as any[]) {
+                      if (!merged[vg.id]) {
+                        merged[vg.id] = { ...vg };
+                      } else {
+                        merged[vg.id].quantity = (merged[vg.id].quantity || 0) + (vg.quantity || 0);
+                      }
+                    }
+                    const sorted = Object.values(merged).sort((a: any, b: any) => {
+                      const rankA = guDictionary[a.id]?.rank || 1;
+                      const rankB = guDictionary[b.id]?.rank || 1;
+                      return rankA - rankB;
+                    });
+                    return sorted.map((vg: any) => {
+                      const spec = guDictionary[vg.id];
+                      const outOfStock = vg.quantity !== undefined && vg.quantity <= 0;
+                      const unaffordable = (member?.contribution_points || 0) < vg.cost;
+                      return (
+                        <div
+                          key={vg.id}
+                          className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex items-center justify-between gap-4 transition-all duration-300"
+                        >
+                          <div className="flex flex-col min-w-0">
+                            <h4 className="text-sm font-serif font-bold text-zinc-100">
+                              {spec?.name || vg.id}
+                            </h4>
+                            <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                              Phân loại: {spec?.gu_type || "Cổ"} | Hạng: {spec?.rank || 1} | Số lượng: {vg.quantity !== undefined ? `${vg.quantity} con` : "Vô hạn"}
+                            </span>
+                            <p className="text-xs text-zinc-500 leading-snug line-clamp-2 mt-1.5">
+                              {spec?.description || "Không có mô tả bí thuật..."}
+                            </p>
                           </div>
-                          <button
-                            onClick={async () => {
-                              await buyFromSectVault("gu", vg.id);
-                            }}
-                            disabled={unaffordable || outOfStock || actionLoading}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-950 disabled:border-zinc-900 disabled:text-zinc-600 disabled:opacity-50 text-white font-semibold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
-                          >
-                            {outOfStock ? "Hết Hàng" : "Đổi Cổ"}
-                          </button>
+
+                          <div className="flex flex-col items-end gap-2 shrink-0">
+                            <div className="text-right">
+                              <span className="text-[9px] text-zinc-500 font-mono block">Cống hiến cần</span>
+                              <span className="text-xs font-mono font-bold text-yellow-500">{vg.cost} Pts</span>
+                            </div>
+                            <button
+                              onClick={async () => {
+                                await buyFromSectVault("gu", vg.id);
+                              }}
+                              disabled={unaffordable || outOfStock || actionLoading}
+                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-950 disabled:border-zinc-900 disabled:text-zinc-600 disabled:opacity-50 text-white font-semibold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
+                            >
+                              {outOfStock ? "Hết Hàng" : "Đổi Cổ"}
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })
+                      );
+                    });
+                  })()
                 ) : (
                   <div className="col-span-2 text-center py-6 text-zinc-600 text-xs font-mono">Bảo khố hiện tại không còn Cổ trùng nào bán</div>
                 )}
@@ -2016,10 +2035,13 @@ export const SectView: React.FC = () => {
                         setStockItemType(type);
                         const sectLvl = sect?.level || 1;
                         if (type === "gu") {
-                          const firstAvailable = Object.entries(guDictionary || {}).find(([, spec]) => (spec.rank || 1) <= sectLvl);
+                          // sorted by rank, exclude rank>=6
+                          const sorted = Object.entries(guDictionary || {}).sort(([,a],[,b]) => (a.rank||1)-(b.rank||1));
+                          const firstAvailable = sorted.find(([, spec]) => (spec.rank || 1) <= sectLvl && (spec.rank || 1) < 6);
                           setStockItemId(firstAvailable ? firstAvailable[0] : "");
                         } else {
-                          const firstAvailable = Object.entries(itemDictionary || {}).find(([, spec]) => (spec.rank || 1) <= sectLvl);
+                          const sorted = Object.entries(itemDictionary || {}).sort(([,a],[,b]) => (a.rank||1)-(b.rank||1));
+                          const firstAvailable = sorted.find(([, spec]) => (spec.rank || 1) <= sectLvl);
                           setStockItemId(firstAvailable ? firstAvailable[0] : "");
                         }
                       }}
@@ -2032,7 +2054,7 @@ export const SectView: React.FC = () => {
 
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
-                      Chọn vật phẩm <span className="text-cyan-500 normal-case">(Giới hạn: Hạng ≤ Cấp {sect?.level || 1})</span>
+                      Chọn vật phẩm <span className="text-cyan-500 normal-case">(Giới hạn: Hạng ≤ Cấp {sect?.level || 1}, tối đa Hạng 5)</span>
                     </label>
                     <select
                       value={stockItemId}
@@ -2040,27 +2062,33 @@ export const SectView: React.FC = () => {
                       className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none cursor-pointer"
                     >
                       {stockItemType === "gu" ? (
-                        Object.entries(guDictionary || {}).map(([id, spec]) => {
-                          const locked = (spec.rank || 1) > (sect?.level || 1);
-                          return (
-                            <option key={id} value={id} disabled={locked}>
-                              {locked ? "🔒 " : ""}{spec.name} (Hạng {spec.rank}){locked ? ` — Cần Cấp ${spec.rank}` : ""}
-                            </option>
-                          );
-                        })
+                        // Sort by rank ascending, exclude rank>=6
+                        Object.entries(guDictionary || {})
+                          .filter(([, spec]) => (spec.rank || 1) < 6)
+                          .sort(([,a],[,b]) => (a.rank||1)-(b.rank||1))
+                          .map(([id, spec]) => {
+                            const locked = (spec.rank || 1) > (sect?.level || 1);
+                            return (
+                              <option key={id} value={id} disabled={locked}>
+                                {locked ? "🔒 " : ""}{spec.name} (Hạng {spec.rank}){locked ? ` — Cần Cấp ${spec.rank}` : ""}
+                              </option>
+                            );
+                          })
                       ) : (
-                        Object.entries(itemDictionary || {}).map(([id, spec]) => {
-                          const locked = (spec.rank || 1) > (sect?.level || 1);
-                          return (
-                            <option key={id} value={id} disabled={locked}>
-                              {locked ? "🔒 " : ""}{spec.name} (Hạng {spec.rank || 1}){locked ? ` — Cần Cấp ${spec.rank || 1}` : ""}
-                            </option>
-                          );
-                        })
+                        Object.entries(itemDictionary || {})
+                          .sort(([,a],[,b]) => (a.rank||1)-(b.rank||1))
+                          .map(([id, spec]) => {
+                            const locked = (spec.rank || 1) > (sect?.level || 1);
+                            return (
+                              <option key={id} value={id} disabled={locked}>
+                                {locked ? "🔒 " : ""}{spec.name} (Hạng {spec.rank || 1}){locked ? ` — Cần Cấp ${spec.rank || 1}` : ""}
+                              </option>
+                            );
+                          })
                       )}
                     </select>
-                    {stockItemType === "gu" && Object.values(guDictionary || {}).some(s => (s.rank || 1) > (sect?.level || 1)) && (
-                      <p className="text-[10px] text-amber-500/80 mt-0.5">⚠ Một số Cổ trùng bị khóa do cấp tông môn chưa đủ. Quyên góp từ đệ tử sẽ không bị giới hạn.</p>
+                    {stockItemType === "gu" && (
+                      <p className="text-[10px] text-amber-500/80 mt-0.5">⚠ Cổ trùng Hạng 6+ không thể thêm vào bảo khố. Quyên góp từ đệ tử sẽ không bị giới hạn.</p>
                     )}
                   </div>
 
@@ -2078,18 +2106,24 @@ export const SectView: React.FC = () => {
                   {(() => {
                     if (!stockItemId) return null;
                     const sectLvl = sect?.level || 1;
+                    // Pricing table matching backend pkg/pricing/pricing.go
+                    const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 10000, 25000, 60000, 150000];
+                    const itemRankBasePrice = [0, 5, 15, 30, 60, 120, 250, 500, 1000, 2500];
                     let unitCost = 0;
                     let isLocked = false;
                     if (stockItemType === "gu") {
                       const spec = guDictionary[stockItemId];
                       const rank = spec?.rank || 1;
-                      isLocked = rank > sectLvl;
-                      unitCost = rank * 100;
+                      isLocked = rank > sectLvl || rank >= 6;
+                      // Use base price from dict if available, else rank table
+                      const basePrice = (spec as any)?.base_price > 0 ? (spec as any).base_price : (guRankBasePrice[rank] || guRankBasePrice[1]);
+                      unitCost = basePrice; // sect funds cost = base price
                     } else {
                       const spec = itemDictionary[stockItemId];
                       const rank = spec?.rank || 1;
                       isLocked = rank > sectLvl;
-                      unitCost = rank * 50;
+                      const basePrice = (spec as any)?.base_price > 0 ? (spec as any).base_price : (itemRankBasePrice[rank] || itemRankBasePrice[1]);
+                      unitCost = Math.ceil(basePrice * 0.5); // material cost = 50% of base price
                     }
                     const totalCost = unitCost * stockQuantity;
                     const canAfford = (sect?.funds || 0) >= totalCost;

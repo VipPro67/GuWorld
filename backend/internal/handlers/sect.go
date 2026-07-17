@@ -1934,11 +1934,20 @@ func StockSectVault(c *gin.Context) {
 	itemType := strings.ToLower(req.ItemType)
 
 	if itemType == "gu" {
-		// Calculate Gu cost: lookup rank from gu_dictionary
-		var guRank int
-		err = tx.QueryRow(`SELECT rank FROM gu_dictionary WHERE id = $1`, req.ItemID).Scan(&guRank)
+		// Calculate Gu cost: lookup rank and base_price from gu_dictionary
+		var guRank, guBasePrice int
+		err = tx.QueryRow(`SELECT COALESCE(rank,1), COALESCE(base_price,0) FROM gu_dictionary WHERE id = $1`, req.ItemID).Scan(&guRank, &guBasePrice)
 		if err != nil {
-			guRank = 1 // default to 1
+			guRank = 1
+			guBasePrice = 0
+		}
+
+		// Hard cap: cannot stock Gu rank >= 6 (too powerful for sect shop)
+		if guRank >= 6 {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": fmt.Sprintf("Không thể thêm Cổ trùng hạng %d vào bảo khố! Chỉ được nhập Cổ trùng hạng 1–5.", guRank),
+			})
+			return
 		}
 
 		// Level gate: Gu rank must be <= sect level
@@ -1949,7 +1958,8 @@ func StockSectVault(c *gin.Context) {
 			return
 		}
 
-		unitCost = guRank * 100 // 100 funds per rank
+		// Cost scaled by rank using pricing package (base_price from DB or rank table)
+		unitCost = pricing.GuBasePrice(guBasePrice, guRank)
 	} else if itemType == "material" {
 		// Check material rank for level gating
 		var matRank int
@@ -1989,25 +1999,28 @@ func StockSectVault(c *gin.Context) {
 			_ = json.Unmarshal(s.VaultGu, &vaultGus)
 		}
 
+		// Recalculate cost for this Gu using pricing package
+		var stockGuRank, stockGuBasePrice int
+		_ = tx.QueryRow(`SELECT COALESCE(rank,1), COALESCE(base_price,0) FROM gu_dictionary WHERE id = $1`, req.ItemID).Scan(&stockGuRank, &stockGuBasePrice)
+		if stockGuRank == 0 {
+			stockGuRank = 1
+		}
+		stockGuCost := pricing.VaultCost(pricing.GuBasePrice(stockGuBasePrice, stockGuRank))
+
 		found := false
 		for i, v := range vaultGus {
 			if v.ID == req.ItemID {
 				vaultGus[i].Quantity += req.Quantity
+				vaultGus[i].Cost = stockGuCost // refresh cost to current pricing
 				found = true
 				break
 			}
 		}
 
 		if !found {
-			// Cost for members to buy from vault uses pricing package
-			var guRank, guBasePrice int
-			_ = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1`, req.ItemID).Scan(&guBasePrice, &guRank)
-			if guRank == 0 {
-				guRank = 1
-			}
 			vaultGus = append(vaultGus, SectVaultGuItem{
 				ID:       req.ItemID,
-				Cost:     pricing.VaultCost(pricing.GuBasePrice(guBasePrice, guRank)),
+				Cost:     stockGuCost,
 				Quantity: req.Quantity,
 			})
 		}
