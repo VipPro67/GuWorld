@@ -120,10 +120,29 @@ export const wikiPages: WikiPage[] = [
             <div className="relative">
               <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
               <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <span>Phiên Bản v0.6.7.1 (Hiện tại)</span>
+                <span>Phiên Bản v0.6.8 (Hiện tại)</span>
                 <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono text-[9px]">
                   Mới nhất
                 </span>
+              </h4>
+
+              <ul className="list-disc list-inside text-[var(--text-secondary)] mt-1.5 space-y-1.5 leading-relaxed">
+                <li>
+                  <strong>Cân Bằng Gameplay:</strong> Cập nhật thời gian giảm độ no của Cổ trùng (Hunger Decay Background Worker) lên 3 giờ/lần.
+                </li>
+                <li>
+                  <strong>Tính Năng Mới:</strong> Thêm Cửa hàng Đấu trường (Arena Shop) và hệ thống Nhiệm vụ hàng ngày (Daily Challenges) cùng với các thành phần Frontend và Handler tương ứng.
+                </li>
+                <li>
+                  <strong>Tối Ưu Trải Nghiệm:</strong> Nâng cấp logic cho Cổ ăn, thêm thông báo (toast) cảnh báo chi tiết khi cho ăn đơn và ăn nhóm nếu không đủ thức ăn.
+                </li>
+              </ul>
+            </div>
+
+            <div className="relative">
+              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-zinc-700 border-2 border-zinc-950" />
+              <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <span>Phiên Bản v0.6.7.1</span>
               </h4>
 
               <ul className="list-disc list-inside text-[var(--text-secondary)] mt-1.5 space-y-1.5 leading-relaxed">

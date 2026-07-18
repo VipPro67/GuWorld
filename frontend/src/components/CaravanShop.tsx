@@ -101,7 +101,12 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
   };
 
   // Filtered lists for Buy Mode
-  const filteredBuyItems = shopItems.filter((item) => item.type === shopTab);
+  const filteredBuyItems = shopItems.filter((item) => {
+    if (shopTab === "Material") {
+      return item.type === "Material" || item.type === "Food" || item.type === "food";
+    }
+    return item.type === shopTab;
+  });
 
   // Filtered lists for Sell Mode
   const sellableMaterials = Object.entries(player.materials_inventory || {})
@@ -361,9 +366,14 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                     <h4 className="text-base font-bold text-zinc-200 font-serif group-hover:text-amber-400 transition-colors">
                       {item.name}
                     </h4>
-                    <p className="text-xs text-zinc-405 leading-normal">
-                      {item.description}
-                    </p>
+                    <details className="mt-1">
+                      <summary className="text-[10px] text-zinc-500 hover:text-amber-500 cursor-pointer select-none list-none font-mono outline-none inline-flex items-center gap-1 transition-colors">
+                        [+] Xem mô tả
+                      </summary>
+                      <p className="text-xs text-zinc-405 leading-normal mt-2 border-l-2 border-zinc-800 pl-2">
+                        {item.description}
+                      </p>
+                    </details>
                   </div>
                   <div className="border-t border-zinc-900/60 pt-3 flex items-center justify-between">
                     <span className="text-[10px] text-zinc-600 font-mono">
@@ -417,9 +427,14 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                   <h4 className="text-base font-bold text-zinc-200 font-serif group-hover:text-rose-405 transition-colors">
                     {item.name}
                   </h4>
-                  <p className="text-xs text-zinc-405 leading-normal">
-                    {item.description}
-                  </p>
+                  <details className="mt-1">
+                    <summary className="text-[10px] text-zinc-500 hover:text-rose-400 cursor-pointer select-none list-none font-mono outline-none inline-flex items-center gap-1 transition-colors">
+                      [+] Xem mô tả
+                    </summary>
+                    <p className="text-xs text-zinc-405 leading-normal mt-2 border-l-2 border-zinc-800 pl-2">
+                      {item.description}
+                    </p>
+                  </details>
                 </div>
                 <div className="border-t border-zinc-900/60 pt-3 flex items-center justify-between">
                   <span className="text-[10px] text-zinc-600 font-mono">

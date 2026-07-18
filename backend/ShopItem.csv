@@ -1,24 +1,61 @@
-id,name,description,item_type,price,stock,sort_order,is_active
-grass_puppet,Hình nộm người cỏ,Hình nộm cỏ để tập luyện chiến đấu.,Material,3,99,0,True
-moon_orchid_petal,Cánh hoa Nguyệt Lan,Cánh hoa lan phát sáng vào ban đêm. Thức ăn của Nguyệt Quang Cổ.,Material,2,99,1,True
-boar_meat,Thịt heo rừng,Nguồn thức ăn giàu năng lượng. Thức ăn của Bạch Thỉ Cổ và Hắc Thỉ Cổ.,Material,3,99,2,True
-green_bamboo_wine,Rượu Thanh Trúc,Rượu trúc xanh thơm ngon. Thức ăn của Tửu Trùng.,Material,2,99,3,True
-heart_knowledge_grass,Cỏ Tri Tâm,Cỏ ngọt khai tâm trí. Thức ăn bổ trợ cho cổ trùng.,Material,2,99,4,True
-ginseng,Nhân Sâm,Nhân sâm quý hiếm. Thức ăn của Địa Thính Nhục Chi Nha.,Material,4,99,5,True
-GU_MOONLIGHT,Nguyệt Quang Cổ,"Cổ trùng Rank 1 Nhất Chuyển, phóng ra nguyệt nhận sắc bén tấn công.",Gu,220,5,6,True
-GU_BLACK_BOAR,Hắc Thỉ Cổ,"Cổ trùng Rank 1 Nhất Chuyển, cải tạo thể chất tăng lực lực lượng vĩnh viễn.",Gu,600,2,7,True
-GU_CLEANSING_WATER,Tịnh Thủy Cổ,Cổ trùng hỗ trợ tẩy rửa cặn bã Không khiếu và thanh trừ ý chí lạ.,Gu,640,1,8,True
-GU_SHADOW_STEPS,Ảnh Bộ Cổ,"Cổ trùng di chuyển giúp thân pháp nhanh thoăn thoắt, nhảy vọt 2 ô.",Gu,600,3,9,True
-GU_EARTH_COMMUNICATION,Địa Thính Nhục Chi Nha,Cổ trùng trinh thám dưới lòng đất mở rộng tầm nhìn thêm 3 ô.,Gu,700,2,10,True
-GU_TUSITA_FLOWER,Thố Ti Hoa Cổ,Cổ trùng không gian tăng thêm 20 ô chứa đồ trong hành lý.,Gu,2500,2,11,True
-GU_RELIC,Xá Lợi Cổ (Relic Gu),Cổ trùng tiêu hao nâng cao tu vi ngay lập tức thêm 1 Tiểu Chuyển.,Gu,2000,2,12,True
-GU_STONE_APERTURE,Thạch Khiếu Cổ (Stone Aperture Gu),Cổ trùng tiêu hao hóa thạch Không khiếu nhận 500 Nguyên Thạch nhưng giảm 15 Chân Nguyên tối đa.,Gu,600,3,13,True
-GU_RED_STEEL_RELIC,Xích Thiết Xá Lợi Cổ,Tăng tu vi Nhị Chuyển lên một tiểu cảnh giới.,Gu,8500,1,14,True
-ITEM_HEALING_PELLET_SMALL,Tiểu Hồi Huyết Đan,Hồi 30 máu tức thì.,Consumable,5,99,15,True
-ITEM_HEALING_PELLET_MEDIUM,Trung Hồi Huyết Đan,Hồi 80 máu tức thì.,Consumable,10,50,16,True
-ITEM_MEDICINAL_PASTE,Kim Sang Dược,Bôi ngoài da hồi 50 máu.,Consumable,8,99,17,True
-ITEM_HERBAL_SOUP,Linh Thảo Thang,Hồi 40 máu + 20 mana.,Consumable,8,99,18,True
-ITEM_BLOOD_GINSENG,Huyết Sâm,Dược liệu quý hồi 150 máu.,Consumable,20,50,19,True
-ITEM_HEALING_PELLET_LARGE,Đại Hồi Huyết Đan,Hồi 200 máu tức thì.,Consumable,30,20,20,True
-ITEM_LIFE_SAVING_PILL,Cứu Mệnh Đan,Hồi 500 máu tức thì.,Consumable,80,5,21,True
-mine_chest,Rương Mỏ Linh Thạch,Rương chứa nhiều tài nguyên quý giá từ mỏ linh thạch.,Consumable,1,1000,22,True
+id,price,stock,sort_order,is_default
+moon_orchid_petal,2,99,1,True
+boar_meat,3,99,2,True
+green_bamboo_wine,2,99,3,True
+heart_knowledge_grass,2,99,4,True
+ginseng,4,99,5,True
+GU_MOONLIGHT,220,5,6,True
+GU_BLACK_BOAR,600,2,7,True
+GU_CLEANSING_WATER,640,1,8,True
+GU_SHADOW_STEPS,600,3,9,True
+GU_EARTH_COMMUNICATION,700,2,10,True
+GU_TUSITA_FLOWER,2500,2,11,True
+GU_BRONZE_RELIC,500,2,12,True
+
+GU_STONE_APERTURE,600,3,13,False
+GU_RED_STEEL_RELIC,8500,1,14,False
+ITEM_HEALING_PELLET_SMALL,5,99,15,True
+ITEM_HEALING_PELLET_MEDIUM,10,50,16,True
+ITEM_MEDICINAL_PASTE,8,99,17,True
+ITEM_HERBAL_SOUP,8,99,18,True
+ITEM_BLOOD_GINSENG,20,50,19,True
+ITEM_HEALING_PELLET_LARGE,30,20,20,False
+ITEM_LIFE_SAVING_PILL,80,5,21,False
+mine_chest,1,1000,22,True
+GU_LIFESPAN_1,1000,1,23,False
+GU_LIFESPAN_5,5000,1,24,False
+GU_WHITE_SILVER_RELIC,1200,2,25,False
+GU_SHADOW,200,3,26,True
+GU_BOOKWORM,200,2,27,True
+GU_FISH_SCALE,200,5,28,True
+GU_FORMATION_HEART,200,1,29,True
+sweet_wine,5,99,30,True
+bitter_wine,5,99,31,True
+sour_wine,5,99,32,True
+spicy_wine,5,99,33,True
+fresh_blood,5,99,34,True
+earth_qi,5,99,35,True
+starlight_firefly,5,99,36,True
+water_weed,2,99,37,True
+bitter_water,2,99,38,True
+light,2,99,39,True
+iron_ore,10,50,40,True
+copper_ore,15,50,41,True
+immortal_essence,250,5,42,False
+womans_heart,250,2,43,False
+heavy_gold_ore,250,5,44,False
+GU_WHITE_BOAR,250,3,45,True
+GU_WHITE_COCOON,180,5,46,True
+GU_STEEL_BRISTLE,220,3,47,True
+GU_FLESH_EAR,300,2,48,True
+GU_GREEN_SILK,150,5,49,True
+GU_MUD,120,9,50,True
+GU_STONE_SKIN,200,4,51,True
+GU_WHIRLWIND,240,3,52,True
+GU_LITTLE_LIGHT,150,5,53,True
+GU_FOUR_FLAVORS_LIQUOR,850,1,55,False
+GU_ALL_OUT_EFFORT,1200,1,56,False
+GU_BITTER_STRENGTH,900,2,57,False
+GU_BEAR_STRENGTH,950,2,58,False
+GU_BONE_FLESH_REUNION,3000,1,59,False
+GU_STARGATE,3500,1,60,False

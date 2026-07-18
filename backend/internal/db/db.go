@@ -77,12 +77,9 @@ func InitSchema() error {
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS caravan_shop_items (
 		id VARCHAR(50) PRIMARY KEY,
-		name VARCHAR(100) NOT NULL,
-		description TEXT NOT NULL DEFAULT '',
-		item_type VARCHAR(30) NOT NULL,
 		price INTEGER NOT NULL,
 		stock INTEGER NOT NULL DEFAULT -1,
-		is_active BOOLEAN NOT NULL DEFAULT TRUE,
+		is_default BOOLEAN NOT NULL DEFAULT TRUE,
 		sort_order INTEGER NOT NULL DEFAULT 0,
 		updated_at TIMESTAMP DEFAULT NOW()
 	);`)
@@ -1562,10 +1559,10 @@ func seedShopItemsFromCSV(filename string) error {
 	defer f.Close()
 
 	col := func(name string) int { return colIndex(header, name) }
-	idIdx, nameIdx, typeIdx, priceIdx := col("id"), col("name"), col("item_type"), col("price")
-	descIdx, stockIdx, sortIdx, activeIdx := col("description"), col("stock"), col("sort_order"), col("is_active")
-	if idIdx < 0 || nameIdx < 0 || typeIdx < 0 || priceIdx < 0 {
-		return fmt.Errorf("ShopItem.csv missing required columns (id, name, item_type, price)")
+	idIdx, priceIdx := col("id"), col("price")
+	stockIdx, sortIdx, defaultIdx := col("stock"), col("sort_order"), col("is_default")
+	if idIdx < 0 || priceIdx < 0 {
+		return fmt.Errorf("ShopItem.csv missing required columns (id, price)")
 	}
 	get := func(row []string, idx int) string {
 		if idx < 0 || idx >= len(row) {
@@ -1587,26 +1584,29 @@ func seedShopItemsFromCSV(filename string) error {
 			continue
 		}
 		price, stock, sortOrder := 0, -1, seeded
-		fmt.Sscanf(get(row, priceIdx), "%d", &price)
+		if priceRaw := get(row, priceIdx); priceRaw != "" {
+			fmt.Sscanf(get(row, priceIdx), "%d", &price)
+		}
 		if stockRaw := get(row, stockIdx); stockRaw != "" {
 			fmt.Sscanf(stockRaw, "%d", &stock)
 		}
 		if sortRaw := get(row, sortIdx); sortRaw != "" {
 			fmt.Sscanf(sortRaw, "%d", &sortOrder)
 		}
-		isActive := true
-		activeRaw := strings.ToLower(get(row, activeIdx))
-		if activeRaw == "false" || activeRaw == "0" || activeRaw == "no" {
-			isActive = false
+		isDefault := true
+		if defaultIdx >= 0 {
+			defaultRaw := strings.ToLower(get(row, defaultIdx))
+			if defaultRaw == "false" || defaultRaw == "0" || defaultRaw == "no" {
+				isDefault = false
+			}
 		}
 		_, err = DB.Exec(`
-			INSERT INTO caravan_shop_items (id, name, description, item_type, price, stock, is_active, sort_order, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+			INSERT INTO caravan_shop_items (id, price, stock, is_default, sort_order, updated_at)
+			VALUES ($1, $2, $3, $4, $5, NOW())
 			ON CONFLICT (id) DO UPDATE
-			SET name=EXCLUDED.name, description=EXCLUDED.description, item_type=EXCLUDED.item_type,
-			    price=EXCLUDED.price, stock=EXCLUDED.stock, is_active=EXCLUDED.is_active,
+			SET price=EXCLUDED.price, stock=EXCLUDED.stock, is_default=EXCLUDED.is_default,
 			    sort_order=EXCLUDED.sort_order, updated_at=NOW()
-		`, id, get(row, nameIdx), get(row, descIdx), get(row, typeIdx), price, stock, isActive, sortOrder)
+		`, id, price, stock, isDefault, sortOrder)
 		if err != nil {
 			return fmt.Errorf("upsert shop item %s: %w", id, err)
 		}

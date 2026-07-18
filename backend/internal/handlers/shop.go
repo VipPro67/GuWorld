@@ -3,7 +3,10 @@ package handlers
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
+
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -13,7 +16,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
-	"time"
 )
 
 // ShopItem represents a product in the shop
@@ -28,10 +30,15 @@ type ShopItem struct {
 
 func loadCaravanShopCatalog() ([]ShopItem, error) {
 	rows, err := db.DB.Query(`
-		SELECT id, name, description, item_type, price, stock
-		FROM caravan_shop_items
-		WHERE is_active = TRUE
-		ORDER BY sort_order ASC, id ASC
+		SELECT c.id, 
+		       COALESCE(i.name, g.name, c.id) AS name, 
+		       COALESCE(i.description, g.description, '') AS description,
+		       COALESCE(i.item_type, 'Gu') AS type, 
+		       c.price, c.stock, c.is_default
+		FROM caravan_shop_items c
+		LEFT JOIN item_dictionary i ON c.id = i.id
+		LEFT JOIN gu_dictionary g ON c.id = g.id
+		ORDER BY c.sort_order ASC, c.id ASC
 	`)
 	if err != nil {
 		return nil, err
@@ -41,10 +48,19 @@ func loadCaravanShopCatalog() ([]ShopItem, error) {
 	items := []ShopItem{}
 	for rows.Next() {
 		var item ShopItem
-		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.Type, &item.Price, &item.Stock); err != nil {
+		var isDefault bool
+		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.Type, &item.Price, &item.Stock, &isDefault); err != nil {
 			return nil, err
 		}
-		items = append(items, item)
+
+		if isDefault {
+			items = append(items, item)
+		} else {
+			// 30% chance to appear
+			if rand.Float32() < 0.3 {
+				items = append(items, item)
+			}
+		}
 	}
 	return items, rows.Err()
 }
@@ -52,9 +68,15 @@ func loadCaravanShopCatalog() ([]ShopItem, error) {
 func findCaravanShopItem(itemID string) (*ShopItem, error) {
 	var item ShopItem
 	err := db.DB.QueryRow(`
-		SELECT id, name, description, item_type, price, stock
-		FROM caravan_shop_items
-		WHERE id = $1 AND is_active = TRUE
+		SELECT c.id, 
+		       COALESCE(i.name, g.name, c.id) AS name, 
+		       COALESCE(i.description, g.description, '') AS description,
+		       COALESCE(i.item_type, 'Gu') AS type, 
+		       c.price, c.stock
+		FROM caravan_shop_items c
+		LEFT JOIN item_dictionary i ON c.id = i.id
+		LEFT JOIN gu_dictionary g ON c.id = g.id
+		WHERE c.id = $1
 	`, itemID).Scan(&item.ID, &item.Name, &item.Description, &item.Type, &item.Price, &item.Stock)
 	if err != nil {
 		return nil, err
@@ -74,6 +96,7 @@ func GetShopList(c *gin.Context) {
 
 	items, err := loadCaravanShopCatalog()
 	if err != nil {
+		fmt.Printf("Error loading shop catalog: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách Thương Đội"})
 		return
 	}
@@ -109,10 +132,34 @@ func BuyShopItem(c *gin.Context) {
 		return
 	}
 
-	// 1. Find product in database-backed catalog
+	// 1. Verify item is in current cached shop catalog
+	var items []ShopItem
+	cacheKey := "caravan_shop_catalog"
+	if err := cache.GetJSON(cacheKey, &items); err != nil || len(items) == 0 {
+		// If cache missing, load it to establish the current catalog
+		items, _ = loadCaravanShopCatalog()
+		if len(items) > 0 {
+			_ = cache.SetJSON(cacheKey, items, 10*time.Minute)
+		}
+	}
+
+	foundInCatalog := false
+	for _, item := range items {
+		if item.ID == req.ItemID {
+			foundInCatalog = true
+			break
+		}
+	}
+
+	if !foundInCatalog {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Vật phẩm này hiện không được bán trong đợt này. Hãy quay lại sau!"})
+		return
+	}
+
+	// 2. Find product in database to get exact price and stock
 	selectedItem, err := findCaravanShopItem(req.ItemID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy vật phẩm này trong Thương Đội."})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy vật phẩm này trong CSDL."})
 		return
 	}
 
@@ -208,9 +255,9 @@ func BuyShopItem(c *gin.Context) {
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "shop.buy", EntityType: "shop_item",
-		EntityID: selectedItem.ID,
+		EntityID:       selectedItem.ID,
 		RequestSummary: fmt.Sprintf("%s x%d | %d Nguyên Thạch", selectedItem.Name, req.Quantity, totalCost),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"player":  player,
@@ -335,9 +382,9 @@ func SellShopItem(c *gin.Context) {
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "shop.sell", EntityType: "shop_item",
-		EntityID: req.ItemID,
+		EntityID:       req.ItemID,
 		RequestSummary: fmt.Sprintf("%s x%d | nhận %d Nguyên Thạch", itemName, req.Quantity, totalGain),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"player": player, "message": "Bán thành công, nhận Nguyên Thạch!"})
 }
