@@ -39,7 +39,7 @@ func main() {
 	}
 	defer db.DB.Close()
 
-	// 2. Initialize Database Schema
+	// 2. Initialize Database Schema (tables only, no CSV seed)
 	err = db.InitSchema()
 	if err != nil {
 		log.Fatalf("Database schema initialization failed: %v", err)
@@ -53,28 +53,28 @@ func main() {
 		_ = cache.Delete("game_dictionary_unified")
 	}
 
-	// 2.2. Load Gu registry cache from database Dictionaries
+	// 2.2. Load Gu registry cache from database (may be empty until admin imports data)
 	err = models.LoadGuRegistry(db.DB)
 	if err != nil {
-		log.Fatalf("Failed to load Gu registry cache: %v", err)
+		log.Printf("Warning: Failed to load Gu registry: %v (data may need import)", err)
 	}
 
-	// 2.3. Load Item registry cache from database Dictionaries
+	// 2.3. Load Item registry cache from database
 	err = models.LoadItemRegistry(db.DB)
 	if err != nil {
-		log.Fatalf("Failed to load Item registry cache: %v", err)
+		log.Printf("Warning: Failed to load Item registry: %v (data may need import)", err)
 	}
 
-	// Load Monster registry cache from database Templates
+	// Load Monster registry cache from database
 	err = models.LoadMonsterRegistry(db.DB)
 	if err != nil {
-		log.Fatalf("Failed to load Monster registry cache: %v", err)
+		log.Printf("Warning: Failed to load Monster registry: %v (data may need import)", err)
 	}
 
-	// 2.4. Load Quest registry from CSV
+	// 2.4. Load Quest registry from DB (or CSV fallback)
 	err = handlers.LoadQuestRegistry()
 	if err != nil {
-		log.Fatalf("Failed to load Quest registry: %v", err)
+		log.Printf("Warning: Failed to load Quest registry: %v (data may need import)", err)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

@@ -99,6 +99,8 @@ func SetupRouter() *gin.Engine {
 		api.DELETE("/admin/sects/:id/missions/:missionId", middleware.AuthRequired(), handlers.AdminDeleteSectMission)
 		api.POST("/admin/sects/:id/vault/stock", middleware.AuthRequired(), handlers.AdminStockSectVault)
 		api.DELETE("/admin/sects/:id/vault/stock", middleware.AuthRequired(), handlers.AdminRemoveSectVaultItem)
+		api.POST("/admin/data/import", middleware.AuthRequired(), handlers.AdminImportData)
+		api.POST("/admin/data/export", middleware.AuthRequired(), handlers.AdminExportData)
 		api.GET("/wallet", middleware.AuthRequired(), handlers.GetWallet)
 		api.POST("/topup/orders", middleware.AuthRequired(), middleware.RateLimit(10, time.Minute), handlers.CreateTopupOrder)
 		api.GET("/topup/orders/:orderCode", middleware.AuthRequired(), handlers.GetTopupOrder)

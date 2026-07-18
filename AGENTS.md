@@ -10,7 +10,7 @@ cd frontend && npm install && npm run dev  # frontend on :3000
 
 **.env search order:** `.env` → `backend/.env` → `../.env` → `../../.env`
 **DB defaults:** localhost:5432, user `gu_admin`, pass `gu_pass_123`, db `gu_db`
-**CSV seed paths** are relative to `backend/internal/db/db.go` (reads `../../*.csv`). If seed fails silently, check `backend/*.csv` exists.
+**CSV files live in `backend/data/`.** Import/export now done via Admin panel (tab "Dữ liệu") — no auto-seed on startup. All csvPath functions search `data/` first, then legacy paths.
 
 ## Tests & Checks
 

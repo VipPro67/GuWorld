@@ -49,6 +49,7 @@ var questRegistry []QuestDefinition
 
 func csvPath(filename string) string {
 	candidates := []string{
+		filepath.Join("data", filename),
 		filename,
 		filepath.Join("backend", filename),
 		filepath.Join("..", filename),
@@ -128,11 +129,62 @@ func CheckQuest(questID string, p *models.Player) bool {
 	}
 }
 
+// LoadQuestRegistry loads quest definitions from DB table (if populated) or falls back to CSV.
 func LoadQuestRegistry() error {
+	loadedQuests, err := loadQuestsFromDB()
+	if err == nil && len(loadedQuests) > 0 {
+		questRegistry = loadedQuests
+		log.Printf("Successfully loaded %d quests from database", len(questRegistry))
+		return nil
+	}
+
+	// Fallback: load from CSV (used on first startup before import)
+	return loadQuestsFromCSV()
+}
+
+// loadQuestsFromDB reads quest definitions from the quests table.
+func loadQuestsFromDB() ([]QuestDefinition, error) {
+	rows, err := db.DB.Query(`SELECT id, title, description, req_desc, message, rewards::text FROM quests ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var loaded []QuestDefinition
+	for rows.Next() {
+		var id, title, desc, reqDesc, message, rewardsStr string
+		if err := rows.Scan(&id, &title, &desc, &reqDesc, &message, &rewardsStr); err != nil {
+			return nil, err
+		}
+		var rewards []QuestReward
+		if rewardsStr != "" && rewardsStr != "[]" {
+			if err := json.Unmarshal([]byte(rewardsStr), &rewards); err != nil {
+				log.Printf("Warning: failed to parse rewards JSON for quest %s: %v", id, err)
+			}
+		}
+		qID := id
+		loaded = append(loaded, QuestDefinition{
+			ID:      qID,
+			Title:   title,
+			Desc:    desc,
+			ReqDesc: reqDesc,
+			Message: message,
+			Rewards: rewards,
+			Check: func(p *models.Player) bool {
+				return CheckQuest(qID, p)
+			},
+		})
+	}
+	return loaded, nil
+}
+
+// loadQuestsFromCSV is the original CSV-based quest loader (kept as fallback).
+func loadQuestsFromCSV() error {
 	path := csvPath("Quest.csv")
 	file, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("failed to open Quest.csv: %w", err)
+		log.Printf("Warning: no Quest.csv found, quest registry will be empty: %v", err)
+		return nil
 	}
 	defer file.Close()
 
@@ -143,7 +195,8 @@ func LoadQuestRegistry() error {
 	}
 
 	if len(records) < 2 {
-		return fmt.Errorf("Quest.csv is empty or missing headers")
+		log.Println("Warning: Quest.csv is empty, quest registry will be empty")
+		return nil
 	}
 
 	headers := records[0]

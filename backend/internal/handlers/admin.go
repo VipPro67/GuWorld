@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -1077,4 +1078,48 @@ func AdminDeleteSect(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã giải tán tông môn " + name})
+}
+
+// AdminImportData seeds all dictionary tables from CSV files.
+// POST /api/admin/data/import
+func AdminImportData(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+
+	if err := db.SeedFromCSV(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Import thất bại: " + err.Error()})
+		return
+	}
+
+	// Reload registries
+	if err := models.LoadGuRegistry(db.DB); err != nil {
+		log.Printf("Warning: failed to reload Gu registry after import: %v", err)
+	}
+	if err := models.LoadItemRegistry(db.DB); err != nil {
+		log.Printf("Warning: failed to reload Item registry after import: %v", err)
+	}
+	if err := models.LoadMonsterRegistry(db.DB); err != nil {
+		log.Printf("Warning: failed to reload Monster registry after import: %v", err)
+	}
+	if err := LoadQuestRegistry(); err != nil {
+		log.Printf("Warning: failed to reload Quest registry after import: %v", err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Import dữ liệu từ CSV thành công"})
+}
+
+// AdminExportData exports all dictionary tables to CSV files.
+// POST /api/admin/data/export
+func AdminExportData(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+
+	if err := db.ExportToCSV(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Export thất bại: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Export dữ liệu ra CSV thành công"})
 }

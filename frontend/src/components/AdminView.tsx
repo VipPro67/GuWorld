@@ -33,6 +33,7 @@ import {
   Edit3,
   ListTodo,
   BookOpen,
+  Database,
 } from "lucide-react";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
@@ -202,7 +203,7 @@ export const AdminView: React.FC = () => {
   const [stonesImmortal, setStonesImmortal] = useState("");
 
   const [actionLoading, setActionLoading] = useState(false);
-  const [section, setSection] = useState<"players" | "sects">("players");
+  const [section, setSection] = useState<"players" | "sects" | "data">("players");
 
   // ----- Sect state -----
   const [sects, setSects] = useState<any[]>([]);
@@ -1212,6 +1213,9 @@ export const AdminView: React.FC = () => {
         <button onClick={() => setSection("sects")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "sects" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
           <Building2 className="w-3.5 h-3.5 inline mr-1.5" />Tông môn
         </button>
+        <button onClick={() => setSection("data")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "data" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+          <Database className="w-3.5 h-3.5 inline mr-1.5" />Dữ liệu
+        </button>
       </div>
 
       {/* Players section */}
@@ -1303,6 +1307,47 @@ export const AdminView: React.FC = () => {
             </>
           )}
         </>
+      )}
+
+      {/* Data section: import/export CSV */}
+      {section === "data" && (
+        <div className="space-y-6">
+          <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-6">
+            <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2 mb-2">
+              <Database className="w-4 h-4 text-emerald-400" />
+              Quản Lý Dữ Liệu
+            </h3>
+            <p className="text-xs text-zinc-500 mb-6">
+              Import dữ liệu từ file CSV vào database, hoặc export dữ liệu từ database ra file CSV.
+              Dùng khi cần đồng bộ dữ liệu game sau khi chỉnh sửa file CSV.
+            </p>
+            <div className="flex flex-wrap gap-4">
+              <button
+                disabled={actionLoading}
+                onClick={async () => {
+                  if (!confirm("Import sẽ ghi đè dữ liệu hiện tại theo cơ chế UPSERT. Tiếp tục?")) return;
+                  const ok = await exec(`${BACKEND_URL}/api/admin/data/import`, "POST", {});
+                  if (ok) addToast("Import dữ liệu từ CSV thành công!", "success");
+                }}
+                className="flex items-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer"
+              >
+                <Database className="w-4 h-4" />
+                {actionLoading ? "Đang xử lý..." : "Import CSV → Database"}
+              </button>
+              <button
+                disabled={actionLoading}
+                onClick={async () => {
+                  const ok = await exec(`${BACKEND_URL}/api/admin/data/export`, "POST", {});
+                  if (ok) addToast("Export dữ liệu ra CSV thành công!", "success");
+                }}
+                className="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer"
+              >
+                <RefreshCw className="w-4 h-4" />
+                {actionLoading ? "Đang xử lý..." : "Export Database → CSV"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Sects section */}

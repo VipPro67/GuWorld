@@ -1,7 +1,0 @@
-sect_id,title,description,mission_type,target_id,target_amount,reward_contribution,required_member_rank
-hu_ca_sect,Thu thập Rượu Thanh Trúc,Nộp 3 bình Rượu Xanh (green_bamboo_wine) đóng góp cho đan lâu tông môn bồi dưỡng sinh cơ.,GATHER,green_bamboo_wine,3,150,NGOAI_MON
-hu_ca_sect,Chinh phạt Lợn Rừng Dã Ngoại,Bảo vệ lối vào Đãng Hồn Sơn, tiêu diệt 2x Lợn Rừng Đột Biến (wild_boar_tusk) để thu thập nanh thú chế tác Cổ trận.,GATHER,wild_boar_tusk,2,250,NOI_MON
-hu_ca_sect,Cống hiến Ngọc Bì Cổ,Nộp 1x Ngọc Bì Cổ (GU_JADE_SKIN) hỗ trợ hộ pháp đệ tử chân truyền thăng hạng.,DONATE,GU_JADE_SKIN,1,500,TINH_ANH
-gu_yue_clan,Hái cánh hoa Nguyệt Lan,Thu thập 5x Cánh hoa Nguyệt Lan (moon_orchid_petal) cho Đường chủ dược đường chế tạo bột trị thương.,GATHER,moon_orchid_petal,5,100,NGOAI_MON
-gu_yue_clan,Thu phục Bạch Thỉ Cổ,Bắt và cống hiến 1x Bạch Thỉ Cổ (GU_WHITE_BOAR) để cấp phát cho đệ tử xuất chúng mới khai mở Không Khiếu.,DONATE,GU_WHITE_BOAR,1,400,NOI_MON
-wan_hang_sect,Đóng góp Nanh Lợn Rừng,Thu thập và đóng góp 3x Nanh Lợn Rừng (wild_boar_tusk) chế tạo giáo mác cho đệ tử canh gác biên giới.,GATHER,wild_boar_tusk,3,120,NGOAI_MON

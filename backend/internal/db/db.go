@@ -479,7 +479,21 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create monster_spawns table: %w", err)
 	}
 
-	// 4.9. Create map_cells
+	// 4.9. Create quests table (seeded from CSV)
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS quests (
+		id TEXT PRIMARY KEY,
+		title TEXT NOT NULL DEFAULT '',
+		description TEXT NOT NULL DEFAULT '',
+		req_desc TEXT NOT NULL DEFAULT '',
+		message TEXT NOT NULL DEFAULT '',
+		rewards JSONB NOT NULL DEFAULT '[]'
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create quests table: %w", err)
+	}
+
+	// 4.10. Create map_cells (fka 4.9)
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS map_cells (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -497,7 +511,7 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create map_cells table: %w", err)
 	}
 
-	// 4.10. Create instance_templates
+	// 4.11. Create instance_templates
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS instance_templates (
 		id VARCHAR(50) PRIMARY KEY,
@@ -513,7 +527,7 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create instance_templates table: %w", err)
 	}
 
-	// 4.11. Create player_instance_sessions
+	// 4.12. Create player_instance_sessions
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS player_instance_sessions (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -530,7 +544,7 @@ func InitSchema() error {
 
 	_, _ = DB.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS player_active_session_idx ON player_instance_sessions(player_id) WHERE status = 'ACTIVE';`)
 
-	// 4.12. Create sects
+	// 4.13. Create sects
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS sects (
 		id VARCHAR(50) PRIMARY KEY,
@@ -547,7 +561,7 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create sects table: %w", err)
 	}
 
-	// 4.13. Create sect_members
+	// 4.14. Create sect_members
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS sect_members (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -562,7 +576,7 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create sect_members table: %w", err)
 	}
 
-	// 4.14. Create sect_missions
+	// 4.15. Create sect_missions
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS sect_missions (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -579,7 +593,7 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create sect_missions table: %w", err)
 	}
 
-	// 4.15. Create player_sect_missions
+	// 4.16. Create player_sect_missions
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS player_sect_missions (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -594,7 +608,7 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create player_sect_missions table: %w", err)
 	}
 
-	// 4.16. Create npcs
+	// 4.17. Create npcs
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS npcs (
 		id VARCHAR(50) PRIMARY KEY,
@@ -1071,27 +1085,7 @@ func InitSchema() error {
 		}
 	}
 
-	// 5. Seed master data
-	if err = SeedDictionaries(); err != nil {
-		return fmt.Errorf("database dictionaries seeding failed: %w", err)
-	}
-
-	// 5b. Seed phó bản / instances data
-	if err = SeedInstanceTemplates(); err != nil {
-		return fmt.Errorf("database instances seeding failed: %w", err)
-	}
-
-	// 5c. Seed tông môn / sects data
-	if err = SeedSects(); err != nil {
-		return fmt.Errorf("database sects seeding failed: %w", err)
-	}
-
-	// 5d. Seed NPCs cho Huyết Sọ Cổ hiến tế
-	if err = seedNPCs(); err != nil {
-		return fmt.Errorf("database npcs seeding failed: %w", err)
-	}
-
-	log.Println("Database schema initialized successfully")
+	log.Println("Database schema initialized successfully (seed skipped, use admin panel to import data)")
 	return nil
 }
 
@@ -1100,10 +1094,9 @@ func SeedDictionaries() error {
 	if err := seedItemsFromCSV("Item.csv"); err != nil {
 		return fmt.Errorf("CSV item seed failed: %w", err)
 	}
-	if err := seedGusFromCSV("Gu_optimized.csv"); err != nil {
-		if err = seedGusFromCSV("Gu.csv"); err != nil {
-			return fmt.Errorf("CSV Gu seed failed: %w", err)
-		}
+	if err := seedGusFromCSV("Gu.csv"); err != nil {
+		return fmt.Errorf("CSV Gu seed failed: %w", err)
+		
 	}
 	if err := seedRecipesFromCSV("Recipe.csv"); err != nil {
 		return fmt.Errorf("CSV recipe seed failed: %w", err)
@@ -1117,9 +1110,32 @@ func SeedDictionaries() error {
 	return nil
 }
 
+// SeedFromCSV runs all CSV-based data seeding in dependency order.
+// This is called manually by admin (AdminImportData) instead of at startup.
+func SeedFromCSV() error {
+	if err := SeedDictionaries(); err != nil {
+		return fmt.Errorf("dictionaries seeding failed: %w", err)
+	}
+	if err := SeedInstanceTemplates(); err != nil {
+		return fmt.Errorf("instances seeding failed: %w", err)
+	}
+	if err := SeedSects(); err != nil {
+		return fmt.Errorf("sects seeding failed: %w", err)
+	}
+	if err := seedQuestsFromCSV(); err != nil {
+		return fmt.Errorf("quests seeding failed: %w", err)
+	}
+	if err := seedNPCs(); err != nil {
+		return fmt.Errorf("npcs seeding failed: %w", err)
+	}
+	log.Println("All CSV data seeded successfully")
+	return nil
+}
+
 // csvPath resolves a CSV filename by searching the working directory and parent directories.
 func csvPath(filename string) string {
 	candidates := []string{
+		filepath.Join("data", filename),
 		filename,
 		filepath.Join("..", filename),
 		filepath.Join("..", "..", filename),
@@ -1636,6 +1652,77 @@ func SeedMonstersAndSpawns() error {
 	if err := seedMonsterSpawnsFromCSV("MonsterSpawn.csv"); err != nil {
 		return err
 	}
+	return nil
+}
+
+// seedQuestsFromCSV reads Quest.csv and upserts into quests table.
+func seedQuestsFromCSV() error {
+	f, r, header, err := openCSV("Quest.csv")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	idIdx := colIndex(header, "id")
+	titleIdx := colIndex(header, "title")
+	descIdx := colIndex(header, "desc")
+	reqDescIdx := colIndex(header, "req_desc")
+	msgIdx := colIndex(header, "message")
+	rewardsIdx := colIndex(header, "rewards")
+
+	if idIdx < 0 || titleIdx < 0 || descIdx < 0 {
+		return fmt.Errorf("Quest.csv missing required columns (id, title, desc)")
+	}
+
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil || len(row) == 0 {
+			continue
+		}
+		id := strings.TrimSpace(row[idIdx])
+		if id == "" {
+			continue
+		}
+		title := ""
+		if titleIdx >= 0 && titleIdx < len(row) {
+			title = strings.TrimSpace(row[titleIdx])
+		}
+		desc := ""
+		if descIdx >= 0 && descIdx < len(row) {
+			desc = strings.TrimSpace(row[descIdx])
+		}
+		reqDesc := ""
+		if reqDescIdx >= 0 && reqDescIdx < len(row) {
+			reqDesc = strings.TrimSpace(row[reqDescIdx])
+		}
+		message := ""
+		if msgIdx >= 0 && msgIdx < len(row) {
+			message = strings.TrimSpace(row[msgIdx])
+		}
+		rewards := "[]"
+		if rewardsIdx >= 0 && rewardsIdx < len(row) {
+			rVal := strings.TrimSpace(row[rewardsIdx])
+			if rVal != "" {
+				rewards = rVal
+			}
+		}
+
+		_, err = DB.Exec(`
+			INSERT INTO quests (id, title, description, req_desc, message, rewards)
+			VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+			ON CONFLICT (id) DO UPDATE
+			SET title=EXCLUDED.title, description=EXCLUDED.description,
+			    req_desc=EXCLUDED.req_desc, message=EXCLUDED.message,
+			    rewards=EXCLUDED.rewards
+		`, id, title, desc, reqDesc, message, rewards)
+		if err != nil {
+			return fmt.Errorf("upsert quest %s: %w", id, err)
+		}
+	}
+	log.Printf("Quests seeded from Quest.csv")
 	return nil
 }
 
@@ -2238,5 +2325,141 @@ func seedNPCs() error {
 		}
 		log.Println("Seeded initial NPCs for Huyết Sọ Cổ hiến tế.")
 	}
+	return nil
+}
+
+// writeCSV is a helper that runs a SQL query and writes the result as a CSV file.
+func writeCSV(filename string, columns []string, query string) error {
+	f, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("create %s: %w", filename, err)
+	}
+	defer f.Close()
+
+	w := csv.NewWriter(f)
+	defer w.Flush()
+
+	if err := w.Write(columns); err != nil {
+		return fmt.Errorf("write header %s: %w", filename, err)
+	}
+
+	rows, err := DB.Query(query)
+	if err != nil {
+		return fmt.Errorf("query %s: %w", filename, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		vals := make([]interface{}, len(columns))
+		ptrs := make([]interface{}, len(columns))
+		for i := range vals {
+			ptrs[i] = &vals[i]
+		}
+		if err := rows.Scan(ptrs...); err != nil {
+			return fmt.Errorf("scan %s: %w", filename, err)
+		}
+		row := make([]string, len(columns))
+		for i, v := range vals {
+			if v == nil {
+				row[i] = ""
+			} else {
+				switch val := v.(type) {
+				case []byte:
+					row[i] = string(val)
+				case string:
+					row[i] = val
+				default:
+					row[i] = fmt.Sprint(val)
+				}
+			}
+		}
+		if err := w.Write(row); err != nil {
+			return fmt.Errorf("write row %s: %w", filename, err)
+		}
+	}
+	return w.Error()
+}
+
+// ensureDataDir creates the data directory if it doesn't exist.
+func ensureDataDir() {
+	if err := os.MkdirAll("data", 0755); err != nil {
+		log.Printf("Warning: failed to create data directory: %v", err)
+	}
+}
+
+// ExportToCSV exports all dictionary tables to CSV files in the data/ directory.
+func ExportToCSV() error {
+	type exportDef struct {
+		filename string
+		columns  []string
+		query    string
+	}
+	ensureDataDir()
+	exports := []exportDef{
+		{
+			filename: "Item.csv",
+			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price"},
+			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'{}'), COALESCE(description,''), COALESCE(base_price,0) FROM item_dictionary ORDER BY id`,
+		},
+		{
+			filename: "Gu.csv",
+			columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price"},
+			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'{"active":{},"support":{},"passive":{},"house":{}}'), COALESCE(rarity,''), COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0) FROM gu_dictionary ORDER BY id`,
+		},
+		{
+			filename: "Recipe.csv",
+			columns:  []string{"id", "target_gu_id", "required_gus", "required_materials", "success_rate", "primeval_stones_cost", "immortal_essence_stones_cost"},
+			query:    `SELECT id, target_gu_id, COALESCE(required_gus::text,'[]'), COALESCE(required_materials::text,'{}'), COALESCE(success_rate,0), COALESCE(primeval_stones_cost,0), COALESCE(immortal_essence_stones_cost,0) FROM refining_recipes ORDER BY id`,
+		},
+		{
+			filename: "ShopItem.csv",
+			columns:  []string{"id", "price", "stock", "is_default", "sort_order"},
+			query:    `SELECT id, price, COALESCE(stock,-1), is_default, COALESCE(sort_order,0) FROM caravan_shop_items ORDER BY id`,
+		},
+		{
+			filename: "Region.csv",
+			columns:  []string{"id", "name", "description", "width", "height", "min_rank", "max_rank", "is_active"},
+			query:    `SELECT id, name, COALESCE(description,''), COALESCE(width,100), COALESCE(height,100), COALESCE(min_rank,1), COALESCE(max_rank,5), COALESCE(is_active,true) FROM regions ORDER BY id`,
+		},
+		{
+			filename: "LootTable.csv",
+			columns:  []string{"id", "name", "entries"},
+			query:    `SELECT id, name, COALESCE(entries::text,'[]') FROM loot_tables ORDER BY id`,
+		},
+		{
+			filename: "Monster.csv",
+			columns:  []string{"id", "name", "type", "max_hp", "base_attack", "base_defense", "gu_inventory", "item_inventory", "dao_marks", "path_masteries", "ai_profile", "loot_table_id", "description", "is_active"},
+			query:    `SELECT id, name, type, max_hp, base_attack, base_defense, COALESCE(gu_inventory::text,'[]'), COALESCE(item_inventory::text,'{}'), COALESCE(dao_marks::text,'{}'), COALESCE(path_masteries::text,'{}'), COALESCE(ai_profile,'beast_basic'), COALESCE(loot_table_id,''), COALESCE(description,''), COALESCE(is_active,true) FROM monster_templates ORDER BY id`,
+		},
+		{
+			filename: "MonsterSpawn.csv",
+			columns:  []string{"region_id", "monster_id", "x", "y", "spawn_mode", "chance", "respawn_seconds", "min_rank", "max_rank", "is_boss_spawn", "is_active"},
+			query:    `SELECT region_id, monster_id, x, y, COALESCE(spawn_mode,'Random'), COALESCE(chance,1.0), COALESCE(respawn_seconds,300), COALESCE(min_rank,1), COALESCE(max_rank,9), COALESCE(is_boss_spawn,false), COALESCE(is_active,true) FROM monster_spawns ORDER BY region_id, monster_id`,
+		},
+		{
+			filename: "Sect.csv",
+			columns:  []string{"id", "name", "description", "region", "vault_gu", "vault_materials", "vault_recipes"},
+			query:    `SELECT id, name, COALESCE(description,''), COALESCE(region,''), COALESCE(vault_gu::text,'[]'), COALESCE(vault_materials::text,'{}'), COALESCE(vault_recipes::text,'[]') FROM sects ORDER BY id`,
+		},
+		{
+			filename: "SectMission.csv",
+			columns:  []string{"sect_id", "title", "description", "mission_type", "target_id", "target_amount", "reward_contribution", "required_member_rank"},
+			query:    `SELECT sect_id, title, COALESCE(description,''), COALESCE(mission_type,'GATHER'), COALESCE(target_id,''), COALESCE(target_amount,1), COALESCE(reward_contribution,0), COALESCE(required_member_rank,'NGOAI_MON') FROM sect_missions ORDER BY sect_id, title`,
+		},
+		{
+			filename: "Quest.csv",
+			columns:  []string{"id", "title", "desc", "req_desc", "message", "rewards"},
+			query:    `SELECT id, title, description, req_desc, message, COALESCE(rewards::text,'[]') FROM quests ORDER BY id`,
+		},
+	}
+
+	for _, e := range exports {
+		p := filepath.Join("data", e.filename)
+		if err := writeCSV(p, e.columns, e.query); err != nil {
+			return fmt.Errorf("export %s: %w", p, err)
+		}
+		log.Printf("Exported %s", p)
+	}
+	log.Println("All CSV data exported successfully")
 	return nil
 }

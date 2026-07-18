@@ -47,6 +47,7 @@ type TopupPackage struct {
 
 func handlerCSVPath(filename string) string {
 	candidates := []string{
+		filepath.Join("data", filename),
 		filename,
 		filepath.Join("backend", filename),
 		filepath.Join("..", filename),

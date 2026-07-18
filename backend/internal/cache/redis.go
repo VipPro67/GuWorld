@@ -56,8 +56,6 @@ func Connect() error {
 		Client = nil // Set to nil to indicate Redis is not available
 		return err
 	}
-
-	fmt.Println("Successfully connected to Redis")
 	return nil
 }
 

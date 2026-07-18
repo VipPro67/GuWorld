@@ -1,6 +1,0 @@
-region_id,monster_id,x,y,spawn_mode,chance,respawn_seconds,min_rank,max_rank,is_boss_spawn,is_active
-gu_luan_slope,boss_wolf_king,80,80,BossRoom,1.0,3600,1,9,True,True
-blood_lake_purple_sand,monster_blood_spider,50,50,Roaming,0.8,300,2,4,False,True
-shadow_glimpse_trench,monster_ghost_bat,20,80,Roaming,0.9,180,3,5,False,True
-azure_ghost_desert,monster_sand_wraith,70,40,Roaming,0.7,600,4,6,False,True
-turbulent_current_sea,monster_sand_wraith,30,60,Roaming,0.5,1200,5,9,False,True
