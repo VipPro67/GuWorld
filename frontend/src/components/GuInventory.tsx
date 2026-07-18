@@ -549,13 +549,23 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                             {spec.gu_type !== "Consumable" && onFeedGroup && (
                               <button
                                 type="button"
-                                disabled={actionLoading || !canFeedGroup || isCurrentlyFeedingGroup}
-                                onClick={() => handleFeedGroupClick(guId)}
+                                disabled={actionLoading || isCurrentlyFeedingGroup}
+                                onClick={() => {
+                                  if (hungryBugsCount === 0) {
+                                    useGameStore.getState().addToast("Không có Cổ trùng nào trong nhóm này đang đói.", "warning");
+                                    return;
+                                  }
+                                  if (availableFood === 0) {
+                                    useGameStore.getState().addToast(`Đạo hữu không có thức ăn phù hợp (${foodName}) để cho ăn!`, "error");
+                                    return;
+                                  }
+                                  handleFeedGroupClick(guId);
+                                }}
                                 title={hungryBugsCount === 0 ? "Không có con nào đói" : `Cho ăn tất cả con đang đói. Cần: ${foodName} (Sở hữu: ${availableFood})`}
                                 className={`text-[9px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1 transition-all cursor-pointer font-mono ${
                                   canFeedGroup
                                     ? "bg-emerald-600 text-white hover:bg-emerald-500 active:scale-[0.96] shadow-[0_0_8px_rgba(16,185,129,0.2)]"
-                                    : "bg-zinc-900 text-zinc-650 border border-zinc-850 cursor-not-allowed"
+                                    : "bg-zinc-900 text-zinc-650 border border-zinc-850"
                                 }`}
                               >
                                 {isCurrentlyFeedingGroup ? "..." : `Cho Ăn Nhóm (${hungryBugsCount} con)`}
@@ -640,12 +650,22 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                     {spec.gu_type !== "Consumable" && !isDead && status !== "SEALED" && (
                                       <button
                                         type="button"
-                                        disabled={actionLoading || !canFeedIndividual || feedingId === gu.instance_id}
-                                        onClick={() => handleFeedClick(gu.instance_id)}
+                                        disabled={actionLoading || feedingId === gu.instance_id}
+                                        onClick={() => {
+                                          if (!isHungry) {
+                                            useGameStore.getState().addToast("Cổ trùng này đã no, không cần ăn thêm.", "warning");
+                                            return;
+                                          }
+                                          if (availableFood === 0) {
+                                            useGameStore.getState().addToast(`Đạo hữu không có thức ăn phù hợp (${foodName}) để cho ăn!`, "error");
+                                            return;
+                                          }
+                                          handleFeedClick(gu.instance_id);
+                                        }}
                                         className={`text-[9px] font-bold py-1 px-2.5 rounded font-mono transition-all cursor-pointer ${
                                           canFeedIndividual
                                             ? "bg-emerald-950/40 text-emerald-400 border border-emerald-900/40 hover:bg-emerald-950/60"
-                                            : "bg-zinc-900/40 text-zinc-600 border border-zinc-900/60 cursor-not-allowed"
+                                            : "bg-zinc-900/40 text-zinc-600 border border-zinc-900/60"
                                         }`}
                                       >
                                         {feedingId === gu.instance_id ? "..." : "Cho Ăn"}
