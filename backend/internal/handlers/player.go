@@ -418,6 +418,9 @@ func RegisterPlayer(c *gin.Context) {
 	}
 	setAuthCookie(c, token)
 
+	auditlog.Logf(db.DB, &player.ID, "player.register",
+		"username=%s email=%s region=%s", req.Username, req.Email, req.StartingRegion)
+
 	c.JSON(http.StatusCreated, CreatePlayerResponse{
 		Player: player,
 		Token:  token,
@@ -624,6 +627,9 @@ func LoginPlayer(c *gin.Context) {
 	}
 	setAuthCookie(c, token)
 
+	auditlog.Logf(db.DB, &player.ID, "player.login",
+		"username=%s email=%s", player.Username, loginEmail)
+
 	c.JSON(http.StatusOK, CreatePlayerResponse{
 		Player: player,
 		Token:  token,
@@ -632,6 +638,9 @@ func LoginPlayer(c *gin.Context) {
 
 // LogoutPlayer clears the auth cookie for the current browser session.
 func LogoutPlayer(c *gin.Context) {
+	if playerID, exists := middleware.GetPlayerID(c); exists {
+		auditlog.Logf(db.DB, &playerID, "player.logout", "")
+	}
 	clearAuthCookie(c)
 	c.Status(http.StatusNoContent)
 }
@@ -1928,10 +1937,13 @@ func EquipGu(c *gin.Context) {
 		guName = spec.Name
 	}
 
+	action := "gu.unequip"
 	statusMsg := fmt.Sprintf("Tháo %s thành công!", guName)
 	if req.Equip {
+		action = "gu.equip"
 		statusMsg = fmt.Sprintf("Trang bị %s thành công!", guName)
 	}
+	auditlog.Logf(db.DB, &authID, action, "gu=%s instance=%s", guName, req.InstanceID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"player":  player,

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 func AdminListPlayers(c *gin.Context) {
@@ -165,7 +167,7 @@ type AdminItemRequest struct {
 }
 
 func AdminAddPlayerItems(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
+	adminID, ok := requireAdmin(c); if !ok {
 		return
 	}
 
@@ -207,11 +209,17 @@ func AdminAddPlayerItems(c *gin.Context) {
 	}
 
 	tx.Commit()
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.add_items",
+		EntityType: "player", EntityID: playerID.String(),
+		RequestSummary: fmt.Sprintf("item=%s qty=%d", req.ItemID, req.Quantity),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã thêm vật phẩm thành công", "item_id": req.ItemID, "quantity": req.Quantity})
 }
 
 func AdminRemovePlayerItems(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
+	adminID, ok := requireAdmin(c); if !ok {
 		return
 	}
 
@@ -257,6 +265,12 @@ func AdminRemovePlayerItems(c *gin.Context) {
 	}
 
 	tx.Commit()
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.remove_items",
+		EntityType: "player", EntityID: playerID.String(),
+		RequestSummary: fmt.Sprintf("item=%s qty=%d", req.ItemID, req.Quantity),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa vật phẩm thành công", "item_id": req.ItemID, "quantity": req.Quantity})
 }
 
@@ -266,7 +280,7 @@ type AdminAddGuRequest struct {
 }
 
 func AdminAddPlayerGus(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
+	adminID, ok := requireAdmin(c); if !ok {
 		return
 	}
 
@@ -316,11 +330,17 @@ func AdminAddPlayerGus(c *gin.Context) {
 	}
 
 	tx.Commit()
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.add_gus",
+		EntityType: "player", EntityID: playerID.String(),
+		RequestSummary: fmt.Sprintf("gu=%s qty=%d", req.GuID, req.Quantity),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã thêm cổ trùng thành công", "gu_id": req.GuID, "quantity": req.Quantity})
 }
 
 func AdminRemovePlayerGu(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
+	adminID, ok := requireAdmin(c); if !ok {
 		return
 	}
 
@@ -369,11 +389,17 @@ func AdminRemovePlayerGu(c *gin.Context) {
 	}
 
 	tx.Commit()
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.remove_gu",
+		EntityType: "player", EntityID: playerID.String(),
+		RequestSummary: fmt.Sprintf("instance=%s", instanceID),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa cổ trùng thành công"})
 }
 
 func AdminChangePlayerStones(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
+	adminID, ok := requireAdmin(c); if !ok {
 		return
 	}
 
@@ -425,6 +451,19 @@ func AdminChangePlayerStones(c *gin.Context) {
 	}
 
 	tx.Commit()
+	summary := ""
+	if req.PrimevalStones != nil {
+		summary += fmt.Sprintf("primeval_stones=%d ", *req.PrimevalStones)
+	}
+	if req.ImmortalStones != nil {
+		summary += fmt.Sprintf("immortal_stones=%.0f ", *req.ImmortalStones)
+	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.change_stones",
+		EntityType: "player", EntityID: playerID.String(),
+		RequestSummary: summary,
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật tài nguyên thành công"})
 }
 
@@ -565,7 +604,7 @@ type AdminSectUpdateRequest struct {
 }
 
 func AdminUpdateSect(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
+	adminID, ok := requireAdmin(c); if !ok {
 		return
 	}
 
@@ -625,11 +664,17 @@ func AdminUpdateSect(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.update_sect",
+		EntityType: "sect", EntityID: sectID,
+		RequestSummary: fmt.Sprintf("sets=%d", len(sets)),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật tông môn thành công"})
 }
 
 func AdminSetSectLeader(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
+	adminID, ok := requireAdmin(c); if !ok {
 		return
 	}
 
@@ -675,11 +720,17 @@ func AdminSetSectLeader(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.set_sect_leader",
+		EntityType: "sect", EntityID: sectID,
+		RequestSummary: fmt.Sprintf("memberId=%s", memberIDStr),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã bổ nhiệm tân Chưởng môn thành công"})
 }
 
 func AdminKickSectMember(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
+	adminID, ok := requireAdmin(c); if !ok {
 		return
 	}
 
@@ -716,6 +767,12 @@ func AdminKickSectMember(c *gin.Context) {
 	}
 
 	tx.Commit()
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.kick_sect_member",
+		EntityType: "sect", EntityID: sectID,
+		RequestSummary: fmt.Sprintf("memberId=%s", memberIDStr),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa thành viên khỏi tông môn"})
 }
 
@@ -725,7 +782,7 @@ type AdminSectAddMemberRequest struct {
 }
 
 func AdminAddToSect(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
+	adminID, ok := requireAdmin(c); if !ok {
 		return
 	}
 
@@ -795,6 +852,12 @@ func AdminAddToSect(c *gin.Context) {
 	}
 
 	tx.Commit()
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.add_to_sect",
+		EntityType: "sect", EntityID: sectID,
+		RequestSummary: fmt.Sprintf("player=%s rank=%s", req.PlayerID, req.MemberRank),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã thêm " + username + " vào tông môn thành công"})
 }
 
@@ -807,7 +870,7 @@ type AdminStockVaultRequest struct {
 }
 
 func AdminStockSectVault(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
+	adminID, ok := requireAdmin(c); if !ok {
 		return
 	}
 
@@ -884,11 +947,17 @@ func AdminStockSectVault(c *gin.Context) {
 	}
 
 	tx.Commit()
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.stock_sect_vault",
+		EntityType: "sect", EntityID: sectID,
+		RequestSummary: fmt.Sprintf("type=%s item=%s qty=%d", req.ItemType, req.ItemID, req.Quantity),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã thêm vào bảo khố thành công"})
 }
 
 func AdminRemoveSectVaultItem(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
+	adminID, ok := requireAdmin(c); if !ok {
 		return
 	}
 
@@ -961,6 +1030,12 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 	}
 
 	tx.Commit()
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.remove_sect_vault",
+		EntityType: "sect", EntityID: sectID,
+		RequestSummary: fmt.Sprintf("type=%s item=%s qty=%d", req.ItemType, req.ItemID, req.Quantity),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa khỏi bảo khố thành công"})
 }
 
@@ -1014,7 +1089,7 @@ type AdminCreateMissionRequest struct {
 }
 
 func AdminCreateSectMission(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
+	adminID, ok := requireAdmin(c); if !ok {
 		return
 	}
 
@@ -1037,11 +1112,17 @@ func AdminCreateSectMission(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.create_sect_mission",
+		EntityType: "sect", EntityID: sectID,
+		RequestSummary: fmt.Sprintf("title=%s type=%s target=%s qty=%d", req.Title, req.MissionType, req.TargetID, req.TargetAmount),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo nhiệm vụ thành công"})
 }
 
 func AdminDeleteSectMission(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
+	adminID, ok := requireAdmin(c); if !ok {
 		return
 	}
 
@@ -1053,11 +1134,17 @@ func AdminDeleteSectMission(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.delete_sect_mission",
+		EntityType: "sect_mission", EntityID: missionID,
+		RequestSummary: "",
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa nhiệm vụ thành công"})
 }
 
 func AdminDeleteSect(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
+	adminID, ok := requireAdmin(c); if !ok {
 		return
 	}
 
@@ -1077,13 +1164,19 @@ func AdminDeleteSect(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.delete_sect",
+		EntityType: "sect", EntityID: sectID,
+		RequestSummary: fmt.Sprintf("name=%s", name),
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã giải tán tông môn " + name})
 }
 
 // AdminImportData seeds all dictionary tables from CSV files.
 // POST /api/admin/data/import
 func AdminImportData(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
+	adminID, ok := requireAdmin(c); if !ok {
 		return
 	}
 
@@ -1106,13 +1199,19 @@ func AdminImportData(c *gin.Context) {
 		log.Printf("Warning: failed to reload Quest registry after import: %v", err)
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.import_data",
+		EntityType: "system", EntityID: "",
+		RequestSummary: "data import from CSV",
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Import dữ liệu từ CSV thành công"})
 }
 
 // AdminExportData exports all dictionary tables to CSV files.
 // POST /api/admin/data/export
 func AdminExportData(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
+	adminID, ok := requireAdmin(c); if !ok {
 		return
 	}
 
@@ -1121,5 +1220,398 @@ func AdminExportData(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.export_data",
+		EntityType: "system", EntityID: "",
+		RequestSummary: "data export to CSV",
+		IPAddress: c.ClientIP(), Success: true,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Export dữ liệu ra CSV thành công"})
+}
+
+// AdminGetAuditLogs returns all audit logs (admin only) with optional filtering.
+// GET /api/admin/audit-logs
+func AdminGetAuditLogs(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+
+	action := c.Query("action")
+	entityType := c.Query("entity_type")
+	playerIDStr := c.Query("player_id")
+	successStr := c.Query("success")
+	limitStr := c.DefaultQuery("limit", "50")
+	offsetStr := c.DefaultQuery("offset", "0")
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 50
+	}
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+
+	query := `SELECT id, player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at FROM audit_logs WHERE 1=1`
+	args := []interface{}{}
+	argCount := 0
+
+	if action != "" {
+		argCount++
+		query += " AND action = $" + strconv.Itoa(argCount)
+		args = append(args, action)
+	}
+	if entityType != "" {
+		argCount++
+		query += " AND entity_type = $" + strconv.Itoa(argCount)
+		args = append(args, entityType)
+	}
+	if playerIDStr != "" {
+		pid, err := uuid.Parse(playerIDStr)
+		if err == nil {
+			argCount++
+			query += " AND player_id = $" + strconv.Itoa(argCount)
+			args = append(args, pid)
+		}
+	}
+	if successStr != "" {
+		success, err := strconv.ParseBool(successStr)
+		if err == nil {
+			argCount++
+			query += " AND success = $" + strconv.Itoa(argCount)
+			args = append(args, success)
+		}
+	}
+
+	query += " ORDER BY created_at DESC LIMIT $" + strconv.Itoa(argCount+1) + " OFFSET $" + strconv.Itoa(argCount+2)
+	args = append(args, limit, offset)
+
+	rows, err := db.DB.Query(query, args...)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể truy vấn nhật ký: " + err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	logs := []AuditLogResponse{}
+	for rows.Next() {
+		var logRow AuditLogResponse
+		var metaJSON []byte
+		err := rows.Scan(
+			&logRow.ID, &logRow.PlayerID, &logRow.Action, &logRow.EntityType,
+			&logRow.EntityID, &logRow.RequestSummary, &metaJSON, &logRow.IPAddress,
+			&logRow.Success, &logRow.ErrorMessage, &logRow.CreatedAt,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc nhật ký: " + err.Error()})
+			return
+		}
+		if len(metaJSON) > 0 {
+			_ = json.Unmarshal(metaJSON, &logRow.Metadata)
+		}
+		logs = append(logs, logRow)
+	}
+
+	// Get total count for pagination
+	countQuery := `SELECT COUNT(*) FROM audit_logs WHERE 1=1`
+	countArgs := make([]interface{}, 0)
+	ci := 0
+	if action != "" {
+		ci++
+		countQuery += " AND action = $" + strconv.Itoa(ci)
+		countArgs = append(countArgs, action)
+	}
+	if entityType != "" {
+		ci++
+		countQuery += " AND entity_type = $" + strconv.Itoa(ci)
+		countArgs = append(countArgs, entityType)
+	}
+	if playerIDStr != "" {
+		pid, err := uuid.Parse(playerIDStr)
+		if err == nil {
+			ci++
+			countQuery += " AND player_id = $" + strconv.Itoa(ci)
+			countArgs = append(countArgs, pid)
+		}
+	}
+	if successStr != "" {
+		success, err := strconv.ParseBool(successStr)
+		if err == nil {
+			ci++
+			countQuery += " AND success = $" + strconv.Itoa(ci)
+			countArgs = append(countArgs, success)
+		}
+	}
+
+	var total int
+	_ = db.DB.QueryRow(countQuery, countArgs...).Scan(&total)
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":  logs,
+		"total": total,
+		"limit": limit,
+		"offset": offset,
+	})
+}
+
+// -------- Admin: Shop Management --------
+
+type AdminShopItem struct {
+	ID        string `json:"id"`
+	Price     int    `json:"price"`
+	Stock     int    `json:"stock"`
+	IsDefault bool   `json:"is_default"`
+	SortOrder int    `json:"sort_order"`
+	Name      string `json:"name,omitempty"`
+	ItemType  string `json:"item_type,omitempty"`
+}
+
+func AdminListShopItems(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+
+	rows, err := db.DB.Query(`
+		SELECT c.id, c.price, c.stock, c.is_default, c.sort_order,
+			COALESCE(i.name, g.name, c.id) AS name,
+			COALESCE(i.item_type, 'Gu') AS item_type
+		FROM caravan_shop_items c
+		LEFT JOIN item_dictionary i ON c.id = i.id
+		LEFT JOIN gu_dictionary g ON c.id = g.id
+		ORDER BY c.sort_order, c.id
+	`)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách shop: " + err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	items := []AdminShopItem{}
+	for rows.Next() {
+		var item AdminShopItem
+		if err := rows.Scan(&item.ID, &item.Price, &item.Stock, &item.IsDefault, &item.SortOrder, &item.Name, &item.ItemType); err != nil {
+			continue
+		}
+		items = append(items, item)
+	}
+
+	c.JSON(http.StatusOK, items)
+}
+
+type AdminShopItemRequest struct {
+	ID        string `json:"id"`
+	Price     int    `json:"price"`
+	Stock     int    `json:"stock"`
+	IsDefault bool   `json:"is_default"`
+	SortOrder int    `json:"sort_order"`
+}
+
+func AdminCreateShopItem(c *gin.Context) {
+	adminID, ok := requireAdmin(c); if !ok {
+		return
+	}
+
+	var req AdminShopItemRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.ID == "" || req.Price <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+
+	// Verify item exists in item_dictionary or gu_dictionary
+	var exists bool
+	_ = db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM item_dictionary WHERE id=$1 UNION SELECT 1 FROM gu_dictionary WHERE id=$1)`, req.ID).Scan(&exists)
+	if !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại trong item_dictionary hoặc gu_dictionary"})
+		return
+	}
+
+	_, err := db.DB.Exec(`INSERT INTO caravan_shop_items (id, price, stock, is_default, sort_order) VALUES ($1,$2,$3,$4,$5)`,
+		req.ID, req.Price, req.Stock, req.IsDefault, req.SortOrder)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thêm: " + err.Error()})
+		return
+	}
+
+	auditlog.Logf(db.DB, &adminID, "admin.create_shop_item", "id=%s price=%d stock=%d", req.ID, req.Price, req.Stock)
+	c.JSON(http.StatusOK, gin.H{"message": "Đã thêm mặt hàng vào shop"})
+}
+
+func AdminUpdateShopItem(c *gin.Context) {
+	adminID, ok := requireAdmin(c); if !ok {
+		return
+	}
+
+	itemID := c.Param("id")
+	var req AdminShopItemRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+
+	_, err := db.DB.Exec(`UPDATE caravan_shop_items SET price=$1, stock=$2, is_default=$3, sort_order=$4, updated_at=NOW() WHERE id=$5`,
+		req.Price, req.Stock, req.IsDefault, req.SortOrder, itemID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
+		return
+	}
+
+	auditlog.Logf(db.DB, &adminID, "admin.update_shop_item", "id=%s price=%d stock=%d is_default=%v", itemID, req.Price, req.Stock, req.IsDefault)
+	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật mặt hàng"})
+}
+
+func AdminDeleteShopItem(c *gin.Context) {
+	adminID, ok := requireAdmin(c); if !ok {
+		return
+	}
+
+	itemID := c.Param("id")
+
+	_, err := db.DB.Exec(`DELETE FROM caravan_shop_items WHERE id=$1`, itemID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
+		return
+	}
+
+	auditlog.Logf(db.DB, &adminID, "admin.delete_shop_item", "id=%s", itemID)
+	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa mặt hàng khỏi shop"})
+}
+
+// -------- Admin: Mine Slot Management --------
+
+type AdminMineSlot struct {
+	ID              int        `json:"id"`
+	Rarity          string     `json:"rarity"`
+	OccupierID      *string    `json:"occupier_id"`
+	OccupierName    *string    `json:"occupier_name"`
+	MonsterID       *string    `json:"monster_id"`
+	MonsterRank     int        `json:"monster_rank"`
+	MonsterSubRank  int        `json:"monster_sub_rank"`
+	OccupiedAt      *time.Time `json:"occupied_at"`
+	LastClaimedAt   *time.Time `json:"last_claimed_at"`
+	AbandonedAt     *time.Time `json:"abandoned_at"`
+}
+
+func AdminListMineSlots(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+
+	rows, err := db.DB.Query(`
+		SELECT m.id, m.rarity, m.occupier_id, COALESCE(p.username, ''), m.monster_id, m.monster_rank, m.monster_sub_rank,
+			m.occupied_at, m.last_claimed_at, m.abandoned_at
+		FROM mine_slots m
+		LEFT JOIN players p ON m.occupier_id = p.id
+		ORDER BY m.id
+	`)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách mỏ: " + err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	slots := []AdminMineSlot{}
+	for rows.Next() {
+		var s AdminMineSlot
+		var occupierName string
+		if err := rows.Scan(&s.ID, &s.Rarity, &s.OccupierID, &occupierName, &s.MonsterID, &s.MonsterRank, &s.MonsterSubRank,
+			&s.OccupiedAt, &s.LastClaimedAt, &s.AbandonedAt); err != nil {
+			continue
+		}
+		if occupierName != "" {
+			s.OccupierName = &occupierName
+		}
+		slots = append(slots, s)
+	}
+
+	c.JSON(http.StatusOK, slots)
+}
+
+type AdminUpdateMineSlotRequest struct {
+	Rarity         *string `json:"rarity"`
+	MonsterRank    *int    `json:"monster_rank"`
+	MonsterSubRank *int    `json:"monster_sub_rank"`
+}
+
+func AdminUpdateMineSlot(c *gin.Context) {
+	adminID, ok := requireAdmin(c); if !ok {
+		return
+	}
+
+	slotID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID mỏ không hợp lệ"})
+		return
+	}
+
+	var req AdminUpdateMineSlotRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+
+	sets := []string{}
+	args := []interface{}{}
+	idx := 1
+
+	if req.Rarity != nil {
+		validRarities := map[string]bool{"Thường": true, "Hiếm": true, "Sử Thi": true, "Truyền Thuyết": true}
+		if !validRarities[*req.Rarity] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Phẩm chất không hợp lệ"})
+			return
+		}
+		sets = append(sets, "rarity=$"+strconv.Itoa(idx))
+		args = append(args, *req.Rarity)
+		idx++
+	}
+	if req.MonsterRank != nil {
+		sets = append(sets, "monster_rank=$"+strconv.Itoa(idx))
+		args = append(args, *req.MonsterRank)
+		idx++
+	}
+	if req.MonsterSubRank != nil {
+		sets = append(sets, "monster_sub_rank=$"+strconv.Itoa(idx))
+		args = append(args, *req.MonsterSubRank)
+		idx++
+	}
+
+	if len(sets) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu cập nhật"})
+		return
+	}
+
+	args = append(args, slotID)
+	query := `UPDATE mine_slots SET ` + strings.Join(sets, ", ") + ` WHERE id=$` + strconv.Itoa(idx)
+
+	if _, err := db.DB.Exec(query, args...); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật mỏ: " + err.Error()})
+		return
+	}
+
+	auditlog.Logf(db.DB, &adminID, "admin.update_mine_slot", "slot=%d rarity=%v rank=%v subRank=%v", slotID, req.Rarity, req.MonsterRank, req.MonsterSubRank)
+	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật mỏ thành công"})
+}
+
+func AdminResetMineSlot(c *gin.Context) {
+	adminID, ok := requireAdmin(c); if !ok {
+		return
+	}
+
+	slotID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID mỏ không hợp lệ"})
+		return
+	}
+
+	_, err = db.DB.Exec(`
+		UPDATE mine_slots
+		SET occupier_id = NULL, monster_id = NULL, occupied_at = NULL, last_claimed_at = NULL, abandoned_at = NOW()
+		WHERE id = $1
+	`, slotID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể reset mỏ: " + err.Error()})
+		return
+	}
+
+	auditlog.Logf(db.DB, &adminID, "admin.reset_mine_slot", "slot=%d", slotID)
+	c.JSON(http.StatusOK, gin.H{"message": "Đã reset mỏ thành công"})
 }

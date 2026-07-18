@@ -209,6 +209,7 @@ func JoinSect(c *gin.Context) {
 		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("Chào mừng đạo hữu %s đã gia nhập tông môn!", username))
 	}
 
+	auditlog.Logf(db.DB, &playerID, "sect.join", "sectId=%s username=%s", sectID, username)
 	c.JSON(http.StatusOK, gin.H{"message": "Gia nhập tông môn thành công!"})
 }
 
@@ -258,6 +259,7 @@ func LeaveSect(c *gin.Context) {
 	// Trigger System Chat Notification on Sect channel
 	_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("Đạo hữu %s đã rời khỏi tông môn.", username))
 
+	auditlog.Logf(db.DB, &playerID, "sect.leave", "sectId=%s username=%s", sectID, username)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã rời khỏi tông môn, tổn thất toàn bộ điểm cống hiến."})
 }
 

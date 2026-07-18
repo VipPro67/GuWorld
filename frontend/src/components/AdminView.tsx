@@ -203,7 +203,31 @@ export const AdminView: React.FC = () => {
   const [stonesImmortal, setStonesImmortal] = useState("");
 
   const [actionLoading, setActionLoading] = useState(false);
-  const [section, setSection] = useState<"players" | "sects" | "data">("players");
+  const [section, setSection] = useState<"players" | "sects" | "data" | "logs" | "shop" | "mines">("players");
+
+  // ----- Audit log state -----
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditLogTotal, setAuditLogTotal] = useState(0);
+  const [auditLogLoading, setAuditLogLoading] = useState(false);
+  const [auditLogPage, setAuditLogPage] = useState(0);
+  const [auditLogLimit] = useState(50);
+  const [auditLogFilterAction, setAuditLogFilterAction] = useState("");
+  const [auditLogFilterPlayer, setAuditLogFilterPlayer] = useState("");
+  const [auditLogFilterSuccess, setAuditLogFilterSuccess] = useState("");
+  const [auditLogExpandId, setAuditLogExpandId] = useState<string | null>(null);
+
+  // ----- Shop state -----
+  const [shopItems, setShopItems] = useState<any[]>([]);
+  const [shopLoading, setShopLoading] = useState(false);
+  const [showShopAdd, setShowShopAdd] = useState(false);
+  const [showShopEdit, setShowShopEdit] = useState<string | null>(null);
+  const [shopForm, setShopForm] = useState({ id: "", price: 100, stock: -1, is_default: true, sort_order: 0 });
+
+  // ----- Mine state -----
+  const [mineSlots, setMineSlots] = useState<any[]>([]);
+  const [mineLoading, setMineLoading] = useState(false);
+  const [showMineEdit, setShowMineEdit] = useState<number | null>(null);
+  const [mineEditRarity, setMineEditRarity] = useState("");
 
   // ----- Sect state -----
   const [sects, setSects] = useState<any[]>([]);
@@ -264,9 +288,56 @@ export const AdminView: React.FC = () => {
     } catch {} finally { setSectsLoading(false); }
   }, []);
 
+  const fetchShopItems = useCallback(async () => {
+    setShopLoading(true);
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/admin/shop`);
+      if (res.ok) setShopItems(await res.json());
+    } catch {} finally { setShopLoading(false); }
+  }, []);
+
+  const fetchMineSlots = useCallback(async () => {
+    setMineLoading(true);
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/admin/mine-slots`);
+      if (res.ok) setMineSlots(await res.json());
+    } catch {} finally { setMineLoading(false); }
+  }, []);
+
+  const fetchAuditLogs = useCallback(async () => {
+    setAuditLogLoading(true);
+    try {
+      const params = new URLSearchParams({
+        limit: String(auditLogLimit),
+        offset: String(auditLogPage * auditLogLimit),
+      });
+      if (auditLogFilterAction) params.set("action", auditLogFilterAction);
+      if (auditLogFilterPlayer) params.set("player_id", auditLogFilterPlayer);
+      if (auditLogFilterSuccess) params.set("success", auditLogFilterSuccess);
+      const res = await authFetch(`${BACKEND_URL}/api/admin/audit-logs?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAuditLogs(data.data || []);
+        setAuditLogTotal(data.total || 0);
+      }
+    } catch {} finally { setAuditLogLoading(false); }
+  }, [auditLogPage, auditLogLimit, auditLogFilterAction, auditLogFilterPlayer, auditLogFilterSuccess]);
+
   useEffect(() => {
     if (section === "sects") fetchSects();
   }, [section, fetchSects]);
+
+  useEffect(() => {
+    if (section === "logs") fetchAuditLogs();
+  }, [section, fetchAuditLogs]);
+
+  useEffect(() => {
+    if (section === "shop") fetchShopItems();
+  }, [section, fetchShopItems]);
+
+  useEffect(() => {
+    if (section === "mines") fetchMineSlots();
+  }, [section, fetchMineSlots]);
 
   useEffect(() => {
     if (selectedSectId) {
@@ -1216,6 +1287,15 @@ export const AdminView: React.FC = () => {
         <button onClick={() => setSection("data")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "data" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
           <Database className="w-3.5 h-3.5 inline mr-1.5" />Dữ liệu
         </button>
+        <button onClick={() => setSection("logs")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "logs" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+          <BookOpen className="w-3.5 h-3.5 inline mr-1.5" />Nhật ký
+        </button>
+        <button onClick={() => setSection("shop")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "shop" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+          <Package className="w-3.5 h-3.5 inline mr-1.5" />Cửa hàng
+        </button>
+        <button onClick={() => setSection("mines")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "mines" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+          <Layers className="w-3.5 h-3.5 inline mr-1.5" />Mỏ
+        </button>
       </div>
 
       {/* Players section */}
@@ -1350,6 +1430,305 @@ export const AdminView: React.FC = () => {
         </div>
       )}
 
+      {/* Audit Logs section */}
+      {section === "logs" && (
+        <div className="space-y-4">
+          <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
+            <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2 mb-3">
+              <BookOpen className="w-4 h-4 text-amber-400" />
+              Nhật Ký Hệ Thống
+            </h3>
+            {/* Filters */}
+            <div className="flex flex-wrap gap-3 mb-4">
+              <div className="flex-1 min-w-[120px]">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Hành động</label>
+                <input value={auditLogFilterAction} onChange={e => setAuditLogFilterAction(e.target.value)} placeholder="Lọc action..." className="w-full px-2.5 py-1.5 bg-zinc-800/80 border border-zinc-700/60 rounded-lg text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-amber-500/50" />
+              </div>
+              <div className="flex-1 min-w-[120px]">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Player ID</label>
+                <input value={auditLogFilterPlayer} onChange={e => setAuditLogFilterPlayer(e.target.value)} placeholder="UUID..." className="w-full px-2.5 py-1.5 bg-zinc-800/80 border border-zinc-700/60 rounded-lg text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-amber-500/50" />
+              </div>
+              <div className="w-[100px]">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Kết quả</label>
+                <select value={auditLogFilterSuccess} onChange={e => setAuditLogFilterSuccess(e.target.value)} className="w-full px-2.5 py-1.5 bg-zinc-800/80 border border-zinc-700/60 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50">
+                  <option value="">Tất cả</option>
+                  <option value="true">Thành công</option>
+                  <option value="false">Thất bại</option>
+                </select>
+              </div>
+              <div className="flex items-end">
+                <button onClick={fetchAuditLogs} disabled={auditLogLoading} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold cursor-pointer">
+                  {auditLogLoading ? "..." : "Tìm"}
+                </button>
+              </div>
+            </div>
+            {/* Log list */}
+            {auditLogLoading ? (
+              <div className="flex justify-center py-10">
+                <RefreshCw className="w-6 h-6 text-amber-400 animate-spin" />
+              </div>
+            ) : auditLogs.length === 0 ? (
+              <div className="text-center py-10 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl">
+                <BookOpen className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
+                <p className="text-xs text-zinc-500">Không có nhật ký nào.</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1 max-h-[500px] overflow-y-auto">
+                  {auditLogs.map((log: any) => (
+                    <div key={log.id}>
+                      <div onClick={() => setAuditLogExpandId(auditLogExpandId === log.id ? null : log.id)} className="flex items-center gap-3 px-3 py-2 bg-zinc-800/40 hover:bg-zinc-800/60 rounded-lg cursor-pointer transition-colors">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${log.success ? "bg-emerald-500" : "bg-red-500"}`} />
+                        <span className="text-xs font-mono text-zinc-500 w-[160px] shrink-0">{log.created_at}</span>
+                        <span className="text-xs font-semibold text-amber-400 w-[160px] shrink-0">{log.action}</span>
+                        <span className="text-xs text-zinc-400 truncate flex-1">{log.request_summary}</span>
+                        <span className="text-[10px] text-zinc-600 w-[36px] text-right">{log.player_id ? log.player_id.substring(0, 8) : "—"}</span>
+                      </div>
+                      {auditLogExpandId === log.id && (
+                        <div className="mx-3 mb-1 px-4 py-2 bg-zinc-900/60 border border-zinc-800/60 rounded-lg text-[11px] text-zinc-400 font-mono space-y-1">
+                          {log.player_id && <div>player_id: {log.player_id}</div>}
+                          {log.entity_type && <div>entity_type: {log.entity_type}</div>}
+                          {log.entity_id && <div>entity_id: {log.entity_id}</div>}
+                          {log.error_message && <div className="text-red-400">error: {log.error_message}</div>}
+                          {log.ip_address && <div>ip: {log.ip_address}</div>}
+                          {log.metadata && Object.keys(log.metadata).length > 0 && (
+                            <div>metadata: {JSON.stringify(log.metadata, null, 1)}</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {/* Pagination */}
+                <div className="flex items-center justify-between mt-4 pt-3 border-t border-zinc-800/60">
+                  <span className="text-[11px] text-zinc-500 font-mono">{auditLogTotal} bản ghi</span>
+                  <div className="flex gap-2">
+                    <button disabled={auditLogPage <= 0} onClick={() => setAuditLogPage(p => Math.max(0, p - 1))} className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 text-zinc-300 rounded-lg text-[11px] font-semibold cursor-pointer">Trước</button>
+                    <button disabled={(auditLogPage + 1) * auditLogLimit >= auditLogTotal} onClick={() => setAuditLogPage(p => p + 1)} className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 text-zinc-300 rounded-lg text-[11px] font-semibold cursor-pointer">Sau</button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Shop section */}
+      {section === "shop" && (
+        <div className="space-y-4">
+          <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2">
+                <Package className="w-4 h-4 text-emerald-400" />
+                Quản Lý Cửa Hàng
+              </h3>
+              <button onClick={() => { setShopForm({ id: "", price: 100, stock: -1, is_default: true, sort_order: 0 }); setShowShopAdd(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer">
+                <Plus className="w-3.5 h-3.5" />Thêm
+              </button>
+            </div>
+            {shopLoading ? (
+              <div className="flex justify-center py-10"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div>
+            ) : shopItems.length === 0 ? (
+              <div className="text-center py-10 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl">
+                <Package className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
+                <p className="text-xs text-zinc-500">Chưa có mặt hàng nào.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
+                      <th className="px-3 py-2.5 font-semibold">ID</th>
+                      <th className="px-3 py-2.5 font-semibold">Tên</th>
+                      <th className="px-3 py-2.5 font-semibold">Loại</th>
+                      <th className="px-3 py-2.5 font-semibold text-right">Giá</th>
+                      <th className="px-3 py-2.5 font-semibold text-right">Tồn kho</th>
+                      <th className="px-3 py-2.5 font-semibold text-center">Mặc định</th>
+                      <th className="px-3 py-2.5 font-semibold text-right">Thứ tự</th>
+                      <th className="px-3 py-2.5"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shopItems.map((item: any) => (
+                      <tr key={item.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                        <td className="px-3 py-2.5 text-zinc-500 font-mono">{item.id}</td>
+                        <td className="px-3 py-2.5 font-semibold text-zinc-200">{item.name || item.id}</td>
+                        <td className="px-3 py-2.5 text-zinc-400">{item.item_type || "—"}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{item.price?.toLocaleString()}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{item.stock === -1 ? "∞" : item.stock}</td>
+                        <td className="px-3 py-2.5 text-center">{item.is_default ? <span className="text-emerald-400">✓</span> : <span className="text-zinc-600">–</span>}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-400">{item.sort_order}</td>
+                        <td className="px-3 py-2.5 text-right">
+                          <button onClick={() => { setShopForm({ id: item.id, price: item.price, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowShopEdit(item.id); }} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
+                          <button onClick={async () => { if (!confirm(`Xóa ${item.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/shop/${item.id}`, "DELETE"); if (ok) fetchShopItems(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Add Shop Item Modal */}
+      {showShopAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowShopAdd(false)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">Thêm mặt hàng</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID (item_dictionary / gu_dictionary)</label>
+                <input value={shopForm.id} onChange={e => setShopForm(f => ({ ...f, id: e.target.value }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Giá</label>
+                  <input type="number" value={shopForm.price} onChange={e => setShopForm(f => ({ ...f, price: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tồn kho (-1: vô hạn)</label>
+                  <input type="number" value={shopForm.stock} onChange={e => setShopForm(f => ({ ...f, stock: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+              </div>
+              <div className="flex gap-3 items-end">
+                <div className="flex-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Thứ tự</label>
+                  <input type="number" value={shopForm.sort_order} onChange={e => setShopForm(f => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <label className="flex items-center gap-2 pb-2">
+                  <input type="checkbox" checked={shopForm.is_default} onChange={e => setShopForm(f => ({ ...f, is_default: e.target.checked }))} className="rounded bg-zinc-800 border-zinc-700" />
+                  <span className="text-[11px] text-zinc-400">Mặc định</span>
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setShowShopAdd(false)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
+              <button onClick={async () => {
+                const ok = await exec(`${BACKEND_URL}/api/admin/shop`, "POST", shopForm);
+                if (ok) { setShowShopAdd(false); fetchShopItems(); }
+              }} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Thêm</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Edit Shop Item Modal */}
+      {showShopEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowShopEdit(null)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">Sửa mặt hàng: {shopForm.id}</h3>
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Giá</label>
+                  <input type="number" value={shopForm.price} onChange={e => setShopForm(f => ({ ...f, price: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tồn kho</label>
+                  <input type="number" value={shopForm.stock} onChange={e => setShopForm(f => ({ ...f, stock: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+              </div>
+              <div className="flex gap-3 items-end">
+                <div className="flex-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Thứ tự</label>
+                  <input type="number" value={shopForm.sort_order} onChange={e => setShopForm(f => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <label className="flex items-center gap-2 pb-2">
+                  <input type="checkbox" checked={shopForm.is_default} onChange={e => setShopForm(f => ({ ...f, is_default: e.target.checked }))} className="rounded bg-zinc-800 border-zinc-700" />
+                  <span className="text-[11px] text-zinc-400">Mặc định</span>
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setShowShopEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
+              <button onClick={async () => {
+                const ok = await exec(`${BACKEND_URL}/api/admin/shop/${showShopEdit}`, "PUT", shopForm);
+                if (ok) { setShowShopEdit(null); fetchShopItems(); }
+              }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Mines section */}
+      {section === "mines" && (
+        <div className="space-y-4">
+          <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
+            <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2 mb-4">
+              <Layers className="w-4 h-4 text-amber-400" />
+              Quản Lý Mỏ Linh Thạch
+            </h3>
+            {mineLoading ? (
+              <div className="flex justify-center py-10"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div>
+            ) : mineSlots.length === 0 ? (
+              <div className="text-center py-10 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl">
+                <Layers className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
+                <p className="text-xs text-zinc-500">Không có mỏ nào.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
+                      <th className="px-3 py-2.5 font-semibold">#</th>
+                      <th className="px-3 py-2.5 font-semibold">Phẩm chất</th>
+                      <th className="px-3 py-2.5 font-semibold">Chủ sở hữu</th>
+                      <th className="px-3 py-2.5 font-semibold">Quái canh</th>
+                      <th className="px-3 py-2.5 font-semibold text-right">Cấp Q</th>
+                      <th className="px-3 py-2.5 font-semibold">Chiếm giữ</th>
+                      <th className="px-3 py-2.5 font-semibold"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mineSlots.map((slot: any) => (
+                      <tr key={slot.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                        <td className="px-3 py-2.5 text-zinc-500 font-mono">{slot.id}</td>
+                        <td className="px-3 py-2.5 font-semibold">{slot.rarity}</td>
+                        <td className="px-3 py-2.5 text-zinc-300">{slot.occupier_name || <span className="text-zinc-600 italic">Trống</span>}</td>
+                        <td className="px-3 py-2.5 text-zinc-400">{slot.monster_id || <span className="text-zinc-600">—</span>}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{slot.monster_rank > 0 ? `${slot.monster_rank}.${slot.monster_sub_rank}` : "—"}</td>
+                        <td className="px-3 py-2.5 text-[10px] text-zinc-500">{slot.occupied_at ? new Date(slot.occupied_at).toLocaleDateString("vi-VN") : "—"}</td>
+                        <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                          <button onClick={() => { setMineEditRarity(slot.rarity); setShowMineEdit(slot.id); }} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
+                          <button onClick={async () => {
+                            if (!confirm(`Reset mỏ #${slot.id}?`)) return;
+                            const ok = await exec(`${BACKEND_URL}/api/admin/mine-slots/${slot.id}/reset`, "POST");
+                            if (ok) fetchMineSlots();
+                          }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Reset"><RefreshCw className="w-3.5 h-3.5 inline" /></button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Edit Mine Slot Modal */}
+      {showMineEdit !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowMineEdit(null)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-sm mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">Sửa mỏ #{showMineEdit}</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Phẩm chất</label>
+                <select value={mineEditRarity} onChange={e => setMineEditRarity(e.target.value)} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50">
+                  <option value="Thường">Thường</option>
+                  <option value="Hiếm">Hiếm</option>
+                  <option value="Sử Thi">Sử Thi</option>
+                  <option value="Truyền Thuyết">Truyền Thuyết</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setShowMineEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
+              <button onClick={async () => {
+                const ok = await exec(`${BACKEND_URL}/api/admin/mine-slots/${showMineEdit}`, "PUT", { rarity: mineEditRarity });
+                if (ok) { setShowMineEdit(null); fetchMineSlots(); }
+              }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Sects section */}
       {section === "sects" && (
         <>

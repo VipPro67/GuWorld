@@ -17,6 +17,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"time"
 )
 
@@ -455,6 +456,8 @@ func CompleteQuest(c *gin.Context) {
 	}
 
 	rewardStr := buildRewardLabel(quest.Rewards)
+
+	auditlog.Logf(db.DB, &authID, "quest.complete", "questId=%s questTitle=%s", req.QuestID, quest.Title)
 	c.JSON(http.StatusOK, gin.H{
 		"player":  player,
 		"message": quest.Message + rewardStr,

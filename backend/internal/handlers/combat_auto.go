@@ -17,6 +17,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 // AutoCombatStartRequest payload for starting automated combat
@@ -667,6 +668,11 @@ func AutoCombatStart(c *gin.Context) {
 		SaveCombatHistory(player.ID, winner, toInterfaceSlice(logs), summary, combatantInfosIface, enemyName, enemyType, player.CurrentRegion)
 	}()
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "combat.finish",
+		RequestSummary: fmt.Sprintf("winner=%s enemy=%s type=%s stonesSpent=%d itemsUsed=%d", winner, enemyName, enemyType, stonesSpent, itemsUsed),
+		IPAddress: c.ClientIP(), Success: alliesAlive,
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"message":    "Chiến đấu hoàn tất",
 		"logs":       logs,
