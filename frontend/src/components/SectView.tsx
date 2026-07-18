@@ -104,6 +104,7 @@ export const SectView: React.FC = () => {
   const [mDesc, setMDesc] = useState("");
   const [mMissionType, setMMissionType] = useState("GATHER");
   const [mTargetId, setMTargetId] = useState("");
+  const [mTargetSearch, setMTargetSearch] = useState("");
   const [mTargetAmount, setMTargetAmount] = useState(1);
   const [mRewardContribution, setMRewardContribution] = useState(100);
   const [mRequiredRank, setMRequiredRank] = useState("NGOAI_MON");
@@ -1889,7 +1890,7 @@ export const SectView: React.FC = () => {
 
           {/* Create Mission Tab */}
           {mgmtTab === "missions" && (
-            <form onSubmit={handleCreateCustomMission} className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4 max-w-lg mx-auto w-full">
+            <form onSubmit={handleCreateCustomMission} className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4 mx-auto w-full">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2 flex flex-col gap-1.5">
                   <label className="text-xs text-zinc-400 font-serif font-bold">Tiêu Đề Nhiệm Vụ</label>
@@ -1927,16 +1928,31 @@ export const SectView: React.FC = () => {
                   </select>
                 </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-zinc-400 font-serif font-bold">Mã Mục Tiêu</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ví dụ: guts_gu hoặc GU_WHITE_BOAR"
-                    value={mTargetId}
-                    onChange={(e) => setMTargetId(e.target.value)}
-                    className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none"
-                  />
+                <div className="sm:col-span-2 flex flex-col gap-1.5">
+                  <label className="text-xs text-zinc-400 font-serif font-bold">Mục Tiêu</label>
+                  <div className="flex flex-col gap-1">
+                    <input
+                      type="text"
+                      placeholder="Lọc nhanh..."
+                      value={mTargetSearch}
+                      onChange={e => { setMTargetSearch(e.target.value); setMTargetId(""); }}
+                      className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none"
+                    />
+                    <select
+                      required
+                      value={mTargetId}
+                      onChange={(e) => setMTargetId(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none"
+                    >
+                      <option value="">-- Chọn --</option>
+                      {(mMissionType === "DONATE" ? Object.entries(guDictionary) : Object.entries(itemDictionary))
+                        .filter(([id]) => !mTargetSearch || id.toLowerCase().includes(mTargetSearch.toLowerCase()))
+                        .sort(([, a], [, b]) => ((a as any)?.rank || 99) - ((b as any)?.rank || 99))
+                        .map(([id, spec]) => (
+                          <option key={id} value={id}>{(spec as any)?.name || id} ({id})</option>
+                        ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-1.5">

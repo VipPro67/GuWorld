@@ -32,6 +32,7 @@ import { TradeRoomModal } from "@/components/TradeRoomModal";
 import { Handshake } from "lucide-react";
 import { KillerMoveBuilder } from "@/components/killer-moves/KillerMoveBuilder";
 import { AuditLogsView } from "@/components/AuditLogsView";
+import { AdminView } from "@/components/AdminView";
 import { ThemeToggle } from "@/components/ThemeToggle";
 export default function Home() {
   const {
@@ -309,6 +310,10 @@ export default function Home() {
         ) : currentView === "feedback" ? (
           <div className="w-full">
             <FeedbackView />
+          </div>
+        ) : currentView === "admin" ? (
+          <div className="w-full">
+            <AdminView />
           </div>
         ) : currentView === "audit-logs" ? (
           <div className="w-full">
