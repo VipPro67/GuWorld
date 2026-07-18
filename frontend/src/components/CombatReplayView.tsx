@@ -28,8 +28,17 @@ interface CombatantReplayInfo {
   hp: number;
   max_mana: number;
   mana: number;
-  grid_row: number;
+  grid_x: number;
+  grid_y: number;
   shield?: number;
+  damage?: number;
+  defense?: number;
+  speed?: number;
+  kind_detail?: string;
+  rank?: number;
+  sub_rank?: number;
+  dao_marks?: Record<string, number>;
+  path_masteries?: Record<string, string>;
 }
 
 interface CombatReplayViewProps {
@@ -46,7 +55,19 @@ interface CombatantState {
   kind: "ally" | "enemy";
   maxHp: number;
   hp: number;
+  maxMp: number;
+  mp: number;
   shield: number;
+  gridX: number;
+  gridY: number;
+  damage: number;
+  defense: number;
+  speed: number;
+  kindDetail: string;
+  rank: number;
+  subRank: number;
+  daoMarks?: Record<string, number>;
+  pathMasteries?: Record<string, string>;
 }
 
 interface FloatingEvent {
@@ -116,6 +137,12 @@ function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
         }
         if (log.action === "DIED") {
           actor.hp = 0;
+        }
+        if (log.action === "MANA_COST") {
+          actor.mp = Math.max(0, actor.mp - (log.damage || 0));
+        }
+        if (log.action === "MANA_RESTORE") {
+          actor.mp = Math.min(actor.maxMp, actor.mp + (log.damage || 0));
         }
         next[log.actor_id] = actor;
       }
@@ -267,7 +294,19 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           kind: c.kind,
           maxHp: c.max_hp || 100,
           hp: c.hp || (c.max_hp || 100),
+          maxMp: c.max_mana || 0,
+          mp: c.mana || 0,
           shield: c.shield || 0,
+          gridX: c.grid_x || 2,
+          gridY: c.grid_y || 2,
+          damage: c.damage || 0,
+          defense: c.defense || 0,
+          speed: c.speed || 0,
+          kindDetail: c.kind_detail || c.kind || "",
+          rank: c.rank || 0,
+          subRank: c.sub_rank || 0,
+          daoMarks: c.dao_marks,
+          pathMasteries: c.path_masteries,
         };
       }
       return map;
@@ -282,7 +321,17 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           kind: "enemy",
           maxHp: 1000,
           hp: 1000,
+          maxMp: 0,
+          mp: 0,
           shield: 0,
+          gridX: 1,
+          gridY: 2,
+          damage: 0,
+          defense: 0,
+          speed: 0,
+          kindDetail: "",
+          rank: 0,
+          subRank: 0,
         };
       }
       if (log.target_id && !map[log.target_id]) {
@@ -292,7 +341,17 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           kind: "enemy",
           maxHp: 1000,
           hp: 1000,
+          maxMp: 0,
+          mp: 0,
           shield: 0,
+          gridX: 1,
+          gridY: 2,
+          damage: 0,
+          defense: 0,
+          speed: 0,
+          kindDetail: "",
+          rank: 0,
+          subRank: 0,
         };
       }
     }
@@ -438,38 +497,198 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
   const hpPct = (c: CombatantState) =>
     c.maxHp > 0 ? Math.max(0, Math.min(100, (c.hp / c.maxHp) * 100)) : 0;
 
-  const renderCombatantCard = (c: CombatantState, isHighlighted: boolean, isTargeted: boolean) => {
-    const pct = hpPct(c);
-    const hpColor = pct > 60 ? "bg-emerald-500" : pct > 30 ? "bg-yellow-500" : "bg-red-500";
-    const borderGlow = isHighlighted ? "border-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.4)]" :
-      isTargeted ? "border-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.4)]" : "border-zinc-700";
+  const [detailCombatant, setDetailCombatant] = React.useState<CombatantState | null>(null);
+
+  const renderGridCell = (c: CombatantState | undefined, gridX: number, gridY: number) => {
+    const isAlly = c?.kind === "ally";
+    const isEmpty = !c;
+    const isHighlighted = state.highlightedActor === c?.id;
+    const isTargeted = state.highlightedTarget === c?.id;
+    const pct = c ? hpPct(c) : 0;
+
+    const borderGlow = isHighlighted ? "border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.35)]" :
+      isTargeted ? "border-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.35)]" : "";
 
     return (
       <div
-        key={c.id}
-        className={`relative bg-zinc-900/80 border ${borderGlow} rounded-xl px-3 py-2.5 transition-all duration-300 ${c.hp <= 0 ? 'opacity-40' : ''}`}
+        key={`${gridX}-${gridY}`}
+        onClick={() => c && setDetailCombatant(detailCombatant?.id === c.id ? null : c)}
+        className={`rounded-lg border ${
+          isEmpty
+            ? 'border-zinc-800/30 bg-zinc-900/20'
+            : c.hp <= 0
+              ? 'border-zinc-800/40 bg-zinc-950/40 opacity-50'
+              : isAlly
+                ? `border-emerald-800/40 bg-emerald-950/20 ${borderGlow}`
+                : `border-rose-800/40 bg-rose-950/20 ${borderGlow}`
+        } flex flex-col p-1.5 relative cursor-pointer transition-all hover:brightness-125 min-h-[80px]`}
       >
-        <div className="flex items-center justify-between mb-1.5">
-          <span className={`text-xs font-bold truncate max-w-[120px] ${c.hp <= 0 ? 'text-zinc-600' : 'text-zinc-200'}`}>
-            {c.name}
-            {c.hp <= 0 && <span className="text-rose-500 ml-1">†</span>}
+        {c ? (
+          <>
+            {/* Name + death marker */}
+            <div className="flex items-center gap-1 min-w-0">
+              <span className={`text-[10px] font-bold truncate ${c.hp <= 0 ? 'text-zinc-700' : isAlly ? 'text-emerald-300' : 'text-rose-300'}`}>
+                {c.name}
+                {c.hp <= 0 && '†'}
+              </span>
+            </div>
+
+            {/* Type badge */}
+            {!isAlly && c.kindDetail && c.kindDetail !== "" && (
+              <span className={`text-[7px] px-1 rounded border font-bold self-start mt-0.5 ${
+                c.kindDetail === "Boss" ? 'bg-red-900/60 text-red-300 border-red-800' :
+                c.kindDetail === "Elite" ? 'bg-purple-900/60 text-purple-300 border-purple-800' :
+                'bg-zinc-800/60 text-zinc-400 border-zinc-700'
+              }`}>
+                {c.kindDetail.toUpperCase()}
+              </span>
+            )}
+
+            {/* HP Bar */}
+            <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden mt-1">
+              <div
+                className={`h-full rounded-full transition-all ${c.hp <= 0 ? 'bg-zinc-700' : isAlly ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+
+            {/* HP number + Mana */}
+            <div className="flex items-center justify-between mt-0.5 text-[8px] font-mono">
+              <span className={c.hp <= 0 ? 'text-zinc-700' : 'text-zinc-400'}>
+                {c.hp}/{c.maxHp}
+              </span>
+              {c.maxMp > 0 && (
+                <span className="text-purple-400/70">
+                  MP {c.mp}/{c.maxMp}
+                </span>
+              )}
+            </div>
+
+            {/* Stats row */}
+            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+              {c.damage > 0 && (
+                <span className="text-[7px] px-1 rounded bg-rose-950/50 text-rose-400 border border-rose-800/40 font-mono leading-tight">
+                  ATK {c.damage}
+                </span>
+              )}
+              {c.defense > 0 && (
+                <span className="text-[7px] px-1 rounded bg-blue-950/50 text-blue-400 border border-blue-800/40 font-mono leading-tight">
+                  DEF {c.defense}
+                </span>
+              )}
+              {c.speed > 0 && (
+                <span className="text-[7px] px-1 rounded bg-cyan-950/50 text-cyan-400 border border-cyan-800/40 font-mono leading-tight">
+                  SPD {c.speed}
+                </span>
+              )}
+              {c.shield > 0 && (
+                <span className="text-[7px] px-1 rounded bg-indigo-950/50 text-indigo-400 border border-indigo-800/40 font-mono leading-tight">
+                  🛡 {c.shield}
+                </span>
+              )}
+            </div>
+          </>
+        ) : (
+          <span className="text-[8px] text-zinc-800 mx-auto mt-auto mb-auto">
+            {gridX},{gridY}
           </span>
-          <span className={`text-[10px] font-mono ${c.hp <= 0 ? 'text-zinc-700' : c.hp > c.maxHp * 0.5 ? 'text-emerald-400' : c.hp > 0 ? 'text-yellow-400' : 'text-red-500'}`}>
-            {c.hp}/{c.maxHp}
-          </span>
-        </div>
-        <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden mb-1">
-          <div
-            className={`h-full rounded-full transition-all duration-300 ${hpColor}`}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-        {c.shield > 0 && (
-          <div className="flex items-center gap-1 text-[10px] text-blue-400 mt-1">
-            <Shield className="w-2.5 h-2.5" />
-            <span>{c.shield.toLocaleString()}</span>
-          </div>
         )}
+      </div>
+    );
+  };
+
+  // Detailed info popup
+  const renderDetailPopup = () => {
+    if (!detailCombatant) return null;
+    const c = detailCombatant;
+    const isAlly = c.kind === "ally";
+    const kindLabel = c.kindDetail || c.kind;
+
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        onClick={() => setDetailCombatant(null)}
+      >
+        <div
+          className={`bg-zinc-900 border ${isAlly ? 'border-emerald-800/50' : 'border-rose-800/50'} rounded-2xl p-5 shadow-2xl max-w-sm w-full mx-4`}
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <h3 className={`text-base font-bold ${isAlly ? 'text-emerald-300' : 'text-rose-300'}`}>{c.name}</h3>
+            <button
+              onClick={() => setDetailCombatant(null)}
+              className="text-zinc-600 hover:text-zinc-300 text-lg leading-none"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="space-y-2 text-xs">
+            {/* Kind + Rank */}
+            <div className="flex items-center gap-2">
+              {kindLabel && kindLabel !== "Player" && (
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                  kindLabel === "Boss" ? 'bg-red-900/60 text-red-300 border-red-800' :
+                  kindLabel === "Elite" ? 'bg-purple-900/60 text-purple-300 border-purple-800' :
+                  'bg-zinc-800/60 text-zinc-400 border-zinc-700'
+                }`}>{kindLabel.toUpperCase()}</span>
+              )}
+              {c.rank > 0 && <span className="text-amber-400 font-bold">R{c.rank}.{c.subRank}</span>}
+            </div>
+
+            {/* Vital stats */}
+            <div className="grid grid-cols-2 gap-2 bg-zinc-950/60 rounded-xl p-3 mt-2">
+              <div><span className="text-zinc-500">HP</span><br /><span className="text-emerald-400 font-bold text-sm">{c.hp}/{c.maxHp}</span></div>
+              <div><span className="text-zinc-500">MP</span><br /><span className="text-purple-400 font-bold text-sm">{c.mp}/{c.maxMp}</span></div>
+              <div><span className="text-zinc-500">ATK</span><br /><span className="text-rose-400 font-bold">{c.damage}</span></div>
+              <div><span className="text-zinc-500">DEF</span><br /><span className="text-blue-400 font-bold">{c.defense}</span></div>
+              <div><span className="text-zinc-500">SPD</span><br /><span className="text-cyan-400 font-bold">{c.speed}</span></div>
+              <div><span className="text-zinc-500">Khiên</span><br /><span className="text-indigo-400 font-bold">{c.shield}</span></div>
+            </div>
+
+            {/* Position */}
+            <div className="text-zinc-500">
+              Vị trí: <span className="text-zinc-300 font-mono">({c.gridX},{c.gridY})</span>
+            </div>
+
+            {/* Dao Marks */}
+            {c.daoMarks && Object.keys(c.daoMarks).length > 0 && (
+              <div className="border-t border-zinc-800 pt-2 mt-2">
+                <span className="text-zinc-500 text-[10px]">Đạo Ấn:</span>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {Object.entries(c.daoMarks).map(([k, v]) => (
+                    <span key={k} className="text-[9px] px-1.5 py-0.5 rounded bg-amber-950/30 text-amber-400 border border-amber-800/40 font-mono">
+                      {k}: {v}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Path Masteries */}
+            {c.pathMasteries && Object.keys(c.pathMasteries).length > 0 && (
+              <div className="border-t border-zinc-800 pt-2 mt-2">
+                <span className="text-zinc-500 text-[10px]">Đường Tu:</span>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {Object.entries(c.pathMasteries).map(([k, v]) => (
+                    <span key={k} className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950/30 text-cyan-400 border border-cyan-800/40 font-mono">
+                      {k}: {v}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Status indicator */}
+            <div className="border-t border-zinc-800 pt-2 mt-2 text-center">
+              {c.hp <= 0 ? (
+                <span className="text-rose-500 font-bold">† Đã gục ngã</span>
+              ) : (
+                <span className="text-emerald-500">● Đang chiến đấu</span>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
@@ -509,7 +728,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
 
   const actionLogs = useMemo(() =>
     visibleLogs.filter(log =>
-      ["BASIC_ATTACK", "GU_SKILL", "KILLER_MOVE", "DAMAGE", "HEAL", "ITEM_HEAL", "SHIELD_GAIN", "DOT_TICK", "DIED", "LIFESTEAL", "STUNNED", "PHANTOM_ATTACK", "THORNS", "SHIELD_ABSORB", "SHIELD_BREAK", "BLEED_APPLIED", "POISON_APPLIED", "STUN_APPLIED", "MANA_RESTORE", "PRE_COMBAT_BARRIER", "MULTI_HIT", "LOOT", "AUTO_ITEM_USAGE", "AUTO_STONE_USAGE"].includes(log.action)
+      ["BASIC_ATTACK", "GU_SKILL", "KILLER_MOVE", "DAMAGE", "HEAL", "ITEM_HEAL", "SHIELD_GAIN", "DOT_TICK", "DIED", "LIFESTEAL", "STUNNED", "PHANTOM_ATTACK", "THORNS", "SHIELD_ABSORB", "SHIELD_BREAK", "BLEED_APPLIED", "POISON_APPLIED", "STUN_APPLIED", "MANA_RESTORE", "MANA_COST", "PRE_COMBAT_BARRIER", "MULTI_HIT", "LOOT", "AUTO_ITEM_USAGE", "AUTO_STONE_USAGE"].includes(log.action)
     ), [visibleLogs]);
 
   return (
@@ -564,27 +783,43 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
         </div>
       </div>
 
-      {/* Teams Display */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-zinc-900/50 border border-emerald-800/40 rounded-xl p-4">
-          <h3 className="text-sm font-bold text-emerald-300 mb-3 flex items-center gap-2">
-            <Heart className="w-4 h-4 text-emerald-400" />
+      {/* Grid Battlefield: 2 grids side by side */}
+      <div className="flex flex-col md:flex-row gap-4">
+        {/* Allies Grid */}
+        <div className="flex-1 bg-zinc-950/60 border border-emerald-800/40 rounded-xl p-3">
+          <h3 className="text-xs font-bold text-emerald-300 mb-2 flex items-center gap-2">
+            <Heart className="w-3.5 h-3.5 text-emerald-400" />
             Phe Ta
             <span className="text-[10px] text-zinc-600 ml-auto">{allies.length} chiến binh</span>
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {allies.map(c => renderCombatantCard(c, state.highlightedActor === c.id, state.highlightedTarget === c.id))}
+          <div className="grid grid-cols-3 gap-1.5">
+            {[1, 2, 3].map(gridX => (
+              [3, 2, 1].map(gridY => {
+                const cellCombatant = Object.values(state.combatantStates).find(
+                  c => c.kind === "ally" && c.gridX === gridX && c.gridY === gridY
+                );
+                return renderGridCell(cellCombatant, gridX, gridY);
+              })
+            ))}
           </div>
         </div>
 
-        <div className="bg-zinc-900/50 border border-rose-800/40 rounded-xl p-4">
-          <h3 className="text-sm font-bold text-rose-300 mb-3 flex items-center gap-2">
-            <Swords className="w-4 h-4 text-rose-400" />
+        {/* Enemies Grid */}
+        <div className="flex-1 bg-zinc-950/60 border border-rose-800/40 rounded-xl p-3">
+          <h3 className="text-xs font-bold text-rose-300 mb-2 flex items-center gap-2">
+            <Swords className="w-3.5 h-3.5 text-rose-400" />
             Kẻ Địch
             <span className="text-[10px] text-zinc-600 ml-auto">{enemies.length} mục tiêu</span>
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {enemies.map(c => renderCombatantCard(c, state.highlightedActor === c.id, state.highlightedTarget === c.id))}
+          <div className="grid grid-cols-3 gap-1.5">
+            {[1, 2, 3].map(gridX => (
+              [1, 2, 3].map(gridY => {
+                const cellCombatant = Object.values(state.combatantStates).find(
+                  c => c.kind === "enemy" && c.gridX === gridX && c.gridY === gridY
+                );
+                return renderGridCell(cellCombatant, gridX, gridY);
+              })
+            ))}
           </div>
         </div>
       </div>
@@ -665,7 +900,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           {visibleLogs.map((log, idx) => {
             const isTurnStart = log.action === "TURN_START";
             const isBattleBoundary = log.action === "BATTLE_START" || log.action === "BATTLE_END";
-            const isAction = ["BASIC_ATTACK", "GU_SKILL", "KILLER_MOVE", "DAMAGE", "HEAL", "ITEM_HEAL", "SHIELD_GAIN", "DOT_TICK", "DIED", "LIFESTEAL", "STUNNED", "PHANTOM_ATTACK", "THORNS", "SHIELD_ABSORB", "SHIELD_BREAK", "BLEED_APPLIED", "POISON_APPLIED", "STUN_APPLIED", "MANA_RESTORE", "PRE_COMBAT_BARRIER", "MULTI_HIT", "LOOT", "AUTO_ITEM_USAGE", "AUTO_STONE_USAGE"].includes(log.action);
+            const isAction = ["BASIC_ATTACK", "GU_SKILL", "KILLER_MOVE", "DAMAGE", "HEAL", "ITEM_HEAL", "SHIELD_GAIN", "DOT_TICK", "DIED", "LIFESTEAL", "STUNNED", "PHANTOM_ATTACK", "THORNS", "SHIELD_ABSORB", "SHIELD_BREAK", "BLEED_APPLIED", "POISON_APPLIED", "STUN_APPLIED", "MANA_RESTORE", "MANA_COST", "PRE_COMBAT_BARRIER", "MULTI_HIT", "LOOT", "AUTO_ITEM_USAGE", "AUTO_STONE_USAGE"].includes(log.action);
 
             if (isTurnStart) {
               return (
@@ -732,6 +967,8 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           Trở Về
         </button>
       )}
+
+      {renderDetailPopup()}
     </div>
   );
 };

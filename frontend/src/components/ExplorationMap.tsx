@@ -256,17 +256,10 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
             )}
           </div>
         </div>
-
-        <div className="text-xs text-zinc-500 max-w-xl">
-          * Chọn vùng đất để cất bước hành trình. Di chuyển sang khu vực mới sẽ đưa đạo hữu về làng trung tâm (50, 50) của vùng đất đó và tiêu hao <span className="text-emerald-400 font-bold">5 Chân Nguyên</span>.
-        </div>
-
         {/* Grid Nodes */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {regions.map((node, index) => {
             const isCurrentExploring = activeNode === node.id;
-            const hasMana = player.current_mana >= 5;
-
             return (
               <div
                 key={node.id}
@@ -294,10 +287,10 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                 <div className="mt-4 pt-3 border-t border-zinc-900/60">
                   <button
                     type="button"
-                    disabled={actionLoading || !!player.active_combat || !hasMana}
+                    disabled={actionLoading || !!player.active_combat}
                     onClick={() => handleNodeClick(node.id)}
                     className={`w-full py-2 px-3 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                      hasMana && !player.active_combat
+                      !player.active_combat
                         ? "bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-200 active:scale-[0.98]"
                         : "bg-zinc-950 text-zinc-600 border border-zinc-900/80 cursor-not-allowed"
                     }`}

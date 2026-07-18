@@ -191,19 +191,6 @@ func calculateEnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuD
 			cost = 0.1
 		}
 
-		// Apply conflicting Dao Marks penalty
-		if actor.DaoMarks != nil && !hasSovereignFetus(actor) {
-			conflictingMarks := 0
-			for path, amount := range actor.DaoMarks {
-				if !isPathInGu(guSpec.Path, path) {
-					conflictingMarks += amount
-				}
-			}
-			if conflictingMarks > 0 {
-				costMultiplier := 1.0 + float64(conflictingMarks)/20000.0
-				cost *= costMultiplier
-			}
-		}
 		if cost < 0.1 {
 			return 0.1
 		}
@@ -220,6 +207,11 @@ func calculateEnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuD
 		for i := 0; i < actor.Rank-guSpec.Rank; i++ {
 			cost /= 10.0
 		}
+	} else if actor.Rank < guSpec.Rank {
+		rankDiff := guSpec.Rank - actor.Rank
+		for i := 0; i < rankDiff; i++ {
+			cost *= 1.5
+		}
 	}
 
 	divisor := 1
@@ -228,19 +220,6 @@ func calculateEnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuD
 	}
 	cost /= float64(divisor)
 
-	// Apply conflicting Dao Marks penalty
-	if actor.DaoMarks != nil && !hasSovereignFetus(actor) {
-		conflictingMarks := 0
-		for path, amount := range actor.DaoMarks {
-			if !isPathInGu(guSpec.Path, path) {
-				conflictingMarks += amount
-			}
-		}
-		if conflictingMarks > 0 {
-			costMultiplier := 1.0 + float64(conflictingMarks)/20000.0
-			cost *= costMultiplier
-		}
-	}
 	return cost
 }
 

@@ -27,15 +27,24 @@ type AutoCombatStartRequest struct {
 
 // CombatantInfo returned to frontend for visual replay
 type CombatantInfo struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Kind    string `json:"kind"`
-	MaxHP   int    `json:"max_hp"`
-	HP      int    `json:"hp"`
-	MaxMana int    `json:"max_mana"`
-	Mana    int    `json:"mana"`
-	GridRow int    `json:"grid_row"`
-	Shield  int    `json:"shield"`
+	ID           string           `json:"id"`
+	Name         string           `json:"name"`
+	Kind         string           `json:"kind"`
+	MaxHP        int              `json:"max_hp"`
+	HP           int              `json:"hp"`
+	MaxMana      int              `json:"max_mana"`
+	Mana         int              `json:"mana"`
+	GridX        int              `json:"grid_x"`
+	GridY        int              `json:"grid_y"`
+	Shield       int              `json:"shield"`
+	Damage       float64          `json:"damage,omitempty"`
+	Defense      float64          `json:"defense,omitempty"`
+	Speed        float64          `json:"speed,omitempty"`
+	KindDetail   string           `json:"kind_detail,omitempty"`
+	Rank         int              `json:"rank,omitempty"`
+	SubRank      int              `json:"sub_rank,omitempty"`
+	DaoMarks     map[string]int   `json:"dao_marks,omitempty"`
+	PathMasteries map[string]string `json:"path_masteries,omitempty"`
 }
 
 // AutoCombatStart initializes and fully simulates a combat, returning the deterministic log.
@@ -84,21 +93,12 @@ func AutoCombatStart(c *gin.Context) {
 
 	var allActions []simulator.SimAction
 
-	// Core Gu
-	if coreSpec, ok := models.GuRegistry[req.Loadout.CoreGuId]; ok {
-		if hasCombatActiveEffects(&coreSpec) {
-			act := buildSimActionFromGu(&actor, &coreSpec, "GU_SKILL")
-			act.SourceID = req.Loadout.CoreGuId
-			allActions = append(allActions, act)
-		}
-	}
-
-	// Support Gu
-	for _, supID := range req.Loadout.SupportGuIds {
-		if supSpec, ok := models.GuRegistry[supID]; ok {
-			if hasCombatActiveEffects(&supSpec) {
-				act := buildSimActionFromGu(&actor, &supSpec, "GU_SKILL")
-				act.SourceID = supID
+	// All selected Gu (core + support, no distinction)
+	for _, guID := range req.Loadout.GuIds {
+		if spec, ok := models.GuRegistry[guID]; ok {
+			if hasCombatActiveEffects(&spec) {
+				act := buildSimActionFromGu(&actor, &spec, "GU_SKILL")
+				act.SourceID = guID
 				allActions = append(allActions, act)
 			}
 		}
@@ -152,12 +152,9 @@ func AutoCombatStart(c *gin.Context) {
 			globalMultiplier *= spec.Effects.Active.DamageMult
 		}
 	}
-	if coreSpec, ok := models.GuRegistry[req.Loadout.CoreGuId]; ok {
-		scanMultiplier(coreSpec)
-	}
-	for _, supID := range req.Loadout.SupportGuIds {
-		if supSpec, ok := models.GuRegistry[supID]; ok {
-			scanMultiplier(supSpec)
+	for _, guID := range req.Loadout.GuIds {
+		if spec, ok := models.GuRegistry[guID]; ok {
+			scanMultiplier(spec)
 		}
 	}
 	if globalMultiplier > 1.0 {
@@ -203,12 +200,9 @@ func AutoCombatStart(c *gin.Context) {
 			virtualShield += int(spec.Effects.Active.ShieldFlat)
 		}
 	}
-	if coreSpec, ok := models.GuRegistry[req.Loadout.CoreGuId]; ok {
-		scanShield(coreSpec)
-	}
-	for _, supID := range req.Loadout.SupportGuIds {
-		if supSpec, ok := models.GuRegistry[supID]; ok {
-			scanShield(supSpec)
+	for _, guID := range req.Loadout.GuIds {
+		if spec, ok := models.GuRegistry[guID]; ok {
+			scanShield(spec)
 		}
 	}
 
@@ -255,7 +249,8 @@ func AutoCombatStart(c *gin.Context) {
 		ID:            player.ID.String(),
 		Name:          player.Username,
 		Kind:          "Player",
-		GridRow:       2,
+		GridX:         2,
+		GridY:         2,
 		MaxHP:         simMaxHP,
 		HP:            simHP,
 		MaxMana:       int(player.MaxMana),
@@ -280,7 +275,7 @@ func AutoCombatStart(c *gin.Context) {
 	simState.Allies = append(simState.Allies, simPlayer)
 
 	// ── Build enemies ──
-	for i, enemy := range player.ActiveCombat.Enemies {
+	for _, enemy := range player.ActiveCombat.Enemies {
 		eHP := int(enemy.HP)
 		if eHP <= 0 {
 			eHP = int(enemy.MaxHP)
@@ -289,7 +284,8 @@ func AutoCombatStart(c *gin.Context) {
 			ID:      enemy.ID,
 			Name:    enemy.Name,
 			Kind:    "Enemy",
-			GridRow: 1,
+			GridX:   enemy.GridX,
+			GridY:   enemy.GridY,
 			MaxHP:   int(enemy.MaxHP),
 			HP:      eHP,
 			MaxMana: int(enemy.MaxMana),
@@ -306,9 +302,6 @@ func AutoCombatStart(c *gin.Context) {
 		}
 		if enemy.Kind == "Boss" {
 			simEnemy.Kind = "Boss"
-		}
-		if i == 0 {
-			simEnemy.GridRow = 1
 		}
 		// Give enemies a basic attack action
 		simEnemy.Actions = []simulator.SimAction{
@@ -327,7 +320,8 @@ func AutoCombatStart(c *gin.Context) {
 		HP:      simPlayer.HP,
 		MaxMana: simPlayer.MaxMana,
 		Mana:    simPlayer.Mana,
-		GridRow: simPlayer.GridRow,
+		GridX:   simPlayer.GridX,
+		GridY:   simPlayer.GridY,
 		Shield:  virtualShield,
 	})
 	for _, a := range player.ActiveCombat.Allies {
@@ -339,19 +333,29 @@ func AutoCombatStart(c *gin.Context) {
 			HP:      int(a.HP),
 			MaxMana: int(a.MaxMana),
 			Mana:    int(a.CurrentMana),
-			GridRow: a.GridX,
+			GridX:   a.GridX,
+			GridY:   a.GridY,
 		})
 	}
 	for _, e := range player.ActiveCombat.Enemies {
 		combatantInfos = append(combatantInfos, CombatantInfo{
-			ID:      e.ID,
-			Name:    e.Name,
-			Kind:    "enemy",
-			MaxHP:   int(e.MaxHP),
-			HP:      int(e.HP),
-			MaxMana: int(e.MaxMana),
-			Mana:    int(e.CurrentMana),
-			GridRow: e.GridX,
+			ID:           e.ID,
+			Name:         e.Name,
+			Kind:         "enemy",
+			MaxHP:        int(e.MaxHP),
+			HP:           int(e.HP),
+			MaxMana:      int(e.MaxMana),
+			Mana:         int(e.CurrentMana),
+			GridX:        e.GridX,
+			GridY:        e.GridY,
+			Damage:       e.BaseAttack,
+			Defense:      e.BaseDefense,
+			Speed:        e.Speed,
+			KindDetail:   e.Kind,
+			Rank:         e.Rank,
+			SubRank:      e.SubRank,
+			DaoMarks:     e.DaoMarks,
+			PathMasteries: e.PathMasteries,
 		})
 	}
 
@@ -627,7 +631,7 @@ func AutoCombatStart(c *gin.Context) {
 		logs = append(logs, simulator.CombatLog{
 			Turn:   simState.Turn,
 			Action: "BATTLE_END",
-			Detail: "Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất sạch chiến lợi phẩm và bị đưa về Nam Cương.",
+			Detail: "Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất sạch chiến lợi phẩm.",
 		})
 
 		tempLootJSON, _ := json.Marshal(player.TempLoot)
@@ -701,6 +705,10 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		ManaCost:   cost,
 	}
 
+	if actor.Rank < spec.Rank {
+		act.BacklashDamage = 5.0
+	}
+
 	if spec.Effects.Active != nil {
 		active := spec.Effects.Active
 		if active.ShieldFlat > 0 {
@@ -731,6 +739,18 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		if active.WoodTransformation {
 			act.Defense += 30.0
 		}
+		if active.DamageMult > 1.0 {
+			act.DamageMult = active.DamageMult
+		}
+		if active.TargetSelector != "" {
+			act.TargetType = active.TargetSelector
+			act.TargetX = actor.GridX
+			act.TargetY = actor.GridY
+		}
+	}
+
+	if act.TargetType == "" {
+		act.TargetType = "SINGLE"
 	}
 
 	return act
@@ -788,5 +808,6 @@ func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlo
 		}
 	}
 
+	act.TargetType = "SINGLE"
 	return act
 }

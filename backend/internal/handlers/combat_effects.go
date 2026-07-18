@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -38,16 +37,6 @@ func getActorPathMasteryMultiplier(actor *models.Combatant, paths []string) floa
 }
 
 func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDictionaryItem) (effectiveDamage float64, effectiveDefense float64, manaCost float64, err error) {
-	if actor.Rank < guSpec.Rank {
-		backlashDmg := 50.0
-		if float64(actor.HP) <= backlashDmg {
-			actor.HP = 0
-		} else {
-			actor.HP -= backlashDmg
-		}
-		return 0, 0, 0, fmt.Errorf("Backlash: Cổ trùng Rank %d phản phệ Không Khiếu Rank %d của %s! (Trừ 50 HP)", guSpec.Rank, actor.Rank, actor.Name)
-	}
-
 	powerScale := 1.0
 
 	var baseDmg float64

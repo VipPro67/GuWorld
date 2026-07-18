@@ -99,20 +99,35 @@ func TestRollLoot(t *testing.T) {
 
 func TestCalculateGuEffectForCombatant_Backlash(t *testing.T) {
 	actor := &models.Combatant{
-		Name: "Test Actor",
-		Rank: 1,
-		HP:   100,
+		Name:    "Test Actor",
+		Rank:    1,
+		SubRank: 1,
+		HP:      200,
+		MaxHP:   200,
+		MaxMana: 1000,
 	}
 	highRankGu := &models.GuDictionaryItem{
-		Name: "Mặt Trời Gu",
-		Rank: 3,
+		Name:         "Mặt Trời Gu",
+		Rank:         3,
+		BaseManaCost: 50,
 	}
 
-	_, _, _, err := CalculateGuEffectForCombatant(actor, highRankGu)
-	if err == nil {
-		t.Fatal("expected backlash error, got nil")
+	dmg, def, cost, err := CalculateGuEffectForCombatant(actor, highRankGu)
+	if err != nil {
+		t.Fatalf("expected no error (backlash applied but action proceeds), got %v", err)
 	}
-	if actor.HP != 50 {
-		t.Fatalf("expected actor HP to drop to 50 due to backlash, got %f", actor.HP)
+	// Backlash is no longer applied by CalculateGuEffectForCombatant
+	// (it is now applied via BacklashDamage on SimAction in the simulator engine)
+	if actor.HP != 200 {
+		t.Fatalf("expected actor HP unchanged by CalculateGuEffectForCombatant, got %f", actor.HP)
 	}
+	// Cost should be penalized (1.5^2 = 2.25x)
+	// BaseManaCost=50 → baseManaPct = 50/100 = 0.50, cost = 0.50 * 1000 = 500
+	baseCost := (float64(highRankGu.BaseManaCost) / 100.0) * actor.MaxMana // 500
+	expectedCost := baseCost * 1.5 * 1.5 // 1125
+	if cost < expectedCost*0.9 || cost > expectedCost*1.1 {
+		t.Fatalf("expected cost around %.0f after rank penalty, got %.0f", expectedCost, cost)
+	}
+	_ = dmg
+	_ = def
 }

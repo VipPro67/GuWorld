@@ -394,6 +394,15 @@ func CombatAttack(c *gin.Context) {
 						dmg, def, cost, errGu := CalculateGuEffectForCombatant(refCaster, &spec)
 						if errGu == nil && refCaster.CurrentMana >= cost {
 							refCaster.CurrentMana -= cost
+							if refCaster.Rank < spec.Rank {
+								backlashHP := 5.0
+								if refCaster.HP <= backlashHP {
+									refCaster.HP = 0
+								} else {
+									refCaster.HP -= backlashHP
+								}
+								logs = append(logs, fmt.Sprintf("[Phản Phệ] Cổ trùng Rank cao phản phệ %s, trừ %.0f HP (còn %.0f HP)!", refCaster.Name, backlashHP, refCaster.HP))
+							}
 
 							isHealing := false
 							isDefense := spec.Type == "Defense"

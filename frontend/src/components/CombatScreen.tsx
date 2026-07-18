@@ -47,8 +47,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   actionLoading,
   onRetreat,
 }) => {
-  const [coreGuId, setCoreGuId] = useState<string>("");
-  const [supportGuIds, setSupportGuIds] = useState<string[]>([]);
+  const [selectedGuIds, setSelectedGuIds] = useState<string[]>([]);
   const [selectedKillerMoveIds, setSelectedKillerMoveIds] = useState<string[]>([]);
 
   const [simulationLogs, setSimulationLogs] = useState<Record<string, unknown>[]>([]);
@@ -150,14 +149,13 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   }, [investigationLevel, enemy]);
 
   const handleStartSimulation = async () => {
-    if (!coreGuId) {
-      addToast("Vui lòng chọn ít nhất 1 Cổ Hạch Tâm!", "error");
+    if (selectedGuIds.length === 0) {
+      addToast("Vui lòng chọn ít nhất 1 Cổ!", "error");
       return;
     }
 
     const loadout = {
-      CoreGuId: eligibleGus.find(g => g.instance_id === coreGuId)?.gu_id || coreGuId,
-      SupportGuIds: supportGuIds.map(id => eligibleGus.find(g => g.instance_id === id)?.gu_id || id),
+      GuIds: selectedGuIds.map(id => eligibleGus.find(g => g.instance_id === id)?.gu_id || id),
       KillerMoveIds: selectedKillerMoveIds,
       ImmortalGuId: null,
       AutoHealHP: autoHealHP,
@@ -174,15 +172,15 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     }
   };
 
-  const toggleSupportGu = (id: string) => {
-    if (supportGuIds.includes(id)) {
-      setSupportGuIds(supportGuIds.filter(i => i !== id));
+  const toggleGu = (id: string) => {
+    if (selectedGuIds.includes(id)) {
+      setSelectedGuIds(selectedGuIds.filter(i => i !== id));
     } else {
-      if (supportGuIds.length >= 6) {
-        addToast("Chỉ được mang tối đa 6 Cổ Phụ Trợ!", "error");
+      if (selectedGuIds.length >= 7) {
+        addToast("Chỉ được mang tối đa 7 Cổ!", "error");
         return;
       }
-      setSupportGuIds([...supportGuIds, id]);
+      setSelectedGuIds([...selectedGuIds, id]);
     }
   };
 
@@ -196,10 +194,10 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   // ── Tank/Shield detection ──
   const hasTankOrShield = useMemo(() => {
-    const selectedIds = [coreGuId, ...supportGuIds].filter(Boolean);
+    const selectedIds = selectedGuIds;
     if (selectedIds.length === 0) return true;
 
-    const shieldKeys = new Set(["defense", "add_base_defense", "virtual_shield", "orbit_shield", "team_shield"]);
+    const shieldKeys = new Set(["defense", "add_base_defense", "virtual_shield", "orbit_shield", "team_shield", "shield_flat"]);
     const tankRoles = new Set(["Defense", "Tank", "Guardian"]);
 
     for (const id of selectedIds) {
@@ -222,7 +220,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       }
     }
     return false;
-  }, [coreGuId, supportGuIds, eligibleGus, guDictionary]);
+  }, [selectedGuIds, eligibleGus, guDictionary]);
 
   const handleExitSimulation = async () => {
     await fetchPlayerStatus(player.id);
@@ -258,27 +256,37 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   };
 
   const multiPathPenalty = useMemo(() => {
-    const selectedIds = [coreGuId, ...supportGuIds].filter(Boolean);
-    if (selectedIds.length <= 1) return 0;
+    const selectedIds = selectedGuIds;
+    if (selectedIds.length <= 6) return 0;
     const paths = new Set(selectedIds.flatMap(id => {
       const gu = eligibleGus.find(g => g.instance_id === id);
       return gu ? guDictionary[gu.gu_id]?.path || [] : [];
     }).filter(Boolean));
     const uniquePaths = paths.size;
-    return Math.min(0.75, (selectedIds.length - 1) * 0.12 + (uniquePaths - 1) * 0.08);
-  }, [coreGuId, supportGuIds, eligibleGus, guDictionary]);
+    return Math.min(0.75, (selectedIds.length - 6) * 0.12 + (uniquePaths - 1) * 0.08);
+  }, [selectedGuIds, eligibleGus, guDictionary]);
 
   const recommendLoadout = useCallback(() => {
     const gus = eligibleGus;
     if (gus.length === 0) return;
 
     const effectivePath = bestPath || "strength";
+    const playerRank = player.rank || 1;
+
+    // Categorize Gu by role
+    const attackRoles = new Set(["ATTACK_CORE", "FIGHTER"]);
+    const attackKeys = new Set(["damage", "add_base_attack", "damage_multiplier", "damage_multiplier_on_hit", "blood_drain", "bleed", "life_steal", "lifesteal"]);
+    const supportRoles = new Set(["HEAL_CORE", "CONTROL_CORE", "BUFF_CORE", "SUMMON_CORE", "MOVEMENT_CORE", "TRANSFORMATION_CORE"]);
+    const supportKeys = new Set(["heal", "regen_hp", "stun", "freeze", "slow", "paralyze", "charm", "bind", "burn", "poison", "summon_phantom", "summon_flying_bear_phantom", "summon_clones", "movement", "flight", "attack_speed"]);
+    const defenseRoles = new Set(["DEFENSE_CORE", "HEAL_CORE", "CONTROL_CORE"]);
+    const shieldKeys = new Set(["defense", "add_base_defense", "virtual_shield", "orbit_shield", "team_shield", "shield_flat"]);
 
     // Score each Gu for recommendation
     const scored = gus.map(gu => {
       const spec = guDictionary[gu.gu_id];
-      if (!spec) return { gu, score: 0, pathMatch: false };
+      if (!spec) return { gu, score: 0, pathMatch: false, isDefense: false };
       const pathMatch = spec.path && spec.path.some(p => p.toLowerCase().includes(effectivePath.toLowerCase()));
+
       let maxDaoMark = 0;
       let maxMastery = 0;
       if (spec.path) {
@@ -292,30 +300,70 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           if (levelIdx > maxMastery) maxMastery = levelIdx;
         });
       }
-      const score = spec.rank * 100 + (pathMatch ? 500 : 0) + (maxDaoMark > 0 ? spec.rank * 50 : 0) + maxMastery * 100;
-      return { gu, score, pathMatch };
+
+      // Detect if this is a defense Gu
+      const isDefense = defenseRoles.has(spec.primary_role) ||
+        spec.combat_roles?.some(r => defenseRoles.has(r)) ||
+        (() => {
+          for (const section of ["active", "passive", "support"] as const) {
+            const effects = spec.effects?.[section];
+            if (!effects) continue;
+            for (const key of Object.keys(effects)) {
+              if (shieldKeys.has(key) && (effects[key] || 0) > 0) return true;
+            }
+          }
+          return false;
+        })();
+
+      // Scoring: prefer Gu with rank ≤ player, path match, Dao Marks, mastery
+      let score = 0;
+      if (spec.rank <= playerRank) {
+        score += 1000; // Strongly prefer rank ≤ player
+      } else {
+        score += Math.max(0, 300 - (spec.rank - playerRank) * 100); // Higher rank still has some value
+      }
+      score += spec.rank * 50; // Base rank value
+      if (pathMatch) score += 800; // Path match is very important
+      if (maxDaoMark > 0) score += Math.min(500, maxDaoMark / 100); // Dao Mark synergy
+      score += maxMastery * 150; // Mastery bonus
+      if (isDefense) score += 200; // Defense bias for balance
+
+      return { gu, score, pathMatch, isDefense };
     });
 
     scored.sort((a, b) => b.score - a.score);
 
-    // Pick best Core
-    const bestCore = scored[0];
-    if (!bestCore) return;
-    setCoreGuId(bestCore.gu.instance_id);
+    // Pick best Gu first (highest score)
+    const best = scored[0];
+    if (!best) return;
+    const picked = [best.gu.instance_id];
 
-    // Pick supports sharing the same path as core to minimize multi-path penalty
-    const corePathList = guDictionary[bestCore.gu.gu_id]?.path || [];
-    const supportCandidates = scored
-      .filter(s => s.gu.instance_id !== bestCore.gu.instance_id)
+    // Prioritize at least 1 defense Gu if not already picked
+    const hasDefense = best.isDefense;
+    if (!hasDefense) {
+      const bestDefense = scored.find(s => s.isDefense && s.gu.instance_id !== best.gu.instance_id);
+      if (bestDefense) picked.push(bestDefense.gu.instance_id);
+    }
+
+    // Fill remaining slots with highest scored, preferring same path
+    const pathPriority = guDictionary[best.gu.gu_id]?.path || [];
+    const remaining = scored
+      .filter(s => !picked.includes(s.gu.instance_id))
       .sort((a, b) => {
         const aSpec = guDictionary[a.gu.gu_id];
         const bSpec = guDictionary[b.gu.gu_id];
-        const aPathMatch = aSpec?.path && corePathList.some(p => aSpec.path.includes(p)) ? 1 : 0;
-        const bPathMatch = bSpec?.path && corePathList.some(p => bSpec.path.includes(p)) ? 1 : 0;
+        const aPathMatch = aSpec?.path && pathPriority.some(p => aSpec.path.includes(p)) ? 1 : 0;
+        const bPathMatch = bSpec?.path && pathPriority.some(p => bSpec.path.includes(p)) ? 1 : 0;
         return (bPathMatch * 1000 + b.score) - (aPathMatch * 1000 + a.score);
       });
 
-    setSupportGuIds(supportCandidates.slice(0, 6).map(s => s.gu.instance_id));
+    // Fill up to 7 total
+    for (const s of remaining) {
+      if (picked.length >= 7) break;
+      picked.push(s.gu.instance_id);
+    }
+
+    setSelectedGuIds(picked);
 
     // Pick killer moves matching the core path (only valid ones)
     const validKMs = (() => {
@@ -335,8 +383,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       });
     })();
     const matchingKMs = validKMs.filter(km => {
-      if (corePathList.length === 0) return true;
-      return corePathList.includes(km.path);
+      if (pathPriority.length === 0) return true;
+      return pathPriority.includes(km.path);
     });
     setSelectedKillerMoveIds(matchingKMs.slice(0, 3).map(km => km.id));
   }, [eligibleGus, guDictionary, bestPath, player.dao_marks, player.path_masteries, killerMoves]);
@@ -365,18 +413,19 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     if (guSortMode === "rank") {
       gus.sort((a, b) => (guDictionary[b.gu_id]?.rank || 0) - (guDictionary[a.gu_id]?.rank || 0));
     } else {
-      const coreSpec = coreGuId ? guDictionary[eligibleGus.find(g => g.instance_id === coreGuId)?.gu_id || ""] : null;
-      const corePath = coreSpec?.path || bestPath;
+      const firstSelected = selectedGuIds.length > 0 ? selectedGuIds[0] : null;
+      const firstSpec = firstSelected ? guDictionary[eligibleGus.find(g => g.instance_id === firstSelected)?.gu_id || ""] : null;
+      const mainPath = firstSpec?.path || bestPath;
       gus.sort((a, b) => {
         const aSpec = guDictionary[a.gu_id];
         const bSpec = guDictionary[b.gu_id];
-        const aMatch = aSpec?.path === corePath ? 1 : 0;
-        const bMatch = bSpec?.path === corePath ? 1 : 0;
+        const aMatch = aSpec?.path === mainPath ? 1 : 0;
+        const bMatch = bSpec?.path === mainPath ? 1 : 0;
         return (bMatch - aMatch) || (bSpec?.rank || 0) - (aSpec?.rank || 0);
       });
     }
     return gus;
-  }, [eligibleGus, guSortMode, guDictionary, coreGuId, bestPath]);
+  }, [eligibleGus, guSortMode, guDictionary, selectedGuIds, bestPath]);
 
   const renderCombatantList = (title: string, combatants: Combatant[], icon: React.ReactNode, isEnemy: boolean) => {
     if (!combatants || combatants.length === 0) return null;
@@ -421,6 +470,25 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                 <span className="text-zinc-500 shrink-0">
                   {c.max_hp?.toLocaleString() || "?"} HP
                 </span>
+              )}
+              {enemyInfoRevealed.showStats && (
+                <>
+                  {(c.base_attack ?? 0) > 0 && (
+                    <span className="text-rose-500 shrink-0 text-[10px] font-mono" title="Tấn công">
+                      ATK {c.base_attack}
+                    </span>
+                  )}
+                  {(c.base_defense ?? 0) > 0 && (
+                    <span className="text-blue-500 shrink-0 text-[10px] font-mono" title="Phòng thủ">
+                      DEF {c.base_defense}
+                    </span>
+                  )}
+                  {(c.speed ?? 0) > 0 && (
+                    <span className="text-cyan-500 shrink-0 text-[10px] font-mono" title="Tốc độ">
+                      SPD {c.speed}
+                    </span>
+                  )}
+                </>
               )}
               {isEnemy && c.kind && (
                 <span className={`px-1.5 py-0.5 rounded text-[10px] border ${typeColor(c.kind)} shrink-0`}>
@@ -543,7 +611,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
               Cảnh báo: {multiPathPenalty >= 0.5 ? 'Quá nhiều' : 'Nhiều'} hệ Cổ làm giảm tỉ lệ thành công ({Math.round(multiPathPenalty * 100)}%).
             </div>
           )}
-          {!hasTankOrShield && (coreGuId || supportGuIds.length > 0) && (
+          {!hasTankOrShield && selectedGuIds.length > 0 && (
             <div className="flex items-center gap-2 px-3 py-2 bg-rose-950/30 border border-rose-800/30 rounded-lg text-[11px] text-rose-300">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
               Không có Cổ chống chịu / khiên ảo! Nên chọn ít nhất 1 Cổ có kỹ năng tạo Khiên Ảo hoặc phòng thủ.
@@ -551,33 +619,65 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           )}
         </div>
 
-        {/* Core Gu */}
+        {/* Total Mana & Backlash Summary */}
+        {(() => {
+          const totalMana = selectedGuIds.reduce((sum, id) => {
+            const gu = eligibleGus.find(g => g.instance_id === id);
+            const spec = gu ? guDictionary[gu.gu_id] : null;
+            return sum + (spec?.base_mana_cost || 0);
+          }, 0);
+          const backlashCount = selectedGuIds.filter(id => {
+            const gu = eligibleGus.find(g => g.instance_id === id);
+            const spec = gu ? guDictionary[gu.gu_id] : null;
+            return spec && (spec.rank || 0) > (player.rank || 1);
+          }).length;
+          return (
+            <div className="flex flex-wrap items-center gap-3 mb-4 px-3 py-2 bg-zinc-900/60 border border-zinc-800 rounded-lg text-xs">
+              <span className="text-zinc-400">
+                Mana: <span className={totalMana > (player.current_mana || 0) ? 'text-rose-400 font-bold' : 'text-cyan-400 font-bold'}>{totalMana}</span>
+                <span className="text-zinc-600"> / {player.current_mana?.toFixed(0) || "?"}</span>
+              </span>
+              {backlashCount > 0 && (
+                <span className="text-rose-400 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  {backlashCount} Cổ rank cao → mất {backlashCount * 5} HP
+                </span>
+              )}
+              <span className="text-zinc-600 ml-auto">{selectedGuIds.length}/7 đã chọn</span>
+            </div>
+          );
+        })()}
+
+        {/* Single Gu Selection Grid */}
         <div className="mb-6">
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-2 mb-3">
-            <h3 className="text-sm font-bold text-zinc-300">Cổ Hạch Tâm <span className="text-zinc-600 font-normal">(bắt buộc 1)</span></h3>
-            <span className="text-[10px] text-zinc-600">{eligibleGus.length} Cổ khả dụng</span>
-          </div>
           {eligibleGus.length === 0 ? (
             <p className="text-sm text-zinc-600 italic py-4 text-center">Không có Cổ nào đủ điều kiện (cần ACTIVE + equipped)</p>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
               {sortedEligibleGus.map(gu => {
                 const spec = guDictionary[gu.gu_id];
-                const isSelected = coreGuId === gu.instance_id;
+                const isSelected = selectedGuIds.includes(gu.instance_id);
+                const playerRank = player.rank || 1;
+                const guRank = spec?.rank || 0;
+                const isHigherRank = guRank > playerRank;
+                const manaCost = spec?.base_mana_cost || 0;
                 const pathMatch = spec?.path && spec.path.some(p => p.toLowerCase().includes(bestPath.toLowerCase()));
                 return (
                   <div
                     key={gu.instance_id}
-                    onClick={() => setCoreGuId(gu.instance_id)}
+                    onClick={() => toggleGu(gu.instance_id)}
                     className={`p-3 rounded-xl border cursor-pointer transition-all relative ${
                       isSelected ? 'border-emerald-500 bg-emerald-950/30 ring-1 ring-emerald-500/30' :
-                      pathMatch && !coreGuId ? 'border-emerald-800/40 bg-emerald-950/10' :
+                      isHigherRank ? 'border-rose-800/40 bg-rose-950/10' :
+                      pathMatch ? 'border-emerald-800/40 bg-emerald-950/10' :
                       'border-zinc-800 bg-zinc-900/50 hover:border-zinc-600'
                     }`}
                   >
                     <div className="font-bold text-sm text-zinc-200 truncate">{spec?.name || gu.gu_id}</div>
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                      <span className="text-[10px] text-zinc-500">R{spec?.rank}</span>
+                      <span className={`text-[10px] ${isHigherRank ? 'text-rose-400 font-bold' : 'text-zinc-500'}`}>
+                        R{guRank}
+                      </span>
                       {spec?.path && spec.path.map(p => (
                         <span key={p} className={`text-[9px] px-1.5 py-0.5 rounded-full ${
                           p.toLowerCase().includes(bestPath.toLowerCase()) ? 'bg-emerald-900/40 text-emerald-300' : 'bg-zinc-800 text-zinc-500'
@@ -585,55 +685,20 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                           {pathLabel(p)}
                         </span>
                       ))}
+                    </div>
+                    <div className="flex items-center justify-between mt-1.5 text-[9px] text-zinc-500">
+                      <span>Mana {manaCost}</span>
                       {spec?.primary_role && (
-                        <span className="text-[9px] text-zinc-600">{spec.primary_role}</span>
+                        <span className="text-zinc-600">{spec.primary_role}</span>
                       )}
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Support Gu */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-2 mb-3">
-            <h3 className="text-sm font-bold text-zinc-300">Cổ Phụ Trợ <span className="text-zinc-600 font-normal">(tối đa 6)</span></h3>
-            <span className="text-[10px] text-zinc-600">{supportGuIds.length}/6 đã chọn</span>
-          </div>
-          {eligibleGus.filter(gu => gu.instance_id !== coreGuId).length === 0 ? (
-            <p className="text-sm text-zinc-600 italic py-4 text-center">Không còn Cổ nào để chọn</p>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {sortedEligibleGus.filter(gu => gu.instance_id !== coreGuId).map(gu => {
-                const spec = guDictionary[gu.gu_id];
-                const isSelected = supportGuIds.includes(gu.instance_id);
-                const coreSpec = coreGuId ? guDictionary[eligibleGus.find(g => g.instance_id === coreGuId)?.gu_id || ""] : null;
-                const pathMatch = coreSpec?.path && spec?.path && spec.path.some(p => coreSpec.path.includes(p));
-                return (
-                  <div
-                    key={gu.instance_id}
-                    onClick={() => toggleSupportGu(gu.instance_id)}
-                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                      isSelected ? 'border-cyan-500 bg-cyan-950/30 ring-1 ring-cyan-500/30' :
-                      pathMatch ? 'border-zinc-700 bg-zinc-900/60' :
-                      'border-zinc-800 bg-zinc-900/50 hover:border-zinc-600'
-                    }`}
-                  >
-                    <div className="font-bold text-sm text-zinc-200 truncate">{spec?.name || gu.gu_id}</div>
-                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                      <span className="text-[10px] text-zinc-500">R{spec?.rank}</span>
-                      {spec?.path && spec.path.map(p => (
-                        <span key={p} className={`text-[9px] px-1.5 py-0.5 rounded-full ${
-                          coreSpec?.path?.includes(p) ? 'bg-emerald-900/40 text-emerald-300' : 'bg-zinc-800 text-zinc-500'
-                        }`}>
-                          {pathLabel(p)}
-                        </span>
-                      ))}
-                    </div>
+                    {isHigherRank && (
+                      <div className="mt-1 text-[8px] text-rose-500/80 flex items-center gap-0.5">
+                        <AlertTriangle className="w-2.5 h-2.5" /> Phản Phệ -5 HP
+                      </div>
+                    )}
                     {isSelected && (
-                      <div className="absolute top-1 right-1 w-4 h-4 bg-cyan-500 rounded-full flex items-center justify-center">
+                      <div className="absolute top-1 right-1 w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center">
                         <span className="text-[8px] text-white font-bold">✓</span>
                       </div>
                     )}
@@ -659,8 +724,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {validKillerMoves.map(move => {
                 const isSelected = selectedKillerMoveIds.includes(move.id);
-                const coreSpec = coreGuId ? guDictionary[eligibleGus.find(g => g.instance_id === coreGuId)?.gu_id || ""] : null;
-                const pathMatch = coreSpec?.path ? coreSpec.path.includes(move.path) : move.path === bestPath;
+                const firstGuId = selectedGuIds.length > 0 ? selectedGuIds[0] : null;
+                const firstSpec = firstGuId ? guDictionary[eligibleGus.find(g => g.instance_id === firstGuId)?.gu_id || ""] : null;
+                const pathMatch = firstSpec?.path ? firstSpec.path.includes(move.path) : move.path === bestPath;
                 return (
                   <div
                     key={move.id}
@@ -741,7 +807,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         <div className="flex gap-4">
           <button
             onClick={handleStartSimulation}
-            disabled={actionLoading || !coreGuId}
+            disabled={actionLoading || selectedGuIds.length === 0}
             className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
           >
             <Play className="w-5 h-5" />

@@ -64,7 +64,7 @@ func CheckBossPhaseTransitions(state *CombatState, boss *CombatantAuto) []Combat
 		})
 
 		minion1 := &CombatantAuto{
-			ID: boss.ID + "_minion1", Name: "Hộ vệ", Kind: "Minion", GridRow: 1,
+			ID: boss.ID + "_minion1", Name: "Hộ vệ", Kind: "Minion", GridX: 1, GridY: 2,
 			MaxHP: boss.MaxHP / 10, HP: boss.MaxHP / 10, BaseDmg: boss.BaseDmg / 5, BaseDef: boss.BaseDef / 5,
 		}
 		state.Enemies = append(state.Enemies, minion1)

@@ -9,7 +9,7 @@ import (
 
 func TestDeterministicSimulator(t *testing.T) {
 	loadout := simulator.CombatLoadout{
-		CoreGuId: "GU_BLOOD_MOON",
+		GuIds: []string{"GU_BLOOD_MOON"},
 	}
 
 	createInitialState := func() *simulator.CombatState {
@@ -21,7 +21,8 @@ func TestDeterministicSimulator(t *testing.T) {
 					ID:            "player1",
 					Name:          "Cổ Sư A",
 					Kind:          "Player",
-					GridRow:       2,
+					GridX:         2,
+					GridY:         2,
 					MaxHP:         100,
 					HP:            100,
 					BaseDmg:       50,
@@ -40,7 +41,8 @@ func TestDeterministicSimulator(t *testing.T) {
 					ID:      "boss1",
 					Name:    "Thái Cổ Hoang Thú",
 					Kind:    "Boss",
-					GridRow: 1,
+					GridX: 1,
+					GridY: 2,
 					MaxHP:   500,
 					HP:      500,
 					BaseDmg: 100,
