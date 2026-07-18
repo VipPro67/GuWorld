@@ -48,6 +48,9 @@ func main() {
 	// Initialize Redis Cache
 	if err := cache.Connect(); err != nil {
 		log.Printf("Warning: Failed to connect to Redis: %v. Proceeding without caching.", err)
+	} else {
+		// Clear dictionary cache to ensure latest database values are loaded on startup
+		_ = cache.Delete("game_dictionary_unified")
 	}
 
 	// 2.2. Load Gu registry cache from database Dictionaries

@@ -60,7 +60,7 @@ yellow_mud,Hoàng nê,Material,Đất bùn vàng màu mỡ dùng cho Lại Thổ
 snake_tongue,Xà tín,Material,Vật liệu nhiệt cảm dùng cho Xà Tín Cổ.,2,{},15
 ITEM_HEALING_PELLET_MEDIUM,Trung Hồi Huyết Đan,Consumable,Đan dược cấp trung hồi phục sinh lực.,2,"{""restore_hp"": 80.0}",15
 ITEM_BLOOD_GINSENG,Huyết Sâm,Consumable,Dược liệu quý hiếm hồi máu số lượng lớn.,2,"{""restore_hp"": 150.0}",15
-stone_man_heart,Trái Tim Thạch Nhân,Food,"Trái tim của người đá (Thạch Nhân), thức ăn của Toàn Lực Ứng Phó Cổ.",3,{},30
+stone_man_heart,Trái Tim Thạch Nhân,Food,"Trái tim của người đá (Thạch Nhân)",1,{},5
 lightning_pearl,Lôi Châu,Food,Viên ngọc ngưng tụ sét.,3,{},30
 twin_blood,Máu Song Sinh,Food,Máu của cặp song sinh.,3,{},30
 sword_qi,Kiếm Khí,Food,Khí tức sắc bén của kiếm.,3,{},30
@@ -72,7 +72,6 @@ ITEM_HEALING_PELLET_LARGE,Đại Hồi Huyết Đan,Consumable,Đan dược cấ
 ITEM_VITALITY_DEW,Sinh Cơ Linh Lộ,Consumable,Dược dịch hồi phục liên tục theo thời gian.,3,"{""regen_hp_out_of_combat"": 300.0}",30
 sun_flame,Thái Dương Hỏa,Food,Ngọn lửa chứa khí tức mặt trời.,4,{},60
 heaven_qi,Thiên Khí,Food,Khí tức của bầu trời.,4,{},60
-hundred_year_lifespan_gu,Bách Niên Thọ Cổ,Material,Thọ cổ trăm năm dùng trong công thức Mộc Mị tiến giai.,4,{},60
 nine_palace_flower,Cửu Cung Hoa,Material,Phụ liệu luyện Cốt Dực Cổ.,4,{},60
 summit_stone,Vấn Đỉnh Thạch,Material,Đá phụ liệu luyện Cốt Dực Cổ.,4,{},60
 golden_crow_meteor,Kim Ô Lưu Tinh,Material,Tinh thạch phụ liệu luyện Cốt Dực Cổ.,4,{},60
