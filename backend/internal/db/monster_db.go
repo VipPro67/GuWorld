@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"encoding/json"
+	"math/rand"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -162,4 +163,77 @@ func FindSpecialCell(tx *sql.Tx, regionID string, x, y int) (models.Cell, bool, 
 		return cell, false, err
 	}
 	return cell, true, nil
+}
+
+// PickDeterministicMonsterFromRegion picks a monster deterministically using a seed
+func PickDeterministicMonsterFromRegion(tx *sql.Tx, regionID string, seed int64) (string, int, int, error) {
+	var monsterID string
+	var minRank, maxRank int
+
+	rng := rand.New(rand.NewSource(seed))
+
+	// Get all possible active random/roaming spawns for this region
+	rows, err := tx.Query(`
+		SELECT monster_id, min_rank, max_rank
+		FROM monster_spawns
+		WHERE region_id = $1 AND spawn_mode IN ('Roaming', 'Random') AND is_active = TRUE
+		ORDER BY monster_id ASC
+	`, regionID)
+	
+	if err == nil {
+		defer rows.Close()
+		type spawn struct {
+			monsterID string
+			minRank   int
+			maxRank   int
+		}
+		var spawns []spawn
+		for rows.Next() {
+			var s spawn
+			if errScan := rows.Scan(&s.monsterID, &s.minRank, &s.maxRank); errScan == nil {
+				spawns = append(spawns, s)
+			}
+		}
+
+		if len(spawns) > 0 {
+			picked := spawns[rng.Intn(len(spawns))]
+			return picked.monsterID, picked.minRank, picked.maxRank, nil
+		}
+	}
+
+	// Fallback to random Normal monster template if no random spawn configured
+	rows, err = tx.Query(`
+		SELECT id FROM monster_templates 
+		WHERE type = 'Normal' AND is_active = TRUE 
+		ORDER BY id ASC
+	`)
+	if err != nil {
+		return "", 1, 1, err
+	}
+	defer rows.Close()
+
+	var templates []string
+	for rows.Next() {
+		var id string
+		if errScan := rows.Scan(&id); errScan == nil {
+			templates = append(templates, id)
+		}
+	}
+
+	if len(templates) == 0 {
+		return "", 1, 1, sql.ErrNoRows
+	}
+
+	monsterID = templates[rng.Intn(len(templates))]
+
+	// Fetch region min/max rank for fallback
+	err = tx.QueryRow(`
+		SELECT min_rank, max_rank FROM regions WHERE id = $1
+	`, regionID).Scan(&minRank, &maxRank)
+	if err != nil {
+		minRank = 1
+		maxRank = 1
+	}
+
+	return monsterID, minRank, maxRank, nil
 }

@@ -202,7 +202,7 @@ export const FeedbackView: React.FC = () => {
           <div className="text-[11px] leading-relaxed text-fuchsia-300/90 font-mono">
             <span className="font-bold text-fuchsia-200">Bổng lộc Thiên Đạo:</span> Mọi sớ trình được phê duyệt triển khai (
             <span className="text-amber-300">Đang thực hiện</span> hoặc <span className="text-emerald-300">Đã hoàn thành</span>)
-            sẽ nhận được bổng lộc trực tiếp từ Bảo Hoàng Thiên: <span className="font-bold text-yellow-500">500 Nguyên Thạch</span> cho Cổ sư phàm nhân hoặc <span className="font-bold text-purple-400">5 Tiên Nguyên Thạch</span> cho Cổ Tiên!
+            sẽ nhận được bổng lộc trực tiếp
           </div>
         </div>
       </div>

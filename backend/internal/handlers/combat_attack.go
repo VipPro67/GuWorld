@@ -426,7 +426,8 @@ func CombatAttack(c *gin.Context) {
 								logs = append(logs, fmt.Sprintf("-> %s thi triển %s phòng thủ, nhận %.1f Khiên hộ thể (Virtual Shield: %.1f).", refCaster.Name, spec.Name, shieldVal, refCaster.VirtualShield))
 							} else if isAttack {
 								hasBypass := spec.Effects.Active != nil && spec.Effects.Active.CurveAttack
-								targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, spec.TargetType, prefX, prefY, hasBypass)
+								targetType := spec.Effects.Active.TargetSelector;
+								targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, targetType, prefX, prefY, hasBypass)
 								if len(targetsIdx) > 0 {
 									logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s!", refCaster.Name, spec.Name))
 									for _, eIdx := range targetsIdx {

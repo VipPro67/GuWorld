@@ -59,6 +59,7 @@ export default function Home() {
     refineGu,
     exploreNode,
     retreat,
+    fleeCombat,
     buyShopItem,
     sellShopItem,
     equipGu,
@@ -195,7 +196,7 @@ export default function Home() {
               enemy={player.active_combat!}
               guDictionary={guDictionary}
               actionLoading={actionLoading}
-              onRetreat={retreat}
+              onRetreat={fleeCombat}
             />
           </div>
         ) : currentView === "dashboard" ? (

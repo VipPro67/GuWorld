@@ -36,13 +36,10 @@ func (e ItemEffects) Value() (driver.Value, error) {
 type ItemSpec struct {
 	ID          string      `json:"id"`
 	Name        string      `json:"name"`
-	Type        string      `json:"type"`          // E.g. "Currency", "Consumable", "Food", "Material"
-	ItemType    string      `json:"item_type"`     // Backward compatibility for frontend
-	Rarity      int         `json:"rarity"`
+	Type        string      `json:"type"`      // E.g. "Currency", "Consumable", "Food", "Material"
+	ItemType    string      `json:"item_type"` // Backward compatibility for frontend
 	Rank        int         `json:"rank"`
-	Path        string      `json:"path"`
 	Effects     ItemEffects `json:"effects"`
-	Tags        []string    `json:"tags"`
 	Description string      `json:"description"`
 	BasePrice   int         `json:"base_price"`
 }
@@ -53,7 +50,7 @@ var ItemRegistry = make(map[string]ItemSpec)
 // LoadItemRegistry queries the database and populates the in-memory cache
 func LoadItemRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
-		SELECT id, name, item_type, rarity, rank, path, effects, tags, description, COALESCE(base_price, 0)
+		SELECT id, name, item_type, rank, effects, description, COALESCE(base_price, 0)
 		FROM item_dictionary
 	`)
 	if err != nil {
@@ -67,11 +64,9 @@ func LoadItemRegistry(db *sql.DB) error {
 
 	for rows.Next() {
 		var item ItemSpec
-		var tagsRaw []byte
 		err = rows.Scan(
-			&item.ID, &item.Name, &item.Type, &item.Rarity,
-			&item.Rank, &item.Path, &item.Effects, &tagsRaw,
-			&item.Description, &item.BasePrice,
+			&item.ID, &item.Name, &item.Type, &item.Rank,
+			&item.Effects, &item.Description, &item.BasePrice,
 		)
 		if err != nil {
 			log.Printf("Warning: failed to scan Item spec row: %v", err)
@@ -79,12 +74,6 @@ func LoadItemRegistry(db *sql.DB) error {
 		}
 
 		item.ItemType = item.Type // align for backward compatibility
-		if len(tagsRaw) > 0 {
-			_ = json.Unmarshal(tagsRaw, &item.Tags)
-		} else {
-			item.Tags = []string{}
-		}
-
 		newRegistry[item.ID] = item
 		count++
 	}

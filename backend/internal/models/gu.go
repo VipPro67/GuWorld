@@ -22,19 +22,19 @@ type ActiveEffect struct {
 	SummonMonsterID     string  `json:"summon_monster_id,omitempty"`
 	SummonPosition      string  `json:"summon_position,omitempty"`
 	InheritStatsPercent float64 `json:"inherit_stats_percent,omitempty"`
-	
-	Range               float64 `json:"range,omitempty"`
-	CurveAttack         bool    `json:"curve_attack,omitempty"`
-	ManaRegen           float64 `json:"mana_regen,omitempty"`
-	WoodTransformation  bool    `json:"wood_transformation,omitempty"`
-	BloodDrain          bool    `json:"blood_drain,omitempty"`
-	Replicate           bool    `json:"replicate,omitempty"`
-	LifeStealRate       float64 `json:"lifesteal_rate,omitempty"`
-	RefineManaTier      float64 `json:"refine_mana_tier,omitempty"`
-	DamageMult          float64 `json:"damage_mult,omitempty"`
-	CleansingPower      float64 `json:"cleansing_power,omitempty"`
-	SummonPhantom       bool    `json:"summon_phantom,omitempty"`
-	GenerateGu          bool    `json:"generate_gu,omitempty"`
+
+	Range              float64 `json:"range,omitempty"`
+	CurveAttack        bool    `json:"curve_attack,omitempty"`
+	ManaRegen          float64 `json:"mana_regen,omitempty"`
+	WoodTransformation bool    `json:"wood_transformation,omitempty"`
+	BloodDrain         bool    `json:"blood_drain,omitempty"`
+	Replicate          bool    `json:"replicate,omitempty"`
+	LifeStealRate      float64 `json:"lifesteal_rate,omitempty"`
+	RefineManaTier     float64 `json:"refine_mana_tier,omitempty"`
+	DamageMult         float64 `json:"damage_mult,omitempty"`
+	CleansingPower     float64 `json:"cleansing_power,omitempty"`
+	SummonPhantom      bool    `json:"summon_phantom,omitempty"`
+	GenerateGu         bool    `json:"generate_gu,omitempty"`
 }
 
 type PassiveEffect struct {
@@ -79,13 +79,10 @@ type GuDictionaryItem struct {
 	HungerRate   int       `json:"hunger_rate"`
 	MaxHunger    int       `json:"max_hunger"`
 	Description  string    `json:"description"`
-	Rarity       string    `json:"rarity"`
-	IsImmortal   bool      `json:"is_immortal"`
 	PrimaryRole  string    `json:"primary_role"`
 	CombatRoles  []string  `json:"combat_roles"`
 	CombatTags   []string  `json:"combat_tags"`
 	SupportTags  []string  `json:"support_tags"`
-	TargetType   string    `json:"target_type"`
 	BasePrice    int       `json:"base_price"`
 }
 
@@ -114,7 +111,7 @@ func (g *GuEffects) Scan(value interface{}) error {
 	if !ok {
 		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 	}
-	
+
 	// Khởi tạo Other là mảng rỗng thay vì nil để dễ dùng
 	if err := json.Unmarshal(b, g); err != nil {
 		return err
@@ -132,20 +129,42 @@ func (g GuEffects) Value() (driver.Value, error) {
 func GetFlatGuEffects(gu Gu) map[string]float64 {
 	res := make(map[string]float64)
 	if gu.Effects.Active != nil {
-		if gu.Effects.Active.DamageFlat > 0 { res["damage"] = gu.Effects.Active.DamageFlat }
-		if gu.Effects.Active.ShieldFlat > 0 { res["defense"] = gu.Effects.Active.ShieldFlat }
-		if gu.Effects.Active.DamageMult > 0 { res["damage_multiplier"] = gu.Effects.Active.DamageMult }
-		if gu.Effects.Active.ApplyStatus == "BLEED" { res["bleed"] = gu.Effects.Active.StatusTickDamage }
-		if gu.Effects.Active.LifeStealRate > 0 { res["lifesteal"] = gu.Effects.Active.LifeStealRate }
-		if gu.Effects.Active.HealFlat > 0 { res["heal"] = gu.Effects.Active.HealFlat }
-		if gu.Effects.Active.BloodDrain { res["blood_drain"] = 1.0 }
+		if gu.Effects.Active.DamageFlat > 0 {
+			res["damage"] = gu.Effects.Active.DamageFlat
+		}
+		if gu.Effects.Active.ShieldFlat > 0 {
+			res["defense"] = gu.Effects.Active.ShieldFlat
+		}
+		if gu.Effects.Active.DamageMult > 0 {
+			res["damage_multiplier"] = gu.Effects.Active.DamageMult
+		}
+		if gu.Effects.Active.ApplyStatus == "BLEED" {
+			res["bleed"] = gu.Effects.Active.StatusTickDamage
+		}
+		if gu.Effects.Active.LifeStealRate > 0 {
+			res["lifesteal"] = gu.Effects.Active.LifeStealRate
+		}
+		if gu.Effects.Active.HealFlat > 0 {
+			res["heal"] = gu.Effects.Active.HealFlat
+		}
+		if gu.Effects.Active.BloodDrain {
+			res["blood_drain"] = 1.0
+		}
 		res["channel_time"] = 0 // default
 	}
 	if gu.Effects.Passive != nil {
-		if gu.Effects.Passive.StatBaseAttack > 0 { res["flat_damage"] = gu.Effects.Passive.StatBaseAttack }
-		if gu.Effects.Passive.StatBaseDefense > 0 { res["flat_defense"] = gu.Effects.Passive.StatBaseDefense }
-		if gu.Effects.Passive.Investigation > 0 { res["success_rate_bonus"] = gu.Effects.Passive.Investigation }
-		if gu.Effects.Passive.PathConflictReduction > 0 { res["path_conflict_reduction"] = gu.Effects.Passive.PathConflictReduction }
+		if gu.Effects.Passive.StatBaseAttack > 0 {
+			res["flat_damage"] = gu.Effects.Passive.StatBaseAttack
+		}
+		if gu.Effects.Passive.StatBaseDefense > 0 {
+			res["flat_defense"] = gu.Effects.Passive.StatBaseDefense
+		}
+		if gu.Effects.Passive.Investigation > 0 {
+			res["success_rate_bonus"] = gu.Effects.Passive.Investigation
+		}
+		if gu.Effects.Passive.PathConflictReduction > 0 {
+			res["path_conflict_reduction"] = gu.Effects.Passive.PathConflictReduction
+		}
 	}
 	return res
 }
@@ -183,12 +202,15 @@ func LoadGuRegistry(db *sql.DB) error {
 	for rows.Next() {
 		var item GuDictionaryItem
 		var pathRaw, foodTypesRaw, combatRolesRaw, combatTagsRaw, supportTagsRaw []byte
+		var targetTypeRaw, rarityRaw []byte
+		var isImmortalRaw bool
 		err = rows.Scan(
 			&item.ID, &item.Name, &item.Rank, &pathRaw,
 			&item.Type, &item.BaseManaCost,
 			&item.Effects, &foodTypesRaw, &item.HungerRate,
-			&item.MaxHunger, &item.Description, &item.TargetType,
-			&item.Rarity, &item.IsImmortal, &item.PrimaryRole,
+			&item.MaxHunger, &item.Description,
+			&targetTypeRaw, &rarityRaw, &isImmortalRaw, // Added missing 3 destinations
+			&item.PrimaryRole,
 			&combatRolesRaw, &combatTagsRaw, &supportTagsRaw, &item.BasePrice,
 		)
 		if err != nil {

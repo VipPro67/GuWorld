@@ -703,6 +703,9 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		if active.ApplyStatus == "BLEED" {
 			act.BleedPerTurn += active.StatusTickDamage
 		}
+		if active.ApplyStatus == "POISON" {
+			act.PoisonPerTurn += active.StatusTickDamage
+		}
 		if active.LifeStealRate > 0 {
 			act.LifeStealPct += active.LifeStealRate
 		}
@@ -711,6 +714,16 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		}
 		if active.BloodDrain {
 			act.LifeStealPct += 0.5
+		}
+		if active.SummonPhantom {
+			act.PhantomDmg += actor.BaseAttack
+		}
+		if active.RefineManaTier > 0 {
+			boost := active.RefineManaTier * 0.20
+			act.Damage += act.Damage * boost
+		}
+		if active.WoodTransformation {
+			act.Defense += 30.0
 		}
 	}
 
@@ -723,7 +736,10 @@ func hasCombatActiveEffects(spec *models.GuDictionaryItem) bool {
 		return false
 	}
 	active := spec.Effects.Active
-	return active.DamageFlat > 0 || active.DamageMult > 0 || active.ShieldFlat > 0 || active.ApplyStatus != "" || active.LifeStealRate > 0 || active.HealFlat > 0 || active.BloodDrain
+	return active.DamageFlat > 0 || active.DamageMult > 0 || active.ShieldFlat > 0 ||
+		active.ApplyStatus != "" || active.LifeStealRate > 0 || active.HealFlat > 0 ||
+		active.BloodDrain || active.SummonPhantom || active.RefineManaTier > 0 ||
+		active.WoodTransformation || active.ManaRegen > 0 || active.CleansingPower > 0
 }
 
 func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlot) simulator.SimAction {

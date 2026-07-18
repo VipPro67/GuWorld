@@ -815,7 +815,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                         <span className="text-zinc-300">{preferredFoodName}</span>
                                       </div>
                                       <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
-                                        <span className="text-zinc-600 font-mono block mb-1">Độ đói mỗi giờ</span>
+                                        <span className="text-zinc-600 font-mono block mb-1">Độ đói mỗi 3 giờ</span>
                                         <span className="text-zinc-300">{spec.hunger_rate}/h</span>
                                       </div>
                                       {spec.effects && Object.keys(spec.effects).length > 0 && (

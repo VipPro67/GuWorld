@@ -773,6 +773,7 @@ interface GameState {
   currentView: string;
   setView: (view: string) => void;
   retreat: () => Promise<void>;
+  fleeCombat: () => Promise<void>;
   combatSettings: AutoCombatConfig | null;
   combatSettingsLoading: boolean;
   fetchCombatSettings: () => Promise<void>;
@@ -2628,6 +2629,36 @@ export const useGameStore = create<GameState>((set, get) => {
     } catch (err: any) {
       set({ error: err.message });
       get().addLog(`Rút lui thất bại: ${err.message}`);
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  fleeCombat: async () => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/explore/flee/${player.id}`, {
+        method: "POST",
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Bỏ chạy thất bại.");
+      }
+
+      setPlayerFromServer(data.player, { currentView: "explore" });
+      get().addLog(data.log || "Đạo hữu đã bỏ chạy an toàn.");
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Bỏ chạy thất bại: ${err.message}`);
     } finally {
       set({ actionLoading: false });
     }

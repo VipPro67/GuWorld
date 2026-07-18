@@ -264,3 +264,61 @@ func Retreat(c *gin.Context) {
 		"log":    logMsg,
 	})
 }
+
+func Flee(c *gin.Context) {
+	playerIDStr := c.Param("id")
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	playerUUID, err := uuid.Parse(playerIDStr)
+	if err != nil || playerUUID != authID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: Aperture mismatch"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock player Aperture"})
+		return
+	}
+
+	if player.ActiveCombat == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có trận chiến nào để rút lui."})
+		return
+	}
+
+	logMsg := fmt.Sprintf("Đạo hữu đã bỏ chạy khỏi %s.", player.ActiveCombat.EnemyName)
+	player.ActiveCombat = nil
+
+	updateQuery := `
+		UPDATE players
+		SET active_combat = $1
+		WHERE id = $2
+	`
+	_, err = tx.Exec(updateQuery, player.ActiveCombat, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player status after fleeing"})
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"player": player,
+		"log":    logMsg,
+	})
+}
+

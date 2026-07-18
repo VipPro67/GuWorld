@@ -18,9 +18,18 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
+func GetCellSeed(x, y int, region string) int64 {
+	respawnWindow := time.Now().Unix() / 180
+	h := sha256.New()
+	h.Write([]byte(region))
+	binary.Write(h, binary.BigEndian, int64(x))
+	binary.Write(h, binary.BigEndian, int64(y))
+	binary.Write(h, binary.BigEndian, respawnWindow)
+	return int64(binary.BigEndian.Uint64(h.Sum(nil)[:8]))
+}
+
 // GenerateCell procedurally generates the cell content based on region, x, y coordinates
 func GenerateCell(x, y int, region string) models.Cell {
-	respawnWindow := time.Now().Unix() / 180
 	if x == 50 && y == 50 {
 		return models.Cell{X: x, Y: y, Type: "Empty", Content: "Thanh Bản Thôn (Safe Village)"}
 	}
@@ -29,13 +38,7 @@ func GenerateCell(x, y int, region string) models.Cell {
 		return models.Cell{X: x, Y: y, Type: "Empty", Content: "Biên Giới Cổ Giới (World Edge)"}
 	}
 
-	h := sha256.New()
-	h.Write([]byte(region))
-	binary.Write(h, binary.BigEndian, int64(x))
-	binary.Write(h, binary.BigEndian, int64(y))
-	binary.Write(h, binary.BigEndian, respawnWindow)
-	seed := int64(binary.BigEndian.Uint64(h.Sum(nil)[:8]))
-
+	seed := GetCellSeed(x, y, region)
 	rng := rand.New(rand.NewSource(seed))
 	roll := rng.Intn(100)
 
@@ -55,6 +58,8 @@ func ResolveCell(tx *sql.Tx, region string, x int, y int) (models.Cell, error) {
 
 	spawn, ok, err := db.FindFixedSpawn(tx, region, x, y)
 	if err == nil && ok {
+		seed := GetCellSeed(x, y, region)
+		rng := rand.New(rand.NewSource(seed))
 		t := "Monster"
 		if spawn.IsBossSpawn {
 			t = "Boss"
@@ -62,9 +67,9 @@ func ResolveCell(tx *sql.Tx, region string, x int, y int) (models.Cell, error) {
 
 		rank := spawn.MinRank
 		if spawn.MaxRank > spawn.MinRank {
-			rank += rand.Intn(spawn.MaxRank - spawn.MinRank + 1)
+			rank += rng.Intn(spawn.MaxRank - spawn.MinRank + 1)
 		}
-		subRank := rand.Intn(5) + 1
+		subRank := rng.Intn(5) + 1
 
 		return models.Cell{X: x, Y: y, Type: t, Content: spawn.MonsterID, Rank: rank, SubRank: subRank}, nil
 	}
@@ -72,18 +77,21 @@ func ResolveCell(tx *sql.Tx, region string, x int, y int) (models.Cell, error) {
 	cell := GenerateCell(x, y, region)
 
 	if cell.Type == "Monster" || cell.Type == "Boss" {
-		monsterID, minRank, maxRank, err := db.PickRandomMonsterFromRegion(tx, region)
+		seed := GetCellSeed(x, y, region)
+		rng := rand.New(rand.NewSource(seed))
+		
+		monsterID, minRank, maxRank, err := db.PickDeterministicMonsterFromRegion(tx, region, seed)
 		if err == nil && monsterID != "" {
 			cell.Content = monsterID
 			rank := minRank
 			if maxRank > minRank {
-				rank += rand.Intn(maxRank - minRank + 1)
+				rank += rng.Intn(maxRank - minRank + 1)
 			}
 			cell.Rank = rank
-			cell.SubRank = rand.Intn(5) + 1
+			cell.SubRank = rng.Intn(5) + 1
 		} else {
 			cell.Rank = 1
-			cell.SubRank = rand.Intn(5) + 1
+			cell.SubRank = rng.Intn(5) + 1
 		}
 	}
 

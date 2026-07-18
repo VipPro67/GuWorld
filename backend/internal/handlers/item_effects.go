@@ -3,11 +3,10 @@ package handlers
 import (
 	"fmt"
 	"math/rand"
-	"strings"
 
 	"github.com/google/uuid"
-	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
 type ItemEffectHandler func(player *models.Player, item models.ItemSpec) (string, error)
@@ -23,7 +22,6 @@ var ApplyItemEffects = map[string]ItemEffectHandler{
 	"restore_hp":             restoreHPEffect,
 	"restore_mana":           restoreManaEffect,
 	"soul_boost":             soulBoostEffect,
-	"dao_mark_gain":          daoMarkGainEffect,
 	"remove_negative_status": removeNegativeStatusEffect,
 	"lifespan_boost":         lifespanBoostEffect,
 	"open_mine_chest":        openMineChestEffect,
@@ -33,19 +31,25 @@ var ApplyItemEffects = map[string]ItemEffectHandler{
 
 func healApertureEffect(player *models.Player, item models.ItemSpec) (string, error) {
 	val := item.Effects["heal_aperture"]
-	if val <= 0 { return "", nil }
+	if val <= 0 {
+		return "", nil
+	}
 	if !isImmortalCultivator(player) {
 		return "", fmt.Errorf("%s chỉ dành cho Cổ Tiên để trị liệu tiên khiếu.", item.Name)
 	}
 	player.ApertureDamage -= val
-	if player.ApertureDamage < 0 { player.ApertureDamage = 0 }
+	if player.ApertureDamage < 0 {
+		player.ApertureDamage = 0
+	}
 	return fmt.Sprintf("Đạo hữu sử dụng %s, khôi phục %.0f hư tổn tiên khiếu!", item.Name, val), nil
 }
 
 func regenHPOutOfCombatEffect(player *models.Player, item models.ItemSpec) (string, error) {
 	val := item.Effects["regen_hp_out_of_combat"]
-	if val <= 0 { return "", nil }
-	
+	if val <= 0 {
+		return "", nil
+	}
+
 	// We'll just return success here and the main `UseItem` will handle Redis TTL or we can handle it here
 	// But `cache` package might cause circular dependency if imported? No, `handlers` imports `cache` in `marketplace.go`.
 	return fmt.Sprintf("Đạo hữu sử dụng %s, kích hoạt trạng thái Hồi Phục Sinh Lực trong 10 phút!", item.Name), nil
@@ -113,22 +117,6 @@ func soulBoostEffect(player *models.Player, item models.ItemSpec) (string, error
 	}
 	player.DaoMarks["soul"] += int(val)
 	return fmt.Sprintf("Hồn phách của đạo hữu được tráng kiện (+%.0f điểm Hồn lực).", val), nil
-}
-
-func daoMarkGainEffect(player *models.Player, item models.ItemSpec) (string, error) {
-	val := item.Effects["dao_mark_gain"]
-	if val <= 0 {
-		return "", nil
-	}
-	pathKey := strings.ToLower(strings.TrimSuffix(strings.ReplaceAll(item.Path, " ", ""), "Path"))
-	if pathKey == "" {
-		pathKey = "strength" // fallback
-	}
-	if player.DaoMarks == nil {
-		player.DaoMarks = make(models.DaoMarksMap)
-	}
-	player.DaoMarks[pathKey] += int(val)
-	return fmt.Sprintf("Nhận thêm %d Đạo Ngân %s.", int(val), item.Path), nil
 }
 
 func removeNegativeStatusEffect(player *models.Player, item models.ItemSpec) (string, error) {
@@ -263,7 +251,7 @@ func rollMaterialDrop(player *models.Player, item models.ItemSpec) string {
 		if spec.Type != "Material" {
 			continue
 		}
-		w := rankDropMultiplier(spec.Rank) * itemRarityWeight(spec.Rarity)
+		w := rankDropMultiplier(spec.Rank)
 		if w > 0 {
 			pool = append(pool, weightedMat{id: id, weight: w})
 			totalWeight += w
@@ -308,7 +296,7 @@ func rollGuDrop(player *models.Player, item models.ItemSpec) string {
 	var totalWeight float64
 
 	for id, spec := range models.GuRegistry {
-		w := rankDropMultiplier(spec.Rank) * guRarityWeight(spec.Rarity)
+		w := rankDropMultiplier(spec.Rank)
 		if w > 0 {
 			pool = append(pool, weightedGu{id: id, weight: w})
 			totalWeight += w
@@ -349,7 +337,7 @@ func rollGuDrop(player *models.Player, item models.ItemSpec) string {
 	isImmortal := false
 	if spec, ok := models.GuRegistry[chosenID]; ok {
 		guName = spec.Name
-		isImmortal = spec.IsImmortal
+		isImmortal = spec.Rank >= 6 // Assuming rank 6+ is immortal
 	}
 
 	if isImmortal {
@@ -427,4 +415,3 @@ func rollRecipeDrop(player *models.Player, _ models.ItemSpec) string {
 
 	return fmt.Sprintf("- Lĩnh ngộ bí phương: [%s] (Độ hoàn thiện: %.0f%%)\n", targetGuName, completionRate)
 }
-

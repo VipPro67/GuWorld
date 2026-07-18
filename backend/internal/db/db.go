@@ -65,11 +65,8 @@ func InitSchema() error {
 		id VARCHAR(50) PRIMARY KEY,
 		name VARCHAR(100) NOT NULL,
 		item_type VARCHAR(50) NOT NULL,
-		rarity INTEGER DEFAULT 1,
 		rank INTEGER DEFAULT 1,
-		path VARCHAR(50) NOT NULL DEFAULT 'None',
 		effects JSONB NOT NULL DEFAULT '{}',
-		tags JSONB NOT NULL DEFAULT '[]',
 		description TEXT
 	);`)
 	if err != nil {
@@ -803,11 +800,8 @@ func InitSchema() error {
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS human_qi DOUBLE PRECISION NOT NULL DEFAULT 0.0;`, "human_qi"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS next_tribulation_time TIMESTAMPTZ NULL;`, "next_tribulation_time"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS tribulation_count INTEGER NOT NULL DEFAULT 0;`, "tribulation_count"},
-		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS rarity INTEGER DEFAULT 1;`, "item_dictionary.rarity"},
 		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS rank INTEGER DEFAULT 1;`, "item_dictionary.rank"},
-		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS path VARCHAR(50) NOT NULL DEFAULT 'None';`, "item_dictionary.path"},
 		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{}';`, "item_dictionary.effects"},
-		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]';`, "item_dictionary.tags"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS lifespan DOUBLE PRECISION NOT NULL DEFAULT 100.0;`, "lifespan"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS max_lifespan DOUBLE PRECISION NOT NULL DEFAULT 100.0;`, "max_lifespan"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS time_speed_multiplier DOUBLE PRECISION NOT NULL DEFAULT 1.0;`, "time_speed_multiplier"},
@@ -1248,11 +1242,8 @@ func seedItemsFromCSV(filename string) error {
 	idIdx := colIndex(header, "id")
 	nameIdx := colIndex(header, "name")
 	typeIdx := colIndex(header, "item_type")
-	rarityIdx := colIndex(header, "rarity")
 	rankIdx := colIndex(header, "rank")
-	pathIdx := colIndex(header, "path")
 	effectsIdx := colIndex(header, "effects")
-	tagsIdx := colIndex(header, "tags")
 	descIdx := colIndex(header, "description")
 	basePriceIdx := colIndex(header, "base_price")
 
@@ -1275,22 +1266,9 @@ func seedItemsFromCSV(filename string) error {
 		name := strings.TrimSpace(row[nameIdx])
 		itemType := strings.TrimSpace(row[typeIdx])
 
-		rarity := 1
-		if rarityIdx >= 0 && rarityIdx < len(row) {
-			fmt.Sscanf(strings.TrimSpace(row[rarityIdx]), "%d", &rarity)
-		}
-
 		rank := 1
 		if rankIdx >= 0 && rankIdx < len(row) {
 			fmt.Sscanf(strings.TrimSpace(row[rankIdx]), "%d", &rank)
-		}
-
-		path := "None"
-		if pathIdx >= 0 && pathIdx < len(row) {
-			pathVal := strings.TrimSpace(row[pathIdx])
-			if pathVal != "" {
-				path = pathVal
-			}
 		}
 
 		effects := "{}"
@@ -1298,14 +1276,6 @@ func seedItemsFromCSV(filename string) error {
 			effVal := strings.TrimSpace(row[effectsIdx])
 			if effVal != "" {
 				effects = effVal
-			}
-		}
-
-		tags := "[]"
-		if tagsIdx >= 0 && tagsIdx < len(row) {
-			tagsVal := strings.TrimSpace(row[tagsIdx])
-			if tagsVal != "" {
-				tags = tagsVal
 			}
 		}
 
@@ -1320,13 +1290,13 @@ func seedItemsFromCSV(filename string) error {
 		}
 
 		_, err = DB.Exec(`
-			INSERT INTO item_dictionary (id, name, item_type, rarity, rank, path, effects, tags, description, base_price)
-			VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10)
+			INSERT INTO item_dictionary (id, name, item_type, rank, effects, description, base_price)
+			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
 			ON CONFLICT (id) DO UPDATE
-			SET name=EXCLUDED.name, item_type=EXCLUDED.item_type, rarity=EXCLUDED.rarity, rank=EXCLUDED.rank,
-			    path=EXCLUDED.path, effects=EXCLUDED.effects, tags=EXCLUDED.tags, description=EXCLUDED.description,
+			SET name=EXCLUDED.name, item_type=EXCLUDED.item_type, rank=EXCLUDED.rank,
+			    effects=EXCLUDED.effects, description=EXCLUDED.description,
 			    base_price=CASE WHEN EXCLUDED.base_price > 0 THEN EXCLUDED.base_price ELSE item_dictionary.base_price END
-		`, id, name, itemType, rarity, rank, path, effects, tags, desc, basePrice)
+		`, id, name, itemType, rank, effects, desc, basePrice)
 		if err != nil {
 			return fmt.Errorf("upsert item %s: %w", id, err)
 		}

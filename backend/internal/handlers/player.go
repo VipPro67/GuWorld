@@ -1211,14 +1211,6 @@ func FeedGu(c *gin.Context) {
 				itemSpec, ok := models.ItemRegistry[food]
 				if ok {
 					isFood := itemSpec.Type == "Food"
-					if !isFood {
-						for _, t := range itemSpec.Tags {
-							if t == "food" {
-								isFood = true
-								break
-							}
-						}
-					}
 					if isFood {
 						chosenFoodItem = food
 						break
@@ -1387,14 +1379,6 @@ func FeedGroup(c *gin.Context) {
 				itemSpec, ok := models.ItemRegistry[food]
 				if ok {
 					isFood := itemSpec.Type == "Food"
-					if !isFood {
-						for _, t := range itemSpec.Tags {
-							if t == "food" {
-								isFood = true
-								break
-							}
-						}
-					}
 					if isFood {
 						return food
 					}

@@ -1,7 +1,7 @@
 id,name,description,width,height,min_rank,max_rank,is_active
-qing_mao_mountain,Thanh Mao Sơn (Qing Mao Mountain),"Southern Border mountain containing Gu Yue, Bai, and Xiong clans.",100,100,1,5,True
-gu_luan_slope,Cổ Loạn Sườn (Gu Luan Slope),Southern Border region full of dangerous wild beast packs.,100,100,1,5,True
-three_kings_inheritance,Tam Vương Truyền Thừa (Three Kings Inheritance),An ancient inheritance ground with rich resources and relics.,100,100,1,5,True
+qing_mao_mountain,Thanh Mao Sơn,"Southern Border mountain containing Gu Yue, Bai, and Xiong clans.",100,100,1,3,True
+gu_luan_slope,Cổ Loạn Sườn,"Southern Border region full of dangerous wild beast packs.",100,100,2,5,True
+three_kings_inheritance,Tam Vương Truyền Thừa,"An ancient inheritance ground with rich resources and relics.",100,100,3,5,True
 blood_lake_purple_sand,Huyết Hồ Tử Sa,"Khu vực chết chóc, nơi chứa đầy thi thể hoang thú cổ đại và các tiên tài bị biến chất.",100,100,2,4,True
 shadow_glimpse_trench,Cống Ngầm Lược Ảnh,"Mê cung dưới lòng đất với lượng quái Ám Đạo khổng lồ, phù hợp để săn tài nguyên quý.",100,100,3,5,True
 azure_ghost_desert,Sa Mạc Thanh Quỷ,"Vùng đất khô cằn, nơi tồn tại những hồn thú mạnh mẽ và di tích Hồn Đạo.",100,100,4,6,True

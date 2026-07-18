@@ -96,32 +96,11 @@ func Simulate(state *CombatState) []CombatLog {
 	cicadaUsed := false
 	initialState := cloneCombatState(state)
 
-	totalShield := 0
-	for _, p := range state.Allies {
-		totalShield += p.VirtualShield
-	}
-	shieldMsg := "không có Khiên Ảo"
-	if totalShield > 0 {
-		shieldMsg = fmt.Sprintf("tổng cộng %d Khiên Ảo", totalShield)
-	}
 	logs = append(logs, CombatLog{
 		Turn:   0,
 		Action: "BATTLE_START",
-		Detail: fmt.Sprintf("Trận chiến bắt đầu. Kích hoạt Giáp Ảo trước trận... (%s)", shieldMsg),
+		Detail: "Trận chiến bắt đầu.",
 	})
-
-	for _, p := range state.Allies {
-		if p.VirtualShield > 0 {
-			logs = append(logs, CombatLog{
-				Turn:      0,
-				ActorId:   p.ID,
-				ActorName: p.Name,
-				Action:    "PRE_COMBAT_BARRIER",
-				Damage:    p.VirtualShield,
-				Detail:    fmt.Sprintf("%s được bao bọc bởi %d Giáp Ảo!", p.Name, p.VirtualShield),
-			})
-		}
-	}
 
 	maxTurns := 100
 
