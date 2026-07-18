@@ -552,7 +552,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                 disabled={actionLoading || isCurrentlyFeedingGroup}
                                 onClick={() => {
                                   if (hungryBugsCount === 0) {
-                                    useGameStore.getState().addToast("Không có Cổ trùng nào trong nhóm này đang đói.", "warning");
+                                    useGameStore.getState().addToast("Không có Cổ trùng nào trong nhóm này đang đói.", "info");
                                     return;
                                   }
                                   if (availableFood === 0) {
@@ -653,7 +653,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                         disabled={actionLoading || feedingId === gu.instance_id}
                                         onClick={() => {
                                           if (!isHungry) {
-                                            useGameStore.getState().addToast("Cổ trùng này đã no, không cần ăn thêm.", "warning");
+                                            useGameStore.getState().addToast("Cổ trùng này đã no, không cần ăn thêm.", "info");
                                             return;
                                           }
                                           if (availableFood === 0) {
