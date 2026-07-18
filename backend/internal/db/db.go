@@ -1096,7 +1096,7 @@ func SeedDictionaries() error {
 	}
 	if err := seedGusFromCSV("Gu.csv"); err != nil {
 		return fmt.Errorf("CSV Gu seed failed: %w", err)
-		
+
 	}
 	if err := seedRecipesFromCSV("Recipe.csv"); err != nil {
 		return fmt.Errorf("CSV recipe seed failed: %w", err)
@@ -1334,9 +1334,6 @@ func seedGusFromCSV(filename string) error {
 	typeIdx := col("gu_type")
 	hungerIdx := col("hunger_rate")
 	foodIdx := col("food_types")
-	if foodIdx < 0 {
-		foodIdx = col("food_type")
-	}
 	maxHungerIdx := col("max_hunger")
 	descIdx := col("description")
 	pathIdx := col("path")

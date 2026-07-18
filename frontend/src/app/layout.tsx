@@ -19,10 +19,7 @@ const siteUrl = process.env.NEXT_PUBLIC_BACKEND_URL
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: {
-    default: "Cổ Giới",
-    template: "%s | Cổ Giới",
-  },
+  title: "Cổ Giới - Game Cổ Chân Nhân Online",
   description: "Khai mở Không Khiếu, thâm nhập Thế Giới, tích lũy Nguyên Thạch, luyện hóa Cổ Trùng. Trò chơi nhập vai tu tiên mô phỏng theo tiểu thuyết Cổ Chân Nhân.",
   keywords: ["Cổ Giới", "Cổ Chân Nhân", "web game", "tu tiên", "nhập vai", "Cổ Trùng", "Nguyên Thạch", "Thanh Mao Sơn"],
   authors: [{ name: "Cổ Giới Development" }],

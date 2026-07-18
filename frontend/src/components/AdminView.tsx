@@ -34,6 +34,7 @@ import {
   ListTodo,
   BookOpen,
   Database,
+  FlaskConical,
 } from "lucide-react";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
@@ -229,6 +230,24 @@ export const AdminView: React.FC = () => {
   const [showMineEdit, setShowMineEdit] = useState<number | null>(null);
   const [mineEditRarity, setMineEditRarity] = useState("");
 
+  // ----- Dictionary state -----
+  const [dataTab, setDataTab] = useState<"import" | "gus" | "items" | "recipes">("import");
+  const [gus, setGus] = useState<any[]>([]);
+  const [gusLoading, setGusLoading] = useState(false);
+  const [guEdit, setGuEdit] = useState<any | null>(null);
+  const [items, setItems] = useState<any[]>([]);
+  const [itemsLoading, setItemsLoading] = useState(false);
+  const [itemEdit, setItemEdit] = useState<any | null>(null);
+  const [recipes, setRecipes] = useState<any[]>([]);
+  const [recipesLoading, setRecipesLoading] = useState(false);
+  const [recipeEdit, setRecipeEdit] = useState<any | null>(null);
+  const [dictGuSearch, setDictGuSearch] = useState("");
+  const [guSortField, setGuSortField] = useState<string>("id");
+  const [guSortDir, setGuSortDir] = useState<"asc" | "desc">("asc");
+  const [dictItemSearch, setDictItemSearch] = useState("");
+  const [itemSortField, setItemSortField] = useState<string>("id");
+  const [itemSortDir, setItemSortDir] = useState<"asc" | "desc">("asc");
+
   // ----- Sect state -----
   const [sects, setSects] = useState<any[]>([]);
   const [sectsLoading, setSectsLoading] = useState(false);
@@ -304,6 +323,22 @@ export const AdminView: React.FC = () => {
     } catch {} finally { setMineLoading(false); }
   }, []);
 
+  const fetchGus = useCallback(async () => {
+    setGusLoading(true);
+    try { const res = await authFetch(`${BACKEND_URL}/api/admin/gu-dictionary`); if (res.ok) setGus(await res.json()); }
+    catch {} finally { setGusLoading(false); }
+  }, []);
+  const fetchItems = useCallback(async () => {
+    setItemsLoading(true);
+    try { const res = await authFetch(`${BACKEND_URL}/api/admin/item-dictionary`); if (res.ok) setItems(await res.json()); }
+    catch {} finally { setItemsLoading(false); }
+  }, []);
+  const fetchRecipes = useCallback(async () => {
+    setRecipesLoading(true);
+    try { const res = await authFetch(`${BACKEND_URL}/api/admin/recipes`); if (res.ok) setRecipes(await res.json()); }
+    catch {} finally { setRecipesLoading(false); }
+  }, []);
+
   const fetchAuditLogs = useCallback(async () => {
     setAuditLogLoading(true);
     try {
@@ -338,6 +373,8 @@ export const AdminView: React.FC = () => {
   useEffect(() => {
     if (section === "mines") fetchMineSlots();
   }, [section, fetchMineSlots]);
+
+  useEffect(() => { if (section === "data") { if (dataTab === "gus") fetchGus(); else if (dataTab === "items") fetchItems(); else if (dataTab === "recipes") fetchRecipes(); } }, [section, dataTab, fetchGus, fetchItems, fetchRecipes]);
 
   useEffect(() => {
     if (selectedSectId) {
@@ -1389,44 +1426,177 @@ export const AdminView: React.FC = () => {
         </>
       )}
 
-      {/* Data section: import/export CSV */}
+      {/* Data section: import/export + dictionary management */}
       {section === "data" && (
-        <div className="space-y-6">
-          <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-6">
-            <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2 mb-2">
-              <Database className="w-4 h-4 text-emerald-400" />
-              Quản Lý Dữ Liệu
-            </h3>
-            <p className="text-xs text-zinc-500 mb-6">
-              Import dữ liệu từ file CSV vào database, hoặc export dữ liệu từ database ra file CSV.
-              Dùng khi cần đồng bộ dữ liệu game sau khi chỉnh sửa file CSV.
-            </p>
-            <div className="flex flex-wrap gap-4">
-              <button
-                disabled={actionLoading}
-                onClick={async () => {
-                  if (!confirm("Import sẽ ghi đè dữ liệu hiện tại theo cơ chế UPSERT. Tiếp tục?")) return;
-                  const ok = await exec(`${BACKEND_URL}/api/admin/data/import`, "POST", {});
-                  if (ok) addToast("Import dữ liệu từ CSV thành công!", "success");
-                }}
-                className="flex items-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer"
-              >
-                <Database className="w-4 h-4" />
-                {actionLoading ? "Đang xử lý..." : "Import CSV → Database"}
-              </button>
-              <button
-                disabled={actionLoading}
-                onClick={async () => {
-                  const ok = await exec(`${BACKEND_URL}/api/admin/data/export`, "POST", {});
-                  if (ok) addToast("Export dữ liệu ra CSV thành công!", "success");
-                }}
-                className="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer"
-              >
-                <RefreshCw className="w-4 h-4" />
-                {actionLoading ? "Đang xử lý..." : "Export Database → CSV"}
-              </button>
-            </div>
+        <div className="space-y-4">
+          <div className="border-b border-zinc-800/80 flex gap-0 mb-4">
+            <button onClick={() => setDataTab("import")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${dataTab === "import" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <Database className="w-3.5 h-3.5 inline mr-1.5" />Import / Export
+            </button>
+            <button onClick={() => setDataTab("gus")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${dataTab === "gus" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <Bug className="w-3.5 h-3.5 inline mr-1.5" />Cổ trùng
+            </button>
+            <button onClick={() => setDataTab("items")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${dataTab === "items" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <Package className="w-3.5 h-3.5 inline mr-1.5" />Vật phẩm
+            </button>
+            <button onClick={() => setDataTab("recipes")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${dataTab === "recipes" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <FlaskConical className="w-3.5 h-3.5 inline mr-1.5" />Cổ phương
+            </button>
           </div>
+
+          {dataTab === "import" && (
+            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-6">
+              <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2 mb-2">
+                <Database className="w-4 h-4 text-emerald-400" />
+                Import / Export CSV
+              </h3>
+              <p className="text-xs text-zinc-500 mb-6">
+                Import dữ liệu từ file CSV vào database, hoặc export dữ liệu từ database ra file CSV.
+              </p>
+              <div className="flex flex-wrap gap-4">
+                <button disabled={actionLoading} onClick={async () => { if (!confirm("Import sẽ ghi đè dữ liệu hiện tại theo cơ chế UPSERT. Tiếp tục?")) return; const ok = await exec(`${BACKEND_URL}/api/admin/data/import`, "POST", {}); if (ok) addToast("Import thành công!", "success"); }} className="flex items-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer">
+                  <Database className="w-4 h-4" />
+                  {actionLoading ? "Đang xử lý..." : "Import CSV → Database"}
+                </button>
+                <button disabled={actionLoading} onClick={async () => { const ok = await exec(`${BACKEND_URL}/api/admin/data/export`, "POST", {}); if (ok) addToast("Export thành công!", "success"); }} className="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer">
+                  <RefreshCw className="w-4 h-4" />
+                  {actionLoading ? "Đang xử lý..." : "Export Database → CSV"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {dataTab === "gus" && (
+            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2"><Bug className="w-4 h-4 text-amber-400" />Danh Sách Cổ Trùng</h3>
+                <button onClick={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Attack", base_mana_cost: 0, effects: { active: {}, passive: {}, house: {} }, food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: "", is_immortal: false, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0 })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
+              </div>
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                <input value={dictGuSearch} onChange={e => setDictGuSearch(e.target.value)} placeholder="Tìm kiếm theo ID hoặc tên..." className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 placeholder-zinc-500" />
+              </div>
+              {gusLoading ? <div className="flex justify-center py-8"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div> : gus.length === 0 ? <div className="text-center py-8 text-zinc-500 text-xs">Không có cổ trùng nào.</div> : (
+                <div className="overflow-x-auto rounded-xl border border-zinc-800/80 max-h-[500px] overflow-y-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px] sticky top-0">
+                      {["ID", "Tên", "Rank", "Loại", "Giá"].map(col => {
+                        const fieldMap: Record<string, string> = { "ID": "id", "Tên": "name", "Rank": "rank", "Loại": "gu_type", "Giá": "base_price" };
+                        const f = fieldMap[col];
+                        return <th key={col} onClick={() => { if (f) { if (guSortField === f) setGuSortDir(d => d === "asc" ? "desc" : "asc"); else { setGuSortField(f); setGuSortDir("asc"); } } }} className={`px-3 py-2.5 font-semibold ${f ? "cursor-pointer hover:text-zinc-200 select-none" : "cursor-default"} ${guSortField === f ? "text-amber-400" : ""} ${col === "Giá" ? "text-right" : ""}`}>{col}{guSortField === f ? (guSortDir === "asc" ? " ▲" : " ▼") : ""}</th>
+                      })}
+                      <th className="px-3 py-2.5"></th>
+                    </tr></thead>
+                    <tbody>{(() => {
+                      const q = dictGuSearch.toLowerCase();
+                      const filtered = q ? gus.filter((g: any) => (g.id?.toLowerCase() || "").includes(q) || (g.name?.toLowerCase() || "").includes(q)) : [...gus];
+                      filtered.sort((a: any, b: any) => {
+                        let va = a[guSortField], vb = b[guSortField];
+                        if (typeof va === "string") va = va.toLowerCase();
+                        if (typeof vb === "string") vb = vb.toLowerCase();
+                        if (va < vb) return guSortDir === "asc" ? -1 : 1;
+                        if (va > vb) return guSortDir === "asc" ? 1 : -1;
+                        return 0;
+                      });
+                      return filtered.map((g: any) => (
+                        <tr key={g.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                          <td className="px-3 py-2.5 text-zinc-500 font-mono">{g.id}</td>
+                          <td className="px-3 py-2.5 font-semibold text-zinc-200">{g.name}</td>
+                          <td className="px-3 py-2.5 text-zinc-400">{g.rank}</td>
+                          <td className="px-3 py-2.5 text-zinc-400">{g.gu_type}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{g.base_price?.toLocaleString() || 0}</td>
+                          <td className="px-3 py-2.5 text-right">
+                            <button onClick={() => setGuEdit({ ...g, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects })} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
+                            <button onClick={async () => { if (!confirm(`Xóa ${g.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/gu-dictionary/${g.id}`, "DELETE"); if (ok) fetchGus(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
+                          </td>
+                        </tr>
+                      ));
+                    })()}</tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {dataTab === "items" && (
+            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2"><Package className="w-4 h-4 text-emerald-400" />Danh Sách Vật Phẩm</h3>
+                <button onClick={() => setItemEdit({ id: "", name: "", item_type: "Material", rank: 1, effects: {}, description: "", base_price: 0 })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
+              </div>
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                <input value={dictItemSearch} onChange={e => setDictItemSearch(e.target.value)} placeholder="Tìm kiếm theo ID hoặc tên..." className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 placeholder-zinc-500" />
+              </div>
+              {itemsLoading ? <div className="flex justify-center py-8"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div> : items.length === 0 ? <div className="text-center py-8 text-zinc-500 text-xs">Không có vật phẩm nào.</div> : (
+                <div className="overflow-x-auto rounded-xl border border-zinc-800/80 max-h-[500px] overflow-y-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px] sticky top-0">
+                      {["ID", "Tên", "Loại", "Rank", "Giá"].map(col => {
+                        const fieldMap: Record<string, string> = { "ID": "id", "Tên": "name", "Loại": "item_type", "Rank": "rank", "Giá": "base_price" };
+                        const f = fieldMap[col];
+                        return <th key={col} onClick={() => { if (f) { if (itemSortField === f) setItemSortDir(d => d === "asc" ? "desc" : "asc"); else { setItemSortField(f); setItemSortDir("asc"); } } }} className={`px-3 py-2.5 font-semibold ${f ? "cursor-pointer hover:text-zinc-200 select-none" : "cursor-default"} ${itemSortField === f ? "text-amber-400" : ""} ${col === "Giá" ? "text-right" : ""}`}>{col}{itemSortField === f ? (itemSortDir === "asc" ? " ▲" : " ▼") : ""}</th>
+                      })}
+                      <th className="px-3 py-2.5"></th>
+                    </tr></thead>
+                    <tbody>{(() => {
+                      const q = dictItemSearch.toLowerCase();
+                      const filtered = q ? items.filter((it: any) => (it.id?.toLowerCase() || "").includes(q) || (it.name?.toLowerCase() || "").includes(q)) : [...items];
+                      filtered.sort((a: any, b: any) => {
+                        let va = a[itemSortField], vb = b[itemSortField];
+                        if (typeof va === "string") va = va.toLowerCase();
+                        if (typeof vb === "string") vb = vb.toLowerCase();
+                        if (va < vb) return itemSortDir === "asc" ? -1 : 1;
+                        if (va > vb) return itemSortDir === "asc" ? 1 : -1;
+                        return 0;
+                      });
+                      return filtered.map((it: any) => (
+                        <tr key={it.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                          <td className="px-3 py-2.5 text-zinc-500 font-mono">{it.id}</td>
+                          <td className="px-3 py-2.5 font-semibold text-zinc-200">{it.name}</td>
+                          <td className="px-3 py-2.5 text-zinc-400">{it.item_type}</td>
+                          <td className="px-3 py-2.5 text-zinc-400">{it.rank}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{it.base_price?.toLocaleString() || 0}</td>
+                          <td className="px-3 py-2.5 text-right">
+                            <button onClick={() => setItemEdit({ ...it, effects: typeof it.effects === "string" ? JSON.parse(it.effects) : it.effects })} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
+                            <button onClick={async () => { if (!confirm(`Xóa ${it.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/item-dictionary/${it.id}`, "DELETE"); if (ok) fetchItems(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
+                          </td>
+                        </tr>
+                      ));
+                    })()}</tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {dataTab === "recipes" && (
+            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2"><FlaskConical className="w-4 h-4 text-emerald-400" />Danh Sách Cổ Phương</h3>
+                <button onClick={() => setRecipeEdit({ id: "", target_gu_id: "", target_gu_name: "", required_gus: {}, required_materials: {}, success_rate: 0.5, primeval_stones_cost: 0, immortal_essence_stones_cost: 0 })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
+              </div>
+              {recipesLoading ? <div className="flex justify-center py-8"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div> : recipes.length === 0 ? <div className="text-center py-8 text-zinc-500 text-xs">Không có cổ phương nào.</div> : (
+                <div className="overflow-x-auto rounded-xl border border-zinc-800/80 max-h-[500px] overflow-y-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px] sticky top-0"><th className="px-3 py-2.5 font-semibold">ID</th><th className="px-3 py-2.5 font-semibold">Cổ trùng đích</th><th className="px-3 py-2.5 font-semibold text-right">Tỉ lệ</th><th className="px-3 py-2.5 font-semibold text-right">Nguyên thạch</th><th className="px-3 py-2.5"></th></tr></thead>
+                    <tbody>{recipes.map((r: any) => (
+                      <tr key={r.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                        <td className="px-3 py-2.5 text-zinc-500 font-mono">{r.id}</td>
+                        <td className="px-3 py-2.5 font-semibold text-zinc-200">{r.target_gu_name || r.target_gu_id}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{(r.success_rate * 100).toFixed(0)}%</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{r.primeval_stones_cost?.toLocaleString() || 0}</td>
+                        <td className="px-3 py-2.5 text-right">
+                          <button onClick={() => setRecipeEdit({ ...r, required_gus: typeof r.required_gus === "string" ? JSON.parse(r.required_gus) : r.required_gus, required_materials: typeof r.required_materials === "string" ? JSON.parse(r.required_materials) : r.required_materials })} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
+                          <button onClick={async () => { if (!confirm(`Xóa ${r.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/recipes/${r.id}`, "DELETE"); if (ok) fetchRecipes(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
+                        </td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1781,6 +1951,219 @@ export const AdminView: React.FC = () => {
             </div>
           )}
         </>
+      )}
+
+      {/* Gu Edit Modal */}
+      {guEdit !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setGuEdit(null)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-2xl mx-4 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">{guEdit.id ? "Sửa" : "Thêm"} Cổ Trùng</h3>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID</label><input value={guEdit.id || ""} onChange={e => setGuEdit({...guEdit, id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tên</label><input value={guEdit.name || ""} onChange={e => setGuEdit({...guEdit, name: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Rank</label><input type="number" min={1} max={10} value={guEdit.rank} onChange={e => setGuEdit({...guEdit, rank: parseInt(e.target.value) || 1})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Loại</label><select value={guEdit.gu_type} onChange={e => setGuEdit({...guEdit, gu_type: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200"><option value="Attack">Attack</option><option value="Support">Support</option><option value="Defense">Defense</option><option value="House">House</option></select></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Hunger Rate</label><input type="number" min={1} value={guEdit.hunger_rate} onChange={e => setGuEdit({...guEdit, hunger_rate: parseInt(e.target.value) || 1})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Max Hunger</label><input type="number" value={guEdit.max_hunger} onChange={e => setGuEdit({...guEdit, max_hunger: parseInt(e.target.value) || 100})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Base Mana Cost</label><input type="number" step="0.1" value={guEdit.base_mana_cost} onChange={e => setGuEdit({...guEdit, base_mana_cost: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Base Price</label><input type="number" value={guEdit.base_price} onChange={e => setGuEdit({...guEdit, base_price: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Target Type</label><select value={guEdit.target_type || "SINGLE"} onChange={e => setGuEdit({...guEdit, target_type: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200"><option value="SINGLE">SINGLE</option><option value="ALL">ALL</option></select></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Rarity</label><input value={guEdit.rarity || ""} onChange={e => setGuEdit({...guEdit, rarity: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Primary Role</label><input value={guEdit.primary_role || ""} onChange={e => setGuEdit({...guEdit, primary_role: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="flex items-center gap-2 pt-5"><input type="checkbox" checked={guEdit.is_immortal} onChange={e => setGuEdit({...guEdit, is_immortal: e.target.checked})} className="rounded bg-zinc-800 border-zinc-700" /><span className="text-[11px] text-zinc-400">Bất Tử</span></label></div>
+            </div>
+            <div className="mb-4"><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Mô tả</label><textarea value={guEdit.description || ""} onChange={e => setGuEdit({...guEdit, description: e.target.value})} rows={2} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+            {/* JSON arrays as comma input */}
+            {[
+              { key: "path", label: "Path (cách nhau bằng dấu phẩy)" },
+              { key: "food_types", label: "Food Types (cách nhau bằng dấu phẩy)" },
+              { key: "combat_roles", label: "Combat Roles" },
+              { key: "combat_tags", label: "Combat Tags" },
+              { key: "support_tags", label: "Support Tags" },
+            ].map(f => (
+              <div key={f.key} className="mb-2">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">{f.label}</label>
+                <input value={(Array.isArray(guEdit[f.key]) ? guEdit[f.key] : []).join(", ")} onChange={e => setGuEdit({...guEdit, [f.key]: e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean)})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+              </div>
+            ))}
+            {/* Gu Effects - structured */}
+            <div className="mt-4 border-t border-zinc-800 pt-4">
+              <h4 className="text-xs font-bold text-zinc-400 mb-3 uppercase tracking-wider">Hiệu Ứng (Effects)</h4>
+              {["active", "passive", "house"].map(cat => {
+                const eff = guEdit.effects?.[cat] || {};
+                const activeEff = [
+                  { key: "damage_flat", label: "Damage Flat", type: "float" },
+                  { key: "damage_mult", label: "Damage Mult", type: "float" },
+                  { key: "heal_flat", label: "Heal Flat", type: "float" },
+                  { key: "shield_flat", label: "Shield Flat", type: "float" },
+                  { key: "mana_regen", label: "Mana Regen", type: "float" },
+                  { key: "lifesteal_rate", label: "Life Steal", type: "float" },
+                  { key: "apply_status", label: "Apply Status", type: "string" },
+                  { key: "status_tick_damage", label: "Status Tick Dmg", type: "float" },
+                  { key: "refine_mana_tier", label: "Refine Mana Tier", type: "float" },
+                  { key: "cleansing_power", label: "Cleansing Power", type: "float" },
+                ];
+                const passiveEff = [
+                  { key: "stat_base_attack", label: "Base Attack", type: "float" },
+                  { key: "stat_base_defense", label: "Base Defense", type: "float" },
+                  { key: "stat_base_hp", label: "Base HP", type: "float" },
+                  { key: "mana_regen_mult", label: "Mana Regen Mult", type: "float" },
+                  { key: "soul_refinement", label: "Soul Refinement", type: "float" },
+                  { key: "movement", label: "Movement", type: "float" },
+                  { key: "evasion", label: "Evasion", type: "float" },
+                  { key: "storage_capacity", label: "Storage", type: "float" },
+                  { key: "investigation", label: "Investigation", type: "float" },
+                  { key: "hearing", label: "Hearing", type: "float" },
+                  { key: "path_conflict_reduction", label: "Path Conflict Reduct", type: "float" },
+                ];
+                //otherEff 
+
+                const boolKeys = cat === "active" ? ["summon_phantom", "generate_gu", "blood_drain", "wood_transformation", "curve_attack", "replicate"] : [];
+                const fields = cat === "active" ? activeEff : cat === "passive" ? passiveEff : [];
+                return (
+                  <details key={cat} className="mb-2 bg-zinc-800/30 rounded-lg">
+                    <summary className="px-3 py-2 text-xs font-bold text-zinc-400 uppercase cursor-pointer">{cat} ({Object.keys(eff).length} fields)</summary>
+                    <div className="px-3 pb-3 grid grid-cols-3 gap-2">
+                      {fields.map(f => (
+                        <div key={f.key}>
+                          <label className="text-[10px] text-zinc-500 block">{f.label}</label>
+                          {f.type === "string" ? (
+                            <input value={eff[f.key] || ""} onChange={e => { const newEff = {...guEdit.effects}; newEff[cat] = {...newEff[cat], [f.key]: e.target.value}; setGuEdit({...guEdit, effects: newEff}) }} className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-xs text-zinc-200" />
+                          ) : (
+                            <input type="number" step="any" value={eff[f.key] || 0} onChange={e => { const v = parseFloat(e.target.value) || 0; const newEff = {...guEdit.effects}; newEff[cat] = {...newEff[cat], [f.key]: v}; setGuEdit({...guEdit, effects: newEff}) }} className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-xs text-zinc-200" />
+                          )}
+                        </div>
+                      ))}
+                      {boolKeys.map(k => (
+                        <label key={k} className="flex items-center gap-1.5 pt-4">
+                          <input type="checkbox" checked={!!eff[k]} onChange={e => { const newEff = {...guEdit.effects}; newEff[cat] = {...newEff[cat], [k]: e.target.checked}; setGuEdit({...guEdit, effects: newEff}) }} className="rounded bg-zinc-800 border-zinc-700 w-3 h-3" />
+                          <span className="text-[10px] text-zinc-400">{k}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setGuEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
+              <button onClick={async () => {
+                const body = { ...guEdit };
+                const isNew = !guEdit.id || guEdit.id.startsWith("__");
+                const url = isNew ? `${BACKEND_URL}/api/admin/gu-dictionary` : `${BACKEND_URL}/api/admin/gu-dictionary/${guEdit.id}`;
+                const method = isNew ? "POST" : "PUT";
+                const ok = await exec(url, method, body);
+                if (ok) { setGuEdit(null); fetchGus(); }
+              }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Item Edit Modal */}
+      {itemEdit !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setItemEdit(null)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-lg mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">{itemEdit.id ? "Sửa" : "Thêm"} Vật Phẩm</h3>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID</label><input value={itemEdit.id || ""} onChange={e => setItemEdit({...itemEdit, id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tên</label><input value={itemEdit.name || ""} onChange={e => setItemEdit({...itemEdit, name: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Loại</label><select value={itemEdit.item_type} onChange={e => setItemEdit({...itemEdit, item_type: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200"><option value="Material">Material</option><option value="Consumable">Consumable</option><option value="Food">Food</option><option value="Currency">Currency</option></select></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Rank</label><input type="number" min={1} value={itemEdit.rank} onChange={e => setItemEdit({...itemEdit, rank: parseInt(e.target.value) || 1})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              </div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Base Price</label><input type="number" value={itemEdit.base_price} onChange={e => setItemEdit({...itemEdit, base_price: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Mô tả</label><textarea value={itemEdit.description || ""} onChange={e => setItemEdit({...itemEdit, description: e.target.value})} rows={2} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              {/* Effects key-value pairs */}
+              <div className="border-t border-zinc-800 pt-3">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">Hiệu ứng (Effects) — key: value</label>
+                {Object.entries(itemEdit.effects || {}).map(([k, v]) => (
+                  <div key={k} className="flex gap-2 mb-1.5">
+                    <input value={k} onChange={e => { const newEff = {...itemEdit.effects}; const val = newEff[k]; delete newEff[k]; newEff[e.target.value] = val; setItemEdit({...itemEdit, effects: newEff}) }} className="flex-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" placeholder="key" />
+                    <input type="number" step="any" value={v as number} onChange={e => setItemEdit({...itemEdit, effects: {...itemEdit.effects, [k]: parseFloat(e.target.value) || 0}})} className="w-24 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" placeholder="value" />
+                    <button onClick={() => { const newEff = {...itemEdit.effects}; delete newEff[k]; setItemEdit({...itemEdit, effects: newEff}) }} className="text-red-400 hover:text-red-300 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
+                  </div>
+                ))}
+                <button onClick={() => setItemEdit({...itemEdit, effects: {...itemEdit.effects, [""]: 0}})} className="text-xs text-amber-400 hover:text-amber-300 cursor-pointer mt-1">+ Thêm hiệu ứng</button>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setItemEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
+              <button onClick={async () => {
+                const isNew = !itemEdit.id || itemEdit.id.startsWith("__");
+                const itemUrl = isNew ? `${BACKEND_URL}/api/admin/item-dictionary` : `${BACKEND_URL}/api/admin/item-dictionary/${itemEdit.id}`;
+                const clean = {...itemEdit, effects: Object.fromEntries(Object.entries(itemEdit.effects || {}).filter(([k]) => k.trim() !== ""))};
+                const ok = await exec(itemUrl, isNew ? "POST" : "PUT", clean);
+                if (ok) { setItemEdit(null); fetchItems(); }
+              }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Recipe Edit Modal */}
+      {recipeEdit !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setRecipeEdit(null)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-lg mx-4 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">{recipeEdit.id ? "Sửa" : "Thêm"} Cổ Phương</h3>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID</label><input value={recipeEdit.id || ""} onChange={e => setRecipeEdit({...recipeEdit, id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Cổ trùng đích</label>
+                  <select value={recipeEdit.target_gu_id} onChange={e => setRecipeEdit({...recipeEdit, target_gu_id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200">
+                    <option value="">Chọn...</option>
+                    {gus.map((g: any) => <option key={g.id} value={g.id}>{g.name} ({g.id})</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tỉ lệ thành công</label><input type="number" step="0.01" min={0} max={1} value={recipeEdit.success_rate} onChange={e => setRecipeEdit({...recipeEdit, success_rate: parseFloat(e.target.value) || 0.5})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Nguyên thạch</label><input type="number" value={recipeEdit.primeval_stones_cost} onChange={e => setRecipeEdit({...recipeEdit, primeval_stones_cost: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tiên nguyên thạch</label><input type="number" step="any" value={recipeEdit.immortal_essence_stones_cost} onChange={e => setRecipeEdit({...recipeEdit, immortal_essence_stones_cost: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              </div>
+              {/* Required Gus as key-value */}
+              <div className="border-t border-zinc-800 pt-3">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">Cổ trùng yêu cầu (required_gus): ID → số lượng</label>
+                {Object.entries(recipeEdit.required_gus || {}).map(([k, v]) => (
+                  <div key={k} className="flex gap-2 mb-1.5">
+                    <input value={k} onChange={e => { const newG = {...recipeEdit.required_gus}; const val = newG[k]; delete newG[k]; newG[e.target.value] = val; setRecipeEdit({...recipeEdit, required_gus: newG}) }} className="flex-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" list="gu-list" />
+                    <input type="number" min={1} value={v as number} onChange={e => setRecipeEdit({...recipeEdit, required_gus: {...recipeEdit.required_gus, [k]: parseInt(e.target.value) || 1}})} className="w-20 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" />
+                    <button onClick={() => { const newG = {...recipeEdit.required_gus}; delete newG[k]; setRecipeEdit({...recipeEdit, required_gus: newG}) }} className="text-red-400 hover:text-red-300 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
+                  </div>
+                ))}
+                <button onClick={() => setRecipeEdit({...recipeEdit, required_gus: {...recipeEdit.required_gus, "": 1}})} className="text-xs text-amber-400 hover:text-amber-300 cursor-pointer mt-1">+ Thêm Gu</button>
+              </div>
+              {/* Required Materials as key-value */}
+              <div className="border-t border-zinc-800 pt-3">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">Nguyên liệu yêu cầu (required_materials): ID → số lượng</label>
+                {Object.entries(recipeEdit.required_materials || {}).map(([k, v]) => (
+                  <div key={k} className="flex gap-2 mb-1.5">
+                    <input value={k} onChange={e => { const newM = {...recipeEdit.required_materials}; const val = newM[k]; delete newM[k]; newM[e.target.value] = val; setRecipeEdit({...recipeEdit, required_materials: newM}) }} className="flex-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" list="item-list" />
+                    <input type="number" min={1} value={v as number} onChange={e => setRecipeEdit({...recipeEdit, required_materials: {...recipeEdit.required_materials, [k]: parseInt(e.target.value) || 1}})} className="w-20 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" />
+                    <button onClick={() => { const newM = {...recipeEdit.required_materials}; delete newM[k]; setRecipeEdit({...recipeEdit, required_materials: newM}) }} className="text-red-400 hover:text-red-300 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
+                  </div>
+                ))}
+                <button onClick={() => setRecipeEdit({...recipeEdit, required_materials: {...recipeEdit.required_materials, "": 1}})} className="text-xs text-amber-400 hover:text-amber-300 cursor-pointer mt-1">+ Thêm nguyên liệu</button>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setRecipeEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
+              <button onClick={async () => {
+                const isNew = !recipeEdit.id || recipeEdit.id.startsWith("__");
+                const recipeUrl = isNew ? `${BACKEND_URL}/api/admin/recipes` : `${BACKEND_URL}/api/admin/recipes/${recipeEdit.id}`;
+                const clean = {
+                  ...recipeEdit,
+                  required_gus: Object.fromEntries(Object.entries(recipeEdit.required_gus || {}).filter(([k]) => k.trim() !== "")),
+                  required_materials: Object.fromEntries(Object.entries(recipeEdit.required_materials || {}).filter(([k]) => k.trim() !== "")),
+                };
+                const ok = await exec(recipeUrl, isNew ? "POST" : "PUT", clean);
+                if (ok) { setRecipeEdit(null); fetchRecipes(); }
+              }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
+              <datalist id="gu-list">{gus.map((g: any) => <option key={g.id} value={g.id} />)}</datalist>
+              <datalist id="item-list">{items.map((it: any) => <option key={it.id} value={it.id} />)}</datalist>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
