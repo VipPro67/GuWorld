@@ -143,6 +143,18 @@ func CombatAttack(c *gin.Context) {
 		return
 	}
 
+	// Virtual mode: auto-restore mana to max each turn
+	isVirtual := player.ActiveCombat.CombatMode == "virtual"
+	if isVirtual {
+		player.CurrentMana = player.MaxMana
+		for i := range player.ActiveCombat.Allies {
+			player.ActiveCombat.Allies[i].CurrentMana = player.ActiveCombat.Allies[i].MaxMana
+		}
+		for i := range player.ActiveCombat.Enemies {
+			player.ActiveCombat.Enemies[i].CurrentMana = player.ActiveCombat.Enemies[i].MaxMana
+		}
+	}
+
 	playerStats := CalculatePlayerStats(&player)
 	player.ActiveCombat.Allies[casterIdx].BaseAttack = playerStats["attack"]
 	player.ActiveCombat.Allies[casterIdx].BaseDefense = playerStats["defense"]
@@ -166,22 +178,26 @@ func CombatAttack(c *gin.Context) {
 		isUsingItem = true
 		player.ActiveCombat.ChargePoints = 0
 
-		if player.ActiveCombat.ItemsUsedCount >= 3 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Chỉ được dùng tối đa 3 vật phẩm trong mỗi trận chiến!"})
-			return
+		if !isVirtual {
+			if player.ActiveCombat.ItemsUsedCount >= 3 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Chỉ được dùng tối đa 3 vật phẩm trong mỗi trận chiến!"})
+				return
+			}
 		}
 		if player.ActiveCombat.ItemCooldowns == nil {
 			player.ActiveCombat.ItemCooldowns = make(map[string]int)
 		}
-		if player.ActiveCombat.ItemCooldowns[req.ItemID] > 0 {
+		if !isVirtual && player.ActiveCombat.ItemCooldowns[req.ItemID] > 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vật phẩm đang hồi chiêu (còn %d lượt)", player.ActiveCombat.ItemCooldowns[req.ItemID])})
 			return
 		}
 
-		qty, ok := player.MaterialsInventory[req.ItemID]
-		if !ok || qty <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm này trong túi đồ"})
-			return
+		if !isVirtual {
+			qty, ok := player.MaterialsInventory[req.ItemID]
+			if !ok || qty <= 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm này trong túi đồ"})
+				return
+			}
 		}
 		item, ok := models.ItemRegistry[req.ItemID]
 		if !ok {
@@ -193,12 +209,14 @@ func CombatAttack(c *gin.Context) {
 			return
 		}
 
-		player.MaterialsInventory[req.ItemID]--
-		if player.MaterialsInventory[req.ItemID] <= 0 {
-			delete(player.MaterialsInventory, req.ItemID)
+		if !isVirtual {
+			player.MaterialsInventory[req.ItemID]--
+			if player.MaterialsInventory[req.ItemID] <= 0 {
+				delete(player.MaterialsInventory, req.ItemID)
+			}
+			player.ActiveCombat.ItemsUsedCount++
+			player.ActiveCombat.ItemCooldowns[req.ItemID] = 3
 		}
-		player.ActiveCombat.ItemsUsedCount++
-		player.ActiveCombat.ItemCooldowns[req.ItemID] = 3
 
 	} else if req.IsCharge {
 		player.ActiveCombat.ChargePoints++
@@ -322,7 +340,10 @@ func CombatAttack(c *gin.Context) {
 				}
 
 				if isUsingStones {
-					if req.UseStones == "immortal" {
+					if isVirtual {
+						refCaster.CurrentMana = refCaster.MaxMana
+						logs = append(logs, fmt.Sprintf("-> [Ảnh Chiếu] %s vận chuyển Chân Nguyên đầy đủ từ thân xác thật!", refCaster.Name))
+					} else if req.UseStones == "immortal" {
 						if player.ImmortalStones >= 1 {
 							player.ImmortalStones -= 1
 							refCaster.CurrentMana += 100.0
@@ -342,7 +363,7 @@ func CombatAttack(c *gin.Context) {
 							}
 							logs = append(logs, fmt.Sprintf("-> %s hấp thu 100 Nguyên Thạch, khôi phục chân nguyên!", refCaster.Name))
 						} else {
-							logs = append(logs, fmt.Sprintf("-> %s định dùng Nguyên Thạch nhưng không đủ (cần 100)!", refCaster.Name))
+							logs = append(logs, fmt.Sprintf("-> %s định dùng Nguyên Thạch nhưng không đủ!", refCaster.Name))
 						}
 					}
 				} else if isUsingItem {
@@ -612,20 +633,18 @@ func CombatAttack(c *gin.Context) {
 		}
 	}
 
-	if player.ActiveCombat.EnemyType != "PVP" {
+	if !isVirtual {
 		player.HP = player.ActiveCombat.Allies[casterIdx].HP
-	}
-	player.CurrentMana = player.ActiveCombat.Allies[casterIdx].CurrentMana
+		player.CurrentMana = player.ActiveCombat.Allies[casterIdx].CurrentMana
 
-	for _, ally := range player.ActiveCombat.Allies {
-		if ally.ID != player.ID.String() {
-			allyUUID, errParse := uuid.Parse(ally.ID)
-			if errParse == nil {
-				allyHP := ally.HP
-				if allyHP < 0 {
-					allyHP = 0
-				}
-				if player.ActiveCombat.EnemyType != "PVP" {
+		for _, ally := range player.ActiveCombat.Allies {
+			if ally.ID != player.ID.String() {
+				allyUUID, errParse := uuid.Parse(ally.ID)
+				if errParse == nil {
+					allyHP := ally.HP
+					if allyHP < 0 {
+						allyHP = 0
+					}
 					_, _ = tx.Exec("UPDATE players SET hp = $1 WHERE id = $2", allyHP, allyUUID)
 				}
 			}
@@ -646,6 +665,17 @@ func CombatAttack(c *gin.Context) {
 	ctx := &CombatContext{
 		Attacker: &playerCombatant,
 		Logs:     turnLogs,
+	}
+
+	// Capture history data before ActiveCombat is cleared
+	var histEnemyName, histEnemyType string
+	var histTargetPlayerID string
+	var histItemsUsed int
+	if player.ActiveCombat != nil {
+		histEnemyName = player.ActiveCombat.EnemyName
+		histEnemyType = player.ActiveCombat.EnemyType
+		histTargetPlayerID = player.ActiveCombat.TargetPlayerID
+		histItemsUsed = player.ActiveCombat.ItemsUsedCount
 	}
 
 	if victory {
@@ -673,7 +703,7 @@ func CombatAttack(c *gin.Context) {
 			}
 		}
 
-		if isPVP {
+		if isPVP && !isVirtual {
 			stolenStones := 10
 			if player.ActiveCombat.TargetPlayerID != "dummy" {
 				targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID)
@@ -955,7 +985,7 @@ func CombatAttack(c *gin.Context) {
 			ctx.Logs = append(ctx.Logs, "Đại bại! Đạo hữu bất tỉnh nhân sự trước áp lực của đối thủ. May mắn thoát chết nhưng rơi rớt mất sạch chiến lợi phẩm thu thập trong chuyến đi này.")
 		}
 
-		if isPVP && player.ActiveCombat.TargetPlayerID != "dummy" {
+		if isPVP && !isVirtual && player.ActiveCombat.TargetPlayerID != "dummy" {
 			targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID)
 			if parseErr == nil {
 				var targetLootBytes []byte
@@ -1038,6 +1068,33 @@ func CombatAttack(c *gin.Context) {
 	if err = tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
+	}
+
+	// Save combat history asynchronously
+	if victory || defeat {
+		winner := "Phe Địch"
+		if victory {
+			winner = "Phe Ta"
+		}
+		go func() {
+			logsIface := make([]interface{}, len(ctx.Logs))
+			for i, l := range ctx.Logs {
+				logsIface[i] = l
+			}
+			summary := CombatSummary{
+				FinalPlayerHP: int(player.HP),
+				ItemsUsed:     histItemsUsed,
+			}
+			SaveCombatHistory(player.ID, winner, logsIface, summary, nil, histEnemyName, histEnemyType, player.CurrentRegion)
+
+			if isPVP && histTargetPlayerID != "" && histTargetPlayerID != "dummy" {
+				pvpWinner := "Phe Ta"
+				if defeat {
+					pvpWinner = "Phe Địch"
+				}
+				SaveCombatHistory(uuid.MustParse(histTargetPlayerID), pvpWinner, logsIface, summary, nil, player.Username, "PVP", player.CurrentRegion)
+			}
+		}()
 	}
 
 	c.JSON(http.StatusOK, gin.H{

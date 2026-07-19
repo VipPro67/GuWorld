@@ -200,14 +200,15 @@ func ChallengeArena(c *gin.Context) {
 		}
 	}
 
-	// Build PVP Combat State
+	// Build PVP Combat State (virtual mode: full power, no real cost)
 	pvpCombat := models.CombatState{
 		EnemyTemplateID:    targetPlayer.ID.String(),
 		EnemyName:          targetPlayer.Username,
 		EnemyType:          "PVP",
+		CombatMode:         "virtual",
 		EnemyHP:            enemyHP,
 		EnemyMaxHP:         enemyHP,
-		EnemyMana:          targetPlayer.CurrentMana,
+		EnemyMana:          targetPlayer.MaxMana,
 		EnemyMaxMana:       targetPlayer.MaxMana,
 		EnemyDamage:        targetStats["attack"],
 		EnemyDefense:       targetStats["defense"],
@@ -219,15 +220,9 @@ func ChallengeArena(c *gin.Context) {
 		TargetPlayerID:     targetPlayer.ID.String(),
 	}
 
-	// Swapping rank logic after battle is implemented inside CombatAttack when victory is achieved!
-	// Wait, we need to handle swapping rank logic in CombatAttack when the PVP victory happens!
-	// Let's check how we handle PVP victory in CombatAttack. Currently, it steals stones.
-	// If the battle was an Arena battle (PVP target and arena), we swap ranks!
-	// To distinguish normal PVP from Arena PVP, let's mark it by checking if both have rankings.
-	// Let's add rank swap helper inside CombatAttack victory check.
-	// If Victory and target is a PVP player:
-	// We check if it's an arena match, swap ranks if pRank > tRank.
-	
+	// Full mana for attacker in virtual mode
+	player.CurrentMana = player.MaxMana
+
 	player.ActiveCombat = InitializeCombatState(tx, &pvpCombat, &player)
 
 	// Save to DB

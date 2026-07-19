@@ -128,6 +128,9 @@ type CombatState struct {
 
 	// Boss specific tracking
 	BossPhase int // 0 = 100-70%, 1 = 70-30%, 2 = 30-0%
+
+	// Virtual mode: illusion combat, auto-restore mana each turn
+	VirtualMode bool
 }
 
 // CombatSnapshot captures full stats of all combatants at a point in time.

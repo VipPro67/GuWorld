@@ -443,6 +443,7 @@ func MovePlayer(c *gin.Context) {
 			EnemyName:          targetPlayer.Username,
 			EnemyAvatarURL:     targetPlayer.AvatarURL,
 			EnemyType:          "PVP",
+			CombatMode:         "real",
 			EnemyHP:            enemyHP,
 			EnemyMaxHP:         enemyMaxHP,
 			EnemyMana:          targetPlayer.CurrentMana,
@@ -575,6 +576,8 @@ func MovePlayer(c *gin.Context) {
 				targetStats := CalculatePlayerStats(&targetPlayer)
 				player.ActiveCombat = &models.CombatState{
 					EnemyName:      targetPlayer.Username,
+					EnemyType:      "PVP",
+					CombatMode:     "real",
 					EnemyHP:        100.0,
 					EnemyMaxHP:     100.0,
 					EnemyDamage:    targetStats["attack"],

@@ -27,11 +27,12 @@ func cloneCombatState(state *CombatState) *CombatState {
 		return nil
 	}
 	clone := &CombatState{
-		Turn:      state.Turn,
-		Seed:      state.Seed,
-		BossPhase: state.BossPhase,
-		Allies:    make([]*CombatantAuto, len(state.Allies)),
-		Enemies:   make([]*CombatantAuto, len(state.Enemies)),
+		Turn:        state.Turn,
+		Seed:        state.Seed,
+		BossPhase:   state.BossPhase,
+		VirtualMode: state.VirtualMode,
+		Allies:       make([]*CombatantAuto, len(state.Allies)),
+		Enemies:      make([]*CombatantAuto, len(state.Enemies)),
 	}
 	for i, a := range state.Allies {
 		clone.Allies[i] = cloneCombatant(a)
@@ -262,6 +263,18 @@ func Simulate(state *CombatState) []CombatLog {
 					}
 				}
 				c.ActiveEffects = kept
+			}
+		}
+
+		// ── Virtual mode: restore mana for all combatants each turn ──
+		if state.VirtualMode {
+			for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
+				for _, c := range combatants {
+					if c.HP <= 0 {
+						continue
+					}
+					c.Mana = c.MaxMana
+				}
 			}
 		}
 

@@ -113,6 +113,7 @@ type CombatState struct {
 	EnemyName           string            `json:"enemy_name"`
 	EnemyAvatarURL      string            `json:"enemy_avatar_url,omitempty"`
 	EnemyType           string            `json:"enemy_type,omitempty"`
+	CombatMode          string            `json:"combat_mode,omitempty"` // "virtual" = illusion (no real cost), "real" = actual resource consumption, "" = legacy default
 	EnemyHP             float64           `json:"enemy_hp"`
 	EnemyMaxHP          float64           `json:"enemy_max_hp"`
 	EnemyMana           float64           `json:"enemy_mana,omitempty"`

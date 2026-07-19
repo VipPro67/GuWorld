@@ -550,18 +550,23 @@ func AttackMineSlot(c *gin.Context) {
 
 		defenderStats := CalculatePlayerStats(&defender)
 
-		enemyHP := defender.BaseHP
+		enemyHP := defender.HP
 		if enemyHP <= 0 {
-			enemyHP = 100.0
+			enemyHP = 10.0
+		}
+		enemyMaxHP := defender.BaseHP
+		if enemyMaxHP <= 0 {
+			enemyMaxHP = 100.0
 		}
 
-		// Build PVP Mine Combat State
+		// Build PVP Mine Combat State (real mode: actual HP/mana, real resource cost)
 		pvpCombat = models.CombatState{
 			EnemyTemplateID:    defender.ID.String(),
 			EnemyName:          defender.Username,
 			EnemyType:          "PVP",
+			CombatMode:         "real",
 			EnemyHP:            enemyHP,
-			EnemyMaxHP:         enemyHP,
+			EnemyMaxHP:         enemyMaxHP,
 			EnemyMana:          defender.CurrentMana,
 			EnemyMaxMana:       defender.MaxMana,
 			EnemyDamage:        defenderStats["attack"],

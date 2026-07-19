@@ -19,7 +19,7 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 	if playerCombatant.HP > playerCombatant.MaxHP {
 		playerCombatant.HP = playerCombatant.MaxHP
 	}
-	if base.EnemyType == "PVP" {
+	if base.CombatMode == "virtual" {
 		pHP := player.BaseHP
 		if pHP <= 0 {
 			pHP = 100.0
@@ -53,14 +53,14 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 							&mPlayer.ID, &mPlayer.Username, &mPlayer.Rank, &mPlayer.SubRank,
 							&mPlayer.HP, &mPlayer.MaxMana, &mPlayer.CurrentMana, &mPlayer.PathMasteries, &mPlayer.GuInventory, &mPlayer.DaoMarks, &mPlayer.BodyMods, &mPlayer.BaseHP, &mPlayer.AvatarURL,
 						)
-						if errMember == nil && (mPlayer.HP > 0 || base.EnemyType == "PVP") {
+						if errMember == nil && (mPlayer.HP > 0 || base.CombatMode == "virtual") {
 							mStats := CalculatePlayerStats(&mPlayer)
 							mCombatant := models.CombatantFromPlayer(&mPlayer, mStats)
 							mCombatant.MaxHP = 100.0
 							if mCombatant.HP > mCombatant.MaxHP {
 								mCombatant.HP = mCombatant.MaxHP
 							}
-							if base.EnemyType == "PVP" {
+							if base.CombatMode == "virtual" {
 								mHP := mPlayer.BaseHP
 								if mHP <= 0 {
 									mHP = 100.0
@@ -120,10 +120,10 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 	}
 
 	enemySlots := [][2]int{
+		{2, 2},
 		{1, 2},
 		{1, 1},
 		{1, 3},
-		{2, 2},
 		{2, 1},
 		{2, 3},
 		{3, 2},
@@ -144,7 +144,7 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 }
 
 func StartCombat(tx *sql.Tx, base *models.CombatState, player *models.Player) *models.CombatState {
-	if base.EnemyType != "PVP" && base.EnemyGuInventory != nil {
+	if base.CombatMode != "virtual" && base.EnemyGuInventory != nil {
 		var filteredGu []models.GuInstance
 		for _, g := range base.EnemyGuInventory {
 			spec, ok := models.GuRegistry[g.GuID]

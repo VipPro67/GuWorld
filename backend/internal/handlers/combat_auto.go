@@ -79,11 +79,14 @@ func AutoCombatStart(c *gin.Context) {
 		return
 	}
 
+	isVirtual := player.ActiveCombat.CombatMode == "virtual"
+
 	seed := time.Now().UnixNano()
 	simState := &simulator.CombatState{
-		Turn:      0,
-		Seed:      seed,
-		BossPhase: 0,
+		Turn:        0,
+		Seed:        seed,
+		BossPhase:   0,
+		VirtualMode: isVirtual,
 	}
 
 	// ── Pre-compute SimActions using real combat formulas ──
@@ -234,18 +237,38 @@ func AutoCombatStart(c *gin.Context) {
 	}
 
 	simMaxHP := 100
-	if player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP" {
+	if isVirtual {
+		simMaxHP = int(player.BaseHP)
+		if simMaxHP <= 0 {
+			simMaxHP = 100
+		}
+	} else if player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP" {
 		simMaxHP = int(player.BaseHP)
 		if simMaxHP <= 0 {
 			simMaxHP = 100
 		}
 	}
-	simHP := int(player.HP)
+	simHP := simMaxHP
+	if !isVirtual {
+		simHP = int(player.HP)
+	}
 	if simHP > simMaxHP {
 		simHP = simMaxHP
 	}
 	if simHP <= 0 {
 		simHP = simMaxHP
+	}
+
+	simMana := int(player.MaxMana)
+	if !isVirtual {
+		simMana = int(player.CurrentMana)
+	}
+
+	simStones := player.PrimevalStones
+	simImmortalStones := player.ImmortalStones
+	if isVirtual {
+		simStones = 999999
+		simImmortalStones = 999999
 	}
 
 	simPlayer := &simulator.CombatantAuto{
@@ -257,7 +280,7 @@ func AutoCombatStart(c *gin.Context) {
 		MaxHP:         simMaxHP,
 		HP:            simHP,
 		MaxMana:       int(player.MaxMana),
-		Mana:          int(player.CurrentMana),
+		Mana:          simMana,
 		BaseDmg:       int(playerStats["attack"]),
 		BaseDef:       int(playerStats["defense"]),
 		VirtualShield: virtualShield,
@@ -267,21 +290,27 @@ func AutoCombatStart(c *gin.Context) {
 
 		AutoHealHP:      req.Loadout.AutoHealHP,
 		HealThreshold:   req.Loadout.HealThreshold,
-		AutoRestoreMana: req.Loadout.AutoRestoreMana,
+		AutoRestoreMana: isVirtual || req.Loadout.AutoRestoreMana,
 		ManaThreshold:   req.Loadout.ManaThreshold,
 		HealCharges:     healCharges,
 		HealPotency:     healPotency,
-		PrimevalStones:  player.PrimevalStones,
-		ImmortalStones:  player.ImmortalStones,
+		PrimevalStones:  simStones,
+		ImmortalStones:  simImmortalStones,
 	}
 
 	simState.Allies = append(simState.Allies, simPlayer)
 
 	// ── Build enemies ──
-	for _, enemy := range player.ActiveCombat.Enemies {
+	for idx := range player.ActiveCombat.Enemies {
+		enemy := &player.ActiveCombat.Enemies[idx]
 		eHP := int(enemy.HP)
 		if eHP <= 0 {
 			eHP = int(enemy.MaxHP)
+		}
+		enemyMana := int(enemy.CurrentMana)
+		if isVirtual {
+			eHP = int(enemy.MaxHP)
+			enemyMana = int(enemy.MaxMana)
 		}
 		simEnemy := &simulator.CombatantAuto{
 			ID:      enemy.ID,
@@ -292,7 +321,7 @@ func AutoCombatStart(c *gin.Context) {
 			MaxHP:   int(enemy.MaxHP),
 			HP:      eHP,
 			MaxMana: int(enemy.MaxMana),
-			Mana:    int(enemy.CurrentMana),
+			Mana:    enemyMana,
 			BaseDmg: int(enemy.BaseAttack),
 			BaseDef: int(enemy.BaseDefense),
 			DaoMarks: func() simulator.DaoMarks {
@@ -306,10 +335,33 @@ func AutoCombatStart(c *gin.Context) {
 		if enemy.Kind == "Boss" {
 			simEnemy.Kind = "Boss"
 		}
-		// Give enemies a basic attack action
-		simEnemy.Actions = []simulator.SimAction{
-			{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: float64(simEnemy.BaseDmg), ManaCost: 0},
+		// Auto-select Gu actions from enemy inventory
+		var enemyActions []simulator.SimAction
+		for _, guInst := range enemy.GuInventory {
+			if guInst.Status != "ACTIVE" {
+				continue
+			}
+			spec, ok := models.GuRegistry[guInst.GuID]
+			if !ok {
+				continue
+			}
+			if hasCombatActiveEffects(&spec) {
+				act, err := buildSimActionFromGu(enemy, &spec, "GU_SKILL")
+				if err != nil {
+					continue
+				}
+				act.SourceID = guInst.GuID
+				enemyActions = append(enemyActions, act)
+			}
 		}
+		// Always add basic attack as fallback
+		enemyActions = append(enemyActions, simulator.SimAction{
+			ActionType: "BASIC_ATTACK",
+			Name:       "Đánh thường",
+			Damage:     float64(enemy.BaseAttack),
+			ManaCost:   0,
+		})
+		simEnemy.Actions = enemyActions
 		simState.Enemies = append(simState.Enemies, simEnemy)
 	}
 
@@ -404,40 +456,44 @@ func AutoCombatStart(c *gin.Context) {
 		}
 	}
 
-	// ── Deduct items used by simulator ──
+	// ── Deduct items/stones used by simulator (skip for virtual mode) ──
 	itemsUsed := simPlayer.ItemsUsedInBattle
-	if itemsUsed > 0 {
-		remaining := itemsUsed
-		for itemID, qty := range player.MaterialsInventory {
-			if remaining <= 0 {
-				break
-			}
-			if qty <= 0 {
-				continue
-			}
-			item, ok := models.ItemRegistry[itemID]
-			if !ok || item.Type != "Consumable" {
-				continue
-			}
-			if _, hasHeal := item.Effects["restore_hp"]; hasHeal {
-				remove := qty
-				if remove > remaining {
-					remove = remaining
+	stonesSpent := 0
+	immortalStonesSpent := 0
+
+	if !isVirtual {
+		if itemsUsed > 0 {
+			remaining := itemsUsed
+			for itemID, qty := range player.MaterialsInventory {
+				if remaining <= 0 {
+					break
 				}
-				player.MaterialsInventory[itemID] -= remove
-				if player.MaterialsInventory[itemID] <= 0 {
-					delete(player.MaterialsInventory, itemID)
+				if qty <= 0 {
+					continue
 				}
-				remaining -= remove
+				item, ok := models.ItemRegistry[itemID]
+				if !ok || item.Type != "Consumable" {
+					continue
+				}
+				if _, hasHeal := item.Effects["restore_hp"]; hasHeal {
+					remove := qty
+					if remove > remaining {
+						remove = remaining
+					}
+					player.MaterialsInventory[itemID] -= remove
+					if player.MaterialsInventory[itemID] <= 0 {
+						delete(player.MaterialsInventory, itemID)
+					}
+					remaining -= remove
+				}
 			}
 		}
-	}
 
-	// ── Deduct stones used by simulator ──
-	stonesSpent := player.PrimevalStones - simPlayer.PrimevalStones
-	immortalStonesSpent := player.ImmortalStones - simPlayer.ImmortalStones
-	player.PrimevalStones = simPlayer.PrimevalStones
-	player.ImmortalStones = simPlayer.ImmortalStones
+		stonesSpent = player.PrimevalStones - simPlayer.PrimevalStones
+		immortalStonesSpent = int(player.ImmortalStones - simPlayer.ImmortalStones)
+		player.PrimevalStones = simPlayer.PrimevalStones
+		player.ImmortalStones = simPlayer.ImmortalStones
+	}
 
 	// ── Log item/mana usage ──
 	if itemsUsed > 0 {
@@ -458,7 +514,7 @@ func AutoCombatStart(c *gin.Context) {
 		logs = append(logs, simulator.CombatLog{
 			Turn:   simState.Turn,
 			Action: "AUTO_STONE_USAGE",
-			Detail: fmt.Sprintf("Đã tự động dùng %.0f Tiên Nguyên Thạch hồi phục tiên nguyên.", immortalStonesSpent),
+			Detail: fmt.Sprintf("Đã tự động dùng %d Tiên Nguyên Thạch hồi phục tiên nguyên.", immortalStonesSpent),
 		})
 	}
 
@@ -492,155 +548,168 @@ func AutoCombatStart(c *gin.Context) {
 
 	var lootMsg string
 	if alliesAlive {
-		isExplore := player.CurrentRegion != "Southern_Border" && player.CurrentRegion != "Lobby"
-		if player.ActiveCombat != nil && player.ActiveCombat.LootTableID != "" {
-			lt, err := db.LoadLootTable(tx, player.ActiveCombat.LootTableID)
-			if err == nil {
-				loot := RollLoot(lt)
+		if isVirtual {
+			updateQuery = `UPDATE players SET active_combat = NULL WHERE id = $1`
+			args = append(args, player.ID)
+		} else {
+			isExplore := player.CurrentRegion != "Southern_Border" && player.CurrentRegion != "Lobby"
+			if player.ActiveCombat != nil && player.ActiveCombat.LootTableID != "" {
+				lt, err := db.LoadLootTable(tx, player.ActiveCombat.LootTableID)
+				if err == nil {
+					loot := RollLoot(lt)
 
-				if player.ActiveCombat.EnemyGuInventory != nil && len(player.ActiveCombat.EnemyGuInventory) > 0 {
-					for _, eg := range player.ActiveCombat.EnemyGuInventory {
-						if rand.Intn(100) < 10 {
-							loot.Gus = append(loot.Gus, eg.GuID)
+					if player.ActiveCombat.EnemyGuInventory != nil && len(player.ActiveCombat.EnemyGuInventory) > 0 {
+						for _, eg := range player.ActiveCombat.EnemyGuInventory {
+							if rand.Intn(100) < 10 {
+								loot.Gus = append(loot.Gus, eg.GuID)
+							}
 						}
 					}
-				}
 
-				stoneQty := loot.Items["primeval_stone"]
-				if isExplore {
-					player.TempLoot.PrimevalStones += stoneQty
-					for matID, qty := range loot.Items {
-						if matID == "primeval_stone" {
-							continue
+					stoneQty := loot.Items["primeval_stone"]
+					if isExplore {
+						player.TempLoot.PrimevalStones += stoneQty
+						for matID, qty := range loot.Items {
+							if matID == "primeval_stone" {
+								continue
+							}
+							if player.TempLoot.MaterialsInventory == nil {
+								player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
+							}
+							player.TempLoot.MaterialsInventory[matID] += qty
 						}
-						if player.TempLoot.MaterialsInventory == nil {
-							player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
+						for _, guID := range loot.Gus {
+							newGu := models.GuInstance{
+								InstanceID: uuid.New().String(), GuID: guID, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
+							}
+							player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, newGu)
 						}
-						player.TempLoot.MaterialsInventory[matID] += qty
+					} else {
+						player.PrimevalStones += stoneQty
+						for matID, qty := range loot.Items {
+							if matID == "primeval_stone" {
+								continue
+							}
+							if player.MaterialsInventory == nil {
+								player.MaterialsInventory = make(models.MaterialsInventory)
+							}
+							player.MaterialsInventory[matID] += qty
+						}
+						for _, guID := range loot.Gus {
+							newGu := models.GuInstance{
+								InstanceID: uuid.New().String(), GuID: guID, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
+							}
+							player.GuInventory = append(player.GuInventory, newGu)
+						}
 					}
-					for _, guID := range loot.Gus {
-						newGu := models.GuInstance{
-							InstanceID: uuid.New().String(), GuID: guID, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
-						}
-						player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, newGu)
-					}
-				} else {
-					player.PrimevalStones += stoneQty
-					for matID, qty := range loot.Items {
-						if matID == "primeval_stone" {
-							continue
-						}
-						if player.MaterialsInventory == nil {
-							player.MaterialsInventory = make(models.MaterialsInventory)
-						}
-						player.MaterialsInventory[matID] += qty
-					}
-					for _, guID := range loot.Gus {
-						newGu := models.GuInstance{
-							InstanceID: uuid.New().String(), GuID: guID, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
-						}
-						player.GuInventory = append(player.GuInventory, newGu)
-					}
-				}
 
-				if stoneQty > 0 || len(loot.Items) > 1 || len(loot.Gus) > 0 {
-					lootMsg = fmt.Sprintf("Nhặt được: %d Nguyên Thạch, %d nguyên liệu, %d Cổ trùng.", stoneQty, len(loot.Items)-1, len(loot.Gus))
-					if len(loot.Items) <= 1 && len(loot.Gus) == 0 {
-						lootMsg = fmt.Sprintf("Nhặt được: %d Nguyên Thạch.", stoneQty)
-					}
-				}
-			}
-		}
-
-		if lootMsg != "" {
-			logs = append(logs, simulator.CombatLog{
-				Turn:   simState.Turn,
-				Action: "LOOT",
-				Detail: lootMsg,
-			})
-		}
-
-		// ── Mine combat victory: occupy mine + remove monster ──
-		if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
-			slotID := player.ActiveCombat.MineSlotID
-			var rarity string
-			var currentOccupierStr *string
-			var monsterIDStr *string
-			var lastClaimedAt *time.Time
-			err = tx.QueryRow("SELECT rarity, occupier_id, monster_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &currentOccupierStr, &monsterIDStr, &lastClaimedAt)
-			if err == nil && currentOccupierStr != nil && lastClaimedAt != nil {
-				stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
-				if stones > 0 || qi > 0.0 || chests > 0 {
-					_ = AddMineRewardsToPlayerTx(tx, player.ID, stones/2, qi/2.0, chests/2)
-					player.PrimevalStones += stones / 2
-					if chests/2 > 0 {
-						if player.MaterialsInventory == nil {
-							player.MaterialsInventory = make(models.MaterialsInventory)
+					if stoneQty > 0 || len(loot.Items) > 1 || len(loot.Gus) > 0 {
+						lootMsg = fmt.Sprintf("Nhặt được: %d Nguyên Thạch, %d nguyên liệu, %d Cổ trùng.", stoneQty, len(loot.Items)-1, len(loot.Gus))
+						if len(loot.Items) <= 1 && len(loot.Gus) == 0 {
+							lootMsg = fmt.Sprintf("Nhặt được: %d Nguyên Thạch.", stoneQty)
 						}
-						player.MaterialsInventory["mine_chest"] += chests / 2
 					}
-					logs = append(logs, simulator.CombatLog{
-						Turn:   simState.Turn,
-						Action: "MINE_LOOT",
-						Detail: fmt.Sprintf("Cướp được %d Nguyên Thạch và %d rương từ đối thủ!", stones/2, chests/2),
-					})
 				}
 			}
 
-			now := time.Now()
-			_, errUpdate := tx.Exec(`
-				UPDATE mine_slots
-				SET occupier_id = $1, monster_id = NULL, occupied_at = $2, last_claimed_at = $3
-				WHERE id = $4
-			`, player.ID, now, now, slotID)
-			if errUpdate == nil {
+			if lootMsg != "" {
 				logs = append(logs, simulator.CombatLog{
 					Turn:   simState.Turn,
-					Action: "MINE_OCCUPY",
-					Detail: fmt.Sprintf("Chiếm lĩnh thành công mỏ phẩm chất %s #%d!", rarity, slotID),
+					Action: "LOOT",
+					Detail: lootMsg,
 				})
-			} else {
-				log.Printf("Failed to update mine slot in auto combat victory: %v", errUpdate)
 			}
+
+			// ── Mine combat victory: occupy mine + remove monster ──
+			if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
+				slotID := player.ActiveCombat.MineSlotID
+				var rarity string
+				var currentOccupierStr *string
+				var monsterIDStr *string
+				var lastClaimedAt *time.Time
+				err = tx.QueryRow("SELECT rarity, occupier_id, monster_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &currentOccupierStr, &monsterIDStr, &lastClaimedAt)
+				if err == nil && currentOccupierStr != nil && lastClaimedAt != nil {
+					stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
+					if stones > 0 || qi > 0.0 || chests > 0 {
+						_ = AddMineRewardsToPlayerTx(tx, player.ID, stones/2, qi/2.0, chests/2)
+						player.PrimevalStones += stones / 2
+						if chests/2 > 0 {
+							if player.MaterialsInventory == nil {
+								player.MaterialsInventory = make(models.MaterialsInventory)
+							}
+							player.MaterialsInventory["mine_chest"] += chests / 2
+						}
+						logs = append(logs, simulator.CombatLog{
+							Turn:   simState.Turn,
+							Action: "MINE_LOOT",
+							Detail: fmt.Sprintf("Cướp được %d Nguyên Thạch và %d rương từ đối thủ!", stones/2, chests/2),
+						})
+					}
+				}
+
+				now := time.Now()
+				_, errUpdate := tx.Exec(`
+					UPDATE mine_slots
+					SET occupier_id = $1, monster_id = NULL, occupied_at = $2, last_claimed_at = $3
+					WHERE id = $4
+				`, player.ID, now, now, slotID)
+				if errUpdate == nil {
+					logs = append(logs, simulator.CombatLog{
+						Turn:   simState.Turn,
+						Action: "MINE_OCCUPY",
+						Detail: fmt.Sprintf("Chiếm lĩnh thành công mỏ phẩm chất %s #%d!", rarity, slotID),
+					})
+				} else {
+					log.Printf("Failed to update mine slot in auto combat victory: %v", errUpdate)
+				}
+			}
+
+			tempLootJSON, _ := json.Marshal(player.TempLoot)
+			matJSON, _ := json.Marshal(player.MaterialsInventory)
+			guJSON, _ := json.Marshal(player.GuInventory)
+
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, primeval_stones = $4, materials_inventory = $5, gu_inventory = $6, aptitude_percent = $7, lifespan = $8 WHERE id = $9`
+			args = append(args, finalPlayerHP, finalMana, tempLootJSON, player.PrimevalStones, matJSON, guJSON, player.AptitudePercent, player.Lifespan, player.ID)
 		}
-
-		tempLootJSON, _ := json.Marshal(player.TempLoot)
-		matJSON, _ := json.Marshal(player.MaterialsInventory)
-		guJSON, _ := json.Marshal(player.GuInventory)
-
-		updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, primeval_stones = $4, materials_inventory = $5, gu_inventory = $6, aptitude_percent = $7, lifespan = $8 WHERE id = $9`
-		args = append(args, finalPlayerHP, finalMana, tempLootJSON, player.PrimevalStones, matJSON, guJSON, player.AptitudePercent, player.Lifespan, player.ID)
 	} else {
-		// ── Defeat: same logic as manual combat ──
-		player.HP = 1.0
-		player.CurrentRegion = "Southern_Border"
-		player.X = 50
-		player.Y = 50
-		player.ExploredCells = models.ExploredCellsList{"50,50"}
-		player.TempLoot = models.TempLoot{
-			GuInventory:        models.GuInventory{},
-			MaterialsInventory: models.MaterialsInventory{},
-			PrimevalStones:     0,
-		}
-
-		// Clear allies' active combat
-		for _, ally := range player.ActiveCombat.Allies {
-			allyUUID, errParse := uuid.Parse(ally.ID)
-			if errParse == nil && allyUUID != player.ID {
-				_, _ = tx.Exec("UPDATE players SET active_combat = NULL WHERE id = $1", allyUUID)
+		if isVirtual {
+			updateQuery = `UPDATE players SET active_combat = NULL WHERE id = $1`
+			args = append(args, player.ID)
+			logs = append(logs, simulator.CombatLog{
+				Turn:   simState.Turn,
+				Action: "BATTLE_END",
+				Detail: "Thua cuộc trong đấu trường ảnh! Bản thể không bị ảnh hưởng.",
+			})
+		} else {
+			player.HP = 1.0
+			player.CurrentRegion = "Southern_Border"
+			player.X = 50
+			player.Y = 50
+			player.ExploredCells = models.ExploredCellsList{"50,50"}
+			player.TempLoot = models.TempLoot{
+				GuInventory:        models.GuInventory{},
+				MaterialsInventory: models.MaterialsInventory{},
+				PrimevalStones:     0,
 			}
+
+			for _, ally := range player.ActiveCombat.Allies {
+				allyUUID, errParse := uuid.Parse(ally.ID)
+				if errParse == nil && allyUUID != player.ID {
+					_, _ = tx.Exec("UPDATE players SET active_combat = NULL WHERE id = $1", allyUUID)
+				}
+			}
+
+			logs = append(logs, simulator.CombatLog{
+				Turn:   simState.Turn,
+				Action: "BATTLE_END",
+				Detail: "Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất sạch chiến lợi phẩm.",
+			})
+
+			tempLootJSON, _ := json.Marshal(player.TempLoot)
+			exploredJSON, _ := json.Marshal(player.ExploredCells)
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, current_region = $4, x = $5, y = $6, explored_cells = $7, aptitude_percent = $8, lifespan = $9, primeval_stones = $10 WHERE id = $11`
+			args = append(args, player.HP, finalMana, tempLootJSON, player.CurrentRegion, player.X, player.Y, exploredJSON, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.ID)
 		}
-
-		logs = append(logs, simulator.CombatLog{
-			Turn:   simState.Turn,
-			Action: "BATTLE_END",
-			Detail: "Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất sạch chiến lợi phẩm.",
-		})
-
-		tempLootJSON, _ := json.Marshal(player.TempLoot)
-		exploredJSON, _ := json.Marshal(player.ExploredCells)
-		updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, current_region = $4, x = $5, y = $6, explored_cells = $7, aptitude_percent = $8, lifespan = $9, primeval_stones = $10 WHERE id = $11`
-		args = append(args, player.HP, finalMana, tempLootJSON, player.CurrentRegion, player.X, player.Y, exploredJSON, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.ID)
 	}
 
 	_, err = tx.Exec(updateQuery, args...)
@@ -662,9 +731,11 @@ func AutoCombatStart(c *gin.Context) {
 	// ── Save combat history (non-critical) ──
 	enemyName := ""
 	enemyType := ""
+	var targetPlayerID string
 	if player.ActiveCombat != nil {
 		enemyName = player.ActiveCombat.EnemyName
 		enemyType = player.ActiveCombat.EnemyType
+		targetPlayerID = player.ActiveCombat.TargetPlayerID
 	}
 	go func() {
 		summary := buildCombatSummaryFromLogs(logs, finalPlayerHP, itemsUsed, stonesSpent)
@@ -673,6 +744,15 @@ func AutoCombatStart(c *gin.Context) {
 			combatantInfosIface[i] = ci
 		}
 		SaveCombatHistory(player.ID, winner, toInterfaceSlice(logs), summary, combatantInfosIface, enemyName, enemyType, player.CurrentRegion)
+
+		// Also save history for PvP target player
+		if enemyType == "PVP" && targetPlayerID != "" && targetPlayerID != "dummy" {
+			pvpWinner := "Phe Ta"
+			if !alliesAlive {
+				pvpWinner = "Phe Địch"
+			}
+			SaveCombatHistory(uuid.MustParse(targetPlayerID), pvpWinner, toInterfaceSlice(logs), summary, combatantInfosIface, player.Username, "PVP", player.CurrentRegion)
+		}
 	}()
 
 	auditlog.Log(db.DB, auditlog.Entry{
