@@ -444,10 +444,14 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                       </span>
 
                       {/* Cell Entity View */}
-                      <div className="flex gap-0.5 relative z-10">
+                      <div className="flex gap-1 relative z-10">
                         {isPlayerCell && (
-                          <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-[9px] text-zinc-950 font-bold border border-white/20 animate-bounce">
-                            Ta
+                          <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center text-[10px] text-zinc-950 font-bold border-2 border-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.6)] animate-bounce overflow-hidden">
+                            {player.avatar_url ? (
+                              <img src={player.avatar_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              "Ta"
+                            )}
                           </div>
                         )}
                         {otherPlayersOnCell.length > 0 && (
@@ -460,10 +464,14 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                                 fetchPlayerProfile(otherPlayersOnCell[0].username);
                               }
                             }}
-                            className="w-5 h-5 rounded-full bg-purple-500/80 flex items-center justify-center text-[9px] text-zinc-100 font-bold border border-white/20 shadow-[0_0_8px_rgba(139,92,246,0.6)] animate-pulse cursor-pointer hover:scale-110 transition-transform"
+                            className="w-7 h-7 rounded-full bg-purple-500/80 flex items-center justify-center text-[10px] text-zinc-100 font-bold border-2 border-purple-300 shadow-[0_0_10px_rgba(139,92,246,0.6)] animate-pulse cursor-pointer hover:scale-110 transition-transform overflow-hidden"
                             title={`Bấm để Tấn Công / Trinh Thám cổ sư ${otherPlayersOnCell[0].username}`}
                           >
-                            {otherPlayersOnCell[0].username.slice(0, 2).toUpperCase()}
+                            {otherPlayersOnCell[0].avatar_url ? (
+                              <img src={otherPlayersOnCell[0].avatar_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              otherPlayersOnCell[0].username.slice(0, 2).toUpperCase()
+                            )}
                           </div>
                         )}
                         {!isPlayerCell && otherPlayersOnCell.length === 0 && getCellIcon(cell.cell_type, cell.content)}
@@ -547,10 +555,14 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                           className={`flex items-center gap-2 ${!isMe ? "cursor-pointer hover:text-white" : ""}`}
                           title={!isMe ? "Bấm để trinh thám cổ sư" : undefined}
                         >
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[9px] ${
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[9px] overflow-hidden ${
                             isMe ? "bg-emerald-500 text-zinc-950" : "bg-zinc-800 text-zinc-300"
                           }`}>
-                            {member.username.slice(0, 2).toUpperCase()}
+                            {member.avatar_url ? (
+                              <img src={member.avatar_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              member.username.slice(0, 2).toUpperCase()
+                            )}
                           </div>
                           <span className={`font-semibold ${isMe ? "text-emerald-400" : "text-zinc-300 hover:underline decoration-dotted"}`}>
                             {member.username} {isMe && "(Bạn)"}

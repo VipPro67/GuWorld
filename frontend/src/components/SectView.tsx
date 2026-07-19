@@ -897,6 +897,13 @@ export const SectView: React.FC = () => {
                       <span className="font-mono font-bold text-[10px] text-zinc-500 w-4">
                         {idx + 1}.
                       </span>
+                      <div className="w-6 h-6 rounded-full shrink-0 overflow-hidden bg-zinc-800 flex items-center justify-center text-[8px] font-bold text-zinc-500">
+                        {entry.avatar_url ? (
+                          <img src={entry.avatar_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          entry.username.slice(0, 2).toUpperCase()
+                        )}
+                      </div>
                       <div className="flex flex-col min-w-0">
                         <span className="font-semibold truncate">{entry.username}</span>
                         <span className="text-[9px] text-zinc-500 font-mono">
@@ -1679,6 +1686,13 @@ export const SectView: React.FC = () => {
                       >
                         <div className="flex flex-col gap-1 min-w-0">
                           <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full shrink-0 overflow-hidden bg-zinc-800 flex items-center justify-center text-[8px] font-bold text-zinc-500">
+                              {mInfo.avatar_url ? (
+                                <img src={mInfo.avatar_url} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                mInfo.username.slice(0, 2).toUpperCase()
+                              )}
+                            </div>
                             <span
                               onClick={() => !isSelf && fetchPlayerProfile(mInfo.username)}
                               className={`font-semibold text-zinc-100 truncate ${!isSelf ? "cursor-pointer hover:text-blue-400 hover:underline decoration-dotted" : ""}`}
@@ -1773,16 +1787,25 @@ export const SectView: React.FC = () => {
                         key={reqInfo.id}
                         className="bg-zinc-900/20 border border-zinc-900 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs"
                       >
-                        <div className="flex flex-col gap-1 min-w-0">
-                          <span
-                            onClick={() => reqInfo.username && fetchPlayerProfile(reqInfo.username)}
-                            className="font-semibold text-zinc-100 truncate cursor-pointer hover:text-blue-400 hover:underline decoration-dotted"
-                            title="Bấm để trinh thám cổ sư"
-                          >
-                            {reqInfo.username}
-                          </span>
-                          <div className="text-[10px] text-zinc-500 font-mono">
-                            Tu vi: Rank {reqInfo.player_rank} | Gửi lúc: {new Date(reqInfo.created_at).toLocaleString()}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-6 h-6 rounded-full shrink-0 overflow-hidden bg-zinc-800 flex items-center justify-center text-[8px] font-bold text-zinc-500">
+                            {reqInfo.avatar_url ? (
+                              <img src={reqInfo.avatar_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              reqInfo.username?.slice(0, 2).toUpperCase() || "??"
+                            )}
+                          </div>
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <span
+                              onClick={() => reqInfo.username && fetchPlayerProfile(reqInfo.username)}
+                              className="font-semibold text-zinc-100 truncate cursor-pointer hover:text-blue-400 hover:underline decoration-dotted"
+                              title="Bấm để trinh thám cổ sư"
+                            >
+                              {reqInfo.username}
+                            </span>
+                            <div className="text-[10px] text-zinc-500 font-mono">
+                              Tu vi: Rank {reqInfo.player_rank} | Gửi lúc: {new Date(reqInfo.created_at).toLocaleString()}
+                            </div>
                           </div>
                         </div>
 
@@ -1839,20 +1862,29 @@ export const SectView: React.FC = () => {
                         key={reqInfo.id}
                         className="bg-zinc-900/20 border border-zinc-900 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs"
                       >
-                        <div className="flex flex-col gap-1 min-w-0">
-                          <span
-                            onClick={() => reqInfo.username && fetchPlayerProfile(reqInfo.username)}
-                            className="font-semibold text-zinc-100 truncate cursor-pointer hover:text-blue-400 hover:underline decoration-dotted"
-                            title="Bấm để trinh thám cổ sư"
-                          >
-                            {reqInfo.username}
-                          </span>
-                          <div className="text-[10px] text-zinc-300 font-mono mt-0.5">
-                            Cấp bậc: <span className="text-red-400 font-semibold">{getRankName(reqInfo.current_rank)}</span> &rarr;{" "}
-                            <span className="text-emerald-400 font-semibold">{getRankName(reqInfo.target_rank)}</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-6 h-6 rounded-full shrink-0 overflow-hidden bg-zinc-800 flex items-center justify-center text-[8px] font-bold text-zinc-500">
+                            {reqInfo.avatar_url ? (
+                              <img src={reqInfo.avatar_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              reqInfo.username?.slice(0, 2).toUpperCase() || "??"
+                            )}
                           </div>
-                          <div className="text-[10px] text-zinc-500 font-mono">
-                            Tu vi: Rank {reqInfo.player_rank} | Gửi lúc: {new Date(reqInfo.created_at).toLocaleString()}
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <span
+                              onClick={() => reqInfo.username && fetchPlayerProfile(reqInfo.username)}
+                              className="font-semibold text-zinc-100 truncate cursor-pointer hover:text-blue-400 hover:underline decoration-dotted"
+                              title="Bấm để trinh thám cổ sư"
+                            >
+                              {reqInfo.username}
+                            </span>
+                            <div className="text-[10px] text-zinc-300 font-mono mt-0.5">
+                              Cấp bậc: <span className="text-red-400 font-semibold">{getRankName(reqInfo.current_rank)}</span> &rarr;{" "}
+                              <span className="text-emerald-400 font-semibold">{getRankName(reqInfo.target_rank)}</span>
+                            </div>
+                            <div className="text-[10px] text-zinc-500 font-mono">
+                              Tu vi: Rank {reqInfo.player_rank} | Gửi lúc: {new Date(reqInfo.created_at).toLocaleString()}
+                            </div>
                           </div>
                         </div>
 

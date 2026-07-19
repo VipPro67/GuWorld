@@ -256,20 +256,29 @@ export const GlobalChatOverlay: React.FC = () => {
                 const contentColorClass = isSystem ? "text-amber-900 dark:text-amber-100/90" : "text-zinc-800 dark:text-zinc-200";
 
                 return (
-                  <div key={msg.id || index} className={`${cardClass} leading-relaxed break-all`}>
-                    <span className={`${labelColor} font-bold mr-1.5 shrink-0`}>{chLabel}</span>
-                    <span
-                      onClick={() => !isSystem && !isMe && fetchPlayerProfile(msg.sender_username)}
-                      className={`${nameColorClass} mr-1.5`}
-                      title={!isSystem && !isMe ? "Bấm để trinh thám cổ sư" : undefined}
-                    >
-                      {msg.sender_username}
-                      <span className="text-zinc-400 dark:text-zinc-650 text-[8.5px] font-normal ml-1 normal-case select-none">
-                        ({formatRelativeTime(msg.created_at)})
+                  <div key={msg.id || index} className={`${cardClass} leading-relaxed break-all flex items-start gap-1.5`}>
+                    <div className="w-5 h-5 rounded-full shrink-0 overflow-hidden bg-zinc-300 dark:bg-zinc-800 flex items-center justify-center text-[7px] font-bold text-zinc-500 mt-0.5">
+                      {msg.sender_avatar ? (
+                        <img src={msg.sender_avatar} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        msg.sender_username.slice(0, 2).toUpperCase()
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1 leading-relaxed break-all">
+                      <span className={`${labelColor} font-bold mr-1.5 shrink-0`}>{chLabel}</span>
+                      <span
+                        onClick={() => !isSystem && !isMe && fetchPlayerProfile(msg.sender_username)}
+                        className={`${nameColorClass} mr-1.5`}
+                        title={!isSystem && !isMe ? "Bấm để trinh thám cổ sư" : undefined}
+                      >
+                        {msg.sender_username}
+                        <span className="text-zinc-400 dark:text-zinc-650 text-[8.5px] font-normal ml-1 normal-case select-none">
+                          ({formatRelativeTime(msg.created_at)})
+                        </span>
+                        :
                       </span>
-                      :
-                    </span>
-                    <span className={`${contentColorClass} ml-0.5`}>{msg.content}</span>
+                      <span className={`${contentColorClass} ml-0.5`}>{msg.content}</span>
+                    </div>
                   </div>
                 );
               })

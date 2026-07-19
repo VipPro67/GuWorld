@@ -460,6 +460,13 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         <div className="space-y-1.5">
           {combatants.map(c => (
             <div key={c.id} className="flex items-center gap-2 text-xs bg-zinc-950/40 border border-zinc-800/50 rounded-lg px-3 py-2">
+              <div className="w-5 h-5 rounded-full shrink-0 overflow-hidden bg-zinc-800 flex items-center justify-center text-[8px] font-bold text-zinc-400">
+                {c.avatar_url ? (
+                  <img src={c.avatar_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  c.name.slice(0, 2).toUpperCase()
+                )}
+              </div>
               <span className="text-zinc-200 font-medium truncate flex-1">{c.name}</span>
               <span className="text-zinc-400 shrink-0">{rankLabel(c.rank)}</span>
               <span className="text-zinc-500 shrink-0">{subRankLabel(c.sub_rank)}</span>

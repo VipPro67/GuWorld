@@ -79,6 +79,7 @@ type Combatant struct {
 	MaxSoulHP     float64           `json:"max_soul_hp"`
 	DaoMarkDamage float64           `json:"dao_mark_damage"`
 	ApertureDmg   float64           `json:"aperture_dmg"`
+	AvatarURL     string            `json:"avatar_url,omitempty"`
 }
 
 func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, subRank int, monsterType string) (maxHP, attack, defense float64) {
@@ -184,6 +185,7 @@ func CombatantFromPlayer(player *Player, stats map[string]float64) Combatant {
 		MaxSoulHP:     float64(player.MaxSoul),
 		DaoMarkDamage: player.DaoMarkDamage,
 		ApertureDmg:   player.ApertureDamage,
+		AvatarURL:     player.AvatarURL,
 	}
 }
 
@@ -206,6 +208,7 @@ func CombatantFromActiveCombat(cs *CombatState) Combatant {
 		AIProfile:     cs.AIProfile,
 		LootTableID:   cs.LootTableID,
 		StatusEffects: cs.EnemyStatusEffects,
+		AvatarURL:     cs.EnemyAvatarURL,
 	}
 }
 

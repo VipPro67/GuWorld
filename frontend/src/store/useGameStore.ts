@@ -34,6 +34,7 @@ export interface Combatant {
   grid_y?: number;
   speed?: number;
   virtual_shield?: number;
+  avatar_url?: string;
 }
 
 export interface CombatState {
@@ -534,6 +535,7 @@ export interface SectJoinRequest {
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   created_at: string;
   username?: string;
+  avatar_url?: string;
   player_rank?: number;
 }
 
@@ -546,6 +548,7 @@ export interface SectPromotionRequest {
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   created_at: string;
   username?: string;
+  avatar_url?: string;
   player_rank?: number;
 }
 
@@ -573,6 +576,7 @@ export interface SectMission {
 
 export interface SectLeaderboardEntry {
   username: string;
+  avatar_url?: string;
   rank: 'NGOAI_MON' | 'NOI_MON' | 'TINH_ANH' | 'CHAN_TRUYEN' | 'TRUONG_LAO' | 'CHUONG_MON';
   contribution: number;
 }
@@ -596,6 +600,7 @@ export interface MySectStatus {
 export interface SectMemberInfo {
   player_id: string;
   username: string;
+  avatar_url?: string;
   member_rank: 'NGOAI_MON' | 'NOI_MON' | 'TINH_ANH' | 'CHAN_TRUYEN' | 'TRUONG_LAO' | 'CHUONG_MON';
   contribution_points: number;
   joined_at: string;
@@ -805,7 +810,7 @@ interface GameState {
   confirmTrade: (tradeId: string) => Promise<boolean>;
 
   // Party State & Actions
-  party: { id: string; leader_id: string; members: { id: string; username: string }[] } | null;
+  party: { id: string; leader_id: string; members: { id: string; username: string; avatar_url?: string }[] } | null;
   createParty: () => Promise<boolean>;
   fetchPartyStatus: () => Promise<void>;
   invitePlayer: (username: string) => Promise<boolean>;

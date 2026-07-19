@@ -111,6 +111,7 @@ func DefaultAutoCombatConfig() AutoCombatConfig {
 type CombatState struct {
 	EnemyTemplateID     string            `json:"enemy_template_id,omitempty"`
 	EnemyName           string            `json:"enemy_name"`
+	EnemyAvatarURL      string            `json:"enemy_avatar_url,omitempty"`
 	EnemyType           string            `json:"enemy_type,omitempty"`
 	EnemyHP             float64           `json:"enemy_hp"`
 	EnemyMaxHP          float64           `json:"enemy_max_hp"`

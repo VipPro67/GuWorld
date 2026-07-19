@@ -218,14 +218,15 @@ func GetGrid(c *gin.Context) {
 	}
 
 	type NearbyPlayer struct {
-		ID       string `json:"id"`
-		Username string `json:"username"`
-		X        int    `json:"x"`
-		Y        int    `json:"y"`
+		ID        string `json:"id"`
+		Username  string `json:"username"`
+		AvatarURL string `json:"avatar_url"`
+		X         int    `json:"x"`
+		Y         int    `json:"y"`
 	}
 	nearbyPlayers := []NearbyPlayer{}
 	rows, errQuery := tx.Query(`
-		SELECT id, username, x, y 
+		SELECT id, username, avatar_url, x, y 
 		FROM players 
 		WHERE current_region = $1 
 		  AND id != $2 
@@ -237,7 +238,7 @@ func GetGrid(c *gin.Context) {
 		defer rows.Close()
 		for rows.Next() {
 			var np NearbyPlayer
-			if errScan := rows.Scan(&np.ID, &np.Username, &np.X, &np.Y); errScan == nil {
+			if errScan := rows.Scan(&np.ID, &np.Username, &np.AvatarURL, &np.X, &np.Y); errScan == nil {
 				nearbyPlayers = append(nearbyPlayers, np)
 			}
 		}
@@ -440,6 +441,7 @@ func MovePlayer(c *gin.Context) {
 		pvpCombat := models.CombatState{
 			EnemyTemplateID:    targetPlayer.ID.String(),
 			EnemyName:          targetPlayer.Username,
+			EnemyAvatarURL:     targetPlayer.AvatarURL,
 			EnemyType:          "PVP",
 			EnemyHP:            enemyHP,
 			EnemyMaxHP:         enemyMaxHP,

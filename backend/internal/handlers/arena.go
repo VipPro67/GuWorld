@@ -15,6 +15,7 @@ import (
 type ArenaRanking struct {
 	PlayerID        string    `json:"player_id"`
 	Username        string    `json:"username"`
+	AvatarURL       string    `json:"avatar_url"`
 	Rank            int       `json:"rank"`
 	Points          int       `json:"points"`
 	DailyChallenges int       `json:"daily_challenges"`
@@ -60,7 +61,7 @@ func GetArenaLeaderboard(c *gin.Context) {
 	tx.Commit()
 
 	rows, err := db.DB.Query(`
-		SELECT a.player_id, p.username, a.rank, a.points, a.updated_at
+		SELECT a.player_id, p.username, p.avatar_url, a.rank, a.points, a.updated_at
 		FROM arena_rankings a
 		JOIN players p ON a.player_id = p.id
 		ORDER BY a.rank ASC
@@ -75,7 +76,7 @@ func GetArenaLeaderboard(c *gin.Context) {
 	leaderboard := []ArenaRanking{}
 	for rows.Next() {
 		var r ArenaRanking
-		if errScan := rows.Scan(&r.PlayerID, &r.Username, &r.Rank, &r.Points, &r.UpdatedAt); errScan == nil {
+		if errScan := rows.Scan(&r.PlayerID, &r.Username, &r.AvatarURL, &r.Rank, &r.Points, &r.UpdatedAt); errScan == nil {
 			leaderboard = append(leaderboard, r)
 		}
 	}

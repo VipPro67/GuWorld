@@ -145,6 +145,13 @@ export const ArenaView: React.FC = () => {
                   
                   <div>
                     <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full shrink-0 overflow-hidden bg-zinc-800 flex items-center justify-center text-[9px] font-bold text-zinc-500">
+                        {row.avatar_url ? (
+                          <img src={row.avatar_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          row.username.slice(0, 2).toUpperCase()
+                        )}
+                      </div>
                       <span
                         onClick={() => !isMe && fetchPlayerProfile(row.username)}
                         className={`font-serif text-sm font-bold ${isMe ? "text-amber-400" : "text-zinc-200 cursor-pointer hover:text-amber-400 hover:underline decoration-dotted transition-colors"}`}

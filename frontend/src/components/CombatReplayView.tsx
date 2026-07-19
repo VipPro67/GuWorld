@@ -39,6 +39,7 @@ interface CombatantReplayInfo {
   sub_rank?: number;
   dao_marks?: Record<string, number>;
   path_masteries?: Record<string, string>;
+  avatar_url?: string;
 }
 
 interface CombatReplayViewProps {
@@ -68,6 +69,7 @@ interface CombatantState {
   subRank: number;
   daoMarks?: Record<string, number>;
   pathMasteries?: Record<string, string>;
+  avatarUrl?: string;
 }
 
 interface FloatingEvent {
@@ -307,6 +309,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           subRank: c.sub_rank || 0,
           daoMarks: c.dao_marks,
           pathMasteries: c.path_masteries,
+          avatarUrl: c.avatar_url,
         };
       }
       return map;
@@ -521,13 +524,22 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
               : isAlly
                 ? `border-emerald-800/40 bg-emerald-950/20 ${borderGlow}`
                 : `border-rose-800/40 bg-rose-950/20 ${borderGlow}`
-        } flex flex-col p-1.5 relative cursor-pointer transition-all hover:brightness-125 min-h-[80px]`}
+        } flex flex-col items-center p-1.5 relative cursor-pointer transition-all hover:brightness-125 aspect-square`}
       >
         {c ? (
           <>
+            {/* Avatar */}
+            <div className="w-8 h-8 rounded-full shrink-0 overflow-hidden bg-zinc-800 flex items-center justify-center text-[11px] font-bold text-zinc-500 border-2 border-white/10 mb-0.5">
+              {c.avatarUrl ? (
+                <img src={c.avatarUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                c.name.slice(0, 2).toUpperCase()
+              )}
+            </div>
+
             {/* Name + death marker */}
-            <div className="flex items-center gap-1 min-w-0">
-              <span className={`text-[10px] font-bold truncate ${c.hp <= 0 ? 'text-zinc-700' : isAlly ? 'text-emerald-300' : 'text-rose-300'}`}>
+            <div className="text-center min-w-0 w-full">
+              <span className={`text-[9px] font-bold truncate block leading-tight ${c.hp <= 0 ? 'text-zinc-700' : isAlly ? 'text-emerald-300' : 'text-rose-300'}`}>
                 {c.name}
                 {c.hp <= 0 && '†'}
               </span>
@@ -535,7 +547,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
 
             {/* Type badge */}
             {!isAlly && c.kindDetail && c.kindDetail !== "" && (
-              <span className={`text-[7px] px-1 rounded border font-bold self-start mt-0.5 ${
+              <span className={`text-[6px] px-1 rounded border font-bold mt-0.5 ${
                 c.kindDetail === "Boss" ? 'bg-red-900/60 text-red-300 border-red-800' :
                 c.kindDetail === "Elite" ? 'bg-purple-900/60 text-purple-300 border-purple-800' :
                 'bg-zinc-800/60 text-zinc-400 border-zinc-700'
@@ -545,48 +557,41 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             )}
 
             {/* HP Bar */}
-            <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden mt-1">
+            <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden mt-0.5">
               <div
                 className={`h-full rounded-full transition-all ${c.hp <= 0 ? 'bg-zinc-700' : isAlly ? 'bg-emerald-500' : 'bg-rose-500'}`}
                 style={{ width: `${pct}%` }}
               />
             </div>
 
-            {/* HP number + Mana */}
-            <div className="flex items-center justify-between mt-0.5 text-[8px] font-mono">
+            {/* HP number */}
+            <div className="text-[7px] font-mono mt-0.5">
               <span className={c.hp <= 0 ? 'text-zinc-700' : 'text-zinc-400'}>
-                {c.hp}/{c.maxHp}
+                {Math.round(c.hp)}/{Math.round(c.maxHp)}
               </span>
-              {c.maxMp > 0 && (
-                <span className="text-purple-400/70">
-                  MP {c.mp}/{c.maxMp}
-                </span>
-              )}
             </div>
 
-            {/* Stats row */}
-            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-              {c.damage > 0 && (
-                <span className="text-[7px] px-1 rounded bg-rose-950/50 text-rose-400 border border-rose-800/40 font-mono leading-tight">
-                  ATK {c.damage}
-                </span>
-              )}
-              {c.defense > 0 && (
-                <span className="text-[7px] px-1 rounded bg-blue-950/50 text-blue-400 border border-blue-800/40 font-mono leading-tight">
-                  DEF {c.defense}
-                </span>
-              )}
-              {c.speed > 0 && (
-                <span className="text-[7px] px-1 rounded bg-cyan-950/50 text-cyan-400 border border-cyan-800/40 font-mono leading-tight">
-                  SPD {c.speed}
-                </span>
-              )}
-              {c.shield > 0 && (
-                <span className="text-[7px] px-1 rounded bg-indigo-950/50 text-indigo-400 border border-indigo-800/40 font-mono leading-tight">
-                  🛡 {c.shield}
-                </span>
-              )}
-            </div>
+            {/* Mana Bar */}
+            {c.maxMp > 0 && (
+              <>
+                <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden mt-0.5">
+                  <div
+                    className="h-full rounded-full bg-purple-500/70 transition-all"
+                    style={{ width: `${c.maxMp > 0 ? Math.min(100, (c.mp / c.maxMp) * 100) : 0}%` }}
+                  />
+                </div>
+                <div className="text-[6px] font-mono text-purple-400/70 mt-0.5">
+                  MP {Math.round(c.mp)}/{Math.round(c.maxMp)}
+                </div>
+              </>
+            )}
+
+            {/* Shield */}
+            {c.shield > 0 && (
+              <div className="text-[6px] font-mono text-cyan-400/80 mt-0.5 flex items-center gap-0.5">
+                🛡 {Math.round(c.shield)}
+              </div>
+            )}
           </>
         ) : (
           <span className="text-[8px] text-zinc-800 mx-auto mt-auto mb-auto">
@@ -614,7 +619,16 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           onClick={e => e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-3">
-            <h3 className={`text-base font-bold ${isAlly ? 'text-emerald-300' : 'text-rose-300'}`}>{c.name}</h3>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full shrink-0 overflow-hidden bg-zinc-800 flex items-center justify-center text-[11px] font-bold text-zinc-500">
+                {c.avatarUrl ? (
+                  <img src={c.avatarUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  c.name.slice(0, 2).toUpperCase()
+                )}
+              </div>
+              <h3 className={`text-base font-bold ${isAlly ? 'text-emerald-300' : 'text-rose-300'}`}>{c.name}</h3>
+            </div>
             <button
               onClick={() => setDetailCombatant(null)}
               className="text-zinc-600 hover:text-zinc-300 text-lg leading-none"

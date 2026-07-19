@@ -37,6 +37,7 @@ type SectJoinRequest struct {
 	Status    string    `json:"status"` // PENDING, APPROVED, REJECTED
 	CreatedAt time.Time `json:"created_at"`
 	Username   string `json:"username,omitempty"`
+	AvatarURL  string `json:"avatar_url,omitempty"`
 	PlayerRank int    `json:"player_rank,omitempty"`
 }
 
@@ -49,6 +50,7 @@ type SectPromotionRequest struct {
 	Status      string    `json:"status"` // PENDING, APPROVED, REJECTED
 	CreatedAt   time.Time `json:"created_at"`
 	Username   string `json:"username,omitempty"`
+	AvatarURL  string `json:"avatar_url,omitempty"`
 	PlayerRank int    `json:"player_rank,omitempty"`
 }
 
@@ -333,7 +335,7 @@ func GetMySectStatus(c *gin.Context) {
 
 	// Leaderboard inside the sect
 	rows, err := db.DB.Query(`
-		SELECT p.username, sm.member_rank, sm.contribution_points
+		SELECT p.username, p.avatar_url, sm.member_rank, sm.contribution_points
 		FROM sect_members sm
 		JOIN players p ON sm.player_id = p.id
 		WHERE sm.sect_id = $1
@@ -343,6 +345,7 @@ func GetMySectStatus(c *gin.Context) {
 	
 	type LeaderboardEntry struct {
 		Username     string `json:"username"`
+		AvatarURL    string `json:"avatar_url"`
 		Rank         string `json:"rank"`
 		Contribution int    `json:"contribution"`
 	}
@@ -351,7 +354,7 @@ func GetMySectStatus(c *gin.Context) {
 		defer rows.Close()
 		for rows.Next() {
 			var entry LeaderboardEntry
-			if err := rows.Scan(&entry.Username, &entry.Rank, &entry.Contribution); err == nil {
+			if err := rows.Scan(&entry.Username, &entry.AvatarURL, &entry.Rank, &entry.Contribution); err == nil {
 				leaderboard = append(leaderboard, entry)
 			}
 		}
@@ -1601,7 +1604,7 @@ func GetSectMembers(c *gin.Context) {
 	}
 
 	rows, err := db.DB.Query(`
-		SELECT sm.player_id, p.username, sm.member_rank, sm.contribution_points, sm.joined_at, p.rank
+		SELECT sm.player_id, p.username, p.avatar_url, sm.member_rank, sm.contribution_points, sm.joined_at, p.rank
 		FROM sect_members sm
 		JOIN players p ON sm.player_id = p.id
 		WHERE sm.sect_id = $1
@@ -1624,6 +1627,7 @@ func GetSectMembers(c *gin.Context) {
 	type MemberInfo struct {
 		PlayerID     uuid.UUID `json:"player_id"`
 		Username     string    `json:"username"`
+		AvatarURL    string    `json:"avatar_url"`
 		MemberRank   string    `json:"member_rank"`
 		Contribution int       `json:"contribution_points"`
 		JoinedAt     time.Time `json:"joined_at"`
@@ -1633,7 +1637,7 @@ func GetSectMembers(c *gin.Context) {
 	var members []MemberInfo
 	for rows.Next() {
 		var mi MemberInfo
-		if err := rows.Scan(&mi.PlayerID, &mi.Username, &mi.MemberRank, &mi.Contribution, &mi.JoinedAt, &mi.PlayerRank); err == nil {
+		if err := rows.Scan(&mi.PlayerID, &mi.Username, &mi.AvatarURL, &mi.MemberRank, &mi.Contribution, &mi.JoinedAt, &mi.PlayerRank); err == nil {
 			members = append(members, mi)
 		}
 	}
@@ -2224,7 +2228,7 @@ func GetJoinRequests(c *gin.Context) {
 	}
 
 	rows, err := db.DB.Query(`
-		SELECT r.id, r.sect_id, r.player_id, r.status, r.created_at, p.username, p.rank
+		SELECT r.id, r.sect_id, r.player_id, r.status, r.created_at, p.username, p.avatar_url, p.rank
 		FROM sect_join_requests r
 		JOIN players p ON r.player_id = p.id
 		WHERE r.sect_id = $1 AND r.status = 'PENDING'
@@ -2239,7 +2243,7 @@ func GetJoinRequests(c *gin.Context) {
 	var reqs []SectJoinRequest
 	for rows.Next() {
 		var r SectJoinRequest
-		if err := rows.Scan(&r.ID, &r.SectID, &r.PlayerID, &r.Status, &r.CreatedAt, &r.Username, &r.PlayerRank); err == nil {
+		if err := rows.Scan(&r.ID, &r.SectID, &r.PlayerID, &r.Status, &r.CreatedAt, &r.Username, &r.AvatarURL, &r.PlayerRank); err == nil {
 			reqs = append(reqs, r)
 		}
 	}
@@ -2384,7 +2388,7 @@ func GetPromotionRequests(c *gin.Context) {
 	}
 
 	rows, err := db.DB.Query(`
-		SELECT r.id, r.sect_id, r.player_id, r.current_rank, r.target_rank, r.status, r.created_at, p.username, p.rank
+		SELECT r.id, r.sect_id, r.player_id, r.current_rank, r.target_rank, r.status, r.created_at, p.username, p.avatar_url, p.rank
 		FROM sect_promotion_requests r
 		JOIN players p ON r.player_id = p.id
 		WHERE r.sect_id = $1 AND r.status = 'PENDING'
@@ -2399,7 +2403,7 @@ func GetPromotionRequests(c *gin.Context) {
 	var reqs []SectPromotionRequest
 	for rows.Next() {
 		var r SectPromotionRequest
-		if err := rows.Scan(&r.ID, &r.SectID, &r.PlayerID, &r.CurrentRank, &r.TargetRank, &r.Status, &r.CreatedAt, &r.Username, &r.PlayerRank); err == nil {
+		if err := rows.Scan(&r.ID, &r.SectID, &r.PlayerID, &r.CurrentRank, &r.TargetRank, &r.Status, &r.CreatedAt, &r.Username, &r.AvatarURL, &r.PlayerRank); err == nil {
 			reqs = append(reqs, r)
 		}
 	}

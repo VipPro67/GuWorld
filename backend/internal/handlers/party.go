@@ -13,8 +13,9 @@ import (
 )
 
 type PartyMember struct {
-	ID       string `json:"id"`
-	Username string `json:"username"`
+	ID        string `json:"id"`
+	Username  string `json:"username"`
+	AvatarURL string `json:"avatar_url,omitempty"`
 }
 
 func CreateParty(c *gin.Context) {
@@ -44,7 +45,7 @@ func CreateParty(c *gin.Context) {
 
 	partyID := uuid.New()
 	members := []PartyMember{
-		{ID: player.ID.String(), Username: player.Username},
+		{ID: player.ID.String(), Username: player.Username, AvatarURL: player.AvatarURL},
 	}
 	membersBytes, _ := json.Marshal(members)
 
@@ -178,7 +179,7 @@ func InvitePlayer(c *gin.Context) {
 		return
 	}
 
-	members = append(members, PartyMember{ID: targetPlayer.ID.String(), Username: targetPlayer.Username})
+	members = append(members, PartyMember{ID: targetPlayer.ID.String(), Username: targetPlayer.Username, AvatarURL: targetPlayer.AvatarURL})
 	newMembersBytes, _ := json.Marshal(members)
 
 	_, err = tx.Exec("UPDATE parties SET members = $1 WHERE id = $2", newMembersBytes, player.PartyID)
