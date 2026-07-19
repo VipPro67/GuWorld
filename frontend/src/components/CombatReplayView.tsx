@@ -697,6 +697,9 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
     let totalDmgDealt = 0;
     let totalDmgTaken = 0;
     let shieldsUsed = 0;
+    let manaCost = 0;
+    let itemsUsed = 0;
+    let stonesUsed = 0;
 
     for (const log of logs) {
       if (log.damage && log.damage > 0) {
@@ -707,8 +710,20 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
       if (log.action === "SHIELD_GAIN" || log.action === "SHIELD_ABSORB") {
         shieldsUsed += log.damage || 0;
       }
+      if (log.action === "MANA_COST") {
+        const isFromPlayer = log.actor_name === playerName || log.actor_id === playerName;
+        if (isFromPlayer) manaCost += log.damage || 0;
+      }
+      if (log.action === "AUTO_ITEM_USAGE") {
+        const m = log.detail?.match(/(\d+)/);
+        if (m) itemsUsed += parseInt(m[1]);
+      }
+      if (log.action === "AUTO_STONE_USAGE") {
+        const m = log.detail?.match(/(\d+)/);
+        if (m) stonesUsed += parseInt(m[1]);
+      }
     }
-    return { totalDmgDealt, totalDmgTaken, shieldsUsed };
+    return { totalDmgDealt, totalDmgTaken, shieldsUsed, manaCost, itemsUsed, stonesUsed };
   }, [logs, playerName]);
 
   const summary = useMemo(() => {
@@ -877,6 +892,18 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
               <div className="text-zinc-500">Khiên dùng</div>
               <div className="font-bold text-lg text-blue-400">{summary.shieldsUsed.toLocaleString()}</div>
+            </div>
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
+              <div className="text-zinc-500">Mana tiêu hao</div>
+              <div className="font-bold text-lg text-purple-400">{summary.manaCost.toLocaleString()}</div>
+            </div>
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
+              <div className="text-zinc-500">Số item dùng</div>
+              <div className="font-bold text-lg text-emerald-400">{summary.itemsUsed.toLocaleString()}</div>
+            </div>
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
+              <div className="text-zinc-500">Nguyên thạch dùng</div>
+              <div className="font-bold text-lg text-orange-400">{summary.stonesUsed.toLocaleString()}</div>
             </div>
           </div>
         </div>

@@ -121,12 +121,11 @@ func TestCalculateGuEffectForCombatant_Backlash(t *testing.T) {
 	if actor.HP != 200 {
 		t.Fatalf("expected actor HP unchanged by CalculateGuEffectForCombatant, got %f", actor.HP)
 	}
-	// Cost should be penalized (1.5^2 = 2.25x)
-	// BaseManaCost=50 → baseManaPct = 50/100 = 0.50, cost = 0.50 * 1000 = 500
-	baseCost := (float64(highRankGu.BaseManaCost) / 100.0) * actor.MaxMana // 500
-	expectedCost := baseCost * 1.5 * 1.5 // 1125
+	// Rank 1 using mortal Gu (rank 3): multiplier 1x, cost = 500
+	// Rank difference penalty removed; mortal rank multiplier applies instead
+	expectedCost := (float64(highRankGu.BaseManaCost) / 100.0) * actor.MaxMana // 500
 	if cost < expectedCost*0.9 || cost > expectedCost*1.1 {
-		t.Fatalf("expected cost around %.0f after rank penalty, got %.0f", expectedCost, cost)
+		t.Fatalf("expected cost around %.0f for rank 1 mortal with mortal gu, got %.0f", expectedCost, cost)
 	}
 	_ = dmg
 	_ = def

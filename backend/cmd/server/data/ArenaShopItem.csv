@@ -1,0 +1,2 @@
+id,price,qty,stock,is_default,sort_order
+spicy_wine,50,1,-1,true,0

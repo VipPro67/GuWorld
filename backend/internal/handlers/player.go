@@ -12,8 +12,8 @@ import (
 	"net/url"
 	"os"
 	"regexp"
-	"strings"
 	"strconv"
+	"strings"
 	"time"
 	"unicode"
 
@@ -1132,16 +1132,26 @@ func getFoodNutrition(foodID string) int {
 	}
 	if spec, ok := models.ItemRegistry[foodID]; ok {
 		switch spec.Rank {
-		case 1: return 100
-		case 2: return 200
-		case 3: return 500
-		case 4: return 1000
-		case 5: return 2000
-		case 6: return 5000
-		case 7: return 10000
-		case 8: return 50000
-		case 9: return 100000
-		default: return 100
+		case 1:
+			return 100
+		case 2:
+			return 200
+		case 3:
+			return 500
+		case 4:
+			return 1000
+		case 5:
+			return 2000
+		case 6:
+			return 5000
+		case 7:
+			return 10000
+		case 8:
+			return 50000
+		case 9:
+			return 100000
+		default:
+			return 100
 		}
 	}
 	return 100
@@ -1205,7 +1215,7 @@ func FeedGu(c *gin.Context) {
 	// 4. Loop consuming food until full
 	foodOptions := specs.FoodTypes
 	foodConsumed := make(map[string]int)
-	
+
 	if targetGu.Hunger >= specs.MaxHunger {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng đã no, không cần ăn thêm."})
 		return
@@ -1254,7 +1264,7 @@ func FeedGu(c *gin.Context) {
 			consumedGu := player.GuInventory[consumedGuIndex]
 			foodID = consumedGu.GuID
 			player.GuInventory = append(player.GuInventory[:consumedGuIndex], player.GuInventory[consumedGuIndex+1:]...)
-			
+
 			// Re-find targetGu since slice changed
 			guIndex = -1
 			for i, gu := range player.GuInventory {
@@ -1265,7 +1275,7 @@ func FeedGu(c *gin.Context) {
 			}
 			targetGu = &player.GuInventory[guIndex]
 		}
-		
+
 		foodConsumed[foodID]++
 		nutrition := getFoodNutrition(foodID)
 		targetGu.Hunger += nutrition
@@ -1320,10 +1330,10 @@ func FeedGu(c *gin.Context) {
 		EntityID:       req.GuInstanceID,
 		RequestSummary: fmt.Sprintf("Cho Cổ trùng %s (Instance ID: %s) ăn %s", specs.Name, req.GuInstanceID[:8], foodStr),
 		Metadata: map[string]interface{}{
-			"gu_id":      targetGu.GuID,
-			"gu_name":    specs.Name,
+			"gu_id":         targetGu.GuID,
+			"gu_name":       specs.Name,
 			"food_consumed": foodConsumed,
-			"new_hunger": targetGu.Hunger,
+			"new_hunger":    targetGu.Hunger,
 		},
 		IPAddress: c.ClientIP(),
 		Success:   true,
@@ -1456,7 +1466,7 @@ func FeedGroup(c *gin.Context) {
 				}
 				fedThisGu = true
 			}
-			
+
 			if fedThisGu {
 				gu.Status = "ACTIVE"
 				if gu.IsVital {
@@ -1818,7 +1828,7 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 				}
 			}
 
-						if spec.Effects.Passive != nil {
+			if spec.Effects.Passive != nil {
 				passive := spec.Effects.Passive
 				mult := getPathMasteryMultiplier(player, spec.Path)
 				stats["attack"] += passive.StatBaseAttack * mult
@@ -1905,8 +1915,8 @@ func EquipGu(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": "Gu bug is already equipped", "player": player})
 			return
 		}
-		if equippedCount >= 6 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Aperture capacity full! Cannot equip more than 6 Gu bugs."})
+		if equippedCount >= 60 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Aperture capacity full! Cannot equip more than 60 Gu bugs."})
 			return
 		}
 		targetGu.Equipped = true
@@ -2474,7 +2484,7 @@ func UseConsumableGu(c *gin.Context) {
 	cost := calculateEnergyCost(&player, &specs)
 	player.CurrentMana -= cost
 
-		var logs []string
+	var logs []string
 	if specs.Effects.Other != nil {
 		for _, mechanic := range specs.Effects.Other {
 			if mechanic.EventTrigger == "ON_CONSUME" {
@@ -2592,7 +2602,7 @@ func UseSupportGu(c *gin.Context) {
 	cost := calculateEnergyCost(&player, &specs)
 	player.CurrentMana -= cost
 
-		var logs []string
+	var logs []string
 	if specs.Effects.Other != nil {
 		for _, mechanic := range specs.Effects.Other {
 			if mechanic.EventTrigger == "ON_CONSUME" {
@@ -3028,9 +3038,9 @@ func GoogleCallback(c *gin.Context) {
 		&player.LastManaUpdate, &player.CreatedAt,
 		&player.Lifespan, &player.MaxLifespan, &player.TimeSpeedMultiplier,
 		&player.Email, &player.GoogleID, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
-			&player.ApertureStress, &player.LastCultivateTime,
-			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding,
-		)
+		&player.ApertureStress, &player.LastCultivateTime,
+		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding,
+	)
 
 	if err == nil {
 		hasPlayer = true

@@ -87,6 +87,21 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create caravan_shop_items table: %w", err)
 	}
 
+	// 1.2. Create arena_shop_items
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS arena_shop_items (
+		id VARCHAR(50) PRIMARY KEY,
+		price INTEGER NOT NULL,
+		qty INTEGER NOT NULL DEFAULT 1,
+		stock INTEGER NOT NULL DEFAULT -1,
+		is_default BOOLEAN NOT NULL DEFAULT TRUE,
+		sort_order INTEGER NOT NULL DEFAULT 0,
+		updated_at TIMESTAMP DEFAULT NOW()
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create arena_shop_items table: %w", err)
+	}
+
 	// 2. Create gu_dictionary
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS gu_dictionary (
@@ -1104,6 +1119,9 @@ func SeedDictionaries() error {
 	if err := seedShopItemsFromCSV("ShopItem.csv"); err != nil {
 		return fmt.Errorf("CSV shop item seed failed: %w", err)
 	}
+	if err := seedArenaShopItemsFromCSV("ArenaShopItem.csv"); err != nil {
+		return fmt.Errorf("CSV arena shop item seed failed: %w", err)
+	}
 	if err := SeedMonstersAndSpawns(); err != nil {
 		return fmt.Errorf("monster and spawn seeding failed: %w", err)
 	}
@@ -1626,6 +1644,75 @@ func seedShopItemsFromCSV(filename string) error {
 		seeded++
 	}
 	log.Printf("Shop items seeded from %s (%d seeded)", filename, seeded)
+	return nil
+}
+
+// seedArenaShopItemsFromCSV reads ArenaShopItem.csv and upserts arena shop inventory.
+func seedArenaShopItemsFromCSV(filename string) error {
+	f, r, header, err := openCSV(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	col := func(name string) int { return colIndex(header, name) }
+	idIdx, priceIdx := col("id"), col("price")
+	qtyIdx, stockIdx, sortIdx, defaultIdx := col("qty"), col("stock"), col("sort_order"), col("is_default")
+	if idIdx < 0 || priceIdx < 0 {
+		return fmt.Errorf("ArenaShopItem.csv missing required columns (id, price)")
+	}
+	get := func(row []string, idx int) string {
+		if idx < 0 || idx >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[idx])
+	}
+	seeded := 0
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil || len(row) == 0 {
+			continue
+		}
+		id := get(row, idIdx)
+		if id == "" {
+			continue
+		}
+		price, qty, stock, sortOrder := 0, 1, -1, seeded
+		if priceRaw := get(row, priceIdx); priceRaw != "" {
+			fmt.Sscanf(get(row, priceIdx), "%d", &price)
+		}
+		if qtyRaw := get(row, qtyIdx); qtyRaw != "" {
+			fmt.Sscanf(qtyRaw, "%d", &qty)
+		}
+		if stockRaw := get(row, stockIdx); stockRaw != "" {
+			fmt.Sscanf(stockRaw, "%d", &stock)
+		}
+		if sortRaw := get(row, sortIdx); sortRaw != "" {
+			fmt.Sscanf(sortRaw, "%d", &sortOrder)
+		}
+		isDefault := true
+		if defaultIdx >= 0 {
+			defaultRaw := strings.ToLower(get(row, defaultIdx))
+			if defaultRaw == "false" || defaultRaw == "0" || defaultRaw == "no" {
+				isDefault = false
+			}
+		}
+		_, err = DB.Exec(`
+			INSERT INTO arena_shop_items (id, price, qty, stock, is_default, sort_order, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, NOW())
+			ON CONFLICT (id) DO UPDATE
+			SET price=EXCLUDED.price, qty=EXCLUDED.qty, stock=EXCLUDED.stock, is_default=EXCLUDED.is_default,
+			    sort_order=EXCLUDED.sort_order, updated_at=NOW()
+		`, id, price, qty, stock, isDefault, sortOrder)
+		if err != nil {
+			return fmt.Errorf("upsert arena shop item %s: %w", id, err)
+		}
+		seeded++
+	}
+	log.Printf("Arena shop items seeded from %s (%d seeded)", filename, seeded)
 	return nil
 }
 
@@ -2412,6 +2499,11 @@ func ExportToCSV() error {
 			filename: "ShopItem.csv",
 			columns:  []string{"id", "price", "stock", "is_default", "sort_order"},
 			query:    `SELECT id, price, COALESCE(stock,-1), is_default, COALESCE(sort_order,0) FROM caravan_shop_items ORDER BY id`,
+		},
+		{
+			filename: "ArenaShopItem.csv",
+			columns:  []string{"id", "price", "qty", "stock", "is_default", "sort_order"},
+			query:    `SELECT id, price, COALESCE(qty,1), COALESCE(stock,-1), is_default, COALESCE(sort_order,0) FROM arena_shop_items ORDER BY id`,
 		},
 		{
 			filename: "Region.csv",

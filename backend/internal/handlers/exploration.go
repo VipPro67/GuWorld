@@ -18,6 +18,8 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
+const clearedCellCooldown = 15 * time.Minute
+
 func GetCellSeed(x, y int, region string) int64 {
 	respawnWindow := time.Now().Unix() / 180
 	h := sha256.New()
@@ -183,7 +185,7 @@ func GetGrid(c *gin.Context) {
 		return
 	}
 
-	cleaned := cleanupExpiredClearedCells(&player, 2*time.Minute)
+	cleaned := cleanupExpiredClearedCells(&player, clearedCellCooldown)
 	if cleaned {
 		_, err = tx.Exec("UPDATE players SET cleared_cells = $1 WHERE id = $2", player.ClearedCells, player.ID)
 		if err != nil {
@@ -207,7 +209,7 @@ func GetGrid(c *gin.Context) {
 				if err != nil {
 					cell = GenerateCell(cx, cy, player.CurrentRegion)
 				}
-				if isCellClearedRecently(&player, cx, cy, 2*time.Minute) {
+				if isCellClearedRecently(&player, cx, cy, clearedCellCooldown) {
 					cell = models.Cell{X: cx, Y: cy, Type: "Empty", Content: ""}
 				}
 				cells = append(cells, cell)
@@ -320,7 +322,7 @@ func MovePlayer(c *gin.Context) {
 		return
 	}
 
-	cleanupExpiredClearedCells(&player, 2*time.Minute)
+	cleanupExpiredClearedCells(&player, clearedCellCooldown)
 
 	if player.ActiveCombat != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đang trong trạng thái chiến đấu! Hãy kết thúc trận chiến trước."})
@@ -379,7 +381,7 @@ func MovePlayer(c *gin.Context) {
 
 	// Check if cell is cleared recently (2 minutes cooldown)
 	coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
-	isCleared := isCellClearedRecently(&player, player.X, player.Y, 2*time.Minute)
+	isCleared := isCellClearedRecently(&player, player.X, player.Y, clearedCellCooldown)
 
 	// Trigger cell action
 	cell, err := ResolveCell(tx, player.CurrentRegion, player.X, player.Y)
@@ -592,7 +594,7 @@ func MovePlayer(c *gin.Context) {
 				adjY := player.Y + ay
 
 				// check if already cleared
-				if isCellClearedRecently(&player, adjX, adjY, 2*time.Minute) {
+				if isCellClearedRecently(&player, adjX, adjY, clearedCellCooldown) {
 					continue
 				}
 

@@ -619,13 +619,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           )}
         </div>
 
-        {/* Total Mana & Backlash Summary */}
+        {/* Backlash Summary */}
         {(() => {
-          const totalMana = selectedGuIds.reduce((sum, id) => {
-            const gu = eligibleGus.find(g => g.instance_id === id);
-            const spec = gu ? guDictionary[gu.gu_id] : null;
-            return sum + (spec?.base_mana_cost || 0);
-          }, 0);
           const backlashCount = selectedGuIds.filter(id => {
             const gu = eligibleGus.find(g => g.instance_id === id);
             const spec = gu ? guDictionary[gu.gu_id] : null;
@@ -633,14 +628,10 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           }).length;
           return (
             <div className="flex flex-wrap items-center gap-3 mb-4 px-3 py-2 bg-zinc-900/60 border border-zinc-800 rounded-lg text-xs">
-              <span className="text-zinc-400">
-                Mana: <span className={totalMana > (player.current_mana || 0) ? 'text-rose-400 font-bold' : 'text-cyan-400 font-bold'}>{totalMana}</span>
-                <span className="text-zinc-600"> / {player.current_mana?.toFixed(0) || "?"}</span>
-              </span>
               {backlashCount > 0 && (
                 <span className="text-rose-400 flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3" />
-                  {backlashCount} Cổ rank cao → mất {backlashCount * 5} HP
+                  {backlashCount} Cổ rank cao → có thể mất {backlashCount * 5} HP/lần sài
                 </span>
               )}
               <span className="text-zinc-600 ml-auto">{selectedGuIds.length}/7 đã chọn</span>
@@ -660,7 +651,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                 const playerRank = player.rank || 1;
                 const guRank = spec?.rank || 0;
                 const isHigherRank = guRank > playerRank;
-                const manaCost = spec?.base_mana_cost || 0;
                 const pathMatch = spec?.path && spec.path.some(p => p.toLowerCase().includes(bestPath.toLowerCase()));
                 return (
                   <div
@@ -686,12 +676,11 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                         </span>
                       ))}
                     </div>
-                    <div className="flex items-center justify-between mt-1.5 text-[9px] text-zinc-500">
-                      <span>Mana {manaCost}</span>
-                      {spec?.primary_role && (
+                    {spec?.primary_role && (
+                      <div className="mt-1.5 text-[9px] text-zinc-500">
                         <span className="text-zinc-600">{spec.primary_role}</span>
-                      )}
-                    </div>
+                      </div>
+                    )}
                     {isHigherRank && (
                       <div className="mt-1 text-[8px] text-rose-500/80 flex items-center gap-0.5">
                         <AlertTriangle className="w-2.5 h-2.5" /> Phản Phệ -5 HP

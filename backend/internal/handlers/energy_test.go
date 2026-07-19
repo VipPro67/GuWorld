@@ -36,8 +36,8 @@ func TestNormalizeEnergyPoolExpandsImmortalApertureOnly(t *testing.T) {
 	if !normalizeEnergyPool(immortal) {
 		t.Fatal("immortal aperture should normalize to immortal capacity")
 	}
-	if immortal.MaxMana != 999999999 {
-		t.Fatalf("immortal max mana = %v, want 999999999", immortal.MaxMana)
+	if immortal.MaxMana != 99999999999.0 {
+		t.Fatalf("immortal max mana = %v, want 99999999999.0", immortal.MaxMana)
 	}
 }
 
@@ -47,10 +47,12 @@ func TestCalculateEnergyCostSeparatesMortalAndImmortalGu(t *testing.T) {
 	mortalGu := &models.GuDictionaryItem{Rank: 3, BaseManaCost: 10}
 	immortalGu := &models.GuDictionaryItem{Rank: 6, BaseManaCost: 0}
 
-	if got, want := calculateEnergyCost(mortal, mortalGu), 8.0; got != want {
+	// mortal (rank 3) using mortal gu (rank 3): base=8, rank mult 3→5x, cost=40
+	if got, want := calculateEnergyCost(mortal, mortalGu), 40.0; got != want {
 		t.Fatalf("mortal gu cost = %v, want %v", got, want)
 	}
-	if got, want := calculateEnergyCost(immortal, mortalGu), 0.1; got != want {
+	// immortal using mortal gu: free
+	if got, want := calculateEnergyCost(immortal, mortalGu), 0.0; got != want {
 		t.Fatalf("mortal gu in immortal aperture cost = %v, want %v", got, want)
 	}
 	if got, want := calculateEnergyCost(immortal, immortalGu), 1.0; got != want {

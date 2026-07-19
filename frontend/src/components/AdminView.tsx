@@ -224,6 +224,19 @@ export const AdminView: React.FC = () => {
   const [showShopEdit, setShowShopEdit] = useState<string | null>(null);
   const [shopForm, setShopForm] = useState({ id: "", price: 100, stock: -1, is_default: true, sort_order: 0 });
 
+  // ----- Arena Shop state -----
+  const [arenaShopItems, setArenaShopItems] = useState<any[]>([]);
+  const [arenaShopLoading, setArenaShopLoading] = useState(false);
+  const [showArenaShopAdd, setShowArenaShopAdd] = useState(false);
+  const [showArenaShopEdit, setShowArenaShopEdit] = useState<string | null>(null);
+  const [arenaShopForm, setArenaShopForm] = useState({ id: "", price: 50, qty: 1, stock: -1, is_default: true, sort_order: 0 });
+  const [shopTab, setShopTab] = useState<"caravan" | "arena">("caravan");
+  const [shopSearchGus, setShopSearchGus] = useState<any[]>([]);
+  const [shopSearchItems, setShopSearchItems] = useState<any[]>([]);
+  const [shopSearchRecipes, setShopSearchRecipes] = useState<any[]>([]);
+  const [shopSearchLoaded, setShopSearchLoaded] = useState(false);
+  const [itemPicker, setItemPicker] = useState<{source: string; tab: "gu" | "item" | "recipe"; query: string} | null>(null);
+
   // ----- Mine state -----
   const [mineSlots, setMineSlots] = useState<any[]>([]);
   const [mineLoading, setMineLoading] = useState(false);
@@ -315,6 +328,14 @@ export const AdminView: React.FC = () => {
     } catch {} finally { setShopLoading(false); }
   }, []);
 
+  const fetchArenaShopItems = useCallback(async () => {
+    setArenaShopLoading(true);
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/admin/arena-shop`);
+      if (res.ok) setArenaShopItems(await res.json());
+    } catch {} finally { setArenaShopLoading(false); }
+  }, []);
+
   const fetchMineSlots = useCallback(async () => {
     setMineLoading(true);
     try {
@@ -338,6 +359,19 @@ export const AdminView: React.FC = () => {
     try { const res = await authFetch(`${BACKEND_URL}/api/admin/recipes`); if (res.ok) setRecipes(await res.json()); }
     catch {} finally { setRecipesLoading(false); }
   }, []);
+
+  const ensureShopSearchLoaded = useCallback(async () => {
+    if (shopSearchLoaded) return;
+    const [g, i, r] = await Promise.all([
+      authFetch(`${BACKEND_URL}/api/admin/gu-dictionary`),
+      authFetch(`${BACKEND_URL}/api/admin/item-dictionary`),
+      authFetch(`${BACKEND_URL}/api/admin/recipes`),
+    ]);
+    if (g.ok) setShopSearchGus(await g.json());
+    if (i.ok) setShopSearchItems(await i.json());
+    if (r.ok) setShopSearchRecipes(await r.json());
+    setShopSearchLoaded(true);
+  }, [shopSearchLoaded]);
 
   const fetchAuditLogs = useCallback(async () => {
     setAuditLogLoading(true);
@@ -367,8 +401,11 @@ export const AdminView: React.FC = () => {
   }, [section, fetchAuditLogs]);
 
   useEffect(() => {
-    if (section === "shop") fetchShopItems();
-  }, [section, fetchShopItems]);
+    if (section === "shop") {
+      fetchShopItems();
+      fetchArenaShopItems();
+    }
+  }, [section, fetchShopItems, fetchArenaShopItems]);
 
   useEffect(() => {
     if (section === "mines") fetchMineSlots();
@@ -436,6 +473,74 @@ export const AdminView: React.FC = () => {
   };
 
   const totalPages = Math.ceil(total / limit);
+
+  const renderItemPicker = () => itemPicker && (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70" onClick={() => setItemPicker(null)}>
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 w-full max-w-2xl mx-4 shadow-2xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-serif font-bold text-zinc-200">Chọn vật phẩm</h3>
+          <button onClick={() => setItemPicker(null)} className="text-zinc-500 hover:text-zinc-300 cursor-pointer"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="flex gap-1 bg-zinc-800/60 rounded-lg p-1 mb-3">
+          {(["gu", "item", "recipe"] as const).filter(t => {
+            const s = itemPicker.source;
+            if (s === "add-gu" || s === "mission-donate") return t === "gu";
+            if (s === "add-item") return t === "item" || t === "recipe";
+            if (s === "vault") return true;
+            return true;
+          }).map(t => (
+            <button key={t} onClick={() => setItemPicker(p => p ? {...p, tab: t} : p)} className={`flex-1 px-3 py-1.5 text-xs font-semibold font-mono rounded-md transition-colors cursor-pointer ${itemPicker.tab === t ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-300"}`}>
+              {t === "gu" ? "Cổ Trùng" : t === "item" ? "Item" : "Công thức"}
+            </button>
+          ))}
+        </div>
+        <div className="relative mb-3">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <input value={itemPicker.query} onChange={e => setItemPicker(p => p ? {...p, query: e.target.value} : p)} placeholder="Tìm kiếm..." className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" autoFocus />
+        </div>
+        <div className="overflow-y-auto flex-1 space-y-0.5">
+          {(() => {
+            let list: any[] = [];
+            if (itemPicker.tab === "gu") list = shopSearchGus;
+            else if (itemPicker.tab === "item") list = shopSearchItems;
+            else list = shopSearchRecipes;
+            const q = itemPicker.query.toLowerCase();
+            if (q) list = list.filter((x: any) => (x.id || "").toLowerCase().includes(q) || (x.name || "").toLowerCase().includes(q));
+            if (itemPicker.tab === "recipe") {
+              list = list.filter((x: any) => x.target_gu_id);
+            }
+            return list.length === 0 ? (
+              <div className="text-center py-8 text-zinc-500 text-xs italic">Không tìm thấy</div>
+            ) : (
+              list.slice(0, 100).map((x: any) => (
+                <button key={x.id} onClick={() => {
+                  const s = itemPicker.source;
+                  if (s === "shop") setShopForm(f => ({ ...f, id: x.id }));
+                  else if (s === "arena") setArenaShopForm(f => ({ ...f, id: x.id }));
+                  else if (s === "add-item") setAddItemId(x.id);
+                  else if (s === "add-gu") setAddGuId(x.id);
+                  else if (s === "vault") {
+                    const t = itemPicker.tab === "gu" ? "gu" : itemPicker.tab === "item" ? "material" : "recipe";
+                    setStockVaultType(t);
+                    setStockVaultId(x.id);
+                  } else if (s === "mission" || s === "mission-donate") {
+                    setNewMission(p => ({ ...p, target_id: x.id }));
+                  }
+                  setItemPicker(null);
+                }} className="w-full text-left px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer flex items-center gap-3">
+                  <span className="text-xs font-mono text-zinc-400 min-w-[140px]">{x.id}</span>
+                  <span className="text-xs text-zinc-200 truncate">{x.name || x.target_gu_id || "—"}</span>
+                  {itemPicker.tab === "gu" && x.rank && <span className="text-[10px] text-zinc-500 ml-auto">Rank {x.rank}</span>}
+                  {itemPicker.tab === "item" && x.item_type && <span className="text-[10px] text-zinc-500 ml-auto">{x.item_type}</span>}
+                  {itemPicker.tab === "recipe" && x.target_gu_id && <span className="text-[10px] text-zinc-500 ml-auto">→ {x.target_gu_id}</span>}
+                </button>
+              ))
+            );
+          })()}
+        </div>
+      </div>
+    </div>
+  );
 
   if (!player?.is_admin) {
     return (
@@ -705,14 +810,10 @@ export const AdminView: React.FC = () => {
               </div>
               <div>
                 <label className="text-[11px] font-bold text-zinc-500 font-mono">Chọn vật phẩm</label>
-                <select value={addItemId} onChange={e => setAddItemId(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50">
-                  <option value="">-- Chọn --</option>
-                  {Object.values(itemDictionary)
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map(spec => (
-                      <option key={spec.id} value={spec.id}>{spec.name} ({spec.id}) [{spec.item_type}]</option>
-                    ))}
-                </select>
+                <div className="flex gap-2 mt-1">
+                  <input value={addItemId} onChange={e => setAddItemId(e.target.value)} placeholder="Nhập ID hoặc chọn..." className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                  <button onClick={() => { ensureShopSearchLoaded(); setItemPicker({source: "add-item", tab: "item", query: ""}); }} className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-mono cursor-pointer flex items-center gap-1"><Search className="w-3 h-3" />Chọn</button>
+                </div>
               </div>
               <div>
                 <label className="text-[11px] font-bold text-zinc-500 font-mono">Số lượng</label>
@@ -768,14 +869,10 @@ export const AdminView: React.FC = () => {
               </div>
               <div>
                 <label className="text-[11px] font-bold text-zinc-500 font-mono">Chọn cổ trùng</label>
-                <select value={addGuId} onChange={e => setAddGuId(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50">
-                  <option value="">-- Chọn --</option>
-                  {Object.values(guDictionary)
-                    .sort((a, b) => (b.rank || 0) - (a.rank || 0))
-                    .map(spec => (
-                      <option key={spec.id} value={spec.id}>{spec.name} (Rank {spec.rank}) [{spec.gu_type}]</option>
-                    ))}
-                </select>
+                <div className="flex gap-2 mt-1">
+                  <input value={addGuId} onChange={e => setAddGuId(e.target.value)} placeholder="Nhập ID hoặc chọn..." className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                  <button onClick={() => { ensureShopSearchLoaded(); setItemPicker({source: "add-gu", tab: "gu", query: ""}); }} className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-mono cursor-pointer flex items-center gap-1"><Search className="w-3 h-3" />Chọn</button>
+                </div>
               </div>
               <div>
                 <label className="text-[11px] font-bold text-zinc-500 font-mono">Số lượng</label>
@@ -793,6 +890,7 @@ export const AdminView: React.FC = () => {
             </div>
           </div>
         )}
+        {renderItemPicker()}
       </div>
     );
   }
@@ -1152,22 +1250,10 @@ export const AdminView: React.FC = () => {
               </div>
               <div>
                 <label className="text-[11px] font-bold text-zinc-500 font-mono">Vật phẩm</label>
-                {stockVaultType === "recipe" ? (
-                  <input type="text" value={stockVaultId} onChange={e => setStockVaultId(e.target.value)} placeholder="recipe_id" className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
-                ) : (
-                  <div className="mt-1 flex flex-col gap-1">
-                    <input type="text" value={stockVaultSearch} onChange={e => { setStockVaultSearch(e.target.value); setStockVaultId(""); }} placeholder="Lọc nhanh..." className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500/50" />
-                    <select value={stockVaultId} onChange={e => setStockVaultId(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50">
-                      <option value="">-- Chọn --</option>
-                      {(stockVaultType === "gu" ? Object.entries(guDictionary) : Object.entries(itemDictionary))
-                        .filter(([id, spec]) => !stockVaultSearch || id.toLowerCase().includes(stockVaultSearch.toLowerCase()) || (spec as any)?.name?.toLowerCase().includes(stockVaultSearch.toLowerCase()))
-                        .sort(([, a], [, b]) => ((a as any)?.rank || 99) - ((b as any)?.rank || 99))
-                        .map(([id, spec]) => (
-                          <option key={id} value={id}>{(spec as any)?.name || id}</option>
-                        ))}
-                    </select>
-                  </div>
-                )}
+                <div className="flex gap-2 mt-1">
+                  <input value={stockVaultId} onChange={e => setStockVaultId(e.target.value)} placeholder="Nhập ID hoặc chọn..." className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                  <button onClick={() => { ensureShopSearchLoaded(); setItemPicker({source: "vault", tab: stockVaultType === "recipe" ? "recipe" : stockVaultType === "gu" ? "gu" : "item", query: ""}); }} className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-mono cursor-pointer flex items-center gap-1"><Search className="w-3 h-3" />Chọn</button>
+                </div>
               </div>
               {stockVaultType !== "recipe" && (
                 <div>
@@ -1253,18 +1339,9 @@ export const AdminView: React.FC = () => {
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-zinc-500 font-mono">Mục tiêu</label>
-                  <div className="mt-1 flex flex-col gap-1">
-                    <input type="text" value={missionTargetSearch} onChange={e => { setMissionTargetSearch(e.target.value); setNewMission(p => ({ ...p, target_id: "" })); }} placeholder="Lọc nhanh..." className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500/50" />
-                    <select value={newMission.target_id} onChange={e => setNewMission(p => ({ ...p, target_id: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50">
-                      <option value="">-- Chọn --</option>
-                      {(newMission.mission_type === "DONATE" ? Object.entries(guDictionary) : Object.entries(itemDictionary))
-                        //Search both by id and name (if available)
-                        .filter(([id, spec]) => !missionTargetSearch || id.toLowerCase().includes(missionTargetSearch.toLowerCase()) || (spec as any)?.name?.toLowerCase().includes(missionTargetSearch.toLowerCase()))
-                        .sort(([, a], [, b]) => ((a as any)?.rank || 99) - ((b as any)?.rank || 99))
-                        .map(([id, spec]) => (
-                          <option key={id} value={id}>{(spec as any)?.name || id}</option>
-                        ))}
-                    </select>
+                  <div className="flex gap-2 mt-1">
+                    <input value={newMission.target_id} onChange={e => setNewMission(p => ({ ...p, target_id: e.target.value }))} placeholder="Nhập ID hoặc chọn..." className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                    <button onClick={() => { ensureShopSearchLoaded(); setItemPicker({source: newMission.mission_type === "DONATE" ? "mission-donate" : "mission", tab: newMission.mission_type === "DONATE" ? "gu" : "item", query: ""}); }} className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-mono cursor-pointer flex items-center gap-1"><Search className="w-3 h-3" />Chọn</button>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -1290,6 +1367,7 @@ export const AdminView: React.FC = () => {
             </div>
           </div>
         )}
+        {renderItemPicker()}
       </div>
     );
   }
@@ -1685,59 +1763,127 @@ export const AdminView: React.FC = () => {
       {/* Shop section */}
       {section === "shop" && (
         <div className="space-y-4">
-          <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2">
-                <Package className="w-4 h-4 text-emerald-400" />
-                Quản Lý Cửa Hàng
-              </h3>
-              <button onClick={() => { setShopForm({ id: "", price: 100, stock: -1, is_default: true, sort_order: 0 }); setShowShopAdd(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer">
-                <Plus className="w-3.5 h-3.5" />Thêm
-              </button>
-            </div>
-            {shopLoading ? (
-              <div className="flex justify-center py-10"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div>
-            ) : shopItems.length === 0 ? (
-              <div className="text-center py-10 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl">
-                <Package className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
-                <p className="text-xs text-zinc-500">Chưa có mặt hàng nào.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
-                      <th className="px-3 py-2.5 font-semibold">ID</th>
-                      <th className="px-3 py-2.5 font-semibold">Tên</th>
-                      <th className="px-3 py-2.5 font-semibold">Loại</th>
-                      <th className="px-3 py-2.5 font-semibold text-right">Giá</th>
-                      <th className="px-3 py-2.5 font-semibold text-right">Tồn kho</th>
-                      <th className="px-3 py-2.5 font-semibold text-center">Mặc định</th>
-                      <th className="px-3 py-2.5 font-semibold text-right">Thứ tự</th>
-                      <th className="px-3 py-2.5"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {shopItems.map((item: any) => (
-                      <tr key={item.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
-                        <td className="px-3 py-2.5 text-zinc-500 font-mono">{item.id}</td>
-                        <td className="px-3 py-2.5 font-semibold text-zinc-200">{item.name || item.id}</td>
-                        <td className="px-3 py-2.5 text-zinc-400">{item.item_type || "—"}</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{item.price?.toLocaleString()}</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{item.stock === -1 ? "∞" : item.stock}</td>
-                        <td className="px-3 py-2.5 text-center">{item.is_default ? <span className="text-emerald-400">✓</span> : <span className="text-zinc-600">–</span>}</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-zinc-400">{item.sort_order}</td>
-                        <td className="px-3 py-2.5 text-right">
-                          <button onClick={() => { setShopForm({ id: item.id, price: item.price, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowShopEdit(item.id); }} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
-                          <button onClick={async () => { if (!confirm(`Xóa ${item.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/shop/${item.id}`, "DELETE"); if (ok) fetchShopItems(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+          {/* Sub-toggle */}
+          <div className="flex gap-1 bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-1 w-fit">
+            <button onClick={() => setShopTab("caravan")} className={`px-4 py-2 text-xs font-semibold font-mono rounded-lg transition-colors cursor-pointer ${shopTab === "caravan" ? "bg-emerald-600/30 text-emerald-400 border border-emerald-700/50" : "text-zinc-500 hover:text-zinc-300 border border-transparent"}`}>
+              <Package className="w-3.5 h-3.5 inline mr-1.5" />Cửa hàng thường
+            </button>
+            <button onClick={() => setShopTab("arena")} className={`px-4 py-2 text-xs font-semibold font-mono rounded-lg transition-colors cursor-pointer ${shopTab === "arena" ? "bg-amber-600/30 text-amber-400 border border-amber-700/50" : "text-zinc-500 hover:text-zinc-300 border border-transparent"}`}>
+              <Sword className="w-3.5 h-3.5 inline mr-1.5" />Đấu Trường
+            </button>
           </div>
+
+          {shopTab === "caravan" && (
+            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2">
+                  <Package className="w-4 h-4 text-emerald-400" />
+                  Quản Lý Cửa Hàng
+                </h3>
+                <button onClick={() => { setShopForm({ id: "", price: 100, stock: -1, is_default: true, sort_order: 0 }); setShowShopAdd(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer">
+                  <Plus className="w-3.5 h-3.5" />Thêm
+                </button>
+              </div>
+              {shopLoading ? (
+                <div className="flex justify-center py-10"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div>
+              ) : shopItems.length === 0 ? (
+                <div className="text-center py-10 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl">
+                  <Package className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
+                  <p className="text-xs text-zinc-500">Chưa có mặt hàng nào.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
+                        <th className="px-3 py-2.5 font-semibold">ID</th>
+                        <th className="px-3 py-2.5 font-semibold">Tên</th>
+                        <th className="px-3 py-2.5 font-semibold">Loại</th>
+                        <th className="px-3 py-2.5 font-semibold text-right">Giá</th>
+                        <th className="px-3 py-2.5 font-semibold text-right">Tồn kho</th>
+                        <th className="px-3 py-2.5 font-semibold text-center">Mặc định</th>
+                        <th className="px-3 py-2.5 font-semibold text-right">Thứ tự</th>
+                        <th className="px-3 py-2.5"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shopItems.map((item: any) => (
+                        <tr key={item.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                          <td className="px-3 py-2.5 text-zinc-500 font-mono">{item.id}</td>
+                          <td className="px-3 py-2.5 font-semibold text-zinc-200">{item.name || item.id}</td>
+                          <td className="px-3 py-2.5 text-zinc-400">{item.item_type || "—"}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{item.price?.toLocaleString()}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{item.stock === -1 ? "∞" : item.stock}</td>
+                          <td className="px-3 py-2.5 text-center">{item.is_default ? <span className="text-emerald-400">✓</span> : <span className="text-zinc-600">–</span>}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-zinc-400">{item.sort_order}</td>
+                          <td className="px-3 py-2.5 text-right">
+                            <button onClick={() => { setShopForm({ id: item.id, price: item.price, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowShopEdit(item.id); }} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
+                            <button onClick={async () => { if (!confirm(`Xóa ${item.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/shop/${item.id}`, "DELETE"); if (ok) fetchShopItems(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {shopTab === "arena" && (
+            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2">
+                  <Sword className="w-4 h-4 text-amber-400" />
+                  Quản Lý Shop Đấu Trường
+                </h3>
+                <button onClick={() => { setArenaShopForm({ id: "", price: 50, qty: 1, stock: -1, is_default: true, sort_order: 0 }); setShowArenaShopAdd(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">
+                  <Plus className="w-3.5 h-3.5" />Thêm
+                </button>
+              </div>
+              {arenaShopLoading ? (
+                <div className="flex justify-center py-10"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div>
+              ) : arenaShopItems.length === 0 ? (
+                <div className="text-center py-10 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl">
+                  <Sword className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
+                  <p className="text-xs text-zinc-500">Chưa có mặt hàng nào.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
+                        <th className="px-3 py-2.5 font-semibold">ID</th>
+                        <th className="px-3 py-2.5 font-semibold">Tên</th>
+                        <th className="px-3 py-2.5 font-semibold text-right">Giá (Xu ĐT)</th>
+                        <th className="px-3 py-2.5 font-semibold text-right">SL nhận</th>
+                        <th className="px-3 py-2.5 font-semibold text-right">Tồn kho</th>
+                        <th className="px-3 py-2.5 font-semibold text-center">Mặc định</th>
+                        <th className="px-3 py-2.5 font-semibold text-right">Thứ tự</th>
+                        <th className="px-3 py-2.5"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {arenaShopItems.map((item: any) => (
+                        <tr key={item.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                          <td className="px-3 py-2.5 text-zinc-500 font-mono">{item.id}</td>
+                          <td className="px-3 py-2.5 font-semibold text-zinc-200">{item.name || item.id}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-amber-500">{item.price?.toLocaleString()}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{item.qty}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{item.stock === -1 ? "∞" : item.stock}</td>
+                          <td className="px-3 py-2.5 text-center">{item.is_default ? <span className="text-emerald-400">✓</span> : <span className="text-zinc-600">–</span>}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-zinc-400">{item.sort_order}</td>
+                          <td className="px-3 py-2.5 text-right">
+                            <button onClick={() => { setArenaShopForm({ id: item.id, price: item.price, qty: item.qty, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowArenaShopEdit(item.id); }} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
+                            <button onClick={async () => { if (!confirm(`Xóa ${item.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/arena-shop/${item.id}`, "DELETE"); if (ok) fetchArenaShopItems(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
       {/* Add Shop Item Modal */}
@@ -1747,8 +1893,13 @@ export const AdminView: React.FC = () => {
             <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">Thêm mặt hàng</h3>
             <div className="space-y-3">
               <div>
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID (item_dictionary / gu_dictionary)</label>
-                <input value={shopForm.id} onChange={e => setShopForm(f => ({ ...f, id: e.target.value }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID</label>
+                <div className="flex gap-2">
+                  <input value={shopForm.id} onChange={e => setShopForm(f => ({ ...f, id: e.target.value }))} placeholder="Nhập ID hoặc chọn..." className="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                  <button onClick={() => { ensureShopSearchLoaded(); setItemPicker({source: "shop", tab: "gu", query: ""}); }} className="px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded-lg text-xs font-mono cursor-pointer flex items-center gap-1">
+                    <Search className="w-3 h-3" />Chọn
+                  </button>
+                </div>
               </div>
               <div className="flex gap-3">
                 <div className="flex-1">
@@ -1813,6 +1964,97 @@ export const AdminView: React.FC = () => {
               <button onClick={async () => {
                 const ok = await exec(`${BACKEND_URL}/api/admin/shop/${showShopEdit}`, "PUT", shopForm);
                 if (ok) { setShowShopEdit(null); fetchShopItems(); }
+              }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Add Arena Shop Item Modal */}
+      {showArenaShopAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowArenaShopAdd(false)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">Thêm mặt hàng Arena Shop</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID</label>
+                <div className="flex gap-2">
+                  <input value={arenaShopForm.id} onChange={e => setArenaShopForm(f => ({ ...f, id: e.target.value }))} placeholder="Nhập ID hoặc chọn..." className="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                  <button onClick={() => { ensureShopSearchLoaded(); setItemPicker({source: "arena", tab: "item", query: ""}); }} className="px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded-lg text-xs font-mono cursor-pointer flex items-center gap-1">
+                    <Search className="w-3 h-3" />Chọn
+                  </button>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Giá (Xu ĐT)</label>
+                  <input type="number" value={arenaShopForm.price} onChange={e => setArenaShopForm(f => ({ ...f, price: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">SL nhận</label>
+                  <input type="number" value={arenaShopForm.qty} onChange={e => setArenaShopForm(f => ({ ...f, qty: parseInt(e.target.value) || 1 }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tồn kho (-1: vô hạn)</label>
+                  <input type="number" value={arenaShopForm.stock} onChange={e => setArenaShopForm(f => ({ ...f, stock: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Thứ tự</label>
+                  <input type="number" value={arenaShopForm.sort_order} onChange={e => setArenaShopForm(f => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+              </div>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={arenaShopForm.is_default} onChange={e => setArenaShopForm(f => ({ ...f, is_default: e.target.checked }))} className="rounded bg-zinc-800 border-zinc-700" />
+                <span className="text-[11px] text-zinc-400">Mặc định</span>
+              </label>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setShowArenaShopAdd(false)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
+              <button onClick={async () => {
+                const ok = await exec(`${BACKEND_URL}/api/admin/arena-shop`, "POST", arenaShopForm);
+                if (ok) { setShowArenaShopAdd(false); fetchArenaShopItems(); }
+              }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Thêm</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Edit Arena Shop Item Modal */}
+      {showArenaShopEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowArenaShopEdit(null)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">Sửa mặt hàng Arena Shop: {arenaShopForm.id}</h3>
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Giá (Xu ĐT)</label>
+                  <input type="number" value={arenaShopForm.price} onChange={e => setArenaShopForm(f => ({ ...f, price: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">SL nhận</label>
+                  <input type="number" value={arenaShopForm.qty} onChange={e => setArenaShopForm(f => ({ ...f, qty: parseInt(e.target.value) || 1 }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tồn kho</label>
+                  <input type="number" value={arenaShopForm.stock} onChange={e => setArenaShopForm(f => ({ ...f, stock: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Thứ tự</label>
+                  <input type="number" value={arenaShopForm.sort_order} onChange={e => setArenaShopForm(f => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+              </div>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={arenaShopForm.is_default} onChange={e => setArenaShopForm(f => ({ ...f, is_default: e.target.checked }))} className="rounded bg-zinc-800 border-zinc-700" />
+                <span className="text-[11px] text-zinc-400">Mặc định</span>
+              </label>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setShowArenaShopEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
+              <button onClick={async () => {
+                const ok = await exec(`${BACKEND_URL}/api/admin/arena-shop/${showArenaShopEdit}`, "PUT", arenaShopForm);
+                if (ok) { setShowArenaShopEdit(null); fetchArenaShopItems(); }
               }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
             </div>
           </div>
@@ -2165,6 +2407,7 @@ export const AdminView: React.FC = () => {
           </div>
         </div>
       )}
+      {renderItemPicker()}
     </div>
   );
 };

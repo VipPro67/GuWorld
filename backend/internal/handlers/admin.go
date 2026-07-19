@@ -1476,6 +1476,133 @@ func AdminDeleteShopItem(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa mặt hàng khỏi shop"})
 }
 
+// -------- Admin: Arena Shop Management --------
+
+type AdminArenaShopItem struct {
+	ID        string `json:"id"`
+	Price     int    `json:"price"`
+	Qty       int    `json:"qty"`
+	Stock     int    `json:"stock"`
+	IsDefault bool   `json:"is_default"`
+	SortOrder int    `json:"sort_order"`
+	Name      string `json:"name,omitempty"`
+}
+
+func AdminListArenaShopItems(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+
+	rows, err := db.DB.Query(`
+		SELECT a.id, a.price, a.qty, a.stock, a.is_default, a.sort_order,
+			COALESCE(i.name, a.id) AS name
+		FROM arena_shop_items a
+		LEFT JOIN item_dictionary i ON a.id = i.id
+		ORDER BY a.sort_order, a.id
+	`)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách arena shop: " + err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	items := []AdminArenaShopItem{}
+	for rows.Next() {
+		var item AdminArenaShopItem
+		if err := rows.Scan(&item.ID, &item.Price, &item.Qty, &item.Stock, &item.IsDefault, &item.SortOrder, &item.Name); err != nil {
+			continue
+		}
+		items = append(items, item)
+	}
+
+	c.JSON(http.StatusOK, items)
+}
+
+type AdminArenaShopItemRequest struct {
+	ID        string `json:"id"`
+	Price     int    `json:"price"`
+	Qty       int    `json:"qty"`
+	Stock     int    `json:"stock"`
+	IsDefault bool   `json:"is_default"`
+	SortOrder int    `json:"sort_order"`
+}
+
+func AdminCreateArenaShopItem(c *gin.Context) {
+	adminID, ok := requireAdmin(c); if !ok {
+		return
+	}
+
+	var req AdminArenaShopItemRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.ID == "" || req.Price <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+	if req.Qty <= 0 {
+		req.Qty = 1
+	}
+
+	// Verify item exists in item_dictionary
+	var exists bool
+	_ = db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM item_dictionary WHERE id=$1)`, req.ID).Scan(&exists)
+	if !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại trong item_dictionary"})
+		return
+	}
+
+	_, err := db.DB.Exec(`INSERT INTO arena_shop_items (id, price, qty, stock, is_default, sort_order) VALUES ($1,$2,$3,$4,$5,$6)`,
+		req.ID, req.Price, req.Qty, req.Stock, req.IsDefault, req.SortOrder)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thêm: " + err.Error()})
+		return
+	}
+
+	auditlog.Logf(db.DB, &adminID, "admin.create_arena_shop_item", "id=%s price=%d qty=%d stock=%d", req.ID, req.Price, req.Qty, req.Stock)
+	c.JSON(http.StatusOK, gin.H{"message": "Đã thêm mặt hàng vào Arena Shop"})
+}
+
+func AdminUpdateArenaShopItem(c *gin.Context) {
+	adminID, ok := requireAdmin(c); if !ok {
+		return
+	}
+
+	itemID := c.Param("id")
+	var req AdminArenaShopItemRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+	if req.Qty <= 0 {
+		req.Qty = 1
+	}
+
+	_, err := db.DB.Exec(`UPDATE arena_shop_items SET price=$1, qty=$2, stock=$3, is_default=$4, sort_order=$5, updated_at=NOW() WHERE id=$6`,
+		req.Price, req.Qty, req.Stock, req.IsDefault, req.SortOrder, itemID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
+		return
+	}
+
+	auditlog.Logf(db.DB, &adminID, "admin.update_arena_shop_item", "id=%s price=%d qty=%d stock=%d is_default=%v", itemID, req.Price, req.Qty, req.Stock, req.IsDefault)
+	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật mặt hàng Arena Shop"})
+}
+
+func AdminDeleteArenaShopItem(c *gin.Context) {
+	adminID, ok := requireAdmin(c); if !ok {
+		return
+	}
+
+	itemID := c.Param("id")
+
+	_, err := db.DB.Exec(`DELETE FROM arena_shop_items WHERE id=$1`, itemID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
+		return
+	}
+
+	auditlog.Logf(db.DB, &adminID, "admin.delete_arena_shop_item", "id=%s", itemID)
+	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa mặt hàng khỏi Arena Shop"})
+}
+
 // -------- Admin: Mine Slot Management --------
 
 type AdminMineSlot struct {

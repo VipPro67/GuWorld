@@ -27,23 +27,23 @@ type AutoCombatStartRequest struct {
 
 // CombatantInfo returned to frontend for visual replay
 type CombatantInfo struct {
-	ID           string           `json:"id"`
-	Name         string           `json:"name"`
-	Kind         string           `json:"kind"`
-	MaxHP        int              `json:"max_hp"`
-	HP           int              `json:"hp"`
-	MaxMana      int              `json:"max_mana"`
-	Mana         int              `json:"mana"`
-	GridX        int              `json:"grid_x"`
-	GridY        int              `json:"grid_y"`
-	Shield       int              `json:"shield"`
-	Damage       float64          `json:"damage,omitempty"`
-	Defense      float64          `json:"defense,omitempty"`
-	Speed        float64          `json:"speed,omitempty"`
-	KindDetail   string           `json:"kind_detail,omitempty"`
-	Rank         int              `json:"rank,omitempty"`
-	SubRank      int              `json:"sub_rank,omitempty"`
-	DaoMarks     map[string]int   `json:"dao_marks,omitempty"`
+	ID            string            `json:"id"`
+	Name          string            `json:"name"`
+	Kind          string            `json:"kind"`
+	MaxHP         int               `json:"max_hp"`
+	HP            int               `json:"hp"`
+	MaxMana       int               `json:"max_mana"`
+	Mana          int               `json:"mana"`
+	GridX         int               `json:"grid_x"`
+	GridY         int               `json:"grid_y"`
+	Shield        int               `json:"shield"`
+	Damage        float64           `json:"damage,omitempty"`
+	Defense       float64           `json:"defense,omitempty"`
+	Speed         float64           `json:"speed,omitempty"`
+	KindDetail    string            `json:"kind_detail,omitempty"`
+	Rank          int               `json:"rank,omitempty"`
+	SubRank       int               `json:"sub_rank,omitempty"`
+	DaoMarks      map[string]int    `json:"dao_marks,omitempty"`
 	PathMasteries map[string]string `json:"path_masteries,omitempty"`
 }
 
@@ -97,7 +97,10 @@ func AutoCombatStart(c *gin.Context) {
 	for _, guID := range req.Loadout.GuIds {
 		if spec, ok := models.GuRegistry[guID]; ok {
 			if hasCombatActiveEffects(&spec) {
-				act := buildSimActionFromGu(&actor, &spec, "GU_SKILL")
+				act, err := buildSimActionFromGu(&actor, &spec, "GU_SKILL")
+				if err != nil {
+					continue
+				}
 				act.SourceID = guID
 				allActions = append(allActions, act)
 			}
@@ -339,22 +342,22 @@ func AutoCombatStart(c *gin.Context) {
 	}
 	for _, e := range player.ActiveCombat.Enemies {
 		combatantInfos = append(combatantInfos, CombatantInfo{
-			ID:           e.ID,
-			Name:         e.Name,
-			Kind:         "enemy",
-			MaxHP:        int(e.MaxHP),
-			HP:           int(e.HP),
-			MaxMana:      int(e.MaxMana),
-			Mana:         int(e.CurrentMana),
-			GridX:        e.GridX,
-			GridY:        e.GridY,
-			Damage:       e.BaseAttack,
-			Defense:      e.BaseDefense,
-			Speed:        e.Speed,
-			KindDetail:   e.Kind,
-			Rank:         e.Rank,
-			SubRank:      e.SubRank,
-			DaoMarks:     e.DaoMarks,
+			ID:            e.ID,
+			Name:          e.Name,
+			Kind:          "enemy",
+			MaxHP:         int(e.MaxHP),
+			HP:            int(e.HP),
+			MaxMana:       int(e.MaxMana),
+			Mana:          int(e.CurrentMana),
+			GridX:         e.GridX,
+			GridY:         e.GridY,
+			Damage:        e.BaseAttack,
+			Defense:       e.BaseDefense,
+			Speed:         e.Speed,
+			KindDetail:    e.Kind,
+			Rank:          e.Rank,
+			SubRank:       e.SubRank,
+			DaoMarks:      e.DaoMarks,
 			PathMasteries: e.PathMasteries,
 		})
 	}
@@ -675,7 +678,7 @@ func AutoCombatStart(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "combat.finish",
 		RequestSummary: fmt.Sprintf("winner=%s enemy=%s type=%s stonesSpent=%d itemsUsed=%d", winner, enemyName, enemyType, stonesSpent, itemsUsed),
-		IPAddress: c.ClientIP(), Success: alliesAlive,
+		IPAddress:      c.ClientIP(), Success: alliesAlive,
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"message":    "Chiến đấu hoàn tất",
@@ -687,14 +690,18 @@ func AutoCombatStart(c *gin.Context) {
 
 // ── helpers ────────────────────────────────────────────────────────────
 
-func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem, actionType string) simulator.SimAction {
+func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem, actionType string) (simulator.SimAction, error) {
+	if actor.Rank >= 6 && actor.Rank < spec.Rank {
+		return simulator.SimAction{}, fmt.Errorf("Tiên Khiếu không thể điều khiển Cổ trùng cấp cao hơn")
+	}
+
 	dmg, def, cost, err := CalculateGuEffectForCombatant(actor, spec)
 	if err != nil {
 		return simulator.SimAction{
 			ActionType: actionType,
 			Name:       spec.Name,
 			ManaCost:   cost,
-		}
+		}, nil
 	}
 
 	act := simulator.SimAction{
@@ -706,7 +713,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 	}
 
 	if actor.Rank < spec.Rank {
-		act.BacklashDamage = 5.0
+		act.BacklashDamage = 5.0 * float64(spec.Rank-actor.Rank)
 	}
 
 	if spec.Effects.Active != nil {
@@ -753,7 +760,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		act.TargetType = "SINGLE"
 	}
 
-	return act
+	return act, nil
 }
 
 // hasCombatActiveEffects returns true if the Gu's active effects produce a meaningful combat action.
