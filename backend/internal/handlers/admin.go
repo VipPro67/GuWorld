@@ -1373,11 +1373,13 @@ func AdminListShopItems(c *gin.Context) {
 
 	rows, err := db.DB.Query(`
 		SELECT c.id, c.price, c.stock, c.is_default, c.sort_order,
-			COALESCE(i.name, g.name, c.id) AS name,
-			COALESCE(i.item_type, 'Gu') AS item_type
+			COALESCE(i.name, g.name, 'Công thức ' || rg.name, c.id) AS name,
+			CASE WHEN r.id IS NOT NULL THEN 'Recipe' ELSE COALESCE(i.item_type, 'Gu') END AS item_type
 		FROM caravan_shop_items c
 		LEFT JOIN item_dictionary i ON c.id = i.id
 		LEFT JOIN gu_dictionary g ON c.id = g.id
+		LEFT JOIN refining_recipes r ON c.id = r.id
+		LEFT JOIN gu_dictionary rg ON r.target_gu_id = rg.id
 		ORDER BY c.sort_order, c.id
 	`)
 	if err != nil {
@@ -1417,11 +1419,11 @@ func AdminCreateShopItem(c *gin.Context) {
 		return
 	}
 
-	// Verify item exists in item_dictionary or gu_dictionary
+	// Verify item exists in item_dictionary, gu_dictionary, or refining_recipes
 	var exists bool
-	_ = db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM item_dictionary WHERE id=$1 UNION SELECT 1 FROM gu_dictionary WHERE id=$1)`, req.ID).Scan(&exists)
+	_ = db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM item_dictionary WHERE id=$1 UNION SELECT 1 FROM gu_dictionary WHERE id=$1 UNION SELECT 1 FROM refining_recipes WHERE id=$1)`, req.ID).Scan(&exists)
 	if !exists {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại trong item_dictionary hoặc gu_dictionary"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại trong item_dictionary, gu_dictionary hoặc công thức"})
 		return
 	}
 
@@ -1495,9 +1497,12 @@ func AdminListArenaShopItems(c *gin.Context) {
 
 	rows, err := db.DB.Query(`
 		SELECT a.id, a.price, a.qty, a.stock, a.is_default, a.sort_order,
-			COALESCE(i.name, a.id) AS name
+			COALESCE(i.name, g.name, 'Công thức ' || rg.name, a.id) AS name
 		FROM arena_shop_items a
 		LEFT JOIN item_dictionary i ON a.id = i.id
+		LEFT JOIN gu_dictionary g ON a.id = g.id
+		LEFT JOIN refining_recipes r ON a.id = r.id
+		LEFT JOIN gu_dictionary rg ON r.target_gu_id = rg.id
 		ORDER BY a.sort_order, a.id
 	`)
 	if err != nil {
@@ -1541,11 +1546,11 @@ func AdminCreateArenaShopItem(c *gin.Context) {
 		req.Qty = 1
 	}
 
-	// Verify item exists in item_dictionary
+	// Verify item exists in item_dictionary, gu_dictionary, or refining_recipes
 	var exists bool
-	_ = db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM item_dictionary WHERE id=$1)`, req.ID).Scan(&exists)
+	_ = db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM item_dictionary WHERE id=$1 UNION SELECT 1 FROM gu_dictionary WHERE id=$1 UNION SELECT 1 FROM refining_recipes WHERE id=$1)`, req.ID).Scan(&exists)
 	if !exists {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại trong item_dictionary"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại trong item_dictionary, gu_dictionary hoặc công thức"})
 		return
 	}
 

@@ -31,13 +31,15 @@ type ShopItem struct {
 func loadCaravanShopCatalog() ([]ShopItem, error) {
 	rows, err := db.DB.Query(`
 		SELECT c.id, 
-		       COALESCE(i.name, g.name, c.id) AS name, 
+		       COALESCE(i.name, g.name, 'Công thức ' || rg.name, c.id) AS name, 
 		       COALESCE(i.description, g.description, '') AS description,
-		       COALESCE(i.item_type, 'Gu') AS type, 
+		       CASE WHEN r.id IS NOT NULL THEN 'Recipe' ELSE COALESCE(i.item_type, 'Gu') END AS type, 
 		       c.price, c.stock, c.is_default
 		FROM caravan_shop_items c
 		LEFT JOIN item_dictionary i ON c.id = i.id
 		LEFT JOIN gu_dictionary g ON c.id = g.id
+		LEFT JOIN refining_recipes r ON c.id = r.id
+		LEFT JOIN gu_dictionary rg ON r.target_gu_id = rg.id
 		ORDER BY c.sort_order ASC, c.id ASC
 	`)
 	if err != nil {
@@ -69,13 +71,15 @@ func findCaravanShopItem(itemID string) (*ShopItem, error) {
 	var item ShopItem
 	err := db.DB.QueryRow(`
 		SELECT c.id, 
-		       COALESCE(i.name, g.name, c.id) AS name, 
+		       COALESCE(i.name, g.name, 'Công thức ' || rg.name, c.id) AS name, 
 		       COALESCE(i.description, g.description, '') AS description,
-		       COALESCE(i.item_type, 'Gu') AS type, 
+		       CASE WHEN r.id IS NOT NULL THEN 'Recipe' ELSE COALESCE(i.item_type, 'Gu') END AS type, 
 		       c.price, c.stock
 		FROM caravan_shop_items c
 		LEFT JOIN item_dictionary i ON c.id = i.id
 		LEFT JOIN gu_dictionary g ON c.id = g.id
+		LEFT JOIN refining_recipes r ON c.id = r.id
+		LEFT JOIN gu_dictionary rg ON r.target_gu_id = rg.id
 		WHERE c.id = $1
 	`, itemID).Scan(&item.ID, &item.Name, &item.Description, &item.Type, &item.Price, &item.Stock)
 	if err != nil {

@@ -20,10 +20,13 @@ type ArenaShopItem struct {
 func loadArenaShopItems() ([]ArenaShopItem, error) {
 	rows, err := db.DB.Query(`
 		SELECT a.id,
-			COALESCE(i.name, a.id) AS name,
+			COALESCE(i.name, g.name, 'Công thức ' || rg.name, a.id) AS name,
 			a.price, a.qty, a.stock
 		FROM arena_shop_items a
 		LEFT JOIN item_dictionary i ON a.id = i.id
+		LEFT JOIN gu_dictionary g ON a.id = g.id
+		LEFT JOIN refining_recipes r ON a.id = r.id
+		LEFT JOIN gu_dictionary rg ON r.target_gu_id = rg.id
 		ORDER BY a.sort_order ASC, a.id ASC
 	`)
 	if err != nil {
@@ -72,9 +75,12 @@ func BuyArenaShopItem(c *gin.Context) {
 	var targetPrice, targetQty, targetStock int
 	var targetName string
 	err := db.DB.QueryRow(`
-		SELECT a.price, a.qty, a.stock, COALESCE(i.name, a.id)
+		SELECT a.price, a.qty, a.stock, COALESCE(i.name, g.name, 'Công thức ' || rg.name, a.id)
 		FROM arena_shop_items a
 		LEFT JOIN item_dictionary i ON a.id = i.id
+		LEFT JOIN gu_dictionary g ON a.id = g.id
+		LEFT JOIN refining_recipes r ON a.id = r.id
+		LEFT JOIN gu_dictionary rg ON r.target_gu_id = rg.id
 		WHERE a.id = $1
 	`, req.ItemID).Scan(&targetPrice, &targetQty, &targetStock, &targetName)
 	if err != nil {
