@@ -193,7 +193,7 @@ func loadBaoHoangMessages(channel string, sectID sql.NullString) ([]ChatItem, er
 	if channel == "sect" {
 		rows, err = db.DB.Query(`
 			SELECT * FROM (
-				SELECT m.id, m.sender_id, p.username, p.avatar_url, m.content, m.created_at, m.channel
+				SELECT m.id, m.sender_id, p.username, p.avatar_url, COALESCE(p.selected_title, ''), m.content, m.created_at, m.channel
 				FROM messages m
 				JOIN players p ON m.sender_id = p.id
 				WHERE m.receiver_id = $1 AND m.channel = $2 AND m.sect_id = $3
@@ -205,7 +205,7 @@ func loadBaoHoangMessages(channel string, sectID sql.NullString) ([]ChatItem, er
 	} else {
 		rows, err = db.DB.Query(`
 			SELECT * FROM (
-				SELECT m.id, m.sender_id, p.username, p.avatar_url, m.content, m.created_at, m.channel
+				SELECT m.id, m.sender_id, p.username, p.avatar_url, COALESCE(p.selected_title, ''), m.content, m.created_at, m.channel
 				FROM messages m
 				JOIN players p ON m.sender_id = p.id
 				WHERE m.receiver_id = $1 AND m.channel = $2
@@ -223,7 +223,7 @@ func loadBaoHoangMessages(channel string, sectID sql.NullString) ([]ChatItem, er
 	messages := []ChatItem{}
 	for rows.Next() {
 		var m ChatItem
-		if errScan := rows.Scan(&m.ID, &m.SenderID, &m.SenderUsername, &m.SenderAvatar, &m.Content, &m.CreatedAt, &m.Channel); errScan == nil {
+		if errScan := rows.Scan(&m.ID, &m.SenderID, &m.SenderUsername, &m.SenderAvatar, &m.SenderTitle, &m.Content, &m.CreatedAt, &m.Channel); errScan == nil {
 			messages = append(messages, m)
 		} else {
 			log.Printf("loadBaoHoangMessages scan error: %v", errScan)

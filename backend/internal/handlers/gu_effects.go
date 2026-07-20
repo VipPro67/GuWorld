@@ -284,7 +284,6 @@ func HandleConsumeEvent(player *models.Player, gu models.GuInstance, spec models
 		val, _ := params["value"].(float64)
 		years := val
 		player.Lifespan += years
-		player.MaxLifespan += years
 		return fmt.Sprintf("Cổ trùng Thọ Nguyên hòa tan vào không khiếu! Đạo hữu được ban thêm vĩnh viễn %.0f năm thọ mệnh.", years), nil
 	default:
 		return "", fmt.Errorf("Chưa hỗ trợ action code: %s", actionCode)

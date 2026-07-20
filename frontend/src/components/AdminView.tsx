@@ -36,6 +36,11 @@ import {
   Database,
   FlaskConical,
   Activity,
+  Gift,
+  Ticket,
+  Check,
+  Clock,
+  Copy,
 } from "lucide-react";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
@@ -76,7 +81,7 @@ interface PlayerRow {
   primeval_stones: number; immortal_stones: number; wisdom: number;
   is_admin: boolean; created_at: string; current_region: string;
   aptitude_type: string; wall_progress: number; human_qi: number;
-  lifespan: number; max_lifespan: number;
+  lifespan: number;
 }
 
 interface PlayerDetail {
@@ -85,7 +90,7 @@ interface PlayerDetail {
   current_mana: number; max_mana: number; primeval_stones: number;
   immortal_stones: number; wisdom: number; hp: number; base_hp: number;
   wall_progress: number; human_qi: number; current_region: string;
-  is_admin: boolean; created_at: string; lifespan: number; max_lifespan: number;
+  is_admin: boolean; created_at: string; lifespan: number;
   soul_hp: number; max_soul: number; soul_tier: string;
   explore_count: number; aperture_stress: number;
   avatar_url: string; bio: string;
@@ -205,7 +210,7 @@ export const AdminView: React.FC = () => {
   const [stonesImmortal, setStonesImmortal] = useState("");
 
   const [actionLoading, setActionLoading] = useState(false);
-  const [section, setSection] = useState<"players" | "sects" | "data" | "logs" | "shop" | "mines">("players");
+  const [section, setSection] = useState<"players" | "sects" | "data" | "logs" | "shop" | "mines" | "gift_codes">("players");
   const [playersTab, setPlayersTab] = useState<"list" | "online">("list");
 
   // ----- Audit log state -----
@@ -238,12 +243,24 @@ export const AdminView: React.FC = () => {
   const [shopSearchRecipes, setShopSearchRecipes] = useState<any[]>([]);
   const [shopSearchLoaded, setShopSearchLoaded] = useState(false);
   const [itemPicker, setItemPicker] = useState<{source: string; tab: "gu" | "item" | "recipe"; query: string} | null>(null);
+  const [giftPickerIdx, setGiftPickerIdx] = useState<number | null>(null);
 
   // ----- Mine state -----
   const [mineSlots, setMineSlots] = useState<any[]>([]);
   const [mineLoading, setMineLoading] = useState(false);
   const [showMineEdit, setShowMineEdit] = useState<number | null>(null);
   const [mineEditRarity, setMineEditRarity] = useState("");
+
+  // ----- Gift codes state -----
+  const [giftCodes, setGiftCodes] = useState<any[]>([]);
+  const [giftLoading, setGiftLoading] = useState(false);
+  const [newGiftCode, setNewGiftCode] = useState("");
+  const [newGiftMaxUses, setNewGiftMaxUses] = useState(100);
+  const [newGiftPerPlayer, setNewGiftPerPlayer] = useState(1);
+  const [newGiftExpiry, setNewGiftExpiry] = useState(30);
+  const [newGiftRewards, setNewGiftRewards] = useState<{type: string; id: string; amount: number; label: string}[]>([
+    { type: "primeval_stones", id: "", amount: 1000, label: "1.000 Đá Tinh Túy" },
+  ]);
 
   // ----- Online players state -----
   const [onlinePlayers, setOnlinePlayers] = useState<any[]>([]);
@@ -358,6 +375,45 @@ export const AdminView: React.FC = () => {
     } catch {} finally { setOnlineLoading(false); }
   }, []);
 
+  const fetchGiftCodes = useCallback(async () => {
+    setGiftLoading(true);
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/admin/gift-codes`);
+      if (!res.ok) throw new Error("Không thể tải mã quà");
+      const data = await res.json();
+      setGiftCodes(data.codes || []);
+    } catch (err: any) {
+      console.error(err);
+    } finally { setGiftLoading(false); }
+  }, []);
+
+  const handleCreateGiftCode = async () => {
+    if (!newGiftCode.trim()) { if (addToast) addToast("Vui lòng nhập mã code", "error"); return; }
+    if (newGiftRewards.length === 0) { if (addToast) addToast("Vui lòng thêm ít nhất 1 phần thưởng", "error"); return; }
+    setGiftLoading(true);
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/admin/gift-codes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: newGiftCode.trim(),
+          max_uses: newGiftMaxUses,
+          max_per_player: newGiftPerPlayer,
+          expires_in_days: newGiftExpiry,
+          rewards: newGiftRewards,
+        }),
+      });
+      const data = await res.json().catch(() => ({ error: "Lỗi không xác định" }));
+      if (!res.ok) throw new Error(data.error || "Thất bại");
+      if (addToast) addToast(data.message || "Tạo mã quà thành công", "success");
+      setNewGiftCode("");
+      setNewGiftRewards([{ type: "primeval_stones", id: "", amount: 1000, label: "1.000 Đá Tinh Túy" }]);
+      fetchGiftCodes();
+    } catch (err: any) {
+      if (addToast) addToast(err.message, "error");
+    } finally { setGiftLoading(false); }
+  };
+
   const fetchGus = useCallback(async () => {
     setGusLoading(true);
     try { const res = await authFetch(`${BACKEND_URL}/api/admin/gu-dictionary`); if (res.ok) setGus(await res.json()); }
@@ -424,6 +480,10 @@ export const AdminView: React.FC = () => {
   useEffect(() => {
     if (section === "mines") fetchMineSlots();
   }, [section, fetchMineSlots]);
+
+  useEffect(() => {
+    if (section === "gift_codes") fetchGiftCodes();
+  }, [section, fetchGiftCodes]);
 
   useEffect(() => { if (section === "data") { if (dataTab === "gus") fetchGus(); else if (dataTab === "items") fetchItems(); else if (dataTab === "recipes") fetchRecipes(); } }, [section, dataTab, fetchGus, fetchItems, fetchRecipes]);
 
@@ -543,6 +603,11 @@ export const AdminView: React.FC = () => {
                     setStockVaultId(x.id);
                   } else if (s === "mission" || s === "mission-donate") {
                     setNewMission(p => ({ ...p, target_id: x.id }));
+                  } else if (s === "gift" && giftPickerIdx !== null) {
+                    const upd = [...newGiftRewards];
+                    upd[giftPickerIdx] = { ...upd[giftPickerIdx], id: x.id };
+                    setNewGiftRewards(upd);
+                    setGiftPickerIdx(null);
                   }
                   setItemPicker(null);
                 }} className="w-full text-left px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer flex items-center gap-3">
@@ -1429,6 +1494,9 @@ export const AdminView: React.FC = () => {
         <button onClick={() => setSection("mines")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "mines" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
           <Layers className="w-3.5 h-3.5 inline mr-1.5" />Mỏ
         </button>
+        <button onClick={() => setSection("gift_codes")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "gift_codes" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+          <Gift className="w-3.5 h-3.5 inline mr-1.5" />Mã Quà
+        </button>
       </div>
 
       {/* Players section */}
@@ -2231,6 +2299,110 @@ export const AdminView: React.FC = () => {
                 const ok = await exec(`${BACKEND_URL}/api/admin/mine-slots/${showMineEdit}`, "PUT", { rarity: mineEditRarity });
                 if (ok) { setShowMineEdit(null); fetchMineSlots(); }
               }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Gift Codes section */}
+      {section === "gift_codes" && (
+        <div className="space-y-4">
+          <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
+            <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2 mb-4">
+              <Gift className="w-4 h-4 text-amber-400" />
+              Mã Quà Tặng
+            </h3>
+
+            {/* Create new gift code */}
+            <div className="bg-zinc-950/50 border border-zinc-800/40 rounded-lg p-4 mb-4">
+              <h4 className="text-xs font-bold text-zinc-300 mb-3">Tạo mã quà mới</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Mã code</label>
+                  <input value={newGiftCode} onChange={e => setNewGiftCode(e.target.value.toUpperCase())} placeholder="VIP2024" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 font-mono uppercase" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Số lượt tối đa</label>
+                  <input type="number" min={1} value={newGiftMaxUses} onChange={e => setNewGiftMaxUses(Number(e.target.value))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tối đa / người</label>
+                  <input type="number" min={1} value={newGiftPerPlayer} onChange={e => setNewGiftPerPlayer(Number(e.target.value))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Hạn (ngày)</label>
+                  <input type="number" min={1} value={newGiftExpiry} onChange={e => setNewGiftExpiry(Number(e.target.value))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+              </div>
+
+              {/* Rewards builder */}
+              <div className="bg-zinc-950/30 border border-zinc-800/30 rounded-lg p-3 mb-3">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">Phần thưởng</label>
+                {newGiftRewards.map((r, i) => (
+                  <div key={i} className="flex items-center gap-2 mb-2">
+                    <select value={r.type} onChange={e => { const upd = [...newGiftRewards]; upd[i].type = e.target.value; setNewGiftRewards(upd); }} className="px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] text-zinc-200 focus:outline-none">
+                      <option value="primeval_stones">Đá Tinh Túy</option>
+                      <option value="immortal_stones">Tiên Thạch</option>
+                      <option value="human_qi">Nhân Khí</option>
+                      <option value="item">Vật phẩm</option>
+                      <option value="gu">Cổ Trùng</option>
+                      <option value="lifespan">Thọ Nguyên</option>
+                      <option value="wall_progress">Phá Vách</option>
+                      <option value="dao_mark">Đạo Ấn</option>
+                    </select>
+                    {(r.type === "item" || r.type === "gu" || r.type === "dao_mark") && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-mono text-zinc-400 min-w-[80px] truncate" title={r.id || "Chưa chọn"}>{r.id || "—"}</span>
+                        <button onClick={() => { setGiftPickerIdx(i); ensureShopSearchLoaded(); setItemPicker({source: "gift", tab: r.type === "gu" ? "gu" : "item", query: ""}); }} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[10px] font-mono cursor-pointer flex items-center gap-1"><Search className="w-3 h-3" />Chọn</button>
+                      </div>
+                    )}
+                    <input type="number" min={1} value={r.amount} onChange={e => { const upd = [...newGiftRewards]; upd[i].amount = Number(e.target.value); setNewGiftRewards(upd); }} className="w-16 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] text-zinc-200 focus:outline-none" />
+                    <input value={r.label} onChange={e => { const upd = [...newGiftRewards]; upd[i].label = e.target.value; setNewGiftRewards(upd); }} placeholder="Nhãn" className="w-24 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] text-zinc-200 focus:outline-none" />
+                    <button onClick={() => setNewGiftRewards(newGiftRewards.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-300 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
+                  </div>
+                ))}
+                <button onClick={() => setNewGiftRewards([...newGiftRewards, { type: "primeval_stones", id: "", amount: 100, label: "Đá" }])} className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-dashed border-zinc-600 rounded-lg text-[10px] text-zinc-400 hover:text-zinc-200 transition-all cursor-pointer">
+                  + Thêm phần thưởng
+                </button>
+              </div>
+
+              <button onClick={handleCreateGiftCode} disabled={giftLoading} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold disabled:opacity-50 cursor-pointer">
+                {giftLoading ? "Đang tạo..." : "Tạo mã quà"}
+              </button>
+            </div>
+
+            {/* Gift codes list */}
+            <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
+                    <th className="px-3 py-2.5 font-semibold">Mã</th>
+                    <th className="px-3 py-2.5 font-semibold">Phần thưởng</th>
+                    <th className="px-3 py-2.5 font-semibold">Lượt</th>
+                    <th className="px-3 py-2.5 font-semibold">Hạn</th>
+                    <th className="px-3 py-2.5 font-semibold">Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {giftCodes.length === 0 ? (
+                    <tr><td colSpan={5} className="text-center py-10 text-zinc-600 italic">Chưa có mã quà nào.</td></tr>
+                  ) : (
+                    giftCodes.map((gc: any) => (
+                      <tr key={gc.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                        <td className="px-3 py-2.5 font-mono font-bold text-amber-400">{gc.code}</td>
+                        <td className="px-3 py-2.5 text-zinc-300 max-w-[200px] truncate">{gc.rewards?.map((r: any) => r.label).join(", ")}</td>
+                        <td className="px-3 py-2.5 text-zinc-400">{gc.used_count}/{gc.max_uses}</td>
+                        <td className="px-3 py-2.5 text-[10px] text-zinc-500">{gc.expires_at ? new Date(gc.expires_at).toLocaleDateString("vi-VN") : "—"}</td>
+                        <td className="px-3 py-2.5">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${gc.is_active ? "bg-emerald-900/40 text-emerald-400 border border-emerald-700/50" : "bg-red-900/40 text-red-400 border border-red-700/50"}`}>
+                            {gc.is_active ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                            {gc.is_active ? "Hoạt động" : "Vô hiệu"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

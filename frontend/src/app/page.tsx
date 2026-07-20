@@ -12,11 +12,13 @@ import { ExplorationMap } from "@/components/ExplorationMap";
 import { CombatScreen } from "@/components/CombatScreen";
 import { CaravanShop } from "@/components/CaravanShop";
 import { PremiumStoreView } from "@/components/PremiumStoreView";
-import { Sparkles, HelpCircle } from "lucide-react";
+import { Sparkles, HelpCircle, X } from "lucide-react";
 import Link from "next/link";
 import { BaoHoangMarket } from "@/components/BaoHoangMarket";
 import { ArenaView } from "@/components/ArenaView";
 import { MineView } from "@/components/MineView";
+import { GachaPanel } from "@/components/GachaPanel";
+import AchievementsPanel from "@/components/AchievementsPanel";
 import { LobbyView } from "@/components/LobbyView";
 import { GlobalChatOverlay } from "@/components/GlobalChatOverlay";
 import { ToastContainer } from "@/components/ToastContainer";
@@ -85,6 +87,8 @@ export default function Home() {
     acceptTrade,
     declineTrade,
     cancelTrade,
+    showChangelog,
+    setShowChangelog,
   } = useGameStore();
 
   // 1. Session Restoration on Mount
@@ -285,6 +289,14 @@ export default function Home() {
           />
         ) : currentView === "arena" ? (
           <ArenaView />
+        ) : currentView === "gacha" ? (
+          <div className="w-full max-w-4xl mx-auto">
+            <GachaPanel />
+          </div>
+        ) : currentView === "achievements" ? (
+          <div className="w-full max-w-4xl mx-auto">
+            <AchievementsPanel />
+          </div>
         ) : currentView === "mine" ? (
           <MineView />
         ) : currentView === "aperture" ? (
@@ -339,6 +351,51 @@ export default function Home() {
       {/* Toast Notification Container */}
       <ToastContainer />
       <ConfirmDialog />
+
+      {/* Changelog Modal */}
+      {player && showChangelog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm animate-fade-in" onClick={() => setShowChangelog(false)}>
+          <div className="w-full max-w-lg bg-gradient-to-br from-zinc-950 to-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-xl pointer-events-none" />
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-400" />
+                <h3 className="text-base font-serif font-bold text-zinc-100">Cập Nhật Mới!</h3>
+              </div>
+              <button onClick={() => setShowChangelog(false)} className="text-zinc-500 hover:text-zinc-300 cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-3 text-xs text-zinc-300 leading-relaxed">
+              <p className="text-zinc-400">Phiên bản <strong className="text-amber-400">v0.7.0</strong> có những tính năng mới sau:</p>
+              <div className="space-y-2">
+                <div className="flex gap-2.5 items-start bg-pink-950/20 border border-pink-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">🎴</span>
+                  <div>
+                    <span className="font-bold text-pink-300">Mở đá</span>
+                    <p className="text-zinc-400 mt-0.5">Quay thưởng ngẫu nhiên.</p>
+                  </div>
+                </div>
+                <div className="flex gap-2.5 items-start bg-emerald-950/20 border border-emerald-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">🎁</span>
+                  <div>
+                    <span className="font-bold text-emerald-300">Mã Quà (Gift Code)</span>
+                    <p className="text-zinc-400 mt-0.5">Nhập mã quà tại tab "Phúc Lợi" trong Không Khiếu để nhận thưởng.</p>
+                  </div>
+                </div>
+                <div className="flex gap-2.5 items-start bg-amber-950/20 border border-amber-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">🏆</span>
+                  <div>
+                    <span className="font-bold text-amber-300">Thành Tựu & Danh Hiệu</span>
+                    <p className="text-zinc-400 mt-0.5">23 thành tựu, mở khóa danh hiệu và khung hiển thị cạnh tên trong chat.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button onClick={() => setShowChangelog(false)} className="w-full mt-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-semibold transition-all cursor-pointer">
+              Đã hiểu!
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Inspect Player Profile Modal */}
       {inspectedProfile && <PlayerProfileModal />}

@@ -136,6 +136,7 @@ type ChatItem struct {
 	SenderID       string    `json:"sender_id"`
 	SenderUsername string    `json:"sender_username"`
 	SenderAvatar   string    `json:"sender_avatar"`
+	SenderTitle    string    `json:"sender_title"`
 	Content        string    `json:"content"`
 	Channel        string    `json:"channel"`
 	CreatedAt      time.Time `json:"created_at"`

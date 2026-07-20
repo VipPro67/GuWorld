@@ -175,7 +175,6 @@ type Player struct {
 	LastManaUpdate      time.Time           `json:"last_mana_update"` // Time of last mana recalculation
 	CreatedAt           time.Time           `json:"created_at"`
 	Lifespan            float64             `json:"lifespan"`
-	MaxLifespan         float64             `json:"max_lifespan"`
 	TimeSpeedMultiplier float64             `json:"time_speed_multiplier"`
 	PartyID             *uuid.UUID          `json:"party_id"`
 	ArenaRank           *int                `json:"arena_rank"`

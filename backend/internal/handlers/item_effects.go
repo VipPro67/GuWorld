@@ -57,7 +57,6 @@ func regenHPOutOfCombatEffect(player *models.Player, item models.ItemSpec) (stri
 
 func lifespanBoostEffect(player *models.Player, item models.ItemSpec) (string, error) {
 	val := item.Effects["lifespan_boost"]
-	player.MaxLifespan += val
 	player.Lifespan += val
 	return fmt.Sprintf("Đạo hữu sử dụng %s, gia tăng %.0f năm thọ nguyên tối đa và hồi phục %.0f năm tuổi thọ!", item.Name, val, val), nil
 }

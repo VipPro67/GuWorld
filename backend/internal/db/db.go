@@ -829,7 +829,6 @@ func InitSchema() error {
 		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS rank INTEGER DEFAULT 1;`, "item_dictionary.rank"},
 		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{}';`, "item_dictionary.effects"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS lifespan DOUBLE PRECISION NOT NULL DEFAULT 100.0;`, "lifespan"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS max_lifespan DOUBLE PRECISION NOT NULL DEFAULT 100.0;`, "max_lifespan"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS time_speed_multiplier DOUBLE PRECISION NOT NULL DEFAULT 1.0;`, "time_speed_multiplier"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS party_id UUID NULL;`, "party_id"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS arena_rank INTEGER NULL;`, "arena_rank"},
@@ -1026,6 +1025,28 @@ func InitSchema() error {
 			created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 		);`, "create_email_otps_table"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP WITH TIME ZONE DEFAULT NULL;`, "last_activity"},
+		{`CREATE TABLE IF NOT EXISTS gift_codes (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			code VARCHAR(50) NOT NULL UNIQUE,
+			rewards JSONB NOT NULL DEFAULT '[]',
+			max_uses INTEGER NOT NULL DEFAULT 1,
+			used_count INTEGER NOT NULL DEFAULT 0,
+			max_per_player INTEGER NOT NULL DEFAULT 1,
+			expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (NOW() + INTERVAL '30 days'),
+			is_active BOOLEAN NOT NULL DEFAULT true,
+			created_by UUID REFERENCES players(id) ON DELETE SET NULL,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		);`, "create_gift_codes_table"},
+		{`CREATE TABLE IF NOT EXISTS gift_code_redemptions (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			gift_code_id UUID NOT NULL REFERENCES gift_codes(id) ON DELETE CASCADE,
+			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			redeemed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(gift_code_id, player_id)
+		);`, "create_gift_code_redemptions_table"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS earned_achievements JSONB NOT NULL DEFAULT '[]';`, "earned_achievements"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS selected_title VARCHAR(100) NOT NULL DEFAULT '';`, "selected_title"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS selected_frame VARCHAR(50) NOT NULL DEFAULT '';`, "selected_frame"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {

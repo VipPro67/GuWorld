@@ -41,7 +41,6 @@ type PlayerRealtimeSnapshot struct {
 	WallProgress        float64             `json:"wall_progress"`
 	HumanQi             float64             `json:"human_qi"`
 	Lifespan            float64             `json:"lifespan"`
-	MaxLifespan         float64             `json:"max_lifespan"`
 	X                   int                 `json:"x"`
 	Y                   int                 `json:"y"`
 	CurrentRegion       string              `json:"current_region"`
@@ -115,14 +114,14 @@ func loadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, err
 		SELECT id, username, rank, sub_rank, current_mana, max_mana, last_mana_update,
 			time_speed_multiplier, active_combat, aperture_stress, hp, base_hp,
 			primeval_stones, immortal_stones, wall_progress, human_qi,
-			lifespan, max_lifespan, x, y, current_region
+			lifespan, x, y, current_region
 		FROM players WHERE id = $1
 	`, playerID).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.CurrentMana, &player.MaxMana, &player.LastManaUpdate,
 		&player.TimeSpeedMultiplier, &player.ActiveCombat, &player.ApertureStress,
 		&player.HP, &player.BaseHP, &player.PrimevalStones, &player.ImmortalStones,
-		&player.WallProgress, &player.HumanQi, &player.Lifespan, &player.MaxLifespan,
+		&player.WallProgress, &player.HumanQi, &player.Lifespan,
 		&player.X, &player.Y, &player.CurrentRegion,
 	)
 	if err != nil {
@@ -150,7 +149,6 @@ func playerRealtimeSnapshot(player models.Player) PlayerRealtimeSnapshot {
 		WallProgress:        player.WallProgress,
 		HumanQi:             player.HumanQi,
 		Lifespan:            player.Lifespan,
-		MaxLifespan:         player.MaxLifespan,
 		X:                   player.X,
 		Y:                   player.Y,
 		CurrentRegion:       player.CurrentRegion,

@@ -106,7 +106,6 @@ export interface Player {
   last_mana_update: string;
   created_at: string;
   lifespan: number;
-  max_lifespan: number;
   time_speed_multiplier: number;
   party_id?: string | null;
   arena_rank?: number | null;
@@ -754,8 +753,22 @@ interface GameState {
   ascension: () => Promise<{ success: boolean; message: string } | null>;
   triggerTribulation: () => Promise<{ success: boolean; message: string } | null>;
   completeQuest: (questId: string) => Promise<{ success: boolean; message: string } | null>;
+  redeemGiftCode: (code: string) => Promise<{ success: boolean; message: string } | null>;
+  gachaPools: any[];
+  fetchGachaPools: () => Promise<void>;
+  openGacha: (poolId: string) => Promise<{ success: boolean; message: string; reward?: any } | null>;
+  openGacha10: (poolId: string) => Promise<{ success: boolean; message: string; rewards?: any[] } | null>;
   rechargeWithStones: (stones: number) => Promise<{ success: boolean; message: string } | null>;
   clearStress: () => Promise<{ success: boolean; message: string } | null>;
+  showChangelog: boolean;
+  setShowChangelog: (v: boolean) => void;
+  achievements: any[];
+  earnedAchievements: any[];
+  selectedTitle: string;
+  selectedFrame: string;
+  fetchAchievements: () => Promise<void>;
+  claimAchievement: (achievementId: string) => Promise<{ success: boolean; message: string } | null>;
+  selectTitleFrame: (title: string, frame: string) => Promise<{ success: boolean; message: string } | null>;
   sacrificeNPC: (npcId: string) => Promise<{ success: boolean; message: string } | null>;
   exploreNode: (nodeId: string) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
   executeCombatTurn: (equippedGuIds: string[], isCharge?: boolean, targetId?: string, targetX?: number, targetY?: number) => Promise<{ player: Player; logs: string[]; enemy: CombatState | null; victory: boolean; defeat: boolean } | null>;
@@ -1116,6 +1129,11 @@ export const useGameStore = create<GameState>((set, get) => {
   recipes: [],
   recipesLoaded: false,
   quests: [],
+  gachaPools: [],
+  achievements: [],
+  earnedAchievements: [],
+  selectedTitle: '',
+  selectedFrame: '',
   regions: [],
   regionsLoaded: false,
   killerMoves: [],
@@ -1134,6 +1152,7 @@ export const useGameStore = create<GameState>((set, get) => {
   arenaLeaderboard: [],
   inbox: [],
   baoHoangMessages: [],
+  showChangelog: false,
   activeChannel: "world",
   chatOpen: false,
   chatMessages: { world: [], general: [], sect: [] },
@@ -1155,6 +1174,7 @@ export const useGameStore = create<GameState>((set, get) => {
   sectMines: [],
   feedbacks: [],
   setView: (view) => set({ currentView: view }),
+  setShowChangelog: (v) => set({ showChangelog: v }),
 
   toasts: [],
   addToast: (message, type = "info", duration = 4000) => {
@@ -1220,6 +1240,7 @@ export const useGameStore = create<GameState>((set, get) => {
       get().subscribePlayerEvents();
       get().subscribeTradeEvents();
       get().addLog(`Đồng chí ${data.player.username} đã quy vị!`);
+      set({ showChangelog: true });
       return true;
     } catch (err: any) {
       set({ error: err.message });
@@ -2259,6 +2280,148 @@ export const useGameStore = create<GameState>((set, get) => {
     } catch (err: any) {
       set({ error: err.message });
       get().addLog(`Nhận thưởng nhiệm vụ lỗi: ${err.message}`);
+      return { success: false, message: err.message };
+    } finally { set({ actionLoading: false }); }
+  },
+
+  redeemGiftCode: async (code) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return null;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/redeem-gift-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) { throw new Error(data.error || "Mã quà không hợp lệ."); }
+      setPlayerFromServer(data.player);
+      get().addLog(data.message || "Đổi mã quà thành công!");
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Đổi mã quà lỗi: ${err.message}`);
+      return { success: false, message: err.message };
+    } finally { set({ actionLoading: false }); }
+  },
+
+  fetchAchievements: async () => {
+    const { token } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/achievements`);
+      if (response.status === 401 || response.status === 403) return;
+      if (response.ok) {
+        const data = await response.json();
+        set({ achievements: data.achievements || [], earnedAchievements: data.earned || [], selectedTitle: data.selected_title || '', selectedFrame: data.selected_frame || '' });
+      }
+    } catch (err: any) {
+      console.error("Achievements fetch error:", err.message);
+    }
+  },
+  claimAchievement: async (achievementId) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return null;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/achievements/claim`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ achievement_id: achievementId }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) { throw new Error(data.error || "Nhận thưởng thất bại."); }
+      setPlayerFromServer(data.player);
+      get().fetchAchievements();
+      get().addLog(data.message || "Nhận thưởng thành tựu thành công!");
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Nhận thưởng thành tựu lỗi: ${err.message}`);
+      return { success: false, message: err.message };
+    } finally { set({ actionLoading: false }); }
+  },
+  selectTitleFrame: async (title, frame) => {
+    const { token } = get();
+    if (!token) return null;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/achievements/select`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, frame }),
+      });
+      if (response.status === 401 || response.status === 403) return null;
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Cập nhật thất bại.");
+      set({ selectedTitle: title, selectedFrame: frame });
+      get().addLog(data.message || "Đã cập nhật danh hiệu và frame.");
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      console.error("Select title/frame error:", err.message);
+      return { success: false, message: err.message };
+    }
+  },
+
+  fetchGachaPools: async () => {
+    const { token } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/gacha/pools`);
+      if (response.status === 401 || response.status === 403) return;
+      if (response.ok) {
+        const data = await response.json();
+        set({ gachaPools: data.pools || [] });
+      }
+    } catch (err: any) {
+      console.error("Gacha pools error:", err.message);
+    }
+  },
+
+  openGacha: async (poolId) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return null;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/gacha/open`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pool_id: poolId }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) { throw new Error(data.error || "Mở cổ từ thất bại."); }
+      setPlayerFromServer(data.player);
+      get().addLog(data.message || "Mở cổ từ thành công!");
+      return { success: true, message: data.message, reward: data.reward };
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Mở cổ từ lỗi: ${err.message}`);
+      return { success: false, message: err.message };
+    } finally { set({ actionLoading: false }); }
+  },
+
+  openGacha10: async (poolId) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return null;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/gacha/open10`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pool_id: poolId }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) { throw new Error(data.error || "Mở 10 cổ từ thất bại."); }
+      setPlayerFromServer(data.player);
+      get().addLog(data.message || "Mở 10 cổ từ thành công!");
+      return { success: true, message: data.message, rewards: data.rewards };
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Mở 10 cổ từ lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally { set({ actionLoading: false }); }
   },

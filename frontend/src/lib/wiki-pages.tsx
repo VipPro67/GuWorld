@@ -120,10 +120,32 @@ export const wikiPages: WikiPage[] = [
             <div className="relative">
               <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
               <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <span>Phiên Bản v0.6.8 (Hiện tại)</span>
+                <span>Phiên Bản v0.7.0 (Hiện tại)</span>
                 <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono text-[9px]">
                   Mới nhất
                 </span>
+              </h4>
+
+              <ul className="list-disc list-inside text-[var(--text-secondary)] mt-1.5 space-y-1.5 leading-relaxed">
+                <li>
+                  <strong>Mở đá:</strong> Hệ thống quay thưởng ngẫu nhiên với. Mở từ 1 hoặc 10 lần, nhận Nguyên Thạch, Tiên Thạch, Thọ Nguyên, Cổ trùng và Đạo Ấn. Ra mắt hub mới "Mở đá" tại sảnh chính.
+                </li>
+                <li>
+                  <strong>Mã Quà (Gift Code):</strong> Admin tạo mã quà tặng, người chơi nhập mã tại tab "Phúc Lợi" trong Không Khiếu để nhận thưởng. Admin panel có mục "Mã Quà" riêng.
+                </li>
+                <li>
+                  <strong>Thành Tựu & Danh Hiệu:</strong> Hệ thống thành tựu với 23 mốc, mỗi thành tựu có phần thưởng Nguyên Thạch/Tiên Thạch. Một số thành tựu mở khóa khung Frame và Danh Hiệu hiển thị cạnh tên trong khung chat. Quản lý tại tab "Thành Tựu" trong Không Khiếu.
+                </li>
+                <li>
+                  <strong>Tối Ưu Quản Trị:</strong> Tạo mã quà mới có UI chọn vật phẩm bằng picker thay vì nhập tay ID.
+                </li>
+              </ul>
+            </div>
+
+            <div className="relative">
+              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-zinc-700 border-2 border-zinc-950" />
+              <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <span>Phiên Bản v0.6.8</span>
               </h4>
 
               <ul className="list-disc list-inside text-[var(--text-secondary)] mt-1.5 space-y-1.5 leading-relaxed">
@@ -756,6 +778,89 @@ export const wikiPages: WikiPage[] = [
             <h4 className="font-bold text-[var(--text-primary)]">Người Tuyết</h4>
             <p className="text-[var(--text-muted)] leading-relaxed">
               Tộc nhân sinh sống tại băng nguyên. Khóc ra Lệ Băng (tiên tài trân quý Băng đạo) dùng để luyện các loại Tiên Cổ hệ Băng Tuyết.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  },
+  {
+    id: "tinh-nang-moi",
+    title: "Tính Năng Mới",
+    category: "gameplay",
+    keywords: ["tính năng mới", "gacha", "cổ từ", "gift code", "mã quà", "thành tựu", "danh hiệu", "new features"],
+    content: (
+      <div className="space-y-6">
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-950/30 to-rose-950/30 border border-amber-500/20 flex gap-3 items-start">
+          <Sparkles className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-sm font-serif font-bold text-amber-200">Tổng Quan</h4>
+            <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
+              Phiên bản v0.7.0 giới thiệu ba tính năng lớn nhằm tăng trải nghiệm và thu hút người chơi: Hệ thống <strong>Mở đá</strong>, <strong>Mã Quà (Gift Code)</strong> và <strong>Thành Tựu & Danh Hiệu</strong>.
+            </p>
+          </div>
+        </div>
+
+        {/* Cổ Từ */}
+        <div className="bg-gradient-to-br from-pink-950/20 to-rose-950/20 border border-pink-500/20 rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🎴</span>
+            <h3 className="text-sm font-serif font-bold text-pink-200">Mở đá</h3>
+          </div>
+          <div className="space-y-2 text-xs text-[var(--text-secondary)] leading-relaxed">
+            <p>
+              Hệ thống quay thưởng ngẫu nhiên với 3 Pool quay, mỗi pool có tỉ lệ ra phần thưởng riêng:
+            </p>
+            <ul className="list-disc list-inside space-y-1">
+              <li><strong>Pool Tinh Túy:</strong> 100-50.000 Nguyên Thạch, tỉ lệ ra 85%. Giá 1 lần quay: 1.000 Nguyên Thạch. 10 lần: 9.000 Nguyên Thạch.</li>
+              <li><strong>Pool Thọ Nguyên:</strong> 1-200 Thọ Nguyên, tỉ lệ ra 85%. Giá 1 lần quay: 5.000 Nguyên Thạch. 10 lần: 45.000 Nguyên Thạch.</li>
+              <li><strong>Pool Vận Mệnh:</strong> Tiên Thạch, Cổ trùng, Đạo Ấn, tỉ lệ ra 70%. Giá 1 lần quay: 2.000 Nguyên Thạch. 10 lần: 18.000 Nguyên Thạch.</li>
+            </ul>
+            <p>
+              Có thể vào hub "Cổ Từ" ở sảnh chính để mở. Animation quay thưởng với hiệu ứng ánh sáng và thông báo kết quả chi tiết.
+            </p>
+          </div>
+        </div>
+
+        {/* Mã Quà */}
+        <div className="bg-gradient-to-br from-emerald-950/20 to-teal-950/20 border border-emerald-500/20 rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🎁</span>
+            <h3 className="text-sm font-serif font-bold text-emerald-200">Mã Quà (Gift Code)</h3>
+          </div>
+          <div className="space-y-2 text-xs text-[var(--text-secondary)] leading-relaxed">
+            <p>
+              Hệ thống mã quà tặng cho phép Admin tạo các mã code có phần thưởng bên trong. Người chơi nhập mã tại tab <strong>"Phúc Lợi"</strong> trong Không Khiếu.
+            </p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Mỗi mã có số lượt sử dụng tối đa và giới hạn mỗi người chơi.</li>
+              <li>Phần thưởng có thể là: Nguyên Thạch, Tiên Thạch, Nhân Khí, Vật phẩm, Cổ trùng, Thọ Nguyên, Phá Vách, Đạo Ấn.</li>
+              <li>Admin tạo và quản lý mã tại mục "Mã Quà" trong Admin Panel.</li>
+              <li>UI tạo mã mới có picker chọn vật phẩm trực quan thay vì nhập ID thủ công.</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Thành Tựu */}
+        <div className="bg-gradient-to-br from-amber-950/20 to-yellow-950/20 border border-amber-500/20 rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🏆</span>
+            <h3 className="text-sm font-serif font-bold text-amber-200">Thành Tựu & Danh Hiệu</h3>
+          </div>
+          <div className="space-y-2 text-xs text-[var(--text-secondary)] leading-relaxed">
+            <p>
+              Hệ thống thành tựu với 23 mốc thành tựu, mỗi thành tựu có điều kiện mở khóa và phần thưởng riêng. Quản lý tại tab <strong>"Thành Tựu"</strong> trong Không Khiếu.
+            </p>
+            <ul className="list-disc list-inside space-y-1">
+              <li><strong>Thành tựu chiến đấu:</strong> Tân Thủ Nhập Môn, các mốc Rank 2-9.</li>
+              <li><strong>Thành tựu độ kiếp:</strong> Vượt 1, 5, 10 kiếp nạn.</li>
+              <li><strong>Thành tựu Cổ trùng:</strong> Sở hữu 10, 25, 50 loại Cổ khác nhau.</li>
+              <li><strong>Thành tựu khám phá:</strong> Khám phá 100, 500, 1.000 ô địa đồ.</li>
+              <li><strong>Thành tựu kinh tế:</strong> Tích lũy 1.000.000 Nguyên Thạch.</li>
+              <li><strong>Thành tựu tu luyện:</strong> Nhân Khí, Hồn Phách, Phá Vách.</li>
+            </ul>
+            <p>
+              Một số thành tựu cấp cao (từ Rank 4 trở lên, 10 kiếp, 50 Cổ, 1.000 ô địa đồ, 1 triệu Nguyên Thạch, 10.000 Nhân Khí, Phá Vách 100%) mở khóa <strong>Khung Frame</strong> và <strong>Danh Hiệu</strong>. Có thể trang bị danh hiệu và frame tại tab Thành Tựu — danh hiệu sẽ hiển thị cạnh tên trong khung chat.
             </p>
           </div>
         </div>

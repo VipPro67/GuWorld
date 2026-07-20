@@ -19,6 +19,8 @@ import {
   MessageSquare,
   X,
   Shield,
+  Gift,
+  Award,
 } from "lucide-react";
 import { LogConsole } from "./LogConsole";
 
@@ -155,6 +157,24 @@ export const LobbyView: React.FC = () => {
       glow: "group-hover:shadow-[0_0_20px_rgba(139,92,246,0.4)]",
       borderColor: "border-violet-400/20",
       iconColor: "text-violet-100",
+    },
+    {
+      id: "gacha",
+      label: "Đổ Thạch",
+      icon: Gift,
+      gradient: "from-pink-500 to-rose-600",
+      glow: "group-hover:shadow-[0_0_25px_rgba(236,72,153,0.45)]",
+      borderColor: "border-pink-400/30",
+      iconColor: "text-pink-500",
+    },
+    {
+      id: "achievements",
+      label: "Thành Tựu",
+      icon: Award,
+      gradient: "from-amber-500 to-yellow-600",
+      glow: "group-hover:shadow-[0_0_25px_rgba(245,158,11,0.45)]",
+      borderColor: "border-amber-400/30",
+      iconColor: "text-amber-500",
     },
     {
       id: "feedback",

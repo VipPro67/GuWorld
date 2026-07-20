@@ -20,7 +20,11 @@ import {
   User,
   Camera,
   Swords,
+  Gift,
+  Ticket,
+  Check,
 } from "lucide-react";
+import AchievementsPanel from "@/components/AchievementsPanel";
 
 interface ApertureProps {
   player: Player;
@@ -162,7 +166,10 @@ export const Aperture: React.FC<ApertureProps> = ({
 
   const dashOffset = CIRC * (1 - percent / 100);
 
-  const [activeTab, setActiveTab] = useState<"aperture" | "stats" | "quests" | "soul" | "referrals" | "settings">("aperture");
+  const [activeTab, setActiveTab] = useState<"aperture" | "stats" | "quests" | "soul" | "achievements" | "referrals" | "settings">("aperture");
+  const [giftCodeInput, setGiftCodeInput] = useState("");
+  const [giftCodeMsg, setGiftCodeMsg] = useState<string | null>(null);
+  const [giftCodeLoading, setGiftCodeLoading] = useState(false);
 
   // Disguise/stealth settings state
   const [isDisguised, setIsDisguised] = useState(player.is_disguised || false);
@@ -353,6 +360,18 @@ export const Aperture: React.FC<ApertureProps> = ({
           </button>
           <button
             onClick={() => {
+              setActiveTab("achievements");
+              void store.fetchAchievements();
+            }}
+            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${activeTab === "achievements"
+              ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+              : "text-zinc-500 hover:text-zinc-300"
+              }`}
+          >
+            Thành Tựu
+          </button>
+          <button
+            onClick={() => {
               setActiveTab("referrals");
               void store.fetchReferrals();
             }}
@@ -361,7 +380,7 @@ export const Aperture: React.FC<ApertureProps> = ({
               : "text-zinc-500 hover:text-zinc-300"
               }`}
           >
-            Sư Đồ
+            Phúc Lợi
           </button>
           <button
             onClick={() => setActiveTab("settings")}
@@ -749,6 +768,45 @@ export const Aperture: React.FC<ApertureProps> = ({
               </div>
             </div>
 
+            {/* Gift Code Redeem Card */}
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4">
+              <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
+                <Gift className="w-5 h-5 text-amber-400" />
+                <span className="font-serif font-bold text-zinc-100 text-sm">Đổi Mã Quà</span>
+              </div>
+              <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+                <input
+                  value={giftCodeInput}
+                  onChange={e => setGiftCodeInput(e.target.value.toUpperCase())}
+                  placeholder="NHẬP MÃ QUÀ..."
+                  className="flex-1 px-3 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-zinc-200 font-mono uppercase tracking-wider focus:outline-none focus:border-amber-500/50"
+                />
+                <button
+                  disabled={giftCodeLoading || !giftCodeInput.trim()}
+                  onClick={async () => {
+                    setGiftCodeMsg(null);
+                    setGiftCodeLoading(true);
+                    const result = await store.redeemGiftCode(giftCodeInput.trim());
+                    setGiftCodeLoading(false);
+                    if (result?.success) {
+                      setGiftCodeMsg(result.message || "Đổi mã quà thành công!");
+                      setGiftCodeInput("");
+                    } else {
+                      setGiftCodeMsg(result?.message || "Mã quà không hợp lệ.");
+                    }
+                  }}
+                  className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold font-mono cursor-pointer transition-all whitespace-nowrap"
+                >
+                  {giftCodeLoading ? "Đang xử lý..." : "Nhận quà"}
+                </button>
+              </div>
+              {giftCodeMsg && (
+                <div className={`text-[10px] font-mono ${giftCodeMsg.includes("Nhận được") || giftCodeMsg.includes("thành công") ? "text-emerald-400" : "text-red-400"}`}>
+                  {giftCodeMsg}
+                </div>
+              )}
+            </div>
+
             {/* Simulated Purchase (Simulator Widget) */}
             {/* <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-3">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2">
@@ -850,6 +908,10 @@ export const Aperture: React.FC<ApertureProps> = ({
               </div>
             </div>
           </div>
+        )}
+
+        {activeTab === "achievements" && (
+          <AchievementsPanel />
         )}
 
         {activeTab === "settings" && (
@@ -1471,7 +1533,7 @@ function WallControls() {
       <div className="flex justify-between items-center text-xs">
         <span className="text-zinc-400 font-medium">Thọ Nguyên Còn Lại:</span>
         <span className="text-xs font-semibold text-zinc-300 block">
-          {(player.max_lifespan - player.lifespan).toFixed(1)} năm
+                  {(player.lifespan ?? 0).toFixed(1)} năm
         </span>
       </div>
       {/* Aperture Stress Level */}
@@ -1595,7 +1657,7 @@ function BlessedLandControls() {
               <div className="flex justify-between items-center text-xs">
                 <span className="text-zinc-400 font-medium">Thọ Nguyên Còn Lại:</span>
                 <span className="text-xs font-semibold text-zinc-300 block">
-                  {(player.max_lifespan - player.lifespan).toFixed(1)} năm
+          {(player.lifespan ?? 0).toFixed(1)} năm
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs">

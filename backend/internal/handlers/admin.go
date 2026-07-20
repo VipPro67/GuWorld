@@ -46,7 +46,7 @@ func AdminListPlayers(c *gin.Context) {
 		return
 	}
 
-	query := `SELECT id, username, COALESCE(email, ''), rank, sub_rank, current_mana, max_mana, hp, base_hp, primeval_stones, immortal_stones, wisdom, COALESCE(is_admin, false), created_at, COALESCE(current_region, ''), COALESCE(aptitude_type, ''), wall_progress, human_qi, lifespan, max_lifespan FROM players`
+	query := `SELECT id, username, COALESCE(email, ''), rank, sub_rank, current_mana, max_mana, hp, base_hp, primeval_stones, immortal_stones, wisdom, COALESCE(is_admin, false), created_at, COALESCE(current_region, ''), COALESCE(aptitude_type, ''), wall_progress, human_qi, lifespan FROM players`
 	if search != "" {
 		query += ` WHERE username ILIKE $1 OR email ILIKE $1`
 	}
@@ -69,11 +69,11 @@ func AdminListPlayers(c *gin.Context) {
 		var id uuid.UUID
 		var username, email, currentRegion, aptitudeType string
 		var rank, subRank, primevalStones int
-		var currentMana, maxMana, hp, baseHP, immortalStones, wisdom, wallProgress, humanQi, lifespan, maxLifespan float64
+		var currentMana, maxMana, hp, baseHP, immortalStones, wisdom, wallProgress, humanQi, lifespan float64
 		var isAdmin bool
 		var createdAt time.Time
 
-		if err := rows.Scan(&id, &username, &email, &rank, &subRank, &currentMana, &maxMana, &hp, &baseHP, &primevalStones, &immortalStones, &wisdom, &isAdmin, &createdAt, &currentRegion, &aptitudeType, &wallProgress, &humanQi, &lifespan, &maxLifespan); err != nil {
+		if err := rows.Scan(&id, &username, &email, &rank, &subRank, &currentMana, &maxMana, &hp, &baseHP, &primevalStones, &immortalStones, &wisdom, &isAdmin, &createdAt, &currentRegion, &aptitudeType, &wallProgress, &humanQi, &lifespan); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc dữ liệu người chơi"})
 			return
 		}
@@ -97,7 +97,6 @@ func AdminListPlayers(c *gin.Context) {
 			"wall_progress":   wallProgress,
 			"human_qi":        humanQi,
 			"lifespan":        lifespan,
-			"max_lifespan":    maxLifespan,
 		})
 	}
 
@@ -150,7 +149,6 @@ func AdminGetPlayerDetail(c *gin.Context) {
 		"gu_inventory":         player.GuInventory,
 		"materials_inventory":  player.MaterialsInventory,
 		"lifespan":             player.Lifespan,
-		"max_lifespan":         player.MaxLifespan,
 		"soul_hp":              player.SoulHP,
 		"max_soul":             player.MaxSoul,
 		"soul_tier":            player.SoulTier,

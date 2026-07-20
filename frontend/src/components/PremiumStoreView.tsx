@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Gem, ShoppingBag, QrCode, RefreshCw, ShieldCheck, Gift, Lock } from "lucide-react";
 import { PremiumWallet, WalletBalance } from "./PremiumWallet";
-
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
 interface TopupPackage {
@@ -64,6 +63,8 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
   const [shopPackages, setShopPackages] = useState<ShopPackage[]>([]);
   const [shopMessage, setShopMessage] = useState<string | null>(null);
   const [buyingPackage, setBuyingPackage] = useState<string | null>(null);
+
+
 
   const orderCodeFromUrl = useMemo(
     () => (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("orderCode") : null),
@@ -350,7 +351,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
 
           {!successMode && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {topupPackages.map((pkg) => (
+              {topupPackages?.map((pkg) => (
                 <div
                   key={pkg.id}
                   className="rounded-2xl border border-zinc-900 bg-zinc-950/60 p-5 hover:border-emerald-600/30 transition-all text-left flex flex-col justify-between"

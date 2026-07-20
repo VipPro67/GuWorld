@@ -126,6 +126,8 @@ func SetupRouter() *gin.Engine {
 		api.POST("/admin/recipes", middleware.AuthRequired(), handlers.AdminCreateRecipe)
 		api.PUT("/admin/recipes/:id", middleware.AuthRequired(), handlers.AdminUpdateRecipe)
 		api.DELETE("/admin/recipes/:id", middleware.AuthRequired(), handlers.AdminDeleteRecipe)
+		api.POST("/admin/gift-codes", middleware.AuthRequired(), handlers.AdminCreateGiftCode)
+		api.GET("/admin/gift-codes", middleware.AuthRequired(), handlers.AdminListGiftCodes)
 		api.GET("/wallet", middleware.AuthRequired(), handlers.GetWallet)
 		api.POST("/topup/orders", middleware.AuthRequired(), middleware.RateLimit(10, time.Minute), handlers.CreateTopupOrder)
 		api.GET("/topup/orders/:orderCode", middleware.AuthRequired(), handlers.GetTopupOrder)
@@ -148,6 +150,7 @@ func SetupRouter() *gin.Engine {
 			player.POST("/simulate-deposit", handlers.SimulateDeposit)
 			player.POST("/avatar", handlers.UploadAvatar)
 			player.POST("/tick-regen", handlers.TickRegen)
+			player.POST("/redeem-gift-code", handlers.RedeemGiftCode)
 			player.POST("/complete-onboarding", handlers.CompleteOnboarding)
 			player.GET("/combat-settings", handlers.GetCombatSettings)
 			player.PUT("/combat-settings", handlers.UpdateCombatSettings)
@@ -178,6 +181,22 @@ func SetupRouter() *gin.Engine {
 		{
 			quest.GET("", handlers.ListQuests)
 			quest.POST("/complete", handlers.CompleteQuest)
+		}
+
+		gacha := api.Group("/gacha")
+		gacha.Use(middleware.AuthRequired())
+		{
+			gacha.GET("/pools", handlers.GetGachaPools)
+			gacha.POST("/open", handlers.OpenGacha)
+			gacha.POST("/open10", handlers.OpenGacha10)
+		}
+
+		achievement := api.Group("/achievements")
+		achievement.Use(middleware.AuthRequired())
+		{
+			achievement.GET("", handlers.GetAchievements)
+			achievement.POST("/claim", handlers.ClaimAchievement)
+			achievement.POST("/select", handlers.SelectTitleFrame)
 		}
 
 		// Protected Inventory Endpoints

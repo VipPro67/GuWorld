@@ -28,6 +28,7 @@ export const GlobalChatOverlay: React.FC = () => {
   const {
     player,
     baoHoangMessages,
+    achievements,
     sendBaoHoangChat,
     actionLoading,
     fetchPlayerProfile,
@@ -235,13 +236,6 @@ export const GlobalChatOverlay: React.FC = () => {
                     : msg.channel === "general"
                     ? "text-cyan-600 dark:text-cyan-400"
                     : "text-emerald-600 dark:text-emerald-400";
-                const chLabel =
-                  msg.channel === "world"
-                    ? "[Thế Giới]"
-                    : msg.channel === "general"
-                    ? "[Bảo Hoàng]"
-                    : "[Bang Hội]";
-
                 // Card container styles
                 const cardClass = isSystem
                   ? "w-full bg-amber-500/10 dark:bg-amber-950/15 border border-amber-300/30 dark:border-amber-500/10 rounded-lg p-1.5 sm:p-2"
@@ -265,12 +259,16 @@ export const GlobalChatOverlay: React.FC = () => {
                       )}
                     </div>
                     <div className="min-w-0 flex-1 leading-relaxed break-all">
-                      <span className={`${labelColor} font-bold mr-1.5 shrink-0`}>{chLabel}</span>
                       <span
                         onClick={() => !isSystem && !isMe && fetchPlayerProfile(msg.sender_username)}
                         className={`${nameColorClass} mr-1.5`}
                         title={!isSystem && !isMe ? "Bấm để trinh thám cổ sư" : undefined}
                       >
+                        {msg.sender_title && (
+                          <span className="mr-1" title={(achievements.find((a: any) => a.id === msg.sender_title) as any)?.name || msg.sender_title}>
+                            {(achievements.find((a: any) => a.id === msg.sender_title) as any)?.icon || "🏆"}
+                          </span>
+                        )}
                         {msg.sender_username}
                         <span className="text-zinc-400 dark:text-zinc-650 text-[8.5px] font-normal ml-1 normal-case select-none">
                           ({formatRelativeTime(msg.created_at)})

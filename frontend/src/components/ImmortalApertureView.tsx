@@ -620,7 +620,7 @@ export const ImmortalApertureView: React.FC = () => {
                     <div className="text-xs">
                       <div className="text-slate-400 font-semibold">Thọ Nguyên Hiện Tại</div>
                       <div className="text-emerald-400 font-bold mt-0.5">
-                        {(player.lifespan ?? 100).toFixed(2)} / {(player.max_lifespan ?? 100).toFixed(0)} năm
+                        {(player.lifespan ?? 100).toFixed(2)} năm
                       </div>
                     </div>
                   </div>
