@@ -2120,3 +2120,50 @@ func AdminDeleteRecipe(c *gin.Context) {
 	auditlog.Logf(db.DB, &adminID, "admin.delete_recipe", "id=%s", recipeID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa cổ phương"})
 }
+
+type OnlinePlayerRow struct {
+	ID           string     `json:"id"`
+	Username     string     `json:"username"`
+	Rank         int        `json:"rank"`
+	SubRank      int        `json:"sub_rank"`
+	IsOnline     bool       `json:"is_online"`
+	LastActivity *time.Time `json:"last_activity"`
+}
+
+func AdminListOnlinePlayers(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok { return }
+
+	minutesStr := c.DefaultQuery("minutes", "5")
+	minutes, err := strconv.Atoi(minutesStr)
+	if err != nil || minutes < 1 {
+		minutes = 5
+	}
+
+	rows, err := db.DB.Query(`
+		SELECT id, username, rank, sub_rank, last_activity
+		FROM players
+		WHERE last_activity IS NOT NULL
+		ORDER BY last_activity DESC
+		LIMIT 100
+	`)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	threshold := time.Now().Add(-time.Duration(minutes) * time.Minute)
+	result := []OnlinePlayerRow{}
+	for rows.Next() {
+		var r OnlinePlayerRow
+		if err := rows.Scan(&r.ID, &r.Username, &r.Rank, &r.SubRank, &r.LastActivity); err != nil {
+			continue
+		}
+		if r.LastActivity != nil && r.LastActivity.After(threshold) {
+			r.IsOnline = true
+		}
+		result = append(result, r)
+	}
+
+	c.JSON(http.StatusOK, result)
+}

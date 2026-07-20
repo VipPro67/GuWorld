@@ -35,6 +35,7 @@ import {
   BookOpen,
   Database,
   FlaskConical,
+  Activity,
 } from "lucide-react";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
@@ -205,6 +206,7 @@ export const AdminView: React.FC = () => {
 
   const [actionLoading, setActionLoading] = useState(false);
   const [section, setSection] = useState<"players" | "sects" | "data" | "logs" | "shop" | "mines">("players");
+  const [playersTab, setPlayersTab] = useState<"list" | "online">("list");
 
   // ----- Audit log state -----
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -242,6 +244,10 @@ export const AdminView: React.FC = () => {
   const [mineLoading, setMineLoading] = useState(false);
   const [showMineEdit, setShowMineEdit] = useState<number | null>(null);
   const [mineEditRarity, setMineEditRarity] = useState("");
+
+  // ----- Online players state -----
+  const [onlinePlayers, setOnlinePlayers] = useState<any[]>([]);
+  const [onlineLoading, setOnlineLoading] = useState(false);
 
   // ----- Dictionary state -----
   const [dataTab, setDataTab] = useState<"import" | "gus" | "items" | "recipes">("import");
@@ -344,6 +350,14 @@ export const AdminView: React.FC = () => {
     } catch {} finally { setMineLoading(false); }
   }, []);
 
+  const fetchOnlinePlayers = useCallback(async () => {
+    setOnlineLoading(true);
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/admin/players/online?minutes=5`);
+      if (res.ok) setOnlinePlayers(await res.json());
+    } catch {} finally { setOnlineLoading(false); }
+  }, []);
+
   const fetchGus = useCallback(async () => {
     setGusLoading(true);
     try { const res = await authFetch(`${BACKEND_URL}/api/admin/gu-dictionary`); if (res.ok) setGus(await res.json()); }
@@ -412,6 +426,10 @@ export const AdminView: React.FC = () => {
   }, [section, fetchMineSlots]);
 
   useEffect(() => { if (section === "data") { if (dataTab === "gus") fetchGus(); else if (dataTab === "items") fetchItems(); else if (dataTab === "recipes") fetchRecipes(); } }, [section, dataTab, fetchGus, fetchItems, fetchRecipes]);
+
+  useEffect(() => {
+    if (section === "players" && playersTab === "online") fetchOnlinePlayers();
+  }, [section, playersTab, fetchOnlinePlayers]);
 
   useEffect(() => {
     if (selectedSectId) {
@@ -1416,6 +1434,17 @@ export const AdminView: React.FC = () => {
       {/* Players section */}
       {section === "players" && (
         <>
+          <div className="border-b border-zinc-800/80 flex gap-0 mb-4">
+            <button onClick={() => setPlayersTab("list")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${playersTab === "list" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <Users className="w-3.5 h-3.5 inline mr-1.5" />Danh sách
+            </button>
+            <button onClick={() => setPlayersTab("online")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${playersTab === "online" ? "text-emerald-400 border-emerald-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <Activity className="w-3.5 h-3.5 inline mr-1.5" />Online
+            </button>
+          </div>
+
+          {playersTab === "list" && (
+          <>
           <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4 mb-4">
             <div className="flex gap-3 items-end">
               <div className="flex-1 space-y-1">
@@ -1500,6 +1529,71 @@ export const AdminView: React.FC = () => {
                 </div>
               </div>
             </>
+          )}
+          </>
+          )}
+
+          {playersTab === "online" && (
+            <div className="space-y-4">
+              <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-emerald-400" />
+                    Người chơi Online (5 phút qua)
+                  </h3>
+                  <button onClick={fetchOnlinePlayers} disabled={onlineLoading} className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:text-white transition-all disabled:opacity-50 cursor-pointer">
+                    <RefreshCw className={`w-3.5 h-3.5 ${onlineLoading ? "animate-spin" : ""}`} /> Làm mới
+                  </button>
+                </div>
+                {onlineLoading ? (
+                  <div className="flex flex-col items-center justify-center py-16 space-y-3">
+                    <RefreshCw className="w-8 h-8 text-emerald-400 animate-spin" />
+                    <span className="text-xs text-zinc-500 font-mono">Đang tải...</span>
+                  </div>
+                ) : onlinePlayers.length === 0 ? (
+                  <div className="text-center py-16 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl space-y-2">
+                    <Users className="w-10 h-10 text-zinc-700 mx-auto" />
+                    <p className="text-sm text-zinc-400 font-medium">Không có người chơi nào hoạt động gần đây.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-zinc-800">
+                          <th className="text-left py-2 px-3 text-zinc-500 font-mono font-semibold uppercase tracking-wider">Username</th>
+                          <th className="text-left py-2 px-3 text-zinc-500 font-mono font-semibold uppercase tracking-wider">Cảnh giới</th>
+                          <th className="text-left py-2 px-3 text-zinc-500 font-mono font-semibold uppercase tracking-wider">Trạng thái</th>
+                          <th className="text-left py-2 px-3 text-zinc-500 font-mono font-semibold uppercase tracking-wider">Hoạt động lần cuối</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {onlinePlayers.map((p: any) => (
+                          <tr key={p.id} className="border-b border-zinc-800/50 hover:bg-zinc-900/40 transition-colors">
+                            <td className="py-2.5 px-3 text-zinc-200 font-medium">{p.username}</td>
+                            <td className="py-2.5 px-3">
+                              <span className={`${rankColor(p.rank)}`}>{getRankName(p.rank, p.sub_rank)}</span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              {p.is_online ? (
+                                <span className="inline-flex items-center gap-1 text-emerald-400">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" />
+                                  Online
+                                </span>
+                              ) : (
+                                <span className="text-zinc-500">Offline</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-zinc-400">
+                              {p.last_activity ? formatDate(p.last_activity) : "Không có dữ liệu"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </>
       )}

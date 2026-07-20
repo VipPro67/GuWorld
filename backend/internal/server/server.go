@@ -80,6 +80,7 @@ func SetupRouter() *gin.Engine {
 		api.POST("/webhooks/payos", handlers.PayOSWebhook)
 		api.GET("/admin/topup-orders", middleware.AuthRequired(), handlers.AdminListTopupOrders)
 		api.GET("/admin/wallet-transactions", middleware.AuthRequired(), handlers.AdminListWalletTransactions)
+		api.GET("/admin/players/online", middleware.AuthRequired(), handlers.AdminListOnlinePlayers)
 		api.GET("/admin/players", middleware.AuthRequired(), handlers.AdminListPlayers)
 		api.GET("/admin/players/:id", middleware.AuthRequired(), handlers.AdminGetPlayerDetail)
 		api.POST("/admin/players/:id/items", middleware.AuthRequired(), handlers.AdminAddPlayerItems)

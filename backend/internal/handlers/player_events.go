@@ -90,6 +90,7 @@ func StreamPlayerEvents(c *gin.Context) {
 		case <-c.Request.Context().Done():
 			return
 		case <-ticker.C:
+			db.DB.Exec(`UPDATE players SET last_activity = NOW() WHERE id = $1`, playerID)
 			if err := writePlayerSnapshotEvent(c, playerID, PlayerEventHeartbeat); err != nil {
 				writeSSEError(c, err)
 				flusher.Flush()
