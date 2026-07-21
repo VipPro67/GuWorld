@@ -15,11 +15,14 @@ interface CombatScreenProps {
 }
 
 const rankLabel = (r: number) => {
-  const names = ["", "Nhất chuyển", "Nhị chuyển", "Tam chuyển", "Tứ chuyển", "Ngũ chuyển", "Lục chuyển", "Thất chuyển", "Bát chuyển", "Cửu chuyển"];
-  return names[r] || `Cửu chuyển+`;
+  const names = ["", "Nhất Chuyển", "Nhị Chuyển", "Tam Chuyển", "Tứ Chuyển", "Ngũ Chuyển", "Lục Tiên", "Thất Tiên", "Bát Tiên", "Cửu Tôn"];
+  return names[r] || `Cửu Tôn`;
 };
 
-const subRankLabel = (s: number) => ["", "Sơ giai", "Trung giai", "Cao giai", "Đỉnh phong"][s] || "";
+const subRankLabel = (s: number, r?: number) => {
+  if (r && r >= 6) return "";
+  return ["", "Sơ giai", "Trung giai", "Cao giai", "Đỉnh phong"][s] || "";
+};
 
 const typeColor = (t?: string) => {
   switch (t) {
@@ -469,7 +472,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
               </div>
               <span className="text-zinc-200 font-medium truncate flex-1">{c.name}</span>
               <span className="text-zinc-400 shrink-0">{rankLabel(c.rank)}</span>
-              <span className="text-zinc-500 shrink-0">{subRankLabel(c.sub_rank)}</span>
+              <span className="text-zinc-500 shrink-0">{subRankLabel(c.sub_rank, c.rank)}</span>
               <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${c.grid_x === 1 ? 'text-rose-400 bg-rose-950/40' : c.grid_x === 2 ? 'text-amber-400 bg-amber-950/40' : 'text-cyan-400 bg-cyan-950/40'}`}>
                 {gridXLabel(c.grid_x)}
               </span>

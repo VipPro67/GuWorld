@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useGameStore } from "@/store/useGameStore";
+import { useGameStore, ImmortalAperture } from "@/store/useGameStore";
 import { X, Eye, EyeOff, Flame, Coins, Sparkles, Crown, Award, Activity, Heart } from "lucide-react";
 
 const pathNameMap: Record<string, string> = {
@@ -40,7 +40,7 @@ const translatePath = (path: string): string => {
 };
 
 export const PlayerProfileModal: React.FC = () => {
-  const { inspectedProfile, inspectedUsernameQuery, clearInspectedProfile, guDictionary, player, initiateTrade } = useGameStore();
+  const { inspectedProfile, inspectedUsernameQuery, clearInspectedProfile, guDictionary, player, initiateTrade, aperture } = useGameStore();
 
   if (!inspectedProfile) return null;
 
@@ -68,7 +68,7 @@ export const PlayerProfileModal: React.FC = () => {
 
   const isImmortal = rank >= 6;
 
-  const getRankName = (rankNum: number, subNum: number): string => {
+  const getRankName = (rankNum: number, subNum: number, aperture?: ImmortalAperture | null): string => {
     const ranks = ["Sơ giai", "Trung giai", "Cao giai", "Đỉnh phong"];
     const rankNames = [
       "Nhất Chuyển",
@@ -82,6 +82,20 @@ export const PlayerProfileModal: React.FC = () => {
       "Cửu Tôn",
     ];
     const rName = rankNames[rankNum - 1] || `${rankNum} Chuyển`;
+    if (rankNum >= 6) {
+      if (!aperture) return rName;
+      const tribMap: Record<number, Array<{ key: string; label: string }>> = {
+        6: [{ key: "earth_calamity_count", label: "Địa Tai" }, { key: "heavenly_tribulation_count", label: "Thiên Kiếp" }],
+        7: [{ key: "earth_calamity_count", label: "Địa Tai" }, { key: "heavenly_tribulation_count", label: "Thiên Kiếp" }, { key: "grand_tribulation_count", label: "Hạo Kiếp" }],
+        8: [{ key: "heavenly_tribulation_count", label: "Thiên Kiếp" }, { key: "grand_tribulation_count", label: "Hạo Kiếp" }, { key: "myriad_tribulation_count", label: "Vạn Kiếp" }],
+        9: [{ key: "grand_tribulation_count", label: "Hạo Kiếp" }, { key: "myriad_tribulation_count", label: "Vạn Kiếp" }, { key: "chaos_calamity_count", label: "Hỗn Độn" }],
+      };
+      const types = tribMap[rankNum] || [];
+      const getCnt = (k: string): number => { switch (k) { case "earth_calamity_count": return aperture.earth_calamity_count; case "heavenly_tribulation_count": return aperture.heavenly_tribulation_count; case "grand_tribulation_count": return aperture.grand_tribulation_count; case "myriad_tribulation_count": return aperture.myriad_tribulation_count; case "chaos_calamity_count": return aperture.chaos_calamity_count; default: return 0; } };
+      const parts = types.filter(t => getCnt(t.key) > 0).map(t => `${t.label}: ${getCnt(t.key)}`);
+      const tribStr = parts.length > 0 ? ` [${parts.join(", ")}]` : "";
+      return `${rName}${tribStr}`;
+    }
     const sName = ranks[subNum - 1] || `${subNum} Giai`;
     return `${rName} • ${sName}`;
   };
@@ -194,7 +208,7 @@ export const PlayerProfileModal: React.FC = () => {
             </h3>
             <div className="flex flex-wrap items-center gap-2 mt-0.5">
               <span className="text-xs text-zinc-500 font-mono font-semibold">
-                {getRankName(rank, sub_rank)}
+                {getRankName(rank, sub_rank, aperture)}
               </span>
               {/* For Cổ Sư, show dominant path in header if it is known */}
               {!isImmortal && dominant_path && dominant_path !== "Chưa rõ" && (

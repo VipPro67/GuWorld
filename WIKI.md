@@ -13,8 +13,9 @@ Wiki này phản ánh các hệ thống đã có trong codebase hiện tại.
 ### Rank và tiểu cảnh giới
 
 - Rank chính từ 1 đến 9.
-- `sub_rank` gồm 4 bậc: Sơ giai, Trung giai, Cao giai, Đỉnh phong.
+- `sub_rank` gồm 4 bậc: Sơ giai, Trung giai, Cao giai, Đỉnh phong (chỉ dùng cho Rank 1-5).
 - Rank 1-5 là phàm nhân; Rank 6+ là Cổ Tiên.
+- Rank 6+ **không có sub_rank**. Thay vào đó hiển thị tên `Lục Chuyển/Bát Chuyển/Cửu Chuyển Cổ Tiên/Cổ Tôn` kèm số lần vượt qua từng loại kiếp nạn (Địa Tai, Thiên Kiếp, Hạo Kiếp, Vạn Kiếp, Hỗn Độn Đại Nạn).
 
 ### Phàm nhân: phá vách
 
@@ -27,7 +28,14 @@ Wiki này phản ánh các hệ thống đã có trong codebase hiện tại.
 
 - Rank 5 Đỉnh phong có thể thăng tiên khi đạt điều kiện backend yêu cầu.
 - Cổ Tiên có tiên khiếu, đạo ngân, tiên nguyên/tài nguyên riêng.
-- Tai kiếp có thể được trigger/resolve và cũng có worker kiểm tra tự động.
+- Tai kiếp có worker kiểm tra tự động mỗi 60 giây. Khi năm nội bộ đạt mốc tiếp theo, worker spawn kiếp và resolve.
+- **Kiếp nạn theo cấp bậc:**
+  - Rank 6: Địa Tai (10 năm), Thiên Kiếp (100 năm)
+  - Rank 7: Địa Tai (10 năm), Thiên Kiếp (50 năm), Hạo Kiếp (100 năm)
+  - Rank 8: Thiên Kiếp (10 năm), Hạo Kiếp (50 năm), Vạn Kiếp (100 năm)
+  - Rank 9: Hạo Kiếp (10 năm), Vạn Kiếp (50 năm), Hỗn Độn Đại Nạn (100 năm)
+- **Tự động đột phá:** Khi đủ 3 lần vượt kiếp cấp cao nhất (vd: 3 Thiên Kiếp), kết hợp điều kiện số năm ở rank (300 năm với 6→7, 7→8), Cổ Tiên tự động lên rank kế tiếp.
+- Nhiều kiểu kiếp nạn đến cùng lúc: ưu tiên spawn kiểu hiếm nhất, nhưng đếm tất cả các kiểu đang đến hạn.
 
 ## 3. Không khiếu, tiên khiếu và đạo ngân
 
@@ -39,9 +47,26 @@ Wiki này phản ánh các hệ thống đã có trong codebase hiện tại.
 ### Tiên khiếu
 
 - Tiên khiếu có grade, time rate, HP, diện tích, immortal essence, sản lượng/năm, state.
-- Người chơi đặt node tài nguyên theo toạ độ, thu hoạch, gỡ/xóa, sửa chữa node.
+- **Khi mới khai mở**, Tiên Khiếu được tạo sẵn 2-4 mỏ tài nguyên ngẫu nhiên (tuỳ grade):
+  - LOW: 2 mỏ, MID: 3 mỏ, HIGH/EXTREME: 4 mỏ.
+  - Các mỏ khởi đầu: Nguyệt Lan, Thanh Trúc, Ngọc Thạch, Nguyên Thạch, Kiếm Diệp, Hươu Linh.
+- Người chơi đặt thêm node tài nguyên theo toạ độ, thu hoạch, gỡ/xóa, sửa chữa node.
 - Hệ sinh thái node có kiểm tra xung đột đường tu/path và cân bằng plant/herbivore/carnivore.
 - Dị nhân trong tiên khiếu có population, happiness, oppression, rebellion rate và labor intensity.
+
+### Gia tốc thời gian (Time Rate)
+
+- `time_rate` (1.0x - 100.0x) điều chỉnh tốc độ thời gian bên trong Tiên Khiếu.
+- **Ảnh hưởng đến:**
+  - Tốc độ thu hoạch tài nguyên (cây, quặng, linh thú)
+  - Tăng trưởng dân cư dị nhân
+  - Tốc độ hồi Tiên Nguyên
+  - Tích lũy năm nội bộ → Kiếp nạn đến nhanh hơn
+  - Đói Cổ trùng (Cổ đói nhanh hơn khi time rate cao)
+- **Không ảnh hưởng đến:**
+  - Thọ nguyên (luôn tính theo thời gian thực)
+  - Cooldown/sự kiện bên ngoài Tiên Khiếu
+  - Thời gian ở Ngũ Vực
 
 ### Đạo ngân
 
@@ -53,7 +78,7 @@ Wiki này phản ánh các hệ thống đã có trong codebase hiện tại.
 Mỗi Cổ instance có:
 
 - `instance_id`, `gu_id`.
-- Hunger.
+- Hunger (giảm theo `HungerRate * TimeSpeedMultiplier` mỗi 3 giờ thực tế, Cổ trong Tiên Khiếu có time rate cao sẽ đói nhanh hơn).
 - Status: `ACTIVE`, `SLEEPING`, `DEAD`.
 - `equipped` và `is_vital`.
 
@@ -206,3 +231,30 @@ Hệ thống tích hợp 18 Cổ trùng đặc biệt mang lại các hiệu ứ
 3. **Cổ Thiên Cơ (GU_HEAVEN_SECRET)**: Tăng gấp đôi tầm nhìn khám phá bản đồ (Vision Radius) và hiển thị trực quan tỷ lệ rớt đồ của quái vật trên bản đồ.
 4. **Cổ Thọ Nguyên 100 Năm (GU_LIFESPAN_100)**: Tiêu hao để gia tăng vĩnh viễn 100 năm tuổi thọ cho Cổ sư.
 5. **Tiên Thai Chí Tôn (GU_SOVEREIGN_FETUS)**: Cơ thể Tiên Thai tối cao bỏ qua hoàn toàn bài xích/xung đột Đạo văn trong Tiên khiếu (Node) và khi thiết lập sát chiêu liên hoàn. Tăng 100% sát thương tất cả các hệ.
+
+## 18. Bối cảnh & Cốt truyện nguyên tác (Cổ Chân Nhân)
+
+Thông tin nguyên tác được tổng hợp từ tiểu thuyết **Cổ Chân Nhân**:
+
+### Tóm tắt cốt truyện
+Cổ Nguyệt Phương Nguyên, một đại ma đầu bị ép đến đường cùng sau 500 năm, đã sử dụng Xuân Thu Thiền để trọng sinh. Tại một thế giới tàn khốc "nhược nhục cường thực", nơi con người nuôi Cổ, luyện Cổ và dùng Cổ, hắn bất chấp luân lý, sẵn sàng tính kế thiên hạ để truy cầu con đường vĩnh sinh. Đồng hành cùng Phương Nguyên trong giai đoạn đầu là Bạch Ngưng Băng - một chân ma đa mưu túc trí.
+
+### Thế giới quan (Cổ giới)
+- **Thái Cổ Cửu Thiên:** Xích Thiên, Chanh Thiên, Hoàng Thiên, Lục Thiên, Thanh Thiên, Lam Thiên, Tử Thiên, Bạch Thiên, Hắc Thiên. Về sau chỉ còn Hắc Thiên và Bạch Thiên (trải qua U Hồn Ma Tôn hoàn toàn hợp nhất thành U Thiên).
+- **Ngũ đại địa vực:** Nam Cương, Đông Hải, Trung Châu, Bắc Nguyên, Tây Mạc.
+
+### Cấp bậc tu luyện & Tư chất
+- **Đẳng cấp Cổ Sư:** Chia làm 9 chuyển, mỗi chuyển có 4 tiểu cảnh giới (Sơ giai, Trung giai, Cao giai, Đỉnh phong). Từ ngũ chuyển trở xuống là phàm, lục chuyển thành tiên, cửu chuyển xưng tôn.
+- **Tiên Nguyên:** Lục chuyển (Thanh Đề), Thất chuyển (Hồng Tảo), Bát chuyển (Bạch Lệ), Cửu chuyển (Hoàng Hạnh). Vượt qua các cấp độ thiên kiếp, hạo kiếp, vạn kiếp để thăng tiến.
+- **Tư chất:** Thập tuyệt thể (100%), Giáp đẳng (80-90%), Ất đẳng (60-70%), Bính đẳng (40-50%), Đinh đẳng (20-30%).
+
+### Các thế lực phe phái nổi bật
+- **Trung Châu:** Thiên Đình (thế lực mạnh nhất từ viễn cổ, do Nguyên Thủy Tiên Tôn sáng lập, tồn tại gần 4 triệu năm) và Thập Đại Cổ Phái.
+- **Bắc Nguyên:** Trường Sinh Thiên (Cự Dương Tiên Tôn sáng lập), các Hoàng kim gia tộc (Dược gia, Cung gia, Lưu gia...), và dị nhân (Lang Gia phái).
+- **Nam Cương:** Vũ gia, Hạ gia, Ba gia... và Ảnh Tông (do U Hồn Ma Tôn sáng lập nhằm đối kháng Thiên Đình).
+- **Đông Hải:** Lưỡng thiên liên minh, Tống gia, Thẩm gia, Long đình.
+- **Tây Mạc:** Phòng gia, Lâm gia, Tiêu gia...
+
+### Tu hành lưu phái & Cảnh giới
+- **Lưu phái:** Nhân đạo (Nhân Tổ); Khí đạo, Nô đạo (Nguyên Thủy Tiên Tôn); Trí đạo, Tinh đạo (Tinh Túc Tiên Tôn); Lực đạo, Biến hóa đạo (Cuồng Man Ma Tôn); Luật đạo (Vô Cực Ma Tôn); Hồn đạo (U Hồn Ma Tôn); Thâu đạo (Đạo Thiên Ma Tôn),...
+- **Cảnh giới lưu phái:** Phổ thông ➔ Chuẩn đại sư ➔ Đại sư ➔ Tông sư ➔ Đại tông sư ➔ Vô thượng đại tông sư ➔ Đạo chủ. (Đạo chủ là cảnh giới chỉ có Tôn Giả mới đạt tới, có thể thao túng đạo ngân trong thiên nhiên).

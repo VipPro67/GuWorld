@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import { checkQuest, formatRewards } from "@/data/quests";
-import { estimateManaFromSnapshot, estimateHPFromSnapshot, GuInstance, GuSpec, Player, useGameStore } from "@/store/useGameStore";
+import { estimateManaFromSnapshot, estimateHPFromSnapshot, GuInstance, GuSpec, Player, ImmortalAperture, useGameStore } from "@/store/useGameStore";
 import {
   Sparkles,
   ShieldAlert,
@@ -50,6 +50,48 @@ const SUB_RANK_NAMES: Record<number, string> = {
   3: "Cao Giai",
   4: "Đỉnh Phong",
 };
+
+const TRIB_TYPE_LABELS: Record<string, string> = {
+  earth_calamity_count: "Địa Tai",
+  heavenly_tribulation_count: "Thiên Kiếp",
+  grand_tribulation_count: "Hạo Kiếp",
+  myriad_tribulation_count: "Vạn Kiếp",
+  chaos_calamity_count: "Hỗn Độn",
+};
+
+function getTribulationTypesForRank(rank: number): string[] {
+  switch (rank) {
+    case 6: return ["earth_calamity_count", "heavenly_tribulation_count"];
+    case 7: return ["earth_calamity_count", "heavenly_tribulation_count", "grand_tribulation_count"];
+    case 8: return ["heavenly_tribulation_count", "grand_tribulation_count", "myriad_tribulation_count"];
+    case 9: return ["grand_tribulation_count", "myriad_tribulation_count", "chaos_calamity_count"];
+    default: return [];
+  }
+}
+
+function getTribCount(a: ImmortalAperture, key: string): number {
+  switch (key) {
+    case "earth_calamity_count": return a.earth_calamity_count;
+    case "heavenly_tribulation_count": return a.heavenly_tribulation_count;
+    case "grand_tribulation_count": return a.grand_tribulation_count;
+    case "myriad_tribulation_count": return a.myriad_tribulation_count;
+    case "chaos_calamity_count": return a.chaos_calamity_count;
+    default: return 0;
+  }
+}
+
+function buildTribulationDisplay(rank: number, aperture: ImmortalAperture | null): string {
+  if (!aperture) return "Cổ Tiên";
+  const types = getTribulationTypesForRank(rank);
+  const parts: string[] = [];
+  for (const key of types) {
+    const val = getTribCount(aperture, key);
+    const label = TRIB_TYPE_LABELS[key] || key;
+    if (val > 0) parts.push(`${label}: ${val}`);
+  }
+  if (parts.length === 0) return "Cổ Tiên";
+  return "[" + parts.join(", ") + "]";
+}
 
 const MANA_QUALITY: Record<number, string> = {
   1: "Thanh Đồng Chân Nguyên",
@@ -151,6 +193,9 @@ export const Aperture: React.FC<ApertureProps> = ({
   const rankName = RANK_NAMES[rank] ?? `Rank ${rank}`;
   const subRankName = SUB_RANK_NAMES[subRank] ?? `Sub ${subRank}`;
   const isImmortal = rank >= 6;
+
+  // Build tribulation info string for immortals (rank 6+)
+  const tribulationInfo = isImmortal ? buildTribulationDisplay(rank, store.aperture) : "";
   const energyType = isImmortal ? "Tiên Nguyên" : "Chân Nguyên";
   const apertureName = isImmortal ? "Tiên Khiếu" : "Không Khiếu";
   const energyPoolName = isImmortal ? "Tiên Nguyên Hải" : "Chân Nguyên Hải";
@@ -310,7 +355,16 @@ export const Aperture: React.FC<ApertureProps> = ({
           {isImmortal ? "Tiên Phàm Cách Biệt" : `Tư Chất: ${aptitudeType} (${aptitudePercent}%)`} • {manaQuality}
         </p>
         <p className="text-xs font-semibold tracking-widest text-center mb-4 text-zinc-150 uppercase z-10">
-          Tu Vi: <span className="font-bold" style={{ color: c.text }}>{rankName}</span>&nbsp;&nbsp;❖&nbsp;&nbsp;Cảnh Giới: <span className="font-bold" style={{ color: c.text }}>{subRankName}</span>
+          Tu Vi: <span className="font-bold" style={{ color: c.text }}>{rankName}</span>
+          {isImmortal ? (
+            <span className="font-bold text-[9px]" style={{ color: c.textLight }}>
+              &nbsp;&nbsp;❖&nbsp;&nbsp;{tribulationInfo}
+            </span>
+          ) : (
+            <span className="font-bold" style={{ color: c.text }}>
+              &nbsp;&nbsp;❖&nbsp;&nbsp;Cảnh Giới: {subRankName}
+            </span>
+          )}
         </p>
 
         {/* Health Bar (Sleek Glossy Bar) */}

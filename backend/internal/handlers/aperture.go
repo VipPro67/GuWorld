@@ -161,10 +161,8 @@ func GetImmortalAperture(c *gin.Context) {
 		return
 	}
 
-	// Sync player.DaoMarks JSONB to dao_marks table if the table has no marks for this player
-	var hasMarks bool
-	_ = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM dao_marks WHERE player_id = $1)`, playerID).Scan(&hasMarks)
-	if !hasMarks && player.DaoMarks != nil {
+	// Sync player.DaoMarks JSONB to dao_marks table if API table exists
+	if player.DaoMarks != nil {
 		for pathName, amount := range player.DaoMarks {
 			if amount > 0 {
 				cleanPath := strings.TrimSuffix(strings.ToLower(pathName), " path")
@@ -181,9 +179,9 @@ func GetImmortalAperture(c *gin.Context) {
 	var ap models.ImmortalAperture
 	var createdAt, updatedAt time.Time
 	err = tx.QueryRow(`
-		SELECT id, player_id, grade, time_rate, aperture_hp, max_aperture_hp, area_size, immortal_essence, essence_production_per_year, internal_years_passed, next_tribulation_year, tribulation_count, state, created_at, updated_at
+		SELECT id, player_id, grade, time_rate, aperture_hp, max_aperture_hp, area_size, immortal_essence, essence_production_per_year, internal_years_passed, next_tribulation_year, tribulation_count, rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, state, created_at, updated_at
 		FROM immortal_apertures WHERE player_id = $1
-	`, playerID).Scan(&ap.ID, &ap.PlayerID, &ap.Grade, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP, &ap.AreaSize, &ap.ImmortalEssence, &ap.EssenceProductionPerYear, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.TribulationCount, &ap.State, &createdAt, &updatedAt)
+	`, playerID).Scan(&ap.ID, &ap.PlayerID, &ap.Grade, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP, &ap.AreaSize, &ap.ImmortalEssence, &ap.EssenceProductionPerYear, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.TribulationCount, &ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.State, &createdAt, &updatedAt)
 
 	if err == sql.ErrNoRows {
 		// Auto-create aperture based on stats
@@ -210,7 +208,11 @@ func GetImmortalAperture(c *gin.Context) {
 		}
 		// Sync time_speed_multiplier to player table
 		_, _ = tx.Exec(`UPDATE players SET time_speed_multiplier = $1 WHERE id = $2`, ap.TimeRate, playerID)
+
+		// Seed a few random initial resource nodes for the new aperture
+		seedInitialApertureNodes(tx, ap.ID, grade)
 	} else if err != nil {
+		fmt.Println("Error fetching aperture:", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn Tiên Khiếu"})
 		return
 	} else {
@@ -229,6 +231,49 @@ func GetImmortalAperture(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, ap)
+}
+
+func seedInitialApertureNodes(tx *sql.Tx, apertureID string, grade string) {
+	starterKeys := []string{
+		"MOON_ORCHID_FIELD",
+		"GREEN_BAMBOO_GROVE",
+		"JADE_STONE_MINE",
+		"PRIMEVAL_MINE",
+		"SWORD_LEAF_GRASS",
+		"SPIRIT_DEER_PASTURE",
+	}
+
+	count := 2
+	switch grade {
+	case "MID":
+		count = 3
+	case "HIGH", "EXTREME":
+		count = 4
+	}
+
+	rand.Shuffle(len(starterKeys), func(i, j int) {
+		starterKeys[i], starterKeys[j] = starterKeys[j], starterKeys[i]
+	})
+
+	used := make(map[string]bool)
+	for i := 0; i < count && i < len(starterKeys); i++ {
+		tmpl := ResourceNodeTemplates[starterKeys[i]]
+
+		x, y := rand.Intn(20), rand.Intn(20)
+		key := fmt.Sprintf("%d,%d", x, y)
+		for used[key] {
+			x, y = rand.Intn(20), rand.Intn(20)
+			key = fmt.Sprintf("%d,%d", x, y)
+		}
+		used[key] = true
+
+		_, _ = tx.Exec(`
+			INSERT INTO aperture_resource_nodes
+				(aperture_id, node_type, name, path, level, hp, max_hp, x, y,
+				 production_type, production_amount, production_interval_hours, last_collected_at)
+			VALUES ($1, $2, $3, $4, 1, 1000, 1000, $5, $6, $7, $8, $9, NOW())
+		`, apertureID, tmpl.NodeType, tmpl.Name, tmpl.Path, x, y, tmpl.ProdType, tmpl.ProdAmount, tmpl.ProdIntervalHours)
+	}
 }
 
 func buildApertureByGrade(playerID string, grade string) models.ImmortalAperture {
@@ -792,7 +837,7 @@ func CollectApertureResource(c *gin.Context) {
 	}
 
 	baseReward := n.ProductionAmount * multiples
-	
+
 	// Apply area size production multiplier
 	areaMultiplier := 1.0 + float64(areaSize)/10000000.0
 	totalReward := int(float64(baseReward) * areaMultiplier * daoMultiplier * conflictMultiplier * ecoMultiplier * variantBonus * laborMultiplier * suitabilityMultiplier)
@@ -1148,7 +1193,14 @@ func SetApertureTimeRate(c *gin.Context) {
 		return
 	}
 
-	res, err := db.DB.Exec(`
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi giao dịch"})
+		return
+	}
+	defer tx.Rollback()
+
+	res, err := tx.Exec(`
 		UPDATE immortal_apertures
 		SET time_rate = $1, updated_at = NOW()
 		WHERE player_id = $2
@@ -1161,6 +1213,13 @@ func SetApertureTimeRate(c *gin.Context) {
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa khai mở Tiên Khiếu"})
+		return
+	}
+
+	_, _ = tx.Exec(`UPDATE players SET time_speed_multiplier = $1 WHERE id = $2`, req.TimeRate, playerID)
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi ghi dữ liệu"})
 		return
 	}
 
@@ -1392,4 +1451,3 @@ func FillApertureEnvironment(ap *models.ImmortalAperture, daoMarks models.DaoMar
 		ap.Terrain = "Thảo Nguyên Trù Phú"
 	}
 }
-

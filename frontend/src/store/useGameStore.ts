@@ -320,6 +320,12 @@ export interface ImmortalAperture {
   internal_years_passed: number;
   next_tribulation_year: number;
   tribulation_count: number;
+  rank_start_year: number;
+  earth_calamity_count: number;
+  heavenly_tribulation_count: number;
+  grand_tribulation_count: number;
+  myriad_tribulation_count: number;
+  chaos_calamity_count: number;
   state: 'STABLE' | 'TRIBULATION_PENDING' | 'TRIBULATION_ACTIVE' | 'DAMAGED' | 'DESTROYED';
   created_at: string;
   updated_at: string;

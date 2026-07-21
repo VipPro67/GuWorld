@@ -70,12 +70,13 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 	var guInvRaw []byte
 	var hp float64
 	var eqRaw []byte
+	var tsm float64
 
 	err = tx.QueryRow(`
-		SELECT username, gu_inventory, hp, equipped_gus 
+		SELECT username, gu_inventory, hp, equipped_gus, time_speed_multiplier 
 		FROM players 
 		WHERE id = $1 
-		FOR UPDATE`, playerID).Scan(&username, &guInvRaw, &hp, &eqRaw)
+		FOR UPDATE`, playerID).Scan(&username, &guInvRaw, &hp, &eqRaw, &tsm)
 	if err != nil {
 		return err
 	}
@@ -103,7 +104,11 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 				continue
 			}
 
-			gu.Hunger -= specs.HungerRate
+			rate := tsm
+			if rate <= 0 {
+				rate = 1.0
+			}
+			gu.Hunger -= int(float64(specs.HungerRate) * rate)
 			updated = true
 
 			if gu.Hunger <= 0 {

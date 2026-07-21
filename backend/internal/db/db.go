@@ -232,6 +232,12 @@ func InitSchema() error {
 		internal_years_passed DOUBLE PRECISION NOT NULL DEFAULT 0,
 		next_tribulation_year DOUBLE PRECISION NOT NULL DEFAULT 10,
 		tribulation_count INTEGER NOT NULL DEFAULT 0,
+		rank_start_year DOUBLE PRECISION NOT NULL DEFAULT 0,
+		earth_calamity_count INTEGER NOT NULL DEFAULT 0,
+		heavenly_tribulation_count INTEGER NOT NULL DEFAULT 0,
+		grand_tribulation_count INTEGER NOT NULL DEFAULT 0,
+		myriad_tribulation_count INTEGER NOT NULL DEFAULT 0,
+		chaos_calamity_count INTEGER NOT NULL DEFAULT 0,
 		state VARCHAR(30) NOT NULL DEFAULT 'STABLE',
 		created_at TIMESTAMP DEFAULT now(),
 		updated_at TIMESTAMP DEFAULT now()
@@ -239,6 +245,14 @@ func InitSchema() error {
 	if err != nil {
 		return fmt.Errorf("failed to create immortal_apertures table: %w", err)
 	}
+
+	// Migration: add new columns if missing (safe for existing DBs)
+	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS rank_start_year DOUBLE PRECISION NOT NULL DEFAULT 0;`)
+	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS earth_calamity_count INTEGER NOT NULL DEFAULT 0;`)
+	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS heavenly_tribulation_count INTEGER NOT NULL DEFAULT 0;`)
+	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS grand_tribulation_count INTEGER NOT NULL DEFAULT 0;`)
+	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS myriad_tribulation_count INTEGER NOT NULL DEFAULT 0;`)
+	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS chaos_calamity_count INTEGER NOT NULL DEFAULT 0;`)
 
 	// 7. Create aperture_resource_nodes table
 	_, err = DB.Exec(`
@@ -307,6 +321,21 @@ func InitSchema() error {
 	);`)
 	if err != nil {
 		return fmt.Errorf("failed to create tribulation_enemies table: %w", err)
+	}
+
+	// dao_marks relational table (mirror of players.dao_marks JSONB)
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS dao_marks (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		path VARCHAR(50) NOT NULL,
+		amount INTEGER NOT NULL DEFAULT 0,
+		created_at TIMESTAMP DEFAULT now(),
+		updated_at TIMESTAMP DEFAULT now(),
+		UNIQUE(player_id, path)
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create dao_marks table: %w", err)
 	}
 
 	query = `

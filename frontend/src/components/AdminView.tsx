@@ -110,12 +110,13 @@ interface GuInstanceDetail {
 
 const rankNames = [
   "Nhất Chuyển", "Nhị Chuyển", "Tam Chuyển", "Tứ Chuyển",
-  "Ngũ Chuyển", "Lục Tiên", "Thất Tiên", "Bát Tiên", "Cửu Tôn",
+  "Ngũ Chuyển", "Lục Chuyển Cổ Tiên", "Thất Chuyển Cổ Tiên", "Bát Chuyển Cổ Tiên", "Cửu Chuyển Cổ Tôn",
 ];
 const rankSub = ["Sơ giai", "Trung giai", "Cao giai", "Đỉnh phong"];
 
 function getRankName(rank: number, sub: number): string {
   const r = rankNames[rank - 1] || `${rank} Chuyển`;
+  if (rank >= 6) return r;
   const s = rankSub[sub - 1] || `${sub} Giai`;
   return `${r} • ${s}`;
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { estimateManaFromSnapshot, estimateHPFromSnapshot, useGameStore } from "@/store/useGameStore";
+import { estimateManaFromSnapshot, estimateHPFromSnapshot, ImmortalAperture, useGameStore } from "@/store/useGameStore";
 import {
   User,
   Briefcase,
@@ -63,6 +63,7 @@ export const LobbyView: React.FC = () => {
     fetchPlayerProfile,
     mySectStatus,
     addToast,
+    aperture,
   } = useGameStore();
   const [manaNow, setManaNow] = useState(() => Date.now());
 
@@ -280,7 +281,7 @@ export const LobbyView: React.FC = () => {
     setView(item.id);
   };
 
-  const getRankName = (rank: number, sub: number): string => {
+  const getRankName = (rank: number, sub: number, aperture?: ImmortalAperture | null): string => {
     const ranks = ["Sơ giai", "Trung giai", "Cao giai", "Đỉnh phong"];
     const rankNames = [
       "Nhất Chuyển",
@@ -294,6 +295,20 @@ export const LobbyView: React.FC = () => {
       "Cửu Tôn",
     ];
     const rName = rankNames[rank - 1] || `${rank} Chuyển`;
+    if (rank >= 6) {
+      if (!aperture) return rName;
+      const tribMap: Record<number, Array<{ key: string; label: string }>> = {
+        6: [{ key: "earth_calamity_count", label: "Địa Tai" }, { key: "heavenly_tribulation_count", label: "Thiên Kiếp" }],
+        7: [{ key: "earth_calamity_count", label: "Địa Tai" }, { key: "heavenly_tribulation_count", label: "Thiên Kiếp" }, { key: "grand_tribulation_count", label: "Hạo Kiếp" }],
+        8: [{ key: "heavenly_tribulation_count", label: "Thiên Kiếp" }, { key: "grand_tribulation_count", label: "Hạo Kiếp" }, { key: "myriad_tribulation_count", label: "Vạn Kiếp" }],
+        9: [{ key: "grand_tribulation_count", label: "Hạo Kiếp" }, { key: "myriad_tribulation_count", label: "Vạn Kiếp" }, { key: "chaos_calamity_count", label: "Hỗn Độn" }],
+      };
+      const types = tribMap[rank] || [];
+      const getCnt = (k: string): number => { switch (k) { case "earth_calamity_count": return aperture.earth_calamity_count; case "heavenly_tribulation_count": return aperture.heavenly_tribulation_count; case "grand_tribulation_count": return aperture.grand_tribulation_count; case "myriad_tribulation_count": return aperture.myriad_tribulation_count; case "chaos_calamity_count": return aperture.chaos_calamity_count; default: return 0; } };
+      const parts = types.filter(t => getCnt(t.key) > 0).map(t => `${t.label}: ${getCnt(t.key)}`);
+      const tribStr = parts.length > 0 ? ` [${parts.join(", ")}]` : "";
+      return `${rName}${tribStr}`;
+    }
     const sName = ranks[sub - 1] || `${sub} Giai`;
     return `${rName} • ${sName}`;
   };
@@ -322,7 +337,7 @@ export const LobbyView: React.FC = () => {
                 {player.username}
               </h2>
               <span className="text-xs text-zinc-500 font-mono font-semibold">
-                {getRankName(player.rank, player.sub_rank)}
+                {getRankName(player.rank, player.sub_rank, aperture)}
               </span>
             </div>
           </div>

@@ -612,7 +612,7 @@ export const ImmortalApertureView: React.FC = () => {
                     <Skull className="w-5 h-5 text-rose-400 shrink-0" />
                     <div className="text-xs">
                       <div className="text-slate-400 font-semibold">Khấu trừ Thọ Nguyên</div>
-                      <div className="text-rose-400 font-bold mt-0.5">{(1.2 * sliderRate).toFixed(1)} năm / ngày thực tế</div>
+                      <div className="text-rose-400 font-bold mt-0.5">{(86400 / 432000).toFixed(1)} năm / ngày thực tế</div>
                     </div>
                   </div>
                   <div className="bg-slate-900/40 p-3 rounded-lg border border-slate-800/60 flex items-center gap-2">
@@ -630,7 +630,7 @@ export const ImmortalApertureView: React.FC = () => {
                   <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-300 flex items-start gap-1.5">
                     <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                     <span>
-                      Cảnh báo: Đạo hữu đang tăng tốc dòng thời gian lên mức cao ({sliderRate}x). Điều này sẽ làm cạn kiệt Thọ Nguyên của đạo hữu trong thời gian ngắn và đẩy nhanh Kiếp nạn ập đến!
+                      Cảnh báo: Đạo hữu đang tăng tốc dòng thời gian lên mức cao ({sliderRate}x). Điều này sẽ đẩy nhanh Kiếp nạn ập đến!
                     </span>
                   </div>
                 )}
@@ -658,6 +658,36 @@ export const ImmortalApertureView: React.FC = () => {
                     <span className="text-slate-400">Tổng số kiếp nạn vượt qua</span>
                     <span className="text-emerald-400 font-semibold">{aperture.tribulation_count} lần</span>
                   </div>
+                  {aperture.earth_calamity_count > 0 && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-400">Địa Tai</span>
+                      <span className="text-emerald-400 font-semibold">{aperture.earth_calamity_count} lần</span>
+                    </div>
+                  )}
+                  {aperture.heavenly_tribulation_count > 0 && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-400">Thiên Kiếp</span>
+                      <span className="text-amber-400 font-semibold">{aperture.heavenly_tribulation_count} lần</span>
+                    </div>
+                  )}
+                  {aperture.grand_tribulation_count > 0 && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-400">Hạo Kiếp</span>
+                      <span className="text-red-400 font-semibold">{aperture.grand_tribulation_count} lần</span>
+                    </div>
+                  )}
+                  {aperture.myriad_tribulation_count > 0 && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-400">Vạn Kiếp</span>
+                      <span className="text-purple-400 font-semibold">{aperture.myriad_tribulation_count} lần</span>
+                    </div>
+                  )}
+                  {aperture.chaos_calamity_count > 0 && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-400">Hỗn Độn Đại Nạn</span>
+                      <span className="text-orange-400 font-semibold">{aperture.chaos_calamity_count} lần</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Progress to next Tribulation */}

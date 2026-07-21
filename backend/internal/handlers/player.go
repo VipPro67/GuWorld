@@ -1658,8 +1658,9 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 			}
 		}
 
-		// Lifespan decay (1 game year = 5 days = 120 subjective hours = 432000 subjective seconds).
-		yearsPassed := subjectiveSeconds / 432000.0
+		// Lifespan decay (real-time, not scaled by TimeSpeedMultiplier).
+		// 1 game year = 5 days = 120 hours = 432000 seconds.
+		yearsPassed := secondsPassed / 432000.0
 		player.Lifespan -= yearsPassed
 		if player.Lifespan < 0 {
 			player.Lifespan = 0
@@ -2652,10 +2653,10 @@ func getRankName(rank int) string {
 		3: "Tam Chuyển",
 		4: "Tứ Chuyển",
 		5: "Ngũ Chuyển",
-		6: "Lục Chuyển",
-		7: "Thất Chuyển",
-		8: "Bát Chuyển",
-		9: "Cửu Chuyển",
+		6: "Lục Chuyển Cổ Tiên",
+		7: "Thất Chuyển Cổ Tiên",
+		8: "Bát Chuyển Cổ Tiên",
+		9: "Cửu Chuyển Cổ Tôn",
 	}
 	if name, ok := names[rank]; ok {
 		return name

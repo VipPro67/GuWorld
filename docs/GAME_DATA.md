@@ -24,6 +24,38 @@ Nguồn dữ liệu chính nằm trong các file CSV ở `backend/`. Khi backend
 - API `/api/dictionary` trả dữ liệu dictionary cho frontend.
 - API `/api/recipes` trả recipe refining cho frontend.
 
+## Cấu trúc cơ sở dữ liệu
+
+### Bảng `immortal_apertures` (Tiên Khiếu)
+
+Tạo tự động khi người chơi thăng tiên lên Rank 6. Các cột chính:
+- `time_rate` (DOUBLE PRECISION, DEFAULT 10) — gia tốc thời gian nội bộ
+- `grade` (VARCHAR) — LOW / MID / HIGH / EXTREME
+- `aperture_hp`, `max_aperture_hp` — HP của Tiên Khiếu
+- `area_size` — diện tích grid, quyết định số node tối đa
+- `immortal_essence`, `essence_production_per_year` — Tiên Nguyên
+- `rank_start_year` — năm bắt đầu rank hiện tại (dùng cho auto-breakthrough)
+- `earth_calamity_count`, `heavenly_tribulation_count`, `grand_tribulation_count`, `myriad_tribulation_count`, `chaos_calamity_count` — bộ đếm kiếp nạn
+- `state` — STABLE / DAMAGED
+
+### Bảng `dao_marks`
+
+Lưu Đạo Ấn theo dạng quan hệ (song song với JSONB `players.dao_marks`):
+- `player_id` (UUID, FK → players)
+- `path` (VARCHAR) — đường tu
+- `amount` (INTEGER)
+- `UNIQUE(player_id, path)`
+
+### Bảng `aperture_resource_nodes`
+
+Node tài nguyên đặt trong Tiên Khiếu:
+- `aperture_id` (UUID, FK → immortal_apertures, CASCADE DELETE)
+- `node_type`, `name`, `path` — loại node
+- `level`, `hp`, `max_hp` — cấp và HP
+- `x`, `y` — toạ độ grid (0-19)
+- `production_type`, `production_amount`, `production_interval_hours` — sản lượng
+- `is_destroyed` — trạng thái hỏng
+
 ## Nhóm dữ liệu gameplay
 
 ### Cổ
@@ -59,3 +91,9 @@ Region định nghĩa map lớn. `map_cells` có thể được generate theo v�
 2. Kiểm tra schema seed tương ứng trong `backend/internal/db/db.go` nếu thêm cột mới.
 3. Nếu thêm field Cổ/item mới, cập nhật struct model và frontend type trước khi dùng trong UI.
 4. Cập nhật số dòng trong bảng trên nếu thêm/xóa seed data.
+
+## Lưu ý khi thay đổi schema
+
+- `CREATE TABLE IF NOT EXISTS` toàn bộ ở `backend/internal/db/db.go`. Không có migration riêng.
+- `ALTER TABLE ADD COLUMN IF NOT EXISTS` dùng cho các cột mới thêm vào sau.
+- Thêm cột mới vào schema + thêm ALTER TABLE, restart server để áp dụng.
