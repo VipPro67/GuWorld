@@ -97,6 +97,9 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | POST | `/party/leave` |
 | GET | `/arena/leaderboard` |
 | POST | `/arena/challenge` |
+| GET | `/leaderboard/:category` | BXH tổng hợp. category: `rank`, `primeval_stones`, `gu_strongest`, `immortal_stones`. Trả về top 50, kèm rank người gọi |
+| POST | `/leaderboard/toggle` | Bật/tắt hiển thị trên BXH |
+| GET | `/leaderboard/settings` | Trạng thái `show_on_leaderboard` hiện tại |
 | GET | `/mine/slots` |
 | POST | `/mine/occupy` |
 | POST | `/mine/claim` |

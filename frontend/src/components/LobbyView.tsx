@@ -21,6 +21,7 @@ import {
   Shield,
   Gift,
   Award,
+  Trophy,
 } from "lucide-react";
 import { LogConsole } from "./LogConsole";
 
@@ -233,6 +234,15 @@ export const LobbyView: React.FC = () => {
       glow: "group-hover:shadow-[0_0_25px_rgba(239,68,68,0.45)]",
       borderColor: "border-rose-400/30",
       iconColor: "text-rose-500",
+    },
+    {
+      id: "leaderboard",
+      label: "Bảng Xếp Hạng",
+      icon: Trophy,
+      gradient: "from-amber-500 to-yellow-600",
+      glow: "group-hover:shadow-[0_0_25px_rgba(217,119,6,0.45)]",
+      borderColor: "border-amber-400/30",
+      iconColor: "text-amber-500",
     },
     {
       id: "sect",

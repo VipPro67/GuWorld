@@ -92,6 +92,15 @@ Region định nghĩa map lớn. `map_cells` có thể được generate theo v�
 3. Nếu thêm field Cổ/item mới, cập nhật struct model và frontend type trước khi dùng trong UI.
 4. Cập nhật số dòng trong bảng trên nếu thêm/xóa seed data.
 
+### Bảng `leaderboard_settings` (Bảng Xếp Hạng)
+
+| Cột | Kiểu | Ghi chú |
+| --- | --- | --- |
+| `player_id` | UUID PK | FK → `players(id)` ON DELETE CASCADE |
+| `show_on_leaderboard` | BOOLEAN | DEFAULT TRUE. Người chơi có thể tắt để rút khỏi BXH |
+
+Không có seed CSV cho bảng này. Row được tạo tự động qua `INSERT ON CONFLICT DO NOTHING` khi người chơi truy cập BXH lần đầu.
+
 ## Lưu ý khi thay đổi schema
 
 - `CREATE TABLE IF NOT EXISTS` toàn bộ ở `backend/internal/db/db.go`. Không có migration riêng.

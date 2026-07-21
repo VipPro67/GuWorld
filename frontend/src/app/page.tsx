@@ -35,6 +35,7 @@ import { Handshake } from "lucide-react";
 import { KillerMoveBuilder } from "@/components/killer-moves/KillerMoveBuilder";
 import { AuditLogsView } from "@/components/AuditLogsView";
 import { AdminView } from "@/components/AdminView";
+import { LeaderboardView } from "@/components/LeaderboardView";
 import { ThemeToggle } from "@/components/ThemeToggle";
 export default function Home() {
   const {
@@ -289,6 +290,10 @@ export default function Home() {
           />
         ) : currentView === "arena" ? (
           <ArenaView />
+        ) : currentView === "leaderboard" ? (
+          <div className="w-full">
+            <LeaderboardView />
+          </div>
         ) : currentView === "gacha" ? (
           <div className="w-full max-w-4xl mx-auto">
             <GachaPanel />
@@ -365,27 +370,13 @@ export default function Home() {
               <button onClick={() => setShowChangelog(false)} className="text-zinc-500 hover:text-zinc-300 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
             <div className="space-y-3 text-xs text-zinc-300 leading-relaxed">
-              <p className="text-zinc-400">Phiên bản <strong className="text-amber-400">v0.7.0</strong> có những tính năng mới sau:</p>
+              <p className="text-zinc-400">Phiên bản <strong className="text-amber-400">v0.7.1</strong> có những tính năng mới sau:</p>
               <div className="space-y-2">
-                <div className="flex gap-2.5 items-start bg-pink-950/20 border border-pink-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">🎴</span>
-                  <div>
-                    <span className="font-bold text-pink-300">Mở đá</span>
-                    <p className="text-zinc-400 mt-0.5">Quay thưởng ngẫu nhiên.</p>
-                  </div>
-                </div>
-                <div className="flex gap-2.5 items-start bg-emerald-950/20 border border-emerald-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">🎁</span>
-                  <div>
-                    <span className="font-bold text-emerald-300">Mã Quà (Gift Code)</span>
-                    <p className="text-zinc-400 mt-0.5">Nhập mã quà tại tab "Phúc Lợi" trong Không Khiếu để nhận thưởng.</p>
-                  </div>
-                </div>
                 <div className="flex gap-2.5 items-start bg-amber-950/20 border border-amber-500/10 rounded-lg p-3">
                   <span className="text-lg shrink-0 mt-0.5">🏆</span>
                   <div>
-                    <span className="font-bold text-amber-300">Thành Tựu & Danh Hiệu</span>
-                    <p className="text-zinc-400 mt-0.5">23 thành tựu, mở khóa danh hiệu và khung hiển thị cạnh tên trong chat.</p>
+                    <span className="font-bold text-amber-300">Bảng Xếp Hạng</span>
+                    <p className="text-zinc-400 mt-0.5">So tài tu luyện, nguyên thạch, cổ trùng và tiên nguyên. Có thể chủ động ẩn/hiện khỏi bảng.</p>
                   </div>
                 </div>
               </div>

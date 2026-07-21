@@ -844,6 +844,17 @@ interface GameState {
   challengeArena: (targetPlayerId: string) => Promise<boolean>;
   buyArenaItem: (itemId: string) => Promise<boolean>;
 
+  // Leaderboard State & Actions
+  leaderboardEntries: any[];
+  leaderboardCategory: string;
+  myLeaderboardRank: { rank: number; value: number } | null;
+  leaderboardTotalPlayers: number;
+  leaderboardShowOnLeaderboard: boolean;
+  leaderboardLoading: boolean;
+  fetchLeaderboard: (category: string) => Promise<void>;
+  toggleLeaderboardVisibility: () => Promise<void>;
+  fetchLeaderboardSettings: () => Promise<void>;
+
   // Chat/Mail State & Actions
   inbox: any[];
   baoHoangMessages: any[];
@@ -1156,6 +1167,12 @@ export const useGameStore = create<GameState>((set, get) => {
   activeTrade: null,
   party: null,
   arenaLeaderboard: [],
+  leaderboardEntries: [],
+  leaderboardCategory: "rank",
+  myLeaderboardRank: null,
+  leaderboardTotalPlayers: 0,
+  leaderboardShowOnLeaderboard: true,
+  leaderboardLoading: false,
   inbox: [],
   baoHoangMessages: [],
   showChangelog: false,
@@ -3679,6 +3696,53 @@ export const useGameStore = create<GameState>((set, get) => {
       get().addLog(`Khiêu chiến võ đài lỗi: ${err.message}`);
       return false;
     } finally { set({ actionLoading: false }); }
+  },
+
+  fetchLeaderboard: async (category) => {
+    const { token, logout } = get();
+    if (!token) return;
+    set({ leaderboardLoading: true, leaderboardCategory: category });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/leaderboard/${category}`);
+      if (response.status === 401 || response.status === 403) { logout(); return; }
+      const data = await response.json();
+      set({
+        leaderboardEntries: Array.isArray(data.entries) ? data.entries : [],
+        myLeaderboardRank: data.my_rank ? { rank: data.my_rank, value: data.my_value } : null,
+        leaderboardTotalPlayers: data.total_players || 0,
+      });
+    } catch (err) {
+      console.error("fetch leaderboard failed", err);
+    } finally {
+      set({ leaderboardLoading: false });
+    }
+  },
+
+  toggleLeaderboardVisibility: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/leaderboard/toggle`, { method: "POST" });
+      if (response.status === 401 || response.status === 403) { logout(); return; }
+      const data = await response.json();
+      set({ leaderboardShowOnLeaderboard: data.show_on_leaderboard });
+      get().addLog(data.show_on_leaderboard ? "Đã tham gia bảng xếp hạng" : "Đã rút khỏi bảng xếp hạng");
+    } catch (err) {
+      console.error("toggle leaderboard visibility failed", err);
+    }
+  },
+
+  fetchLeaderboardSettings: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/leaderboard/settings`);
+      if (response.status === 401 || response.status === 403) { logout(); return; }
+      const data = await response.json();
+      set({ leaderboardShowOnLeaderboard: data.show_on_leaderboard });
+    } catch (err) {
+      console.error("fetch leaderboard settings failed", err);
+    }
   },
 
   sendPrivateMail: async (receiverUsername, content) => {

@@ -120,10 +120,23 @@ export const wikiPages: WikiPage[] = [
             <div className="relative">
               <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
               <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <span>Phiên Bản v0.7.0 (Hiện tại)</span>
+                <span>Phiên Bản v0.7.1 (Hiện tại)</span>
                 <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono text-[9px]">
                   Mới nhất
                 </span>
+              </h4>
+
+              <ul className="list-disc list-inside text-[var(--text-secondary)] mt-1.5 space-y-1.5 leading-relaxed">
+                <li>
+                  <strong>Bảng Xếp Hạng:</strong> Hệ thống BXH tổng hợp với 4 tiêu chí: Tu Luyện, Nguyên Thạch, Cổ Trùng (cấp cao nhất) và Tiên Nguyên. Người chơi có thể chủ động rút khỏi hoặc tham gia BXH. Admin bị loại khỏi bảng xếp hạng.
+                </li>
+              </ul>
+            </div>
+
+            <div className="relative">
+              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-zinc-700 border-2 border-zinc-950" />
+              <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <span>Phiên Bản v0.7.0</span>
               </h4>
 
               <ul className="list-disc list-inside text-[var(--text-secondary)] mt-1.5 space-y-1.5 leading-relaxed">

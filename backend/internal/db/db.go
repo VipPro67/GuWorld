@@ -436,6 +436,23 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create arena_rankings table: %w", err)
 	}
 
+	// Create leaderboard_settings table
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS leaderboard_settings (
+		player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+		show_on_leaderboard BOOLEAN NOT NULL DEFAULT TRUE
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create leaderboard_settings table: %w", err)
+	}
+
+	// Ensure all existing players have a leaderboard_settings row
+	_, _ = DB.Exec(`
+		INSERT INTO leaderboard_settings (player_id, show_on_leaderboard)
+		SELECT id, TRUE FROM players
+		ON CONFLICT (player_id) DO NOTHING
+	`)
+
 	// 4.5. Create regions
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS regions (

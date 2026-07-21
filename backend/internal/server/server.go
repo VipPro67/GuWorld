@@ -294,6 +294,15 @@ func SetupRouter() *gin.Engine {
 			arena.POST("/shop/buy", handlers.BuyArenaShopItem)
 		}
 
+		// Leaderboard Endpoints
+		leaderboard := api.Group("/leaderboard")
+		leaderboard.Use(middleware.AuthRequired())
+		{
+			leaderboard.GET("/:category", handlers.GetLeaderboard)
+			leaderboard.POST("/toggle", handlers.ToggleLeaderboardVisibility)
+			leaderboard.GET("/settings", handlers.GetLeaderboardSettings)
+		}
+
 		// Chat / Mail Endpoints
 		chat := api.Group("/chat")
 		chat.Use(middleware.AuthRequired())
