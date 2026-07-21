@@ -36,6 +36,7 @@ export const LeaderboardView: React.FC = () => {
     leaderboardTotalPlayers,
     leaderboardShowOnLeaderboard,
     leaderboardLoading,
+    leaderboardLastUpdated,
     fetchLeaderboard,
     toggleLeaderboardVisibility,
     fetchLeaderboardSettings,
@@ -250,12 +251,21 @@ export const LeaderboardView: React.FC = () => {
       </div>
 
       {leaderboardEntries.length > 0 && (
-        <div className="text-[10px] text-zinc-600 font-mono text-center relative z-10 pt-2 border-t border-zinc-900/50">
-          <Users className="w-3 h-3 inline mr-1" />
-          Tổng số {leaderboardTotalPlayers} người chơi đang tham gia bảng xếp hạng
-          {!leaderboardShowOnLeaderboard && (
-            <span className="text-rose-500"> • Bạn đang ẩn khỏi bảng xếp hạng</span>
-          )}
+        <div className="text-[10px] text-zinc-600 font-mono text-center relative z-10 pt-2 border-t border-zinc-900/50 space-y-1">
+          <div>
+            <Users className="w-3 h-3 inline mr-1" />
+            Tổng số {leaderboardTotalPlayers} người chơi đang tham gia bảng xếp hạng
+            {!leaderboardShowOnLeaderboard && (
+              <span className="text-rose-500"> • Bạn đang ẩn khỏi bảng xếp hạng</span>
+            )}
+          </div>
+          <div className="text-[9px] text-zinc-700">
+            <RefreshCw className="w-2.5 h-2.5 inline mr-1" />
+            Cập nhật mỗi ngày
+            {leaderboardLastUpdated && (
+              <span> — lần cuối: {new Date(leaderboardLastUpdated).toLocaleString("vi-VN")}</span>
+            )}
+          </div>
         </div>
       )}
     </div>

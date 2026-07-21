@@ -851,6 +851,7 @@ interface GameState {
   leaderboardTotalPlayers: number;
   leaderboardShowOnLeaderboard: boolean;
   leaderboardLoading: boolean;
+  leaderboardLastUpdated: string;
   fetchLeaderboard: (category: string) => Promise<void>;
   toggleLeaderboardVisibility: () => Promise<void>;
   fetchLeaderboardSettings: () => Promise<void>;
@@ -1173,6 +1174,7 @@ export const useGameStore = create<GameState>((set, get) => {
   leaderboardTotalPlayers: 0,
   leaderboardShowOnLeaderboard: true,
   leaderboardLoading: false,
+  leaderboardLastUpdated: "",
   inbox: [],
   baoHoangMessages: [],
   showChangelog: false,
@@ -3710,6 +3712,7 @@ export const useGameStore = create<GameState>((set, get) => {
         leaderboardEntries: Array.isArray(data.entries) ? data.entries : [],
         myLeaderboardRank: data.my_rank ? { rank: data.my_rank, value: data.my_value } : null,
         leaderboardTotalPlayers: data.total_players || 0,
+        leaderboardLastUpdated: data.last_updated || "",
       });
     } catch (err) {
       console.error("fetch leaderboard failed", err);

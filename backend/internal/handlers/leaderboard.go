@@ -3,6 +3,8 @@ package handlers
 import (
 	"database/sql"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -22,15 +24,54 @@ type LeaderboardEntry struct {
 }
 
 type LeaderboardResponse struct {
-	Category    string             `json:"category"`
-	Entries     []LeaderboardEntry `json:"entries"`
-	MyRank      *int               `json:"my_rank"`
-	MyValue     float64            `json:"my_value"`
-	TotalPlayers int               `json:"total_players"`
+	Category      string             `json:"category"`
+	Entries       []LeaderboardEntry `json:"entries"`
+	MyRank        *int               `json:"my_rank"`
+	MyValue       float64            `json:"my_value"`
+	TotalPlayers  int                `json:"total_players"`
+	LastUpdated   string             `json:"last_updated"`
 }
 
 type LeaderboardSettings struct {
 	ShowOnLeaderboard bool `json:"show_on_leaderboard"`
+}
+
+const cacheTTL = 24 * time.Hour
+
+type leaderboardCacheEntry struct {
+	entries      []LeaderboardEntry
+	totalPlayers int
+	cachedAt     time.Time
+}
+
+var (
+	leaderboardCache   = make(map[string]*leaderboardCacheEntry)
+	leaderboardCacheMu sync.RWMutex
+	leaderboardLastUpdated time.Time
+)
+
+func leaderboardCacheLoad(category string) (*leaderboardCacheEntry, bool) {
+	leaderboardCacheMu.RLock()
+	defer leaderboardCacheMu.RUnlock()
+	entry, ok := leaderboardCache[category]
+	if !ok {
+		return nil, false
+	}
+	if time.Since(entry.cachedAt) >= cacheTTL {
+		return nil, false
+	}
+	return entry, true
+}
+
+func leaderboardCacheStore(category string, entries []LeaderboardEntry, totalPlayers int) {
+	leaderboardCacheMu.Lock()
+	defer leaderboardCacheMu.Unlock()
+	leaderboardCache[category] = &leaderboardCacheEntry{
+		entries:      entries,
+		totalPlayers: totalPlayers,
+		cachedAt:     time.Now(),
+	}
+	leaderboardLastUpdated = time.Now()
 }
 
 func ensureLeaderboardSetting(playerID uuid.UUID) {
@@ -70,6 +111,37 @@ func GetLeaderboard(c *gin.Context) {
 		return
 	}
 
+	lastUpdatedStr := ""
+	if !leaderboardLastUpdated.IsZero() {
+		lastUpdatedStr = leaderboardLastUpdated.Format("2006-01-02T15:04:05Z07:00")
+	}
+
+	// Try cache
+	if cached, ok := leaderboardCacheLoad(category); ok {
+		var myRank *int
+		var myValue float64
+
+		rankQuery := buildRankQuery(category)
+		if rankQuery != "" {
+			var pos int
+			err := db.DB.QueryRow(rankQuery, authID).Scan(&pos, &myValue)
+			if err == nil {
+				myRank = &pos
+			}
+		}
+
+		c.JSON(http.StatusOK, LeaderboardResponse{
+			Category:     category,
+			Entries:      cached.entries,
+			MyRank:       myRank,
+			MyValue:      myValue,
+			TotalPlayers: cached.totalPlayers,
+			LastUpdated:  lastUpdatedStr,
+		})
+		return
+	}
+
+	// Compute fresh
 	var query string
 	switch category {
 	case "rank":
@@ -145,10 +217,6 @@ func GetLeaderboard(c *gin.Context) {
 		}
 	}
 
-	// Get caller's rank & value
-	var myRank *int
-	var myValue float64
-
 	// Count total visible players
 	var totalPlayers int
 	_ = db.DB.QueryRow(`
@@ -157,11 +225,37 @@ func GetLeaderboard(c *gin.Context) {
 		WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
 	`).Scan(&totalPlayers)
 
-	// Find caller's position in a single subquery
-	var rankQuery string
+	// Cache the result
+	leaderboardCacheStore(category, entries, totalPlayers)
+	lastUpdatedStr = time.Now().Format("2006-01-02T15:04:05Z07:00")
+
+	// Get caller's rank & value
+	var myRank *int
+	var myValue float64
+
+	rankQuery := buildRankQuery(category)
+	if rankQuery != "" {
+		var pos int
+		err := db.DB.QueryRow(rankQuery, authID).Scan(&pos, &myValue)
+		if err == nil {
+			myRank = &pos
+		}
+	}
+
+	c.JSON(http.StatusOK, LeaderboardResponse{
+		Category:     category,
+		Entries:      entries,
+		MyRank:       myRank,
+		MyValue:      myValue,
+		TotalPlayers: totalPlayers,
+		LastUpdated:  lastUpdatedStr,
+	})
+}
+
+func buildRankQuery(category string) string {
 	switch category {
 	case "rank":
-		rankQuery = `
+		return `
 			SELECT position, val FROM (
 				SELECT p.id, (p.rank * 10 + p.sub_rank)::float8 as val,
 					ROW_NUMBER() OVER (ORDER BY p.rank DESC, p.sub_rank DESC) as position
@@ -170,7 +264,7 @@ func GetLeaderboard(c *gin.Context) {
 				WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
 			) sub WHERE sub.id = $1`
 	case "primeval_stones":
-		rankQuery = `
+		return `
 			SELECT position, val FROM (
 				SELECT p.id, p.primeval_stones::float8 as val,
 					ROW_NUMBER() OVER (ORDER BY p.primeval_stones DESC) as position
@@ -179,7 +273,7 @@ func GetLeaderboard(c *gin.Context) {
 				WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
 			) sub WHERE sub.id = $1`
 	case "gu_strongest":
-		rankQuery = `
+		return `
 			SELECT position, val FROM (
 				SELECT p.id, COALESCE(gm.max_gu_rank, 0)::float8 as val,
 					ROW_NUMBER() OVER (ORDER BY COALESCE(gm.max_gu_rank, 0) DESC) as position
@@ -195,7 +289,7 @@ func GetLeaderboard(c *gin.Context) {
 				WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
 			) sub WHERE sub.id = $1`
 	case "immortal_stones":
-		rankQuery = `
+		return `
 			SELECT position, val FROM (
 				SELECT p.id, p.immortal_stones as val,
 					ROW_NUMBER() OVER (ORDER BY p.immortal_stones DESC) as position
@@ -204,24 +298,7 @@ func GetLeaderboard(c *gin.Context) {
 				WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
 			) sub WHERE sub.id = $1`
 	}
-
-	if rankQuery != "" {
-		var pos int
-		err := db.DB.QueryRow(rankQuery, authID).Scan(&pos, &myValue)
-		if err == nil {
-			myRank = &pos
-		} else if err == sql.ErrNoRows {
-			// Player not in leaderboard (e.g., opted out)
-		}
-	}
-
-	c.JSON(http.StatusOK, LeaderboardResponse{
-		Category:     category,
-		Entries:      entries,
-		MyRank:       myRank,
-		MyValue:      myValue,
-		TotalPlayers: totalPlayers,
-	})
+	return ""
 }
 
 func ToggleLeaderboardVisibility(c *gin.Context) {
