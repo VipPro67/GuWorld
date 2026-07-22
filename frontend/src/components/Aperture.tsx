@@ -395,9 +395,6 @@ export const Aperture: React.FC<ApertureProps> = ({
           <span className="text-[10px] font-mono font-bold text-zinc-300 ml-2.5 shrink-0">
             Áp Lực: {(player.aperture_stress ?? 0).toFixed(0)}%
           </span>
-          <span className="text-[8px] text-amber-400/70 ml-2 font-mono shrink-0">
-            ↓50%/2h
-          </span>
         </div>
 
         {/* Tab Selection */}
@@ -1633,39 +1630,6 @@ function WallControls() {
         <span className="text-xs font-semibold text-zinc-300 block">
                   {(player.lifespan ?? 0).toFixed(1)} năm
         </span>
-      </div>
-      {/* Aperture Stress Level */}
-      <div className="mt-3.5 p-3 bg-zinc-950/70 border border-zinc-900 rounded-xl">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5 font-mono">
-            <Activity className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
-            Áp Lực Không Khiếu
-          </span>
-          <span className={`text-xs font-mono font-bold ${(player.aperture_stress ?? 0) >= 80 ? "text-rose-500 animate-pulse font-extrabold" :
-            (player.aperture_stress ?? 0) >= 50 ? "text-amber-500" :
-              "text-emerald-400"
-            }`}>
-            {(player.aperture_stress ?? 0).toFixed(1)}%
-          </span>
-        </div>
-
-        {/* Dial / Progress Bar */}
-        <div className="relative w-full h-3.5 bg-zinc-900/80 rounded-full overflow-hidden border border-zinc-850 p-[2px]">
-          <div
-            className={`h-full rounded-full transition-all duration-300 ${(player.aperture_stress ?? 0) >= 80 ? "bg-gradient-to-r from-red-600 via-rose-500 to-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]" :
-              (player.aperture_stress ?? 0) >= 50 ? "bg-gradient-to-r from-amber-600 to-amber-400" :
-                "bg-gradient-to-r from-emerald-600 to-emerald-400"
-              }`}
-            style={{ width: `${Math.min(100, player.aperture_stress ?? 0)}%` }}
-          />
-        </div>
-
-        {(player.aperture_stress ?? 0) >= 80 && (
-          <div className="text-[9.5px] text-rose-400 mt-1.5 leading-tight font-semibold flex items-center gap-1">
-            <ShieldAlert className="w-3 h-3 text-rose-500 shrink-0" />
-            <span>Không Khiếu quá tải! Tỷ lệ trùng kích giảm cực mạnh. Quá 100% sẽ bị nứt vỡ rớt tu vi!</span>
-          </div>
-        )}
       </div>
     </div>
   );
