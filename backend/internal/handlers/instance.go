@@ -212,20 +212,12 @@ func EnterInstance(c *gin.Context) {
 
 	// Consume entry item if required
 	if template.EntryItem != "NONE" {
-		qty, ok := player.MaterialsInventory[template.EntryItem]
-		if !ok || qty < 1 {
+		qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), template.EntryItem, "materials")
+		if err != nil || qty < 1 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu thiếu vật phẩm \"" + template.EntryItem + "\" để tiến vào!"})
 			return
 		}
-		player.MaterialsInventory[template.EntryItem]--
-		if player.MaterialsInventory[template.EntryItem] == 0 {
-			delete(player.MaterialsInventory, template.EntryItem)
-		}
-
-		_, err = tx.Exec(`
-			UPDATE players SET materials_inventory = $1 WHERE id = $2
-		`, player.MaterialsInventory, player.ID)
-		if err != nil {
+		if err := InventorySvc.RemoveItem(tx, player.ID.String(), template.EntryItem, "materials", 1); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to consume entry item: " + err.Error()})
 			return
 		}
@@ -376,15 +368,15 @@ func ActionInstance(c *gin.Context) {
 				return
 			}
 			requiredAmt := int(amtFloat)
-			playerQty, ok := player.MaterialsInventory[matID]
-			if !ok || playerQty < requiredAmt {
+			qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), matID, "materials")
+			if err != nil || qty < requiredAmt {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ nguyên liệu \"" + matID + "\" yêu cầu!"})
 				return
 			}
 			// Deduct material
-			player.MaterialsInventory[matID] -= requiredAmt
-			if player.MaterialsInventory[matID] == 0 {
-				delete(player.MaterialsInventory, matID)
+			if err := InventorySvc.RemoveItem(tx, player.ID.String(), matID, "materials", requiredAmt); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct material: " + err.Error()})
+				return
 			}
 		}
 
@@ -458,9 +450,9 @@ func ActionInstance(c *gin.Context) {
 
 		_, err = tx.Exec(`
 			UPDATE players
-			SET hp = $1, soul_hp = $2, current_mana = $3, materials_inventory = $4, gu_inventory = $5
-			WHERE id = $6
-		`, player.HP, player.SoulHP, player.CurrentMana, player.MaterialsInventory, player.GuInventory, player.ID)
+			SET hp = $1, soul_hp = $2, current_mana = $3, gu_inventory = $4
+			WHERE id = $5
+		`, player.HP, player.SoulHP, player.CurrentMana, player.GuInventory, player.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player: " + err.Error()})
 			return
@@ -495,9 +487,9 @@ func ActionInstance(c *gin.Context) {
 
 		_, err = tx.Exec(`
 			UPDATE players
-			SET hp = $1, soul_hp = $2, materials_inventory = $3, gu_inventory = $4
-			WHERE id = $5
-		`, player.HP, player.SoulHP, player.MaterialsInventory, player.GuInventory, player.ID)
+			SET hp = $1, soul_hp = $2, gu_inventory = $3
+			WHERE id = $4
+		`, player.HP, player.SoulHP, player.GuInventory, player.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player: " + err.Error()})
 			return
@@ -526,11 +518,8 @@ func ActionInstance(c *gin.Context) {
 		if err := json.Unmarshal(template.Rewards, &rewards); err == nil {
 			// Add materials
 			if rewards.Materials != nil {
-				if player.MaterialsInventory == nil {
-					player.MaterialsInventory = make(models.MaterialsInventory)
-				}
 				for k, v := range rewards.Materials {
-					player.MaterialsInventory[k] += v
+					InventorySvc.AddItem(tx, player.ID.String(), k, "materials", v)
 				}
 			}
 
@@ -601,9 +590,9 @@ func ActionInstance(c *gin.Context) {
 
 		_, err = tx.Exec(`
 			UPDATE players
-			SET hp = $1, soul_hp = $2, materials_inventory = $3, gu_inventory = $4, primeval_stones = $5, path_masteries = $6
-			WHERE id = $7
-		`, player.HP, player.SoulHP, player.MaterialsInventory, player.GuInventory, player.PrimevalStones, player.PathMasteries, player.ID)
+			SET hp = $1, soul_hp = $2, gu_inventory = $3, primeval_stones = $4, path_masteries = $5
+			WHERE id = $6
+		`, player.HP, player.SoulHP, player.GuInventory, player.PrimevalStones, player.PathMasteries, player.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player rewards: " + err.Error()})
 			return
@@ -636,9 +625,9 @@ func ActionInstance(c *gin.Context) {
 
 	_, err = tx.Exec(`
 		UPDATE players
-		SET hp = $1, soul_hp = $2, materials_inventory = $3, gu_inventory = $4
-		WHERE id = $5
-	`, player.HP, player.SoulHP, player.MaterialsInventory, player.GuInventory, player.ID)
+		SET hp = $1, soul_hp = $2, gu_inventory = $3
+		WHERE id = $4
+	`, player.HP, player.SoulHP, player.GuInventory, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player status: " + err.Error()})
 		return

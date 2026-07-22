@@ -24,9 +24,13 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// PlayerSvc is the package-level player service for handler use.
+var PlayerSvc *services.PlayerService
 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 
@@ -284,12 +288,6 @@ func RegisterPlayer(c *gin.Context) {
 			IsVital:    isDefenseVital,
 		},
 	}
-	starterMaterials := models.MaterialsInventory{
-		"moon_orchid_petal": 5,
-		"green_bamboo_wine": 2,
-		"jade_stone":        1,
-	}
-
 	equippedGus := models.EquippedGusList{attackGuInstanceID, defenseGuInstanceID}
 
 	tx, err := db.DB.Begin()
@@ -346,30 +344,39 @@ func RegisterPlayer(c *gin.Context) {
 
 	var player models.Player
 	query := `
-		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, time_speed_multiplier, email, completed_quests, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, avatar_url, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding)
-		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 20, 0, $8, $9, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, $13, '{}'::jsonb, $10, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 1.0, $11, '[]'::jsonb, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, '[{"recipe_id": "recipe_moon_raiment", "completion_rate": 100.0}, {"recipe_id": "recipe_white_jade", "completion_rate": 50.0}, {"recipe_id": "recipe_four_flavors_liquor", "completion_rate": 30.0}]'::jsonb, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $12, true)
-		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, avatar_url, needs_onboarding
+		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, time_speed_multiplier, email, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, avatar_url, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding)
+		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 20, 0, $8, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, $12, '{}'::jsonb, $9, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 1.0, $10, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $11, true)
+		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, avatar_url, needs_onboarding
 	`
 
 	var activeCombatBytes []byte
-	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, starterGu, starterMaterials, req.StartingRegion, req.Email, refCode, equippedGus).Scan(
+	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, starterGu, req.StartingRegion, req.Email, refCode, equippedGus).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
-		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
+		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
 		&player.WallProgress, &player.HumanQi, &player.NextTribulationTime, &player.TribulationCount,
 		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y, &player.ExploredCells,
 		&player.EquippedGus, &player.ClearedCells,
 		&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries, &activeCombatBytes,
 		&player.LastManaUpdate, &player.CreatedAt,
 		&player.Lifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
-		&player.Email, &player.GoogleID, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+		&player.Email, &player.GoogleID, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
-		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.AvatarURL, &player.NeedsOnboarding,
+		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.AvatarURL, &player.NeedsOnboarding,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create player: " + err.Error()})
 		return
 	}
+
+	// Seed starter materials
+	InventorySvc.AddItem(tx, player.ID.String(), "moon_orchid_petal", "materials", 5)
+	InventorySvc.AddItem(tx, player.ID.String(), "green_bamboo_wine", "materials", 2)
+	InventorySvc.AddItem(tx, player.ID.String(), "jade_stone", "materials", 1)
+	// Seed starter recipes
+	RecipeSvc.Upsert(tx, &services.RecipeProgress{PlayerID: player.ID.String(), RecipeID: "recipe_moon_raiment", CompletionRate: 100, IsUnlocked: true})
+	RecipeSvc.Upsert(tx, &services.RecipeProgress{PlayerID: player.ID.String(), RecipeID: "recipe_white_jade", CompletionRate: 50, IsUnlocked: true})
+	RecipeSvc.Upsert(tx, &services.RecipeProgress{PlayerID: player.ID.String(), RecipeID: "recipe_four_flavors_liquor", CompletionRate: 30, IsUnlocked: true})
 
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
@@ -567,7 +574,7 @@ func LoginPlayer(c *gin.Context) {
 	var passwordHash string
 
 	query := `
-		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), COALESCE(avatar_url, '')
+		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), COALESCE(avatar_url, '')
 		FROM players
 		WHERE LOWER(email) = $1
 	`
@@ -575,16 +582,16 @@ func LoginPlayer(c *gin.Context) {
 	err := db.DB.QueryRow(query, loginEmail).Scan(
 		&player.ID, &player.Username, &passwordHash, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
-		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
+		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
 		&player.WallProgress, &player.HumanQi, &player.NextTribulationTime, &player.TribulationCount,
 		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y, &player.ExploredCells,
 		&player.EquippedGus, &player.ClearedCells,
 		&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries, &activeCombatBytes,
 		&player.LastManaUpdate, &player.CreatedAt,
 		&player.Lifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
-		&player.Email, &player.GoogleID, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+		&player.Email, &player.GoogleID, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
-		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.AvatarURL,
+		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.AvatarURL,
 	)
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
@@ -948,10 +955,7 @@ func Explore(c *gin.Context) {
 
 	if droppedMaterial != "" {
 		if HasInventorySpace(&player, 1) {
-			if player.MaterialsInventory == nil {
-				player.MaterialsInventory = make(models.MaterialsInventory)
-			}
-			player.MaterialsInventory[droppedMaterial]++
+			InventorySvc.AddItem(tx, player.ID.String(), droppedMaterial, "materials", 1)
 		} else {
 			droppedMaterial = ""
 			inventoryFullMsg = " [Hành lý đầy, vật phẩm bị rơi mất!]"
@@ -1010,9 +1014,10 @@ func Explore(c *gin.Context) {
 
 		if len(allRecipeIDs) > 0 {
 			// Find which ones player hasn't unlocked or isn't 100%
+			recipes, _ := RecipeSvc.ListByPlayer(player.ID.String())
 			unlockedMap := make(map[string]float64)
-			for _, ur := range player.UnlockedRecipes {
-				unlockedMap[ur.RecipeID] = ur.CompletionRate
+			for _, r := range recipes {
+				unlockedMap[r.RecipeID] = r.CompletionRate
 			}
 
 			var candidates []string
@@ -1027,22 +1032,12 @@ func Explore(c *gin.Context) {
 				randomRate := float64(30 + rand.Intn(30)) // 30% to 60%
 
 				// Add or update
-				found := false
-				for i, ur := range player.UnlockedRecipes {
-					if ur.RecipeID == chosenCandidate {
-						if ur.CompletionRate < randomRate {
-							player.UnlockedRecipes[i].CompletionRate = randomRate
-						}
-						found = true
-						break
-					}
-				}
-				if !found {
-					player.UnlockedRecipes = append(player.UnlockedRecipes, models.UnlockedRecipe{
-						RecipeID:       chosenCandidate,
-						CompletionRate: randomRate,
-					})
-				}
+				RecipeSvc.Upsert(tx, &services.RecipeProgress{
+					PlayerID:       player.ID.String(),
+					RecipeID:       chosenCandidate,
+					CompletionRate: randomRate,
+					IsUnlocked:     true,
+				})
 
 				// Find target Gu name
 				var targetGuName string
@@ -1065,10 +1060,10 @@ func Explore(c *gin.Context) {
 	// 5. Persist changes
 	updateQuery := `
 		UPDATE players
-		SET current_mana = $1, primeval_stones = $2, materials_inventory = $3, gu_inventory = $4, last_mana_update = $5, unlocked_recipes = $6, explored_cells = $7
-		WHERE id = $8
+		SET current_mana = $1, primeval_stones = $2, gu_inventory = $3, last_mana_update = $4, explored_cells = $5
+		WHERE id = $6
 	`
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.MaterialsInventory, player.GuInventory, player.LastManaUpdate, player.UnlockedRecipes, player.ExploredCells, player.ID)
+	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.GuInventory, player.LastManaUpdate, player.ExploredCells, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update explore progress: " + err.Error()})
 		return
@@ -1226,7 +1221,8 @@ func FeedGu(c *gin.Context) {
 		consumedGuIndex := -1
 
 		for _, food := range foodOptions {
-			if player.MaterialsInventory[food] > 0 {
+			qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), food, "materials")
+			if qty > 0 {
 				itemSpec, ok := models.ItemRegistry[food]
 				if ok {
 					isFood := itemSpec.Type == "Food"
@@ -1255,10 +1251,7 @@ func FeedGu(c *gin.Context) {
 
 		foodID := ""
 		if chosenFoodItem != "" {
-			player.MaterialsInventory[chosenFoodItem]--
-			if player.MaterialsInventory[chosenFoodItem] <= 0 {
-				delete(player.MaterialsInventory, chosenFoodItem)
-			}
+			InventorySvc.RemoveItem(tx, player.ID.String(), chosenFoodItem, "materials", 1)
 			foodID = chosenFoodItem
 		} else {
 			consumedGu := player.GuInventory[consumedGuIndex]
@@ -1297,10 +1290,10 @@ func FeedGu(c *gin.Context) {
 	// 6. Update database
 	updateQuery := `
 		UPDATE players
-		SET gu_inventory = $1, materials_inventory = $2
-		WHERE id = $3
+		SET gu_inventory = $1
+		WHERE id = $2
 	`
-	_, err = tx.Exec(updateQuery, player.GuInventory, player.MaterialsInventory, player.ID)
+	_, err = tx.Exec(updateQuery, player.GuInventory, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
@@ -1394,7 +1387,8 @@ func FeedGroup(c *gin.Context) {
 
 	getAvailableFood := func() string {
 		for _, food := range foodOptions {
-			if player.MaterialsInventory[food] > 0 {
+			qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), food, "materials")
+			if qty > 0 {
 				itemSpec, ok := models.ItemRegistry[food]
 				if ok {
 					isFood := itemSpec.Type == "Food"
@@ -1442,10 +1436,7 @@ func FeedGroup(c *gin.Context) {
 				foodID := ""
 				// Consume food
 				if chosenFood != "" {
-					player.MaterialsInventory[chosenFood]--
-					if player.MaterialsInventory[chosenFood] <= 0 {
-						delete(player.MaterialsInventory, chosenFood)
-					}
+					InventorySvc.RemoveItem(tx, player.ID.String(), chosenFood, "materials", 1)
 					foodID = chosenFood
 					foodConsumed[chosenFood]++
 				} else {
@@ -1485,10 +1476,10 @@ func FeedGroup(c *gin.Context) {
 	// 4. Update database
 	updateQuery := `
 		UPDATE players
-		SET gu_inventory = $1, materials_inventory = $2
-		WHERE id = $3
+		SET gu_inventory = $1
+		WHERE id = $2
 	`
-	_, err = tx.Exec(updateQuery, player.GuInventory, player.MaterialsInventory, player.ID)
+	_, err = tx.Exec(updateQuery, player.GuInventory, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
@@ -1537,60 +1528,13 @@ type playerQueryRower interface {
 	QueryRow(query string, args ...any) *sql.Row
 }
 
-// loadPlayerForStatus loads the complete player row used by mana/status projection.
-// Pass forUpdate=true only for authoritative mutation flows that must lock before writing.
+// loadPlayerForStatus delegates to the service layer.
 func loadPlayerForStatus(q playerQueryRower, id uuid.UUID, forUpdate bool) (models.Player, error) {
-	var player models.Player
-
-	query := `
-		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), COALESCE(ref_code, ''), COALESCE(avatar_url, ''), combat_settings, COALESCE(needs_onboarding, false)
-		FROM players
-		WHERE id = $1
-	`
-	if forUpdate {
-		query += "\t\tFOR UPDATE\n"
-	}
-	var activeCombatBytes []byte
-	err := q.QueryRow(query, id).Scan(
-		&player.ID, &player.Username, &player.Rank, &player.SubRank,
-		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
-		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
-		&player.WallProgress, &player.HumanQi, &player.NextTribulationTime, &player.TribulationCount,
-		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y, &player.ExploredCells,
-		&player.EquippedGus, &player.ClearedCells,
-		&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries, &activeCombatBytes,
-		&player.LastManaUpdate, &player.CreatedAt,
-		&player.Lifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
-		&player.Email, &player.GoogleID, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
-		&player.ApertureStress, &player.LastCultivateTime,
-		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.AvatarURL,
-		&player.CombatSettings,
-		&player.NeedsOnboarding,
-	)
-	if err != nil {
-		return player, err
-	}
-	if len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
-		var cs models.CombatState
-		if json.Unmarshal(activeCombatBytes, &cs) == nil {
-			player.ActiveCombat = &cs
-		}
-	}
-
-	return player, nil
+	return PlayerSvc.Load(q, id, forUpdate)
 }
 
 func setDefaultPlayerStatusFields(player *models.Player) {
-	// Initialize default unlocked recipes if empty. Projection callers keep this in memory only.
-	if len(player.UnlockedRecipes) == 0 {
-		player.UnlockedRecipes = models.UnlockedRecipesList{
-			{RecipeID: "recipe_moon_raiment", CompletionRate: 100.0},
-			{RecipeID: "recipe_white_jade", CompletionRate: 50.0},
-			{RecipeID: "recipe_four_flavors_liquor", CompletionRate: 30.0},
-		}
-	}
-
-	// Initialize defaults for new fields if not set.
+	// Unlocked recipes are now stored in player_recipe_progress table
 	if player.Lifespan <= 0 {
 		player.Lifespan = 100.0
 	}
@@ -1603,6 +1547,7 @@ func setDefaultPlayerStatusFields(player *models.Player) {
 	}
 }
 
+// applyProjectedStatus computes mana regen, HP regen, lifespan decay, and stress decay.
 func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time) (bool, bool) {
 	poolChanged := normalizeEnergyPool(player)
 	stressChanged := false
@@ -1622,27 +1567,23 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 		regenRatePerHour = energyRegenRatePerHour(player)
 	}
 
-	// Lão hóa: Giảm 50% tốc độ hồi mana nếu thọ nguyên cạn kiệt.
 	if player.Lifespan <= 0 {
 		regenRatePerHour = regenRatePerHour * 0.5
 	}
 
 	secondsPassed := now.Sub(player.LastManaUpdate).Seconds()
 	if secondsPassed > 0 {
-		// Subjective time speed passed.
 		subjectiveSeconds := secondsPassed * player.TimeSpeedMultiplier
 		earnedMana := (subjectiveSeconds / 3600.0) * regenRatePerHour
 		newMana := player.CurrentMana + earnedMana
 		if newMana > player.MaxMana {
 			newMana = player.MaxMana
 		}
-
 		if newMana != player.CurrentMana {
 			player.CurrentMana = newMana
 			poolChanged = true
 		}
 
-		// HP Regeneration: 5% of BaseHP per hour + healing stat
 		if player.HP > 0 && player.HP < player.BaseHP {
 			stats := CalculatePlayerStats(player)
 			healingStat := stats["healing"]
@@ -1658,8 +1599,6 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 			}
 		}
 
-		// Lifespan decay (real-time, not scaled by TimeSpeedMultiplier).
-		// 1 game year = 5 days = 120 hours = 432000 seconds.
 		yearsPassed := secondsPassed / 432000.0
 		player.Lifespan -= yearsPassed
 		if player.Lifespan < 0 {
@@ -1668,7 +1607,6 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 		poolChanged = true
 	}
 
-	// Real-time Aperture Stress Decay: 10.0% per hour in real time.
 	if player.ApertureStress > 0 && !player.LastCultivateTime.IsZero() {
 		elapsedHours := now.Sub(player.LastCultivateTime).Hours()
 		if elapsedHours > 0 {
@@ -1705,65 +1643,14 @@ func applyImmortalApertureProjection(q playerQueryRower, player *models.Player) 
 	return essenceProd, false
 }
 
-// projectPlayerStatusTx computes a read-only projected status for UI refreshes.
-// It intentionally uses SELECT without FOR UPDATE and never persists current_mana,
-// lifespan, aperture_stress, last_cultivate_time, or players.last_mana_update.
+// projectPlayerStatusTx delegates to the service layer.
 func projectPlayerStatusTx(q playerQueryRower, id uuid.UUID) (models.Player, error) {
-	player, err := loadPlayerForStatus(q, id, false)
-	if err != nil {
-		return player, err
-	}
-
-	setDefaultPlayerStatusFields(&player)
-	essenceProd, _ := applyImmortalApertureProjection(q, &player)
-	applyProjectedStatus(&player, essenceProd, time.Now())
-
-	return player, nil
+	return PlayerSvc.ProjectStatus(q, id)
 }
 
-// evaluateManaTx is the authoritative status evaluator for mutation flows.
-// Keep this for actions that need a locked, authoritative status before mutating DB
-// (cultivate, recharge, combat, explore, refine, login/logout, or periodic sync).
+// evaluateManaTx delegates to the service layer.
 func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
-	player, err := loadPlayerForStatus(tx, id, true)
-	if err != nil {
-		return player, err
-	}
-
-	needsRecipePersist := len(player.UnlockedRecipes) == 0
-	setDefaultPlayerStatusFields(&player)
-	if needsRecipePersist {
-		_, _ = tx.Exec(`UPDATE players SET unlocked_recipes = $1 WHERE id = $2`, player.UnlockedRecipes, player.ID)
-	}
-
-	essenceProd, poolChanged := applyImmortalApertureProjection(tx, &player)
-	now := time.Now()
-	projectedChanged, stressChanged := applyProjectedStatus(&player, essenceProd, now)
-	if projectedChanged {
-		poolChanged = true
-		player.LastManaUpdate = now
-	}
-	if stressChanged {
-		player.LastCultivateTime = now
-	}
-
-	if poolChanged {
-		updateQuery := `
-			UPDATE players
-			SET current_mana = $1, max_mana = $2, last_mana_update = $3, lifespan = $4, time_speed_multiplier = $5, aperture_stress = $6, last_cultivate_time = $7, hp = $8
-			WHERE id = $9
-		`
-		_, err = tx.Exec(updateQuery, player.CurrentMana, player.MaxMana, player.LastManaUpdate, player.Lifespan, player.TimeSpeedMultiplier, player.ApertureStress, player.LastCultivateTime, player.HP, player.ID)
-		if err != nil {
-			return player, err
-		}
-	}
-
-	if player.Rank >= 6 {
-		_, _ = tx.Exec(`UPDATE immortal_apertures SET immortal_essence = $1 WHERE player_id = $2`, int(player.CurrentMana), player.ID)
-	}
-
-	return player, nil
+	return PlayerSvc.EvaluateAndPersistMana(tx, id)
 }
 
 // EquipGuRequest defines request to equip/unequip Gu bugs
@@ -2090,8 +1977,11 @@ func HasInventorySpace(player *models.Player, incomingCount int) bool {
 	}
 
 	currentSize := len(player.GuInventory)
-	for _, qty := range player.MaterialsInventory {
-		if qty > 0 {
+	invItems, _ := InventorySvc.ListByPlayer(player.ID.String())
+	seen := map[string]bool{}
+	for _, inv := range invItems {
+		if !seen[inv.ItemID] {
+			seen[inv.ItemID] = true
 			currentSize++
 		}
 	}
@@ -2131,12 +2021,6 @@ func UseItem(c *gin.Context) {
 		return
 	}
 
-	qty, ok := player.MaterialsInventory[req.ItemID]
-	if !ok || qty <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm này trong túi đồ"})
-		return
-	}
-
 	item, ok := models.ItemRegistry[req.ItemID]
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại trong ItemRegistry"})
@@ -2148,12 +2032,22 @@ func UseItem(c *gin.Context) {
 		return
 	}
 
+	// Check consumables sub-inventory first, fallback to materials
+	qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), req.ItemID, "consumables")
+	if err != nil || qty <= 0 {
+		qty, err = InventorySvc.GetQuantity(tx, player.ID.String(), req.ItemID, "materials")
+		if err != nil || qty <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm này trong túi đồ"})
+			return
+		}
+	}
+
 	messages := []string{}
 
 	// 1. Validation phase
 	for effectKey := range item.Effects {
 		if valHandler, ok := ValidateItemEffects[effectKey]; ok {
-			_, err := valHandler(&player, item)
+			_, err := valHandler(tx, &player, item)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
@@ -2164,7 +2058,7 @@ func UseItem(c *gin.Context) {
 	// 2. Application phase
 	for effectKey := range item.Effects {
 		if appHandler, ok := ApplyItemEffects[effectKey]; ok {
-			msg, err := appHandler(&player, item)
+			msg, err := appHandler(tx, &player, item)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
@@ -2185,18 +2079,16 @@ func UseItem(c *gin.Context) {
 		messages = append(messages, fmt.Sprintf("Đạo hữu sử dụng thành công %s.", item.Name))
 	}
 
-	player.MaterialsInventory[req.ItemID]--
-	if player.MaterialsInventory[req.ItemID] <= 0 {
-		delete(player.MaterialsInventory, req.ItemID)
-	}
+	// Deduct item via InventorySvc
+	InventorySvc.RemoveItem(tx, player.ID.String(), req.ItemID, "consumables", 1)
 
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET materials_inventory = $1, current_mana = $2, max_mana = $3, hp = $4, base_hp = $5, dao_marks = $6,
-		primeval_stones = $7, gu_inventory = $8, unlocked_recipes = $9, lifespan = $10
-		WHERE id = $11`,
-		player.MaterialsInventory, player.CurrentMana, player.MaxMana, player.HP, player.BaseHP, player.DaoMarks,
-		player.PrimevalStones, player.GuInventory, player.UnlockedRecipes, player.Lifespan,
+		SET current_mana = $1, max_mana = $2, hp = $3, base_hp = $4,
+		    dao_marks = $5, primeval_stones = $6, gu_inventory = $7, lifespan = $8
+		WHERE id = $9`,
+		player.CurrentMana, player.MaxMana, player.HP, player.BaseHP, player.DaoMarks,
+		player.PrimevalStones, player.GuInventory, player.Lifespan,
 		player.ID,
 	)
 	if err != nil {
@@ -3021,22 +2913,22 @@ func GoogleCallback(c *gin.Context) {
 
 	// 1. Try to search by google_id
 	err = tx.QueryRow(`
-		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false)
+		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false)
 		FROM players
 		WHERE google_id = $1
 	`, googleUser.ID).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
-		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
+		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
 		&player.WallProgress, &player.HumanQi, &player.NextTribulationTime, &player.TribulationCount,
 		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y, &player.ExploredCells,
 		&player.EquippedGus, &player.ClearedCells,
 		&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries,
 		&player.LastManaUpdate, &player.CreatedAt,
 		&player.Lifespan, &player.TimeSpeedMultiplier,
-		&player.Email, &player.GoogleID, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+		&player.Email, &player.GoogleID, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
-		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding,
+		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding,
 	)
 
 	if err == nil {
@@ -3049,22 +2941,22 @@ func GoogleCallback(c *gin.Context) {
 	if !hasPlayer {
 		// 2. Try to search by email (Merge Account!)
 		err = tx.QueryRow(`
-			SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false)
+			SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false)
 			FROM players
 			WHERE email = $1
 		`, googleUser.Email).Scan(
 			&player.ID, &player.Username, &player.Rank, &player.SubRank,
 			&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
-			&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
+			&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
 			&player.WallProgress, &player.HumanQi, &player.NextTribulationTime, &player.TribulationCount,
 			&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y, &player.ExploredCells,
 			&player.EquippedGus, &player.ClearedCells,
 			&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries,
 			&player.LastManaUpdate, &player.CreatedAt,
 			&player.Lifespan, &player.TimeSpeedMultiplier,
-			&player.Email, &player.GoogleID, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+			&player.Email, &player.GoogleID, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 			&player.ApertureStress, &player.LastCultivateTime,
-			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding,
+			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding,
 		)
 
 		if err == nil {
@@ -3164,41 +3056,44 @@ func GoogleCallback(c *gin.Context) {
 				IsVital:    false,
 			},
 		}
-		starterMaterials := models.MaterialsInventory{
-			"moon_orchid_petal": 5,
-			"green_bamboo_wine": 2,
-			"jade_stone":        1,
-		}
-
 		equippedGus := models.EquippedGusList{attackGuInstanceID, defenseGuInstanceID}
 
 		// Generate unique referral code
 		refCode := "REF-" + strings.ToUpper(uuid.New().String()[:8])
 
 		queryInsert := `
-			INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, time_speed_multiplier, email, google_id, completed_quests, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding)
-			VALUES ($1, '', 1, 1, $2, $3, $4, $5, $6, 20, 0, $7, $8, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, $12, '{}'::jsonb, 'Southern_Border', '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 1.0, $9, $10, '[]'::jsonb, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, '[{"recipe_id": "recipe_moon_raiment", "completion_rate": 100.0}, {"recipe_id": "recipe_white_jade", "completion_rate": 50.0}, {"recipe_id": "recipe_four_flavors_liquor", "completion_rate": 30.0}]'::jsonb, 'Hãy viết gì đó về bản thân...', 1, 1, '', false, $11, true)
-			RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, materials_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, completed_quests, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, unlocked_recipes, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, needs_onboarding
+			INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding)
+			VALUES ($1, '', 1, 1, $2, $3, $4, $5, $6, 20, 0, $7, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, $11, '{}'::jsonb, 'Southern_Border', '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 1.0, $8, $9, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', 1, 1, '', false, $10, true)
+			RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, needs_onboarding
 		`
 
-		err = tx.QueryRow(queryInsert, username, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, starterGu, starterMaterials, googleUser.Email, googleUser.ID, refCode, equippedGus).Scan(
+		err = tx.QueryRow(queryInsert, username, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, starterGu, googleUser.Email, googleUser.ID, refCode, equippedGus).Scan(
 			&player.ID, &player.Username, &player.Rank, &player.SubRank,
 			&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
-			&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory, &player.MaterialsInventory,
+			&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
 			&player.WallProgress, &player.HumanQi, &player.NextTribulationTime, &player.TribulationCount,
 			&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y, &player.ExploredCells,
 			&player.EquippedGus, &player.ClearedCells,
 			&player.CurrentRegion, &player.DaoMarks, &player.PathMasteries, &player.ActiveCombat,
 			&player.LastManaUpdate, &player.CreatedAt,
 			&player.Lifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
-			&player.Email, &player.GoogleID, &player.CompletedQuests, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+			&player.Email, &player.GoogleID, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 			&player.ApertureStress, &player.LastCultivateTime,
-			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.UnlockedRecipes, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode,
+			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create new player record: " + err.Error()})
 			return
 		}
+
+		// Seed starter materials
+		InventorySvc.AddItem(tx, player.ID.String(), "moon_orchid_petal", "materials", 5)
+		InventorySvc.AddItem(tx, player.ID.String(), "green_bamboo_wine", "materials", 2)
+		InventorySvc.AddItem(tx, player.ID.String(), "jade_stone", "materials", 1)
+		// Seed starter recipes
+		RecipeSvc.Upsert(tx, &services.RecipeProgress{PlayerID: player.ID.String(), RecipeID: "recipe_moon_raiment", CompletionRate: 100, IsUnlocked: true})
+		RecipeSvc.Upsert(tx, &services.RecipeProgress{PlayerID: player.ID.String(), RecipeID: "recipe_white_jade", CompletionRate: 50, IsUnlocked: true})
+		RecipeSvc.Upsert(tx, &services.RecipeProgress{PlayerID: player.ID.String(), RecipeID: "recipe_four_flavors_liquor", CompletionRate: 30, IsUnlocked: true})
 
 		// Handle referral code logic
 		if referralCode != "" {

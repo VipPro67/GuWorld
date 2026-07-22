@@ -116,15 +116,11 @@ func CheckQuest(questID string, p *models.Player) bool {
 		}
 		return false
 	case "quest_13_gather_lan_flower":
-		if p.MaterialsInventory == nil {
-			return false
-		}
-		return p.MaterialsInventory["nguyet_lan_hoa"] >= 50
+		qty, _ := InventorySvc.GetQuantity(db.DB, p.ID.String(), "nguyet_lan_hoa", "materials")
+		return qty >= 50
 	case "quest_14_immortal_material":
-		if p.MaterialsInventory == nil {
-			return false
-		}
-		return p.MaterialsInventory["tu_kim_than_bi"] >= 1
+		qty, _ := InventorySvc.GetQuantity(db.DB, p.ID.String(), "tu_kim_than_bi", "materials")
+		return qty >= 1
 	default:
 		return false
 	}
@@ -294,10 +290,7 @@ func applyQuestRewardsTx(tx *sql.Tx, player *models.Player, rewards []QuestRewar
 			}
 			player.DaoMarks[r.ID] += int(r.Amount)
 		case "item":
-			if player.MaterialsInventory == nil {
-				player.MaterialsInventory = make(models.MaterialsInventory)
-			}
-			player.MaterialsInventory[r.ID] += int(r.Amount)
+			InventorySvc.AddItem(tx, player.ID.String(), r.ID, "materials", int(r.Amount))
 		case "gu":
 			newGu := models.GuInstance{
 				InstanceID: "gu-" + uuid.New().String(),
@@ -313,8 +306,8 @@ func applyQuestRewardsTx(tx *sql.Tx, player *models.Player, rewards []QuestRewar
 }
 
 func buildQuestUpdateQuery(player *models.Player) (string, []interface{}) {
-	baseFields := []string{"human_qi", "completed_quests"}
-	baseVals := []interface{}{player.HumanQi, player.CompletedQuests}
+	baseFields := []string{"human_qi"}
+	baseVals := []interface{}{player.HumanQi}
 	extraFields := []string{}
 	extraVals := []interface{}{}
 
@@ -329,10 +322,6 @@ func buildQuestUpdateQuery(player *models.Player) (string, []interface{}) {
 	if len(player.DaoMarks) > 0 {
 		extraFields = append(extraFields, "dao_marks")
 		extraVals = append(extraVals, player.DaoMarks)
-	}
-	if len(player.MaterialsInventory) > 0 {
-		extraFields = append(extraFields, "materials_inventory")
-		extraVals = append(extraVals, player.MaterialsInventory)
 	}
 	if len(player.GuInventory) > 0 {
 		extraFields = append(extraFields, "gu_inventory")
@@ -418,11 +407,10 @@ func CompleteQuest(c *gin.Context) {
 		return
 	}
 
-	for _, q := range player.CompletedQuests {
-		if q == req.QuestID {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Nhiệm vụ này đã được hoàn thành trước đó"})
-			return
-		}
+	existing, _ := QuestSvc.Get(tx, player.ID.String(), req.QuestID)
+	if existing != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Nhiệm vụ này đã được hoàn thành trước đó"})
+		return
 	}
 
 	if !quest.Check(&player) {
@@ -435,7 +423,7 @@ func CompleteQuest(c *gin.Context) {
 		return
 	}
 
-	player.CompletedQuests = append(player.CompletedQuests, req.QuestID)
+	QuestSvc.Complete(tx, player.ID.String(), req.QuestID)
 
 	updateQuery, updateArgs := buildQuestUpdateQuery(&player)
 	_, err = tx.Exec(updateQuery, updateArgs...)

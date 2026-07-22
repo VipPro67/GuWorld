@@ -293,9 +293,9 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     }, 2500);
   };
 
-  const hasEnoughManaForDeduction = player.current_mana >= 15;
+  const hasEnoughThoughtForDeduction = (player.current_thought ?? 0) >= 15;
   const hasEnoughStonesForDeduction = player.primeval_stones >= 10;
-  const canDeduce = hasEnoughManaForDeduction && hasEnoughStonesForDeduction && !actionLoading && !isDeducing;
+  const canDeduce = hasEnoughThoughtForDeduction && hasEnoughStonesForDeduction && !actionLoading && !isDeducing;
 
   const handleDeduce = async () => {
     if (!canDeduce || !selectedRecipe) return;
@@ -798,7 +798,13 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                           <span className="text-zinc-400 font-serif font-bold">Thôi Diễn Công Thức (Trí Đạo)</span>
                         </div>
                         <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500">
-                          <span>Phí: 15 Chân Nguyên & 10 Nguyên Thạch</span>
+                          <span>Phí: 15 Niệm Lực & 10 Nguyên Thạch</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] font-mono">
+                          <span className="text-zinc-500">Niệm Lực hiện có:</span>
+                          <span className={player.current_thought >= 15 ? "text-violet-300" : "text-rose-400 font-bold"}>
+                            {(player.current_thought ?? 0).toFixed(1)} / {player.max_thought ?? 100}
+                          </span>
                         </div>
                         <button
                           type="button"

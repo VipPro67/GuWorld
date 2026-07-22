@@ -268,8 +268,11 @@ func HasExplorationInventorySpace(player *models.Player, incomingCount int) bool
 	}
 
 	currentSize := len(player.GuInventory)
-	for _, qty := range player.MaterialsInventory {
-		if qty > 0 {
+	invItems, _ := InventorySvc.ListByPlayer(player.ID.String())
+	seen := map[string]bool{}
+	for _, inv := range invItems {
+		if !seen[inv.ItemID] {
+			seen[inv.ItemID] = true
 			currentSize++
 		}
 	}
@@ -643,10 +646,10 @@ func MovePlayer(c *gin.Context) {
 	// Update DB
 	updateQuery := `
 		UPDATE players
-		SET current_mana = $1, x = $2, y = $3, explored_cells = $4, gu_inventory = $5, materials_inventory = $6, cleared_cells = $7, active_combat = $8, temp_loot = $9, last_mana_update = $10
-		WHERE id = $11
+		SET current_mana = $1, x = $2, y = $3, explored_cells = $4, gu_inventory = $5, cleared_cells = $6, active_combat = $7, temp_loot = $8, last_mana_update = $9
+		WHERE id = $10
 	`
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.ExploredCells, player.GuInventory, player.MaterialsInventory, player.ClearedCells, player.ActiveCombat, player.TempLoot, time.Now(), player.ID)
+	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.ExploredCells, player.GuInventory, player.ClearedCells, player.ActiveCombat, player.TempLoot, time.Now(), player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return

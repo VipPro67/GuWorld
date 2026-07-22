@@ -21,7 +21,7 @@ const (
 	killerMoveSupportCostRate         = 0.8
 	killerMoveBaseSuccessRate         = 95.0
 	killerMoveSupportCountPenalty     = 5.0
-	killerMoveWisdomBonusFactor       = 0.2
+	// TODO: dùng cổ trùng để tăng tỉ lệ thành công thay vì Wisdom stat
 	killerMoveAttainmentBonusFactor   = 2.0
 	killerMovePathConflictPenaltyBase = 10.0
 	killerMovePathOppositionPenalty   = 20.0
@@ -536,7 +536,7 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 	finalDefense *= daoBonus
 
 	// ── V2: SUCCESS RATE ──
-	wisdom := player.Wisdom
+	// TODO: dùng cổ trùng để tăng tỉ lệ thành công thay vì Wisdom stat
 	if attainment >= 2 {
 		successRateBonus += 5.0
 	}
@@ -545,7 +545,6 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 		successPenalty = math.Min(30.0, float64(conflictingMarks)/500.0)
 	}
 	successRate := killerMoveBaseSuccessRate +
-		wisdom*killerMoveWisdomBonusFactor +
 		attainment*killerMoveAttainmentBonusFactor +
 		successRateBonus -
 		successPenalty -

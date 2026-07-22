@@ -132,7 +132,7 @@ powerScale *= 1.50  // tăng 50% uy lực
 #### d) Trong Sát Chiêu V2 — Tỉ lệ thành công (`killer_move.go:505-513`)
 
 ```go
-successRate = 95 + Wisdom×0.2 + Attainment×2 + successRateBonus - supportCount×5 - pathConflictPenalty
+successRate = 95 + Attainment×2 + successRateBonus - supportCount×5 - pathConflictPenalty
 ```
 
 Trong đó `Attainment` = level (0-4).
@@ -173,7 +173,7 @@ Tại `killer_move.go:505-513`:
 
 ```go
 attainment = attainmentLevel(player, corePath)  // 0-4
-successRate = 95 + Wisdom×0.2 + attainment×2 + successRateBonus - supportCount×5 - pathConflictPenalty
+successRate = 95 + attainment×2 + successRateBonus - supportCount×5 - pathConflictPenalty
 ```
 
 ### 3.3 Path Conflict

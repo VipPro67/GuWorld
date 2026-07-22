@@ -12,6 +12,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/services"
 )
 
 func TestP2PTradeFlow_ConnectingHeaven(t *testing.T) {
@@ -40,6 +41,9 @@ func TestP2PTradeFlow_ConnectingHeaven(t *testing.T) {
 		t.Fatalf("Failed to initialize database: %v", err)
 	}
 
+	// Initialize InventorySvc
+	InventorySvc = services.NewInventoryService(db.DB)
+
 	// 2. Set up test players
 	player1ID := uuid.New()
 	player2ID := uuid.New()
@@ -49,19 +53,21 @@ func TestP2PTradeFlow_ConnectingHeaven(t *testing.T) {
 		db.DB.Exec(`DELETE FROM players WHERE id IN ($1, $2)`, player1ID, player2ID)
 	}()
 
-	// Insert Player 1 (TestTrade1, 1000 stones, 5 iron_ore)
-	_, err = db.DB.Exec(`INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, hp, base_hp, current_region, email, ref_code, materials_inventory)
-		VALUES ($1, $2, '', 1, 1, 'Giáp', 90, 100.0, 100.0, 1000, 100.0, 100.0, 'Nam Hoang', 'trade1@test.com', 'REF-T1', '{"iron_ore": 5}')`, player1ID, "TestTrade1")
+	// Insert Player 1 (TestTrade1, 1000 stones)
+	_, err = db.DB.Exec(`INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, hp, base_hp, current_region, email, ref_code)
+		VALUES ($1, $2, '', 1, 1, 'Giáp', 90, 100.0, 100.0, 1000, 100.0, 100.0, 'Nam Hoang', 'trade1@test.com', 'REF-T1')`, player1ID, "TestTrade1")
 	if err != nil {
 		t.Fatalf("Failed to insert player 1: %v", err)
 	}
+	InventorySvc.AddItem(nil, player1ID.String(), "iron_ore", "materials", 5)
 
-	// Insert Player 2 (TestTrade2, 1000 stones, 5 copper_ore)
-	_, err = db.DB.Exec(`INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, hp, base_hp, current_region, email, ref_code, materials_inventory)
-		VALUES ($1, $2, '', 1, 1, 'Giáp', 90, 100.0, 100.0, 1000, 100.0, 100.0, 'Nam Hoang', 'trade2@test.com', 'REF-T2', '{"copper_ore": 5}')`, player2ID, "TestTrade2")
+	// Insert Player 2 (TestTrade2, 1000 stones)
+	_, err = db.DB.Exec(`INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, hp, base_hp, current_region, email, ref_code)
+		VALUES ($1, $2, '', 1, 1, 'Giáp', 90, 100.0, 100.0, 1000, 100.0, 100.0, 'Nam Hoang', 'trade2@test.com', 'REF-T2')`, player2ID, "TestTrade2")
 	if err != nil {
 		t.Fatalf("Failed to insert player 2: %v", err)
 	}
+	InventorySvc.AddItem(nil, player2ID.String(), "copper_ore", "materials", 5)
 
 	// Helper to give Connecting Heaven Gu
 	giveConnectingHeaven := func(playerID uuid.UUID) {
@@ -204,10 +210,9 @@ func TestP2PTradeFlow_ConnectingHeaven(t *testing.T) {
 
 	// Verify player balances in database
 	var stones1, stones2 int
-	var mats1Bytes, mats2Bytes []byte
 
-	db.DB.QueryRow(`SELECT primeval_stones, materials_inventory FROM players WHERE id = $1`, player1ID).Scan(&stones1, &mats1Bytes)
-	db.DB.QueryRow(`SELECT primeval_stones, materials_inventory FROM players WHERE id = $1`, player2ID).Scan(&stones2, &mats2Bytes)
+	db.DB.QueryRow(`SELECT primeval_stones FROM players WHERE id = $1`, player1ID).Scan(&stones1)
+	db.DB.QueryRow(`SELECT primeval_stones FROM players WHERE id = $1`, player2ID).Scan(&stones2)
 
 	// Player 1 had 1000, offered 100, received 50 -> 950
 	if stones1 != 950 {
@@ -219,18 +224,23 @@ func TestP2PTradeFlow_ConnectingHeaven(t *testing.T) {
 		t.Errorf("Expected Player 2 stones to be 1050, got %d", stones2)
 	}
 
-	var mats1, mats2 map[string]int
-	_ = json.Unmarshal(mats1Bytes, &mats1)
-	_ = json.Unmarshal(mats2Bytes, &mats2)
-
-	// Player 1 had 5 iron_ore, offered 3 (remains 2), received 2 copper_ore -> iron_ore: 2, copper_ore: 2
-	if mats1["iron_ore"] != 2 || mats1["copper_ore"] != 2 {
-		t.Errorf("Expected Player 1 materials: iron_ore=2, copper_ore=2; got: %+v", mats1)
+	// Check materials from player_inventory_items
+	var qty int
+	db.DB.QueryRow(`SELECT quantity FROM player_inventory_items WHERE player_id = $1 AND item_id = 'iron_ore'`, player1ID.String()).Scan(&qty)
+	if qty != 2 {
+		t.Errorf("Expected Player 1 iron_ore=2, got %d", qty)
 	}
-
-	// Player 2 had 5 copper_ore, offered 2 (remains 3), received 3 iron_ore -> iron_ore: 3, copper_ore: 3
-	if mats2["iron_ore"] != 3 || mats2["copper_ore"] != 3 {
-		t.Errorf("Expected Player 2 materials: iron_ore=3, copper_ore=3; got: %+v", mats2)
+	db.DB.QueryRow(`SELECT quantity FROM player_inventory_items WHERE player_id = $1 AND item_id = 'copper_ore'`, player1ID.String()).Scan(&qty)
+	if qty != 2 {
+		t.Errorf("Expected Player 1 copper_ore=2, got %d", qty)
+	}
+	db.DB.QueryRow(`SELECT quantity FROM player_inventory_items WHERE player_id = $1 AND item_id = 'iron_ore'`, player2ID.String()).Scan(&qty)
+	if qty != 3 {
+		t.Errorf("Expected Player 2 iron_ore=3, got %d", qty)
+	}
+	db.DB.QueryRow(`SELECT quantity FROM player_inventory_items WHERE player_id = $1 AND item_id = 'copper_ore'`, player2ID.String()).Scan(&qty)
+	if qty != 3 {
+		t.Errorf("Expected Player 2 copper_ore=3, got %d", qty)
 	}
 
 	// Verify trade status is COMPLETED

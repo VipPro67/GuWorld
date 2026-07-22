@@ -134,6 +134,9 @@ export interface Player {
   avatar_url?: string;
   combat_settings?: AutoCombatConfig;
   needs_onboarding?: boolean;
+  current_thought: number;
+  max_thought: number;
+  thought_regen_rate: number;
 }
 
 
@@ -1080,7 +1083,14 @@ export const useGameStore = create<GameState>((set, get) => {
     const equippedSet = new Set<string>(player.equipped_gus || []);
     const vital = guInventory.find((g) => g.is_vital);
     if (vital && vital.status !== "DEAD") equippedSet.add(vital.instance_id);
-    return { ...player, gu_inventory: guInventory, equipped_gus: Array.from(equippedSet) };
+    return {
+      ...player,
+      current_thought: player.current_thought ?? 100,
+      max_thought: player.max_thought ?? 100,
+      thought_regen_rate: player.thought_regen_rate ?? 1.0,
+      gu_inventory: guInventory,
+      equipped_gus: Array.from(equippedSet),
+    };
   };
 
   const setPlayerFromServer = (player: Player | null, extraState: Partial<GameState> = {}) => {

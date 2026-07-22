@@ -46,7 +46,7 @@ func AdminListPlayers(c *gin.Context) {
 		return
 	}
 
-	query := `SELECT id, username, COALESCE(email, ''), rank, sub_rank, current_mana, max_mana, hp, base_hp, primeval_stones, immortal_stones, wisdom, COALESCE(is_admin, false), created_at, COALESCE(current_region, ''), COALESCE(aptitude_type, ''), wall_progress, human_qi, lifespan FROM players`
+	query := `SELECT id, username, COALESCE(email, ''), rank, sub_rank, current_mana, max_mana, hp, base_hp, primeval_stones, immortal_stones, COALESCE(is_admin, false), created_at, COALESCE(current_region, ''), COALESCE(aptitude_type, ''), wall_progress, human_qi, lifespan FROM players`
 	if search != "" {
 		query += ` WHERE username ILIKE $1 OR email ILIKE $1`
 	}
@@ -69,11 +69,11 @@ func AdminListPlayers(c *gin.Context) {
 		var id uuid.UUID
 		var username, email, currentRegion, aptitudeType string
 		var rank, subRank, primevalStones int
-		var currentMana, maxMana, hp, baseHP, immortalStones, wisdom, wallProgress, humanQi, lifespan float64
+		var currentMana, maxMana, hp, baseHP, immortalStones, wallProgress, humanQi, lifespan float64
 		var isAdmin bool
 		var createdAt time.Time
 
-		if err := rows.Scan(&id, &username, &email, &rank, &subRank, &currentMana, &maxMana, &hp, &baseHP, &primevalStones, &immortalStones, &wisdom, &isAdmin, &createdAt, &currentRegion, &aptitudeType, &wallProgress, &humanQi, &lifespan); err != nil {
+		if err := rows.Scan(&id, &username, &email, &rank, &subRank, &currentMana, &maxMana, &hp, &baseHP, &primevalStones, &immortalStones, &isAdmin, &createdAt, &currentRegion, &aptitudeType, &wallProgress, &humanQi, &lifespan); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc dữ liệu người chơi"})
 			return
 		}
@@ -89,7 +89,6 @@ func AdminListPlayers(c *gin.Context) {
 			"base_hp":         baseHP,
 			"primeval_stones": primevalStones,
 			"immortal_stones": immortalStones,
-			"wisdom":          wisdom,
 			"is_admin":        isAdmin,
 			"created_at":      createdAt,
 			"current_region":  currentRegion,
@@ -138,7 +137,6 @@ func AdminGetPlayerDetail(c *gin.Context) {
 		"max_mana":             player.MaxMana,
 		"primeval_stones":      player.PrimevalStones,
 		"immortal_stones":      player.ImmortalStones,
-		"wisdom":               player.Wisdom,
 		"hp":                   player.HP,
 		"base_hp":              player.BaseHP,
 		"wall_progress":        player.WallProgress,
@@ -147,7 +145,6 @@ func AdminGetPlayerDetail(c *gin.Context) {
 		"is_admin":             player.IsAdmin,
 		"created_at":           player.CreatedAt,
 		"gu_inventory":         player.GuInventory,
-		"materials_inventory":  player.MaterialsInventory,
 		"lifespan":             player.Lifespan,
 		"soul_hp":              player.SoulHP,
 		"max_soul":             player.MaxSoul,
@@ -193,15 +190,13 @@ func AdminAddPlayerItems(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	player, err := loadPlayerForStatus(tx, playerID, true)
+	_, err = loadPlayerForStatus(tx, playerID, true)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
 		return
 	}
 
-	player.MaterialsInventory[req.ItemID] += req.Quantity
-
-	if _, err := tx.Exec(`UPDATE players SET materials_inventory=$1 WHERE id=$2`, player.MaterialsInventory, playerID); err != nil {
+	if err := InventorySvc.AddItem(tx, playerID.String(), req.ItemID, "materials", req.Quantity); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật vật phẩm"})
 		return
 	}
@@ -240,25 +235,8 @@ func AdminRemovePlayerItems(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	player, err := loadPlayerForStatus(tx, playerID, true)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
-		return
-	}
-
-	currentQty := player.MaterialsInventory[req.ItemID]
-	if currentQty < req.Quantity {
+	if err := InventorySvc.RemoveItem(tx, playerID.String(), req.ItemID, "materials", req.Quantity); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Người chơi không có đủ vật phẩm"})
-		return
-	}
-
-	player.MaterialsInventory[req.ItemID] -= req.Quantity
-	if player.MaterialsInventory[req.ItemID] <= 0 {
-		delete(player.MaterialsInventory, req.ItemID)
-	}
-
-	if _, err := tx.Exec(`UPDATE players SET materials_inventory=$1 WHERE id=$2`, player.MaterialsInventory, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật vật phẩm"})
 		return
 	}
 

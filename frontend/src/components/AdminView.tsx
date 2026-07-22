@@ -78,7 +78,7 @@ function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
 interface PlayerRow {
   id: string; username: string; email: string; rank: number; sub_rank: number;
   current_mana: number; max_mana: number; hp: number; base_hp: number;
-  primeval_stones: number; immortal_stones: number; wisdom: number;
+  primeval_stones: number; immortal_stones: number;
   is_admin: boolean; created_at: string; current_region: string;
   aptitude_type: string; wall_progress: number; human_qi: number;
   lifespan: number;
@@ -88,7 +88,7 @@ interface PlayerDetail {
   id: string; username: string; email: string; rank: number; sub_rank: number;
   aptitude_type: string; aptitude_percent: number; aptitude_grade: number;
   current_mana: number; max_mana: number; primeval_stones: number;
-  immortal_stones: number; wisdom: number; hp: number; base_hp: number;
+  immortal_stones: number; hp: number; base_hp: number;
   wall_progress: number; human_qi: number; current_region: string;
   is_admin: boolean; created_at: string; lifespan: number;
   soul_hp: number; max_soul: number; soul_tier: string;

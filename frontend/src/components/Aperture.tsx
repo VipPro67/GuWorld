@@ -383,6 +383,23 @@ export const Aperture: React.FC<ApertureProps> = ({
           </span>
         </div>
 
+        {/* Aperture Stress Bar */}
+        <div className="relative h-6 w-full overflow-hidden rounded-xl border border-amber-950/60 bg-zinc-950/60 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] mb-2 flex items-center px-2 z-10">
+          <ShieldAlert className="w-3.5 h-3.5 text-amber-500 mr-2 shrink-0 animate-pulse" />
+          <div className="relative flex-grow h-3 rounded-md overflow-hidden bg-zinc-900/60">
+            <div
+              className="h-full bg-gradient-to-r from-amber-800 via-amber-600 to-yellow-500 rounded-md transition-all duration-300 shadow-[0_0_8px_rgba(245,158,11,0.5)]"
+              style={{ width: `${Math.min(100, player.aperture_stress ?? 0)}%` }}
+            />
+          </div>
+          <span className="text-[10px] font-mono font-bold text-zinc-300 ml-2.5 shrink-0">
+            Áp Lực: {(player.aperture_stress ?? 0).toFixed(0)}%
+          </span>
+          <span className="text-[8px] text-amber-400/70 ml-2 font-mono shrink-0">
+            ↓50%/2h
+          </span>
+        </div>
+
         {/* Tab Selection */}
         <div className="flex gap-2 w-full bg-zinc-950/60 p-1.5 rounded-2xl border border-zinc-900 mb-5 z-10">
           <button
@@ -649,6 +666,33 @@ export const Aperture: React.FC<ApertureProps> = ({
               ) : (
                 <div className="text-[10px] text-zinc-500 text-center italic py-1">Chưa trang bị Cổ trùng</div>
               )}
+            </div>
+
+            {/* Thought Pool Section */}
+            <div className="w-full mb-4 bg-zinc-950/40 border border-zinc-900 rounded-2xl p-3">
+              <div className="text-[9px] text-zinc-550 uppercase tracking-widest text-center mb-2 font-bold font-mono flex items-center justify-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-violet-400" />
+                Niệm Lực (Thought Pool)
+              </div>
+              <div className="flex items-center justify-between px-3 py-2 rounded-xl border border-zinc-800/60 bg-zinc-950/60 max-w-sm mx-auto">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-400 font-mono">Niệm Lực:</span>
+                  <span className="text-sm font-bold text-violet-300 font-mono">
+                    {(player.current_thought ?? 0).toFixed(1)}
+                  </span>
+                  <span className="text-xs text-zinc-600 font-mono">/ {(player.max_thought ?? 100).toFixed(0)}</span>
+                </div>
+                <span className="text-[9px] text-zinc-500 font-mono">
+                  Tái tạo: +{(player.thought_regen_rate ?? 1.0).toFixed(1)}/giờ
+                </span>
+              </div>
+              {/* Thought progress bar */}
+              <div className="mt-2 w-full max-w-sm mx-auto h-1.5 rounded-full bg-zinc-950 overflow-hidden border border-zinc-900">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-violet-600 to-purple-500 transition-all duration-300"
+                  style={{ width: `${Math.min(100, ((player.current_thought ?? 0) / (player.max_thought ?? 100)) * 100)}%` }}
+                />
+              </div>
             </div>
 
             {/* Cultivation / Blessed Land Controls */}
@@ -1622,28 +1666,6 @@ function WallControls() {
             <span>Không Khiếu quá tải! Tỷ lệ trùng kích giảm cực mạnh. Quá 100% sẽ bị nứt vỡ rớt tu vi!</span>
           </div>
         )}
-
-        <div className="flex items-center justify-between mt-3 gap-2">
-          <span className="text-[9px] text-zinc-500 font-mono italic">
-            Tự giảm: -10%/giờ thực tế
-          </span>
-          <button
-            type="button"
-            className="px-3 py-1.5 bg-gradient-to-r from-purple-700 to-violet-600 hover:from-purple-600 hover:to-violet-500 text-white font-bold rounded-lg text-[10px] shadow-md shadow-purple-950/20 active:scale-95 transition-all cursor-pointer uppercase tracking-wider flex items-center gap-1"
-            onClick={async () => {
-              if (player.primeval_stones < 100) {
-                return store.addToast("Không đủ Nguyên Thạch (Cần 100 Nguyên Thạch)", "error");
-              }
-              if (await store.showConfirm("Dùng 100 Nguyên Thạch để tịnh hóa Không khiếu, giảm 50% áp lực?")) {
-                const res = await store.clearStress();
-                if (res) store.addToast(res.message, "success");
-              }
-            }}
-          >
-            <Sparkles className="w-3 h-3" />
-            Tịnh Hóa
-          </button>
-        </div>
       </div>
     </div>
   );

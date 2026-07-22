@@ -95,9 +95,8 @@ func BuyArenaShopItem(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	var arenaCoins int
-	err = tx.QueryRow("SELECT COALESCE((materials_inventory->>'arena_coin')::int, 0) FROM players WHERE id = $1 FOR UPDATE", authID).Scan(&arenaCoins)
-	if err != nil || arenaCoins < targetPrice {
+	// Deduct coins (atomic FOR UPDATE + check + deduct)
+	if err := InventorySvc.RemoveItem(tx, authID.String(), "arena_coin", "materials", targetPrice); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Xu Đấu Trường!"})
 		return
 	}
@@ -109,25 +108,15 @@ func BuyArenaShopItem(c *gin.Context) {
 		_ = soldCount // placeholder for future per-player stock tracking
 	}
 
-	// Deduct coins
-	_, err = tx.Exec("UPDATE players SET materials_inventory = jsonb_set(materials_inventory, '{arena_coin}', (($1)::text)::jsonb) WHERE id = $2", arenaCoins-targetPrice, authID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi trừ xu"})
-		return
-	}
-
 	// Give item
+	var giveErr error
 	if req.ItemID == "primeval_stone" {
-		_, err = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", targetQty, authID)
+		_, giveErr = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", targetQty, authID)
 	} else {
-		_, err = tx.Exec(`
-			UPDATE players 
-			SET materials_inventory = COALESCE(materials_inventory, '{}'::jsonb) || jsonb_build_object($1::text, COALESCE((materials_inventory->>$1)::int, 0) + $2)
-			WHERE id = $3
-		`, req.ItemID, targetQty, authID)
+		giveErr = InventorySvc.AddItem(tx, authID.String(), req.ItemID, "materials", targetQty)
 	}
 
-	if err != nil {
+	if giveErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi thêm vật phẩm"})
 		return
 	}

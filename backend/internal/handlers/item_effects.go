@@ -1,15 +1,17 @@
 package handlers
 
 import (
+	"database/sql"
 	"fmt"
 	"math/rand"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/services"
 )
 
-type ItemEffectHandler func(player *models.Player, item models.ItemSpec) (string, error)
+type ItemEffectHandler func(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error)
 
 var ValidateItemEffects = map[string]ItemEffectHandler{
 	"mortal_only":   mortalOnlyEffect,
@@ -29,7 +31,7 @@ var ApplyItemEffects = map[string]ItemEffectHandler{
 	"regen_hp_out_of_combat": regenHPOutOfCombatEffect,
 }
 
-func healApertureEffect(player *models.Player, item models.ItemSpec) (string, error) {
+func healApertureEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
 	val := item.Effects["heal_aperture"]
 	if val <= 0 {
 		return "", nil
@@ -44,7 +46,7 @@ func healApertureEffect(player *models.Player, item models.ItemSpec) (string, er
 	return fmt.Sprintf("Đạo hữu sử dụng %s, khôi phục %.0f hư tổn tiên khiếu!", item.Name, val), nil
 }
 
-func regenHPOutOfCombatEffect(player *models.Player, item models.ItemSpec) (string, error) {
+func regenHPOutOfCombatEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
 	val := item.Effects["regen_hp_out_of_combat"]
 	if val <= 0 {
 		return "", nil
@@ -55,13 +57,13 @@ func regenHPOutOfCombatEffect(player *models.Player, item models.ItemSpec) (stri
 	return fmt.Sprintf("Đạo hữu sử dụng %s, kích hoạt trạng thái Hồi Phục Sinh Lực trong 10 phút!", item.Name), nil
 }
 
-func lifespanBoostEffect(player *models.Player, item models.ItemSpec) (string, error) {
+func lifespanBoostEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
 	val := item.Effects["lifespan_boost"]
 	player.Lifespan += val
 	return fmt.Sprintf("Đạo hữu sử dụng %s, gia tăng %.0f năm thọ nguyên tối đa và hồi phục %.0f năm tuổi thọ!", item.Name, val, val), nil
 }
 
-func restoreManaEffect(player *models.Player, item models.ItemSpec) (string, error) {
+func restoreManaEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
 	value := item.Effects["restore_mana"]
 	player.CurrentMana += value
 	if player.CurrentMana > player.MaxMana {
@@ -70,7 +72,7 @@ func restoreManaEffect(player *models.Player, item models.ItemSpec) (string, err
 	return fmt.Sprintf("Đạo hữu sử dụng %s, phục hồi %.0f Chân Nguyên!", item.Name, value), nil
 }
 
-func restoreHPEffect(player *models.Player, item models.ItemSpec) (string, error) {
+func restoreHPEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
 	value := item.Effects["restore_hp"]
 	player.HP += value
 	if player.HP > player.BaseHP {
@@ -79,21 +81,21 @@ func restoreHPEffect(player *models.Player, item models.ItemSpec) (string, error
 	return fmt.Sprintf("Đạo hữu sử dụng %s, hồi phục %.0f HP!", item.Name, value), nil
 }
 
-func mortalOnlyEffect(player *models.Player, item models.ItemSpec) (string, error) {
+func mortalOnlyEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
 	if isImmortalCultivator(player) {
 		return "", fmt.Errorf("%s chỉ bổ sung Chân Nguyên phàm cấp; Cổ Tiên cần Tiên Nguyên Thạch hoặc Tiên Khiếu ngưng tụ Tiên Nguyên.", item.Name)
 	}
 	return "", nil
 }
 
-func immortalOnlyEffect(player *models.Player, item models.ItemSpec) (string, error) {
+func immortalOnlyEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
 	if !isImmortalCultivator(player) {
 		return "", fmt.Errorf("%s chỉ dành cho Cổ Tiên.", item.Name)
 	}
 	return "", nil
 }
 
-func minRankEffect(player *models.Player, item models.ItemSpec) (string, error) {
+func minRankEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
 	val := item.Effects["min_rank"]
 	if float64(player.Rank) < val {
 		return "", fmt.Errorf("Yêu cầu tu vi tối thiểu %s để sử dụng %s.", getRankName(int(val)), item.Name)
@@ -101,7 +103,7 @@ func minRankEffect(player *models.Player, item models.ItemSpec) (string, error) 
 	return "", nil
 }
 
-func maxRankEffect(player *models.Player, item models.ItemSpec) (string, error) {
+func maxRankEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
 	val := item.Effects["max_rank"]
 	if float64(player.Rank) > val {
 		return "", fmt.Errorf("Tu vi vượt quá giới hạn tối đa %s để sử dụng %s.", getRankName(int(val)), item.Name)
@@ -109,7 +111,7 @@ func maxRankEffect(player *models.Player, item models.ItemSpec) (string, error) 
 	return "", nil
 }
 
-func soulBoostEffect(player *models.Player, item models.ItemSpec) (string, error) {
+func soulBoostEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
 	val := item.Effects["soul_boost"]
 	if player.DaoMarks == nil {
 		player.DaoMarks = make(models.DaoMarksMap)
@@ -118,7 +120,7 @@ func soulBoostEffect(player *models.Player, item models.ItemSpec) (string, error
 	return fmt.Sprintf("Hồn phách của đạo hữu được tráng kiện (+%.0f điểm Hồn lực).", val), nil
 }
 
-func removeNegativeStatusEffect(player *models.Player, item models.ItemSpec) (string, error) {
+func removeNegativeStatusEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
 	if player.ActiveCombat != nil && len(player.ActiveCombat.PlayerStatusEffects) > 0 {
 		player.ActiveCombat.PlayerStatusEffects = []models.StatusEffect{}
 		return fmt.Sprintf("%s giải trừ toàn bộ trạng thái tiêu cực của đạo hữu trong trận chiến.", item.Name), nil
@@ -126,7 +128,7 @@ func removeNegativeStatusEffect(player *models.Player, item models.ItemSpec) (st
 	return "", nil
 }
 
-func openMineChestEffect(player *models.Player, item models.ItemSpec) (string, error) {
+func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
 	msg := fmt.Sprintf("Mở %s thành công!\n", item.Name)
 
 	// ── 50 % → Nguyên Thạch  |  50 % → Vật phẩm (vật liệu / cổ trùng / bí phương)
@@ -142,24 +144,24 @@ func openMineChestEffect(player *models.Player, item models.ItemSpec) (string, e
 
 		if roll < 5.0 {
 			// ── GU DROP (5%) ──
-			guMsg := rollGuDrop(player, item)
+			guMsg := rollGuDrop(tx, player, item)
 			if guMsg != "" {
 				msg += guMsg
 			} else {
 				// Fallback to materials if no valid Gu found
-				msg += rollMaterialDrop(player, item)
+				msg += rollMaterialDrop(tx, player, item)
 			}
 		} else if roll < 7.5 {
 			// ── RECIPE DROP (2.5%) ──
-			recipeMsg := rollRecipeDrop(player, item)
+			recipeMsg := rollRecipeDrop(tx, player, item)
 			if recipeMsg != "" {
 				msg += recipeMsg
 			} else {
-				msg += rollMaterialDrop(player, item)
+				msg += rollMaterialDrop(tx, player, item)
 			}
 		} else {
 			// ── MATERIAL DROP (92.5%) ──
-			msg += rollMaterialDrop(player, item)
+			msg += rollMaterialDrop(tx, player, item)
 		}
 	}
 
@@ -237,7 +239,7 @@ func itemRarityWeight(rarity int) float64 {
 	}
 }
 
-func rollMaterialDrop(player *models.Player, item models.ItemSpec) string {
+func rollMaterialDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) string {
 	// Build weighted pool of materials
 	type weightedMat struct {
 		id     string
@@ -275,10 +277,7 @@ func rollMaterialDrop(player *models.Player, item models.ItemSpec) string {
 		chosen = pool[0].id
 	}
 
-	if player.MaterialsInventory == nil {
-		player.MaterialsInventory = make(models.MaterialsInventory)
-	}
-	player.MaterialsInventory[chosen]++
+	InventorySvc.AddItem(tx, player.ID.String(), chosen, "materials", 1)
 	matName := chosen
 	if spec, ok := models.ItemRegistry[chosen]; ok {
 		matName = spec.Name
@@ -286,7 +285,7 @@ func rollMaterialDrop(player *models.Player, item models.ItemSpec) string {
 	return fmt.Sprintf("- Nhận được 1x %s\n", matName)
 }
 
-func rollGuDrop(player *models.Player, item models.ItemSpec) string {
+func rollGuDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) string {
 	type weightedGu struct {
 		id     string
 		weight float64
@@ -345,7 +344,7 @@ func rollGuDrop(player *models.Player, item models.ItemSpec) string {
 	return fmt.Sprintf("- Cơ duyên xảo hợp! Đạo hữu nhận được Cổ trùng: [%s] (Độ no: %d%%)\n", guName, hunger)
 }
 
-func rollRecipeDrop(player *models.Player, _ models.ItemSpec) string {
+func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) string {
 	// Query all recipe IDs from DB
 	rows, err := db.DB.Query(`SELECT id, target_gu_id FROM refining_recipes`)
 	if err != nil {
@@ -369,9 +368,10 @@ func rollRecipeDrop(player *models.Player, _ models.ItemSpec) string {
 	}
 
 	// Build map of already-unlocked recipes
+	recipes, _ := RecipeSvc.ListByPlayer(player.ID.String())
 	unlockedMap := make(map[string]float64)
-	for _, ur := range player.UnlockedRecipes {
-		unlockedMap[ur.RecipeID] = ur.CompletionRate
+	for _, r := range recipes {
+		unlockedMap[r.RecipeID] = r.CompletionRate
 	}
 
 	// Filter to candidates: not yet unlocked, or unlocked but < 100%
@@ -395,22 +395,12 @@ func rollRecipeDrop(player *models.Player, _ models.ItemSpec) string {
 	}
 
 	// Add or update recipe
-	found := false
-	for i, ur := range player.UnlockedRecipes {
-		if ur.RecipeID == chosen.id {
-			if completionRate > ur.CompletionRate {
-				player.UnlockedRecipes[i].CompletionRate = completionRate
-			}
-			found = true
-			break
-		}
-	}
-	if !found {
-		player.UnlockedRecipes = append(player.UnlockedRecipes, models.UnlockedRecipe{
-			RecipeID:       chosen.id,
-			CompletionRate: completionRate,
-		})
-	}
+	RecipeSvc.Upsert(tx, &services.RecipeProgress{
+		PlayerID:       player.ID.String(),
+		RecipeID:       chosen.id,
+		CompletionRate: completionRate,
+		IsUnlocked:     true,
+	})
 
 	return fmt.Sprintf("- Lĩnh ngộ bí phương: [%s] (Độ hoàn thiện: %.0f%%)\n", targetGuName, completionRate)
 }

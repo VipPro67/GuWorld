@@ -435,10 +435,7 @@ func applyGachaReward(tx *sql.Tx, player *models.Player, reward GachaResultItem)
 			player.WallProgress = 1.0
 		}
 	case "item":
-		if player.MaterialsInventory == nil {
-			player.MaterialsInventory = make(models.MaterialsInventory)
-		}
-		player.MaterialsInventory[reward.ID] += int(reward.Amount)
+		InventorySvc.AddItem(tx, player.ID.String(), reward.ID, "materials", int(reward.Amount))
 	case "gu":
 		newGu := models.GuInstance{
 			InstanceID: "gu-" + uuid.New().String(),
@@ -458,10 +455,7 @@ func buildGachaUpdateQuery(player *models.Player) (string, []interface{}) {
 	extraFields := []string{}
 	extraVals := []interface{}{}
 
-	if len(player.MaterialsInventory) > 0 {
-		extraFields = append(extraFields, "materials_inventory")
-		extraVals = append(extraVals, player.MaterialsInventory)
-	}
+	// materials_inventory no longer stored on players table
 	if len(player.GuInventory) > 0 {
 		extraFields = append(extraFields, "gu_inventory")
 		extraVals = append(extraVals, player.GuInventory)

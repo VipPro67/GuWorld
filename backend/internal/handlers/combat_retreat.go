@@ -119,11 +119,8 @@ func Retreat(c *gin.Context) {
 			}
 
 			player.PrimevalStones += shares[player.ID].PrimevalStones
-			if player.MaterialsInventory == nil {
-				player.MaterialsInventory = make(models.MaterialsInventory)
-			}
 			for itemID, qty := range shares[player.ID].MaterialsInventory {
-				player.MaterialsInventory[itemID] += qty
+				InventorySvc.AddItem(tx, player.ID.String(), itemID, "materials", qty)
 			}
 			player.GuInventory = append(player.GuInventory, shares[player.ID].GuInventory...)
 
@@ -131,35 +128,28 @@ func Retreat(c *gin.Context) {
 				if mID == player.ID {
 					continue
 				}
-				var targetInvBytes, targetGuBytes []byte
+				var targetGuBytes []byte
 				var targetStones int
 				errLoad := tx.QueryRow(`
-					SELECT primeval_stones, materials_inventory, gu_inventory 
+					SELECT primeval_stones, gu_inventory 
 					FROM players WHERE id = $1 FOR UPDATE`, mID,
-				).Scan(&targetStones, &targetInvBytes, &targetGuBytes)
+				).Scan(&targetStones, &targetGuBytes)
 				if errLoad == nil {
-					var targetInv models.MaterialsInventory
 					var targetGu models.GuInventory
-					if len(targetInvBytes) > 0 {
-						json.Unmarshal(targetInvBytes, &targetInv)
-					}
-					if targetInv == nil {
-						targetInv = make(models.MaterialsInventory)
-					}
 					if len(targetGuBytes) > 0 {
 						json.Unmarshal(targetGuBytes, &targetGu)
 					}
 
 					targetStones += share.PrimevalStones
 					for itemID, qty := range share.MaterialsInventory {
-						targetInv[itemID] += qty
+						InventorySvc.AddItem(tx, mID.String(), itemID, "materials", qty)
 					}
 					targetGu = append(targetGu, share.GuInventory...)
 
 					_, _ = tx.Exec(`
 						UPDATE players 
-						SET primeval_stones = $1, materials_inventory = $2, gu_inventory = $3 
-						WHERE id = $4`, targetStones, targetInv, targetGu, mID)
+						SET primeval_stones = $1, gu_inventory = $2 
+						WHERE id = $3`, targetStones, targetGu, mID)
 				}
 			}
 
@@ -208,7 +198,7 @@ func Retreat(c *gin.Context) {
 				}
 			}
 		} else {
-			TransferTempLootToInventory(&player)
+			TransferTempLootToInventory(tx, &player)
 
 			logMsg = "Đạo hữu trở về an toàn từ hành trình.\n"
 			logMsg += "=== TÀI NGUYÊN THU HOẠCH ===\n"
@@ -240,11 +230,11 @@ func Retreat(c *gin.Context) {
 	updateQuery := `
 		UPDATE players
 		SET hp = $1, current_mana = $2, active_combat = $3, x = $4, y = $5, explored_cells = $6, primeval_stones = $7,
-		    gu_inventory = $8, materials_inventory = $9, temp_loot = $10, current_region = $11
-		WHERE id = $12
+		    gu_inventory = $8, temp_loot = $9, current_region = $10
+		WHERE id = $11
 	`
 	_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.ActiveCombat, player.X, player.Y, player.ExploredCells, player.PrimevalStones,
-		player.GuInventory, player.MaterialsInventory, player.TempLoot, player.CurrentRegion, player.ID)
+		player.GuInventory, player.TempLoot, player.CurrentRegion, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player status after retreat"})
 		return

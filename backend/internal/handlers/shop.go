@@ -194,7 +194,8 @@ func BuyShopItem(c *gin.Context) {
 	if selectedItem.Type == "Gu" {
 		incomingCount = req.Quantity
 	} else {
-		if player.MaterialsInventory[selectedItem.ID] == 0 {
+		qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), selectedItem.ID, "materials")
+		if qty == 0 {
 			incomingCount = 1
 		}
 	}
@@ -228,24 +229,22 @@ func BuyShopItem(c *gin.Context) {
 			player.GuInventory = append(player.GuInventory, newInstance)
 		}
 	case "Material":
-		if player.MaterialsInventory == nil {
-			player.MaterialsInventory = make(models.MaterialsInventory)
-		}
-		player.MaterialsInventory[selectedItem.ID] += req.Quantity
+		InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "materials", req.Quantity)
 	case "Consumable":
-		if player.MaterialsInventory == nil {
-			player.MaterialsInventory = make(models.MaterialsInventory)
-		}
-		player.MaterialsInventory[selectedItem.ID] += req.Quantity
+		InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "consumables", req.Quantity)
+	case "Treasure":
+		InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "treasures", req.Quantity)
+	case "ImmortalMaterial":
+		InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "immortal_materials", req.Quantity)
 	}
 
 	// 6. Save player state
 	updateQuery := `
 		UPDATE players
-		SET primeval_stones = $1, gu_inventory = $2, materials_inventory = $3
-		WHERE id = $4
+		SET primeval_stones = $1, gu_inventory = $2
+		WHERE id = $3
 	`
-	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.GuInventory, player.MaterialsInventory, player.ID)
+	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.GuInventory, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player inventory updates"})
 		return
@@ -307,15 +306,16 @@ func SellShopItem(c *gin.Context) {
 
 	totalGain := 0
 	if req.ItemType == "Material" || req.ItemType == "Consumable" {
-		qty := player.MaterialsInventory[req.ItemID]
+		cat := "materials"
+		if req.ItemType == "Consumable" {
+			cat = "consumables"
+		}
+		qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), req.ItemID, cat)
 		if qty < req.Quantity {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ vật phẩm để bán"})
 			return
 		}
-		player.MaterialsInventory[req.ItemID] -= req.Quantity
-		if player.MaterialsInventory[req.ItemID] <= 0 {
-			delete(player.MaterialsInventory, req.ItemID)
-		}
+		InventorySvc.RemoveItem(tx, player.ID.String(), req.ItemID, cat, req.Quantity)
 		// Resolve sell price: prefer shop catalog price, fallback to item_dictionary rank
 		var unitSellPrice int
 		if shopItem, err := findCaravanShopItem(req.ItemID); err == nil {
@@ -363,7 +363,8 @@ func SellShopItem(c *gin.Context) {
 			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 		}
 	}
-	_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, gu_inventory=$2, materials_inventory=$3, equipped_gus=$4 WHERE id=$5`, player.PrimevalStones, player.GuInventory, player.MaterialsInventory, player.EquippedGus, player.ID)
+	_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, gu_inventory=$2, equipped_gus=$3 WHERE id=$4`,
+		player.PrimevalStones, player.GuInventory, player.EquippedGus, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save sell transaction"})
 		return

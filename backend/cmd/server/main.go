@@ -15,6 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/server"
+	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/internal/worker"
 )
 
@@ -76,6 +77,17 @@ func main() {
 	if err != nil {
 		log.Printf("Warning: Failed to load Quest registry: %v (data may need import)", err)
 	}
+
+	// 2.5. Initialize services
+	playerSvc := services.NewPlayerService(db.DB)
+	handlers.PlayerSvc = playerSvc
+	handlers.RecipeSvc = services.NewRecipeService(db.DB)
+	handlers.MapService = services.NewMapService(db.DB)
+	handlers.CombatSessionSvc = services.NewCombatSessionService(db.DB)
+	handlers.DaoSvc = services.NewDaoService(db.DB)
+	handlers.InventorySvc = services.NewInventoryService(db.DB)
+	handlers.QuestSvc = services.NewQuestService(db.DB)
+	handlers.AchievementSvc = services.NewAchievementService(db.DB)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

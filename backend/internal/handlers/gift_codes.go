@@ -282,10 +282,7 @@ func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCod
 			}
 			player.DaoMarks[r.ID] += int(r.Amount)
 		case "item":
-			if player.MaterialsInventory == nil {
-				player.MaterialsInventory = make(models.MaterialsInventory)
-			}
-			player.MaterialsInventory[r.ID] += int(r.Amount)
+			InventorySvc.AddItem(tx, player.ID.String(), r.ID, "materials", int(r.Amount))
 		case "gu":
 			for i := 0; i < int(r.Amount); i++ {
 				newGu := models.GuInstance{
@@ -319,10 +316,7 @@ func buildGiftCodeUpdateQuery(player *models.Player) (string, []interface{}) {
 		extraFields = append(extraFields, "dao_marks")
 		extraVals = append(extraVals, player.DaoMarks)
 	}
-	if len(player.MaterialsInventory) > 0 {
-		extraFields = append(extraFields, "materials_inventory")
-		extraVals = append(extraVals, player.MaterialsInventory)
-	}
+	// materials_inventory no longer stored on players table
 	if len(player.GuInventory) > 0 {
 		extraFields = append(extraFields, "gu_inventory")
 		extraVals = append(extraVals, player.GuInventory)

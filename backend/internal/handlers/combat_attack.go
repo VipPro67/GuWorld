@@ -193,8 +193,8 @@ func CombatAttack(c *gin.Context) {
 		}
 
 		if !isVirtual {
-			qty, ok := player.MaterialsInventory[req.ItemID]
-			if !ok || qty <= 0 {
+			qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), req.ItemID, "materials")
+			if err != nil || qty <= 0 {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm này trong túi đồ"})
 				return
 			}
@@ -210,9 +210,9 @@ func CombatAttack(c *gin.Context) {
 		}
 
 		if !isVirtual {
-			player.MaterialsInventory[req.ItemID]--
-			if player.MaterialsInventory[req.ItemID] <= 0 {
-				delete(player.MaterialsInventory, req.ItemID)
+			if err := InventorySvc.RemoveItem(tx, player.ID.String(), req.ItemID, "materials", 1); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tiêu hao vật phẩm"})
+				return
 			}
 			player.ActiveCombat.ItemsUsedCount++
 			player.ActiveCombat.ItemCooldowns[req.ItemID] = 3
@@ -830,10 +830,9 @@ func CombatAttack(c *gin.Context) {
 										player.TempLoot.MaterialsInventory[matID]++
 										ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhặt được 1x %s (giữ tạm thời).", matID))
 									} else {
-										if player.MaterialsInventory == nil {
-											player.MaterialsInventory = make(models.MaterialsInventory)
+										if err := InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", 1); err != nil {
+											log.Printf("Failed to add loot item %s to player %s: %v", matID, player.ID, err)
 										}
-										player.MaterialsInventory[matID]++
 										ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhặt được 1x %s.", matID))
 									}
 								} else {
@@ -853,17 +852,9 @@ func CombatAttack(c *gin.Context) {
 										targetLoot.MaterialsInventory[matID]++
 										_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, winnerID)
 									} else {
-										var targetInv models.MaterialsInventory
-										var targetInvBytes []byte
-										_ = tx.QueryRow("SELECT materials_inventory FROM players WHERE id = $1 FOR UPDATE", winnerID).Scan(&targetInvBytes)
-										if len(targetInvBytes) > 0 {
-											json.Unmarshal(targetInvBytes, &targetInv)
+										if err := InventorySvc.AddItem(tx, winnerID.String(), matID, "materials", 1); err != nil {
+											log.Printf("Failed to distribute loot %s to party member %s: %v", matID, winnerID, err)
 										}
-										if targetInv == nil {
-											targetInv = make(models.MaterialsInventory)
-										}
-										targetInv[matID]++
-										_, _ = tx.Exec("UPDATE players SET materials_inventory = $1 WHERE id = $2", targetInv, winnerID)
 									}
 									ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s nhặt được 1x %s.", uname, matID))
 								}
@@ -914,7 +905,7 @@ func CombatAttack(c *gin.Context) {
 							}
 						}
 					} else {
-						lootLogs := ApplyLoot(&player, loot)
+						lootLogs := ApplyLoot(tx, &player, loot)
 						ctx.Logs = append(ctx.Logs, lootLogs...)
 					}
 				} else {
@@ -939,10 +930,9 @@ func CombatAttack(c *gin.Context) {
 					_ = AddMineRewardsToPlayerTx(tx, player.ID, stones/2, qi/2.0, chests/2)
 					player.PrimevalStones += stones / 2
 					if chests/2 > 0 {
-						if player.MaterialsInventory == nil {
-							player.MaterialsInventory = make(models.MaterialsInventory)
+						if err := InventorySvc.AddItem(tx, player.ID.String(), "mine_chest", "materials", chests/2); err != nil {
+							log.Printf("Failed to add mine_chest to player %s: %v", player.ID, err)
 						}
-						player.MaterialsInventory["mine_chest"] += chests / 2
 					}
 					ctx.Logs = append(ctx.Logs, fmt.Sprintf("Cướp được %d Nguyên Thạch và %d rương từ đối thủ!", stones/2, chests/2))
 				}
@@ -1054,11 +1044,11 @@ func CombatAttack(c *gin.Context) {
 
 	updateQuery := `
 		UPDATE players
-		SET hp = $1, current_mana = $2, primeval_stones = $3, materials_inventory = $4, gu_inventory = $5, cleared_cells = $6, active_combat = $7,
-		    temp_loot = $8, current_region = $9, x = $10, y = $11, explored_cells = $12
-		WHERE id = $13
+		SET hp = $1, current_mana = $2, primeval_stones = $3, gu_inventory = $4, cleared_cells = $5, active_combat = $6,
+		    temp_loot = $7, current_region = $8, x = $9, y = $10, explored_cells = $11
+		WHERE id = $12
 	`
-	_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.PrimevalStones, player.MaterialsInventory, player.GuInventory, player.ClearedCells, player.ActiveCombat,
+	_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.PrimevalStones, player.GuInventory, player.ClearedCells, player.ActiveCombat,
 		player.TempLoot, player.CurrentRegion, player.X, player.Y, player.ExploredCells, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update combat results"})

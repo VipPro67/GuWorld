@@ -634,8 +634,8 @@ func DonateMaterials(c *gin.Context) {
 		return
 	}
 
-	qty, ok := player.MaterialsInventory[req.MaterialID]
-	if !ok || qty < req.Amount {
+	qty, _ := InventorySvc.GetQuantity(tx, playerID.String(), req.MaterialID, "materials")
+	if qty < req.Amount {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không có đủ linh tài yêu cầu!"})
 		return
 	}
@@ -660,10 +660,7 @@ func DonateMaterials(c *gin.Context) {
 	pointsPerItem := pricing.DonatePoints(pricing.ItemBasePrice(dbBasePrice, matRank))
 
 	gainedContribution := pointsPerItem * req.Amount
-	player.MaterialsInventory[req.MaterialID] -= req.Amount
-	if player.MaterialsInventory[req.MaterialID] == 0 {
-		delete(player.MaterialsInventory, req.MaterialID)
-	}
+	InventorySvc.RemoveItem(tx, playerID.String(), req.MaterialID, "materials", req.Amount)
 
 	m.ContributionPoints += gainedContribution
 
@@ -695,12 +692,6 @@ func DonateMaterials(c *gin.Context) {
 		return
 	}
 
-	_, err = tx.Exec(`UPDATE players SET materials_inventory = $1 WHERE id = $2`, player.MaterialsInventory, player.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update materials"})
-		return
-	}
-
 	_, err = tx.Exec(`UPDATE sect_members SET contribution_points = $1 WHERE player_id = $2`, m.ContributionPoints, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update contribution"})
@@ -728,7 +719,6 @@ func DonateMaterials(c *gin.Context) {
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"message":             "Quyên góp linh tài thành công!",
-		"materials_inventory": player.MaterialsInventory,
 		"contribution_points": m.ContributionPoints,
 	})
 }
@@ -1032,21 +1022,12 @@ func BuyFromSectVault(c *gin.Context) {
 			delete(vaultMats, req.ItemID)
 		}
 
-		if player.MaterialsInventory == nil {
-			player.MaterialsInventory = make(models.MaterialsInventory)
-		}
-		player.MaterialsInventory[req.ItemID]++
+		InventorySvc.AddItem(tx, player.ID.String(), req.ItemID, "materials", 1)
 
 		newVaultMats, _ := json.Marshal(vaultMats)
 		_, err = tx.Exec(`UPDATE sects SET vault_materials = $1 WHERE id = $2`, newVaultMats, s.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update vault materials"})
-			return
-		}
-
-		_, err = tx.Exec(`UPDATE players SET materials_inventory = $1 WHERE id = $2`, player.MaterialsInventory, player.ID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update materials"})
 			return
 		}
 	} else if strings.ToLower(req.ItemType) == "recipe" {
@@ -1307,21 +1288,13 @@ func CompleteSectMission(c *gin.Context) {
 
 	// Verify completion requirements
 	if sm.MissionType == "GATHER" {
-		qty, hasMat := player.MaterialsInventory[sm.TargetID]
-		if !hasMat || qty < sm.TargetAmount {
+		qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), sm.TargetID, "materials")
+		if qty < sm.TargetAmount {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa thu thập đủ linh tài yêu cầu!"})
 			return
 		}
 		// Deduct materials from player
-		player.MaterialsInventory[sm.TargetID] -= sm.TargetAmount
-		if player.MaterialsInventory[sm.TargetID] == 0 {
-			delete(player.MaterialsInventory, sm.TargetID)
-		}
-		_, err = tx.Exec(`UPDATE players SET materials_inventory = $1 WHERE id = $2`, player.MaterialsInventory, player.ID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct materials"})
-			return
-		}
+		InventorySvc.RemoveItem(tx, player.ID.String(), sm.TargetID, "materials", sm.TargetAmount)
 
 		// Add gathered materials to sect vault
 		var memberForVault SectMember

@@ -370,7 +370,7 @@ func UpdateTradeOffer(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Số lượng vật phẩm giao dịch không hợp lệ"})
 			return
 		}
-		availableQty := player.MaterialsInventory[matID]
+		availableQty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), matID, "materials")
 		if availableQty < qty {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ số lượng vật phẩm trong kho: %s", matID)})
 			return
@@ -606,20 +606,14 @@ func ConfirmTrade(c *gin.Context) {
 
 		// Deduct sender materials
 		for matID, qty := range senderOffer.Materials {
-			avail := sender.MaterialsInventory[matID]
+			avail, _ := InventorySvc.GetQuantity(tx, sender.ID.String(), matID, "materials")
 			if avail < qty {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Người gửi thiếu vật phẩm: %s", matID)})
 				return
 			}
-			sender.MaterialsInventory[matID] -= qty
-			if sender.MaterialsInventory[matID] <= 0 {
-				delete(sender.MaterialsInventory, matID)
-			}
+			InventorySvc.RemoveItem(tx, sender.ID.String(), matID, "materials", qty)
 			// Add to receiver
-			if receiver.MaterialsInventory == nil {
-				receiver.MaterialsInventory = map[string]int{}
-			}
-			receiver.MaterialsInventory[matID] += qty
+			InventorySvc.AddItem(tx, receiver.ID.String(), matID, "materials", qty)
 		}
 
 		// 2. Verify and deduct receiver assets
@@ -659,20 +653,14 @@ func ConfirmTrade(c *gin.Context) {
 
 		// Deduct receiver materials
 		for matID, qty := range receiverOffer.Materials {
-			avail := receiver.MaterialsInventory[matID]
+			avail, _ := InventorySvc.GetQuantity(tx, receiver.ID.String(), matID, "materials")
 			if avail < qty {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Người nhận thiếu vật phẩm: %s", matID)})
 				return
 			}
-			receiver.MaterialsInventory[matID] -= qty
-			if receiver.MaterialsInventory[matID] <= 0 {
-				delete(receiver.MaterialsInventory, matID)
-			}
+			InventorySvc.RemoveItem(tx, receiver.ID.String(), matID, "materials", qty)
 			// Add to sender
-			if sender.MaterialsInventory == nil {
-				sender.MaterialsInventory = map[string]int{}
-			}
-			sender.MaterialsInventory[matID] += qty
+			InventorySvc.AddItem(tx, sender.ID.String(), matID, "materials", qty)
 		}
 
 		// 3. Add swap items to balances

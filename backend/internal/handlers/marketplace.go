@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -133,21 +134,13 @@ func CreateListing(c *gin.Context) {
 
 	var itemDataJSON []byte
 	if req.ItemType == "Recipe" {
-		idx := -1
-		for i, ur := range player.UnlockedRecipes {
-			if ur.RecipeID == req.ItemID {
-				idx = i
-				break
-			}
-		}
-		if idx == -1 {
+		recipeToSell, err := RecipeSvc.Get(tx, player.ID.String(), req.ItemID)
+		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn chưa khai mở phương thức này để bán"})
 			return
 		}
-		recipeToSell := player.UnlockedRecipes[idx]
-		
 		// Remove recipe from seller's unlocked list
-		player.UnlockedRecipes = append(player.UnlockedRecipes[:idx], player.UnlockedRecipes[idx+1:]...)
+		RecipeSvc.Delete(tx, player.ID.String(), req.ItemID)
 		req.Quantity = 1 // Recipes are single instance
 		
 		itemDataJSON, err = json.Marshal(recipeToSell)
@@ -221,14 +214,14 @@ func CreateListing(c *gin.Context) {
 		if req.Quantity <= 0 {
 			req.Quantity = 1
 		}
-		qty := player.MaterialsInventory[req.ItemID]
-		if qty < req.Quantity {
+		qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), req.ItemID, "materials")
+		if err != nil || qty < req.Quantity {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ vật phẩm"})
 			return
 		}
-		player.MaterialsInventory[req.ItemID] -= req.Quantity
-		if player.MaterialsInventory[req.ItemID] <= 0 {
-			delete(player.MaterialsInventory, req.ItemID)
+		if err := InventorySvc.RemoveItem(tx, player.ID.String(), req.ItemID, "materials", req.Quantity); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật vật phẩm"})
+			return
 		}
 		itemData := req.ItemID
 		itemDataJSON, err = json.Marshal(itemData)
@@ -253,7 +246,7 @@ func CreateListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo phiên giao dịch"})
 		return
 	}
-	_, err = tx.Exec(`UPDATE players SET gu_inventory=$1, materials_inventory=$2, equipped_gus=$3, unlocked_recipes=$4, primeval_stones=$5 WHERE id=$6`, player.GuInventory, player.MaterialsInventory, player.EquippedGus, player.UnlockedRecipes, player.PrimevalStones, player.ID)
+	_, err = tx.Exec(`UPDATE players SET gu_inventory=$1, equipped_gus=$2, primeval_stones=$3 WHERE id=$4`, player.GuInventory, player.EquippedGus, player.PrimevalStones, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ"})
 		return
@@ -613,7 +606,7 @@ func BuyListing(c *gin.Context) {
 		itemDataToSend = itemData
 	}
 
-	if err := addAuctionItemToPlayer(&buyer, itemType, itemDataToSend, purchaseQty); err != nil {
+	if err := addAuctionItemToPlayer(tx, &buyer, itemType, itemDataToSend, purchaseQty); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển giao vật phẩm"})
 		return
 	}
@@ -741,7 +734,7 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 			seller.ImmortalStones += payout
 		}
 
-		if err := addAuctionItemToPlayer(&buyer, itemType, itemData, qty); err != nil {
+		if err := addAuctionItemToPlayer(tx, &buyer, itemType, itemData, qty); err != nil {
 			return err
 		}
 
@@ -756,7 +749,7 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 			return err
 		}
 	} else {
-		if err := addAuctionItemToPlayer(&seller, itemType, itemData, qty); err != nil {
+		if err := addAuctionItemToPlayer(tx, &seller, itemType, itemData, qty); err != nil {
 			return err
 		}
 		if err := updatePlayerInventory(tx, seller); err != nil {
@@ -785,7 +778,7 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 	return tx.Commit()
 }
 
-func addAuctionItemToPlayer(player *models.Player, itemType, itemData string, qty int) error {
+func addAuctionItemToPlayer(tx *sql.Tx, player *models.Player, itemType, itemData string, qty int) error {
 	if itemType == "Gu" {
 		var gus []models.GuInstance
 		if err := json.Unmarshal([]byte(itemData), &gus); err == nil {
@@ -812,33 +805,36 @@ func addAuctionItemToPlayer(player *models.Player, itemType, itemData string, qt
 	if itemType == "Recipe" {
 		var recipeInfo models.UnlockedRecipe
 		if err := json.Unmarshal([]byte(itemData), &recipeInfo); err == nil {
-			found := false
-			for i, ur := range player.UnlockedRecipes {
-				if ur.RecipeID == recipeInfo.RecipeID {
-					player.UnlockedRecipes[i].CompletionRate += recipeInfo.CompletionRate
-					if player.UnlockedRecipes[i].CompletionRate > 100.0 {
-						player.UnlockedRecipes[i].CompletionRate = 100.0
-					}
-					found = true
-					break
+			existing, err := RecipeSvc.Get(tx, player.ID.String(), recipeInfo.RecipeID)
+			if err == nil {
+				completionRate := existing.CompletionRate + recipeInfo.CompletionRate
+				if completionRate > 100.0 {
+					completionRate = 100.0
 				}
-			}
-			if !found {
-				player.UnlockedRecipes = append(player.UnlockedRecipes, recipeInfo)
+				RecipeSvc.Upsert(tx, &services.RecipeProgress{
+					PlayerID:       player.ID.String(),
+					RecipeID:       recipeInfo.RecipeID,
+					CompletionRate: completionRate,
+					IsUnlocked:     true,
+				})
+			} else {
+				RecipeSvc.Upsert(tx, &services.RecipeProgress{
+					PlayerID:       player.ID.String(),
+					RecipeID:       recipeInfo.RecipeID,
+					CompletionRate: recipeInfo.CompletionRate,
+					IsUnlocked:     true,
+				})
 			}
 		}
 		return nil
 	}
 
-	if player.MaterialsInventory == nil {
-		player.MaterialsInventory = map[string]int{}
-	}
-	player.MaterialsInventory[itemData] += qty
+	InventorySvc.AddItem(tx, player.ID.String(), itemData, "materials", qty)
 	return nil
 }
 
 func updatePlayerInventory(tx *sql.Tx, player models.Player) error {
-	_, err := tx.Exec(`UPDATE players SET gu_inventory=$1, materials_inventory=$2, equipped_gus=$3, primeval_stones=$4, immortal_stones=$5, unlocked_recipes=$6 WHERE id=$7`, player.GuInventory, player.MaterialsInventory, player.EquippedGus, player.PrimevalStones, player.ImmortalStones, player.UnlockedRecipes, player.ID)
+	_, err := tx.Exec(`UPDATE players SET gu_inventory=$1, equipped_gus=$2, primeval_stones=$3, immortal_stones=$4 WHERE id=$5`, player.GuInventory, player.EquippedGus, player.PrimevalStones, player.ImmortalStones, player.ID)
 	return err
 }
 
@@ -889,7 +885,7 @@ func CancelListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
 		return
 	}
-	if err := addAuctionItemToPlayer(&player, itemType, itemData, qty); err != nil {
+	if err := addAuctionItemToPlayer(tx, &player, itemType, itemData, qty); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn trả vật phẩm"})
 		return
 	}

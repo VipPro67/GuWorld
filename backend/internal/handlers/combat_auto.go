@@ -220,11 +220,12 @@ func AutoCombatStart(c *gin.Context) {
 	// ── Scan inventory for healing items ──
 	healPotency := 0.0
 	healCharges := 0
-	for itemID, qty := range player.MaterialsInventory {
-		if qty <= 0 {
+	invItems, _ := InventorySvc.ListByPlayer(authID.String())
+	for _, inv := range invItems {
+		if inv.Quantity <= 0 {
 			continue
 		}
-		item, ok := models.ItemRegistry[itemID]
+		item, ok := models.ItemRegistry[inv.ItemID]
 		if !ok || item.Type != "Consumable" {
 			continue
 		}
@@ -232,7 +233,7 @@ func AutoCombatStart(c *gin.Context) {
 			if healPotency == 0 {
 				healPotency = healVal
 			}
-			healCharges += qty
+			healCharges += int(inv.Quantity)
 		}
 	}
 
@@ -464,26 +465,21 @@ func AutoCombatStart(c *gin.Context) {
 	if !isVirtual {
 		if itemsUsed > 0 {
 			remaining := itemsUsed
-			for itemID, qty := range player.MaterialsInventory {
+			invItems, _ := InventorySvc.ListByPlayer(authID.String())
+			for _, inv := range invItems {
 				if remaining <= 0 {
 					break
 				}
-				if qty <= 0 {
-					continue
-				}
-				item, ok := models.ItemRegistry[itemID]
+				item, ok := models.ItemRegistry[inv.ItemID]
 				if !ok || item.Type != "Consumable" {
 					continue
 				}
 				if _, hasHeal := item.Effects["restore_hp"]; hasHeal {
-					remove := qty
+					remove := inv.Quantity
 					if remove > remaining {
 						remove = remaining
 					}
-					player.MaterialsInventory[itemID] -= remove
-					if player.MaterialsInventory[itemID] <= 0 {
-						delete(player.MaterialsInventory, itemID)
-					}
+					InventorySvc.RemoveItem(tx, authID.String(), inv.ItemID, "materials", remove)
 					remaining -= remove
 				}
 			}
@@ -590,10 +586,7 @@ func AutoCombatStart(c *gin.Context) {
 							if matID == "primeval_stone" {
 								continue
 							}
-							if player.MaterialsInventory == nil {
-								player.MaterialsInventory = make(models.MaterialsInventory)
-							}
-							player.MaterialsInventory[matID] += qty
+							InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", qty)
 						}
 						for _, guID := range loot.Gus {
 							newGu := models.GuInstance{
@@ -634,10 +627,7 @@ func AutoCombatStart(c *gin.Context) {
 						_ = AddMineRewardsToPlayerTx(tx, player.ID, stones/2, qi/2.0, chests/2)
 						player.PrimevalStones += stones / 2
 						if chests/2 > 0 {
-							if player.MaterialsInventory == nil {
-								player.MaterialsInventory = make(models.MaterialsInventory)
-							}
-							player.MaterialsInventory["mine_chest"] += chests / 2
+							InventorySvc.AddItem(tx, player.ID.String(), "mine_chest", "materials", chests/2)
 						}
 						logs = append(logs, simulator.CombatLog{
 							Turn:   simState.Turn,
@@ -665,11 +655,10 @@ func AutoCombatStart(c *gin.Context) {
 			}
 
 			tempLootJSON, _ := json.Marshal(player.TempLoot)
-			matJSON, _ := json.Marshal(player.MaterialsInventory)
 			guJSON, _ := json.Marshal(player.GuInventory)
 
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, primeval_stones = $4, materials_inventory = $5, gu_inventory = $6, aptitude_percent = $7, lifespan = $8 WHERE id = $9`
-			args = append(args, finalPlayerHP, finalMana, tempLootJSON, player.PrimevalStones, matJSON, guJSON, player.AptitudePercent, player.Lifespan, player.ID)
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, primeval_stones = $4, gu_inventory = $5, aptitude_percent = $6, lifespan = $7 WHERE id = $8`
+			args = append(args, finalPlayerHP, finalMana, tempLootJSON, player.PrimevalStones, guJSON, player.AptitudePercent, player.Lifespan, player.ID)
 		}
 	} else {
 		if isVirtual {

@@ -158,7 +158,6 @@ func InitSchema() error {
 		primeval_stones INTEGER DEFAULT 0,
 		immortal_stones DOUBLE PRECISION DEFAULT 0,
 		gu_inventory JSONB NOT NULL DEFAULT '[]',
-		materials_inventory JSONB NOT NULL DEFAULT '{}',
 		hp DOUBLE PRECISION NOT NULL DEFAULT 100,
 		base_hp DOUBLE PRECISION NOT NULL DEFAULT 100,
 		body_mods JSONB NOT NULL DEFAULT '[]',
@@ -175,7 +174,10 @@ func InitSchema() error {
 		last_cultivate_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		email VARCHAR(255) UNIQUE NOT NULL DEFAULT '',
 		google_id VARCHAR(255) UNIQUE NULL,
-		ref_code VARCHAR(50) UNIQUE NOT NULL DEFAULT ''
+		ref_code VARCHAR(50) UNIQUE NOT NULL DEFAULT '',
+		earned_achievements JSONB NOT NULL DEFAULT '[]',
+		selected_title VARCHAR(100) NOT NULL DEFAULT '',
+		selected_frame VARCHAR(50) NOT NULL DEFAULT ''
 	);
 	`
 	_, err = DB.Exec(query)
@@ -882,7 +884,6 @@ func InitSchema() error {
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS email VARCHAR(100) NULL;`, "email"},
 		{`CREATE UNIQUE INDEX IF NOT EXISTS players_email_idx ON players (email) WHERE email IS NOT NULL AND email != '';`, "players_email_idx"},
 		{`CREATE UNIQUE INDEX IF NOT EXISTS players_phone_number_idx ON players (phone_number) WHERE phone_number IS NOT NULL AND phone_number != '';`, "players_phone_number_idx"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS completed_quests JSONB NOT NULL DEFAULT '[]';`, "completed_quests"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS temp_loot JSONB NOT NULL DEFAULT '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}';`, "temp_loot"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS explore_count INTEGER NOT NULL DEFAULT 0;`, "explore_count"},
 		{`ALTER TABLE arena_rankings ADD COLUMN IF NOT EXISTS daily_challenges INTEGER NOT NULL DEFAULT 0;`, "arena_rankings.daily_challenges"},
@@ -931,7 +932,6 @@ func InitSchema() error {
 			updated_at TIMESTAMP DEFAULT now(),
 			UNIQUE(aperture_id, race)
 		);`, "aperture_variant_humans"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS unlocked_recipes JSONB NOT NULL DEFAULT '[]';`, "unlocked_recipes"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT 'Hãy viết gì đó về bản thân...';`, "bio"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS fake_rank INTEGER DEFAULT 1;`, "fake_rank"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS fake_sub_rank INTEGER DEFAULT 1;`, "fake_sub_rank"},
@@ -1031,7 +1031,7 @@ func InitSchema() error {
 			('Bách Thảo Tiên Vực', 'Thường')
 			ON CONFLICT (name) DO NOTHING;`, "seed_sect_mines"},
 		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS usage_count INTEGER NOT NULL DEFAULT 0;`, "usage_count"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS wisdom DOUBLE PRECISION NOT NULL DEFAULT 0;`, "wisdom"},
+
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS needs_onboarding BOOLEAN NOT NULL DEFAULT false;`, "needs_onboarding"},
 		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS success_rate DOUBLE PRECISION NOT NULL DEFAULT 0;`, "add_success_rate"},
 		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS channel_time INTEGER NOT NULL DEFAULT 1;`, "add_channel_time"},
@@ -1090,14 +1090,155 @@ func InitSchema() error {
 			redeemed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(gift_code_id, player_id)
 		);`, "create_gift_code_redemptions_table"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS earned_achievements JSONB NOT NULL DEFAULT '[]';`, "earned_achievements"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS selected_title VARCHAR(100) NOT NULL DEFAULT '';`, "selected_title"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS selected_frame VARCHAR(50) NOT NULL DEFAULT '';`, "selected_frame"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS current_thought DOUBLE PRECISION NOT NULL DEFAULT 100.0;`, "current_thought"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS max_thought DOUBLE PRECISION NOT NULL DEFAULT 100.0;`, "max_thought"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS thought_regen_rate DOUBLE PRECISION NOT NULL DEFAULT 1.0;`, "thought_regen_rate"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS immortal_state JSONB NOT NULL DEFAULT '{}';`, "immortal_state"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {
 			return fmt.Errorf("failed to run migration %s: %w", m.errMsg, err)
 		}
+	}
+
+	// Phase 1 tables: player_recipe_progress
+	_, err = DB.Exec(`
+		CREATE TABLE IF NOT EXISTS player_recipe_progress (
+			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			recipe_id VARCHAR(50) NOT NULL,
+			completion_rate FLOAT NOT NULL DEFAULT 0,
+			is_unlocked BOOLEAN NOT NULL DEFAULT false,
+			deduce_count INT NOT NULL DEFAULT 0,
+			last_deduce_at TIMESTAMPTZ,
+			favorite BOOLEAN NOT NULL DEFAULT false,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (player_id, recipe_id)
+		);`)
+	if err != nil {
+		return fmt.Errorf("failed to create player_recipe_progress table: %w", err)
+	}
+
+	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_recipe_progress_player ON player_recipe_progress(player_id);`)
+	if err != nil {
+		log.Printf("Warning: failed to create idx_recipe_progress_player: %v", err)
+	}
+
+	// Phase 1 tables: player_map_progress
+	_, err = DB.Exec(`
+		CREATE TABLE IF NOT EXISTS player_map_progress (
+			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			region_id VARCHAR(50) NOT NULL DEFAULT '',
+			cell_x INT NOT NULL,
+			cell_y INT NOT NULL,
+			explored BOOLEAN NOT NULL DEFAULT false,
+			cleared BOOLEAN NOT NULL DEFAULT false,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (player_id, region_id, cell_x, cell_y)
+		);`)
+	if err != nil {
+		return fmt.Errorf("failed to create player_map_progress table: %w", err)
+	}
+
+	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_map_progress_player ON player_map_progress(player_id);`)
+	if err != nil {
+		log.Printf("Warning: failed to create idx_map_progress_player: %v", err)
+	}
+
+	// Phase 1 tables: combat_sessions
+	_, err = DB.Exec(`
+		CREATE TABLE IF NOT EXISTS combat_sessions (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			state JSONB NOT NULL DEFAULT '{}',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE(player_id)
+		);`)
+	if err != nil {
+		return fmt.Errorf("failed to create combat_sessions table: %w", err)
+	}
+
+	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_combat_sessions_player ON combat_sessions(player_id);`)
+	if err != nil {
+		log.Printf("Warning: failed to create idx_combat_sessions_player: %v", err)
+	}
+
+	// Phase 3 tables: player_dao_path
+	_, err = DB.Exec(`
+		CREATE TABLE IF NOT EXISTS player_dao_path (
+			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			path VARCHAR(50) NOT NULL,
+			mastery VARCHAR(50) NOT NULL DEFAULT 'Ordinary',
+			dao_marks INT NOT NULL DEFAULT 0,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (player_id, path)
+		);`)
+	if err != nil {
+		return fmt.Errorf("failed to create player_dao_path table: %w", err)
+	}
+
+	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_player_dao_path_player ON player_dao_path(player_id);`)
+	if err != nil {
+		log.Printf("Warning: failed to create idx_player_dao_path_player: %v", err)
+	}
+
+	// Phase 6 tables: player_inventory_items
+	_, err = DB.Exec(`
+		CREATE TABLE IF NOT EXISTS player_inventory_items (
+			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			item_id VARCHAR(50) NOT NULL,
+			category VARCHAR(30) NOT NULL DEFAULT 'materials',
+			quantity INT NOT NULL DEFAULT 0,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (player_id, item_id, category)
+		);`)
+	if err != nil {
+		return fmt.Errorf("failed to create player_inventory_items table: %w", err)
+	}
+	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_inventory_player ON player_inventory_items(player_id);`)
+	if err != nil {
+		log.Printf("Warning: failed to create idx_inventory_player: %v", err)
+	}
+
+	// Phase 6 tables: player_quest_progress
+	_, err = DB.Exec(`
+		CREATE TABLE IF NOT EXISTS player_quest_progress (
+			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			quest_id VARCHAR(50) NOT NULL,
+			status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+			progress_data JSONB NOT NULL DEFAULT '{}',
+			completed_at TIMESTAMPTZ,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (player_id, quest_id)
+		);`)
+	if err != nil {
+		return fmt.Errorf("failed to create player_quest_progress table: %w", err)
+	}
+	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_quest_progress_player ON player_quest_progress(player_id);`)
+	if err != nil {
+		log.Printf("Warning: failed to create idx_quest_progress_player: %v", err)
+	}
+
+	// Phase 6 tables: player_achievements
+	_, err = DB.Exec(`
+		CREATE TABLE IF NOT EXISTS player_achievements (
+			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			achievement_id VARCHAR(50) NOT NULL,
+			selected_title VARCHAR(100) NOT NULL DEFAULT '',
+			selected_frame VARCHAR(50) NOT NULL DEFAULT '',
+			unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (player_id, achievement_id)
+		);`)
+	if err != nil {
+		return fmt.Errorf("failed to create player_achievements table: %w", err)
+	}
+	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_achievements_player ON player_achievements(player_id);`)
+	if err != nil {
+		log.Printf("Warning: failed to create idx_achievements_player: %v", err)
 	}
 
 	// Set is_admin = true only if no admin exists yet (first deploy)

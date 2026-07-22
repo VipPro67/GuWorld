@@ -285,13 +285,14 @@ func UseRelicGu(c *gin.Context) {
 	}
 
 	// Check ownership of relic in materials inventory
-	if player.MaterialsInventory == nil || player.MaterialsInventory[req.RelicKey] <= 0 {
+	qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), req.RelicKey, "materials")
+	if err != nil || qty <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "You do not possess that Relic Gu"})
 		return
 	}
 
 	// Consume relic
-	player.MaterialsInventory[req.RelicKey]--
+	InventorySvc.RemoveItem(tx, player.ID.String(), req.RelicKey, "materials", 1)
 	// Instant advancement
 	player.SubRank += 1
 	if player.SubRank > 4 {
@@ -308,10 +309,10 @@ func UseRelicGu(c *gin.Context) {
 	}
 
 	updateQuery := `
-        UPDATE players SET materials_inventory = $1, sub_rank = $2, rank = $3, wall_progress = $4, human_qi = $5
-        WHERE id = $6
+        UPDATE players SET sub_rank = $1, rank = $2, wall_progress = $3, human_qi = $4
+        WHERE id = $5
     `
-	_, err = tx.Exec(updateQuery, player.MaterialsInventory, player.SubRank, player.Rank, player.WallProgress, player.HumanQi, player.ID)
+	_, err = tx.Exec(updateQuery, player.SubRank, player.Rank, player.WallProgress, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to apply Relic Gu"})
 		return

@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"time"
-
-	"github.com/google/uuid"
 )
 
 // GuInstance represents an individual Gu bug owned by a player.
@@ -26,6 +23,26 @@ type GuInventory []GuInstance
 
 // MaterialsInventory maps material keys to their quantities.
 type MaterialsInventory map[string]int
+
+// ItemCategory returns the sub-inventory bucket name for a given item type.
+func ItemCategory(itemType string) string {
+	switch itemType {
+	case "Consumable", "SoulResource":
+		return "consumables"
+	case "Treasure":
+		return "treasures"
+	case "ImmortalMaterial":
+		return "immortal_materials"
+	default:
+		return "materials"
+	}
+}
+
+// InventoryForCategory is a deprecated helper kept for backward compat.
+// Inventory is now managed via InventoryService.
+func (p *Player) InventoryForCategory(category string) *MaterialsInventory {
+	return nil
+}
 
 // DaoMarksMap maps Dao mark types to their counts.
 type DaoMarksMap map[string]int
@@ -139,70 +156,57 @@ type CombatState struct {
 	Enemies             []Combatant       `json:"enemies,omitempty"`
 }
 
+// ImmortalState groups immortal expansion data.
+type ImmortalState struct {
+	ImmortalEssence  int                    `json:"immortal_essence"`
+	ApertureGrade    string                 `json:"aperture_grade,omitempty"`
+	ApertureTimeRate float64                `json:"aperture_time_rate,omitempty"`
+	BlessedLand      map[string]interface{} `json:"blessed_land,omitempty"`
+	HeavenSpirit     map[string]interface{} `json:"heaven_spirit,omitempty"`
+}
+
+// Scan implements the sql.Scanner interface for ImmortalState.
+func (s *ImmortalState) Scan(value interface{}) error {
+	if value == nil {
+		*s = ImmortalState{}
+		return nil
+	}
+	b, ok := value.([]byte)
+	if !ok {
+		*s = ImmortalState{}
+		return nil
+	}
+	if len(b) == 0 || string(b) == "null" {
+		*s = ImmortalState{}
+		return nil
+	}
+	return json.Unmarshal(b, s)
+}
+
+// Value implements the driver.Valuer interface for ImmortalState.
+func (s ImmortalState) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
 // Player represents a cultivator in the Gu World.
+// The struct embeds domain sub-states (Account, Cultivation, Body, etc.)
+// so field promotion preserves backward-compatible Go access and JSON output.
 type Player struct {
-	ID                  uuid.UUID           `json:"id"`
-	Username            string              `json:"username"`
-	PasswordHash        string              `json:"-"`
-	Rank                int                 `json:"rank"`             // 1 to 9 (Nhất chuyển to Cửu chuyển)
-	SubRank             int                 `json:"sub_rank"`         // 1: Sơ giai, 2: Trung giai, 3: Cao giai, 4: Đỉnh phong
-	AptitudeType        string              `json:"aptitude_type"`    // 'Giáp', 'Ất', 'Bính', 'Đinh'
-	AptitudePercent     int                 `json:"aptitude_percent"` // 20 to 99
-	AptitudeGrade       int                 `json:"aptitude_grade"`   // 1..4 mapping to A..D (optional duplicate of AptitudeType)
-	CurrentMana         float64             `json:"current_mana"`     // Current Primeval Essence
-	MaxMana             float64             `json:"max_mana"`         // Max Primeval Essence (equals AptitudePercent)
-	PrimevalStones      int                 `json:"primeval_stones"`  // Game currency
-	ImmortalStones      float64             `json:"immortal_stones"`
-	Wisdom              float64             `json:"wisdom"`
-	GuInventory         GuInventory         `json:"gu_inventory"`
-	MaterialsInventory  MaterialsInventory  `json:"materials_inventory"`
-	WallProgress        float64             `json:"wall_progress"` // 0.0..1.0 progress to next sub-rank for mortals
-	HumanQi             float64             `json:"human_qi"`      // Accumulated hidden stat for ascension
-	HP                  float64             `json:"hp"`
-	BaseHP              float64             `json:"base_hp"`
-	BodyMods            BodyModsList        `json:"body_mods"`
-	X                   int                 `json:"x"`
-	Y                   int                 `json:"y"`
-	ExploredCells       ExploredCellsList   `json:"explored_cells"`
-	EquippedGus         EquippedGusList     `json:"equipped_gus"`
-	ClearedCells        ClearedCellsMap     `json:"cleared_cells"`
-	CurrentRegion       string              `json:"current_region"`
-	DaoMarks            DaoMarksMap         `json:"dao_marks"`
-	PathMasteries       PathMasteriesMap    `json:"path_masteries"`
-	NextTribulationTime *time.Time          `json:"next_tribulation_time"`
-	TribulationCount    int                 `json:"tribulation_count"`
-	ActiveCombat        *CombatState        `json:"active_combat"`
-	LastManaUpdate      time.Time           `json:"last_mana_update"` // Time of last mana recalculation
-	CreatedAt           time.Time           `json:"created_at"`
-	Lifespan            float64             `json:"lifespan"`
-	TimeSpeedMultiplier float64             `json:"time_speed_multiplier"`
-	PartyID             *uuid.UUID          `json:"party_id"`
-	ArenaRank           *int                `json:"arena_rank"`
-	Email               string              `json:"email"`
-	GoogleID            *string             `json:"google_id,omitempty"`
-	RefCode             string              `json:"ref_code"`
-	CompletedQuests     CompletedQuestsList `json:"completed_quests"`
-	TempLoot            TempLoot            `json:"temp_loot"`
-	ExploreCount        int                 `json:"explore_count"`
-	LastExploreReset    time.Time           `json:"last_explore_reset"`
-	ApertureStress      float64             `json:"aperture_stress"`
-	LastCultivateTime   time.Time           `json:"last_cultivate_time"`
-	SoulHP              int                 `json:"soul_hp"`
-	MaxSoul             int                 `json:"max_soul"`
-	SoulTier            string              `json:"soul_tier"`
-	NeedsSoulRefine     bool                `json:"needs_soul_refine"`
-	UnlockedRecipes     UnlockedRecipesList `json:"unlocked_recipes"`
-	Bio                 string              `json:"bio"`
-	AvatarURL           string              `json:"avatar_url"`
-	FakeRank            int                 `json:"fake_rank"`
-	FakeSubRank         int                 `json:"fake_sub_rank"`
-	FakeVitalGu         string              `json:"fake_vital_gu"`
-	IsDisguised         bool                `json:"is_disguised"`
-	IsAdmin             bool                `json:"is_admin"`
-	DaoMarkDamage       float64             `json:"dao_mark_damage"`
-	ApertureDamage      float64             `json:"aperture_damage"`
-	CombatSettings      AutoCombatConfig    `json:"combat_settings"`
-	NeedsOnboarding     bool                `json:"needs_onboarding"`
+	Account
+	CultivationState
+	ResourceState
+	BodyState
+	SoulState
+	ThoughtPool
+	DaoState
+	WorldState
+	SocialState
+	CombatConfig
+
+	ImmortalState   ImmortalState   `json:"immortal_state"`
+	GuInventory     GuInventory     `json:"gu_inventory"`
+	ActiveCombat    *CombatState    `json:"active_combat"`
+	TempLoot        TempLoot        `json:"temp_loot"`
 }
 
 type TempLoot struct {

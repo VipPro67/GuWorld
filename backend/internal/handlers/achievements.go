@@ -137,7 +137,7 @@ func ClaimAchievement(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	player, err := loadPlayerForStatus(tx, playerID, true)
+	player, err := PlayerSvc.Load(tx, playerID, true)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
 		return
@@ -180,14 +180,14 @@ func ClaimAchievement(c *gin.Context) {
 	} else if ach.RewardType == "immortal_stones" {
 		player.ImmortalStones += ach.RewardVal
 	} else if ach.RewardType == "item" {
-		if player.MaterialsInventory == nil {
-			player.MaterialsInventory = make(models.MaterialsInventory)
+		if err := InventorySvc.AddItem(tx, playerID.String(), ach.RewardID, "materials", int(ach.RewardVal)); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật vật phẩm"})
+			return
 		}
-		player.MaterialsInventory[ach.RewardID] += int(ach.RewardVal)
 	}
 
-	_, err = tx.Exec(`UPDATE players SET earned_achievements = $1, primeval_stones = $2, immortal_stones = $3, materials_inventory = $4 WHERE id = $5`,
-		earnedBytes, player.PrimevalStones, player.ImmortalStones, player.MaterialsInventory, player.ID)
+	_, err = tx.Exec(`UPDATE players SET earned_achievements = $1, primeval_stones = $2, immortal_stones = $3 WHERE id = $4`,
+		earnedBytes, player.PrimevalStones, player.ImmortalStones, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật"})
 		return

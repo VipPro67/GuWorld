@@ -74,8 +74,8 @@ func UseGutsGu(c *gin.Context) {
 		return
 	}
 
-	gutsQty, ok := player.MaterialsInventory["guts_gu"]
-	if !ok || gutsQty <= 0 {
+	gutsQty, err := InventorySvc.GetQuantity(tx, playerID.String(), "guts_gu", "materials")
+	if err != nil || gutsQty <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không có Cổ Can Đảm (guts_gu)!"})
 		return
 	}
@@ -104,9 +104,9 @@ func UseGutsGu(c *gin.Context) {
 	}
 
 	// Consume guts_gu
-	player.MaterialsInventory["guts_gu"]--
-	if player.MaterialsInventory["guts_gu"] == 0 {
-		delete(player.MaterialsInventory, "guts_gu")
+	if err := InventorySvc.RemoveItem(tx, playerID.String(), "guts_gu", "materials", 1); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tiêu hao Cổ Can Đảm!"})
+		return
 	}
 
 	player.MaxSoul += 10
@@ -121,9 +121,9 @@ func UseGutsGu(c *gin.Context) {
 
 	_, err = tx.Exec(`
 		UPDATE players
-		SET materials_inventory = $1, max_soul = $2, soul_hp = $3, needs_soul_refine = $4
-		WHERE id = $5
-	`, player.MaterialsInventory, player.MaxSoul, player.SoulHP, player.NeedsSoulRefine, player.ID)
+		SET max_soul = $1, soul_hp = $2, needs_soul_refine = $3
+		WHERE id = $4
+	`, player.MaxSoul, player.SoulHP, player.NeedsSoulRefine, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player: " + err.Error()})
 		return

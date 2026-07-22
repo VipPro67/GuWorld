@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"fmt"
 	"math/rand"
 
@@ -39,13 +40,11 @@ func RollLoot(lt models.LootTable) RolledLoot {
 	return rolled
 }
 
-func ApplyLoot(player *models.Player, loot RolledLoot) []string {
+func ApplyLoot(tx *sql.Tx, player *models.Player, loot RolledLoot) []string {
 	isExplore := player.CurrentRegion != "Southern_Border" && player.CurrentRegion != "Lobby"
 	var logs []string
 	if !isExplore {
-		if player.MaterialsInventory == nil {
-			player.MaterialsInventory = make(models.MaterialsInventory)
-		}
+		// items go directly via InventorySvc in the loop below
 	} else {
 		if player.TempLoot.MaterialsInventory == nil {
 			player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
@@ -76,7 +75,7 @@ func ApplyLoot(player *models.Player, loot RolledLoot) []string {
 				name = "Rượu Thanh Trúc"
 			}
 			if !isExplore {
-				player.MaterialsInventory[itemID] += qty
+				InventorySvc.AddItem(tx, player.ID.String(), itemID, "materials", qty)
 				logs = append(logs, fmt.Sprintf("Thu hoạch chiến lợi phẩm thú dữ: %dx %s.", qty, name))
 			} else {
 				player.TempLoot.MaterialsInventory[itemID] += qty
@@ -109,12 +108,9 @@ func ApplyLoot(player *models.Player, loot RolledLoot) []string {
 	return logs
 }
 
-func TransferTempLootToInventory(player *models.Player) {
-	if player.MaterialsInventory == nil {
-		player.MaterialsInventory = make(models.MaterialsInventory)
-	}
+func TransferTempLootToInventory(tx *sql.Tx, player *models.Player) {
 	for itemID, qty := range player.TempLoot.MaterialsInventory {
-		player.MaterialsInventory[itemID] += qty
+		InventorySvc.AddItem(tx, player.ID.String(), itemID, "materials", qty)
 	}
 	player.PrimevalStones += player.TempLoot.PrimevalStones
 	player.GuInventory = append(player.GuInventory, player.TempLoot.GuInventory...)

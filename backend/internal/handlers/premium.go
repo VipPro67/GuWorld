@@ -502,9 +502,6 @@ func BuyPremiumPackage(c *gin.Context) {
 		return
 	}
 
-	if player.MaterialsInventory == nil {
-		player.MaterialsInventory = make(models.MaterialsInventory)
-	}
 	for _, reward := range pkg.Rewards {
 		switch reward.Currency {
 		case CurrencyPrimevalStone:
@@ -532,13 +529,13 @@ func BuyPremiumPackage(c *gin.Context) {
 						}
 					}
 				} else {
-					player.MaterialsInventory[reward.ItemID] += int(reward.Quantity)
+					InventorySvc.AddItem(tx, playerID.String(), reward.ItemID, "materials", int(reward.Quantity))
 				}
 			}
 		}
 	}
 
-	if _, err = tx.Exec(`UPDATE players SET primeval_stones=$1, immortal_stones=$2, gu_inventory=$3, materials_inventory=$4 WHERE id=$5`, player.PrimevalStones, player.ImmortalStones, player.GuInventory, player.MaterialsInventory, playerID); err != nil {
+	if _, err = tx.Exec(`UPDATE players SET primeval_stones=$1, immortal_stones=$2, gu_inventory=$3 WHERE id=$4`, player.PrimevalStones, player.ImmortalStones, player.GuInventory, playerID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật phần thưởng"})
 		return
 	}

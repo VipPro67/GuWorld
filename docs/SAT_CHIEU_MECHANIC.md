@@ -71,7 +71,6 @@ ManaCost = CoreGu.ManaCostBase × (1 + Σ(mana_cost_multiplier)) − Σ(mana_cos
 
 ```
 SuccessRate = 95
-              + Wisdom × 0.2
               + Attainment × 2
               + Σ(success_rate_bonus)
               − SupportCount × 5
@@ -79,8 +78,6 @@ SuccessRate = 95
 
 Clamp(SuccessRate, 5%, 100%)
 ```
-
-**Wisdom** = chỉ số trí tuệ của người chơi (thuộc tính nhân vật).
 
 **Attainment** = cấp độ cảnh giới lưu phái (`player.PathMasteries[path]`):
 - 0: chưa đạt cảnh giới
@@ -273,7 +270,7 @@ Không giới hạn trên của DaoMarks (nhưng diminishing returns có thể �
 3. Đổi `Stability` → `SuccessRate` trong DB, model, response.
 4. Thêm `DaoMarks` vào Player model + DB migration.
 5. Implement Channeling cơ chế trong combat loop.
-6. Thêm `Wisdom` stat vào Player.
+6. (Đã xoá) Wisdom stat — dùng cổ trùng để tăng tỉ lệ thành công.
 7. Cập nhật `applyKillerMoveToCombat` — đọc effect theo category.
 
 ### 9.2 Những thứ giữ lại từ V1

@@ -178,11 +178,11 @@ func ExploreNode(c *gin.Context) {
 
 	updateQuery := `
 		UPDATE players
-		SET current_mana = $1, primeval_stones = $2, materials_inventory = $3, active_combat = $4, current_region = $5, x = $6, y = $7, explored_cells = $8,
-		    temp_loot = $9, explore_count = $10, last_explore_reset = $11
-		WHERE id = $12
+		SET current_mana = $1, primeval_stones = $2, active_combat = $3, current_region = $4, x = $5, y = $6, explored_cells = $7,
+		    temp_loot = $8, explore_count = $9, last_explore_reset = $10
+		WHERE id = $11
 	`
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.MaterialsInventory, player.ActiveCombat, player.CurrentRegion, player.X, player.Y, player.ExploredCells,
+	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.ActiveCombat, player.CurrentRegion, player.X, player.Y, player.ExploredCells,
 		player.TempLoot, player.ExploreCount, player.LastExploreReset, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save exploration progress"})

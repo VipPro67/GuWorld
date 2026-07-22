@@ -9,15 +9,24 @@ import (
 )
 
 func TestEnergyRegenMortalUsesAptitude(t *testing.T) {
-	player := &models.Player{Rank: 3, SubRank: 1, AptitudeType: "Giáp", MaxMana: 80}
+	player := &models.Player{
+		CultivationState: models.CultivationState{Rank: 3, SubRank: 1, AptitudeType: "Giáp"},
+		ResourceState:    models.ResourceState{MaxMana: 80},
+	}
 	if got := energyRegenRatePerHour(player); got != 8.0 {
 		t.Fatalf("mortal regen = %v, want 8.0", got)
 	}
 }
 
 func TestEnergyRegenImmortalIgnoresAptitudeAndUsesRank(t *testing.T) {
-	lowAptitude := &models.Player{Rank: 6, SubRank: 1, AptitudeType: "Đinh", MaxMana: 80}
-	highAptitude := &models.Player{Rank: 6, SubRank: 1, AptitudeType: "Giáp", MaxMana: 80}
+	lowAptitude := &models.Player{
+		CultivationState: models.CultivationState{Rank: 6, SubRank: 1, AptitudeType: "Đinh"},
+		ResourceState:    models.ResourceState{MaxMana: 80},
+	}
+	highAptitude := &models.Player{
+		CultivationState: models.CultivationState{Rank: 6, SubRank: 1, AptitudeType: "Giáp"},
+		ResourceState:    models.ResourceState{MaxMana: 80},
+	}
 	if got, want := energyRegenRatePerHour(lowAptitude), 0.5; got != want {
 		t.Fatalf("immortal regen = %v, want %v", got, want)
 	}
@@ -27,12 +36,18 @@ func TestEnergyRegenImmortalIgnoresAptitudeAndUsesRank(t *testing.T) {
 }
 
 func TestNormalizeEnergyPoolExpandsImmortalApertureOnly(t *testing.T) {
-	mortal := &models.Player{Rank: 5, SubRank: 4, CurrentMana: 40, MaxMana: 40}
+	mortal := &models.Player{
+		CultivationState: models.CultivationState{Rank: 5, SubRank: 4},
+		ResourceState:    models.ResourceState{CurrentMana: 40, MaxMana: 40},
+	}
 	if normalizeEnergyPool(mortal) {
 		t.Fatal("mortal max mana should not be expanded by immortal aperture rules")
 	}
 
-	immortal := &models.Player{Rank: 6, SubRank: 1, CurrentMana: 40, MaxMana: 40}
+	immortal := &models.Player{
+		CultivationState: models.CultivationState{Rank: 6, SubRank: 1},
+		ResourceState:    models.ResourceState{CurrentMana: 40, MaxMana: 40},
+	}
 	if !normalizeEnergyPool(immortal) {
 		t.Fatal("immortal aperture should normalize to immortal capacity")
 	}
@@ -42,8 +57,14 @@ func TestNormalizeEnergyPoolExpandsImmortalApertureOnly(t *testing.T) {
 }
 
 func TestCalculateEnergyCostSeparatesMortalAndImmortalGu(t *testing.T) {
-	mortal := &models.Player{Rank: 3, SubRank: 1, MaxMana: 80}
-	immortal := &models.Player{Rank: 6, SubRank: 1, MaxMana: 120}
+	mortal := &models.Player{
+		CultivationState: models.CultivationState{Rank: 3, SubRank: 1},
+		ResourceState:    models.ResourceState{MaxMana: 80},
+	}
+	immortal := &models.Player{
+		CultivationState: models.CultivationState{Rank: 6, SubRank: 1},
+		ResourceState:    models.ResourceState{MaxMana: 120},
+	}
 	mortalGu := &models.GuDictionaryItem{Rank: 3, BaseManaCost: 10}
 	immortalGu := &models.GuDictionaryItem{Rank: 6, BaseManaCost: 0}
 
@@ -62,12 +83,18 @@ func TestCalculateEnergyCostSeparatesMortalAndImmortalGu(t *testing.T) {
 
 func TestHPRegeneration(t *testing.T) {
 	player := &models.Player{
-		Rank:                3,
-		SubRank:             1,
-		HP:                  50.0,
-		BaseHP:              100.0,
-		LastManaUpdate:      time.Now().Add(-2 * time.Hour), // 2 hours ago
-		TimeSpeedMultiplier: 1.0,
+		CultivationState: models.CultivationState{
+			Rank:                3,
+			SubRank:             1,
+			TimeSpeedMultiplier: 1.0,
+		},
+		BodyState: models.BodyState{
+			HP:     50.0,
+			BaseHP: 100.0,
+		},
+		ResourceState: models.ResourceState{
+			LastManaUpdate: time.Now().Add(-2 * time.Hour), // 2 hours ago
+		},
 	}
 
 	applyProjectedStatus(player, 10, time.Now())

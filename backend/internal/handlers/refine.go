@@ -16,6 +16,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -60,34 +61,33 @@ func GetRecipes(c *gin.Context) {
 		return
 	}
 
-	// 1. Fetch player's unlocked recipes
-	var unlockedJSON []byte
-	err := db.DB.QueryRow(`SELECT unlocked_recipes FROM players WHERE id = $1`, playerID).Scan(&unlockedJSON)
+	// 1. Fetch player's unlocked recipes via RecipeSvc
+	recipeProgresses, err := RecipeSvc.ListByPlayer(playerID.String())
 	if err != nil {
+		fmt.Print(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player recipes"})
 		return
 	}
 
-	var unlockedList models.UnlockedRecipesList
-	if len(unlockedJSON) > 0 {
-		_ = json.Unmarshal(unlockedJSON, &unlockedList)
-	}
-
 	// If empty, initialize with defaults
-	if len(unlockedList) == 0 {
-		unlockedList = models.UnlockedRecipesList{
-			{RecipeID: "recipe_moon_raiment", CompletionRate: 100.0},
-			{RecipeID: "recipe_white_jade", CompletionRate: 50.0},
-			{RecipeID: "recipe_four_flavors_liquor", CompletionRate: 30.0},
+	if len(recipeProgresses) == 0 {
+		defaults := []services.RecipeProgress{
+			{PlayerID: playerID.String(), RecipeID: "recipe_moon_raiment", CompletionRate: 100.0, IsUnlocked: true},
+			{PlayerID: playerID.String(), RecipeID: "recipe_white_jade", CompletionRate: 50.0, IsUnlocked: true},
+			{PlayerID: playerID.String(), RecipeID: "recipe_four_flavors_liquor", CompletionRate: 30.0, IsUnlocked: true},
 		}
-		// Save to DB
-		_, _ = db.DB.Exec(`UPDATE players SET unlocked_recipes = $1 WHERE id = $2`, unlockedList, playerID)
+		for i := range defaults {
+			RecipeSvc.Upsert(nil, &defaults[i])
+		}
+		recipeProgresses = defaults
 	}
 
 	// Create map for lookup
 	unlockedMap := make(map[string]float64)
-	for _, ur := range unlockedList {
-		unlockedMap[ur.RecipeID] = ur.CompletionRate
+	for _, rp := range recipeProgresses {
+		if rp.IsUnlocked {
+			unlockedMap[rp.RecipeID] = rp.CompletionRate
+		}
 	}
 
 	// 2. Query global database or cache
@@ -163,18 +163,12 @@ func RefineGu(c *gin.Context) {
 
 	// 2b. Verify player has unlocked the recipe
 	var unlockedRate float64 = 0.0
-	unlockedFound := false
-	for _, ur := range player.UnlockedRecipes {
-		if ur.RecipeID == req.RecipeID {
-			unlockedRate = ur.CompletionRate
-			unlockedFound = true
-			break
-		}
-	}
-	if !unlockedFound {
+	recipeProgress, err := RecipeSvc.Get(tx, player.ID.String(), req.RecipeID)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa khai mở công thức này!"})
 		return
 	}
+	unlockedRate = recipeProgress.CompletionRate
 	isForcedRefine := unlockedRate < 100.0
 
 	// 3. Fetch Recipe
@@ -210,7 +204,7 @@ func RefineGu(c *gin.Context) {
 
 	// 5. Validate Costs (Required Materials)
 	for matID, reqQty := range recipe.RequiredMaterials {
-		currentQty := player.MaterialsInventory[matID]
+		currentQty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), matID, "materials")
 		if currentQty < reqQty {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Not enough required material items: " + matID})
 			return
@@ -271,10 +265,7 @@ func RefineGu(c *gin.Context) {
 	}
 
 	for matID, reqQty := range recipe.RequiredMaterials {
-		player.MaterialsInventory[matID] -= reqQty
-		if player.MaterialsInventory[matID] <= 0 {
-			delete(player.MaterialsInventory, matID)
-		}
+		InventorySvc.RemoveItem(tx, player.ID.String(), matID, "materials", reqQty)
 	}
 
 	// 8. RNG Roll
@@ -356,7 +347,7 @@ func RefineGu(c *gin.Context) {
 	if success {
 		statusStr = "success"
 		statusMsg = "Hợp luyện thành công! Đạo hữu luyện chế được Cổ trùng mới."
-		
+
 		// Check if any of the consumed ingredients was a Vital Gu
 		hasVitalIngredient := false
 		newInventory := models.GuInventory{}
@@ -369,7 +360,7 @@ func RefineGu(c *gin.Context) {
 				newInventory = append(newInventory, item)
 			}
 		}
-		
+
 		newGuInstance = models.GuInstance{
 			InstanceID: uuid.New().String(),
 			GuID:       recipe.TargetGuID,
@@ -378,13 +369,13 @@ func RefineGu(c *gin.Context) {
 			Equipped:   false,
 			IsVital:    hasVitalIngredient,
 		}
-		
+
 		newInventory = append(newInventory, newGuInstance)
 		player.GuInventory = newInventory
 	} else {
 		statusStr = "failed"
 		statusMsg = "Hợp luyện thất bại! Các nguyên liệu thường đã hóa thành tro bụi."
-		
+
 		hasVitalSurvived := false
 		newInventory := models.GuInventory{}
 		for _, item := range player.GuInventory {
@@ -403,7 +394,7 @@ func RefineGu(c *gin.Context) {
 			}
 		}
 		player.GuInventory = newInventory
-		
+
 		if isForcedRefine {
 			player.HP -= 30.0
 			if player.HP < 10.0 {
@@ -438,10 +429,10 @@ func RefineGu(c *gin.Context) {
 	// 9. Update player status in database
 	updateQuery := `
 		UPDATE players
-		SET primeval_stones = $1, immortal_stones = $2, materials_inventory = $3, gu_inventory = $4, equipped_gus = $5, hp = $6, max_mana = $7, current_mana = $8, unlocked_recipes = $9
-		WHERE id = $10
+		SET primeval_stones = $1, immortal_stones = $2, gu_inventory = $3, equipped_gus = $4, hp = $5, max_mana = $6, current_mana = $7
+		WHERE id = $8
 	`
-	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ImmortalStones, player.MaterialsInventory, player.GuInventory, player.EquippedGus, player.HP, player.MaxMana, player.CurrentMana, player.UnlockedRecipes, player.ID)
+	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ImmortalStones, player.GuInventory, player.EquippedGus, player.HP, player.MaxMana, player.CurrentMana, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save refining results"})
 		return
@@ -459,7 +450,7 @@ func RefineGu(c *gin.Context) {
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "refine.gu", EntityType: "refining_recipe",
-		EntityID: req.RecipeID,
+		EntityID:       req.RecipeID,
 		RequestSummary: fmt.Sprintf("Luyện Cổ: công thức %s -> %s | Thành công: %v | Ép luyện: %v", req.RecipeID, targetName, success, isForcedRefine),
 		Metadata: map[string]interface{}{
 			"recipe_id":      req.RecipeID,
@@ -523,27 +514,20 @@ func DeduceRecipe(c *gin.Context) {
 	}
 
 	// Find the recipe in player's unlocked list
-	foundIdx := -1
-	for i, ur := range player.UnlockedRecipes {
-		if ur.RecipeID == req.RecipeID {
-			foundIdx = i
-			break
-		}
-	}
-
-	if foundIdx == -1 {
+	recipeProgress, err := RecipeSvc.Get(tx, player.ID.String(), req.RecipeID)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa sở hữu Tàn Phương của công thức này!"})
 		return
 	}
 
-	currentRate := player.UnlockedRecipes[foundIdx].CompletionRate
+	currentRate := recipeProgress.CompletionRate
 	if currentRate >= 100.0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Công thức này đã hoàn chỉnh 100%!"})
 		return
 	}
 
-	// Cost verification
-	manaCost := 15.0
+	// Cost verification — Deduce tiêu hao Thought thay vì Mana
+	thoughtCost := 15.0
 	stoneCost := 10
 
 	hasWisdomGu := false
@@ -554,12 +538,12 @@ func DeduceRecipe(c *gin.Context) {
 		}
 	}
 	if hasWisdomGu {
-		manaCost = 7.5
+		thoughtCost = 7.5
 		stoneCost = 5
 	}
 
-	if player.CurrentMana < manaCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Chân Nguyên (cần %.1f)", manaCost)})
+	if player.CurrentThought < thoughtCost {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Niệm Lực (cần %.1f)", thoughtCost)})
 		return
 	}
 	if player.PrimevalStones < stoneCost {
@@ -568,7 +552,7 @@ func DeduceRecipe(c *gin.Context) {
 	}
 
 	// Deduct cost
-	player.CurrentMana -= manaCost
+	player.CurrentThought -= thoughtCost
 	player.PrimevalStones -= stoneCost
 
 	// Roll for deduction outcome
@@ -578,11 +562,17 @@ func DeduceRecipe(c *gin.Context) {
 	}
 	inspirationFlash := rand.Float64() < inspirationFlashChance
 	var improvement float64
+	var newRate float64
 	var message string
 
 	if inspirationFlash {
 		improvement = 100.0 - currentRate
-		player.UnlockedRecipes[foundIdx].CompletionRate = 100.0
+		RecipeSvc.Upsert(tx, &services.RecipeProgress{
+			PlayerID:       player.ID.String(),
+			RecipeID:       req.RecipeID,
+			CompletionRate: 100.0,
+			IsUnlocked:     true,
+		})
 		message = "Linh quang chớp lóe! Đạo hữu đột nhiên thông suốt, lập tức hoàn thiện 100% công thức!"
 	} else {
 		// improve by 10% - 25%
@@ -593,23 +583,28 @@ func DeduceRecipe(c *gin.Context) {
 		// round to 1 decimal place for neatness
 		improvement = float64(int(improvement*10)) / 10.0
 
-		newRate := currentRate + improvement
+		newRate = currentRate + improvement
 		if newRate >= 100.0 {
 			newRate = 100.0
 			message = fmt.Sprintf("Thôi diễn thành công! Tăng thêm %.1f%% độ hoàn thiện. Công thức đã được hoàn thiện 100%%!", improvement)
 		} else {
 			message = fmt.Sprintf("Thôi diễn thành công! Tăng thêm %.1f%% độ hoàn thiện.", improvement)
 		}
-		player.UnlockedRecipes[foundIdx].CompletionRate = newRate
+		RecipeSvc.Upsert(tx, &services.RecipeProgress{
+			PlayerID:       player.ID.String(),
+			RecipeID:       req.RecipeID,
+			CompletionRate: newRate,
+			IsUnlocked:     true,
+		})
 	}
 
 	// Save back to database
 	updateQuery := `
 		UPDATE players
-		SET current_mana = $1, primeval_stones = $2, unlocked_recipes = $3
-		WHERE id = $4
+		SET current_thought = $1, primeval_stones = $2
+		WHERE id = $3
 	`
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.UnlockedRecipes, player.ID)
+	_, err = tx.Exec(updateQuery, player.CurrentThought, player.PrimevalStones, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save deduction results"})
 		return
@@ -622,15 +617,14 @@ func DeduceRecipe(c *gin.Context) {
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "refine.deduce_recipe", EntityType: "refining_recipe",
-		EntityID: req.RecipeID, RequestSummary: fmt.Sprintf("improvement=%.1f%% rate=%.1f%% inspiration=%v", improvement, player.UnlockedRecipes[foundIdx].CompletionRate, inspirationFlash),
+		EntityID: req.RecipeID, RequestSummary: fmt.Sprintf("improvement=%.1f%% inspiration=%v", improvement, inspirationFlash),
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"message":         message,
 		"inspiration":     inspirationFlash,
 		"improvement":     improvement,
-		"completion_rate": player.UnlockedRecipes[foundIdx].CompletionRate,
+		"completion_rate": newRate,
 		"player":          player,
 	})
 }
-
