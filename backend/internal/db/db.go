@@ -1064,6 +1064,8 @@ func InitSchema() error {
 		// Unified pricing: base_price column as single source of truth for all pricing calculations
 		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS base_price INTEGER NOT NULL DEFAULT 0;`, "gu_dictionary.base_price"},
 		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS base_price INTEGER NOT NULL DEFAULT 0;`, "item_dictionary.base_price"},
+		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT '';`, "gu_dictionary.image_url"},
+		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT '';`, "item_dictionary.image_url"},
 		{`CREATE TABLE IF NOT EXISTS email_otps (
 			email VARCHAR(255) PRIMARY KEY,
 			otp VARCHAR(10) NOT NULL,
@@ -1486,6 +1488,7 @@ func seedItemsFromCSV(filename string) error {
 	effectsIdx := colIndex(header, "effects")
 	descIdx := colIndex(header, "description")
 	basePriceIdx := colIndex(header, "base_price")
+	imageURLIdx := colIndex(header, "image_url")
 
 	if idIdx < 0 || nameIdx < 0 || typeIdx < 0 {
 		return fmt.Errorf("Item.csv missing required columns (id, name, item_type)")
@@ -1529,14 +1532,20 @@ func seedItemsFromCSV(filename string) error {
 			fmt.Sscanf(strings.TrimSpace(row[basePriceIdx]), "%d", &basePrice)
 		}
 
+		imageURL := ""
+		if imageURLIdx >= 0 && imageURLIdx < len(row) {
+			imageURL = strings.TrimSpace(row[imageURLIdx])
+		}
+
 		_, err = DB.Exec(`
-			INSERT INTO item_dictionary (id, name, item_type, rank, effects, description, base_price)
-			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
+			INSERT INTO item_dictionary (id, name, item_type, rank, effects, description, base_price, image_url)
+			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)
 			ON CONFLICT (id) DO UPDATE
 			SET name=EXCLUDED.name, item_type=EXCLUDED.item_type, rank=EXCLUDED.rank,
 			    effects=EXCLUDED.effects, description=EXCLUDED.description,
-			    base_price=CASE WHEN EXCLUDED.base_price > 0 THEN EXCLUDED.base_price ELSE item_dictionary.base_price END
-		`, id, name, itemType, rank, effects, desc, basePrice)
+			    base_price=CASE WHEN EXCLUDED.base_price > 0 THEN EXCLUDED.base_price ELSE item_dictionary.base_price END,
+			    image_url=CASE WHEN EXCLUDED.image_url <> '' THEN EXCLUDED.image_url ELSE item_dictionary.image_url END
+		`, id, name, itemType, rank, effects, desc, basePrice, imageURL)
 		if err != nil {
 			return fmt.Errorf("upsert item %s: %w", id, err)
 		}
@@ -1573,6 +1582,7 @@ func seedGusFromCSV(filename string) error {
 	combatTagsIdx := col("combat_tags")
 	supportTagsIdx := col("support_tags")
 	basePriceIdx := col("base_price")
+	imageURLIdx := col("image_url")
 
 	if idIdx < 0 || nameIdx < 0 || rankIdx < 0 {
 		return fmt.Errorf("Gu.csv missing required columns (id, name, rank)")
@@ -1628,6 +1638,8 @@ func seedGusFromCSV(filename string) error {
 		basePriceStr := get(row, basePriceIdx)
 		basePrice := 0
 		fmt.Sscanf(basePriceStr, "%d", &basePrice)
+
+		imageURL := get(row, imageURLIdx)
 
 		rank := 1
 		fmt.Sscanf(rankStr, "%d", &rank)
@@ -1687,16 +1699,17 @@ func seedGusFromCSV(filename string) error {
 		}
 
 		_, err := DB.Exec(`
-			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, is_immortal, primary_role, combat_roles, combat_tags, support_tags, base_price)
-			VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8, $9::jsonb, $10, $11, $12, $13, $14, $15, $16::jsonb, $17::jsonb, $18::jsonb, $19)
+			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, is_immortal, primary_role, combat_roles, combat_tags, support_tags, base_price, image_url)
+			VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8, $9::jsonb, $10, $11, $12, $13, $14, $15, $16::jsonb, $17::jsonb, $18::jsonb, $19, $20)
 			ON CONFLICT (id) DO UPDATE
 			SET name=EXCLUDED.name, rank=EXCLUDED.rank, path=EXCLUDED.path, gu_type=EXCLUDED.gu_type,
 			    base_mana_cost=EXCLUDED.base_mana_cost, effects=EXCLUDED.effects,
 			    hunger_rate=EXCLUDED.hunger_rate, food_types=EXCLUDED.food_types, max_hunger=EXCLUDED.max_hunger, description=EXCLUDED.description,
 			    target_type=EXCLUDED.target_type, rarity=EXCLUDED.rarity, is_immortal=EXCLUDED.is_immortal, primary_role=EXCLUDED.primary_role,
 			    combat_roles=EXCLUDED.combat_roles, combat_tags=EXCLUDED.combat_tags, support_tags=EXCLUDED.support_tags,
-			    base_price=CASE WHEN EXCLUDED.base_price > 0 THEN EXCLUDED.base_price ELSE gu_dictionary.base_price END
-		`, id, name, rank, pathJSON, guType, manaCost, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType, rarity, isImmortal, primaryRole, combatRolesJSON, combatTagsJSON, supportTagsJSON, basePrice)
+			    base_price=CASE WHEN EXCLUDED.base_price > 0 THEN EXCLUDED.base_price ELSE gu_dictionary.base_price END,
+			    image_url=CASE WHEN EXCLUDED.image_url <> '' THEN EXCLUDED.image_url ELSE gu_dictionary.image_url END
+		`, id, name, rank, pathJSON, guType, manaCost, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType, rarity, isImmortal, primaryRole, combatRolesJSON, combatTagsJSON, supportTagsJSON, basePrice, imageURL)
 		if err != nil {
 			log.Printf("Warning: upsert gu %s failed: %v", id, err)
 			continue
@@ -2678,6 +2691,11 @@ func ensureDataDir() {
 	if err := os.MkdirAll("data", 0755); err != nil {
 		log.Printf("Warning: failed to create data directory: %v", err)
 	}
+	for _, d := range []string{"storage/images/gu", "storage/images/item"} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			log.Printf("Warning: failed to create %s: %v", d, err)
+		}
+	}
 }
 
 // ExportToCSV exports all dictionary tables to CSV files in the data/ directory.
@@ -2691,13 +2709,13 @@ func ExportToCSV() error {
 	exports := []exportDef{
 		{
 			filename: "Item.csv",
-			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price"},
-			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'{}'), COALESCE(description,''), COALESCE(base_price,0) FROM item_dictionary ORDER BY id`,
+			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url"},
+			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'{}'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,'') FROM item_dictionary ORDER BY id`,
 		},
 		{
 			filename: "Gu.csv",
-			columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price"},
-			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'{"active":{},"support":{},"passive":{},"house":{}}'), COALESCE(rarity,''), COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0) FROM gu_dictionary ORDER BY id`,
+			columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
+			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'{"active":{},"support":{},"passive":{},"house":{}}'), COALESCE(rarity,''), COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
 		},
 		{
 			filename: "Recipe.csv",

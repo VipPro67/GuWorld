@@ -440,6 +440,7 @@ export interface GuSpec {
   combat_tags: string[];
   support_tags: string[];
   base_price?: number;
+  image_url?: string;
 }
 
 export interface ItemSpec {
@@ -454,6 +455,7 @@ export interface ItemSpec {
   tags?: string[];
   description: string;
   base_price?: number;
+  image_url?: string;
 }
 
 export interface MonsterSpec {

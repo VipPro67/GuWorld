@@ -41,6 +41,7 @@ import {
   Check,
   Clock,
   Copy,
+  Upload,
 } from "lucide-react";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
@@ -275,6 +276,7 @@ export const AdminView: React.FC = () => {
   const [items, setItems] = useState<any[]>([]);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemEdit, setItemEdit] = useState<any | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [recipes, setRecipes] = useState<any[]>([]);
   const [recipesLoading, setRecipesLoading] = useState(false);
   const [recipeEdit, setRecipeEdit] = useState<any | null>(null);
@@ -1711,7 +1713,7 @@ export const AdminView: React.FC = () => {
             <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2"><Bug className="w-4 h-4 text-amber-400" />Danh Sách Cổ Trùng</h3>
-                <button onClick={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Attack", base_mana_cost: 0, effects: { active: {}, passive: {}, house: {} }, food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: "", is_immortal: false, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0 })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
+                <button onClick={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Attack", base_mana_cost: 0, effects: { active: {}, passive: {}, house: {} }, food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: "", is_immortal: false, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0, image_url: "" })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
               </div>
               <div className="relative mb-3">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
@@ -1742,7 +1744,14 @@ export const AdminView: React.FC = () => {
                       return filtered.map((g: any) => (
                         <tr key={g.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                           <td className="px-3 py-2.5 text-zinc-500 font-mono">{g.id}</td>
-                          <td className="px-3 py-2.5 font-semibold text-zinc-200">{g.name}</td>
+                          <td className="px-3 py-2.5 font-semibold text-zinc-200 flex items-center gap-2">
+                            {g.image_url ? (
+                              <img src={g.image_url} alt="" className="w-7 h-7 rounded object-cover border border-zinc-700 flex-shrink-0" />
+                            ) : (
+                              <span className="text-base flex-shrink-0">{g.gu_type === "Attack" ? "⚔️" : g.gu_type === "Defense" ? "🛡️" : g.gu_type === "Support" ? "✨" : "🏠"}</span>
+                            )}
+                            {g.name}
+                          </td>
                           <td className="px-3 py-2.5 text-zinc-400">{g.rank}</td>
                           <td className="px-3 py-2.5 text-zinc-400">{g.gu_type}</td>
                           <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{g.base_price?.toLocaleString() || 0}</td>
@@ -1763,7 +1772,7 @@ export const AdminView: React.FC = () => {
             <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2"><Package className="w-4 h-4 text-emerald-400" />Danh Sách Vật Phẩm</h3>
-                <button onClick={() => setItemEdit({ id: "", name: "", item_type: "Material", rank: 1, effects: {}, description: "", base_price: 0 })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
+                <button onClick={() => setItemEdit({ id: "", name: "", item_type: "Material", rank: 1, effects: {}, description: "", base_price: 0, image_url: "" })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
               </div>
               <div className="relative mb-3">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
@@ -1794,7 +1803,14 @@ export const AdminView: React.FC = () => {
                       return filtered.map((it: any) => (
                         <tr key={it.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                           <td className="px-3 py-2.5 text-zinc-500 font-mono">{it.id}</td>
-                          <td className="px-3 py-2.5 font-semibold text-zinc-200">{it.name}</td>
+                          <td className="px-3 py-2.5 font-semibold text-zinc-200 flex items-center gap-2">
+                            {it.image_url ? (
+                              <img src={it.image_url} alt="" className="w-7 h-7 rounded object-cover border border-zinc-700 flex-shrink-0" />
+                            ) : (
+                              <Package className="w-4 h-4 text-zinc-500 flex-shrink-0" />
+                            )}
+                            {it.name}
+                          </td>
                           <td className="px-3 py-2.5 text-zinc-400">{it.item_type}</td>
                           <td className="px-3 py-2.5 text-zinc-400">{it.rank}</td>
                           <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{it.base_price?.toLocaleString() || 0}</td>
@@ -2482,6 +2498,41 @@ export const AdminView: React.FC = () => {
               <div><label className="flex items-center gap-2 pt-5"><input type="checkbox" checked={guEdit.is_immortal} onChange={e => setGuEdit({...guEdit, is_immortal: e.target.checked})} className="rounded bg-zinc-800 border-zinc-700" /><span className="text-[11px] text-zinc-400">Bất Tử</span></label></div>
             </div>
             <div className="mb-4"><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Mô tả</label><textarea value={guEdit.description || ""} onChange={e => setGuEdit({...guEdit, description: e.target.value})} rows={2} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+            <div className="mb-4">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Ảnh</label>
+              <div className="flex items-center gap-3">
+                {guEdit.image_url ? (
+                  <img src={guEdit.image_url} alt="" className="w-14 h-14 rounded-lg object-cover border border-zinc-700" />
+                ) : (
+                  <div className="w-14 h-14 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-600 text-lg">{guEdit.gu_type === "Attack" ? "⚔️" : guEdit.gu_type === "Defense" ? "🛡️" : guEdit.gu_type === "Support" ? "✨" : "🏠"}</div>
+                )}
+                <div className="flex-1">
+                  <input value={guEdit.image_url || ""} onChange={e => setGuEdit({...guEdit, image_url: e.target.value})} placeholder="URL ảnh hoặc để trống và upload..." className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 mb-1.5" />
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-lg text-[10px] font-semibold cursor-pointer">
+                    <Upload className="w-3 h-3" />
+                    {uploading ? "Đang tải..." : "Upload ảnh"}
+                    <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={uploading} onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file || !guEdit.id) return;
+                      setUploading(true);
+                      try {
+                        const fd = new FormData();
+                        fd.append("file", file);
+                        fd.append("entity_type", "gu");
+                        fd.append("entity_id", guEdit.id);
+                        const res = await authFetch(`${BACKEND_URL}/api/admin/upload-image`, { method: "POST", body: fd });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error || "Upload thất bại");
+                        setGuEdit({...guEdit, image_url: data.image_url});
+                        if (addToast) addToast(data.message || "Tải ảnh lên thành công!", "success");
+                      } catch (err: any) {
+                        if (addToast) addToast(err.message, "error");
+                      } finally { setUploading(false); e.target.value = ""; }
+                    }} />
+                  </label>
+                </div>
+              </div>
+            </div>
             {/* JSON arrays as comma input */}
             {[
               { key: "path", label: "Path (cách nhau bằng dấu phẩy)" },
@@ -2582,6 +2633,41 @@ export const AdminView: React.FC = () => {
                 <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Rank</label><input type="number" min={1} value={itemEdit.rank} onChange={e => setItemEdit({...itemEdit, rank: parseInt(e.target.value) || 1})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
               </div>
               <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Base Price</label><input type="number" value={itemEdit.base_price} onChange={e => setItemEdit({...itemEdit, base_price: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Ảnh</label>
+                <div className="flex items-center gap-3">
+                  {itemEdit.image_url ? (
+                    <img src={itemEdit.image_url} alt="" className="w-14 h-14 rounded-lg object-cover border border-zinc-700" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-600 text-lg"><Package className="w-6 h-6" /></div>
+                  )}
+                  <div className="flex-1">
+                    <input value={itemEdit.image_url || ""} onChange={e => setItemEdit({...itemEdit, image_url: e.target.value})} placeholder="URL ảnh hoặc upload..." className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 mb-1.5" />
+                    <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-lg text-[10px] font-semibold cursor-pointer">
+                      <Upload className="w-3 h-3" />
+                      {uploading ? "Đang tải..." : "Upload ảnh"}
+                      <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={uploading} onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file || !itemEdit.id) return;
+                        setUploading(true);
+                        try {
+                          const fd = new FormData();
+                          fd.append("file", file);
+                          fd.append("entity_type", "item");
+                          fd.append("entity_id", itemEdit.id);
+                          const res = await authFetch(`${BACKEND_URL}/api/admin/upload-image`, { method: "POST", body: fd });
+                          const data = await res.json();
+                          if (!res.ok) throw new Error(data.error || "Upload thất bại");
+                          setItemEdit({...itemEdit, image_url: data.image_url});
+                          if (addToast) addToast(data.message || "Tải ảnh lên thành công!", "success");
+                        } catch (err: any) {
+                          if (addToast) addToast(err.message, "error");
+                        } finally { setUploading(false); e.target.value = ""; }
+                      }} />
+                    </label>
+                  </div>
+                </div>
+              </div>
               <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Mô tả</label><textarea value={itemEdit.description || ""} onChange={e => setItemEdit({...itemEdit, description: e.target.value})} rows={2} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
               {/* Effects key-value pairs */}
               <div className="border-t border-zinc-800 pt-3">

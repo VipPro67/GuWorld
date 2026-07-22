@@ -55,6 +55,9 @@ func SetupRouter() *gin.Engine {
 		c.Next()
 	})
 
+	// Serve uploaded images
+	r.Static("/images", "./storage/images")
+
 	// API routes
 	api := r.Group("/api")
 	{
@@ -128,6 +131,7 @@ func SetupRouter() *gin.Engine {
 		api.DELETE("/admin/recipes/:id", middleware.AuthRequired(), handlers.AdminDeleteRecipe)
 		api.POST("/admin/gift-codes", middleware.AuthRequired(), handlers.AdminCreateGiftCode)
 		api.GET("/admin/gift-codes", middleware.AuthRequired(), handlers.AdminListGiftCodes)
+		api.POST("/admin/upload-image", middleware.AuthRequired(), handlers.AdminUploadImage)
 		api.GET("/wallet", middleware.AuthRequired(), handlers.GetWallet)
 		api.POST("/topup/orders", middleware.AuthRequired(), middleware.RateLimit(10, time.Minute), handlers.CreateTopupOrder)
 		api.GET("/topup/orders/:orderCode", middleware.AuthRequired(), handlers.GetTopupOrder)

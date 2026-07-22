@@ -84,6 +84,7 @@ type GuDictionaryItem struct {
 	CombatTags   []string  `json:"combat_tags"`
 	SupportTags  []string  `json:"support_tags"`
 	BasePrice    int       `json:"base_price"`
+	ImageURL     string    `json:"image_url"`
 }
 
 type Gu = GuDictionaryItem
@@ -188,7 +189,7 @@ var GuRegistry = make(map[string]GuDictionaryItem)
 
 func LoadGuRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
-		SELECT id, name, rank, path, gu_type, base_mana_cost, effects, food_types, hunger_rate, max_hunger, description, target_type, rarity, is_immortal, primary_role, combat_roles, combat_tags, support_tags, COALESCE(base_price, 0)
+		SELECT id, name, rank, path, gu_type, base_mana_cost, effects, food_types, hunger_rate, max_hunger, description, target_type, rarity, is_immortal, primary_role, combat_roles, combat_tags, support_tags, COALESCE(base_price, 0), COALESCE(image_url, '')
 		FROM gu_dictionary
 	`)
 	if err != nil {
@@ -212,6 +213,7 @@ func LoadGuRegistry(db *sql.DB) error {
 			&targetTypeRaw, &rarityRaw, &isImmortalRaw, // Added missing 3 destinations
 			&item.PrimaryRole,
 			&combatRolesRaw, &combatTagsRaw, &supportTagsRaw, &item.BasePrice,
+			&item.ImageURL,
 		)
 		if err != nil {
 			log.Printf("Warning: failed to scan Gu spec row: %v", err)
