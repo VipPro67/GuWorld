@@ -5,8 +5,9 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
+
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type ActiveEffect struct {
@@ -216,7 +217,7 @@ func LoadGuRegistry(db *sql.DB) error {
 			&item.ImageURL,
 		)
 		if err != nil {
-			log.Printf("Warning: failed to scan Gu spec row: %v", err)
+			logger.S.Warnf("failed to scan Gu spec row: %v", err)
 			continue
 		}
 
@@ -234,6 +235,6 @@ func LoadGuRegistry(db *sql.DB) error {
 	}
 
 	GuRegistry = newRegistry
-	log.Printf("Loaded %d Gu bugs from database registry into memory cache", count)
+	logger.S.Infof("Loaded %d Gu bugs from database registry into memory cache", count)
 	return nil
 }

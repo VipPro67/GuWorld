@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 func AdminListPlayers(c *gin.Context) {
@@ -1163,16 +1163,16 @@ func AdminImportData(c *gin.Context) {
 
 	// Reload registries
 	if err := models.LoadGuRegistry(db.DB); err != nil {
-		log.Printf("Warning: failed to reload Gu registry after import: %v", err)
+		logger.S.Warnf("failed to reload Gu registry after import: %v", err)
 	}
 	if err := models.LoadItemRegistry(db.DB); err != nil {
-		log.Printf("Warning: failed to reload Item registry after import: %v", err)
+		logger.S.Warnf("failed to reload Item registry after import: %v", err)
 	}
 	if err := models.LoadMonsterRegistry(db.DB); err != nil {
-		log.Printf("Warning: failed to reload Monster registry after import: %v", err)
+		logger.S.Warnf("failed to reload Monster registry after import: %v", err)
 	}
 	if err := LoadQuestRegistry(); err != nil {
-		log.Printf("Warning: failed to reload Quest registry after import: %v", err)
+		logger.S.Warnf("failed to reload Quest registry after import: %v", err)
 	}
 
 	auditlog.Log(db.DB, auditlog.Entry{

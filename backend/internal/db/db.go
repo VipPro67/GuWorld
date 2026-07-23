@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
+
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 var DB *sql.DB
@@ -44,7 +45,7 @@ func Connect() error {
 	DB.SetMaxIdleConns(10)
 	DB.SetConnMaxLifetime(5 * time.Minute)
 
-	log.Println("Successfully connected to the database")
+	logger.S.Info("Successfully connected to the database")
 	return nil
 }
 
@@ -56,7 +57,7 @@ func InitSchema() error {
 
 	_, err := DB.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`)
 	if err != nil {
-		log.Printf("Warning: failed to create uuid-ossp extension: %v", err)
+		logger.S.Warnf("failed to create uuid-ossp extension: %v", err)
 	}
 
 	// 1. Create item_dictionary
@@ -398,10 +399,10 @@ func InitSchema() error {
 			}
 			_, err = DB.Exec("INSERT INTO mine_slots (id, rarity, abandoned_at) VALUES ($1, $2, NOW())", i, rarity)
 			if err != nil {
-				log.Printf("Failed to seed mine %d: %v", i, err)
+				logger.S.Errorf("Failed to seed mine %d: %v", i, err)
 			}
 		}
-		log.Println("Seeded 20 initial world mine slots.")
+		logger.S.Info("Seeded 20 initial world mine slots.")
 	}
 
 	// Migrate existing mine_slots to have monster_id and abandoned_at if not exist
@@ -1123,7 +1124,7 @@ func InitSchema() error {
 
 	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_recipe_progress_player ON player_recipe_progress(player_id);`)
 	if err != nil {
-		log.Printf("Warning: failed to create idx_recipe_progress_player: %v", err)
+		logger.S.Warnf("failed to create idx_recipe_progress_player: %v", err)
 	}
 
 	// Phase 1 tables: player_map_progress
@@ -1144,7 +1145,7 @@ func InitSchema() error {
 
 	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_map_progress_player ON player_map_progress(player_id);`)
 	if err != nil {
-		log.Printf("Warning: failed to create idx_map_progress_player: %v", err)
+		logger.S.Warnf("failed to create idx_map_progress_player: %v", err)
 	}
 
 	// Phase 1 tables: combat_sessions
@@ -1163,7 +1164,7 @@ func InitSchema() error {
 
 	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_combat_sessions_player ON combat_sessions(player_id);`)
 	if err != nil {
-		log.Printf("Warning: failed to create idx_combat_sessions_player: %v", err)
+		logger.S.Warnf("failed to create idx_combat_sessions_player: %v", err)
 	}
 
 	// Phase 3 tables: player_dao_path
@@ -1183,7 +1184,7 @@ func InitSchema() error {
 
 	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_player_dao_path_player ON player_dao_path(player_id);`)
 	if err != nil {
-		log.Printf("Warning: failed to create idx_player_dao_path_player: %v", err)
+		logger.S.Warnf("failed to create idx_player_dao_path_player: %v", err)
 	}
 
 	// Phase 6 tables: player_inventory_items
@@ -1202,7 +1203,7 @@ func InitSchema() error {
 	}
 	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_inventory_player ON player_inventory_items(player_id);`)
 	if err != nil {
-		log.Printf("Warning: failed to create idx_inventory_player: %v", err)
+		logger.S.Warnf("failed to create idx_inventory_player: %v", err)
 	}
 
 	// Phase 6 tables: player_quest_progress
@@ -1222,7 +1223,7 @@ func InitSchema() error {
 	}
 	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_quest_progress_player ON player_quest_progress(player_id);`)
 	if err != nil {
-		log.Printf("Warning: failed to create idx_quest_progress_player: %v", err)
+		logger.S.Warnf("failed to create idx_quest_progress_player: %v", err)
 	}
 
 	// Phase 6 tables: player_achievements
@@ -1240,7 +1241,7 @@ func InitSchema() error {
 	}
 	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_achievements_player ON player_achievements(player_id);`)
 	if err != nil {
-		log.Printf("Warning: failed to create idx_achievements_player: %v", err)
+		logger.S.Warnf("failed to create idx_achievements_player: %v", err)
 	}
 
 	// Set is_admin = true only if no admin exists yet (first deploy)
@@ -1249,7 +1250,7 @@ func InitSchema() error {
 	if adminCount == 0 {
 		_, err = DB.Exec(`UPDATE players SET is_admin = true WHERE username IN ('admin', 'Bảo Hoàng Thiên')`)
 		if err != nil {
-			log.Printf("Warning: failed to update is_admin status: %v", err)
+			logger.S.Warnf("failed to update is_admin status: %v", err)
 		}
 	}
 
@@ -1266,7 +1267,7 @@ func InitSchema() error {
 		WHERE table_name = 'gu_dictionary' AND column_name = 'path'
 	`).Scan(&dataType)
 	if dataType == "character varying" {
-		log.Println("Migrating gu_dictionary.path from VARCHAR to JSONB...")
+		logger.S.Info("Migrating gu_dictionary.path from VARCHAR to JSONB...")
 		_, _ = DB.Exec(`ALTER TABLE gu_dictionary ALTER COLUMN path TYPE JSONB USING jsonb_build_array(path);`)
 		_, _ = DB.Exec(`ALTER TABLE gu_dictionary ALTER COLUMN path SET DEFAULT '[]'::jsonb;`)
 	}
@@ -1307,11 +1308,11 @@ func InitSchema() error {
 	for _, idx := range indexes {
 		_, err := DB.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s (%s)", idx.name, idx.table, idx.column))
 		if err != nil {
-			log.Printf("Warning: failed to create index %s: %v", idx.name, err)
+			logger.S.Warnf("failed to create index %s: %v", idx.name, err)
 		}
 	}
 
-	log.Println("Database schema initialized successfully (seed skipped, use admin panel to import data)")
+	logger.S.Info("Database schema initialized successfully (seed skipped, use admin panel to import data)")
 	return nil
 }
 
@@ -1357,7 +1358,7 @@ func SeedFromCSV() error {
 	if err := seedNPCs(); err != nil {
 		return fmt.Errorf("npcs seeding failed: %w", err)
 	}
-	log.Println("All CSV data seeded successfully")
+	logger.S.Info("All CSV data seeded successfully")
 	return nil
 }
 
@@ -1414,11 +1415,11 @@ func safeJSONObject(raw string, fallback string, rowLabel string) string {
 	}
 	var parsed interface{}
 	if err := json.Unmarshal([]byte(value), &parsed); err != nil {
-		log.Printf("Warning: invalid JSON object in %s: %v", rowLabel, err)
+		logger.S.Warnf("invalid JSON object in %s: %v", rowLabel, err)
 		return fallback
 	}
 	if _, ok := parsed.(map[string]interface{}); !ok {
-		log.Printf("Warning: JSON object expected in %s", rowLabel)
+		logger.S.Warnf("JSON object expected in %s", rowLabel)
 		return fallback
 	}
 	return value
@@ -1431,11 +1432,11 @@ func safeJSONArray(raw string, fallback string, rowLabel string) string {
 	}
 	var parsed interface{}
 	if err := json.Unmarshal([]byte(value), &parsed); err != nil {
-		log.Printf("Warning: invalid JSON array in %s: %v", rowLabel, err)
+		logger.S.Warnf("invalid JSON array in %s: %v", rowLabel, err)
 		return fallback
 	}
 	if _, ok := parsed.([]interface{}); !ok {
-		log.Printf("Warning: JSON array expected in %s", rowLabel)
+		logger.S.Warnf("JSON array expected in %s", rowLabel)
 		return fallback
 	}
 	return value
@@ -1546,7 +1547,7 @@ func seedItemsFromCSV(filename string) error {
 			return fmt.Errorf("upsert item %s: %w", id, err)
 		}
 	}
-	log.Printf("Item dictionary seeded from %s", filename)
+	logger.S.Infof("Item dictionary seeded from %s", filename)
 	return nil
 }
 
@@ -1710,11 +1711,11 @@ func seedGusFromCSV(filename string) error {
 			    image_url=CASE WHEN EXCLUDED.image_url <> '' THEN EXCLUDED.image_url ELSE gu_dictionary.image_url END
 		`, id, name, rank, pathJSON, guType, manaCost, effectsRaw, hungerRate, foodTypesJSON, maxHunger, desc, targetType, rarity, isImmortal, primaryRole, combatRolesJSON, combatTagsJSON, supportTagsJSON, basePrice, imageURL)
 		if err != nil {
-			log.Printf("Warning: upsert gu %s failed: %v", id, err)
+			logger.S.Warnf("upsert gu %s failed: %v", id, err)
 			continue
 		}
 	}
-	log.Printf("Gu dictionary seeded from %s (%d unique entries)", filename, len(order))
+	logger.S.Infof("Gu dictionary seeded from %s (%d unique entries)", filename, len(order))
 	return nil
 }
 
@@ -1780,7 +1781,7 @@ func seedRecipesFromCSV(filename string) error {
 		// Skip if target Gu doesn't exist (FK constraint)
 		var exists bool
 		if err = DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1)`, targetGuID).Scan(&exists); err != nil || !exists {
-			log.Printf("Recipe %s skipped: target_gu_id %s not in gu_dictionary", id, targetGuID)
+			logger.S.Warnf("Recipe %s skipped: target_gu_id %s not in gu_dictionary", id, targetGuID)
 			skipped++
 			continue
 		}
@@ -1798,7 +1799,7 @@ func seedRecipesFromCSV(filename string) error {
 		}
 		seeded++
 	}
-	log.Printf("Recipes seeded from %s (%d seeded, %d skipped)", filename, seeded, skipped)
+	logger.S.Infof("Recipes seeded from %s (%d seeded, %d skipped)", filename, seeded, skipped)
 	return nil
 }
 
@@ -1864,7 +1865,7 @@ func seedShopItemsFromCSV(filename string) error {
 		}
 		seeded++
 	}
-	log.Printf("Shop items seeded from %s (%d seeded)", filename, seeded)
+	logger.S.Infof("Shop items seeded from %s (%d seeded)", filename, seeded)
 	return nil
 }
 
@@ -1933,7 +1934,7 @@ func seedArenaShopItemsFromCSV(filename string) error {
 		}
 		seeded++
 	}
-	log.Printf("Arena shop items seeded from %s (%d seeded)", filename, seeded)
+	logger.S.Infof("Arena shop items seeded from %s (%d seeded)", filename, seeded)
 	return nil
 }
 
@@ -2027,7 +2028,7 @@ func seedQuestsFromCSV() error {
 			return fmt.Errorf("upsert quest %s: %w", id, err)
 		}
 	}
-	log.Printf("Quests seeded from Quest.csv")
+	logger.S.Info("Quests seeded from Quest.csv")
 	return nil
 }
 
@@ -2092,7 +2093,7 @@ func seedRegionsFromCSV(filename string) error {
 		}
 		seeded++
 	}
-	log.Printf("Regions seeded from %s (%d seeded)", filename, seeded)
+	logger.S.Infof("Regions seeded from %s (%d seeded)", filename, seeded)
 	return nil
 }
 
@@ -2133,7 +2134,7 @@ func seedLootTablesFromCSV(filename string) error {
 		}
 		seeded++
 	}
-	log.Printf("Loot tables seeded from %s (%d seeded)", filename, seeded)
+	logger.S.Infof("Loot tables seeded from %s (%d seeded)", filename, seeded)
 	return nil
 }
 
@@ -2200,7 +2201,7 @@ func seedMonsterTemplatesFromCSV(filename string) error {
 		}
 		seeded++
 	}
-	log.Printf("Monster templates seeded from %s (%d seeded)", filename, seeded)
+	logger.S.Infof("Monster templates seeded from %s (%d seeded)", filename, seeded)
 	return nil
 }
 
@@ -2283,7 +2284,7 @@ func seedMonsterSpawnsFromCSV(filename string) error {
 		}
 		seeded++
 	}
-	log.Printf("Monster spawns seeded from %s (%d read)", filename, seeded)
+	logger.S.Infof("Monster spawns seeded from %s (%d read)", filename, seeded)
 	return nil
 }
 
@@ -2479,7 +2480,7 @@ func seedSectsFromCSV(filename string) error {
 		}
 		seeded++
 	}
-	log.Printf("Seeded %d sects from %s", seeded, filename)
+	logger.S.Infof("Seeded %d sects from %s", seeded, filename)
 	return nil
 }
 
@@ -2537,7 +2538,7 @@ func seedSectMissionsFromCSV(filename string) error {
 		}
 		seeded++
 	}
-	log.Printf("Seeded %d sect missions from %s", seeded, filename)
+	logger.S.Infof("Seeded %d sect missions from %s", seeded, filename)
 	return nil
 }
 
@@ -2628,7 +2629,7 @@ func seedNPCs() error {
 				return err
 			}
 		}
-		log.Println("Seeded initial NPCs for Huyết Sọ Cổ hiến tế.")
+		logger.S.Info("Seeded initial NPCs for Huyết Sọ Cổ hiến tế.")
 	}
 	return nil
 }
@@ -2688,11 +2689,11 @@ func writeCSV(filename string, columns []string, query string) error {
 // ensureDataDir creates the data directory if it doesn't exist.
 func ensureDataDir() {
 	if err := os.MkdirAll("data", 0755); err != nil {
-		log.Printf("Warning: failed to create data directory: %v", err)
+		logger.S.Warnf("failed to create data directory: %v", err)
 	}
 	for _, d := range []string{"storage/images/gu", "storage/images/item"} {
 		if err := os.MkdirAll(d, 0755); err != nil {
-			log.Printf("Warning: failed to create %s: %v", d, err)
+			logger.S.Warnf("failed to create %s: %v", d, err)
 		}
 	}
 }
@@ -2773,8 +2774,8 @@ func ExportToCSV() error {
 		if err := writeCSV(p, e.columns, e.query); err != nil {
 			return fmt.Errorf("export %s: %w", p, err)
 		}
-		log.Printf("Exported %s", p)
+		logger.S.Infof("Exported %s", p)
 	}
-	log.Println("All CSV data exported successfully")
+	logger.S.Info("All CSV data exported successfully")
 	return nil
 }

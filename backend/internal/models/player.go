@@ -4,7 +4,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"log"
+
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // GuInstance represents an individual Gu bug owned by a player.
@@ -97,7 +98,7 @@ func (c *AutoCombatConfig) Scan(value interface{}) error {
 	bytes, ok := value.([]byte)
 	if !ok {
 		*c = AutoCombatConfig{}
-		log.Printf("AutoCombatConfig.Scan: unexpected type %T", value)
+		logger.S.Warnf("AutoCombatConfig.Scan: unexpected type %T", value)
 		return nil
 	}
 	if len(bytes) == 0 || string(bytes) == "null" {

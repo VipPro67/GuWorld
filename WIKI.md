@@ -167,7 +167,7 @@ Người chơi có thể:
 ### P2P trade
 
 - Hai người chơi có thể initiate, accept/decline, offer, lock và confirm.
-- Offer hỗ trợ nguyên thạch, tiên thạch, Cổ và materials.
+- Offer hỗ trợ nguyên thạch, Tiên Nguyên Thạch, Cổ và materials.
 - Có SSE trade events.
 
 ### Ví, nạp tiền và premium

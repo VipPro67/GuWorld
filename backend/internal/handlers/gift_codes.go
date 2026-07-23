@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -25,16 +26,16 @@ type GiftCodeReward struct {
 }
 
 type GiftCode struct {
-	ID            uuid.UUID       `json:"id"`
-	Code          string          `json:"code"`
-	Rewards       []GiftCodeReward `json:"rewards"`
-	MaxUses       int             `json:"max_uses"`
-	UsedCount     int             `json:"used_count"`
-	MaxPerPlayer  int             `json:"max_per_player"`
-	ExpiresAt     time.Time       `json:"expires_at"`
-	IsActive      bool            `json:"is_active"`
-	CreatedBy     *uuid.UUID      `json:"created_by,omitempty"`
-	CreatedAt     time.Time       `json:"created_at"`
+	ID           uuid.UUID        `json:"id"`
+	Code         string           `json:"code"`
+	Rewards      []GiftCodeReward `json:"rewards"`
+	MaxUses      int              `json:"max_uses"`
+	UsedCount    int              `json:"used_count"`
+	MaxPerPlayer int              `json:"max_per_player"`
+	ExpiresAt    time.Time        `json:"expires_at"`
+	IsActive     bool             `json:"is_active"`
+	CreatedBy    *uuid.UUID       `json:"created_by,omitempty"`
+	CreatedAt    time.Time        `json:"created_at"`
 }
 
 type AdminCreateGiftCodeRequest struct {
@@ -50,7 +51,8 @@ type RedeemGiftCodeRequest struct {
 }
 
 func AdminCreateGiftCode(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -101,13 +103,13 @@ func AdminCreateGiftCode(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.create_gift_code",
 		EntityType: "gift_code", EntityID: id.String(),
 		RequestSummary: fmt.Sprintf("code=%s uses=%d rewards=%s", req.Code, req.MaxUses, string(rewardsJSON)),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":  "Đã tạo mã quà thành công",
-		"code_id":  id,
-		"code":     req.Code,
+		"message": "Đã tạo mã quà thành công",
+		"code_id": id,
+		"code":    req.Code,
 	})
 }
 
@@ -301,6 +303,13 @@ func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCod
 			if player.WallProgress > 1.0 {
 				player.WallProgress = 1.0
 			}
+		case "recipe":
+			RecipeSvc.Upsert(tx, &services.RecipeProgress{
+				PlayerID:       player.ID.String(),
+				RecipeID:       r.ID,
+				CompletionRate: 100,
+				IsUnlocked:    true,
+			})
 		}
 	}
 	return nil
@@ -351,9 +360,9 @@ func buildGiftCodeRewardLabel(rewards []GiftCodeReward) string {
 		case "human_qi":
 			parts = append(parts, fmt.Sprintf("%.0f Nhân Khí", r.Amount))
 		case "primeval_stones":
-			parts = append(parts, fmt.Sprintf("%.0f Đá Tinh Túy", r.Amount))
+			parts = append(parts, fmt.Sprintf("%.0f Nguyên Thạch", r.Amount))
 		case "immortal_stones":
-			parts = append(parts, fmt.Sprintf("%.0f Tiên Thạch", r.Amount))
+			parts = append(parts, fmt.Sprintf("%.0f Tiên Nguyên Thạch", r.Amount))
 		case "dao_mark":
 			parts = append(parts, fmt.Sprintf("%.0f %s", r.Amount, r.ID))
 		case "item":

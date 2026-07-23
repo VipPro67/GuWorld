@@ -18,6 +18,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type RefineRequest struct {
@@ -64,7 +65,7 @@ func GetRecipes(c *gin.Context) {
 	// 1. Fetch player's unlocked recipes via RecipeSvc
 	recipeProgresses, err := RecipeSvc.ListByPlayer(playerID.String())
 	if err != nil {
-		fmt.Print(err)
+		logger.S.Error(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player recipes"})
 		return
 	}

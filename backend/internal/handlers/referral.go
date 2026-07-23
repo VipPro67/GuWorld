@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // CheckReferralMilestones evaluates and awards rewards to the referrer if the referee is verified
@@ -121,7 +121,7 @@ func CheckReferralMilestones(tx *sql.Tx, refereeID uuid.UUID) error {
 			LIMIT 1
 		`).Scan(&randomGuID)
 		if err != nil {
-			log.Printf("Warning: failed to roll random Gu bug from dictionary: %v. Defaulting to Moonlight Gu.", err)
+			logger.S.Warnf("failed to roll random Gu bug from dictionary: %v. Defaulting to Moonlight Gu.", err)
 			randomGuID = "GU_MOONLIGHT"
 		}
 

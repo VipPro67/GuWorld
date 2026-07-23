@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"math/rand"
 	"net/http"
 	"sort"
@@ -14,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type CombatAttackRequest struct {
@@ -831,7 +831,7 @@ func CombatAttack(c *gin.Context) {
 										ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhặt được 1x %s (giữ tạm thời).", matID))
 									} else {
 										if err := InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", 1); err != nil {
-											log.Printf("Failed to add loot item %s to player %s: %v", matID, player.ID, err)
+											logger.S.Errorf("Failed to add loot item %s to player %s: %v", matID, player.ID, err)
 										}
 										ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhặt được 1x %s.", matID))
 									}
@@ -853,7 +853,7 @@ func CombatAttack(c *gin.Context) {
 										_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, winnerID)
 									} else {
 										if err := InventorySvc.AddItem(tx, winnerID.String(), matID, "materials", 1); err != nil {
-											log.Printf("Failed to distribute loot %s to party member %s: %v", matID, winnerID, err)
+											logger.S.Errorf("Failed to distribute loot %s to party member %s: %v", matID, winnerID, err)
 										}
 									}
 									ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s nhặt được 1x %s.", uname, matID))
@@ -908,9 +908,9 @@ func CombatAttack(c *gin.Context) {
 						lootLogs := ApplyLoot(tx, &player, loot)
 						ctx.Logs = append(ctx.Logs, lootLogs...)
 					}
-				} else {
-					log.Printf("Failed to load loot table %s: %v", player.ActiveCombat.LootTableID, err)
-				}
+		} else {
+				logger.S.Errorf("Failed to load loot table %s: %v", player.ActiveCombat.LootTableID, err)
+			}
 			} else {
 				ctx.Logs = append(ctx.Logs, "Chiến đấu thắng lợi vang dội!")
 			}
@@ -931,7 +931,7 @@ func CombatAttack(c *gin.Context) {
 					player.PrimevalStones += stones / 2
 					if chests/2 > 0 {
 						if err := InventorySvc.AddItem(tx, player.ID.String(), "mine_chest", "materials", chests/2); err != nil {
-							log.Printf("Failed to add mine_chest to player %s: %v", player.ID, err)
+							logger.S.Errorf("Failed to add mine_chest to player %s: %v", player.ID, err)
 						}
 					}
 					ctx.Logs = append(ctx.Logs, fmt.Sprintf("Cướp được %d Nguyên Thạch và %d rương từ đối thủ!", stones/2, chests/2))
@@ -947,7 +947,7 @@ func CombatAttack(c *gin.Context) {
 			if errUpdate == nil {
 				ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chiếm lĩnh thành công mỏ phẩm chất %s #%d!", rarity, slotID))
 			} else {
-				log.Printf("Failed to update mine slot occupier in combat victory: %v", errUpdate)
+				logger.S.Errorf("Failed to update mine slot occupier in combat victory: %v", errUpdate)
 			}
 		}
 

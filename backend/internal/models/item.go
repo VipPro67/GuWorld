@@ -5,7 +5,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	"log"
+
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // ItemEffects represents flexible stats map stored in JSONB
@@ -71,7 +72,7 @@ func LoadItemRegistry(db *sql.DB) error {
 			&item.ImageURL,
 		)
 		if err != nil {
-			log.Printf("Warning: failed to scan Item spec row: %v", err)
+			logger.S.Warnf("failed to scan Item spec row: %v", err)
 			continue
 		}
 
@@ -81,6 +82,6 @@ func LoadItemRegistry(db *sql.DB) error {
 	}
 
 	ItemRegistry = newRegistry
-	log.Printf("Loaded %d items from database registry into memory cache", count)
+	logger.S.Infof("Loaded %d items from database registry into memory cache", count)
 	return nil
 }

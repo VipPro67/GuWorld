@@ -3,13 +3,13 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"net/http"
 	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type chatEventPayload struct {
@@ -226,7 +226,7 @@ func loadBaoHoangMessages(channel string, sectID sql.NullString) ([]ChatItem, er
 		if errScan := rows.Scan(&m.ID, &m.SenderID, &m.SenderUsername, &m.SenderAvatar, &m.SenderTitle, &m.Content, &m.CreatedAt, &m.Channel); errScan == nil {
 			messages = append(messages, m)
 		} else {
-			log.Printf("loadBaoHoangMessages scan error: %v", errScan)
+			logger.S.Errorf("loadBaoHoangMessages scan error: %v", errScan)
 		}
 	}
 	return messages, rows.Err()

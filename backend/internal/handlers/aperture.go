@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type ResourceNodeTemplate struct {
@@ -212,7 +213,7 @@ func GetImmortalAperture(c *gin.Context) {
 		// Seed a few random initial resource nodes for the new aperture
 		seedInitialApertureNodes(tx, ap.ID, grade)
 	} else if err != nil {
-		fmt.Println("Error fetching aperture:", err)
+		logger.S.Errorf("Error fetching aperture: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn Tiên Khiếu"})
 		return
 	} else {

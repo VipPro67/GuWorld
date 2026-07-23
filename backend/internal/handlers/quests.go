@@ -5,11 +5,12 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -18,7 +19,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
-	"time"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type QuestReward struct {
@@ -131,7 +132,7 @@ func LoadQuestRegistry() error {
 	loadedQuests, err := loadQuestsFromDB()
 	if err == nil && len(loadedQuests) > 0 {
 		questRegistry = loadedQuests
-		log.Printf("Successfully loaded %d quests from database", len(questRegistry))
+		logger.S.Infof("Successfully loaded %d quests from database", len(questRegistry))
 		return nil
 	}
 
@@ -156,7 +157,7 @@ func loadQuestsFromDB() ([]QuestDefinition, error) {
 		var rewards []QuestReward
 		if rewardsStr != "" && rewardsStr != "[]" {
 			if err := json.Unmarshal([]byte(rewardsStr), &rewards); err != nil {
-				log.Printf("Warning: failed to parse rewards JSON for quest %s: %v", id, err)
+				logger.S.Warnf("failed to parse rewards JSON for quest %s: %v", id, err)
 			}
 		}
 		qID := id
@@ -180,7 +181,7 @@ func loadQuestsFromCSV() error {
 	path := csvPath("Quest.csv")
 	file, err := os.Open(path)
 	if err != nil {
-		log.Printf("Warning: no Quest.csv found, quest registry will be empty: %v", err)
+		logger.S.Warnf("no Quest.csv found, quest registry will be empty: %v", err)
 		return nil
 	}
 	defer file.Close()
@@ -192,7 +193,7 @@ func loadQuestsFromCSV() error {
 	}
 
 	if len(records) < 2 {
-		log.Println("Warning: Quest.csv is empty, quest registry will be empty")
+		logger.S.Warn("Quest.csv is empty, quest registry will be empty")
 		return nil
 	}
 
@@ -242,7 +243,7 @@ func loadQuestsFromCSV() error {
 	}
 
 	questRegistry = loadedQuests
-	log.Printf("Successfully loaded %d quests from Quest.csv", len(questRegistry))
+	logger.S.Infof("Successfully loaded %d quests from Quest.csv", len(questRegistry))
 	return nil
 }
 

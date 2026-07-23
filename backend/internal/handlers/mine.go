@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math/rand"
 	"net/http"
 	"time"
@@ -16,6 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type MineRates struct {
@@ -609,7 +609,7 @@ func StartMineMonsterWorker(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("Mine Monster Worker stopped")
+				logger.S.Info("Mine Monster Worker stopped")
 				return
 			case <-ticker.C:
 				AssignMonstersToMines()
@@ -635,7 +635,7 @@ func AssignMonstersToMines() {
 		AND abandoned_at < NOW() - INTERVAL '24 hours'
 	`)
 	if err != nil {
-		log.Printf("Error finding abandoned mines: %v", err)
+		logger.S.Errorf("Error finding abandoned mines: %v", err)
 		return
 	}
 	defer rows.Close()
@@ -679,9 +679,9 @@ func AssignMonstersToMines() {
 		if chosenMonsterID != "" {
 			_, err = tx.Exec("UPDATE mine_slots SET monster_id = $1, monster_rank = $2, monster_sub_rank = $3 WHERE id = $4", chosenMonsterID, targetRank, 1, slot.ID)
 			if err != nil {
-				log.Printf("Failed to assign monster to mine slot %d: %v", slot.ID, err)
+				logger.S.Errorf("Failed to assign monster to mine slot %d: %v", slot.ID, err)
 			} else {
-				log.Printf("Assigned monster %s to abandoned mine slot %d", chosenMonsterID, slot.ID)
+				logger.S.Infof("Assigned monster %s to abandoned mine slot %d", chosenMonsterID, slot.ID)
 			}
 		}
 	}
@@ -692,7 +692,7 @@ func AssignMonstersToMines() {
 // StartMidnightMineWorker runs daily at 00:00 to assign monsters to empty mines
 func StartMidnightMineWorker(ctx context.Context) {
 	go func() {
-		log.Println("Midnight Mine Worker - initial run at startup")
+		logger.S.Info("Midnight Mine Worker - initial run at startup")
 		AssignMonstersToEmptyMines()
 
 		now := time.Now()
@@ -705,7 +705,7 @@ func StartMidnightMineWorker(ctx context.Context) {
 		case <-time.After(durationUntilMidnight):
 		}
 
-		log.Println("Midnight Mine Worker - daily reset at 00:00")
+		logger.S.Info("Midnight Mine Worker - daily reset at 00:00")
 		AssignMonstersToEmptyMines()
 
 		ticker := time.NewTicker(24 * time.Hour)
@@ -714,10 +714,10 @@ func StartMidnightMineWorker(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("Midnight Mine Worker stopped")
+				logger.S.Info("Midnight Mine Worker stopped")
 				return
 			case <-ticker.C:
-				log.Println("Midnight Mine Worker - daily reset at 00:00")
+				logger.S.Info("Midnight Mine Worker - daily reset at 00:00")
 				AssignMonstersToEmptyMines()
 			}
 		}
@@ -738,7 +738,7 @@ func AssignMonstersToEmptyMines() {
 		WHERE occupier_id IS NULL AND monster_id IS NULL
 	`)
 	if err != nil {
-		log.Printf("Error finding empty mines: %v", err)
+		logger.S.Errorf("Error finding empty mines: %v", err)
 		return
 	}
 	defer rows.Close()
@@ -781,9 +781,9 @@ func AssignMonstersToEmptyMines() {
 		if chosenMonsterID != "" {
 			_, err = tx.Exec("UPDATE mine_slots SET monster_id = $1, monster_rank = $2, monster_sub_rank = $3, abandoned_at = NOW() WHERE id = $4", chosenMonsterID, targetRank, 1, slot.ID)
 			if err != nil {
-				log.Printf("Failed to assign monster to mine slot %d: %v", slot.ID, err)
+				logger.S.Errorf("Failed to assign monster to mine slot %d: %v", slot.ID, err)
 			} else {
-				log.Printf("[Midnight] Assigned monster %s to empty mine slot %d", chosenMonsterID, slot.ID)
+				logger.S.Infof("[Midnight] Assigned monster %s to empty mine slot %d", chosenMonsterID, slot.ID)
 			}
 		}
 	}

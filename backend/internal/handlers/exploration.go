@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -16,6 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 const clearedCellCooldown = 15 * time.Minute
@@ -189,7 +189,7 @@ func GetGrid(c *gin.Context) {
 	if cleaned {
 		_, err = tx.Exec("UPDATE players SET cleared_cells = $1 WHERE id = $2", player.ClearedCells, player.ID)
 		if err != nil {
-			log.Println("Failed to save cleaned up cleared_cells:", err)
+			logger.S.Error("Failed to save cleaned up cleared_cells:", err)
 		}
 	}
 
@@ -245,7 +245,7 @@ func GetGrid(c *gin.Context) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		log.Println("GetGrid commit warning:", err)
+		logger.S.Error("GetGrid commit warning:", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

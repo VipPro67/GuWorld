@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
 	"net/http"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
 
@@ -100,7 +100,7 @@ func GetShopList(c *gin.Context) {
 
 	items, err := loadCaravanShopCatalog()
 	if err != nil {
-		fmt.Printf("Error loading shop catalog: %v\n", err)
+		logger.S.Errorf("Error loading shop catalog: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách Thương Đội"})
 		return
 	}
@@ -211,7 +211,7 @@ func BuyShopItem(c *gin.Context) {
 	// 5. Add items to player inventory
 	switch selectedItem.Type {
 	case "Gu":
-		log.Printf("Adding %d x %s to player %s inventory", req.Quantity, selectedItem.Name, player.ID)
+		logger.S.Infof("Adding %d x %s to player %s inventory", req.Quantity, selectedItem.Name, player.ID)
 		spec, ok := models.GuRegistry[selectedItem.ID]
 		if !ok {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy định nghĩa của Cổ trùng trong Dictionary"})

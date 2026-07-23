@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type CreateListingRequest struct {
@@ -145,7 +145,7 @@ func CreateListing(c *gin.Context) {
 		
 		itemDataJSON, err = json.Marshal(recipeToSell)
 		if err != nil {
-			log.Printf("Failed to marshal recipe: %v", err)
+			logger.S.Errorf("Failed to marshal recipe: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đăng bán phương thức"})
 			return
 		}
@@ -206,7 +206,7 @@ func CreateListing(c *gin.Context) {
 
 		itemDataJSON, err = json.Marshal(gusToSell)
 		if err != nil {
-			log.Printf("Failed to marshal Gu: %v", err)
+			logger.S.Errorf("Failed to marshal Gu: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đăng bán Cổ trùng"})
 			return
 		}
@@ -226,7 +226,7 @@ func CreateListing(c *gin.Context) {
 		itemData := req.ItemID
 		itemDataJSON, err = json.Marshal(itemData)
 		if err != nil {
-			log.Printf("Failed to marshal material: %v", err)
+			logger.S.Errorf("Failed to marshal material: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đăng bán vật phẩm"})
 			return
 		}
@@ -242,7 +242,7 @@ func CreateListing(c *gin.Context) {
 	}
 	_, err = tx.Exec(`INSERT INTO auction(id,seller_id,item_type,item_data,quantity,currency,start_price,current_price,highest_bidder_id,end_time,status,listing_type,created_at,target_buyer_id) VALUES($1,$2,$3,$4,$5,$6,$7,$7,NULL,$8,'ACTIVE',$9,NOW(),$10)`, listingID, player.ID, req.ItemType, itemDataJSON, req.Quantity, req.Currency, req.Price, end, req.ListingType, targetBuyerParam)
 	if err != nil {
-		log.Printf("Failed to create auction listing: %v", err)
+		logger.S.Errorf("Failed to create auction listing: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo phiên giao dịch"})
 		return
 	}
@@ -283,7 +283,7 @@ func CreateListing(c *gin.Context) {
 
 func ListListings(c *gin.Context) {
 	if err := settleExpiredAuctions(); err != nil {
-		log.Printf("Failed to settle expired auctions: %v", err)
+		logger.S.Errorf("Failed to settle expired auctions: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to settle expired auctions"})
 		return
 	}
@@ -344,12 +344,12 @@ func ListListings(c *gin.Context) {
 		var targetBuyerID sql.NullString
 		var targetBuyerUsername sql.NullString
 		if err := rows.Scan(&id, &seller, &it, &rawItemData, &qty, &cur, &start, &current, &bidder, &end, &status, &lt, &created, &targetBuyerID, &targetBuyerUsername); err != nil {
-			log.Printf("Warning: failed to scan auction row: %v", err)
+			logger.S.Warnf("failed to scan auction row: %v", err)
 			continue
 		}
 		var data interface{}
 		if err := json.Unmarshal(rawItemData, &data); err != nil {
-			log.Printf("Warning: failed to unmarshal auction item_data: %v", err)
+			logger.S.Warnf("failed to unmarshal auction item_data: %v", err)
 			data = string(rawItemData)
 		}
 		out = append(out, gin.H{
@@ -658,7 +658,7 @@ func BuyListing(c *gin.Context) {
 
 func SettleExpiredAuctions(c *gin.Context) {
 	if err := settleExpiredAuctions(); err != nil {
-		log.Printf("Failed to settle expired auctions: %v", err)
+		logger.S.Errorf("Failed to settle expired auctions: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to settle expired auctions"})
 		return
 	}
@@ -683,7 +683,7 @@ func settleExpiredAuctions() error {
 		var currentPrice float64
 		var currency, listingType string
 		if err := rows.Scan(&id, &sellerID, &highestBidderID, &itemType, &rawItemData, &qty, &currentPrice, &currency, &listingType); err != nil {
-			log.Printf("Failed to scan expired auction row: %v", err)
+			logger.S.Errorf("Failed to scan expired auction row: %v", err)
 			continue
 		}
 
@@ -693,7 +693,7 @@ func settleExpiredAuctions() error {
 		}
 
 		if err := settleAuction(id, sellerID, highestBidderID, itemType, itemData, qty, currentPrice, currency, listingType); err != nil {
-			log.Printf("Failed to settle auction %s: %v", id, err)
+			logger.S.Errorf("Failed to settle auction %s: %v", id, err)
 			continue
 		}
 	}

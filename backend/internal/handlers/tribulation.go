@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -17,6 +16,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // GetActiveTribulation returns the active tribulation event and its enemies for the player
@@ -689,7 +689,7 @@ func CheckAndTriggerTribulations() error {
 					VALUES ('Thiên Địa Chí Tôn', 'Đạo hữu đã hết thọ nguyên! Tiên Khiếu suy kiệt, dòng thời gian ngưng trệ. Hãy mau kiếm Thọ Cổ để hồi sinh!', 'private', $1, NOW())
 				`, ap.PlayerID)
 
-				log.Printf("Player %s lifespan depleted, aperture %s frozen", ap.PlayerID, ap.ID)
+				logger.S.Warnf("Player %s lifespan depleted, aperture %s frozen", ap.PlayerID, ap.ID)
 				continue
 			}
 		}
@@ -931,7 +931,7 @@ func CheckAndTriggerTribulations() error {
 			spawnType := calcNextType
 			err := spawnTribulationEventWorker(ap.ID, ap.PlayerID, ap.TribulationCount+1, ap.ApertureHP, newYearsPassed, spawnType)
 			if err != nil {
-				log.Printf("Failed to spawn tribulation event for player %s: %v", ap.PlayerID, err)
+				logger.S.Errorf("Failed to spawn tribulation event for player %s: %v", ap.PlayerID, err)
 			}
 		} else {
 			// Update counters and time in DB
@@ -966,7 +966,7 @@ func CheckAndTriggerTribulations() error {
 		autoRows.Close()
 
 		for _, r := range toResolve {
-			log.Printf("Auto-resolving expired tribulation event %s for player %s", r.EventID, r.PlayerID)
+			logger.S.Infof("Auto-resolving expired tribulation event %s for player %s", r.EventID, r.PlayerID)
 			// Trigger a mock resolve
 			autoResolveEvent(r.EventID, r.PlayerID)
 		}
@@ -1408,12 +1408,12 @@ func StartTribulationWorker(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("Tribulation worker (60s) stopped")
+				logger.S.Info("Tribulation worker (60s) stopped")
 				return
 			case <-ticker60.C:
 				err := CheckAndTriggerTribulations()
 				if err != nil {
-					log.Printf("Tribulation background worker error: %v", err)
+					logger.S.Errorf("Tribulation background worker error: %v", err)
 				}
 			}
 		}
@@ -1424,16 +1424,16 @@ func StartTribulationWorker(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("Tribulation worker (15s) stopped")
+				logger.S.Info("Tribulation worker (15s) stopped")
 				return
 			case <-ticker15.C:
 				err := ProcessActiveTribulationGrid()
 				if err != nil {
-					log.Printf("Tribulation grid worker error: %v", err)
+					logger.S.Errorf("Tribulation grid worker error: %v", err)
 				}
 			}
 		}
 	}()
 
-	log.Println("Tribulation and internal year worker started successfully (Interval: 60s/15s)")
+	logger.S.Info("Tribulation and internal year worker started successfully (Interval: 60s/15s)")
 }

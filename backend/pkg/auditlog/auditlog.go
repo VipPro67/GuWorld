@@ -4,10 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type Querier interface {
@@ -28,7 +28,7 @@ type Entry struct {
 
 func Log(q Querier, entry Entry) {
 	if q == nil {
-		log.Printf("auditlog: nil querier, skipping action=%s", entry.Action)
+		logger.S.Errorf("auditlog: nil querier, skipping action=%s", entry.Action)
 		return
 	}
 	var metaBytes []byte
@@ -36,7 +36,7 @@ func Log(q Querier, entry Entry) {
 		var err error
 		metaBytes, err = json.Marshal(entry.Metadata)
 		if err != nil {
-			log.Printf("auditlog: failed to marshal metadata for action=%s: %v", entry.Action, err)
+			logger.S.Errorf("auditlog: failed to marshal metadata for action=%s: %v", entry.Action, err)
 		}
 	}
 	metaJSON := string(metaBytes)
@@ -52,7 +52,7 @@ func Log(q Querier, entry Entry) {
 		pid, entry.Action, entry.EntityType, entry.EntityID, entry.RequestSummary, metaJSON, entry.IPAddress, entry.Success, entry.ErrorMessage, time.Now().UTC(),
 	)
 	if err != nil {
-		log.Printf("auditlog: failed to insert action=%s player=%v: %v", entry.Action, entry.PlayerID, err)
+		logger.S.Errorf("auditlog: failed to insert action=%s player=%v: %v", entry.Action, entry.PlayerID, err)
 	}
 }
 

@@ -141,13 +141,13 @@ export const wikiPages: WikiPage[] = [
 
               <ul className="list-disc list-inside text-[var(--text-secondary)] mt-1.5 space-y-1.5 leading-relaxed">
                 <li>
-                  <strong>Mở đá:</strong> Hệ thống quay thưởng ngẫu nhiên với. Mở từ 1 hoặc 10 lần, nhận Nguyên Thạch, Tiên Thạch, Thọ Nguyên, Cổ trùng và Đạo Ấn. Ra mắt hub mới "Mở đá" tại sảnh chính.
+                  <strong>Mở đá:</strong> Hệ thống quay thưởng ngẫu nhiên với. Mở từ 1 hoặc 10 lần, nhận Nguyên Thạch, Tiên Nguyên Thạch, Thọ Nguyên, Cổ trùng và Đạo Ấn. Ra mắt hub mới "Mở đá" tại sảnh chính.
                 </li>
                 <li>
                   <strong>Mã Quà (Gift Code):</strong> Admin tạo mã quà tặng, người chơi nhập mã tại tab "Phúc Lợi" trong Không Khiếu để nhận thưởng. Admin panel có mục "Mã Quà" riêng.
                 </li>
                 <li>
-                  <strong>Thành Tựu & Danh Hiệu:</strong> Hệ thống thành tựu với 23 mốc, mỗi thành tựu có phần thưởng Nguyên Thạch/Tiên Thạch. Một số thành tựu mở khóa khung Frame và Danh Hiệu hiển thị cạnh tên trong khung chat. Quản lý tại tab "Thành Tựu" trong Không Khiếu.
+                  <strong>Thành Tựu & Danh Hiệu:</strong> Hệ thống thành tựu với 23 mốc, mỗi thành tựu có phần thưởng Nguyên Thạch/Tiên Nguyên Thạch. Một số thành tựu mở khóa khung Frame và Danh Hiệu hiển thị cạnh tên trong khung chat. Quản lý tại tab "Thành Tựu" trong Không Khiếu.
                 </li>
                 <li>
                   <strong>Tối Ưu Quản Trị:</strong> Tạo mã quà mới có UI chọn vật phẩm bằng picker thay vì nhập tay ID.
@@ -827,7 +827,7 @@ export const wikiPages: WikiPage[] = [
             <ul className="list-disc list-inside space-y-1">
               <li><strong>Pool Tinh Túy:</strong> 100-50.000 Nguyên Thạch, tỉ lệ ra 85%. Giá 1 lần quay: 1.000 Nguyên Thạch. 10 lần: 9.000 Nguyên Thạch.</li>
               <li><strong>Pool Thọ Nguyên:</strong> 1-200 Thọ Nguyên, tỉ lệ ra 85%. Giá 1 lần quay: 5.000 Nguyên Thạch. 10 lần: 45.000 Nguyên Thạch.</li>
-              <li><strong>Pool Vận Mệnh:</strong> Tiên Thạch, Cổ trùng, Đạo Ấn, tỉ lệ ra 70%. Giá 1 lần quay: 2.000 Nguyên Thạch. 10 lần: 18.000 Nguyên Thạch.</li>
+              <li><strong>Pool Vận Mệnh:</strong> Tiên Nguyên Thạch, Cổ trùng, Đạo Ấn, tỉ lệ ra 70%. Giá 1 lần quay: 2.000 Nguyên Thạch. 10 lần: 18.000 Nguyên Thạch.</li>
             </ul>
             <p>
               Có thể vào hub "Cổ Từ" ở sảnh chính để mở. Animation quay thưởng với hiệu ứng ánh sáng và thông báo kết quả chi tiết.
@@ -847,7 +847,7 @@ export const wikiPages: WikiPage[] = [
             </p>
             <ul className="list-disc list-inside space-y-1">
               <li>Mỗi mã có số lượt sử dụng tối đa và giới hạn mỗi người chơi.</li>
-              <li>Phần thưởng có thể là: Nguyên Thạch, Tiên Thạch, Nhân Khí, Vật phẩm, Cổ trùng, Thọ Nguyên, Phá Vách, Đạo Ấn.</li>
+              <li>Phần thưởng có thể là: Nguyên Thạch, Tiên Nguyên Thạch, Nhân Khí, Vật phẩm, Cổ trùng, Thọ Nguyên, Phá Vách, Đạo Ấn.</li>
               <li>Admin tạo và quản lý mã tại mục "Mã Quà" trong Admin Panel.</li>
               <li>UI tạo mã mới có picker chọn vật phẩm trực quan thay vì nhập ID thủ công.</li>
             </ul>

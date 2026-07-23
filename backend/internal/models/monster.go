@@ -3,8 +3,9 @@ package models
 import (
 	"database/sql"
 	"encoding/json"
-	"log"
 	"strings"
+
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 
@@ -237,7 +238,7 @@ func LoadMonsterRegistry(db *sql.DB) error {
 			&guInvRaw, &itemInvRaw, &daoMarksRaw, &masteriesRaw, &mon.AIProfile, &mon.LootTableID, &mon.Description,
 		)
 		if err != nil {
-			log.Printf("Warning: failed to scan monster template row: %v", err)
+			logger.S.Warnf("failed to scan monster template row: %v", err)
 			continue
 		}
 
@@ -251,7 +252,7 @@ func LoadMonsterRegistry(db *sql.DB) error {
 	}
 
 	MonsterRegistry = newRegistry
-	log.Printf("Loaded %d monster templates from database registry into memory cache", count)
+	logger.S.Infof("Loaded %d monster templates from database registry into memory cache", count)
 	return nil
 }
 

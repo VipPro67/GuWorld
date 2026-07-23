@@ -33,27 +33,27 @@ var achievementRegistry = []AchievementDef{
 	{ID: "rank_3", Name: "Tam Chuyển Cường Giả", Description: "Đột phá tới Tam Chuyển Cổ Sư", Icon: "🌿", RewardType: "primeval_stones", RewardVal: 3000, RewardLabel: "3.000 Nguyên Thạch"},
 	{ID: "rank_4", Name: "Tứ Chuyển Bá Chủ", Description: "Bước vào cảnh giới Tứ Chuyển", Icon: "💎", HasFrame: true, RewardType: "primeval_stones", RewardVal: 8000, RewardLabel: "8.000 Nguyên Thạch"},
 	{ID: "rank_5", Name: "Ngũ Chuyển Tông Sư", Description: "Trở thành Ngũ Chuyển Cổ Sư", Icon: "💎", HasFrame: true, RewardType: "primeval_stones", RewardVal: 15000, RewardLabel: "15.000 Nguyên Thạch"},
-	{ID: "rank_6", Name: "Lục Chuyển Cổ Tiên", Description: "Khai mở Tiên Khiếu, bước vào hàng ngũ Cổ Tiên", Icon: "👑", HasFrame: true, RewardType: "immortal_stones", RewardVal: 50, RewardLabel: "50 Tiên Thạch"},
-	{ID: "rank_7", Name: "Thất Chuyển Đại Năng", Description: "Đạt tới Thất Chuyển Cổ Tiên", Icon: "👑", HasFrame: true, RewardType: "immortal_stones", RewardVal: 200, RewardLabel: "200 Tiên Thạch"},
-	{ID: "rank_8", Name: "Bát Chuyển Tôn Giả", Description: "Đứng trên đỉnh cao Bát Chuyển", Icon: "👑", HasFrame: true, RewardType: "immortal_stones", RewardVal: 500, RewardLabel: "500 Tiên Thạch"},
-	{ID: "rank_9", Name: "Cửu Chuyển Tôn Giả", Description: "Chạm tới cảnh giới tối cao của thiên địa", Icon: "🐉", HasFrame: true, RewardType: "immortal_stones", RewardVal: 1000, RewardLabel: "1.000 Tiên Thạch"},
+	{ID: "rank_6", Name: "Lục Chuyển Cổ Tiên", Description: "Khai mở Tiên Khiếu, bước vào hàng ngũ Cổ Tiên", Icon: "👑", HasFrame: true, RewardType: "immortal_stones", RewardVal: 50, RewardLabel: "50 Tiên Nguyên Thạch"},
+	{ID: "rank_7", Name: "Thất Chuyển Đại Năng", Description: "Đạt tới Thất Chuyển Cổ Tiên", Icon: "👑", HasFrame: true, RewardType: "immortal_stones", RewardVal: 200, RewardLabel: "200 Tiên Nguyên Thạch"},
+	{ID: "rank_8", Name: "Bát Chuyển Tôn Giả", Description: "Đứng trên đỉnh cao Bát Chuyển", Icon: "👑", HasFrame: true, RewardType: "immortal_stones", RewardVal: 500, RewardLabel: "500 Tiên Nguyên Thạch"},
+	{ID: "rank_9", Name: "Cửu Chuyển Tôn Giả", Description: "Chạm tới cảnh giới tối cao của thiên địa", Icon: "🐉", HasFrame: true, RewardType: "immortal_stones", RewardVal: 1000, RewardLabel: "1.000 Tiên Nguyên Thạch"},
 
 	{ID: "tribulation_1", Name: "Lần Đầu Độ Kiếp", Description: "Vượt qua một lần thiên kiếp", Icon: "⛈️", RewardType: "primeval_stones", RewardVal: 1000, RewardLabel: "1.000 Nguyên Thạch"},
 	{ID: "tribulation_5", Name: "Ngũ Kiếp Bất Diệt", Description: "Vượt qua năm lần thiên kiếp", Icon: "⛈️", HasFrame: true, RewardType: "primeval_stones", RewardVal: 10000, RewardLabel: "10.000 Nguyên Thạch"},
-	{ID: "tribulation_10", Name: "Thiên Kiếp Bất Khuất", Description: "Vượt qua mười lần thiên kiếp", Icon: "☠️", HasFrame: true, RewardType: "immortal_stones", RewardVal: 100, RewardLabel: "100 Tiên Thạch"},
+	{ID: "tribulation_10", Name: "Thiên Kiếp Bất Khuất", Description: "Vượt qua mười lần thiên kiếp", Icon: "☠️", HasFrame: true, RewardType: "immortal_stones", RewardVal: 100, RewardLabel: "100 Tiên Nguyên Thạch"},
 
 	{ID: "gu_10", Name: "Tiểu Cổ Tàng Gia", Description: "Thu thập 10 loại Cổ trùng khác nhau", Icon: "🐛", RewardType: "primeval_stones", RewardVal: 2000, RewardLabel: "2.000 Nguyên Thạch"},
 	{ID: "gu_25", Name: "Cổ Đạo Chuyên Gia", Description: "Thu thập 25 loại Cổ trùng khác nhau", Icon: "🦋", RewardType: "primeval_stones", RewardVal: 8000, RewardLabel: "8.000 Nguyên Thạch"},
-	{ID: "gu_50", Name: "Vạn Cổ Chi Chủ", Description: "Thu thập 50 loại Cổ trùng khác nhau", Icon: "🐉", HasFrame: true, RewardType: "immortal_stones", RewardVal: 50, RewardLabel: "50 Tiên Thạch"},
+	{ID: "gu_50", Name: "Vạn Cổ Chi Chủ", Description: "Thu thập 50 loại Cổ trùng khác nhau", Icon: "🐉", HasFrame: true, RewardType: "immortal_stones", RewardVal: 50, RewardLabel: "50 Tiên Nguyên Thạch"},
 
 	{ID: "explorer_100", Name: "Lữ Hành Giả", Description: "Khám phá 100 ô địa đồ", Icon: "🗺️", RewardType: "primeval_stones", RewardVal: 1000, RewardLabel: "1.000 Nguyên Thạch"},
 	{ID: "explorer_500", Name: "Chu Du Ngũ Vực", Description: "Khám phá 500 ô địa đồ", Icon: "🗺️", RewardType: "primeval_stones", RewardVal: 5000, RewardLabel: "5.000 Nguyên Thạch"},
-	{ID: "explorer_1000", Name: "Dấu Chân Thiên Hạ", Description: "Khám phá 1.000 ô địa đồ", Icon: "🌍", HasFrame: true, RewardType: "immortal_stones", RewardVal: 30, RewardLabel: "30 Tiên Thạch"},
+	{ID: "explorer_1000", Name: "Dấu Chân Thiên Hạ", Description: "Khám phá 1.000 ô địa đồ", Icon: "🌍", HasFrame: true, RewardType: "immortal_stones", RewardVal: 30, RewardLabel: "30 Tiên Nguyên Thạch"},
 
-	{ID: "millionaire", Name: "Phú Giáp Thiên Hạ", Description: "Tích lũy 1.000.000 Nguyên Thạch", Icon: "🪙", HasFrame: true, RewardType: "immortal_stones", RewardVal: 100, RewardLabel: "100 Tiên Thạch"},
+	{ID: "millionaire", Name: "Phú Giáp Thiên Hạ", Description: "Tích lũy 1.000.000 Nguyên Thạch", Icon: "🪙", HasFrame: true, RewardType: "immortal_stones", RewardVal: 100, RewardLabel: "100 Tiên Nguyên Thạch"},
 
 	{ID: "human_qi_1000", Name: "Nhân Khí Hưng Thịnh", Description: "Đạt 1.000 Nhân Khí", Icon: "💨", RewardType: "primeval_stones", RewardVal: 3000, RewardLabel: "3.000 Nguyên Thạch"},
-	{ID: "human_qi_10000", Name: "Nhân Khí Thông Thiên", Description: "Đạt 10.000 Nhân Khí", Icon: "🌪️", HasFrame: true, RewardType: "immortal_stones", RewardVal: 30, RewardLabel: "30 Tiên Thạch"},
+	{ID: "human_qi_10000", Name: "Nhân Khí Thông Thiên", Description: "Đạt 10.000 Nhân Khí", Icon: "🌪️", HasFrame: true, RewardType: "immortal_stones", RewardVal: 30, RewardLabel: "30 Tiên Nguyên Thạch"},
 
 	{ID: "soul_awaken", Name: "Hồn Phách Hiển Hiện", Description: "Hồn phách thức tỉnh (SoulHP > 0)", Icon: "👻", RewardType: "primeval_stones", RewardVal: 500, RewardLabel: "500 Nguyên Thạch"},
 }

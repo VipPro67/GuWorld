@@ -4,11 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"os"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 var Client *redis.Client
@@ -30,7 +30,7 @@ func Connect() error {
 	}
 
 	if redisHost == "" || redisPort == "" {
-		fmt.Println("Redis host or port not configured, skipping Redis connection")
+		logger.S.Info("Redis host or port not configured, skipping Redis connection")
 		return nil
 	}
 
@@ -52,7 +52,7 @@ func Connect() error {
 
 	// Test the connection
 	if err := Client.Ping(Ctx).Err(); err != nil {
-		fmt.Printf("Failed to connect to Redis: %v", err)
+		logger.S.Warnf("Failed to connect to Redis: %v", err)
 		Client = nil // Set to nil to indicate Redis is not available
 		return err
 	}

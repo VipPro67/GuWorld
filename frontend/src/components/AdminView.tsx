@@ -261,7 +261,7 @@ export const AdminView: React.FC = () => {
   const [newGiftPerPlayer, setNewGiftPerPlayer] = useState(1);
   const [newGiftExpiry, setNewGiftExpiry] = useState(30);
   const [newGiftRewards, setNewGiftRewards] = useState<{type: string; id: string; amount: number; label: string}[]>([
-    { type: "primeval_stones", id: "", amount: 1000, label: "1.000 Đá Tinh Túy" },
+    { type: "primeval_stones", id: "", amount: 1000, label: "1.000 Nguyên Thạch" },
   ]);
 
   // ----- Online players state -----
@@ -410,7 +410,7 @@ export const AdminView: React.FC = () => {
       if (!res.ok) throw new Error(data.error || "Thất bại");
       if (addToast) addToast(data.message || "Tạo mã quà thành công", "success");
       setNewGiftCode("");
-      setNewGiftRewards([{ type: "primeval_stones", id: "", amount: 1000, label: "1.000 Đá Tinh Túy" }]);
+      setNewGiftRewards([{ type: "primeval_stones", id: "", amount: 1000, label: "1.000 Nguyên Thạch" }]);
       fetchGiftCodes();
     } catch (err: any) {
       if (addToast) addToast(err.message, "error");
@@ -608,7 +608,7 @@ export const AdminView: React.FC = () => {
                     setNewMission(p => ({ ...p, target_id: x.id }));
                   } else if (s === "gift" && giftPickerIdx !== null) {
                     const upd = [...newGiftRewards];
-                    upd[giftPickerIdx] = { ...upd[giftPickerIdx], id: x.id };
+                    upd[giftPickerIdx] = { ...upd[giftPickerIdx], id: x.id, amount: 1, label: x.name || x.id };
                     setNewGiftRewards(upd);
                     setGiftPickerIdx(null);
                   }
@@ -2357,19 +2357,20 @@ export const AdminView: React.FC = () => {
                 {newGiftRewards.map((r, i) => (
                   <div key={i} className="flex items-center gap-2 mb-2">
                     <select value={r.type} onChange={e => { const upd = [...newGiftRewards]; upd[i].type = e.target.value; setNewGiftRewards(upd); }} className="px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] text-zinc-200 focus:outline-none">
-                      <option value="primeval_stones">Đá Tinh Túy</option>
-                      <option value="immortal_stones">Tiên Thạch</option>
+                      <option value="primeval_stones">Nguyên Thạch</option>
+                      <option value="immortal_stones">Tiên Nguyên Thạch</option>
                       <option value="human_qi">Nhân Khí</option>
                       <option value="item">Vật phẩm</option>
                       <option value="gu">Cổ Trùng</option>
+                      <option value="recipe">Bí Phương</option>
                       <option value="lifespan">Thọ Nguyên</option>
                       <option value="wall_progress">Phá Vách</option>
                       <option value="dao_mark">Đạo Ấn</option>
                     </select>
-                    {(r.type === "item" || r.type === "gu" || r.type === "dao_mark") && (
+                    {(r.type === "item" || r.type === "gu" || r.type === "dao_mark" || r.type === "recipe") && (
                       <div className="flex items-center gap-1">
                         <span className="text-[10px] font-mono text-zinc-400 min-w-[80px] truncate" title={r.id || "Chưa chọn"}>{r.id || "—"}</span>
-                        <button onClick={() => { setGiftPickerIdx(i); ensureShopSearchLoaded(); setItemPicker({source: "gift", tab: r.type === "gu" ? "gu" : "item", query: ""}); }} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[10px] font-mono cursor-pointer flex items-center gap-1"><Search className="w-3 h-3" />Chọn</button>
+                        <button onClick={() => { setGiftPickerIdx(i); ensureShopSearchLoaded(); setItemPicker({source: "gift", tab: r.type === "gu" ? "gu" : r.type === "recipe" ? "recipe" : "item", query: ""}); }} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[10px] font-mono cursor-pointer flex items-center gap-1"><Search className="w-3 h-3" />Chọn</button>
                       </div>
                     )}
                     <input type="number" min={1} value={r.amount} onChange={e => { const upd = [...newGiftRewards]; upd[i].amount = Number(e.target.value); setNewGiftRewards(upd); }} className="w-16 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] text-zinc-200 focus:outline-none" />

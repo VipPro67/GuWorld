@@ -9,10 +9,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // SetupRouter initializes the Gin router with middlewares and routes
 func SetupRouter() *gin.Engine {
+	gin.DefaultWriter = logger.GinWriter()
 	r := gin.Default()
 
 	// CORS Middleware

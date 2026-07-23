@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -18,6 +17,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // AutoCombatStartRequest payload for starting automated combat
@@ -650,7 +650,7 @@ func AutoCombatStart(c *gin.Context) {
 						Detail: fmt.Sprintf("Chiếm lĩnh thành công mỏ phẩm chất %s #%d!", rarity, slotID),
 					})
 				} else {
-					log.Printf("Failed to update mine slot in auto combat victory: %v", errUpdate)
+					logger.S.Errorf("Failed to update mine slot in auto combat victory: %v", errUpdate)
 				}
 			}
 

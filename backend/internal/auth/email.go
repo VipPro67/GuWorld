@@ -3,11 +3,12 @@ package auth
 import (
 	"crypto/rand"
 	"fmt"
-	"log"
 	"math/big"
 	"net/smtp"
 	"os"
 	"strings"
+
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // GenerateOTP generates a random 6-digit numeric string
@@ -66,7 +67,7 @@ func SendEmailOTP(toEmail string, otp string) error {
 
 	err := smtp.SendMail(addr, auth, mailFrom, []string{toEmail}, msg)
 	if err != nil {
-		log.Printf("Failed to send SMTP email to %s: %v", toEmail, err)
+		logger.S.Errorf("Failed to send SMTP email to %s: %v", toEmail, err)
 		return err
 	}
 

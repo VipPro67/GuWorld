@@ -2,15 +2,15 @@ package handlers
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // StartArenaSettlementWorker runs every minute, checking if it is 22:00
 func StartArenaSettlementWorker(ctx context.Context) {
-	log.Println("Starting Arena Settlement Worker...")
+	logger.S.Info("Starting Arena Settlement Worker...")
 	
 	var lastSettlementDay int
 	
@@ -21,13 +21,13 @@ func StartArenaSettlementWorker(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("Arena Settlement Worker stopped.")
+				logger.S.Info("Arena Settlement Worker stopped.")
 				return
 			case t := <-ticker.C:
 				if t.Hour() == 22 && t.Minute() == 0 {
 					currentDay := t.YearDay()
 					if lastSettlementDay != currentDay {
-						log.Println("Running Daily Arena Settlement...")
+						logger.S.Info("Running Daily Arena Settlement...")
 						runArenaSettlement()
 						lastSettlementDay = currentDay
 					}
@@ -40,7 +40,7 @@ func StartArenaSettlementWorker(ctx context.Context) {
 func runArenaSettlement() {
 	tx, err := db.DB.Begin()
 	if err != nil {
-		log.Println("ArenaSettlement Error: Failed to start tx", err)
+		logger.S.Error("ArenaSettlement Error: Failed to start tx", err)
 		return
 	}
 	defer tx.Rollback()
@@ -48,7 +48,7 @@ func runArenaSettlement() {
 	// Get all rankings
 	rows, err := tx.Query("SELECT player_id, rank FROM arena_rankings")
 	if err != nil {
-		log.Println("ArenaSettlement Error: Failed to query rankings", err)
+		logger.S.Error("ArenaSettlement Error: Failed to query rankings", err)
 		return
 	}
 	defer rows.Close()
@@ -79,13 +79,13 @@ func runArenaSettlement() {
 		`, rewardCoins, playerID)
 		
 		if errUpdate != nil {
-			log.Printf("ArenaSettlement Error: Failed to give reward to %s: %v\n", playerID, errUpdate)
+			logger.S.Errorf("ArenaSettlement Error: Failed to give reward to %s: %v", playerID, errUpdate)
 		}
 	}
 	
 	if err := tx.Commit(); err != nil {
-		log.Println("ArenaSettlement Error: Failed to commit tx", err)
+		logger.S.Error("ArenaSettlement Error: Failed to commit tx", err)
 	} else {
-		log.Println("Daily Arena Settlement completed successfully.")
+		logger.S.Info("Daily Arena Settlement completed successfully.")
 	}
 }

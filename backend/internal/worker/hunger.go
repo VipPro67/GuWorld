@@ -4,25 +4,25 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"log"
 	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // StartHungerWorker begins the background process for depleting Gu bug hunger.
 func StartHungerWorker(ctx context.Context, db *sql.DB, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	go func() {
-		log.Printf("Starting background Hunger Worker with tick interval of %v", interval)
+		logger.S.Infof("Starting background Hunger Worker with tick interval of %v", interval)
 		for {
 			select {
 			case <-ctx.Done():
 				ticker.Stop()
-				log.Println("Hunger Worker stopped")
+				logger.S.Info("Hunger Worker stopped")
 				return
 			case <-ticker.C:
 				processHungerDecay(db)
@@ -35,7 +35,7 @@ func processHungerDecay(db *sql.DB) {
 	// 1. Fetch all player IDs to process them individually in isolated transactions
 	rows, err := db.Query("SELECT id FROM players")
 	if err != nil {
-		log.Printf("Hunger Worker Error: failed to fetch player list: %v", err)
+		logger.S.Errorf("Hunger Worker Error: failed to fetch player list: %v", err)
 		return
 	}
 	defer rows.Close()
@@ -52,7 +52,7 @@ func processHungerDecay(db *sql.DB) {
 	for _, pID := range playerIDs {
 		err := updatePlayerGuHunger(db, pID)
 		if err != nil {
-			log.Printf("Hunger Worker Error updating player %s: %v", pID, err)
+			logger.S.Errorf("Hunger Worker Error updating player %s: %v", pID, err)
 		}
 	}
 }
@@ -116,7 +116,7 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 				// Vital Gu never sleeps — it either stays alive (fed) or dies
 				if gu.IsVital {
 					gu.Status = "DEAD"
-					log.Printf("Cultivation Log: Player %s's VITAL Gu %s (%s) starved and DIED — HP backlash incoming", username, specs.Name, gu.InstanceID[:8])
+					logger.S.Infof("Cultivation Log: Player %s's VITAL Gu %s (%s) starved and DIED — HP backlash incoming", username, specs.Name, gu.InstanceID[:8])
 					playerHPBacklash += 80.0
 					auditlog.Log(tx, auditlog.Entry{
 						PlayerID: &pUUID, Action: "gu.starve_vital_death", EntityType: "gu_instance",
@@ -128,11 +128,11 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 					roll := rand.Intn(100)
 					if roll < 20 {
 						gu.Status = "SLEEPING"
-						log.Printf("Cultivation Log: Player %s's Gu %s (%s) starved and went into HIBERNATION", username, specs.Name, gu.InstanceID[:8])
+						logger.S.Infof("Cultivation Log: Player %s's Gu %s (%s) starved and went into HIBERNATION", username, specs.Name, gu.InstanceID[:8])
 						newInventory = append(newInventory, gu)
 					} else {
 						gu.Status = "DEAD"
-						log.Printf("Cultivation Log: Player %s's Gu %s (%s) starved and DIED", username, specs.Name, gu.InstanceID[:8])
+						logger.S.Infof("Cultivation Log: Player %s's Gu %s (%s) starved and DIED", username, specs.Name, gu.InstanceID[:8])
 						auditlog.Log(tx, auditlog.Entry{
 							PlayerID: &pUUID, Action: "gu.starve_death", EntityType: "gu_instance",
 							EntityID: gu.InstanceID, RequestSummary: specs.Name + " | Cổ chết đói",
