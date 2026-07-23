@@ -1365,6 +1365,7 @@ func SeedFromCSV() error {
 func csvPath(filename string) string {
 	candidates := []string{
 		filepath.Join("data", filename),
+		filepath.Join("cmd/server/data", filename),
 		filename,
 		filepath.Join("..", filename),
 		filepath.Join("..", "..", filename),
@@ -1387,6 +1388,7 @@ func openCSV(filename string) (*os.File, *csv.Reader, []string, error) {
 	r := csv.NewReader(f)
 	r.LazyQuotes = true
 	r.TrimLeadingSpace = true
+	r.FieldsPerRecord = -1
 	header, err := r.Read()
 	if err != nil {
 		f.Close()
@@ -1443,31 +1445,25 @@ func normalizedGuEffectsJSON(raw string, rowLabel string) string {
 	value := safeJSONObject(raw, `{}`, rowLabel)
 	var parsed map[string]interface{}
 	_ = json.Unmarshal([]byte(value), &parsed)
-	sections := map[string]map[string]interface{}{
-		"active":     {},
-		"support":    {},
-		"passive":    {},
-		"house":      {},
-		"explore":    {},
-		"refinement": {},
+	sections := map[string]interface{}{
+		"active":     map[string]interface{}{},
+		"support":    map[string]interface{}{},
+		"passive":    map[string]interface{}{},
+		"house":      map[string]interface{}{},
+		"explore":    map[string]interface{}{},
+		"refinement": map[string]interface{}{},
+		"other":      []interface{}{},
 	}
+	knownSections := []string{"active", "support", "passive", "house", "explore", "refinement", "other"}
 	sectionFound := false
-	for section := range sections {
+	for _, section := range knownSections {
 		if rawSection, ok := parsed[section]; ok {
 			sectionFound = true
-			if values, ok := rawSection.(map[string]interface{}); ok {
-				for key, value := range values {
-					sections[section][key] = value
-				}
-			} else {
-				log.Printf("Warning: Gu effects section %s must be object in %s", section, rowLabel)
-			}
+			sections[section] = rawSection
 		}
 	}
 	if !sectionFound {
-		for key, value := range parsed {
-			sections["active"][key] = value
-		}
+		sections["active"] = parsed
 	}
 	bytes, _ := json.Marshal(sections)
 	return string(bytes)
@@ -1597,7 +1593,10 @@ func seedGusFromCSV(filename string) error {
 		if err == io.EOF {
 			break
 		}
-		if err != nil || len(row) == 0 {
+		if err != nil {
+			continue
+		}
+		if len(row) == 0 {
 			continue
 		}
 		id := strings.TrimSpace(row[idIdx])
