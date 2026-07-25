@@ -98,7 +98,7 @@ func AutoCombatStart(c *gin.Context) {
 
 	// All selected Gu (core + support, no distinction)
 	for _, guID := range req.Loadout.GuIds {
-		if spec, ok := models.GuRegistry[guID]; ok {
+		if spec, ok := models.GetGuAny(guID); ok {
 			if hasCombatActiveEffects(&spec) {
 				act, err := buildSimActionFromGu(&actor, &spec, "GU_SKILL")
 				if err != nil {
@@ -159,7 +159,7 @@ func AutoCombatStart(c *gin.Context) {
 		}
 	}
 	for _, guID := range req.Loadout.GuIds {
-		if spec, ok := models.GuRegistry[guID]; ok {
+		if spec, ok := models.GetGuAny(guID); ok {
 			scanMultiplier(spec)
 		}
 	}
@@ -207,7 +207,7 @@ func AutoCombatStart(c *gin.Context) {
 		}
 	}
 	for _, guID := range req.Loadout.GuIds {
-		if spec, ok := models.GuRegistry[guID]; ok {
+		if spec, ok := models.GetGuAny(guID); ok {
 			scanShield(spec)
 		}
 	}
@@ -342,7 +342,7 @@ func AutoCombatStart(c *gin.Context) {
 			if guInst.Status != "ACTIVE" {
 				continue
 			}
-			spec, ok := models.GuRegistry[guInst.GuID]
+			spec, ok := models.GetGuAny(guInst.GuID)
 			if !ok {
 				continue
 			}
@@ -575,8 +575,9 @@ func AutoCombatStart(c *gin.Context) {
 							player.TempLoot.MaterialsInventory[matID] += qty
 						}
 						for _, guID := range loot.Gus {
+							guSpec, _ := models.GetGuAny(guID)
 							newGu := models.GuInstance{
-								InstanceID: uuid.New().String(), GuID: guID, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
+								InstanceID: uuid.New().String(), GuID: guID, Rank: guSpec.Rank, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
 							}
 							player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, newGu)
 						}
@@ -589,8 +590,9 @@ func AutoCombatStart(c *gin.Context) {
 							InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", qty)
 						}
 						for _, guID := range loot.Gus {
+							guSpec, _ := models.GetGuAny(guID)
 							newGu := models.GuInstance{
-								InstanceID: uuid.New().String(), GuID: guID, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
+								InstanceID: uuid.New().String(), GuID: guID, Rank: guSpec.Rank, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
 							}
 							player.GuInventory = append(player.GuInventory, newGu)
 						}

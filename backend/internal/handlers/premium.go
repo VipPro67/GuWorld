@@ -523,9 +523,9 @@ func BuyPremiumPackage(c *gin.Context) {
 		default:
 			if reward.ItemID != "" {
 				if strings.HasPrefix(reward.ItemID, "GU_") {
-					if spec, exists := models.GuRegistry[reward.ItemID]; exists {
+					if spec, exists := models.GetGuAny(reward.ItemID); exists {
 						for i := int64(0); i < reward.Quantity; i++ {
-							player.GuInventory = append(player.GuInventory, models.GuInstance{InstanceID: uuid.New().String(), GuID: spec.ID, Hunger: 100, Status: "ACTIVE", Equipped: false})
+							player.GuInventory = append(player.GuInventory, models.GuInstance{InstanceID: uuid.New().String(), GuID: spec.ID, Rank: spec.Rank, Hunger: 100, Status: "ACTIVE", Equipped: false})
 						}
 					}
 				} else {

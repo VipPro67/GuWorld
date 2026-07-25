@@ -285,7 +285,7 @@ func rollGachaReward(pool *GachaPool) GachaResultItem {
 			return GachaResultItem{Type: "primeval_stones", Amount: 100, Label: "100 Nguyên Thạch"}
 		}
 		guName := guID
-		if spec, ok := models.GuRegistry[guID]; ok {
+		if spec, ok := models.GetGuAny(guID); ok {
 			guName = spec.Name
 		}
 		return GachaResultItem{Type: "gu", ID: guID, Amount: 1, Label: fmt.Sprintf("1x %s", guName), IsRare: isRare}
@@ -297,7 +297,7 @@ func rollGachaReward(pool *GachaPool) GachaResultItem {
 			return GachaResultItem{Type: "primeval_stones", Amount: 100, Label: "100 Nguyên Thạch"}
 		}
 		guName := guID
-		if spec, ok := models.GuRegistry[guID]; ok {
+		if spec, ok := models.GetGuAny(guID); ok {
 			guName = spec.Name
 		}
 		return GachaResultItem{Type: "gu", ID: guID, Amount: 1, Label: fmt.Sprintf("1x %s", guName), IsRare: isRare}
@@ -327,7 +327,8 @@ func rollWeightedGu(rankFilter []string) string {
 	var pool []weighted
 	var totalWeight float64
 
-	for id, spec := range models.GuRegistry {
+	for id, ranks := range models.GuRegistry {
+		for _, spec := range ranks {
 		if len(rankFilter) > 0 {
 			matched := false
 			for _, rs := range rankFilter {
@@ -347,6 +348,7 @@ func rollWeightedGu(rankFilter []string) string {
 			pool = append(pool, weighted{id: id, weight: w})
 			totalWeight += w
 		}
+	}
 	}
 
 	if len(pool) == 0 || totalWeight <= 0 {
@@ -437,9 +439,11 @@ func applyGachaReward(tx *sql.Tx, player *models.Player, reward GachaResultItem)
 	case "item":
 		InventorySvc.AddItem(tx, player.ID.String(), reward.ID, "materials", int(reward.Amount))
 	case "gu":
+		guSpec, _ := models.GetGuAny(reward.ID)
 		newGu := models.GuInstance{
 			InstanceID: "gu-" + uuid.New().String(),
 			GuID:       reward.ID,
+			Rank:       guSpec.Rank,
 			Hunger:     rand.Intn(21),
 			Status:     "ACTIVE",
 			Equipped:   false,

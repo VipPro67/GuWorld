@@ -982,9 +982,11 @@ func Explore(c *gin.Context) {
 
 	if capturedGuID != "" {
 		if HasInventorySpace(&player, 1) {
+			guSpec, _ := models.GetGuAny(capturedGuID)
 			newGu := models.GuInstance{
 				InstanceID: uuid.New().String(),
 				GuID:       capturedGuID,
+				Rank:       guSpec.Rank,
 				Hunger:     100,
 				Status:     "ACTIVE",
 				Equipped:   false,
@@ -1122,7 +1124,7 @@ func getFoodNutrition(foodID string) int {
 			return years * 1000
 		}
 	}
-	if spec, ok := models.GuRegistry[foodID]; ok {
+	if spec, ok := models.GetGuAny(foodID); ok {
 		return spec.Rank * 1000
 	}
 	if spec, ok := models.ItemRegistry[foodID]; ok {
@@ -1201,7 +1203,7 @@ func FeedGu(c *gin.Context) {
 	}
 
 	// 3. Find static specs in Dictionary
-	specs, found := models.GuRegistry[targetGu.GuID]
+	specs, found := models.GetGuAny(targetGu.GuID)
 	if !found {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gu definition not found in registry"})
 		return
@@ -1309,7 +1311,7 @@ func FeedGu(c *gin.Context) {
 		fName := fID
 		if itemSpec, ok := models.ItemRegistry[fID]; ok {
 			fName = itemSpec.Name
-		} else if guSpec, ok := models.GuRegistry[fID]; ok {
+		} else if guSpec, ok := models.GetGuAny(fID); ok {
 			fName = guSpec.Name
 		}
 		foodDetails = append(foodDetails, fmt.Sprintf("%dx %s", qty, fName))
@@ -1373,7 +1375,7 @@ func FeedGroup(c *gin.Context) {
 	}
 
 	// 2. Find static specs in Dictionary
-	specs, found := models.GuRegistry[req.GuID]
+	specs, found := models.GetGuAny(req.GuID)
 	if !found {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gu definition not found in registry"})
 		return
@@ -1496,7 +1498,7 @@ func FeedGroup(c *gin.Context) {
 		foodName := foodID
 		if itemSpec, ok := models.ItemRegistry[foodID]; ok {
 			foodName = itemSpec.Name
-		} else if guSpec, ok := models.GuRegistry[foodID]; ok {
+		} else if guSpec, ok := models.GetGuAny(foodID); ok {
 			foodName = guSpec.Name
 		}
 		foodDetails = append(foodDetails, fmt.Sprintf("%dx %s", qty, foodName))
@@ -1693,7 +1695,7 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 
 	for _, gu := range player.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" {
-			spec, ok := models.GuRegistry[gu.GuID]
+			spec, ok := models.GetGuAny(gu.GuID)
 			if !ok {
 				continue
 			}
@@ -1827,7 +1829,7 @@ func EquipGu(c *gin.Context) {
 	}
 
 	guName := targetGu.GuID
-	if spec, ok := models.GuRegistry[targetGu.GuID]; ok {
+	if spec, ok := models.GetGuAny(targetGu.GuID); ok {
 		guName = spec.Name
 	}
 
@@ -2354,7 +2356,7 @@ func UseConsumableGu(c *gin.Context) {
 	}
 
 	targetGu := &player.GuInventory[targetIdx]
-	specs, found := models.GuRegistry[targetGu.GuID]
+	specs, found := models.GetGuAny(targetGu.GuID)
 	if !found {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy thông tin Cổ trùng trong thư viện"})
 		return
@@ -2472,7 +2474,7 @@ func UseSupportGu(c *gin.Context) {
 	}
 
 	targetGu := &player.GuInventory[targetIdx]
-	specs, found := models.GuRegistry[targetGu.GuID]
+	specs, found := models.GetGuAny(targetGu.GuID)
 	if !found {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy thông tin Cổ trùng trong thư viện"})
 		return

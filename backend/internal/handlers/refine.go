@@ -95,7 +95,7 @@ func GetRecipes(c *gin.Context) {
 	var masterRecipes []models.RefiningRecipe
 	if err := cache.GetJSON("master_refining_recipes", &masterRecipes); err != nil {
 		rows, err := db.DB.Query(`
-			SELECT id, target_gu_id, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost 
+			SELECT id, target_gu_id, target_rank, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost 
 			FROM refining_recipes
 		`)
 		if err != nil {
@@ -107,7 +107,7 @@ func GetRecipes(c *gin.Context) {
 		for rows.Next() {
 			var recipe models.RefiningRecipe
 			err = rows.Scan(
-				&recipe.ID, &recipe.TargetGuID, &recipe.RequiredGus,
+				&recipe.ID, &recipe.TargetGuID, &recipe.TargetRank, &recipe.RequiredGus,
 				&recipe.RequiredMaterials, &recipe.SuccessRate, &recipe.PrimevalStonesCost,
 				&recipe.ImmortalEssenceStonesCost,
 			)
@@ -175,10 +175,10 @@ func RefineGu(c *gin.Context) {
 	// 3. Fetch Recipe
 	var recipe models.RefiningRecipe
 	err = tx.QueryRow(`
-		SELECT id, target_gu_id, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost 
+		SELECT id, target_gu_id, target_rank, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost 
 		FROM refining_recipes 
 		WHERE id = $1`, req.RecipeID).Scan(
-		&recipe.ID, &recipe.TargetGuID, &recipe.RequiredGus,
+		&recipe.ID, &recipe.TargetGuID, &recipe.TargetRank, &recipe.RequiredGus,
 		&recipe.RequiredMaterials, &recipe.SuccessRate, &recipe.PrimevalStonesCost,
 		&recipe.ImmortalEssenceStonesCost,
 	)
@@ -271,7 +271,7 @@ func RefineGu(c *gin.Context) {
 
 	// 8. RNG Roll
 	var pathRaw []byte
-	err = tx.QueryRow(`SELECT path FROM gu_dictionary WHERE id = $1`, recipe.TargetGuID).Scan(&pathRaw)
+	err = tx.QueryRow(`SELECT path FROM gu_dictionary WHERE id = $1 AND rank = $2`, recipe.TargetGuID, recipe.TargetRank).Scan(&pathRaw)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query target Gu path: " + err.Error()})
 		return
@@ -334,9 +334,9 @@ func RefineGu(c *gin.Context) {
 
 	if success {
 		// Tiên cổ duy nhất check
-		spec, ok := models.GuRegistry[recipe.TargetGuID]
+		spec, ok := models.GetGu(recipe.TargetGuID, recipe.TargetRank)
 		if ok && spec.Rank >= 6 {
-			exists, _ := db.CheckImmortalGuExists(tx, recipe.TargetGuID)
+			exists, _ := db.CheckImmortalGuExists(tx, recipe.TargetGuID, recipe.TargetRank, req.SelectedGuInstanceIDs)
 			if exists {
 				success = false
 				statusStr = "failed"
@@ -365,6 +365,7 @@ func RefineGu(c *gin.Context) {
 		newGuInstance = models.GuInstance{
 			InstanceID: uuid.New().String(),
 			GuID:       recipe.TargetGuID,
+			Rank:       recipe.TargetRank,
 			Hunger:     100,
 			Status:     "ACTIVE",
 			Equipped:   false,
@@ -445,7 +446,7 @@ func RefineGu(c *gin.Context) {
 	}
 
 	targetName := recipe.TargetGuID
-	if targetSpec, ok := models.GuRegistry[recipe.TargetGuID]; ok {
+	if targetSpec, ok := models.GetGuAny(recipe.TargetGuID); ok {
 		targetName = targetSpec.Name
 	}
 

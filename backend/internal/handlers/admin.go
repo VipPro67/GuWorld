@@ -272,7 +272,7 @@ func AdminAddPlayerGus(c *gin.Context) {
 		return
 	}
 
-	if _, exists := models.GuRegistry[req.GuID]; !exists {
+	if _, exists := models.GetGuAny(req.GuID); !exists {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng không tồn tại"})
 		return
 	}
@@ -290,10 +290,12 @@ func AdminAddPlayerGus(c *gin.Context) {
 		return
 	}
 
+	guSpec, _ := models.GetGuAny(req.GuID)
 	for i := 0; i < req.Quantity; i++ {
 		player.GuInventory = append(player.GuInventory, models.GuInstance{
 			InstanceID: uuid.New().String(),
 			GuID:       req.GuID,
+			Rank:       guSpec.Rank,
 			Hunger:     100,
 			Status:     "ACTIVE",
 			Equipped:   false,
@@ -2019,7 +2021,7 @@ func AdminDeleteItemItem(c *gin.Context) {
 
 func AdminListRecipes(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok { return }
-	rows, err := db.DB.Query(`SELECT r.id, r.target_gu_id, COALESCE(g.name, ''), r.required_gus, r.required_materials, r.success_rate, r.primeval_stones_cost, COALESCE(r.immortal_essence_stones_cost,0) FROM refining_recipes r LEFT JOIN gu_dictionary g ON r.target_gu_id = g.id ORDER BY r.id`)
+	rows, err := db.DB.Query(`SELECT r.id, r.target_gu_id, COALESCE(g.name, ''), r.required_gus, r.required_materials, r.success_rate, r.primeval_stones_cost, COALESCE(r.immortal_essence_stones_cost,0) FROM refining_recipes r LEFT JOIN gu_dictionary g ON r.target_gu_id = g.id AND r.target_rank = g.rank ORDER BY r.id`)
 	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
 	defer rows.Close()
 
@@ -2045,6 +2047,7 @@ func AdminListRecipes(c *gin.Context) {
 type AdminRecipeInput struct {
 	ID                        string          `json:"id"`
 	TargetGuID                string          `json:"target_gu_id"`
+	TargetRank                int             `json:"target_rank"`
 	RequiredGus               json.RawMessage `json:"required_gus"`
 	RequiredMaterials         json.RawMessage `json:"required_materials"`
 	SuccessRate               float64         `json:"success_rate"`
@@ -2059,14 +2062,16 @@ func AdminCreateRecipe(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
+	targetRank := 1
+	if req.TargetRank > 0 { targetRank = req.TargetRank }
 	var exists bool
-	db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1)`, req.TargetGuID).Scan(&exists)
+	db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1 AND rank=$2)`, req.TargetGuID, targetRank).Scan(&exists)
 	if !exists { c.JSON(http.StatusBadRequest, gin.H{"error": "target_gu_id không tồn tại"}); return }
 	if req.SuccessRate <= 0 { req.SuccessRate = 0.5 }
 	if len(req.RequiredGus) == 0 { req.RequiredGus = json.RawMessage(`{}`) }
 	if len(req.RequiredMaterials) == 0 { req.RequiredMaterials = json.RawMessage(`{}`) }
-	_, err := db.DB.Exec(`INSERT INTO refining_recipes(id,target_gu_id,required_gus,required_materials,success_rate,primeval_stones_cost,immortal_essence_stones_cost) VALUES($1,$2,$3,$4,$5,$6,$7)`,
-		req.ID, req.TargetGuID, req.RequiredGus, req.RequiredMaterials, req.SuccessRate, req.PrimevalStonesCost, req.ImmortalEssenceStonesCost)
+	_, err := db.DB.Exec(`INSERT INTO refining_recipes(id,target_gu_id,target_rank,required_gus,required_materials,success_rate,primeval_stones_cost,immortal_essence_stones_cost) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
+		req.ID, req.TargetGuID, targetRank, req.RequiredGus, req.RequiredMaterials, req.SuccessRate, req.PrimevalStonesCost, req.ImmortalEssenceStonesCost)
 	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
 	auditlog.Logf(db.DB, &adminID, "admin.create_recipe", "id=%s target=%s", req.ID, req.TargetGuID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo cổ phương"})
@@ -2082,6 +2087,7 @@ func AdminUpdateRecipe(c *gin.Context) {
 	}
 	sets := []string{}; args := []interface{}{}; idx := 1
 	if req.TargetGuID != "" { sets = append(sets, "target_gu_id=$"+strconv.Itoa(idx)); args = append(args, req.TargetGuID); idx++ }
+	if req.TargetRank > 0 { sets = append(sets, "target_rank=$"+strconv.Itoa(idx)); args = append(args, req.TargetRank); idx++ }
 	if req.SuccessRate > 0 { sets = append(sets, "success_rate=$"+strconv.Itoa(idx)); args = append(args, req.SuccessRate); idx++ }
 	if req.PrimevalStonesCost > 0 { sets = append(sets, "primeval_stones_cost=$"+strconv.Itoa(idx)); args = append(args, req.PrimevalStonesCost); idx++ }
 	if req.ImmortalEssenceStonesCost > 0 { sets = append(sets, "immortal_essence_stones_cost=$"+strconv.Itoa(idx)); args = append(args, req.ImmortalEssenceStonesCost); idx++ }

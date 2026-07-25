@@ -80,7 +80,7 @@ func CheckQuest(questID string, p *models.Player) bool {
 		return p.Rank >= 2
 	case "quest_4_refine_gu":
 		for _, g := range p.GuInventory {
-			if spec, ok := models.GuRegistry[g.GuID]; ok && spec.Rank >= 2 {
+			if spec, ok := models.GetGuAny(g.GuID); ok && spec.Rank >= 2 {
 				return true
 			}
 		}
@@ -111,7 +111,7 @@ func CheckQuest(questID string, p *models.Player) bool {
 		return len(p.GuInventory) >= 10
 	case "quest_12_immortal_gu_owner":
 		for _, g := range p.GuInventory {
-			if spec, ok := models.GuRegistry[g.GuID]; ok && spec.Rank >= 6 {
+			if spec, ok := models.GetGuAny(g.GuID); ok && spec.Rank >= 6 {
 				return true
 			}
 		}
@@ -293,9 +293,11 @@ func applyQuestRewardsTx(tx *sql.Tx, player *models.Player, rewards []QuestRewar
 		case "item":
 			InventorySvc.AddItem(tx, player.ID.String(), r.ID, "materials", int(r.Amount))
 		case "gu":
+			guSpec, _ := models.GetGuAny(r.ID)
 			newGu := models.GuInstance{
 				InstanceID: "gu-" + uuid.New().String(),
 				GuID:       r.ID,
+				Rank:       guSpec.Rank,
 				Hunger:     100,
 				Status:     "ACTIVE",
 				Equipped:   false,

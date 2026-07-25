@@ -286,10 +286,12 @@ func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCod
 		case "item":
 			InventorySvc.AddItem(tx, player.ID.String(), r.ID, "materials", int(r.Amount))
 		case "gu":
+			guSpec, _ := models.GetGuAny(r.ID)
 			for i := 0; i < int(r.Amount); i++ {
 				newGu := models.GuInstance{
 					InstanceID: "gu-" + uuid.New().String(),
 					GuID:       r.ID,
+					Rank:       guSpec.Rank,
 					Hunger:     100,
 					Status:     "ACTIVE",
 					Equipped:   false,
@@ -373,7 +375,7 @@ func buildGiftCodeRewardLabel(rewards []GiftCodeReward) string {
 			parts = append(parts, fmt.Sprintf("%.0fx %s", r.Amount, itemName))
 		case "gu":
 			guName := r.ID
-			if gu, ok := models.GuRegistry[r.ID]; ok {
+			if gu, ok := models.GetGuAny(r.ID); ok {
 				guName = gu.Name
 			}
 			parts = append(parts, fmt.Sprintf("%.0fx %s", r.Amount, guName))

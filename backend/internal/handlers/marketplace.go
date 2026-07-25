@@ -911,7 +911,8 @@ func CancelListing(c *gin.Context) {
 }
 
 func mapGuFromRaw(guID string) models.GuInstance {
-	return models.GuInstance{InstanceID: uuid.New().String(), GuID: guID, Hunger: 100, Status: "SLEEPING", Equipped: false, IsVital: false}
+	spec, _ := models.GetGuAny(guID)
+	return models.GuInstance{InstanceID: uuid.New().String(), GuID: guID, Rank: spec.Rank, Hunger: 100, Status: "SLEEPING", Equipped: false, IsVital: false}
 }
 
 // GetItemName returns a user-friendly name for listed/auctioned items
@@ -919,7 +920,7 @@ func GetItemName(itemType string, itemDataJSON []byte) string {
 	if itemType == "Gu" {
 		var gus []models.GuInstance
 		if err := json.Unmarshal(itemDataJSON, &gus); err == nil && len(gus) > 0 {
-			if spec, ok := models.GuRegistry[gus[0].GuID]; ok {
+			if spec, ok := models.GetGuAny(gus[0].GuID); ok {
 				return spec.Name
 			}
 			return gus[0].GuID
@@ -938,7 +939,7 @@ func GetItemName(itemType string, itemDataJSON []byte) string {
 			var targetGuID string
 			err := db.DB.QueryRow(`SELECT target_gu_id FROM refining_recipes WHERE id = $1`, rec.RecipeID).Scan(&targetGuID)
 			if err == nil {
-				if spec, ok := models.GuRegistry[targetGuID]; ok {
+				if spec, ok := models.GetGuAny(targetGuID); ok {
 					return fmt.Sprintf("Phương thức phối chế %s", spec.Name)
 				}
 			}

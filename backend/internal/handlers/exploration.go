@@ -485,9 +485,11 @@ func MovePlayer(c *gin.Context) {
 			}
 		case "WildGu":
 			if HasExplorationInventorySpace(&player, 1) {
+				guSpec, _ := models.GetGuAny(cell.Content)
 				newGu := models.GuInstance{
 					InstanceID: uuid.New().String(),
 					GuID:       cell.Content,
+					Rank:       guSpec.Rank,
 					Hunger:     100,
 					Status:     "ACTIVE",
 					Equipped:   false,

@@ -237,7 +237,7 @@ func CombatAttack(c *gin.Context) {
 						c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể chiến đấu bằng Cổ trùng ĐÃ CHẾT: " + inst.GuID})
 						return
 					}
-					spec, ok := models.GuRegistry[inst.GuID]
+					spec, ok := models.GetGuAny(inst.GuID)
 					if !ok {
 						c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy định nghĩa của Cổ trùng: " + inst.GuID})
 						return
@@ -863,9 +863,11 @@ func CombatAttack(c *gin.Context) {
 
 						for _, gID := range loot.Gus {
 							winnerID := partyMembers[rand.Intn(len(partyMembers))]
+							guSpec, _ := models.GetGuAny(gID)
 							newGu := models.GuInstance{
 								InstanceID: uuid.New().String(),
 								GuID:       gID,
+								Rank:       guSpec.Rank,
 								Hunger:     100,
 								Status:     "ACTIVE",
 								Equipped:   false,

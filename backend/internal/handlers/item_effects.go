@@ -293,11 +293,13 @@ func rollGuDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) string 
 	var pool []weightedGu
 	var totalWeight float64
 
-	for id, spec := range models.GuRegistry {
-		w := rankDropMultiplier(spec.Rank)
-		if w > 0 {
-			pool = append(pool, weightedGu{id: id, weight: w})
-			totalWeight += w
+	for id, ranks := range models.GuRegistry {
+		for _, spec := range ranks {
+			w := rankDropMultiplier(spec.Rank)
+			if w > 0 {
+				pool = append(pool, weightedGu{id: id, weight: w})
+				totalWeight += w
+			}
 		}
 	}
 
@@ -321,10 +323,12 @@ func rollGuDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) string 
 
 	// Hunger: random 0-10%
 	hunger := rand.Intn(11) // 0 to 10
+	spec, _ := models.GetGuAny(chosenID)
 
 	newInstance := models.GuInstance{
 		InstanceID: "gu-" + uuid.New().String(),
 		GuID:       chosenID,
+		Rank:       spec.Rank,
 		Hunger:     hunger,
 		Status:     "ACTIVE",
 		Equipped:   false,
@@ -333,7 +337,7 @@ func rollGuDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) string 
 
 	guName := chosenID
 	isImmortal := false
-	if spec, ok := models.GuRegistry[chosenID]; ok {
+	if spec.ID != "" {
 		guName = spec.Name
 		isImmortal = spec.Rank >= 6 // Assuming rank 6+ is immortal
 	}
@@ -390,7 +394,7 @@ func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) string
 
 	// Find target Gu name for display
 	targetGuName := chosen.targetGuID
-	if spec, ok := models.GuRegistry[chosen.targetGuID]; ok {
+	if spec, ok := models.GetGuAny(chosen.targetGuID); ok {
 		targetGuName = spec.Name
 	}
 

@@ -786,7 +786,7 @@ func DonateGu(c *gin.Context) {
 
 	// Fetch Gu base_price + rank for contribution calculation
 	var guRank, guBasePrice int
-	err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1`, guInstance.GuID).Scan(&guBasePrice, &guRank)
+	err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1 AND rank = $2`, guInstance.GuID, guInstance.Rank).Scan(&guBasePrice, &guRank)
 	if err != nil {
 		guRank = 1
 		guBasePrice = 0
@@ -862,7 +862,7 @@ func DonateGu(c *gin.Context) {
 	}
 
 	guName := guInstance.GuID
-	if spec, ok := models.GuRegistry[guInstance.GuID]; ok {
+	if spec, ok := models.GetGuAny(guInstance.GuID); ok {
 		guName = spec.Name
 	}
 
@@ -965,9 +965,11 @@ func BuyFromSectVault(c *gin.Context) {
 		m.ContributionPoints -= cost
 		vaultGus[targetIdx].Quantity--
 
+		guSpec, _ := models.GetGuAny(req.ItemID)
 		newGu := models.GuInstance{
 			InstanceID: uuid.New().String(),
 			GuID:       req.ItemID,
+			Rank:       guSpec.Rank,
 			Hunger:     100,
 			Status:     "ACTIVE",
 			Equipped:   false,
@@ -1053,7 +1055,7 @@ func BuyFromSectVault(c *gin.Context) {
 		// Dynamic recipe cost based on target Gu rank via pricing package
 		{
 			var targetGuRank int
-			_ = tx.QueryRow(`SELECT COALESCE(gd.rank,1) FROM refining_recipes rr JOIN gu_dictionary gd ON gd.id=rr.target_gu_id WHERE rr.id=$1`, req.ItemID).Scan(&targetGuRank)
+			_ = tx.QueryRow(`SELECT COALESCE(gd.rank,1) FROM refining_recipes rr JOIN gu_dictionary gd ON gd.id=rr.target_gu_id AND gd.rank=rr.target_rank WHERE rr.id=$1`, req.ItemID).Scan(&targetGuRank)
 			cost = pricing.RecipeCostByGuRank(targetGuRank)
 		}
 		if m.ContributionPoints < cost {
@@ -1082,7 +1084,7 @@ func BuyFromSectVault(c *gin.Context) {
 
 	itemName := req.ItemID
 	if req.ItemType == "Gu" {
-		if spec, ok := models.GuRegistry[req.ItemID]; ok {
+		if spec, ok := models.GetGuAny(req.ItemID); ok {
 			itemName = spec.Name
 		}
 	} else {
@@ -1354,7 +1356,7 @@ func CompleteSectMission(c *gin.Context) {
 				}
 				// Look up Gu base_price + rank for vault cost calculation
 				var donatedGuRank, donatedGuBase int
-				_ = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1`, donatedGuID).Scan(&donatedGuBase, &donatedGuRank)
+				_ = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1 ORDER BY rank DESC LIMIT 1`, donatedGuID).Scan(&donatedGuBase, &donatedGuRank)
 				if donatedGuRank == 0 {
 					donatedGuRank = 1
 				}
@@ -1915,7 +1917,7 @@ func StockSectVault(c *gin.Context) {
 	if itemType == "gu" {
 		// Calculate Gu cost: lookup rank and base_price from gu_dictionary
 		var guRank, guBasePrice int
-		err = tx.QueryRow(`SELECT COALESCE(rank,1), COALESCE(base_price,0) FROM gu_dictionary WHERE id = $1`, req.ItemID).Scan(&guRank, &guBasePrice)
+		err = tx.QueryRow(`SELECT COALESCE(rank,1), COALESCE(base_price,0) FROM gu_dictionary WHERE id = $1 ORDER BY rank DESC LIMIT 1`, req.ItemID).Scan(&guRank, &guBasePrice)
 		if err != nil {
 			guRank = 1
 			guBasePrice = 0
@@ -1980,7 +1982,7 @@ func StockSectVault(c *gin.Context) {
 
 		// Recalculate cost for this Gu using pricing package
 		var stockGuRank, stockGuBasePrice int
-		_ = tx.QueryRow(`SELECT COALESCE(rank,1), COALESCE(base_price,0) FROM gu_dictionary WHERE id = $1`, req.ItemID).Scan(&stockGuRank, &stockGuBasePrice)
+		_ = tx.QueryRow(`SELECT COALESCE(rank,1), COALESCE(base_price,0) FROM gu_dictionary WHERE id = $1 ORDER BY rank DESC LIMIT 1`, req.ItemID).Scan(&stockGuRank, &stockGuBasePrice)
 		if stockGuRank == 0 {
 			stockGuRank = 1
 		}
@@ -2040,7 +2042,7 @@ func StockSectVault(c *gin.Context) {
 	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
 	itemName := req.ItemID
 	if itemType == "gu" {
-		if spec, ok := models.GuRegistry[req.ItemID]; ok {
+		if spec, ok := models.GetGuAny(req.ItemID); ok {
 			itemName = spec.Name
 		}
 	} else if itemType == "material" {

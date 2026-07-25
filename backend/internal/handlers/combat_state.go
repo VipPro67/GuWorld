@@ -147,9 +147,9 @@ func StartCombat(tx *sql.Tx, base *models.CombatState, player *models.Player) *m
 	if base.CombatMode != "virtual" && base.EnemyGuInventory != nil {
 		var filteredGu []models.GuInstance
 		for _, g := range base.EnemyGuInventory {
-			spec, ok := models.GuRegistry[g.GuID]
+			spec, ok := models.GetGuAny(g.GuID)
 			if ok && spec.Rank >= 6 {
-				exists, _ := db.CheckImmortalGuExists(tx, g.GuID)
+				exists, _ := db.CheckImmortalGuExists(tx, g.GuID, spec.Rank, nil)
 				if exists {
 					continue
 				}

@@ -1,32 +1,33 @@
-id,target_gu_id,required_gus,required_materials,success_rate,primeval_stones_cost,immortal_essence_stones_cost
-recipe_big_belly_toad,GU_BIG_BELLY_TOAD,{},"{""water_weed"": 2, ""yellow_mud"": 2}",0.7,90,0
-recipe_black_bristle,GU_BLACK_BRISTLE,"{""GU_GREEN_SILK"": 1}","{""black_boar_tusk"": 1}",0.75,80,0
-recipe_blood_moon,GU_BLOOD_MOON,"{""GU_BLOOD_QI"": 1, ""GU_MOON_HALO"": 1}",{},0.7,250,0
-recipe_bone_wings,GU_BONE_WINGS,{},"{""beast_bones"": 5, ""summit_stone"": 1, ""cold_ice_grass"": 1, ""golden_crow_meteor"": 1, ""nine_palace_flower"": 1}",0.35,1200,0
-recipe_dream_sweat_butterfly,GU_DREAM_SWEAT_BUTTERFLY,"{""GU_WHITE_COCOON"": 1}","{""nectar"": 3}",0.5,300,0
-recipe_earth_communication,GU_EARTH_COMMUNICATION,"{""GU_FLESH_EAR"": 1, ""GU_EARTH_WORM"": 1}","{""ginseng"": 2}",0.75,70,0
-recipe_earth_escape,GU_EARTH_ESCAPE,{},"{""yellow_mud"": 5, ""earth_horse_hoof"": 1}",0.45,1800,0
-recipe_electric_centipede,GU_ELECTRIC_CENTIPEDE,{},"{""iron_ore"": 2, ""lightning_pearl"": 3}",0.45,900,0
-recipe_five_orifice_fire_pagoda,GU_FIVE_ORIFICE_FIRE_PAGODA,"{""GU_FOUR_ORIFICE_FIRE_TOWER"": 1}","{""sun_flame"": 5}",0.35,3000,0
-recipe_fixed_immortal_travel,GU_FIXED_IMMORTAL_TRAVEL,"{""GU_SUN_RAY"": 1, ""GU_STAR_GEM"": 1, ""GU_AZURE_BAMBOO"": 1, ""GU_DIVINE_TRAVEL"": 1}","{""glory_of_the_immemorial_light"": 1}",0.01,0,50
-recipe_flying_bear_phantom,GU_FLYING_BEAR_PHANTOM,{},"{""soul_core"": 1, ""beast_bones"": 5, ""flying_bear_meat"": 5}",0.12,0,30
-recipe_four_flavors_liquor,GU_FOUR_FLAVORS_LIQUOR,"{""GU_LIQUOR_WORM"": 2}","{""sour_wine"": 1, ""spicy_wine"": 1, ""sweet_wine"": 1, ""bitter_wine"": 1}",0.6,120,0
-recipe_four_orifice_fire_tower,GU_FOUR_ORIFICE_FIRE_TOWER,"{""GU_THREE_ORIFICE_FIRE_HOUSE"": 1}","{""sun_flame"": 3}",0.5,1000,0
-recipe_gold_cup_silver_goblet,GU_GOLD_CUP_SILVER_GOBLET,{},"{""primeval_stone"": 500}",0.5,1000,0
-recipe_heavenly_canopy,GU_CANOPY,"{""GU_WHITE_JADE"": 1}","{""water_defense_shell"": 1}",0.55,260,0
-recipe_hundred_year_wood_charm,GU_HUNDRED_YEAR_WOOD_CHARM,"{""GU_WOOD_CHARM"": 1}","{""tree_sap"": 5, ""hundred_year_lifespan_gu"": 1}",0.35,1200,0
-recipe_moon_halo,GU_MOON_HALO,"{""GU_MOONLIGHT"": 1, ""GU_LITTLE_LIGHT"": 2}",{},0.75,50,0
-recipe_moon_raiment,GU_MOON_RAIMENT,"{""GU_JADE_SKIN"": 1, ""GU_MOONLIGHT"": 1}",{},0.85,50,0
-recipe_moon_shadow,GU_MOON_SHADOW,"{""GU_ILLUSION_MOON"": 1}","{""moon_orchid_petal"": 5}",0.45,700,0
-recipe_moon_silver,GU_MOON_SILVER,"{""GU_MOONLIGHT"": 1, ""GU_SILVER_STONE"": 1}",{},0.85,40,0
-recipe_moon_whirl,GU_MOON_WHIRL,"{""GU_MOONLIGHT"": 1, ""GU_WHIRLWIND"": 1}",{},0.85,50,0
-recipe_nine_eyes_liquor,GU_NINE_EYES_LIQUOR,"{""GU_SEVEN_FRAGRANCES_LIQUOR"": 2}","{""nine_beast_kings_eyes"": 1}",0.2,5000,0
-recipe_oil_harvest,GU_OIL_HARVEST,{},"{""black_oil_refined"": 2, ""gold_dragonfish_scale"": 1}",0.5,1600,0
-recipe_seven_fragrances_liquor,GU_SEVEN_FRAGRANCES_LIQUOR,"{""GU_FOUR_FLAVORS_LIQUOR"": 2}","{""seven_spices"": 1}",0.4,800,0
-recipe_single_blade,GU_SINGLE_BLADE,{},"{""sword_qi"": 3, ""blade_food"": 3}",0.12,0,30
-recipe_stealth_scales,GU_STEALTH_SCALES,"{""GU_FISH_SCALE"": 1, ""GU_STEALTH_STONE"": 1}",{},0.8,80,0
-recipe_strength_infusion,GU_STRENGTH_INFUSION,{},"{""beast_meat"": 5, ""primeval_stone"": 200}",0.55,800,0
-recipe_treasure_moonlight_king,GU_TREASURE_MOONLIGHT_KING,"{""GU_MOON_RAIMENT"": 1}","{""jade_stone"": 3, ""moon_orchid_petal"": 10}",0.25,5000,0
-recipe_white_cocoon,GU_WHITE_COCOON,"{""GU_LIQUOR_WORM"": 1}","{""white_lotus_giant_silkworm"": 1}",0.65,120,0
-recipe_white_jade,GU_WHITE_JADE,"{""GU_JADE_SKIN"": 1, ""GU_WHITE_BOAR"": 1}","{""wild_boar_tusk"": 1}",0.8,60,0
-recipe_yellow_bronze_toad,GU_YELLOW_BRONZE_TOAD,"{""GU_LAZY_EARTH_TOAD"": 1}","{""copper_ore"": 3, ""yellow_mud"": 5, ""copper_spike"": 2}",0.55,300,0
+id,target_gu_id,target_rank,required_gus,required_materials,success_rate,primeval_stones_cost,immortal_essence_stones_cost
+recipe_big_belly_toad,GU_BIG_BELLY_TOAD,1,{},"{""water_weed"": 2, ""yellow_mud"": 2}",0.7,90,0
+recipe_black_bristle,GU_BLACK_BRISTLE,1,"{""GU_GREEN_SILK"": 1}","{""black_boar_tusk"": 1}",0.75,80,0
+recipe_blood_moon,GU_BLOOD_MOON,1,"{""GU_BLOOD_QI"": 1, ""GU_MOON_HALO"": 1}",{},0.7,250,0
+recipe_bone_wings,GU_BONE_WINGS,1,{},"{""beast_bones"": 5, ""summit_stone"": 1, ""cold_ice_grass"": 1, ""golden_crow_meteor"": 1, ""nine_palace_flower"": 1}",0.35,1200,0
+recipe_dream_sweat_butterfly,GU_DREAM_SWEAT_BUTTERFLY,1,"{""GU_WHITE_COCOON"": 1}","{""nectar"": 3}",0.5,300,0
+recipe_earth_communication,GU_EARTH_COMMUNICATION,1,"{""GU_FLESH_EAR"": 1, ""GU_EARTH_WORM"": 1}","{""ginseng"": 2}",0.75,70,0
+recipe_earth_escape,GU_EARTH_ESCAPE,1,{},"{""yellow_mud"": 5, ""earth_horse_hoof"": 1}",0.45,1800,0
+recipe_electric_centipede,GU_ELECTRIC_CENTIPEDE,1,{},"{""iron_ore"": 2, ""lightning_pearl"": 3}",0.45,900,0
+recipe_five_orifice_fire_pagoda,GU_FIVE_ORIFICE_FIRE_PAGODA,1,"{""GU_FOUR_ORIFICE_FIRE_TOWER"": 1}","{""sun_flame"": 5}",0.35,3000,0
+recipe_fixed_immortal_travel,GU_FIXED_IMMORTAL_TRAVEL,1,"{""GU_SUN_RAY"": 1, ""GU_STAR_GEM"": 1, ""GU_AZURE_BAMBOO"": 1, ""GU_DIVINE_TRAVEL"": 1}","{""glory_of_the_immemorial_light"": 1}",0.01,0,50
+recipe_flying_bear_phantom,GU_FLYING_BEAR_PHANTOM,1,{},"{""soul_core"": 1, ""beast_bones"": 5, ""flying_bear_meat"": 5}",0.12,0,30
+recipe_four_flavors_liquor,GU_FOUR_FLAVORS_LIQUOR,1,"{""GU_LIQUOR_WORM"": 2}","{""sour_wine"": 1, ""spicy_wine"": 1, ""sweet_wine"": 1, ""bitter_wine"": 1}",0.6,120,0
+recipe_four_orifice_fire_tower,GU_FOUR_ORIFICE_FIRE_TOWER,1,"{""GU_THREE_ORIFICE_FIRE_HOUSE"": 1}","{""sun_flame"": 3}",0.5,1000,0
+recipe_gold_cup_silver_goblet,GU_GOLD_CUP_SILVER_GOBLET,1,{},"{""primeval_stone"": 500}",0.5,1000,0
+recipe_heavenly_canopy,GU_CANOPY,1,"{""GU_WHITE_JADE"": 1}","{""water_defense_shell"": 1}",0.55,260,0
+recipe_hundred_year_wood_charm,GU_HUNDRED_YEAR_WOOD_CHARM,1,"{""GU_WOOD_CHARM"": 1}","{""tree_sap"": 5, ""hundred_year_lifespan_gu"": 1}",0.35,1200,0
+recipe_moon_halo,GU_MOON_HALO,1,"{""GU_MOONLIGHT"": 1, ""GU_LITTLE_LIGHT"": 2}",{},0.75,50,0
+recipe_moon_raiment,GU_MOON_RAIMENT,1,"{""GU_JADE_SKIN"": 1, ""GU_MOONLIGHT"": 1}",{},0.85,50,0
+recipe_moon_shadow,GU_MOON_SHADOW,1,"{""GU_ILLUSION_MOON"": 1}","{""moon_orchid_petal"": 5}",0.45,700,0
+recipe_moon_silver,GU_MOON_SILVER,1,"{""GU_MOONLIGHT"": 1, ""GU_SILVER_STONE"": 1}",{},0.85,40,0
+recipe_moon_whirl,GU_MOON_WHIRL,1,"{""GU_MOONLIGHT"": 1, ""GU_WHIRLWIND"": 1}",{},0.85,50,0
+recipe_nine_eyes_liquor,GU_NINE_EYES_LIQUOR,1,"{""GU_SEVEN_FRAGRANCES_LIQUOR"": 2}","{""nine_beast_kings_eyes"": 1}",0.2,5000,0
+recipe_oil_harvest,GU_OIL_HARVEST,1,{},"{""black_oil_refined"": 2, ""gold_dragonfish_scale"": 1}",0.5,1600,0
+recipe_seven_fragrances_liquor,GU_SEVEN_FRAGRANCES_LIQUOR,1,"{""GU_FOUR_FLAVORS_LIQUOR"": 2}","{""seven_spices"": 1}",0.4,800,0
+recipe_single_blade,GU_SINGLE_BLADE,1,{},"{""sword_qi"": 3, ""blade_food"": 3}",0.12,0,30
+recipe_stealth_scales,GU_STEALTH_SCALES,1,"{""GU_FISH_SCALE"": 1, ""GU_STEALTH_STONE"": 1}",{},0.8,80,0
+recipe_strength_infusion,GU_STRENGTH_INFUSION,1,{},"{""beast_meat"": 5, ""primeval_stone"": 200}",0.55,800,0
+recipe_treasure_moonlight_king,GU_TREASURE_MOONLIGHT_KING,1,"{""GU_MOON_RAIMENT"": 1}","{""jade_stone"": 3, ""moon_orchid_petal"": 10}",0.25,5000,0
+recipe_white_cocoon,GU_WHITE_COCOON,1,"{""GU_LIQUOR_WORM"": 1}","{""white_lotus_giant_silkworm"": 1}",0.65,120,0
+recipe_white_jade,GU_WHITE_JADE,1,"{""GU_JADE_SKIN"": 1, ""GU_WHITE_BOAR"": 1}","{""wild_boar_tusk"": 1}",0.8,60,0
+recipe_yellow_bronze_toad,GU_YELLOW_BRONZE_TOAD,1,"{""GU_LAZY_EARTH_TOAD"": 1}","{""copper_ore"": 3, ""yellow_mud"": 5, ""copper_spike"": 2}",0.55,300,0
+recipe_sac_6_7,GU_SPRING_AUTUMN_CICADA,7,"{""GU_SPRING_AUTUMN_CICADA"": 1}","{""river_of_time_water"": 10, ""immortal_essence"": 5, ""glory_of_the_immemorial_light"": 1}",0.15,0,100

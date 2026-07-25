@@ -86,16 +86,18 @@ func ApplyLoot(tx *sql.Tx, player *models.Player, loot RolledLoot) []string {
 
 	for _, guID := range loot.Gus {
 		instID := "gu-" + uuid.New().String()
+		guSpec, _ := models.GetGuAny(guID)
 		newInstance := models.GuInstance{
 			InstanceID: instID,
 			GuID:       guID,
+			Rank:       guSpec.Rank,
 			Hunger:     100,
 			Status:     "ACTIVE",
 			Equipped:   false,
 		}
 		guName := guID
-		if spec, ok := models.GuRegistry[guID]; ok {
-			guName = spec.Name
+		if guSpec.ID != "" {
+			guName = guSpec.Name
 		}
 		if !isExplore {
 			player.GuInventory = append(player.GuInventory, newInstance)

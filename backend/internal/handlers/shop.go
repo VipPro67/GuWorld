@@ -212,7 +212,7 @@ func BuyShopItem(c *gin.Context) {
 	switch selectedItem.Type {
 	case "Gu":
 		logger.S.Infof("Adding %d x %s to player %s inventory", req.Quantity, selectedItem.Name, player.ID)
-		spec, ok := models.GuRegistry[selectedItem.ID]
+		spec, ok := models.GetGuAny(selectedItem.ID)
 		if !ok {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy định nghĩa của Cổ trùng trong Dictionary"})
 			return
@@ -222,6 +222,7 @@ func BuyShopItem(c *gin.Context) {
 			newInstance := models.GuInstance{
 				InstanceID: uuid.New().String(),
 				GuID:       spec.ID,
+				Rank:       spec.Rank,
 				Hunger:     100,
 				Status:     "ACTIVE",
 				Equipped:   false,
@@ -375,7 +376,7 @@ func SellShopItem(c *gin.Context) {
 	}
 	itemName := req.ItemID
 	if req.ItemType == "Gu" {
-		if spec, ok := models.GuRegistry[req.ItemID]; ok {
+		if spec, ok := models.GetGuAny(req.ItemID); ok {
 			itemName = spec.Name
 		}
 	} else {

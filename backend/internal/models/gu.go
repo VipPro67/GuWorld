@@ -186,7 +186,35 @@ func rawEffectNumber(raw json.RawMessage) (float64, bool) {
 	return 0, false
 }
 
-var GuRegistry = make(map[string]GuDictionaryItem)
+var GuRegistry = make(map[string]map[int]GuDictionaryItem)
+
+func GetGu(id string, rank int) (GuDictionaryItem, bool) {
+	ranks, ok := GuRegistry[id]
+	if !ok {
+		return GuDictionaryItem{}, false
+	}
+	item, found := ranks[rank]
+	return item, found
+}
+
+func GetGuAny(id string) (GuDictionaryItem, bool) {
+	ranks, ok := GuRegistry[id]
+	if !ok {
+		return GuDictionaryItem{}, false
+	}
+	var best GuDictionaryItem
+	max := 0
+	for r, item := range ranks {
+		if r > max {
+			max = r
+			best = item
+		}
+	}
+	if max == 0 {
+		return GuDictionaryItem{}, false
+	}
+	return best, true
+}
 
 func LoadGuRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
@@ -198,7 +226,7 @@ func LoadGuRegistry(db *sql.DB) error {
 	}
 	defer rows.Close()
 
-	newRegistry := make(map[string]GuDictionaryItem)
+	newRegistry := make(map[string]map[int]GuDictionaryItem)
 	count := 0
 
 	for rows.Next() {
@@ -211,7 +239,7 @@ func LoadGuRegistry(db *sql.DB) error {
 			&item.Type, &item.BaseManaCost,
 			&item.Effects, &foodTypesRaw, &item.HungerRate,
 			&item.MaxHunger, &item.Description,
-			&targetTypeRaw, &rarityRaw, &isImmortalRaw, // Added missing 3 destinations
+			&targetTypeRaw, &rarityRaw, &isImmortalRaw,
 			&item.PrimaryRole,
 			&combatRolesRaw, &combatTagsRaw, &supportTagsRaw, &item.BasePrice,
 			&item.ImageURL,
@@ -222,7 +250,6 @@ func LoadGuRegistry(db *sql.DB) error {
 		}
 
 		if err := json.Unmarshal(pathRaw, &item.Path); err != nil {
-			// fallback to single string in array if unmarshal fails (legacy)
 			item.Path = []string{string(pathRaw)}
 		}
 		_ = json.Unmarshal(foodTypesRaw, &item.FoodTypes)
@@ -230,7 +257,10 @@ func LoadGuRegistry(db *sql.DB) error {
 		_ = json.Unmarshal(combatTagsRaw, &item.CombatTags)
 		_ = json.Unmarshal(supportTagsRaw, &item.SupportTags)
 
-		newRegistry[item.ID] = item
+		if _, ok := newRegistry[item.ID]; !ok {
+			newRegistry[item.ID] = make(map[int]GuDictionaryItem)
+		}
+		newRegistry[item.ID][item.Rank] = item
 		count++
 	}
 

@@ -98,7 +98,7 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 	for i := range guInv {
 		gu := guInv[i]
 		if gu.Status == "ACTIVE" || gu.Status == "SLEEPING" {
-			specs, found := models.GuRegistry[gu.GuID]
+			specs, found := models.GetGuAny(gu.GuID)
 			if !found {
 				newInventory = append(newInventory, gu)
 				continue

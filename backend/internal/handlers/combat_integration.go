@@ -10,7 +10,7 @@ func IntegratePassiveGus(player *models.Player, logs *[]string) {
 	newInventory := models.GuInventory{}
 	for _, gu := range player.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" {
-			spec, ok := models.GuRegistry[gu.GuID]
+			spec, ok := models.GetGuAny(gu.GuID)
 			if ok && spec.Type == "Passive" {
 				gu.IntegrationTime += 1.0
 				if gu.IntegrationTime >= 5.0 {

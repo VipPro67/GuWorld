@@ -12,6 +12,7 @@ import (
 type GuInstance struct {
 	InstanceID      string  `json:"instance_id"`
 	GuID            string  `json:"gu_id"`
+	Rank            int     `json:"rank"`
 	Hunger          int     `json:"hunger"`
 	Status          string  `json:"status"` // "ACTIVE", "SLEEPING", "DEAD"
 	Equipped        bool    `json:"equipped"`

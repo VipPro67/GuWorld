@@ -106,9 +106,9 @@ func InitSchema() error {
 	// 2. Create gu_dictionary
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS gu_dictionary (
-		id VARCHAR(50) PRIMARY KEY,
-		name VARCHAR(100) NOT NULL,
+		id VARCHAR(50) NOT NULL,
 		rank INTEGER NOT NULL,
+		name VARCHAR(100) NOT NULL,
 		path JSONB NOT NULL DEFAULT '[]'::jsonb,
 		gu_type VARCHAR(50) NOT NULL,
 		base_mana_cost DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -123,7 +123,8 @@ func InitSchema() error {
 		primary_role VARCHAR(80),
 		combat_roles JSONB DEFAULT '[]',
 		combat_tags JSONB DEFAULT '[]',
-		support_tags JSONB DEFAULT '[]'
+		support_tags JSONB DEFAULT '[]',
+		PRIMARY KEY (id, rank)
 	);`)
 	if err != nil {
 		return fmt.Errorf("failed to create gu_dictionary table: %w", err)
@@ -133,12 +134,14 @@ func InitSchema() error {
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS refining_recipes (
 		id VARCHAR(50) PRIMARY KEY,
-		target_gu_id VARCHAR(50) NOT NULL REFERENCES gu_dictionary(id) ON DELETE CASCADE,
+		target_gu_id VARCHAR(50) NOT NULL,
+		target_rank INTEGER NOT NULL DEFAULT 1,
 		required_gus JSONB NOT NULL,
 		required_materials JSONB NOT NULL,
 		success_rate DOUBLE PRECISION NOT NULL,
 		primeval_stones_cost INTEGER DEFAULT 0,
-		immortal_essence_stones_cost DOUBLE PRECISION DEFAULT 0
+		immortal_essence_stones_cost DOUBLE PRECISION DEFAULT 0,
+		FOREIGN KEY (target_gu_id, target_rank) REFERENCES gu_dictionary(id, rank) ON DELETE CASCADE
 	);`)
 	if err != nil {
 		return fmt.Errorf("failed to create refining_recipes table: %w", err)
@@ -822,8 +825,10 @@ func InitSchema() error {
 	CREATE TABLE IF NOT EXISTS player_gu (
 		id VARCHAR(80) PRIMARY KEY,
 		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		gu_id VARCHAR(50) NOT NULL REFERENCES gu_dictionary(id),
+		gu_id VARCHAR(50) NOT NULL,
+		gu_rank INTEGER NOT NULL DEFAULT 1,
 		rank INTEGER NOT NULL DEFAULT 1,
+		FOREIGN KEY (gu_id, gu_rank) REFERENCES gu_dictionary(id, rank),
 		level INTEGER NOT NULL DEFAULT 1,
 		hunger DOUBLE PRECISION NOT NULL DEFAULT 100,
 		state VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
@@ -877,6 +882,25 @@ func InitSchema() error {
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS tribulation_count INTEGER NOT NULL DEFAULT 0;`, "tribulation_count"},
 		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS rank INTEGER DEFAULT 1;`, "item_dictionary.rank"},
 		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{}';`, "item_dictionary.effects"},
+
+		// Composite PK (id, rank) migration for gu_dictionary
+		// Must drop FKs first before dropping the PK they reference
+		{`ALTER TABLE refining_recipes ADD COLUMN IF NOT EXISTS target_rank INTEGER NOT NULL DEFAULT 1;`, "add_target_rank"},
+		{`UPDATE refining_recipes rr SET target_rank = gd.rank FROM gu_dictionary gd WHERE gd.id = rr.target_gu_id AND rr.target_rank = 1;`, "backfill_target_rank"},
+		{`ALTER TABLE refining_recipes DROP CONSTRAINT IF EXISTS refining_recipes_target_gu_id_fkey;`, "drop_recipe_fk"},
+		{`ALTER TABLE refining_recipes DROP CONSTRAINT IF EXISTS refining_recipes_target_gu_id_target_rank_fkey;`, "drop_recipe_fk2"},
+		{`ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS gu_rank INTEGER NOT NULL DEFAULT 1;`, "add_player_gu_rank"},
+		{`UPDATE player_gu SET gu_rank = rank WHERE gu_rank = 1;`, "backfill_player_gu_rank"},
+		{`ALTER TABLE player_gu DROP CONSTRAINT IF EXISTS player_gu_gu_id_fkey;`, "drop_player_gu_fk"},
+		{`ALTER TABLE player_gu DROP CONSTRAINT IF EXISTS player_gu_gu_id_gu_rank_fkey;`, "drop_player_gu_fk2"},
+		{`ALTER TABLE gu_dictionary DROP CONSTRAINT IF EXISTS gu_dictionary_pkey;`, "drop_gu_dict_pk"},
+		{`ALTER TABLE gu_dictionary ADD PRIMARY KEY (id, rank);`, "add_gu_dict_pk"},
+		{`ALTER TABLE refining_recipes ADD FOREIGN KEY (target_gu_id, target_rank) REFERENCES gu_dictionary(id, rank) ON DELETE CASCADE;`, "add_recipe_fk"},
+		{`ALTER TABLE player_gu ADD FOREIGN KEY (gu_id, gu_rank) REFERENCES gu_dictionary(id, rank);`, "add_player_gu_fk"},
+		{`UPDATE players SET gu_inventory = COALESCE(gu_inventory, '[]'::jsonb) WHERE gu_inventory IS NULL;`, "fix_null_gu_inventory"},
+		{`UPDATE players SET gu_inventory = (SELECT jsonb_agg(CASE WHEN elem->>'rank' IS NULL OR elem->>'rank' = '' THEN elem || jsonb_build_object('rank', COALESCE((SELECT gd.rank FROM gu_dictionary gd WHERE gd.id = elem->>'gu_id' LIMIT 1), 1)) ELSE elem END) FROM jsonb_array_elements(COALESCE(gu_inventory, '[]'::jsonb)) AS elem) WHERE gu_inventory IS NOT NULL AND gu_inventory::text != '[]' AND gu_inventory::text != 'null';`, "backfill_gu_inventory_rank"},
+		{`UPDATE players SET temp_loot = COALESCE(temp_loot, '{}'::jsonb) WHERE temp_loot IS NULL;`, "fix_null_temp_loot"},
+		{`UPDATE players SET temp_loot = jsonb_set(temp_loot, '{gu_inventory}', COALESCE((SELECT jsonb_agg(CASE WHEN elem->>'rank' IS NULL OR elem->>'rank' = '' THEN elem || jsonb_build_object('rank', COALESCE((SELECT gd.rank FROM gu_dictionary gd WHERE gd.id = elem->>'gu_id' LIMIT 1), 1)) ELSE elem END) FROM jsonb_array_elements(COALESCE(temp_loot->'gu_inventory', '[]'::jsonb)) AS elem), '[]'::jsonb), false) WHERE temp_loot IS NOT NULL AND temp_loot::text != '{}' AND temp_loot::text != 'null';`, "backfill_temp_loot_rank"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS lifespan DOUBLE PRECISION NOT NULL DEFAULT 100.0;`, "lifespan"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS time_speed_multiplier DOUBLE PRECISION NOT NULL DEFAULT 1.0;`, "time_speed_multiplier"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS party_id UUID NULL;`, "party_id"},
@@ -1586,8 +1610,9 @@ func seedGusFromCSV(filename string) error {
 	}
 
 	type guRow struct{ fields []string }
-	seen := make(map[string]guRow)
-	order := []string{}
+	type guKey struct{ id, rank string }
+	seen := make(map[guKey]guRow)
+	order := []guKey{}
 
 	for {
 		row, err := r.Read()
@@ -1604,10 +1629,12 @@ func seedGusFromCSV(filename string) error {
 		if id == "" {
 			continue
 		}
-		if _, exists := seen[id]; !exists {
-			order = append(order, id)
+		rank := strings.TrimSpace(row[rankIdx])
+		key := guKey{id, rank}
+		if _, exists := seen[key]; !exists {
+			order = append(order, key)
 		}
-		seen[id] = guRow{fields: row}
+		seen[key] = guRow{fields: row}
 	}
 
 	get := func(row []string, idx int) string {
@@ -1617,10 +1644,11 @@ func seedGusFromCSV(filename string) error {
 		return strings.TrimSpace(row[idx])
 	}
 
-	for _, id := range order {
-		row := seen[id].fields
+	for _, key := range order {
+		row := seen[key].fields
+		id := key.id
+		rankStr := key.rank
 		name := get(row, nameIdx)
-		rankStr := get(row, rankIdx)
 		guType := get(row, typeIdx)
 		hungerStr := get(row, hungerIdx)
 		foodType := get(row, foodIdx)
@@ -1701,7 +1729,7 @@ func seedGusFromCSV(filename string) error {
 		_, err := DB.Exec(`
 			INSERT INTO gu_dictionary (id, name, rank, path, gu_type, base_mana_cost, effects, hunger_rate, food_types, max_hunger, description, target_type, rarity, is_immortal, primary_role, combat_roles, combat_tags, support_tags, base_price, image_url)
 			VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7::jsonb, $8, $9::jsonb, $10, $11, $12, $13, $14, $15, $16::jsonb, $17::jsonb, $18::jsonb, $19, $20)
-			ON CONFLICT (id) DO UPDATE
+			ON CONFLICT (id, rank) DO UPDATE
 			SET name=EXCLUDED.name, rank=EXCLUDED.rank, path=EXCLUDED.path, gu_type=EXCLUDED.gu_type,
 			    base_mana_cost=EXCLUDED.base_mana_cost, effects=EXCLUDED.effects,
 			    hunger_rate=EXCLUDED.hunger_rate, food_types=EXCLUDED.food_types, max_hunger=EXCLUDED.max_hunger, description=EXCLUDED.description,
@@ -1731,6 +1759,7 @@ func seedRecipesFromCSV(filename string) error {
 	col := func(name string) int { return colIndex(header, name) }
 	idIdx := col("id")
 	targetIdx := col("target_gu_id")
+	targetRankIdx := col("target_rank")
 	reqGusIdx := col("required_gus")
 	reqMatsIdx := col("required_materials")
 	rateIdx := col("success_rate")
@@ -1762,6 +1791,7 @@ func seedRecipesFromCSV(filename string) error {
 			continue
 		}
 		targetGuID := get(row, targetIdx)
+		targetRankStr := get(row, targetRankIdx)
 		reqGus := get(row, reqGusIdx)
 		reqMats := get(row, reqMatsIdx)
 		if reqMats == "" {
@@ -1770,6 +1800,11 @@ func seedRecipesFromCSV(filename string) error {
 		rateStr := get(row, rateIdx)
 		stoneCostStr := get(row, stoneCostIdx)
 		immortalCostStr := get(row, immortalCostIdx)
+
+		targetRank := 1
+		if targetRankStr != "" {
+			fmt.Sscanf(targetRankStr, "%d", &targetRank)
+		}
 
 		rate := 0.5
 		fmt.Sscanf(rateStr, "%f", &rate)
@@ -1780,20 +1815,20 @@ func seedRecipesFromCSV(filename string) error {
 
 		// Skip if target Gu doesn't exist (FK constraint)
 		var exists bool
-		if err = DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1)`, targetGuID).Scan(&exists); err != nil || !exists {
-			logger.S.Warnf("Recipe %s skipped: target_gu_id %s not in gu_dictionary", id, targetGuID)
+		if err = DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1 AND rank=$2)`, targetGuID, targetRank).Scan(&exists); err != nil || !exists {
+			logger.S.Warnf("Recipe %s skipped: target %s rank %d not in gu_dictionary", id, targetGuID, targetRank)
 			skipped++
 			continue
 		}
 
 		_, err = DB.Exec(`
-			INSERT INTO refining_recipes (id, target_gu_id, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost)
-			VALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6, $7)
+			INSERT INTO refining_recipes (id, target_gu_id, target_rank, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost)
+			VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8)
 			ON CONFLICT (id) DO UPDATE
-			SET target_gu_id=EXCLUDED.target_gu_id, required_gus=EXCLUDED.required_gus,
+			SET target_gu_id=EXCLUDED.target_gu_id, target_rank=EXCLUDED.target_rank, required_gus=EXCLUDED.required_gus,
 			    required_materials=EXCLUDED.required_materials, success_rate=EXCLUDED.success_rate,
 			    primeval_stones_cost=EXCLUDED.primeval_stones_cost, immortal_essence_stones_cost=EXCLUDED.immortal_essence_stones_cost
-		`, id, targetGuID, reqGus, reqMats, rate, stoneCost, immortalCost)
+		`, id, targetGuID, targetRank, reqGus, reqMats, rate, stoneCost, immortalCost)
 		if err != nil {
 			return fmt.Errorf("upsert recipe %s: %w", id, err)
 		}
@@ -2542,17 +2577,27 @@ func seedSectMissionsFromCSV(filename string) error {
 	return nil
 }
 
-// CheckImmortalGuExists verifies if a specific Immortal Gu exists anywhere in the world.
-func CheckImmortalGuExists(tx *sql.Tx, guID string) (bool, error) {
+// CheckImmortalGuExists verifies if a specific Immortal Gu (id, rank) exists anywhere in the world,
+// excluding instances whose InstanceID is in excludeInstanceIDs (being consumed in a refine).
+func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs []string) (bool, error) {
 	var exists bool
+
+	excludeArray := "{}"
+	if len(excludeInstanceIDs) > 0 {
+		b, _ := json.Marshal(excludeInstanceIDs)
+		excludeArray = string(b)
+	}
 
 	// 1. Kiểm tra trong rương đồ gu_inventory của tất cả người chơi
 	err := tx.QueryRow(`
 		SELECT EXISTS(
-			SELECT 1 FROM players 
-			WHERE gu_inventory @> jsonb_build_array(jsonb_build_object('gu_id', $1::text))
+			SELECT 1 FROM players,
+			jsonb_array_elements(gu_inventory) AS elem
+			WHERE elem->>'gu_id' = $1::text
+			  AND COALESCE((elem->>'rank')::int, 0) = $2
+			  AND NOT (elem->>'instance_id' = ANY($3::text[]))
 		)
-	`, guID).Scan(&exists)
+	`, guID, rank, excludeArray).Scan(&exists)
 	if err != nil {
 		return false, err
 	}
@@ -2561,7 +2606,7 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string) (bool, error) {
 	}
 
 	// 1b. Kiểm tra trong bảng phụ player_gu (phòng hờ)
-	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM player_gu WHERE gu_id = $1)", guID).Scan(&exists)
+	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM player_gu WHERE gu_id = $1 AND gu_rank = $2)", guID, rank).Scan(&exists)
 	if err != nil {
 		return false, err
 	}
@@ -2572,12 +2617,14 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string) (bool, error) {
 	// 2. Kiểm tra trên sàn giao dịch/đấu giá (auction)
 	err = tx.QueryRow(`
 		SELECT EXISTS(
-			SELECT 1 FROM auction 
-			WHERE item_type = 'Gu' 
-			  AND status = 'ACTIVE' 
-			  AND item_data @> jsonb_build_array(jsonb_build_object('gu_id', $1::text))
+			SELECT 1 FROM auction,
+			jsonb_array_elements(item_data) AS elem
+			WHERE item_type = 'Gu'
+			  AND status = 'ACTIVE'
+			  AND elem->>'gu_id' = $1::text
+			  AND COALESCE((elem->>'rank')::int, 0) = $2
 		)
-	`, guID).Scan(&exists)
+	`, guID, rank).Scan(&exists)
 	if err != nil {
 		return false, err
 	}
@@ -2588,10 +2635,13 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string) (bool, error) {
 	// 3. Kiểm tra trong rương tạm temp_loot
 	err = tx.QueryRow(`
 		SELECT EXISTS(
-			SELECT 1 FROM players 
-			WHERE temp_loot->'gu_inventory' @> jsonb_build_array(jsonb_build_object('gu_id', $1::text))
+			SELECT 1 FROM players,
+			jsonb_array_elements(COALESCE(temp_loot->'gu_inventory', '[]'::jsonb)) AS elem
+			WHERE elem->>'gu_id' = $1::text
+			  AND COALESCE((elem->>'rank')::int, 0) = $2
+			  AND NOT (elem->>'instance_id' = ANY($3::text[]))
 		)
-	`, guID).Scan(&exists)
+	`, guID, rank, excludeArray).Scan(&exists)
 	if err != nil {
 		return false, err
 	}

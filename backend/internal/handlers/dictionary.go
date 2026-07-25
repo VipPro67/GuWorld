@@ -25,8 +25,15 @@ func GetDictionary(c *gin.Context) {
 		return
 	}
 
+	flatGu := make([]models.GuDictionaryItem, 0)
+	for _, ranks := range models.GuRegistry {
+		for _, item := range ranks {
+			flatGu = append(flatGu, item)
+		}
+	}
+
 	resp = DictionaryResponse{
-		Gu:       models.GuRegistry,
+		Gu:       flatGu,
 		Items:    models.ItemRegistry,
 		Monsters: models.MonsterRegistry,
 	}

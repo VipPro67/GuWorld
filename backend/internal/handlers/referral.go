@@ -125,9 +125,11 @@ func CheckReferralMilestones(tx *sql.Tx, refereeID uuid.UUID) error {
 			randomGuID = "GU_MOONLIGHT"
 		}
 
+		guSpec, _ := models.GetGuAny(randomGuID)
 		newGu := models.GuInstance{
 			InstanceID: uuid.New().String(),
 			GuID:       randomGuID,
+			Rank:       guSpec.Rank,
 			Hunger:     100,
 			Status:     "ACTIVE",
 			Equipped:   false,

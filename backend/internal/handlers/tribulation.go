@@ -169,7 +169,7 @@ func AttackTribulationEnemy(c *gin.Context) {
 		return
 	}
 
-	spec, ok := models.GuRegistry[req.GuID]
+	spec, ok := models.GetGuAny(req.GuID)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đặc tính Cổ trùng không hợp lệ"})
 		return
