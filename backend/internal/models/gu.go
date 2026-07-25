@@ -42,6 +42,7 @@ type PassiveEffect struct {
 	StatBaseAttack        float64 `json:"stat_base_attack,omitempty"`
 	StatBaseDefense       float64 `json:"stat_base_defense,omitempty"`
 	StatBaseHP            float64 `json:"stat_base_hp,omitempty"`
+	StatBaseSpeed         float64 `json:"stat_base_speed,omitempty"`
 	ManaRegenMult         float64 `json:"mana_regen_mult,omitempty"`
 	PathConflictReduction float64 `json:"path_conflict_reduction,omitempty"`
 
@@ -80,6 +81,8 @@ type GuDictionaryItem struct {
 	HungerRate   int       `json:"hunger_rate"`
 	MaxHunger    int       `json:"max_hunger"`
 	Description  string    `json:"description"`
+	Rarity       string    `json:"rarity"`
+	IsImmortal   bool      `json:"is_immortal"`
 	PrimaryRole  string    `json:"primary_role"`
 	CombatRoles  []string  `json:"combat_roles"`
 	CombatTags   []string  `json:"combat_tags"`
@@ -256,6 +259,14 @@ func LoadGuRegistry(db *sql.DB) error {
 		_ = json.Unmarshal(combatRolesRaw, &item.CombatRoles)
 		_ = json.Unmarshal(combatTagsRaw, &item.CombatTags)
 		_ = json.Unmarshal(supportTagsRaw, &item.SupportTags)
+
+		if len(rarityRaw) > 0 {
+			_ = json.Unmarshal(rarityRaw, &item.Rarity)
+			if item.Rarity == "" {
+				item.Rarity = string(rarityRaw)
+			}
+		}
+		item.IsImmortal = isImmortalRaw
 
 		if _, ok := newRegistry[item.ID]; !ok {
 			newRegistry[item.ID] = make(map[int]GuDictionaryItem)

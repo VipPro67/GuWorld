@@ -79,6 +79,7 @@ type CombatantAuto struct {
 	Mana     int
 	BaseDmg  int // fallback basic-attack damage
 	BaseDef  int
+	Speed    float64
 
 	// Pre-combat Auto-Barrier
 	VirtualShield int

@@ -91,8 +91,16 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 		equippedGus = []string{}
 	}
 
+	// Also fetch stones and mana for ON_TICK effects
+	var primevalStones int
+	var currentMana, maxMana float64
+	_ = tx.QueryRow(`SELECT primeval_stones, current_mana, max_mana FROM players WHERE id = $1`, playerID).Scan(&primevalStones, &currentMana, &maxMana)
+
 	updated := false
 	playerHPBacklash := 0.0
+	tickStones := 0
+	tickMana := 0.0
+	tickHP := 0.0
 	newInventory := models.GuInventory{} // never nil — marshals to [] not null
 
 	for i := range guInv {
@@ -110,6 +118,39 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 			}
 			gu.Hunger -= int(float64(specs.HungerRate) * rate)
 			updated = true
+
+			// Fire ON_TICK for equipped ACTIVE Gus
+			if gu.Equipped && gu.Status == "ACTIVE" && specs.Effects.Other != nil {
+				for _, mech := range specs.Effects.Other {
+					if mech.EventTrigger != "ON_TICK" {
+						continue
+					}
+					var params map[string]interface{}
+					if len(mech.Params) > 0 {
+						json.Unmarshal(mech.Params, &params)
+					}
+					switch mech.ActionCode {
+					case "HOT_TICK":
+						val, _ := params["value"].(float64)
+						if val <= 0 {
+							val = 5.0
+						}
+						tickHP += val
+					case "GENERATE_STONES_TICK":
+						val, _ := params["value"].(float64)
+						if val <= 0 {
+							val = 1.0
+						}
+						tickStones += int(val)
+					case "MANA_REGEN_TICK":
+						val, _ := params["value"].(float64)
+						if val <= 0 {
+							val = 0.5
+						}
+						tickMana += val
+					}
+				}
+			}
 
 			if gu.Hunger <= 0 {
 				gu.Hunger = 0
@@ -151,9 +192,29 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 		}
 	}
 
-	// If no Gu was modified and no HP backlash occurred, we can return early
-	if !updated && playerHPBacklash == 0 {
+	// If no Gu was modified, no HP backlash, and no tick effects, return early
+	if !updated && playerHPBacklash == 0 && tickStones == 0 && tickMana == 0 && tickHP == 0 {
 		return nil
+	}
+
+	// Apply ON_TICK stat changes
+	if tickHP > 0 {
+		hp += tickHP
+		var baseHP float64
+		_ = tx.QueryRow(`SELECT base_hp FROM players WHERE id = $1`, playerID).Scan(&baseHP)
+		if hp > baseHP {
+			hp = baseHP
+		}
+		updated = true
+	}
+	if tickStones > 0 {
+		primevalStones += tickStones
+	}
+	if tickMana > 0 {
+		currentMana += tickMana
+		if currentMana > maxMana {
+			currentMana = maxMana
+		}
 	}
 
 	// Apply HP Backlash if Vital Gu died
@@ -161,10 +222,9 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 		hp -= playerHPBacklash
 		if hp <= 0 {
 			hp = 0
-			// Reset combat state upon defeat
-			_, err = tx.Exec(`UPDATE players SET hp = $1, active_combat = NULL WHERE id = $2`, hp, playerID)
+			_, err = tx.Exec(`UPDATE players SET hp = $1, primeval_stones = $2, current_mana = $3, max_mana = $4, active_combat = NULL WHERE id = $5`, hp, primevalStones, currentMana, maxMana, playerID)
 		} else {
-			_, err = tx.Exec(`UPDATE players SET hp = $1 WHERE id = $2`, hp, playerID)
+			_, err = tx.Exec(`UPDATE players SET hp = $1, primeval_stones = $2, current_mana = $3, max_mana = $4 WHERE id = $5`, hp, primevalStones, currentMana, maxMana, playerID)
 		}
 		if err != nil {
 			return err
@@ -196,7 +256,7 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 		return err
 	}
 
-	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1, equipped_gus = $2 WHERE id = $3`, string(newGuInvRaw), string(newEquippedGusRaw), playerID)
+	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1, equipped_gus = $2, primeval_stones = $3, current_mana = $4 WHERE id = $5`, string(newGuInvRaw), string(newEquippedGusRaw), primevalStones, currentMana, playerID)
 	if err != nil {
 		return err
 	}

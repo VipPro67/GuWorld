@@ -161,6 +161,15 @@ func StartCombat(tx *sql.Tx, base *models.CombatState, player *models.Player) *m
 
 	initialized := InitializeCombatState(tx, base, player)
 
+	// Fire ON_COMBAT_START on equipped ACTIVE Gus
+	for _, gu := range player.GuInventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			if spec, ok := models.GetGuAny(gu.GuID); ok {
+				HandleGuEvent(player, spec, gu, "ON_COMBAT_START")
+			}
+		}
+	}
+
 	combatBytes, err := json.Marshal(initialized)
 	if err == nil {
 		for _, ally := range initialized.Allies {

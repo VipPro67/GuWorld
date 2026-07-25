@@ -1212,6 +1212,7 @@ func FeedGu(c *gin.Context) {
 	// 4. Loop consuming food until full
 	foodOptions := specs.FoodTypes
 	foodConsumed := make(map[string]int)
+	var feedEventMsg string
 
 	if targetGu.Hunger >= specs.MaxHunger {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng đã no, không cần ăn thêm."})
@@ -1258,6 +1259,14 @@ func FeedGu(c *gin.Context) {
 		} else {
 			consumedGu := player.GuInventory[consumedGuIndex]
 			foodID = consumedGu.GuID
+
+			// Fire ON_FEED trigger for the consumed Gu
+			if cSpec, cOk := models.GetGuAny(consumedGu.GuID); cOk {
+				if msg, err := HandleGuEvent(&player, cSpec, consumedGu, "ON_FEED"); err == nil && msg != "" {
+					feedEventMsg = msg
+				}
+			}
+
 			player.GuInventory = append(player.GuInventory[:consumedGuIndex], player.GuInventory[consumedGuIndex+1:]...)
 
 			// Re-find targetGu since slice changed
@@ -1290,12 +1299,8 @@ func FeedGu(c *gin.Context) {
 	}
 
 	// 6. Update database
-	updateQuery := `
-		UPDATE players
-		SET gu_inventory = $1
-		WHERE id = $2
-	`
-	_, err = tx.Exec(updateQuery, player.GuInventory, player.ID)
+	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1, primeval_stones = $2, immortal_stones = $3, hp = $4, max_mana = $5, current_mana = $6, lifespan = $7 WHERE id = $8`,
+		player.GuInventory, player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
@@ -1334,9 +1339,13 @@ func FeedGu(c *gin.Context) {
 		Success:   true,
 	})
 
+	msg := fmt.Sprintf("Cho %s ăn thành công! Đã khôi phục tới %d độ no. Tiêu hao: %s.", specs.Name, targetGu.Hunger, foodStr)
+	if feedEventMsg != "" {
+		msg += " " + feedEventMsg
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"player":  player,
-		"message": fmt.Sprintf("Cho %s ăn thành công! Đã khôi phục tới %d độ no. Tiêu hao: %s.", specs.Name, targetGu.Hunger, foodStr),
+		"message": msg,
 	})
 }
 
@@ -1670,6 +1679,7 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 	stats := map[string]float64{
 		"attack":        10.0 + float64(player.Rank-1)*10.0 + float64(player.SubRank-1)*2.0 + float64(strengthMarks)/10.0,
 		"defense":       5.0 + float64(player.Rank-1)*5.0 + float64(player.SubRank-1)*1.0,
+		"speed":         10.0 + float64(player.Rank-1)*2.0 + float64(player.SubRank-1)*0.5,
 		"healing":       0.0,
 		"movement":      1.0,
 		"investigation": 1.0,
@@ -1719,6 +1729,7 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 				mult := getPathMasteryMultiplier(player, spec.Path)
 				stats["attack"] += passive.StatBaseAttack * mult
 				stats["defense"] += passive.StatBaseDefense * mult
+				stats["speed"] += passive.StatBaseSpeed * mult
 				if player.BaseHP > 0 {
 					missingHpRate := 1.0 - player.HP/player.BaseHP
 					stats["damage_multiplier"] += missingHpRate * passive.DamageMultiplierOnHit
@@ -1817,19 +1828,9 @@ func EquipGu(c *gin.Context) {
 		}
 	}
 
-	_, err = tx.Exec("UPDATE players SET gu_inventory = $1, equipped_gus = $2 WHERE id = $3", player.GuInventory, player.EquippedGus, player.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update equipped Gu inventory"})
-		return
-	}
-
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
-		return
-	}
-
 	guName := targetGu.GuID
-	if spec, ok := models.GetGuAny(targetGu.GuID); ok {
+	spec, specOk := models.GetGuAny(targetGu.GuID)
+	if specOk {
 		guName = spec.Name
 	}
 
@@ -1838,7 +1839,25 @@ func EquipGu(c *gin.Context) {
 	if req.Equip {
 		action = "gu.equip"
 		statusMsg = fmt.Sprintf("Trang bị %s thành công!", guName)
+		if specOk {
+			if msg, err := HandleGuEvent(&player, spec, *targetGu, "ON_EQUIP"); err == nil && msg != "" {
+				statusMsg += " " + msg
+			}
+		}
 	}
+
+	_, err = tx.Exec("UPDATE players SET gu_inventory = $1, equipped_gus = $2, primeval_stones = $3, immortal_stones = $4, hp = $5, max_mana = $6, current_mana = $7, lifespan = $8, rank = $9, sub_rank = $10, aptitude_percent = $11 WHERE id = $12",
+		player.GuInventory, player.EquippedGus, player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.Rank, player.SubRank, player.AptitudePercent, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+
 	auditlog.Logf(db.DB, &authID, action, "gu=%s instance=%s", guName, req.InstanceID)
 
 	c.JSON(http.StatusOK, gin.H{

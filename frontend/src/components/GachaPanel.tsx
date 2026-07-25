@@ -77,7 +77,7 @@ export const GachaPanel: React.FC = () => {
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => { setShowAnim(false); setResults(null); }}>
         <div className="max-w-lg w-full mx-4" onClick={e => e.stopPropagation()}>
           <div className="text-center mb-6">
-            <h3 className="text-lg font-bold font-serif text-amber-400 animate-pulse">MỞ CỔ TỪ</h3>
+            <h3 className="text-lg font-bold font-serif text-amber-400 animate-pulse">Mở Đá </h3>
             <div className="text-[10px] text-zinc-500 font-mono mt-1">{animIndex}/{animRewards.length}</div>
           </div>
           <div className="grid grid-cols-5 gap-3 justify-items-center">

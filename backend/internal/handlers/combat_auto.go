@@ -284,6 +284,7 @@ func AutoCombatStart(c *gin.Context) {
 		Mana:          simMana,
 		BaseDmg:       int(playerStats["attack"]),
 		BaseDef:       int(playerStats["defense"]),
+		Speed:         playerStats["speed"],
 		VirtualShield: virtualShield,
 		DaoMarks:      playerDaoMarks,
 		Loadout:       &req.Loadout,
@@ -325,6 +326,7 @@ func AutoCombatStart(c *gin.Context) {
 			Mana:    enemyMana,
 			BaseDmg: int(enemy.BaseAttack),
 			BaseDef: int(enemy.BaseDefense),
+			Speed:   enemy.Speed,
 			DaoMarks: func() simulator.DaoMarks {
 				dm := make(simulator.DaoMarks)
 				for k, v := range enemy.DaoMarks {
@@ -701,6 +703,26 @@ func AutoCombatStart(c *gin.Context) {
 			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, current_region = $4, x = $5, y = $6, explored_cells = $7, aptitude_percent = $8, lifespan = $9, primeval_stones = $10 WHERE id = $11`
 			args = append(args, player.HP, finalMana, tempLootJSON, player.CurrentRegion, player.X, player.Y, exploredJSON, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.ID)
 		}
+	}
+
+	// Fire ON_COMBAT_END on equipped ACTIVE Gus
+	var combatEndMsg string
+	for _, gu := range player.GuInventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			if spec, ok := models.GetGuAny(gu.GuID); ok {
+				if msg, err := HandleGuEvent(&player, spec, gu, "ON_COMBAT_END"); err == nil && msg != "" {
+					combatEndMsg = msg
+				}
+			}
+		}
+	}
+	if combatEndMsg != "" {
+		playerMsg := player.Username + " chứng kiến: " + combatEndMsg
+		logs = append(logs, simulator.CombatLog{
+			Turn:   simState.Turn,
+			Action: "GU_EVENT",
+			Detail: playerMsg,
+		})
 	}
 
 	_, err = tx.Exec(updateQuery, args...)

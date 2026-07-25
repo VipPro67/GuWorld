@@ -276,8 +276,8 @@ export default function Home() {
         ) : currentView === "auction" ? (
           <BaoHoangMarket
             player={player}
-            guInventory={player.gu_inventory}
-            materials={player.materials_inventory}
+            guInventory={player.gu_inventory || []}
+            materials={player.materials_inventory || {}}
             actionLoading={actionLoading}
             listings={marketplaceListings as any[]}
             onRefresh={fetchMarketplaceListings}

@@ -349,17 +349,26 @@ func RefineGu(c *gin.Context) {
 		statusStr = "success"
 		statusMsg = "Hợp luyện thành công! Đạo hữu luyện chế được Cổ trùng mới."
 
-		// Check if any of the consumed ingredients was a Vital Gu
+		// Check if any of the consumed ingredients was a Vital Gu & fire ON_REFINE_MATERIAL
 		hasVitalIngredient := false
 		newInventory := models.GuInventory{}
+		var refineEventMsg string
 		for _, item := range player.GuInventory {
 			if seenInstances[item.InstanceID] {
 				if item.IsVital {
 					hasVitalIngredient = true
 				}
+				if spec, ok := models.GetGuAny(item.GuID); ok {
+					if msg, err := HandleGuEvent(&player, spec, item, "ON_REFINE_MATERIAL"); err == nil && msg != "" {
+						refineEventMsg = msg
+					}
+				}
 			} else {
 				newInventory = append(newInventory, item)
 			}
+		}
+		if refineEventMsg != "" {
+			statusMsg += " " + refineEventMsg
 		}
 
 		newGuInstance = models.GuInstance{
@@ -380,22 +389,28 @@ func RefineGu(c *gin.Context) {
 
 		hasVitalSurvived := false
 		newInventory := models.GuInventory{}
+		var refineEventMsg string
 		for _, item := range player.GuInventory {
 			if seenInstances[item.InstanceID] {
 				if item.IsVital {
-					// Vital Gu survives in DYING state
 					item.Hunger = 1
 					item.Status = "DYING"
 					item.Equipped = false
 					newInventory = append(newInventory, item)
 					hasVitalSurvived = true
 				}
-				// Regular Gus are not appended (perished)
+				if spec, ok := models.GetGuAny(item.GuID); ok {
+				if msg, err := HandleGuEvent(&player, spec, item, "ON_REFINE_MATERIAL"); err == nil && msg != "" {
+						refineEventMsg = msg
+					}
+				}
 			} else {
 				newInventory = append(newInventory, item)
 			}
 		}
-		player.GuInventory = newInventory
+		if refineEventMsg != "" {
+			statusMsg += " " + refineEventMsg
+		}
 
 		if isForcedRefine {
 			player.HP -= 30.0

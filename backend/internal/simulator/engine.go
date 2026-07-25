@@ -283,6 +283,10 @@ func Simulate(state *CombatState) []CombatLog {
 		allActors = append(allActors, state.Allies...)
 		allActors = append(allActors, state.Enemies...)
 
+		sort.SliceStable(allActors, func(i, j int) bool {
+			return allActors[i].Speed > allActors[j].Speed
+		})
+
 		for _, actor := range allActors {
 			if actor.HP <= 0 || actor.IsDead {
 				continue
@@ -992,7 +996,7 @@ func buildSnapshot(state *CombatState) *CombatSnapshot {
 			HP: a.HP, MaxHP: a.MaxHP, Mana: a.Mana, MaxMana: a.MaxMana,
 			GridX: a.GridX, GridY: a.GridY, Shield: a.VirtualShield,
 			Damage: float64(a.BaseDmg), Defense: float64(a.BaseDef),
-			IsDead: a.IsDead,
+			Speed: a.Speed, IsDead: a.IsDead,
 		})
 	}
 	for _, e := range state.Enemies {
@@ -1001,7 +1005,7 @@ func buildSnapshot(state *CombatState) *CombatSnapshot {
 			HP: e.HP, MaxHP: e.MaxHP, Mana: e.Mana, MaxMana: e.MaxMana,
 			GridX: e.GridX, GridY: e.GridY, Shield: e.VirtualShield,
 			Damage: float64(e.BaseDmg), Defense: float64(e.BaseDef),
-			IsDead: e.IsDead,
+			Speed: e.Speed, IsDead: e.IsDead,
 		})
 	}
 	return snap

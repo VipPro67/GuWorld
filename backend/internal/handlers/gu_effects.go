@@ -215,9 +215,31 @@ func ApplyPostDamageEffects(ctx *CombatContext, playerAction *Action, enemyActio
 	}
 }
 
-// ── OUT-OF-COMBAT EVENT HANDLERS ────────────────────────────────────────
+// ── GENERIC EVENT DISPATCHER ─────────────────────────────────────────────
 
-func HandleConsumeEvent(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem, mechanic models.SpecialMechanic) (string, error) {
+func HandleGuEvent(player *models.Player, specs models.GuDictionaryItem, guInstance models.GuInstance, eventTrigger string) (string, error) {
+	if specs.Effects.Other == nil {
+		return "", nil
+	}
+	var logs []string
+	for _, mechanic := range specs.Effects.Other {
+		if mechanic.EventTrigger == eventTrigger {
+			msg, err := handleActionCode(player, specs, guInstance, mechanic)
+			if err != nil {
+				return "", err
+			}
+			if msg != "" {
+				logs = append(logs, msg)
+			}
+		}
+	}
+	if len(logs) == 0 {
+		return "", nil
+	}
+	return strings.Join(logs, " "), nil
+}
+
+func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu models.GuInstance, mechanic models.SpecialMechanic) (string, error) {
 	var params map[string]interface{}
 	if len(mechanic.Params) > 0 {
 		_ = json.Unmarshal(mechanic.Params, &params)
@@ -274,7 +296,7 @@ func HandleConsumeEvent(player *models.Player, gu models.GuInstance, spec models
 		player.Rank++
 		return fmt.Sprintf("Đột phá đại cảnh giới lên %s Sơ Giai!", getRankName(player.Rank)), nil
 	case "MANA_POLLUTION":
-		player.MaxMana = math.Round(player.MaxMana * 0.90) // lose 10%
+		player.MaxMana = math.Round(player.MaxMana * 0.90)
 		if player.CurrentMana > player.MaxMana { player.CurrentMana = player.MaxMana }
 		return "Chân Nguyên bị ô nhiễm nặng nề (giảm 10% Chân Nguyên tối đa)!", nil
 	case "ENSLAVE_BEAST_TIER":
@@ -285,9 +307,54 @@ func HandleConsumeEvent(player *models.Player, gu models.GuInstance, spec models
 		years := val
 		player.Lifespan += years
 		return fmt.Sprintf("Cổ trùng Thọ Nguyên hòa tan vào không khiếu! Đạo hữu được ban thêm vĩnh viễn %.0f năm thọ mệnh.", years), nil
+
+	// ── New action codes ──────────────────────────────────────────────
+	case "TIME_ACCELERATION":
+		val, _ := params["value"].(float64)
+		if val <= 0 { val = 3.0 }
+		boost := player.MaxMana * 0.10 * val
+		player.CurrentMana += boost
+		if player.CurrentMana > player.MaxMana {
+			player.CurrentMana = player.MaxMana
+		}
+		return fmt.Sprintf("%s gia tốc dòng chảy thời gian, hồi phục %.0f Chân Nguyên!", spec.Name, boost), nil
+	case "RECORD":
+		return fmt.Sprintf("%s ghi lại toàn bộ hình ảnh và âm thanh trong khu vực.", spec.Name), nil
+	case "CONTRACT_OATH":
+		return fmt.Sprintf("%s kết khế ước — hai bên không thể phản bội.", spec.Name), nil
+	case "PORTAL_CREATE":
+		return fmt.Sprintf("%s khắc ấn tọa độ không gian tại vị trí hiện tại.", spec.Name), nil
+	case "REGENERATE_TERRAIN":
+		return fmt.Sprintf("%s hồi phục địa hình xung quanh, xóa bỏ dấu vết chiến đấu.", spec.Name), nil
+	case "HOT_TICK":
+		val, _ := params["value"].(float64)
+		if val <= 0 { val = 5.0 }
+		player.HP += val
+		if player.HP > player.BaseHP {
+			player.HP = player.BaseHP
+		}
+		return "", nil
+	case "GENERATE_STONES_TICK":
+		val, _ := params["value"].(float64)
+		if val <= 0 { val = 1.0 }
+		player.PrimevalStones += int(val)
+		return "", nil
+	case "MANA_REGEN_TICK":
+		val, _ := params["value"].(float64)
+		if val <= 0 { val = 0.5 }
+		player.CurrentMana += val
+		if player.CurrentMana > player.MaxMana {
+			player.CurrentMana = player.MaxMana
+		}
+		return "", nil
 	default:
 		return "", fmt.Errorf("Chưa hỗ trợ action code: %s", actionCode)
 	}
+}
+
+// HandleConsumeEvent is kept for backward compatibility, delegates to handleActionCode
+func HandleConsumeEvent(player *models.Player, gu models.GuInstance, spec models.GuDictionaryItem, mechanic models.SpecialMechanic) (string, error) {
+	return handleActionCode(player, spec, gu, mechanic)
 }
 
 func tickStatusEffects(player *models.Player, ctx *CombatContext) {

@@ -2043,8 +2043,15 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error("Failed to load global metadata");
       }
       const data = await response.json();
+      const guArray = data.gu || [];
+      const guMap: Record<string, GuSpec> = {};
+      if (Array.isArray(guArray)) {
+        for (const item of guArray) {
+          guMap[item.id] = item;
+        }
+      }
       set({
-        guDictionary: data.gu || {},
+        guDictionary: guMap,
         itemDictionary: data.items || {},
         monsterDictionary: data.monsters || {},
         dictionaryLoaded: true,
@@ -2429,13 +2436,13 @@ export const useGameStore = create<GameState>((set, get) => {
       });
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
-      if (!response.ok) { throw new Error(data.error || "Mở cổ từ thất bại."); }
+      if (!response.ok) { throw new Error(data.error || "Mở Đá  thất bại."); }
       setPlayerFromServer(data.player);
-      get().addLog(data.message || "Mở cổ từ thành công!");
+      get().addLog(data.message || "Mở Đá  thành công!");
       return { success: true, message: data.message, reward: data.reward };
     } catch (err: any) {
       set({ error: err.message });
-      get().addLog(`Mở cổ từ lỗi: ${err.message}`);
+      get().addLog(`Mở Đá  lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally { set({ actionLoading: false }); }
   },

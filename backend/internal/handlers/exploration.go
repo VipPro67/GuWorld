@@ -645,13 +645,28 @@ func MovePlayer(c *gin.Context) {
 		player.ActiveCombat = StartCombat(tx, player.ActiveCombat, &player)
 	}
 
+	// Fire ON_EXPLORE_MOVE on equipped Gus
+	var exploreEventMsg string
+	for _, gu := range player.GuInventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			if spec, ok := models.GetGuAny(gu.GuID); ok {
+				if msg, err := HandleGuEvent(&player, spec, gu, "ON_EXPLORE_MOVE"); err == nil && msg != "" {
+					exploreEventMsg = msg
+				}
+			}
+		}
+	}
+	if exploreEventMsg != "" {
+		logMsg += " " + exploreEventMsg
+	}
+
 	// Update DB
 	updateQuery := `
 		UPDATE players
-		SET current_mana = $1, x = $2, y = $3, explored_cells = $4, gu_inventory = $5, cleared_cells = $6, active_combat = $7, temp_loot = $8, last_mana_update = $9
-		WHERE id = $10
+		SET current_mana = $1, x = $2, y = $3, explored_cells = $4, gu_inventory = $5, cleared_cells = $6, active_combat = $7, temp_loot = $8, last_mana_update = $9, primeval_stones = $10, hp = $11, max_mana = $12
+		WHERE id = $13
 	`
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.ExploredCells, player.GuInventory, player.ClearedCells, player.ActiveCombat, player.TempLoot, time.Now(), player.ID)
+	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.ExploredCells, player.GuInventory, player.ClearedCells, player.ActiveCombat, player.TempLoot, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return
