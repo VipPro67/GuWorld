@@ -660,6 +660,9 @@ func InitSchema() error {
 	if err != nil {
 		return fmt.Errorf("failed to create sect_missions table: %w", err)
 	}
+	// Deduplicate and prevent duplicate mission rows
+	_, _ = DB.Exec(`DELETE FROM sect_missions WHERE id NOT IN (SELECT MIN(id) FROM sect_missions GROUP BY sect_id, title);`)
+	_, _ = DB.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_sect_mission_title ON sect_missions (sect_id, title);`)
 
 	// 4.16. Create player_sect_missions
 	_, err = DB.Exec(`

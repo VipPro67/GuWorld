@@ -754,6 +754,49 @@ export const Aperture: React.FC<ApertureProps> = ({
               })()}
             </div>
 
+            {/* Passive Effects from Equipped Gu */}
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4">
+              <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
+                <Zap className="w-5 h-5 text-amber-400" />
+                <span className="font-serif font-bold text-zinc-100 text-sm">Bị Động Cổ Trùng Đang Trang Bị</span>
+              </div>
+              {(() => {
+                const passiveTotals: Record<string, number> = {};
+                for (const gu of player.gu_inventory) {
+                  if (!gu.equipped || gu.status !== "ACTIVE") continue;
+                  const spec = guDictionary[gu.gu_id];
+                  if (!spec?.effects?.passive) continue;
+                  const p = spec.effects.passive;
+                  for (const [k, v] of Object.entries(p)) {
+                    if (typeof v === "number" && v !== 0) {
+                      passiveTotals[k] = (passiveTotals[k] || 0) + v;
+                    }
+                  }
+                }
+                const labels: Record<string, string> = {
+                  stat_base_attack: "Công Kích", stat_base_defense: "Phòng Ngự", stat_base_hp: "Máu",
+                  stat_base_speed: "Tốc Độ", soul_refinement: "Hồn Lực", storage_capacity: "Vật Chứa",
+                  movement: "Di Chuyển", evasion: "Né Tránh", investigation: "Trinh Sát",
+                  hearing: "Thính Giác", mana_regen_mult: "Hồi Pháp",
+                  damage_multiplier_on_hit: "Sát Thương Khi Mất Máu",
+                  refine_mana_tier: "Tinh Luyện", cleansing_power: "Tẩy Trừ",
+                  path_conflict_reduction: "Giảm Xung Đột",
+                };
+                const entries = Object.entries(passiveTotals).filter(([k]) => labels[k]);
+                if (entries.length === 0) return <div className="text-xs text-zinc-500 italic py-2">Không có Cổ trùng bị động nào đang trang bị.</div>;
+                return (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {entries.map(([k, v]) => (
+                      <div key={k} className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
+                        <div className="text-[10px] text-zinc-500 font-mono">{labels[k] || k}</div>
+                        <div className="text-base font-bold text-zinc-100 font-mono">+{v.toFixed(1)}</div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
             {/* Fully Grown Gu List */}
             <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner space-y-4">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
@@ -785,6 +828,110 @@ export const Aperture: React.FC<ApertureProps> = ({
               ) : (
                 <div className="text-xs text-zinc-500 italic py-2">Chưa khai thác Cổ trùng nào.</div>
               )}
+            </div>
+
+            {/* Soul Foundation info */}
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4">
+              <div className="flex justify-between items-center border-b border-zinc-900 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-indigo-400" />
+                  <span className="font-serif font-bold text-zinc-100 text-sm">Nội Tình Hồn Phách</span>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-indigo-950/50 text-indigo-300 border border-indigo-800/40">
+                  {player.soul_tier === "NHAN_HON" ? "Nhân Hồn" :
+                    player.soul_tier === "BACH_NHAN" ? "Bách Nhân Hồn" :
+                      player.soul_tier === "THIEN_NHAN" ? "Thiên Nhân Hồn" :
+                        player.soul_tier === "VAN_NHAN" ? "Vạn Nhân Hồn" :
+                          player.soul_tier === "BACH_VAN" ? "Bách Vạn Hồn" :
+                            player.soul_tier === "THIEN_VAN" ? "Thiên Vạn Hồn" : "Ức Nhân Hồn"}
+                </span>
+              </div>
+
+              {/* Progress HP bar */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center text-xs font-mono text-zinc-400">
+                  <span>Sức mạnh Linh hồn</span>
+                  <span>{player.soul_hp} / {player.max_soul}</span>
+                </div>
+                <div className="w-full bg-zinc-950 rounded-full h-3 border border-zinc-900 overflow-hidden relative shadow-inner">
+                  <div
+                    className="bg-gradient-to-r from-indigo-600 to-purple-500 h-full rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min(100, (player.soul_hp / player.max_soul) * 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Warning if needs refinement */}
+              {player.needs_soul_refine ? (
+                <div className="bg-red-950/20 border border-red-800/30 rounded-xl p-3 flex flex-col gap-2">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldAlert className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+                    <div className="text-xs text-red-200">
+                      <strong className="font-semibold">Cảnh báo:</strong> Hồn phách đang bị phù nề! Đạo hữu không thể dùng Can Đảm Cổ để tráng hồn. Hãy tiến vào Cốc Lạc Phách để rèn luyện nén chặt hồn phách.
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => store.refineSoul()}
+                    className="w-full bg-red-900/30 hover:bg-red-900/50 border border-red-800/40 text-red-200 rounded-xl py-2 text-xs font-mono font-bold transition-all cursor-pointer"
+                  >
+                    Luyện Hồn (Cốc Lạc Phách) - Giảm 80% Sức Mạnh Linh Hồn
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => store.useGutsGu()}
+                    disabled={player.needs_soul_refine || (player.materials_inventory?.["guts_gu"] || 0) <= 0}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:opacity-40 disabled:border-zinc-800/40 border border-indigo-500/20 text-white rounded-xl py-2 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Tráng Hồn ({player.materials_inventory?.["guts_gu"] || 0} Cổ Can Đảm)
+                  </button>
+                  <button
+                    onClick={() => store.calmSoul()}
+                    disabled={player.soul_hp >= player.max_soul || player.primeval_stones < 50}
+                    className="flex-1 bg-purple-900/30 hover:bg-purple-900/50 disabled:bg-zinc-800 disabled:opacity-40 disabled:border-zinc-800/40 border border-purple-800/40 text-purple-200 rounded-xl py-2 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    An Hồn (50 Nguyên Thạch)
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Path Attainments */}
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner space-y-4">
+              <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
+                <Crown className="w-5 h-5 text-amber-400" />
+                <span className="font-serif font-bold text-zinc-100 text-sm">Cảnh Giới Lưu Phái</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {player.path_masteries && Object.keys(player.path_masteries).length > 0 ? (
+                  Object.entries(player.path_masteries).map(([path, level]) => (
+                    <div key={path} className="flex flex-col gap-1.5 bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
+                      <div className="flex justify-between items-center">
+                        <span className="text-zinc-300 font-mono text-xs font-bold capitalize">{path} Path</span>
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono ${level === "Supreme Grandmaster" ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" :
+                          level === "Great Grandmaster" ? "bg-red-950/50 text-red-300 border border-red-800/40" :
+                            level === "Grandmaster" ? "bg-amber-950/50 text-amber-300 border border-amber-800/40" :
+                              level === "Master" ? "bg-blue-950/50 text-blue-300 border border-blue-800/40" :
+                                "bg-zinc-800/50 text-zinc-400 border border-zinc-700/40"
+                          }`}>
+                          {level}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-zinc-500 leading-normal">
+                        {level === "Master" && "Trực giác chiến đấu hệ, nhận +10% hiệu quả kỹ năng."}
+                        {level === "Grandmaster" && "Bỏ qua hình phạt giảm 30% sức mạnh khi sử dụng Cổ trùng hệ này."}
+                        {level === "Great Grandmaster" && "Cộng hưởng Thiên Địa Đạo Ngân, +50% hiệu ứng tại map cùng hệ."}
+                        {level === "Supreme Grandmaster" && "Cảnh giới Vô Thượng tối cao, kiểm soát tuyệt đối đại đạo."}
+                        {level === "Ordinary" && "Đạt hiểu biết phổ thông cơ bản về đạo pháp."}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="col-span-2 text-center text-xs text-zinc-650 italic py-4">Chưa ngộ chân ý bất kỳ lưu phái nào. Hãy thám hiểm Mộng Cảnh!</div>
+                )}
+              </div>
             </div>
           </div>
         )}
