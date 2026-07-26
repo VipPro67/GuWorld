@@ -23,6 +23,8 @@ import {
   Gift,
   Ticket,
   Check,
+  TrendingUp,
+  Leaf,
 } from "lucide-react";
 import AchievementsPanel from "@/components/AchievementsPanel";
 
@@ -211,7 +213,7 @@ export const Aperture: React.FC<ApertureProps> = ({
 
   const dashOffset = CIRC * (1 - percent / 100);
 
-  const [activeTab, setActiveTab] = useState<"aperture" | "stats" | "quests" | "soul" | "achievements" | "referrals" | "settings">("aperture");
+  const [activeTab, setActiveTab] = useState<"aperture" | "quests" | "growth" | "achievements" | "referrals" | "settings">("aperture");
   const [giftCodeInput, setGiftCodeInput] = useState("");
   const [giftCodeMsg, setGiftCodeMsg] = useState<string | null>(null);
   const [giftCodeLoading, setGiftCodeLoading] = useState(false);
@@ -418,13 +420,13 @@ export const Aperture: React.FC<ApertureProps> = ({
             Nhiệm Vụ
           </button>
           <button
-            onClick={() => setActiveTab("soul")}
-            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${activeTab === "soul"
+            onClick={() => setActiveTab("growth")}
+            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${activeTab === "growth"
               ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
               : "text-zinc-500 hover:text-zinc-300"
               }`}
           >
-            Hồn Phách
+            Trưởng Thành
           </button>
           <button
             onClick={() => {
@@ -708,110 +710,81 @@ export const Aperture: React.FC<ApertureProps> = ({
           <MainQuestsPanel />
         )}
 
-        {activeTab === "soul" && (
+        {activeTab === "growth" && (
           <div className="w-full z-10 space-y-5">
-            {/* Soul Foundation info */}
+            {/* Growth Boosts */}
             <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4">
-              <div className="flex justify-between items-center border-b border-zinc-900 pb-2.5">
-                <div className="flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-indigo-400" />
-                  <span className="font-serif font-bold text-zinc-100 text-sm">Nội Tình Hồn Phách</span>
-                </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-indigo-950/50 text-indigo-300 border border-indigo-800/40">
-                  {player.soul_tier === "NHAN_HON" ? "Nhân Hồn" :
-                    player.soul_tier === "BACH_NHAN" ? "Bách Nhân Hồn" :
-                      player.soul_tier === "THIEN_NHAN" ? "Thiên Nhân Hồn" :
-                        player.soul_tier === "VAN_NHAN" ? "Vạn Nhân Hồn" :
-                          player.soul_tier === "BACH_VAN" ? "Bách Vạn Hồn" :
-                            player.soul_tier === "THIEN_VAN" ? "Thiên Vạn Hồn" : "Ức Nhân Hồn"}
-                </span>
+              <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
+                <TrendingUp className="w-5 h-5 text-emerald-400" />
+                <span className="font-serif font-bold text-zinc-100 text-sm">Cốt Tủy Không Khiếu</span>
               </div>
-
-              {/* Progress HP bar */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center text-xs font-mono text-zinc-400">
-                  <span>Sức mạnh Linh hồn</span>
-                  <span>{player.soul_hp} / {player.max_soul}</span>
-                </div>
-                <div className="w-full bg-zinc-950 rounded-full h-3 border border-zinc-900 overflow-hidden relative shadow-inner">
-                  <div
-                    className="bg-gradient-to-r from-indigo-600 to-purple-500 h-full rounded-full transition-all duration-300"
-                    style={{ width: `${Math.min(100, (player.soul_hp / player.max_soul) * 100)}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Warning if needs refinement */}
-              {player.needs_soul_refine ? (
-                <div className="bg-red-950/20 border border-red-800/30 rounded-xl p-3 flex flex-col gap-2">
-                  <div className="flex items-start gap-2.5">
-                    <ShieldAlert className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
-                    <div className="text-xs text-red-200">
-                      <strong className="font-semibold">Cảnh báo:</strong> Hồn phách đang bị phù nề! Đạo hữu không thể dùng Can Đảm Cổ để tráng hồn. Hãy tiến vào Cốc Lạc Phách để rèn luyện nén chặt hồn phách.
-                    </div>
+              {(() => {
+                const gd = player.growth_data;
+                const b = gd?.boosts;
+                const hasBoosts = b && (b.attack > 0 || b.defense > 0 || b.hp > 0 || b.speed > 0);
+                if (!hasBoosts) return <div className="text-xs text-zinc-500 italic py-2">Chưa có tăng trưởng nào. Hãy trang bị Cổ trùng có hiệu ứng Trưởng Thành.</div>;
+                return (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {b.attack > 0 && (
+                      <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
+                        <div className="text-[10px] text-zinc-500 font-mono">Công Kích</div>
+                        <div className="text-lg font-bold text-zinc-100 font-mono">+{b.attack}</div>
+                      </div>
+                    )}
+                    {b.defense > 0 && (
+                      <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
+                        <div className="text-[10px] text-zinc-500 font-mono">Phòng Ngự</div>
+                        <div className="text-lg font-bold text-zinc-100 font-mono">+{b.defense}</div>
+                      </div>
+                    )}
+                    {b.hp > 0 && (
+                      <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
+                        <div className="text-[10px] text-zinc-500 font-mono">Máu Tối Đa</div>
+                        <div className="text-lg font-bold text-zinc-100 font-mono">+{b.hp}</div>
+                      </div>
+                    )}
+                    {b.speed > 0 && (
+                      <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
+                        <div className="text-[10px] text-zinc-500 font-mono">Tốc Độ</div>
+                        <div className="text-lg font-bold text-zinc-100 font-mono">+{b.speed}</div>
+                      </div>
+                    )}
                   </div>
-                  <button
-                    onClick={() => store.refineSoul()}
-                    className="w-full bg-red-900/30 hover:bg-red-900/50 border border-red-800/40 text-red-200 rounded-xl py-2 text-xs font-mono font-bold transition-all cursor-pointer"
-                  >
-                    Luyện Hồn (Cốc Lạc Phách) - Giảm 80% Sức Mạnh Linh Hồn
-                  </button>
-                </div>
-              ) : (
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => store.useGutsGu()}
-                    disabled={player.needs_soul_refine || (player.materials_inventory?.["guts_gu"] || 0) <= 0}
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:opacity-40 disabled:border-zinc-800/40 border border-indigo-500/20 text-white rounded-xl py-2 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Tráng Hồn ({player.materials_inventory?.["guts_gu"] || 0} Cổ Can Đảm)
-                  </button>
-                  <button
-                    onClick={() => store.calmSoul()}
-                    disabled={player.soul_hp >= player.max_soul || player.primeval_stones < 50}
-                    className="flex-1 bg-purple-900/30 hover:bg-purple-900/50 disabled:bg-zinc-800 disabled:opacity-40 disabled:border-zinc-800/40 border border-purple-800/40 text-purple-200 rounded-xl py-2 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    An Hồn (50 Nguyên Thạch)
-                  </button>
-                </div>
-              )}
+                );
+              })()}
             </div>
 
-            {/* Path Attainments */}
+            {/* Fully Grown Gu List */}
             <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner space-y-4">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
-                <Crown className="w-5 h-5 text-amber-400" />
-                <span className="font-serif font-bold text-zinc-100 text-sm">Cảnh Giới Lưu Phái</span>
+                <Leaf className="w-5 h-5 text-amber-400" />
+                <span className="font-serif font-bold text-zinc-100 text-sm">Cổ Trùng Đã Khai Thác</span>
+                <span className="ml-auto text-[10px] text-zinc-500 font-mono">{(player.growth_data?.fully_grown || []).length} loại</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                {player.path_masteries && Object.keys(player.path_masteries).length > 0 ? (
-                  Object.entries(player.path_masteries).map(([path, level]) => (
-                    <div key={path} className="flex flex-col gap-1.5 bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
-                      <div className="flex justify-between items-center">
-                        <span className="text-zinc-300 font-mono text-xs font-bold capitalize">{path} Path</span>
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono ${level === "Supreme Grandmaster" ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" :
-                          level === "Great Grandmaster" ? "bg-red-950/50 text-red-300 border border-red-800/40" :
-                            level === "Grandmaster" ? "bg-amber-950/50 text-amber-300 border border-amber-800/40" :
-                              level === "Master" ? "bg-blue-950/50 text-blue-300 border border-blue-800/40" :
-                                "bg-zinc-800/50 text-zinc-400 border border-zinc-700/40"
-                          }`}>
-                          {level}
-                        </span>
+              {player.growth_data?.fully_grown && player.growth_data.fully_grown.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {player.growth_data.fully_grown.map((fg, i) => {
+                    const parts: string[] = [];
+                    if (fg.attack > 0) parts.push(`Công +${fg.attack}`);
+                    if (fg.defense > 0) parts.push(`Thủ +${fg.defense}`);
+                    if (fg.hp > 0) parts.push(`Máu +${fg.hp}`);
+                    if (fg.speed > 0) parts.push(`Tốc +${fg.speed}`);
+                    return (
+                      <div key={i} className="flex items-center gap-3 bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
+                        <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400">
+                          {fg.gu_id.replace("GU_", "").slice(0, 2)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-bold text-zinc-200 font-mono truncate">{fg.gu_id}</div>
+                          <div className="text-[10px] text-emerald-400">{parts.join(" | ")}</div>
+                        </div>
                       </div>
-                      <div className="text-[10px] text-zinc-500 leading-normal">
-                        {level === "Master" && "Trực giác chiến đấu hệ, nhận +10% hiệu quả kỹ năng."}
-                        {level === "Grandmaster" && "Bỏ qua hình phạt giảm 30% sức mạnh khi sử dụng Cổ trùng hệ này."}
-                        {level === "Great Grandmaster" && "Cộng hưởng Thiên Địa Đạo Ngân, +50% hiệu ứng tại map cùng hệ."}
-                        {level === "Supreme Grandmaster" && "Cảnh giới Vô Thượng tối cao, kiểm soát tuyệt đối đại đạo."}
-                        {level === "Ordinary" && "Đạt hiểu biết phổ thông cơ bản về đạo pháp."}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="col-span-2 text-center text-xs text-zinc-650 italic py-4">Chưa ngộ chân ý bất kỳ lưu phái nào. Hãy thám hiểm Mộng Cảnh!</div>
-                )}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-xs text-zinc-500 italic py-2">Chưa khai thác Cổ trùng nào.</div>
+              )}
             </div>
           </div>
         )}

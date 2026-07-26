@@ -137,6 +137,10 @@ export interface Player {
   current_thought: number;
   max_thought: number;
   thought_regen_rate: number;
+  growth_data?: {
+    boosts: { attack: number; defense: number; hp: number; speed: number };
+    fully_grown: { gu_id: string; attack: number; defense: number; hp: number; speed: number }[];
+  };
 }
 
 
