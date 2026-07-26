@@ -178,6 +178,31 @@ func BuildCombatAction(ctx *CombatContext, spec models.GuDictionaryItem) (Action
 		action.Dmg += ctx.Attacker.BaseAttack
 		action.Logs = append(action.Logs, fmt.Sprintf("%s triệu hồi thú lực hư ảnh, gây %.1f sát thương lực đạo.", spec.Name, ctx.Attacker.BaseAttack))
 	}
+	if active.SummonGrowthPhantoms {
+		fg := ctx.Attacker.FullyGrown
+		if len(fg) > 0 && active.PhantomDamageScale > 0 {
+			count := int(active.SummonCountPerTick * float64(spec.Rank))
+			if count <= 0 {
+				count = 1
+			}
+			if count > len(fg) {
+				count = len(fg)
+			}
+			totalPhantomDmg := 0.0
+			for i := 0; i < count; i++ {
+				gu := fg[i]
+				baseStat := gu.Attack
+				if baseStat <= 0 {
+					baseStat = gu.HP * 0.1 // fallback: use HP/10 as base
+				}
+				dmg := baseStat * active.PhantomDamageScale
+				totalPhantomDmg += dmg
+				action.Logs = append(action.Logs, fmt.Sprintf("Hư ảnh của %s tấn công gây %.1f sát thương.", gu.GuID, dmg))
+			}
+			action.Dmg += totalPhantomDmg
+			action.Logs = append(action.Logs, fmt.Sprintf("%s triệu hồi %d hư ảnh từ các cổ đã khai thác, tổng sát thương %.1f.", spec.Name, count, totalPhantomDmg))
+		}
+	}
 	if active.GenerateGu {
 		action.Logs = append(action.Logs, fmt.Sprintf("%s bắt đầu ngưng tụ Sinh Cơ Diệp.", spec.Name))
 	}
@@ -350,6 +375,38 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 	default:
 		return "", fmt.Errorf("Chưa hỗ trợ action code: %s", actionCode)
 	}
+}
+
+// ApplyGrowthProgress calculates and applies growth progress for a Gu instance.
+// Returns the delta boosts applied.
+func ApplyGrowthProgress(gu *models.GuInstance, spec *models.GuDictionaryItem, elapsedHours float64) (attack, defense, hp, speed float64) {
+	if spec.Effects.Growth == nil || elapsedHours <= 0 {
+		return 0, 0, 0, 0
+	}
+	g := spec.Effects.Growth
+	maxHours := g.HoursToMax
+	if maxHours <= 0 {
+		maxHours = 168 // default 1 week
+	}
+	oldHours := gu.GrowthHours
+	newHours := oldHours + elapsedHours
+	if newHours > maxHours {
+		newHours = maxHours
+	}
+	progress := newHours / maxHours
+	if progress > 1.0 {
+		progress = 1.0
+	}
+	oldProgress := oldHours / maxHours
+
+	attack = g.MaxAttack * (progress - oldProgress)
+	defense = g.MaxDefense * (progress - oldProgress)
+	hp = g.MaxHP * (progress - oldProgress)
+	speed = g.MaxSpeed * (progress - oldProgress)
+
+	gu.GrowthHours = newHours
+	gu.EquippedAt = nil // reset after processing
+	return
 }
 
 // HandleConsumeEvent is kept for backward compatibility, delegates to handleActionCode

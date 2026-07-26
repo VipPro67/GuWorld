@@ -17,6 +17,9 @@ export interface ActiveEffect {
   summon_phantom?: boolean;
   generate_gu?: boolean;
   curve_attack?: boolean;
+  summon_growth_phantoms?: boolean;
+  summon_count_per_tick?: number;
+  phantom_damage_scale?: number;
   [key: string]: any;
 }
 
@@ -43,9 +46,18 @@ export interface SpecialMechanic {
   chance: number;
 }
 
+export interface GrowthEffect {
+  max_attack?: number;
+  max_defense?: number;
+  max_hp?: number;
+  max_speed?: number;
+  hours_to_max?: number;
+}
+
 export interface GuEffects {
   active?: ActiveEffect | null;
   passive?: PassiveEffect | null;
+  growth?: GrowthEffect | null;
   other?: SpecialMechanic[] | null;
   [key: string]: any;
 }

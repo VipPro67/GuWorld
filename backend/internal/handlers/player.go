@@ -1686,6 +1686,12 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 		"storage":       20.0,
 	}
 
+	// Apply permanent growth boosts
+	stats["attack"] += player.GrowthData.Boosts.Attack
+	stats["defense"] += player.GrowthData.Boosts.Defense
+	stats["hp"] += player.GrowthData.Boosts.HP
+	stats["speed"] += player.GrowthData.Boosts.Speed
+
 	for _, mod := range player.BodyMods {
 		switch mod {
 		case "Iron Bone":
@@ -1730,6 +1736,7 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 				stats["attack"] += passive.StatBaseAttack * mult
 				stats["defense"] += passive.StatBaseDefense * mult
 				stats["speed"] += passive.StatBaseSpeed * mult
+				stats["hp"] += passive.StatBaseHP * mult
 				if player.BaseHP > 0 {
 					missingHpRate := 1.0 - player.HP/player.BaseHP
 					stats["damage_multiplier"] += missingHpRate * passive.DamageMultiplierOnHit
@@ -1834,6 +1841,18 @@ func EquipGu(c *gin.Context) {
 		guName = spec.Name
 	}
 
+	// ── Growth (Growth Effect) ───────────────────────────────────────────
+	hasGrowth := specOk && spec.Effects.Growth != nil && spec.Effects.Growth.HoursToMax > 0
+	isFullyGrown := false
+	if hasGrowth {
+		for _, fg := range player.GrowthData.FullyGrown {
+			if fg.GuID == targetGu.GuID {
+				isFullyGrown = true
+				break
+			}
+		}
+	}
+
 	action := "gu.unequip"
 	statusMsg := fmt.Sprintf("Tháo %s thành công!", guName)
 	if req.Equip {
@@ -1844,10 +1863,40 @@ func EquipGu(c *gin.Context) {
 				statusMsg += " " + msg
 			}
 		}
+		// Set EquippedAt if this Gu has growth effect and isn't fully grown yet
+		if hasGrowth && !isFullyGrown {
+			now := time.Now()
+			targetGu.EquippedAt = &now
+		}
+	} else {
+		// Unequip — flush pending growth time
+		if hasGrowth && targetGu.EquippedAt != nil {
+			elapsed := time.Since(*targetGu.EquippedAt).Hours()
+			if elapsed > 0 {
+				atk, def, hp, spd := ApplyGrowthProgress(targetGu, &spec, elapsed)
+				if atk != 0 || def != 0 || hp != 0 || spd != 0 {
+					player.GrowthData.Boosts.Attack += atk
+					player.GrowthData.Boosts.Defense += def
+					player.GrowthData.Boosts.HP += hp
+					player.GrowthData.Boosts.Speed += spd
+					player.BaseHP += hp
+				}
+				// Check if fully grown now, add to FullyGrown list
+				if targetGu.GrowthHours >= spec.Effects.Growth.HoursToMax {
+					player.GrowthData.FullyGrown = append(player.GrowthData.FullyGrown, models.FullyGrownInfo{
+						GuID:    targetGu.GuID,
+						Attack:  spec.Effects.Growth.MaxAttack,
+						Defense: spec.Effects.Growth.MaxDefense,
+						HP:      spec.Effects.Growth.MaxHP,
+						Speed:   spec.Effects.Growth.MaxSpeed,
+					})
+				}
+			}
+		}
 	}
 
-	_, err = tx.Exec("UPDATE players SET gu_inventory = $1, equipped_gus = $2, primeval_stones = $3, immortal_stones = $4, hp = $5, max_mana = $6, current_mana = $7, lifespan = $8, rank = $9, sub_rank = $10, aptitude_percent = $11 WHERE id = $12",
-		player.GuInventory, player.EquippedGus, player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.Rank, player.SubRank, player.AptitudePercent, player.ID)
+	_, err = tx.Exec("UPDATE players SET gu_inventory = $1, equipped_gus = $2, primeval_stones = $3, immortal_stones = $4, hp = $5, max_mana = $6, current_mana = $7, lifespan = $8, rank = $9, sub_rank = $10, aptitude_percent = $11, base_hp = $12, growth_data = $13 WHERE id = $14",
+		player.GuInventory, player.EquippedGus, player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.Rank, player.SubRank, player.AptitudePercent, player.BaseHP, player.GrowthData, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state"})
 		return

@@ -81,6 +81,7 @@ type Combatant struct {
 	DaoMarkDamage float64           `json:"dao_mark_damage"`
 	ApertureDmg   float64           `json:"aperture_dmg"`
 	AvatarURL     string            `json:"avatar_url,omitempty"`
+	FullyGrown    []FullyGrownInfo  `json:"fully_grown,omitempty"`
 }
 
 func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, subRank int, monsterType string) (maxHP, attack, defense float64) {
@@ -166,6 +167,8 @@ func BuildCombatStateFromMonster(mon MonsterTemplate, rank int, subRank int) Com
 }
 
 func CombatantFromPlayer(player *Player, stats map[string]float64) Combatant {
+	hpBonus := stats["hp"]
+	effectiveBaseHP := player.BaseHP + hpBonus
 	return Combatant{
 		ID:            player.ID.String(),
 		Name:          player.Username,
@@ -173,7 +176,7 @@ func CombatantFromPlayer(player *Player, stats map[string]float64) Combatant {
 		Rank:          player.Rank,
 		SubRank:       player.SubRank,
 		HP:            player.HP,
-		MaxHP:         player.BaseHP,
+		MaxHP:         effectiveBaseHP,
 		CurrentMana:   player.CurrentMana,
 		MaxMana:       player.MaxMana,
 		BaseAttack:    stats["attack"],
@@ -187,6 +190,7 @@ func CombatantFromPlayer(player *Player, stats map[string]float64) Combatant {
 		DaoMarkDamage: player.DaoMarkDamage,
 		ApertureDmg:   player.ApertureDamage,
 		AvatarURL:     player.AvatarURL,
+		FullyGrown:    player.GrowthData.FullyGrown,
 	}
 }
 

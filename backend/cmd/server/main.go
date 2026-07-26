@@ -96,6 +96,7 @@ func main() {
 	defer stop()
 
 	worker.StartHungerWorker(ctx, db.DB, 3*time.Hour)
+	worker.StartGrowthWorker(ctx, db.DB, 60*time.Second)
 	handlers.StartTribulationWorker(ctx)
 	handlers.StartMineMonsterWorker(ctx)
 	handlers.StartMidnightMineWorker(ctx)

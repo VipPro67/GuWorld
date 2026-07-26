@@ -1713,7 +1713,7 @@ export const AdminView: React.FC = () => {
             <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2"><Bug className="w-4 h-4 text-amber-400" />Danh Sách Cổ Trùng</h3>
-                <button onClick={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Attack", base_mana_cost: 0, effects: { active: {}, passive: {}, house: {} }, food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: "", is_immortal: false, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0, image_url: "" })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
+                <button onClick={() => setGuEdit({ id: "", name: "", rank: 1, path: [], gu_type: "Attack", base_mana_cost: 0, effects: { active: {}, passive: {}, house: {}, other: [] }, food_types: [], hunger_rate: 1, max_hunger: 100, description: "", target_type: "SINGLE", rarity: "", is_immortal: false, primary_role: "", combat_roles: [], combat_tags: [], support_tags: [], base_price: 0, image_url: "" })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
               </div>
               <div className="relative mb-3">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
@@ -2555,19 +2555,30 @@ export const AdminView: React.FC = () => {
                 const activeEff = [
                   { key: "damage_flat", label: "Damage Flat", type: "float" },
                   { key: "damage_mult", label: "Damage Mult", type: "float" },
+                  { key: "damage_path", label: "Damage Path", type: "string" },
                   { key: "heal_flat", label: "Heal Flat", type: "float" },
                   { key: "shield_flat", label: "Shield Flat", type: "float" },
                   { key: "mana_regen", label: "Mana Regen", type: "float" },
                   { key: "lifesteal_rate", label: "Life Steal", type: "float" },
                   { key: "apply_status", label: "Apply Status", type: "string" },
                   { key: "status_tick_damage", label: "Status Tick Dmg", type: "float" },
+                  { key: "status_duration_ticks", label: "Status Duration Ticks", type: "float" },
                   { key: "refine_mana_tier", label: "Refine Mana Tier", type: "float" },
                   { key: "cleansing_power", label: "Cleansing Power", type: "float" },
+                  { key: "range", label: "Range", type: "float" },
+                  { key: "target_selector", label: "Target Selector", type: "string" },
+                  { key: "target_count", label: "Target Count", type: "float" },
+                  { key: "summon_monster_id", label: "Summon Monster ID", type: "string" },
+                  { key: "summon_position", label: "Summon Position", type: "string" },
+                  { key: "inherit_stats_percent", label: "Inherit Stats %", type: "float" },
+                  { key: "phantom_damage_scale", label: "Phantom Damage Scale", type: "float" },
+                  { key: "summon_count_per_tick", label: "Summon Count/Tick", type: "float" },
                 ];
                 const passiveEff = [
                   { key: "stat_base_attack", label: "Base Attack", type: "float" },
                   { key: "stat_base_defense", label: "Base Defense", type: "float" },
                   { key: "stat_base_hp", label: "Base HP", type: "float" },
+                  { key: "stat_base_speed", label: "Base Speed", type: "float" },
                   { key: "mana_regen_mult", label: "Mana Regen Mult", type: "float" },
                   { key: "soul_refinement", label: "Soul Refinement", type: "float" },
                   { key: "movement", label: "Movement", type: "float" },
@@ -2576,10 +2587,12 @@ export const AdminView: React.FC = () => {
                   { key: "investigation", label: "Investigation", type: "float" },
                   { key: "hearing", label: "Hearing", type: "float" },
                   { key: "path_conflict_reduction", label: "Path Conflict Reduct", type: "float" },
+                  { key: "damage_multiplier_on_hit", label: "Damage Mult On Hit", type: "float" },
+                  { key: "refine_mana_tier", label: "Refine Mana Tier", type: "float" },
+                  { key: "cleansing_power", label: "Cleansing Power", type: "float" },
                 ];
-                //otherEff 
 
-                const boolKeys = cat === "active" ? ["summon_phantom", "generate_gu", "blood_drain", "wood_transformation", "curve_attack", "replicate"] : [];
+                const boolKeys = cat === "active" ? ["summon_phantom", "generate_gu", "blood_drain", "wood_transformation", "curve_attack", "replicate", "summon_growth_phantoms"] : [];
                 const fields = cat === "active" ? activeEff : cat === "passive" ? passiveEff : [];
                 return (
                   <details key={cat} className="mb-2 bg-zinc-800/30 rounded-lg">
@@ -2605,6 +2618,53 @@ export const AdminView: React.FC = () => {
                   </details>
                 );
               })}
+              {/* Growth section - Permanent stat growth */}
+              <details className="mb-2 bg-zinc-800/30 rounded-lg">
+                <summary className="px-3 py-2 text-xs font-bold text-zinc-400 uppercase cursor-pointer">growth ({Object.keys(guEdit.effects?.growth || {}).length} fields)</summary>
+                <div className="px-3 pb-3 grid grid-cols-3 gap-2">
+                  {[
+                    { key: "max_attack", label: "Max Attack", type: "float" },
+                    { key: "max_defense", label: "Max Defense", type: "float" },
+                    { key: "max_hp", label: "Max HP", type: "float" },
+                    { key: "max_speed", label: "Max Speed", type: "float" },
+                    { key: "hours_to_max", label: "Hours To Max", type: "float" },
+                  ].map(f => {
+                    const eff = guEdit.effects?.growth || {};
+                    return (
+                      <div key={f.key}>
+                        <label className="text-[10px] text-zinc-500 block">{f.label}</label>
+                        <input type="number" step="any" value={eff[f.key] || 0} onChange={e => { const v = parseFloat(e.target.value) || 0; const newEff = {...guEdit.effects}; newEff.growth = {...newEff.growth, [f.key]: v}; setGuEdit({...guEdit, effects: newEff}) }} className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-xs text-zinc-200" />
+                      </div>
+                    );
+                  })}
+                </div>
+              </details>
+              {/* Other section - Special Mechanics */}
+              <details className="mb-2 bg-zinc-800/30 rounded-lg">
+                <summary className="px-3 py-2 text-xs font-bold text-zinc-400 uppercase cursor-pointer">other ({(guEdit.effects?.other || []).length} mechanics)</summary>
+                <div className="px-3 pb-3">
+                  {(guEdit.effects?.other || []).map((m: any, i: number) => (
+                    <div key={i} className="grid grid-cols-3 gap-2 mb-2 p-2 bg-zinc-800/50 rounded">
+                      <div>
+                        <label className="text-[10px] text-zinc-500 block">Event Trigger</label>
+                        <input value={m.event_trigger || ""} onChange={e => { const newEff = {...guEdit.effects}; const arr = [...(newEff.other || [])]; arr[i] = {...arr[i], event_trigger: e.target.value}; newEff.other = arr; setGuEdit({...guEdit, effects: newEff}) }} className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-xs text-zinc-200" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 block">Action Code</label>
+                        <input value={m.action_code || ""} onChange={e => { const newEff = {...guEdit.effects}; const arr = [...(newEff.other || [])]; arr[i] = {...arr[i], action_code: e.target.value}; newEff.other = arr; setGuEdit({...guEdit, effects: newEff}) }} className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-xs text-zinc-200" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 block">Params (JSON)</label>
+                        <textarea value={JSON.stringify(m.params || {})} onChange={e => { let p; try { p = JSON.parse(e.target.value) } catch { p = m.params } const newEff = {...guEdit.effects}; const arr = [...(newEff.other || [])]; arr[i] = {...arr[i], params: p}; newEff.other = arr; setGuEdit({...guEdit, effects: newEff}) }} className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-xs text-zinc-200 font-mono" rows={2} />
+                      </div>
+                      <div className="col-span-3 flex justify-end">
+                        <button onClick={() => { const newEff = {...guEdit.effects}; newEff.other = (newEff.other || []).filter((_: any, j: number) => j !== i); setGuEdit({...guEdit, effects: newEff}) }} className="text-[10px] text-red-400 hover:text-red-300">Xóa</button>
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={() => { const newEff = {...guEdit.effects}; newEff.other = [...(newEff.other || []), { event_trigger: "", action_code: "", params: {} }]; setGuEdit({...guEdit, effects: newEff}) }} className="px-3 py-1 bg-zinc-700 hover:bg-zinc-600 text-xs text-zinc-300 rounded">+ Thêm Mechanic</button>
+                </div>
+              </details>
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setGuEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>

@@ -4,20 +4,23 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // GuInstance represents an individual Gu bug owned by a player.
 type GuInstance struct {
-	InstanceID      string  `json:"instance_id"`
-	GuID            string  `json:"gu_id"`
-	Rank            int     `json:"rank"`
-	Hunger          int     `json:"hunger"`
-	Status          string  `json:"status"` // "ACTIVE", "SLEEPING", "DEAD"
-	Equipped        bool    `json:"equipped"`
-	IsVital         bool    `json:"is_vital"`
-	IntegrationTime float64 `json:"integration_time,omitempty"`
+	InstanceID      string     `json:"instance_id"`
+	GuID            string     `json:"gu_id"`
+	Rank            int        `json:"rank"`
+	Hunger          int        `json:"hunger"`
+	Status          string     `json:"status"` // "ACTIVE", "SLEEPING", "DEAD"
+	Equipped        bool       `json:"equipped"`
+	IsVital         bool       `json:"is_vital"`
+	IntegrationTime float64    `json:"integration_time,omitempty"`
+	EquippedAt      *time.Time `json:"equipped_at,omitempty"`
+	GrowthHours     float64    `json:"growth_hours,omitempty"`
 }
 
 // GuInventory is a collection of GuInstances owned by a player.
@@ -209,6 +212,7 @@ type Player struct {
 	GuInventory     GuInventory     `json:"gu_inventory"`
 	ActiveCombat    *CombatState    `json:"active_combat"`
 	TempLoot        TempLoot        `json:"temp_loot"`
+	GrowthData      GrowthData      `json:"growth_data"`
 }
 
 type TempLoot struct {
@@ -237,6 +241,47 @@ func (t *TempLoot) Scan(value interface{}) error {
 // Value implements the driver.Valuer interface for TempLoot
 func (t TempLoot) Value() (driver.Value, error) {
 	return json.Marshal(t)
+}
+
+type GrowthBoosts struct {
+	Attack  float64 `json:"attack,omitempty"`
+	Defense float64 `json:"defense,omitempty"`
+	HP      float64 `json:"hp,omitempty"`
+	Speed   float64 `json:"speed,omitempty"`
+}
+
+type FullyGrownInfo struct {
+	GuID    string  `json:"gu_id"`
+	Attack  float64 `json:"attack,omitempty"`
+	Defense float64 `json:"defense,omitempty"`
+	HP      float64 `json:"hp,omitempty"`
+	Speed   float64 `json:"speed,omitempty"`
+}
+
+type GrowthData struct {
+	Boosts     GrowthBoosts     `json:"boosts"`
+	FullyGrown []FullyGrownInfo `json:"fully_grown"`
+}
+
+func (g *GrowthData) Scan(value interface{}) error {
+	if value == nil {
+		*g = GrowthData{Boosts: GrowthBoosts{}, FullyGrown: []FullyGrownInfo{}}
+		return nil
+	}
+	b, ok := value.([]byte)
+	if !ok {
+		*g = GrowthData{Boosts: GrowthBoosts{}, FullyGrown: []FullyGrownInfo{}}
+		return nil
+	}
+	if len(b) == 0 || string(b) == "null" {
+		*g = GrowthData{Boosts: GrowthBoosts{}, FullyGrown: []FullyGrownInfo{}}
+		return nil
+	}
+	return json.Unmarshal(b, g)
+}
+
+func (g GrowthData) Value() (driver.Value, error) {
+	return json.Marshal(g)
 }
 
 type EquippedGusList []string

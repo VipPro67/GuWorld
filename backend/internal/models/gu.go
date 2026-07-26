@@ -36,6 +36,10 @@ type ActiveEffect struct {
 	CleansingPower     float64 `json:"cleansing_power,omitempty"`
 	SummonPhantom      bool    `json:"summon_phantom,omitempty"`
 	GenerateGu         bool    `json:"generate_gu,omitempty"`
+
+	SummonGrowthPhantoms bool    `json:"summon_growth_phantoms,omitempty"`
+	SummonCountPerTick   float64 `json:"summon_count_per_tick,omitempty"`
+	PhantomDamageScale   float64 `json:"phantom_damage_scale,omitempty"`
 }
 
 type PassiveEffect struct {
@@ -63,9 +67,18 @@ type SpecialMechanic struct {
 	Params       json.RawMessage `json:"params"`
 }
 
+type GrowthEffect struct {
+	MaxAttack  float64 `json:"max_attack,omitempty"`
+	MaxDefense float64 `json:"max_defense,omitempty"`
+	MaxHP      float64 `json:"max_hp,omitempty"`
+	MaxSpeed   float64 `json:"max_speed,omitempty"`
+	HoursToMax float64 `json:"hours_to_max,omitempty"`
+}
+
 type GuEffects struct {
 	Active  *ActiveEffect     `json:"active"`
 	Passive *PassiveEffect    `json:"passive"`
+	Growth  *GrowthEffect     `json:"growth,omitempty"`
 	Other   []SpecialMechanic `json:"other"`
 }
 

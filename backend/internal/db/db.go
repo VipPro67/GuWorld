@@ -181,7 +181,8 @@ func InitSchema() error {
 		ref_code VARCHAR(50) UNIQUE NOT NULL DEFAULT '',
 		earned_achievements JSONB NOT NULL DEFAULT '[]',
 		selected_title VARCHAR(100) NOT NULL DEFAULT '',
-		selected_frame VARCHAR(50) NOT NULL DEFAULT ''
+		selected_frame VARCHAR(50) NOT NULL DEFAULT '',
+		growth_data JSONB NOT NULL DEFAULT '{"boosts":{"attack":0,"defense":0,"hp":0,"speed":0},"fully_grown":[]}'
 	);
 	`
 	_, err = DB.Exec(query)
@@ -1039,6 +1040,7 @@ func InitSchema() error {
 		);`, "create_trades_table"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT '';`, "avatar_url"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS combat_settings JSONB NOT NULL DEFAULT '{}';`, "combat_settings"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS growth_data JSONB NOT NULL DEFAULT '{"boosts":{"attack":0,"defense":0,"hp":0,"speed":0},"fully_grown":[]}';`, "growth_data"},
 		{`CREATE TABLE IF NOT EXISTS sect_mines (
 			id SERIAL PRIMARY KEY,
 			name VARCHAR(100) NOT NULL UNIQUE,
