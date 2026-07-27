@@ -616,8 +616,8 @@ export const AdminView: React.FC = () => {
                 }} className="w-full text-left px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer flex items-center gap-3">
                   <span className="text-xs font-mono text-zinc-400 min-w-[140px]">{x.id}</span>
                   <span className="text-xs text-zinc-200 truncate">{x.name || x.target_gu_id || "—"}</span>
-                  {itemPicker.tab === "gu" && x.rank && <span className="text-[10px] text-zinc-500 ml-auto">Rank {x.rank}</span>}
-                  {itemPicker.tab === "item" && x.item_type && <span className="text-[10px] text-zinc-500 ml-auto">{x.item_type}</span>}
+                  {itemPicker.tab === "gu" && x.rank && <span className="text-[10px] text-zinc-500 ml-auto">Bậc {x.rank}</span>}
+                  {itemPicker.tab === "item" && x.item_type && <span className="text-[10px] text-zinc-500 ml-auto">{translateItemType(x.item_type)}</span>}
                   {itemPicker.tab === "recipe" && x.target_gu_id && <span className="text-[10px] text-zinc-500 ml-auto">→ {x.target_gu_id}</span>}
                 </button>
               ))
@@ -683,7 +683,7 @@ export const AdminView: React.FC = () => {
                 <span className="text-sm font-bold text-zinc-200">{Math.round(detail.hp)}/{Math.round(detail.base_hp)}</span>
               </div>
               <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-3">
-                <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono mb-1"><Zap className="w-3.5 h-3.5 text-blue-400" />Mana</div>
+                <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono mb-1"><Zap className="w-3.5 h-3.5 text-blue-400" />Chân nguyên</div>
                 <span className="text-sm font-bold text-zinc-200">{Math.round(detail.current_mana)}/{Math.round(detail.max_mana)}</span>
               </div>
               <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-3">
@@ -728,7 +728,7 @@ export const AdminView: React.FC = () => {
                           <th className="px-3 py-2.5 font-semibold">ID</th>
                           <th className="px-3 py-2.5 font-semibold">Tên</th>
                           <th className="px-3 py-2.5 font-semibold">Loại</th>
-                          <th className="px-3 py-2.5 font-semibold">Rank</th>
+                          <th className="px-3 py-2.5 font-semibold">Bậc</th>
                           <th className="px-3 py-2.5 font-semibold text-right">Số lượng</th>
                           <th className="px-3 py-2.5 font-semibold text-right">Thao tác</th>
                         </tr>
@@ -749,7 +749,7 @@ export const AdminView: React.FC = () => {
                                 <td className="px-3 py-2.5 text-zinc-500 font-mono max-w-[100px] truncate" title={itemId}>{itemId}</td>
                                 <td className="px-3 py-2.5 font-semibold text-zinc-200">{spec?.name || itemId}</td>
                                 <td className="px-3 py-2.5">
-                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-900 border border-zinc-800 text-zinc-400">{spec?.item_type || "?"}</span>
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-900 border border-zinc-800 text-zinc-400">{translateItemType(spec?.item_type) || "?"}</span>
                                 </td>
                                 <td className="px-3 py-2.5 text-zinc-400">{spec?.rank || "?"}</td>
                                 <td className="px-3 py-2.5 text-right font-mono font-bold text-zinc-200">{qty.toLocaleString()}</td>
@@ -793,7 +793,7 @@ export const AdminView: React.FC = () => {
                         <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
                           <th className="px-3 py-2.5 font-semibold">Instance ID</th>
                           <th className="px-3 py-2.5 font-semibold">Tên</th>
-                          <th className="px-3 py-2.5 font-semibold">Rank</th>
+                          <th className="px-3 py-2.5 font-semibold">Bậc</th>
                           <th className="px-3 py-2.5 font-semibold">Trạng thái</th>
                           <th className="px-3 py-2.5 font-semibold">Đói</th>
                           <th className="px-3 py-2.5 font-semibold">Trang bị</th>
@@ -1510,7 +1510,7 @@ export const AdminView: React.FC = () => {
               <Users className="w-3.5 h-3.5 inline mr-1.5" />Danh sách
             </button>
             <button onClick={() => setPlayersTab("online")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${playersTab === "online" ? "text-emerald-400 border-emerald-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-              <Activity className="w-3.5 h-3.5 inline mr-1.5" />Online
+              <Activity className="w-3.5 h-3.5 inline mr-1.5" />Trực tuyến
             </button>
           </div>
 
@@ -1556,8 +1556,8 @@ export const AdminView: React.FC = () => {
                       <th className="px-3 py-2.5 font-semibold">Tên</th>
                       <th className="px-3 py-2.5 font-semibold">Email</th>
                       <th className="px-3 py-2.5 font-semibold">Tu vi</th>
-                      <th className="px-3 py-2.5 font-semibold">HP</th>
-                      <th className="px-3 py-2.5 font-semibold">Mana</th>
+                      <th className="px-3 py-2.5 font-semibold">Sinh lực</th>
+                      <th className="px-3 py-2.5 font-semibold">Chân nguyên</th>
                       <th className="px-3 py-2.5 font-semibold">Nguyên Thạch</th>
                       <th className="px-3 py-2.5 font-semibold">Tiên Nguyên</th>
                       <th className="px-3 py-2.5 font-semibold">Admin</th>
@@ -1610,7 +1610,7 @@ export const AdminView: React.FC = () => {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2">
                     <Activity className="w-4 h-4 text-emerald-400" />
-                    Người chơi Online (5 phút qua)
+                    Người chơi Trực tuyến (5 phút qua)
                   </h3>
                   <button onClick={fetchOnlinePlayers} disabled={onlineLoading} className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:text-white transition-all disabled:opacity-50 cursor-pointer">
                     <RefreshCw className={`w-3.5 h-3.5 ${onlineLoading ? "animate-spin" : ""}`} /> Làm mới
@@ -1648,10 +1648,10 @@ export const AdminView: React.FC = () => {
                               {p.is_online ? (
                                 <span className="inline-flex items-center gap-1 text-emerald-400">
                                   <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" />
-                                  Online
+                                  Trực tuyến
                                 </span>
                               ) : (
-                                <span className="text-zinc-500">Offline</span>
+                                <span className="text-zinc-500">Ngoại tuyến</span>
                               )}
                             </td>
                             <td className="py-2.5 px-3 text-zinc-400">
@@ -1753,7 +1753,7 @@ export const AdminView: React.FC = () => {
                             {g.name}
                           </td>
                           <td className="px-3 py-2.5 text-zinc-400">{g.rank}</td>
-                          <td className="px-3 py-2.5 text-zinc-400">{g.gu_type}</td>
+                          <td className="px-3 py-2.5 text-zinc-400">{translateGuType(g.gu_type)}</td>
                           <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{g.base_price?.toLocaleString() || 0}</td>
                           <td className="px-3 py-2.5 text-right">
                             <button onClick={() => setGuEdit({ ...g, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects })} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
@@ -1811,7 +1811,7 @@ export const AdminView: React.FC = () => {
                             )}
                             {it.name}
                           </td>
-                          <td className="px-3 py-2.5 text-zinc-400">{it.item_type}</td>
+                          <td className="px-3 py-2.5 text-zinc-400">{translateItemType(it.item_type)}</td>
                           <td className="px-3 py-2.5 text-zinc-400">{it.rank}</td>
                           <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{it.base_price?.toLocaleString() || 0}</td>
                           <td className="px-3 py-2.5 text-right">
@@ -1990,7 +1990,7 @@ export const AdminView: React.FC = () => {
                         <tr key={item.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                           <td className="px-3 py-2.5 text-zinc-500 font-mono">{item.id}</td>
                           <td className="px-3 py-2.5 font-semibold text-zinc-200">{item.name || item.id}</td>
-                          <td className="px-3 py-2.5 text-zinc-400">{item.item_type || "—"}</td>
+                          <td className="px-3 py-2.5 text-zinc-400">{translateItemType(item.item_type) || "—"}</td>
                           <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{item.price?.toLocaleString()}</td>
                           <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{item.stock === -1 ? "∞" : item.stock}</td>
                           <td className="px-3 py-2.5 text-center">{item.is_default ? <span className="text-emerald-400">✓</span> : <span className="text-zinc-600">–</span>}</td>
@@ -2487,15 +2487,15 @@ export const AdminView: React.FC = () => {
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID</label><input value={guEdit.id || ""} onChange={e => setGuEdit({...guEdit, id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
               <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tên</label><input value={guEdit.name || ""} onChange={e => setGuEdit({...guEdit, name: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
-              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Rank</label><input type="number" min={1} max={10} value={guEdit.rank} onChange={e => setGuEdit({...guEdit, rank: parseInt(e.target.value) || 1})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
-              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Loại</label><select value={guEdit.gu_type} onChange={e => setGuEdit({...guEdit, gu_type: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200"><option value="Active">Active</option><option value="Buff">Buff</option><option value="Consumable">Consumable</option><option value="Control">Control</option><option value="Defense">Defense</option><option value="Healing">Healing</option><option value="Investigation">Investigation</option><option value="Movement">Movement</option><option value="Passive">Passive</option><option value="Refinement">Refinement</option><option value="Special">Special</option><option value="Storage">Storage</option><option value="Summon">Summon</option><option value="Support">Support</option><option value="Transformation">Transformation</option><option value="Vital">Vital</option></select></div>
-              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Hunger Rate</label><input type="number" min={1} value={guEdit.hunger_rate} onChange={e => setGuEdit({...guEdit, hunger_rate: parseInt(e.target.value) || 1})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
-              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Max Hunger</label><input type="number" value={guEdit.max_hunger} onChange={e => setGuEdit({...guEdit, max_hunger: parseInt(e.target.value) || 100})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
-              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Base Mana Cost</label><input type="number" step="0.1" value={guEdit.base_mana_cost} onChange={e => setGuEdit({...guEdit, base_mana_cost: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
-              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Base Price</label><input type="number" value={guEdit.base_price} onChange={e => setGuEdit({...guEdit, base_price: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
-              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Target Type</label><select value={guEdit.target_type || "SINGLE"} onChange={e => setGuEdit({...guEdit, target_type: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200"><option value="SINGLE">SINGLE</option><option value="ALL">ALL</option></select></div>
-              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Rarity</label><input value={guEdit.rarity || ""} onChange={e => setGuEdit({...guEdit, rarity: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
-              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Primary Role</label><input value={guEdit.primary_role || ""} onChange={e => setGuEdit({...guEdit, primary_role: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Bậc</label><input type="number" min={1} max={10} value={guEdit.rank} onChange={e => setGuEdit({...guEdit, rank: parseInt(e.target.value) || 1})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Loại</label><select value={guEdit.gu_type} onChange={e => setGuEdit({...guEdit, gu_type: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200"><option value="Active">Chủ động</option><option value="Buff">Cường hoá</option><option value="Consumable">Tiêu hao</option><option value="Control">Khống chế</option><option value="Defense">Phòng thủ</option><option value="Healing">Hồi phục</option><option value="Investigation">Trinh sát</option><option value="Movement">Di chuyển</option><option value="Passive">Bị động</option><option value="Refinement">Luyện cổ</option><option value="Special">Đặc thù</option><option value="Storage">Lưu trữ</option><option value="Summon">Triệu hồi</option><option value="Support">Hỗ trợ</option><option value="Transformation">Biến hoá</option><option value="Vital">Bản mệnh</option></select></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tốc độ đói</label><input type="number" min={1} value={guEdit.hunger_rate} onChange={e => setGuEdit({...guEdit, hunger_rate: parseInt(e.target.value) || 1})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Độ no tối đa</label><input type="number" value={guEdit.max_hunger} onChange={e => setGuEdit({...guEdit, max_hunger: parseInt(e.target.value) || 100})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tiêu hao CN cơ bản</label><input type="number" step="0.1" value={guEdit.base_mana_cost} onChange={e => setGuEdit({...guEdit, base_mana_cost: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Giá cơ bản</label><input type="number" value={guEdit.base_price} onChange={e => setGuEdit({...guEdit, base_price: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Mục tiêu</label><select value={guEdit.target_type || "SINGLE"} onChange={e => setGuEdit({...guEdit, target_type: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200"><option value="SINGLE">Đơn mục tiêu</option><option value="ALL">Toàn thể</option></select></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Độ hiếm</label><input value={guEdit.rarity || ""} onChange={e => setGuEdit({...guEdit, rarity: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Vai trò chính</label><input value={guEdit.primary_role || ""} onChange={e => setGuEdit({...guEdit, primary_role: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
               <div><label className="flex items-center gap-2 pt-5"><input type="checkbox" checked={guEdit.is_immortal} onChange={e => setGuEdit({...guEdit, is_immortal: e.target.checked})} className="rounded bg-zinc-800 border-zinc-700" /><span className="text-[11px] text-zinc-400">Bất Tử</span></label></div>
             </div>
             <div className="mb-4"><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Mô tả</label><textarea value={guEdit.description || ""} onChange={e => setGuEdit({...guEdit, description: e.target.value})} rows={2} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
@@ -2549,7 +2549,7 @@ export const AdminView: React.FC = () => {
             ))}
             {/* Gu Effects - structured */}
             <div className="mt-4 border-t border-zinc-800 pt-4">
-              <h4 className="text-xs font-bold text-zinc-400 mb-3 uppercase tracking-wider">Hiệu Ứng (Effects)</h4>
+              <h4 className="text-xs font-bold text-zinc-400 mb-3 uppercase tracking-wider">Hiệu Ứng</h4>
               {["active", "passive", "house"].map(cat => {
                 const eff = guEdit.effects?.[cat] || {};
                 const activeEff = [
@@ -2646,11 +2646,11 @@ export const AdminView: React.FC = () => {
                   {(guEdit.effects?.other || []).map((m: any, i: number) => (
                     <div key={i} className="grid grid-cols-3 gap-2 mb-2 p-2 bg-zinc-800/50 rounded">
                       <div>
-                        <label className="text-[10px] text-zinc-500 block">Event Trigger</label>
+                        <label className="text-[10px] text-zinc-500 block">Sự kiện kích hoạt</label>
                         <input value={m.event_trigger || ""} onChange={e => { const newEff = {...guEdit.effects}; const arr = [...(newEff.other || [])]; arr[i] = {...arr[i], event_trigger: e.target.value}; newEff.other = arr; setGuEdit({...guEdit, effects: newEff}) }} className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-xs text-zinc-200" />
                       </div>
                       <div>
-                        <label className="text-[10px] text-zinc-500 block">Action Code</label>
+                        <label className="text-[10px] text-zinc-500 block">Mã hành động</label>
                         <input value={m.action_code || ""} onChange={e => { const newEff = {...guEdit.effects}; const arr = [...(newEff.other || [])]; arr[i] = {...arr[i], action_code: e.target.value}; newEff.other = arr; setGuEdit({...guEdit, effects: newEff}) }} className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-xs text-zinc-200" />
                       </div>
                       <div>
@@ -2690,10 +2690,10 @@ export const AdminView: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID</label><input value={itemEdit.id || ""} onChange={e => setItemEdit({...itemEdit, id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
                 <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tên</label><input value={itemEdit.name || ""} onChange={e => setItemEdit({...itemEdit, name: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
-                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Loại</label><select value={itemEdit.item_type} onChange={e => setItemEdit({...itemEdit, item_type: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200"><option value="Material">Material</option><option value="Consumable">Consumable</option><option value="Food">Food</option><option value="Currency">Currency</option></select></div>
-                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Rank</label><input type="number" min={1} value={itemEdit.rank} onChange={e => setItemEdit({...itemEdit, rank: parseInt(e.target.value) || 1})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Loại</label><select value={itemEdit.item_type} onChange={e => setItemEdit({...itemEdit, item_type: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200"><option value="Material">Vật liệu</option><option value="Consumable">Tiêu hao</option><option value="Food">Thức ăn</option><option value="Currency">Tiền tệ</option></select></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Bậc</label><input type="number" min={1} value={itemEdit.rank} onChange={e => setItemEdit({...itemEdit, rank: parseInt(e.target.value) || 1})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
               </div>
-              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Base Price</label><input type="number" value={itemEdit.base_price} onChange={e => setItemEdit({...itemEdit, base_price: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Giá cơ bản</label><input type="number" value={itemEdit.base_price} onChange={e => setItemEdit({...itemEdit, base_price: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
               <div>
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Ảnh</label>
                 <div className="flex items-center gap-3">
@@ -2732,7 +2732,7 @@ export const AdminView: React.FC = () => {
               <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Mô tả</label><textarea value={itemEdit.description || ""} onChange={e => setItemEdit({...itemEdit, description: e.target.value})} rows={2} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
               {/* Effects key-value pairs */}
               <div className="border-t border-zinc-800 pt-3">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">Hiệu ứng (Effects) — key: value</label>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">Hiệu ứng — key: value</label>
                 {Object.entries(itemEdit.effects || {}).map(([k, v]) => (
                   <div key={k} className="flex gap-2 mb-1.5">
                     <input value={k} onChange={e => { const newEff = {...itemEdit.effects}; const val = newEff[k]; delete newEff[k]; newEff[e.target.value] = val; setItemEdit({...itemEdit, effects: newEff}) }} className="flex-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" placeholder="key" />

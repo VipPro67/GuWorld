@@ -96,8 +96,21 @@ func AutoCombatStart(c *gin.Context) {
 
 	var allActions []simulator.SimAction
 
+	// ── Build owned equipped+ACTIVE Gu sets for validation ──
+	ownedGuTypeSet := make(map[string]bool)       // gu_id → true
+	ownedGuInstanceSet := make(map[string]bool)   // instance_id → true
+	for _, gu := range player.GuInventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			ownedGuTypeSet[gu.GuID] = true
+			ownedGuInstanceSet[gu.InstanceID] = true
+		}
+	}
+
 	// All selected Gu (core + support, no distinction)
 	for _, guID := range req.Loadout.GuIds {
+		if !ownedGuTypeSet[guID] {
+			continue
+		}
 		if spec, ok := models.GetGuAny(guID); ok {
 			if hasCombatActiveEffects(&spec) {
 				act, err := buildSimActionFromGu(&actor, &spec, "GU_SKILL")
@@ -111,12 +124,7 @@ func AutoCombatStart(c *gin.Context) {
 	}
 
 	// ── Build active Gu set for killer move component validation ──
-	activeGuSet := make(map[string]bool)
-	for _, gu := range player.GuInventory {
-		if gu.Status == "ACTIVE" {
-			activeGuSet[gu.InstanceID] = true
-		}
-	}
+	activeGuSet := ownedGuInstanceSet
 
 	// Killer moves
 	for _, kmID := range req.Loadout.KillerMoveIds {
@@ -237,17 +245,10 @@ func AutoCombatStart(c *gin.Context) {
 		}
 	}
 
-	simMaxHP := 100
-	if isVirtual {
-		simMaxHP = int(player.BaseHP)
-		if simMaxHP <= 0 {
-			simMaxHP = 100
-		}
-	} else if player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP" {
-		simMaxHP = int(player.BaseHP)
-		if simMaxHP <= 0 {
-			simMaxHP = 100
-		}
+	baseHP := player.BaseHP + playerStats["hp"]
+	simMaxHP := int(baseHP)
+	if simMaxHP <= 0 {
+		simMaxHP = 100
 	}
 	simHP := simMaxHP
 	if !isVirtual {

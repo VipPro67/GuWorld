@@ -11,6 +11,8 @@ export interface GuInstance {
   equipped: boolean;
   is_vital: boolean;
   integration_time?: number;
+  growth_hours?: number;
+  equipped_at?: string;
 }
 
 export interface Combatant {
@@ -423,6 +425,13 @@ export interface GuEffects {
   support?: Record<string, number>;
   passive?: Record<string, number>;
   house?: Record<string, number>;
+  growth?: {
+    max_attack?: number;
+    max_defense?: number;
+    max_hp?: number;
+    max_speed?: number;
+    hours_to_max?: number;
+  };
 }
 
 export interface GuSpec {
@@ -923,8 +932,6 @@ interface GameState {
   // Soul foundation actions
   useGutsGu: () => Promise<boolean>;
   refineSoul: () => Promise<boolean>;
-  calmSoul: () => Promise<boolean>;
-
   // Instance actions
   activeInstanceSession: PlayerInstanceSession | null;
   activeInstanceTemplate: InstanceTemplate | null;
@@ -4365,26 +4372,6 @@ export const useGameStore = create<GameState>((set, get) => {
       setPlayerFromServer(data.player);
       get().addToast(data.message || "Luyện hồn thành công!", "success");
       get().addLog(data.message || "Đã luyện hồn tại Lạc Phách Cốc, nén ép linh hồn ngưng thực.");
-      return true;
-    } catch (err: any) {
-      set({ error: err.message });
-      get().addToast(err.message, "error");
-      return false;
-    } finally { set({ actionLoading: false }); }
-  },
-
-  calmSoul: async () => {
-    const { token, actionLoading, logout } = get();
-    if (!token || actionLoading) return false;
-    set({ actionLoading: true, error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/soul/calm`, { method: "POST" });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "An hồn thất bại.");
-      setPlayerFromServer(data.player);
-      get().addToast(data.message || "An hồn thành công!", "success");
-      get().addLog(data.message || "Đã an ổn hồn phách bằng nước hồ An Hồn.");
       return true;
     } catch (err: any) {
       set({ error: err.message });

@@ -23,6 +23,7 @@ import {
   Users,
   Leaf,
 } from "lucide-react";
+import { translatePath } from "@/lib/translate";
 
 const CountdownTimer: React.FC<{ node: ApertureResourceNode; timeRate: number; onComplete?: () => void }> = ({ node, timeRate, onComplete }) => {
   const [timeLeft, setTimeLeft] = useState<string>("");
@@ -1332,7 +1333,7 @@ export const ImmortalApertureView: React.FC = () => {
                                   <div>
                                     <div className="font-bold">{spec.name}</div>
                                     <div className="text-[10px] text-slate-500 mt-0.5">
-                                      Hệ: {spec.path} | Cấp: {spec.rank}
+                                      Hệ: {translatePath(spec.path)} | Cấp: {spec.rank}
                                     </div>
                                   </div>
                                   <div className="text-right">

@@ -652,11 +652,11 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
 
             {/* Vital stats */}
             <div className="grid grid-cols-2 gap-2 bg-zinc-950/60 rounded-xl p-3 mt-2">
-              <div><span className="text-zinc-500">HP</span><br /><span className="text-emerald-400 font-bold text-sm">{c.hp}/{c.maxHp}</span></div>
-              <div><span className="text-zinc-500">MP</span><br /><span className="text-purple-400 font-bold text-sm">{c.mp}/{c.maxMp}</span></div>
-              <div><span className="text-zinc-500">ATK</span><br /><span className="text-rose-400 font-bold">{c.damage}</span></div>
-              <div><span className="text-zinc-500">DEF</span><br /><span className="text-blue-400 font-bold">{c.defense}</span></div>
-              <div><span className="text-zinc-500">SPD</span><br /><span className="text-cyan-400 font-bold">{c.speed}</span></div>
+              <div><span className="text-zinc-500">Sinh lực</span><br /><span className="text-emerald-400 font-bold text-sm">{c.hp}/{c.maxHp}</span></div>
+              <div><span className="text-zinc-500">Chân nguyên</span><br /><span className="text-purple-400 font-bold text-sm">{c.mp}/{c.maxMp}</span></div>
+              <div><span className="text-zinc-500">Tấn công</span><br /><span className="text-rose-400 font-bold">{c.damage}</span></div>
+              <div><span className="text-zinc-500">Phòng thủ</span><br /><span className="text-blue-400 font-bold">{c.defense}</span></div>
+              <div><span className="text-zinc-500">Tốc độ</span><br /><span className="text-cyan-400 font-bold">{c.speed}</span></div>
               <div><span className="text-zinc-500">Khiên</span><br /><span className="text-indigo-400 font-bold">{c.shield}</span></div>
             </div>
 
@@ -980,7 +980,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
                 </span>
                 
                 {log.trigger && (
-                  <span className="text-[8px] text-cyan-500 bg-cyan-950/40 px-1 rounded shrink-0">Trigger</span>
+                  <span className="text-[8px] text-cyan-500 bg-cyan-950/40 px-1 rounded shrink-0">Kích hoạt</span>
                 )}
                 <span className={`${baseColor} leading-tight ${isCurrent ? 'font-medium' : ''}`}>
                   {log.detail}

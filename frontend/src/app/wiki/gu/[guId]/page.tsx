@@ -206,7 +206,7 @@ function GuPageContent({ gu }: { gu: GuDictionaryItem }) {
                   ))}
                 </div>
               </div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] font-mono mt-4 mb-2">Tags</h3>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] font-mono mt-4 mb-2">Thẻ</h3>
               <div className="flex flex-wrap gap-1.5">
                 {gu.combat_tags.map((tag) => (
                   <span key={tag} className="px-1.5 py-0.5 rounded bg-[var(--surface)] text-[9px] text-[var(--text-muted)] font-mono">

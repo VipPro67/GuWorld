@@ -181,6 +181,7 @@ func CombatantFromPlayer(player *Player, stats map[string]float64) Combatant {
 		MaxMana:       player.MaxMana,
 		BaseAttack:    stats["attack"],
 		BaseDefense:   stats["defense"],
+		Speed:         stats["speed"],
 		GuInventory:   player.GuInventory,
 		DaoMarks:      player.DaoMarks,
 		PathMasteries: player.PathMasteries,

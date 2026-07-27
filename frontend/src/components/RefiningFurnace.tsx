@@ -438,7 +438,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                             x{totalAvailable}
                           </span>
                           <span className="text-[8px] font-mono border border-amber-500/20 px-1 py-0.2 rounded text-amber-400 uppercase">
-                            Rank {spec.rank}
+                            Bậc {spec.rank}
                           </span>
                         </div>
                         <p className="text-[9px] text-zinc-500 line-clamp-1 leading-normal">
@@ -699,7 +699,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                         {slottedGu ? (
                           <div className="text-center space-y-1.5 w-full">
                             <span className="text-[9px] font-mono border border-amber-500/20 px-1 py-0.2 rounded text-amber-400 uppercase inline-block mx-auto">
-                              {isMaskedSlot ? "Rank ???" : `Rank ${guDictionary[slottedGu.gu_id]?.rank || 1}`}
+                              {isMaskedSlot ? "Bậc ???" : `Bậc ${guDictionary[slottedGu.gu_id]?.rank || 1}`}
                             </span>
                             <div className="text-xs font-bold text-zinc-200 truncate font-serif">
                               {isMaskedSlot ? "Cổ Trùng Ẩn (Đã đặt)" : (guDictionary[slottedGu.gu_id]?.name || slottedGu.gu_id)}
@@ -945,7 +945,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                         {guDictionary[refineResult.new_gu.gu_id]?.name || refineResult.new_gu.gu_id}
                       </span>
                       <span className="text-[9px] font-mono border border-amber-500/30 px-1.5 py-0.2 rounded text-amber-400 font-bold uppercase">
-                        Rank {guDictionary[refineResult.new_gu.gu_id]?.rank || 1}
+                        Bậc {guDictionary[refineResult.new_gu.gu_id]?.rank || 1}
                       </span>
                     </div>
                     <div className="text-[9px] text-left text-zinc-500 font-mono">

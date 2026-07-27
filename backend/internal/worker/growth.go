@@ -91,10 +91,7 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 
 	for i := range guInv {
 		gu := &guInv[i]
-		if !gu.Equipped || gu.Status != "ACTIVE" || gu.EquippedAt == nil {
-			continue
-		}
-		if gu.EquippedAt.IsZero() {
+		if !gu.Equipped || gu.Status != "ACTIVE" {
 			continue
 		}
 
@@ -115,6 +112,13 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 		}
 		if isFullyGrown {
 			gu.EquippedAt = nil
+			updated = true
+			continue
+		}
+
+		// Initialize EquippedAt for legacy Gus equipped before growth feature existed
+		if gu.EquippedAt == nil || gu.EquippedAt.IsZero() {
+			gu.EquippedAt = &now
 			updated = true
 			continue
 		}

@@ -91,38 +91,23 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     }
   }, [combatSettings]);
 
-  // Filter: only show Gu with combat-relevant effects
+  // Filter: only show Gu with combat-relevant active effects (mirrors backend hasCombatActiveEffects)
   const isCombatGu = (gu: GuInstance): boolean => {
     const spec = guDictionary[gu.gu_id];
-    if (!spec) return false;
-    const combatRoles = new Set([
-      "ATTACK_CORE", "DEFENSE_CORE", "HEAL_CORE", "CONTROL_CORE",
-      "BUFF_CORE", "SUMMON_CORE", "MOVEMENT_CORE", "TRANSFORMATION_CORE",
-      "PASSIVE_BODY", "FIGHTER",
-    ]);
-    if (combatRoles.has(spec.primary_role)) return true;
-    const combatEffectKeys = new Set([
-      "damage", "add_base_attack", "add_base_defense", "defense",
-      "damage_multiplier", "damage_multiplier_on_hit",
-      "blood_drain", "bleed", "life_steal", "lifesteal",
-      "shield", "virtual_shield", "damage_reduction_pct",
-      "heal", "regen_hp",
-      "stun", "freeze", "slow", "paralyze", "charm", "bind",
-      "burn", "poison",
-      "summon_phantom", "summon_flying_bear_phantom", "summon_clones",
-      "movement", "flight", "attack_speed",
-      "mana_regen", "refine_mana_tier",
-      "wood_transformation", "curve_attack", "range", "aoe_col", "aoe_all", "aoe_row",
-      "damage_reflect", "thorns_damage", "phantom_damage",
-    ]);
-    for (const section of ["active", "passive", "support"] as const) {
-      const effects = spec.effects?.[section];
-      if (!effects) continue;
-      for (const key of Object.keys(effects)) {
-        if (combatEffectKeys.has(key)) return true;
-      }
-    }
-    return false;
+    if (!spec?.effects?.active) return false;
+    const a = spec.effects.active;
+    return (a.damage_flat ?? 0) > 0
+      || (a.damage_mult ?? 0) > 0
+      || (a.shield_flat ?? 0) > 0
+      || !!a.apply_status
+      || (a.lifesteal_rate ?? 0) > 0
+      || (a.heal_flat ?? 0) > 0
+      || !!a.blood_drain
+      || !!a.summon_phantom
+      || (a.refine_mana_tier ?? 0) > 0
+      || !!a.wood_transformation
+      || (a.mana_regen ?? 0) > 0
+      || (a.cleansing_power ?? 0) > 0;
   };
 
   const eligibleGus = (player.gu_inventory || []).filter((gu) => gu.status === "ACTIVE" && gu.equipped && isCombatGu(gu));
@@ -594,7 +579,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                 onClick={() => setGuSortMode("rank")}
                 className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${guSortMode === "rank" ? 'bg-zinc-700 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'}`}
               >
-                <ChevronDown className="w-3 h-3 inline" /> Rank
+                <ChevronDown className="w-3 h-3 inline" /> Bậc
               </button>
               <button
                 onClick={() => setGuSortMode("path")}
@@ -641,7 +626,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
               {backlashCount > 0 && (
                 <span className="text-rose-400 flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3" />
-                  {backlashCount} Cổ rank cao → có thể mất {backlashCount * 5} HP/lần sài
+                  {backlashCount} Cổ bậc cao → có thể mất {backlashCount * 5} Sinh lực/lần sài
                 </span>
               )}
               <span className="text-zinc-600 ml-auto">{selectedGuIds.length}/7 đã chọn</span>
@@ -676,7 +661,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                     <div className="font-bold text-sm text-zinc-200 truncate">{spec?.name || gu.gu_id}</div>
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                       <span className={`text-[10px] ${isHigherRank ? 'text-rose-400 font-bold' : 'text-zinc-500'}`}>
-                        R{guRank}
+                        Bậc {guRank}
                       </span>
                       {spec?.path && spec.path.map(p => (
                         <span key={p} className={`text-[9px] px-1.5 py-0.5 rounded-full ${

@@ -97,7 +97,7 @@ export const ArenaView: React.FC = () => {
           </div>
           <div className="text-left bg-zinc-950/80 px-4 py-2 border border-zinc-900 rounded-xl">
             <div className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">Tu vi đạo hạnh</div>
-            <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">Rank {player.rank} - {player.sub_rank}</span>
+            <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">Bậc {player.rank} - {player.sub_rank}</span>
           </div>
         </div>
       </div>

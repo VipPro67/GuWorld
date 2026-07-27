@@ -671,7 +671,7 @@ export const Aperture: React.FC<ApertureProps> = ({
             <div className="w-full mb-4 bg-zinc-950/40 border border-zinc-900 rounded-2xl p-3">
               <div className="text-[9px] text-zinc-550 uppercase tracking-widest text-center mb-2 font-bold font-mono flex items-center justify-center gap-1.5">
                 <Zap className="w-3.5 h-3.5 text-violet-400" />
-                Niệm Lực (Thought Pool)
+                Niệm Lực
               </div>
               <div className="flex items-center justify-between px-3 py-2 rounded-xl border border-zinc-800/60 bg-zinc-950/60 max-w-sm mx-auto">
                 <div className="flex items-center gap-2">
@@ -797,37 +797,76 @@ export const Aperture: React.FC<ApertureProps> = ({
               })()}
             </div>
 
-            {/* Fully Grown Gu List */}
+            {/* In-progress + Fully Grown Gu List */}
             <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner space-y-4">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
                 <Leaf className="w-5 h-5 text-amber-400" />
-                <span className="font-serif font-bold text-zinc-100 text-sm">Cổ Trùng Đã Khai Thác</span>
+                <span className="font-serif font-bold text-zinc-100 text-sm">Cổ Trùng Đang Có Hiệu Ứng</span>
                 <span className="ml-auto text-[10px] text-zinc-500 font-mono">{(player.growth_data?.fully_grown || []).length} loại</span>
               </div>
-              {player.growth_data?.fully_grown && player.growth_data.fully_grown.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {player.growth_data.fully_grown.map((fg, i) => {
-                    const parts: string[] = [];
-                    if (fg.attack > 0) parts.push(`Công +${fg.attack}`);
-                    if (fg.defense > 0) parts.push(`Thủ +${fg.defense}`);
-                    if (fg.hp > 0) parts.push(`Máu +${fg.hp}`);
-                    if (fg.speed > 0) parts.push(`Tốc +${fg.speed}`);
-                    return (
-                      <div key={i} className="flex items-center gap-3 bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
-                        <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400">
-                          {fg.gu_id.replace("GU_", "").slice(0, 2)}
+              {(() => {
+                const growing = (player.gu_inventory || []).filter(gu => {
+                  if (!gu.equipped || gu.status !== "ACTIVE") return false;
+                  const spec = guDictionary[gu.gu_id];
+                  if (!spec?.effects?.growth?.hours_to_max) return false;
+                  const isDone = (player.growth_data?.fully_grown || []).some(fg => fg.gu_id === gu.gu_id);
+                  return !isDone;
+                });
+                const fullyGrown = player.growth_data?.fully_grown || [];
+                const hasAny = growing.length > 0 || fullyGrown.length > 0;
+                if (!hasAny) return <div className="text-xs text-zinc-500 italic py-2">Chưa có Cổ trùng nào đang có hiệu ứng.</div>;
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {growing.map((gu, i) => {
+                      const spec = guDictionary[gu.gu_id];
+                      const g = spec?.effects?.growth;
+                      const maxH = g?.hours_to_max || 168;
+                      const curH = gu.growth_hours || 0;
+                      const pct = Math.min(100, Math.round((curH / maxH) * 100));
+                      const parts: string[] = [];
+                      if (g?.max_attack) parts.push(`Công +${g.max_attack}`);
+                      if (g?.max_defense) parts.push(`Thủ +${g.max_defense}`);
+                      if (g?.max_hp) parts.push(`Máu +${g.max_hp}`);
+                      if (g?.max_speed) parts.push(`Tốc +${g.max_speed}`);
+                      return (
+                        <div key={gu.instance_id} className="flex items-center gap-3 bg-zinc-950/40 p-3 rounded-xl border border-zinc-800">
+                          <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold text-amber-500">
+                            {(spec?.name || gu.gu_id).slice(0, 2)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-bold text-zinc-200 font-mono truncate">{spec?.name || gu.gu_id}</div>
+                            <div className="text-[10px] text-zinc-400">{parts.join(" | ")}</div>
+                            <div className="mt-1.5 flex items-center gap-2">
+                              <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                                <div className="h-full bg-emerald-500 rounded-full transition-all" style={{width: `${pct}%`}} />
+                              </div>
+                              <span className="text-[10px] text-zinc-500 font-mono shrink-0">{pct}%</span>
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-bold text-zinc-200 font-mono truncate">{fg.gu_id}</div>
-                          <div className="text-[10px] text-emerald-400">{parts.join(" | ")}</div>
+                      );
+                    })}
+                    {fullyGrown.map((fg, i) => {
+                      const parts: string[] = [];
+                      if (fg.attack > 0) parts.push(`Công +${fg.attack}`);
+                      if (fg.defense > 0) parts.push(`Thủ +${fg.defense}`);
+                      if (fg.hp > 0) parts.push(`Máu +${fg.hp}`);
+                      if (fg.speed > 0) parts.push(`Tốc +${fg.speed}`);
+                      return (
+                        <div key={`fg-${i}`} className="flex items-center gap-3 bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
+                          <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400">
+                            {(guDictionary[fg.gu_id]?.name || fg.gu_id).slice(0, 2)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-bold text-zinc-200 font-mono truncate">{guDictionary[fg.gu_id]?.name || fg.gu_id}</div>
+                            <div className="text-[10px] text-emerald-400">{parts.join(" | ")}</div>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-xs text-zinc-500 italic py-2">Chưa khai thác Cổ trùng nào.</div>
-              )}
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Soul Foundation info */}
@@ -887,13 +926,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                     <Sparkles className="w-3.5 h-3.5" />
                     Tráng Hồn ({player.materials_inventory?.["guts_gu"] || 0} Cổ Can Đảm)
                   </button>
-                  <button
-                    onClick={() => store.calmSoul()}
-                    disabled={player.soul_hp >= player.max_soul || player.primeval_stones < 50}
-                    className="flex-1 bg-purple-900/30 hover:bg-purple-900/50 disabled:bg-zinc-800 disabled:opacity-40 disabled:border-zinc-800/40 border border-purple-800/40 text-purple-200 rounded-xl py-2 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    An Hồn (50 Nguyên Thạch)
-                  </button>
+
                 </div>
               )}
             </div>
@@ -1159,7 +1192,7 @@ export const Aperture: React.FC<ApertureProps> = ({
               }} className="space-y-4">
                 {/* Username */}
                 <div className="flex flex-col gap-1.5">
-                  <label htmlFor="settings-username" className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Đạo Hiệu (Username)</label>
+                  <label htmlFor="settings-username" className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Đạo Hiệu</label>
                   <input
                     id="settings-username"
                     name="username"
@@ -1172,7 +1205,7 @@ export const Aperture: React.FC<ApertureProps> = ({
 
                 {/* Lời giới thiệu / Bio */}
                 <div className="flex flex-col gap-1.5">
-                  <label htmlFor="settings-bio" className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Lời giới thiệu (Bio)</label>
+                  <label htmlFor="settings-bio" className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">Lời giới thiệu</label>
                   <textarea
                     id="settings-bio"
                     name="bio"
@@ -1237,7 +1270,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                   />
                 </div>
 
-                {/* Ngụy Trang Khí Tức (Disguise System) */}
+                {/* Ngụy Trang Khí Tức */}
                 <div className="flex flex-col gap-4 border-t border-zinc-900/60 pt-4 mt-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -1374,10 +1407,10 @@ export const Aperture: React.FC<ApertureProps> = ({
                           onChange={e => setCsAutoRestoreMana(e.target.checked)} />
                         <div className="w-9 h-5 bg-zinc-700 rounded-full peer peer-checked:bg-cyan-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all" />
                       </label>
-                      <span className="text-xs text-zinc-300">Tự dùng Nguyên Thạch hồi Mana</span>
+                      <span className="text-xs text-zinc-300">Tự dùng Nguyên Thạch hồi Chân nguyên</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-zinc-500">Mana ≤</span>
+                      <span className="text-[10px] text-zinc-500">Chân nguyên ≤</span>
                       <input type="range" min="10" max="80" value={csManaThreshold}
                         onChange={e => setCsManaThreshold(Number(e.target.value))}
                         disabled={!csAutoRestoreMana} className="w-20 h-1 accent-cyan-500" />
@@ -1412,7 +1445,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                               >
                                 <option value="always">Luôn</option>
                                 <option value="hp_below">HP &lt; %</option>
-                                <option value="mana_above">Mana &gt; %</option>
+                                <option value="mana_above">Chân nguyên &gt; %</option>
                                 <option value="enemy_hp_below">Máu địch &lt; %</option>
                               </select>
                               {condition !== "always" && (
@@ -1472,7 +1505,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                               >
                                 <option value="always">Luôn</option>
                                 <option value="hp_below">HP &lt; %</option>
-                                <option value="mana_above">Mana &gt; %</option>
+                                <option value="mana_above">Chân nguyên &gt; %</option>
                                 <option value="enemy_hp_below">Máu địch &lt; %</option>
                               </select>
                               {condition !== "always" && (
@@ -1604,7 +1637,7 @@ function WallControls() {
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5 font-mono">
               <Coins className="w-3.5 h-3.5 text-cyan-400" />
-              Nạp Nguyên Thạch (Recharge)
+              Nạp Nguyên Thạch
             </span>
             <span className="text-[10px] text-cyan-400 font-mono font-bold">
               Khả dụng: {player.primeval_stones.toLocaleString()}
@@ -1671,7 +1704,7 @@ function WallControls() {
               min={0}
               max={Math.floor(player.current_mana)}
             />
-            <span className="text-[10px] text-zinc-500 font-mono font-semibold ml-2">Mana</span>
+            <span className="text-[10px] text-zinc-500 font-mono font-semibold ml-2">Chân nguyên</span>
           </div>
           <div className="flex gap-1.5">
             <button
@@ -1701,7 +1734,7 @@ function WallControls() {
         <div className="flex items-center justify-between mb-2">
           <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5 font-mono">
             <Coins className="w-3.5 h-3.5 text-cyan-400" />
-            Nạp Nguyên Thạch (Recharge)
+            Nạp Nguyên Thạch
           </span>
           <span className="text-[10px] text-cyan-400 font-mono font-bold">
             Khả dụng: {player.primeval_stones.toLocaleString()}
@@ -1862,7 +1895,7 @@ function BlessedLandControls() {
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5 font-mono">
               <Sparkles className="w-4 h-4 text-violet-400" />
-              Nạp Tiên Nguyên Thạch (Recharge)
+              Nạp Tiên Nguyên Thạch
             </span>
             <span className="text-[10px] text-cyan-400 font-mono font-bold">
               Khả dụng: {player.immortal_stones.toLocaleString()} Tiên Nguyên Thạch

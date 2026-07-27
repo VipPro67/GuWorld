@@ -16,7 +16,7 @@ export const ArenaShopView: React.FC = () => {
           <div key={item.id} className="bg-zinc-950/60 border border-zinc-800 rounded-2xl p-4 flex flex-col justify-between items-start hover:border-amber-900/50 transition-all group">
             <div>
               <h4 className="text-amber-500 font-bold font-serif text-sm group-hover:text-amber-400">{item.name}</h4>
-              <p className="text-xs text-zinc-500 font-mono mt-1">Sổ lượng: {item.qty}</p>
+              <p className="text-xs text-zinc-500 font-mono mt-1">Số lượng: {item.qty}</p>
             </div>
             
             <div className="mt-4 w-full flex items-center justify-between">

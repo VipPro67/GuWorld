@@ -779,7 +779,7 @@ export const SectView: React.FC = () => {
               <p className="text-sm text-zinc-400 leading-relaxed mb-4">{sect?.description}</p>
               <div className="p-3.5 bg-zinc-900/30 border border-zinc-900 rounded-2xl flex items-center justify-between text-xs text-zinc-500 font-mono">
                 <span>Tu vi thực tế của đạo hữu:</span>
-                <span className="text-zinc-300 font-semibold">Rank {player.rank}</span>
+                <span className="text-zinc-300 font-semibold">Bậc {player.rank}</span>
               </div>
             </div>
 

@@ -253,7 +253,7 @@ export const AuditLogsView: React.FC = () => {
                 {isExpanded && log.metadata && Object.keys(log.metadata).length > 0 && (
                   <div className="px-4 pb-4 pt-1 border-t border-slate-800/80 space-y-3">
                     <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono">
-                      📋 Thuộc tính chi tiết (Metadata)
+                      📋 Thuộc tính chi tiết
                     </div>
                     <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 font-mono text-[11px] text-slate-350 grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
                       {Object.entries(log.metadata).map(([key, val]) => {

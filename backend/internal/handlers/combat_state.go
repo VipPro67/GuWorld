@@ -15,7 +15,6 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 	playerStats := CalculatePlayerStats(player)
 	playerCombatant := models.CombatantFromPlayer(player, playerStats)
 	playerCombatant.HP = player.HP
-	playerCombatant.MaxHP = 100.0
 	if playerCombatant.HP > playerCombatant.MaxHP {
 		playerCombatant.HP = playerCombatant.MaxHP
 	}
@@ -25,6 +24,7 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 			pHP = 100.0
 		}
 		playerCombatant.HP = pHP
+		playerCombatant.MaxHP = pHP
 	}
 	base.Allies = []models.Combatant{playerCombatant}
 

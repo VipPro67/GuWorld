@@ -1686,10 +1686,9 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 		"storage":       20.0,
 	}
 
-	// Apply permanent growth boosts
+	// Apply permanent growth boosts (HP is excluded: worker bakes it into BaseHP)
 	stats["attack"] += player.GrowthData.Boosts.Attack
 	stats["defense"] += player.GrowthData.Boosts.Defense
-	stats["hp"] += player.GrowthData.Boosts.HP
 	stats["speed"] += player.GrowthData.Boosts.Speed
 
 	for _, mod := range player.BodyMods {

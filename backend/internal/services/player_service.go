@@ -197,6 +197,18 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 			}
 		}
 
+		if player.SoulHP > 0 && player.SoulHP < player.MaxSoul {
+			soulRegenPerHour := float64(player.MaxSoul) * 0.10
+			earnedSoul := int((subjectiveSeconds / 3600.0) * soulRegenPerHour)
+			if earnedSoul > 0 {
+				player.SoulHP += earnedSoul
+				if player.SoulHP > player.MaxSoul {
+					player.SoulHP = player.MaxSoul
+				}
+				poolChanged = true
+			}
+		}
+
 		yearsPassed := (secondsPassed * player.TimeSpeedMultiplier) / 172800.0
 		player.Lifespan -= yearsPassed
 		if player.Lifespan < 0 {
@@ -279,11 +291,11 @@ func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models
 			UPDATE players
 			SET current_mana = $1, max_mana = $2, last_mana_update = $3,
 			    lifespan = $4, time_speed_multiplier = $5, aperture_stress = $6,
-			    last_cultivate_time = $7, hp = $8
-			WHERE id = $9
+			    last_cultivate_time = $7, hp = $8, soul_hp = $9
+			WHERE id = $10
 		`, player.CurrentMana, player.MaxMana, player.LastManaUpdate,
 			player.Lifespan, player.TimeSpeedMultiplier, player.ApertureStress,
-			player.LastCultivateTime, player.HP, player.ID)
+			player.LastCultivateTime, player.HP, player.SoulHP, player.ID)
 		if err != nil {
 			return player, err
 		}

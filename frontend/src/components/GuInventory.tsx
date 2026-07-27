@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Player, GuSpec, ItemSpec, GuInstance, useGameStore } from "@/store/useGameStore";
 import { Flower2, Wine, Gem, ShieldAlert, Sparkles, HelpCircle, Search, Shield, Zap, ChevronDown, ChevronUp, Lock, Unlock } from "lucide-react";
+import { translateGuType, translateItemType, translatePath } from "@/lib/translate";
 
 interface GuInventoryProps {
   player: Player;
@@ -314,10 +315,10 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                             <div className="flex flex-wrap gap-1">
                               {Array.isArray(spec.path) ? (
                                 spec.path.map(p => (
-                                  <span key={p} className={getPathColor(p)}>{p}</span>
+                                  <span key={p} className={getPathColor(p)}>{translatePath(p)}</span>
                                 ))
                               ) : (
-                                <span className={getPathColor(spec.path as string)}>{spec.path as string}</span>
+                                <span className={getPathColor(spec.path as string)}>{translatePath(spec.path as string)}</span>
                               )}
                             </div>
                           </div>
@@ -330,7 +331,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         )}
                         <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
                           <span className="text-zinc-600 font-mono block mb-0.5">Loại</span>
-                          <span className="text-zinc-300">{spec.item_type || spec.type || "?"}</span>
+                          <span className="text-zinc-300">{translateItemType(spec.item_type || spec.type)}</span>
                         </div>
                         {spec.effects && Object.keys(spec.effects).length > 0 && (
                           <div className="col-span-2 bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
@@ -535,11 +536,11 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                               </span>
                             )}
                             <span className="text-[8px] font-mono font-bold text-amber-600 dark:text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded uppercase">
-                              Rank {spec.rank}
+                              Bậc {spec.rank}
                             </span>
                             {spec.path && spec.path.map(p => (
                               <span key={p} className={`text-[8px] font-mono px-1 rounded border leading-normal ${getPathColor(p)}`}>
-                                {p}
+                                {translatePath(p)}
                               </span>
                             ))}
                           </div>
@@ -816,13 +817,15 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                     <div className="w-full mt-2 pt-2 border-t border-zinc-900/60 grid grid-cols-2 md:grid-cols-3 gap-2 text-[10px]">
                                       <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
                                         <span className="text-zinc-600 font-mono block mb-1">Loại Cổ</span>
-                                        <span className="text-zinc-300">{spec.gu_type}</span>
+                                        <span className="text-zinc-300">{translateGuType(spec.gu_type)}</span>
                                       </div>
                                       <div className="bg-zinc-950/40 rounded-lg p-2 border border-zinc-900/50">
                                         <span className="text-zinc-600 font-mono block mb-1">Đường</span>
                                         <div className="flex flex-wrap gap-1">
                                           {spec.path && spec.path.map(p => (
-                                            <span key={p} className={getPathColor(p)}>{p}</span>
+                                            <span key={p} className={`text-[9px] px-1.5 py-0.5 rounded-full ${getPathColor(p)}`}>
+                                              {translatePath(p)}
+                                            </span>
                                           ))}
                                         </div>
                                       </div>

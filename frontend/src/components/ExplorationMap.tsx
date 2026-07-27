@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Player, useGameStore } from "@/store/useGameStore";
-import { Compass, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, User, Gem, Flower2, HelpCircle, Wine, Users, Crown, Package } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useGameStore, Player, CellData, PartyState } from "@/store/useGameStore";
+import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, Gem, Flower2, HelpCircle, Wine, Crown, Package } from "lucide-react";
+import { translatePath } from "@/lib/translate";
 import { LogConsole } from "./LogConsole";
 
 interface ExplorationMapProps {
@@ -458,7 +459,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                           <div
                             onClick={async (e) => {
                               e.stopPropagation();
-                              if (await showConfirm(`Đạo hữu muốn khiêu chiến (PVP) với ${otherPlayersOnCell[0].username}?\n\nChọn [OK] để Tấn Công.\nChọn [Cancel] để Trinh Thám.`)) {
+                              if (await showConfirm(`Đạo hữu muốn khiêu chiến (PVP) với ${otherPlayersOnCell[0].username}?\n\nChọn [OK] để Tấn Công.\nChọn [Hủy] để Trinh Thám.`)) {
                                 movePlayer(cell.x, cell.y, otherPlayersOnCell[0].id);
                               } else {
                                 fetchPlayerProfile(otherPlayersOnCell[0].username);
@@ -502,7 +503,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                 <div className="text-left">
                   <div className="text-xs font-bold text-rose-400 font-serif">Đang chạm trán dã thú/đối thủ!</div>
                   <div className="text-[10px] text-zinc-500">
-                    Hãy trở về Căn cứ (Dashboard) để kích hoạt sát chiêu tiêu diệt kẻ thù.
+                    Hãy trở về Căn cứ để kích hoạt sát chiêu tiêu diệt kẻ thù.
                   </div>
                 </div>
               </div>
@@ -680,7 +681,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                           </div>
                           <div>
                             <span className="font-semibold text-zinc-300 block leading-tight">{spec.name}</span>
-                            <span className="text-[8px] text-zinc-550 font-mono">{spec.path && spec.path.join(" / ")}</span>
+                            <span className="text-[8px] text-zinc-550 font-mono">{spec.path && spec.path.map(translatePath).join(" / ")}</span>
                           </div>
                         </div>
                         <span className="text-[8px] font-mono text-emerald-400 bg-emerald-950/20 border border-emerald-900/30 px-1 py-0.5 rounded uppercase tracking-wide shrink-0">
@@ -712,7 +713,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                             </div>
                             <div>
                               <span className="font-semibold text-zinc-300 block leading-tight">{spec.name}</span>
-                              <span className="text-[8px] text-zinc-550 font-mono">{spec.item_type}</span>
+                              <span className="text-[8px] text-zinc-550 font-mono">{translateItemType(spec.item_type)}</span>
                             </div>
                           </div>
                           <span className="font-mono font-bold text-zinc-400 shrink-0">x{qty}</span>

@@ -370,13 +370,34 @@ export default function Home() {
               <button onClick={() => setShowChangelog(false)} className="text-zinc-500 hover:text-zinc-300 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
             <div className="space-y-3 text-xs text-zinc-300 leading-relaxed">
-              <p className="text-zinc-400">Phiên bản <strong className="text-amber-400">v0.7.1</strong> có những tính năng mới sau:</p>
+              <p className="text-zinc-400">Phiên bản <strong className="text-amber-400">v0.7.2</strong> — Sửa lỗi chiến đấu & Gift Code:</p>
               <div className="space-y-2">
                 <div className="flex gap-2.5 items-start bg-amber-950/20 border border-amber-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">🏆</span>
+                  <span className="text-lg shrink-0 mt-0.5">⚔️</span>
                   <div>
-                    <span className="font-bold text-amber-300">Bảng Xếp Hạng</span>
-                    <p className="text-zinc-400 mt-0.5">So tài tu luyện, nguyên thạch, cổ trùng và tiên nguyên. Có thể chủ động ẩn/hiện khỏi bảng.</p>
+                    <span className="font-bold text-amber-300">Sửa chiến đấu</span>
+                    <p className="text-zinc-400 mt-0.5">Tốc độ giờ ảnh hưởng thứ tự đánh. MaxHP không còn bị kẹt ở 100. Passive + Growth auto-apply từ toàn bộ Cổ đang trang bị.</p>
+                  </div>
+                </div>
+                <div className="flex gap-2.5 items-start bg-emerald-950/20 border border-emerald-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">🎯</span>
+                  <div>
+                    <span className="font-bold text-emerald-300">Auto-Combat chỉ hiện Cổ có Active Skill</span>
+                    <p className="text-zinc-400 mt-0.5">Bộ lọc giờ chỉ hiện Cổ có hiệu ứng chủ động (tấn công, hồi máu, khiên...).</p>
+                  </div>
+                </div>
+                <div className="flex gap-2.5 items-start bg-amber-950/20 border border-amber-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">📈</span>
+                  <div>
+                    <span className="font-bold text-amber-300">Trưởng Thành </span>
+                    <p className="text-zinc-400 mt-0.5">Sửa lỗi Cổ cũ không có thông tin phát triển.</p>
+                  </div>
+                </div>
+                <div className="flex gap-2.5 items-start bg-fuchsia-950/20 border border-fuchsia-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">🎁</span>
+                  <div>
+                    <span className="font-bold text-fuchsia-300">Gift Code mới!</span>
+                    <p className="text-zinc-400 mt-0.5">Nhập <strong className="text-fuchsia-300">CHODAUGIA</strong>, <strong className="text-fuchsia-300">PHUONGNGUYEN</strong>, <strong className="text-fuchsia-300">BACHNGUNGBANG</strong> tại tab Phúc Lợi để nhận quà!</p>
                   </div>
                 </div>
               </div>

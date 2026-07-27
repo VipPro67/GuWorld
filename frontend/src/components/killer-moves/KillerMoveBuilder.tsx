@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { translateStat } from "@/lib/translate";
 import { GuInstance, GuSpec, KillerMove, Player, useGameStore } from "@/store/useGameStore";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
@@ -156,7 +157,7 @@ export function KillerMoveBuilder() {
       <section className="rounded-3xl border border-purple-500/30 bg-slate-950/90 p-6 shadow-2xl shadow-purple-950/30">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm uppercase tracking-[0.3em] text-purple-300">Killer Move System</p>
+            <p className="text-sm uppercase tracking-[0.3em] text-purple-300">Hệ Thống Sát Chiêu</p>
             <h1 className="text-3xl font-bold text-amber-100">Sát Chiêu Đường</h1>
             <p className="mt-2 text-sm text-slate-300">Đặt Cổ hạch tâm ở giữa, tối đa 8 Cổ phụ trợ xung quanh. Preview tự tính sau 300ms.</p>
           </div>
@@ -264,7 +265,7 @@ function GuInventoryPanel({ gus, guDictionary }: { gus: GuInstance[]; guDictiona
 function KillerMovePreviewPanel({ preview, error, isCalculating, isSaving, savedMessage, canSave, onSave, player }: { preview: KillerMovePreview | null; error: string | null; isCalculating: boolean; isSaving: boolean; savedMessage: string | null; canSave: boolean; onSave: () => void; player: Player }) {
   return (
     <aside className="rounded-3xl border border-amber-500/30 bg-slate-950/90 p-6 shadow-2xl shadow-amber-950/20">
-      <h2 className="text-2xl font-bold text-amber-100">Preview</h2>
+      <h2 className="text-2xl font-bold text-amber-100">Xem trước</h2>
       {isCalculating && <p className="mt-3 text-sm text-purple-200">Đang diễn toán cấu trúc...</p>}
       {error && <p className="mt-3 rounded-xl border border-red-500/40 bg-red-950/40 p-3 text-sm text-red-100">{error}</p>}
       {savedMessage && <p className="mt-3 rounded-xl border border-emerald-500/40 bg-emerald-950/40 p-3 text-sm text-emerald-100">{savedMessage}</p>}
@@ -296,7 +297,7 @@ function KillerMovePreviewPanel({ preview, error, isCalculating, isSaving, saved
           )}
           {preview.slot_results?.length > 0 && (
             <div>
-              <h3 className="mb-2 font-semibold text-amber-100">Slot Compatibility</h3>
+              <h3 className="mb-2 font-semibold text-amber-100">Độ tương thích</h3>
               <div className="space-y-2">
                 {preview.slot_results.map((slot) => (
                   <div key={`${slot.slot_type}-${slot.slot_index}-${slot.player_gu_id}`} className={`rounded-xl border p-3 text-xs ${slot.applied ? "border-emerald-500/30 bg-emerald-950/20" : "border-red-500/40 bg-red-950/30"}`}>
@@ -420,7 +421,7 @@ function EffectSection({ title, effects, emptyText }: { title: string; effects: 
     <div>
       <h3 className="mb-2 font-semibold text-amber-100">{title}</h3>
       <div className="flex flex-wrap gap-2 rounded-xl bg-slate-900 p-3 text-xs text-slate-300">
-        {entries.length === 0 ? emptyText : entries.map(([key, value]) => <span key={key} className="rounded-full border border-purple-400/30 bg-purple-950/30 px-2 py-1">{key}: {value}</span>)}
+        {entries.length === 0 ? emptyText : entries.map(([key, value]) => <span key={key} className="rounded-full border border-purple-400/30 bg-purple-950/30 px-2 py-1">{translateStat(key)}: {value}</span>)}
       </div>
     </div>
   );
@@ -428,8 +429,11 @@ function EffectSection({ title, effects, emptyText }: { title: string; effects: 
 
 function EffectChips({ effects }: { effects: Record<string, number> }) {
   const entries = Object.entries(effects).slice(0, 2);
-  if (entries.length === 0) return null;
-  return <span className="mt-1 text-[10px] text-slate-300">{entries.map(([key, value]) => `${key} ${value}`).join(" · ")}</span>;
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {entries.map(([key, val]) => <span key={key} className="whitespace-nowrap rounded-md bg-slate-800/50 px-1.5 py-0.5 font-mono text-[10px] text-slate-300">{translateStat(key)}: {val}</span>)}
+    </div>
+  );
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

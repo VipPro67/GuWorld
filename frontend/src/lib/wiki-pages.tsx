@@ -877,6 +877,21 @@ export const wikiPages: WikiPage[] = [
             </p>
           </div>
         </div>
+
+        {/* v0.7.2 - Combat Fixes + Gift Codes */}
+        <div className="bg-gradient-to-br from-amber-950/20 to-rose-950/20 border border-amber-500/20 rounded-xl p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-lg shrink-0">🛠️</span>
+            <h3 className="text-sm font-serif font-bold text-amber-200">v0.7.2 — Sửa lỗi Chiến đấu & Gift Code</h3>
+          </div>
+          <ul className="list-disc list-inside space-y-1 text-xs text-[var(--text-secondary)] leading-relaxed">
+            <li><strong>Sửa Speed:</strong> Tốc độ từ Growth và Passive giờ ảnh hưởng thứ tự đánh trong combat (trước bị ignore).</li>
+            <li><strong>Sửa MaxHP:</strong> Không còn bị ghi đè cứng ở 100. Growth HP + Passive HP giờ hoạt động đúng.</li>
+            <li><strong>Growth cho legacy Cổ:</strong> Worker tự tạo EquippedAt cho Cổ đã equip trước khi feature growth ra mắt.</li>
+            <li><strong>Auto-Combat loadout:</strong> Chỉ hiện Cổ có Active Skill. Passive + Growth auto-apply từ toàn bộ Cổ đang trang bị.</li>
+            <li><strong>Gift Code mới:</strong> <span className="font-mono text-emerald-400">CHODAUGIA</span>, <span className="font-mono text-emerald-400">PHUONGNGUYEN</span>, <span className="font-mono text-amber-400">BACHNGUNGBANG</span>. Nhập tại tab Phúc Lợi trong Không Khiếu.</li>
+          </ul>
+        </div>
       </div>
     )
   }

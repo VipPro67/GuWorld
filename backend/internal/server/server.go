@@ -365,7 +365,7 @@ func SetupRouter() *gin.Engine {
 		{
 			soul.POST("/use-guts", handlers.UseGutsGu)
 			soul.POST("/refine", handlers.RefineSoul)
-			soul.POST("/calm", handlers.CalmSoul)
+
 		}
 
 		// Protected Instance Endpoints

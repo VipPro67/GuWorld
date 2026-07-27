@@ -1810,8 +1810,8 @@ func guValidate(req *AdminGuInput) (bool, string) {
 	if req.ID == "" { return false, "ID là bắt buộc" }
 	if req.Name == "" { return false, "Tên là bắt buộc" }
 	if req.Rank < 1 { return false, "Rank phải >= 1" }
-	validTypes := map[string]bool{"Attack": true, "Support": true, "Defense": true, "House": true}
-	if !validTypes[req.GuType] { return false, "gu_type phải là Attack/Support/Defense/House" }
+	validTypes := map[string]bool{"Active": true, "Buff": true, "Consumable": true, "Control": true, "Defense": true, "Healing": true, "Investigation": true, "Movement": true, "Passive": true, "Refinement": true, "Special": true, "Storage": true, "Summon": true, "Support": true, "Transformation": true, "Vital": true}
+	if !validTypes[req.GuType] { return false, "gu_type không hợp lệ" }
 	if req.HungerRate < 1 { return false, "hunger_rate phải >= 1" }
 	return true, ""
 }

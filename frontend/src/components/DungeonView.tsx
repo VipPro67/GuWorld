@@ -142,7 +142,7 @@ export const DungeonView: React.FC = () => {
           {/* Lore Warning for Dream Realms */}
           {isDreamRealm && (
             <div className="bg-purple-950/40 border border-purple-800/20 rounded-2xl p-4 text-xs text-purple-200 leading-relaxed">
-              💡 <strong className="font-semibold text-purple-300">Cơ chế Mộng Cảnh:</strong> Cổ trùng và tu vi của đạo hữu bị khóa. Mỗi bước thám hiểm hoặc thất bại sẽ trừ thẳng vào <strong className="text-indigo-300">Soul HP</strong>. Nếu Soul HP giảm về 0, đạo hữu sẽ rơi vào trạng thái hôn mê sâu thảm hại!
+              💡 <strong className="font-semibold text-purple-300">Cơ chế Mộng Cảnh:</strong> Cổ trùng và tu vi của đạo hữu bị khóa. Mỗi bước thám hiểm hoặc thất bại sẽ trừ thẳng vào <strong className="text-indigo-300">Hồn Lực</strong>. Nếu Hồn Lực giảm về 0, đạo hữu sẽ rơi vào trạng thái hôn mê sâu thảm hại!
             </div>
           )}
 
@@ -212,7 +212,7 @@ export const DungeonView: React.FC = () => {
                   {/* Badges / Requirements */}
                   <div className="flex flex-wrap gap-2 text-[10px] font-mono pt-1">
                     <span className="bg-zinc-900 text-zinc-400 border border-zinc-800 px-2 py-0.5 rounded-lg">
-                      Yêu cầu: Rank {dg.required_rank}+
+                      Yêu cầu: Bậc {dg.required_rank}+
                     </span>
                     <span className="bg-zinc-900 text-zinc-400 border border-zinc-800 px-2 py-0.5 rounded-lg">
                       Vật phẩm: {dg.entry_item === 'NONE' ? 'Tự do' : dg.entry_item}
