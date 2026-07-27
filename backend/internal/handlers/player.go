@@ -1746,8 +1746,7 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 				stats["investigation"] += passive.Investigation
 				stats["hearing"] += passive.Hearing
 				stats["evasion"] += passive.Evasion
-				stats["healing"] += passive.RefineManaTier * 10.0
-				stats["healing"] += passive.CleansingPower * 15.0
+					stats["healing"] += passive.CleansingPower * 15.0
 			}
 		}
 	}

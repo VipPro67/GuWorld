@@ -565,6 +565,10 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 		costMultiplier := 1.0 + float64(conflictingMarks)/20000.0
 		totalMana *= costMultiplier
 	}
+	refineTier := getRefineManaTier(player.Rank, player.GuInventory)
+	if refineTier > 0 {
+		totalMana *= 0.5
+	}
 
 	cooldown := 1 + len(supports)/3
 	if conflictingMarks > 0 {

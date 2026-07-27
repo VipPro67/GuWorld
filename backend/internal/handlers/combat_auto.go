@@ -299,6 +299,7 @@ func AutoCombatStart(c *gin.Context) {
 		HealPotency:     healPotency,
 		PrimevalStones:  simStones,
 		ImmortalStones:  simImmortalStones,
+		RefineManaTier:  getRefineManaTier(player.Rank, player.GuInventory),
 	}
 
 	simState.Allies = append(simState.Allies, simPlayer)

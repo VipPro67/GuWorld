@@ -46,6 +46,7 @@ func normalizeEnergyPool(player *models.Player) bool {
 }
 
 func energyRegenRatePerHour(player *models.Player) float64 {
+	var rate float64
 	if isImmortalCultivator(player) {
 		baseByRank := map[int]float64{
 			6: 0.5,
@@ -57,7 +58,6 @@ func energyRegenRatePerHour(player *models.Player) float64 {
 		if base == 0 {
 			base = 0.5 + float64(player.Rank-immortalRankThreshold)*0.35
 		}
-
 		subRank := player.SubRank
 		if subRank < 1 {
 			subRank = 1
@@ -65,21 +65,28 @@ func energyRegenRatePerHour(player *models.Player) float64 {
 		if subRank > 4 {
 			subRank = 4
 		}
-		return base * (1.0 + float64(subRank-1)*0.15)
+		rate = base * (1.0 + float64(subRank-1)*0.15)
+	} else {
+		switch player.AptitudeType {
+		case "Giáp":
+			rate = 8.0
+		case "Ất":
+			rate = 6.0
+		case "Bính":
+			rate = 4.0
+		case "Đinh":
+			rate = 2.0
+		default:
+			rate = 2.0
+		}
 	}
 
-	switch player.AptitudeType {
-	case "Giáp":
-		return 8.0
-	case "Ất":
-		return 6.0
-	case "Bính":
-		return 4.0
-	case "Đinh":
-		return 2.0
-	default:
-		return 2.0
+	refineTier := getRefineManaTier(player.Rank, player.GuInventory)
+	if refineTier > 0 {
+		rate *= 0.4 + refineTier*0.1
 	}
+
+	return rate
 }
 
 func calculateEnergyCost(player *models.Player, guSpec *models.GuDictionaryItem) float64 {
@@ -118,6 +125,13 @@ func calculateEnergyCost(player *models.Player, guSpec *models.GuDictionaryItem)
 			cost *= 20
 		case 5:
 			cost *= 100
+		}
+	}
+
+	if !isImmortalCultivator(player) {
+		refineTier := getRefineManaTier(player.Rank, player.GuInventory)
+		if refineTier > 0 {
+			cost *= 0.5
 		}
 	}
 
@@ -165,9 +179,33 @@ func calculateEnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuD
 		}
 	}
 
+	if !isImmortal {
+		refineTier := getRefineManaTier(actor.Rank, actor.GuInventory)
+		if refineTier > 0 {
+			cost *= 0.5
+		}
+	}
+
 	return cost
 }
 
+
+func getRefineManaTier(rank int, inventory []models.GuInstance) float64 {
+	var maxTier float64
+	for _, gu := range inventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			spec, ok := models.GetGuAny(gu.GuID)
+			if ok && spec.Effects.Passive != nil && spec.Effects.Passive.RefineManaTier > 0 {
+				if spec.Rank == rank {
+					if spec.Effects.Passive.RefineManaTier > maxTier {
+						maxTier = spec.Effects.Passive.RefineManaTier
+					}
+				}
+			}
+		}
+	}
+	return maxTier
+}
 
 func isPathInGu(paths []string, path string) bool {
 	cleanPath := strings.TrimSpace(strings.TrimSuffix(strings.ToLower(path), " path"))

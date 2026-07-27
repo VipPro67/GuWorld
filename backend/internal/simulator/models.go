@@ -104,6 +104,9 @@ type CombatantAuto struct {
 	AutoRestoreMana bool
 	ManaThreshold   float64
 
+	// Mana refinement tier (from equipped Gu)
+	RefineManaTier float64
+
 	// Battle inventory
 	HealCharges    int     // how many healing items available
 	HealPotency    float64 // how much HP each heal restores

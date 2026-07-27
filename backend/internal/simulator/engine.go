@@ -354,9 +354,14 @@ func Simulate(state *CombatState) []CombatLog {
 			if actor.AutoRestoreMana && actor.Mana < actor.MaxMana {
 				manaPct := float64(actor.Mana) / float64(actor.MaxMana) * 100
 				if manaPct <= actor.ManaThreshold {
+					regenMult := 1.0
+					if actor.RefineManaTier > 0 {
+						regenMult = 0.4 + actor.RefineManaTier*0.1
+					}
 					if actor.ImmortalStones >= 1 {
 						actor.ImmortalStones -= 1
-						actor.Mana += 100
+						restore := int(float64(100) * regenMult)
+						actor.Mana += restore
 						if actor.Mana > actor.MaxMana {
 							actor.Mana = actor.MaxMana
 						}
@@ -365,11 +370,12 @@ func Simulate(state *CombatState) []CombatLog {
 							ActorId:   actor.ID,
 							ActorName: actor.Name,
 							Action:    "MANA_RESTORE",
-							Detail:    fmt.Sprintf("%s tự động nghiền nát Tiên Nguyên Thạch, khôi phục 100 tiên nguyên!", actor.Name),
+							Detail:    fmt.Sprintf("%s tự động nghiền nát Tiên Nguyên Thạch, khôi phục %d tiên nguyên!", actor.Name, restore),
 						})
 					} else if actor.PrimevalStones >= 100 {
 						actor.PrimevalStones -= 100
-						actor.Mana += 50
+						restore := int(float64(50) * regenMult)
+						actor.Mana += restore
 						if actor.Mana > actor.MaxMana {
 							actor.Mana = actor.MaxMana
 						}
@@ -378,7 +384,7 @@ func Simulate(state *CombatState) []CombatLog {
 							ActorId:   actor.ID,
 							ActorName: actor.Name,
 							Action:    "MANA_RESTORE",
-							Detail:    fmt.Sprintf("%s tự động hấp thu 100 Nguyên Thạch, khôi phục 50 chân nguyên!", actor.Name),
+							Detail:    fmt.Sprintf("%s tự động hấp thu 100 Nguyên Thạch, khôi phục %d chân nguyên!", actor.Name, restore),
 						})
 					}
 				}
