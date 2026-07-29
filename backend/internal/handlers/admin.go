@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -1214,7 +1215,7 @@ func AdminExportData(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Export dữ liệu ra CSV thành công"})
 }
 
-// AdminClearCache reloads all in-memory registries from the database.
+// AdminClearCache reloads all in-memory registries from the database and clears Redis caches.
 // POST /api/admin/clear-cache
 func AdminClearCache(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok {
@@ -1232,6 +1233,22 @@ func AdminClearCache(c *gin.Context) {
 	}
 	if err := LoadQuestRegistry(); err != nil {
 		logger.S.Warnf("failed to reload Quest registry: %v", err)
+	}
+
+	// Clear all known Redis cache keys
+	cache.Delete(
+		"game_dictionary_unified",
+		"game_quests_list",
+		"caravan_shop_catalog",
+		"master_refining_recipes",
+		"market_listings_public",
+	)
+	// Also clear profile page cache keys (pattern-based, use a wildcard approach)
+	if cache.Client != nil {
+		iter := cache.Client.Scan(cache.Ctx, 0, "profile_*", 100).Iterator()
+		for iter.Next(cache.Ctx) {
+			cache.Client.Del(cache.Ctx, iter.Val())
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa và tải lại toàn bộ cache dữ liệu thành công!"})
