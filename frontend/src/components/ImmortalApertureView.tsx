@@ -1333,7 +1333,7 @@ export const ImmortalApertureView: React.FC = () => {
                                   <div>
                                     <div className="font-bold">{spec.name}</div>
                                     <div className="text-[10px] text-slate-500 mt-0.5">
-                                      Hệ: {translatePath(spec.path)} | Cấp: {spec.rank}
+                                      Hệ: {Array.isArray(spec.path) ? spec.path.map(translatePath).join(", ") : translatePath(spec.path)} | Cấp: {spec.rank}
                                     </div>
                                   </div>
                                   <div className="text-right">

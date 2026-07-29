@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useGameStore, Player, CellData, PartyState } from "@/store/useGameStore";
+import { useGameStore, Player } from "@/store/useGameStore";
 import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, Gem, Flower2, HelpCircle, Wine, Crown, Package } from "lucide-react";
-import { translatePath } from "@/lib/translate";
+import { translateItemType, translatePath } from "@/lib/translate";
 import { LogConsole } from "./LogConsole";
 
 interface ExplorationMapProps {
