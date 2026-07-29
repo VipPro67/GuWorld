@@ -359,7 +359,8 @@ func InitSchema() error {
 		end_time TIMESTAMP WITH TIME ZONE NOT NULL,
 		status VARCHAR(20) NOT NULL DEFAULT 'active',
 		listing_type VARCHAR(20) NOT NULL DEFAULT 'AUCTION',
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		duration_hours INTEGER NOT NULL DEFAULT 24
 	);
 	`
 	_, err = DB.Exec(query)
@@ -1126,6 +1127,7 @@ func InitSchema() error {
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS max_thought DOUBLE PRECISION NOT NULL DEFAULT 100.0;`, "max_thought"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS thought_regen_rate DOUBLE PRECISION NOT NULL DEFAULT 1.0;`, "thought_regen_rate"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS immortal_state JSONB NOT NULL DEFAULT '{}';`, "immortal_state"},
+		{`ALTER TABLE auction ADD COLUMN IF NOT EXISTS duration_hours INTEGER NOT NULL DEFAULT 24;`, "duration_hours"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {

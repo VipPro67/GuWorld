@@ -372,6 +372,11 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 			player.CurrentMana = player.MaxMana
 		}
 		return "", nil
+	case "GENERATE_IMMORTAL_STONES_TICK":
+		val, _ := params["value"].(float64)
+		if val <= 0 { val = 1.0 }
+		player.ImmortalStones += val
+		return fmt.Sprintf("Sản xuất %.0f Tiên Nguyên Thạch.", val), nil
 	default:
 		return "", fmt.Errorf("Chưa hỗ trợ action code: %s", actionCode)
 	}

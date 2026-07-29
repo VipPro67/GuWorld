@@ -1743,7 +1743,7 @@ export const AdminView: React.FC = () => {
                         return 0;
                       });
                       return filtered.map((g: any) => (
-                        <tr key={g.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                        <tr key={g.id + g.rank} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                           <td className="px-3 py-2.5 text-zinc-500 font-mono">{g.id}</td>
                           <td className="px-3 py-2.5 font-semibold text-zinc-200 flex items-center gap-2">
                             {g.image_url ? (

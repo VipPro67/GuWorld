@@ -1839,6 +1839,28 @@ func EquipGu(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Aperture capacity full! Cannot equip more than 60 Gu bugs."})
 			return
 		}
+
+		// Type restriction: only Support-type Gu can be equipped
+		specForEquip, specFound := models.GetGuAny(targetGu.GuID)
+		if specFound && specForEquip.Type != "Support" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Chỉ Cổ trùng loại Support mới có thể trang bị vào Không Khiếu."})
+			return
+		}
+
+		// Thien Nguyen Bao Lien special cross-rank equip rules
+		if specFound && strings.HasPrefix(targetGu.GuID, "GU_HEAVENLY_ESSENCE_LOTUS") {
+			if player.Rank < 6 && targetGu.Rank >= 6 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Phàm nhân không thể điều khiển Thiên Nguyên Bảo Hoàng Liên Tiên Cổ!"})
+				return
+			}
+		} else if specFound {
+			// All other Gu: standard rank check
+			if player.Rank < targetGu.Rank {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không Khiếu Rank %d không thể trang bị Cổ trùng Rank %d!", player.Rank, targetGu.Rank)})
+				return
+			}
+		}
+
 		targetGu.Equipped = true
 	} else {
 		targetGu.Equipped = false

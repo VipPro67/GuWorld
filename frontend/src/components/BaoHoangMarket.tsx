@@ -86,7 +86,7 @@ export function BaoHoangMarket({
   
   // Sell form inputs
   const [price, setPrice] = useState(10);
-  const [durationHours, setDurationHours] = useState(24);
+  const [durationHours, setDurationHours] = useState(72);
   const [selectedGuType, setSelectedGuType] = useState("");
   const [selectedGus, setSelectedGus] = useState<string[]>([]);
   const [selectedMaterial, setSelectedMaterial] = useState("");
@@ -146,12 +146,26 @@ export function BaoHoangMarket({
     return `Bí phương: ${name}`;
   };
 
-  // Fees calculation
+  // Duration-based fees calculation
+  const getFeeTier = (hours: number) => {
+    if (hours <= 24) return 1;
+    if (hours <= 72) return 2;
+    if (hours <= 168) return 3;
+    return 4;
+  };
   const getUpfrontFee = () => {
-    return listingType === "MARKET" ? 5 : 20;
+    const tier = getFeeTier(durationHours);
+    if (listingType === "AUCTION") {
+      return [20, 40, 80, 200][tier - 1];
+    }
+    return [5, 10, 20, 50][tier - 1];
   };
   const getCommissionRateText = () => {
-    return listingType === "MARKET" ? "2%" : "5%";
+    const tier = getFeeTier(durationHours);
+    if (listingType === "AUCTION") {
+      return ["5%", "6%", "8%", "12%"][tier - 1];
+    }
+    return ["2%", "3%", "5%", "8%"][tier - 1];
   };
 
   const createListing = async () => {
@@ -178,7 +192,7 @@ export function BaoHoangMarket({
       return;
     }
     if (durationHours < 1) {
-      setMessage({ type: "error", text: "Thời gian đăng bán phải từ 1 giờ." });
+      setMessage({ type: "error", text: "Thời gian đăng bán phải từ 24 giờ (1 Ngày)." });
       return;
     }
 
@@ -727,10 +741,10 @@ export function BaoHoangMarket({
                   onChange={(e) => setDurationHours(Number(e.target.value))}
                   className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-serif"
                 >
-                  <option value={12}>12 Giờ</option>
-                  <option value={24}>24 Giờ</option>
-                  <option value={48}>48 Giờ</option>
-                  <option value={72}>72 Giờ</option>
+                  <option value={24}>1 Ngày (24 Giờ)</option>
+                  <option value={72}>3 Ngày (72 Giờ)</option>
+                  <option value={168}>7 Ngày (168 Giờ)</option>
+                  <option value={720}>30 Ngày (720 Giờ)</option>
                 </select>
               </label>
             </div>

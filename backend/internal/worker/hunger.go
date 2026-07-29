@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"math"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -91,16 +93,18 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 		equippedGus = []string{}
 	}
 
-	// Also fetch stones and mana for ON_TICK effects
+	// Also fetch stones, mana, rank for ON_TICK effects
 	var primevalStones int
-	var currentMana, maxMana float64
-	_ = tx.QueryRow(`SELECT primeval_stones, current_mana, max_mana FROM players WHERE id = $1`, playerID).Scan(&primevalStones, &currentMana, &maxMana)
+	var currentMana, maxMana, immortalStones float64
+	var playerRank int
+	_ = tx.QueryRow(`SELECT primeval_stones, current_mana, max_mana, immortal_stones, rank FROM players WHERE id = $1`, playerID).Scan(&primevalStones, &currentMana, &maxMana, &immortalStones, &playerRank)
 
 	updated := false
 	playerHPBacklash := 0.0
 	tickStones := 0
 	tickMana := 0.0
 	tickHP := 0.0
+	tickImmortalStones := 0.0
 	newInventory := models.GuInventory{} // never nil — marshals to [] not null
 
 	for i := range guInv {
@@ -121,6 +125,11 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 
 			// Fire ON_TICK for equipped ACTIVE Gus
 			if gu.Equipped && gu.Status == "ACTIVE" && specs.Effects.Other != nil {
+				// Determine Thien Nguyen multiplier based on player rank vs gu rank
+				tnMultiplier := 1.0
+				if strings.HasPrefix(specs.ID, "GU_HEAVENLY_ESSENCE_LOTUS") {
+					tnMultiplier = getThienNguyenMultiplier(playerRank, specs.Rank)
+				}
 				for _, mech := range specs.Effects.Other {
 					if mech.EventTrigger != "ON_TICK" {
 						continue
@@ -135,19 +144,25 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 						if val <= 0 {
 							val = 5.0
 						}
-						tickHP += val
+						tickHP += val * tnMultiplier
 					case "GENERATE_STONES_TICK":
 						val, _ := params["value"].(float64)
 						if val <= 0 {
 							val = 1.0
 						}
-						tickStones += int(val)
+						tickStones += int(float64(val) * tnMultiplier)
 					case "MANA_REGEN_TICK":
 						val, _ := params["value"].(float64)
 						if val <= 0 {
 							val = 0.5
 						}
-						tickMana += val
+						tickMana += val * tnMultiplier
+					case "GENERATE_IMMORTAL_STONES_TICK":
+						val, _ := params["value"].(float64)
+						if val <= 0 {
+							val = 1.0
+						}
+						tickImmortalStones += val * tnMultiplier
 					}
 				}
 			}
@@ -193,7 +208,7 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 	}
 
 	// If no Gu was modified, no HP backlash, and no tick effects, return early
-	if !updated && playerHPBacklash == 0 && tickStones == 0 && tickMana == 0 && tickHP == 0 {
+	if !updated && playerHPBacklash == 0 && tickStones == 0 && tickMana == 0 && tickHP == 0 && tickImmortalStones == 0 {
 		return nil
 	}
 
@@ -216,15 +231,18 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 			currentMana = maxMana
 		}
 	}
+	if tickImmortalStones > 0 {
+		immortalStones += tickImmortalStones
+	}
 
 	// Apply HP Backlash if Vital Gu died
 	if playerHPBacklash > 0 {
 		hp -= playerHPBacklash
 		if hp <= 0 {
 			hp = 0
-			_, err = tx.Exec(`UPDATE players SET hp = $1, primeval_stones = $2, current_mana = $3, max_mana = $4, active_combat = NULL WHERE id = $5`, hp, primevalStones, currentMana, maxMana, playerID)
+			_, err = tx.Exec(`UPDATE players SET hp = $1, primeval_stones = $2, current_mana = $3, max_mana = $4, immortal_stones = $5, active_combat = NULL WHERE id = $6`, hp, primevalStones, currentMana, maxMana, immortalStones, playerID)
 		} else {
-			_, err = tx.Exec(`UPDATE players SET hp = $1, primeval_stones = $2, current_mana = $3, max_mana = $4 WHERE id = $5`, hp, primevalStones, currentMana, maxMana, playerID)
+			_, err = tx.Exec(`UPDATE players SET hp = $1, primeval_stones = $2, current_mana = $3, max_mana = $4, immortal_stones = $5 WHERE id = $6`, hp, primevalStones, currentMana, maxMana, immortalStones, playerID)
 		}
 		if err != nil {
 			return err
@@ -256,10 +274,43 @@ func updatePlayerGuHunger(db *sql.DB, playerID string) error {
 		return err
 	}
 
-	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1, equipped_gus = $2, primeval_stones = $3, current_mana = $4 WHERE id = $5`, string(newGuInvRaw), string(newEquippedGusRaw), primevalStones, currentMana, playerID)
+	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1, equipped_gus = $2, primeval_stones = $3, current_mana = $4, immortal_stones = $5 WHERE id = $6`, string(newGuInvRaw), string(newEquippedGusRaw), primevalStones, currentMana, immortalStones, playerID)
 	if err != nil {
 		return err
 	}
 
 	return tx.Commit()
+}
+
+// getThienNguyenMultiplier returns the multiplier for Thien Nguyen Bao Lien series effects.
+// Same rank = x2. Lower player rank = higher boost (high-rank gu helps low-rank cultivator more).
+// Formula follows energy cost logic: multiplier = 2.0 * costFactor(guRank) / costFactor(playerRank).
+// Immortal gu (6+) blocked for mortals (<6) in EquipGu already.
+func getThienNguyenMultiplier(playerRank, guRank int) float64 {
+	if playerRank == guRank {
+		return 2.0
+	}
+	immortalCost := func(diff int) float64 {
+		return math.Pow(100, float64(diff))
+	}
+	mortalCost := map[int]float64{1: 1, 2: 2, 3: 5, 4: 20, 5: 100}
+	if playerRank >= 6 && guRank >= 6 {
+		diff := playerRank - guRank
+		if diff > 0 {
+			return 2.0 / immortalCost(diff)
+		}
+		return 2.0 * immortalCost(-diff)
+	}
+	if playerRank >= 6 {
+		return 2.0 / immortalCost(playerRank-guRank)
+	}
+	if guRank >= 6 {
+		return 0
+	}
+	playerCost := mortalCost[playerRank]
+	guCost := mortalCost[guRank]
+	if playerCost == 0 || guCost == 0 {
+		return 0
+	}
+	return 2.0 * guCost / playerCost
 }

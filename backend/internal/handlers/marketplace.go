@@ -41,6 +41,74 @@ type BuyListingRequest struct {
 	Quantity  int    `json:"quantity"`
 }
 
+// Duration-based fee tiers
+func getFeeTier(durationHours int) int {
+	switch {
+	case durationHours <= 24:
+		return 1
+	case durationHours <= 72:
+		return 2
+	case durationHours <= 168:
+		return 3
+	default:
+		return 4
+	}
+}
+
+func getUpfrontFee(listingType string, durationHours int) int {
+	tier := getFeeTier(durationHours)
+	if listingType == "AUCTION" {
+		switch tier {
+		case 1:
+			return 20
+		case 2:
+			return 40
+		case 3:
+			return 80
+		default:
+			return 200
+		}
+	}
+	// MARKET
+	switch tier {
+	case 1:
+		return 5
+	case 2:
+		return 10
+	case 3:
+		return 20
+	default:
+		return 50
+	}
+}
+
+func getCommissionPct(listingType string, durationHours int) float64 {
+	tier := getFeeTier(durationHours)
+	if listingType == "AUCTION" {
+		switch tier {
+		case 1:
+			return 0.05
+		case 2:
+			return 0.06
+		case 3:
+			return 0.08
+		default:
+			return 0.12
+		}
+	}
+	// MARKET
+	switch tier {
+	case 1:
+		return 0.02
+	case 2:
+		return 0.03
+	case 3:
+		return 0.05
+	default:
+		return 0.08
+	}
+}
+
 func CreateListing(c *gin.Context) {
 	var req CreateListingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -120,17 +188,15 @@ func CreateListing(c *gin.Context) {
 	}
 
 	// Calculate and charge upfront listing fee (always in Primeval Stones)
-	basicFee := 5
-	if req.ListingType == "AUCTION" {
-		basicFee = 20
-	} else if req.ListingType == "TRADE" {
-		basicFee = 0
+	upfrontFee := getUpfrontFee(req.ListingType, req.DurationHours)
+	if req.ListingType == "TRADE" {
+		upfrontFee = 0
 	}
-	if player.PrimevalStones < basicFee {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch để chi trả phí đăng bán cơ bản (cần %d Nguyên Thạch)", basicFee)})
+	if player.PrimevalStones < upfrontFee {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch để chi trả phí đăng bán cơ bản (cần %d Nguyên Thạch)", upfrontFee)})
 		return
 	}
-	player.PrimevalStones -= basicFee
+	player.PrimevalStones -= upfrontFee
 
 	var itemDataJSON []byte
 	if req.ItemType == "Recipe" {
@@ -240,7 +306,7 @@ func CreateListing(c *gin.Context) {
 	} else {
 		targetBuyerParam = nil
 	}
-	_, err = tx.Exec(`INSERT INTO auction(id,seller_id,item_type,item_data,quantity,currency,start_price,current_price,highest_bidder_id,end_time,status,listing_type,created_at,target_buyer_id) VALUES($1,$2,$3,$4,$5,$6,$7,$7,NULL,$8,'ACTIVE',$9,NOW(),$10)`, listingID, player.ID, req.ItemType, itemDataJSON, req.Quantity, req.Currency, req.Price, end, req.ListingType, targetBuyerParam)
+	_, err = tx.Exec(`INSERT INTO auction(id,seller_id,item_type,item_data,quantity,currency,start_price,current_price,highest_bidder_id,end_time,status,listing_type,created_at,target_buyer_id,duration_hours) VALUES($1,$2,$3,$4,$5,$6,$7,$7,NULL,$8,'ACTIVE',$9,NOW(),$10,$11)`, listingID, player.ID, req.ItemType, itemDataJSON, req.Quantity, req.Currency, req.Price, end, req.ListingType, targetBuyerParam, req.DurationHours)
 	if err != nil {
 		logger.S.Errorf("Failed to create auction listing: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo phiên giao dịch"})
@@ -487,10 +553,10 @@ func BuyListing(c *gin.Context) {
 	var sellerID uuid.UUID
 	var itemType, currency, status, listingType string
 	var currentPrice float64
-	var qty int
+	var qty, durationHours int
 	var rawItemData []byte
 	var targetBuyerID sql.NullString
-	err = tx.QueryRow(`SELECT seller_id, item_type, item_data, quantity, currency, current_price, status, listing_type, target_buyer_id FROM auction WHERE id=$1 FOR UPDATE`, req.ListingID).Scan(&sellerID, &itemType, &rawItemData, &qty, &currency, &currentPrice, &status, &listingType, &targetBuyerID)
+	err = tx.QueryRow(`SELECT seller_id, item_type, item_data, quantity, currency, current_price, status, listing_type, target_buyer_id, duration_hours FROM auction WHERE id=$1 FOR UPDATE`, req.ListingID).Scan(&sellerID, &itemType, &rawItemData, &qty, &currency, &currentPrice, &status, &listingType, &targetBuyerID, &durationHours)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phiên giao dịch"})
 		return
@@ -575,11 +641,12 @@ func BuyListing(c *gin.Context) {
 		}
 	}
 
-	// 2% commission fee for MARKET, 0% for TRADE
-	commission := totalPrice * 0.02
+	// Time-based commission fee, 0% for TRADE
+	commPct := getCommissionPct(listingType, durationHours)
 	if listingType == "TRADE" {
-		commission = 0.0
+		commPct = 0.0
 	}
+	commission := totalPrice * commPct
 	payout := totalPrice - commission
 
 	if currency == "primeval" {
@@ -667,7 +734,7 @@ func SettleExpiredAuctions(c *gin.Context) {
 }
 
 func settleExpiredAuctions() error {
-	rows, err := db.DB.Query(`SELECT id,seller_id,highest_bidder_id,item_type,item_data,quantity,current_price,currency,listing_type FROM auction WHERE status='ACTIVE' AND end_time <= NOW()`)
+	rows, err := db.DB.Query(`SELECT id,seller_id,highest_bidder_id,item_type,item_data,quantity,current_price,currency,listing_type,duration_hours FROM auction WHERE status='ACTIVE' AND end_time <= NOW()`)
 	if err != nil {
 		return err
 	}
@@ -679,10 +746,10 @@ func settleExpiredAuctions() error {
 		var highestBidderID sql.NullString
 		var itemType string
 		var rawItemData []byte
-		var qty int
+		var qty, durationHours int
 		var currentPrice float64
 		var currency, listingType string
-		if err := rows.Scan(&id, &sellerID, &highestBidderID, &itemType, &rawItemData, &qty, &currentPrice, &currency, &listingType); err != nil {
+		if err := rows.Scan(&id, &sellerID, &highestBidderID, &itemType, &rawItemData, &qty, &currentPrice, &currency, &listingType, &durationHours); err != nil {
 			logger.S.Errorf("Failed to scan expired auction row: %v", err)
 			continue
 		}
@@ -692,7 +759,7 @@ func settleExpiredAuctions() error {
 			itemData = string(rawItemData)
 		}
 
-		if err := settleAuction(id, sellerID, highestBidderID, itemType, itemData, qty, currentPrice, currency, listingType); err != nil {
+		if err := settleAuction(id, sellerID, highestBidderID, itemType, itemData, qty, currentPrice, currency, listingType, durationHours); err != nil {
 			logger.S.Errorf("Failed to settle auction %s: %v", id, err)
 			continue
 		}
@@ -701,7 +768,7 @@ func settleExpiredAuctions() error {
 	return rows.Err()
 }
 
-func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.NullString, itemType, itemData string, qty int, currentPrice float64, currency string, listingType string) error {
+func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.NullString, itemType, itemData string, qty int, currentPrice float64, currency string, listingType string, durationHours int) error {
 	tx, err := db.DB.Begin()
 	if err != nil {
 		return err
@@ -724,8 +791,8 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 			return err
 		}
 
-		// 5% commission fee for AUCTION
-		commission := currentPrice * 0.05
+		// Time-based commission fee
+		commission := currentPrice * getCommissionPct(listingType, durationHours)
 		payout := currentPrice - commission
 
 		if currency == "primeval" {
