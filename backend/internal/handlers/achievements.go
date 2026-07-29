@@ -200,8 +200,7 @@ func ClaimAchievement(c *gin.Context) {
 
 	auditlog.Logf(db.DB, &playerID, "achievement.claim", "achievementId=%s name=%s", ach.ID, ach.Name)
 
-	c.JSON(http.StatusOK, gin.H{
-		"player":  player,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Nhận thành tựu [%s] %s! Phần thưởng: %s", ach.Icon, ach.Name, ach.RewardLabel),
 	})
 }

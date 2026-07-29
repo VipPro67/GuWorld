@@ -371,8 +371,7 @@ func CastKillerMove(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"player":           player,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"event":            eventType,
 		"success":          succeeded,
 		"killer_move":      move,

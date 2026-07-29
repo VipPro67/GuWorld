@@ -147,12 +147,11 @@ func BreakWall(c *gin.Context) {
 
 			tx.Commit()
 
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"chance":  chance,
-				"message": msg,
-				"player":  player,
-			})
+		responseWithPlayer(c, http.StatusOK, player, gin.H{
+			"success": false,
+			"chance":  chance,
+			"message": msg,
+		})
 
 			return
 		}
@@ -435,7 +434,7 @@ func Ascension(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"player": player, "success": success, "message": msg})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"success": success, "message": msg})
 }
 
 // Tribulation handles the heavenly tribulation event for Immortals
@@ -497,7 +496,7 @@ func Tribulation(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"player": player, "message": "Thiên kiếp giáng lâm! Hãy chuẩn bị chiến đấu!"})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Thiên kiếp giáng lâm! Hãy chuẩn bị chiến đấu!"})
 }
 
 // CompleteQuestRequest defines body to complete a main quest
@@ -551,8 +550,7 @@ func ClearStress(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"player":  player,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": "Không khiếu đã được tịnh hóa thành công! Giảm 50% áp lực.",
 	})
 }

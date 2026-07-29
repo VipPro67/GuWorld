@@ -1089,8 +1089,7 @@ func CombatAttack(c *gin.Context) {
 		}()
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"player":  player,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"logs":    ctx.Logs,
 		"enemy":   player.ActiveCombat,
 		"victory": victory,

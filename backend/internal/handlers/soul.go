@@ -96,9 +96,8 @@ func UseGutsGu(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction: " + err.Error()})
 			return
 		}
-		c.JSON(http.StatusBadRequest, gin.H{
+		responseWithPlayer(c, http.StatusBadRequest, player, gin.H{
 			"error": "Hồn phách đã đạt giới hạn của " + player.SoulTier + ". Hãy luyện hồn tại Cốc Lạc Phách để bứt phá giới hạn!",
-			"player": player,
 		})
 		return
 	}
@@ -139,9 +138,8 @@ func UseGutsGu(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("maxSoul=%d soulHP=%d tier=%s", player.MaxSoul, player.SoulHP, player.SoulTier),
 		Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": "Tráng Hồn thành công! Hồn phách tăng thêm 10 điểm.",
-		"player":  player,
 	})
 }
 
@@ -203,9 +201,8 @@ func RefineSoul(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("tier %s → %s", oldTier, newTier),
 		Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": "Luyện Hồn thành công! Hồn phách đột phá lên " + newTier + ", nhưng bị suy yếu do gió Lạc Phách (Soul HP giảm mạnh). Hãy dưỡng hồn để khôi phục.",
-		"player":  player,
 	})
 }
 

@@ -1100,9 +1100,8 @@ func BuyFromSectVault(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("%s | %s | giá %d điểm cống hiến", req.ItemType, itemName, cost),
 		IPAddress: c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": "Đổi vật phẩm thành công!",
-		"player":  player,
 		"member":  m,
 	})
 }
@@ -1419,9 +1418,8 @@ func CompleteSectMission(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message":             "Hoàn thành nhiệm vụ tông môn! Nhận được " + string(rune('0'+sm.RewardContribution)) + " Điểm cống hiến.",
-		"player":              player,
 		"contribution_points": m.ContributionPoints,
 	})
 }
@@ -1557,9 +1555,8 @@ func CreateSect(c *gin.Context) {
 	// Trigger System Chat Notification on Sect channel
 	_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("Chúc mừng đạo hữu %s đã lập phái thành công! Tông môn %s chính thức được thành lập.", player.Username, req.Name))
 
-	c.JSON(http.StatusOK, gin.H{
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": "Khai tông lập phái thành công! Chào mừng Chưởng môn của \"" + req.Name + "\"!",
-		"player":  player,
 	})
 }
 

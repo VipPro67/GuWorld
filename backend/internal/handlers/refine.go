@@ -480,17 +480,15 @@ func RefineGu(c *gin.Context) {
 	})
 	// Return response
 	if success {
-		c.JSON(http.StatusOK, gin.H{
+		responseWithPlayer(c, http.StatusOK, player, gin.H{
 			"status":  statusStr,
 			"message": statusMsg,
-			"player":  player,
 			"new_gu":  newGuInstance,
 		})
 	} else {
-		c.JSON(http.StatusOK, gin.H{
+		responseWithPlayer(c, http.StatusOK, player, gin.H{
 			"status":  statusStr,
 			"message": statusMsg,
-			"player":  player,
 		})
 	}
 }
@@ -637,11 +635,10 @@ func DeduceRecipe(c *gin.Context) {
 		EntityID: req.RecipeID, RequestSummary: fmt.Sprintf("improvement=%.1f%% inspiration=%v", improvement, inspirationFlash),
 		IPAddress: c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message":         message,
 		"inspiration":     inspirationFlash,
 		"improvement":     improvement,
 		"completion_rate": newRate,
-		"player":          player,
 	})
 }

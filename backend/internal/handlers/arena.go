@@ -237,8 +237,7 @@ func ChallengeArena(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": "Khiêu chiến Võ Đài bắt đầu!",
-		"player":  player,
 	})
 }

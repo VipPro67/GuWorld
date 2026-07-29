@@ -250,8 +250,7 @@ func Retreat(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("hadCombat=%v stones=%d gus=%d mats=%d", player.ActiveCombat != nil, player.TempLoot.PrimevalStones, len(player.TempLoot.GuInventory), len(player.TempLoot.MaterialsInventory)),
 		IPAddress: c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{
-		"player": player,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"log":    logMsg,
 	})
 }
@@ -308,8 +307,7 @@ func Flee(c *gin.Context) {
 	}
 
 	auditlog.Logf(db.DB, &authID, "combat.flee", "enemy=%s", logMsg)
-	c.JSON(http.StatusOK, gin.H{
-		"player": player,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"log":    logMsg,
 	})
 }

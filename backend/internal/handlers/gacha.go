@@ -151,8 +151,7 @@ func OpenGacha(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"player":  player,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"reward":  reward,
 		"message": buildGachaRewardLabel(reward),
 	})
@@ -229,8 +228,7 @@ func OpenGacha10(c *gin.Context) {
 		announcement += buildGachaRewardLabel(r) + "\n"
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"player":  player,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"rewards": rewards,
 		"message": "Mở 10 lần thành công!\n" + announcement,
 	})

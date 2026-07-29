@@ -463,10 +463,9 @@ func ActionInstance(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		responseWithPlayer(c, http.StatusOK, player, gin.H{
 			"message": "Phó bản thất bại! " + logResult,
 			"session": session,
-			"player":  player,
 		})
 		return
 	}
@@ -502,11 +501,10 @@ func ActionInstance(c *gin.Context) {
 
 		// Reload session for response
 		session.CurrentStage = nextStage
-		c.JSON(http.StatusOK, gin.H{
+		responseWithPlayer(c, http.StatusOK, player, gin.H{
 			"message":  "Hành động thành công!",
 			"session":  session,
 			"template": template,
-			"player":   player,
 		})
 		return
 	}
@@ -604,10 +602,9 @@ func ActionInstance(c *gin.Context) {
 		}
 
 		session.Status = "COMPLETED"
-		c.JSON(http.StatusOK, gin.H{
+		responseWithPlayer(c, http.StatusOK, player, gin.H{
 			"message": "Phó bản hoàn thành! " + logResult,
 			"session": session,
-			"player":  player,
 		})
 		return
 	}
@@ -639,9 +636,8 @@ func ActionInstance(c *gin.Context) {
 	}
 
 	session.Status = "FAILED"
-	c.JSON(http.StatusOK, gin.H{
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": "Đạo hữu thất bại thảm hại trong cuộc thám hiểm này!",
 		"session": session,
-		"player":  player,
 	})
 }

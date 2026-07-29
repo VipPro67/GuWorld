@@ -789,9 +789,8 @@ func RechargeWithStones(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		responseWithPlayer(c, http.StatusOK, player, gin.H{
 			"message": fmt.Sprintf("Luyện hóa thành công %d Tiên Nguyên Thạch thành %d hạt Tiên Nguyên!", stonesToUse, stonesToUse),
-			"player":  player,
 		})
 		return
 	}
@@ -861,8 +860,7 @@ func RechargeWithStones(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"player":  player,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Nạp %d nguyên thạch, khôi phục %.4f%% chân nguyên.", stonesToUse, addedMana),
 	})
 }
@@ -1345,8 +1343,7 @@ func FeedGu(c *gin.Context) {
 	if feedEventMsg != "" {
 		msg += " " + feedEventMsg
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"player":  player,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": msg,
 	})
 }
@@ -1531,8 +1528,7 @@ func FeedGroup(c *gin.Context) {
 		Success:   true,
 	})
 
-	c.JSON(http.StatusOK, gin.H{
-		"player":  player,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Đã cho ăn thành công %d con %s! Tiêu hao: %s.", fedCount, specs.Name, strings.Join(foodDetails, ", ")),
 	})
 }
@@ -1844,7 +1840,7 @@ func EquipGu(c *gin.Context) {
 
 	if req.Equip {
 		if targetGu.Equipped {
-			c.JSON(http.StatusOK, gin.H{"message": "Gu bug is already equipped", "player": player})
+			responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Gu bug is already equipped"})
 			return
 		}
 		if equippedCount >= 60 {
@@ -1959,10 +1955,7 @@ func EquipGu(c *gin.Context) {
 
 	auditlog.Logf(db.DB, &authID, action, "gu=%s instance=%s", guName, req.InstanceID)
 
-	c.JSON(http.StatusOK, gin.H{
-		"player":  player,
-		"message": statusMsg,
-	})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": statusMsg})
 }
 
 // UpdateGuStatusRequest defines body to change status of owned Gu instance
@@ -2054,8 +2047,7 @@ func UpdateGuStatus(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"player":  player,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Cập nhật trạng thái Cổ trùng thành %s thành công!", req.Status),
 	})
 }
@@ -2082,8 +2074,7 @@ func GetPlayerStatsHandler(c *gin.Context) {
 	}
 
 	stats := CalculatePlayerStats(&player)
-	c.JSON(http.StatusOK, gin.H{
-		"player": player,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"stats":  stats,
 	})
 }
@@ -2276,8 +2267,7 @@ func SetVitalGu(c *gin.Context) {
 	}
 
 	if targetGu.IsVital {
-		c.JSON(http.StatusOK, gin.H{
-			"player":  player,
+		responseWithPlayer(c, http.StatusOK, player, gin.H{
 			"message": "Cổ trùng này đã là Bản Mệnh Cổ của đạo hữu rồi.",
 		})
 		return
@@ -2345,8 +2335,7 @@ func SetVitalGu(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("Thiết lập %s thành Bản Mệnh Cổ | hadVital=%v", targetGu.GuID, hadVital),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{
-		"player":  player,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Thiết lập %s thành Bản Mệnh Cổ thành công!%s", targetGu.GuID, backlashMessage),
 	})
 }
@@ -2422,7 +2411,7 @@ func DropGu(c *gin.Context) {
 		EntityID: req.GuInstanceID, RequestSummary: "Vứt bỏ Cổ trùng khỏi túi đồ",
 		IPAddress: c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{"player": player, "message": "Đã vứt bỏ Cổ trùng khỏi túi đồ."})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Đã vứt bỏ Cổ trùng khỏi túi đồ."})
 }
 
 // UseGuRequest represents request payload to use a consumable Gu
@@ -2537,8 +2526,7 @@ func UseConsumableGu(c *gin.Context) {
 		EntityID: req.GuInstanceID, RequestSummary: logMsg,
 		IPAddress: c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{
-		"player":  player,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": logMsg,
 	})
 }
@@ -2648,8 +2636,7 @@ func UseSupportGu(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"player":  player,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": logMsg,
 	})
 }
@@ -2844,7 +2831,7 @@ func UpdateProfileSettings(c *gin.Context) {
 		setAuthCookie(c, newToken)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"player": player, "message": "Cập nhật hồ sơ thành công!"})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Cập nhật hồ sơ thành công!"})
 }
 
 func getClientIDFromGoogleJSON() string {

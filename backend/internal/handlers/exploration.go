@@ -680,8 +680,7 @@ func MovePlayer(c *gin.Context) {
 	// Calculate fresh stats
 	newStats := CalculatePlayerStats(&player)
 
-	c.JSON(http.StatusOK, gin.H{
-		"player":           player,
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"log":              logMsg,
 		"combat_triggered": combatTriggered,
 		"stats":            newStats,
