@@ -107,6 +107,7 @@ func SetupRouter() *gin.Engine {
 		api.DELETE("/admin/sects/:id/vault/stock", middleware.AuthRequired(), handlers.AdminRemoveSectVaultItem)
 		api.POST("/admin/data/import", middleware.AuthRequired(), handlers.AdminImportData)
 		api.POST("/admin/data/export", middleware.AuthRequired(), handlers.AdminExportData)
+		api.POST("/admin/clear-cache", middleware.AuthRequired(), handlers.AdminClearCache)
 		api.GET("/admin/audit-logs", middleware.AuthRequired(), handlers.AdminGetAuditLogs)
 		api.GET("/admin/shop", middleware.AuthRequired(), handlers.AdminListShopItems)
 		api.POST("/admin/shop", middleware.AuthRequired(), handlers.AdminCreateShopItem)

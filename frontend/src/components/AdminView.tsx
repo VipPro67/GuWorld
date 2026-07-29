@@ -1706,6 +1706,10 @@ export const AdminView: React.FC = () => {
                   <RefreshCw className="w-4 h-4" />
                   {actionLoading ? "Đang xử lý..." : "Export Database → CSV"}
                 </button>
+                <button disabled={actionLoading} onClick={async () => { const ok = await exec(`${BACKEND_URL}/api/admin/clear-cache`, "POST", {}); if (ok) addToast("Cache đã được xóa và tải lại!", "success"); }} className="flex items-center gap-2 px-5 py-3 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer">
+                  <Trash2 className="w-4 h-4" />
+                  {actionLoading ? "Đang xử lý..." : "Xóa Cache Dictionary"}
+                </button>
               </div>
             </div>
           )}

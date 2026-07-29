@@ -1214,6 +1214,29 @@ func AdminExportData(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Export dữ liệu ra CSV thành công"})
 }
 
+// AdminClearCache reloads all in-memory registries from the database.
+// POST /api/admin/clear-cache
+func AdminClearCache(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+
+	if err := models.LoadGuRegistry(db.DB); err != nil {
+		logger.S.Warnf("failed to reload Gu registry: %v", err)
+	}
+	if err := models.LoadItemRegistry(db.DB); err != nil {
+		logger.S.Warnf("failed to reload Item registry: %v", err)
+	}
+	if err := models.LoadMonsterRegistry(db.DB); err != nil {
+		logger.S.Warnf("failed to reload Monster registry: %v", err)
+	}
+	if err := LoadQuestRegistry(); err != nil {
+		logger.S.Warnf("failed to reload Quest registry: %v", err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa và tải lại toàn bộ cache dữ liệu thành công!"})
+}
+
 // AdminGetAuditLogs returns all audit logs (admin only) with optional filtering.
 // GET /api/admin/audit-logs
 func AdminGetAuditLogs(c *gin.Context) {
