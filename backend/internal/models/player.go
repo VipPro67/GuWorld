@@ -208,11 +208,12 @@ type Player struct {
 	SocialState
 	CombatConfig
 
-	ImmortalState   ImmortalState   `json:"immortal_state"`
-	GuInventory     GuInventory     `json:"gu_inventory"`
-	ActiveCombat    *CombatState    `json:"active_combat"`
-	TempLoot        TempLoot        `json:"temp_loot"`
-	GrowthData      GrowthData      `json:"growth_data"`
+	ImmortalState      ImmortalState      `json:"immortal_state"`
+	GuInventory        GuInventory        `json:"gu_inventory"`
+	ActiveCombat       *CombatState       `json:"active_combat"`
+	TempLoot           TempLoot           `json:"temp_loot"`
+	GrowthData         GrowthData         `json:"growth_data"`
+	MaterialsInventory map[string]int     `json:"materials_inventory,omitempty"`
 }
 
 type TempLoot struct {

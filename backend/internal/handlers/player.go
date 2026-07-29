@@ -682,6 +682,7 @@ func GetCurrentPlayer(c *gin.Context) {
 		return
 	}
 
+	player.MaterialsInventory = loadMaterialsInventory(playerID.String())
 	c.JSON(http.StatusOK, player)
 }
 
@@ -711,6 +712,7 @@ func GetPlayerStatus(c *gin.Context) {
 		return
 	}
 
+	player.MaterialsInventory = loadMaterialsInventory(playerID.String())
 	c.JSON(http.StatusOK, player)
 }
 
@@ -1662,6 +1664,22 @@ func projectPlayerStatusTx(q playerQueryRower, id uuid.UUID) (models.Player, err
 // evaluateManaTx delegates to the service layer.
 func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	return PlayerSvc.EvaluateAndPersistMana(tx, id)
+}
+
+// loadMaterialsInventory fetches the player's materials inventory as a flat id->quantity map.
+func loadMaterialsInventory(playerID string) map[string]int {
+	if InventorySvc == nil {
+		return nil
+	}
+	items, err := InventorySvc.ListByPlayer(playerID)
+	if err != nil {
+		return nil
+	}
+	mi := make(map[string]int)
+	for _, it := range items {
+		mi[it.ItemID] += it.Quantity
+	}
+	return mi
 }
 
 // EquipGuRequest defines request to equip/unequip Gu bugs

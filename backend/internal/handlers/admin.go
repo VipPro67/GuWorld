@@ -124,6 +124,12 @@ func AdminGetPlayerDetail(c *gin.Context) {
 		return
 	}
 
+	items, _ := InventorySvc.ListByPlayer(playerID.String())
+	materialsInventory := make(map[string]int)
+	for _, it := range items {
+		materialsInventory[it.ItemID] = materialsInventory[it.ItemID] + it.Quantity
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"id":                   player.ID,
 		"username":             player.Username,
@@ -153,6 +159,7 @@ func AdminGetPlayerDetail(c *gin.Context) {
 		"aperture_stress":      player.ApertureStress,
 		"avatar_url":           player.AvatarURL,
 		"bio":                  player.Bio,
+		"materials_inventory":  materialsInventory,
 	})
 }
 
