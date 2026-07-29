@@ -27,7 +27,7 @@ interface Listing {
   id: string;
   seller_id: string;
   item_type: "Gu" | "Material" | "Recipe";
-  item_data: string | RecipeData;
+  item_data: string | RecipeData | any[];
   quantity: number;
   currency: "primeval" | "immortal";
   start_price: number;
@@ -119,7 +119,7 @@ export function BaoHoangMarket({
 
   const getDisplayName = (listing: Listing): string => {
     if (listing.item_type === "Recipe") {
-      const rData = typeof listing.item_data === "object" ? listing.item_data : null;
+      const rData = typeof listing.item_data === "object" && !Array.isArray(listing.item_data) ? listing.item_data : null;
       if (rData) {
         const targetGuName = guDictionary[rData.recipe_id.replace("recipe_", "GU_").toUpperCase()]?.name || 
                            guDictionary[rData.recipe_id.replace("recipe_", "GU")]?.name ||
@@ -129,14 +129,19 @@ export function BaoHoangMarket({
       return `Bí phương: ${String(listing.item_data)}`;
     }
     
-    const dataStr = typeof listing.item_data === "string" ? listing.item_data : "";
+    let guId = "";
+    if (Array.isArray(listing.item_data) && listing.item_data.length > 0) {
+      guId = (listing.item_data[0] as any)?.gu_id || "";
+    } else if (typeof listing.item_data === "string") {
+      guId = listing.item_data;
+    }
     if (listing.item_type === "Gu") {
-      const spec = guDictionary[dataStr];
-      return spec?.name || dataStr.replace(/^GU_/, "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const spec = guDictionary[guId];
+      return spec?.name || guId.replace(/^GU_/, "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
     }
     
-    const spec = itemDictionary[dataStr];
-    return spec?.name || dataStr.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    const spec = itemDictionary[guId];
+    return spec?.name || guId.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
   };
 
   const getRecipeDisplayName = (recipeId: string): string => {
@@ -890,17 +895,35 @@ export function BaoHoangMarket({
                       </div>
                       <h4 className="text-zinc-100 font-serif font-bold text-sm leading-snug group-hover:text-amber-300 transition-colors pt-0.5">
                         {getDisplayName(listing)}
+                        {listing.item_type === "Gu" && (() => {
+                          let rank = 0;
+                          if (Array.isArray(listing.item_data) && listing.item_data.length > 0) {
+                            rank = (listing.item_data[0] as any)?.rank || 0;
+                          }
+                          return rank > 0 ? (
+                            <span className="text-[10px] font-mono border border-amber-500/20 px-1.5 py-0.2 rounded text-amber-400 uppercase ml-2">
+                              Rank {rank}
+                            </span>
+                          ) : null;
+                        })()}
                       </h4>
                       {listing.listing_type === "TRADE" && listing.target_buyer_username && (
                         <p className="text-[10px] text-amber-400/90 font-mono">
                           Người nhận: {listing.target_buyer_username}
                         </p>
                       )}
-                      {listing.item_type === "Gu" && (
-                        <p className="text-[10px] text-zinc-500 line-clamp-1 italic font-serif">
-                          {guDictionary[typeof listing.item_data === "string" ? listing.item_data : ""]?.description || ""}
-                        </p>
-                      )}
+                      {listing.item_type === "Gu" && (() => {
+                        let guId = "";
+                        if (Array.isArray(listing.item_data) && listing.item_data.length > 0) {
+                          guId = (listing.item_data[0] as any)?.gu_id || "";
+                        } else if (typeof listing.item_data === "string") {
+                          guId = listing.item_data;
+                        }
+                        const desc = guDictionary[guId]?.description || "";
+                        return desc ? (
+                          <p className="text-[10px] text-zinc-500 line-clamp-1 italic font-serif">{desc}</p>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
 
