@@ -1288,7 +1288,11 @@ export const useGameStore = create<GameState>((set, get) => {
       get().subscribePlayerEvents();
       get().subscribeTradeEvents();
       get().addLog(`Đồng chí ${data.player.username} đã quy vị!`);
-      set({ showChangelog: true });
+      const today = new Date().toISOString().split('T')[0];
+      const hiddenUntil = typeof window !== "undefined" ? localStorage.getItem("gu_changelog_hide_until") : null;
+      if (hiddenUntil !== today) {
+        set({ showChangelog: true });
+      }
       return true;
     } catch (err: any) {
       set({ error: err.message });
@@ -1811,6 +1815,11 @@ export const useGameStore = create<GameState>((set, get) => {
       void get().fetchRecipes();
       get().subscribePlayerEvents();
       get().subscribeTradeEvents();
+      const today = new Date().toISOString().split('T')[0];
+      const hiddenUntil = typeof window !== "undefined" ? localStorage.getItem("gu_changelog_hide_until") : null;
+      if (hiddenUntil !== today) {
+        set({ showChangelog: true });
+      }
     } catch (err: any) {
       console.error("Session restore failed:", err.message);
       set({ player: null, manaSnapshot: null, token: null });

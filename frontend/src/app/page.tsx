@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import { Registration } from "@/components/Registration";
 import { OnboardingModal } from "@/components/OnboardingModal";
@@ -91,6 +91,17 @@ export default function Home() {
     showChangelog,
     setShowChangelog,
   } = useGameStore();
+
+  const [dontShowToday, setDontShowToday] = useState(false);
+
+  const handleCloseChangelog = () => {
+    if (dontShowToday) {
+      const today = new Date().toISOString().split('T')[0];
+      localStorage.setItem("gu_changelog_hide_until", today);
+    }
+    setDontShowToday(false);
+    setShowChangelog(false);
+  };
 
   // 1. Session Restoration on Mount
   useEffect(() => {
@@ -359,7 +370,7 @@ export default function Home() {
 
       {/* Changelog Modal */}
       {player && showChangelog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm animate-fade-in" onClick={() => setShowChangelog(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm animate-fade-in" onClick={handleCloseChangelog}>
           <div className="w-full max-w-lg bg-gradient-to-br from-zinc-950 to-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
             <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-xl pointer-events-none" />
             <div className="flex items-center justify-between mb-4">
@@ -367,7 +378,7 @@ export default function Home() {
                 <Sparkles className="w-5 h-5 text-amber-400" />
                 <h3 className="text-base font-serif font-bold text-zinc-100">Cập Nhật Mới!</h3>
               </div>
-              <button onClick={() => setShowChangelog(false)} className="text-zinc-500 hover:text-zinc-300 cursor-pointer"><X className="w-4 h-4" /></button>
+              <button onClick={handleCloseChangelog} className="text-zinc-500 hover:text-zinc-300 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
             <div className="space-y-3 text-xs text-zinc-300 leading-relaxed">
               <p className="text-zinc-400">Phiên bản <strong className="text-amber-400">v0.7.2</strong> — Sửa lỗi chiến đấu & Gift Code:</p>
@@ -402,7 +413,16 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <button onClick={() => setShowChangelog(false)} className="w-full mt-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-semibold transition-all cursor-pointer">
+            <label className="flex items-center gap-2 mt-4 mb-1 text-xs text-zinc-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={dontShowToday}
+                onChange={e => setDontShowToday(e.target.checked)}
+                className="rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-amber-500"
+              />
+              Không hiển thị lại hôm nay
+            </label>
+            <button onClick={handleCloseChangelog} className="w-full mt-2 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-semibold transition-all cursor-pointer">
               Đã hiểu!
             </button>
           </div>
