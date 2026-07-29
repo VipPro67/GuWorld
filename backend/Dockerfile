@@ -28,7 +28,7 @@ RUN apk --no-cache add ca-certificates
 
 # Copy compiled binary and CSV data files from builder
 COPY --from=builder /app/guworld_server .
-COPY --from=builder /app/*.csv ./
+COPY --from=builder /app/cmd/server/data ./data
 COPY --from=builder /app/google.json* ./
 
 EXPOSE 8080
