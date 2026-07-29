@@ -329,7 +329,7 @@ func UseRelicGu(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"player": player, "message": "Relic Gu consumed. Instant advancement!"})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Relic Gu consumed. Instant advancement!"})
 }
 
 // Ascension attempts to break through from Rank 5 Peak to Rank 6 Gu Immortal

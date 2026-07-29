@@ -1666,6 +1666,18 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	return PlayerSvc.EvaluateAndPersistMana(tx, id)
 }
 
+// responseWithPlayer sends a JSON response with the player object, ensuring MaterialsInventory is populated.
+func responseWithPlayer(c *gin.Context, status int, player models.Player, extra ...gin.H) {
+	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
+	resp := gin.H{"player": player}
+	for _, e := range extra {
+		for k, v := range e {
+			resp[k] = v
+		}
+	}
+	c.JSON(status, resp)
+}
+
 // loadMaterialsInventory fetches the player's materials inventory as a flat id->quantity map.
 func loadMaterialsInventory(playerID string) map[string]int {
 	if InventorySvc == nil {
@@ -2209,10 +2221,7 @@ func UseItem(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"player":  player,
-		"message": strings.Join(messages, " "),
-	})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": strings.Join(messages, " ")})
 }
 
 // SetVitalGuRequest represents the payload to select a vital Gu

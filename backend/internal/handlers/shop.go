@@ -263,10 +263,7 @@ func BuyShopItem(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("%s x%d | %d Nguyên Thạch", selectedItem.Name, req.Quantity, totalCost),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{
-		"player":  player,
-		"message": "Giao dịch thành công!",
-	})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Giao dịch thành công!"})
 }
 
 type SellShopRequest struct {
@@ -374,6 +371,7 @@ func SellShopItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+
 	itemName := req.ItemID
 	if req.ItemType == "Gu" {
 		if spec, ok := models.GetGuAny(req.ItemID); ok {
@@ -392,5 +390,5 @@ func SellShopItem(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("%s x%d | nhận %d Nguyên Thạch", itemName, req.Quantity, totalGain),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{"player": player, "message": "Bán thành công, nhận Nguyên Thạch!"})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Bán thành công, nhận Nguyên Thạch!"})
 }

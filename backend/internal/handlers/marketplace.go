@@ -720,7 +720,7 @@ func BuyListing(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("seller=%s | sl=%d | %.0f %s", sellerID, purchaseQty, totalPrice, currency),
 		IPAddress: c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{"message": "Mua hàng thành công", "player": buyer})
+	responseWithPlayer(c, http.StatusOK, buyer, gin.H{"message": "Mua hàng thành công"})
 }
 
 func SettleExpiredAuctions(c *gin.Context) {

@@ -410,12 +410,6 @@ func CompleteQuest(c *gin.Context) {
 		return
 	}
 
-	existing, _ := QuestSvc.Get(tx, player.ID.String(), req.QuestID)
-	if existing != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Nhiệm vụ này đã được hoàn thành trước đó"})
-		return
-	}
-
 	if !quest.Check(&player) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Chưa đạt yêu cầu: " + quest.ReqDesc})
 		return
@@ -426,7 +420,15 @@ func CompleteQuest(c *gin.Context) {
 		return
 	}
 
-	QuestSvc.Complete(tx, player.ID.String(), req.QuestID)
+	completed, err := QuestSvc.Complete(tx, player.ID.String(), req.QuestID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error completing quest"})
+		return
+	}
+	if !completed {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Nhiệm vụ này đã được hoàn thành trước đó"})
+		return
+	}
 
 	updateQuery, updateArgs := buildQuestUpdateQuery(&player)
 	_, err = tx.Exec(updateQuery, updateArgs...)
@@ -449,8 +451,5 @@ func CompleteQuest(c *gin.Context) {
 	rewardStr := buildRewardLabel(quest.Rewards)
 
 	auditlog.Logf(db.DB, &authID, "quest.complete", "questId=%s questTitle=%s", req.QuestID, quest.Title)
-	c.JSON(http.StatusOK, gin.H{
-		"player":  player,
-		"message": quest.Message + rewardStr,
-	})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": quest.Message + rewardStr})
 }

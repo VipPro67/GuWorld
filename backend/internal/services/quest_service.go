@@ -102,14 +102,19 @@ func (s *QuestService) Upsert(tx *sql.Tx, q *QuestProgress) error {
 	return err
 }
 
-// Complete marks a quest as completed.
-func (s *QuestService) Complete(tx *sql.Tx, playerID, questID string) error {
+// Complete marks a quest as completed. Returns false if already completed.
+func (s *QuestService) Complete(tx *sql.Tx, playerID, questID string) (bool, error) {
 	now := time.Now()
-	_, err := tx.Exec(`
-		UPDATE player_quest_progress SET status = 'COMPLETED', completed_at = $1, updated_at = NOW()
-		WHERE player_id = $2 AND quest_id = $3
-	`, now, playerID, questID)
-	return err
+	res, err := tx.Exec(`
+		INSERT INTO player_quest_progress (player_id, quest_id, status, completed_at, updated_at)
+		VALUES ($1, $2, 'COMPLETED', $3, NOW())
+		ON CONFLICT (player_id, quest_id) DO NOTHING
+	`, playerID, questID, now)
+	if err != nil {
+		return false, err
+	}
+	rows, _ := res.RowsAffected()
+	return rows > 0, nil
 }
 
 // Delete removes a quest progress row.
