@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { useGameStore, ImmortalAperture } from "@/store/useGameStore";
 import { X, Eye, EyeOff, Flame, Coins, Sparkles, Crown, Award, Activity, Heart } from "lucide-react";
 
@@ -43,6 +43,14 @@ export const PlayerProfileModal: React.FC = () => {
   const { inspectedProfile, inspectedUsernameQuery, clearInspectedProfile, guDictionary, player, initiateTrade, aperture } = useGameStore();
 
   if (!inspectedProfile) return null;
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") clearInspectedProfile();
+    };
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [clearInspectedProfile]);
 
   const {
     username,
@@ -165,7 +173,7 @@ export const PlayerProfileModal: React.FC = () => {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-lg bg-zinc-950 border rounded-3xl p-6 relative overflow-hidden bg-gradient-to-br ${themeClass} ${glowClass} border shadow-2xl flex flex-col gap-6 animate-scale-up cursor-default`}
+        className={`w-full max-w-sm sm:max-w-lg bg-zinc-950 border rounded-2xl sm:rounded-3xl p-4 sm:p-6 relative overflow-y-auto max-h-[90vh] bg-gradient-to-br ${themeClass} ${glowClass} border shadow-2xl flex flex-col gap-4 sm:gap-6 animate-scale-up cursor-default`}
       >
         {/* Status Indicator Banner with Close Button */}
         <div className={`flex items-center justify-between gap-2.5 px-4 py-3 rounded-2xl border ${statusBadge} backdrop-blur-md relative`}>
