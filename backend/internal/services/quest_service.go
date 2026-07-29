@@ -50,6 +50,30 @@ func (s *QuestService) ListByPlayer(playerID string) ([]QuestProgress, error) {
 	return results, rows.Err()
 }
 
+// ListCompleted returns all completed quests for a player.
+func (s *QuestService) ListCompleted(playerID string) ([]QuestProgress, error) {
+	rows, err := s.db.Query(`
+		SELECT player_id, quest_id, status, progress_data, completed_at, created_at, updated_at
+		FROM player_quest_progress
+		WHERE player_id = $1 AND status = 'COMPLETED'
+		ORDER BY quest_id
+	`, playerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []QuestProgress
+	for rows.Next() {
+		var q QuestProgress
+		if err := rows.Scan(&q.PlayerID, &q.QuestID, &q.Status, &q.ProgressData, &q.CompletedAt, &q.CreatedAt, &q.UpdatedAt); err != nil {
+			return nil, err
+		}
+		results = append(results, q)
+	}
+	return results, rows.Err()
+}
+
 // ListActive returns all active quests for a player.
 func (s *QuestService) ListActive(playerID string) ([]QuestProgress, error) {
 	rows, err := s.db.Query(`

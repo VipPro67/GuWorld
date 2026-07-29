@@ -214,6 +214,7 @@ type Player struct {
 	TempLoot           TempLoot           `json:"temp_loot"`
 	GrowthData         GrowthData         `json:"growth_data"`
 	MaterialsInventory map[string]int     `json:"materials_inventory,omitempty"`
+	CompletedQuests    CompletedQuestsList `json:"completed_quests,omitempty"`
 }
 
 type TempLoot struct {

@@ -1662,9 +1662,26 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	return PlayerSvc.EvaluateAndPersistMana(tx, id)
 }
 
-// responseWithPlayer sends a JSON response with the player object, ensuring MaterialsInventory is populated.
+// loadCompletedQuests returns the list of quest IDs the player has completed.
+func loadCompletedQuests(playerID string) models.CompletedQuestsList {
+	if QuestSvc == nil {
+		return nil
+	}
+	progress, err := QuestSvc.ListCompleted(playerID)
+	if err != nil {
+		return nil
+	}
+	result := make(models.CompletedQuestsList, 0, len(progress))
+	for _, p := range progress {
+		result = append(result, p.QuestID)
+	}
+	return result
+}
+
+// responseWithPlayer sends a JSON response with the player object, ensuring MaterialsInventory and CompletedQuests are populated.
 func responseWithPlayer(c *gin.Context, status int, player models.Player, extra ...gin.H) {
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
+	player.CompletedQuests = loadCompletedQuests(player.ID.String())
 	resp := gin.H{"player": player}
 	for _, e := range extra {
 		for k, v := range e {
@@ -2143,7 +2160,8 @@ func UseItem(c *gin.Context) {
 		return
 	}
 
-	// Check consumables sub-inventory first, fallback to materials
+	// Determine which category the item is in
+	itemCategory := "consumables"
 	qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), req.ItemID, "consumables")
 	if err != nil || qty <= 0 {
 		qty, err = InventorySvc.GetQuantity(tx, player.ID.String(), req.ItemID, "materials")
@@ -2151,6 +2169,7 @@ func UseItem(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm này trong túi đồ"})
 			return
 		}
+		itemCategory = "materials"
 	}
 
 	messages := []string{}
@@ -2190,8 +2209,11 @@ func UseItem(c *gin.Context) {
 		messages = append(messages, fmt.Sprintf("Đạo hữu sử dụng thành công %s.", item.Name))
 	}
 
-	// Deduct item via InventorySvc
-	InventorySvc.RemoveItem(tx, player.ID.String(), req.ItemID, "consumables", 1)
+	// Deduct item from the correct category
+	if err := InventorySvc.RemoveItem(tx, player.ID.String(), req.ItemID, itemCategory, 1); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể xóa vật phẩm khỏi túi đồ"})
+		return
+	}
 
 	_, err = tx.Exec(`
 		UPDATE players 

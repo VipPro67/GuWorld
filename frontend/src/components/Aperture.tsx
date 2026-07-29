@@ -2049,7 +2049,7 @@ function MainQuestsPanel() {
                         store.addToast(res.message, "success");
                       }
                     }}
-                    className={`px-3 py-1.5 rounded-xl text-[10px] font-bold font-mono transition-all shrink-0 cursor-pointer ${isDone
+                    className={`px-2 sm:px-3 py-1.5 rounded-xl text-[9px] sm:text-[10px] font-bold font-mono transition-all shrink-0 cursor-pointer whitespace-nowrap max-w-[140px] sm:max-w-none truncate ${isDone
                       ? "bg-zinc-900/60 text-zinc-650 border border-zinc-950 cursor-not-allowed"
                       : canClaim
                         ? "bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-zinc-950 shadow-[0_0_10px_rgba(245,158,11,0.3)] active:scale-95"
