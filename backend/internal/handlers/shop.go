@@ -246,10 +246,6 @@ func BuyShopItem(c *gin.Context) {
 		WHERE id = $3
 	`
 	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.GuInventory, player.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player inventory updates"})
-		return
-	}
 
 	// Commit Transaction
 	if err = tx.Commit(); err != nil {
