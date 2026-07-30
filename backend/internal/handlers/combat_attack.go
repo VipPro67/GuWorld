@@ -751,17 +751,7 @@ func CombatAttack(c *gin.Context) {
 						ctx.Logs = append(ctx.Logs, fmt.Sprintf("Thu hoạch toàn bộ chiến lợi phẩm tạm thời của bại binh! Hút được %d Nguyên Thạch, %d Cổ trùng, và các nguyên liệu khác từ đối phương.", targetLoot.PrimevalStones, len(targetLoot.GuInventory)))
 					}
 
-					var playerRank, targetRank int
-					errPR := tx.QueryRow("SELECT rank FROM arena_rankings WHERE player_id = $1", player.ID).Scan(&playerRank)
-					errTR := tx.QueryRow("SELECT rank FROM arena_rankings WHERE player_id = $1", targetUUID).Scan(&targetRank)
-					if errPR == nil && errTR == nil && playerRank > targetRank {
-						_, _ = tx.Exec("UPDATE arena_rankings SET rank = $1 WHERE player_id = $2", playerRank, targetUUID)
-						_, _ = tx.Exec("UPDATE arena_rankings SET rank = $1 WHERE player_id = $2", targetRank, player.ID)
-						_, _ = tx.Exec("UPDATE players SET arena_rank = $1 WHERE id = $2", playerRank, targetUUID)
-						_, _ = tx.Exec("UPDATE players SET arena_rank = $1 WHERE id = $2", targetRank, player.ID)
-						ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chúc mừng! Đạo hữu đã vượt cấp khiêu chiến thành công, thăng lên Hạng %d Võ Đài!", targetRank))
 					}
-				}
 			}
 			player.PrimevalStones += stolenStones
 			ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chiến thắng PVP vang dội! Đạo hữu cướp đoạt %d Nguyên Thạch từ đối phương!", stolenStones))
@@ -915,6 +905,25 @@ func CombatAttack(c *gin.Context) {
 			}
 			} else {
 				ctx.Logs = append(ctx.Logs, "Chiến đấu thắng lợi vang dội!")
+			}
+		}
+
+		if isPVP {
+			if player.ActiveCombat.TargetPlayerID != "dummy" {
+				targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID)
+				if parseErr == nil {
+					var playerRank, targetRank int
+					errPR := tx.QueryRow("SELECT rank FROM arena_rankings WHERE player_id = $1", player.ID).Scan(&playerRank)
+					errTR := tx.QueryRow("SELECT rank FROM arena_rankings WHERE player_id = $1", targetUUID).Scan(&targetRank)
+					if errPR == nil && errTR == nil && playerRank > targetRank {
+						_, _ = tx.Exec("UPDATE arena_rankings SET rank = -1 WHERE player_id = $1", player.ID)
+						_, _ = tx.Exec("UPDATE arena_rankings SET rank = $1 WHERE player_id = $2", playerRank, targetUUID)
+						_, _ = tx.Exec("UPDATE arena_rankings SET rank = $1 WHERE player_id = $2", targetRank, player.ID)
+						_, _ = tx.Exec("UPDATE players SET arena_rank = $1 WHERE id = $2", playerRank, targetUUID)
+						_, _ = tx.Exec("UPDATE players SET arena_rank = $1 WHERE id = $2", targetRank, player.ID)
+						ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chúc mừng! Đạo hữu đã vượt cấp khiêu chiến thành công, thăng lên Hạng %d Võ Đài!", targetRank))
+					}
+				}
 			}
 		}
 

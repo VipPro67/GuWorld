@@ -462,11 +462,12 @@ func PlaceBid(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
 		return
 	}
+	var sellerID uuid.UUID
 	var currency, status, listingType string
 	var current float64
 	var bidder sql.NullString
 	var end time.Time
-	err = tx.QueryRow(`SELECT currency,current_price,highest_bidder_id,status,end_time,listing_type FROM auction WHERE id=$1 FOR UPDATE`, req.ListingID).Scan(&currency, &current, &bidder, &status, &end, &listingType)
+	err = tx.QueryRow(`SELECT seller_id,currency,current_price,highest_bidder_id,status,end_time,listing_type FROM auction WHERE id=$1 FOR UPDATE`, req.ListingID).Scan(&sellerID, &currency, &current, &bidder, &status, &end, &listingType)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phiên giao dịch"})
 		return
@@ -523,6 +524,14 @@ func PlaceBid(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("giá=%.0f | hiện tại=%.0f", req.Amount, current),
 		IPAddress: c.ClientIP(), Success: true,
 	})
+	if sellerID != authID {
+		auditlog.Log(db.DB, auditlog.Entry{
+			PlayerID: &sellerID, Action: "marketplace.bid_notify", EntityType: "auction",
+			EntityID: req.ListingID,
+			RequestSummary: fmt.Sprintf("người mua=%s | giá=%.0f", authID, req.Amount),
+			IPAddress: c.ClientIP(), Success: true,
+		})
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đặt giá thành công"})
 }
 
@@ -718,6 +727,12 @@ func BuyListing(c *gin.Context) {
 		PlayerID: &authID, Action: "marketplace.buy", EntityType: "auction",
 		EntityID: req.ListingID,
 		RequestSummary: fmt.Sprintf("seller=%s | sl=%d | %.0f %s", sellerID, purchaseQty, totalPrice, currency),
+		IPAddress: c.ClientIP(), Success: true,
+	})
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &sellerID, Action: "marketplace.sold", EntityType: "auction",
+		EntityID: req.ListingID,
+		RequestSummary: fmt.Sprintf("người mua=%s | sl=%d | %.0f %s", authID, purchaseQty, totalPrice, currency),
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	responseWithPlayer(c, http.StatusOK, buyer, gin.H{"message": "Mua hàng thành công"})

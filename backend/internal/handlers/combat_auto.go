@@ -549,6 +549,26 @@ func AutoCombatStart(c *gin.Context) {
 	var lootMsg string
 	if alliesAlive {
 		if isVirtual {
+			if player.ActiveCombat != nil && player.ActiveCombat.TargetPlayerID != "" && player.ActiveCombat.TargetPlayerID != "dummy" {
+				targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID)
+				if parseErr == nil {
+					var playerRank, targetRank int
+					errPR := tx.QueryRow("SELECT rank FROM arena_rankings WHERE player_id = $1", player.ID).Scan(&playerRank)
+					errTR := tx.QueryRow("SELECT rank FROM arena_rankings WHERE player_id = $1", targetUUID).Scan(&targetRank)
+					if errPR == nil && errTR == nil && playerRank > targetRank {
+						_, _ = tx.Exec("UPDATE arena_rankings SET rank = -1 WHERE player_id = $1", player.ID)
+						_, _ = tx.Exec("UPDATE arena_rankings SET rank = $1 WHERE player_id = $2", playerRank, targetUUID)
+						_, _ = tx.Exec("UPDATE arena_rankings SET rank = $1 WHERE player_id = $2", targetRank, player.ID)
+						_, _ = tx.Exec("UPDATE players SET arena_rank = $1 WHERE id = $2", playerRank, targetUUID)
+						_, _ = tx.Exec("UPDATE players SET arena_rank = $1 WHERE id = $2", targetRank, player.ID)
+						logs = append(logs, simulator.CombatLog{
+							Turn:   simState.Turn,
+							Action: "ARENA_RANK_UP",
+							Detail: fmt.Sprintf("Chúc mừng! Đạo hữu đã vượt cấp khiêu chiến thành công, thăng lên Hạng %d Võ Đài!", targetRank),
+						})
+					}
+				}
+			}
 			updateQuery = `UPDATE players SET active_combat = NULL WHERE id = $1`
 			args = append(args, player.ID)
 		} else {
