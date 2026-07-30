@@ -1793,7 +1793,7 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 				stats["investigation"] += passive.Investigation
 				stats["hearing"] += passive.Hearing
 				stats["evasion"] += passive.Evasion
-					stats["healing"] += passive.CleansingPower * 15.0
+				stats["healing"] += passive.CleansingPower * 15.0
 			}
 		}
 	}
@@ -1869,10 +1869,10 @@ func EquipGu(c *gin.Context) {
 			return
 		}
 
-		// Type restriction: only Support and Passive-type Gu can be equipped
+		// Type restriction: only Support, Passive, Active and Motivation-type Gu can be equipped
 		specForEquip, specFound := models.GetGuAny(targetGu.GuID)
-		if specFound && specForEquip.Type != "Support" && specForEquip.Type != "Passive" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Chỉ Cổ trùng loại Support hoặc Passive mới có thể trang bị vào Không Khiếu."})
+		if specFound && specForEquip.Type != "Support" && specForEquip.Type != "Passive" && specForEquip.Type != "Active" && specForEquip.Type != "Motivation" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Chỉ Cổ trùng loại Support, Passive, Active hoặc Motivation mới có thể trang bị vào Không Khiếu."})
 			return
 		}
 
@@ -2096,7 +2096,7 @@ func GetPlayerStatsHandler(c *gin.Context) {
 
 	stats := CalculatePlayerStats(&player)
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"stats":  stats,
+		"stats": stats,
 	})
 }
 
