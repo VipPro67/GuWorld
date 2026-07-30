@@ -2341,11 +2341,11 @@ export const useGameStore = create<GameState>((set, get) => {
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Không thể nhận thưởng nhiệm vụ."); }
       setPlayerFromServer(data.player);
-      get().addLog(data.message || "Hoàn thành nhiệm vụ.");
+      get().addToast(data.message || "Hoàn thành nhiệm vụ.", "success");
       return { success: true, message: data.message };
     } catch (err: any) {
       set({ error: err.message });
-      get().addLog(`Nhận thưởng nhiệm vụ lỗi: ${err.message}`);
+      get().addToast(`Nhận thưởng nhiệm vụ lỗi: ${err.message}`, "error");
       return { success: false, message: err.message };
     } finally { set({ actionLoading: false }); }
   },
