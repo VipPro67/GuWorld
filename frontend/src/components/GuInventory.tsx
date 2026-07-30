@@ -592,7 +592,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                               const isDead = status === "DEAD";
                               const hungerPercent = Math.min(100, Math.max(0, (gu.hunger / spec.max_hunger) * 100));
                               const isHungry = gu.hunger < spec.max_hunger;
-                              const canFeedIndividual = availableFood > 0 && isHungry && !isDead && status !== "SEALED";
+                              const canFeedIndividual = (availableFood > 0 && isHungry && !isDead && status !== "SEALED") || spec.food_types.includes("primeval_stone") || spec.food_types.includes("immortal_stone");
 
                               return (
                                 <div
