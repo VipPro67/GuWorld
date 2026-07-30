@@ -121,7 +121,7 @@ export const ArenaView: React.FC = () => {
         ) : (
           arenaLeaderboard.map((row) => {
             const isMe = row.player_id === player.id;
-            const canChallenge = !isMe && arenaDailyChallenges < 3;
+            const canChallenge = !isMe && arenaDailyChallenges < 99;
             
             return (
               <div

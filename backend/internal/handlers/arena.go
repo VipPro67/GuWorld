@@ -84,14 +84,14 @@ func GetArenaLeaderboard(c *gin.Context) {
 	var dailyChallenges int
 	var lastChallengeAt time.Time
 	_ = db.DB.QueryRow("SELECT daily_challenges, last_challenge_at FROM arena_rankings WHERE player_id = $1", authID).Scan(&dailyChallenges, &lastChallengeAt)
-	
+
 	now := time.Now()
 	if lastChallengeAt.YearDay() != now.YearDay() || lastChallengeAt.Year() != now.Year() {
 		dailyChallenges = 0
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"leaderboard": leaderboard,
+		"leaderboard":      leaderboard,
 		"daily_challenges": dailyChallenges,
 	})
 }
@@ -150,11 +150,11 @@ func ChallengeArena(c *gin.Context) {
 		if lastChallengeAt.YearDay() != now.YearDay() || lastChallengeAt.Year() != now.Year() {
 			dailyChallenges = 0
 		}
-		if dailyChallenges >= 3 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Hôm nay đạo hữu đã hết lượt khiêu chiến Võ Đài (Tối đa 3 lần/ngày)!"})
+		if dailyChallenges >= 99 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Hôm nay đạo hữu đã hết lượt khiêu chiến Võ Đài (Tối đa 99 lần/ngày)!"})
 			return
 		}
-		
+
 		_, err = tx.Exec("UPDATE arena_rankings SET daily_challenges = $1, last_challenge_at = $2 WHERE player_id = $3", dailyChallenges+1, now, player.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật lượt khiêu chiến"})
