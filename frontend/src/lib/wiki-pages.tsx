@@ -435,9 +435,6 @@ export const wikiPages: WikiPage[] = [
             <li>Nếu áp lực vượt mốc <strong>80%</strong>, tỉ lệ trùng kích đột phá thành công bị suy giảm nghiêm trọng.</li>
             <li>Nếu áp lực chạm mốc <strong>100%</strong>, Không khiếu bị nứt: Nhân vật bị **mất vĩnh viễn 5% Max Mana** và có nguy cơ <strong>rớt cấp tu vi hiện tại</strong>!</li>
           </ul>
-          <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-xs leading-relaxed text-[var(--text-secondary)]">
-            💡 <strong>Mẹo:</strong> Sử dụng vật phẩm tiêu hao <strong>Tịnh Thủy Cổ</strong> để lập tức thanh lọc, đưa thanh Áp lực vách khiếu về 0% ngay tức khắc.
-          </div>
         </div>
       </div>
     )

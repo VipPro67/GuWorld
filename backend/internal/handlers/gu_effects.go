@@ -113,7 +113,7 @@ func BuildCombatAction(ctx *CombatContext, spec models.GuDictionaryItem) (Action
 	if spec.Effects.Active == nil {
 		return action, nil
 	}
-	
+
 	active := spec.Effects.Active
 
 	if active.DamageFlat > 0 {
@@ -302,18 +302,26 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 	case "APERTURE_PETRIFICATION":
 		player.SubRank = 4
 		player.MaxMana -= 15
-		if player.MaxMana < 20 { player.MaxMana = 20 }
-		if player.CurrentMana > player.MaxMana { player.CurrentMana = player.MaxMana }
+		if player.MaxMana < 20 {
+			player.MaxMana = 20
+		}
+		if player.CurrentMana > player.MaxMana {
+			player.CurrentMana = player.MaxMana
+		}
 		return fmt.Sprintf("%s đẩy tu vi lên Đỉnh Phong nhưng làm Không khiếu hóa đá.", spec.Name), nil
 	case "GIVE_STONES":
 		val, _ := params["value"].(float64)
 		amount := int(val)
-		if amount == 0 { amount = 500 }
+		if amount == 0 {
+			amount = 500
+		}
 		player.PrimevalStones += amount
 		return fmt.Sprintf("Nhận ngay %d Nguyên Thạch.", amount), nil
 	case "SOUL_BOOST":
 		val, _ := params["value"].(float64)
-		if player.DaoMarks == nil { player.DaoMarks = make(models.DaoMarksMap) }
+		if player.DaoMarks == nil {
+			player.DaoMarks = make(models.DaoMarksMap)
+		}
 		player.DaoMarks["soul"] += int(val)
 		return fmt.Sprintf("Hồn phách của đạo hữu được tráng kiện (+%.0f điểm Hồn lực).", val), nil
 	case "FORCE_RANK_UP":
@@ -322,7 +330,9 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		return fmt.Sprintf("Đột phá đại cảnh giới lên %s Sơ Giai!", getRankName(player.Rank)), nil
 	case "MANA_POLLUTION":
 		player.MaxMana = math.Round(player.MaxMana * 0.90)
-		if player.CurrentMana > player.MaxMana { player.CurrentMana = player.MaxMana }
+		if player.CurrentMana > player.MaxMana {
+			player.CurrentMana = player.MaxMana
+		}
 		return "Chân Nguyên bị ô nhiễm nặng nề (giảm 10% Chân Nguyên tối đa)!", nil
 	case "ENSLAVE_BEAST_TIER":
 		val, _ := params["value"].(float64)
@@ -336,7 +346,9 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 	// ── New action codes ──────────────────────────────────────────────
 	case "TIME_ACCELERATION":
 		val, _ := params["value"].(float64)
-		if val <= 0 { val = 3.0 }
+		if val <= 0 {
+			val = 3.0
+		}
 		boost := player.MaxMana * 0.10 * val
 		player.CurrentMana += boost
 		if player.CurrentMana > player.MaxMana {
@@ -353,7 +365,9 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		return fmt.Sprintf("%s hồi phục địa hình xung quanh, xóa bỏ dấu vết chiến đấu.", spec.Name), nil
 	case "HOT_TICK":
 		val, _ := params["value"].(float64)
-		if val <= 0 { val = 5.0 }
+		if val <= 0 {
+			val = 5.0
+		}
 		player.HP += val
 		if player.HP > player.BaseHP {
 			player.HP = player.BaseHP
@@ -361,12 +375,16 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		return "", nil
 	case "GENERATE_STONES_TICK":
 		val, _ := params["value"].(float64)
-		if val <= 0 { val = 1.0 }
+		if val <= 0 {
+			val = 1.0
+		}
 		player.PrimevalStones += int(val)
 		return "", nil
 	case "MANA_REGEN_TICK":
 		val, _ := params["value"].(float64)
-		if val <= 0 { val = 0.5 }
+		if val <= 0 {
+			val = 0.5
+		}
 		player.CurrentMana += val
 		if player.CurrentMana > player.MaxMana {
 			player.CurrentMana = player.MaxMana
@@ -374,9 +392,21 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		return "", nil
 	case "GENERATE_IMMORTAL_STONES_TICK":
 		val, _ := params["value"].(float64)
-		if val <= 0 { val = 1.0 }
+		if val <= 0 {
+			val = 1.0
+		}
 		player.ImmortalStones += val
 		return fmt.Sprintf("Sản xuất %.0f Tiên Nguyên Thạch.", val), nil
+	case "REDUCE_STRESS":
+		val, _ := params["value"].(float64)
+		if val <= 0 {
+			val = 5.0
+		}
+		player.ApertureStress -= val
+		if player.ApertureStress < 0 {
+			player.ApertureStress = 0
+		}
+		return fmt.Sprintf("Giảm %.0f áp lực tinh thần.", val), nil
 	default:
 		return "", fmt.Errorf("Chưa hỗ trợ action code: %s", actionCode)
 	}

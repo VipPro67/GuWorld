@@ -1730,7 +1730,7 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 		"healing":       0.0,
 		"movement":      1.0,
 		"investigation": 1.0,
-		"storage":       20.0,
+		"storage":       100.0,
 	}
 
 	// Apply permanent growth boosts (HP is excluded: worker bakes it into BaseHP)
@@ -1738,42 +1738,11 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 	stats["defense"] += player.GrowthData.Boosts.Defense
 	stats["speed"] += player.GrowthData.Boosts.Speed
 
-	for _, mod := range player.BodyMods {
-		switch mod {
-		case "Iron Bone":
-			stats["defense"] += 100.0
-		case "Jade Skin Mod":
-			stats["defense"] += 40.0
-		case "Copper Skin Mod":
-			stats["defense"] += 20.0
-		case "White Boar Strength":
-			stats["attack"] += 15.0
-		case "Black Boar Strength":
-			stats["attack"] += 15.0
-		case "Wind Walk":
-			stats["movement"] += 1.0
-		}
-	}
-
 	for _, gu := range player.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" {
 			spec, ok := models.GetGuAny(gu.GuID)
 			if !ok {
 				continue
-			}
-
-			// Ràng buộc Bí cảnh (Secret Realm): Chỉ dùng Moon Path hoặc Earth Path
-			if player.CurrentRegion == "three_kings_inheritance" {
-				hasAllowedPath := false
-				for _, p := range spec.Path {
-					if p == "Moon Path" || p == "Earth Path" {
-						hasAllowedPath = true
-						break
-					}
-				}
-				if !hasAllowedPath {
-					continue
-				}
 			}
 
 			if spec.Effects.Passive != nil {
@@ -2102,23 +2071,24 @@ func GetPlayerStatsHandler(c *gin.Context) {
 
 // HasInventorySpace checks if the player has enough space in their bag
 func HasInventorySpace(player *models.Player, incomingCount int) bool {
-	stats := CalculatePlayerStats(player)
-	maxSlots := int(stats["storage"])
-	if player.Rank >= 6 {
-		maxSlots = 999
-	}
 
-	currentSize := len(player.GuInventory)
-	invItems, _ := InventorySvc.ListByPlayer(player.ID.String())
-	seen := map[string]bool{}
-	for _, inv := range invItems {
-		if !seen[inv.ItemID] {
-			seen[inv.ItemID] = true
-			currentSize++
-		}
-	}
+	return true
+	// stats := CalculatePlayerStats(player)
+	// maxSlots := int(stats["storage"])
+	// if player.Rank >= 6 {
+	// 	maxSlots = 99999999
+	// }
 
-	return (currentSize + incomingCount) <= maxSlots
+	// currentSize := len(player.GuInventory)
+	// invItems, _ := InventorySvc.ListByPlayer(player.ID.String())
+	// seen := map[string]bool{}
+	// for _, inv := range invItems {
+	// 	if !seen[inv.ItemID] {
+	// 		seen[inv.ItemID] = true
+	// 		currentSize++
+	// 	}
+	// }
+	//return (currentSize + incomingCount) <= maxSlots
 }
 
 // UseItemRequest defines the request body for using an item
