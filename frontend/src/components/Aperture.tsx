@@ -1650,7 +1650,7 @@ function WallControls() {
             Cơ Hội Thăng Tiên
           </div>
           <div className="text-[10.5px] text-zinc-400 mb-3 text-center leading-relaxed">
-            Ngươi đã đạt tới Ngũ Chuyển Đỉnh Phong. Nhân khí tích lũy: <span className="font-bold text-amber-400 font-mono">{player.human_qi?.toFixed(1) || 0}/1000</span> <br />
+            Ngươi đã đạt tới Ngũ Chuyển Đỉnh Phong. Nhân khí tích lũy: <span className="font-bold text-amber-400 font-mono">{player.human_qi?.toFixed(1) || 0}</span> <br />
             Thăng Tiên là quá trình độ kiếp cực kỳ nguy hiểm, nếu thất bại tu vi sẽ vỡ nát!
           </div>
           <button

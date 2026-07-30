@@ -1280,6 +1280,22 @@ func FeedGu(c *gin.Context) {
 			targetGu = &player.GuInventory[guIndex]
 		}
 
+		//some Gu consume immortal_stone and primeval_stone as food, so we need to check if the foodID is a stone and deduct it from the player's inventory
+		switch foodID {
+		case "immortal_stone":
+			if player.ImmortalStones < float64(targetGu.Rank) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Tiên Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %d Tiên Nguyên Thạch cho Cổ trùng hạng %d.", 1*float64(targetGu.Rank), targetGu.Rank)})
+				return
+			}
+			player.ImmortalStones -= 1
+		case "primeval_stone":
+			if player.PrimevalStones < int(math.Pow(2, float64(targetGu.Rank))) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %d Nguyên Thạch cho Cổ trùng hạng %d.", int(math.Pow(2, float64(targetGu.Rank))), targetGu.Rank)})
+				return
+			}
+			player.PrimevalStones -= 1
+		}
+
 		foodConsumed[foodID]++
 		nutrition := getFoodNutrition(foodID)
 		targetGu.Hunger += nutrition

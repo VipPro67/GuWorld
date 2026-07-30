@@ -21,7 +21,7 @@ Trong tệp gốc, có tới **42 mục cổ trùng** (bao gồm cả các phẩ
     *   `GU_DREAM_WINGS` (Mộng Dực Cổ - Rank 6)
     *   `GU_LANDSCAPE_AS_BEFORE` (Giang Sơn Như Cũ - Rank 6)
     *   `GU_PULLING_WATER` (Kéo Sông Tiên Cổ - Rank 6)
-    *   `GU_HEAVENLY_ESSENCE_LOTUS_3` (Thiên Nguyên Bảo Liên - Rank 3)
+    *   `GU_HEAVENLY_ESSENCE_LOTUS` (Thiên Nguyên Bảo Liên - Rank 3)
     *   `GU_SELF_STRENGTH` (Tự Lực Cổ - Rank 4)
     *   `GU_VITALITY_SPROUT` (Sinh Mệnh Nha Cổ - Rank 2)
     *   `GU_EARTH_WORM` (Địa Trùng - Rank 1)

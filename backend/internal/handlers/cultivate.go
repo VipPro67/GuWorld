@@ -361,16 +361,16 @@ func Ascension(c *gin.Context) {
 
 	// Ascension calculation: Heaven Qi, Earth Qi, Human Qi
 	// For simplicity, we just check if HumanQi > threshold and add some randomness
-	humanQiRequired := 100.0 // arbitrary threshold
-	heavenQi := rand.Float64() * 50.0
-	earthQi := rand.Float64() * 50.0
+	humanQiRequired := 100000.0 // arbitrary threshold
+	heavenQi := rand.Float64() * 50000.0
+	earthQi := rand.Float64() * 50000.0
 
 	totalQi := player.HumanQi + heavenQi + earthQi
 
 	success := false
 	msg := ""
 
-	if totalQi > humanQiRequired && player.HumanQi > 40.0 {
+	if totalQi > humanQiRequired && player.HumanQi > 40000.0 {
 		success = true
 	} else {
 		// Random chance based on HumanQi
