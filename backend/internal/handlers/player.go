@@ -2533,9 +2533,9 @@ func UseConsumableGu(c *gin.Context) {
 
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET gu_inventory = $1, sub_rank = $2, rank = $3, primeval_stones = $4, max_mana = $5, current_mana = $6, equipped_gus = $7, dao_marks = $8, wall_progress = $9, hp = $10
-		WHERE id = $11`,
-		player.GuInventory, player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.DaoMarks, player.WallProgress, player.HP, player.ID,
+		SET gu_inventory = $1, sub_rank = $2, rank = $3, primeval_stones = $4, max_mana = $5, current_mana = $6, equipped_gus = $7, dao_marks = $8, wall_progress = $9, hp = $10, lifespan = $11, aptitude_percent = $12, immortal_stones = $13
+		WHERE id = $14`,
+		player.GuInventory, player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.DaoMarks, player.WallProgress, player.HP, player.Lifespan, player.AptitudePercent, player.ImmortalStones, player.ID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using Gu"})
