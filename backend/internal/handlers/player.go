@@ -1869,10 +1869,10 @@ func EquipGu(c *gin.Context) {
 			return
 		}
 
-		// Type restriction: only Support, Passive, Active and Motivation-type Gu can be equipped
+		// Type restriction: block only Consumable Gu from being equipped
 		specForEquip, specFound := models.GetGuAny(targetGu.GuID)
-		if specFound && specForEquip.Type != "Support" && specForEquip.Type != "Passive" && specForEquip.Type != "Active" && specForEquip.Type != "Motivation" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Chỉ Cổ trùng loại Support, Passive, Active hoặc Motivation mới có thể trang bị vào Không Khiếu."})
+		if specFound && specForEquip.Type == "Consumable" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể trang bị Cổ trùng loại Consumable."})
 			return
 		}
 
