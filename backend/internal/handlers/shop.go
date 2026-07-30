@@ -230,6 +230,9 @@ func BuyShopItem(c *gin.Context) {
 			player.GuInventory = append(player.GuInventory, newInstance)
 		}
 	case "Material":
+	case "Recipe":
+	case "RefiningRecipe":
+	case "Food":
 		InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "materials", req.Quantity)
 	case "Consumable":
 		InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "consumables", req.Quantity)
