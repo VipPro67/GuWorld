@@ -171,6 +171,8 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 		regenRatePerHour = regenRatePerHour * 0.5
 	}
 
+	player.ManaRegenRate = regenRatePerHour
+
 	secondsPassed := now.Sub(player.LastManaUpdate).Seconds()
 	if secondsPassed > 0 {
 		subjectiveSeconds := secondsPassed * player.TimeSpeedMultiplier

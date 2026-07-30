@@ -268,7 +268,7 @@ export const Aperture: React.FC<ApertureProps> = ({
 
   const aperture = store.aperture;
   const essenceProd = aperture?.essence_production_per_year ?? 10;
-  const immortalRegen = (essenceProd / 20.0) * (1 + (Math.min(Math.max(subRank, 1), 4) - 1) * 0.15);
+  const immortalRegen = (essenceProd / 120.0) * (1 + (Math.min(Math.max(subRank, 1), 4) - 1) * 0.15);
   const mortalRegen = aptitudeType === "Giáp" ? 8 : aptitudeType === "Ất" ? 6 : aptitudeType === "Bính" ? 4 : 2;
   const regenRate = (isImmortal ? immortalRegen : mortalRegen).toFixed(2);
 
@@ -603,7 +603,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                     <div className="text-[10px] text-zinc-300 mt-2 font-mono" style={{ color: c.textLight }}>
                       Tốc lưu tiên khiếu: +{Math.round(manaRegenRealHourly * 24)} viên/ngày
                     </div>
-                    {currentMana < maxMana && manaRegenRealHourly > 0 && (
+                    {!isImmortal && currentMana < maxMana && manaRegenRealHourly > 0 && (
                       <div className="text-[9px] text-zinc-400 mt-0.5 font-mono">
                         {formatTimeRemaining(currentMana, maxMana, manaRegenRealHourly)}
                       </div>

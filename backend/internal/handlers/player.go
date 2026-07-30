@@ -2634,9 +2634,10 @@ func UseSupportGu(c *gin.Context) {
 	// Save to DB
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET gu_inventory = $1, max_mana = $2, current_mana = $3, aptitude_percent = $4, hp = $5
-		WHERE id = $6`,
-		player.GuInventory, player.MaxMana, player.CurrentMana, player.AptitudePercent, player.HP, player.ID,
+		SET gu_inventory = $1, max_mana = $2, current_mana = $3, aptitude_percent = $4, hp = $5 , aptitude_stress = $6
+		WHERE id = $7`,
+		player.GuInventory, player.MaxMana, player.CurrentMana, player.AptitudePercent, player.HP, player.CultivationState.ApertureStress,
+		player.ID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using support Gu"})

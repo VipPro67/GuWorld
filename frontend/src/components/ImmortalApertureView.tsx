@@ -107,7 +107,8 @@ export const ImmortalApertureView: React.FC = () => {
   const rank = player?.rank ?? 6;
   const subRank = player?.sub_rank ?? 1;
   const subRankFactor = 1.0 + (Math.min(Math.max(subRank, 1), 4) - 1) * 0.15;
-  const hourlyRegen = (essenceProd / 20.0) * subRankFactor;
+  const timeRate = aperture?.time_rate ?? player?.time_speed_multiplier ?? 10;
+  const hourlyRegen = (essenceProd / 120.0) * subRankFactor * timeRate;
   const dailyRegen = Math.round(hourlyRegen * 24);
 
   const MANA_QUALITY_NAMES: Record<number, string> = {
@@ -499,16 +500,11 @@ export const ImmortalApertureView: React.FC = () => {
                   <div className="text-slate-400 text-xs font-semibold">{manaName} Dự Trữ</div>
                   <div className="text-lg font-bold text-yellow-400 mt-1 flex items-center gap-1">
                     <Coins className="w-5 h-5 text-yellow-500" />
-                    {Math.floor(player.current_mana)} hạt
+                    {Math.floor(player.current_mana)} viên
                   </div>
                   <div className="text-[10px] text-slate-400 mt-1 font-mono">
                     Hồi phục: +{dailyRegen} viên/ngày
                   </div>
-                </div>
-
-                <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800/80">
-                  <div className="text-slate-400 text-xs font-semibold">Sản Lượng Tiên Nguyên</div>
-                  <div className="text-lg font-bold text-emerald-400 mt-1">{aperture.essence_production_per_year} hạt / năm</div>
                 </div>
 
                 <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800/80 col-span-2">
@@ -608,24 +604,7 @@ export const ImmortalApertureView: React.FC = () => {
                   </button>
                 </div> */}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                  <div className="bg-slate-900/40 p-3 rounded-lg border border-slate-800/60 flex items-center gap-2">
-                    <Skull className="w-5 h-5 text-rose-400 shrink-0" />
-                    <div className="text-xs">
-                      <div className="text-slate-400 font-semibold">Khấu trừ Thọ Nguyên</div>
-                      <div className="text-rose-400 font-bold mt-0.5">{(86400 / 432000).toFixed(1)} năm / ngày thực tế</div>
-                    </div>
-                  </div>
-                  <div className="bg-slate-900/40 p-3 rounded-lg border border-slate-800/60 flex items-center gap-2">
-                    <Heart className="w-5 h-5 text-emerald-400 shrink-0" />
-                    <div className="text-xs">
-                      <div className="text-slate-400 font-semibold">Thọ Nguyên Hiện Tại</div>
-                      <div className="text-emerald-400 font-bold mt-0.5">
-                        {(player.lifespan ?? 100).toFixed(2)} năm
-                      </div>
-                    </div>
-                  </div>
-                </div>
+
 
                 {sliderRate > 30 && (
                   <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-300 flex items-start gap-1.5">

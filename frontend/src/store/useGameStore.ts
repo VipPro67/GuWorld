@@ -225,7 +225,7 @@ const getManaRegenRatePerHour = (snapshot: ManaSnapshot): number => {
     const subRank = Math.min(4, Math.max(1, snapshot.sub_rank || 1));
     const subRankFactor = 1.0 + (subRank - 1) * 0.15;
     const essenceProduction = snapshot.essence_production_per_year ?? 10;
-    return (essenceProduction / 20.0) * subRankFactor;
+    return (essenceProduction / 120.0) * subRankFactor;
   }
 
   switch (snapshot.aptitude_type) {
