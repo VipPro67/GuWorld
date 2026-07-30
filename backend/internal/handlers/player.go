@@ -1580,6 +1580,13 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 		regenRatePerHour = regenRatePerHour * 0.5
 	}
 
+	player.ManaRegenRate = regenRatePerHour
+
+	stats := CalculatePlayerStats(player)
+	healingStat := stats["healing"]
+	regenHPPerHour := (player.BaseHP * 0.05) + healingStat
+	player.HPRegenRate = regenHPPerHour
+
 	secondsPassed := now.Sub(player.LastManaUpdate).Seconds()
 	if secondsPassed > 0 {
 		subjectiveSeconds := secondsPassed * player.TimeSpeedMultiplier
@@ -1594,9 +1601,6 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 		}
 
 		if player.HP > 0 && player.HP < player.BaseHP {
-			stats := CalculatePlayerStats(player)
-			healingStat := stats["healing"]
-			regenHPPerHour := (player.BaseHP * 0.05) + healingStat
 			earnedHP := (subjectiveSeconds / 3600.0) * regenHPPerHour
 			newHP := player.HP + earnedHP
 			if newHP > player.BaseHP {

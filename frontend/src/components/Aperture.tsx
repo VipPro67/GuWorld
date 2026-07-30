@@ -272,6 +272,22 @@ export const Aperture: React.FC<ApertureProps> = ({
   const mortalRegen = aptitudeType === "Giáp" ? 8 : aptitudeType === "Ất" ? 6 : aptitudeType === "Bính" ? 4 : 2;
   const regenRate = (isImmortal ? immortalRegen : mortalRegen).toFixed(2);
 
+  // Calculate real-world hourly regen rates using TimeSpeedMultiplier
+  const timeSpeedMultiplier = player.time_speed_multiplier || 1;
+  const hpRegenRealHourly = (player.hp_regen_rate || 0) * timeSpeedMultiplier;
+  const manaRegenRealHourly = (player.mana_regen_rate || Number(regenRate)) * timeSpeedMultiplier;
+
+  // Helper to format time remaining
+  const formatTimeRemaining = (current: number, max: number, realRegenPerHour: number) => {
+    if (current >= max || realRegenPerHour <= 0) return "Đã đầy";
+    const hoursRemaining = (max - current) / realRegenPerHour;
+    const totalMinutes = Math.floor(hoursRemaining * 60);
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    if (h > 0) return `Đầy sau ${h}h ${m}m`;
+    return `Đầy sau ${m}m`;
+  };
+
   // Vital Gu
   const vitalGu = guInventory.find((g) => g.is_vital);
   const vitalSpec = vitalGu ? guDictionary[vitalGu.gu_id] : null;
@@ -370,19 +386,27 @@ export const Aperture: React.FC<ApertureProps> = ({
         </p>
 
         {/* Health Bar (Sleek Glossy Bar) */}
-        <div className="relative h-6 w-full overflow-hidden rounded-xl border border-red-950/60 bg-zinc-950/60 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] mb-5 flex items-center px-2 z-10">
-          <Heart className="w-3.5 h-3.5 text-rose-500 mr-2 shrink-0 animate-pulse" />
-          <div className="relative flex-grow h-3 rounded-md overflow-hidden bg-zinc-900/60">
-            <div
-              className="h-full bg-gradient-to-r from-red-800 via-red-600 to-rose-500 rounded-md transition-all duration-300 shadow-[0_0_8px_rgba(239,68,68,0.5)]"
-              style={{ width: `${hpPercent}%` }}
-            />
+        <div className="w-full mb-5 z-10">
+          <div className="relative h-6 w-full overflow-hidden rounded-xl border border-red-950/60 bg-zinc-950/60 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] flex items-center px-2">
+            <Heart className="w-3.5 h-3.5 text-rose-500 mr-2 shrink-0 animate-pulse" />
+            <div className="relative flex-grow h-3 rounded-md overflow-hidden bg-zinc-900/60">
+              <div
+                className="h-full bg-gradient-to-r from-red-800 via-red-600 to-rose-500 rounded-md transition-all duration-300 shadow-[0_0_8px_rgba(239,68,68,0.5)]"
+                style={{ width: `${hpPercent}%` }}
+              />
+            </div>
+            <span className="text-[10px] font-mono font-bold text-zinc-300 ml-2.5 shrink-0">
+              {player
+                ? `${Math.round(currentHP)}/${Math.round(maxHP)} (${hpPercent.toFixed(0)}%)`
+                : "--"}
+            </span>
           </div>
-          <span className="text-[10px] font-mono font-bold text-zinc-300 ml-2.5 shrink-0">
-            {player
-              ? `${Math.round(currentHP)}/${Math.round(maxHP)} (${hpPercent.toFixed(0)}%)`
-              : "--"}
-          </span>
+          {player && hpRegenRealHourly > 0 && currentHP < maxHP && (
+            <div className="text-[9px] text-zinc-400 mt-1 pl-2 font-mono flex justify-between">
+              <span>Hồi phục: +{(hpRegenRealHourly * 24).toFixed(1)}/ngày</span>
+              <span>{formatTimeRemaining(currentHP, maxHP, hpRegenRealHourly)}</span>
+            </div>
+          )}
         </div>
 
         {/* Aperture Stress Bar */}
@@ -577,8 +601,13 @@ export const Aperture: React.FC<ApertureProps> = ({
                     </div>
                     <div className="text-[10px] text-zinc-400 mt-0.5 tracking-wider uppercase font-semibold">{energyPoolName}</div>
                     <div className="text-[10px] text-zinc-300 mt-2 font-mono" style={{ color: c.textLight }}>
-                      Tốc lưu tiên khiếu: +{Math.round(Number(regenRate) * 24)} viên/ngày
+                      Tốc lưu tiên khiếu: +{Math.round(manaRegenRealHourly * 24)} viên/ngày
                     </div>
+                    {currentMana < maxMana && manaRegenRealHourly > 0 && (
+                      <div className="text-[9px] text-zinc-400 mt-0.5 font-mono">
+                        {formatTimeRemaining(currentMana, maxMana, manaRegenRealHourly)}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -594,6 +623,11 @@ export const Aperture: React.FC<ApertureProps> = ({
                   <span className="text-[9px] mt-1 text-zinc-400 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] uppercase font-semibold tracking-wider font-mono">
                     {energyPoolName}
                   </span>
+                  {currentMana < maxMana && manaRegenRealHourly > 0 && (
+                    <span className="text-[9px] mt-1 text-zinc-300 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] font-mono">
+                      +{Math.round(manaRegenRealHourly * 24)}/ngày • {formatTimeRemaining(currentMana, maxMana, manaRegenRealHourly)}
+                    </span>
+                  )}
                 </div>
               )}
             </div>

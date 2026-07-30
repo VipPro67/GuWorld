@@ -95,6 +95,20 @@ export const LobbyView: React.FC = () => {
   const displayedMaxHP = player?.base_hp || 0;
   const displayedHPPercent = displayedMaxHP > 0 ? Math.min(100, (displayedHP / displayedMaxHP) * 100) : 0;
 
+  const timeSpeedMultiplier = player?.time_speed_multiplier || 1;
+  const hpRegenRealHourly = (player?.hp_regen_rate || 0) * timeSpeedMultiplier;
+  const manaRegenRealHourly = (player?.mana_regen_rate || 0) * timeSpeedMultiplier;
+
+  const formatTimeRemaining = (current: number, max: number, realRegenPerHour: number) => {
+    if (current >= max || realRegenPerHour <= 0) return "Đã đầy";
+    const hoursRemaining = (max - current) / realRegenPerHour;
+    const totalMinutes = Math.floor(hoursRemaining * 60);
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    if (h > 0) return `Đầy sau ${h}h ${m}m`;
+    return `Đầy sau ${m}m`;
+  };
+
   // Management items (Removed "Truyền Tin" as requested)
   const managementItems: HubItem[] = [
     {
@@ -354,14 +368,20 @@ export const LobbyView: React.FC = () => {
 
           {/* Center Block: HP & Mana Bars */}
           <div className="flex flex-col gap-2.5 w-full md:w-80 grow max-w-md">
-            {/* HP Bar */}
             <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
-              <span>Máu</span>
+              <div className="flex flex-col">
+                <span>Máu</span>
+                {player && hpRegenRealHourly > 0 && displayedHP < displayedMaxHP && (
+                  <span className="text-[8px] text-zinc-500">
+                    +{Math.round(hpRegenRealHourly * 24)}/ngày • {formatTimeRemaining(displayedHP, displayedMaxHP, hpRegenRealHourly)}
+                  </span>
+                )}
+              </div>
               <span>
                 {Math.round(displayedHP)} / {Math.round(displayedMaxHP)}
               </span>
             </div>
-            <div className="w-full bg-zinc-950 rounded-full h-2.5 border border-zinc-900 overflow-hidden">
+            <div className="w-full bg-zinc-950 rounded-full h-2.5 border border-zinc-900 overflow-hidden mb-2">
               <div
                 className="bg-gradient-to-r from-red-600 to-rose-500 h-full rounded-full transition-all duration-300"
                 style={{ width: `${displayedHPPercent}%` }}
@@ -370,7 +390,14 @@ export const LobbyView: React.FC = () => {
 
             {/* Mana Bar */}
             <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
-              <span>{player.rank >= 6 ? "Tiên Nguyên" : "Chân Nguyên"}</span>
+              <div className="flex flex-col">
+                <span>{player.rank >= 6 ? "Tiên Nguyên" : "Chân Nguyên"}</span>
+                {player && manaRegenRealHourly > 0 && displayedMana < displayedMaxMana && (
+                  <span className="text-[8px] text-zinc-500">
+                    +{Math.round(manaRegenRealHourly * 24)}/ngày • {formatTimeRemaining(displayedMana, displayedMaxMana, manaRegenRealHourly)}
+                  </span>
+                )}
+              </div>
               <span>
                 {player.rank >= 6
                   ? `${Math.round(displayedMana)}`
