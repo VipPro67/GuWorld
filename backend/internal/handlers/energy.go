@@ -114,17 +114,11 @@ func calculateEnergyCost(player *models.Player, guSpec *models.GuDictionaryItem)
 	cost := baseManaPct * player.MaxMana
 
 	if guSpec.Rank < immortalRankThreshold {
-		switch player.Rank {
-		case 1:
-			cost *= 1
-		case 2:
-			cost *= 2
-		case 3:
-			cost *= 5
-		case 4:
-			cost *= 20
-		case 5:
-			cost *= 100
+		rankDiff := player.Rank - guSpec.Rank
+		if rankDiff > 0 {
+			cost /= math.Pow(10, float64(rankDiff))
+		} else if rankDiff < 0 {
+			cost *= math.Pow(10, float64(-rankDiff))
 		}
 	}
 
@@ -165,17 +159,11 @@ func calculateEnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuD
 	cost := baseManaPct * actor.MaxMana
 
 	if guSpec.Rank < immortalRankThreshold {
-		switch actor.Rank {
-		case 1:
-			cost *= 1
-		case 2:
-			cost *= 2
-		case 3:
-			cost *= 5
-		case 4:
-			cost *= 20
-		case 5:
-			cost *= 100
+		rankDiff := actor.Rank - guSpec.Rank
+		if rankDiff > 0 {
+			cost /= math.Pow(10, float64(rankDiff))
+		} else if rankDiff < 0 {
+			cost *= math.Pow(10, float64(-rankDiff))
 		}
 	}
 
