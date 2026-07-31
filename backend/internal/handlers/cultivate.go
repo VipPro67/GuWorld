@@ -362,9 +362,9 @@ func Ascension(c *gin.Context) {
 		return
 	}
 
-	// Must be Rank 5, SubRank 4 to ascend
-	if player.Rank != 5 || player.SubRank != 4 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "You must reach Rank 5 Peak (Đỉnh phong) to attempt Ascension"})
+	// Must be Rank 5, SubRank 4 with full wall progress to ascend
+	if player.Rank != 5 || player.SubRank != 4 || player.WallProgress < 1.0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "You must reach Rank 5 Peak (Đỉnh phong) with full wall progress to attempt Ascension"})
 		return
 	}
 

@@ -1641,7 +1641,7 @@ function WallControls() {
 
   if (!player) return <div className="text-xs text-zinc-500 text-center py-2">Không có thông tin người chơi</div>;
 
-  if (player.rank === 5 && player.sub_rank === 4) {
+  if (player.rank === 5 && player.sub_rank === 4 && (player.wall_progress ?? 0) >= 1) {
     return (
       <div className="w-full space-y-3.5">
         <div className="w-full flex flex-col items-center justify-center p-4 border border-rose-950 bg-rose-950/20 rounded-2xl shadow-[inset_0_0_12px_rgba(244,63,94,0.1)]">
