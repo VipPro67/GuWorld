@@ -149,18 +149,27 @@ func FindSpecialCell(tx *sql.Tx, regionID string, x, y int) (models.Cell, bool, 
 	cell.X = x
 	cell.Y = y
 
+	var metadataBytes []byte
 	query := `
-		SELECT cell_type, content_id
+		SELECT cell_type, content_id, metadata
 		FROM map_cells
 		WHERE region_id = $1 AND x = $2 AND y = $3 AND is_active = TRUE
 		LIMIT 1
 	`
-	err := tx.QueryRow(query, regionID, x, y).Scan(&cell.Type, &cell.Content)
+	err := tx.QueryRow(query, regionID, x, y).Scan(&cell.Type, &cell.Content, &metadataBytes)
 	if err == sql.ErrNoRows {
 		return cell, false, nil
 	}
 	if err != nil {
 		return cell, false, err
+	}
+	if len(metadataBytes) > 0 {
+		var meta struct {
+			Rank int `json:"rank"`
+		}
+		if err := json.Unmarshal(metadataBytes, &meta); err == nil {
+			cell.Rank = meta.Rank
+		}
 	}
 	return cell, true, nil
 }

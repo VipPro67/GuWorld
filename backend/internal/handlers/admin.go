@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,6 +19,68 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
+// adminPlayerSearchClause builds the WHERE fragment + args for the admin player list search.
+// Supported searchBy values: all, id, username, email, item, gu.
+// When searchBy is "all", a valid UUID input is auto-detected as an id search.
+func adminPlayerSearchClause(searchBy, search string) (string, []interface{}) {
+	if search == "" {
+		return "", nil
+	}
+
+	by := searchBy
+	if by == "all" {
+		if _, err := uuid.Parse(search); err == nil {
+			by = "id"
+		}
+	}
+
+	like := "%" + search + "%"
+	switch by {
+	case "id":
+		return `players.id::text ILIKE $1`, []interface{}{like}
+	case "username":
+		return `username ILIKE $1`, []interface{}{like}
+	case "email":
+		return `COALESCE(email, '') ILIKE $1`, []interface{}{like}
+	case "item":
+		itemIDs := models.ItemIDsByName(search)
+		if len(itemIDs) > 0 {
+			return `EXISTS (SELECT 1 FROM player_inventory_items i WHERE i.player_id = players.id AND (i.item_id ILIKE $1 OR i.item_id = ANY($2)))`, []interface{}{like, itemIDs}
+		}
+		return `EXISTS (SELECT 1 FROM player_inventory_items i WHERE i.player_id = players.id AND i.item_id ILIKE $1)`, []interface{}{like}
+	case "gu":
+		guIDs := models.GuIDsByName(search)
+		if len(guIDs) > 0 {
+			return `EXISTS (SELECT 1 FROM jsonb_array_elements(gu_inventory) g WHERE (g->>'gu_id' ILIKE $1 OR g->>'gu_id' = ANY($2)))`, []interface{}{like, guIDs}
+		}
+		return `EXISTS (SELECT 1 FROM jsonb_array_elements(gu_inventory) g WHERE g->>'gu_id' ILIKE $1)`, []interface{}{like}
+	default: // all
+		clauses := []string{`username ILIKE $1`, `COALESCE(email, '') ILIKE $1`}
+		args := []interface{}{like}
+		argIdx := 2
+
+		itemIDs := models.ItemIDsByName(search)
+		if len(itemIDs) > 0 {
+			clauses = append(clauses, fmt.Sprintf(`EXISTS (SELECT 1 FROM player_inventory_items i WHERE i.player_id = players.id AND (i.item_id ILIKE $1 OR i.item_id = ANY($%d)))`, argIdx))
+			args = append(args, itemIDs)
+			argIdx++
+		} else {
+			clauses = append(clauses, `EXISTS (SELECT 1 FROM player_inventory_items i WHERE i.player_id = players.id AND i.item_id ILIKE $1)`)
+		}
+
+		guIDs := models.GuIDsByName(search)
+		if len(guIDs) > 0 {
+			clauses = append(clauses, fmt.Sprintf(`EXISTS (SELECT 1 FROM jsonb_array_elements(gu_inventory) g WHERE (g->>'gu_id' ILIKE $1 OR g->>'gu_id' = ANY($%d)))`, argIdx))
+			args = append(args, guIDs)
+			argIdx++
+		} else {
+			clauses = append(clauses, `EXISTS (SELECT 1 FROM jsonb_array_elements(gu_inventory) g WHERE g->>'gu_id' ILIKE $1)`)
+		}
+
+		return "(" + strings.Join(clauses, " OR ") + ")", args
+	}
+}
+
 func AdminListPlayers(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok {
 		return
@@ -26,6 +89,7 @@ func AdminListPlayers(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	search := c.Query("search")
+	searchBy := c.DefaultQuery("search_by", "all")
 
 	if page < 1 {
 		page = 1
@@ -35,12 +99,12 @@ func AdminListPlayers(c *gin.Context) {
 	}
 	offset := (page - 1) * limit
 
+	where, args := adminPlayerSearchClause(searchBy, search)
+
 	var total int
 	countQuery := `SELECT COUNT(*) FROM players`
-	args := []interface{}{}
-	if search != "" {
-		countQuery += ` WHERE username ILIKE $1 OR email ILIKE $1`
-		args = append(args, "%"+search+"%")
+	if where != "" {
+		countQuery += ` WHERE ` + where
 	}
 	if err := db.DB.QueryRow(countQuery, args...).Scan(&total); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm số lượng người chơi"})
@@ -48,15 +112,12 @@ func AdminListPlayers(c *gin.Context) {
 	}
 
 	query := `SELECT id, username, COALESCE(email, ''), rank, sub_rank, current_mana, max_mana, hp, base_hp, primeval_stones, immortal_stones, COALESCE(is_admin, false), created_at, COALESCE(current_region, ''), COALESCE(aptitude_type, ''), wall_progress, human_qi, lifespan FROM players`
-	if search != "" {
-		query += ` WHERE username ILIKE $1 OR email ILIKE $1`
+	if where != "" {
+		query += ` WHERE ` + where
 	}
 	query += ` ORDER BY created_at DESC LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
 
-	dataArgs := append(args, limit, offset)
-	if search == "" {
-		dataArgs = []interface{}{limit, offset}
-	}
+	dataArgs := append(append([]interface{}{}, args...), limit, offset)
 
 	rows, err := db.DB.Query(query, dataArgs...)
 	if err != nil {
@@ -125,11 +186,10 @@ func AdminGetPlayerDetail(c *gin.Context) {
 		return
 	}
 
-	items, _ := InventorySvc.ListByPlayer(playerID.String())
-	materialsInventory := make(map[string]int)
-	for _, it := range items {
-		materialsInventory[it.ItemID] = materialsInventory[it.ItemID] + it.Quantity
-	}
+	var guCount int
+	_ = db.DB.QueryRow(`SELECT COALESCE(jsonb_array_length(gu_inventory), 0) FROM players WHERE id=$1`, playerID).Scan(&guCount)
+	var itemCount int
+	_ = db.DB.QueryRow(`SELECT COUNT(*) FROM player_inventory_items WHERE player_id=$1`, playerID).Scan(&itemCount)
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":                   player.ID,
@@ -151,7 +211,6 @@ func AdminGetPlayerDetail(c *gin.Context) {
 		"current_region":       player.CurrentRegion,
 		"is_admin":             player.IsAdmin,
 		"created_at":           player.CreatedAt,
-		"gu_inventory":         player.GuInventory,
 		"lifespan":             player.Lifespan,
 		"soul_hp":              player.SoulHP,
 		"max_soul":             player.MaxSoul,
@@ -160,7 +219,8 @@ func AdminGetPlayerDetail(c *gin.Context) {
 		"aperture_stress":      player.ApertureStress,
 		"avatar_url":           player.AvatarURL,
 		"bio":                  player.Bio,
-		"materials_inventory":  materialsInventory,
+		"gu_count":             guCount,
+		"item_count":           itemCount,
 	})
 }
 
@@ -451,6 +511,571 @@ func AdminChangePlayerStones(c *gin.Context) {
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật tài nguyên thành công"})
+}
+
+// AdminListPlayerItems returns a paginated, lazily-loaded list of a player's inventory items.
+func AdminListPlayerItems(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+
+	playerID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID người chơi không hợp lệ"})
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	search := c.Query("search")
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 200 {
+		limit = 50
+	}
+	offset := (page - 1) * limit
+
+	var exists bool
+	if err := db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE id=$1)`, playerID).Scan(&exists); err != nil || !exists {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
+		return
+	}
+
+	where := `player_id = $1`
+	args := []interface{}{playerID}
+	if search != "" {
+		like := "%" + search + "%"
+		itemIDs := models.ItemIDsByName(search)
+		if len(itemIDs) > 0 {
+			where += ` AND (item_id ILIKE $2 OR item_id = ANY($3))`
+			args = append(args, like, itemIDs)
+		} else {
+			where += ` AND item_id ILIKE $2`
+			args = append(args, like)
+		}
+	}
+
+	var total int
+	if err := db.DB.QueryRow(`SELECT COUNT(*) FROM player_inventory_items WHERE `+where, args...).Scan(&total); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm vật phẩm"})
+		return
+	}
+
+	query := `SELECT item_id, category, quantity FROM player_inventory_items WHERE ` + where + ` ORDER BY item_id ASC LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
+	dataArgs := append(append([]interface{}{}, args...), limit, offset)
+
+	rows, err := db.DB.Query(query, dataArgs...)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải vật phẩm"})
+		return
+	}
+	defer rows.Close()
+
+	data := []gin.H{}
+	for rows.Next() {
+		var itemID, category string
+		var quantity int
+		if err := rows.Scan(&itemID, &category, &quantity); err != nil {
+			continue
+		}
+		spec, ok := models.ItemRegistry[itemID]
+		name, itemType := itemID, ""
+		rank := 0
+		if ok {
+			name = spec.Name
+			itemType = spec.Type
+			rank = spec.Rank
+		}
+		data = append(data, gin.H{
+			"item_id":   itemID,
+			"name":      name,
+			"item_type": itemType,
+			"rank":      rank,
+			"category":  category,
+			"quantity":  quantity,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": data, "total": total})
+}
+
+// AdminListPlayerGus returns a paginated, lazily-loaded list of a player's Gu instances.
+func AdminListPlayerGus(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+
+	playerID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID người chơi không hợp lệ"})
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	search := c.Query("search")
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 200 {
+		limit = 50
+	}
+	offset := (page - 1) * limit
+
+	var raw []byte
+	if err := db.DB.QueryRow(`SELECT COALESCE(gu_inventory, '[]'::jsonb)::text FROM players WHERE id=$1`, playerID).Scan(&raw); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
+		return
+	}
+
+	var inv models.GuInventory
+	if err := json.Unmarshal(raw, &inv); err != nil {
+		inv = models.GuInventory{}
+	}
+
+	if search != "" {
+		lower := strings.ToLower(search)
+		guIDs := models.GuIDsByName(search)
+		filtered := models.GuInventory{}
+		for _, gu := range inv {
+			if strings.Contains(strings.ToLower(gu.GuID), lower) || strings.Contains(strings.ToLower(gu.InstanceID), lower) {
+				filtered = append(filtered, gu)
+				continue
+			}
+			for _, gid := range guIDs {
+				if gu.GuID == gid {
+					filtered = append(filtered, gu)
+					break
+				}
+			}
+		}
+		inv = filtered
+	}
+
+	total := len(inv)
+	start := offset
+	if start > total {
+		start = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+
+	data := []gin.H{}
+	for _, gu := range inv[start:end] {
+		name := gu.GuID
+		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
+			name = spec.Name
+		} else if spec, ok := models.GetGuAny(gu.GuID); ok {
+			name = spec.Name
+		}
+		data = append(data, gin.H{
+			"instance_id": gu.InstanceID,
+			"gu_id":       gu.GuID,
+			"name":        name,
+			"rank":        gu.Rank,
+			"hunger":      gu.Hunger,
+			"status":      gu.Status,
+			"equipped":    gu.Equipped,
+			"is_vital":    gu.IsVital,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": data, "total": total})
+}
+
+type AdminUpdatePlayerRequest struct {
+	Rank            *int     `json:"rank"`
+	SubRank         *int     `json:"sub_rank"`
+	AptitudeType    *string  `json:"aptitude_type"`
+	AptitudePercent *float64 `json:"aptitude_percent"`
+	AptitudeGrade   *string  `json:"aptitude_grade"`
+	CurrentMana     *float64 `json:"current_mana"`
+	MaxMana         *float64 `json:"max_mana"`
+	HP              *float64 `json:"hp"`
+	BaseHP          *float64 `json:"base_hp"`
+	WallProgress    *float64 `json:"wall_progress"`
+	HumanQi         *float64 `json:"human_qi"`
+	Lifespan        *float64 `json:"lifespan"`
+	CurrentRegion   *string  `json:"current_region"`
+	IsAdmin         *bool    `json:"is_admin"`
+	SoulHP          *float64 `json:"soul_hp"`
+	MaxSoul         *float64 `json:"max_soul"`
+	SoulTier        *string  `json:"soul_tier"`
+	ExploreCount    *int     `json:"explore_count"`
+	ApertureStress  *float64 `json:"aperture_stress"`
+	Bio             *string  `json:"bio"`
+	AvatarURL       *string  `json:"avatar_url"`
+}
+
+// AdminUpdatePlayer allows admins to edit a wide range of player attributes in one call.
+func AdminUpdatePlayer(c *gin.Context) {
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
+
+	playerID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID người chơi không hợp lệ"})
+		return
+	}
+
+	var req AdminUpdatePlayerRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := loadPlayerForStatus(tx, playerID, true); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
+		return
+	}
+
+	sets := []string{}
+	args := []interface{}{}
+	argIdx := 1
+
+	if req.Rank != nil {
+		rank := *req.Rank
+		if rank < 1 {
+			rank = 1
+		} else if rank > 9 {
+			rank = 9
+		}
+		sets = append(sets, "rank=$"+strconv.Itoa(argIdx))
+		args = append(args, rank)
+		argIdx++
+	}
+	if req.SubRank != nil {
+		subRank := *req.SubRank
+		if subRank < 1 {
+			subRank = 1
+		} else if subRank > 4 {
+			subRank = 4
+		}
+		sets = append(sets, "sub_rank=$"+strconv.Itoa(argIdx))
+		args = append(args, subRank)
+		argIdx++
+	}
+	if req.AptitudeType != nil {
+		sets = append(sets, "aptitude_type=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.AptitudeType)
+		argIdx++
+	}
+	if req.AptitudePercent != nil {
+		pct := *req.AptitudePercent
+		if pct < 0 {
+			pct = 0
+		} else if pct > 100 {
+			pct = 100
+		}
+		sets = append(sets, "aptitude_percent=$"+strconv.Itoa(argIdx))
+		args = append(args, pct)
+		argIdx++
+	}
+	if req.AptitudeGrade != nil {
+		sets = append(sets, "aptitude_grade=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.AptitudeGrade)
+		argIdx++
+	}
+	if req.CurrentMana != nil {
+		val := math.Max(0, *req.CurrentMana)
+		sets = append(sets, "current_mana=$"+strconv.Itoa(argIdx))
+		args = append(args, val)
+		argIdx++
+	}
+	if req.MaxMana != nil {
+		val := math.Max(0, *req.MaxMana)
+		sets = append(sets, "max_mana=$"+strconv.Itoa(argIdx))
+		args = append(args, val)
+		argIdx++
+	}
+	if req.HP != nil {
+		val := math.Max(0, *req.HP)
+		sets = append(sets, "hp=$"+strconv.Itoa(argIdx))
+		args = append(args, val)
+		argIdx++
+	}
+	if req.BaseHP != nil {
+		val := math.Max(0, *req.BaseHP)
+		sets = append(sets, "base_hp=$"+strconv.Itoa(argIdx))
+		args = append(args, val)
+		argIdx++
+	}
+	if req.WallProgress != nil {
+		val := math.Max(0, *req.WallProgress)
+		sets = append(sets, "wall_progress=$"+strconv.Itoa(argIdx))
+		args = append(args, val)
+		argIdx++
+	}
+	if req.HumanQi != nil {
+		val := math.Max(0, *req.HumanQi)
+		sets = append(sets, "human_qi=$"+strconv.Itoa(argIdx))
+		args = append(args, val)
+		argIdx++
+	}
+	if req.Lifespan != nil {
+		val := math.Max(0, *req.Lifespan)
+		sets = append(sets, "lifespan=$"+strconv.Itoa(argIdx))
+		args = append(args, val)
+		argIdx++
+	}
+	if req.CurrentRegion != nil {
+		sets = append(sets, "current_region=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.CurrentRegion)
+		argIdx++
+	}
+	if req.IsAdmin != nil {
+		sets = append(sets, "is_admin=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.IsAdmin)
+		argIdx++
+	}
+	if req.SoulHP != nil {
+		val := math.Max(0, *req.SoulHP)
+		sets = append(sets, "soul_hp=$"+strconv.Itoa(argIdx))
+		args = append(args, val)
+		argIdx++
+	}
+	if req.MaxSoul != nil {
+		val := math.Max(0, *req.MaxSoul)
+		sets = append(sets, "max_soul=$"+strconv.Itoa(argIdx))
+		args = append(args, val)
+		argIdx++
+	}
+	if req.SoulTier != nil {
+		sets = append(sets, "soul_tier=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.SoulTier)
+		argIdx++
+	}
+	if req.ExploreCount != nil {
+		val := *req.ExploreCount
+		if val < 0 {
+			val = 0
+		}
+		sets = append(sets, "explore_count=$"+strconv.Itoa(argIdx))
+		args = append(args, val)
+		argIdx++
+	}
+	if req.ApertureStress != nil {
+		val := math.Max(0, *req.ApertureStress)
+		sets = append(sets, "aperture_stress=$"+strconv.Itoa(argIdx))
+		args = append(args, val)
+		argIdx++
+	}
+	if req.Bio != nil {
+		sets = append(sets, "bio=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.Bio)
+		argIdx++
+	}
+	if req.AvatarURL != nil {
+		sets = append(sets, "avatar_url=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.AvatarURL)
+		argIdx++
+	}
+
+	if len(sets) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có trường nào để cập nhật"})
+		return
+	}
+	args = append(args, playerID)
+	if _, err := tx.Exec(`UPDATE players SET `+strings.Join(sets, ", ")+` WHERE id=$`+strconv.Itoa(argIdx), args...); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật thông tin người chơi"})
+		return
+	}
+
+	tx.Commit()
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &adminID,
+		Action:         "admin.update_player",
+		EntityType:     "player",
+		EntityID:       playerID.String(),
+		RequestSummary: strings.Join(sets, ", "),
+		IPAddress:      c.ClientIP(),
+		Success:        true,
+	})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật thông tin người chơi"})
+}
+
+// AdminSearchGus searches for Gu instances across player inventories, auctions and shops.
+func AdminSearchGus(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	guSearch := c.Query("gu_id")
+	instSearch := c.Query("instance_id")
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 200 {
+		limit = 50
+	}
+	offset := (page - 1) * limit
+
+	if guSearch == "" && instSearch == "" {
+		c.JSON(http.StatusOK, gin.H{"data": []gin.H{}, "total": 0})
+		return
+	}
+
+	guWhere := ""
+	shopWhere := ""
+	args := []interface{}{}
+	argIdx := 1
+	if guSearch != "" {
+		like := "%" + guSearch + "%"
+		guIDs := models.GuIDsByName(guSearch)
+		if len(guIDs) > 0 {
+			guWhere = fmt.Sprintf("(g->>'gu_id' ILIKE $%d OR g->>'gu_id' = ANY($%d))", argIdx, argIdx+1)
+			shopWhere = fmt.Sprintf("(s.id ILIKE $%d OR s.id = ANY($%d))", argIdx, argIdx+1)
+			args = append(args, like, guIDs)
+			argIdx += 2
+		} else {
+			guWhere = fmt.Sprintf("g->>'gu_id' ILIKE $%d", argIdx)
+			shopWhere = fmt.Sprintf("s.id ILIKE $%d", argIdx)
+			args = append(args, like)
+			argIdx++
+		}
+	}
+	if instSearch != "" {
+		instClause := fmt.Sprintf("g->>'instance_id' ILIKE $%d", argIdx)
+		args = append(args, "%"+instSearch+"%")
+		argIdx++
+		if guWhere == "" {
+			guWhere = instClause
+		} else {
+			guWhere = "(" + guWhere + " OR " + instClause + ")"
+		}
+	}
+
+	inventoryBranch := `SELECT 'inventory' AS location,
+		p.id AS owner_id, p.username AS owner_username,
+		NULL::text AS listing_id,
+		g->>'instance_id' AS instance_id, g->>'gu_id' AS gu_id,
+		(g->>'rank')::int AS rank,
+		COALESCE((g->>'hunger')::int, 0) AS hunger,
+		COALESCE(g->>'status', '') AS status,
+		COALESCE((g->>'equipped')::boolean, false) AS equipped,
+		COALESCE((g->>'is_vital')::boolean, false) AS is_vital,
+		'' AS listing_status, NULL::text AS shop_name
+	FROM players p
+	CROSS JOIN LATERAL jsonb_array_elements(p.gu_inventory) g
+	WHERE p.gu_inventory IS NOT NULL AND ` + guWhere
+
+	auctionBranch := `SELECT 'auction' AS location,
+		a.seller_id AS owner_id, pl.username AS owner_username,
+		a.id::text AS listing_id,
+		g->>'instance_id' AS instance_id, g->>'gu_id' AS gu_id,
+		(g->>'rank')::int AS rank,
+		COALESCE((g->>'hunger')::int, 0) AS hunger,
+		COALESCE(g->>'status', '') AS status,
+		COALESCE((g->>'equipped')::boolean, false) AS equipped,
+		COALESCE((g->>'is_vital')::boolean, false) AS is_vital,
+		COALESCE(a.status, '') AS listing_status, NULL::text AS shop_name
+	FROM auction a
+	CROSS JOIN LATERAL jsonb_array_elements(a.item_data) g
+	JOIN players pl ON pl.id = a.seller_id
+	WHERE a.item_type = 'Gu' AND ` + guWhere
+
+	guDictSub := `(SELECT id, MAX(rank) AS rank, MIN(name) AS name FROM gu_dictionary GROUP BY id)`
+
+	shopBranch := `SELECT 'shop' AS location,
+		NULL::uuid AS owner_id, NULL::text AS owner_username,
+		s.id AS listing_id,
+		NULL::text AS instance_id, s.id AS gu_id,
+		d.rank AS rank,
+		NULL::int AS hunger,
+		'SHOP' AS status,
+		false AS equipped,
+		false AS is_vital,
+		'SHOP' AS listing_status, d.name AS shop_name
+	FROM caravan_shop_items s
+	JOIN ` + guDictSub + ` d ON d.id = s.id
+	WHERE ` + shopWhere
+
+	arenaShopBranch := `SELECT 'shop' AS location,
+		NULL::uuid AS owner_id, NULL::text AS owner_username,
+		s.id AS listing_id,
+		NULL::text AS instance_id, s.id AS gu_id,
+		d.rank AS rank,
+		NULL::int AS hunger,
+		'SHOP' AS status,
+		false AS equipped,
+		false AS is_vital,
+		'SHOP' AS listing_status, d.name AS shop_name
+	FROM arena_shop_items s
+	JOIN ` + guDictSub + ` d ON d.id = s.id
+	WHERE ` + shopWhere
+
+	branches := []string{inventoryBranch, auctionBranch}
+	if shopWhere != "" {
+		branches = append(branches, shopBranch, arenaShopBranch)
+	}
+	union := strings.Join(branches, " UNION ALL ")
+
+	var total int
+	if err := db.DB.QueryRow(`SELECT COUNT(*) FROM (`+union+`) AS t`, args...).Scan(&total); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tìm cổ trùng"})
+		return
+	}
+
+	query := `SELECT location, owner_id::text, owner_username, listing_id, instance_id, gu_id, rank, hunger, status, equipped, is_vital, listing_status, shop_name FROM (` + union + `) AS t ORDER BY t.location, t.owner_username, t.gu_id LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
+	dataArgs := append(append([]interface{}{}, args...), limit, offset)
+
+	rows, err := db.DB.Query(query, dataArgs...)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tìm cổ trùng"})
+		return
+	}
+	defer rows.Close()
+
+	data := []gin.H{}
+	for rows.Next() {
+		var location, ownerID, ownerUsername, listingID, instanceID, guID, status, listingStatus, shopName string
+		var rank, hunger int
+		var equipped, isVital bool
+		if err := rows.Scan(&location, &ownerID, &ownerUsername, &listingID, &instanceID, &guID, &rank, &hunger, &status, &equipped, &isVital, &listingStatus, &shopName); err != nil {
+			continue
+		}
+		name := guID
+		if spec, ok := models.GetGu(guID, rank); ok {
+			name = spec.Name
+		} else if spec, ok := models.GetGuAny(guID); ok {
+			name = spec.Name
+		}
+		data = append(data, gin.H{
+			"location":       location,
+			"owner_id":       ownerID,
+			"owner_username": ownerUsername,
+			"listing_id":     listingID,
+			"instance_id":    instanceID,
+			"gu_id":          guID,
+			"name":           name,
+			"rank":           rank,
+			"hunger":         hunger,
+			"status":         status,
+			"equipped":       equipped,
+			"is_vital":       isVital,
+			"listing_status": listingStatus,
+			"shop_name":      shopName,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": data, "total": total})
 }
 
 // -------- Admin: Sect Management --------
@@ -1816,7 +2441,7 @@ func AdminListGuItems(c *gin.Context) {
 		ImageURL    string          `json:"image_url"`
 	}
 
-	var items []GuRow
+	items := []GuRow{}
 	for rows.Next() {
 		var r GuRow
 		if err := rows.Scan(&r.ID, &r.Name, &r.Rank, &r.Path, &r.GuType,
@@ -1992,7 +2617,7 @@ func AdminListItemItems(c *gin.Context) {
 		BasePrice   int             `json:"base_price"`
 		ImageURL    string          `json:"image_url"`
 	}
-	var items []ItemRow
+	items := []ItemRow{}
 	for rows.Next() {
 		var r ItemRow
 		if err := rows.Scan(&r.ID, &r.Name, &r.ItemType, &r.Rank, &r.Effects, &r.Description, &r.BasePrice, &r.ImageURL); err != nil { continue }
@@ -2082,7 +2707,7 @@ func AdminListRecipes(c *gin.Context) {
 		PrimevalStonesCost        int             `json:"primeval_stones_cost"`
 		ImmortalEssenceStonesCost float64         `json:"immortal_essence_stones_cost"`
 	}
-	var items []RecipeRow
+	items := []RecipeRow{}
 	for rows.Next() {
 		var r RecipeRow
 		if err := rows.Scan(&r.ID, &r.TargetGuID, &r.TargetGuName, &r.RequiredGus, &r.RequiredMaterials, &r.SuccessRate, &r.PrimevalStonesCost, &r.ImmortalEssenceStonesCost); err != nil { continue }

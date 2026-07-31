@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -48,6 +49,21 @@ type ItemSpec struct {
 
 // ItemRegistry holds the memory map cache of all Item specifications.
 var ItemRegistry = make(map[string]ItemSpec)
+
+// ItemIDsByName returns all item ids whose name contains the given search term (case-insensitive).
+func ItemIDsByName(search string) []string {
+	if search == "" {
+		return nil
+	}
+	lower := strings.ToLower(search)
+	var ids []string
+	for id, spec := range ItemRegistry {
+		if strings.Contains(strings.ToLower(spec.Name), lower) {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
 
 // LoadItemRegistry queries the database and populates the in-memory cache
 func LoadItemRegistry(db *sql.DB) error {

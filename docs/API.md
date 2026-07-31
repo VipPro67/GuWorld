@@ -209,3 +209,21 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | GET | `/feedback/:id/comments` | Public list góp ý của topic. |
 | POST | `/feedback/:id/comments` | Protected góp ý (rank ≥ 2; status phải `active`/`in_progress`/`completed`). |
 | DELETE | `/feedback/:id/comments/:commentId` | Protected xóa góp ý (tác giả hoặc admin). |
+
+## Admin — players & gus
+
+| Method | Path | Ghi chú |
+| --- | --- | --- |
+| GET | `/admin/players` | List người chơi, phân trang (`page`, `limit`). Search: `search_by=all|id|username|email|item|gu`. Khi `search_by=all` auto-detect UUID. `item`/`gu` match theo registry ID + tên (trả `gu_ids`/`item_ids` mới hơn bản ghi cũ). |
+| GET | `/admin/players/online` | List người chơi online. |
+| GET | `/admin/players/:id` | Chi tiết người chơi. Response bỏ `gu_inventory`/`materials_inventory`, trả `gu_count` + `item_count`. |
+| GET | `/admin/players/:id/items` | Lazy-load item của người chơi từ `player_inventory_items`. Params: `page`, `limit`, `q` (match item_id/item_name theo registry). |
+| GET | `/admin/players/:id/gus` | Lazy-load gu trong `players.gu_inventory` (JSONB). Params: `page`, `limit`, `q` (match gu_id/instance_id theo registry). |
+| PUT | `/admin/players/:id` | Sửa thông tin người chơi. Body là object chứa 1+ field (chỉ gửi field thay đổi): `username`, `email`, `password`, `bio`, `avatar_url`, `rank`, `sub_rank`, `cultivation`, `realm`, `hp`, `max_hp`, `mana`, `max_mana`, `mortal_stones`, `immortal_stones`, `primeval_stones`, `soul`, `hp_regen_rate`, `mana_regen_rate`, `is_admin`, `is_banned`, `is_online`. Trả list field đã cập nhật. |
+| GET | `/admin/gus/search` | Tìm cổ trùng trên toàn server. Params: `gu_id` và/hoặc `instance_id` (match registry ID + tên, ILIKE), `page`, `limit`. Quét 3 nguồn: `players.gu_inventory`, `auction` (`item_type='Gu'`), `caravan_shop_items` + `arena_shop_items`. `location`: `inventory`/`auction`/`shop`. |
+| POST | `/admin/players/:id/items` | Thêm item cho người chơi. |
+| DELETE | `/admin/players/:id/items` | Xóa item khỏi người chơi. |
+| POST | `/admin/players/:id/gus` | Thêm gu cho người chơi. |
+| DELETE | `/admin/players/:id/gus/:instance_id` | Xóa gu theo instance_id. |
+| PUT | `/admin/players/:id/stones` | Đổi đá (stones) của người chơi. |
+| GET | `/admin/audit-logs` | Audit log (bao gồm `admin.update_player`). |

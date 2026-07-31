@@ -1369,6 +1369,7 @@ func FeedGu(c *gin.Context) {
 // FeedGroupRequest represents payload for feeding all hungry Gu bugs of the same type
 type FeedGroupRequest struct {
 	GuID string `json:"gu_id" binding:"required"`
+	Rank *int   `json:"rank,omitempty"`
 }
 
 // FeedGroup feeds all hungry Gu bugs of the same type (gu_id) using available food
@@ -1400,8 +1401,14 @@ func FeedGroup(c *gin.Context) {
 		return
 	}
 
-	// 2. Find static specs in Dictionary
+	// 2. Find static specs in Dictionary (match both ID and rank when rank provided)
 	specs, found := models.GetGuAny(req.GuID)
+	if req.Rank != nil {
+		if spec, ok := models.GetGu(req.GuID, *req.Rank); ok {
+			specs = spec
+			found = true
+		}
+	}
 	if !found {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gu definition not found in registry"})
 		return
@@ -1448,7 +1455,7 @@ func FeedGroup(c *gin.Context) {
 	// 3. Iterate over the player's Gu inventory and feed hungry ones of matching type
 	for i := 0; i < len(player.GuInventory); i++ {
 		gu := &player.GuInventory[i]
-		if gu.GuID == req.GuID && gu.Status != "DEAD" && gu.Status != "SEALED" && gu.Hunger < specs.MaxHunger {
+		if gu.GuID == req.GuID && (req.Rank == nil || gu.Rank == *req.Rank) && gu.Status != "DEAD" && gu.Status != "SEALED" && gu.Hunger < specs.MaxHunger {
 			fedThisGu := false
 			for gu.Hunger < specs.MaxHunger {
 				chosenFood := getAvailableFood()

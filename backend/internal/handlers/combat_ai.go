@@ -11,7 +11,7 @@ func BuildEnemyActions(ctx *CombatContext, enemy *models.Combatant) []Action {
 	var potentialActions []Action
 	for _, eg := range enemy.GuInventory {
 		if eg.Status == "ACTIVE" {
-			spec, ok := models.GetGuAny(eg.GuID)
+			spec, ok := models.GetGu(eg.GuID, eg.Rank)
 			if ok {
 				action, err := BuildCombatAction(ctx, spec)
 				if err == nil {

@@ -182,7 +182,7 @@ func getRefineManaTier(rank int, inventory []models.GuInstance) float64 {
 	var maxTier float64
 	for _, gu := range inventory {
 		if gu.Equipped && gu.Status == "ACTIVE" {
-			spec, ok := models.GetGuAny(gu.GuID)
+			spec, ok := models.GetGu(gu.GuID, gu.Rank)
 			if ok && spec.Effects.Passive != nil && spec.Effects.Passive.RefineManaTier > 0 {
 				if spec.Rank == rank {
 					if spec.Effects.Passive.RefineManaTier > maxTier {

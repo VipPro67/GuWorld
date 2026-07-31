@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { Player, GuSpec, ItemSpec, GuInstance, useGameStore } from "@/store/useGameStore";
+import { Player, GuSpec, ItemSpec, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
 import { Flower2, Wine, Gem, ShieldAlert, Sparkles, HelpCircle, Search, Shield, Zap, ChevronDown, ChevronUp, Lock, Unlock } from "lucide-react";
 import { translateGuType, translateItemType, translatePath } from "@/lib/translate";
 
 interface GuInventoryProps {
   player: Player;
   onFeed: (guInstanceId: string) => Promise<void>;
-  onFeedGroup?: (guId: string) => Promise<void>;
+  onFeedGroup?: (guId: string, rank?: number) => Promise<void>;
   actionLoading: boolean;
   guDictionary: Record<string, GuSpec>;
   itemDictionary: Record<string, ItemSpec>;
@@ -87,11 +87,12 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
     setExpandedGroups((prev) => ({ ...prev, [guId]: !prev[guId] }));
   };
 
-  const handleFeedGroupClick = async (guId: string) => {
+  const handleFeedGroupClick = async (guId: string, rank?: number) => {
     if (!onFeedGroup) return;
-    setFeedingGroupGuId(guId);
+    const groupKey = rank != null ? `${guId}::${rank}` : guId;
+    setFeedingGroupGuId(groupKey);
     try {
-      await onFeedGroup(guId);
+      await onFeedGroup(guId, rank);
     } finally {
       setFeedingGroupGuId(null);
     }
@@ -184,7 +185,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
   // Filter Gu bugs matching searchTerm
   const filteredGus = guList.filter((gu) => {
-    const spec = guDictionary[gu.gu_id] || {
+    const spec = guSpecFor(gu.gu_id, gu.rank) || {
       name: gu.gu_id,
       description: "Cổ trùng chưa được giải nghĩa.",
       path: [] as string[],
@@ -386,21 +387,24 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
             </div>
           ) : (
             (() => {
-              // Group the filtered Gu instances by gu_id
+              // Group the filtered Gu instances by gu_id + rank (a gu is identified by both ID and rank)
               const groupsMap: Record<string, GuInstance[]> = {};
               filteredGus.forEach((gu) => {
-                if (!groupsMap[gu.gu_id]) {
-                  groupsMap[gu.gu_id] = [];
+                const groupKey = `${gu.gu_id}::${gu.rank ?? 0}`;
+                if (!groupsMap[groupKey]) {
+                  groupsMap[groupKey] = [];
                 }
-                groupsMap[gu.gu_id].push(gu);
+                groupsMap[groupKey].push(gu);
               });
 
               // Construct list of groups with stats
-              const guGroups = Object.entries(groupsMap).map(([guId, instances]) => {
-                const spec = guDictionary[guId] || {
+              const guGroups = Object.entries(groupsMap).map(([groupKey, instances]) => {
+                const [guId, rankStr] = groupKey.split("::");
+                const groupRank = parseInt(rankStr, 10) || 0;
+                const spec = guSpecFor(guId, groupRank) || {
                   id: guId,
                   name: guId,
-                  rank: 1,
+                  rank: groupRank || 1,
                   path: ["Unknown Path"],
                   gu_type: "Phàm Cổ",
                   base_mana_cost: 0,
@@ -439,6 +443,8 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
                 return {
                   guId,
+                  groupKey,
+                  groupRank,
                   spec,
                   instances,
                   hasVital,
@@ -465,6 +471,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                 <div className="space-y-4">
                   {guGroups.map(({
                     guId,
+                    groupKey,
                     spec,
                     instances,
                     hasVital,
@@ -475,7 +482,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                     deadCount,
                     equippedCount,
                   }) => {
-                    const isExpanded = !!expandedGroups[guId];
+                    const isExpanded = !!expandedGroups[groupKey];
                     const totalCount = instances.length;
                     
                     // Food info
@@ -497,7 +504,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                       inst => inst.status !== "DEAD" && inst.status !== "SEALED" && inst.hunger < spec.max_hunger
                     ).length;
                     const canFeedGroup = availableFood > 0 && hungryBugsCount > 0 && onFeedGroup;
-                    const isCurrentlyFeedingGroup = feedingGroupGuId === guId;
+                    const isCurrentlyFeedingGroup = feedingGroupGuId === groupKey;
 
                     // Build dynamic styling based on group attributes
                     let cardStyle = "bg-zinc-950/60 border-zinc-900 hover:border-zinc-800";
@@ -518,7 +525,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
                     return (
                       <div
-                        key={guId}
+                        key={groupKey}
                         className={`p-4 sm:p-5 rounded-2xl border transition-all ${cardStyle}`}
                       >
                         {/* Summary Header */}
@@ -560,7 +567,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                     useGameStore.getState().addToast(`Đạo hữu không có thức ăn phù hợp (${foodName}) để cho ăn!`, "error");
                                     return;
                                   }
-                                  handleFeedGroupClick(guId);
+                                  handleFeedGroupClick(guId, spec.rank);
                                 }}
                                 title={hungryBugsCount === 0 ? "Không có con nào đói" : `Cho ăn tất cả con đang đói. Cần: ${foodName} (Sở hữu: ${availableFood})`}
                                 className={`text-[9px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1 transition-all cursor-pointer font-mono ${
@@ -575,7 +582,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
                             <button
                               type="button"
-                              onClick={() => toggleGroupExpand(guId)}
+                              onClick={() => toggleGroupExpand(groupKey)}
                               className="text-[9px] py-1.5 px-3 bg-zinc-900 hover:bg-zinc-850 text-zinc-350 hover:text-zinc-150 border border-zinc-800 rounded-xl font-mono transition-all flex items-center gap-1 cursor-pointer"
                             >
                               <span>{isExpanded ? "Thu gọn" : "Chi tiết"}</span>
@@ -846,15 +853,27 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                           <span className="text-zinc-600 font-mono block mb-1">Hiệu Ứng</span>
                                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                                             {Object.entries(spec.effects).map(([section, effects]) =>
-                                              effects && typeof effects === 'object' && Object.keys(effects).length > 0 && (
+                                              section === "other" && Array.isArray(effects) && effects.length > 0 ? (
                                                 <span key={section} className="inline-flex items-center gap-1">
                                                   <span className="text-zinc-500 font-mono text-[9px] uppercase">{section}:</span>
-                                                  {Object.entries(effects).map(([k, v]) => (
-                                                    <span key={k} className="bg-zinc-900/60 px-1.5 py-0.5 rounded border border-zinc-800/50 whitespace-nowrap">
-                                                      {FormatKey(k)}: {String(v)}
+                                                  {effects.map((m: any, mi: number) => (
+                                                    <span key={mi} className="bg-zinc-900/60 px-1.5 py-0.5 rounded border border-zinc-800/50 whitespace-nowrap">
+                                                      {m?.event_trigger || "?"} → {m?.action_code || "?"}
+                                                      {m?.params && Object.keys(m.params).length > 0 ? ` (${JSON.stringify(m.params)})` : ""}
                                                     </span>
                                                   ))}
                                                 </span>
+                                              ) : (
+                                                effects && typeof effects === 'object' && Object.keys(effects).length > 0 && (
+                                                  <span key={section} className="inline-flex items-center gap-1">
+                                                    <span className="text-zinc-500 font-mono text-[9px] uppercase">{section}:</span>
+                                                    {Object.entries(effects).map(([k, v]) => (
+                                                      <span key={k} className="bg-zinc-900/60 px-1.5 py-0.5 rounded border border-zinc-800/50 whitespace-nowrap">
+                                                        {FormatKey(k)}: {String(v)}
+                                                      </span>
+                                                    ))}
+                                                  </span>
+                                                )
                                               )
                                             )}
                                           </div>

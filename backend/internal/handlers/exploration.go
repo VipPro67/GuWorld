@@ -485,7 +485,14 @@ func MovePlayer(c *gin.Context) {
 			}
 		case "WildGu":
 			if HasExplorationInventorySpace(&player, 1) {
-				guSpec, _ := models.GetGuAny(cell.Content)
+				var guSpec models.GuDictionaryItem
+				var ok bool
+				if cell.Rank > 0 {
+					guSpec, ok = models.GetGu(cell.Content, cell.Rank)
+				}
+				if !ok {
+					guSpec, _ = models.GetGuAny(cell.Content)
+				}
 				newGu := models.GuInstance{
 					InstanceID: uuid.New().String(),
 					GuID:       cell.Content,
@@ -649,7 +656,7 @@ func MovePlayer(c *gin.Context) {
 	var exploreEventMsg string
 	for _, gu := range player.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" {
-			if spec, ok := models.GetGuAny(gu.GuID); ok {
+			if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
 				if msg, err := HandleGuEvent(&player, spec, gu, "ON_EXPLORE_MOVE"); err == nil && msg != "" {
 					exploreEventMsg = msg
 				}

@@ -237,7 +237,7 @@ func CombatAttack(c *gin.Context) {
 						c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể chiến đấu bằng Cổ trùng ĐÃ CHẾT: " + inst.GuID})
 						return
 					}
-					spec, ok := models.GetGuAny(inst.GuID)
+					spec, ok := models.GetGu(inst.GuID, inst.Rank)
 					if !ok {
 						c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy định nghĩa của Cổ trùng: " + inst.GuID})
 						return

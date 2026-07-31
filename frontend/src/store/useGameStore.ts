@@ -6,6 +6,7 @@ let confirmResolve: ((value: boolean) => void) | null = null;
 export interface GuInstance {
   instance_id: string;
   gu_id: string;
+  rank: number;
   hunger: number;
   status: string; // "ACTIVE", "SLEEPING", "DEAD"
   equipped: boolean;
@@ -422,11 +423,17 @@ export interface TribulationEnemy {
   updated_at: string;
 }
 
+export interface SpecialMechanic {
+  event_trigger: string;
+  action_code: string;
+  params: Record<string, any>;
+}
+
 export interface GuEffects {
-  active?: Record<string, number>;
-  support?: Record<string, number>;
-  passive?: Record<string, number>;
-  house?: Record<string, number>;
+  active?: Record<string, any>;
+  support?: Record<string, any>;
+  passive?: Record<string, any>;
+  house?: Record<string, any>;
   growth?: {
     max_attack?: number;
     max_defense?: number;
@@ -434,6 +441,7 @@ export interface GuEffects {
     max_speed?: number;
     hours_to_max?: number;
   };
+  other?: SpecialMechanic[];
 }
 
 export interface GuSpec {
@@ -676,6 +684,7 @@ interface FeedResponse {
 export interface RefiningRecipe {
   id: string;
   target_gu_id: string;
+  target_rank?: number;
   required_gus: Record<string, number>;
   required_materials: Record<string, number>;
   success_rate: number;
@@ -711,6 +720,7 @@ interface GameState {
   error: string | null;
   logs: string[];
   guDictionary: Record<string, GuSpec>;
+  guByRank: Record<string, Record<number, GuSpec>>;
   itemDictionary: Record<string, ItemSpec>;
   monsterDictionary: Record<string, MonsterSpec>;
   dictionaryLoaded: boolean;
@@ -777,7 +787,7 @@ interface GameState {
   initializeSession: () => Promise<void>;
   explore: () => Promise<void>;
   feedGu: (guInstanceId: string) => Promise<void>;
-  feedGuGroup: (guId: string) => Promise<void>;
+  feedGuGroup: (guId: string, rank?: number) => Promise<void>;
   fetchDictionary: () => Promise<void>;
   fetchRecipes: () => Promise<void>;
   quests: any[];
@@ -1105,6 +1115,19 @@ let worldMessagesSource: EventSource | null = null;
 let generalMessagesSource: EventSource | null = null;
 let sectMessagesSource: EventSource | null = null;
 
+export function guSpecFor(guId?: string, rank?: number): GuSpec | undefined {
+  if (!guId) return undefined;
+  const state = useGameStore.getState();
+  const byRank = state.guByRank[guId];
+  if (byRank) {
+    if (rank != null && byRank[rank]) return byRank[rank];
+    const ranks = Object.keys(byRank).map(Number);
+    const maxRank = ranks.length ? Math.max(...ranks) : 0;
+    if (maxRank && byRank[maxRank]) return byRank[maxRank];
+  }
+  return state.guDictionary[guId];
+}
+
 export const useGameStore = create<GameState>((set, get) => {
   const normalizePlayer = (player: Player | null): Player | null => {
     if (!player) return null;
@@ -1180,6 +1203,7 @@ export const useGameStore = create<GameState>((set, get) => {
   logs: ["Chào mừng đạo hữu đến với Cổ Giới. Hãy tu luyện và sinh tồn."],
   referralsData: null,
   guDictionary: {},
+  guByRank: {},
   itemDictionary: {},
   monsterDictionary: {},
   dictionaryLoaded: false,
@@ -2036,7 +2060,7 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
-  feedGuGroup: async (guId) => {
+  feedGuGroup: async (guId, rank) => {
     const { player, token, actionLoading, logout } = get();
     if (!player || !token || actionLoading) return;
 
@@ -2047,7 +2071,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ gu_id: guId }),
+        body: JSON.stringify({ gu_id: guId, ...(rank ? { rank } : {}) }),
       });
 
       if (response.status === 401 || response.status === 403) {
@@ -2082,13 +2106,20 @@ export const useGameStore = create<GameState>((set, get) => {
       const data = await response.json();
       const guArray = data.gu || [];
       const guMap: Record<string, GuSpec> = {};
+      const guByRank: Record<string, Record<number, GuSpec>> = {};
       if (Array.isArray(guArray)) {
         for (const item of guArray) {
-          guMap[item.id] = item;
+          if (!guByRank[item.id]) guByRank[item.id] = {};
+          guByRank[item.id][item.rank] = item;
+          const existing = guMap[item.id];
+          if (!existing || item.rank > existing.rank) {
+            guMap[item.id] = item;
+          }
         }
       }
       set({
         guDictionary: guMap,
+        guByRank,
         itemDictionary: data.items || {},
         monsterDictionary: data.monsters || {},
         dictionaryLoaded: true,

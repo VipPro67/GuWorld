@@ -147,7 +147,7 @@ func StartCombat(tx *sql.Tx, base *models.CombatState, player *models.Player) *m
 	if base.CombatMode != "virtual" && base.EnemyGuInventory != nil {
 		var filteredGu []models.GuInstance
 		for _, g := range base.EnemyGuInventory {
-			spec, ok := models.GetGuAny(g.GuID)
+			spec, ok := models.GetGu(g.GuID, g.Rank)
 			if ok && spec.Rank >= 6 {
 				exists, _ := db.CheckImmortalGuExists(tx, g.GuID, spec.Rank, nil)
 				if exists {
@@ -164,7 +164,7 @@ func StartCombat(tx *sql.Tx, base *models.CombatState, player *models.Player) *m
 	// Fire ON_COMBAT_START on equipped ACTIVE Gus
 	for _, gu := range player.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" {
-			if spec, ok := models.GetGuAny(gu.GuID); ok {
+			if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
 				HandleGuEvent(player, spec, gu, "ON_COMBAT_START")
 			}
 		}

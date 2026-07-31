@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -203,6 +204,24 @@ func rawEffectNumber(raw json.RawMessage) (float64, bool) {
 }
 
 var GuRegistry = make(map[string]map[int]GuDictionaryItem)
+
+// GuIDsByName returns all gu ids whose name contains the given search term (case-insensitive).
+func GuIDsByName(search string) []string {
+	if search == "" {
+		return nil
+	}
+	lower := strings.ToLower(search)
+	var ids []string
+	for id, ranks := range GuRegistry {
+		for _, item := range ranks {
+			if strings.Contains(strings.ToLower(item.Name), lower) {
+				ids = append(ids, id)
+				break
+			}
+		}
+	}
+	return ids
+}
 
 func GetGu(id string, rank int) (GuDictionaryItem, bool) {
 	ranks, ok := GuRegistry[id]

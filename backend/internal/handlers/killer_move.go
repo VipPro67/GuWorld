@@ -667,7 +667,7 @@ func findUsableOwnedGu(player *models.Player, instanceID string, tx *sql.Tx) (ow
 		if locked {
 			return ownedGu{}, fmt.Errorf("Cổ trùng đang bị khóa trong giao dịch hoặc đấu giá")
 		}
-		spec, ok := models.GetGuAny(inst.GuID)
+		spec, ok := models.GetGu(inst.GuID, inst.Rank)
 		if !ok {
 			return ownedGu{}, fmt.Errorf("không tìm thấy định nghĩa Cổ trùng %s", inst.GuID)
 		}

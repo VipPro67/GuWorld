@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { Player, CombatState, Combatant, GuSpec, GuInstance, useGameStore } from "@/store/useGameStore";
+import { Player, CombatState, Combatant, GuSpec, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
 import { Sparkles, Play, Swords, Eye, Shield, Zap, ChevronDown, ChevronUp, Wand2, AlertTriangle } from "lucide-react";
 import { CombatReplayView } from "./CombatReplayView";
 
@@ -93,7 +93,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   // Filter: only show Gu with combat-relevant active effects (mirrors backend hasCombatActiveEffects)
   const isCombatGu = (gu: GuInstance): boolean => {
-    const spec = guDictionary[gu.gu_id];
+    const spec = guSpecFor(gu.gu_id, gu.rank);
     if (!spec?.effects?.active) return false;
     const a = spec.effects.active;
     return (a.damage_flat ?? 0) > 0
@@ -116,7 +116,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     let inv = 1.0;
     (player.gu_inventory || []).forEach((gu) => {
       if (gu.status !== "ACTIVE" || !gu.equipped) return;
-      const spec = guDictionary[gu.gu_id];
+      const spec = guSpecFor(gu.gu_id, gu.rank);
       if (spec?.effects?.passive?.investigation) {
         inv += spec.effects.passive.investigation;
       }
@@ -191,7 +191,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     for (const id of selectedIds) {
       const gu = eligibleGus.find(g => g.instance_id === id);
       if (!gu) continue;
-      const spec = guDictionary[gu.gu_id];
+      const spec = guSpecFor(gu.gu_id, gu.rank);
       if (!spec) continue;
 
       // Check primary role / combat roles
@@ -258,7 +258,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     if (selectedIds.length <= 6) return 0;
     const paths = new Set(selectedIds.flatMap(id => {
       const gu = eligibleGus.find(g => g.instance_id === id);
-      return gu ? guDictionary[gu.gu_id]?.path || [] : [];
+      return gu ? guSpecFor(gu.gu_id, gu.rank)?.path || [] : [];
     }).filter(Boolean));
     const uniquePaths = paths.size;
     return Math.min(0.75, (selectedIds.length - 6) * 0.12 + (uniquePaths - 1) * 0.08);
@@ -281,7 +281,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
     // Score each Gu for recommendation
     const scored = gus.map(gu => {
-      const spec = guDictionary[gu.gu_id];
+      const spec = guSpecFor(gu.gu_id, gu.rank);
       if (!spec) return { gu, score: 0, pathMatch: false, isDefense: false };
       const pathMatch = spec.path && spec.path.some(p => p.toLowerCase().includes(effectivePath.toLowerCase()));
 
@@ -344,12 +344,12 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     }
 
     // Fill remaining slots with highest scored, preferring same path
-    const pathPriority = guDictionary[best.gu.gu_id]?.path || [];
+    const pathPriority = guSpecFor(best.gu.gu_id, best.gu.rank)?.path || [];
     const remaining = scored
       .filter(s => !picked.includes(s.gu.instance_id))
       .sort((a, b) => {
-        const aSpec = guDictionary[a.gu.gu_id];
-        const bSpec = guDictionary[b.gu.gu_id];
+        const aSpec = guSpecFor(a.gu.gu_id, a.gu.rank);
+        const bSpec = guSpecFor(b.gu.gu_id, b.gu.rank);
         const aPathMatch = aSpec?.path && pathPriority.some(p => aSpec.path.includes(p)) ? 1 : 0;
         const bPathMatch = bSpec?.path && pathPriority.some(p => bSpec.path.includes(p)) ? 1 : 0;
         return (bPathMatch * 1000 + b.score) - (aPathMatch * 1000 + a.score);
@@ -409,17 +409,18 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const sortedEligibleGus = useMemo(() => {
     const gus = [...eligibleGus];
     if (guSortMode === "rank") {
-      gus.sort((a, b) => (guDictionary[b.gu_id]?.rank || 0) - (guDictionary[a.gu_id]?.rank || 0));
+      gus.sort((a, b) => (b.rank || guSpecFor(b.gu_id, b.rank)?.rank || 0) - (a.rank || guSpecFor(a.gu_id, a.rank)?.rank || 0));
     } else {
       const firstSelected = selectedGuIds.length > 0 ? selectedGuIds[0] : null;
-      const firstSpec = firstSelected ? guDictionary[eligibleGus.find(g => g.instance_id === firstSelected)?.gu_id || ""] : null;
+      const firstSelectedGu = eligibleGus.find(g => g.instance_id === firstSelected);
+      const firstSpec = firstSelectedGu ? guSpecFor(firstSelectedGu.gu_id, firstSelectedGu.rank) : null;
       const mainPath = firstSpec?.path || bestPath;
       gus.sort((a, b) => {
-        const aSpec = guDictionary[a.gu_id];
-        const bSpec = guDictionary[b.gu_id];
+        const aSpec = guSpecFor(a.gu_id, a.rank);
+        const bSpec = guSpecFor(b.gu_id, b.rank);
         const aMatch = aSpec?.path === mainPath ? 1 : 0;
         const bMatch = bSpec?.path === mainPath ? 1 : 0;
-        return (bMatch - aMatch) || (bSpec?.rank || 0) - (aSpec?.rank || 0);
+        return (bMatch - aMatch) || (b.rank || bSpec?.rank || 0) - (a.rank || aSpec?.rank || 0);
       });
     }
     return gus;
@@ -628,8 +629,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         {(() => {
           const backlashCount = selectedGuIds.filter(id => {
             const gu = eligibleGus.find(g => g.instance_id === id);
-            const spec = gu ? guDictionary[gu.gu_id] : null;
-            return spec && (spec.rank || 0) > (player.rank || 1);
+            const spec = gu ? guSpecFor(gu.gu_id, gu.rank) : null;
+            return spec && (gu.rank || spec.rank || 0) > (player.rank || 1);
           }).length;
           return (
             <div className="flex flex-wrap items-center gap-3 mb-4 px-3 py-2 bg-zinc-900/60 border border-zinc-800 rounded-lg text-xs">
@@ -647,14 +648,14 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         {/* Single Gu Selection Grid */}
         <div className="mb-6">
           {eligibleGus.length === 0 ? (
-            <p className="text-sm text-zinc-600 italic py-4 text-center">Không có Cổ nào đủ điều kiện (cần ACTIVE + equipped)</p>
+            <p className="text-sm text-zinc-650 italic py-4 text-center">Không có Cổ nào đủ điều kiện (cần ACTIVE + equipped)</p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
               {sortedEligibleGus.map(gu => {
-                const spec = guDictionary[gu.gu_id];
+                const spec = guSpecFor(gu.gu_id, gu.rank);
                 const isSelected = selectedGuIds.includes(gu.instance_id);
                 const playerRank = player.rank || 1;
-                const guRank = spec?.rank || 0;
+                const guRank = gu.rank || spec?.rank || 0;
                 const isHigherRank = guRank > playerRank;
                 const pathMatch = spec?.path && spec.path.some(p => p.toLowerCase().includes(bestPath.toLowerCase()));
                 return (
@@ -719,7 +720,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
               {validKillerMoves.map(move => {
                 const isSelected = selectedKillerMoveIds.includes(move.id);
                 const firstGuId = selectedGuIds.length > 0 ? selectedGuIds[0] : null;
-                const firstSpec = firstGuId ? guDictionary[eligibleGus.find(g => g.instance_id === firstGuId)?.gu_id || ""] : null;
+                const firstSelectedGu = eligibleGus.find(g => g.instance_id === firstGuId);
+                const firstSpec = firstSelectedGu ? guSpecFor(firstSelectedGu.gu_id, firstSelectedGu.rank) : null;
                 const pathMatch = firstSpec?.path ? firstSpec.path.includes(move.path) : move.path === bestPath;
                 return (
                   <div

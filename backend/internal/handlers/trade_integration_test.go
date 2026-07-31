@@ -41,8 +41,9 @@ func TestP2PTradeFlow_ConnectingHeaven(t *testing.T) {
 		t.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	// Initialize InventorySvc
+	// Initialize InventorySvc & PlayerSvc
 	InventorySvc = services.NewInventoryService(db.DB)
+	PlayerSvc = services.NewPlayerService(db.DB)
 
 	// 2. Set up test players
 	player1ID := uuid.New()
@@ -55,7 +56,7 @@ func TestP2PTradeFlow_ConnectingHeaven(t *testing.T) {
 
 	// Insert Player 1 (TestTrade1, 1000 stones)
 	_, err = db.DB.Exec(`INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, hp, base_hp, current_region, email, ref_code)
-		VALUES ($1, $2, '', 1, 1, 'Giáp', 90, 100.0, 100.0, 1000, 100.0, 100.0, 'Nam Hoang', 'trade1@test.com', 'REF-T1')`, player1ID, "TestTrade1")
+		VALUES ($1, $2, '', 1, 1, 'Giáp', 90, 100.0, 100.0, 1000, 100.0, 100.0, 'Nam Hoang', 'trade1@test.com', $3)`, player1ID, "TestTrade1", "REF-T1-"+player1ID.String()[:8])
 	if err != nil {
 		t.Fatalf("Failed to insert player 1: %v", err)
 	}
@@ -63,7 +64,7 @@ func TestP2PTradeFlow_ConnectingHeaven(t *testing.T) {
 
 	// Insert Player 2 (TestTrade2, 1000 stones)
 	_, err = db.DB.Exec(`INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, hp, base_hp, current_region, email, ref_code)
-		VALUES ($1, $2, '', 1, 1, 'Giáp', 90, 100.0, 100.0, 1000, 100.0, 100.0, 'Nam Hoang', 'trade2@test.com', 'REF-T2')`, player2ID, "TestTrade2")
+		VALUES ($1, $2, '', 1, 1, 'Giáp', 90, 100.0, 100.0, 1000, 100.0, 100.0, 'Nam Hoang', 'trade2@test.com', $3)`, player2ID, "TestTrade2", "REF-T2-"+player2ID.String()[:8])
 	if err != nil {
 		t.Fatalf("Failed to insert player 2: %v", err)
 	}

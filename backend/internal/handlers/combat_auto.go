@@ -99,11 +99,23 @@ func AutoCombatStart(c *gin.Context) {
 	// ── Build owned equipped+ACTIVE Gu sets for validation ──
 	ownedGuTypeSet := make(map[string]bool)       // gu_id → true
 	ownedGuInstanceSet := make(map[string]bool)   // instance_id → true
+	equippedInstByGuID := make(map[string]models.GuInstance) // gu_id → highest-rank equipped ACTIVE instance
 	for _, gu := range player.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" {
 			ownedGuTypeSet[gu.GuID] = true
 			ownedGuInstanceSet[gu.InstanceID] = true
+			if best, ok := equippedInstByGuID[gu.GuID]; !ok || gu.Rank > best.Rank {
+				equippedInstByGuID[gu.GuID] = gu
+			}
 		}
+	}
+
+	// Resolve a loadout GuID to its actual equipped instance spec (match ID + rank)
+	loadoutSpec := func(guID string) (models.GuDictionaryItem, bool) {
+		if inst, ok := equippedInstByGuID[guID]; ok {
+			return models.GetGu(guID, inst.Rank)
+		}
+		return models.GuDictionaryItem{}, false
 	}
 
 	// All selected Gu (core + support, no distinction)
@@ -111,7 +123,7 @@ func AutoCombatStart(c *gin.Context) {
 		if !ownedGuTypeSet[guID] {
 			continue
 		}
-		if spec, ok := models.GetGuAny(guID); ok {
+		if spec, ok := loadoutSpec(guID); ok {
 			if hasCombatActiveEffects(&spec) {
 				act, err := buildSimActionFromGu(&actor, &spec, "GU_SKILL")
 				if err != nil {
@@ -167,7 +179,7 @@ func AutoCombatStart(c *gin.Context) {
 		}
 	}
 	for _, guID := range req.Loadout.GuIds {
-		if spec, ok := models.GetGuAny(guID); ok {
+		if spec, ok := loadoutSpec(guID); ok {
 			scanMultiplier(spec)
 		}
 	}
@@ -215,7 +227,7 @@ func AutoCombatStart(c *gin.Context) {
 		}
 	}
 	for _, guID := range req.Loadout.GuIds {
-		if spec, ok := models.GetGuAny(guID); ok {
+		if spec, ok := loadoutSpec(guID); ok {
 			scanShield(spec)
 		}
 	}
@@ -346,7 +358,7 @@ func AutoCombatStart(c *gin.Context) {
 			if guInst.Status != "ACTIVE" {
 				continue
 			}
-			spec, ok := models.GetGuAny(guInst.GuID)
+			spec, ok := models.GetGu(guInst.GuID, guInst.Rank)
 			if !ok {
 				continue
 			}
@@ -731,7 +743,7 @@ func AutoCombatStart(c *gin.Context) {
 	var combatEndMsg string
 	for _, gu := range player.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" {
-			if spec, ok := models.GetGuAny(gu.GuID); ok {
+			if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
 				if msg, err := HandleGuEvent(&player, spec, gu, "ON_COMBAT_END"); err == nil && msg != "" {
 					combatEndMsg = msg
 				}

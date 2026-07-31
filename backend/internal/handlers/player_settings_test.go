@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/services"
 )
 
 func TestUpdateProfileSettings_UsernameRules(t *testing.T) {
@@ -35,6 +36,8 @@ func TestUpdateProfileSettings_UsernameRules(t *testing.T) {
 	}
 	defer db.DB.Close()
 
+	PlayerSvc = services.NewPlayerService(db.DB)
+
 	if err := db.InitSchema(); err != nil {
 		t.Fatalf("Failed to initialize database: %v", err)
 	}
@@ -49,14 +52,14 @@ func TestUpdateProfileSettings_UsernameRules(t *testing.T) {
 
 	// Insert Player 1: "OrigPlayerOne" with email "p1@test.com"
 	_, err = db.DB.Exec(`INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, hp, base_hp, current_region, email, ref_code)
-		VALUES ($1, $2, '', 1, 1, 'Giáp', 90, 100.0, 100.0, 1000, 100.0, 100.0, 'Nam Hoang', 'p1@test.com', 'REF-P1')`, player1ID, "OrigPlayerOne")
+		VALUES ($1, $2, '', 1, 1, 'Giáp', 90, 100.0, 100.0, 1000, 100.0, 100.0, 'Nam Hoang', 'p1@test.com', $3)`, player1ID, "OrigPlayerOne", "REF-P1-"+player1ID.String()[:8])
 	if err != nil {
 		t.Fatalf("Failed to insert player 1: %v", err)
 	}
 
 	// Insert Player 2: "OrigPlayerTwo" with email "p2@test.com"
 	_, err = db.DB.Exec(`INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, hp, base_hp, current_region, email, ref_code)
-		VALUES ($1, $2, '', 1, 1, 'Giáp', 90, 100.0, 100.0, 1000, 100.0, 100.0, 'Nam Hoang', 'p2@test.com', 'REF-P2')`, player2ID, "OrigPlayerTwo")
+		VALUES ($1, $2, '', 1, 1, 'Giáp', 90, 100.0, 100.0, 1000, 100.0, 100.0, 'Nam Hoang', 'p2@test.com', $3)`, player2ID, "OrigPlayerTwo", "REF-P2-"+player2ID.String()[:8])
 	if err != nil {
 		t.Fatalf("Failed to insert player 2: %v", err)
 	}

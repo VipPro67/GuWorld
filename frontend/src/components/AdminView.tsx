@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { useGameStore } from "@/store/useGameStore";
+import { useGameStore, guSpecFor } from "@/store/useGameStore";
 import type { GuSpec, ItemSpec } from "@/store/useGameStore";
 import {
   Shield,
@@ -88,7 +88,7 @@ interface PlayerRow {
 
 interface PlayerDetail {
   id: string; username: string; email: string; rank: number; sub_rank: number;
-  aptitude_type: string; aptitude_percent: number; aptitude_grade: number;
+  aptitude_type: string; aptitude_percent: number; aptitude_grade: string;
   current_mana: number; max_mana: number; primeval_stones: number;
   immortal_stones: number; hp: number; base_hp: number;
   wall_progress: number; human_qi: number; current_region: string;
@@ -96,18 +96,28 @@ interface PlayerDetail {
   soul_hp: number; max_soul: number; soul_tier: string;
   explore_count: number; aperture_stress: number;
   avatar_url: string; bio: string;
-  gu_inventory: GuInstanceDetail[];
-  materials_inventory: Record<string, number>;
+  gu_count: number;
+  item_count: number;
 }
 
-interface GuInstanceDetail {
+interface PlayerItemRow {
+  item_id: string;
+  name: string;
+  item_type: string;
+  rank: number;
+  category: string;
+  quantity: number;
+}
+
+interface PlayerGuRow {
   instance_id: string;
   gu_id: string;
+  name: string;
+  rank: number;
   hunger: number;
   status: string;
   equipped: boolean;
   is_vital: boolean;
-  integration_time?: number;
 }
 
 const rankNames = [
@@ -180,6 +190,26 @@ function memberRankLabel(rank: string): string {
   }
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function guLocationStyle(loc: string): string {
+  switch (loc) {
+    case "inventory": return "text-emerald-400 border-emerald-500/30 bg-emerald-950/60";
+    case "auction": return "text-amber-400 border-amber-500/30 bg-amber-950/60";
+    case "shop": return "text-blue-400 border-blue-500/30 bg-blue-950/60";
+    default: return "text-zinc-400 border-zinc-700 bg-zinc-900";
+  }
+}
+
+function guLocationLabel(loc: string): string {
+  switch (loc) {
+    case "inventory": return "Túi đồ";
+    case "auction": return "Đấu giá";
+    case "shop": return "Cửa hàng";
+    default: return loc;
+  }
+}
+
 export const AdminView: React.FC = () => {
   const { player, setView, addToast, guDictionary, itemDictionary } = useGameStore();
   const [activeTab, setActiveTab] = useState<"items" | "gus">("items");
@@ -188,14 +218,40 @@ export const AdminView: React.FC = () => {
   const [page, setPage] = useState(1);
   const [limit] = useState(50);
   const [search, setSearch] = useState("");
+  const [searchBy, setSearchBy] = useState<"all" | "id" | "username" | "email" | "item" | "gu">("all");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<PlayerDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const [itemSearch, setItemSearch] = useState("");
-  const [guSearch, setGuSearch] = useState("");
+  // Lazy-loaded player detail tabs
+  const [playerItems, setPlayerItems] = useState<PlayerItemRow[]>([]);
+  const [playerItemsTotal, setPlayerItemsTotal] = useState(0);
+  const [playerItemsPage, setPlayerItemsPage] = useState(1);
+  const [playerItemsLimit] = useState(20);
+  const [playerItemsLoading, setPlayerItemsLoading] = useState(false);
+  const [playerItemsSearch, setPlayerItemsSearch] = useState("");
+
+  const [playerGus, setPlayerGus] = useState<PlayerGuRow[]>([]);
+  const [playerGusTotal, setPlayerGusTotal] = useState(0);
+  const [playerGusPage, setPlayerGusPage] = useState(1);
+  const [playerGusLimit] = useState(20);
+  const [playerGusLoading, setPlayerGusLoading] = useState(false);
+  const [playerGusSearch, setPlayerGusSearch] = useState("");
+
+  // Edit player modal
+  const [showEditPlayer, setShowEditPlayer] = useState(false);
+  const [editPlayerForm, setEditPlayerForm] = useState<Record<string, string>>({});
+
+  // Global gu search (túi đồ / đấu giá / cửa hàng)
+  const [guSearchId, setGuSearchId] = useState("");
+  const [guSearchInstance, setGuSearchInstance] = useState("");
+  const [guSearchResults, setGuSearchResults] = useState<any[]>([]);
+  const [guSearchTotal, setGuSearchTotal] = useState(0);
+  const [guSearchPage, setGuSearchPage] = useState(1);
+  const [guSearchLimit] = useState(50);
+  const [guSearchLoading, setGuSearchLoading] = useState(false);
 
   const [showAddItem, setShowAddItem] = useState(false);
   const [addItemId, setAddItemId] = useState("");
@@ -214,7 +270,7 @@ export const AdminView: React.FC = () => {
 
   const [actionLoading, setActionLoading] = useState(false);
   const [section, setSection] = useState<"players" | "sects" | "data" | "logs" | "shop" | "mines" | "gift_codes">("players");
-  const [playersTab, setPlayersTab] = useState<"list" | "online">("list");
+  const [playersTab, setPlayersTab] = useState<"list" | "online" | "gusearch">("list");
 
   // ----- Audit log state -----
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -420,17 +476,17 @@ export const AdminView: React.FC = () => {
 
   const fetchGus = useCallback(async () => {
     setGusLoading(true);
-    try { const res = await authFetch(`${BACKEND_URL}/api/admin/gu-dictionary`); if (res.ok) setGus(await res.json()); }
+    try { const res = await authFetch(`${BACKEND_URL}/api/admin/gu-dictionary`); if (res.ok) { const data = await res.json(); setGus(Array.isArray(data) ? data : []); } }
     catch {} finally { setGusLoading(false); }
   }, []);
   const fetchItems = useCallback(async () => {
     setItemsLoading(true);
-    try { const res = await authFetch(`${BACKEND_URL}/api/admin/item-dictionary`); if (res.ok) setItems(await res.json()); }
+    try { const res = await authFetch(`${BACKEND_URL}/api/admin/item-dictionary`); if (res.ok) { const data = await res.json(); setItems(Array.isArray(data) ? data : []); } }
     catch {} finally { setItemsLoading(false); }
   }, []);
   const fetchRecipes = useCallback(async () => {
     setRecipesLoading(true);
-    try { const res = await authFetch(`${BACKEND_URL}/api/admin/recipes`); if (res.ok) setRecipes(await res.json()); }
+    try { const res = await authFetch(`${BACKEND_URL}/api/admin/recipes`); if (res.ok) { const data = await res.json(); if (Array.isArray(data)) setRecipes(data); else setRecipes([]); } }
     catch {} finally { setRecipesLoading(false); }
   }, []);
 
@@ -495,6 +551,30 @@ export const AdminView: React.FC = () => {
     if (section === "players" && playersTab === "online") fetchOnlinePlayers();
   }, [section, playersTab, fetchOnlinePlayers]);
 
+  const fetchGuSearch = useCallback(async () => {
+    if (!guSearchId.trim() && !guSearchInstance.trim()) {
+      setGuSearchResults([]);
+      setGuSearchTotal(0);
+      return;
+    }
+    setGuSearchLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(guSearchPage), limit: String(guSearchLimit) });
+      if (guSearchId.trim()) params.set("gu_id", guSearchId.trim());
+      if (guSearchInstance.trim()) params.set("instance_id", guSearchInstance.trim());
+      const res = await authFetch(`${BACKEND_URL}/api/admin/gus/search?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setGuSearchResults(data.data || []);
+        setGuSearchTotal(data.total || 0);
+      }
+    } catch {} finally { setGuSearchLoading(false); }
+  }, [guSearchPage, guSearchLimit, guSearchId, guSearchInstance]);
+
+  useEffect(() => {
+    if (section === "players" && playersTab === "gusearch") fetchGuSearch();
+  }, [section, playersTab, fetchGuSearch]);
+
   useEffect(() => {
     if (selectedSectId) {
       fetchSectDetail(selectedSectId);
@@ -507,7 +587,13 @@ export const AdminView: React.FC = () => {
     setError("");
     try {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });
-      if (search.trim()) params.set("search", search.trim());
+      const q = search.trim();
+      if (q) {
+        params.set("search", q);
+        let by = searchBy;
+        if (by === "all" && UUID_RE.test(q)) by = "id";
+        if (by !== "all") params.set("search_by", by);
+      }
       const res = await authFetch(`${BACKEND_URL}/api/admin/players?${params}`);
       if (!res.ok) throw new Error((await res.json().catch(() => ({ error: "Lỗi" }))).error || "Lỗi tải");
       const data = await res.json();
@@ -516,7 +602,7 @@ export const AdminView: React.FC = () => {
     } catch (err: any) {
       setError(err.message);
     } finally { setLoading(false); }
-  }, [page, limit, search]);
+  }, [page, limit, search, searchBy]);
 
   useEffect(() => { fetchPlayers(); }, [fetchPlayers]);
 
@@ -535,6 +621,42 @@ export const AdminView: React.FC = () => {
     if (selectedId) fetchDetail(selectedId);
   }, [selectedId, fetchDetail]);
 
+  const fetchPlayerItems = useCallback(async (id: string) => {
+    setPlayerItemsLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(playerItemsPage), limit: String(playerItemsLimit) });
+      if (playerItemsSearch.trim()) params.set("search", playerItemsSearch.trim());
+      const res = await authFetch(`${BACKEND_URL}/api/admin/players/${id}/items?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setPlayerItems(data.data || []);
+        setPlayerItemsTotal(data.total || 0);
+      }
+    } catch {} finally { setPlayerItemsLoading(false); }
+  }, [playerItemsPage, playerItemsLimit, playerItemsSearch]);
+
+  const fetchPlayerGus = useCallback(async (id: string) => {
+    setPlayerGusLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(playerGusPage), limit: String(playerGusLimit) });
+      if (playerGusSearch.trim()) params.set("search", playerGusSearch.trim());
+      const res = await authFetch(`${BACKEND_URL}/api/admin/players/${id}/gus?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setPlayerGus(data.data || []);
+        setPlayerGusTotal(data.total || 0);
+      }
+    } catch {} finally { setPlayerGusLoading(false); }
+  }, [playerGusPage, playerGusLimit, playerGusSearch]);
+
+  useEffect(() => {
+    if (selectedId && activeTab === "items") fetchPlayerItems(selectedId);
+  }, [selectedId, activeTab, playerItemsPage, playerItemsSearch, fetchPlayerItems]);
+
+  useEffect(() => {
+    if (selectedId && activeTab === "gus") fetchPlayerGus(selectedId);
+  }, [selectedId, activeTab, playerGusPage, playerGusSearch, fetchPlayerGus]);
+
   const exec = async (url: string, method: string, body?: any) => {
     setActionLoading(true);
     try {
@@ -545,7 +667,11 @@ export const AdminView: React.FC = () => {
       });
       const data = await res.json().catch(() => ({ error: "Lỗi không xác định" }));
       if (!res.ok) throw new Error(data.error || "Thất bại");
-      if (selectedId) fetchDetail(selectedId);
+      if (selectedId) {
+        fetchDetail(selectedId);
+        if (activeTab === "items") fetchPlayerItems(selectedId);
+        else if (activeTab === "gus") fetchPlayerGus(selectedId);
+      }
       if (addToast) addToast(data.message || "Thành công", "success");
       return true;
     } catch (err: any) {
@@ -657,10 +783,30 @@ export const AdminView: React.FC = () => {
               )}
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button onClick={() => setShowStones(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer">
               <Coins className="w-3.5 h-3.5" />
               Điều chỉnh tài nguyên
+            </button>
+            <button onClick={() => {
+              if (detail) {
+                setEditPlayerForm({
+                  rank: String(detail.rank), sub_rank: String(detail.sub_rank),
+                  aptitude_type: detail.aptitude_type || "", aptitude_percent: String(detail.aptitude_percent ?? ""),
+                  aptitude_grade: detail.aptitude_grade || "", current_mana: String(detail.current_mana ?? ""),
+                  max_mana: String(detail.max_mana ?? ""), hp: String(detail.hp ?? ""), base_hp: String(detail.base_hp ?? ""),
+                  wall_progress: String(detail.wall_progress ?? ""), human_qi: String(detail.human_qi ?? ""),
+                  lifespan: String(detail.lifespan ?? ""), current_region: detail.current_region || "",
+                  is_admin: String(detail.is_admin), soul_hp: String(detail.soul_hp ?? ""),
+                  max_soul: String(detail.max_soul ?? ""), soul_tier: detail.soul_tier || "",
+                  explore_count: String(detail.explore_count ?? ""), aperture_stress: String(detail.aperture_stress ?? ""),
+                  bio: detail.bio || "", avatar_url: detail.avatar_url || "",
+                });
+                setShowEditPlayer(true);
+              }
+            }} disabled={!detail} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50">
+              <Edit3 className="w-3.5 h-3.5" />
+              Sửa thông tin
             </button>
             <button onClick={() => { setSelectedId(null); setDetail(null); }} disabled={actionLoading} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer">
               <X className="w-3.5 h-3.5" />
@@ -696,10 +842,10 @@ export const AdminView: React.FC = () => {
             {/* Tabs */}
             <div className="border-b border-zinc-800/80 flex gap-0">
               <button onClick={() => setActiveTab("items")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${activeTab === "items" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-                <Package className="w-3.5 h-3.5 inline mr-1.5" />Vật phẩm ({Object.keys(detail.materials_inventory || {}).length})
+                <Package className="w-3.5 h-3.5 inline mr-1.5" />Vật phẩm ({detail.item_count || 0})
               </button>
               <button onClick={() => setActiveTab("gus")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${activeTab === "gus" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
-                <Bug className="w-3.5 h-3.5 inline mr-1.5" />Cổ trùng ({detail.gu_inventory?.length || 0})
+                <Bug className="w-3.5 h-3.5 inline mr-1.5" />Cổ trùng ({detail.gu_count || 0})
               </button>
             </div>
 
@@ -709,19 +855,25 @@ export const AdminView: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <div className="flex-1 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
-                    <input type="text" value={itemSearch} onChange={e => setItemSearch(e.target.value)} placeholder="Tìm vật phẩm trong túi đồ..." className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 placeholder:text-zinc-600" />
+                    <input type="text" value={playerItemsSearch} onChange={e => setPlayerItemsSearch(e.target.value)} onKeyDown={e => { if (e.key === "Enter") setPlayerItemsPage(1); }} placeholder="Tìm vật phẩm trong túi đồ..." className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 placeholder:text-zinc-600" />
                   </div>
+                  <button onClick={() => { setPlayerItemsPage(1); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-300 transition-colors cursor-pointer">
+                    <Search className="w-3.5 h-3.5" /> Tìm
+                  </button>
                   <button onClick={() => { setAddItemId(""); setAddItemQty(1); setShowAddItem(true); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">
                     <Plus className="w-3.5 h-3.5" /> Thêm
                   </button>
                 </div>
 
-                {Object.keys(detail.materials_inventory || {}).length === 0 ? (
+                {playerItemsLoading ? (
+                  <div className="flex flex-col items-center py-12"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /><span className="text-xs text-zinc-500 font-mono mt-2">Đang tải vật phẩm...</span></div>
+                ) : playerItems.length === 0 ? (
                   <div className="text-center py-12 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl">
                     <Package className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
                     <p className="text-xs text-zinc-500">Túi đồ trống</p>
                   </div>
                 ) : (
+                  <>
                   <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
                     <table className="w-full text-left text-xs">
                       <thead>
@@ -735,36 +887,43 @@ export const AdminView: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {Object.entries(detail.materials_inventory)
-                          .filter(([id]) => {
-                            if (!itemSearch.trim()) return true;
-                            const spec = itemDictionary[id];
-                            const name = spec?.name || "";
-                            return id.toLowerCase().includes(itemSearch.toLowerCase()) || name.toLowerCase().includes(itemSearch.toLowerCase());
-                          })
-                          .sort((a, b) => b[1] - a[1])
-                          .map(([itemId, qty]) => {
-                            const spec = itemDictionary[itemId];
-                            return (
-                              <tr key={itemId} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
-                                <td className="px-3 py-2.5 text-zinc-500 font-mono max-w-[100px] truncate" title={itemId}>{itemId}</td>
-                                <td className="px-3 py-2.5 font-semibold text-zinc-200">{spec?.name || itemId}</td>
-                                <td className="px-3 py-2.5">
-                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-900 border border-zinc-800 text-zinc-400">{translateItemType(spec?.item_type) || "?"}</span>
-                                </td>
-                                <td className="px-3 py-2.5 text-zinc-400">{spec?.rank || "?"}</td>
-                                <td className="px-3 py-2.5 text-right font-mono font-bold text-zinc-200">{qty.toLocaleString()}</td>
-                                <td className="px-3 py-2.5 text-right">
-                                  <button onClick={() => { setShowRemoveItem(itemId); setRemoveItemQty(1); }} className="p-1 rounded-lg hover:bg-red-950/40 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer" title="Xóa">
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
+                        {playerItems.map((it) => {
+                          const spec = itemDictionary[it.item_id];
+                          return (
+                            <tr key={it.item_id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                              <td className="px-3 py-2.5 text-zinc-500 font-mono max-w-[100px] truncate" title={it.item_id}>{it.item_id}</td>
+                              <td className="px-3 py-2.5 font-semibold text-zinc-200">{it.name || spec?.name || it.item_id}</td>
+                              <td className="px-3 py-2.5">
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-900 border border-zinc-800 text-zinc-400">{translateItemType(it.item_type || spec?.item_type) || "?"}</span>
+                              </td>
+                              <td className="px-3 py-2.5 text-zinc-400">{it.rank || spec?.rank || "?"}</td>
+                              <td className="px-3 py-2.5 text-right font-mono font-bold text-zinc-200">{it.quantity.toLocaleString()}</td>
+                              <td className="px-3 py-2.5 text-right">
+                                <button onClick={() => { setShowRemoveItem(it.item_id); setRemoveItemQty(1); }} className="p-1 rounded-lg hover:bg-red-950/40 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer" title="Xóa">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
+                  <div className="flex items-center justify-between mt-2 text-xs font-semibold text-zinc-500">
+                    <div>Tổng: <span className="text-zinc-300">{playerItemsTotal.toLocaleString()}</span> vật phẩm</div>
+                    <div className="flex items-center gap-3">
+                      <span>Trang {playerItemsPage}/{Math.max(1, Math.ceil(playerItemsTotal / playerItemsLimit))}</span>
+                      <div className="flex gap-2">
+                        <button onClick={() => setPlayerItemsPage(Math.max(1, playerItemsPage - 1))} disabled={playerItemsPage <= 1 || playerItemsLoading} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 disabled:opacity-40 transition-colors cursor-pointer">
+                          <ChevronLeft className="w-4 h-4" /> Trước
+                        </button>
+                        <button onClick={() => setPlayerItemsPage(playerItemsPage + 1)} disabled={playerItemsPage >= Math.ceil(playerItemsTotal / playerItemsLimit) || playerItemsLoading} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 disabled:opacity-40 transition-colors cursor-pointer">
+                          Sau <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  </>
                 )}
               </div>
             )}
@@ -775,19 +934,25 @@ export const AdminView: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <div className="flex-1 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
-                    <input type="text" value={guSearch} onChange={e => setGuSearch(e.target.value)} placeholder="Tìm cổ trùng..." className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 placeholder:text-zinc-600" />
+                    <input type="text" value={playerGusSearch} onChange={e => setPlayerGusSearch(e.target.value)} onKeyDown={e => { if (e.key === "Enter") setPlayerGusPage(1); }} placeholder="Tìm cổ trùng (ID, tên, instance ID)..." className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 placeholder:text-zinc-600" />
                   </div>
+                  <button onClick={() => { setPlayerGusPage(1); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-300 transition-colors cursor-pointer">
+                    <Search className="w-3.5 h-3.5" /> Tìm
+                  </button>
                   <button onClick={() => { setAddGuId(""); setAddGuQty(1); setShowAddGu(true); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">
                     <Plus className="w-3.5 h-3.5" /> Thêm
                   </button>
                 </div>
 
-                {(!detail.gu_inventory || detail.gu_inventory.length === 0) ? (
+                {playerGusLoading ? (
+                  <div className="flex flex-col items-center py-12"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /><span className="text-xs text-zinc-500 font-mono mt-2">Đang tải cổ trùng...</span></div>
+                ) : playerGus.length === 0 ? (
                   <div className="text-center py-12 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl">
                     <Bug className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
                     <p className="text-xs text-zinc-500">Không có cổ trùng nào</p>
                   </div>
                 ) : (
+                  <>
                   <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
                     <table className="w-full text-left text-xs">
                       <thead>
@@ -803,44 +968,52 @@ export const AdminView: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {detail.gu_inventory
-                          .filter((gu) => {
-                            if (!guSearch.trim()) return true;
-                            const spec = guDictionary[gu.gu_id];
-                            const name = spec?.name || "";
-                            return gu.gu_id.toLowerCase().includes(guSearch.toLowerCase()) || name.toLowerCase().includes(guSearch.toLowerCase());
-                          })
-                          .map((gu) => {
-                            const spec = guDictionary[gu.gu_id];
-                            return (
-                              <tr key={gu.instance_id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
-                                <td className="px-3 py-2.5 text-zinc-500 font-mono max-w-[80px] truncate" title={gu.instance_id}>{gu.instance_id.slice(0, 8)}...</td>
-                                <td className="px-3 py-2.5 font-semibold text-zinc-200">{spec?.name || gu.gu_id}</td>
-                                <td className={`px-3 py-2.5 font-bold ${rankColor(spec?.rank || 1)}`}>{spec?.rank || "?"}</td>
-                                <td className="px-3 py-2.5">
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${statusColor(gu.status)}`}>{statusLabel(gu.status)}</span>
-                                </td>
-                                <td className="px-3 py-2.5 font-mono text-zinc-300">{gu.hunger}</td>
-                                <td className="px-3 py-2.5">{gu.equipped ? <span className="text-emerald-400 text-[11px] font-bold">✓</span> : <span className="text-zinc-600">–</span>}</td>
-                                <td className="px-3 py-2.5">{gu.is_vital ? <Star className="w-3.5 h-3.5 text-amber-400" /> : <span className="text-zinc-600">–</span>}</td>
-                                <td className="px-3 py-2.5 text-right">
-                                  <button
-                                    onClick={async () => {
-                                      if (!confirm("Xóa cổ trùng này?")) return;
-                                      await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/gus/${gu.instance_id}`, "DELETE");
-                                    }}
-                                    className="p-1 rounded-lg hover:bg-red-950/40 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
-                                    title="Xóa"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
+                        {playerGus.map((gu) => {
+                          const spec = guSpecFor(gu.gu_id, gu.rank);
+                          return (
+                            <tr key={gu.instance_id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                              <td className="px-3 py-2.5 text-zinc-500 font-mono max-w-[80px] truncate" title={gu.instance_id}>{gu.instance_id.slice(0, 8)}...</td>
+                              <td className="px-3 py-2.5 font-semibold text-zinc-200">{gu.name || spec?.name || gu.gu_id}</td>
+                              <td className={`px-3 py-2.5 font-bold ${rankColor(gu.rank || spec?.rank || 1)}`}>{gu.rank || spec?.rank || "?"}</td>
+                              <td className="px-3 py-2.5">
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${statusColor(gu.status)}`}>{statusLabel(gu.status)}</span>
+                              </td>
+                              <td className="px-3 py-2.5 font-mono text-zinc-300">{gu.hunger}</td>
+                              <td className="px-3 py-2.5">{gu.equipped ? <span className="text-emerald-400 text-[11px] font-bold">✓</span> : <span className="text-zinc-600">–</span>}</td>
+                              <td className="px-3 py-2.5">{gu.is_vital ? <Star className="w-3.5 h-3.5 text-amber-400" /> : <span className="text-zinc-600">–</span>}</td>
+                              <td className="px-3 py-2.5 text-right">
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm("Xóa cổ trùng này?")) return;
+                                    await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/gus/${gu.instance_id}`, "DELETE");
+                                  }}
+                                  className="p-1 rounded-lg hover:bg-red-950/40 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
+                                  title="Xóa"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
+                  <div className="flex items-center justify-between mt-2 text-xs font-semibold text-zinc-500">
+                    <div>Tổng: <span className="text-zinc-300">{playerGusTotal.toLocaleString()}</span> cổ trùng</div>
+                    <div className="flex items-center gap-3">
+                      <span>Trang {playerGusPage}/{Math.max(1, Math.ceil(playerGusTotal / playerGusLimit))}</span>
+                      <div className="flex gap-2">
+                        <button onClick={() => setPlayerGusPage(Math.max(1, playerGusPage - 1))} disabled={playerGusPage <= 1 || playerGusLoading} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 disabled:opacity-40 transition-colors cursor-pointer">
+                          <ChevronLeft className="w-4 h-4" /> Trước
+                        </button>
+                        <button onClick={() => setPlayerGusPage(playerGusPage + 1)} disabled={playerGusPage >= Math.ceil(playerGusTotal / playerGusLimit) || playerGusLoading} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 disabled:opacity-40 transition-colors cursor-pointer">
+                          Sau <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  </>
                 )}
               </div>
             )}
@@ -928,10 +1101,10 @@ export const AdminView: React.FC = () => {
                 <button onClick={() => setShowRemoveItem(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
               </div>
               <p className="text-xs text-zinc-400">Vật phẩm: <span className="text-zinc-200 font-bold">{itemDictionary[showRemoveItem]?.name || showRemoveItem}</span></p>
-              <p className="text-xs text-zinc-500">Hiện có: <span className="text-zinc-300 font-bold">{detail?.materials_inventory[showRemoveItem]?.toLocaleString() || 0}</span></p>
+              <p className="text-xs text-zinc-500">Hiện có: <span className="text-zinc-300 font-bold">{(() => { const row = playerItems.find(i => i.item_id === showRemoveItem); return (row?.quantity || 0).toLocaleString(); })()}</span></p>
               <div>
                 <label className="text-[11px] font-bold text-zinc-500 font-mono">Số lượng xóa</label>
-                <input type="number" min={1} max={detail?.materials_inventory[showRemoveItem] || 1} value={removeItemQty} onChange={e => setRemoveItemQty(Math.max(1, Math.min(parseInt(e.target.value) || 1, detail?.materials_inventory[showRemoveItem] || 1)))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                <input type="number" min={1} max={playerItems.find(i => i.item_id === showRemoveItem)?.quantity || 1} value={removeItemQty} onChange={e => setRemoveItemQty(Math.max(1, Math.min(parseInt(e.target.value) || 1, playerItems.find(i => i.item_id === showRemoveItem)?.quantity || 1)))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
               </div>
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setShowRemoveItem(null)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
@@ -972,6 +1145,145 @@ export const AdminView: React.FC = () => {
                   if (ok) setShowAddGu(false);
                 }} className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-zinc-100 transition-colors cursor-pointer disabled:opacity-50">
                   {actionLoading ? "Đang xử lý..." : "Thêm"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Edit Player Modal */}
+        {showEditPlayer && detail && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
+            <div className="w-full max-w-2xl bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-zinc-100 font-serif">Sửa thông tin người chơi</h3>
+                <button onClick={() => setShowEditPlayer(false)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tu vi (rank 1-9)</label>
+                  <input type="number" min={1} max={9} value={editPlayerForm.rank || ""} onChange={e => setEditPlayerForm(f => ({ ...f, rank: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tiểu cảnh giới (1-4)</label>
+                  <input type="number" min={1} max={4} value={editPlayerForm.sub_rank || ""} onChange={e => setEditPlayerForm(f => ({ ...f, sub_rank: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Thiên phú (aptitude_type)</label>
+                  <input type="text" value={editPlayerForm.aptitude_type || ""} onChange={e => setEditPlayerForm(f => ({ ...f, aptitude_type: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Phần trăm thiên phú (0-100)</label>
+                  <input type="number" min={0} max={100} value={editPlayerForm.aptitude_percent || ""} onChange={e => setEditPlayerForm(f => ({ ...f, aptitude_percent: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Hạng thiên phú</label>
+                  <input type="text" value={editPlayerForm.aptitude_grade || ""} onChange={e => setEditPlayerForm(f => ({ ...f, aptitude_grade: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Chân nguyên hiện tại</label>
+                  <input type="number" value={editPlayerForm.current_mana || ""} onChange={e => setEditPlayerForm(f => ({ ...f, current_mana: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Chân nguyên tối đa</label>
+                  <input type="number" value={editPlayerForm.max_mana || ""} onChange={e => setEditPlayerForm(f => ({ ...f, max_mana: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Máu hiện tại (hp)</label>
+                  <input type="number" value={editPlayerForm.hp || ""} onChange={e => setEditPlayerForm(f => ({ ...f, hp: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Máu tối đa (base_hp)</label>
+                  <input type="number" value={editPlayerForm.base_hp || ""} onChange={e => setEditPlayerForm(f => ({ ...f, base_hp: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tuổi thọ (lifespan)</label>
+                  <input type="number" value={editPlayerForm.lifespan || ""} onChange={e => setEditPlayerForm(f => ({ ...f, lifespan: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Khu vực hiện tại</label>
+                  <input type="text" value={editPlayerForm.current_region || ""} onChange={e => setEditPlayerForm(f => ({ ...f, current_region: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tường đạo (wall_progress)</label>
+                  <input type="number" value={editPlayerForm.wall_progress || ""} onChange={e => setEditPlayerForm(f => ({ ...f, wall_progress: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Nhân khí (human_qi)</label>
+                  <input type="number" value={editPlayerForm.human_qi || ""} onChange={e => setEditPlayerForm(f => ({ ...f, human_qi: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Hồn lực (soul_hp)</label>
+                  <input type="number" value={editPlayerForm.soul_hp || ""} onChange={e => setEditPlayerForm(f => ({ ...f, soul_hp: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Hồn lực tối đa (max_soul)</label>
+                  <input type="number" value={editPlayerForm.max_soul || ""} onChange={e => setEditPlayerForm(f => ({ ...f, max_soul: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tầng hồn (soul_tier)</label>
+                  <input type="text" value={editPlayerForm.soul_tier || ""} onChange={e => setEditPlayerForm(f => ({ ...f, soul_tier: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Số lần khai phá (explore_count)</label>
+                  <input type="number" min={0} value={editPlayerForm.explore_count || ""} onChange={e => setEditPlayerForm(f => ({ ...f, explore_count: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Áp lực đan điền</label>
+                  <input type="number" value={editPlayerForm.aperture_stress || ""} onChange={e => setEditPlayerForm(f => ({ ...f, aperture_stress: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Avatar URL</label>
+                  <input type="text" value={editPlayerForm.avatar_url || ""} onChange={e => setEditPlayerForm(f => ({ ...f, avatar_url: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div className="flex items-end pb-1">
+                  <label className="flex items-center gap-2 text-[11px] font-bold text-zinc-500 font-mono cursor-pointer">
+                    <input type="checkbox" checked={editPlayerForm.is_admin === "true"} onChange={e => setEditPlayerForm(f => ({ ...f, is_admin: String(e.target.checked) }))} className="accent-amber-500 w-4 h-4" />
+                    Quyền Admin
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-zinc-500 font-mono">Tiểu sử (bio)</label>
+                <textarea value={editPlayerForm.bio || ""} onChange={e => setEditPlayerForm(f => ({ ...f, bio: e.target.value }))} rows={2} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setShowEditPlayer(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
+                <button disabled={actionLoading} onClick={async () => {
+                  const body: any = {};
+                  const num = (v: string) => (v.trim() === "" ? undefined : Number(v));
+                  const set = (field: string, cur: any, next: any) => {
+                    if (next === undefined || next === "") return;
+                    if (String(cur) !== String(next)) body[field] = next;
+                  };
+                  set("rank", detail.rank, num(editPlayerForm.rank));
+                  set("sub_rank", detail.sub_rank, num(editPlayerForm.sub_rank));
+                  set("aptitude_type", detail.aptitude_type || "", editPlayerForm.aptitude_type);
+                  set("aptitude_percent", detail.aptitude_percent, num(editPlayerForm.aptitude_percent));
+                  set("aptitude_grade", detail.aptitude_grade || "", editPlayerForm.aptitude_grade);
+                  set("current_mana", detail.current_mana, num(editPlayerForm.current_mana));
+                  set("max_mana", detail.max_mana, num(editPlayerForm.max_mana));
+                  set("hp", detail.hp, num(editPlayerForm.hp));
+                  set("base_hp", detail.base_hp, num(editPlayerForm.base_hp));
+                  set("wall_progress", detail.wall_progress, num(editPlayerForm.wall_progress));
+                  set("human_qi", detail.human_qi, num(editPlayerForm.human_qi));
+                  set("lifespan", detail.lifespan, num(editPlayerForm.lifespan));
+                  set("current_region", detail.current_region || "", editPlayerForm.current_region);
+                  set("is_admin", detail.is_admin, editPlayerForm.is_admin === "true");
+                  set("soul_hp", detail.soul_hp, num(editPlayerForm.soul_hp));
+                  set("max_soul", detail.max_soul, num(editPlayerForm.max_soul));
+                  set("soul_tier", detail.soul_tier || "", editPlayerForm.soul_tier);
+                  set("explore_count", detail.explore_count, num(editPlayerForm.explore_count));
+                  set("aperture_stress", detail.aperture_stress, num(editPlayerForm.aperture_stress));
+                  set("bio", detail.bio || "", editPlayerForm.bio);
+                  set("avatar_url", detail.avatar_url || "", editPlayerForm.avatar_url);
+                  if (Object.keys(body).length === 0) {
+                    if (addToast) addToast("Không có thay đổi nào", "info");
+                    return;
+                  }
+                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}`, "PUT", body);
+                  if (ok) setShowEditPlayer(false);
+                }} className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-500 text-zinc-100 transition-colors cursor-pointer disabled:opacity-50">
+                  {actionLoading ? "Đang xử lý..." : "Lưu"}
                 </button>
               </div>
             </div>
@@ -1513,17 +1825,33 @@ export const AdminView: React.FC = () => {
             <button onClick={() => setPlayersTab("online")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${playersTab === "online" ? "text-emerald-400 border-emerald-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <Activity className="w-3.5 h-3.5 inline mr-1.5" />Trực tuyến
             </button>
+            <button onClick={() => setPlayersTab("gusearch")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${playersTab === "gusearch" ? "text-blue-400 border-blue-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <Bug className="w-3.5 h-3.5 inline mr-1.5" />Tìm cổ trùng
+            </button>
           </div>
 
           {playersTab === "list" && (
           <>
           <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4 mb-4">
             <div className="flex gap-3 items-end">
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1">
+                  <Filter className="w-3 h-3" /> Loại tìm kiếm
+                </label>
+                <select value={searchBy} onChange={e => { setSearchBy(e.target.value as any); setPage(1); }} className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 transition-colors cursor-pointer">
+                  <option value="all">Tất cả (tự nhận diện ID)</option>
+                  <option value="id">ID</option>
+                  <option value="username">Tên đăng nhập</option>
+                  <option value="email">Email</option>
+                  <option value="item">Vật phẩm sở hữu</option>
+                  <option value="gu">Cổ trùng sở hữu</option>
+                </select>
+              </div>
               <div className="flex-1 space-y-1">
                 <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1">
                   <Search className="w-3 h-3" /> Tìm kiếm
                 </label>
-                <input type="text" value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { setPage(1); fetchPlayers(); } }} placeholder="Tên đăng nhập hoặc email..." className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 transition-colors placeholder:text-zinc-600" />
+                <input type="text" value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { setPage(1); fetchPlayers(); } }} placeholder={searchBy === "item" ? "ID hoặc tên vật phẩm..." : searchBy === "gu" ? "ID hoặc tên cổ trùng..." : "ID, tên đăng nhập hoặc email..."} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 transition-colors placeholder:text-zinc-600" />
               </div>
               <button onClick={() => { setPage(1); fetchPlayers(); }} className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">Tìm</button>
               <button onClick={fetchPlayers} disabled={loading} className="flex items-center gap-1.5 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:text-white transition-all disabled:opacity-50 cursor-pointer">
@@ -1665,6 +1993,112 @@ export const AdminView: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {playersTab === "gusearch" && (
+            <div className="space-y-4">
+              <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div className="flex-1 min-w-[200px] space-y-1">
+                    <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1">
+                      <Bug className="w-3 h-3" /> ID Cổ Trùng (gu_id)
+                    </label>
+                    <input type="text" value={guSearchId} onChange={e => setGuSearchId(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { setGuSearchPage(1); fetchGuSearch(); } }} placeholder="Ví dụ: GU_HUYEN_LONG..." className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-500/50 transition-colors placeholder:text-zinc-600" />
+                  </div>
+                  <div className="flex-1 min-w-[200px] space-y-1">
+                    <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider font-mono flex items-center gap-1">
+                      <Info className="w-3 h-3" /> Instance ID
+                    </label>
+                    <input type="text" value={guSearchInstance} onChange={e => setGuSearchInstance(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { setGuSearchPage(1); fetchGuSearch(); } }} placeholder="UUID của cổ trùng..." className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-500/50 transition-colors placeholder:text-zinc-600" />
+                  </div>
+                  <button onClick={() => { setGuSearchPage(1); fetchGuSearch(); }} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">Tìm</button>
+                  <button onClick={fetchGuSearch} disabled={guSearchLoading} className="flex items-center gap-1.5 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:text-white transition-all disabled:opacity-50 cursor-pointer">
+                    <RefreshCw className={`w-3.5 h-3.5 ${guSearchLoading ? "animate-spin" : ""}`} />
+                  </button>
+                </div>
+                <p className="text-[11px] text-zinc-500 mt-3 font-mono">Tìm kiếm trên 3 nguồn: Túi đồ người chơi, Phiên đấu giá, Cửa hàng (lữ hành & đấu trường).</p>
+              </div>
+
+              {!guSearchId.trim() && !guSearchInstance.trim() ? (
+                <div className="text-center py-16 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl">
+                  <Bug className="w-10 h-10 text-zinc-700 mx-auto" />
+                  <p className="text-sm text-zinc-400 font-medium mt-2">Nhập ID hoặc Instance ID để tìm cổ trùng.</p>
+                </div>
+              ) : guSearchLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 space-y-3">
+                  <RefreshCw className="w-8 h-8 text-blue-400 animate-spin" />
+                  <span className="text-xs text-zinc-500 font-mono">Đang tìm cổ trùng...</span>
+                </div>
+              ) : guSearchResults.length === 0 ? (
+                <div className="text-center py-16 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl space-y-2">
+                  <Bug className="w-10 h-10 text-zinc-700 mx-auto" />
+                  <p className="text-sm text-zinc-400 font-medium">Không tìm thấy cổ trùng nào.</p>
+                </div>
+              ) : (
+                <>
+                <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
+                        <th className="px-3 py-2.5 font-semibold">Vị trí</th>
+                        <th className="px-3 py-2.5 font-semibold">Tên</th>
+                        <th className="px-3 py-2.5 font-semibold">gu_id</th>
+                        <th className="px-3 py-2.5 font-semibold">Instance ID</th>
+                        <th className="px-3 py-2.5 font-semibold">Bậc</th>
+                        <th className="px-3 py-2.5 font-semibold">Trạng thái</th>
+                        <th className="px-3 py-2.5 font-semibold">Đói</th>
+                        <th className="px-3 py-2.5 font-semibold">Trang bị</th>
+                        <th className="px-3 py-2.5 font-semibold">Bản Mệnh</th>
+                        <th className="px-3 py-2.5 font-semibold">Chủ sở hữu</th>
+                        <th className="px-3 py-2.5 font-semibold">Trạng thái phiên</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {guSearchResults.map((r: any, idx: number) => (
+                        <tr key={idx} className={`border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors ${r.location !== "shop" ? "cursor-pointer" : ""}`} onClick={() => { if (r.location !== "shop" && r.owner_id) setSelectedId(r.owner_id); }}>
+                          <td className="px-3 py-2.5">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${guLocationStyle(r.location)}`}>{guLocationLabel(r.location)}</span>
+                          </td>
+                          <td className="px-3 py-2.5 font-semibold text-zinc-200">{r.name || r.gu_id}</td>
+                          <td className="px-3 py-2.5 text-zinc-400 font-mono">{r.gu_id}</td>
+                          <td className="px-3 py-2.5 text-zinc-500 font-mono max-w-[80px] truncate" title={r.instance_id || ""}>{r.instance_id ? r.instance_id.slice(0, 8) + "..." : "—"}</td>
+                          <td className={`px-3 py-2.5 font-bold ${rankColor(r.rank || 1)}`}>{r.rank || "?"}</td>
+                          <td className="px-3 py-2.5">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${statusColor(r.status)}`}>{r.status === "SHOP" ? "Cửa hàng" : statusLabel(r.status)}</span>
+                          </td>
+                          <td className="px-3 py-2.5 font-mono text-zinc-300">{r.hunger ?? "—"}</td>
+                          <td className="px-3 py-2.5">{r.equipped ? <span className="text-emerald-400 text-[11px] font-bold">✓</span> : <span className="text-zinc-600">–</span>}</td>
+                          <td className="px-3 py-2.5">{r.is_vital ? <Star className="w-3.5 h-3.5 text-amber-400" /> : <span className="text-zinc-600">–</span>}</td>
+                          <td className="px-3 py-2.5">
+                            {r.location === "shop" ? (
+                              <span className="text-zinc-400">{r.shop_name || "Cửa hàng"}</span>
+                            ) : r.owner_username ? (
+                              <button onClick={() => setSelectedId(r.owner_id)} className="text-blue-400 hover:text-blue-300 underline cursor-pointer font-medium">{r.owner_username}</button>
+                            ) : <span className="text-zinc-600">—</span>}
+                          </td>
+                          <td className="px-3 py-2.5 text-zinc-400">{r.listing_status || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex items-center justify-between mt-4 text-xs font-semibold text-zinc-500">
+                  <div>Tổng số: <span className="text-zinc-300">{guSearchTotal.toLocaleString()}</span> kết quả</div>
+                  <div className="flex items-center gap-3">
+                    <span>Trang {guSearchPage}/{Math.max(1, Math.ceil(guSearchTotal / guSearchLimit))}</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => setGuSearchPage(Math.max(1, guSearchPage - 1))} disabled={guSearchPage <= 1 || guSearchLoading} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 disabled:opacity-40 transition-colors cursor-pointer">
+                        <ChevronLeft className="w-4 h-4" /> Trước
+                      </button>
+                      <button onClick={() => setGuSearchPage(guSearchPage + 1)} disabled={guSearchPage >= Math.ceil(guSearchTotal / guSearchLimit) || guSearchLoading} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 disabled:opacity-40 transition-colors cursor-pointer">
+                        Sau <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                </>
+              )}
             </div>
           )}
         </>

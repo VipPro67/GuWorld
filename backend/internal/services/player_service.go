@@ -87,6 +87,25 @@ func (s *PlayerService) Load(q QueryRower, id uuid.UUID, forUpdate bool) (models
 			player.ActiveCombat = &cs
 		}
 	}
+
+	if s.db != nil {
+		invRows, err := s.db.Query(`
+			SELECT item_id, quantity FROM player_inventory_items WHERE player_id = $1
+		`, id.String())
+		if err == nil {
+			defer invRows.Close()
+			mi := make(map[string]int)
+			for invRows.Next() {
+				var itemID string
+				var qty int
+				if invRows.Scan(&itemID, &qty) == nil {
+					mi[itemID] += qty
+				}
+			}
+			player.MaterialsInventory = mi
+		}
+	}
+
 	return player, nil
 }
 

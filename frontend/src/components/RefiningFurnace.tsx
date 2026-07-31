@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Player, GuSpec, ItemSpec, RefiningRecipe, GuInstance, useGameStore } from "@/store/useGameStore";
+import { Player, GuSpec, ItemSpec, RefiningRecipe, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
 import { Flame, Sparkles, AlertCircle, Check, X, RefreshCw, Coins, Zap, Trophy, HelpCircle, ChevronDown, Search } from "lucide-react";
 
 interface RefiningFurnaceProps {
@@ -65,7 +65,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
 
   const allRecipes = [...recipes, ...customRecipes];
   const filteredRecipes = allRecipes.filter((r) => {
-    const targetName = guDictionary[r.target_gu_id]?.name || r.target_gu_id;
+    const targetName = guSpecFor(r.target_gu_id, r.target_rank)?.name || r.target_gu_id;
     const matchesSearch = targetName.toLowerCase().includes(searchKeyword.toLowerCase()) || r.id.toLowerCase().includes(searchKeyword.toLowerCase());
     const isComplete = r.completion_rate === undefined || r.completion_rate >= 100.0;
     
@@ -133,8 +133,8 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     (gu) => gu.status !== "DEAD" && !slottedIds.includes(gu.instance_id)
   );
 
-  const getBestCandidateForRefine = (guId: string): GuInstance | undefined => {
-    const candidates = availableInventoryGus.filter(g => g.gu_id === guId);
+  const getBestCandidateForRefine = (guId: string, rank: number): GuInstance | undefined => {
+    const candidates = availableInventoryGus.filter(g => g.gu_id === guId && g.rank === rank);
     if (candidates.length === 0) return undefined;
     
     // Sort: non-vital & non-equipped first, then lowest hunger, then sleeping
@@ -146,8 +146,8 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     return candidates[0];
   };
 
-  const handleInventoryGroupClick = (guId: string) => {
-    const candidate = getBestCandidateForRefine(guId);
+  const handleInventoryGroupClick = (guId: string, rank: number) => {
+    const candidate = getBestCandidateForRefine(guId, rank);
     if (candidate) {
       handleInventoryClick(candidate);
     }
@@ -379,17 +379,20 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
               // Group by gu_id
               const groupsMap: Record<string, GuInstance[]> = {};
               availableInventoryGus.forEach((gu) => {
-                if (!groupsMap[gu.gu_id]) {
-                  groupsMap[gu.gu_id] = [];
+                const groupKey = `${gu.gu_id}::${gu.rank}`;
+                if (!groupsMap[groupKey]) {
+                  groupsMap[groupKey] = [];
                 }
-                groupsMap[gu.gu_id].push(gu);
+                groupsMap[groupKey].push(gu);
               });
 
-              const groups = Object.entries(groupsMap).map(([guId, instances]) => {
-                const spec = guDictionary[guId] || {
+              const groups = Object.entries(groupsMap).map(([groupKey, instances]) => {
+                const [guId, rankStr] = groupKey.split("::");
+                const rank = parseInt(rankStr, 10) || 1;
+                const spec = guSpecFor(guId, rank) || {
                   id: guId,
                   name: guId,
-                  rank: 1,
+                  rank: rank,
                   path: ["Unknown Path"],
                   gu_type: "Phàm Cổ",
                   base_mana_cost: 0,
@@ -399,7 +402,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                   max_hunger: 100,
                   description: "Cổ trùng chưa được giải nghĩa.",
                 };
-                return { guId, spec, instances };
+                return { groupKey, guId, spec, instances };
               });
 
               // Sort groups by rank descending, name ascending
@@ -408,10 +411,10 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                 return a.spec.name.localeCompare(b.spec.name);
               });
 
-              return groups.map(({ guId, spec, instances }) => {
-                const isExpanded = !!expandedGroups[guId];
+              return groups.map(({ groupKey, guId, spec, instances }) => {
+                const isExpanded = !!expandedGroups[groupKey];
                 const totalAvailable = instances.length;
-                const bestCandidate = getBestCandidateForRefine(guId);
+                const bestCandidate = getBestCandidateForRefine(guId, spec.rank);
 
                 return (
                   <div
@@ -426,7 +429,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                           handleDragStart(e, bestCandidate.instance_id);
                         }
                       }}
-                      onClick={() => handleInventoryGroupClick(guId)}
+                      onClick={() => handleInventoryGroupClick(guId, spec.rank)}
                       className={`p-3 flex justify-between items-center cursor-grab active:cursor-grabbing hover:bg-zinc-950/80 transition-all select-none group text-left`}
                     >
                       <div className="space-y-0.5 max-w-[75%]">
@@ -449,7 +452,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                       <div className="flex items-center gap-2 shrink-0">
                         <button
                           type="button"
-                          onClick={(e) => toggleGroupExpand(guId, e)}
+                          onClick={(e) => toggleGroupExpand(groupKey, e)}
                           className="text-[9px] py-1 px-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-400 rounded transition-all cursor-pointer font-mono"
                         >
                           {isExpanded ? "Ẩn" : `Hiện (${totalAvailable})`}
@@ -621,7 +624,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                       </div>
                     ) : (
                       filteredRecipes.map((recipe) => {
-                        const targetGu = guDictionary[recipe.target_gu_id] || { name: recipe.target_gu_id };
+                        const targetGu = guSpecFor(recipe.target_gu_id, recipe.target_rank) || { name: recipe.target_gu_id };
                         const isActive = recipe.id === selectedRecipeId;
                         return (
                           <div
@@ -667,17 +670,17 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                     Sản Vật Hợp Thành
                   </span>
                   <h4 className="text-lg font-bold text-zinc-100 font-serif">
-                    {guDictionary[selectedRecipe.target_gu_id]?.name || selectedRecipe.target_gu_id}
+                    {guSpecFor(selectedRecipe.target_gu_id, selectedRecipe.target_rank)?.name || selectedRecipe.target_gu_id}
                   </h4>
                   <p className="text-xs text-zinc-400 max-w-md mx-auto line-clamp-1 italic leading-relaxed">
-                    {guDictionary[selectedRecipe.target_gu_id]?.description || ""}
+                    {guSpecFor(selectedRecipe.target_gu_id, selectedRecipe.target_rank)?.description || ""}
                   </p>
                 </div>
 
                 {/* Slots Crucible Row */}
                 <div className="flex flex-wrap justify-center items-center gap-3 py-2">
                   {requiredSlots.map((slot) => {
-                    const reqGuSpec = guDictionary[slot.guId] || { name: slot.guId };
+                    const reqGuSpec = guSpecFor(slot.guId) || { name: slot.guId };
                     const slottedInstanceId = slottedGus[slot.index];
                     const slottedGu = player.gu_inventory.find(
                       (g) => g.instance_id === slottedInstanceId
@@ -699,10 +702,10 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                         {slottedGu ? (
                           <div className="text-center space-y-1.5 w-full">
                             <span className="text-[9px] font-mono border border-amber-500/20 px-1 py-0.2 rounded text-amber-400 uppercase inline-block mx-auto">
-                              {isMaskedSlot ? "Bậc ???" : `Bậc ${guDictionary[slottedGu.gu_id]?.rank || 1}`}
+                              {isMaskedSlot ? "Bậc ???" : `Bậc ${slottedGu.rank}`}
                             </span>
                             <div className="text-xs font-bold text-zinc-200 truncate font-serif">
-                              {isMaskedSlot ? "Cổ Trùng Ẩn (Đã đặt)" : (guDictionary[slottedGu.gu_id]?.name || slottedGu.gu_id)}
+                              {isMaskedSlot ? "Cổ Trùng Ẩn (Đã đặt)" : (guSpecFor(slottedGu.gu_id, slottedGu.rank)?.name || slottedGu.gu_id)}
                             </div>
                             <div className="text-[9px] text-zinc-500">
                               Độ no: {slottedGu.hunger}/100
@@ -942,17 +945,17 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                   <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-900 space-y-2.5">
                     <div className="flex justify-between items-center">
                       <span className="text-base font-bold text-zinc-100 font-serif">
-                        {guDictionary[refineResult.new_gu.gu_id]?.name || refineResult.new_gu.gu_id}
+                        {guSpecFor(refineResult.new_gu.gu_id, refineResult.new_gu.rank)?.name || refineResult.new_gu.gu_id}
                       </span>
                       <span className="text-[9px] font-mono border border-amber-500/30 px-1.5 py-0.2 rounded text-amber-400 font-bold uppercase">
-                        Bậc {guDictionary[refineResult.new_gu.gu_id]?.rank || 1}
+                        Bậc {refineResult.new_gu.rank}
                       </span>
                     </div>
-                    <div className="text-[9px] text-left text-zinc-500 font-mono">
-                      Loại: {guDictionary[refineResult.new_gu.gu_id]?.gu_type || "Thượng Cổ"}
+                    <div className="text-[9px] text-left text-zinc-505 font-mono">
+                      Loại: {guSpecFor(refineResult.new_gu.gu_id, refineResult.new_gu.rank)?.gu_type || "Thượng Cổ"}
                     </div>
                     <p className="text-[11px] text-left text-zinc-400 leading-relaxed italic border-t border-zinc-900 pt-2">
-                      {guDictionary[refineResult.new_gu.gu_id]?.description || ""}
+                      {guSpecFor(refineResult.new_gu.gu_id, refineResult.new_gu.rank)?.description || ""}
                     </p>
                   </div>
                 )}
