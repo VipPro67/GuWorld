@@ -112,7 +112,7 @@ func TestCalculateGuEffectForCombatant_Backlash(t *testing.T) {
 		BaseManaCost: 50,
 	}
 
-	dmg, def, cost, err := CalculateGuEffectForCombatant(actor, highRankGu)
+	dmg, def, cost, err := CalculateGuEffectForCombatant(actor, highRankGu, true)
 	if err != nil {
 		t.Fatalf("expected no error (backlash applied but action proceeds), got %v", err)
 	}

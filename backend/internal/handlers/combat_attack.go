@@ -260,7 +260,7 @@ func CombatAttack(c *gin.Context) {
 					selectedGus = append(selectedGus, inst)
 					selectedSpecs = append(selectedSpecs, spec)
 
-					_, _, cost, errVal := CalculateGuEffectForCombatant(&playerCombatant, &spec)
+					_, _, cost, errVal := CalculateGuEffectForCombatant(&playerCombatant, &spec, true)
 					if errVal == nil {
 						totalManaCost += cost
 					}
@@ -412,7 +412,7 @@ func CombatAttack(c *gin.Context) {
 					}
 
 					for _, spec := range selectedSpecs {
-						dmg, def, cost, errGu := CalculateGuEffectForCombatant(refCaster, &spec)
+						dmg, def, cost, errGu := CalculateGuEffectForCombatant(refCaster, &spec, true)
 						if errGu == nil && refCaster.CurrentMana >= cost {
 							refCaster.CurrentMana -= cost
 							if refCaster.Rank < spec.Rank {

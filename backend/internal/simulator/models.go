@@ -19,10 +19,11 @@ type SimAction struct {
 	ActionType   string  // "BASIC_ATTACK" | "GU_SKILL" | "KILLER_MOVE" | "HEAL" | "SHIELD"
 	Name         string  // display name
 	SourceID     string  // GuID or KillerMoveID for tactic matching
-	Damage       float64 // raw damage before defense mitigation
+	Path         []string // dao paths used to compute the dao mark bonus in the engine
+	Damage       float64 // raw damage before defense mitigation (excludes dao bonus; engine applies it)
 	DamageMult   float64 // damage multiplier (applied on top of Damage)
-	Defense      float64 // shield value granted to self
-	Healing      float64 // HP restored to self
+	Defense      float64 // shield value granted to self (excludes dao bonus)
+	Healing      float64 // HP restored to self (excludes dao bonus)
 	ManaCost     float64 // mana consumed on use
 	StunTurns    int     // turns of stun applied to target
 	BleedPerTurn float64 // bleed DoT per turn (applied to target)

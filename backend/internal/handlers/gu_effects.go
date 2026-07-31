@@ -100,7 +100,7 @@ func RebuildEquippedGus(player *models.Player) {
 }
 
 func BuildCombatAction(ctx *CombatContext, spec models.GuDictionaryItem) (Action, error) {
-	dmg, def, cost, err := CalculateGuEffectForCombatant(ctx.Attacker, &spec)
+	dmg, def, cost, err := CalculateGuEffectForCombatant(ctx.Attacker, &spec, true)
 	if err != nil {
 		return Action{}, err
 	}

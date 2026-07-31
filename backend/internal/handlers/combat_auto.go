@@ -146,7 +146,7 @@ func AutoCombatStart(c *gin.Context) {
 		if !allSlotsValid {
 			continue
 		}
-		act := buildSimActionFromKillerMove(km, slots)
+		act := buildSimActionFromKillerMove(km, slots, player.DaoMarks)
 		act.SourceID = kmID
 		allActions = append(allActions, act)
 	}
@@ -816,7 +816,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		return simulator.SimAction{}, fmt.Errorf("Tiên Khiếu không thể điều khiển Cổ trùng cấp cao hơn")
 	}
 
-	dmg, def, cost, err := CalculateGuEffectForCombatant(actor, spec)
+	dmg, def, cost, err := CalculateGuEffectForCombatant(actor, spec, false)
 	if err != nil {
 		return simulator.SimAction{
 			ActionType: actionType,
@@ -828,6 +828,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 	act := simulator.SimAction{
 		ActionType: actionType,
 		Name:       spec.Name,
+		Path:       spec.Path,
 		Damage:     dmg,
 		Defense:    def,
 		ManaCost:   cost,
@@ -896,13 +897,21 @@ func hasCombatActiveEffects(spec *models.GuDictionaryItem) bool {
 		active.WoodTransformation || active.ManaRegen > 0 || active.CleansingPower > 0
 }
 
-func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlot) simulator.SimAction {
+func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlot, daoMarks map[string]int) simulator.SimAction {
 	act := simulator.SimAction{
 		ActionType: "KILLER_MOVE",
 		Name:       km.Name,
 		Damage:     km.DamageValue,
 		Defense:    km.DefenseValue,
 		ManaCost:   km.TotalManaCost,
+		Path:       []string{km.Path},
+	}
+
+	// Strip the dao bonus baked in at creation so the engine re-applies it
+	// using the current dao marks (and reports it in the combat log).
+	if mult, ok := simulator.DaoMultiplier(daoMarks, act.Path); ok && mult > 1.0 {
+		act.Damage /= mult
+		act.Defense /= mult
 	}
 
 	var effects map[string]float64

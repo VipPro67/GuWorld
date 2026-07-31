@@ -47,6 +47,8 @@ finalDamage = baseDamage × daoMultiplier
 finalDefense = baseDefense × daoMultiplier
 ```
 
+**Auto-combat (chiến đấu tự động):** Đạo Ngân được engine `simulator/engine.go` áp dụng **cho cả 2 phe** (người chơi lẫn quái) theo `DaoMultiplier()` (`engine.go`), dựa trên `SimAction.Path` — áp dụng cho **sát thương, Khiên Ảo (`Defense`) và hồi phục (`Healing`)** nếu hành động thuộc cùng đường (path). Log chiến đấu hiển thị phần cộng thêm dạng `gây X + Y sát thương do Đạo Ngân`, `nhận X + Y Khiên Ảo do Đạo Ngân`, `hồi phục X + Y HP do Đạo Ngân`. Trong auto-combat, sát chiêu được bỏ phần dao đã snapshot lúc tạo rồi engine tính lại theo Đạo Ngân hiện tại (`combat_auto.go:buildSimActionFromKillerMove`), còn kỹ năng Cổ thì `CalculateGuEffectForCombatant` được gọi với `applyDao=false` để engine tự áp dụng (`combat_auto.go:buildSimActionFromGu`).
+
 Frontend đồng bộ: `ImmortalApertureView.tsx:1850-1855`
 
 ### 1.4 Cách Nhận Đạo Ngân

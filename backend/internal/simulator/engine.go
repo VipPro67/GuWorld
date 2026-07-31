@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand"
 	"sort"
+	"strings"
 )
 
 func hasGuEquipped(c *CombatantAuto, guID string) bool {
@@ -21,6 +22,39 @@ func hasGuEquipped(c *CombatantAuto, guID string) bool {
 	}
 	return false
 }
+
+// DaoMultiplier returns the dao mark damage multiplier for a combatant's paths,
+// mirroring the formula in handlers/combat_effects.go. Returns 1.0 and false when
+// no matching dao mark is present.
+func DaoMultiplier(dm DaoMarks, paths []string) (float64, bool) {
+	if dm == nil || len(paths) == 0 {
+		return 1.0, false
+	}
+	maxMult := 1.0
+	found := false
+	for _, path := range paths {
+		cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
+		amt, ok := dm[cleanPath]
+		if !ok || amt <= 0 {
+			continue
+		}
+		found = true
+		var mult float64
+		if amt <= 10000 {
+			mult = 1.0 + float64(amt)/100.0
+		} else {
+			mult = 1.0 + 100.0 + float64(amt-10000)/500.0
+		}
+		if mult > maxMult {
+			maxMult = mult
+		}
+	}
+	if !found {
+		return 1.0, false
+	}
+	return maxMult, true
+}
+
 
 func cloneCombatState(state *CombatState) *CombatState {
 	if state == nil {
@@ -489,26 +523,42 @@ func Simulate(state *CombatState) []CombatLog {
 					}
 				}
 
+				// Dao mark multiplier for this action's path (applies to damage, shield, heal)
+				daoMult, hasDao := DaoMultiplier(actor.DaoMarks, a.Path)
+
 				// Buffer shield/heal logs — emit after action name
 				var shieldLog, healLog *CombatLog
 
 				// Apply shield to self
 				if a.Defense > 0 {
-					actor.VirtualShield += int(a.Defense)
+					baseShield := int(a.Defense)
+					daoShield := 0
+					if hasDao && daoMult > 1.0 {
+						daoShield = int(float64(baseShield) * (daoMult - 1.0))
+					}
+					actor.VirtualShield += baseShield + daoShield
 					sl := CombatLog{
 						Turn:      turn,
 						ActorId:   actor.ID,
 						ActorName: actor.Name,
 						Action:    "SHIELD_GAIN",
-						Damage:    int(a.Defense),
-						Detail:    fmt.Sprintf("%s nhận %.0f Khiên Ảo!", actor.Name, a.Defense),
+						Damage:    baseShield + daoShield,
+						Detail:    fmt.Sprintf("%s nhận %d Khiên Ảo!", actor.Name, baseShield),
+					}
+					if daoShield > 0 {
+						sl.Detail = fmt.Sprintf("%s nhận %d + %d Khiên Ảo do Đạo Ngân!", actor.Name, baseShield, daoShield)
 					}
 					shieldLog = &sl
 				}
 
 				// Apply healing to self
 				if a.Healing > 0 {
-					heal := int(a.Healing)
+					baseHeal := int(a.Healing)
+					daoHeal := 0
+					if hasDao && daoMult > 1.0 {
+						daoHeal = int(float64(baseHeal) * (daoMult - 1.0))
+					}
+					heal := baseHeal + daoHeal
 					actor.HP += heal
 					if actor.HP > actor.MaxHP {
 						actor.HP = actor.MaxHP
@@ -519,7 +569,10 @@ func Simulate(state *CombatState) []CombatLog {
 						ActorName: actor.Name,
 						Action:    "HEAL",
 						Damage:    heal,
-						Detail:    fmt.Sprintf("%s hồi phục %d HP!", actor.Name, heal),
+						Detail:    fmt.Sprintf("%s hồi phục %d HP!", actor.Name, baseHeal),
+					}
+					if daoHeal > 0 {
+						hl.Detail = fmt.Sprintf("%s hồi phục %d + %d HP do Đạo Ngân!", actor.Name, baseHeal, daoHeal)
 					}
 					healLog = &hl
 				}
@@ -715,7 +768,7 @@ func Simulate(state *CombatState) []CombatLog {
 						}
 
 						for h := 0; h < hitCount; h++ {
-							hitDmg := a.Damage * dmgMultiplier
+							hitDmg := a.Damage * dmgMultiplier * daoMult
 							if h > 0 {
 								hitDmg *= 0.7
 							}
@@ -728,6 +781,15 @@ func Simulate(state *CombatState) []CombatLog {
 						totalDamageDealt += int(totalDmg)
 
 						if int(totalDmg) > 0 {
+							damageDetail := fmt.Sprintf("%s dùng [%s] lên %s, gây %d sát thương (còn %d HP)", actor.Name, a.Name, target.Name, int(totalDmg), target.HP)
+							if hasDao && daoMult > 1.0 {
+								appliedTotal := int(totalDmg)
+								daoShare := int(float64(appliedTotal) * (daoMult - 1.0) / daoMult)
+								if daoShare > 0 {
+									baseShare := appliedTotal - daoShare
+									damageDetail = fmt.Sprintf("%s dùng [%s] lên %s, gây %d + %d sát thương do Đạo Ngân (còn %d HP)", actor.Name, a.Name, target.Name, baseShare, daoShare, target.HP)
+								}
+							}
 							turnLogs = append(turnLogs, CombatLog{
 								Turn:      turn,
 								ActorId:   actor.ID,
@@ -735,7 +797,7 @@ func Simulate(state *CombatState) []CombatLog {
 								Action:    a.ActionType,
 								TargetId:  target.ID,
 								Damage:    int(totalDmg),
-								Detail:    fmt.Sprintf("%s dùng [%s] lên %s, gây %d sát thương (còn %d HP)", actor.Name, a.Name, target.Name, int(totalDmg), target.HP),
+								Detail:    damageDetail,
 							})
 						}
 

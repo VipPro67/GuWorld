@@ -36,7 +36,7 @@ func getActorPathMasteryMultiplier(actor *models.Combatant, paths []string) floa
 	return masteryMultiplier
 }
 
-func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDictionaryItem) (effectiveDamage float64, effectiveDefense float64, manaCost float64, err error) {
+func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDictionaryItem, applyDao bool) (effectiveDamage float64, effectiveDefense float64, manaCost float64, err error) {
 	powerScale := 1.0
 
 	var baseDmg float64
@@ -114,7 +114,7 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 	masteryMultiplier := getActorPathMasteryMultiplier(actor, guSpec.Path)
 
 	daoMultiplier := 1.0
-	if actor.DaoMarks != nil {
+	if applyDao && actor.DaoMarks != nil {
 		maxDaoMultiplier := 1.0
 		for _, path := range guSpec.Path {
 			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
@@ -151,7 +151,7 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 
 func CalculateGuEffect(player *models.Player, guSpec *models.GuDictionaryItem) (effectiveDamage float64, effectiveDefense float64, manaCost float64, err error) {
 	actor := models.CombatantFromPlayer(player, CalculatePlayerStats(player))
-	dmg, def, cost, err := CalculateGuEffectForCombatant(&actor, guSpec)
+	dmg, def, cost, err := CalculateGuEffectForCombatant(&actor, guSpec, true)
 	player.HP = actor.HP
 	return dmg, def, cost, err
 }
