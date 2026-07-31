@@ -230,7 +230,14 @@ Hệ thống môn phái hiện có:
 
 - Mail riêng: gửi và xem inbox.
 - Bảo Hoàng chat theo channel, fetch message và subscribe SSE.
-- Feedback: xem danh sách, gửi góp ý, vote, cập nhật trạng thái/developer response.
+- Feedback (Thỉnh Thiên Đạo): mỗi sớ trình là một topic. Xem danh sách, gửi góp ý, bình chọn, góp ý (comment), cập nhật trạng thái/developer response.
+- **Quyền theo trạng thái topic:**
+  - `pending` (chờ duyệt): không bình chọn, không góp ý.
+  - `active` (đang mở): bình chọn + góp ý.
+  - `in_progress` / `completed`: không bình chọn, chỉ góp ý.
+  - `rejected`: khép lại, chỉ xem.
+- Cả bình chọn và góp ý đều yêu cầu Cổ sư đạt **Nhị Chuyển (rank ≥ 2)** trở lên. Tác giả hoặc Admin có thể xóa góp ý.
+- Thưởng: khi topic được duyệt triển khai (`in_progress`/`completed`), tác giả nhận 5 Tiên Nguyên (rank ≥ 6) hoặc 500 Nguyên Thạch (phàm nhân).
 
 ## 17. Hiệu ứng Cổ trùng đặc sắc (Special Gu Effects)
 

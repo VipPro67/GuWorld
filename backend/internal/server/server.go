@@ -413,12 +413,15 @@ func SetupRouter() *gin.Engine {
 
 		// Feedback Endpoints
 		api.GET("/feedback", handlers.GetFeedbacks)
+		api.GET("/feedback/:id/comments", handlers.GetFeedbackComments)
 		feedback := api.Group("/feedback")
 		feedback.Use(middleware.AuthRequired())
 		{
 			feedback.POST("", handlers.SubmitFeedback)
 			feedback.POST("/:id/vote", handlers.VoteFeedback)
 			feedback.PUT("/:id/status", handlers.UpdateFeedbackStatus)
+			feedback.POST("/:id/comments", handlers.AddFeedbackComment)
+			feedback.DELETE("/:id/comments/:commentId", handlers.DeleteFeedbackComment)
 		}
 	}
 

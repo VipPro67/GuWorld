@@ -90,7 +90,8 @@ func GetFeedbacks(c *gin.Context) {
 	// Base query
 	query := `
 		SELECT f.id, f.user_id, p.username, f.title, f.description, f.category, f.status, f.total_votes, f.developer_response, f.rewarded, f.created_at,
-		       v.vote_type
+		       v.vote_type,
+		       (SELECT COUNT(1) FROM feedback_comments fc WHERE fc.feedback_id = f.id) AS comment_count
 		FROM feedback f
 		JOIN players p ON f.user_id = p.id
 		LEFT JOIN feedback_votes v ON f.id = v.feedback_id AND v.user_id = $1
@@ -140,7 +141,7 @@ func GetFeedbacks(c *gin.Context) {
 
 		err := rows.Scan(
 			&f.ID, &f.UserID, &f.Username, &f.Title, &f.Description, &f.Category, &f.Status, &f.TotalVotes, &devResp, &f.Rewarded, &f.CreatedAt,
-			&userVote,
+			&userVote, &f.CommentCount,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning feedback: " + err.Error()})
@@ -283,8 +284,8 @@ func VoteFeedback(c *gin.Context) {
 		return
 	}
 
-	if feedbackStatus == "pending" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Góp ý này chưa được Thiên Đạo duyệt hiển thị!"})
+	if feedbackStatus != "active" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Góp ý này không trong trạng thái bình chọn (chỉ sớ trình đang mở mới được bình chọn)!"})
 		return
 	}
 
@@ -530,4 +531,200 @@ func UpdateFeedbackStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": fmt.Sprintf("Cập nhật trạng thái góp ý thành công!%s", rewardMsg),
 	})
+}
+
+// GetFeedbackComments returns all góp ý (comments) on a feedback topic, newest last.
+func GetFeedbackComments(c *gin.Context) {
+	feedbackIDStr := c.Param("id")
+	feedbackID, err := uuid.Parse(feedbackIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Feedback ID không hợp lệ"})
+		return
+	}
+
+	var exists bool
+	err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM feedback WHERE id = $1)", feedbackID).Scan(&exists)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		return
+	}
+	if !exists {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Góp ý không tồn tại!"})
+		return
+	}
+
+	rows, err := db.DB.Query(`
+		SELECT c.id, c.feedback_id, c.user_id, p.username, c.content, c.created_at
+		FROM feedback_comments c
+		JOIN players p ON c.user_id = p.id
+		WHERE c.feedback_id = $1
+		ORDER BY c.created_at ASC
+	`, feedbackID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải góp ý: " + err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	comments := []models.FeedbackComment{}
+	for rows.Next() {
+		var cm models.FeedbackComment
+		if err := rows.Scan(&cm.ID, &cm.FeedbackID, &cm.UserID, &cm.Username, &cm.Content, &cm.CreatedAt); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc góp ý: " + err.Error()})
+			return
+		}
+		comments = append(comments, cm)
+	}
+
+	c.JSON(http.StatusOK, comments)
+}
+
+type AddFeedbackCommentRequest struct {
+	Content string `json:"content" binding:"required,min=1,max=500"`
+}
+
+// AddFeedbackComment lets a rank >= 2 cultivator post a góp ý on an approved topic.
+// Góp ý chỉ được phép khi status là active / in_progress / completed (đã qua duyệt).
+func AddFeedbackComment(c *gin.Context) {
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var req AddFeedbackCommentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Nội dung góp ý không hợp lệ (1-500 ký tự)"})
+		return
+	}
+
+	feedbackIDStr := c.Param("id")
+	feedbackID, err := uuid.Parse(feedbackIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Feedback ID không hợp lệ"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		return
+	}
+	defer tx.Rollback()
+
+	// 1. Rank requirement (giống vote: rank >= 2)
+	var rank int
+	err = tx.QueryRow("SELECT rank FROM players WHERE id = $1", authID).Scan(&rank)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải thông tin cổ sư: " + err.Error()})
+		return
+	}
+	if rank < 2 {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu phải đạt Nhị Chuyển trở lên mới có thể góp ý trên sớ trình!"})
+		return
+	}
+
+	// 2. Status gating: chỉ góp ý được khi sớ trình đã được duyệt (active/in_progress/completed)
+	var status string
+	err = tx.QueryRow("SELECT status FROM feedback WHERE id = $1 FOR UPDATE", feedbackID).Scan(&status)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Góp ý không tồn tại!"})
+		return
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		return
+	}
+
+	switch status {
+	case "active", "in_progress", "completed":
+		// allowed
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Sớ trình này chưa được duyệt hoặc đã khép lại, không thể góp ý!"})
+		return
+	}
+
+	var commentID uuid.UUID
+	var createdAt time.Time
+	err = tx.QueryRow(`
+		INSERT INTO feedback_comments (feedback_id, user_id, content)
+		VALUES ($1, $2, $3)
+		RETURNING id, created_at
+	`, feedbackID, authID, strings.TrimSpace(req.Content)).Scan(&commentID, &createdAt)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu góp ý: " + err.Error()})
+		return
+	}
+
+	var commentCount int
+	err = tx.QueryRow("SELECT COUNT(1) FROM feedback_comments WHERE feedback_id = $1", feedbackID).Scan(&commentCount)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đếm góp ý: " + err.Error()})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failure: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message":       "Đã góp ý lên sớ trình thành công!",
+		"comment_id":    commentID,
+		"created_at":    createdAt,
+		"comment_count": commentCount,
+	})
+}
+
+// DeleteFeedbackComment lets the comment author or an admin remove a góp ý.
+func DeleteFeedbackComment(c *gin.Context) {
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	commentIDStr := c.Param("commentId")
+	commentID, err := uuid.Parse(commentIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Comment ID không hợp lệ"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		return
+	}
+	defer tx.Rollback()
+
+	var authorID uuid.UUID
+	err = tx.QueryRow("SELECT user_id FROM feedback_comments WHERE id = $1 FOR UPDATE", commentID).Scan(&authorID)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Góp ý không tồn tại!"})
+		return
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+		return
+	}
+
+	var isAdmin bool
+	_ = tx.QueryRow("SELECT COALESCE(is_admin, false) FROM players WHERE id = $1", authID).Scan(&isAdmin)
+
+	if authorID != authID && !isAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu không có quyền xóa góp ý này!"})
+		return
+	}
+
+	_, err = tx.Exec("DELETE FROM feedback_comments WHERE id = $1", commentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi xóa góp ý: " + err.Error()})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failure: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa góp ý!"})
 }

@@ -641,10 +641,20 @@ export interface Feedback {
   category: string;
   status: string;
   total_votes: number;
+  comment_count: number;
   developer_response: string | null;
   rewarded: boolean;
   created_at: string;
   user_vote?: number | null;
+}
+
+export interface FeedbackComment {
+  id: string;
+  feedback_id: string;
+  user_id: string;
+  username?: string;
+  content: string;
+  created_at: string;
 }
 
 interface AuthResponse {
@@ -987,10 +997,14 @@ interface GameState {
 
   // Feedback State & Actions
   feedbacks: Feedback[];
+  feedbackComments: Record<string, FeedbackComment[]>;
   fetchFeedbacks: (category?: string, status?: string) => Promise<void>;
   submitFeedback: (title: string, description: string, category: string) => Promise<boolean>;
   voteFeedback: (feedbackId: string, voteType: number) => Promise<boolean>;
   updateFeedbackStatus: (feedbackId: string, status: string, developerResponse: string) => Promise<boolean>;
+  fetchFeedbackComments: (feedbackId: string) => Promise<boolean>;
+  addFeedbackComment: (feedbackId: string, content: string) => Promise<boolean>;
+  deleteFeedbackComment: (feedbackId: string, commentId: string) => Promise<boolean>;
 }
 
 export interface MineSlot {
@@ -1223,6 +1237,7 @@ export const useGameStore = create<GameState>((set, get) => {
   sectPromotionRequests: [],
   sectMines: [],
   feedbacks: [],
+  feedbackComments: {},
   setView: (view) => set({ currentView: view }),
   setShowChangelog: (v) => set({ showChangelog: v }),
 
@@ -5125,6 +5140,76 @@ export const useGameStore = create<GameState>((set, get) => {
       if (get().player) {
         await get().fetchPlayerStatus(get().player!.id);
       }
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  fetchFeedbackComments: async (feedbackId) => {
+    const { token, logout } = get();
+    if (!token) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/feedback/${feedbackId}/comments`);
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Tải góp ý thất bại.");
+      set((state) => ({ feedbackComments: { ...state.feedbackComments, [feedbackId]: data || [] } }));
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      return false;
+    }
+  },
+
+  addFeedbackComment: async (feedbackId, content) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/feedback/${feedbackId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Góp ý thất bại.");
+      get().addToast(data.message || "Đã góp ý!", "success");
+      await get().fetchFeedbackComments(feedbackId);
+      set((state) => ({
+        feedbacks: state.feedbacks.map((f) =>
+          f.id === feedbackId ? { ...f, comment_count: f.comment_count + 1 } : f
+        ),
+      }));
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  deleteFeedbackComment: async (feedbackId, commentId) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/feedback/${feedbackId}/comments/${commentId}`, {
+        method: "DELETE",
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Xóa góp ý thất bại.");
+      get().addToast(data.message || "Đã xóa góp ý!", "success");
+      await get().fetchFeedbackComments(feedbackId);
+      set((state) => ({
+        feedbacks: state.feedbacks.map((f) =>
+          f.id === feedbackId ? { ...f, comment_count: Math.max(0, f.comment_count - 1) } : f
+        ),
+      }));
       return true;
     } catch (err: any) {
       set({ error: err.message });

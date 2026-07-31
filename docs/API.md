@@ -204,5 +204,8 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | --- | --- | --- |
 | GET | `/feedback` | Public list/filter. |
 | POST | `/feedback` | Protected submit. |
-| POST | `/feedback/:id/vote` | Protected vote. |
-| PUT | `/feedback/:id/status` | Protected status update. |
+| POST | `/feedback/:id/vote` | Protected vote (chỉ khi status = `active`, rank ≥ 2). |
+| PUT | `/feedback/:id/status` | Protected status update (admin). |
+| GET | `/feedback/:id/comments` | Public list góp ý của topic. |
+| POST | `/feedback/:id/comments` | Protected góp ý (rank ≥ 2; status phải `active`/`in_progress`/`completed`). |
+| DELETE | `/feedback/:id/comments/:commentId` | Protected xóa góp ý (tác giả hoặc admin). |

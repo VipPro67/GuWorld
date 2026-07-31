@@ -986,6 +986,13 @@ func InitSchema() error {
 			vote_type INTEGER NOT NULL,
 			PRIMARY KEY (feedback_id, user_id)
 		);`, "feedback_votes_table"},
+		{`CREATE TABLE IF NOT EXISTS feedback_comments (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			feedback_id UUID NOT NULL REFERENCES feedback(id) ON DELETE CASCADE,
+			user_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			content TEXT NOT NULL,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+		);`, "feedback_comments_table"},
 		{`UPDATE players SET email = 'system@guworld.local' WHERE id = '00000000-0000-0000-0000-000000000000' AND (email IS NULL OR email = '');`, "set_system_player_email"},
 		{`DROP INDEX IF EXISTS players_phone_number_idx;`, "drop_phone_number_idx"},
 		{`DROP INDEX IF EXISTS players_email_idx;`, "drop_email_idx"},
@@ -1332,6 +1339,7 @@ func InitSchema() error {
 		{"idx_mine_slots_occupier", "mine_slots", "occupier_id"},
 		{"idx_feedback_user", "feedback", "user_id"},
 		{"idx_feedback_status", "feedback", "status"},
+		{"idx_feedback_comments_feedback", "feedback_comments", "feedback_id"},
 		{"idx_audit_logs_player", "audit_logs", "player_id"},
 		{"idx_audit_logs_action", "audit_logs", "action"},
 		{"idx_audit_logs_created", "audit_logs", "created_at"},

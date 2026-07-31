@@ -14,16 +14,23 @@ import {
   Send,
   Loader2,
   HelpCircle,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 export const FeedbackView: React.FC = () => {
   const {
     player,
     feedbacks,
+    feedbackComments,
     fetchFeedbacks,
     submitFeedback,
     voteFeedback,
     updateFeedbackStatus,
+    fetchFeedbackComments,
+    addFeedbackComment,
+    deleteFeedbackComment,
     actionLoading,
     setView,
   } = useGameStore();
@@ -36,6 +43,10 @@ export const FeedbackView: React.FC = () => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("BUG");
+
+  // Comments state
+  const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
+  const [commentText, setCommentText] = useState<Record<string, string>>({});
 
   // Admin moderation form state
   const [modifyingFeedbackId, setModifyingFeedbackId] = useState<string | null>(null);
@@ -334,7 +345,39 @@ export const FeedbackView: React.FC = () => {
                 const isAuthor = player && player.id === f.user_id;
                 const isUpvoted = f.user_vote === 1;
                 const isDownvoted = f.user_vote === -1;
-                const userCanVote = player && player.rank >= 2;
+                const userCanVote = player && player.rank >= 2 && f.status === "active";
+                const userCanComment = player && player.rank >= 2;
+                const topicOpen = f.status === "active" || f.status === "in_progress" || f.status === "completed";
+                const comments = feedbackComments[f.id] || [];
+                const isExpanded = expandedComments.has(f.id);
+
+                const toggleComments = () => {
+                  if (isExpanded) {
+                    setExpandedComments((prev) => {
+                      const next = new Set(prev);
+                      next.delete(f.id);
+                      return next;
+                    });
+                  } else {
+                    setExpandedComments((prev) => new Set(prev).add(f.id));
+                    if (comments.length === 0) {
+                      fetchFeedbackComments(f.id);
+                    }
+                  }
+                };
+
+                const handleAddComment = async () => {
+                  const content = (commentText[f.id] || "").trim();
+                  if (!content) return;
+                  const ok = await addFeedbackComment(f.id, content);
+                  if (ok) {
+                    setCommentText((prev) => ({ ...prev, [f.id]: "" }));
+                  }
+                };
+
+                const handleDeleteComment = async (commentId: string) => {
+                  await deleteFeedbackComment(f.id, commentId);
+                };
 
                 return (
                   <div
@@ -352,7 +395,11 @@ export const FeedbackView: React.FC = () => {
                             : "bg-transparent border-transparent hover:bg-zinc-900 text-zinc-500 hover:text-zinc-300"
                         }`}
                         title={
-                          !userCanVote
+                          !player
+                            ? "Đăng nhập để bình chọn!"
+                            : f.status !== "active"
+                            ? "Sớ trình này không trong trạng thái bình chọn!"
+                            : player.rank < 2
                             ? "Đạo hữu phải đạt Nhị Chuyển mới được bình chọn!"
                             : "Ủng hộ ý kiến này"
                         }
@@ -381,7 +428,11 @@ export const FeedbackView: React.FC = () => {
                             : "bg-transparent border-transparent hover:bg-zinc-900 text-zinc-500 hover:text-zinc-300"
                         }`}
                         title={
-                          !userCanVote
+                          !player
+                            ? "Đăng nhập để bình chọn!"
+                            : f.status !== "active"
+                            ? "Sớ trình này không trong trạng thái bình chọn!"
+                            : player.rank < 2
                             ? "Đạo hữu phải đạt Nhị Chuyển mới được bình chọn!"
                             : "Phản đối ý kiến này"
                         }
@@ -399,6 +450,14 @@ export const FeedbackView: React.FC = () => {
                           <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400">
                             {getCategoryLabel(f.category)}
                           </span>
+                          <button
+                            onClick={toggleComments}
+                            className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-fuchsia-300 hover:border-fuchsia-800/50 transition-colors cursor-pointer"
+                          >
+                            <MessageSquare className="w-3 h-3" />
+                            {f.comment_count ?? 0} góp ý
+                            {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
                         </div>
 
                         <span className="text-[10px] text-zinc-600 font-mono">
@@ -499,6 +558,112 @@ export const FeedbackView: React.FC = () => {
                                 />
                               </div>
                             </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Góp ý (comments) section */}
+                      {isExpanded && (
+                        <div className="mt-4 pt-3 border-t border-zinc-900 flex flex-col gap-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-fuchsia-400 font-mono flex items-center gap-1">
+                              <MessageSquare className="w-3.5 h-3.5 text-fuchsia-400" />
+                              Góp Ý Của Thiên Hạ
+                              <span className="text-zinc-600 font-normal">
+                                ({comments.length})
+                              </span>
+                            </span>
+                          </div>
+
+                          {comments.length === 0 ? (
+                            <p className="text-[10px] text-zinc-600 font-mono italic">
+                              Chưa có đạo hữu nào góp ý. Hãy là người đầu tiên!
+                            </p>
+                          ) : (
+                            <div className="flex flex-col gap-2.5">
+                              {comments.map((cm) => {
+                                const isCommentAuthor = player && player.id === cm.user_id;
+                                return (
+                                  <div
+                                    key={cm.id}
+                                    className="bg-zinc-900/30 border border-zinc-900 rounded-xl px-3 py-2.5 flex items-start gap-2.5"
+                                  >
+                                    <div className="flex-grow min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-[10px] font-bold text-zinc-300 font-mono">
+                                          {cm.username || "Ẩn danh"}
+                                        </span>
+                                        {isCommentAuthor && (
+                                          <span className="text-[9px] text-fuchsia-400/80 font-mono">
+                                            (Đạo hữu)
+                                          </span>
+                                        )}
+                                        <span className="text-[9px] text-zinc-600 font-mono">
+                                          {new Date(cm.created_at).toLocaleString("vi-VN")}
+                                        </span>
+                                      </div>
+                                      <p className="text-[11px] text-zinc-300 leading-relaxed font-serif mt-1 whitespace-pre-wrap">
+                                        {cm.content}
+                                      </p>
+                                    </div>
+                                    {(isCommentAuthor || (player && player.is_admin)) && (
+                                      <button
+                                        onClick={() => handleDeleteComment(cm.id)}
+                                        disabled={actionLoading}
+                                        title="Xóa góp ý"
+                                        className="p-1 rounded-lg text-zinc-600 hover:text-rose-400 hover:bg-rose-950/30 transition-colors cursor-pointer shrink-0"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* Comment input */}
+                          {userCanComment ? (
+                            topicOpen ? (
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={commentText[f.id] || ""}
+                                  onChange={(e) =>
+                                    setCommentText((prev) => ({ ...prev, [f.id]: e.target.value }))
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      handleAddComment();
+                                    }
+                                  }}
+                                  placeholder="Viết góp ý của đạo hữu..."
+                                  maxLength={500}
+                                  className="flex-grow bg-zinc-950 border border-zinc-900 focus:border-fuchsia-800/50 rounded-lg px-3 py-2 text-[11px] text-zinc-200 focus:outline-none placeholder-zinc-700 transition-all font-serif"
+                                />
+                                <button
+                                  onClick={handleAddComment}
+                                  disabled={actionLoading || !(commentText[f.id] || "").trim()}
+                                  className="px-3 py-2 rounded-lg bg-fuchsia-600/80 hover:bg-fuchsia-500 text-white text-[11px] font-semibold font-mono cursor-pointer flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  {actionLoading ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Send className="w-3 h-3" />
+                                  )}
+                                  Góp ý
+                                </button>
+                              </div>
+                            ) : (
+                              <p className="text-[10px] text-zinc-600 font-mono italic">
+                                Sớ trình này đang chờ duyệt hoặc đã khép lại — không thể góp ý.
+                              </p>
+                            )
+                          ) : (
+                            <p className="text-[10px] text-amber-600/80 font-mono italic">
+                              Đạo hữu phải đạt Nhị Chuyển trở lên mới được góp ý!
+                            </p>
                           )}
                         </div>
                       )}
