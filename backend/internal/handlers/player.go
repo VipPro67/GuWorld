@@ -1284,7 +1284,7 @@ func FeedGu(c *gin.Context) {
 		switch foodID {
 		case "immortal_stone":
 			if player.ImmortalStones < float64(targetGu.Rank) {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Tiên Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %d Tiên Nguyên Thạch cho Cổ trùng hạng %d.", 1*float64(targetGu.Rank), targetGu.Rank)})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Tiên Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %d Tiên Nguyên Thạch cho Cổ trùng hạng %d.", targetGu.Rank, targetGu.Rank)})
 				return
 			}
 			player.ImmortalStones -= 1
@@ -2519,9 +2519,9 @@ func UseConsumableGu(c *gin.Context) {
 
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET gu_inventory = $1, sub_rank = $2, rank = $3, primeval_stones = $4, max_mana = $5, current_mana = $6, equipped_gus = $7, dao_marks = $8, wall_progress = $9, hp = $10, lifespan = $11, aptitude_percent = $12, immortal_stones = $13
-		WHERE id = $14`,
-		player.GuInventory, player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.DaoMarks, player.WallProgress, player.HP, player.Lifespan, player.AptitudePercent, player.ImmortalStones, player.ID,
+		SET gu_inventory = $1, sub_rank = $2, rank = $3, primeval_stones = $4, max_mana = $5, current_mana = $6, equipped_gus = $7, dao_marks = $8, wall_progress = $9, hp = $10, lifespan = $11, aptitude_percent = $12, immortal_stones = $13, aperture_stress = $14
+		WHERE id = $15`,
+		player.GuInventory, player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.DaoMarks, player.WallProgress, player.HP, player.Lifespan, player.AptitudePercent, player.ImmortalStones, player.ApertureStress, player.ID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using Gu"})
@@ -2634,9 +2634,9 @@ func UseSupportGu(c *gin.Context) {
 	// Save to DB
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET gu_inventory = $1, max_mana = $2, current_mana = $3, aptitude_percent = $4, hp = $5 , aptitude_stress = $6
+		SET gu_inventory = $1, max_mana = $2, current_mana = $3, aptitude_percent = $4, hp = $5, aperture_stress = $6
 		WHERE id = $7`,
-		player.GuInventory, player.MaxMana, player.CurrentMana, player.AptitudePercent, player.HP, player.CultivationState.ApertureStress,
+		player.GuInventory, player.MaxMana, player.CurrentMana, player.AptitudePercent, player.HP, player.ApertureStress,
 		player.ID,
 	)
 	if err != nil {
