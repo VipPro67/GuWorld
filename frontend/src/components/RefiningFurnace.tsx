@@ -389,7 +389,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
               const groups = Object.entries(groupsMap).map(([groupKey, instances]) => {
                 const [guId, rankStr] = groupKey.split("::");
                 const rank = parseInt(rankStr, 10) || 1;
-                const spec = guSpecFor(guId, rank) || {
+                const spec = (guSpecFor(guId, rank) || {
                   id: guId,
                   name: guId,
                   rank: rank,
@@ -401,7 +401,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                   food_type: "unknown",
                   max_hunger: 100,
                   description: "Cổ trùng chưa được giải nghĩa.",
-                };
+                }) as GuSpec;
                 return { groupKey, guId, spec, instances };
               });
 

@@ -630,7 +630,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           const backlashCount = selectedGuIds.filter(id => {
             const gu = eligibleGus.find(g => g.instance_id === id);
             const spec = gu ? guSpecFor(gu.gu_id, gu.rank) : null;
-            return spec && (gu.rank || spec.rank || 0) > (player.rank || 1);
+            return !!(spec && gu && (gu.rank || spec.rank || 0) > (player.rank || 1));
           }).length;
           return (
             <div className="flex flex-wrap items-center gap-3 mb-4 px-3 py-2 bg-zinc-900/60 border border-zinc-800 rounded-lg text-xs">

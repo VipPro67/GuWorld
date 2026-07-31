@@ -401,7 +401,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
               const guGroups = Object.entries(groupsMap).map(([groupKey, instances]) => {
                 const [guId, rankStr] = groupKey.split("::");
                 const groupRank = parseInt(rankStr, 10) || 0;
-                const spec = guSpecFor(guId, groupRank) || {
+                const spec = (guSpecFor(guId, groupRank) || {
                   id: guId,
                   name: guId,
                   rank: groupRank || 1,
@@ -413,7 +413,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                   food_types: ["unknown"],
                   max_hunger: 100,
                   description: "Cổ trùng chưa được giải nghĩa.",
-                };
+                }) as GuSpec;
 
                 // Sort instances: Vital first, then Equipped first, then ACTIVE > SLEEPING > SEALED > Hunger (descending)
                 const statusPriority = {

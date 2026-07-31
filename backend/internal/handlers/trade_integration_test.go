@@ -49,6 +49,9 @@ func TestP2PTradeFlow_ConnectingHeaven(t *testing.T) {
 	player1ID := uuid.New()
 	player2ID := uuid.New()
 
+	// Clean up any leftover test users from aborted/panicked runs
+	db.DB.Exec(`DELETE FROM players WHERE username IN ('TestTrade1', 'TestTrade2')`)
+
 	defer func() {
 		db.DB.Exec(`DELETE FROM trades WHERE sender_id IN ($1, $2) OR receiver_id IN ($1, $2)`, player1ID, player2ID)
 		db.DB.Exec(`DELETE FROM players WHERE id IN ($1, $2)`, player1ID, player2ID)
