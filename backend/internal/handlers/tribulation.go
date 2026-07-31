@@ -563,13 +563,19 @@ func ResolveTribulation(c *gin.Context) {
 	// Clean up dead/remaining enemies
 	_, _ = tx.Exec(`UPDATE tribulation_enemies SET is_dead = true WHERE event_id = $1`, ev.ID)
 
+	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 10, $1) WHERE id = $2", MaxHumanQi, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": msg,
+		"message": msg + " Nhân Khí +10.",
 		"state":   ap.State,
 	})
 }

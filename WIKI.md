@@ -44,6 +44,31 @@ Wiki này phản ánh các hệ thống đã có trong codebase hiện tại.
 - UI `Aperture` hiển thị mana, HP, rank, tư chất, Cổ trang bị, quest và tu luyện.
 - Mana/HP được frontend ước tính theo thời gian từ snapshot server.
 
+### Nhân Khí (Human Qi)
+
+- Nhân Khí là tài nguyên phản ánh hoạt động tích cực của đạo hữu trong giới tu tiên, giới hạn tối đa **100.000**.
+- Mọi hoạt động lớn đều tích lũy Nhân Khí (tăng theo `human_qi`, lưu trực tiếp vào DB):
+  - Chiến đấu: thắng +20, thua +5; tự động chiến +3; rút lui +2, bỏ chạy +1.
+  - Mua/bán tại shop +5; đổi vật phẩm đấu trường +5.
+  - Market: niêm yết +5, đặt giá +3, mua thành công +5 (cả người mua lẫn người bán).
+  - Giao dịch P2P: tạo giao dịch +2, cập nhật đề nghị +1, khóa +1, xác nhận +10 mỗi bên.
+  - Khám phá: đi tới ô mới +1, thám hiểm node +3.
+  - Cổ trùng: cho ăn +2, dùng Cổ tiêu hao/hỗ trợ +3.
+  - Luyện Cổ +10, suy diễn công thức +5.
+  - Hồn phách: kiên cố +3, tinh luyện +5.
+  - Môn phái: quyên góp nguyên thạch/vật liệu/Cổ +5, mua từ kho +5, gia nhập +3, chiếm mỏ +5.
+  - Phó bản: vào phó bản +2, mỗi lựa chọn hành động +3.
+  - Tu luyện: phá vách +1, vượt kiếp +5, resolve tai kiếp +10, xả stress +5.
+  - Gacha: mở 1 lần +1, mở 10 lần +10.
+  - Thành tựu: nhận thành tựu +5.
+  - Nhiệm vụ hoàn thành +5, nhập mã quà +2.
+  - Sát chiêu mới +5; hiến tế +10.
+  - Party: tạo đội +2, mời vào đội +2.
+  - Tiên khiếu: xây node +5, thu hoạch +2.
+  - Mua gói premium +10.
+  - Chat: mail riêng +1, Bảo Hoàng thị +1.
+- Nhân Khí dùng để xét điều kiện Thăng Tiên (Rank 5 Đỉnh phong) — xem mục Thăng Tiên.
+
 ### Tiên khiếu
 
 - Tiên khiếu có grade, time rate, HP, diện tích, immortal essence, sản lượng/năm, state.

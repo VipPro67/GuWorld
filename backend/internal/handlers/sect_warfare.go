@@ -232,11 +232,17 @@ func AttackSectMine(c *gin.Context) {
 		return
 	}
 
+	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 5, $1) WHERE id = $2", MaxHumanQi, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
+		return
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Đã chiếm đóng mỏ khoáng thành công!"})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã chiếm đóng mỏ khoáng thành công! Nhân Khí +5."})
 }

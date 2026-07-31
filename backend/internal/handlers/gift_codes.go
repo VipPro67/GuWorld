@@ -232,6 +232,8 @@ func RedeemGiftCode(c *gin.Context) {
 		return
 	}
 
+	qiGained := AddHumanQi(&player, 2.0)
+
 	updateQuery, updateArgs := buildGiftCodeUpdateQuery(&player)
 	_, err = tx.Exec(updateQuery, updateArgs...)
 	if err != nil {
@@ -261,7 +263,7 @@ func RedeemGiftCode(c *gin.Context) {
 	auditlog.Logf(db.DB, &playerID, "gift_code.redeem", "code=%s rewards=%s", gc.Code, string(rewardsJSON))
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message": "Nhập mã quà thành công!" + rewardStr,
+		"message": "Nhập mã quà thành công!" + rewardStr + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})
 }
 

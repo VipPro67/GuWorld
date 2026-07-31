@@ -61,13 +61,19 @@ func CreateParty(c *gin.Context) {
 		return
 	}
 
+	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 2, $1) WHERE id = $2", MaxHumanQi, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Tạo tổ đội thành công!",
+		"message": "Tạo tổ đội thành công! Nhân Khí +2.",
 		"party": gin.H{
 			"id":        partyID.String(),
 			"leader_id": player.ID.String(),
@@ -194,13 +200,19 @@ func InvitePlayer(c *gin.Context) {
 		return
 	}
 
+	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 2, $1) WHERE id = $2", MaxHumanQi, targetPlayer.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Đã thêm người chơi vào tổ đội thành công!",
+		"message": "Đã thêm người chơi vào tổ đội thành công! Nhân Khí +2.",
 		"party": gin.H{
 			"id":        player.PartyID.String(),
 			"leader_id": leaderID,

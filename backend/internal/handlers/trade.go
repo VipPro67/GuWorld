@@ -132,6 +132,12 @@ func InitiateTrade(c *gin.Context) {
 		return
 	}
 
+	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 2, $1) WHERE id = $2", MaxHumanQi, sender.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit trade request"})
 		return
@@ -144,7 +150,7 @@ func InitiateTrade(c *gin.Context) {
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{
-		"message":  "Yêu cầu giao dịch đã được gửi!",
+		"message":  "Yêu cầu giao dịch đã được gửi! Nhân Khí +2.",
 		"trade_id": tradeID,
 	})
 }
@@ -407,13 +413,19 @@ func UpdateTradeOffer(c *gin.Context) {
 		return
 	}
 
+	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 1, $1) WHERE id = $2", MaxHumanQi, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
 	notifyTradeParticipants(senderID, receiverID)
 
-	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật ưu đãi thành công, trạng thái khóa của 2 bên đã được đặt lại"})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật ưu đãi thành công, trạng thái khóa của 2 bên đã được đặt lại. Nhân Khí +1."})
 }
 
 func LockTrade(c *gin.Context) {
@@ -460,6 +472,12 @@ func LockTrade(c *gin.Context) {
 		return
 	}
 
+	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 1, $1) WHERE id = $2", MaxHumanQi, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
@@ -469,7 +487,7 @@ func LockTrade(c *gin.Context) {
 		PlayerID: &authID, Action: "trade.lock", EntityType: "trade",
 		EntityID: tradeID, IPAddress: c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{"message": "Đã khóa vật phẩm giao dịch"})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã khóa vật phẩm giao dịch. Nhân Khí +1."})
 }
 
 func ConfirmTrade(c *gin.Context) {
@@ -668,6 +686,9 @@ func ConfirmTrade(c *gin.Context) {
 		sender.ImmortalStones += receiverOffer.ImmortalStones
 		receiver.PrimevalStones += senderOffer.PrimevalStones
 		receiver.ImmortalStones += senderOffer.ImmortalStones
+
+		AddHumanQi(&sender, 10.0)
+		AddHumanQi(&receiver, 10.0)
 
 		// Update both players in database
 		if err := updatePlayerInventory(tx, sender); err != nil {

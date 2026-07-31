@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -241,15 +242,22 @@ func EnterInstance(c *gin.Context) {
 		return
 	}
 
+	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 2, $1) WHERE id = $2", MaxHumanQi, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit: " + err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":  "Tiến vào phó bản \"" + template.Name + "\" thành công!",
+		"message":  "Tiến vào phó bản \"" + template.Name + "\" thành công! Nhân Khí +2.",
 		"session":  session,
 		"template": template,
+		"human_qi_gained": 2.0,
 	})
 }
 
@@ -420,6 +428,8 @@ func ActionInstance(c *gin.Context) {
 	player.SoulHP -= soulDeduct
 	player.HP -= float64(normalDeduct)
 
+	qiGained := AddHumanQi(&player, 3.0)
+
 	var logResult string
 	sessionFailed := false
 
@@ -450,9 +460,9 @@ func ActionInstance(c *gin.Context) {
 
 		_, err = tx.Exec(`
 			UPDATE players
-			SET hp = $1, soul_hp = $2, current_mana = $3, gu_inventory = $4
-			WHERE id = $5
-		`, player.HP, player.SoulHP, player.CurrentMana, player.GuInventory, player.ID)
+			SET hp = $1, soul_hp = $2, current_mana = $3, gu_inventory = $4, human_qi = $5
+			WHERE id = $6
+		`, player.HP, player.SoulHP, player.CurrentMana, player.GuInventory, player.HumanQi, player.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player: " + err.Error()})
 			return
@@ -486,9 +496,9 @@ func ActionInstance(c *gin.Context) {
 
 		_, err = tx.Exec(`
 			UPDATE players
-			SET hp = $1, soul_hp = $2, gu_inventory = $3
-			WHERE id = $4
-		`, player.HP, player.SoulHP, player.GuInventory, player.ID)
+			SET hp = $1, soul_hp = $2, gu_inventory = $3, human_qi = $4
+			WHERE id = $5
+		`, player.HP, player.SoulHP, player.GuInventory, player.HumanQi, player.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player: " + err.Error()})
 			return
@@ -502,7 +512,7 @@ func ActionInstance(c *gin.Context) {
 		// Reload session for response
 		session.CurrentStage = nextStage
 		responseWithPlayer(c, http.StatusOK, player, gin.H{
-			"message":  "Hành động thành công!",
+			"message":  fmt.Sprintf("Hành động thành công! Nhân Khí +%.0f.", qiGained),
 			"session":  session,
 			"template": template,
 		})
@@ -588,9 +598,9 @@ func ActionInstance(c *gin.Context) {
 
 		_, err = tx.Exec(`
 			UPDATE players
-			SET hp = $1, soul_hp = $2, gu_inventory = $3, primeval_stones = $4, path_masteries = $5
-			WHERE id = $6
-		`, player.HP, player.SoulHP, player.GuInventory, player.PrimevalStones, player.PathMasteries, player.ID)
+			SET hp = $1, soul_hp = $2, gu_inventory = $3, primeval_stones = $4, path_masteries = $5, human_qi = $6
+			WHERE id = $7
+		`, player.HP, player.SoulHP, player.GuInventory, player.PrimevalStones, player.PathMasteries, player.HumanQi, player.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player rewards: " + err.Error()})
 			return
@@ -603,7 +613,7 @@ func ActionInstance(c *gin.Context) {
 
 		session.Status = "COMPLETED"
 		responseWithPlayer(c, http.StatusOK, player, gin.H{
-			"message": "Phó bản hoàn thành! " + logResult,
+			"message": "Phó bản hoàn thành! " + logResult + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 			"session": session,
 		})
 		return
@@ -622,9 +632,9 @@ func ActionInstance(c *gin.Context) {
 
 	_, err = tx.Exec(`
 		UPDATE players
-		SET hp = $1, soul_hp = $2, gu_inventory = $3
-		WHERE id = $4
-	`, player.HP, player.SoulHP, player.GuInventory, player.ID)
+		SET hp = $1, soul_hp = $2, gu_inventory = $3, human_qi = $4
+		WHERE id = $5
+	`, player.HP, player.SoulHP, player.GuInventory, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player status: " + err.Error()})
 		return

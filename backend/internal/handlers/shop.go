@@ -243,12 +243,13 @@ func BuyShopItem(c *gin.Context) {
 	}
 
 	// 6. Save player state
+	qiGained := AddHumanQi(&player, 5.0)
 	updateQuery := `
 		UPDATE players
-		SET primeval_stones = $1, gu_inventory = $2
-		WHERE id = $3
+		SET primeval_stones = $1, gu_inventory = $2, human_qi = $3
+		WHERE id = $4
 	`
-	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.GuInventory, player.ID)
+	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.GuInventory, player.HumanQi, player.ID)
 
 	// Commit Transaction
 	if err = tx.Commit(); err != nil {
@@ -262,7 +263,7 @@ func BuyShopItem(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("%s x%d | %d Nguyên Thạch", selectedItem.Name, req.Quantity, totalCost),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Giao dịch thành công!"})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Giao dịch thành công! Nhân Khí +%.0f.", qiGained)})
 }
 
 type SellShopRequest struct {
@@ -360,8 +361,9 @@ func SellShopItem(c *gin.Context) {
 			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 		}
 	}
-	_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, gu_inventory=$2, equipped_gus=$3 WHERE id=$4`,
-		player.PrimevalStones, player.GuInventory, player.EquippedGus, player.ID)
+	qiGained := AddHumanQi(&player, 5.0)
+	_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, gu_inventory=$2, equipped_gus=$3, human_qi=$4 WHERE id=$5`,
+		player.PrimevalStones, player.GuInventory, player.EquippedGus, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save sell transaction"})
 		return
@@ -389,5 +391,5 @@ func SellShopItem(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("%s x%d | nhận %d Nguyên Thạch", itemName, req.Quantity, totalGain),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Bán thành công, nhận Nguyên Thạch!"})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công, nhận Nguyên Thạch! Nhân Khí +%.0f.", qiGained)})
 }

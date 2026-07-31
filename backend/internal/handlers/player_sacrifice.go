@@ -99,12 +99,14 @@ func SacrificeNPC(c *gin.Context) {
 	// 5. Increase Aperture Stress (+40)
 	player.ApertureStress += 40.0
 
+	qiGained := AddHumanQi(&player, 10.0)
+
 	// 6. Save back to DB
 	_, err = tx.Exec(`
 		UPDATE players
-		SET aptitude_percent = $1, aptitude_type = $2, aperture_stress = $3
-		WHERE id = $4
-	`, player.AptitudePercent, player.AptitudeType, player.ApertureStress, player.ID)
+		SET aptitude_percent = $1, aptitude_type = $2, aperture_stress = $3, human_qi = $4
+		WHERE id = $5
+	`, player.AptitudePercent, player.AptitudeType, player.ApertureStress, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player stats"})
 		return
@@ -116,9 +118,9 @@ func SacrificeNPC(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":      fmt.Sprintf("Hiến tế thành công %s! Huyết Sọ Cổ đã nghiền nát cốt nhục đệ tử, chuyển hóa chân huyết nâng cao tư chất Không khiếu của đạo hữu (+5%% tư chất).", npcName),
-		"old_aptitude": oldAptitude,
-		"new_aptitude": player.AptitudePercent,
+		"message":       fmt.Sprintf("Hiến tế thành công %s! Huyết Sọ Cổ đã nghiền nát cốt nhục đệ tử, chuyển hóa chân huyết nâng cao tư chất Không khiếu của đạo hữu (+5%% tư chất). Nhân Khí +%.0f.", npcName, qiGained),
+		"old_aptitude":  oldAptitude,
+		"new_aptitude":  player.AptitudePercent,
 		"aptitude_type": player.AptitudeType,
 		"aperture_stress": player.ApertureStress,
 	})

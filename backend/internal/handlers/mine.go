@@ -254,6 +254,12 @@ func OccupyMineSlot(c *gin.Context) {
 		return
 	}
 
+	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 5, $1) WHERE id = $2", MaxHumanQi, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update human qi"})
+		return
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
@@ -261,7 +267,7 @@ func OccupyMineSlot(c *gin.Context) {
 	}
 
 	auditlog.Logf(db.DB, &authID, "mine.occupy", "slot=%d rarity=%s", req.SlotID, rarity)
-	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Chiếm lĩnh thành công mỏ phẩm chất %s #%d!", rarity, req.SlotID)})
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Chiếm lĩnh thành công mỏ phẩm chất %s #%d! Nhân Khí +5.", rarity, req.SlotID)})
 }
 
 func ClaimMineRewards(c *gin.Context) {
@@ -585,7 +591,7 @@ func AttackMineSlot(c *gin.Context) {
 	attacker.ActiveCombat = StartCombat(tx, &pvpCombat, &attacker)
 
 	combatBytes, _ := json.Marshal(attacker.ActiveCombat)
-	_, err = tx.Exec("UPDATE players SET active_combat = $1 WHERE id = $2", combatBytes, authID)
+	_, err = tx.Exec("UPDATE players SET active_combat = $1, human_qi = LEAST(human_qi + 3, $2) WHERE id = $3", combatBytes, MaxHumanQi, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat state"})
 		return
@@ -598,7 +604,7 @@ func AttackMineSlot(c *gin.Context) {
 	}
 
 	auditlog.Logf(db.DB, &authID, "mine.attack", "slot=%d enemyType=%s", req.SlotID, pvpCombat.EnemyType)
-	c.JSON(http.StatusOK, gin.H{"message": "Khởi động chiến đấu chiếm mỏ thành công!"})
+	c.JSON(http.StatusOK, gin.H{"message": "Khởi động chiến đấu chiếm mỏ thành công! Nhân Khí +3."})
 }
 
 // StartMineMonsterWorker runs periodically to assign monsters to abandoned mines

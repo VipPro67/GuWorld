@@ -753,6 +753,12 @@ func AutoCombatStart(c *gin.Context) {
 		return
 	}
 
+	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 3, $1) WHERE id = $2", MaxHumanQi, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit combat transaction"})
 		return
@@ -796,7 +802,7 @@ func AutoCombatStart(c *gin.Context) {
 		IPAddress:      c.ClientIP(), Success: alliesAlive,
 	})
 	c.JSON(http.StatusOK, gin.H{
-		"message":    "Chiến đấu hoàn tất",
+		"message":    "Chiến đấu hoàn tất. Nhân Khí +3.",
 		"logs":       logs,
 		"winner":     winner,
 		"combatants": combatantInfos,

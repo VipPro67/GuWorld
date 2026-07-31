@@ -443,13 +443,15 @@ func RefineGu(c *gin.Context) {
 		}
 	}
 
+	qiGained := AddHumanQi(&player, 10.0)
+
 	// 9. Update player status in database
 	updateQuery := `
 		UPDATE players
-		SET primeval_stones = $1, immortal_stones = $2, gu_inventory = $3, equipped_gus = $4, hp = $5, max_mana = $6, current_mana = $7
-		WHERE id = $8
+		SET primeval_stones = $1, immortal_stones = $2, gu_inventory = $3, equipped_gus = $4, hp = $5, max_mana = $6, current_mana = $7, human_qi = $8
+		WHERE id = $9
 	`
-	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ImmortalStones, player.GuInventory, player.EquippedGus, player.HP, player.MaxMana, player.CurrentMana, player.ID)
+	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ImmortalStones, player.GuInventory, player.EquippedGus, player.HP, player.MaxMana, player.CurrentMana, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save refining results"})
 		return
@@ -482,13 +484,13 @@ func RefineGu(c *gin.Context) {
 	if success {
 		responseWithPlayer(c, http.StatusOK, player, gin.H{
 			"status":  statusStr,
-			"message": statusMsg,
+			"message": statusMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 			"new_gu":  newGuInstance,
 		})
 	} else {
 		responseWithPlayer(c, http.StatusOK, player, gin.H{
 			"status":  statusStr,
-			"message": statusMsg,
+			"message": statusMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 		})
 	}
 }
@@ -613,13 +615,15 @@ func DeduceRecipe(c *gin.Context) {
 		})
 	}
 
+	qiGained := AddHumanQi(&player, 5.0)
+
 	// Save back to database
 	updateQuery := `
 		UPDATE players
-		SET current_thought = $1, primeval_stones = $2
-		WHERE id = $3
+		SET current_thought = $1, primeval_stones = $2, human_qi = $3
+		WHERE id = $4
 	`
-	_, err = tx.Exec(updateQuery, player.CurrentThought, player.PrimevalStones, player.ID)
+	_, err = tx.Exec(updateQuery, player.CurrentThought, player.PrimevalStones, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save deduction results"})
 		return
@@ -636,7 +640,7 @@ func DeduceRecipe(c *gin.Context) {
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message":         message,
+		"message":         message + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 		"inspiration":     inspirationFlash,
 		"improvement":     improvement,
 		"completion_rate": newRate,

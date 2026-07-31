@@ -162,6 +162,11 @@ func CreateKillerMove(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu slot sát chiêu"})
 		return
 	}
+	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 5, $1) WHERE id = $2", MaxHumanQi, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật Nhân Khí"})
+		return
+	}
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tất lưu sát chiêu"})
 		return

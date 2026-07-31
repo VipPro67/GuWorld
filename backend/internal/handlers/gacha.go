@@ -139,6 +139,8 @@ func OpenGacha(c *gin.Context) {
 		return
 	}
 
+	qiGained := AddHumanQi(&player, 1.0)
+
 	updateQuery, updateArgs := buildGachaUpdateQuery(&player)
 	_, err = tx.Exec(updateQuery, updateArgs...)
 	if err != nil {
@@ -153,7 +155,7 @@ func OpenGacha(c *gin.Context) {
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"reward":  reward,
-		"message": buildGachaRewardLabel(reward),
+		"message": buildGachaRewardLabel(reward) + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})
 }
 
@@ -211,6 +213,8 @@ func OpenGacha10(c *gin.Context) {
 		}
 	}
 
+	qiGained := AddHumanQi(&player, 10.0)
+
 	updateQuery, updateArgs := buildGachaUpdateQuery(&player)
 	_, err = tx.Exec(updateQuery, updateArgs...)
 	if err != nil {
@@ -230,7 +234,7 @@ func OpenGacha10(c *gin.Context) {
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"rewards": rewards,
-		"message": "Mở 10 lần thành công!\n" + announcement,
+		"message": fmt.Sprintf("Mở 10 lần thành công! Nhân Khí +%.0f.\n", qiGained) + announcement,
 	})
 }
 

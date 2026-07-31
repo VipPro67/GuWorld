@@ -227,14 +227,16 @@ func Retreat(c *gin.Context) {
 	player.ExploredCells = models.ExploredCellsList{"50,50"}
 	player.CurrentRegion = "Southern_Border"
 
+	qiGained := AddHumanQi(&player, 2.0)
+
 	updateQuery := `
 		UPDATE players
 		SET hp = $1, current_mana = $2, active_combat = $3, x = $4, y = $5, explored_cells = $6, primeval_stones = $7,
-		    gu_inventory = $8, temp_loot = $9, current_region = $10
-		WHERE id = $11
+		    gu_inventory = $8, temp_loot = $9, current_region = $10, human_qi = $11
+		WHERE id = $12
 	`
 	_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.ActiveCombat, player.X, player.Y, player.ExploredCells, player.PrimevalStones,
-		player.GuInventory, player.TempLoot, player.CurrentRegion, player.ID)
+		player.GuInventory, player.TempLoot, player.CurrentRegion, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player status after retreat"})
 		return
@@ -251,7 +253,7 @@ func Retreat(c *gin.Context) {
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"log":    logMsg,
+		"log":    logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})
 }
 
@@ -290,12 +292,14 @@ func Flee(c *gin.Context) {
 	logMsg := fmt.Sprintf("Đạo hữu đã bỏ chạy khỏi %s.", player.ActiveCombat.EnemyName)
 	player.ActiveCombat = nil
 
+	qiGained := AddHumanQi(&player, 1.0)
+
 	updateQuery := `
 		UPDATE players
-		SET active_combat = $1
-		WHERE id = $2
+		SET active_combat = $1, human_qi = $2
+		WHERE id = $3
 	`
-	_, err = tx.Exec(updateQuery, player.ActiveCombat, player.ID)
+	_, err = tx.Exec(updateQuery, player.ActiveCombat, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player status after fleeing"})
 		return
@@ -308,7 +312,7 @@ func Flee(c *gin.Context) {
 
 	auditlog.Logf(db.DB, &authID, "combat.flee", "enemy=%s", logMsg)
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"log":    logMsg,
+		"log":    logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})
 }
 

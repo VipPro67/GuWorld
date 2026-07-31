@@ -121,7 +121,9 @@ func BuyArenaShopItem(c *gin.Context) {
 		return
 	}
 
+	_, _ = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 5, $1) WHERE id = $2", MaxHumanQi, authID)
+
 	tx.Commit()
 
-	c.JSON(http.StatusOK, gin.H{"message": "Đổi vật phẩm thành công!", "cost": targetPrice})
+	c.JSON(http.StatusOK, gin.H{"message": "Đổi vật phẩm thành công! Nhân Khí +5.", "cost": targetPrice})
 }

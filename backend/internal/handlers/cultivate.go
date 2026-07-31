@@ -146,12 +146,18 @@ func BreakWall(c *gin.Context) {
 				return
 			}
 
+			_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 1, $1) WHERE id = $2", MaxHumanQi, player.ID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
+				return
+			}
+
 			tx.Commit()
 
 			responseWithPlayer(c, http.StatusOK, player, gin.H{
 				"success": false,
 				"chance":  chance,
-				"message": msg,
+				"message": msg + " Nhân Khí +1.",
 			})
 
 			return
@@ -176,6 +182,9 @@ func BreakWall(c *gin.Context) {
 			msg = "Chúc mừng! Bạn đã trùng kích vỡ nát được một tầng khiếu, tiến lên tu vi cao hơn!"
 		}
 	}
+
+	qiGained := AddHumanQi(&player, 1.0)
+	msg += fmt.Sprintf(" Nhân Khí +%.0f.", qiGained)
 
 	updateQuery := `
         UPDATE players 
@@ -492,12 +501,18 @@ func Tribulation(c *gin.Context) {
 		return
 	}
 
+	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 5, $1) WHERE id = $2", MaxHumanQi, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
 	}
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Thiên kiếp giáng lâm! Hãy chuẩn bị chiến đấu!"})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Thiên kiếp giáng lâm! Hãy chuẩn bị chiến đấu! Nhân Khí +5."})
 }
 
 // CompleteQuestRequest defines body to complete a main quest
@@ -535,12 +550,14 @@ func ClearStress(c *gin.Context) {
 	player.PrimevalStones -= 100
 	player.ApertureStress = math.Max(0.0, player.ApertureStress-50.0)
 
+	qiGained := AddHumanQi(&player, 5.0)
+
 	updateQuery := `
 		UPDATE players 
-		SET primeval_stones = $1, aperture_stress = $2
-		WHERE id = $3
+		SET primeval_stones = $1, aperture_stress = $2, human_qi = $3
+		WHERE id = $4
 	`
-	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ApertureStress, player.ID)
+	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ApertureStress, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player stress"})
 		return
@@ -552,6 +569,6 @@ func ClearStress(c *gin.Context) {
 	}
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message": "Không khiếu đã được tịnh hóa thành công! Giảm 50% áp lực.",
+		"message": fmt.Sprintf("Không khiếu đã được tịnh hóa thành công! Giảm 50%% áp lực. Nhân Khí +%.0f.", qiGained),
 	})
 }

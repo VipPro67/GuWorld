@@ -539,6 +539,10 @@ func BuyPremiumPackage(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật phần thưởng"})
 		return
 	}
+	if _, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 10, $1) WHERE id = $2", MaxHumanQi, playerID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật Nhân Khí"})
+		return
+	}
 	if _, err = tx.Exec(`UPDATE wallets SET primeval_stone=$1, immortal_essence_stone=$2, immortal_jade=$3, updated_at=CURRENT_TIMESTAMP WHERE user_id=$4`, wallet.PrimevalStone, wallet.ImmortalEssenceStone, wallet.ImmortalJade, playerID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật ví"})
 		return
@@ -559,7 +563,7 @@ func BuyPremiumPackage(c *gin.Context) {
 		Metadata: map[string]interface{}{"price_jade": pkg.PriceJade, "jade_before": jadeBefore, "jade_after": wallet.ImmortalJade},
 		IPAddress: c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{"message": "Mua gói thành công", "wallet": wallet, "rewards": pkg.Rewards})
+	c.JSON(http.StatusOK, gin.H{"message": "Mua gói thành công. Nhân Khí +10.", "wallet": wallet, "rewards": pkg.Rewards})
 }
 
 func ensureWallet(database *sql.DB, playerID uuid.UUID) (WalletDTO, error) {

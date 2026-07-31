@@ -77,7 +77,8 @@ func SendPrivateMail(c *gin.Context) {
 
 	// Deduct stone
 	player.PrimevalStones -= 1
-	_, err = tx.Exec("UPDATE players SET primeval_stones = $1 WHERE id = $2", player.PrimevalStones, player.ID)
+	qiGained := AddHumanQi(&player, 1.0)
+	_, err = tx.Exec("UPDATE players SET primeval_stones = $1, human_qi = $2 WHERE id = $3", player.PrimevalStones, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct primeval stones"})
 		return
@@ -88,7 +89,7 @@ func SendPrivateMail(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Truyền tin thành công! Cổ trùng đã cất cánh bay đi."})
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Truyền tin thành công! Cổ trùng đã cất cánh bay đi. Nhân Khí +%.0f.", qiGained)})
 }
 
 func GetInbox(c *gin.Context) {
@@ -239,15 +240,22 @@ func SendBaoHoangChat(c *gin.Context) {
 		}
 	}
 
+	qiGained := AddHumanQi(&player, 1.0)
+	_, err = tx.Exec("UPDATE players SET human_qi = $1 WHERE id = $2", player.HumanQi, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update human qi"})
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit chat"})
 		return
 	}
 	notifyBaoHoangMessages(req.Channel, sectID)
 
-	msg := "Đã truyền tin nhắn thành công!"
+	msg := "Đã truyền tin nhắn thành công! Nhân Khí +1."
 	if fee > 0 {
-		msg = fmt.Sprintf("Đã truyền tin nhắn thành công! Trừ %d Nguyên Thạch phí truyền phát.", fee)
+		msg = fmt.Sprintf("Đã truyền tin nhắn thành công! Trừ %d Nguyên Thạch phí truyền phát. Nhân Khí +%.0f.", fee, qiGained)
 	}
 	c.JSON(http.StatusOK, gin.H{"message": msg})
 }

@@ -176,14 +176,16 @@ func ExploreNode(c *gin.Context) {
 	}
 	addExploredCells(&player, exploreRadius)
 
+	qiGained := AddHumanQi(&player, 3.0)
+
 	updateQuery := `
 		UPDATE players
 		SET current_mana = $1, primeval_stones = $2, active_combat = $3, current_region = $4, x = $5, y = $6, explored_cells = $7,
-		    temp_loot = $8, explore_count = $9, last_explore_reset = $10
-		WHERE id = $11
+		    temp_loot = $8, explore_count = $9, last_explore_reset = $10, human_qi = $11
+		WHERE id = $12
 	`
 	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.ActiveCombat, player.CurrentRegion, player.X, player.Y, player.ExploredCells,
-		player.TempLoot, player.ExploreCount, player.LastExploreReset, player.ID)
+		player.TempLoot, player.ExploreCount, player.LastExploreReset, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save exploration progress"})
 		return
@@ -195,7 +197,7 @@ func ExploreNode(c *gin.Context) {
 	}
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"log":              logMsg,
+		"log":              logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 		"combat_triggered": combatTriggered,
 	})
 }

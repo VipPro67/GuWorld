@@ -186,8 +186,10 @@ func ClaimAchievement(c *gin.Context) {
 		}
 	}
 
-	_, err = tx.Exec(`UPDATE players SET earned_achievements = $1, primeval_stones = $2, immortal_stones = $3 WHERE id = $4`,
-		earnedBytes, player.PrimevalStones, player.ImmortalStones, player.ID)
+	qiGained := AddHumanQi(&player, 5.0)
+
+	_, err = tx.Exec(`UPDATE players SET earned_achievements = $1, primeval_stones = $2, immortal_stones = $3, human_qi = $4 WHERE id = $5`,
+		earnedBytes, player.PrimevalStones, player.ImmortalStones, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật"})
 		return
@@ -201,7 +203,7 @@ func ClaimAchievement(c *gin.Context) {
 	auditlog.Logf(db.DB, &playerID, "achievement.claim", "achievementId=%s name=%s", ach.ID, ach.Name)
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message": fmt.Sprintf("Nhận thành tựu [%s] %s! Phần thưởng: %s", ach.Icon, ach.Name, ach.RewardLabel),
+		"message": fmt.Sprintf("Nhận thành tựu [%s] %s! Phần thưởng: %s Nhân Khí +%.0f.", ach.Icon, ach.Name, ach.RewardLabel, qiGained),
 	})
 }
 

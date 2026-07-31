@@ -118,11 +118,13 @@ func UseGutsGu(c *gin.Context) {
 		player.NeedsSoulRefine = true
 	}
 
+	qiGained := AddHumanQi(&player, 3.0)
+
 	_, err = tx.Exec(`
 		UPDATE players
-		SET max_soul = $1, soul_hp = $2, needs_soul_refine = $3
-		WHERE id = $4
-	`, player.MaxSoul, player.SoulHP, player.NeedsSoulRefine, player.ID)
+		SET max_soul = $1, soul_hp = $2, needs_soul_refine = $3, human_qi = $4
+		WHERE id = $5
+	`, player.MaxSoul, player.SoulHP, player.NeedsSoulRefine, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player: " + err.Error()})
 		return
@@ -139,7 +141,7 @@ func UseGutsGu(c *gin.Context) {
 		Success: true,
 	})
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message": "Tráng Hồn thành công! Hồn phách tăng thêm 10 điểm.",
+		"message": fmt.Sprintf("Tráng Hồn thành công! Hồn phách tăng thêm 10 điểm. Nhân Khí +%.0f.", qiGained),
 	})
 }
 
@@ -181,11 +183,13 @@ func RefineSoul(c *gin.Context) {
 		player.SoulHP = 1
 	}
 
+	qiGained := AddHumanQi(&player, 5.0)
+
 	_, err = tx.Exec(`
 		UPDATE players
-		SET soul_tier = $1, needs_soul_refine = $2, soul_hp = $3
-		WHERE id = $4
-	`, player.SoulTier, player.NeedsSoulRefine, player.SoulHP, player.ID)
+		SET soul_tier = $1, needs_soul_refine = $2, soul_hp = $3, human_qi = $4
+		WHERE id = $5
+	`, player.SoulTier, player.NeedsSoulRefine, player.SoulHP, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player: " + err.Error()})
 		return
@@ -202,7 +206,7 @@ func RefineSoul(c *gin.Context) {
 		Success: true,
 	})
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message": "Luyện Hồn thành công! Hồn phách đột phá lên " + newTier + ", nhưng bị suy yếu do gió Lạc Phách (Soul HP giảm mạnh). Hãy dưỡng hồn để khôi phục.",
+		"message": fmt.Sprintf("Luyện Hồn thành công! Hồn phách đột phá lên %s, nhưng bị suy yếu do gió Lạc Phách (Soul HP giảm mạnh). Hãy dưỡng hồn để khôi phục. Nhân Khí +%.0f.", newTier, qiGained),
 	})
 }
 

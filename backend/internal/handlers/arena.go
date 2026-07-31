@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -223,10 +224,12 @@ func ChallengeArena(c *gin.Context) {
 	// Full mana for attacker in virtual mode
 	player.CurrentMana = player.MaxMana
 
+	qiGained := AddHumanQi(&player, 3.0)
+
 	player.ActiveCombat = InitializeCombatState(tx, &pvpCombat, &player)
 
 	// Save to DB
-	_, err = tx.Exec("UPDATE players SET active_combat = $1 WHERE id = $2", player.ActiveCombat, player.ID)
+	_, err = tx.Exec("UPDATE players SET active_combat = $1, human_qi = $2 WHERE id = $3", player.ActiveCombat, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize arena combat"})
 		return
@@ -238,6 +241,6 @@ func ChallengeArena(c *gin.Context) {
 	}
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message": "Khiêu chiến Võ Đài bắt đầu!",
+		"message": fmt.Sprintf("Khiêu chiến Võ Đài bắt đầu! Nhân Khí +%.0f.", qiGained),
 	})
 }

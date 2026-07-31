@@ -681,6 +681,9 @@ func CombatAttack(c *gin.Context) {
 	if victory {
 		ctx.Logs = append(ctx.Logs, "=== CHIẾN THẮNG VANG DỘI ===")
 
+		qiGained := AddHumanQi(&player, 20.0)
+		ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chiến thắng đem lại sự tin tưởng của bá tánh. Nhân Khí +%.0f.", qiGained))
+
 		IntegratePassiveGus(&player, &ctx.Logs)
 
 		var partyMembers []uuid.UUID
@@ -980,6 +983,8 @@ func CombatAttack(c *gin.Context) {
 	} else if defeat {
 		player.HP = 1.0
 		defeat = true
+		qiGained := AddHumanQi(&player, 5.0)
+		ctx.Logs = append(ctx.Logs, fmt.Sprintf("Dù bại trận, đạo hữu vẫn giữ được chí khí. Nhân Khí +%.0f.", qiGained))
 		if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
 			ctx.Logs = append(ctx.Logs, "Thách đấu mỏ linh thạch thất bại, không thể chiếm lĩnh mỏ.")
 		} else {
@@ -1056,11 +1061,11 @@ func CombatAttack(c *gin.Context) {
 	updateQuery := `
 		UPDATE players
 		SET hp = $1, current_mana = $2, primeval_stones = $3, gu_inventory = $4, cleared_cells = $5, active_combat = $6,
-		    temp_loot = $7, current_region = $8, x = $9, y = $10, explored_cells = $11
-		WHERE id = $12
+		    temp_loot = $7, current_region = $8, x = $9, y = $10, explored_cells = $11, human_qi = $12
+		WHERE id = $13
 	`
 	_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.PrimevalStones, player.GuInventory, player.ClearedCells, player.ActiveCombat,
-		player.TempLoot, player.CurrentRegion, player.X, player.Y, player.ExploredCells, player.ID)
+		player.TempLoot, player.CurrentRegion, player.X, player.Y, player.ExploredCells, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update combat results"})
 		return

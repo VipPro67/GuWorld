@@ -312,7 +312,8 @@ func CreateListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo phiên giao dịch"})
 		return
 	}
-	_, err = tx.Exec(`UPDATE players SET gu_inventory=$1, equipped_gus=$2, primeval_stones=$3 WHERE id=$4`, player.GuInventory, player.EquippedGus, player.PrimevalStones, player.ID)
+	AddHumanQi(&player, 5.0)
+	_, err = tx.Exec(`UPDATE players SET gu_inventory=$1, equipped_gus=$2, primeval_stones=$3, human_qi=$4 WHERE id=$5`, player.GuInventory, player.EquippedGus, player.PrimevalStones, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ"})
 		return
@@ -504,7 +505,8 @@ func PlaceBid(c *gin.Context) {
 			return
 		}
 	}
-	_, err = tx.Exec(`UPDATE players SET primeval_stones=$1 WHERE id=$2`, player.PrimevalStones, player.ID)
+	AddHumanQi(&player, 3.0)
+	_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, human_qi=$2 WHERE id=$3`, player.PrimevalStones, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "update failed"})
 		return
@@ -686,6 +688,9 @@ func BuyListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển giao vật phẩm"})
 		return
 	}
+
+	AddHumanQi(&buyer, 5.0)
+	AddHumanQi(&seller, 5.0)
 
 	if err := updatePlayerInventory(tx, buyer); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật kho đồ người mua"})
@@ -916,7 +921,7 @@ func addAuctionItemToPlayer(tx *sql.Tx, player *models.Player, itemType, itemDat
 }
 
 func updatePlayerInventory(tx *sql.Tx, player models.Player) error {
-	_, err := tx.Exec(`UPDATE players SET gu_inventory=$1, equipped_gus=$2, primeval_stones=$3, immortal_stones=$4 WHERE id=$5`, player.GuInventory, player.EquippedGus, player.PrimevalStones, player.ImmortalStones, player.ID)
+	_, err := tx.Exec(`UPDATE players SET gu_inventory=$1, equipped_gus=$2, primeval_stones=$3, immortal_stones=$4, human_qi=$5 WHERE id=$6`, player.GuInventory, player.EquippedGus, player.PrimevalStones, player.ImmortalStones, player.HumanQi, player.ID)
 	return err
 }
 

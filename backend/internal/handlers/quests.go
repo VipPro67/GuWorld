@@ -430,6 +430,8 @@ func CompleteQuest(c *gin.Context) {
 		return
 	}
 
+	qiGained := AddHumanQi(&player, 5.0)
+
 	updateQuery, updateArgs := buildQuestUpdateQuery(&player)
 	_, err = tx.Exec(updateQuery, updateArgs...)
 	if err != nil {
@@ -451,5 +453,5 @@ func CompleteQuest(c *gin.Context) {
 	rewardStr := buildRewardLabel(quest.Rewards)
 
 	auditlog.Logf(db.DB, &authID, "quest.complete", "questId=%s questTitle=%s", req.QuestID, quest.Title)
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": quest.Message + rewardStr})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": quest.Message + rewardStr + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained)})
 }

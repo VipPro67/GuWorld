@@ -181,12 +181,18 @@ func JoinSect(c *gin.Context) {
 			return
 		}
 
+		_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 2, $1) WHERE id = $2", MaxHumanQi, playerID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
+			return
+		}
+
 		if err := tx.Commit(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"message": "Gửi yêu cầu gia nhập thành công, vui lòng chờ duyệt!"})
+		c.JSON(http.StatusOK, gin.H{"message": "Gửi yêu cầu gia nhập thành công, vui lòng chờ duyệt! Nhân Khí +2."})
 		return
 	}
 
@@ -197,6 +203,12 @@ func JoinSect(c *gin.Context) {
 	`, sectID, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to join sect: " + err.Error()})
+		return
+	}
+
+	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 3, $1) WHERE id = $2", MaxHumanQi, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
 		return
 	}
 
@@ -212,7 +224,7 @@ func JoinSect(c *gin.Context) {
 	}
 
 	auditlog.Logf(db.DB, &playerID, "sect.join", "sectId=%s username=%s", sectID, username)
-	c.JSON(http.StatusOK, gin.H{"message": "Gia nhập tông môn thành công!"})
+	c.JSON(http.StatusOK, gin.H{"message": "Gia nhập tông môn thành công! Nhân Khí +3."})
 }
 
 // LeaveSect removes a player from their sect
@@ -575,7 +587,9 @@ func DonateStones(c *gin.Context) {
 		return
 	}
 
-	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1 WHERE id = $2`, player.PrimevalStones, player.ID)
+	qiGained := AddHumanQi(&player, 5.0)
+
+	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, human_qi = $2 WHERE id = $3`, player.PrimevalStones, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct stones"})
 		return
@@ -601,7 +615,7 @@ func DonateStones(c *gin.Context) {
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{
-		"message":             "Quyên góp thành công!",
+		"message":             fmt.Sprintf("Quyên góp thành công! Nhân Khí +%.0f.", qiGained),
 		"primeval_stones":     player.PrimevalStones,
 		"contribution_points": m.ContributionPoints,
 	})
@@ -663,6 +677,7 @@ func DonateMaterials(c *gin.Context) {
 	InventorySvc.RemoveItem(tx, playerID.String(), req.MaterialID, "materials", req.Amount)
 
 	m.ContributionPoints += gainedContribution
+	qiGained := AddHumanQi(&player, 5.0)
 
 	// Increase sect funds
 	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, gainedContribution, m.SectID)
@@ -698,6 +713,12 @@ func DonateMaterials(c *gin.Context) {
 		return
 	}
 
+	_, err = tx.Exec(`UPDATE players SET human_qi = $1 WHERE id = $2`, player.HumanQi, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update human qi"})
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
 		return
@@ -718,7 +739,7 @@ func DonateMaterials(c *gin.Context) {
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{
-		"message":             "Quyên góp linh tài thành công!",
+		"message":             fmt.Sprintf("Quyên góp linh tài thành công! Nhân Khí +%.0f.", qiGained),
 		"contribution_points": m.ContributionPoints,
 	})
 }
@@ -836,6 +857,7 @@ func DonateGu(c *gin.Context) {
 	// Remove Gu
 	player.GuInventory = append(player.GuInventory[:targetIdx], player.GuInventory[targetIdx+1:]...)
 	m.ContributionPoints += gainedContribution
+	qiGained := AddHumanQi(&player, 5.0)
 
 	// Increase sect funds
 	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, gainedContribution, m.SectID)
@@ -844,7 +866,7 @@ func DonateGu(c *gin.Context) {
 		return
 	}
 
-	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1 WHERE id = $2`, player.GuInventory, player.ID)
+	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1, human_qi = $2 WHERE id = $3`, player.GuInventory, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update gu inventory"})
 		return
@@ -875,7 +897,7 @@ func DonateGu(c *gin.Context) {
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{
-		"message":             "Quyên góp Cổ trùng thành công!",
+		"message":             fmt.Sprintf("Quyên góp Cổ trùng thành công! Nhân Khí +%.0f.", qiGained),
 		"gu_inventory":        player.GuInventory,
 		"contribution_points": m.ContributionPoints,
 	})
@@ -1071,9 +1093,17 @@ func BuyFromSectVault(c *gin.Context) {
 		return
 	}
 
+	qiGained := AddHumanQi(&player, 5.0)
+
 	_, err = tx.Exec(`UPDATE sect_members SET contribution_points = $1 WHERE player_id = $2`, m.ContributionPoints, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update contribution"})
+		return
+	}
+
+	_, err = tx.Exec(`UPDATE players SET human_qi = $1 WHERE id = $2`, player.HumanQi, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update human qi"})
 		return
 	}
 
@@ -1101,7 +1131,7 @@ func BuyFromSectVault(c *gin.Context) {
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message": "Đổi vật phẩm thành công!",
+		"message": fmt.Sprintf("Đổi vật phẩm thành công! Nhân Khí +%.0f.", qiGained),
 		"member":  m,
 	})
 }

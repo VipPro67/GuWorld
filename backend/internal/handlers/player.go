@@ -1060,12 +1060,13 @@ func Explore(c *gin.Context) {
 	}
 
 	// 5. Persist changes
+	qiGained := AddHumanQi(&player, 3.0)
 	updateQuery := `
 		UPDATE players
-		SET current_mana = $1, primeval_stones = $2, gu_inventory = $3, last_mana_update = $4, explored_cells = $5
-		WHERE id = $6
+		SET current_mana = $1, primeval_stones = $2, gu_inventory = $3, last_mana_update = $4, explored_cells = $5, human_qi = $6
+		WHERE id = $7
 	`
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.GuInventory, player.LastManaUpdate, player.ExploredCells, player.ID)
+	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.GuInventory, player.LastManaUpdate, player.ExploredCells, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update explore progress: " + err.Error()})
 		return
@@ -1101,6 +1102,8 @@ func Explore(c *gin.Context) {
 	if inventoryFullMsg != "" {
 		logMsg = logMsg + inventoryFullMsg
 	}
+
+	logMsg += fmt.Sprintf(" Nhân Khí +%.0f.", qiGained)
 
 	c.JSON(http.StatusOK, ExploreResponse{
 		Player:       player,
@@ -1314,9 +1317,11 @@ func FeedGu(c *gin.Context) {
 		targetGu.Equipped = true
 	}
 
+	qiGained := AddHumanQi(&player, 2.0)
+
 	// 6. Update database
-	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1, primeval_stones = $2, immortal_stones = $3, hp = $4, max_mana = $5, current_mana = $6, lifespan = $7 WHERE id = $8`,
-		player.GuInventory, player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.ID)
+	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1, primeval_stones = $2, immortal_stones = $3, hp = $4, max_mana = $5, current_mana = $6, lifespan = $7, human_qi = $8 WHERE id = $9`,
+		player.GuInventory, player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
@@ -1355,7 +1360,7 @@ func FeedGu(c *gin.Context) {
 		Success:   true,
 	})
 
-	msg := fmt.Sprintf("Cho %s ăn thành công! Đã khôi phục tới %d độ no. Tiêu hao: %s.", specs.Name, targetGu.Hunger, foodStr)
+	msg := fmt.Sprintf("Cho %s ăn thành công! Đã khôi phục tới %d độ no. Tiêu hao: %s. Nhân Khí +%.0f.", specs.Name, targetGu.Hunger, foodStr, qiGained)
 	if feedEventMsg != "" {
 		msg += " " + feedEventMsg
 	}
@@ -2514,14 +2519,16 @@ func UseConsumableGu(c *gin.Context) {
 
 	logMsg := strings.Join(logs, " ")
 
+	qiGained := AddHumanQi(&player, 3.0)
+
 	// Delete from inventory
 	RemoveGuFromInventory(&player, targetGu.InstanceID)
 
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET gu_inventory = $1, sub_rank = $2, rank = $3, primeval_stones = $4, max_mana = $5, current_mana = $6, equipped_gus = $7, dao_marks = $8, wall_progress = $9, hp = $10, lifespan = $11, aptitude_percent = $12, immortal_stones = $13, aperture_stress = $14
-		WHERE id = $15`,
-		player.GuInventory, player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.DaoMarks, player.WallProgress, player.HP, player.Lifespan, player.AptitudePercent, player.ImmortalStones, player.ApertureStress, player.ID,
+		SET gu_inventory = $1, sub_rank = $2, rank = $3, primeval_stones = $4, max_mana = $5, current_mana = $6, equipped_gus = $7, dao_marks = $8, wall_progress = $9, hp = $10, lifespan = $11, aptitude_percent = $12, immortal_stones = $13, aperture_stress = $14, human_qi = $15
+		WHERE id = $16`,
+		player.GuInventory, player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.DaoMarks, player.WallProgress, player.HP, player.Lifespan, player.AptitudePercent, player.ImmortalStones, player.ApertureStress, player.HumanQi, player.ID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using Gu"})
@@ -2539,7 +2546,7 @@ func UseConsumableGu(c *gin.Context) {
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message": logMsg,
+		"message": logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})
 }
 
@@ -2631,12 +2638,14 @@ func UseSupportGu(c *gin.Context) {
 
 	logMsg := strings.Join(logs, " ")
 
+	qiGained := AddHumanQi(&player, 3.0)
+
 	// Save to DB
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET gu_inventory = $1, max_mana = $2, current_mana = $3, aptitude_percent = $4, hp = $5, aperture_stress = $6
-		WHERE id = $7`,
-		player.GuInventory, player.MaxMana, player.CurrentMana, player.AptitudePercent, player.HP, player.ApertureStress,
+		SET gu_inventory = $1, max_mana = $2, current_mana = $3, aptitude_percent = $4, hp = $5, aperture_stress = $6, human_qi = $7
+		WHERE id = $8`,
+		player.GuInventory, player.MaxMana, player.CurrentMana, player.AptitudePercent, player.HP, player.ApertureStress, player.HumanQi,
 		player.ID,
 	)
 	if err != nil {
@@ -2650,7 +2659,7 @@ func UseSupportGu(c *gin.Context) {
 	}
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message": logMsg,
+		"message": logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})
 }
 
