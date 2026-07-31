@@ -368,28 +368,14 @@ func Ascension(c *gin.Context) {
 		return
 	}
 
-	// Ascension calculation: Heaven Qi, Earth Qi, Human Qi
-	// For simplicity, we just check if HumanQi > threshold and add some randomness
-	humanQiRequired := 100000.0 // arbitrary threshold
-	heavenQi := rand.Float64() * 50000.0
-	earthQi := rand.Float64() * 50000.0
+	// Ascension chance scales linearly with Nhân Khí: 0% at 0, 100% at full (MaxHumanQi)
+	chance := player.HumanQi / MaxHumanQi
+	success := rand.Float64() < chance
 
-	totalQi := player.HumanQi + heavenQi + earthQi
-
-	success := false
 	msg := ""
 
-	if totalQi > humanQiRequired && player.HumanQi > 40000.0 {
-		success = true
-	} else {
-		// Random chance based on HumanQi
-		chance := player.HumanQi / humanQiRequired
-		if rand.Float64() < chance {
-			success = true
-		}
-	}
-
 	if success {
+		ascQi := player.HumanQi
 		player.Rank = 6
 		player.SubRank = 1
 		player.HumanQi = 0.0 // reset after successful ascension
@@ -404,6 +390,15 @@ func Ascension(c *gin.Context) {
 		player.NextTribulationTime = &nextTrib
 		player.TribulationCount = 0
 		player.ImmortalStones = 10.0 // Initial immortal stones
+
+		// Create Tiên Khiếu immediately — grade rolled from Nhân Khí at the moment of ascending
+		ap, apErr := createAperture(tx, player.ID.String(), ascQi, player.CurrentMana)
+		if apErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Thăng tiên thành công nhưng không thể khai mở Tiên Khiếu: " + apErr.Error()})
+			return
+		}
+		// Sync time_speed_multiplier to player table
+		_, _ = tx.Exec(`UPDATE players SET time_speed_multiplier = $1 WHERE id = $2`, ap.TimeRate, player.ID)
 
 		msg = "Thăng tiên thành công! Bạn đã khai Tiên Khiếu."
 		SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Đạo hữu %s đã thăng tiên thành công! Người người ngưỡng mộ", player.Account.Username))

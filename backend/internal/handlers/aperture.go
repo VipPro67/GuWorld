@@ -185,33 +185,16 @@ func GetImmortalAperture(c *gin.Context) {
 	`, playerID).Scan(&ap.ID, &ap.PlayerID, &ap.Grade, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP, &ap.AreaSize, &ap.ImmortalEssence, &ap.EssenceProductionPerYear, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.TribulationCount, &ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.State, &createdAt, &updatedAt)
 
 	if err == sql.ErrNoRows {
-		// Auto-create aperture based on stats
-		score := int(player.HumanQi) + player.AptitudePercent + 250 // Base boost
-		grade := "LOW"
-		if score >= 900 {
-			grade = "EXTREME"
-		} else if score >= 700 {
-			grade = "HIGH"
-		} else if score >= 450 {
-			grade = "MID"
-		}
-
-		ap = buildApertureByGrade(playerID.String(), grade)
-		ap.ImmortalEssence = int(player.CurrentMana)
-		err = tx.QueryRow(`
-			INSERT INTO immortal_apertures (player_id, grade, time_rate, aperture_hp, max_aperture_hp, area_size, immortal_essence, essence_production_per_year, internal_years_passed, next_tribulation_year, state)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-			RETURNING id, created_at, updated_at
-		`, ap.PlayerID, ap.Grade, ap.TimeRate, ap.ApertureHP, ap.MaxApertureHP, ap.AreaSize, ap.ImmortalEssence, ap.EssenceProductionPerYear, ap.InternalYearsPassed, ap.NextTribulationYear, ap.State).Scan(&ap.ID, &createdAt, &updatedAt)
+		// Auto-create aperture (fallback for legacy players) — grade rolled from current Nhân Khí
+		ap, err = createAperture(tx, playerID.String(), player.HumanQi, player.CurrentMana)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khai mở Tiên Khiếu: " + err.Error()})
 			return
 		}
+		createdAt = ap.CreatedAt
+		updatedAt = ap.UpdatedAt
 		// Sync time_speed_multiplier to player table
 		_, _ = tx.Exec(`UPDATE players SET time_speed_multiplier = $1 WHERE id = $2`, ap.TimeRate, playerID)
-
-		// Seed a few random initial resource nodes for the new aperture
-		seedInitialApertureNodes(tx, ap.ID, grade)
 	} else if err != nil {
 		logger.S.Errorf("Error fetching aperture: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn Tiên Khiếu"})
@@ -275,6 +258,43 @@ func seedInitialApertureNodes(tx *sql.Tx, apertureID string, grade string) {
 			VALUES ($1, $2, $3, $4, 1, 1000, 1000, $5, $6, $7, $8, $9, NOW())
 		`, apertureID, tmpl.NodeType, tmpl.Name, tmpl.Path, x, y, tmpl.ProdType, tmpl.ProdAmount, tmpl.ProdIntervalHours)
 	}
+}
+
+// rollApertureGrade rolls the Tiên Khiếu grade based on Nhân Khí ratio q (0..1).
+// Higher Nhân Khí increases the chance of higher grades (weights sum to a constant 21).
+func rollApertureGrade(q float64) string {
+	wExtreme := 1.0 + 9.0*q
+	wHigh := 3.0 + 3.0*q
+	wMid := 5.0
+	roll := rand.Float64() * 21.0
+	switch {
+	case roll < wExtreme:
+		return "EXTREME"
+	case roll < wExtreme+wHigh:
+		return "HIGH"
+	case roll < wExtreme+wHigh+wMid:
+		return "MID"
+	default:
+		return "LOW"
+	}
+}
+
+// createAperture inserts a brand new Tiên Khiếu for a newly ascended player,
+// rolls its grade from the Nhân Khí they had at ascension, and seeds starter nodes.
+func createAperture(tx *sql.Tx, playerID string, humanQi, currentMana float64) (models.ImmortalAperture, error) {
+	ap := buildApertureByGrade(playerID, rollApertureGrade(humanQi/MaxHumanQi))
+	ap.ImmortalEssence = int(currentMana)
+	err := tx.QueryRow(`
+		INSERT INTO immortal_apertures (player_id, grade, time_rate, aperture_hp, max_aperture_hp, area_size, immortal_essence, essence_production_per_year, internal_years_passed, next_tribulation_year, state)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		RETURNING id, created_at, updated_at
+	`, ap.PlayerID, ap.Grade, ap.TimeRate, ap.ApertureHP, ap.MaxApertureHP, ap.AreaSize, ap.ImmortalEssence, ap.EssenceProductionPerYear, ap.InternalYearsPassed, ap.NextTribulationYear, ap.State).Scan(&ap.ID, &ap.CreatedAt, &ap.UpdatedAt)
+	if err != nil {
+		return models.ImmortalAperture{}, err
+	}
+	// Seed a few random initial resource nodes for the new aperture
+	seedInitialApertureNodes(tx, ap.ID, ap.Grade)
+	return ap, nil
 }
 
 func buildApertureByGrade(playerID string, grade string) models.ImmortalAperture {

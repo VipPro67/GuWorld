@@ -28,7 +28,7 @@ Nguồn dữ liệu chính nằm trong các file CSV ở `backend/`. Khi backend
 
 ### Bảng `immortal_apertures` (Tiên Khiếu)
 
-Tạo tự động khi người chơi thăng tiên lên Rank 6. Các cột chính:
+Tạo ngay tại thời điểm người chơi thăng tiên lên Rank 6. `grade` được roll theo Nhân Khí lúc thăng tiên (LOW / MID / HIGH / EXTREME). Các cột chính:
 - `time_rate` (DOUBLE PRECISION, DEFAULT 10) — gia tốc thời gian nội bộ
 - `grade` (VARCHAR) — LOW / MID / HIGH / EXTREME
 - `aperture_hp`, `max_aperture_hp` — HP của Tiên Khiếu

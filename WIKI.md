@@ -26,7 +26,10 @@ Wiki này phản ánh các hệ thống đã có trong codebase hiện tại.
 
 ### Thăng Tiên và Độ Kiếp
 
-- Rank 5 Đỉnh phong có thể thăng tiên khi đạt điều kiện backend yêu cầu.
+- Rank 5 Đỉnh phong (Rank 5, SubRank 4) có thể thăng tiên khi Nhân Khí đạt mức mong muốn.
+- **Tỉ lệ thành công tuyến tính theo Nhân Khí:** `chance = NhânKhí / 100.000`. 0 Nhân Khí → 0%, 40.000 → 40%, 100.000 → chắc chắn thành công.
+- **Thành công:** lên Rank 6 (Lục Chuyển Cổ Tiên), nhận 10 Tiên Nguyên Thạch, Đạo Ngân Thiên/Địa = 100, kiếp đầu tiên sau 10 ngày. **Tiên Khiếu được khai mở ngay**, grade roll theo Nhân Khí tại thời điểm thăng tiên (xem mục Tiên khiếu).
+- **Thất bại:** Nhân Khí về 0, tu vi phế bỏ rơi về Rank 1 SubRank 1, mất hết tiến độ phá vách.
 - Cổ Tiên có tiên khiếu, đạo ngân, tiên nguyên/tài nguyên riêng.
 - Tai kiếp có worker kiểm tra tự động mỗi 60 giây. Khi năm nội bộ đạt mốc tiếp theo, worker spawn kiếp và resolve.
 - **Kiếp nạn theo cấp bậc:**
@@ -72,6 +75,22 @@ Wiki này phản ánh các hệ thống đã có trong codebase hiện tại.
 ### Tiên khiếu
 
 - Tiên khiếu có grade, time rate, HP, diện tích, immortal essence, sản lượng/năm, state.
+- **Grade được roll ngay lúc thăng tiên**, dựa trên Nhân Khí tại thời điểm đó (`q = NhânKhí / 100.000`). Grade cố định sau khi khai mở, không thể đổi.
+- **Tỉ lệ ra grade theo Nhân Khí:**
+
+  | Nhân Khí | EXTREME | HIGH | MID | LOW |
+  |---------|---------|------|-----|-----|
+  | 0 | 4.8% | 14.3% | 23.8% | 57.1% |
+  | 25.000 | 16.7% | 17.9% | 23.8% | 42.9% |
+  | 50.000 | 26.2% | 21.4% | 23.8% | 28.6% |
+  | 75.000 | 36.9% | 25.0% | 23.8% | 14.3% |
+  | 100.000 | 47.6% | 28.6% | 23.8% | 0% |
+
+- **Thuộc tính theo grade:**
+  - LOW: time rate 10-15x, HP 10.000, 30 node, 10 essence/năm.
+  - MID: time rate 20-28x, HP 20.000, 60 node, 20 essence/năm.
+  - HIGH: time rate 30-40x, HP 30.000, 90 node, 30 essence/năm.
+  - EXTREME: time rate 40-55x, HP 50.000, 100 node, 50 essence/năm.
 - **Khi mới khai mở**, Tiên Khiếu được tạo sẵn 2-4 mỏ tài nguyên ngẫu nhiên (tuỳ grade):
   - LOW: 2 mỏ, MID: 3 mỏ, HIGH/EXTREME: 4 mỏ.
   - Các mỏ khởi đầu: Nguyệt Lan, Thanh Trúc, Ngọc Thạch, Nguyên Thạch, Kiếm Diệp, Hươu Linh.
