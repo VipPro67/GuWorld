@@ -1229,18 +1229,15 @@ func FeedGu(c *gin.Context) {
 		for _, food := range foodOptions {
 			qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), food, "materials")
 			if qty > 0 {
-				itemSpec, ok := models.ItemRegistry[food]
-				if ok {
-					isFood := itemSpec.Type == "Food"
-					if isFood {
-						chosenFoodItem = food
-						break
-					}
-				}
+				chosenFoodItem = food
+				break
 			}
+
 			if strings.HasPrefix(food, "GU_") {
 				for i, invGu := range player.GuInventory {
-					if invGu.GuID == food && invGu.InstanceID != targetGu.InstanceID && invGu.Status != "DEAD" {
+					if invGu.GuID == food &&
+						invGu.InstanceID != targetGu.InstanceID &&
+						invGu.Status != "DEAD" {
 						consumedGuIndex = i
 						break
 					}
