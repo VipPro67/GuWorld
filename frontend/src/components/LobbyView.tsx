@@ -426,11 +426,11 @@ export const LobbyView: React.FC = () => {
 
             {/* Immortal Stones */}
             <div className="flex flex-col items-center">
-              <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">Tiên Nguyên</span>
+              <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">Tiên Nguyên Thạch</span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <Sparkles className="w-4 h-4 text-violet-400" />
                 <span className="text-sm font-bold text-purple-400 font-mono">
-                  {player.immortal_stones.toLocaleString()}
+                  {player.immortal_stones?.toLocaleString()}
                 </span>
               </div>
             </div>
