@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 type GachaRewardItem struct {
@@ -164,6 +165,21 @@ func OpenGacha(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &playerID,
+		Action:         "gacha.open",
+		EntityType:     "gacha_pool",
+		EntityID:       pool.ID,
+		RequestSummary: fmt.Sprintf("pool=%s | %s | cost=%.0f %s", pool.Name, buildGachaRewardLabel(reward), pool.CostAmount, pool.CostType),
+		Metadata: map[string]interface{}{
+			"pool_id":     pool.ID,
+			"cost_type":   pool.CostType,
+			"cost_amount": pool.CostAmount,
+			"reward":      reward,
+		},
+		IPAddress: c.ClientIP(), Success: true,
+	})
+
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"reward":  reward,
 		"message": buildGachaRewardLabel(reward) + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
@@ -252,6 +268,21 @@ func OpenGacha10(c *gin.Context) {
 	for _, r := range rewards {
 		announcement += buildGachaRewardLabel(r) + "\n"
 	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &playerID,
+		Action:         "gacha.open10",
+		EntityType:     "gacha_pool",
+		EntityID:       pool.ID,
+		RequestSummary: fmt.Sprintf("pool=%s | 10x | cost=%.0f %s", pool.Name, totalCost, pool.CostType),
+		Metadata: map[string]interface{}{
+			"pool_id":     pool.ID,
+			"cost_type":   pool.CostType,
+			"cost_amount": totalCost,
+			"rewards":     rewards,
+		},
+		IPAddress: c.ClientIP(), Success: true,
+	})
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"rewards": rewards,
