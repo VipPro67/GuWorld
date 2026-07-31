@@ -9,6 +9,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type ItemEffectHandler func(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error)
@@ -298,6 +299,12 @@ func rollMaterialDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) s
 }
 
 func rollGuDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) string {
+	excludedImmortal, err := db.GetExistingImmortalGuIDs(tx)
+	if err != nil {
+		logger.S.Warnf("rollGuDrop: failed to load existing immortal Gu: %v", err)
+		excludedImmortal = map[string]bool{}
+	}
+
 	type weightedGu struct {
 		id     string
 		weight float64
@@ -306,6 +313,9 @@ func rollGuDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) string 
 	var totalWeight float64
 
 	for id, ranks := range models.GuRegistry {
+		if excludedImmortal[id] {
+			continue
+		}
 		for _, spec := range ranks {
 			w := rankDropMultiplier(spec.Rank)
 			if w > 0 {

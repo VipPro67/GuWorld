@@ -2664,6 +2664,40 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 	return exists, nil
 }
 
+// GetExistingImmortalGuIDs returns the set of gu_ids that currently have at least one
+// rank >= 6 (Immortal Gu) instance anywhere in the world: any player's gu_inventory,
+// player_gu, ACTIVE auction listings, and temp_loot.
+func GetExistingImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
+	rows, err := tx.Query(`
+		SELECT DISTINCT elem->>'gu_id' FROM players,
+			jsonb_array_elements(gu_inventory) AS elem
+			WHERE COALESCE((elem->>'rank')::int, 0) >= 6
+		UNION
+		SELECT DISTINCT gu_id FROM player_gu WHERE gu_rank >= 6
+		UNION
+		SELECT DISTINCT elem->>'gu_id' FROM auction,
+			jsonb_array_elements(item_data) AS elem
+			WHERE item_type = 'Gu' AND status = 'ACTIVE' AND COALESCE((elem->>'rank')::int, 0) >= 6
+		UNION
+		SELECT DISTINCT elem->>'gu_id' FROM players,
+			jsonb_array_elements(COALESCE(temp_loot->'gu_inventory', '[]'::jsonb)) AS elem
+			WHERE COALESCE((elem->>'rank')::int, 0) >= 6
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	existing := make(map[string]bool)
+	for rows.Next() {
+		var guID string
+		if err := rows.Scan(&guID); err == nil {
+			existing[guID] = true
+		}
+	}
+	return existing, rows.Err()
+}
+
 func seedNPCs() error {
 	var count int
 	err := DB.QueryRow("SELECT COUNT(*) FROM npcs").Scan(&count)

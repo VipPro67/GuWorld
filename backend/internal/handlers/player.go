@@ -2213,10 +2213,10 @@ func UseItem(c *gin.Context) {
 	_, err = tx.Exec(`
 		UPDATE players 
 		SET current_mana = $1, max_mana = $2, hp = $3, base_hp = $4,
-		    dao_marks = $5, primeval_stones = $6, gu_inventory = $7, lifespan = $8
-		WHERE id = $9`,
+		    dao_marks = $5, primeval_stones = $6, gu_inventory = $7, lifespan = $8, human_qi = $9
+		WHERE id = $10`,
 		player.CurrentMana, player.MaxMana, player.HP, player.BaseHP, player.DaoMarks,
-		player.PrimevalStones, player.GuInventory, player.Lifespan,
+		player.PrimevalStones, player.GuInventory, player.Lifespan, player.HumanQi,
 		player.ID,
 	)
 	if err != nil {
@@ -2636,10 +2636,9 @@ func UseSupportGu(c *gin.Context) {
 		return
 	}
 
+	qiGained := AddHumanQi(&player, float64(3))
+
 	logMsg := strings.Join(logs, " ")
-
-	qiGained := AddHumanQi(&player, 3.0)
-
 	// Save to DB
 	_, err = tx.Exec(`
 		UPDATE players 

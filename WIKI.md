@@ -116,6 +116,8 @@ Người chơi có thể:
 - Dùng Cổ tiêu hao hoặc Cổ hỗ trợ.
 - Drop Cổ.
 
+**Tiên Cổ duy nhất:** Cổ cấp **Rank ≥ 6 (Tiên Cổ)** là độc nhất toàn thiên hạ — mỗi `gu_id` chỉ tồn tại một instance trên toàn server. Các kênh nhận Cổ (Gacha, Rương Mỏ Linh Thạch, Luyện Cổ, quái rơi đồ) đều loại trừ Tiên Cổ đã tồn tại (trong túi bất kỳ đạo hữu, đấu giá, rương tạm) trước khi roll; nếu hết ứng viên hợp lệ sẽ rơi vật phẩm/thạch bù trừ.
+
 ## 5. Vật phẩm và nguyên liệu
 
 - Item dictionary nằm trong `backend/Item.csv`.

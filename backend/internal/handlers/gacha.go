@@ -132,11 +132,22 @@ func OpenGacha(c *gin.Context) {
 		return
 	}
 
-	reward := rollGachaReward(pool)
+	excludedImmortal, err := db.GetExistingImmortalGuIDs(tx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		return
+	}
+
+	reward := rollGachaReward(pool, excludedImmortal)
 
 	if err := applyGachaReward(tx, &player, reward); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi áp dụng phần thưởng"})
 		return
+	}
+	if reward.Type == "gu" {
+		if spec, ok := models.GetGuAny(reward.ID); ok && spec.Rank >= 6 {
+			excludedImmortal[reward.ID] = true
+		}
 	}
 
 	qiGained := AddHumanQi(&player, 1.0)
@@ -205,11 +216,21 @@ func OpenGacha10(c *gin.Context) {
 	}
 
 	rewards := make([]GachaResultItem, 10)
+	excludedImmortal, err := db.GetExistingImmortalGuIDs(tx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
+		return
+	}
 	for i := 0; i < 10; i++ {
-		rewards[i] = rollGachaReward(pool)
+		rewards[i] = rollGachaReward(pool, excludedImmortal)
 		if err := applyGachaReward(tx, &player, rewards[i]); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi áp dụng phần thưởng"})
 			return
+		}
+		if rewards[i].Type == "gu" {
+			if spec, ok := models.GetGuAny(rewards[i].ID); ok && spec.Rank >= 6 {
+				excludedImmortal[rewards[i].ID] = true
+			}
 		}
 	}
 
@@ -246,7 +267,7 @@ type GachaResultItem struct {
 	IsRare bool    `json:"is_rare"`
 }
 
-func rollGachaReward(pool *GachaPool) GachaResultItem {
+func rollGachaReward(pool *GachaPool, excludedImmortal map[string]bool) GachaResultItem {
 	var totalWeight float64
 	for _, r := range pool.Rewards {
 		totalWeight += r.Weight
@@ -282,7 +303,7 @@ func rollGachaReward(pool *GachaPool) GachaResultItem {
 		return GachaResultItem{Type: "item", ID: itemID, Amount: 1, Label: fmt.Sprintf("1x %s", itemName), IsRare: isRare}
 
 	case "gu":
-		guID := rollWeightedGu(nil)
+		guID := rollWeightedGu([]string{"1", "2", "3"}, excludedImmortal)
 		if guID == "" {
 			return GachaResultItem{Type: "primeval_stones", Amount: 100, Label: "100 Nguyên Thạch"}
 		}
@@ -294,7 +315,7 @@ func rollGachaReward(pool *GachaPool) GachaResultItem {
 
 	case "gu_rank":
 		rankList := strings.Split(chosen.ID, ",")
-		guID := rollWeightedGu(rankList)
+		guID := rollWeightedGu(rankList, excludedImmortal)
 		if guID == "" {
 			return GachaResultItem{Type: "primeval_stones", Amount: 100, Label: "100 Nguyên Thạch"}
 		}
@@ -321,7 +342,7 @@ func rollGachaReward(pool *GachaPool) GachaResultItem {
 	}
 }
 
-func rollWeightedGu(rankFilter []string) string {
+func rollWeightedGu(rankFilter []string, excludedImmortal map[string]bool) string {
 	type weighted struct {
 		id     string
 		weight float64
@@ -330,27 +351,30 @@ func rollWeightedGu(rankFilter []string) string {
 	var totalWeight float64
 
 	for id, ranks := range models.GuRegistry {
+		if excludedImmortal[id] {
+			continue
+		}
 		for _, spec := range ranks {
-		if len(rankFilter) > 0 {
-			matched := false
-			for _, rs := range rankFilter {
-				r := 0
-				fmt.Sscanf(rs, "%d", &r)
-				if spec.Rank == r {
-					matched = true
-					break
+			if len(rankFilter) > 0 {
+				matched := false
+				for _, rs := range rankFilter {
+					r := 0
+					fmt.Sscanf(rs, "%d", &r)
+					if spec.Rank == r {
+						matched = true
+						break
+					}
+				}
+				if !matched {
+					continue
 				}
 			}
-			if !matched {
-				continue
+			w := guRarityWeightByRank(spec.Rank)
+			if w > 0 {
+				pool = append(pool, weighted{id: id, weight: w})
+				totalWeight += w
 			}
 		}
-		w := guRarityWeightByRank(spec.Rank)
-		if w > 0 {
-			pool = append(pool, weighted{id: id, weight: w})
-			totalWeight += w
-		}
-	}
 	}
 
 	if len(pool) == 0 || totalWeight <= 0 {
