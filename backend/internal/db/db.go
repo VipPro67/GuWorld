@@ -330,19 +330,10 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create tribulation_enemies table: %w", err)
 	}
 
-	// dao_marks relational table (mirror of players.dao_marks JSONB)
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS dao_marks (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		path VARCHAR(50) NOT NULL,
-		amount INTEGER NOT NULL DEFAULT 0,
-		created_at TIMESTAMP DEFAULT now(),
-		updated_at TIMESTAMP DEFAULT now(),
-		UNIQUE(player_id, path)
-	);`)
+	// dao_marks (relational mirror) removed: dao marks live only in players.dao_marks JSONB
+	_, err = DB.Exec(`DROP TABLE IF EXISTS dao_marks;`)
 	if err != nil {
-		return fmt.Errorf("failed to create dao_marks table: %w", err)
+		return fmt.Errorf("failed to drop legacy dao_marks table: %w", err)
 	}
 
 	query = `

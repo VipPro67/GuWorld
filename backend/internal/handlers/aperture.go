@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -160,20 +161,6 @@ func GetImmortalAperture(c *gin.Context) {
 	if player.Rank < 6 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa thăng tiên (Rank 6), chưa có Tiên Khiếu."})
 		return
-	}
-
-	// Sync player.DaoMarks JSONB to dao_marks table if API table exists
-	if player.DaoMarks != nil {
-		for pathName, amount := range player.DaoMarks {
-			if amount > 0 {
-				cleanPath := strings.TrimSuffix(strings.ToLower(pathName), " path")
-				_, _ = tx.Exec(`
-					INSERT INTO dao_marks (player_id, path, amount)
-					VALUES ($1, $2, $3)
-					ON CONFLICT (player_id, path) DO UPDATE SET amount = EXCLUDED.amount
-				`, playerID, cleanPath, amount)
-			}
-		}
 	}
 
 	// 2. Fetch aperture
@@ -362,25 +349,33 @@ func GetDaoMarks(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.Query(`
-		SELECT id, player_id, path, amount, created_at, updated_at
-		FROM dao_marks WHERE player_id = $1
-		ORDER BY amount DESC
-	`, playerID)
+	var daoJSON []byte
+	err := db.DB.QueryRow(`SELECT COALESCE(dao_marks, '{}') FROM players WHERE id = $1`, playerID).Scan(&daoJSON)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load Dao Marks"})
 		return
 	}
-	defer rows.Close()
 
-	marks := []models.DaoMark{}
-	for rows.Next() {
-		var m models.DaoMark
-		err = rows.Scan(&m.ID, &m.PlayerID, &m.Path, &m.Amount, &m.CreatedAt, &m.UpdatedAt)
-		if err == nil {
-			marks = append(marks, m)
-		}
+	daoMap := make(map[string]int)
+	if len(daoJSON) > 0 {
+		_ = json.Unmarshal(daoJSON, &daoMap)
 	}
+
+	marks := make([]models.DaoMark, 0, len(daoMap))
+	for path, amount := range daoMap {
+		if amount <= 0 {
+			continue
+		}
+		marks = append(marks, models.DaoMark{
+			ID:       playerID.String() + ":" + path,
+			PlayerID: playerID.String(),
+			Path:     path,
+			Amount:   amount,
+		})
+	}
+	sort.Slice(marks, func(i, j int) bool {
+		return marks[i].Amount > marks[j].Amount
+	})
 
 	c.JSON(http.StatusOK, marks)
 }
@@ -707,8 +702,13 @@ func CollectApertureResource(c *gin.Context) {
 	rows.Close()
 
 	// 1. Dao Marks multiplier
-	var daoMarks int
-	_ = tx.QueryRow(`SELECT amount FROM dao_marks WHERE player_id = $1 AND path = $2`, playerID, n.Path).Scan(&daoMarks)
+	var nodeDaoJSON []byte
+	_ = tx.QueryRow(`SELECT COALESCE(dao_marks, '{}') FROM players WHERE id = $1`, playerID).Scan(&nodeDaoJSON)
+	nodeDaoMap := make(map[string]int)
+	if len(nodeDaoJSON) > 0 {
+		_ = json.Unmarshal(nodeDaoJSON, &nodeDaoMap)
+	}
+	daoMarks := nodeDaoMap[strings.TrimSuffix(strings.ToLower(n.Path), " path")]
 	daoMultiplier := 1.0 + float64(daoMarks)*0.005
 
 	// Check if player has Tiên Thai Chí Tôn (ignore Dao conflicts)

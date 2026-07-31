@@ -38,13 +38,9 @@ Tạo ngay tại thời điểm người chơi thăng tiên lên Rank 6. `grade`
 - `earth_calamity_count`, `heavenly_tribulation_count`, `grand_tribulation_count`, `myriad_tribulation_count`, `chaos_calamity_count` — bộ đếm kiếp nạn
 - `state` — STABLE / DAMAGED
 
-### Bảng `dao_marks`
+### Đạo Ngân (Đạo Ấn)
 
-Lưu Đạo Ấn theo dạng quan hệ (song song với JSONB `players.dao_marks`):
-- `player_id` (UUID, FK → players)
-- `path` (VARCHAR) — đường tu
-- `amount` (INTEGER)
-- `UNIQUE(player_id, path)`
+Đạo Ngân chỉ lưu trong cột JSONB `players.dao_marks` (ví dụ `{"strength": 100, "fire": 2500}`). Bảng quan hệ `dao_marks` đã bị xóa — không còn mirror. Path được normalize dạng lowercase (không có hậu tố `" path"`) khi lưu.
 
 ### Bảng `aperture_resource_nodes`
 
@@ -62,7 +58,7 @@ Node tài nguyên đặt trong Tiên Khiếu:
 
 Các trường quan trọng trong dictionary:
 
-- `id`, `name`, `rank`, `path` (mảng JSON các Đạo học), `gu_type`.
+- `id`, `name`, `rank`, `path` (mảng JSON các Đạo học — 49 path có thể có, xem danh sách ở `docs/CANH_GIOI_DAO_NGAN.md`), `gu_type`.
 - `base_mana_cost`.
 - `effects` JSON: active/passive/combat/support tuỳ Cổ.
 - `hunger_rate`, `food_types`, `max_hunger`.

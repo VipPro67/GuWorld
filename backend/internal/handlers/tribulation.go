@@ -203,13 +203,16 @@ func AttackTribulationEnemy(c *gin.Context) {
 	}
 
 	// Fetch Dao Mark Multiplier
+	var daoJSON []byte
+	_ = tx.QueryRow(`SELECT COALESCE(dao_marks, '{}') FROM players WHERE id = $1`, playerID).Scan(&daoJSON)
+	daoMap := make(map[string]int)
+	if len(daoJSON) > 0 {
+		_ = json.Unmarshal(daoJSON, &daoMap)
+	}
 	daoMultiplier := 1.0
 	for _, path := range spec.Path {
 		cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-		var daoAmount int
-		_ = tx.QueryRow(`
-			SELECT amount FROM dao_marks WHERE player_id = $1 AND path = $2
-		`, playerID, cleanPath).Scan(&daoAmount)
+		daoAmount := daoMap[cleanPath]
 
 		mult := 1.0
 		if daoAmount > 0 {
@@ -581,47 +584,21 @@ func ResolveTribulation(c *gin.Context) {
 }
 
 func addDaoMarksTx(tx *sql.Tx, playerID string, path string, amount int) error {
-	var count int
-	err := tx.QueryRow(`
-		SELECT COUNT(1) FROM dao_marks WHERE player_id = $1 AND path = $2
-	`, playerID, path).Scan(&count)
+	var daoJSON []byte
+	err := tx.QueryRow(`SELECT COALESCE(dao_marks, '{}') FROM players WHERE id = $1 FOR UPDATE`, playerID).Scan(&daoJSON)
 	if err != nil {
 		return err
 	}
-
-	if count == 0 {
-		_, err = tx.Exec(`
-			INSERT INTO dao_marks (player_id, path, amount)
-			VALUES ($1, $2, $3)
-		`, playerID, path, amount)
-	} else {
-		_, err = tx.Exec(`
-			UPDATE dao_marks 
-			SET amount = amount + $1, updated_at = NOW() 
-			WHERE player_id = $2 AND path = $3
-		`, amount, playerID, path)
-	}
-	if err != nil {
-		return err
-	}
-
-	// Synchronize back to players.dao_marks JSONB
-	rows, err := tx.Query(`SELECT path, amount FROM dao_marks WHERE player_id = $1`, playerID)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
 
 	daoMap := make(map[string]int)
-	for rows.Next() {
-		var p string
-		var a int
-		if err := rows.Scan(&p, &a); err == nil {
-			daoMap[p] = a
+	if len(daoJSON) > 0 {
+		if err := json.Unmarshal(daoJSON, &daoMap); err != nil {
+			return err
 		}
 	}
+	daoMap[path] += amount
 
-	daoJSON, err := json.Marshal(daoMap)
+	daoJSON, err = json.Marshal(daoMap)
 	if err != nil {
 		return err
 	}

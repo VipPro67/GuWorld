@@ -382,8 +382,8 @@ func Ascension(c *gin.Context) {
 		if player.DaoMarks == nil {
 			player.DaoMarks = models.DaoMarksMap{}
 		}
-		player.DaoMarks["Heaven"] = 100
-		player.DaoMarks["Earth"] = 100
+		player.DaoMarks["heaven"] = 100
+		player.DaoMarks["earth"] = 100
 
 		// Set first tribulation to 10 days from now (simulated real-time)
 		nextTrib := time.Now().Add(10 * 24 * time.Hour)

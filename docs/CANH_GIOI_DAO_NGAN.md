@@ -17,21 +17,22 @@
 
 ### 1.2 DB Schema
 
-```
-dao_marks (
-    id UUID PRIMARY KEY,
-    player_id UUID → players(id) ON DELETE CASCADE,
-    path VARCHAR(50),
-    amount INTEGER DEFAULT 0,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP,
-    UNIQUE(player_id, path)
-);
+Đạo Ngân chỉ lưu trong **1 nguồn duy nhất**: cột JSONB `players.dao_marks` (`backend/internal/db/db.go:156`).
+
+```json
+{
+  "strength": 100,
+  "fire": 2500
+}
 ```
 
-- `backend/internal/db/db.go:223-236`
+> Bảng quan hệ `dao_marks` (relational mirror) đã bị **xóa** để thống nhất nguồn dữ liệu. Không còn `dao_marks` table.
 
-`players.dao_marks` JSONB mirror column: `backend/internal/db/db.go:156`
+**Danh sách path hợp lệ** (49 path, lấy từ cột `path` trong `backend/cmd/server/data/Gu.csv` — key = lowercase bỏ hậu tố `" path"`):
+
+Blade, Blood, Bone, Cloud, Concealment, Creation, Dark, Death, Destruction, Dream, Earth, Enchantment, Enslavement, Fire, Food, Formation, Heaven, Human, Ice, Illusion, Information, Investigation, Life, Light, Lightning, Luck, Metal, Moon, Movement, Poison, Qi, Refinement, Rule, Shadow, Smoke, Soul, Sound, Space, Strength, Sun, Sword, Theft, Theme, Time, Transformation, Water, Wind, Wisdom, Wood.
+
+> `Sun`, `Creation`, `Destruction`, `Death` được bổ sung qua các Cổ `GU_SUN_EMPEROR`, `GU_CREATION_ORIGIN`, `GU_DESTRUCTION_NOVA`, `GU_DEATH_REAPER` để đủ 8 cặp đối nghịch trong `isOpposingPath`.
 
 ### 1.3 Công Thức Tính DaoBonus
 
@@ -58,18 +59,22 @@ Frontend đồng bộ: `ImmortalApertureView.tsx:1850-1855`
 | **Thiên Kiếp** (Tribulation) | `tribulation.go:874-883` | Earth: 250 + diff×50. Heavenly: 750 + diff×150. Grand: 7250 + diff×500. Myriad: 86750 + diff×2000 |
 | **Item effect** `dao_mark_gain` | `item_effects.go:118-131` | `player.DaoMarks[pathKey] += int(val)` |
 | **Item effect** `soul_boost` | `item_effects.go:109-115` | `player.DaoMarks["soul"] += int(val)` |
-| **Phi Thăng** (Ascension) | `cultivate.go:302-306` | Ban đầu: Heaven=100, Earth=100 |
+| **Phi Thăng** (Ascension) | `cultivate.go:385-386` | Ban đầu: heaven=100, earth=100 (key lowercase theo `normalizePath`) |
 | **Sát Chiêu** (V2) | `SAT_CHIEU_MECHANIC.md:254-255` | `DaoMarks[CorePath] += BaseDaoMarkValue × dao_mark_multiplier` |
 
-### 1.5 Đồng Bộ DB ↔ JSONB
+### 1.5 Cập Nhật Đạo Ngân
 
-Khi thêm Đạo Ngân qua `addDaoMarksTx()` (`tribulation.go:494-541`):
-1. UPSERT vào bảng `dao_marks`
-2. SELECT toàn bộ `path, amount` → ghi đè vào `players.dao_marks` JSONB
+Mọi ghi thêm Đạo Ngân đi qua `addDaoMarksTx()` (`tribulation.go:586`) — thao tác trực tiếp read-modify-write trên `players.dao_marks` JSONB trong transaction:
+
+1. `SELECT COALESCE(dao_marks, '{}') ... FOR UPDATE`
+2. Cộng dồn `amount` vào `map[path]int` (normalize path qua `TrimSuffix(strings.ToLower(...), " path")`)
+3. `UPDATE players SET dao_marks = $json`
+
+Các nguồn ghi khác (item effect, phi thăng, sát chiêu, gift code, quest) đều cập nhật trực tiếp `player.DaoMarks` map trong code — tất cả cùng 1 nguồn JSONB, không còn đồng bộ 2 chiều.
 
 ### 1.6 API
 
-- `GET /api/dao-marks` → `GetDaoMarks` (`aperture.go:290-319`) — trả về danh sách `DaoMark[]` theo `amount DESC`
+- `GET /api/dao-marks` → `GetDaoMarks` (`aperture.go:345-379`) — đọc trực tiếp `players.dao_marks` JSONB, trả về danh sách `DaoMark[]` theo `amount DESC` (giữ shape `{id, player_id, path, amount, created_at, updated_at}` tương thích frontend)
 
 ### 1.7 Frontend
 
@@ -186,7 +191,7 @@ Tại `killer_move.go:449-457`, `calculatePathConflict()`:
 - Khác đường: +10% penalty (`killerMovePathConflictPenaltyBase`)
 - Đối nghịch: +20% penalty (`killerMovePathOppositionPenalty`)
 
-**Cặp đối nghịch** (`killer_move.go`):
+**Cặp đối nghịch** (`killer_move.go:1000-1019`) — cả 8 cặp đều có path tồn tại trong Gu.csv (49 paths, gồm Sun/Creation/Destruction/Death đã bổ sung qua GU_SUN_EMPEROR, GU_CREATION_ORIGIN, GU_DESTRUCTION_NOVA, GU_DEATH_REAPER):
 
 | Path A | Path B |
 |--------|--------|
@@ -253,11 +258,11 @@ KillerMoveBuilder.tsx
 |------|------|----------|
 | `backend/internal/models/player.go` | 30-34, 141-204, 362-381 | DaoMarksMap, PathMasteriesMap, Player struct, scanners |
 | `backend/internal/models/aperture.go` | 7-52, 88-99 | DaoMark, ImmortalAperture, ResourceNode |
-| `backend/internal/db/db.go` | 156-157, 223-261, 534-596, 767, 814-848, 932-947, 1840-2121 | Schema, seeds, migrations |
+| `backend/internal/db/db.go` | 156-157 | `players.dao_marks` JSONB (schema); bảng `dao_marks` đã xóa |
 | `backend/internal/handlers/killer_move.go` | 20-33, 413-554, 936-953 | Constants, V2 formula, attainmentLevel(), calculatePathConflict() |
 | `backend/internal/handlers/combat_effects.go` | 12-126 | Path mastery multiplier, DaoBonus, region resonance |
-| `backend/internal/handlers/tribulation.go` | 494-541, 860-889 | addDaoMarksTx, reward calculation |
-| `backend/internal/handlers/aperture.go` | 290-319 | GetDaoMarks API |
+| `backend/internal/handlers/tribulation.go` | 586-630, 405-470, 860-889 | addDaoMarksTx (JSONB read-modify-write), reward calculation |
+| `backend/internal/handlers/aperture.go` | 345-379 | GetDaoMarks API (đọc JSONB) |
 | `backend/internal/handlers/item_effects.go` | 109-131 | dao_mark_gain, soul_boost effects |
 | `backend/internal/handlers/gu_effects.go` | 80-97 | getPathMasteryMultiplier |
 | `backend/internal/handlers/instance.go` | 540-586 | Attainment reward từ phó bản |

@@ -68,7 +68,8 @@ Schema được tạo bằng SQL trong `backend/internal/db/db.go`. Các bảng 
 - `players`, `referrals`, `wallets`, `topup_orders`, `wallet_transactions`.
 - `gu_dictionary`, `item_dictionary`, `refining_recipes`.
 - `regions`, `map_cells`, `monster_templates`, `monster_spawns`, `loot_tables`.
-- `immortal_apertures`, `dao_marks`, `aperture_resource_nodes`, `tribulation_events`, `tribulation_enemies`, `aperture_variant_humans`.
+- `immortal_apertures`, `aperture_resource_nodes`, `tribulation_events`, `tribulation_enemies`, `aperture_variant_humans`.
+- Đạo Ngân không có bảng riêng — lưu trong cột JSONB `players.dao_marks`.
 - `auction`, `trades`, `messages`, `parties`, `arena_rankings`, `leaderboard_settings`.
 - `sects`, `sect_members`, `sect_missions`, `player_sect_missions`, `sect_join_requests`, `sect_promotion_requests`, `sect_mines`.
 - `mine_slots`, `instance_templates`, `player_instance_sessions`, `killer_moves`, `feedback`, `feedback_votes`.

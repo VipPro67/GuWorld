@@ -235,10 +235,20 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   const pathLabel = (path: string) => {
     const labels: Record<string, string> = {
-      water: "Thủy", fire: "Hỏa", earth: "Thổ", wind: "Phong",
-      qi: "Khí", moon: "Nguyệt", strength: "Lực", poison: "Độc",
-      blood: "Huyết", shadow: "Ảnh", wood: "Mộc", metal: "Kim",
-      lightning: "Lôi", time: "Thời Gian", space: "Không Gian",
+      blade: "Đao", blood: "Huyết", bone: "Cốt", cloud: "Vân",
+      concealment: "Ẩn Nặc", creation: "Tạo Hóa", dark: "Hắc Ám",
+      death: "Tử Vong", destruction: "Hủy Diệt", dream: "Mộng",
+      earth: "Thổ", enchantment: "Phù Chú", enslavement: "Nô Dịch",
+      fire: "Hỏa", food: "Thực", formation: "Trận Pháp", heaven: "Thiên",
+      human: "Nhân", ice: "Băng", illusion: "Ảo Giác", information: "Thông Tin",
+      investigation: "Trinh Sát", life: "Sinh", light: "Quang Minh",
+      lightning: "Lôi", luck: "Khí Vận", metal: "Kim", moon: "Nguyệt",
+      movement: "Di Động", poison: "Độc", qi: "Khí", refinement: "Tinh Luyện",
+      rule: "Quy Tắc", shadow: "Ảnh", smoke: "Yên Vụ", soul: "Hồn",
+      sound: "Âm Thanh", space: "Không Gian", strength: "Lực", sun: "Nhật",
+      sword: "Kiếm", theft: "Trộm", theme: "Chủ Đề", time: "Thời Gian",
+      transformation: "Biến Hóa", water: "Thủy", wind: "Phong",
+      wisdom: "Trí Tuệ", wood: "Mộc",
     };
     return labels[path] || path;
   };
