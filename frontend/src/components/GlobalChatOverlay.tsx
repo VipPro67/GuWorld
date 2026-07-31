@@ -49,7 +49,7 @@ export const GlobalChatOverlay: React.FC = () => {
       const saved = localStorage.getItem("guworld_chat_width");
       if (saved === "sm" || saved === "md" || saved === "lg") return saved;
     }
-    return "sm";
+    return "md";
   });
 
   const [chatHeight, setChatHeight] = useState<"sm" | "md" | "lg">(() => {
@@ -57,7 +57,7 @@ export const GlobalChatOverlay: React.FC = () => {
       const saved = localStorage.getItem("guworld_chat_height");
       if (saved === "sm" || saved === "md" || saved === "lg") return saved;
     }
-    return "sm";
+    return "md";
   });
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -105,15 +105,15 @@ export const GlobalChatOverlay: React.FC = () => {
   };
 
   const widthClasses = {
-    sm: "w-[260px] sm:w-[320px] md:w-[360px]",
-    md: "w-[300px] sm:w-[420px] md:w-[480px]",
-    lg: "w-[350px] sm:w-[520px] md:w-[620px] lg:w-[700px]",
+    sm: "w-[320px] sm:w-[380px] md:w-[440px]",
+    md: "w-[380px] sm:w-[500px] md:w-[560px]",
+    lg: "w-[440px] sm:w-[620px] md:w-[720px] lg:w-[820px]",
   }[chatWidth];
 
   const heightClasses = {
-    sm: "h-[280px] sm:h-[340px] md:h-[380px]",
-    md: "h-[360px] sm:h-[440px] md:h-[480px]",
-    lg: "h-[420px] sm:h-[540px] md:h-[600px] lg:h-[700px]",
+    sm: "h-[360px] sm:h-[440px] md:h-[520px]",
+    md: "h-[460px] sm:h-[560px] md:h-[640px]",
+    lg: "h-[560px] sm:h-[680px] md:h-[760px] lg:h-[860px]",
   }[chatHeight];
 
   return (
@@ -296,7 +296,7 @@ export const GlobalChatOverlay: React.FC = () => {
                   ? "Bảo Hoàng Thiên..."
                   : "Nội bộ Bang Hội..."
               }
-              maxLength={100}
+              maxLength={500}
               className="flex-grow bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 focus:border-zinc-300 dark:focus:border-zinc-800 rounded-xl px-3 py-2 text-xs md:text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none transition-all font-mono"
             />
             <button

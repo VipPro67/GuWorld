@@ -128,7 +128,7 @@ func GetInbox(c *gin.Context) {
 }
 
 type BaoHoangRequest struct {
-	Content string `json:"content" binding:"required"`
+	Content string `json:"content" binding:"required,max=500"`
 	Channel string `json:"channel"`
 }
 
