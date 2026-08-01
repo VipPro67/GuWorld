@@ -35,6 +35,7 @@ export const SectView: React.FC = () => {
     actionLoading,
     fetchSects,
     joinSect,
+    cancelSectJoinRequest,
     leaveSect,
     fetchMySectStatus,
     promoteSectRank,
@@ -340,8 +341,19 @@ export const SectView: React.FC = () => {
             Nơi đây lấy cống hiến đo tài nguyên, bái sư học nghệ, mượn cổ trùng quý hiếm, cùng tranh phong thiên hạ!
           </p>
           {mySectStatus?.has_pending_join && (
-            <div className="mt-4 p-3 bg-amber-950/40 border border-amber-500/25 rounded-2xl text-xs text-amber-400 font-mono max-w-md mx-auto">
-              ⏳ Yêu cầu gia nhập tông môn <strong className="text-amber-200 font-bold">{mySectStatus.pending_sect_name}</strong> đang chờ duyệt!
+            <div className="mt-4 p-3 bg-amber-950/40 border border-amber-500/25 rounded-2xl text-xs text-amber-400 font-mono max-w-md mx-auto flex flex-col items-center gap-2">
+              <span>⏳ Yêu cầu gia nhập tông môn <strong className="text-amber-200 font-bold">{mySectStatus.pending_sect_name}</strong> đang chờ duyệt!</span>
+              <button
+                onClick={async () => {
+                  if (await showConfirm("Đạo hữu có chắc chắn muốn hủy đơn xin gia nhập tông môn này?")) {
+                    await cancelSectJoinRequest();
+                  }
+                }}
+                disabled={actionLoading}
+                className="px-3 py-1.5 bg-zinc-900 hover:bg-red-950/40 border border-zinc-800 hover:border-red-500/40 text-zinc-300 hover:text-red-300 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Hủy Đơn Xin
+              </button>
             </div>
           )}
         </div>

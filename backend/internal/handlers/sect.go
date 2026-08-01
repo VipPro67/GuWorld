@@ -227,6 +227,23 @@ func JoinSect(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Gia nhập tông môn thành công! Nhân Khí +3."})
 }
 
+// CancelSectJoinRequest withdraws a player's pending join request
+func CancelSectJoinRequest(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	_, err := db.DB.Exec(`DELETE FROM sect_join_requests WHERE player_id = $1 AND status = 'PENDING'`, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel join request: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Đã hủy đơn xin gia nhập tông môn."})
+}
+
 // LeaveSect removes a player from their sect
 func LeaveSect(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)

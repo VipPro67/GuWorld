@@ -389,6 +389,7 @@ func SetupRouter() *gin.Engine {
 		{
 			sect.GET("", handlers.GetSects)
 			sect.POST("/:id/join", handlers.JoinSect)
+			sect.POST("/join-request/cancel", handlers.CancelSectJoinRequest)
 			sect.POST("/leave", handlers.LeaveSect)
 			sect.GET("/me", handlers.GetMySectStatus)
 			sect.POST("/promote", handlers.PromoteSectRank)

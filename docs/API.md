@@ -173,6 +173,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | --- | --- |
 | GET | `/sects` |
 | POST | `/sects/:id/join` |
+| POST | `/sects/join-request/cancel` |
 | POST | `/sects/leave` |
 | GET | `/sects/me` |
 | POST | `/sects/promote` |

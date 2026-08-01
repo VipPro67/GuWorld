@@ -973,6 +973,7 @@ interface GameState {
   sectMines: SectMine[];
   fetchSects: () => Promise<void>;
   joinSect: (sectId: string) => Promise<boolean>;
+  cancelSectJoinRequest: () => Promise<boolean>;
   leaveSect: () => Promise<boolean>;
   fetchMySectStatus: () => Promise<void>;
   promoteSectRank: () => Promise<boolean>;
@@ -4619,6 +4620,28 @@ export const useGameStore = create<GameState>((set, get) => {
       get().addLog(data.message || "Rời tông môn.");
       set({ mySectStatus: null });
       await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  cancelSectJoinRequest: async () => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/join-request/cancel`, {
+        method: "POST",
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Hủy đơn xin gia nhập thất bại.");
+      get().addToast(data.message || "Đã hủy đơn xin gia nhập tông môn!", "info");
+      get().addLog(data.message || "Hủy đơn xin gia nhập tông môn.");
+      await get().fetchMySectStatus();
       return true;
     } catch (err: any) {
       set({ error: err.message });
