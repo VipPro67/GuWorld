@@ -120,10 +120,32 @@ export const wikiPages: WikiPage[] = [
             <div className="relative">
               <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
               <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <span>Phiên Bản v0.7.1 (Hiện tại)</span>
+                <span>Phiên Bản v0.8.0 (Hiện tại)</span>
                 <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono text-[9px]">
                   Mới nhất
                 </span>
+              </h4>
+
+              <ul className="list-disc list-inside text-[var(--text-secondary)] mt-1.5 space-y-1.5 leading-relaxed">
+                <li>
+                  <strong>Tối ưu lưu trữ:</strong> Kho Cổ trùng được lưu trữ gọn gàng hơn, mở kho, trang bị và cho ăn nhanh mượt hơn kể cả khi sở hữu rất nhiều Cổ.
+                </li>
+                <li>
+                  <strong>Cho ăn Cổ trùng ổn định:</strong> Độ no giảm đều theo thời gian, tránh lag khi máy chủ xử lý toàn bộ người chơi cùng lúc.
+                </li>
+                <li>
+                  <strong>Đạo Ngân vận hành tốt hơn:</strong> Đạo Ngân hiển thị và áp dụng hiệu ứng chính xác cho cả đồng đội lẫn địch trong chiến đấu tự động.
+                </li>
+                <li>
+                  <strong>Thăng Tiên theo Nhân Khí:</strong> Tỉ lệ thành công tỉ lệ thuận với Nhân Khí (0 → 0%, 100.000 → chắc chắn thành công). Thành công lên Lục Chuyển Cổ Tiên, nhận thưởng và khai mở Tiên Khiếu — cấp bậc Tiên Khiếu được định đoạt bởi Nhân Khí lúc thăng tiên. Thất bại: Nhân Khí về 0, tu vi phế bỏ rơi về Rank 1.
+                </li>
+              </ul>
+            </div>
+
+            <div className="relative">
+              <div className="absolute -left-[26px] top-1.5 w-3 h-3 rounded-full bg-zinc-700 border-2 border-zinc-950" />
+              <h4 className="font-serif font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <span>Phiên Bản v0.7.1</span>
               </h4>
 
               <ul className="list-disc list-inside text-[var(--text-secondary)] mt-1.5 space-y-1.5 leading-relaxed">

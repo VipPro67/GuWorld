@@ -381,34 +381,34 @@ export default function Home() {
               <button onClick={handleCloseChangelog} className="text-zinc-500 hover:text-zinc-300 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
             <div className="space-y-3 text-xs text-zinc-300 leading-relaxed">
-              <p className="text-zinc-400">Phiên bản <strong className="text-amber-400">v0.7.2</strong> — Sửa lỗi chiến đấu & Gift Code:</p>
+              <p className="text-zinc-400">Phiên bản <strong className="text-amber-400">v0.8.0</strong> — Tối ưu trải nghiệm & Thăng Tiên:</p>
               <div className="space-y-2">
                 <div className="flex gap-2.5 items-start bg-amber-950/20 border border-amber-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">⚔️</span>
+                  <span className="text-lg shrink-0 mt-0.5">🚀</span>
                   <div>
-                    <span className="font-bold text-amber-300">Sửa chiến đấu</span>
-                    <p className="text-zinc-400 mt-0.5">Tốc độ giờ ảnh hưởng thứ tự đánh. MaxHP không còn bị kẹt ở 100. Passive + Growth auto-apply từ toàn bộ Cổ đang trang bị.</p>
+                    <span className="font-bold text-amber-300">Tối ưu lưu trữ</span>
+                    <p className="text-zinc-400 mt-0.5">Kho Cổ trùng giờ lưu trữ gọn gàng hơn: mở kho, trang bị, cho ăn nhanh mượt hơn dù sở hữu nhiều Cổ.</p>
                   </div>
                 </div>
                 <div className="flex gap-2.5 items-start bg-emerald-950/20 border border-emerald-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">🎯</span>
+                  <span className="text-lg shrink-0 mt-0.5">🍽️</span>
                   <div>
-                    <span className="font-bold text-emerald-300">Auto-Combat chỉ hiện Cổ có Active Skill</span>
-                    <p className="text-zinc-400 mt-0.5">Bộ lọc giờ chỉ hiện Cổ có hiệu ứng chủ động (tấn công, hồi máu, khiên...).</p>
+                    <span className="font-bold text-emerald-300">Cho ăn Cổ trùng ổn định</span>
+                    <p className="text-zinc-400 mt-0.5">Chăm sóc Cổ trùng mượt mà hơn: độ no giảm đều theo thời gian, tránh tình trạng lag khi toàn máy chủ xử lý cùng lúc.</p>
                   </div>
                 </div>
                 <div className="flex gap-2.5 items-start bg-amber-950/20 border border-amber-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">📈</span>
+                  <span className="text-lg shrink-0 mt-0.5">☯️</span>
                   <div>
-                    <span className="font-bold text-amber-300">Trưởng Thành </span>
-                    <p className="text-zinc-400 mt-0.5">Sửa lỗi Cổ cũ không có thông tin phát triển.</p>
+                    <span className="font-bold text-amber-300">Đạo Ngân vận hành tốt hơn</span>
+                    <p className="text-zinc-400 mt-0.5">Đạo Ngân hiển thị và hoạt động chính xác, áp dụng hiệu ứng cho cả đồng đội lẫn địch trong chiến đấu tự động.</p>
                   </div>
                 </div>
                 <div className="flex gap-2.5 items-start bg-fuchsia-950/20 border border-fuchsia-500/10 rounded-lg p-3">
-                  <span className="text-lg shrink-0 mt-0.5">🎁</span>
+                  <span className="text-lg shrink-0 mt-0.5">🐉</span>
                   <div>
-                    <span className="font-bold text-fuchsia-300">Gift Code mới!</span>
-                    <p className="text-zinc-400 mt-0.5">Nhập <strong className="text-fuchsia-300">CHODAUGIA</strong>, <strong className="text-fuchsia-300">PHUONGNGUYEN</strong>, <strong className="text-fuchsia-300">BACHNGUNGBANG</strong> tại tab Phúc Lợi để nhận quà!</p>
+                    <span className="font-bold text-fuchsia-300">Thăng Tiên theo Nhân Khí</span>
+                    <p className="text-zinc-400 mt-0.5">Tỉ lệ thành công Thăng Tiên tỉ lệ thuận với Nhân Khí (tối đa 100.000 → chắc chắn thành công). Thành công lên Lục Chuyển Cổ Tiên và khai mở Tiên Khiếu — cấp bậc Tiên Khiếu được định đoạt bởi Nhân Khí lúc thăng tiên.</p>
                   </div>
                 </div>
               </div>
