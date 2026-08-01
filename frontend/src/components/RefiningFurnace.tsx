@@ -32,6 +32,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [statusTab, setStatusTab] = useState<"all" | "complete" | "incomplete">("all");
   const [isDeducing, setIsDeducing] = useState(false);
+  const [showFullDesc, setShowFullDesc] = useState(false);
 
   const toggleGroupExpand = (guId: string, event?: React.MouseEvent) => {
     if (event) event.stopPropagation();
@@ -927,6 +928,18 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
               <div className="space-y-6 max-w-sm w-full animate-gold-glow p-6 rounded-3xl border border-amber-500/40 bg-zinc-950 relative overflow-hidden">
                 <div className="absolute inset-0 bg-radial-gradient from-amber-500/10 to-transparent pointer-events-none" />
 
+                {/* Close/Exit Button */}
+                <button
+                  onClick={() => {
+                    setRefineResult(null);
+                    setSlottedGus({});
+                  }}
+                  className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-200 transition-colors p-1 rounded-lg hover:bg-zinc-900 cursor-pointer z-10"
+                  title="Thoát"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+
                 {/* Celebration header */}
                 <div className="space-y-1">
                   <div className="w-14 h-14 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto mb-2 shadow-[0_0_15px_rgba(234,179,8,0.2)]">
@@ -954,9 +967,17 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                     <div className="text-[9px] text-left text-zinc-505 font-mono">
                       Loại: {guSpecFor(refineResult.new_gu.gu_id, refineResult.new_gu.rank)?.gu_type || "Thượng Cổ"}
                     </div>
-                    <p className="text-[11px] text-left text-zinc-400 leading-relaxed italic border-t border-zinc-900 pt-2">
+                    <p className={`text-[11px] text-left text-zinc-400 leading-relaxed italic border-t border-zinc-900 pt-2 transition-all ${!showFullDesc ? "line-clamp-2" : ""}`}>
                       {guSpecFor(refineResult.new_gu.gu_id, refineResult.new_gu.rank)?.description || ""}
                     </p>
+                    {(guSpecFor(refineResult.new_gu.gu_id, refineResult.new_gu.rank)?.description?.length || 0) > 40 && (
+                      <button
+                        onClick={() => setShowFullDesc(!showFullDesc)}
+                        className="text-[9px] text-amber-500 hover:text-amber-400 block mt-1 cursor-pointer select-none mx-auto border border-amber-500/20 px-2 py-0.5 rounded bg-zinc-950/40"
+                      >
+                        {showFullDesc ? "Rút gọn mô tả" : "Xem thêm mô tả"}
+                      </button>
+                    )}
                   </div>
                 )}
 

@@ -47,8 +47,8 @@ var gachaPools = []GachaPool{
 			{Type: "gu", Min: 1, Max: 1, Weight: 20.0, Label: "Cổ Trùng R1~R3"},
 			{Type: "primeval_stones", Min: 2000, Max: 5000, Weight: 10.0, Label: "2.000~5.000 Nguyên Thạch"},
 			{Type: "gu_rank", ID: "4,5", Min: 1, Max: 1, Weight: 4.0, Label: "Cổ Trùng R4~R5"},
-			{Type: "gu_rank", ID: "6,7", Min: 1, Max: 1, Weight: 0.5, Label: "Cổ Trùng R6+ Cao Cấp"},
-			{Type: "gu_rank", ID: "8,9", Min: 1, Max: 1, Weight: 0.1, Label: "Cổ Trùng R8+ Siêu Cấp"},
+			{Type: "gu_rank", ID: "6,7", Min: 1, Max: 1, Weight: 0.004, Label: "Cổ Trùng R6+ Cao Cấp"},
+			{Type: "gu_rank", ID: "8,9", Min: 1, Max: 1, Weight: 0.00004, Label: "Cổ Trùng R8+ Siêu Cấp"},
 		},
 	},
 	// {
