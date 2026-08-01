@@ -34,7 +34,7 @@ func Connect() error {
 	// Defaults: statement 15s, lock wait 10s. Override via env (ms).
 	statementTimeout := getEnv("DB_STATEMENT_TIMEOUT_MS", "15000")
 	lockTimeout := getEnv("DB_LOCK_TIMEOUT_MS", "10000")
-	connStr += fmt.Sprintf(" options=-c%%20statement_timeout=%s%%20-c%%20lock_timeout=%s", statementTimeout, lockTimeout)
+	connStr += fmt.Sprintf(" options='-c statement_timeout=%s -c lock_timeout=%s'", statementTimeout, lockTimeout)
 
 	var err error
 	DB, err = sql.Open("postgres", connStr)
