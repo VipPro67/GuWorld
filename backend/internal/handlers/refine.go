@@ -447,7 +447,8 @@ func RefineGu(c *gin.Context) {
 
 	// 9. Update player status in database
 	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu túi đồ"})
+		logger.S.Error("DEBUG SavePlayerGus failed:", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu túi đồ: " + err.Error()})
 		return
 	}
 	updateQuery := `

@@ -228,6 +228,7 @@ func SendBaoHoangChat(c *gin.Context) {
 	`, player.ID, globalUUID, req.Content, req.Channel, sectID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send chat"})
+		fmt.Println("Error inserting chat message:", err)
 		return
 	}
 
