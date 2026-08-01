@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -2652,12 +2652,6 @@ func seedSectMissionsFromCSV(filename string) error {
 func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs []string) (bool, error) {
 	var exists bool
 
-	excludeArray := "{}"
-	if len(excludeInstanceIDs) > 0 {
-		b, _ := json.Marshal(excludeInstanceIDs)
-		excludeArray = string(b)
-	}
-
 	// 1. Kiểm tra trong bảng phụ player_gu (toàn bộ cổ của mọi người chơi)
 	err := tx.QueryRow(`
 		SELECT EXISTS(
@@ -2666,7 +2660,7 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 			  AND gu_rank = $2
 			  AND NOT (id = ANY($3::text[]))
 		)
-	`, guID, rank, excludeArray).Scan(&exists)
+	`, guID, rank, pq.Array(excludeInstanceIDs)).Scan(&exists)
 	if err != nil {
 		return false, err
 	}
@@ -2701,7 +2695,7 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 			  AND COALESCE((elem->>'rank')::int, 0) = $2
 			  AND NOT (elem->>'instance_id' = ANY($3::text[]))
 		)
-	`, guID, rank, excludeArray).Scan(&exists)
+	`, guID, rank, pq.Array(excludeInstanceIDs)).Scan(&exists)
 	if err != nil {
 		return false, err
 	}
