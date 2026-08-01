@@ -195,7 +195,7 @@ func AttackTribulationEnemy(c *gin.Context) {
 		foundGus = append(foundGus, foundGu)
 	}
 
-	totalManaCost := 0
+	totalManaCost := 0.0
 	var guSpecs []models.GuDictionaryItem
 	for _, fg := range foundGus {
 		spec, ok := models.GetGuAny(fg.GuID)
@@ -208,7 +208,11 @@ func AttackTribulationEnemy(c *gin.Context) {
 	}
 
 	if player.CurrentMana < totalManaCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Chân Nguyên không đủ để thi triển Sát Chiêu (cần %d, hiện có %d)", totalManaCost, player.CurrentMana)})
+		manaType := "Chân Nguyên"
+		if player.Rank >= 6 {
+			manaType = "Tiên Nguyên"
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("%s không đủ để thi triển Sát Chiêu (cần %.0f, hiện có %.0f)", manaType, totalManaCost, player.CurrentMana)})
 		return
 	}
 
