@@ -1260,10 +1260,24 @@ func FeedGu(c *gin.Context) {
 		consumedGuIndex := -1
 
 		for _, food := range foodOptions {
-			qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), food, "materials")
-			if qty > 0 {
-				chosenFoodItem = food
-				break
+			if food == "primeval_stone" {
+				cost := int(math.Pow(2, float64(targetGu.Rank)))
+				if player.PrimevalStones >= cost {
+					chosenFoodItem = food
+					break
+				}
+			} else if food == "immortal_stone" {
+				cost := float64(targetGu.Rank)
+				if player.ImmortalStones >= cost {
+					chosenFoodItem = food
+					break
+				}
+			} else {
+				qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), food, "materials")
+				if qty > 0 {
+					chosenFoodItem = food
+					break
+				}
 			}
 
 			if strings.HasPrefix(food, "GU_") {
@@ -1287,7 +1301,9 @@ func FeedGu(c *gin.Context) {
 
 		foodID := ""
 		if chosenFoodItem != "" {
-			InventorySvc.RemoveItem(tx, player.ID.String(), chosenFoodItem, "materials", 1)
+			if chosenFoodItem != "primeval_stone" && chosenFoodItem != "immortal_stone" {
+				InventorySvc.RemoveItem(tx, player.ID.String(), chosenFoodItem, "materials", 1)
+			}
 			foodID = chosenFoodItem
 		} else {
 			consumedGu := player.GuInventory[consumedGuIndex]
@@ -1316,17 +1332,19 @@ func FeedGu(c *gin.Context) {
 		//some Gu consume immortal_stone and primeval_stone as food, so we need to check if the foodID is a stone and deduct it from the player's inventory
 		switch foodID {
 		case "immortal_stone":
-			if player.ImmortalStones < float64(targetGu.Rank) {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Tiên Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %d Tiên Nguyên Thạch cho Cổ trùng hạng %d.", targetGu.Rank, targetGu.Rank)})
+			cost := float64(targetGu.Rank)
+			if player.ImmortalStones < cost {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Tiên Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %d Tiên Nguyên Thạch cho Cổ trùng hạng %d.", int(cost), targetGu.Rank)})
 				return
 			}
-			player.ImmortalStones -= 1
+			player.ImmortalStones -= cost
 		case "primeval_stone":
-			if player.PrimevalStones < int(math.Pow(2, float64(targetGu.Rank))) {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %d Nguyên Thạch cho Cổ trùng hạng %d.", int(math.Pow(2, float64(targetGu.Rank))), targetGu.Rank)})
+			cost := int(math.Pow(2, float64(targetGu.Rank)))
+			if player.PrimevalStones < cost {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %d Nguyên Thạch cho Cổ trùng hạng %d.", cost, targetGu.Rank)})
 				return
 			}
-			player.PrimevalStones -= 1
+			player.PrimevalStones -= cost
 		}
 
 		foodConsumed[foodID]++
