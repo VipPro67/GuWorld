@@ -239,7 +239,7 @@ func InitSchema() error {
 		aperture_hp INTEGER NOT NULL DEFAULT 10000,
 		max_aperture_hp INTEGER NOT NULL DEFAULT 10000,
 		area_size BIGINT NOT NULL DEFAULT 3000000,
-		immortal_essence INTEGER NOT NULL DEFAULT 0,
+		immortal_essence BIGINT NOT NULL DEFAULT 0,
 		essence_production_per_year INTEGER NOT NULL DEFAULT 10,
 		internal_years_passed DOUBLE PRECISION NOT NULL DEFAULT 0,
 		next_tribulation_year DOUBLE PRECISION NOT NULL DEFAULT 10,
@@ -1178,6 +1178,7 @@ func InitSchema() error {
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS thought_regen_rate DOUBLE PRECISION NOT NULL DEFAULT 1.0;`, "thought_regen_rate"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS immortal_state JSONB NOT NULL DEFAULT '{}';`, "immortal_state"},
 		{`ALTER TABLE auction ADD COLUMN IF NOT EXISTS duration_hours INTEGER NOT NULL DEFAULT 24;`, "duration_hours"},
+		{`ALTER TABLE immortal_apertures ALTER COLUMN immortal_essence TYPE BIGINT;`, "alter_immortal_essence_type"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {
