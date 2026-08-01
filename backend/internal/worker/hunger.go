@@ -214,11 +214,17 @@ func runHungerDecayBatch(db *sql.DB) error {
 				pg.gu_rank,
 				pg.is_vital,
 				pg.equipped,
-				pg.hunger - gd.hunger_rate AS new_hunger,
+				pg.state,
+				CASE
+					WHEN pg.state = 'ACTIVE' THEN pg.hunger - gd.hunger_rate
+					WHEN pg.state = 'SLEEPING' THEN pg.hunger - 0.25 * gd.hunger_rate
+					WHEN pg.state = 'SEALED' THEN pg.hunger - 0.1 * gd.hunger_rate
+					ELSE pg.hunger
+				END AS new_hunger,
 				gd.name AS gu_name
 			FROM player_gu pg
 			JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank
-			WHERE pg.state IN ('ACTIVE', 'SLEEPING')
+			WHERE pg.state IN ('ACTIVE', 'SLEEPING', 'SEALED')
 		)
 		SELECT
 			d.gu_instance_id,
@@ -230,10 +236,8 @@ func runHungerDecayBatch(db *sql.DB) error {
 			d.gu_name,
 			GREATEST(d.new_hunger, 0) AS new_hunger,
 			CASE
-				WHEN d.new_hunger <= 0 AND d.is_vital THEN 'DEAD'
-				WHEN d.new_hunger <= 0 AND random() < 0.2 THEN 'SLEEPING'
 				WHEN d.new_hunger <= 0 THEN 'DEAD'
-				ELSE 'ACTIVE'
+				ELSE d.state
 			END AS new_state
 		FROM decayed d`)
 	if err != nil {
@@ -298,7 +302,7 @@ func runHungerDecayBatch(db *sql.DB) error {
 			 WHERE pg.player_id = p.id AND pg.equipped AND pg.state = 'ACTIVE'),
 			'[]'::jsonb)
 		FROM _hunger_tick t
-		WHERE p.id = t.player_id AND t.new_state IN ('DEAD', 'SLEEPING')`)
+		WHERE p.id = t.player_id AND t.new_state IN ('DEAD', 'SLEEPING', 'SEALED')`)
 	if err != nil {
 		return err
 	}

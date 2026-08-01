@@ -492,7 +492,7 @@ export const ImmortalApertureView: React.FC = () => {
                     {Math.floor(player.current_mana)} viên
                   </div>
                   <div className="text-[10px] text-slate-400 mt-1 font-mono">
-                    Hồi phục: +{dailyRegen} viên/ngày
+                    Hồi phục: +{hourlyRegen.toFixed(1)} viên/giờ
                   </div>
                 </div>
 

@@ -2096,6 +2096,18 @@ func UpdateGuStatus(c *gin.Context) {
 		targetGu.Equipped = false
 	}
 
+	if req.Status == "SEALED" && targetGu.Status != "SEALED" {
+		qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), "sealing_stone", "materials")
+		if err != nil || qty < 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ sealing_stone để phong ấn Cổ trùng."})
+			return
+		}
+		if err := InventorySvc.RemoveItem(tx, player.ID.String(), "sealing_stone", "materials", 1); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to consume sealing_stone"})
+			return
+		}
+	}
+
 	targetGu.Status = req.Status
 
 	// Recalculate equipped_gus list
@@ -2347,6 +2359,11 @@ func SetVitalGu(c *gin.Context) {
 	targetGu := &player.GuInventory[targetIndex]
 	if targetGu.Status == "DEAD" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể thiết lập Cổ trùng ĐÃ CHẾT làm Bản Mệnh Cổ"})
+		return
+	}
+
+	if targetGu.Rank > player.Rank {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể thiết lập Cổ trùng Rank %d làm Bản Mệnh Cổ do vượt quá tu vi hiện tại của đạo hữu (Rank %d)!", targetGu.Rank, player.Rank)})
 		return
 	}
 

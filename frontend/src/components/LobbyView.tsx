@@ -373,7 +373,7 @@ export const LobbyView: React.FC = () => {
                 <span>Máu</span>
                 {player && hpRegenRealHourly > 0 && displayedHP < displayedMaxHP && (
                   <span className="text-[8px] text-zinc-500">
-                    +{Math.round(hpRegenRealHourly * 24)}/ngày • {formatTimeRemaining(displayedHP, displayedMaxHP, hpRegenRealHourly)}
+                    +{hpRegenRealHourly.toFixed(1)}/giờ • {formatTimeRemaining(displayedHP, displayedMaxHP, hpRegenRealHourly)}
                   </span>
                 )}
               </div>
@@ -392,9 +392,9 @@ export const LobbyView: React.FC = () => {
             <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
               <div className="flex flex-col">
                 <span>{player.rank >= 6 ? "Tiên Nguyên" : "Chân Nguyên"}</span>
-                {player && manaRegenRealHourly > 0 && displayedMana < displayedMaxMana && (
+                {player && manaRegenRealHourly > 0 && (player.rank >= 6 || displayedMana < displayedMaxMana) && (
                   <span className="text-[8px] text-zinc-500">
-                    +{Math.round(manaRegenRealHourly * 24)}/ngày • {formatTimeRemaining(displayedMana, displayedMaxMana, manaRegenRealHourly)}
+                    +{manaRegenRealHourly.toFixed(1)}/giờ{player.rank < 6 ? ` • ${formatTimeRemaining(displayedMana, displayedMaxMana, manaRegenRealHourly)}` : ""}
                   </span>
                 )}
               </div>

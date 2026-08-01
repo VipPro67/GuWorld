@@ -130,6 +130,14 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
   const handleSetVital = async (instanceId: string, name: string) => {
     if (!onSetVital) return;
+    const targetGu = player.gu_inventory?.find((g) => g.instance_id === instanceId);
+    if (targetGu && targetGu.rank > player.rank) {
+      useGameStore.getState().addToast(
+        `Không thể thiết lập Cổ trùng Rank ${targetGu.rank} vượt quá tu vi hiện tại của đạo hữu (Rank ${player.rank}) làm Bản Mệnh Cổ!`,
+        "error"
+      );
+      return;
+    }
     const hadVital = player.gu_inventory?.some((g) => g.is_vital) || false;
     const confirmMsg = hadVital
       ? `Cảnh báo: Đạo hữu đang sở hữu một Bản Mệnh Cổ. Thiết lập Cổ trùng "${name}" làm Bản Mệnh Cổ mới sẽ hủy Bản Mệnh cũ và gây phản phệ khiến đạo hữu mất 50 HP!\n\nĐạo hữu chắc chắn muốn tiếp tục?`
@@ -824,9 +832,14 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                         {!isDead && !gu.is_vital && onSetVital && (
                                           <button
                                             type="button"
-                                            disabled={actionLoading || settingVitalId === gu.instance_id}
+                                            disabled={actionLoading || settingVitalId === gu.instance_id || gu.rank > player.rank}
                                             onClick={() => handleSetVital(gu.instance_id, spec.name)}
-                                            className="text-[8px] py-1 px-1.5 bg-zinc-950/50 text-amber-400 border border-zinc-900 hover:bg-amber-950/20 hover:border-amber-500/50 rounded font-mono font-bold transition-all cursor-pointer"
+                                            className={`text-[8px] py-1 px-1.5 border rounded font-mono font-bold transition-all cursor-pointer ${
+                                              gu.rank > player.rank
+                                                ? "bg-zinc-950/20 text-zinc-600 border-zinc-950/40 cursor-not-allowed opacity-50"
+                                                : "bg-zinc-950/50 text-amber-400 border-zinc-900 hover:bg-amber-950/20 hover:border-amber-500/50"
+                                            }`}
+                                            title={gu.rank > player.rank ? `Yêu cầu tu vi Rank ${gu.rank} (Hiện tại: Rank ${player.rank})` : ""}
                                           >
                                             {settingVitalId === gu.instance_id ? "..." : "👑 Bản Mệnh"}
                                           </button>

@@ -402,7 +402,7 @@ export const Aperture: React.FC<ApertureProps> = ({
           </div>
           {player && hpRegenRealHourly > 0 && currentHP < maxHP && (
             <div className="text-[9px] text-zinc-400 mt-1 pl-2 font-mono flex justify-between">
-              <span>Hồi phục: +{(hpRegenRealHourly * 24).toFixed(1)}/ngày</span>
+              <span>Hồi phục: +{hpRegenRealHourly.toFixed(1)}/giờ</span>
               <span>{formatTimeRemaining(currentHP, maxHP, hpRegenRealHourly)}</span>
             </div>
           )}
@@ -579,7 +579,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                     </div>
                     <div className="text-[10px] text-zinc-400 mt-0.5 tracking-wider uppercase font-semibold">{energyPoolName}</div>
                     <div className="text-[10px] text-zinc-300 mt-2 font-mono" style={{ color: c.textLight }}>
-                      Tốc lưu tiên khiếu: +{Math.round(manaRegenRealHourly * 24)} viên/ngày
+                      Tốc lưu tiên khiếu: +{manaRegenRealHourly.toFixed(1)} viên/giờ
                     </div>
                     {!isImmortal && currentMana < maxMana && manaRegenRealHourly > 0 && (
                       <div className="text-[9px] text-zinc-400 mt-0.5 font-mono">
@@ -603,7 +603,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                   </span>
                   {currentMana < maxMana && manaRegenRealHourly > 0 && (
                     <span className="text-[9px] mt-1 text-zinc-300 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] font-mono">
-                      +{Math.round(manaRegenRealHourly * 24)}/ngày • {formatTimeRemaining(currentMana, maxMana, manaRegenRealHourly)}
+                      +{manaRegenRealHourly.toFixed(1)}/giờ • {formatTimeRemaining(currentMana, maxMana, manaRegenRealHourly)}
                     </span>
                   )}
                 </div>
