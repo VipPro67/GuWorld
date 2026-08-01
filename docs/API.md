@@ -183,6 +183,14 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | POST | `/instance/enter` |
 | POST | `/instance/action` |
 
+## Gacha (Cổ Từ / Mở Đá)
+
+| Method | Path | Ghi chú |
+| --- | --- | --- |
+| GET | `/gacha/pools` | Danh sách gói mở. |
+| POST | `/gacha/open` | Mở N lần. Body: `{"pool_id": "...", "quantity": 10}` (`quantity` mặc định 1, tối đa 100; ≥ 10 được giảm 10% chi phí). |
+| POST | `/gacha/open10` | Tương đương `/gacha/open` với `quantity: 10` (giữ để tương thích). |
+
 ## Sects
 
 | Method | Path |
@@ -196,7 +204,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | POST | `/sects/donate/stones` |
 | POST | `/sects/donate/materials` |
 | POST | `/sects/donate/gu` |
-| POST | `/sects/vault/buy` |
+| POST | `/sects/vault/buy` | Đổi vật phẩm từ bảo khố. Body: `{"item_type": "gu|material|recipe", "item_id": "...", "quantity": 5}` (`quantity` mặc định 1; recipe chỉ nhận 1). |
 | GET | `/sects/missions` |
 | POST | `/sects/missions/:missionId/accept` |
 | POST | `/sects/missions/:missionId/complete` |

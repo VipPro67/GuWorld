@@ -107,6 +107,7 @@ type DonateGuRequest struct {
 type VaultBuyRequest struct {
 	ItemType string `json:"item_type" binding:"required"` // gu, material, recipe
 	ItemID   string `json:"item_id" binding:"required"`
+	Quantity int    `json:"quantity"`
 }
 
 // GetSects lists all available sects
@@ -932,6 +933,15 @@ func BuyFromSectVault(c *gin.Context) {
 		return
 	}
 
+	quantity := req.Quantity
+	if quantity <= 0 {
+		quantity = 1
+	}
+	if quantity > 100 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Mỗi lần chỉ được trao đổi tối đa 100 đơn vị!"})
+		return
+	}
+
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -994,30 +1004,32 @@ func BuyFromSectVault(c *gin.Context) {
 			return
 		}
 
-		if vaultGus[targetIdx].Quantity <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng này đã hết hàng trong Bảo khố!"})
+		if vaultGus[targetIdx].Quantity < quantity {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bảo khố chỉ còn %d con Cổ trùng này!", vaultGus[targetIdx].Quantity)})
 			return
 		}
 
-		cost = vaultGus[targetIdx].Cost
+		cost = vaultGus[targetIdx].Cost * quantity
 		if m.ContributionPoints < cost {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Điểm cống hiến!"})
 			return
 		}
 
 		m.ContributionPoints -= cost
-		vaultGus[targetIdx].Quantity--
+		vaultGus[targetIdx].Quantity -= quantity
 
 		guSpec, _ := models.GetGuAny(req.ItemID)
-		newGu := models.GuInstance{
-			InstanceID: uuid.New().String(),
-			GuID:       req.ItemID,
-			Rank:       guSpec.Rank,
-			Hunger:     100,
-			Status:     "ACTIVE",
-			Equipped:   false,
+		for i := 0; i < quantity; i++ {
+			newGu := models.GuInstance{
+				InstanceID: uuid.New().String(),
+				GuID:       req.ItemID,
+				Rank:       guSpec.Rank,
+				Hunger:     100,
+				Status:     "ACTIVE",
+				Equipped:   false,
+			}
+			player.GuInventory = append(player.GuInventory, newGu)
 		}
-		player.GuInventory = append(player.GuInventory, newGu)
 
 		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Gu inventory"})
@@ -1047,8 +1059,8 @@ func BuyFromSectVault(c *gin.Context) {
 		}
 
 		qty, hasMat := vaultMats[req.ItemID]
-		if !hasMat || qty <= 0 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Linh tài này đã hết hàng trong Bảo khố!"})
+		if !hasMat || qty < quantity {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Linh tài này không đủ số lượng trong Bảo khố!"})
 			return
 		}
 
@@ -1056,7 +1068,7 @@ func BuyFromSectVault(c *gin.Context) {
 		{
 			var matBasePrice, matRank int
 			_ = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, req.ItemID).Scan(&matBasePrice, &matRank)
-			cost = pricing.VaultCost(pricing.ItemBasePrice(matBasePrice, matRank))
+			cost = pricing.VaultCost(pricing.ItemBasePrice(matBasePrice, matRank)) * quantity
 		}
 
 		if m.ContributionPoints < cost {
@@ -1065,12 +1077,12 @@ func BuyFromSectVault(c *gin.Context) {
 		}
 
 		m.ContributionPoints -= cost
-		vaultMats[req.ItemID]--
-		if vaultMats[req.ItemID] == 0 {
+		vaultMats[req.ItemID] -= quantity
+		if vaultMats[req.ItemID] <= 0 {
 			delete(vaultMats, req.ItemID)
 		}
 
-		InventorySvc.AddItem(tx, player.ID.String(), req.ItemID, "materials", 1)
+		InventorySvc.AddItem(tx, player.ID.String(), req.ItemID, "materials", quantity)
 
 		newVaultMats, _ := json.Marshal(vaultMats)
 		_, err = tx.Exec(`UPDATE sects SET vault_materials = $1 WHERE id = $2`, newVaultMats, s.ID)
@@ -1095,6 +1107,11 @@ func BuyFromSectVault(c *gin.Context) {
 
 		if !hasRecipe {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Công thức này không có sẵn trong Bảo khố!"})
+			return
+		}
+
+		if quantity > 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Công thức mỗi lần chỉ có thể học một lần!"})
 			return
 		}
 
@@ -1151,11 +1168,11 @@ func BuyFromSectVault(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.buy_vault", EntityType: "sect",
 		EntityID: m.SectID,
-		RequestSummary: fmt.Sprintf("%s | %s | giá %d điểm cống hiến", req.ItemType, itemName, cost),
+		RequestSummary: fmt.Sprintf("%s | %s x%d | giá %d điểm cống hiến", req.ItemType, itemName, quantity, cost),
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message": fmt.Sprintf("Đổi vật phẩm thành công! Nhân Khí +%.0f.", qiGained),
+		"message": fmt.Sprintf("Đổi thành công %d %s! Nhân Khí +%.0f.", quantity, itemName, qiGained),
 		"member":  m,
 	})
 }

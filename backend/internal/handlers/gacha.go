@@ -88,118 +88,20 @@ func GetGachaPools(c *gin.Context) {
 }
 
 type GachaOpenRequest struct {
-	PoolID string `json:"pool_id" binding:"required"`
+	PoolID   string `json:"pool_id" binding:"required"`
+	Quantity int    `json:"quantity"`
 }
 
 func OpenGacha(c *gin.Context) {
-	playerID, ok := middleware.GetPlayerID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-
-	var req GachaOpenRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
-		return
-	}
-
-	var pool *GachaPool
-	for i := range gachaPools {
-		if gachaPools[i].ID == req.PoolID {
-			pool = &gachaPools[i]
-			break
-		}
-	}
-	if pool == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Gói quà không tồn tại"})
-		return
-	}
-
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
-		return
-	}
-	defer tx.Rollback()
-
-	player, err := loadPlayerForStatus(tx, playerID, true)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
-		return
-	}
-
-	if err := deductGachaCost(&player, pool); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	excludedImmortal, err := db.GetExistingImmortalGuIDs(tx)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
-		return
-	}
-
-	reward := rollGachaReward(pool, excludedImmortal)
-
-	if err := applyGachaReward(tx, &player, reward); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi áp dụng phần thưởng"})
-		return
-	}
-	if reward.Type == "gu" {
-		if spec, ok := models.GetGuAny(reward.ID); ok && spec.Rank >= 6 {
-			excludedImmortal[reward.ID] = true
-		}
-	}
-
-	qiGained := AddHumanQi(&player, 1.0)
-
-	updateQuery, updateArgs := buildGachaUpdateQuery(&player)
-	_, err = tx.Exec(updateQuery, updateArgs...)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật người chơi"})
-		return
-	}
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cổ trùng"})
-		return
-	}
-
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi commit"})
-		return
-	}
-
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID:       &playerID,
-		Action:         "gacha.open",
-		EntityType:     "gacha_pool",
-		EntityID:       pool.ID,
-		RequestSummary: fmt.Sprintf("pool=%s | %s | cost=%.0f %s", pool.Name, buildGachaRewardLabel(reward), pool.CostAmount, pool.CostType),
-		Metadata: map[string]interface{}{
-			"pool_id":     pool.ID,
-			"cost_type":   pool.CostType,
-			"cost_amount": pool.CostAmount,
-			"reward":      reward,
-		},
-		IPAddress: c.ClientIP(), Success: true,
-	})
-
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"reward":  reward,
-		"message": buildGachaRewardLabel(reward) + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
-	})
-
-	//SendSystemMessage while reward is gu and rank >= 6
-	if reward.Type == "gu" {
-		if spec, ok := models.GetGuAny(reward.ID); ok && spec.Rank >= 6 {
-			message := fmt.Sprintf("Đạo hữu %s đã mở được Cổ Trùng %s (R%d) từ Mở Thạch %s!", player.Username, spec.Name, spec.Rank, pool.Name)
-			SendSystemMessage("world", sql.NullString{Valid: false}, message)
-		}
-	}
+	runGachaOpen(c, 0)
 }
 
+// OpenGacha10 kept for backward compatibility — forces a 10x open.
 func OpenGacha10(c *gin.Context) {
+	runGachaOpen(c, 10)
+}
+
+func runGachaOpen(c *gin.Context, forced int) {
 	playerID, ok := middleware.GetPlayerID(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -209,6 +111,18 @@ func OpenGacha10(c *gin.Context) {
 	var req GachaOpenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+
+	quantity := forced
+	if quantity <= 0 {
+		quantity = req.Quantity
+	}
+	if quantity <= 0 {
+		quantity = 1
+	}
+	if quantity > 100 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Mỗi lần chỉ được mở tối đa 100 lần!"})
 		return
 	}
 
@@ -237,20 +151,26 @@ func OpenGacha10(c *gin.Context) {
 		return
 	}
 
-	// 10x cost with 10% discount
-	totalCost := pool.CostAmount * 10 * 0.9
+	// 10% discount when opening 10 or more times in one go
+	totalCost := pool.CostAmount * float64(quantity)
+	discounted := false
+	if quantity >= 10 {
+		totalCost *= 0.9
+		discounted = true
+	}
 	if err := deductGachaCostAmount(&player, pool.CostType, totalCost); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	rewards := make([]GachaResultItem, 10)
 	excludedImmortal, err := db.GetExistingImmortalGuIDs(tx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
 		return
 	}
-	for i := 0; i < 10; i++ {
+
+	rewards := make([]GachaResultItem, quantity)
+	for i := 0; i < quantity; i++ {
 		rewards[i] = rollGachaReward(pool, excludedImmortal)
 		if err := applyGachaReward(tx, &player, rewards[i]); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi áp dụng phần thưởng"})
@@ -263,7 +183,7 @@ func OpenGacha10(c *gin.Context) {
 		}
 	}
 
-	qiGained := AddHumanQi(&player, 10.0)
+	qiGained := AddHumanQi(&player, float64(quantity))
 
 	updateQuery, updateArgs := buildGachaUpdateQuery(&player)
 	_, err = tx.Exec(updateQuery, updateArgs...)
@@ -281,30 +201,60 @@ func OpenGacha10(c *gin.Context) {
 		return
 	}
 
-	announcement := ""
-	for _, r := range rewards {
-		announcement += buildGachaRewardLabel(r) + "\n"
+	action := "gacha.open"
+	if quantity > 1 {
+		action = "gacha.open_bulk"
+	}
+	summary := fmt.Sprintf("pool=%s | %dx | cost=%.0f %s", pool.Name, quantity, totalCost, pool.CostType)
+	if discounted {
+		summary += " (đã giảm 10%)"
 	}
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &playerID,
-		Action:         "gacha.open10",
+		Action:         action,
 		EntityType:     "gacha_pool",
 		EntityID:       pool.ID,
-		RequestSummary: fmt.Sprintf("pool=%s | 10x | cost=%.0f %s", pool.Name, totalCost, pool.CostType),
+		RequestSummary: summary,
 		Metadata: map[string]interface{}{
 			"pool_id":     pool.ID,
 			"cost_type":   pool.CostType,
 			"cost_amount": totalCost,
+			"quantity":    quantity,
 			"rewards":     rewards,
 		},
 		IPAddress: c.ClientIP(), Success: true,
 	})
 
-	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"rewards": rewards,
-		"message": fmt.Sprintf("Mở 10 lần thành công! Nhân Khí +%.0f.\n", qiGained) + announcement,
-	})
+	if quantity == 1 {
+		responseWithPlayer(c, http.StatusOK, player, gin.H{
+			"reward":  rewards[0],
+			"message": buildGachaRewardLabel(rewards[0]) + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
+		})
+	} else {
+		announcement := ""
+		for _, r := range rewards {
+			announcement += buildGachaRewardLabel(r) + "\n"
+		}
+		discountMsg := ""
+		if discounted {
+			discountMsg = " Đã giảm 10% chi phí mở."
+		}
+		responseWithPlayer(c, http.StatusOK, player, gin.H{
+			"rewards": rewards,
+			"message": fmt.Sprintf("Mở %d lần thành công! Nhân Khí +%.0f.%s\n", quantity, qiGained, discountMsg) + announcement,
+		})
+	}
+
+	// SendSystemMessage for any rare Gu (rank >= 6) obtained
+	for _, r := range rewards {
+		if r.Type == "gu" {
+			if spec, ok := models.GetGuAny(r.ID); ok && spec.Rank >= 6 {
+				message := fmt.Sprintf("Đạo hữu %s đã mở được Cổ Trùng %s (R%d) từ Mở Thạch %s!", player.Username, spec.Name, spec.Rank, pool.Name)
+				SendSystemMessage("world", sql.NullString{Valid: false}, message)
+			}
+		}
+	}
 }
 
 type GachaResultItem struct {
@@ -470,10 +420,6 @@ func rollWeightedMaterial() string {
 		}
 	}
 	return pool[0].id
-}
-
-func deductGachaCost(player *models.Player, pool *GachaPool) error {
-	return deductGachaCostAmount(player, pool.CostType, pool.CostAmount)
 }
 
 func deductGachaCostAmount(player *models.Player, costType string, amount float64) error {

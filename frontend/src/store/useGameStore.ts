@@ -804,8 +804,7 @@ interface GameState {
   redeemGiftCode: (code: string) => Promise<{ success: boolean; message: string } | null>;
   gachaPools: any[];
   fetchGachaPools: () => Promise<void>;
-  openGacha: (poolId: string) => Promise<{ success: boolean; message: string; reward?: any } | null>;
-  openGacha10: (poolId: string) => Promise<{ success: boolean; message: string; rewards?: any[] } | null>;
+  openGacha: (poolId: string, quantity?: number) => Promise<{ success: boolean; message: string; reward?: any; rewards?: any[] } | null>;
   rechargeWithStones: (stones: number) => Promise<{ success: boolean; message: string } | null>;
   clearStress: () => Promise<{ success: boolean; message: string } | null>;
   showChangelog: boolean;
@@ -980,7 +979,7 @@ interface GameState {
   donateSectStones: (amount: number) => Promise<boolean>;
   donateSectMaterials: (materialId: string, amount: number) => Promise<boolean>;
   donateSectGu: (guInstanceId: string) => Promise<boolean>;
-  buyFromSectVault: (itemType: string, itemId: string) => Promise<boolean>;
+  buyFromSectVault: (itemType: string, itemId: string, quantity?: number) => Promise<boolean>;
   fetchSectMissions: () => Promise<void>;
   acceptSectMission: (missionId: string) => Promise<boolean>;
   completeSectMission: (missionId: string) => Promise<boolean>;
@@ -2534,7 +2533,7 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
-  openGacha: async (poolId) => {
+  openGacha: async (poolId, quantity = 1) => {
     const { player, token, actionLoading, logout } = get();
     if (!player || !token || actionLoading) return null;
     set({ actionLoading: true, error: null });
@@ -2542,40 +2541,17 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/gacha/open`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pool_id: poolId }),
+        body: JSON.stringify({ pool_id: poolId, quantity }),
       });
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Mở Đá  thất bại."); }
       setPlayerFromServer(data.player);
       get().addLog(data.message || "Mở Đá  thành công!");
-      return { success: true, message: data.message, reward: data.reward };
+      return { success: true, message: data.message, reward: data.reward, rewards: data.rewards };
     } catch (err: any) {
       set({ error: err.message });
       get().addLog(`Mở Đá  lỗi: ${err.message}`);
-      return { success: false, message: err.message };
-    } finally { set({ actionLoading: false }); }
-  },
-
-  openGacha10: async (poolId) => {
-    const { player, token, actionLoading, logout } = get();
-    if (!player || !token || actionLoading) return null;
-    set({ actionLoading: true, error: null });
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/gacha/open10`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pool_id: poolId }),
-      });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
-      const data = await response.json();
-      if (!response.ok) { throw new Error(data.error || "Mở 10 cổ từ thất bại."); }
-      setPlayerFromServer(data.player);
-      get().addLog(data.message || "Mở 10 cổ từ thành công!");
-      return { success: true, message: data.message, rewards: data.rewards };
-    } catch (err: any) {
-      set({ error: err.message });
-      get().addLog(`Mở 10 cổ từ lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally { set({ actionLoading: false }); }
   },
@@ -4763,7 +4739,7 @@ export const useGameStore = create<GameState>((set, get) => {
     } finally { set({ actionLoading: false }); }
   },
 
-  buyFromSectVault: async (itemType: string, itemId: string) => {
+  buyFromSectVault: async (itemType: string, itemId: string, quantity = 1) => {
     const { token, actionLoading, logout } = get();
     if (!token || actionLoading) return false;
     set({ actionLoading: true, error: null });
@@ -4771,13 +4747,13 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/sects/vault/buy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ item_type: itemType, item_id: itemId }),
+        body: JSON.stringify({ item_type: itemType, item_id: itemId, quantity }),
       });
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Trao đổi vật phẩm thất bại.");
       get().addToast(data.message || "Trao đổi vật phẩm thành công!", "success");
-      get().addLog(data.message || `Đổi ${itemType}: ${itemId} từ bảo khố.`);
+      get().addLog(data.message || `Đổi ${itemType}: ${itemId} x${quantity} từ bảo khố.`);
       await get().fetchMySectStatus();
       await get().initializeSession();
       return true;

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Gift, Sparkles, Coins, Heart, Zap, Gem, Crown, X, ChevronRight, Star, Repeat, Clock } from "lucide-react";
+import { Gift, Sparkles, Coins, Heart, Zap, Gem, Crown, X, ChevronRight, Star, Repeat, Clock, Minus, Plus, Layers } from "lucide-react";
 import { useGameStore } from "@/store/useGameStore";
 
 const POOL_ICONS: Record<string, React.ReactNode> = {
@@ -22,12 +22,23 @@ const POOL_BTN: Record<string, string> = {
   van_menh_co_tu: "bg-purple-600 hover:bg-purple-500",
 };
 
+const QUICK_QTYS = [1, 10, 50, 100];
+
+interface GachaPoolShape {
+  id: string;
+  name: string;
+  description: string;
+  cost_type: string;
+  cost_amount: number;
+}
+
 export const GachaPanel: React.FC = () => {
-  const { gachaPools, fetchGachaPools, openGacha, openGacha10, actionLoading, addToast, player } = useGameStore();
+  const { gachaPools, fetchGachaPools, openGacha, actionLoading, player } = useGameStore();
   const [results, setResults] = useState<{ poolId: string; rewards: any[] } | null>(null);
   const [showAnim, setShowAnim] = useState(false);
   const [animIndex, setAnimIndex] = useState(0);
   const [animRewards, setAnimRewards] = useState<any[]>([]);
+  const [quantity, setQuantity] = useState<number>(1);
 
   useEffect(() => {
     fetchGachaPools();
@@ -44,15 +55,34 @@ export const GachaPanel: React.FC = () => {
     }
   }, [showAnim, animIndex, animRewards]);
 
-  const handleOpen = async (poolId: string, count: 1 | 10) => {
+  const clampQty = (n: number): number => Math.max(1, Math.min(100, Math.floor(n) || 1));
+
+  const handleOpen = async (poolId: string, count: number) => {
     if (actionLoading) return;
-    const result = count === 1 ? await openGacha(poolId) : await openGacha10(poolId);
+    const result = await openGacha(poolId, count);
     if (result?.success) {
       const rewards = "reward" in result && result.reward ? [result.reward] : ("rewards" in result ? (result.rewards || []) : []);
       setAnimRewards(rewards);
       setAnimIndex(0);
       setShowAnim(true);
     }
+  };
+
+  const totalCost = (pool: GachaPoolShape): number => {
+    const base = pool.cost_amount * quantity;
+    return quantity >= 10 ? Math.floor(base * 0.9) : Math.floor(base);
+  };
+
+  const costLabel = (pool: GachaPoolShape): string => {
+    const v = totalCost(pool);
+    return pool.cost_type === "primeval_stones" ? `${v.toLocaleString()} Nguyên Thạch` : `${v} năm Thọ Nguyên`;
+  };
+
+  const canAfford = (pool: GachaPoolShape): boolean => {
+    const v = totalCost(pool);
+    return pool.cost_type === "primeval_stones"
+      ? (player?.primeval_stones || 0) >= v
+      : (player?.lifespan || 0) >= v;
   };
 
   const renderRewardIcon = (r: any) => {
@@ -73,15 +103,17 @@ export const GachaPanel: React.FC = () => {
   };
 
   if (showAnim) {
+    const shown = animRewards.slice(0, 20);
+    const hiddenCount = animRewards.length - shown.length;
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => { setShowAnim(false); setResults(null); }}>
         <div className="max-w-lg w-full mx-4" onClick={e => e.stopPropagation()}>
           <div className="text-center mb-6">
-            <h3 className="text-lg font-bold font-serif text-amber-400 animate-pulse">Mở Đá </h3>
-            <div className="text-[10px] text-zinc-500 font-mono mt-1">{animIndex}/{animRewards.length}</div>
+            <h3 className="text-lg font-bold font-serif text-amber-400 animate-pulse">Mở Đá</h3>
+            <div className="text-[10px] text-zinc-500 font-mono mt-1">{Math.min(animIndex, shown.length)}/{animRewards.length} lần</div>
           </div>
           <div className="grid grid-cols-5 gap-3 justify-items-center">
-            {animRewards.map((r, i) => (
+            {shown.map((r, i) => (
               <div
                 key={i}
                 className={`w-full aspect-square rounded-2xl border-2 flex flex-col items-center justify-center gap-1 p-1 transition-all duration-500 ${i < animIndex ? rarityClass(r) : "bg-zinc-950/80 border-zinc-800/40 opacity-30"}`}
@@ -98,7 +130,12 @@ export const GachaPanel: React.FC = () => {
               </div>
             ))}
           </div>
-          {animIndex >= animRewards.length && (
+          {hiddenCount > 0 && (
+            <div className="text-center mt-3 text-[10px] text-zinc-500 font-mono">
+              ... và {hiddenCount} lần mở khác
+            </div>
+          )}
+          {animIndex >= shown.length && (
             <div className="text-center mt-4 text-emerald-400 text-xs font-mono font-bold animate-fade-in">
               ✦ Nhận thưởng thành công! ✦
             </div>
@@ -119,39 +156,87 @@ export const GachaPanel: React.FC = () => {
       {gachaPools.length === 0 ? (
         <div className="text-center py-10 text-zinc-600 italic text-xs">Đang tải...</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {gachaPools.map((pool: any) => (
-            <div key={pool.id} className={`bg-gradient-to-br ${POOL_COLORS[pool.id] || "from-zinc-800/50 to-zinc-900/50"} rounded-2xl border p-4 flex flex-col gap-3`}>
-              <div className="flex items-center gap-2">
-                {POOL_ICONS[pool.id] || <Gift className="w-5 h-5 text-zinc-400" />}
-                <div>
-                  <div className="text-xs font-bold text-zinc-100">{pool.name}</div>
-                  <div className="text-[9px] text-zinc-500 font-mono">
-                    {pool.cost_type === "primeval_stones" ? `${pool.cost_amount.toLocaleString()} Nguyên Thạch` : `${pool.cost_amount} năm Thọ Nguyên`}
+        <>
+          {/* Quantity selector */}
+          <div className="bg-zinc-900/30 border border-zinc-800/60 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-amber-400" />
+              <span className="text-xs font-serif font-bold text-zinc-300">Số lần mở</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setQuantity((q) => clampQty(q - 1))}
+                className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center cursor-pointer transition-colors"
+              >
+                <Minus className="w-4 h-4" />
+              </button>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={quantity}
+                onChange={(e) => setQuantity(clampQty(parseInt(e.target.value) || 1))}
+                className="w-20 h-8 bg-zinc-950 border border-zinc-800 rounded-lg text-center text-sm font-mono font-bold text-amber-400 outline-none focus:border-amber-600"
+              />
+              <button
+                onClick={() => setQuantity((q) => clampQty(q + 1))}
+                className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center cursor-pointer transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {QUICK_QTYS.map((q) => (
+                <button
+                  key={q}
+                  onClick={() => setQuantity(q)}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer ${quantity === q ? "bg-amber-600 text-white" : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"}`}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+            {quantity >= 10 && (
+              <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded-lg">
+                -10% chi phí
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {gachaPools.map((pool: GachaPoolShape) => (
+              <div key={pool.id} className={`bg-gradient-to-br ${POOL_COLORS[pool.id] || "from-zinc-800/50 to-zinc-900/50"} rounded-2xl border p-4 flex flex-col gap-3`}>
+                <div className="flex items-center gap-2">
+                  {POOL_ICONS[pool.id] || <Gift className="w-5 h-5 text-zinc-400" />}
+                  <div>
+                    <div className="text-xs font-bold text-zinc-100">{pool.name}</div>
+                    <div className="text-[9px] text-zinc-500 font-mono">
+                      {pool.cost_type === "primeval_stones" ? `${pool.cost_amount.toLocaleString()} Nguyên Thạch / lần` : `${pool.cost_amount} năm Thọ Nguyên / lần`}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="text-[10px] text-zinc-400 leading-relaxed min-h-[40px]">{pool.description}</div>
-              <div className="flex gap-2 mt-auto">
+                <div className="text-[10px] text-zinc-400 leading-relaxed min-h-[40px]">{pool.description}</div>
+
+                <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/60 rounded-xl px-3 py-2">
+                  <span className="text-[9px] text-zinc-500 font-mono">Tổng chi phí</span>
+                  <span className="text-[10px] font-mono font-bold text-yellow-500">{costLabel(pool)}</span>
+                </div>
+
                 <button
-                  disabled={actionLoading}
-                  onClick={() => handleOpen(pool.id, 1)}
-                  className={`flex-1 py-2 ${POOL_BTN[pool.id] || "bg-amber-600 hover:bg-amber-500"} disabled:opacity-50 text-white rounded-xl text-[10px] font-bold font-mono cursor-pointer transition-all`}
+                  disabled={actionLoading || !canAfford(pool)}
+                  onClick={() => handleOpen(pool.id, quantity)}
+                  className={`w-full py-2.5 ${POOL_BTN[pool.id] || "bg-amber-600 hover:bg-amber-500"} disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-[11px] font-bold font-mono cursor-pointer transition-all flex items-center justify-center gap-1.5`}
                 >
-                  Mở 1
+                  <Repeat className="w-3 h-3" />
+                  {quantity > 1 ? `Mở ${quantity} lần` : "Mở 1"}
                 </button>
-                <button
-                  disabled={actionLoading}
-                  onClick={() => handleOpen(pool.id, 10)}
-                  className={`flex-1 py-2 ${POOL_BTN[pool.id] || "bg-amber-600 hover:bg-amber-500"} disabled:opacity-50 text-white rounded-xl text-[10px] font-bold font-mono cursor-pointer transition-all flex items-center justify-center gap-1`}
-                >
-                  <Repeat className="w-3 h-3" />Mở 10
-                  <span className="text-[8px] opacity-70">-10%</span>
-                </button>
+                {!canAfford(pool) && (
+                  <span className="text-[9px] text-red-400/80 font-mono text-center">Không đủ tài nguyên</span>
+                )}
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

@@ -89,6 +89,40 @@ export const SectView: React.FC = () => {
 
   // Vault state
   const [vaultTab, setVaultTab] = useState<"gu" | "material" | "recipe">("gu");
+  const [buyQtys, setBuyQtys] = useState<Record<string, number>>({});
+
+  const getBuyQty = (key: string): number => buyQtys[key] || 1;
+  const setBuyQty = (key: string, n: number): void => {
+    const v = Math.max(1, Math.min(100, Math.floor(n) || 1));
+    setBuyQtys((prev) => ({ ...prev, [key]: v }));
+  };
+
+  const renderQtyStepper = (key: string, max?: number) => (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => setBuyQty(key, getBuyQty(key) - 1)}
+        disabled={getBuyQty(key) <= 1}
+        className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 flex items-center justify-center cursor-pointer transition-colors text-sm font-bold"
+      >
+        −
+      </button>
+      <input
+        type="number"
+        min={1}
+        max={max ?? 100}
+        value={getBuyQty(key)}
+        onChange={(e) => setBuyQty(key, parseInt(e.target.value) || 1)}
+        className="w-14 h-7 bg-zinc-950 border border-zinc-800 rounded-lg text-center text-xs font-mono font-bold text-amber-400 outline-none focus:border-amber-600"
+      />
+      <button
+        onClick={() => setBuyQty(key, getBuyQty(key) + 1)}
+        disabled={max !== undefined && getBuyQty(key) >= max}
+        className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 flex items-center justify-center cursor-pointer transition-colors text-sm font-bold"
+      >
+        +
+      </button>
+    </div>
+  );
 
   // Donation state
   const [donateType, setDonateType] = useState<"stones" | "materials" | "gu">("stones");
@@ -1262,7 +1296,11 @@ export const SectView: React.FC = () => {
                     return sorted.map((vg: any) => {
                       const spec = guDictionary[vg.id];
                       const outOfStock = vg.quantity !== undefined && vg.quantity <= 0;
-                      const unaffordable = (member?.contribution_points || 0) < vg.cost;
+                      const qtyKey = `gu-${vg.id}`;
+                      const qty = getBuyQty(qtyKey);
+                      const maxQty = vg.quantity !== undefined ? vg.quantity : 1;
+                      const totalCost = vg.cost * qty;
+                      const unaffordable = (member?.contribution_points || 0) < totalCost;
                       return (
                         <div
                           key={vg.id}
@@ -1281,18 +1319,25 @@ export const SectView: React.FC = () => {
                           </div>
 
                           <div className="flex flex-col items-end gap-2 shrink-0">
-                            <div className="text-right">
-                              <span className="text-[9px] text-zinc-500 font-mono block">Cống hiến cần</span>
-                              <span className="text-xs font-mono font-bold text-yellow-500">{vg.cost} Pts</span>
-                            </div>
+                            {!outOfStock && (
+                              <div className="flex items-center gap-2">
+                                {renderQtyStepper(qtyKey, maxQty)}
+                                <div className="text-right">
+                                  <span className="text-[9px] text-zinc-500 font-mono block">Cống hiến cần</span>
+                                  <span className="text-xs font-mono font-bold text-yellow-500">
+                                    {qty > 1 ? `${totalCost} Pts` : `${vg.cost} Pts`}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
                             <button
                               onClick={async () => {
-                                await buyFromSectVault("gu", vg.id);
+                                await buyFromSectVault("gu", vg.id, qty);
                               }}
                               disabled={unaffordable || outOfStock || actionLoading}
                               className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-950 disabled:border-zinc-900 disabled:text-zinc-600 disabled:opacity-50 text-white font-semibold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
                             >
-                              {outOfStock ? "Hết Hàng" : "Đổi Cổ"}
+                              {outOfStock ? "Hết Hàng" : qty > 1 ? `Đổi ${qty} Cổ` : "Đổi Cổ"}
                             </button>
                           </div>
                         </div>
@@ -1311,7 +1356,10 @@ export const SectView: React.FC = () => {
                   Object.entries(sect.vault_materials).map(([matId, qty]) => {
                     const spec = itemDictionary[matId];
                     const cost = getVaultCost(getItemBasePrice(matId));
-                    const unaffordable = (member?.contribution_points || 0) < cost;
+                    const qtyKey = `material-${matId}`;
+                    const buyQty = getBuyQty(qtyKey);
+                    const totalCost = cost * buyQty;
+                    const unaffordable = (member?.contribution_points || 0) < totalCost;
 
                     return (
                       <div
@@ -1331,18 +1379,25 @@ export const SectView: React.FC = () => {
                         </div>
 
                         <div className="flex flex-col items-end gap-2 shrink-0">
-                          <div className="text-right">
-                            <span className="text-[9px] text-zinc-500 font-mono block">Cống hiến cần</span>
-                            <span className="text-xs font-mono font-bold text-yellow-500">{cost} Pts</span>
-                          </div>
+                          {qty > 0 && (
+                            <div className="flex items-center gap-2">
+                              {renderQtyStepper(qtyKey, qty)}
+                              <div className="text-right">
+                                <span className="text-[9px] text-zinc-500 font-mono block">Cống hiến cần</span>
+                                <span className="text-xs font-mono font-bold text-yellow-500">
+                                  {buyQty > 1 ? `${totalCost} Pts` : `${cost} Pts`}
+                                </span>
+                              </div>
+                            </div>
+                          )}
                           <button
                             onClick={async () => {
-                              await buyFromSectVault("material", matId);
+                              await buyFromSectVault("material", matId, buyQty);
                             }}
                             disabled={unaffordable || qty <= 0 || actionLoading}
                             className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-950 disabled:border-zinc-900 disabled:text-zinc-600 disabled:opacity-50 text-white font-semibold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
                           >
-                            Đổi Linh Tài
+                            {qty <= 0 ? "Hết Hàng" : buyQty > 1 ? `Đổi ${buyQty} Linh Tài` : "Đổi Linh Tài"}
                           </button>
                         </div>
                       </div>
