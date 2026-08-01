@@ -324,7 +324,7 @@ export const ImmortalApertureView: React.FC = () => {
   //continue from activeGus, filter out only those that are in guDictionary and have effect active
   const activeGusWithEffect = activeGus.filter((gu) => {
     const spec = guDictionary[gu.gu_id];
-    return spec && spec.effects && spec.effects.active && spec.effects.active.length > 0;
+    return spec && spec.effects && spec.effects.active && Object.keys(spec.effects.active).length > 0;
   });
 
   // Helper to check for path conflict with other nodes

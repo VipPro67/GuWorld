@@ -75,8 +75,9 @@ export const GlobalChatOverlay: React.FC = () => {
   const handleReply = (username: string) => {
     setChatInput((prev) => {
       const mention = `@${username} `;
-      if (prev.includes(mention)) return prev;
-      return mention + prev;
+      if (prev.includes(`@${username}`)) return prev;
+      if (!prev.trim()) return mention;
+      return prev.endsWith(" ") ? prev + mention : prev + " " + mention;
     });
     if (inputRef.current) {
       inputRef.current.focus();
