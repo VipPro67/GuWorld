@@ -556,24 +556,39 @@ export const SectView: React.FC = () => {
                   >
                     Hủy
                   </button>
-                  <button
-                    onClick={async () => {
-                      const ok = await joinSect(sect.id);
-                      if (ok) setSelectedSectId(null);
-                    }}
-                    disabled={actionLoading || mySectStatus?.has_pending_join}
-                    className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50 border border-transparent text-white rounded-xl font-semibold shadow-lg shadow-blue-500/20 hover:shadow-blue-500/35 transition-all text-sm cursor-pointer"
-                  >
-                    {actionLoading
-                      ? "Đang gia nhập..."
-                      : mySectStatus?.has_pending_join
-                        ? mySectStatus.pending_sect_id === sect.id
-                          ? "Đang Chờ Duyệt..."
-                          : "Đã Đăng Ký Phái Khác"
-                        : sect.require_approval
-                          ? "Xin Gia Nhập (Cần duyệt)"
-                          : "Gia Nhập Môn Phái"}
-                  </button>
+                  {mySectStatus?.has_pending_join && mySectStatus.pending_sect_id === sect.id ? (
+                    <button
+                      onClick={async () => {
+                        if (await showConfirm("Đạo hữu có chắc chắn muốn hủy đơn xin gia nhập tông môn này?")) {
+                          const ok = await cancelSectJoinRequest();
+                          if (ok) setSelectedSectId(null);
+                        }
+                      }}
+                      disabled={actionLoading}
+                      className="px-6 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50 border border-transparent text-white rounded-xl font-semibold shadow-lg shadow-red-500/20 hover:shadow-red-500/35 transition-all text-sm cursor-pointer"
+                    >
+                      {actionLoading ? "Đang hủy đơn..." : "Hủy Đơn Xin"}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        const ok = await joinSect(sect.id);
+                        if (ok) setSelectedSectId(null);
+                      }}
+                      disabled={actionLoading || mySectStatus?.has_pending_join}
+                      className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50 border border-transparent text-white rounded-xl font-semibold shadow-lg shadow-blue-500/20 hover:shadow-blue-500/35 transition-all text-sm cursor-pointer"
+                    >
+                      {actionLoading
+                        ? "Đang gia nhập..."
+                        : mySectStatus?.has_pending_join
+                          ? mySectStatus.pending_sect_id === sect.id
+                            ? "Đang Chờ Duyệt..."
+                            : "Đã Đăng Ký Phái Khác"
+                          : sect.require_approval
+                            ? "Xin Gia Nhập (Cần duyệt)"
+                            : "Gia Nhập Môn Phái"}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
