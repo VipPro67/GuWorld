@@ -32,6 +32,9 @@ Wiki này phản ánh các hệ thống đã có trong codebase hiện tại.
 - **Thất bại:** Nhân Khí về 0, tu vi phế bỏ rơi về Rank 1 SubRank 1, mất hết tiến độ phá vách.
 - Cổ Tiên có tiên khiếu, đạo ngân, tiên nguyên/tài nguyên riêng.
 - Tai kiếp có worker kiểm tra tự động mỗi 60 giây. Khi năm nội bộ đạt mốc tiếp theo, worker spawn kiếp và resolve.
+- **Quái tai kiếp không phá hủy trực tiếp mỏ tài nguyên.** Khi tiếp cận node tài nguyên, mỗi minion mỗi nhát làm giảm `hp` mỏ theo loại kiếp: Địa Tai -1, Thiên Kiếp -2, Hạo Kiếp -4, Vạn Kiếp -8, Hỗn Độn Đại Nạn -16. Boss di chuyển quanh quẩn và đánh mỏ với sát thương gấp đôi minion.
+- **Combat tai kiếp hỗ trợ buff từ Cổ đang trang bị:** hiệu ứng `damage` (sát thương), `damage_multiplier` (nhân sát thương), `defense`/`shield_flat` (tạo Khiên hộ thể hấp thụ phản chấn), `heal`/`heal_flat` (hồi HP, tối đa bằng `base_hp`).
+- **Player chỉ được công kích khi HP Tiên Khiếu > 20% max HP.** Nếu Tiên Khiếu nguy cấp (≤ 20%), đạo hữu không thể ra tay — quái sẽ tiếp tục càn quét mỏ trong sự bất lực; hãy chờ Tiên Khiếu hồi phục hoặc kết toán vượt kiếp.
 - **Kiếp nạn theo cấp bậc:**
   - Rank 6: Địa Tai (10 năm), Thiên Kiếp (100 năm)
   - Rank 7: Địa Tai (10 năm), Thiên Kiếp (50 năm), Hạo Kiếp (100 năm)

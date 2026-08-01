@@ -144,12 +144,22 @@ func AttackTribulationEnemy(c *gin.Context) {
 		return
 	}
 
+	// 1b. Player may only fight back while the Aperture is above 20% max HP
+	var apHP, apMaxHP int
+	err = tx.QueryRow(`
+		SELECT aperture_hp, max_aperture_hp FROM immortal_apertures WHERE id = $1
+	`, apertureID).Scan(&apHP, &apMaxHP)
+	if err == nil && apHP*5 <= apMaxHP {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Khiếu đang nguy cấp (HP ≤ 20%)! Quái tai kiếp đang càn quét, đạo hữu không thể ra tay. Hãy chờ Tiên Khiếu hồi phục hoặc kết toán vượt kiếp."})
+		return
+	}
+
 	// 2. Fetch Player stats
 	var player models.Player
 	err = tx.QueryRow(`
-		SELECT id, username, current_mana, max_mana, hp, base_hp, primeval_stones, `+db.GuInventoryAggregate("players.id")+`
+		SELECT id, username, rank, current_mana, max_mana, hp, base_hp, primeval_stones, `+db.GuInventoryAggregate("players.id")+`
 		FROM players WHERE id = $1
-	`, playerID).Scan(&player.ID, &player.Username, &player.CurrentMana, &player.MaxMana, &player.HP, &player.BaseHP, &player.PrimevalStones, &player.GuInventory)
+	`, playerID).Scan(&player.ID, &player.Username, &player.Rank, &player.CurrentMana, &player.MaxMana, &player.HP, &player.BaseHP, &player.PrimevalStones, &player.GuInventory)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy thông tin cổ sư"})
 		return
@@ -201,6 +211,10 @@ func AttackTribulationEnemy(c *gin.Context) {
 	if d, hasDmg := activeEffects["damage"]; hasDmg {
 		baseDmg = d
 	}
+	dmgMult := 1.0
+	if m, hasMult := activeEffects["damage_multiplier"]; hasMult {
+		dmgMult = m
+	}
 
 	// Fetch Dao Mark Multiplier
 	var daoJSON []byte
@@ -227,7 +241,7 @@ func AttackTribulationEnemy(c *gin.Context) {
 		}
 	}
 
-	finalDmg := baseDmg * daoMultiplier
+	finalDmg := baseDmg * daoMultiplier * dmgMult
 	netDmg := int(finalDmg) - en.Defense
 	if netDmg < 10 {
 		netDmg = 10
@@ -239,7 +253,21 @@ func AttackTribulationEnemy(c *gin.Context) {
 		en.IsDead = true
 	}
 
-	// 5. Enemy Counter-attacks! (Damages player HP and Aperture HP)
+	// 5. Player self-buffs from the Gu: heal, then raise a shield
+	healVal, hasHeal := activeEffects["heal"]
+	if hasHeal && healVal > 0 {
+		player.HP += healVal
+		if player.HP > player.BaseHP {
+			player.HP = player.BaseHP
+		}
+	}
+	shieldVal, hasShield := activeEffects["defense"]
+	shield := 0.0
+	if hasShield && shieldVal > 0 {
+		shield = shieldVal
+	}
+
+	// 6. Enemy Counter-attacks! (Damages player HP and Aperture HP)
 	counterDmg := en.Attack
 	if en.IsBoss {
 		counterDmg = en.Attack * 2
@@ -249,24 +277,24 @@ func AttackTribulationEnemy(c *gin.Context) {
 	if player.Rank >= 6 {
 		playerHpDmg = float64(counterDmg) / 1000.0 // Protected by Dao Marks
 	}
+	absorbed := 0.0
+	if shield > 0 {
+		absorbed = math.Min(shield, playerHpDmg)
+		shield -= absorbed
+		playerHpDmg -= absorbed
+	}
 	player.HP -= playerHpDmg
 	if player.HP <= 0 {
 		player.HP = 1.0 // Prevent instant death in normal mode
 	}
 
-	var apHP, apMaxHP int
-	err = tx.QueryRow(`
-		SELECT aperture_hp, max_aperture_hp FROM immortal_apertures WHERE id = $1
-	`, apertureID).Scan(&apHP, &apMaxHP)
-	if err == nil {
-		newApHP := apHP - counterDmg
-		if newApHP < 0 {
-			newApHP = 0
-		}
-		_, _ = tx.Exec(`UPDATE immortal_apertures SET aperture_hp = $1 WHERE id = $2`, newApHP, apertureID)
+	newApHP := apHP - counterDmg
+	if newApHP < 0 {
+		newApHP = 0
 	}
+	_, _ = tx.Exec(`UPDATE immortal_apertures SET aperture_hp = $1 WHERE id = $2`, newApHP, apertureID)
 
-	// 6. Update Database State
+	// 7. Update Database State
 	player.CurrentMana -= manaCost
 	_, err = tx.Exec(`
 		UPDATE players
@@ -294,16 +322,30 @@ func AttackTribulationEnemy(c *gin.Context) {
 	}
 
 	// Formulate log message
-	combatLog := fmt.Sprintf("Thi triển %s: Đạo hữu gây %d sát thương lên %s (Đạo Ngân buff x%.1f). Gánh chịu phản chấn %d sát thương lên cơ thể và Tiên Khiếu.", spec.Name, netDmg, en.Name, daoMultiplier, counterDmg)
+	combatLog := fmt.Sprintf("Thi triển %s: Đạo hữu gây %d sát thương lên %s (Đạo Ngân buff x%.1f)", spec.Name, netDmg, en.Name, daoMultiplier)
+	if dmgMult != 1.0 {
+		combatLog += fmt.Sprintf(", sát thương nhân x%.1f", dmgMult)
+	}
+	if hasHeal && healVal > 0 {
+		combatLog += fmt.Sprintf(". Hồi phục %.0f HP", healVal)
+	}
+	if hasShield && shieldVal > 0 {
+		combatLog += fmt.Sprintf(". Tạo Khiên hộ thể %.0f điểm", shieldVal)
+	}
+	if absorbed > 0 {
+		combatLog += fmt.Sprintf(". Khiên hấp thụ %.0f sát thương phản chấn", absorbed)
+	}
+	combatLog += fmt.Sprintf(". Gánh chịu %d sát thương lên Tiên Khiếu", counterDmg)
 	if en.IsDead {
 		combatLog += fmt.Sprintf(" Kẻ địch %s đã bị tiêu diệt hoàn toàn!", en.Name)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":     combatLog,
-		"enemy_hp":    en.HP,
-		"player_hp":   player.HP,
-		"player_mana": player.CurrentMana,
+		"message":       combatLog,
+		"enemy_hp":      en.HP,
+		"player_hp":     player.HP,
+		"player_shield": shield,
+		"player_mana":   player.CurrentMana,
 	})
 }
 
@@ -411,8 +453,8 @@ func ResolveTribulation(c *gin.Context) {
 		}
 	}
 
-	if remainingEnemies == 0 && ap.ApertureHP > 0 {
-		// Clear Victory!
+	if remainingEnemies == 0 {
+		// Clear Victory! All enemies defeated = guaranteed success
 		rewards := distributeDaoMarks(ev.Path, ev.RewardDaoMarks)
 		err = addMultipleDaoMarksTx(tx, playerID.String(), rewards)
 		if err != nil {
@@ -470,7 +512,10 @@ func ResolveTribulation(c *gin.Context) {
 		if win {
 			reducedReward := ev.RewardDaoMarks / 2
 			rewards := distributeDaoMarks(ev.Path, reducedReward)
-			_ = addMultipleDaoMarksTx(tx, playerID.String(), rewards)
+			if err := addMultipleDaoMarksTx(tx, playerID.String(), rewards); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Đạo Ngân: " + err.Error()})
+				return
+			}
 
 			handleSuccess(ev.TribulationType)
 			ap.ApertureHP = ap.MaxApertureHP / 2
@@ -713,10 +758,10 @@ func CheckAndTriggerTribulations() error {
 		EssenceProductionPerYear int
 		RankStartYear            float64
 		EarthCalamityCount       int
-		HeavenlyTribulationCount  int
-		GrandTribulationCount     int
-		MyriadTribulationCount    int
-		ChaosCalamityCount        int
+		HeavenlyTribulationCount int
+		GrandTribulationCount    int
+		MyriadTribulationCount   int
+		ChaosCalamityCount       int
 	}
 
 	apertures := []ApertureCheck{}
@@ -960,7 +1005,7 @@ func CheckAndTriggerTribulations() error {
 			typesToInc := []string{}
 			for _, tc := range models.GetTribulationTypesForRank(rank) {
 				ty := tc.Interval * float64(models.GetTribTypeCount(&models.ImmortalAperture{
-					EarthCalamityCount:      ap.EarthCalamityCount,
+					EarthCalamityCount:       ap.EarthCalamityCount,
 					HeavenlyTribulationCount: ap.HeavenlyTribulationCount,
 					GrandTribulationCount:    ap.GrandTribulationCount,
 					MyriadTribulationCount:   ap.MyriadTribulationCount,
@@ -1312,7 +1357,7 @@ func ProcessActiveTribulationGrid() error {
 
 	// 1. Fetch all active tribulation events
 	rows, err := tx.Query(`
-		SELECT id, aperture_id, player_id 
+		SELECT id, aperture_id, player_id, tribulation_type
 		FROM tribulation_events 
 		WHERE status = 'ACTIVE'
 	`)
@@ -1322,23 +1367,37 @@ func ProcessActiveTribulationGrid() error {
 	defer rows.Close()
 
 	type ActiveEvent struct {
-		EventID    string
-		ApertureID string
-		PlayerID   string
+		EventID         string
+		ApertureID      string
+		PlayerID        string
+		TribulationType string
 	}
 	var events []ActiveEvent
 	for rows.Next() {
 		var ev ActiveEvent
-		if err := rows.Scan(&ev.EventID, &ev.ApertureID, &ev.PlayerID); err == nil {
+		if err := rows.Scan(&ev.EventID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType); err == nil {
 			events = append(events, ev)
 		}
 	}
 	rows.Close()
 
 	for _, ev := range events {
+		// Fixed node damage per hit, based on tribulation type
+		nodeDmgPerHit := 1 // EARTH_CALAMITY
+		switch ev.TribulationType {
+		case "HEAVENLY_TRIBULATION":
+			nodeDmgPerHit = 2
+		case "GRAND_TRIBULATION":
+			nodeDmgPerHit = 4
+		case "MYRIAD_TRIBULATION":
+			nodeDmgPerHit = 8
+		case "CHAOS_CALAMITY":
+			nodeDmgPerHit = 16
+		}
+
 		// Fetch living enemies
 		enRows, err := tx.Query(`
-			SELECT id, name, x, y, attack 
+			SELECT id, name, enemy_type, x, y 
 			FROM tribulation_enemies 
 			WHERE event_id = $1 AND is_dead = false
 		`, ev.EventID)
@@ -1347,18 +1406,24 @@ func ProcessActiveTribulationGrid() error {
 		}
 
 		type TEnemy struct {
-			ID     string
-			Name   string
-			X      int
-			Y      int
-			Attack int
+			ID        string
+			Name      string
+			EnemyType string
+			X         int
+			Y         int
+			NodeDmg   int
 		}
 		var enemies []TEnemy
 		for enRows.Next() {
 			var en TEnemy
-			if err := enRows.Scan(&en.ID, &en.Name, &en.X, &en.Y, &en.Attack); err != nil {
+			if err := enRows.Scan(&en.ID, &en.Name, &en.EnemyType, &en.X, &en.Y); err != nil {
 				enRows.Close()
 				return fmt.Errorf("failed to scan enemy row: %w", err)
+			}
+			// Minions chip away at the mine; the boss deals double the minion damage
+			en.NodeDmg = nodeDmgPerHit
+			if en.EnemyType == "BOSS" {
+				en.NodeDmg = nodeDmgPerHit * 2
 			}
 			enemies = append(enemies, en)
 		}
@@ -1397,7 +1462,41 @@ func ProcessActiveTribulationGrid() error {
 		nodeRows.Close()
 
 		if len(nodes) == 0 {
-			continue // No nodes to attack
+			// No nodes to attack: enemies wander around aimlessly
+			for _, en := range enemies {
+				dx, dy := 0, 0
+				switch rand.Intn(4) {
+				case 0:
+					dx = 1
+				case 1:
+					dx = -1
+				case 2:
+					dy = 1
+				case 3:
+					dy = -1
+				}
+				newX := en.X + dx
+				if newX < 0 {
+					newX = 0
+				} else if newX > 19 {
+					newX = 19
+				}
+				newY := en.Y + dy
+				if newY < 0 {
+					newY = 0
+				} else if newY > 19 {
+					newY = 19
+				}
+				_, err = tx.Exec(`
+					UPDATE tribulation_enemies 
+					SET x = $1, y = $2, updated_at = NOW() 
+					WHERE id = $3
+				`, newX, newY, en.ID)
+				if err != nil {
+					return fmt.Errorf("failed to update enemy coordinates: %w", err)
+				}
+			}
+			continue
 		}
 
 		// Process each enemy
@@ -1439,7 +1538,7 @@ func ProcessActiveTribulationGrid() error {
 
 			if absDx <= 1 && absDy <= 1 {
 				// Enemy is adjacent or on top of the node, attack!
-				nearestNode.HP -= en.Attack
+				nearestNode.HP -= en.NodeDmg
 				isDestroyed := false
 				if nearestNode.HP <= 0 {
 					nearestNode.HP = 0
