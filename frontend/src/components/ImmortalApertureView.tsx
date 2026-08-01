@@ -919,7 +919,7 @@ export const ImmortalApertureView: React.FC = () => {
                     {/* Gu Select */}
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
-                        <label className="text-xs text-slate-300 font-bold">Chọn Cổ Trùng (Cho phép chọn nhiều)</label>
+                        <label className="text-xs text-slate-300 font-bold">Chọn Cổ Trùng</label>
                         {selectedGus.length > 0 && (
                           <button
                             onClick={() => setSelectedGus([])}
@@ -966,7 +966,7 @@ export const ImmortalApertureView: React.FC = () => {
                                   <div>
                                     <div className="font-bold">{spec.name}</div>
                                     <div className="text-[10px] text-slate-500">
-                                      Cấp: {spec.rank} | {spec.base_mana_cost} Chân Nguyên
+                                      Cấp: {spec.rank} | {spec.rank < 6 ? '' : spec.base_mana_cost + ' Tiên Nguyên'}
                                     </div>
                                   </div>
                                 </div>

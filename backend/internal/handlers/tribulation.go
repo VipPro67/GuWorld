@@ -203,7 +203,12 @@ func AttackTribulationEnemy(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đặc tính Cổ trùng %s không hợp lệ", fg.GuID)})
 			return
 		}
-		totalManaCost += spec.BaseManaCost
+		_, _, cost, errGu := CalculateGuEffect(&player, &spec)
+		if errGu == nil {
+			totalManaCost += cost
+		} else {
+			totalManaCost += spec.BaseManaCost
+		}
 		guSpecs = append(guSpecs, spec)
 	}
 
@@ -230,14 +235,6 @@ func AttackTribulationEnemy(c *gin.Context) {
 		return
 	}
 
-	// Fetch Dao Mark Multiplier once (could be different system/path for each Gu)
-	var daoJSON []byte
-	_ = tx.QueryRow(`SELECT COALESCE(dao_marks, '{}') FROM players WHERE id = $1`, playerID).Scan(&daoJSON)
-	daoMap := make(map[string]int)
-	if len(daoJSON) > 0 {
-		_ = json.Unmarshal(daoJSON, &daoMap)
-	}
-
 	// 4. Calculate Player Damage (augmented by Dao Marks) and other effects across all Gu
 	totalFinalDmg := 0.0
 	totalHeal := 0.0
@@ -246,46 +243,27 @@ func AttackTribulationEnemy(c *gin.Context) {
 
 	for _, spec := range guSpecs {
 		guNames = append(guNames, spec.Name)
+
+		dmg, def, _, errGu := CalculateGuEffect(&player, &spec)
+		if errGu == nil {
+			totalFinalDmg += dmg
+			totalShield += def
+		} else {
+			activeEffects := models.GetFlatGuEffects(spec)
+			baseDmg := 35.0
+			if d, hasDmg := activeEffects["damage"]; hasDmg {
+				baseDmg = d
+			}
+			totalFinalDmg += baseDmg
+			if shieldVal, hasShield := activeEffects["defense"]; hasShield && shieldVal > 0 {
+				totalShield += shieldVal
+			}
+		}
+
 		activeEffects := models.GetFlatGuEffects(spec)
-
-		baseDmg := 35.0
-		if d, hasDmg := activeEffects["damage"]; hasDmg {
-			baseDmg = d
-		}
-		dmgMult := 1.0
-		if m, hasMult := activeEffects["damage_multiplier"]; hasMult {
-			dmgMult = m
-		}
-
-		daoMultiplier := 1.0
-		for _, path := range spec.Path {
-			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-			daoAmount := daoMap[cleanPath]
-
-			mult := 1.0
-			if daoAmount > 0 {
-				if daoAmount <= 10000 {
-					mult = 1.0 + float64(daoAmount)/100.0
-				} else {
-					mult = 1.0 + 100.0 + float64(daoAmount-10000)/500.0
-				}
-			}
-			if mult > daoMultiplier {
-				daoMultiplier = mult
-			}
-		}
-
-		finalDmg := baseDmg * daoMultiplier * dmgMult
-		totalFinalDmg += finalDmg
-
 		healVal, hasHeal := activeEffects["heal"]
 		if hasHeal && healVal > 0 {
 			totalHeal += healVal
-		}
-
-		shieldVal, hasShield := activeEffects["defense"]
-		if hasShield && shieldVal > 0 {
-			totalShield += shieldVal
 		}
 	}
 
