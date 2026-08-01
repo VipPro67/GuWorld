@@ -18,6 +18,7 @@ interface GuInventoryProps {
   onSetVital?: (instanceId: string) => Promise<void>;
   onUseGu?: (instanceId: string) => Promise<void>;
   onDropGu?: (instanceId: string) => Promise<boolean>;
+  onDropGus?: (instanceIds: string[]) => Promise<boolean>;
 }
 
 const getPathColor = (path: string): string => {
@@ -67,7 +68,11 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   onSetVital,
   onUseGu,
   onDropGu,
+  onDropGus,
 }) => {
+  const [selectedGuIds, setSelectedGuIds] = useState<Record<string, boolean>>({});
+  const [isBatchMode, setIsBatchMode] = useState<boolean>(false);
+
   const [feedingId, setFeedingId] = useState<string | null>(null);
   const [feedingGroupGuId, setFeedingGroupGuId] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -186,6 +191,32 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   };
 
 
+  const handleBatchDrop = async () => {
+    const selectedIds = Object.keys(selectedGuIds).filter((id) => selectedGuIds[id]);
+    if (selectedIds.length === 0) {
+      useGameStore.getState().addToast("Đạo hữu chưa chọn Cổ trùng nào để thả.", "info");
+      return;
+    }
+    const confirmMsg = `Xác nhận phóng sinh (thả) ${selectedIds.length} Cổ trùng đã chọn? Hành động này không thể hoàn tác.`;
+    if (!(await useGameStore.getState().showConfirm(confirmMsg))) return;
+
+    setDroppingId("batch");
+    try {
+      if (onDropGus) {
+        await onDropGus(selectedIds);
+      }
+      setSelectedGuIds({});
+      setIsBatchMode(false);
+    } finally {
+      setDroppingId(null);
+    }
+  };
+
+  const isEligibleForDrop = (gu: GuInstance) => {
+    return !gu.is_vital && !gu.equipped;
+  };
+
+
   // Filter materials (only those with qty > 0 and matching searchTerm)
   const filteredMaterials = Object.keys(itemDictionary)
     .filter((key) => {
@@ -236,6 +267,26 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
     return matchesSearch && matchesPath && matchesRank;
   });
+
+  const eligibleGus = filteredGus.filter(isEligibleForDrop);
+  const selectedEligibleCount = eligibleGus.filter(g => selectedGuIds[g.instance_id]).length;
+  const isAllEligibleSelected = eligibleGus.length > 0 && selectedEligibleCount === eligibleGus.length;
+
+  const handleSelectAllToggle = () => {
+    if (isAllEligibleSelected) {
+      const newSelected = { ...selectedGuIds };
+      eligibleGus.forEach(g => {
+        newSelected[g.instance_id] = false;
+      });
+      setSelectedGuIds(newSelected);
+    } else {
+      const newSelected = { ...selectedGuIds };
+      eligibleGus.forEach(g => {
+        newSelected[g.instance_id] = true;
+      });
+      setSelectedGuIds(newSelected);
+    }
+  };
 
   const showMaterials = selectedTab === "material";
   const showGus = selectedTab === "gu";
@@ -457,9 +508,61 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
       {/* Gu Bug list section */}
       {showGus && (
         <div className="space-y-6 text-left">
-          <span className="text-[10px] font-mono text-zinc-505 uppercase tracking-widest block font-bold">
-            Cổ Trùng Sở Hữu ({filteredGus.length} / {guList.length} con)
-          </span>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-900 pb-3">
+            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest block font-bold">
+              Cổ Trùng Sở Hữu ({filteredGus.length} / {guList.length} con)
+            </span>
+
+            {onDropGus && filteredGus.length > 0 && (
+              <div className="flex items-center gap-2">
+                {isBatchMode ? (
+                  <>
+                    <label className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer font-mono select-none">
+                      <input
+                        type="checkbox"
+                        checked={isAllEligibleSelected}
+                        onChange={handleSelectAllToggle}
+                        className="rounded border-zinc-850 bg-zinc-950 text-amber-550 focus:ring-amber-500/50"
+                      />
+                      Chọn tất cả ({eligibleGus.length})
+                    </label>
+
+                    <button
+                      type="button"
+                      disabled={selectedEligibleCount === 0 || droppingId === "batch"}
+                      onClick={handleBatchDrop}
+                      className={`text-[10px] font-bold py-1 px-3 rounded-lg font-mono transition-all ${
+                        selectedEligibleCount > 0
+                          ? "bg-rose-600 text-white hover:bg-rose-500 cursor-pointer shadow-[0_0_8px_rgba(239,68,68,0.2)]"
+                          : "bg-zinc-900 text-zinc-600 border border-zinc-850 cursor-not-allowed"
+                      }`}
+                    >
+                      {droppingId === "batch" ? "Đang thả..." : `Thả Đã Chọn (${selectedEligibleCount})`}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedGuIds({});
+                        setIsBatchMode(false);
+                      }}
+                      className="text-[10px] font-medium py-1 px-2.5 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 hover:text-zinc-200 border border-zinc-800 rounded-lg font-mono transition-all cursor-pointer"
+                    >
+                      Hủy
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsBatchMode(true)}
+                    className="text-[10px] font-bold py-1 px-2.5 bg-amber-950/20 text-amber-400 border border-amber-900 hover:bg-amber-950/40 rounded-lg font-mono transition-all cursor-pointer"
+                  >
+                    🗑️ Thả Hàng Loạt
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
 
           {filteredGus.length === 0 ? (
             <div className="text-center py-6 border border-dashed border-zinc-900 rounded-2xl text-[10px] text-zinc-600 italic">
@@ -603,6 +706,24 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                     if (deadCount > 0) statusTextParts.push(`${deadCount} Đã Chết`);
                     const statusSummary = statusTextParts.join(", ");
 
+                    const eligibleGrpGus = instances.filter(isEligibleForDrop);
+                    const grpSelectedCount = eligibleGrpGus.filter(g => selectedGuIds[g.instance_id]).length;
+                    const isAllGrpSelected = eligibleGrpGus.length > 0 && grpSelectedCount === eligibleGrpGus.length;
+
+                    const handleGroupSelectToggle = () => {
+                      const newSelected = { ...selectedGuIds };
+                      if (isAllGrpSelected) {
+                        eligibleGrpGus.forEach(g => {
+                          newSelected[g.instance_id] = false;
+                        });
+                      } else {
+                        eligibleGrpGus.forEach(g => {
+                          newSelected[g.instance_id] = true;
+                        });
+                      }
+                      setSelectedGuIds(newSelected);
+                    };
+
                     return (
                       <div
                         key={groupKey}
@@ -611,6 +732,15 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         {/* Summary Header */}
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                           <div className="flex items-center gap-3 flex-wrap">
+                            {isBatchMode && eligibleGrpGus.length > 0 && (
+                              <input
+                                type="checkbox"
+                                checked={isAllGrpSelected}
+                                onChange={handleGroupSelectToggle}
+                                className="rounded border-zinc-800 bg-zinc-950 text-amber-550 focus:ring-amber-500/50 cursor-pointer mr-1"
+                                title="Chọn cả nhóm"
+                              />
+                            )}
                             <h4 className="text-sm font-bold text-zinc-100 font-serif flex items-center gap-2">
                               {spec.name}
                               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-405">
@@ -688,6 +818,27 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                 >
                                   {/* Info */}
                                   <div className="flex items-center gap-3 flex-wrap">
+                                    {isBatchMode && (
+                                      <input
+                                        type="checkbox"
+                                        disabled={!isEligibleForDrop(gu)}
+                                        checked={!!selectedGuIds[gu.instance_id]}
+                                        onChange={(e) => {
+                                          setSelectedGuIds((prev) => ({
+                                            ...prev,
+                                            [gu.instance_id]: e.target.checked,
+                                          }));
+                                        }}
+                                        className={`rounded border-zinc-800 bg-zinc-950 text-amber-550 focus:ring-amber-550/50 cursor-pointer ${
+                                          !isEligibleForDrop(gu) ? "opacity-30 cursor-not-allowed" : ""
+                                        }`}
+                                        title={
+                                          !isEligibleForDrop(gu)
+                                            ? "Không thể thả Bản Mệnh Cổ hoặc Cổ trùng đang xuất trận"
+                                            : "Chọn Cổ trùng"
+                                        }
+                                      />
+                                    )}
                                     <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-850">
                                       #{gu.instance_id.slice(0, 6)}
                                     </span>
@@ -809,7 +960,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                     {advancedOpen[gu.instance_id] && (
                                       <div className="w-full flex items-center gap-1.5 justify-end flex-wrap pt-1.5 mt-1.5 border-t border-zinc-900/60">
                                         {/* Drop */}
-                                        {onDropGu && !gu.is_vital && !gu.equipped && (
+                                        {onDropGu && !gu.is_vital && !gu.equipped && !isBatchMode && (
                                           <button
                                             type="button"
                                             disabled={actionLoading || droppingId === gu.instance_id}

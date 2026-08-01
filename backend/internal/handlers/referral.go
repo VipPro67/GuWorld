@@ -318,7 +318,7 @@ func GetReferralStats(c *gin.Context) {
 
 	// Fetch referrals stats
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT r.id, p.username, p.rank, r.referee_ip, r.is_suspicious, r.has_deposited, 
+		SELECT r.id, p.username, p.rank, r.is_suspicious, r.has_deposited, 
 		       r.milestone1_rewarded, r.milestone2_rewarded, r.milestone3_rewarded, r.created_at
 		FROM referrals r
 		JOIN players p ON r.referee_id = p.id
@@ -335,7 +335,6 @@ func GetReferralStats(c *gin.Context) {
 		ID                 uuid.UUID `json:"id"`
 		Username           string    `json:"username"`
 		Rank               int       `json:"rank"`
-		IP                 string    `json:"ip"`
 		IsSuspicious       bool      `json:"is_suspicious"`
 		HasDeposited       bool      `json:"has_deposited"`
 		Milestone1Rewarded bool      `json:"milestone1_rewarded"`
@@ -348,7 +347,7 @@ func GetReferralStats(c *gin.Context) {
 	for rows.Next() {
 		var r RefereeInfo
 		err := rows.Scan(
-			&r.ID, &r.Username, &r.Rank, &r.IP, &r.IsSuspicious, &r.HasDeposited,
+			&r.ID, &r.Username, &r.Rank, &r.IsSuspicious, &r.HasDeposited,
 			&r.Milestone1Rewarded, &r.Milestone2Rewarded, &r.Milestone3Rewarded, &r.CreatedAt,
 		)
 		if err != nil {

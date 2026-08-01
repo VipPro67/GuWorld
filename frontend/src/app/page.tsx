@@ -72,6 +72,7 @@ export default function Home() {
     setVitalGu,
     useGu,
     dropGu,
+    dropGus,
     executeCombatTurn,
     currentView,
     setView,
@@ -242,6 +243,7 @@ export default function Home() {
               onSetVital={setVitalGu}
               onUseGu={useGu}
               onDropGu={dropGu}
+              onDropGus={dropGus}
             />
           </div>
         ) : currentView === "explore" ? (

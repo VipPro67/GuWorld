@@ -851,6 +851,7 @@ interface GameState {
   movePlayer: (x: number, y: number, attackTargetId?: string) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
   fetchGrid: () => Promise<{ x: number; y: number; vision_radius: number; cells: any[]; explored_cells: string[]; stats: any; players_on_map?: any[] } | null>;
   dropGu: (instanceId: string) => Promise<boolean>;
+  dropGus: (instanceIds: string[]) => Promise<boolean>;
   buyShopItem: (itemId: string, quantity: number) => Promise<boolean>;
   sellShopItem: (itemId: string, quantity: number, itemType: "Gu" | "Material") => Promise<boolean>;
   marketplaceListings: any[];
@@ -3376,6 +3377,28 @@ export const useGameStore = create<GameState>((set, get) => {
     } catch (err: any) {
       set({ error: err.message });
       get().addLog(`Vứt Cổ thất bại: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+  dropGus: async (instanceIds) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/drop-batch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gu_instance_ids: instanceIds }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Vứt Cổ thất bại.");
+      setPlayerFromServer(data.player);
+      get().addLog(data.message || "Đã vứt Cổ trùng hàng loạt.");
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Vứt Cổ hàng loạt thất bại: ${err.message}`);
       return false;
     } finally { set({ actionLoading: false }); }
   },

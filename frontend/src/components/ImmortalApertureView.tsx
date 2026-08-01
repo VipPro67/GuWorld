@@ -971,7 +971,7 @@ export const ImmortalApertureView: React.FC = () => {
                                   <div>
                                     <div className="font-bold">{spec.name}</div>
                                     <div className="text-[10px] text-slate-500">
-                                      Cấp: {spec.rank} | {spec.rank < 6 ? '' : spec.base_mana_cost + manaName} | {spec.gu_type}
+                                      Cấp: {spec.rank} | {spec.rank < 6 ? '' : spec.base_mana_cost + ' ' + manaName}
                                     </div>
                                   </div>
                                 </div>

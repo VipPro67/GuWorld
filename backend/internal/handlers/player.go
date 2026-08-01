@@ -2523,6 +2523,95 @@ func DropGu(c *gin.Context) {
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Đã vứt bỏ Cổ trùng khỏi túi đồ."})
 }
 
+// DropGusRequest represents request payload to drop multiple Gu instances.
+type DropGusRequest struct {
+	GuInstanceIDs []string `json:"gu_instance_ids" binding:"required"`
+}
+
+// DropGus removes multiple owned Gus from inventory.
+func DropGus(c *gin.Context) {
+	var req DropGusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "gu_instance_ids is required"})
+		return
+	}
+	if len(req.GuInstanceIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Danh sách gu_instance_ids trống"})
+		return
+	}
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		return
+	}
+
+	dropMap := make(map[string]bool)
+	for _, id := range req.GuInstanceIDs {
+		dropMap[id] = true
+	}
+
+	foundCount := 0
+	for _, gu := range player.GuInventory {
+		if dropMap[gu.InstanceID] {
+			foundCount++
+			if gu.IsVital {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể vứt Bản Mệnh Cổ (%s)", gu.InstanceID)})
+				return
+			}
+		}
+	}
+
+	if foundCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Cổ trùng nào trong danh sách yêu cầu"})
+		return
+	}
+
+	newInv := models.GuInventory{}
+	for _, gu := range player.GuInventory {
+		if !dropMap[gu.InstanceID] {
+			newInv = append(newInv, gu)
+		}
+	}
+	player.GuInventory = newInv
+	player.EquippedGus = []string{}
+	for _, gu := range player.GuInventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
+		}
+	}
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gus"})
+		return
+	}
+	_, err = tx.Exec(`UPDATE players SET equipped_gus = $1 WHERE id = $2`, player.EquippedGus, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gus"})
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "gu.drop_batch", EntityType: "gu_instance",
+		RequestSummary: fmt.Sprintf("Vứt bỏ hàng loạt %d Cổ trùng khỏi túi đồ", len(req.GuInstanceIDs)),
+		IPAddress: c.ClientIP(), Success: true,
+	})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Đã vứt bỏ %d Cổ trùng khỏi túi đồ.", foundCount)})
+}
+
+
 // UseGuRequest represents request payload to use a consumable Gu
 type UseGuRequest struct {
 	GuInstanceID string `json:"gu_instance_id" binding:"required"`

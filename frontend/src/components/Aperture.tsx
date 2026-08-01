@@ -1114,7 +1114,6 @@ export const Aperture: React.FC<ApertureProps> = ({
                     <tr className="border-b border-zinc-800 text-zinc-500 uppercase tracking-wider text-[10px]">
                       <th className="py-2.5">Đạo hiệu</th>
                       <th className="py-2.5">Tu vi</th>
-                      <th className="py-2.5">IP/Thiết bị</th>
                       <th className="py-2.5 text-center">Trạng Thái</th>
                       <th className="py-2.5 text-right">Mốc Quà</th>
                     </tr>
@@ -1125,9 +1124,6 @@ export const Aperture: React.FC<ApertureProps> = ({
                         <tr key={referee.id} className="border-b border-zinc-900 hover:bg-zinc-950/20">
                           <td className="py-3 font-semibold text-zinc-200">{referee.username}</td>
                           <td className="py-3 text-amber-500">{RANK_NAMES[referee.rank] || `Chuyển ${referee.rank}`}</td>
-                          <td className="py-3 text-[10px] text-zinc-500">
-                            {referee.ip || "Không rõ"}
-                          </td>
                           <td className="py-3 text-center">
                             {referee.is_suspicious ? (
                               <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded text-[10px]">
@@ -1156,7 +1152,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={5} className="py-8 text-center text-zinc-500 italic">
+                        <td colSpan={4} className="py-8 text-center text-zinc-500 italic">
                           Chưa chiêu mộ được đệ tử nào. Hãy gửi liên kết sư đồ cho bằng hữu!
                         </td>
                       </tr>

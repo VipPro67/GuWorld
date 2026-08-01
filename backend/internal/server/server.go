@@ -275,6 +275,7 @@ func SetupRouter() *gin.Engine {
 			inventory.POST("/use-gu", handlers.UseConsumableGu)
 			inventory.POST("/use-support", handlers.UseSupportGu)
 			inventory.POST("/drop", handlers.DropGu)
+			inventory.POST("/drop-batch", handlers.DropGus)
 		}
 
 		// Protected Refining Endpoints
