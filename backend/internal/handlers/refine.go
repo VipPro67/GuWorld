@@ -383,6 +383,11 @@ func RefineGu(c *gin.Context) {
 
 		newInventory = append(newInventory, newGuInstance)
 		player.GuInventory = newInventory
+		if newGuInstance.Rank >= 6 {
+			message := fmt.Sprintf("Đạo hữu %s đã luyện chế thành công Cổ Trùng [%s] R%d!", player.Username, newGuInstance.GuID, newGuInstance.Rank)
+			_ = SendSystemMessage("world", sql.NullString{}, message)
+		}
+
 	} else {
 		statusStr = "failed"
 		isUniqueImmortalFail := statusMsg != ""
