@@ -4,14 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"math/rand"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-	pkgdb "github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -33,12 +29,44 @@ func StartHungerWorker(ctx context.Context, db *sql.DB, interval time.Duration) 
 	}()
 }
 
+// processHungerDecay depletes Gu hunger for every player. The heavy lifting is
+// done with set-based SQL over the normalized player_gu table (single pass,
+// no per-player transactions). Only the rare ON_TICK effects (Thien Nguyen Bao
+// Lien series, GU_CREATION_ORIGIN) are handled in Go, and only for the small
+// subset of players that actually own an equipped ACTIVE Gu with such effects.
 func processHungerDecay(db *sql.DB) {
-	// 1. Fetch all player IDs to process them individually in isolated transactions
-	rows, err := db.Query("SELECT id FROM players")
+	// 1. Find players who own an equipped ACTIVE Gu carrying ON_TICK effects.
+	subset := findOnTickPlayers(db)
+
+	// 2. Apply ON_TICK effects (HP / stones / immortal stones) BEFORE the SQL
+	//    decay pass so a Gu that starves this tick still produces its ON_TICK.
+	for _, pID := range subset {
+		if err := applyOnTickEffects(db, pID); err != nil {
+			logger.S.Errorf("Hunger Worker Error applying ON_TICK for player %s: %v", pID, err)
+		}
+	}
+
+	// 3. Set-based decay + starvation + HP backlash + audit log + equipped_gus.
+	if err := runHungerDecayBatch(db); err != nil {
+		logger.S.Errorf("Hunger Worker Error running decay batch: %v", err)
+	}
+}
+
+// findOnTickPlayers returns the player ids that own at least one equipped
+// ACTIVE Gu whose dictionary effects.other contains an ON_TICK trigger.
+func findOnTickPlayers(db *sql.DB) []string {
+	rows, err := db.Query(`
+		SELECT DISTINCT pg.player_id::text
+		FROM player_gu pg
+		JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank
+		WHERE pg.equipped AND pg.state = 'ACTIVE'
+		  AND EXISTS (
+			SELECT 1 FROM jsonb_array_elements(COALESCE(gd.effects->'other', '[]'::jsonb)) m
+			WHERE m->>'event_trigger' = 'ON_TICK'
+		  )`)
 	if err != nil {
-		logger.S.Errorf("Hunger Worker Error: failed to fetch player list: %v", err)
-		return
+		logger.S.Errorf("Hunger Worker Error: failed to query ON_TICK players: %v", err)
+		return nil
 	}
 	defer rows.Close()
 
@@ -49,221 +77,234 @@ func processHungerDecay(db *sql.DB) {
 			playerIDs = append(playerIDs, id)
 		}
 	}
-
-	// 2. Process each player's inventory
-	for _, pID := range playerIDs {
-		err := updatePlayerGuHunger(db, pID)
-		if err != nil {
-			logger.S.Errorf("Hunger Worker Error updating player %s: %v", pID, err)
-		}
-	}
+	return playerIDs
 }
 
-func updatePlayerGuHunger(db *sql.DB, playerID string) error {
-	pUUID, _ := uuid.Parse(playerID)
+// applyOnTickEffects handles the rare ON_TICK effects (HOT_TICK,
+// GENERATE_STONES_TICK, GENERATE_IMMORTAL_STONES_TICK) for a single player's
+// equipped ACTIVE Gus. It only updates player counters (hp / stones), never
+// hunger or Gu state.
+func applyOnTickEffects(db *sql.DB, playerID string) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	// Select and lock the row
-	var username string
-	var guInvRaw []byte
-	var hp float64
-	var eqRaw []byte
-	var tsm float64
-
+	var currentMana, maxMana, immortalStones float64
+	var primevalStones int
+	var playerRank int
+	var hp, baseHP float64
 	err = tx.QueryRow(`
-		SELECT username, `+pkgdb.GuInventoryAggregate("players.id")+`, hp, equipped_gus, time_speed_multiplier 
-		FROM players 
-		WHERE id = $1 
-		FOR UPDATE`, playerID).Scan(&username, &guInvRaw, &hp, &eqRaw, &tsm)
+		SELECT primeval_stones, current_mana, max_mana, immortal_stones, rank, hp, base_hp
+		FROM players WHERE id = $1`, playerID).Scan(
+		&primevalStones, &currentMana, &maxMana, &immortalStones, &playerRank, &hp, &baseHP)
 	if err != nil {
 		return err
 	}
 
-	var guInv models.GuInventory
-	if err := json.Unmarshal(guInvRaw, &guInv); err != nil {
-		return err
-	}
-
-	var equippedGus []string
-	if err := json.Unmarshal(eqRaw, &equippedGus); err != nil {
-		equippedGus = []string{}
-	}
-
-	// Also fetch stones, mana, rank for ON_TICK effects
-	var primevalStones int
-	var currentMana, maxMana, immortalStones float64
-	var playerRank int
-	_ = tx.QueryRow(`SELECT primeval_stones, current_mana, max_mana, immortal_stones, rank FROM players WHERE id = $1`, playerID).Scan(&primevalStones, &currentMana, &maxMana, &immortalStones, &playerRank)
-
-	updated := false
-	playerHPBacklash := 0.0
 	tickStones := 0
-	tickMana := 0.0
 	tickHP := 0.0
 	tickImmortalStones := 0.0
-	newInventory := models.GuInventory{} // never nil — marshals to [] not null
 
-	for i := range guInv {
-		gu := guInv[i]
-		if gu.Status == "ACTIVE" || gu.Status == "SLEEPING" {
-			specs, found := models.GetGuAny(gu.GuID)
-			if !found {
-				newInventory = append(newInventory, gu)
+	rows, err := tx.Query(`
+		SELECT pg.gu_id, pg.gu_rank, gd.effects->'other'
+		FROM player_gu pg
+		JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank
+		WHERE pg.player_id = $1 AND pg.equipped AND pg.state = 'ACTIVE'`, playerID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var guID string
+		var guRank int
+		var otherRaw []byte
+		if err := rows.Scan(&guID, &guRank, &otherRaw); err != nil {
+			return err
+		}
+		var other []models.SpecialMechanic
+		if len(otherRaw) > 0 {
+			if err := json.Unmarshal(otherRaw, &other); err != nil {
 				continue
 			}
+		}
 
-			gu.Hunger -= specs.HungerRate
-			updated = true
-
-			// Fire ON_TICK for equipped ACTIVE Gus
-			if gu.Equipped && gu.Status == "ACTIVE" && specs.Effects.Other != nil {
-				// Determine Thien Nguyen multiplier based on player rank vs gu rank
-				tnMultiplier := 1.0
-				if strings.HasPrefix(specs.ID, "GU_HEAVENLY_ESSENCE_LOTUS") {
-					tnMultiplier = models.GetThienNguyenMultiplier(playerRank, specs.Rank)
-				}
-				for _, mech := range specs.Effects.Other {
-					if mech.EventTrigger != "ON_TICK" {
-						continue
-					}
-					var params map[string]interface{}
-					if len(mech.Params) > 0 {
-						json.Unmarshal(mech.Params, &params)
-					}
-					switch mech.ActionCode {
-					case "HOT_TICK":
-						val, _ := params["value"].(float64)
-						if val <= 0 {
-							val = 5.0
-						}
-						tickHP += val * tnMultiplier
-					case "GENERATE_STONES_TICK":
-						val, _ := params["value"].(float64)
-						if val <= 0 {
-							val = 1.0
-						}
-						tickStones += int(float64(val) * tnMultiplier)
-					case "GENERATE_IMMORTAL_STONES_TICK":
-						val, _ := params["value"].(float64)
-						if val <= 0 {
-							val = 1.0
-						}
-						tickImmortalStones += val * tnMultiplier
-					}
-				}
+		tnMultiplier := 1.0
+		if strings.HasPrefix(guID, "GU_HEAVENLY_ESSENCE_LOTUS") {
+			tnMultiplier = models.GetThienNguyenMultiplier(playerRank, guRank)
+		}
+		for _, mech := range other {
+			if mech.EventTrigger != "ON_TICK" {
+				continue
 			}
-
-			if gu.Hunger <= 0 {
-				gu.Hunger = 0
-				// Vital Gu never sleeps — it either stays alive (fed) or dies
-				if gu.IsVital {
-					gu.Status = "DEAD"
-					logger.S.Infof("Cultivation Log: Player %s's VITAL Gu %s (%s) starved and DIED — HP backlash incoming", username, specs.Name, gu.InstanceID[:8])
-					playerHPBacklash += 80.0
-					auditlog.Log(tx, auditlog.Entry{
-						PlayerID: &pUUID, Action: "gu.starve_vital_death", EntityType: "gu_instance",
-						EntityID: gu.InstanceID, RequestSummary: specs.Name + " | bản mệnh Cổ chết đói",
-						Success: false, ErrorMessage: "Chết đói",
-					})
-				} else {
-					// Roll for sleep vs death (20% Hibernation, 80% Dead)
-					roll := rand.Intn(100)
-					if roll < 20 {
-						gu.Status = "SLEEPING"
-						logger.S.Infof("Cultivation Log: Player %s's Gu %s (%s) starved and went into HIBERNATION", username, specs.Name, gu.InstanceID[:8])
-						newInventory = append(newInventory, gu)
-					} else {
-						gu.Status = "DEAD"
-						logger.S.Infof("Cultivation Log: Player %s's Gu %s (%s) starved and DIED", username, specs.Name, gu.InstanceID[:8])
-						auditlog.Log(tx, auditlog.Entry{
-							PlayerID: &pUUID, Action: "gu.starve_death", EntityType: "gu_instance",
-							EntityID: gu.InstanceID, RequestSummary: specs.Name + " | Cổ chết đói",
-							Success: false, ErrorMessage: "Chết đói",
-						})
-					}
-				}
-			} else {
-				newInventory = append(newInventory, gu)
+			var params map[string]interface{}
+			if len(mech.Params) > 0 {
+				json.Unmarshal(mech.Params, &params)
 			}
-		} else {
-			// Keep other statuses (e.g. SEALED, DYING, or existing DEAD bugs if any, though regular dead are removed)
-			if gu.Status != "DEAD" {
-				newInventory = append(newInventory, gu)
+			switch mech.ActionCode {
+			case "HOT_TICK":
+				val, _ := params["value"].(float64)
+				if val <= 0 {
+					val = 5.0
+				}
+				tickHP += val * tnMultiplier
+			case "GENERATE_STONES_TICK":
+				val, _ := params["value"].(float64)
+				if val <= 0 {
+					val = 1.0
+				}
+				tickStones += int(float64(val) * tnMultiplier)
+			case "GENERATE_IMMORTAL_STONES_TICK":
+				val, _ := params["value"].(float64)
+				if val <= 0 {
+					val = 1.0
+				}
+				tickImmortalStones += val * tnMultiplier
 			}
 		}
 	}
 
-	// If no Gu was modified, no HP backlash, and no tick effects, return early
-	if !updated && playerHPBacklash == 0 && tickStones == 0 && tickMana == 0 && tickHP == 0 && tickImmortalStones == 0 {
-		return nil
-	}
-
-	// Apply ON_TICK stat changes
 	if tickHP > 0 {
 		hp += tickHP
-		var baseHP float64
-		_ = tx.QueryRow(`SELECT base_hp FROM players WHERE id = $1`, playerID).Scan(&baseHP)
 		if hp > baseHP {
 			hp = baseHP
 		}
-		updated = true
 	}
 	if tickStones > 0 {
 		primevalStones += tickStones
-	}
-	if tickMana > 0 {
-		currentMana += tickMana
-		if currentMana > maxMana {
-			currentMana = maxMana
-		}
 	}
 	if tickImmortalStones > 0 {
 		immortalStones += tickImmortalStones
 	}
 
-	// Apply HP Backlash if Vital Gu died
-	if playerHPBacklash > 0 {
-		hp -= playerHPBacklash
-		if hp <= 0 {
-			hp = 0
-			_, err = tx.Exec(`UPDATE players SET hp = $1, primeval_stones = $2, current_mana = $3, max_mana = $4, immortal_stones = $5, active_combat = NULL WHERE id = $6`, hp, primevalStones, currentMana, maxMana, immortalStones, playerID)
-		} else {
-			_, err = tx.Exec(`UPDATE players SET hp = $1, primeval_stones = $2, current_mana = $3, max_mana = $4, immortal_stones = $5 WHERE id = $6`, hp, primevalStones, currentMana, maxMana, immortalStones, playerID)
-		}
-		if err != nil {
-			return err
-		}
+	if tickHP == 0 && tickStones == 0 && tickImmortalStones == 0 {
+		return tx.Rollback()
 	}
 
-	// Re-evaluate equipped_gus array
-	newEquippedGus := []string{} // never nil — marshals to [] not null
-	for _, eqInstID := range equippedGus {
-		stillExists := false
-		for _, item := range newInventory {
-			if item.InstanceID == eqInstID && item.Status == "ACTIVE" {
-				stillExists = true
-				break
-			}
-		}
-		if stillExists {
-			newEquippedGus = append(newEquippedGus, eqInstID)
-		}
+	_, err = tx.Exec(`UPDATE players SET hp = $1, primeval_stones = $2, immortal_stones = $3 WHERE id = $4`,
+		hp, primevalStones, immortalStones, playerID)
+	if err != nil {
+		return err
 	}
+	return tx.Commit()
+}
 
-	newEquippedGusRaw, err := json.Marshal(newEquippedGus)
+// runHungerDecayBatch applies hunger decay, starvation (sleep/death),
+// vital HP backlash, death audit logs and equipped_gus cleanup in a single
+// set-based transaction across all players.
+func runHungerDecayBatch(db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Materialize the per-Gu decay result into a temp table so subsequent
+	// statements (state update, backlash, audit, cleanup) all agree on the
+	// exact same random rolls and computed values.
+	_, err = tx.Exec(`
+		CREATE TEMP TABLE _hunger_tick ON COMMIT DROP AS
+		WITH decayed AS (
+			SELECT
+				pg.id AS gu_instance_id,
+				pg.player_id,
+				pg.gu_id,
+				pg.gu_rank,
+				pg.is_vital,
+				pg.equipped,
+				pg.hunger - gd.hunger_rate AS new_hunger,
+				gd.name AS gu_name
+			FROM player_gu pg
+			JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank
+			WHERE pg.state IN ('ACTIVE', 'SLEEPING')
+		)
+		SELECT
+			d.gu_instance_id,
+			d.player_id,
+			d.gu_id,
+			d.gu_rank,
+			d.is_vital,
+			d.equipped,
+			d.gu_name,
+			GREATEST(d.new_hunger, 0) AS new_hunger,
+			CASE
+				WHEN d.new_hunger <= 0 AND d.is_vital THEN 'DEAD'
+				WHEN d.new_hunger <= 0 AND random() < 0.2 THEN 'SLEEPING'
+				WHEN d.new_hunger <= 0 THEN 'DEAD'
+				ELSE 'ACTIVE'
+			END AS new_state
+		FROM decayed d`)
 	if err != nil {
 		return err
 	}
 
-	if err := pkgdb.SavePlayerGus(tx, playerID, newInventory); err != nil {
+	// Apply decay + state transitions.
+	_, err = tx.Exec(`
+		UPDATE player_gu pg
+		SET hunger = t.new_hunger,
+		    state = t.new_state,
+		    updated_at = NOW()
+		FROM _hunger_tick t
+		WHERE pg.id = t.gu_instance_id`)
+	if err != nil {
 		return err
 	}
 
-	_, err = tx.Exec(`UPDATE players SET equipped_gus = $1, primeval_stones = $2, current_mana = $3, immortal_stones = $4 WHERE id = $5`, string(newEquippedGusRaw), primevalStones, currentMana, immortalStones, playerID)
+	// Vital Gu death → 80 HP backlash per death; drop active_combat on collapse.
+	_, err = tx.Exec(`
+		UPDATE players p
+		SET hp = GREATEST(p.hp - 80.0 * COALESCE(v.cnt, 0), 0),
+		    active_combat = CASE WHEN p.hp - 80.0 * COALESCE(v.cnt, 0) <= 0 THEN NULL ELSE p.active_combat END
+		FROM (
+			SELECT player_id, COUNT(*) AS cnt
+			FROM _hunger_tick
+			WHERE is_vital AND new_state = 'DEAD'
+			GROUP BY player_id
+		) v
+		WHERE p.id = v.player_id`)
+	if err != nil {
+		return err
+	}
+
+	// Audit log for every Gu that starved this tick (vital vs regular death).
+	_, err = tx.Exec(`
+		INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
+		SELECT
+			t.player_id,
+			CASE WHEN t.is_vital THEN 'gu.starve_vital_death' ELSE 'gu.starve_death' END,
+			'gu_instance',
+			t.gu_id,
+			CASE WHEN t.is_vital THEN t.gu_name || ' | bản mệnh Cổ chết đói' ELSE t.gu_name || ' | Cổ chết đói' END,
+			'{}'::jsonb,
+			'',
+			false,
+			'Chết đói',
+			NOW()
+		FROM _hunger_tick t
+		WHERE t.new_state = 'DEAD'`)
+	if err != nil {
+		return err
+	}
+
+	// Rebuild equipped_gus for players whose Gu just died or went dormant:
+	// only ACTIVE equipped Gus stay in the equipped_gus array.
+	_, err = tx.Exec(`
+		UPDATE players p
+		SET equipped_gus = COALESCE(
+			(SELECT jsonb_agg(pg.id ORDER BY pg.id)
+			 FROM player_gu pg
+			 WHERE pg.player_id = p.id AND pg.equipped AND pg.state = 'ACTIVE'),
+			'[]'::jsonb)
+		FROM _hunger_tick t
+		WHERE p.id = t.player_id AND t.new_state IN ('DEAD', 'SLEEPING')`)
+	if err != nil {
+		return err
+	}
+
+	// Remove starved (now DEAD) Gu instances.
+	_, err = tx.Exec(`DELETE FROM player_gu pg USING _hunger_tick t WHERE pg.id = t.gu_instance_id AND t.new_state = 'DEAD'`)
 	if err != nil {
 		return err
 	}

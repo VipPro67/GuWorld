@@ -28,11 +28,36 @@ func StartGrowthWorker(ctx context.Context, db *sql.DB, interval time.Duration) 
 	}()
 }
 
+// processGrowthTick advances Gu growth for every equipped ACTIVE Gu that has a
+// growth profile. A set-based SQL query narrows the work to only the players
+// who actually own such a Gu (a tiny subset of the player base); the growth_data
+// fold for those players is then done in Go.
 func processGrowthTick(db *sql.DB) {
-	rows, err := db.Query("SELECT id FROM players")
+	players, err := findGrowthAffectedPlayers(db)
 	if err != nil {
-		logger.S.Errorf("Growth Worker Error: failed to fetch player list: %v", err)
+		logger.S.Errorf("Growth Worker Error finding affected players: %v", err)
 		return
+	}
+
+	for _, pID := range players {
+		if err := updatePlayerGrowth(db, pID); err != nil {
+			logger.S.Errorf("Growth Worker Error updating player %s: %v", pID, err)
+		}
+	}
+}
+
+// findGrowthAffectedPlayers returns players who own at least one equipped ACTIVE
+// Gu with a growth profile. This replaces the old full-table player scan.
+func findGrowthAffectedPlayers(db *sql.DB) ([]string, error) {
+	rows, err := db.Query(`
+		SELECT DISTINCT pg.player_id::text
+		FROM player_gu pg
+		JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank
+		WHERE pg.equipped AND pg.state = 'ACTIVE'
+		  AND gd.effects->'growth' IS NOT NULL
+		  AND COALESCE((gd.effects->'growth'->>'hours_to_max')::double precision, 0) > 0`)
+	if err != nil {
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -43,13 +68,7 @@ func processGrowthTick(db *sql.DB) {
 			playerIDs = append(playerIDs, id)
 		}
 	}
-
-	for _, pID := range playerIDs {
-		err := updatePlayerGrowth(db, pID)
-		if err != nil {
-			logger.S.Errorf("Growth Worker Error updating player %s: %v", pID, err)
-		}
-	}
+	return playerIDs, rows.Err()
 }
 
 func updatePlayerGrowth(db *sql.DB, playerID string) error {
@@ -62,13 +81,12 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 	var guInvRaw []byte
 	var growthDataRaw []byte
 	var baseHP float64
-	var hp float64
 
 	err = tx.QueryRow(`
-		SELECT `+pkgdb.GuInventoryAggregate("players.id")+`, growth_data, base_hp, hp
+		SELECT `+pkgdb.GuInventoryAggregate("players.id")+`, growth_data, base_hp
 		FROM players
 		WHERE id = $1
-		FOR UPDATE`, playerID).Scan(&guInvRaw, &growthDataRaw, &baseHP, &hp)
+		FOR UPDATE`, playerID).Scan(&guInvRaw, &growthDataRaw, &baseHP)
 	if err != nil {
 		return err
 	}
@@ -86,7 +104,6 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 		}
 	}
 
-	updated := false
 	hasGrowthGu := false
 	now := time.Now()
 
@@ -113,14 +130,20 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 		}
 		if isFullyGrown {
 			gu.EquippedAt = nil
-			updated = true
+			_, err = tx.Exec(`UPDATE player_gu SET equipped_at = NULL, updated_at = NOW() WHERE id = $1`, gu.InstanceID)
+			if err != nil {
+				return err
+			}
 			continue
 		}
 
 		// Initialize EquippedAt for legacy Gus equipped before growth feature existed
 		if gu.EquippedAt == nil || gu.EquippedAt.IsZero() {
 			gu.EquippedAt = &now
-			updated = true
+			_, err = tx.Exec(`UPDATE player_gu SET equipped_at = $1, updated_at = NOW() WHERE id = $2`, now, gu.InstanceID)
+			if err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -136,7 +159,6 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 			growthData.Boosts.HP += hpBoost
 			growthData.Boosts.Speed += spd
 			baseHP += hpBoost
-			updated = true
 		}
 
 		if gu.GrowthHours >= spec.Effects.Growth.HoursToMax {
@@ -148,17 +170,21 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 				Speed:   spec.Effects.Growth.MaxSpeed,
 			})
 		}
+
+		// Persist growth_hours / equipped_at per Gu (no full-inventory rewrite).
+		_, err = tx.Exec(`
+			UPDATE player_gu SET growth_hours = $1, equipped_at = $2, updated_at = NOW() WHERE id = $3`,
+			gu.GrowthHours, gu.EquippedAt, gu.InstanceID)
+		if err != nil {
+			return err
+		}
 	}
 
-	if !updated && !hasGrowthGu {
+	if !hasGrowthGu {
 		return nil
 	}
 
 	growthDataRawUpdated, _ := json.Marshal(growthData)
-
-	if err := pkgdb.SavePlayerGus(tx, playerID, guInv); err != nil {
-		return err
-	}
 
 	_, err = tx.Exec(`UPDATE players SET growth_data = $1, base_hp = $2 WHERE id = $3`,
 		string(growthDataRawUpdated), baseHP, playerID)
