@@ -19,11 +19,24 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
+func init() {
+	// Set the global default timezone for Go (time.Local)
+	loc, err := time.LoadLocation("Asia/Ho_Chi_Minh")
+	if err != nil {
+		// Fallback to fixed UTC+7 if system tzdata fails to load
+		loc = time.FixedZone("ICT", 7*3600)
+	}
+	time.Local = loc
+	os.Setenv("TZ", "Asia/Ho_Chi_Minh")
+}
+
 func main() {
 	if err := logger.Init(); err != nil {
 		os.Stderr.WriteString("Failed to initialize logger: " + err.Error() + "\n")
 		os.Exit(1)
 	}
+
+	logger.S.Infof("App running in default local timezone: %s", time.Now().Location())
 
 	var envLoaded bool
 	for _, envPath := range []string{".env", "backend/.env", "../.env", "../../.env"} {

@@ -14,9 +14,9 @@ import (
 // StartArenaSettlementWorker runs every minute, checking if it is 22:00
 func StartArenaSettlementWorker(ctx context.Context) {
 	logger.S.Info("Starting Arena Settlement Worker...")
-	
+
 	var lastSettlementDay int
-	
+
 	go func() {
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
@@ -27,7 +27,7 @@ func StartArenaSettlementWorker(ctx context.Context) {
 				logger.S.Info("Arena Settlement Worker stopped.")
 				return
 			case t := <-ticker.C:
-				if t.Hour() == 22 && t.Minute() == 10 {
+				if t.Hour() == 22 && t.Minute() == 30 {
 					currentDay := t.YearDay()
 					if lastSettlementDay != currentDay {
 						logger.S.Info("Running Daily Arena Settlement...")
@@ -81,7 +81,7 @@ func runArenaSettlement() {
 			ON CONFLICT (player_id, item_id, category)
 			DO UPDATE SET quantity = player_inventory_items.quantity + EXCLUDED.quantity, updated_at = NOW()
 		`, playerID, rewardCoins)
-		
+
 		if errUpdate != nil {
 			logger.S.Errorf("ArenaSettlement Error: Failed to give reward to %s: %v", playerID, errUpdate)
 		} else {
@@ -90,7 +90,7 @@ func runArenaSettlement() {
 			}
 		}
 	}
-	
+
 	if err := tx.Commit(); err != nil {
 		logger.S.Error("ArenaSettlement Error: Failed to commit tx", err)
 	} else {
