@@ -274,6 +274,7 @@ func RegisterPlayer(c *gin.Context) {
 		{
 			InstanceID: attackGuInstanceID,
 			GuID:       req.AttackGuID,
+			Rank:       1,
 			Hunger:     100,
 			Status:     "ACTIVE",
 			Equipped:   true,
@@ -282,6 +283,7 @@ func RegisterPlayer(c *gin.Context) {
 		{
 			InstanceID: defenseGuInstanceID,
 			GuID:       req.DefenseGuID,
+			Rank:       1,
 			Hunger:     100,
 			Status:     "ACTIVE",
 			Equipped:   true,
@@ -518,8 +520,8 @@ func CompleteOnboarding(c *gin.Context) {
 	isDefenseVital := req.VitalGuChoice == "DEFENSE"
 
 	newGu := models.GuInventory{
-		{InstanceID: attackGuInstanceID, GuID: req.AttackGuID, Hunger: 100, Status: "ACTIVE", Equipped: true, IsVital: isAttackVital},
-		{InstanceID: defenseGuInstanceID, GuID: req.DefenseGuID, Hunger: 100, Status: "ACTIVE", Equipped: true, IsVital: isDefenseVital},
+		{InstanceID: attackGuInstanceID, GuID: req.AttackGuID, Rank: 1, Hunger: 100, Status: "ACTIVE", Equipped: true, IsVital: isAttackVital},
+		{InstanceID: defenseGuInstanceID, GuID: req.DefenseGuID, Rank: 1, Hunger: 100, Status: "ACTIVE", Equipped: true, IsVital: isDefenseVital},
 	}
 	equippedGus := models.EquippedGusList{attackGuInstanceID, defenseGuInstanceID}
 
@@ -3240,6 +3242,7 @@ func GoogleCallback(c *gin.Context) {
 			{
 				InstanceID: attackGuInstanceID,
 				GuID:       "GU_MOONLIGHT",
+				Rank:       1,
 				Hunger:     100,
 				Status:     "ACTIVE",
 				Equipped:   true,
@@ -3248,6 +3251,7 @@ func GoogleCallback(c *gin.Context) {
 			{
 				InstanceID: defenseGuInstanceID,
 				GuID:       "GU_STONE_SKIN",
+				Rank:       1,
 				Hunger:     100,
 				Status:     "ACTIVE",
 				Equipped:   true,

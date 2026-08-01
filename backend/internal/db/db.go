@@ -908,29 +908,36 @@ func InitSchema() error {
 		{`DO $$
 			BEGIN
 				IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'players' AND column_name = 'gu_inventory') THEN
+					-- Normalize each inventory entry to a dictionary-valid (gu_id, rank):
+					--   A) rank 0 -> the dictionary's minimum rank for that gu_id (starter Gus were stored with rank 0)
+					--   B) if the (gu_id, rank) pair still has no match, fall back to the dictionary's minimum rank
+					--      so the FK constraint holds (rows are preserved instead of dropped).
 					INSERT INTO player_gu (id, player_id, gu_id, gu_rank, rank, level, hunger, state, location, is_locked, equipped, is_vital, integration_time, equipped_at, growth_hours)
-					SELECT
-						elem->>'instance_id',
-						p.id,
-						elem->>'gu_id',
-						COALESCE((elem->>'rank')::int, 1),
-						COALESCE((elem->>'rank')::int, 1),
-						1,
-						COALESCE((elem->>'hunger')::int, 100),
-						COALESCE(NULLIF(elem->>'status', ''), 'ACTIVE'),
-						'INVENTORY',
-						false,
-						COALESCE((elem->>'equipped')::boolean, false),
-						COALESCE((elem->>'is_vital')::boolean, false),
-						COALESCE((elem->>'integration_time')::double precision, 0),
-						NULLIF(elem->>'equipped_at', '')::timestamptz,
-						COALESCE((elem->>'growth_hours')::double precision, 0)
-					FROM players p
-					CROSS JOIN LATERAL jsonb_array_elements(COALESCE(p.gu_inventory, '[]'::jsonb)) AS elem
-					WHERE elem->>'instance_id' IS NOT NULL
-					  AND elem->>'gu_id' IS NOT NULL
-					  AND NOT EXISTS (SELECT 1 FROM player_gu pg WHERE pg.id = elem->>'instance_id')
-					  AND EXISTS (SELECT 1 FROM gu_dictionary gd WHERE gd.id = elem->>'gu_id' AND gd.rank = COALESCE((elem->>'rank')::int, 1));
+					WITH normalized AS (
+						SELECT
+							elem->>'instance_id' AS instance_id,
+							p.id AS player_id,
+							elem->>'gu_id' AS gu_id,
+							CASE
+								WHEN (elem->>'rank')::int = 0 THEN COALESCE((SELECT MIN(gd.rank) FROM gu_dictionary gd WHERE gd.id = elem->>'gu_id'), 1)
+								ELSE COALESCE((elem->>'rank')::int, 1)
+							END AS gu_rank,
+							COALESCE((elem->>'hunger')::int, 100) AS hunger,
+							COALESCE(NULLIF(elem->>'status', ''), 'ACTIVE') AS state,
+							COALESCE((elem->>'equipped')::boolean, false) AS equipped,
+							COALESCE((elem->>'is_vital')::boolean, false) AS is_vital,
+							COALESCE((elem->>'integration_time')::double precision, 0) AS integration_time,
+							NULLIF(elem->>'equipped_at', '')::timestamptz AS equipped_at,
+							COALESCE((elem->>'growth_hours')::double precision, 0) AS growth_hours
+						FROM players p
+						CROSS JOIN LATERAL jsonb_array_elements(COALESCE(p.gu_inventory, '[]'::jsonb)) AS elem
+						WHERE elem->>'instance_id' IS NOT NULL
+						  AND elem->>'gu_id' IS NOT NULL
+					)
+					SELECT n.instance_id, n.player_id, n.gu_id, n.gu_rank, n.gu_rank, 1, n.hunger, n.state, 'INVENTORY', false, n.equipped, n.is_vital, n.integration_time, n.equipped_at, n.growth_hours
+					FROM normalized n
+					WHERE NOT EXISTS (SELECT 1 FROM player_gu pg WHERE pg.id = n.instance_id)
+					  AND EXISTS (SELECT 1 FROM gu_dictionary gd WHERE gd.id = n.gu_id AND gd.rank = n.gu_rank);
 				END IF;
 			END $$;`, "migrate_player_gu_from_inventory"},
 		{`ALTER TABLE players DROP COLUMN IF EXISTS gu_inventory;`, "drop_player_gu_inventory"},
