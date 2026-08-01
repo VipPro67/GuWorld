@@ -1100,7 +1100,7 @@ export const AdminView: React.FC = () => {
                 <h3 className="text-sm font-bold text-zinc-100 font-serif">Xóa vật phẩm</h3>
                 <button onClick={() => setShowRemoveItem(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
               </div>
-              <p className="text-xs text-zinc-400">Vật phẩm: <span className="text-zinc-200 font-bold">{itemDictionary[showRemoveItem]?.name || showRemoveItem}</span></p>
+              <p className="text-xs text-zinc-400">Vật phẩm: <span className="text-zinc-200 font-bold">{itemDictionary[showRemoveItem]?.name || playerItems.find(i => i.item_id === showRemoveItem)?.name || showRemoveItem}</span></p>
               <p className="text-xs text-zinc-500">Hiện có: <span className="text-zinc-300 font-bold">{(() => { const row = playerItems.find(i => i.item_id === showRemoveItem); return (row?.quantity || 0).toLocaleString(); })()}</span></p>
               <div>
                 <label className="text-[11px] font-bold text-zinc-500 font-mono">Số lượng xóa</label>

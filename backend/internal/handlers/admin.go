@@ -15,6 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -229,6 +230,19 @@ type AdminItemRequest struct {
 	Quantity int    `json:"quantity"`
 }
 
+// adminItemKind returns "item" if the ID is a material item, "recipe" if it is
+// a refining recipe (Cổ phương), or "" if the ID matches neither.
+func adminItemKind(itemID string) string {
+	if _, ok := models.ItemRegistry[itemID]; ok {
+		return "item"
+	}
+	var exists bool
+	if err := db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM refining_recipes WHERE id = $1)`, itemID).Scan(&exists); err == nil && exists {
+		return "recipe"
+	}
+	return ""
+}
+
 func AdminAddPlayerItems(c *gin.Context) {
 	adminID, ok := requireAdmin(c); if !ok {
 		return
@@ -246,8 +260,9 @@ func AdminAddPlayerItems(c *gin.Context) {
 		return
 	}
 
-	if _, exists := models.ItemRegistry[req.ItemID]; !exists {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại"})
+	kind := adminItemKind(req.ItemID)
+	if kind == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm hoặc công thức không tồn tại"})
 		return
 	}
 
@@ -264,7 +279,17 @@ func AdminAddPlayerItems(c *gin.Context) {
 		return
 	}
 
-	if err := InventorySvc.AddItem(tx, playerID.String(), req.ItemID, "materials", req.Quantity); err != nil {
+	if kind == "recipe" {
+		if err := RecipeSvc.Upsert(tx, &services.RecipeProgress{
+			PlayerID:       playerID.String(),
+			RecipeID:       req.ItemID,
+			CompletionRate: 100,
+			IsUnlocked:     true,
+		}); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật công thức"})
+			return
+		}
+	} else if err := InventorySvc.AddItem(tx, playerID.String(), req.ItemID, "materials", req.Quantity); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật vật phẩm"})
 		return
 	}
@@ -273,10 +298,10 @@ func AdminAddPlayerItems(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.add_items",
 		EntityType: "player", EntityID: playerID.String(),
-		RequestSummary: fmt.Sprintf("item=%s qty=%d", req.ItemID, req.Quantity),
+		RequestSummary: fmt.Sprintf("%s=%s qty=%d", kind, req.ItemID, req.Quantity),
 		IPAddress: c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{"message": "Đã thêm vật phẩm thành công", "item_id": req.ItemID, "quantity": req.Quantity})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã thêm thành công", "kind": kind, "item_id": req.ItemID, "quantity": req.Quantity})
 }
 
 func AdminRemovePlayerItems(c *gin.Context) {
@@ -296,6 +321,12 @@ func AdminRemovePlayerItems(c *gin.Context) {
 		return
 	}
 
+	kind := adminItemKind(req.ItemID)
+	if kind == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm hoặc công thức không tồn tại"})
+		return
+	}
+
 	tx, err := db.DB.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
@@ -303,7 +334,12 @@ func AdminRemovePlayerItems(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	if err := InventorySvc.RemoveItem(tx, playerID.String(), req.ItemID, "materials", req.Quantity); err != nil {
+	if kind == "recipe" {
+		if err := RecipeSvc.Delete(tx, playerID.String(), req.ItemID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa công thức"})
+			return
+		}
+	} else if err := InventorySvc.RemoveItem(tx, playerID.String(), req.ItemID, "materials", req.Quantity); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Người chơi không có đủ vật phẩm"})
 		return
 	}
@@ -312,10 +348,10 @@ func AdminRemovePlayerItems(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.remove_items",
 		EntityType: "player", EntityID: playerID.String(),
-		RequestSummary: fmt.Sprintf("item=%s qty=%d", req.ItemID, req.Quantity),
+		RequestSummary: fmt.Sprintf("%s=%s qty=%d", kind, req.ItemID, req.Quantity),
 		IPAddress: c.ClientIP(), Success: true,
 	})
-	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa vật phẩm thành công", "item_id": req.ItemID, "quantity": req.Quantity})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa thành công", "kind": kind, "item_id": req.ItemID, "quantity": req.Quantity})
 }
 
 type AdminAddGuRequest struct {
@@ -597,6 +633,34 @@ func AdminListPlayerItems(c *gin.Context) {
 			"quantity":  quantity,
 		})
 	}
+
+	// Include unlocked recipes (Cổ phương) so admins can view/remove them too.
+	recipeCount := 0
+	if recipeRows, err := db.DB.QueryContext(c.Request.Context(), `SELECT recipe_id FROM player_recipe_progress WHERE player_id = $1 AND is_unlocked = true ORDER BY recipe_id`, playerID); err == nil {
+		defer recipeRows.Close()
+		for recipeRows.Next() {
+			var recipeID string
+			if err := recipeRows.Scan(&recipeID); err != nil {
+				continue
+			}
+			name := recipeID
+			var targetGuID string
+			_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(target_gu_id,'') FROM refining_recipes WHERE id = $1`, recipeID).Scan(&targetGuID)
+			if spec, ok := models.GetGuAny(targetGuID); ok && spec.Name != "" {
+				name = spec.Name
+			}
+			data = append(data, gin.H{
+				"item_id":   recipeID,
+				"name":      name,
+				"item_type": "recipe",
+				"rank":      0,
+				"category":  "recipe",
+				"quantity":  1,
+			})
+			recipeCount++
+		}
+	}
+	total += recipeCount
 
 	c.JSON(http.StatusOK, gin.H{"data": data, "total": total})
 }
