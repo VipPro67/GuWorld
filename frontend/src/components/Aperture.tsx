@@ -1,6 +1,5 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { checkQuest, formatRewards } from "@/data/quests";
 import { estimateManaFromSnapshot, estimateHPFromSnapshot, GuInstance, GuSpec, Player, ImmortalAperture, useGameStore } from "@/store/useGameStore";
 import {
   Sparkles,
@@ -26,7 +25,7 @@ import {
   TrendingUp,
   Leaf,
 } from "lucide-react";
-import AchievementsPanel from "@/components/AchievementsPanel";
+
 
 interface ApertureProps {
   player: Player;
@@ -213,7 +212,7 @@ export const Aperture: React.FC<ApertureProps> = ({
 
   const dashOffset = CIRC * (1 - percent / 100);
 
-  const [activeTab, setActiveTab] = useState<"aperture" | "quests" | "growth" | "achievements" | "referrals" | "settings">("aperture");
+  const [activeTab, setActiveTab] = useState<"aperture" | "growth" | "referrals" | "settings">("aperture");
   const [giftCodeInput, setGiftCodeInput] = useState("");
   const [giftCodeMsg, setGiftCodeMsg] = useState<string | null>(null);
   const [giftCodeLoading, setGiftCodeLoading] = useState(false);
@@ -435,15 +434,6 @@ export const Aperture: React.FC<ApertureProps> = ({
             Không Khiếu
           </button>
           <button
-            onClick={() => setActiveTab("quests")}
-            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${activeTab === "quests"
-              ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-              : "text-zinc-500 hover:text-zinc-300"
-              }`}
-          >
-            Nhiệm Vụ
-          </button>
-          <button
             onClick={() => setActiveTab("growth")}
             className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${activeTab === "growth"
               ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
@@ -451,18 +441,6 @@ export const Aperture: React.FC<ApertureProps> = ({
               }`}
           >
             Trưởng Thành
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("achievements");
-              void store.fetchAchievements();
-            }}
-            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${activeTab === "achievements"
-              ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-              : "text-zinc-500 hover:text-zinc-300"
-              }`}
-          >
-            Thành Tựu
           </button>
           <button
             onClick={() => {
@@ -740,9 +718,7 @@ export const Aperture: React.FC<ApertureProps> = ({
             )}
           </div>
         )}
-        {activeTab === "quests" && (
-          <MainQuestsPanel />
-        )}
+
 
         {activeTab === "growth" && (
           <div className="w-full z-10 space-y-5">
@@ -1192,9 +1168,7 @@ export const Aperture: React.FC<ApertureProps> = ({
           </div>
         )}
 
-        {activeTab === "achievements" && (
-          <AchievementsPanel />
-        )}
+
 
         {activeTab === "settings" && (
           <div className="w-full z-10 space-y-5">
@@ -1986,7 +1960,7 @@ function BlessedLandControls() {
         </div>
         {/* Path Masteries Section */}
         <div className="w-full text-left pt-2">
-          <span className="text-[9px] text-zinc-500 uppercase tracking-wider block mb-2 font-mono">
+          <span className="text-[9px] text-zinc-550 uppercase tracking-wider block mb-2 font-mono">
             Lĩnh Ngộ Lưu Phái
           </span>
           <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
@@ -2008,94 +1982,6 @@ function BlessedLandControls() {
             )}
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function MainQuestsPanel() {
-  const store = useGameStore();
-  const player = store.player;
-  if (!player) return null;
-
-  const completed = player.completed_quests || [];
-  const quests = store.quests || [];
-
-  const getQuestIcon = (id: string) => {
-    switch (id) {
-      case "quest_1_awaken": return <Sparkles className="w-3.5 h-3.5 text-emerald-400" />;
-      case "quest_2_vital_gu": return <Flame className="w-3.5 h-3.5 text-amber-500 animate-pulse" />;
-      case "quest_3_rank_2": return <Zap className="w-3.5 h-3.5 text-cyan-400" />;
-      case "quest_4_refine_gu": return <Atom className="w-3.5 h-3.5 text-purple-400" />;
-      case "quest_5_fame": return <Crown className="w-3.5 h-3.5 text-yellow-500 animate-bounce" />;
-      case "quest_6_rank_5": return <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />;
-      default: return <Award className="w-3.5 h-3.5 text-zinc-400" />;
-    }
-  };
-
-  const buttonLabel = (q: any, isDone: boolean, canClaim: boolean) => {
-    if (isDone) return "ĐÃ NHẬN";
-    if (!canClaim) return "CHƯA ĐẠT";
-    const rewardStr = formatRewards(q.rewards);
-    return `NHẬN${rewardStr ? " " + rewardStr : ""}`;
-  };
-
-  return (
-    <div className="w-full text-center min-h-full">
-      <div className="text-[10px] text-zinc-500 uppercase tracking-widest text-center mb-3 font-mono font-bold flex items-center justify-center gap-1.5">
-        <Award className="w-4 h-4 text-amber-500 animate-pulse" />
-        Nhiệm Vụ Chính Tuyến
-      </div>
-      <div className="space-y-2  overflow-y-auto pr-1">
-        {quests.filter((q) => !completed.includes(q.id)).length === 0 ? (
-          <div className="text-zinc-500 text-xs italic py-6 bg-zinc-950/20 rounded-2xl border border-zinc-900/30">
-            🎉 Đạo hữu đã hoàn thành toàn bộ nhiệm vụ chính tuyến!
-          </div>
-        ) : (
-          quests
-            .filter((q) => !completed.includes(q.id))
-            .map((q) => {
-              const isDone = completed.includes(q.id);
-              const canClaim = !isDone && checkQuest(q.id, player, store.guDictionary || {});
-
-              return (
-                <div
-                  key={q.id}
-                  className={`p-2.5 rounded-xl border text-xs flex justify-between items-center transition-all duration-300 hover:scale-[1.01] ${isDone ? "bg-emerald-950/10 border-emerald-950/20 opacity-70" :
-                    canClaim ? "bg-amber-950/15 border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.08)] animate-pulse" :
-                      "bg-zinc-950/40 border-zinc-900"
-                    }`}
-                >
-                  <div className="text-left flex-1 min-w-0 mr-3">
-                    <div className={`font-semibold flex items-center gap-2 ${isDone ? "text-emerald-600 dark:text-emerald-400 line-through" : "text-zinc-200"}`}>
-                      {getQuestIcon(q.id)}
-                      <span className="truncate">{q.title}</span>
-                    </div>
-                    <div className="text-[10px] text-zinc-500 mt-0.5 truncate">{q.desc}</div>
-                    <div className="text-[9px] text-zinc-400 mt-0.5 italic font-mono">{q.req_desc}</div>
-                  </div>
-
-                  <button
-                    disabled={isDone || !canClaim || store.actionLoading}
-                    onClick={async () => {
-                      const res = await store.completeQuest(q.id);
-                      if (res && res.success) {
-                        store.addToast(res.message, "success");
-                      }
-                    }}
-                    className={`px-2 sm:px-3 py-1.5 rounded-xl text-[9px] sm:text-[10px] font-bold font-mono transition-all shrink-0 cursor-pointer whitespace-nowrap max-w-[140px] sm:max-w-none truncate ${isDone
-                      ? "bg-zinc-900/60 text-zinc-650 border border-zinc-950 cursor-not-allowed"
-                      : canClaim
-                        ? "bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-zinc-950 shadow-[0_0_10px_rgba(245,158,11,0.3)] active:scale-95"
-                        : "bg-zinc-900 text-zinc-600 border border-zinc-850 cursor-not-allowed"
-                      }`}
-                  >
-                    {buttonLabel(q, isDone, canClaim)}
-                  </button>
-                </div>
-              );
-            })
-        )}
       </div>
     </div>
   );

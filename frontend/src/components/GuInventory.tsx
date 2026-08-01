@@ -82,6 +82,8 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const [advancedOpen, setAdvancedOpen] = useState<Record<string, boolean>>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTab, setSelectedTab] = useState<"gu" | "material">("gu");
+  const [selectedPath, setSelectedPath] = useState<string>("all");
+  const [selectedRank, setSelectedRank] = useState<string>("all");
 
   // The player status snapshot only carries equipped/vital Gus; lazy-load the
   // full inventory when the management view is opened.
@@ -191,7 +193,23 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
     })
     .map((key) => ({ key, spec: itemDictionary[key], qty: materials[key] }));
 
-  // Filter Gu bugs matching searchTerm
+  // Dynamic filters calculation
+  const allPaths = Array.from(
+    new Set(
+      guList.map((gu) => {
+        const spec = guSpecFor(gu.gu_id, gu.rank);
+        return spec?.path && spec.path.length > 0 ? spec.path[0] : null;
+      }).filter(Boolean)
+    )
+  ) as string[];
+
+  const allRanks = Array.from(
+    new Set(
+      guList.map((gu) => gu.rank).filter((r): r is number => r !== undefined)
+    )
+  ).sort((a, b) => a - b);
+
+  // Filter Gu bugs matching searchTerm, path, and rank
   const filteredGus = guList.filter((gu) => {
     const spec = guSpecFor(gu.gu_id, gu.rank) || {
       name: gu.gu_id,
@@ -199,12 +217,16 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
       path: [] as string[],
       gu_type: "",
     };
-    return (
+    const matchesSearch =
       spec.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       spec.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (spec.path && spec.path.some(p => p.toLowerCase().includes(searchTerm.toLowerCase()))) ||
-      (spec.gu_type && spec.gu_type.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+      (spec.gu_type && spec.gu_type.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesPath = selectedPath === "all" || (spec.path && spec.path.includes(selectedPath));
+    const matchesRank = selectedRank === "all" || (gu.rank !== undefined && gu.rank === parseInt(selectedRank, 10));
+
+    return matchesSearch && matchesPath && matchesRank;
   });
 
   const showMaterials = selectedTab === "material";
@@ -256,6 +278,48 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
             className="w-full bg-zinc-950/40 border border-zinc-900 focus:border-amber-500/50 outline-none text-xs text-zinc-200 placeholder-zinc-650 pl-10 pr-4 py-2.5 rounded-xl transition-colors font-mono"
           />
         </div>
+
+        {/* Dynamic Filters for Gu bugs */}
+        {selectedTab === "gu" && (
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1 relative">
+              <select
+                value={selectedPath}
+                onChange={(e) => setSelectedPath(e.target.value)}
+                className="w-full bg-zinc-950/40 border border-zinc-900 focus:border-amber-500/50 outline-none text-xs text-zinc-300 px-3 py-2 rounded-xl transition-colors font-mono cursor-pointer appearance-none"
+                style={{
+                  backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 12px center',
+                  backgroundSize: '14px'
+                }}
+              >
+                <option value="all">Tất cả Lưu Phái</option>
+                {allPaths.map(path => (
+                  <option key={path} value={path}>{translatePath(path)}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex-1 relative">
+              <select
+                value={selectedRank}
+                onChange={(e) => setSelectedRank(e.target.value)}
+                className="w-full bg-zinc-950/40 border border-zinc-900 focus:border-amber-500/50 outline-none text-xs text-zinc-300 px-3 py-2 rounded-xl transition-colors font-mono cursor-pointer appearance-none"
+                style={{
+                  backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 12px center',
+                  backgroundSize: '14px'
+                }}
+              >
+                <option value="all">Tất cả Bậc (Rank)</option>
+                {allRanks.map(rank => (
+                  <option key={rank} value={rank}>Bậc {rank}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Materials Inventory section */}
@@ -386,7 +450,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
       {showGus && (
         <div className="space-y-6 text-left">
           <span className="text-[10px] font-mono text-zinc-505 uppercase tracking-widest block font-bold">
-            Cổ Trùng Sở Hữu
+            Cổ Trùng Sở Hữu ({filteredGus.length} / {guList.length} con)
           </span>
 
           {filteredGus.length === 0 ? (

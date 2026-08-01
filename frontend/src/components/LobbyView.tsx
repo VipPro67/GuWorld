@@ -185,7 +185,7 @@ export const LobbyView: React.FC = () => {
     },
     {
       id: "achievements",
-      label: "Thành Tựu",
+      label: "Nhiệm Vụ & Thành Tựu",
       icon: Award,
       gradient: "from-amber-500 to-yellow-600",
       glow: "group-hover:shadow-[0_0_25px_rgba(245,158,11,0.45)]",
