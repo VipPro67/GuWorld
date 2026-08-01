@@ -79,7 +79,7 @@ func GetMyAuditLogs(c *gin.Context) {
 	query += " ORDER BY created_at DESC LIMIT $" + strconv.Itoa(argCount+1) + " OFFSET $" + strconv.Itoa(argCount+2)
 	args = append(args, limit, offset)
 
-	rows, err := db.DB.Query(query, args...)
+	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query audit logs: " + err.Error()})
 		return

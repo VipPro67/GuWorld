@@ -124,7 +124,7 @@ func GetLeaderboard(c *gin.Context) {
 		rankQuery := buildRankQuery(category)
 		if rankQuery != "" {
 			var pos int
-			err := db.DB.QueryRow(rankQuery, authID).Scan(&pos, &myValue)
+			err := db.DB.QueryRowContext(c.Request.Context(), rankQuery, authID).Scan(&pos, &myValue)
 			if err == nil {
 				myRank = &pos
 			}
@@ -167,14 +167,10 @@ func GetLeaderboard(c *gin.Context) {
 	case "gu_strongest":
 		query = `
 			WITH gu_max AS (
-				SELECT p.id,
-					MAX(COALESCE(gd.rank, 0)) as max_gu_rank
-				FROM players p
-				LEFT JOIN LATERAL jsonb_array_elements(
-					CASE WHEN jsonb_typeof(p.gu_inventory) = 'array' THEN p.gu_inventory ELSE '[]'::jsonb END
-				) AS gu_elems ON true
-				LEFT JOIN gu_dictionary gd ON gd.id = gu_elems->>'gu_id'
-				GROUP BY p.id
+				SELECT pg.player_id as id,
+					MAX(pg.gu_rank) as max_gu_rank
+				FROM player_gu pg
+				GROUP BY pg.player_id
 			)
 			SELECT p.id::text, p.username, COALESCE(p.avatar_url, ''), p.rank, p.sub_rank,
 				COALESCE(gm.max_gu_rank, 0)::float8 as val,
@@ -197,7 +193,7 @@ func GetLeaderboard(c *gin.Context) {
 			LIMIT 50`
 	}
 
-	rows, err := db.DB.Query(query)
+	rows, err := db.DB.QueryContext(c.Request.Context(), query)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leaderboard"})
 		return
@@ -219,7 +215,7 @@ func GetLeaderboard(c *gin.Context) {
 
 	// Count total visible players
 	var totalPlayers int
-	_ = db.DB.QueryRow(`
+	_ = db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT COUNT(*) FROM players p
 		JOIN leaderboard_settings ls ON p.id = ls.player_id
 		WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
@@ -236,7 +232,7 @@ func GetLeaderboard(c *gin.Context) {
 	rankQuery := buildRankQuery(category)
 	if rankQuery != "" {
 		var pos int
-		err := db.DB.QueryRow(rankQuery, authID).Scan(&pos, &myValue)
+		err := db.DB.QueryRowContext(c.Request.Context(), rankQuery, authID).Scan(&pos, &myValue)
 		if err == nil {
 			myRank = &pos
 		}
@@ -279,13 +275,11 @@ func buildRankQuery(category string) string {
 					ROW_NUMBER() OVER (ORDER BY COALESCE(gm.max_gu_rank, 0) DESC) as position
 				FROM players p
 				JOIN leaderboard_settings ls ON p.id = ls.player_id
-				LEFT JOIN LATERAL (
-					SELECT MAX(COALESCE(gd.rank, 0)) as max_gu_rank
-					FROM jsonb_array_elements(
-						CASE WHEN jsonb_typeof(p.gu_inventory) = 'array' THEN p.gu_inventory ELSE '[]'::jsonb END
-					) AS gu_elems
-					LEFT JOIN gu_dictionary gd ON gd.id = gu_elems->>'gu_id'
-				) gm ON true
+				LEFT JOIN (
+					SELECT pg.player_id, MAX(pg.gu_rank) as max_gu_rank
+					FROM player_gu pg
+					GROUP BY pg.player_id
+				) gm ON gm.player_id = p.id
 				WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
 			) sub WHERE sub.id = $1`
 	case "immortal_stones":
@@ -336,7 +330,7 @@ func GetLeaderboardSettings(c *gin.Context) {
 	ensureLeaderboardSetting(authID)
 
 	var show bool
-	err := db.DB.QueryRow(`SELECT show_on_leaderboard FROM leaderboard_settings WHERE player_id = $1`, authID).Scan(&show)
+	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT show_on_leaderboard FROM leaderboard_settings WHERE player_id = $1`, authID).Scan(&show)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			show = true

@@ -350,7 +350,7 @@ func GetDaoMarks(c *gin.Context) {
 	}
 
 	var daoJSON []byte
-	err := db.DB.QueryRow(`SELECT COALESCE(dao_marks, '{}') FROM players WHERE id = $1`, playerID).Scan(&daoJSON)
+	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(dao_marks, '{}') FROM players WHERE id = $1`, playerID).Scan(&daoJSON)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load Dao Marks"})
 		return
@@ -388,7 +388,7 @@ func GetApertureNodes(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT n.id, n.aperture_id, n.node_type, n.name, n.path, n.level, n.hp, n.max_hp, n.x, n.y, n.production_type, n.production_amount, n.production_interval_hours, n.last_collected_at, n.is_destroyed, n.created_at, n.updated_at
 		FROM aperture_resource_nodes n
 		JOIN immortal_apertures a ON n.aperture_id = a.id
@@ -714,7 +714,7 @@ func CollectApertureResource(c *gin.Context) {
 	// Check if player has Tiên Thai Chí Tôn (ignore Dao conflicts)
 	hasSovereignFetus := false
 	var guJSON []byte
-	errGu := tx.QueryRow(`SELECT gu_inventory FROM players WHERE id = $1`, playerID).Scan(&guJSON)
+	errGu := tx.QueryRow(`SELECT `+db.GuInventoryAggregate("players.id")+` FROM players WHERE id = $1`, playerID).Scan(&guJSON)
 	if errGu == nil {
 		var guInv models.GuInventory
 		if json.Unmarshal(guJSON, &guInv) == nil {
@@ -1403,7 +1403,7 @@ func GetApertureVariantHumans(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT v.id, v.aperture_id, v.race, v.population, v.happiness, v.oppression, v.rebellion_rate, v.labor_intensity, v.created_at, v.updated_at
 		FROM aperture_variant_humans v
 		JOIN immortal_apertures a ON v.aperture_id = a.id

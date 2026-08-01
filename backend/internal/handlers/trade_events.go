@@ -163,8 +163,8 @@ func loadActiveTrade(authID uuid.UUID) (any, error) {
 
 	var senderGuInv models.GuInventory
 	var receiverGuInv models.GuInventory
-	_ = db.DB.QueryRow(`SELECT gu_inventory FROM players WHERE id = $1`, senderID).Scan(&senderGuInv)
-	_ = db.DB.QueryRow(`SELECT gu_inventory FROM players WHERE id = $1`, receiverID).Scan(&receiverGuInv)
+	_ = db.DB.QueryRow(`SELECT `+db.GuInventoryAggregate("players.id")+` FROM players WHERE id = $1`, senderID).Scan(&senderGuInv)
+	_ = db.DB.QueryRow(`SELECT `+db.GuInventoryAggregate("players.id")+` FROM players WHERE id = $1`, receiverID).Scan(&receiverGuInv)
 
 	guDetails := make(map[string]string)
 	for _, g := range senderGuInv {

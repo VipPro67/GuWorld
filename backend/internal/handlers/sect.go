@@ -111,7 +111,7 @@ type VaultBuyRequest struct {
 
 // GetSects lists all available sects
 func GetSects(c *gin.Context) {
-	rows, err := db.DB.Query(`SELECT id, name, description, region, vault_gu, vault_materials, vault_recipes, funds, level, require_approval FROM sects`)
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, description, region, vault_gu, vault_materials, vault_recipes, funds, level, require_approval FROM sects`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sects: " + err.Error()})
 		return
@@ -286,7 +286,7 @@ func GetMySectStatus(c *gin.Context) {
 	}
 
 	var m SectMember
-	err := db.DB.QueryRow(`
+	err := db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT id, sect_id, player_id, member_rank, contribution_points, master_id, joined_at
 		FROM sect_members
 		WHERE player_id = $1
@@ -295,7 +295,7 @@ func GetMySectStatus(c *gin.Context) {
 		if err == sql.ErrNoRows {
 			// Check if they have a pending join request
 			var pendingSectID, pendingSectName string
-			err = db.DB.QueryRow(`
+			err = db.DB.QueryRowContext(c.Request.Context(), `
 				SELECT r.sect_id, s.name FROM sect_join_requests r
 				JOIN sects s ON r.sect_id = s.id
 				WHERE r.player_id = $1 AND r.status = 'PENDING'
@@ -319,7 +319,7 @@ func GetMySectStatus(c *gin.Context) {
 	}
 
 	var s Sect
-	err = db.DB.QueryRow(`
+	err = db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT id, name, description, region, vault_gu, vault_materials, vault_recipes, funds, level, require_approval
 		FROM sects
 		WHERE id = $1
@@ -334,7 +334,7 @@ func GetMySectStatus(c *gin.Context) {
 	var activeProgress int
 	var activePMId uuid.UUID
 	hasActive := false
-	err = db.DB.QueryRow(`
+	err = db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT pm.id, sm.id, sm.title, sm.description, sm.mission_type, sm.target_id, sm.target_amount, sm.reward_contribution, pm.current_progress
 		FROM player_sect_missions pm
 		JOIN sect_missions sm ON pm.mission_id = sm.id
@@ -346,7 +346,7 @@ func GetMySectStatus(c *gin.Context) {
 	}
 
 	// Leaderboard inside the sect
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT p.username, p.avatar_url, sm.member_rank, sm.contribution_points
 		FROM sect_members sm
 		JOIN players p ON sm.player_id = p.id
@@ -375,7 +375,7 @@ func GetMySectStatus(c *gin.Context) {
 	// Check if this player has a pending promotion request
 	var hasPendingPromotion bool
 	var pendingPromoTarget string
-	err = db.DB.QueryRow(`
+	err = db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT target_rank FROM sect_promotion_requests
 		WHERE player_id = $1 AND status = 'PENDING'
 	`, playerID).Scan(&pendingPromoTarget)
@@ -866,7 +866,11 @@ func DonateGu(c *gin.Context) {
 		return
 	}
 
-	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1, human_qi = $2 WHERE id = $3`, player.GuInventory, player.HumanQi, player.ID)
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update gu inventory"})
+		return
+	}
+	_, err = tx.Exec(`UPDATE players SET human_qi = $1 WHERE id = $2`, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update gu inventory"})
 		return
@@ -998,7 +1002,10 @@ func BuyFromSectVault(c *gin.Context) {
 		}
 		player.GuInventory = append(player.GuInventory, newGu)
 
-		_, err = tx.Exec(`UPDATE players SET gu_inventory = $1 WHERE id = $2`, player.GuInventory, player.ID)
+		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Gu inventory"})
+			return
+		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add Gu bug"})
 			return
@@ -1145,7 +1152,7 @@ func GetSectMissions(c *gin.Context) {
 	}
 
 	var m SectMember
-	err := db.DB.QueryRow(`
+	err := db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT sect_id, member_rank
 		FROM sect_members
 		WHERE player_id = $1
@@ -1155,7 +1162,7 @@ func GetSectMissions(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT id, sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank
 		FROM sect_missions
 		WHERE sect_id = $1
@@ -1366,8 +1373,7 @@ func CompleteSectMission(c *gin.Context) {
 		// Remove Gu from player
 		donatedGuID := player.GuInventory[targetIdx].GuID
 		player.GuInventory = append(player.GuInventory[:targetIdx], player.GuInventory[targetIdx+1:]...)
-		_, err = tx.Exec(`UPDATE players SET gu_inventory = $1 WHERE id = $2`, player.GuInventory, player.ID)
-		if err != nil {
+		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update gu inventory"})
 			return
 		}
@@ -1599,13 +1605,13 @@ func GetSectMembers(c *gin.Context) {
 	}
 
 	var sectID string
-	err := db.DB.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID)
+	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
 
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT sm.player_id, p.username, p.avatar_url, sm.member_rank, sm.contribution_points, sm.joined_at, p.rank
 		FROM sect_members sm
 		JOIN players p ON sm.player_id = p.id
@@ -2218,7 +2224,7 @@ func GetJoinRequests(c *gin.Context) {
 	}
 
 	var sectID, callerRank string
-	err := db.DB.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
+	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
@@ -2229,7 +2235,7 @@ func GetJoinRequests(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT r.id, r.sect_id, r.player_id, r.status, r.created_at, p.username, p.avatar_url, p.rank
 		FROM sect_join_requests r
 		JOIN players p ON r.player_id = p.id
@@ -2378,7 +2384,7 @@ func GetPromotionRequests(c *gin.Context) {
 	}
 
 	var sectID, callerRank string
-	err := db.DB.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
+	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
@@ -2389,7 +2395,7 @@ func GetPromotionRequests(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT r.id, r.sect_id, r.player_id, r.current_rank, r.target_rank, r.status, r.created_at, p.username, p.avatar_url, p.rank
 		FROM sect_promotion_requests r
 		JOIN players p ON r.player_id = p.id

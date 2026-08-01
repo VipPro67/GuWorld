@@ -22,7 +22,7 @@ type SectMineResponse struct {
 }
 
 func GetSectMines(c *gin.Context) {
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT sm.id, sm.name, sm.rarity, sm.occupier_sect_id, s.name, sm.occupied_at, sm.shield_until, sm.last_claimed_at
 		FROM sect_mines sm
 		LEFT JOIN sects s ON sm.occupier_sect_id = s.id

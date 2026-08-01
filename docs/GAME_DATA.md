@@ -42,6 +42,34 @@ Tạo ngay tại thời điểm người chơi thăng tiên lên Rank 6. `grade`
 
 Đạo Ngân chỉ lưu trong cột JSONB `players.dao_marks` (ví dụ `{"strength": 100, "fire": 2500}`). Bảng quan hệ `dao_marks` đã bị xóa — không còn mirror. Path được normalize dạng lowercase (không có hậu tố `" path"`) khi lưu.
 
+### Cổ của người chơi — bảng `player_gu`
+
+Cột `players.gu_inventory` (JSONB) đã được **thay thế hoàn toàn** bằng bảng quan hệ `player_gu`. Mỗi row = một Cổ instance của một người chơi:
+
+| Cột | Kiểu | Ghi chú |
+| --- | --- | --- |
+| `id` | VARCHAR(80) PK | = `instance_id` của Cổ. Được tham chiếu bởi `killer_moves.core_player_gu_id` / `killer_move_slots.player_gu_id`. |
+| `player_id` | UUID FK | → `players(id)` ON DELETE CASCADE |
+| `gu_id` | VARCHAR(50) | FK (cùng `gu_rank`) → `gu_dictionary(id, rank)` |
+| `gu_rank` | INTEGER | Cấp Cổ |
+| `rank` | INTEGER | Cột legacy, giữ bằng `gu_rank` |
+| `level` | INTEGER | Mặc định 1 |
+| `hunger` | DOUBLE PRECISION | Độ no |
+| `state` | VARCHAR(30) | ACTIVE / SLEEPING / DEAD / ... |
+| `location` | VARCHAR(30) | Mặc định `INVENTORY` |
+| `is_locked` | BOOLEAN | |
+| `equipped` | BOOLEAN | Đang trang bị |
+| `is_vital` | BOOLEAN | Bản Mệnh Cổ |
+| `integration_time` | DOUBLE PRECISION | |
+| `equipped_at` | TIMESTAMPTZ | NULL nếu chưa trang bị |
+| `growth_hours` | DOUBLE PRECISION | |
+| `created_at` / `updated_at` | TIMESTAMPTZ | |
+
+- Migration `migrate_player_gu_from_inventory` (chạy một lần khi còn cột `gu_inventory`) copy toàn bộ dữ liệu cũ sang `player_gu`, sau đó `DROP COLUMN IF EXISTS gu_inventory` loại bỏ cột. An toàn chạy lặp lại.
+- Cổ đang trang bị/Bản Mệnh vẫn được mirror trong cột JSONB `players.equipped_gus` (danh sách `instance_id`) để các truy vấn nhẹ (status) không cần join.
+- API `GET /api/player/status/:id` chỉ trả Cổ đang trang bị/vital; toàn bộ túi Cổ lấy qua `GET /api/player/inventory/gus` (helper `db.GuInventoryAggregate` / `db.LoadPlayerGus`).
+- `temp_loot.gu_inventory` và `monster_templates.gu_inventory` (JSON trong `temp_loot` / cột monster) **giữ nguyên**, không đổi.
+
 ### Bảng `aperture_resource_nodes`
 
 Node tài nguyên đặt trong Tiên Khiếu:

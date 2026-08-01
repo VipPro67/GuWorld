@@ -117,7 +117,7 @@ func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int, qi flo
 }
 
 func GetMineSlots(c *gin.Context) {
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT m.id, m.rarity, m.occupier_id, m.monster_id, m.occupied_at, m.last_claimed_at, p.username
 		FROM mine_slots m
 		LEFT JOIN players p ON m.occupier_id = p.id
@@ -544,7 +544,7 @@ func AttackMineSlot(c *gin.Context) {
 		// 4. Load defender (occupier) details
 		var defender models.Player
 		err = tx.QueryRow(`
-			SELECT id, username, rank, sub_rank, hp, max_mana, path_masteries, gu_inventory, dao_marks, current_mana, base_hp
+			SELECT id, username, rank, sub_rank, hp, max_mana, path_masteries, `+db.GuInventoryAggregate("players.id")+`, dao_marks, current_mana, base_hp
 			FROM players WHERE id = $1 FOR UPDATE`, occupierUUID).Scan(
 			&defender.ID, &defender.Username, &defender.Rank, &defender.SubRank,
 			&defender.HP, &defender.MaxMana, &defender.PathMasteries, &defender.GuInventory, &defender.DaoMarks, &defender.CurrentMana, &defender.BaseHP,

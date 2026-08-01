@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -31,11 +32,48 @@ func (s *PlayerService) DB() *sql.DB {
 
 // Load reads a full player row from the database.
 func (s *PlayerService) Load(q QueryRower, id uuid.UUID, forUpdate bool) (models.Player, error) {
+	player, err := s.loadRow(q, id, forUpdate)
+	if err != nil {
+		return player, err
+	}
+	if s.db != nil {
+		// Load the full Gu inventory from the player_gu table.
+		if inv, err := db.LoadPlayerGus(s.db, id.String(), false); err == nil {
+			player.GuInventory = inv
+		}
+	}
+	return player, nil
+}
+
+// LoadForUpdate loads a player with a row-level lock for mutation flows.
+func (s *PlayerService) LoadForUpdate(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
+	return s.Load(tx, id, true)
+}
+
+// LoadEquipped loads a player with only equipped/vital Gus populated in
+// GuInventory. Used for lightweight read-only status snapshots where the full
+// inventory is not needed (the dedicated inventory endpoint serves full data).
+func (s *PlayerService) LoadEquipped(q QueryRower, id uuid.UUID) (models.Player, error) {
+	player, err := s.loadRow(q, id, false)
+	if err != nil {
+		return player, err
+	}
+	if s.db != nil {
+		if inv, err := db.LoadPlayerGus(s.db, id.String(), true); err == nil {
+			player.GuInventory = inv
+		}
+	}
+	return player, nil
+}
+
+// loadRow loads the player row, active combat state and materials inventory,
+// but not the Gu inventory (callers decide equipped-only vs full).
+func (s *PlayerService) loadRow(q QueryRower, id uuid.UUID, forUpdate bool) (models.Player, error) {
 	var player models.Player
 
 	query := `
 		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade,
-		       current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory,
+		       current_mana, max_mana, primeval_stones, immortal_stones,
 		       wall_progress, human_qi, next_tribulation_time,
 		       tribulation_count, hp, base_hp, body_mods, x, y, explored_cells,
 		       equipped_gus, cleared_cells, current_region, dao_marks, path_masteries,
@@ -61,7 +99,7 @@ func (s *PlayerService) Load(q QueryRower, id uuid.UUID, forUpdate bool) (models
 	err := q.QueryRow(query, id).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
-		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
+		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones,
 		&player.WallProgress, &player.HumanQi, &player.NextTribulationTime, &player.TribulationCount,
 		&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y, &player.ExploredCells,
 		&player.EquippedGus, &player.ClearedCells,
@@ -107,11 +145,6 @@ func (s *PlayerService) Load(q QueryRower, id uuid.UUID, forUpdate bool) (models
 	}
 
 	return player, nil
-}
-
-// LoadForUpdate loads a player with a row-level lock for mutation flows.
-func (s *PlayerService) LoadForUpdate(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
-	return s.Load(tx, id, true)
 }
 
 // setDefaults initializes default values for empty fields.
@@ -166,7 +199,7 @@ func normalizeEnergyPool(player *models.Player) bool {
 	return false
 }
 
-// applyProjectedStatus computes mana regen, HP regen, lifespan decay, and stress decay.
+// applyProjectedStatus computes mana regen, HP regen, lifespan decay, and stress decay, 
 func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time) (poolChanged, stressChanged bool) {
 	poolChanged = normalizeEnergyPool(player)
 	stressChanged = false
@@ -185,6 +218,9 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 	} else {
 		regenRatePerHour = energyRegenRatePerHour(player)
 	}
+
+	// Add mana regen tick bonus from equipped active Gus (e.g. Heavenly Essence Lotus)
+	regenRatePerHour += models.GetPlayerManaRegenTickBonus(player.Rank, player.GuInventory)
 
 	if player.Lifespan <= 0 {
 		regenRatePerHour = regenRatePerHour * 0.5
@@ -274,7 +310,7 @@ func energyRegenRatePerHour(player *models.Player) float64 {
 
 // ProjectStatus computes the read-only projected status for UI refreshes.
 func (s *PlayerService) ProjectStatus(q QueryRower, id uuid.UUID) (models.Player, error) {
-	player, err := s.Load(q, id, false)
+	player, err := s.LoadEquipped(q, id)
 	if err != nil {
 		return player, err
 	}

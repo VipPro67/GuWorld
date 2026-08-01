@@ -84,7 +84,7 @@ func CheckReferralMilestones(tx *sql.Tx, refereeID uuid.UUID) error {
 	var referrerStones int
 	var referrerGuInvBytes []byte
 	err = tx.QueryRow(`
-		SELECT username, primeval_stones, gu_inventory
+		SELECT username, primeval_stones, `+db.GuInventoryAggregate("players.id")+`
 		FROM players
 		WHERE id = $1
 		FOR UPDATE
@@ -154,12 +154,14 @@ func CheckReferralMilestones(tx *sql.Tx, refereeID uuid.UUID) error {
 
 	if rewardsAwarded {
 		// Save referrer updates
-		referrerGuInvBytes, _ = json.Marshal(referrerGuInv)
+		if err := db.SavePlayerGus(tx, referrerID.String(), referrerGuInv); err != nil {
+			return fmt.Errorf("failed to save referrer Gu inventory: %w", err)
+		}
 		_, err = tx.Exec(`
 			UPDATE players 
-			SET primeval_stones = $1, gu_inventory = $2 
-			WHERE id = $3
-		`, referrerStones, referrerGuInvBytes, referrerID)
+			SET primeval_stones = $1 
+			WHERE id = $2
+		`, referrerStones, referrerID)
 		if err != nil {
 			return fmt.Errorf("failed to update referrer rewards: %w", err)
 		}
@@ -304,7 +306,7 @@ func GetReferralStats(c *gin.Context) {
 
 	// Fetch player's ref code
 	var refCode string
-	err := db.DB.QueryRow(`
+	err := db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT ref_code 
 		FROM players 
 		WHERE id = $1
@@ -315,7 +317,7 @@ func GetReferralStats(c *gin.Context) {
 	}
 
 	// Fetch referrals stats
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT r.id, p.username, p.rank, r.referee_ip, r.is_suspicious, r.has_deposited, 
 		       r.milestone1_rewarded, r.milestone2_rewarded, r.milestone3_rewarded, r.created_at
 		FROM referrals r

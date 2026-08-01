@@ -94,7 +94,7 @@ func GetRecipes(c *gin.Context) {
 	// 2. Query global database or cache
 	var masterRecipes []models.RefiningRecipe
 	if err := cache.GetJSON("master_refining_recipes", &masterRecipes); err != nil {
-		rows, err := db.DB.Query(`
+		rows, err := db.DB.QueryContext(c.Request.Context(), `
 			SELECT id, target_gu_id, target_rank, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost 
 			FROM refining_recipes
 		`)
@@ -446,12 +446,16 @@ func RefineGu(c *gin.Context) {
 	qiGained := AddHumanQi(&player, 10.0)
 
 	// 9. Update player status in database
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu túi đồ"})
+		return
+	}
 	updateQuery := `
 		UPDATE players
-		SET primeval_stones = $1, immortal_stones = $2, gu_inventory = $3, equipped_gus = $4, hp = $5, max_mana = $6, current_mana = $7, human_qi = $8
-		WHERE id = $9
+		SET primeval_stones = $1, immortal_stones = $2, equipped_gus = $3, hp = $4, max_mana = $5, current_mana = $6, human_qi = $7
+		WHERE id = $8
 	`
-	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ImmortalStones, player.GuInventory, player.EquippedGus, player.HP, player.MaxMana, player.CurrentMana, player.HumanQi, player.ID)
+	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ImmortalStones, player.EquippedGus, player.HP, player.MaxMana, player.CurrentMana, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save refining results"})
 		return

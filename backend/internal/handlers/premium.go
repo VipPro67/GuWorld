@@ -344,7 +344,7 @@ func GetTopupOrder(c *gin.Context) {
 		CreatedAt time.Time
 		PaidAt    sql.NullTime
 	}
-	err = db.DB.QueryRow(`SELECT order_code, amount_vnd, jade_amount, status, checkout_url, qr_code, created_at, paid_at FROM topup_orders WHERE order_code=$1 AND user_id=$2`, orderCode, playerID).Scan(&row.OrderCode, &row.AmountVND, &row.Jade, &row.Status, &row.Checkout, &row.QR, &row.CreatedAt, &row.PaidAt)
+	err = db.DB.QueryRowContext(c.Request.Context(), `SELECT order_code, amount_vnd, jade_amount, status, checkout_url, qr_code, created_at, paid_at FROM topup_orders WHERE order_code=$1 AND user_id=$2`, orderCode, playerID).Scan(&row.OrderCode, &row.AmountVND, &row.Jade, &row.Status, &row.Checkout, &row.QR, &row.CreatedAt, &row.PaidAt)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy đơn nạp"})
 		return
@@ -535,7 +535,11 @@ func BuyPremiumPackage(c *gin.Context) {
 		}
 	}
 
-	if _, err = tx.Exec(`UPDATE players SET primeval_stones=$1, immortal_stones=$2, gu_inventory=$3 WHERE id=$4`, player.PrimevalStones, player.ImmortalStones, player.GuInventory, playerID); err != nil {
+	if err := db.SavePlayerGus(tx, playerID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật phần thưởng"})
+		return
+	}
+	if _, err = tx.Exec(`UPDATE players SET primeval_stones=$1, immortal_stones=$2 WHERE id=$3`, player.PrimevalStones, player.ImmortalStones, playerID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật phần thưởng"})
 		return
 	}
@@ -782,7 +786,7 @@ func AdminListTopupOrders(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok {
 		return
 	}
-	rows, err := db.DB.Query(`SELECT order_code, user_id, amount_vnd, jade_amount, status, provider, checkout_url, created_at, paid_at FROM topup_orders ORDER BY created_at DESC LIMIT 100`)
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT order_code, user_id, amount_vnd, jade_amount, status, provider, checkout_url, created_at, paid_at FROM topup_orders ORDER BY created_at DESC LIMIT 100`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách đơn nạp"})
 		return
@@ -817,7 +821,7 @@ func AdminListWalletTransactions(c *gin.Context) {
 		args = append(args, userID)
 	}
 	query += ` ORDER BY created_at DESC LIMIT 200`
-	rows, err := db.DB.Query(query, args...)
+	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải giao dịch ví"})
 		return

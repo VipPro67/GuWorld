@@ -161,7 +161,6 @@ func InitSchema() error {
 		max_mana DOUBLE PRECISION NOT NULL,
 		primeval_stones INTEGER DEFAULT 0,
 		immortal_stones DOUBLE PRECISION DEFAULT 0,
-		gu_inventory JSONB NOT NULL DEFAULT '[]',
 		hp DOUBLE PRECISION NOT NULL DEFAULT 100,
 		base_hp DOUBLE PRECISION NOT NULL DEFAULT 100,
 		body_mods JSONB NOT NULL DEFAULT '[]',
@@ -830,6 +829,11 @@ func InitSchema() error {
 		state VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
 		location VARCHAR(30) NOT NULL DEFAULT 'INVENTORY',
 		is_locked BOOLEAN NOT NULL DEFAULT false,
+		equipped BOOLEAN NOT NULL DEFAULT false,
+		is_vital BOOLEAN NOT NULL DEFAULT false,
+		integration_time DOUBLE PRECISION NOT NULL DEFAULT 0,
+		equipped_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+		growth_hours DOUBLE PRECISION NOT NULL DEFAULT 0,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);`)
@@ -842,10 +846,13 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create player_gu index: %w", err)
 	}
 
+	// player_gu_player_equipped_idx / player_gu_player_gu_idx are created after
+	// the migration loop below, because the equipped column is added by a
+	// migration on databases that predate this schema.
+
 	// Backwards-compatible column migrations
 	migrations := []struct{ sql, errMsg string }{
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) NOT NULL DEFAULT '';`, "password_hash"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS gu_inventory JSONB NOT NULL DEFAULT '[]';`, "gu_inventory"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS materials_inventory JSONB NOT NULL DEFAULT '{}';`, "materials_inventory"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS hp DOUBLE PRECISION NOT NULL DEFAULT 100;`, "hp"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS base_hp DOUBLE PRECISION NOT NULL DEFAULT 100;`, "base_hp"},
@@ -893,8 +900,40 @@ func InitSchema() error {
 		{`ALTER TABLE gu_dictionary ADD PRIMARY KEY (id, rank);`, "add_gu_dict_pk"},
 		{`ALTER TABLE refining_recipes ADD FOREIGN KEY (target_gu_id, target_rank) REFERENCES gu_dictionary(id, rank) ON DELETE CASCADE;`, "add_recipe_fk"},
 		{`ALTER TABLE player_gu ADD FOREIGN KEY (gu_id, gu_rank) REFERENCES gu_dictionary(id, rank);`, "add_player_gu_fk"},
-		{`UPDATE players SET gu_inventory = COALESCE(gu_inventory, '[]'::jsonb) WHERE gu_inventory IS NULL;`, "fix_null_gu_inventory"},
-		{`UPDATE players SET gu_inventory = (SELECT jsonb_agg(CASE WHEN elem->>'rank' IS NULL OR elem->>'rank' = '' THEN elem || jsonb_build_object('rank', COALESCE((SELECT gd.rank FROM gu_dictionary gd WHERE gd.id = elem->>'gu_id' LIMIT 1), 1)) ELSE elem END) FROM jsonb_array_elements(COALESCE(gu_inventory, '[]'::jsonb)) AS elem) WHERE gu_inventory IS NOT NULL AND gu_inventory::text != '[]' AND gu_inventory::text != 'null';`, "backfill_gu_inventory_rank"},
+		{`ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS equipped BOOLEAN NOT NULL DEFAULT false;`, "player_gu.equipped"},
+		{`ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS is_vital BOOLEAN NOT NULL DEFAULT false;`, "player_gu.is_vital"},
+		{`ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS integration_time DOUBLE PRECISION NOT NULL DEFAULT 0;`, "player_gu.integration_time"},
+		{`ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS equipped_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;`, "player_gu.equipped_at"},
+		{`ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS growth_hours DOUBLE PRECISION NOT NULL DEFAULT 0;`, "player_gu.growth_hours"},
+		{`DO $$
+			BEGIN
+				IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'players' AND column_name = 'gu_inventory') THEN
+					INSERT INTO player_gu (id, player_id, gu_id, gu_rank, rank, level, hunger, state, location, is_locked, equipped, is_vital, integration_time, equipped_at, growth_hours)
+					SELECT
+						elem->>'instance_id',
+						p.id,
+						elem->>'gu_id',
+						COALESCE((elem->>'rank')::int, 1),
+						COALESCE((elem->>'rank')::int, 1),
+						1,
+						COALESCE((elem->>'hunger')::int, 100),
+						COALESCE(NULLIF(elem->>'status', ''), 'ACTIVE'),
+						'INVENTORY',
+						false,
+						COALESCE((elem->>'equipped')::boolean, false),
+						COALESCE((elem->>'is_vital')::boolean, false),
+						COALESCE((elem->>'integration_time')::double precision, 0),
+						NULLIF(elem->>'equipped_at', '')::timestamptz,
+						COALESCE((elem->>'growth_hours')::double precision, 0)
+					FROM players p
+					CROSS JOIN LATERAL jsonb_array_elements(COALESCE(p.gu_inventory, '[]'::jsonb)) AS elem
+					WHERE elem->>'instance_id' IS NOT NULL
+					  AND elem->>'gu_id' IS NOT NULL
+					  AND NOT EXISTS (SELECT 1 FROM player_gu pg WHERE pg.id = elem->>'instance_id')
+					  AND EXISTS (SELECT 1 FROM gu_dictionary gd WHERE gd.id = elem->>'gu_id' AND gd.rank = COALESCE((elem->>'rank')::int, 1));
+				END IF;
+			END $$;`, "migrate_player_gu_from_inventory"},
+		{`ALTER TABLE players DROP COLUMN IF EXISTS gu_inventory;`, "drop_player_gu_inventory"},
 		{`UPDATE players SET temp_loot = COALESCE(temp_loot, '{}'::jsonb) WHERE temp_loot IS NULL;`, "fix_null_temp_loot"},
 		{`UPDATE players SET temp_loot = jsonb_set(temp_loot, '{gu_inventory}', COALESCE((SELECT jsonb_agg(CASE WHEN elem->>'rank' IS NULL OR elem->>'rank' = '' THEN elem || jsonb_build_object('rank', COALESCE((SELECT gd.rank FROM gu_dictionary gd WHERE gd.id = elem->>'gu_id' LIMIT 1), 1)) ELSE elem END) FROM jsonb_array_elements(COALESCE(temp_loot->'gu_inventory', '[]'::jsonb)) AS elem), '[]'::jsonb), false) WHERE temp_loot IS NOT NULL AND temp_loot::text != '{}' AND temp_loot::text != 'null';`, "backfill_temp_loot_rank"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS lifespan DOUBLE PRECISION NOT NULL DEFAULT 100.0;`, "lifespan"},
@@ -1131,6 +1170,17 @@ func InitSchema() error {
 		if _, err = DB.Exec(m.sql); err != nil {
 			return fmt.Errorf("failed to run migration %s: %w", m.errMsg, err)
 		}
+	}
+
+	// player_gu secondary indexes — created here so they work on databases whose
+	// player_gu table predates the equipped/gu_rank columns (added by migration).
+	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS player_gu_player_equipped_idx ON player_gu (player_id, equipped);`)
+	if err != nil {
+		return fmt.Errorf("failed to create player_gu equipped index: %w", err)
+	}
+	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS player_gu_player_gu_idx ON player_gu (player_id, gu_id);`)
+	if err != nil {
+		return fmt.Errorf("failed to create player_gu gu_id index: %w", err)
 	}
 
 	// Phase 1 tables: player_recipe_progress
@@ -2594,25 +2644,15 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 		excludeArray = string(b)
 	}
 
-	// 1. Kiểm tra trong rương đồ gu_inventory của tất cả người chơi
+	// 1. Kiểm tra trong bảng phụ player_gu (toàn bộ cổ của mọi người chơi)
 	err := tx.QueryRow(`
 		SELECT EXISTS(
-			SELECT 1 FROM players,
-			jsonb_array_elements(gu_inventory) AS elem
-			WHERE elem->>'gu_id' = $1::text
-			  AND COALESCE((elem->>'rank')::int, 0) = $2
-			  AND NOT (elem->>'instance_id' = ANY($3::text[]))
+			SELECT 1 FROM player_gu
+			WHERE gu_id = $1
+			  AND gu_rank = $2
+			  AND NOT (id = ANY($3::text[]))
 		)
 	`, guID, rank, excludeArray).Scan(&exists)
-	if err != nil {
-		return false, err
-	}
-	if exists {
-		return true, nil
-	}
-
-	// 1b. Kiểm tra trong bảng phụ player_gu (phòng hờ)
-	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM player_gu WHERE gu_id = $1 AND gu_rank = $2)", guID, rank).Scan(&exists)
 	if err != nil {
 		return false, err
 	}
@@ -2656,14 +2696,10 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 }
 
 // GetExistingImmortalGuIDs returns the set of gu_ids that currently have at least one
-// rank >= 6 (Immortal Gu) instance anywhere in the world: any player's gu_inventory,
-// player_gu, ACTIVE auction listings, and temp_loot.
+// rank >= 6 (Immortal Gu) instance anywhere in the world: any player's player_gu,
+// ACTIVE auction listings, and temp_loot.
 func GetExistingImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
 	rows, err := tx.Query(`
-		SELECT DISTINCT elem->>'gu_id' FROM players,
-			jsonb_array_elements(gu_inventory) AS elem
-			WHERE COALESCE((elem->>'rank')::int, 0) >= 6
-		UNION
 		SELECT DISTINCT gu_id FROM player_gu WHERE gu_rank >= 6
 		UNION
 		SELECT DISTINCT elem->>'gu_id' FROM auction,

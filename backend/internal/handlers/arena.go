@@ -61,7 +61,7 @@ func GetArenaLeaderboard(c *gin.Context) {
 	_, _ = EnsurePlayerArenaRanking(tx, authID)
 	tx.Commit()
 
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT a.player_id, p.username, p.avatar_url, a.rank, a.points, a.updated_at
 		FROM arena_rankings a
 		JOIN players p ON a.player_id = p.id
@@ -84,7 +84,7 @@ func GetArenaLeaderboard(c *gin.Context) {
 
 	var dailyChallenges int
 	var lastChallengeAt time.Time
-	_ = db.DB.QueryRow("SELECT daily_challenges, last_challenge_at FROM arena_rankings WHERE player_id = $1", authID).Scan(&dailyChallenges, &lastChallengeAt)
+	_ = db.DB.QueryRowContext(c.Request.Context(), "SELECT daily_challenges, last_challenge_at FROM arena_rankings WHERE player_id = $1", authID).Scan(&dailyChallenges, &lastChallengeAt)
 
 	now := time.Now()
 	if lastChallengeAt.YearDay() != now.YearDay() || lastChallengeAt.Year() != now.Year() {
@@ -165,7 +165,7 @@ func ChallengeArena(c *gin.Context) {
 
 	var targetPlayer models.Player
 	err = tx.QueryRow(`
-		SELECT id, username, rank, sub_rank, hp, max_mana, path_masteries, gu_inventory, dao_marks, current_mana, base_hp
+		SELECT id, username, rank, sub_rank, hp, max_mana, path_masteries, `+db.GuInventoryAggregate("players.id")+`, dao_marks, current_mana, base_hp
 		FROM players WHERE id = $1 FOR UPDATE`, targetUUID).Scan(
 		&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
 		&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,

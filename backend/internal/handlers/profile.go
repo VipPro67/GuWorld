@@ -98,8 +98,8 @@ func GetPlayerProfile(c *gin.Context) {
 	var viewerGuInventory models.GuInventory
 	var viewerPathMasteries models.PathMasteriesMap
 
-	err := db.DB.QueryRow(`
-		SELECT rank, gu_inventory, path_masteries
+	err := db.DB.QueryRowContext(c.Request.Context(), `
+		SELECT rank, `+db.GuInventoryAggregate("players.id")+`, path_masteries
 		FROM players
 		WHERE id = $1
 	`, viewerID).Scan(&viewerRank, &viewerGuInventory, &viewerPathMasteries)
@@ -114,11 +114,11 @@ func GetPlayerProfile(c *gin.Context) {
 	var targetDaoMarks models.DaoMarksMap
 
 	query := `
-		SELECT p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitude_percent, p.current_mana, p.max_mana, p.primeval_stones, p.immortal_stones, p.hp, p.base_hp, p.gu_inventory, p.path_masteries, p.dao_marks, COALESCE(p.bio, ''), COALESCE(p.avatar_url, ''), p.fake_rank, p.fake_sub_rank, COALESCE(p.fake_vital_gu, ''), p.is_disguised
+		SELECT p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitude_percent, p.current_mana, p.max_mana, p.primeval_stones, p.immortal_stones, p.hp, p.base_hp, `+db.GuInventoryAggregate("p.id")+`, p.path_masteries, p.dao_marks, COALESCE(p.bio, ''), COALESCE(p.avatar_url, ''), p.fake_rank, p.fake_sub_rank, COALESCE(p.fake_vital_gu, ''), p.is_disguised
 		FROM players p
 		WHERE p.username = $1
 	`
-	err = db.DB.QueryRow(query, targetUsername).Scan(
+	err = db.DB.QueryRowContext(c.Request.Context(), query, targetUsername).Scan(
 		&target.ID, &target.Username, &target.Rank, &target.SubRank,
 		&target.AptitudeType, &target.AptitudePercent, &target.CurrentMana, &target.MaxMana,
 		&target.PrimevalStones, &target.ImmortalStones, &target.HP, &target.BaseHP, &target.GuInventory, &target.PathMasteries,
@@ -133,7 +133,7 @@ func GetPlayerProfile(c *gin.Context) {
 	}
 
 	// Fetch sect name separately to keep query simpler and safe
-	_ = db.DB.QueryRow(`
+	_ = db.DB.QueryRowContext(c.Request.Context(), `
 		SELECT s.name 
 		FROM sect_members sm 
 		JOIN sects s ON sm.sect_id = s.id 

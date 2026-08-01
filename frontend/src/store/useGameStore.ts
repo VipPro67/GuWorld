@@ -776,6 +776,8 @@ interface GameState {
   setPlayerFromServer: (player: Player | null) => void;
   getEstimatedMana: () => number | null;
   fetchPlayerStatus: (id: string) => Promise<void>;
+  fetchGuInventory: () => Promise<void>;
+  guInventoryLoaded: boolean;
   subscribePlayerEvents: () => void;
   unsubscribePlayerEvents: () => void;
   playerEventsConnected: boolean;
@@ -1150,6 +1152,7 @@ export const useGameStore = create<GameState>((set, get) => {
     set({
       ...extraState,
       player: normalizedPlayer,
+      guInventoryLoaded: normalizedPlayer ? (normalizedPlayer.gu_inventory || []).length > 0 : false,
       manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer, get().guDictionary) : null,
     });
     if (normalizedPlayer) {
@@ -1200,6 +1203,7 @@ export const useGameStore = create<GameState>((set, get) => {
   arenaShopItems: [],
   playerEventsConnected: false,
   playerEventsRetries: 0,
+  guInventoryLoaded: false,
   logs: ["Chào mừng đạo hữu đến với Cổ Giới. Hãy tu luyện và sinh tồn."],
   referralsData: null,
   guDictionary: {},
@@ -1453,7 +1457,7 @@ export const useGameStore = create<GameState>((set, get) => {
     get().unsubscribeTradeEvents();
     get().unsubscribeBaoHoangMessages();
     void authFetch(`${BACKEND_URL}/api/auth/logout`, { method: "POST" });
-    set({ player: null, manaSnapshot: null, token: null, recipes: [], recipesLoaded: true, quests: [] });
+    set({ player: null, manaSnapshot: null, token: null, recipes: [], recipesLoaded: true, quests: [], guInventoryLoaded: false });
     localStorage.removeItem("gu_auth_token");
     localStorage.removeItem("gu_player_id");
     get().addLog("Đã rời khỏi thế giới Cổ sư.");
@@ -1886,10 +1890,47 @@ export const useGameStore = create<GameState>((set, get) => {
       const player: Player = await response.json();
       const currentPlayer = get().player;
       if (currentPlayer && currentPlayer.id === id) {
-        setPlayerFromServer(player);
+        // The status endpoint only projects equipped/vital Gus. Preserve the
+        // full inventory already in state so it is not clobbered by the sparse
+        // snapshot.
+        setPlayerFromServer({
+          ...player,
+          gu_inventory: currentPlayer.gu_inventory?.length ? currentPlayer.gu_inventory : player.gu_inventory,
+          equipped_gus: currentPlayer.gu_inventory?.length ? currentPlayer.equipped_gus : player.equipped_gus,
+        });
       }
     } catch (err: any) {
       console.error("Status fetch failed:", err.message);
+    }
+  },
+
+  fetchGuInventory: async () => {
+    const { token, logout, guInventoryLoaded } = get();
+    if (!token || guInventoryLoaded) return;
+
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/inventory/gus`);
+
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch inventory");
+      }
+
+      const data: { gu_inventory: GuInstance[]; equipped_gus: string[] } = await response.json();
+      const currentPlayer = get().player;
+      if (!currentPlayer) return;
+
+      setPlayerFromServer({
+        ...currentPlayer,
+        gu_inventory: data.gu_inventory,
+        equipped_gus: data.equipped_gus,
+      });
+    } catch (err: any) {
+      console.error("Gu inventory fetch failed:", err.message);
     }
   },
 

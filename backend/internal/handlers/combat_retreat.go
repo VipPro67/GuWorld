@@ -128,16 +128,15 @@ func Retreat(c *gin.Context) {
 				if mID == player.ID {
 					continue
 				}
-				var targetGuBytes []byte
 				var targetStones int
 				errLoad := tx.QueryRow(`
-					SELECT primeval_stones, gu_inventory 
+					SELECT primeval_stones
 					FROM players WHERE id = $1 FOR UPDATE`, mID,
-				).Scan(&targetStones, &targetGuBytes)
+				).Scan(&targetStones)
 				if errLoad == nil {
-					var targetGu models.GuInventory
-					if len(targetGuBytes) > 0 {
-						json.Unmarshal(targetGuBytes, &targetGu)
+					targetGu, errLoadGu := db.LoadPlayerGus(tx, mID.String(), false)
+					if errLoadGu != nil {
+						continue
 					}
 
 					targetStones += share.PrimevalStones
@@ -148,8 +147,9 @@ func Retreat(c *gin.Context) {
 
 					_, _ = tx.Exec(`
 						UPDATE players 
-						SET primeval_stones = $1, gu_inventory = $2 
-						WHERE id = $3`, targetStones, targetGu, mID)
+						SET primeval_stones = $1
+						WHERE id = $2`, targetStones, mID)
+					_ = db.SavePlayerGus(tx, mID.String(), targetGu)
 				}
 			}
 

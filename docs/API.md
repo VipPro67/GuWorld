@@ -32,7 +32,8 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | Method | Path |
 | --- | --- |
 | GET | `/player/events` |
-| GET | `/player/status/:id` |
+| GET | `/player/status/:id` | Projects only equipped/vital Gus. |
+| GET | `/player/inventory/gus` | Full Gu inventory (lazy-loaded). |
 | GET | `/player/stats` |
 | POST | `/player/explore/:id` |
 | POST | `/player/use-item` |

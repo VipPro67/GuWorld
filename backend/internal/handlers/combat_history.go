@@ -99,7 +99,7 @@ func ListCombatHistory(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.Query(
+	rows, err := db.DB.QueryContext(c.Request.Context(), 
 		`SELECT id, player_id, winner, logs, summary, combatants, enemy_name, enemy_type, region, created_at
 		 FROM combat_history WHERE player_id = $1 ORDER BY created_at DESC LIMIT 20`,
 		authID,
@@ -141,7 +141,7 @@ func GetCombatHistory(c *gin.Context) {
 	}
 
 	var e CombatHistoryEntry
-	err := db.DB.QueryRow(
+	err := db.DB.QueryRowContext(c.Request.Context(), 
 		`SELECT id, player_id, winner, logs, summary, combatants, enemy_name, enemy_type, region, created_at
 		 FROM combat_history WHERE id = $1 AND player_id = $2`,
 		id, authID,

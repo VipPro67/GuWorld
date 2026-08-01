@@ -90,7 +90,7 @@ func GetPartyStatus(c *gin.Context) {
 	}
 
 	var partyIDStr sql.NullString
-	err := db.DB.QueryRow("SELECT party_id FROM players WHERE id = $1", authID).Scan(&partyIDStr)
+	err := db.DB.QueryRowContext(c.Request.Context(), "SELECT party_id FROM players WHERE id = $1", authID).Scan(&partyIDStr)
 	if err != nil || !partyIDStr.Valid || partyIDStr.String == "" {
 		c.JSON(http.StatusOK, gin.H{"party": nil})
 		return
@@ -98,7 +98,7 @@ func GetPartyStatus(c *gin.Context) {
 
 	var leaderID string
 	var membersRaw []byte
-	err = db.DB.QueryRow("SELECT leader_id, members FROM parties WHERE id = $1", partyIDStr.String).Scan(&leaderID, &membersRaw)
+	err = db.DB.QueryRowContext(c.Request.Context(), "SELECT leader_id, members FROM parties WHERE id = $1", partyIDStr.String).Scan(&leaderID, &membersRaw)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"party": nil})
 		return

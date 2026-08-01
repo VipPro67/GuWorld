@@ -159,6 +159,10 @@ func OpenGacha(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật người chơi"})
 		return
 	}
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cổ trùng"})
+		return
+	}
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi commit"})
@@ -256,6 +260,10 @@ func OpenGacha10(c *gin.Context) {
 	_, err = tx.Exec(updateQuery, updateArgs...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật người chơi"})
+		return
+	}
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cổ trùng"})
 		return
 	}
 
@@ -517,10 +525,6 @@ func buildGachaUpdateQuery(player *models.Player) (string, []interface{}) {
 	extraVals := []interface{}{}
 
 	// materials_inventory no longer stored on players table
-	if len(player.GuInventory) > 0 {
-		extraFields = append(extraFields, "gu_inventory")
-		extraVals = append(extraVals, player.GuInventory)
-	}
 
 	allFields := append(baseFields, extraFields...)
 	allVals := append(baseVals, extraVals...)

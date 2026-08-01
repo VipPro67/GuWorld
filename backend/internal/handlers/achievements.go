@@ -83,7 +83,7 @@ func GetAchievements(c *gin.Context) {
 
 	var earnedJSON []byte
 	var selectedTitle, selectedFrame string
-	err := db.DB.QueryRow(`SELECT COALESCE(earned_achievements, '[]'::jsonb), COALESCE(selected_title, ''), COALESCE(selected_frame, '') FROM players WHERE id = $1`, playerID).Scan(&earnedJSON, &selectedTitle, &selectedFrame)
+	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(earned_achievements, '[]'::jsonb), COALESCE(selected_title, ''), COALESCE(selected_frame, '') FROM players WHERE id = $1`, playerID).Scan(&earnedJSON, &selectedTitle, &selectedFrame)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
 		return

@@ -400,7 +400,7 @@ func MovePlayer(c *gin.Context) {
 	var targetPlayer models.Player
 	var hasTargetPlayer bool
 	queryStr := `
-		SELECT id, username, rank, sub_rank, hp, max_mana, current_mana, base_hp, path_masteries, gu_inventory, dao_marks
+		SELECT id, username, rank, sub_rank, hp, max_mana, current_mana, base_hp, path_masteries, `+db.GuInventoryAggregate("players.id")+`, dao_marks
 		FROM players
 		WHERE current_region = $1 AND x = $2 AND y = $3 AND id != $4
 		  AND (current_region IN ('qing_mao_mountain', 'gu_luan_slope', 'three_kings_inheritance') OR last_mana_update >= NOW() - INTERVAL '15 minutes')
@@ -564,7 +564,7 @@ func MovePlayer(c *gin.Context) {
 		case "PVP":
 			var targetPlayer models.Player
 			err := tx.QueryRow(`
-				SELECT id, username, rank, sub_rank, hp, max_mana, path_masteries, gu_inventory, dao_marks
+				SELECT id, username, rank, sub_rank, hp, max_mana, path_masteries, `+db.GuInventoryAggregate("players.id")+`, dao_marks
 				FROM players 
 				WHERE id != $1 
 				LIMIT 1`, player.ID,
@@ -672,10 +672,14 @@ func MovePlayer(c *gin.Context) {
 	// Update DB
 	updateQuery := `
 		UPDATE players
-		SET current_mana = $1, x = $2, y = $3, explored_cells = $4, gu_inventory = $5, cleared_cells = $6, active_combat = $7, temp_loot = $8, last_mana_update = $9, primeval_stones = $10, hp = $11, max_mana = $12, human_qi = $13
-		WHERE id = $14
+		SET current_mana = $1, x = $2, y = $3, explored_cells = $4, cleared_cells = $5, active_combat = $6, temp_loot = $7, last_mana_update = $8, primeval_stones = $9, hp = $10, max_mana = $11, human_qi = $12
+		WHERE id = $13
 	`
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.ExploredCells, player.GuInventory, player.ClearedCells, player.ActiveCombat, player.TempLoot, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.ID)
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
+		return
+	}
+	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.ExploredCells, player.ClearedCells, player.ActiveCombat, player.TempLoot, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return
@@ -704,7 +708,7 @@ func GetRegions(c *gin.Context) {
 		WHERE is_active = TRUE
 		ORDER BY min_rank ASC
 	`
-	rows, err := db.DB.Query(query)
+	rows, err := db.DB.QueryContext(c.Request.Context(), query)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải dữ liệu bản đồ"})
 		return

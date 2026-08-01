@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Player, GuSpec, ItemSpec, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
 import { Flower2, Wine, Gem, ShieldAlert, Sparkles, HelpCircle, Search, Shield, Zap, ChevronDown, ChevronUp, Lock, Unlock } from "lucide-react";
 import { translateGuType, translateItemType, translatePath } from "@/lib/translate";
@@ -82,6 +82,14 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const [advancedOpen, setAdvancedOpen] = useState<Record<string, boolean>>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTab, setSelectedTab] = useState<"gu" | "material">("gu");
+
+  // The player status snapshot only carries equipped/vital Gus; lazy-load the
+  // full inventory when the management view is opened.
+  const fetchGuInventory = useGameStore((state) => state.fetchGuInventory);
+  const guInventoryLoaded = useGameStore((state) => state.guInventoryLoaded);
+  useEffect(() => {
+    if (!guInventoryLoaded) void fetchGuInventory();
+  }, [fetchGuInventory, guInventoryLoaded]);
 
   const toggleGroupExpand = (guId: string) => {
     setExpandedGroups((prev) => ({ ...prev, [guId]: !prev[guId] }));

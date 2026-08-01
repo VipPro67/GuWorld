@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -310,4 +311,67 @@ func LoadGuRegistry(db *sql.DB) error {
 	GuRegistry = newRegistry
 	logger.S.Infof("Loaded %d Gu bugs from database registry into memory cache", count)
 	return nil
+}
+
+// GetThienNguyenMultiplier returns the multiplier for Thien Nguyen Bao Lien series effects.
+// Same rank = x2. Lower player rank = higher boost (high-rank gu helps low-rank cultivator more).
+// Formula follows energy cost logic: multiplier = 2.0 * costFactor(guRank) / costFactor(playerRank).
+// Immortal gu (6+) blocked for mortals (<6) in EquipGu already.
+func GetThienNguyenMultiplier(playerRank, guRank int) float64 {
+	if playerRank == guRank {
+		return 2.0
+	}
+	immortalCost := func(diff int) float64 {
+		return math.Pow(100, float64(diff))
+	}
+	mortalCost := map[int]float64{1: 1, 2: 2, 3: 5, 4: 20, 5: 100}
+	if playerRank >= 6 && guRank >= 6 {
+		diff := playerRank - guRank
+		if diff > 0 {
+			return 2.0 / immortalCost(diff)
+		}
+		return 2.0 * immortalCost(-diff)
+	}
+	if playerRank >= 6 {
+		return 2.0 / immortalCost(playerRank-guRank)
+	}
+	if guRank >= 6 {
+		return 0
+	}
+	playerCost := mortalCost[playerRank]
+	guCost := mortalCost[guRank]
+	if playerCost == 0 || guCost == 0 {
+		return 0
+	}
+	return 2.0 * guCost / playerCost
+}
+
+// GetPlayerManaRegenTickBonus calculates the total mana regeneration bonus from equipped active Gus with MANA_REGEN_TICK.
+func GetPlayerManaRegenTickBonus(playerRank int, inventory []GuInstance) float64 {
+	var totalBonus float64
+	for _, gu := range inventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			spec, found := GetGuAny(gu.GuID)
+			if found && spec.Effects.Other != nil {
+				tnMultiplier := 1.0
+				if strings.HasPrefix(spec.ID, "GU_HEAVENLY_ESSENCE_LOTUS") {
+					tnMultiplier = GetThienNguyenMultiplier(playerRank, spec.Rank)
+				}
+				for _, mech := range spec.Effects.Other {
+					if mech.EventTrigger == "ON_TICK" && mech.ActionCode == "MANA_REGEN_TICK" {
+						var params map[string]interface{}
+						if len(mech.Params) > 0 {
+							_ = json.Unmarshal(mech.Params, &params)
+						}
+						val, _ := params["value"].(float64)
+						if val <= 0 {
+							val = 0.5
+						}
+						totalBonus += val * tnMultiplier
+					}
+				}
+			}
+		}
+	}
+	return totalBonus
 }

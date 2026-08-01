@@ -99,7 +99,7 @@ func GetInbox(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT m.id, m.sender_id, p.username, m.content, m.is_read, m.created_at
 		FROM messages m
 		JOIN players p ON m.sender_id = p.id

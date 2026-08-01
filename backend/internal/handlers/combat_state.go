@@ -46,7 +46,7 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 					if errParse == nil {
 						var mPlayer models.Player
 						errMember := tx.QueryRow(`
-							SELECT id, username, rank, sub_rank, hp, max_mana, current_mana, path_masteries, gu_inventory, dao_marks, body_mods, base_hp, avatar_url
+							SELECT id, username, rank, sub_rank, hp, max_mana, current_mana, path_masteries, `+db.GuInventoryAggregate("players.id")+`, dao_marks, body_mods, base_hp, avatar_url
 							FROM players 
 							WHERE id = $1 AND current_region = $2`,
 							mUUID, player.CurrentRegion).Scan(

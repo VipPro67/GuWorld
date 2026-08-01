@@ -344,13 +344,13 @@ func RegisterPlayer(c *gin.Context) {
 
 	var player models.Player
 	query := `
-		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, time_speed_multiplier, email, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, avatar_url, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding)
-		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 20, 0, $8, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, $12, '{}'::jsonb, $9, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 1.0, $10, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $11, true)
-		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, avatar_url, needs_onboarding
+		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, time_speed_multiplier, email, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, avatar_url, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding)
+		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 20, 0, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, $11, '{}'::jsonb, $8, '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 1.0, $9, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $10, true)
+		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregate("players.id")+`, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, avatar_url, needs_onboarding
 	`
 
 	var activeCombatBytes []byte
-	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, starterGu, req.StartingRegion, req.Email, refCode, equippedGus).Scan(
+	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, req.StartingRegion, req.Email, refCode, equippedGus).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
 		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
@@ -368,6 +368,13 @@ func RegisterPlayer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create player: " + err.Error()})
 		return
 	}
+
+	// Persist starter Gus in the player_gu table (the players.gu_inventory column is gone).
+	if err := db.SavePlayerGus(tx, player.ID.String(), starterGu); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to seed starter Gus: " + err.Error()})
+		return
+	}
+	player.GuInventory = starterGu
 
 	// Seed starter materials
 	InventorySvc.AddItem(tx, player.ID.String(), "moon_orchid_petal", "materials", 5)
@@ -518,11 +525,15 @@ func CompleteOnboarding(c *gin.Context) {
 
 	_, err = tx.Exec(`
 		UPDATE players
-		SET needs_onboarding = false, current_region = $1, gu_inventory = $2, equipped_gus = $3
-		WHERE id = $4
-	`, req.StartingRegion, newGu, equippedGus, playerID)
+		SET needs_onboarding = false, current_region = $1, equipped_gus = $2
+		WHERE id = $3
+	`, req.StartingRegion, equippedGus, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save onboarding: " + err.Error()})
+		return
+	}
+	if err := db.SavePlayerGus(tx, playerID.String(), newGu); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save starter Gus: " + err.Error()})
 		return
 	}
 
@@ -574,7 +585,7 @@ func LoginPlayer(c *gin.Context) {
 	var passwordHash string
 
 	query := `
-		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), COALESCE(avatar_url, '')
+		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregate("players.id")+`, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), COALESCE(avatar_url, '')
 		FROM players
 		WHERE LOWER(email) = $1
 	`
@@ -714,6 +725,32 @@ func GetPlayerStatus(c *gin.Context) {
 
 	player.MaterialsInventory = loadMaterialsInventory(playerID.String())
 	c.JSON(http.StatusOK, player)
+}
+
+// GetPlayerInventoryGus returns the full Gu inventory of the authenticated player.
+// The player status endpoint only projects equipped/vital Gus, so the full
+// inventory is lazy-loaded here on demand.
+func GetPlayerInventoryGus(c *gin.Context) {
+	authID, ok := middleware.GetPlayerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	player, err := PlayerSvc.Load(db.DB, authID, false)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Player not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player: " + err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"gu_inventory": player.GuInventory,
+		"equipped_gus": player.EquippedGus,
+	})
 }
 
 type RechargeWithStoneRequest struct {
@@ -1063,10 +1100,14 @@ func Explore(c *gin.Context) {
 	qiGained := AddHumanQi(&player, 3.0)
 	updateQuery := `
 		UPDATE players
-		SET current_mana = $1, primeval_stones = $2, gu_inventory = $3, last_mana_update = $4, explored_cells = $5, human_qi = $6
-		WHERE id = $7
+		SET current_mana = $1, primeval_stones = $2, last_mana_update = $3, explored_cells = $4, human_qi = $5
+		WHERE id = $6
 	`
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.GuInventory, player.LastManaUpdate, player.ExploredCells, player.HumanQi, player.ID)
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update explore progress: " + err.Error()})
+		return
+	}
+	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.LastManaUpdate, player.ExploredCells, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update explore progress: " + err.Error()})
 		return
@@ -1317,8 +1358,12 @@ func FeedGu(c *gin.Context) {
 	qiGained := AddHumanQi(&player, 2.0)
 
 	// 6. Update database
-	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1, primeval_stones = $2, immortal_stones = $3, hp = $4, max_mana = $5, current_mana = $6, lifespan = $7, human_qi = $8 WHERE id = $9`,
-		player.GuInventory, player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.HumanQi, player.ID)
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
+		return
+	}
+	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2, hp = $3, max_mana = $4, current_mana = $5, lifespan = $6, human_qi = $7 WHERE id = $8`,
+		player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
@@ -1509,17 +1554,10 @@ func FeedGroup(c *gin.Context) {
 	}
 
 	// 4. Update database
-	updateQuery := `
-		UPDATE players
-		SET gu_inventory = $1
-		WHERE id = $2
-	`
-	_, err = tx.Exec(updateQuery, player.GuInventory, player.ID)
-	if err != nil {
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
 	}
-
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
@@ -1600,6 +1638,9 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 	} else {
 		regenRatePerHour = energyRegenRatePerHour(player)
 	}
+
+	// Add mana regen tick bonus from equipped active Gus (e.g. Heavenly Essence Lotus)
+	regenRatePerHour += models.GetPlayerManaRegenTickBonus(player.Rank, player.GuInventory)
 
 	if player.Lifespan <= 0 {
 		regenRatePerHour = regenRatePerHour * 0.5
@@ -1956,8 +1997,12 @@ func EquipGu(c *gin.Context) {
 		}
 	}
 
-	_, err = tx.Exec("UPDATE players SET gu_inventory = $1, equipped_gus = $2, primeval_stones = $3, immortal_stones = $4, hp = $5, max_mana = $6, current_mana = $7, lifespan = $8, rank = $9, sub_rank = $10, aptitude_percent = $11, base_hp = $12, growth_data = $13 WHERE id = $14",
-		player.GuInventory, player.EquippedGus, player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.Rank, player.SubRank, player.AptitudePercent, player.BaseHP, player.GrowthData, player.ID)
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state"})
+		return
+	}
+	_, err = tx.Exec("UPDATE players SET equipped_gus = $1, primeval_stones = $2, immortal_stones = $3, hp = $4, max_mana = $5, current_mana = $6, lifespan = $7, rank = $8, sub_rank = $9, aptitude_percent = $10, base_hp = $11, growth_data = $12 WHERE id = $13",
+		player.EquippedGus, player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.Rank, player.SubRank, player.AptitudePercent, player.BaseHP, player.GrowthData, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state"})
 		return
@@ -2051,7 +2096,11 @@ func UpdateGuStatus(c *gin.Context) {
 		}
 	}
 
-	_, err = tx.Exec("UPDATE players SET gu_inventory = $1, equipped_gus = $2 WHERE id = $3", player.GuInventory, player.EquippedGus, player.ID)
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update Gu inventory status"})
+		return
+	}
+	_, err = tx.Exec("UPDATE players SET equipped_gus = $1 WHERE id = $2", player.EquippedGus, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update Gu inventory status"})
 		return
@@ -2214,13 +2263,17 @@ func UseItem(c *gin.Context) {
 		return
 	}
 
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state" + err.Error()})
+		return
+	}
 	_, err = tx.Exec(`
 		UPDATE players 
 		SET current_mana = $1, max_mana = $2, hp = $3, base_hp = $4,
-		    dao_marks = $5, primeval_stones = $6, gu_inventory = $7, lifespan = $8, human_qi = $9
-		WHERE id = $10`,
+		    dao_marks = $5, primeval_stones = $6, lifespan = $7, human_qi = $8
+		WHERE id = $9`,
 		player.CurrentMana, player.MaxMana, player.HP, player.BaseHP, player.DaoMarks,
-		player.PrimevalStones, player.GuInventory, player.Lifespan, player.HumanQi,
+		player.PrimevalStones, player.Lifespan, player.HumanQi,
 		player.ID,
 	)
 	if err != nil {
@@ -2334,11 +2387,15 @@ func SetVitalGu(c *gin.Context) {
 		}
 	}
 
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player vital Gu status"})
+		return
+	}
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET gu_inventory = $1, hp = $2, equipped_gus = $3, active_combat = $4
-		WHERE id = $5`,
-		player.GuInventory, player.HP, player.EquippedGus, player.ActiveCombat, player.ID,
+		SET hp = $1, equipped_gus = $2, active_combat = $3
+		WHERE id = $4`,
+		player.HP, player.EquippedGus, player.ActiveCombat, player.ID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player vital Gu status"})
@@ -2418,7 +2475,11 @@ func DropGu(c *gin.Context) {
 			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 		}
 	}
-	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1, equipped_gus = $2 WHERE id = $3`, player.GuInventory, player.EquippedGus, player.ID)
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gu"})
+		return
+	}
+	_, err = tx.Exec(`UPDATE players SET equipped_gus = $1 WHERE id = $2`, player.EquippedGus, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gu"})
 		return
@@ -2528,11 +2589,15 @@ func UseConsumableGu(c *gin.Context) {
 	// Delete from inventory
 	RemoveGuFromInventory(&player, targetGu.InstanceID)
 
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using Gu"})
+		return
+	}
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET gu_inventory = $1, sub_rank = $2, rank = $3, primeval_stones = $4, max_mana = $5, current_mana = $6, equipped_gus = $7, dao_marks = $8, wall_progress = $9, hp = $10, lifespan = $11, aptitude_percent = $12, immortal_stones = $13, aperture_stress = $14, human_qi = $15
-		WHERE id = $16`,
-		player.GuInventory, player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.DaoMarks, player.WallProgress, player.HP, player.Lifespan, player.AptitudePercent, player.ImmortalStones, player.ApertureStress, player.HumanQi, player.ID,
+		SET sub_rank = $1, rank = $2, primeval_stones = $3, max_mana = $4, current_mana = $5, equipped_gus = $6, dao_marks = $7, wall_progress = $8, hp = $9, lifespan = $10, aptitude_percent = $11, immortal_stones = $12, aperture_stress = $13, human_qi = $14
+		WHERE id = $15`,
+		player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.DaoMarks, player.WallProgress, player.HP, player.Lifespan, player.AptitudePercent, player.ImmortalStones, player.ApertureStress, player.HumanQi, player.ID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using Gu"})
@@ -2644,11 +2709,15 @@ func UseSupportGu(c *gin.Context) {
 
 	logMsg := strings.Join(logs, " ")
 	// Save to DB
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using support Gu"})
+		return
+	}
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET gu_inventory = $1, max_mana = $2, current_mana = $3, aptitude_percent = $4, hp = $5, aperture_stress = $6, human_qi = $7
-		WHERE id = $8`,
-		player.GuInventory, player.MaxMana, player.CurrentMana, player.AptitudePercent, player.HP, player.ApertureStress, player.HumanQi,
+		SET max_mana = $1, current_mana = $2, aptitude_percent = $3, hp = $4, aperture_stress = $5, human_qi = $6
+		WHERE id = $7`,
+		player.MaxMana, player.CurrentMana, player.AptitudePercent, player.HP, player.ApertureStress, player.HumanQi,
 		player.ID,
 	)
 	if err != nil {
@@ -3042,7 +3111,7 @@ func GoogleCallback(c *gin.Context) {
 
 	// 1. Try to search by google_id
 	err = tx.QueryRow(`
-		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false)
+		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregate("players.id")+`, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false)
 		FROM players
 		WHERE google_id = $1
 	`, googleUser.ID).Scan(
@@ -3070,7 +3139,7 @@ func GoogleCallback(c *gin.Context) {
 	if !hasPlayer {
 		// 2. Try to search by email (Merge Account!)
 		err = tx.QueryRow(`
-			SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false)
+			SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregate("players.id")+`, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false)
 			FROM players
 			WHERE email = $1
 		`, googleUser.Email).Scan(
@@ -3191,12 +3260,12 @@ func GoogleCallback(c *gin.Context) {
 		refCode := "REF-" + strings.ToUpper(uuid.New().String()[:8])
 
 		queryInsert := `
-			INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding)
-			VALUES ($1, '', 1, 1, $2, $3, $4, $5, $6, 20, 0, $7, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, $11, '{}'::jsonb, 'Southern_Border', '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 1.0, $8, $9, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', 1, 1, '', false, $10, true)
-			RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, gu_inventory, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, needs_onboarding
+			INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding)
+			VALUES ($1, '', 1, 1, $2, $3, $4, $5, $6, 20, 0, 0.0, 0.0, NULL, 0, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, $10, '{}'::jsonb, 'Southern_Border', '{"strength": 0}'::jsonb, '{}'::jsonb, NULL, 100.0, 1.0, $7, $8, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', 1, 1, '', false, $9, true)
+			RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregate("players.id")+`, wall_progress, human_qi, next_tribulation_time, tribulation_count, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, dao_marks, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, needs_onboarding
 		`
 
-		err = tx.QueryRow(queryInsert, username, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, starterGu, googleUser.Email, googleUser.ID, refCode, equippedGus).Scan(
+		err = tx.QueryRow(queryInsert, username, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, googleUser.Email, googleUser.ID, refCode, equippedGus).Scan(
 			&player.ID, &player.Username, &player.Rank, &player.SubRank,
 			&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
 			&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
@@ -3214,6 +3283,13 @@ func GoogleCallback(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create new player record: " + err.Error()})
 			return
 		}
+
+		// Persist starter Gus in the player_gu table (the gu_inventory column is gone).
+		if err := db.SavePlayerGus(tx, player.ID.String(), starterGu); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to seed starter Gus: " + err.Error()})
+			return
+		}
+		player.GuInventory = starterGu
 
 		// Seed starter materials
 		InventorySvc.AddItem(tx, player.ID.String(), "moon_orchid_petal", "materials", 5)

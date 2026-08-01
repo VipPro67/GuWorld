@@ -887,14 +887,12 @@ func CombatAttack(c *gin.Context) {
 									targetLoot.GuInventory = append(targetLoot.GuInventory, newGu)
 									_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, winnerID)
 								} else {
-									var targetGuInv models.GuInventory
-									var targetGuInvBytes []byte
-									_ = tx.QueryRow("SELECT gu_inventory FROM players WHERE id = $1 FOR UPDATE", winnerID).Scan(&targetGuInvBytes)
-									if len(targetGuInvBytes) > 0 {
-										json.Unmarshal(targetGuInvBytes, &targetGuInv)
+									targetGuInv, err := db.LoadPlayerGus(tx, winnerID.String(), false)
+									if err != nil {
+										targetGuInv = models.GuInventory{}
 									}
 									targetGuInv = append(targetGuInv, newGu)
-									_, _ = tx.Exec("UPDATE players SET gu_inventory = $1 WHERE id = $2", targetGuInv, winnerID)
+									_ = db.SavePlayerGus(tx, winnerID.String(), targetGuInv)
 								}
 								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, gID))
 							}
@@ -1058,13 +1056,17 @@ func CombatAttack(c *gin.Context) {
 		}
 	}
 
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update combat results"})
+		return
+	}
 	updateQuery := `
 		UPDATE players
-		SET hp = $1, current_mana = $2, primeval_stones = $3, gu_inventory = $4, cleared_cells = $5, active_combat = $6,
-		    temp_loot = $7, current_region = $8, x = $9, y = $10, explored_cells = $11, human_qi = $12
-		WHERE id = $13
+		SET hp = $1, current_mana = $2, primeval_stones = $3, cleared_cells = $4, active_combat = $5,
+		    temp_loot = $6, current_region = $7, x = $8, y = $9, explored_cells = $10, human_qi = $11
+		WHERE id = $12
 	`
-	_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.PrimevalStones, player.GuInventory, player.ClearedCells, player.ActiveCombat,
+	_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.PrimevalStones, player.ClearedCells, player.ActiveCombat,
 		player.TempLoot, player.CurrentRegion, player.X, player.Y, player.ExploredCells, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update combat results"})

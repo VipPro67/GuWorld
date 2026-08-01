@@ -118,7 +118,7 @@ func AdminListGiftCodes(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT id, code, rewards, max_uses, used_count, max_per_player, expires_at, is_active, created_by, created_at
 		FROM gift_codes
 		ORDER BY created_at DESC
@@ -240,6 +240,10 @@ func RedeemGiftCode(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật người chơi"})
 		return
 	}
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cổ trùng"})
+		return
+	}
 
 	_, err = tx.Exec(`UPDATE gift_codes SET used_count = used_count + 1 WHERE id = $1`, gc.ID)
 	if err != nil {
@@ -329,10 +333,6 @@ func buildGiftCodeUpdateQuery(player *models.Player) (string, []interface{}) {
 		extraVals = append(extraVals, player.DaoMarks)
 	}
 	// materials_inventory no longer stored on players table
-	if len(player.GuInventory) > 0 {
-		extraFields = append(extraFields, "gu_inventory")
-		extraVals = append(extraVals, player.GuInventory)
-	}
 
 	allFields := append(baseFields, extraFields...)
 	allVals := append(baseVals, extraVals...)

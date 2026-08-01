@@ -79,14 +79,21 @@ func TestP2PTradeFlow_ConnectingHeaven(t *testing.T) {
 			{
 				InstanceID: uuid.New().String(),
 				GuID:       "GU_CONNECTING_HEAVEN",
+				Rank:       5,
 				Hunger:     100,
 				Status:     "SLEEPING",
 			},
 		}
-		guBytes, _ := json.Marshal(guInv)
-		_, err := db.DB.Exec(`UPDATE players SET gu_inventory = $1 WHERE id = $2`, guBytes, playerID)
+		tx, err := db.DB.Begin()
 		if err != nil {
+			t.Fatalf("failed to begin tx: %v", err)
+		}
+		defer tx.Rollback()
+		if err := db.SavePlayerGus(tx, playerID.String(), guInv); err != nil {
 			t.Fatalf("failed to give Connecting Heaven Gu: %v", err)
+		}
+		if err := tx.Commit(); err != nil {
+			t.Fatalf("failed to commit: %v", err)
 		}
 	}
 

@@ -51,9 +51,9 @@ func adminPlayerSearchClause(searchBy, search string) (string, []interface{}) {
 	case "gu":
 		guIDs := models.GuIDsByName(search)
 		if len(guIDs) > 0 {
-			return `EXISTS (SELECT 1 FROM jsonb_array_elements(gu_inventory) g WHERE (g->>'gu_id' ILIKE $1 OR g->>'gu_id' = ANY($2)))`, []interface{}{like, guIDs}
+			return `EXISTS (SELECT 1 FROM player_gu pg WHERE pg.player_id = players.id AND (pg.gu_id ILIKE $1 OR pg.gu_id = ANY($2)))`, []interface{}{like, guIDs}
 		}
-		return `EXISTS (SELECT 1 FROM jsonb_array_elements(gu_inventory) g WHERE g->>'gu_id' ILIKE $1)`, []interface{}{like}
+		return `EXISTS (SELECT 1 FROM player_gu pg WHERE pg.player_id = players.id AND pg.gu_id ILIKE $1)`, []interface{}{like}
 	default: // all
 		clauses := []string{`username ILIKE $1`, `COALESCE(email, '') ILIKE $1`}
 		args := []interface{}{like}
@@ -70,11 +70,11 @@ func adminPlayerSearchClause(searchBy, search string) (string, []interface{}) {
 
 		guIDs := models.GuIDsByName(search)
 		if len(guIDs) > 0 {
-			clauses = append(clauses, fmt.Sprintf(`EXISTS (SELECT 1 FROM jsonb_array_elements(gu_inventory) g WHERE (g->>'gu_id' ILIKE $1 OR g->>'gu_id' = ANY($%d)))`, argIdx))
+			clauses = append(clauses, fmt.Sprintf(`EXISTS (SELECT 1 FROM player_gu pg WHERE pg.player_id = players.id AND (pg.gu_id ILIKE $1 OR pg.gu_id = ANY($%d)))`, argIdx))
 			args = append(args, guIDs)
 			argIdx++
 		} else {
-			clauses = append(clauses, `EXISTS (SELECT 1 FROM jsonb_array_elements(gu_inventory) g WHERE g->>'gu_id' ILIKE $1)`)
+			clauses = append(clauses, `EXISTS (SELECT 1 FROM player_gu pg WHERE pg.player_id = players.id AND pg.gu_id ILIKE $1)`)
 		}
 
 		return "(" + strings.Join(clauses, " OR ") + ")", args
@@ -106,7 +106,7 @@ func AdminListPlayers(c *gin.Context) {
 	if where != "" {
 		countQuery += ` WHERE ` + where
 	}
-	if err := db.DB.QueryRow(countQuery, args...).Scan(&total); err != nil {
+	if err := db.DB.QueryRowContext(c.Request.Context(), countQuery, args...).Scan(&total); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm số lượng người chơi"})
 		return
 	}
@@ -119,7 +119,7 @@ func AdminListPlayers(c *gin.Context) {
 
 	dataArgs := append(append([]interface{}{}, args...), limit, offset)
 
-	rows, err := db.DB.Query(query, dataArgs...)
+	rows, err := db.DB.QueryContext(c.Request.Context(), query, dataArgs...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách người chơi"})
 		return
@@ -187,9 +187,9 @@ func AdminGetPlayerDetail(c *gin.Context) {
 	}
 
 	var guCount int
-	_ = db.DB.QueryRow(`SELECT COALESCE(jsonb_array_length(gu_inventory), 0) FROM players WHERE id=$1`, playerID).Scan(&guCount)
+	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM player_gu WHERE player_id=$1`, playerID).Scan(&guCount)
 	var itemCount int
-	_ = db.DB.QueryRow(`SELECT COUNT(*) FROM player_inventory_items WHERE player_id=$1`, playerID).Scan(&itemCount)
+	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM player_inventory_items WHERE player_id=$1`, playerID).Scan(&itemCount)
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":                   player.ID,
@@ -370,7 +370,7 @@ func AdminAddPlayerGus(c *gin.Context) {
 		})
 	}
 
-	if _, err := tx.Exec(`UPDATE players SET gu_inventory=$1 WHERE id=$2`, player.GuInventory, playerID); err != nil {
+	if err := db.SavePlayerGus(tx, playerID.String(), player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật cổ trùng"})
 		return
 	}
@@ -429,7 +429,7 @@ func AdminRemovePlayerGu(c *gin.Context) {
 		return
 	}
 
-	if _, err := tx.Exec(`UPDATE players SET gu_inventory=$1 WHERE id=$2`, newInv, playerID); err != nil {
+	if err := db.SavePlayerGus(tx, playerID.String(), newInv); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật cổ trùng"})
 		return
 	}
@@ -538,7 +538,7 @@ func AdminListPlayerItems(c *gin.Context) {
 	offset := (page - 1) * limit
 
 	var exists bool
-	if err := db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM players WHERE id=$1)`, playerID).Scan(&exists); err != nil || !exists {
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM players WHERE id=$1)`, playerID).Scan(&exists); err != nil || !exists {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
 		return
 	}
@@ -558,7 +558,7 @@ func AdminListPlayerItems(c *gin.Context) {
 	}
 
 	var total int
-	if err := db.DB.QueryRow(`SELECT COUNT(*) FROM player_inventory_items WHERE `+where, args...).Scan(&total); err != nil {
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM player_inventory_items WHERE `+where, args...).Scan(&total); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đếm vật phẩm"})
 		return
 	}
@@ -566,7 +566,7 @@ func AdminListPlayerItems(c *gin.Context) {
 	query := `SELECT item_id, category, quantity FROM player_inventory_items WHERE ` + where + ` ORDER BY item_id ASC LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
 	dataArgs := append(append([]interface{}{}, args...), limit, offset)
 
-	rows, err := db.DB.Query(query, dataArgs...)
+	rows, err := db.DB.QueryContext(c.Request.Context(), query, dataArgs...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải vật phẩm"})
 		return
@@ -625,15 +625,10 @@ func AdminListPlayerGus(c *gin.Context) {
 	}
 	offset := (page - 1) * limit
 
-	var raw []byte
-	if err := db.DB.QueryRow(`SELECT COALESCE(gu_inventory, '[]'::jsonb)::text FROM players WHERE id=$1`, playerID).Scan(&raw); err != nil {
+	inv, err := db.LoadPlayerGus(db.DB, playerID.String(), false)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
 		return
-	}
-
-	var inv models.GuInventory
-	if err := json.Unmarshal(raw, &inv); err != nil {
-		inv = models.GuInventory{}
 	}
 
 	if search != "" {
@@ -933,6 +928,7 @@ func AdminSearchGus(c *gin.Context) {
 	}
 
 	guWhere := ""
+	invWhere := ""
 	shopWhere := ""
 	args := []interface{}{}
 	argIdx := 1
@@ -941,11 +937,13 @@ func AdminSearchGus(c *gin.Context) {
 		guIDs := models.GuIDsByName(guSearch)
 		if len(guIDs) > 0 {
 			guWhere = fmt.Sprintf("(g->>'gu_id' ILIKE $%d OR g->>'gu_id' = ANY($%d))", argIdx, argIdx+1)
+			invWhere = fmt.Sprintf("(pg.gu_id ILIKE $%d OR pg.gu_id = ANY($%d))", argIdx, argIdx+1)
 			shopWhere = fmt.Sprintf("(s.id ILIKE $%d OR s.id = ANY($%d))", argIdx, argIdx+1)
 			args = append(args, like, guIDs)
 			argIdx += 2
 		} else {
 			guWhere = fmt.Sprintf("g->>'gu_id' ILIKE $%d", argIdx)
+			invWhere = fmt.Sprintf("pg.gu_id ILIKE $%d", argIdx)
 			shopWhere = fmt.Sprintf("s.id ILIKE $%d", argIdx)
 			args = append(args, like)
 			argIdx++
@@ -953,6 +951,7 @@ func AdminSearchGus(c *gin.Context) {
 	}
 	if instSearch != "" {
 		instClause := fmt.Sprintf("g->>'instance_id' ILIKE $%d", argIdx)
+		invInstClause := fmt.Sprintf("pg.id::text ILIKE $%d", argIdx)
 		args = append(args, "%"+instSearch+"%")
 		argIdx++
 		if guWhere == "" {
@@ -960,21 +959,26 @@ func AdminSearchGus(c *gin.Context) {
 		} else {
 			guWhere = "(" + guWhere + " OR " + instClause + ")"
 		}
+		if invWhere == "" {
+			invWhere = invInstClause
+		} else {
+			invWhere = "(" + invWhere + " OR " + invInstClause + ")"
+		}
 	}
 
 	inventoryBranch := `SELECT 'inventory' AS location,
 		p.id AS owner_id, p.username AS owner_username,
 		NULL::text AS listing_id,
-		g->>'instance_id' AS instance_id, g->>'gu_id' AS gu_id,
-		(g->>'rank')::int AS rank,
-		COALESCE((g->>'hunger')::int, 0) AS hunger,
-		COALESCE(g->>'status', '') AS status,
-		COALESCE((g->>'equipped')::boolean, false) AS equipped,
-		COALESCE((g->>'is_vital')::boolean, false) AS is_vital,
+		pg.id::text AS instance_id, pg.gu_id AS gu_id,
+		pg.gu_rank AS rank,
+		COALESCE(pg.hunger, 0) AS hunger,
+		COALESCE(pg.state, '') AS status,
+		COALESCE(pg.equipped, false) AS equipped,
+		COALESCE(pg.is_vital, false) AS is_vital,
 		'' AS listing_status, NULL::text AS shop_name
 	FROM players p
-	CROSS JOIN LATERAL jsonb_array_elements(p.gu_inventory) g
-	WHERE p.gu_inventory IS NOT NULL AND ` + guWhere
+	JOIN player_gu pg ON pg.player_id = p.id
+	WHERE ` + invWhere
 
 	auctionBranch := `SELECT 'auction' AS location,
 		a.seller_id AS owner_id, pl.username AS owner_username,
@@ -1028,7 +1032,7 @@ func AdminSearchGus(c *gin.Context) {
 	union := strings.Join(branches, " UNION ALL ")
 
 	var total int
-	if err := db.DB.QueryRow(`SELECT COUNT(*) FROM (`+union+`) AS t`, args...).Scan(&total); err != nil {
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM (`+union+`) AS t`, args...).Scan(&total); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tìm cổ trùng"})
 		return
 	}
@@ -1036,7 +1040,7 @@ func AdminSearchGus(c *gin.Context) {
 	query := `SELECT location, owner_id::text, owner_username, listing_id, instance_id, gu_id, rank, hunger, status, equipped, is_vital, listing_status, shop_name FROM (` + union + `) AS t ORDER BY t.location, t.owner_username, t.gu_id LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
 	dataArgs := append(append([]interface{}{}, args...), limit, offset)
 
-	rows, err := db.DB.Query(query, dataArgs...)
+	rows, err := db.DB.QueryContext(c.Request.Context(), query, dataArgs...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tìm cổ trùng"})
 		return
@@ -1085,7 +1089,7 @@ func AdminListSects(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT s.id, s.name, s.description, s.region, s.level, s.funds, s.require_approval,
 			COALESCE(m.member_count, 0) AS member_count,
 			l.leader_name
@@ -1155,13 +1159,13 @@ func AdminGetSectDetail(c *gin.Context) {
 		VaultRecipes    json.RawMessage `json:"vault_recipes"`
 	}
 	var s sectVault
-	err := db.DB.QueryRow(`SELECT id, name, description, region, level, funds, require_approval, vault_gu, vault_materials, vault_recipes FROM sects WHERE id = $1`, sectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Level, &s.Funds, &s.RequireApproval, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes)
+	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT id, name, description, region, level, funds, require_approval, vault_gu, vault_materials, vault_recipes FROM sects WHERE id = $1`, sectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Level, &s.Funds, &s.RequireApproval, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy tông môn"})
 		return
 	}
 
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT sm.player_id, p.username, sm.member_rank, sm.contribution_points, sm.joined_at, p.rank
 		FROM sect_members sm
 		JOIN players p ON p.id = sm.player_id
@@ -1659,7 +1663,7 @@ func AdminListSectMissions(c *gin.Context) {
 
 	sectID := c.Param("id")
 
-	rows, err := db.DB.Query(`SELECT id, sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank FROM sect_missions WHERE sect_id = $1 ORDER BY required_member_rank, title`, sectID)
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank FROM sect_missions WHERE sect_id = $1 ORDER BY required_member_rank, title`, sectID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải nhiệm vụ"})
 		return
@@ -1936,7 +1940,7 @@ func AdminGetAuditLogs(c *gin.Context) {
 	query += " ORDER BY created_at DESC LIMIT $" + strconv.Itoa(argCount+1) + " OFFSET $" + strconv.Itoa(argCount+2)
 	args = append(args, limit, offset)
 
-	rows, err := db.DB.Query(query, args...)
+	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể truy vấn nhật ký: " + err.Error()})
 		return
@@ -1994,7 +1998,7 @@ func AdminGetAuditLogs(c *gin.Context) {
 	}
 
 	var total int
-	_ = db.DB.QueryRow(countQuery, countArgs...).Scan(&total)
+	_ = db.DB.QueryRowContext(c.Request.Context(), countQuery, countArgs...).Scan(&total)
 
 	c.JSON(http.StatusOK, gin.H{
 		"data":  logs,
@@ -2021,7 +2025,7 @@ func AdminListShopItems(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT c.id, c.price, c.stock, c.is_default, c.sort_order,
 			COALESCE(i.name, g.name, 'Công thức ' || rg.name, c.id) AS name,
 			CASE WHEN r.id IS NOT NULL THEN 'Recipe' ELSE COALESCE(i.item_type, 'Gu') END AS item_type
@@ -2145,7 +2149,7 @@ func AdminListArenaShopItems(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT a.id, a.price, a.qty, a.stock, a.is_default, a.sort_order,
 			COALESCE(i.name, g.name, 'Công thức ' || rg.name, a.id) AS name
 		FROM arena_shop_items a
@@ -2278,7 +2282,7 @@ func AdminListMineSlots(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT m.id, m.rarity, m.occupier_id, COALESCE(p.username, ''), m.monster_id, m.monster_rank, m.monster_sub_rank,
 			m.occupied_at, m.last_claimed_at, m.abandoned_at
 		FROM mine_slots m
@@ -2405,7 +2409,7 @@ func AdminListGuItems(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.Query(`SELECT id, name, rank, path, gu_type,
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, rank, path, gu_type,
 		base_mana_cost, effects, food_types, hunger_rate, max_hunger,
 		COALESCE(description,''), COALESCE(target_type,'SINGLE'), COALESCE(rarity,''),
 		COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles,'[]'::jsonb),
@@ -2603,7 +2607,7 @@ func AdminDeleteGuItem(c *gin.Context) {
 
 func AdminListItemItems(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok { return }
-	rows, err := db.DB.Query(`SELECT id, name, item_type, rank, effects, COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,'') FROM item_dictionary ORDER BY name`)
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, item_type, rank, effects, COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,'') FROM item_dictionary ORDER BY name`)
 	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
 	defer rows.Close()
 
@@ -2693,7 +2697,7 @@ func AdminDeleteItemItem(c *gin.Context) {
 
 func AdminListRecipes(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok { return }
-	rows, err := db.DB.Query(`SELECT r.id, r.target_gu_id, COALESCE(g.name, ''), r.required_gus, r.required_materials, r.success_rate, r.primeval_stones_cost, COALESCE(r.immortal_essence_stones_cost,0) FROM refining_recipes r LEFT JOIN gu_dictionary g ON r.target_gu_id = g.id AND r.target_rank = g.rank ORDER BY r.id`)
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT r.id, r.target_gu_id, COALESCE(g.name, ''), r.required_gus, r.required_materials, r.success_rate, r.primeval_stones_cost, COALESCE(r.immortal_essence_stones_cost,0) FROM refining_recipes r LEFT JOIN gu_dictionary g ON r.target_gu_id = g.id AND r.target_rank = g.rank ORDER BY r.id`)
 	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
 	defer rows.Close()
 
@@ -2800,7 +2804,7 @@ func AdminListOnlinePlayers(c *gin.Context) {
 		minutes = 5
 	}
 
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT id, username, rank, sub_rank, last_activity
 		FROM players
 		WHERE last_activity IS NOT NULL

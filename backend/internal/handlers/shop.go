@@ -244,12 +244,16 @@ func BuyShopItem(c *gin.Context) {
 
 	// 6. Save player state
 	qiGained := AddHumanQi(&player, 5.0)
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu túi đồ"})
+		return
+	}
 	updateQuery := `
 		UPDATE players
-		SET primeval_stones = $1, gu_inventory = $2, human_qi = $3
-		WHERE id = $4
+		SET primeval_stones = $1, human_qi = $2
+		WHERE id = $3
 	`
-	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.GuInventory, player.HumanQi, player.ID)
+	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.HumanQi, player.ID)
 
 	// Commit Transaction
 	if err = tx.Commit(); err != nil {
@@ -362,8 +366,12 @@ func SellShopItem(c *gin.Context) {
 		}
 	}
 	qiGained := AddHumanQi(&player, 5.0)
-	_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, gu_inventory=$2, equipped_gus=$3, human_qi=$4 WHERE id=$5`,
-		player.PrimevalStones, player.GuInventory, player.EquippedGus, player.HumanQi, player.ID)
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save sell transaction"})
+		return
+	}
+	_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, equipped_gus=$2, human_qi=$3 WHERE id=$4`,
+		player.PrimevalStones, player.EquippedGus, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save sell transaction"})
 		return

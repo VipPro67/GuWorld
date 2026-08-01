@@ -313,7 +313,11 @@ func CreateListing(c *gin.Context) {
 		return
 	}
 	AddHumanQi(&player, 5.0)
-	_, err = tx.Exec(`UPDATE players SET gu_inventory=$1, equipped_gus=$2, primeval_stones=$3, human_qi=$4 WHERE id=$5`, player.GuInventory, player.EquippedGus, player.PrimevalStones, player.HumanQi, player.ID)
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ"})
+		return
+	}
+	_, err = tx.Exec(`UPDATE players SET equipped_gus=$1, primeval_stones=$2, human_qi=$3 WHERE id=$4`, player.EquippedGus, player.PrimevalStones, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ"})
 		return
@@ -370,7 +374,7 @@ func ListListings(c *gin.Context) {
 	var rows *sql.Rows
 	var err error
 	if ok {
-		rows, err = db.DB.Query(`
+		rows, err = db.DB.QueryContext(c.Request.Context(), `
 			SELECT 
 				a.id, a.seller_id, a.item_type, a.item_data, a.quantity, a.currency, 
 				a.start_price, a.current_price, a.highest_bidder_id, a.end_time, 
@@ -383,7 +387,7 @@ func ListListings(c *gin.Context) {
 			ORDER BY a.created_at DESC
 		`, authID)
 	} else {
-		rows, err = db.DB.Query(`
+		rows, err = db.DB.QueryContext(c.Request.Context(), `
 			SELECT 
 				a.id, a.seller_id, a.item_type, a.item_data, a.quantity, a.currency, 
 				a.start_price, a.current_price, a.highest_bidder_id, a.end_time, 
@@ -921,7 +925,10 @@ func addAuctionItemToPlayer(tx *sql.Tx, player *models.Player, itemType, itemDat
 }
 
 func updatePlayerInventory(tx *sql.Tx, player models.Player) error {
-	_, err := tx.Exec(`UPDATE players SET gu_inventory=$1, equipped_gus=$2, primeval_stones=$3, immortal_stones=$4, human_qi=$5 WHERE id=$6`, player.GuInventory, player.EquippedGus, player.PrimevalStones, player.ImmortalStones, player.HumanQi, player.ID)
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		return err
+	}
+	_, err := tx.Exec(`UPDATE players SET equipped_gus=$1, primeval_stones=$2, immortal_stones=$3, human_qi=$4 WHERE id=$5`, player.EquippedGus, player.PrimevalStones, player.ImmortalStones, player.HumanQi, player.ID)
 	return err
 }
 

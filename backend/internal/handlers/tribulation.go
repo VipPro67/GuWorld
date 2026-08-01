@@ -147,7 +147,7 @@ func AttackTribulationEnemy(c *gin.Context) {
 	// 2. Fetch Player stats
 	var player models.Player
 	err = tx.QueryRow(`
-		SELECT id, username, current_mana, max_mana, hp, base_hp, primeval_stones, gu_inventory
+		SELECT id, username, current_mana, max_mana, hp, base_hp, primeval_stones, `+db.GuInventoryAggregate("players.id")+`
 		FROM players WHERE id = $1
 	`, playerID).Scan(&player.ID, &player.Username, &player.CurrentMana, &player.MaxMana, &player.HP, &player.BaseHP, &player.PrimevalStones, &player.GuInventory)
 	if err != nil {

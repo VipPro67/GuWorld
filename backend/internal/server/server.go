@@ -149,6 +149,7 @@ func SetupRouter() *gin.Engine {
 		{
 			player.GET("/events", handlers.StreamPlayerEvents)
 			player.GET("/status/:id", handlers.GetPlayerStatus)
+			player.GET("/inventory/gus", handlers.GetPlayerInventoryGus)
 			player.GET("/stats", handlers.GetPlayerStatsHandler)
 			player.POST("/explore/:id", handlers.Explore)
 			player.POST("/use-item", handlers.UseItem)

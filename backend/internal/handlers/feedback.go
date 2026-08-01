@@ -68,7 +68,7 @@ func GetFeedbacks(c *gin.Context) {
 	// Get player's admin status
 	var isAdmin bool
 	if exists {
-		err := db.DB.QueryRow("SELECT COALESCE(is_admin, false) FROM players WHERE id = $1", authID).Scan(&isAdmin)
+		err := db.DB.QueryRowContext(c.Request.Context(), "SELECT COALESCE(is_admin, false) FROM players WHERE id = $1", authID).Scan(&isAdmin)
 		if err != nil && err != sql.ErrNoRows {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
 			return
@@ -126,7 +126,7 @@ func GetFeedbacks(c *gin.Context) {
 	// Order by votes desc, then created_at desc
 	query += " ORDER BY f.total_votes DESC, f.created_at DESC"
 
-	rows, err := db.DB.Query(query, args...)
+	rows, err := db.DB.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch feedbacks: " + err.Error()})
 		return
@@ -543,7 +543,7 @@ func GetFeedbackComments(c *gin.Context) {
 	}
 
 	var exists bool
-	err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM feedback WHERE id = $1)", feedbackID).Scan(&exists)
+	err = db.DB.QueryRowContext(c.Request.Context(), "SELECT EXISTS(SELECT 1 FROM feedback WHERE id = $1)", feedbackID).Scan(&exists)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
 		return
@@ -553,7 +553,7 @@ func GetFeedbackComments(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.Query(`
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT c.id, c.feedback_id, c.user_id, p.username, c.content, c.created_at
 		FROM feedback_comments c
 		JOIN players p ON c.user_id = p.id

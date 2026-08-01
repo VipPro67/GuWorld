@@ -103,3 +103,58 @@ func TestHPRegeneration(t *testing.T) {
 		t.Fatalf("HP after 2 hours = %v, want 60.0", player.HP)
 	}
 }
+
+func TestManaRegenTickBonusIntegrated(t *testing.T) {
+	// Setup mock Gu registry
+	guID := "GU_HEAVENLY_ESSENCE_LOTUS_MOCK"
+	if models.GuRegistry == nil {
+		models.GuRegistry = make(map[string]map[int]models.GuDictionaryItem)
+	}
+	models.GuRegistry[guID] = map[int]models.GuDictionaryItem{
+		3: {
+			ID:   guID,
+			Name: "Thiên Nguyên Bảo Liên Mock",
+			Rank: 3,
+			Effects: models.GuEffects{
+				Other: []models.SpecialMechanic{
+					{
+						EventTrigger: "ON_TICK",
+						ActionCode:   "MANA_REGEN_TICK",
+						Params:       []byte(`{"value":10.0}`),
+					},
+				},
+			},
+		},
+	}
+
+	player := &models.Player{
+		CultivationState: models.CultivationState{
+			Rank:                3,
+			SubRank:             1,
+			AptitudeType:        "Giáp", // base rate 8.0
+			TimeSpeedMultiplier: 1.0,
+			Lifespan:            100.0,
+		},
+		ResourceState: models.ResourceState{
+			LastManaUpdate: time.Now(),
+			MaxMana:        100,
+			CurrentMana:    0,
+		},
+		GuInventory: []models.GuInstance{
+			{
+				GuID:     guID,
+				Rank:     3,
+				Equipped: true,
+				Status:   "ACTIVE",
+			},
+		},
+	}
+
+	// Calculate base + bonus (base Giáp: 8.0, Lotus multiplier: same rank rank=3 vs rank=3 -> tnMultiplier=2.0 -> bonus 10*2 = 20.0)
+	// Expected regen rate: 8.0 + 20.0 = 28.0
+	applyProjectedStatus(player, 10, time.Now())
+
+	if got, want := player.ManaRegenRate, 28.0; got != want {
+		t.Fatalf("expected ManaRegenRate to be %v, got %v", want, got)
+	}
+}

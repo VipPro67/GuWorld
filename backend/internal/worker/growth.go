@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"time"
 
+	pkgdb "github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -64,7 +65,7 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 	var hp float64
 
 	err = tx.QueryRow(`
-		SELECT gu_inventory, growth_data, base_hp, hp
+		SELECT `+pkgdb.GuInventoryAggregate("players.id")+`, growth_data, base_hp, hp
 		FROM players
 		WHERE id = $1
 		FOR UPDATE`, playerID).Scan(&guInvRaw, &growthDataRaw, &baseHP, &hp)
@@ -153,11 +154,14 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 		return nil
 	}
 
-	newGuInvRaw, _ := json.Marshal(guInv)
 	growthDataRawUpdated, _ := json.Marshal(growthData)
 
-	_, err = tx.Exec(`UPDATE players SET gu_inventory = $1, growth_data = $2, base_hp = $3 WHERE id = $4`,
-		string(newGuInvRaw), string(growthDataRawUpdated), baseHP, playerID)
+	if err := pkgdb.SavePlayerGus(tx, playerID, guInv); err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(`UPDATE players SET growth_data = $1, base_hp = $2 WHERE id = $3`,
+		string(growthDataRawUpdated), baseHP, playerID)
 	if err != nil {
 		return err
 	}
