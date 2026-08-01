@@ -99,7 +99,7 @@ func GetActiveTribulation(c *gin.Context) {
 
 type AttackEnemyRequest struct {
 	EnemyID string   `json:"enemy_id" binding:"required"`
-	GuID    string   `json:"gu_id"` // Gu bug ID used for attack (legacy/fallback)
+	GuID    string   `json:"gu_id"`  // Gu bug ID used for attack (legacy/fallback)
 	GuIDs   []string `json:"gu_ids"` // List of Gu IDs to apply simultaneously
 }
 
@@ -217,7 +217,12 @@ func AttackTribulationEnemy(c *gin.Context) {
 		if player.Rank >= 6 {
 			manaType = "Tiên Nguyên"
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("%s không đủ để thi triển Sát Chiêu (cần %.0f, hiện có %.0f)", manaType, totalManaCost, player.CurrentMana)})
+
+		guNames := []string{}
+		for _, gu := range foundGus {
+			guNames = append(guNames, gu.GuID)
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("%s không đủ để thi triển %s (cần %.0f, hiện có %.0f)", manaType, strings.Join(guNames, ", "), totalManaCost, player.CurrentMana)})
 		return
 	}
 
