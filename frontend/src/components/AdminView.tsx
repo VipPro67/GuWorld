@@ -830,12 +830,17 @@ export const AdminView: React.FC = () => {
                 <span className="text-sm font-bold text-zinc-200">{Math.round(detail.hp)}/{Math.round(detail.base_hp)}</span>
               </div>
               <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-3">
-                <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono mb-1"><Zap className="w-3.5 h-3.5 text-blue-400" />Chân nguyên</div>
+                <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono mb-1"><Zap className="w-3.5 h-3.5 text-blue-400" />{detail.rank < 6 ? "Chân nguyên" : "Tiên nguyên"}</div>
                 <span className="text-sm font-bold text-zinc-200">{Math.round(detail.current_mana)}/{Math.round(detail.max_mana)}</span>
               </div>
               <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-3">
                 <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono mb-1"><Coins className="w-3.5 h-3.5 text-yellow-500" />Nguyên Thạch</div>
                 <span className="text-sm font-bold text-yellow-500">{detail.primeval_stones.toLocaleString()}</span>
+              </div>
+              {/*Tiên Nguyên Thạch */}
+              <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-3">
+                <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono mb-1"><Star className="w-3.5 h-3.5 text-purple-500" />Tiên Nguyên Thạch</div>
+                <span className="text-sm font-bold text-purple-500">{detail.immortal_stones.toLocaleString()}</span>
               </div>
             </div>
 
