@@ -1449,7 +1449,7 @@ export const SectView: React.FC = () => {
           {donateType === "stones" && (
             <div className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4 max-w-lg mx-auto w-full">
               <div className="flex justify-between items-center text-xs">
-                <span className="text-zinc-500 font-mono">Nguyên thạch của đạo hữu:</span>
+                <span className="text-zinc-500 font-mono">Nguyên Thạch của đạo hữu:</span>
                 <span className="font-mono font-bold text-yellow-500">{player.primeval_stones} Đá</span>
               </div>
 
@@ -1470,7 +1470,7 @@ export const SectView: React.FC = () => {
                   </button>
                 </div>
                 <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
-                  Tỷ giá quyên góp: 1 Nguyên thạch = 1 Điểm cống hiến
+                  Tỷ giá quyên góp: 1 Nguyên Thạch = 1 Điểm cống hiến
                 </span>
               </div>
 

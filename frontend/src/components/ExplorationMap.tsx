@@ -528,7 +528,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
             {!party ? (
               <div className="text-center py-4 space-y-3">
                 <p className="text-[11px] text-zinc-400 leading-normal">
-                  Đạo hữu chưa gia nhập tổ đội. Lập tổ đội để đi chung bản đồ và cùng chia sẻ Nguyên thạch & Vật phẩm rơi ra khi chiến thắng.
+                  Đạo hữu chưa gia nhập tổ đội. Lập tổ đội để đi chung bản đồ và cùng chia sẻ Nguyên Thạch & Vật phẩm rơi ra khi chiến thắng.
                 </p>
                 <button
                   type="button"

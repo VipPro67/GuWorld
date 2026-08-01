@@ -736,7 +736,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                             useGameStore.getState().addToast("Cổ trùng này đã no, không cần ăn thêm.", "info");
                                             return;
                                           }
-                                          if (availableFood === 0) {
+                                          if (availableFood === 0 && !spec.food_types.includes("primeval_stone") && !spec.food_types.includes("immortal_stone")) {
                                             useGameStore.getState().addToast(`Đạo hữu không có thức ăn phù hợp (${foodName}) để cho ăn!`, "error");
                                             return;
                                           }

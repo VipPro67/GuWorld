@@ -544,7 +544,7 @@ func PlaceApertureNode(c *gin.Context) {
 		}
 	} else {
 		if stones < template.CostStones || int(immortalStones) < template.CostImmortal {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Nguyên thạch hoặc Tiên nguyên không đủ để xây dựng mỏ này."})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Nguyên Thạch hoặc Tiên nguyên không đủ để xây dựng mỏ này."})
 			return
 		}
 		_, err = tx.Exec(`
@@ -1369,14 +1369,14 @@ func RepairApertureNode(c *gin.Context) {
 	}
 
 	if stones < cost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Nguyên thạch không đủ để sửa chữa mỏ này (Yêu cầu: %d, Hiện có: %d).", cost, stones)})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Nguyên Thạch không đủ để sửa chữa mỏ này (Yêu cầu: %d, Hiện có: %d).", cost, stones)})
 		return
 	}
 
 	// Deduct stones
 	_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2`, cost, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Nguyên thạch"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Nguyên Thạch"})
 		return
 	}
 

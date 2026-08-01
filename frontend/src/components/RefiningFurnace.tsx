@@ -868,7 +868,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                       <div className="flex justify-between items-center text-xs px-1">
                         <span className="text-zinc-500 uppercase tracking-widest font-mono text-[10px] flex items-center gap-1">
                           <Coins className="w-3.5 h-3.5 text-amber-500" />
-                          Nguyên thạch tiêu hao:
+                          Nguyên Thạch tiêu hao:
                         </span>
                         <span className={`font-bold font-mono ${hasEnoughStones ? "text-amber-400" : "text-rose-400 font-bold text-sm animate-pulse"}`}>
                           {player.primeval_stones}/{selectedRecipe.primeval_stones_cost} viên

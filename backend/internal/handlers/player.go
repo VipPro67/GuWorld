@@ -847,7 +847,7 @@ func RechargeWithStones(c *gin.Context) {
 
 	neededMana := player.MaxMana - player.CurrentMana
 
-	// Tính số Nguyên thạch TỐI ĐA cần dùng để sạc đầy Không khiếu
+	// Tính số Nguyên Thạch TỐI ĐA cần dùng để sạc đầy Không khiếu
 	maxUsableStones := int(math.Ceil(neededMana / manaPerStone))
 
 	stonesToUse := req.Stones
@@ -856,7 +856,7 @@ func RechargeWithStones(c *gin.Context) {
 	}
 
 	if stonesToUse > player.PrimevalStones {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên thạch trong túi."})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch trong túi."})
 		return
 	}
 

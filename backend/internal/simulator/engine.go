@@ -55,7 +55,6 @@ func DaoMultiplier(dm DaoMarks, paths []string) (float64, bool) {
 	return maxMult, true
 }
 
-
 func cloneCombatState(state *CombatState) *CombatState {
 	if state == nil {
 		return nil
@@ -65,8 +64,8 @@ func cloneCombatState(state *CombatState) *CombatState {
 		Seed:        state.Seed,
 		BossPhase:   state.BossPhase,
 		VirtualMode: state.VirtualMode,
-		Allies:       make([]*CombatantAuto, len(state.Allies)),
-		Enemies:      make([]*CombatantAuto, len(state.Enemies)),
+		Allies:      make([]*CombatantAuto, len(state.Allies)),
+		Enemies:     make([]*CombatantAuto, len(state.Enemies)),
 	}
 	for i, a := range state.Allies {
 		clone.Allies[i] = cloneCombatant(a)
@@ -685,7 +684,7 @@ func Simulate(state *CombatState) []CombatLog {
 					})
 				}
 
-			if a.SourceID == "GU_LOVE_GU" {
+				if a.SourceID == "GU_LOVE_GU" {
 					effectsChoices := []string{"crit_500", "invulnerable_1_turn", "reduce_enemy_hp_90"}
 					costChoices := []string{"aptitude_10", "lifespan_5", "luck_50"}
 
@@ -718,7 +717,7 @@ func Simulate(state *CombatState) []CombatLog {
 					} else if chosenCost == "lifespan_5" {
 						costMsg = "Trừ 5 năm tuổi thọ vĩnh viễn!"
 					} else if chosenCost == "luck_50" {
-						costMsg = "Trừ 50% Nguyên thạch hiện tại!"
+						costMsg = "Trừ 50% Nguyên Thạch hiện tại!"
 					}
 
 					turnLogs = append(turnLogs, CombatLog{

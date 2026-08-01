@@ -890,7 +890,7 @@ export const ImmortalApertureView: React.FC = () => {
                           </div>
 
                           <div className="text-xs text-slate-400">
-                            Loại sản sinh: <span className="text-slate-300 font-medium">{selectedNode.production_type === "Material" ? "Vật phẩm" : "Nguyên thạch"}</span>
+                            Loại sản sinh: <span className="text-slate-300 font-medium">{selectedNode.production_type === "Material" ? "Vật phẩm" : "Nguyên Thạch"}</span>
                           </div>
 
                           <div className="flex justify-between text-xs text-slate-400">

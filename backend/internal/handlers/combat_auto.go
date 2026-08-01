@@ -97,8 +97,8 @@ func AutoCombatStart(c *gin.Context) {
 	var allActions []simulator.SimAction
 
 	// ── Build owned equipped+ACTIVE Gu sets for validation ──
-	ownedGuTypeSet := make(map[string]bool)       // gu_id → true
-	ownedGuInstanceSet := make(map[string]bool)   // instance_id → true
+	ownedGuTypeSet := make(map[string]bool)                  // gu_id → true
+	ownedGuInstanceSet := make(map[string]bool)              // instance_id → true
 	equippedInstByGuID := make(map[string]models.GuInstance) // gu_id → highest-rank equipped ACTIVE instance
 	for _, gu := range player.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" {
@@ -444,7 +444,7 @@ func AutoCombatStart(c *gin.Context) {
 				loveAptitudePenalty += 10
 			} else if strings.Contains(logMsg.Detail, "Trừ 5 năm tuổi thọ vĩnh viễn") {
 				loveLifespanPenalty += 5.0
-			} else if strings.Contains(logMsg.Detail, "Trừ 50% Nguyên thạch hiện tại") {
+			} else if strings.Contains(logMsg.Detail, "Trừ 50% Nguyên Thạch hiện tại") {
 				loveStonesPenalty = true
 			}
 		}

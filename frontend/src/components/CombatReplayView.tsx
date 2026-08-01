@@ -916,7 +916,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
               <div className="font-bold text-lg text-emerald-400">{summary.itemsUsed.toLocaleString()}</div>
             </div>
             <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
-              <div className="text-zinc-500">Nguyên thạch dùng</div>
+              <div className="text-zinc-500">Nguyên Thạch dùng</div>
               <div className="font-bold text-lg text-orange-400">{summary.stonesUsed.toLocaleString()}</div>
             </div>
           </div>

@@ -2275,7 +2275,7 @@ export const AdminView: React.FC = () => {
               {recipesLoading ? <div className="flex justify-center py-8"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div> : recipes.length === 0 ? <div className="text-center py-8 text-zinc-500 text-xs">Không có cổ phương nào.</div> : (
                 <div className="overflow-x-auto rounded-xl border border-zinc-800/80 max-h-[500px] overflow-y-auto">
                   <table className="w-full text-left text-xs">
-                    <thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px] sticky top-0"><th className="px-3 py-2.5 font-semibold">ID</th><th className="px-3 py-2.5 font-semibold">Cổ trùng đích</th><th className="px-3 py-2.5 font-semibold text-right">Tỉ lệ</th><th className="px-3 py-2.5 font-semibold text-right">Nguyên thạch</th><th className="px-3 py-2.5"></th></tr></thead>
+                    <thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px] sticky top-0"><th className="px-3 py-2.5 font-semibold">ID</th><th className="px-3 py-2.5 font-semibold">Cổ trùng đích</th><th className="px-3 py-2.5 font-semibold text-right">Tỉ lệ</th><th className="px-3 py-2.5 font-semibold text-right">Nguyên Thạch</th><th className="px-3 py-2.5"></th></tr></thead>
                     <tbody>{recipes.map((r: any) => (
                       <tr key={r.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                         <td className="px-3 py-2.5 text-zinc-500 font-mono">{r.id}</td>
@@ -3213,7 +3213,7 @@ export const AdminView: React.FC = () => {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tỉ lệ thành công</label><input type="number" step="0.01" min={0} max={1} value={recipeEdit.success_rate} onChange={e => setRecipeEdit({...recipeEdit, success_rate: parseFloat(e.target.value) || 0.5})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
-                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Nguyên thạch</label><input type="number" value={recipeEdit.primeval_stones_cost} onChange={e => setRecipeEdit({...recipeEdit, primeval_stones_cost: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Nguyên Thạch</label><input type="number" value={recipeEdit.primeval_stones_cost} onChange={e => setRecipeEdit({...recipeEdit, primeval_stones_cost: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
                 <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tiên nguyên thạch</label><input type="number" step="any" value={recipeEdit.immortal_essence_stones_cost} onChange={e => setRecipeEdit({...recipeEdit, immortal_essence_stones_cost: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
               </div>
               {/* Required Gus as key-value */}
