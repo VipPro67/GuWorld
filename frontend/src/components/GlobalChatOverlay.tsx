@@ -7,6 +7,7 @@ import {
   X,
   ArrowLeftRight,
   ArrowUpDown,
+  CornerUpLeft,
 } from "lucide-react";
 
 const formatRelativeTime = (createdAtStr: string): string => {
@@ -43,6 +44,14 @@ export const GlobalChatOverlay: React.FC = () => {
   } = useGameStore();
 
   const [chatInput, setChatInput] = useState("");
+  const [showTimeIds, setShowTimeIds] = useState<Record<string, boolean>>({});
+
+  const toggleTimeVisibility = (id: string) => {
+    setShowTimeIds((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
   
   const [chatWidth, setChatWidth] = useState<"sm" | "md" | "lg">(() => {
     if (typeof window !== "undefined") {
@@ -61,6 +70,18 @@ export const GlobalChatOverlay: React.FC = () => {
   });
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleReply = (username: string) => {
+    setChatInput((prev) => {
+      const mention = `@${username} `;
+      if (prev.includes(mention)) return prev;
+      return mention + prev;
+    });
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
 
   // Persist width and height adjustments locally
   useEffect(() => {
@@ -239,7 +260,7 @@ export const GlobalChatOverlay: React.FC = () => {
                 // Card container styles
                 const cardClass = isSystem
                   ? "w-full bg-amber-500/10 dark:bg-amber-950/15 border border-amber-300/30 dark:border-amber-500/10 rounded-lg p-1.5 sm:p-2"
-                  : "w-full bg-zinc-100/70 dark:bg-zinc-900/30 border border-zinc-200/50 dark:border-zinc-800/40 rounded-lg p-1.5 sm:p-2";
+                  : "w-full bg-zinc-100/70 dark:bg-zinc-900/30 border border-zinc-200/50 dark:border-zinc-800/40 rounded-lg p-1.5 sm:p-2 group";
 
                 const nameColorClass = isSystem
                   ? "text-amber-700 dark:text-amber-400 font-bold"
@@ -258,9 +279,15 @@ export const GlobalChatOverlay: React.FC = () => {
                         msg.sender_username.slice(0, 2).toUpperCase()
                       )}
                     </div>
-                    <div className="min-w-0 flex-1 leading-relaxed break-all">
+                    <div 
+                      className="min-w-0 flex-1 leading-relaxed break-all cursor-pointer"
+                      onClick={() => toggleTimeVisibility(msg.id || index.toString())}
+                    >
                       <span
-                        onClick={() => !isSystem && !isMe && fetchPlayerProfile(msg.sender_username)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isSystem && !isMe) fetchPlayerProfile(msg.sender_username);
+                        }}
                         className={`${nameColorClass} mr-1.5`}
                         title={!isSystem && !isMe ? "Bấm để trinh thám cổ sư" : undefined}
                       >
@@ -270,13 +297,25 @@ export const GlobalChatOverlay: React.FC = () => {
                           </span>
                         )}
                         {msg.sender_username}
-                        <span className="text-zinc-400 dark:text-zinc-650 text-[8.5px] font-normal ml-1 normal-case select-none">
-                          ({formatRelativeTime(msg.created_at)})
-                        </span>
+                        {showTimeIds[msg.id || index.toString()] && (
+                          <span className="text-zinc-400 dark:text-zinc-650 text-[8.5px] font-normal ml-1 normal-case select-none">
+                            ({formatRelativeTime(msg.created_at)})
+                          </span>
+                        )}
                         :
                       </span>
                       <span className={`${contentColorClass} ml-0.5`}>{msg.content}</span>
                     </div>
+                    {!isSystem && (
+                      <button
+                        type="button"
+                        onClick={() => handleReply(msg.sender_username)}
+                        className="opacity-0 group-hover:opacity-100 sm:opacity-50 hover:sm:opacity-100 p-1 rounded hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-all cursor-pointer self-start shrink-0 ml-1"
+                        title="Phản hồi (Nhắc tên)"
+                      >
+                        <CornerUpLeft className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 );
               })
@@ -286,6 +325,7 @@ export const GlobalChatOverlay: React.FC = () => {
           {/* Chat input form */}
           <form onSubmit={handleSendChat} className="flex gap-2">
             <input
+              ref={inputRef}
               type="text"
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
