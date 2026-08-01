@@ -793,20 +793,10 @@ func RechargeWithStones(c *gin.Context) {
 			return
 		}
 
-		neededMana := player.MaxMana - player.CurrentMana
-		if neededMana <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Nguyên Hải đã đầy."})
-			return
-		}
-
-		stonesToUse := int(math.Min(float64(req.Stones), math.Ceil(neededMana)))
-		if stonesToUse <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Số lượng Tiên Nguyên Thạch nạp không hợp lệ."})
-			return
-		}
-
+		stonesToUse := req.Stones
+		manaGain := float64(stonesToUse) / math.Pow(100, float64(player.Rank-6))
+		player.CurrentMana += manaGain
 		player.ImmortalStones -= float64(stonesToUse)
-		player.CurrentMana += float64(stonesToUse)
 		if player.CurrentMana > player.MaxMana {
 			player.CurrentMana = player.MaxMana
 		}

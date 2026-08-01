@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"math"
+	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
@@ -256,12 +257,29 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 
 		if player.SoulHP > 0 && player.SoulHP < player.MaxSoul {
 			soulRegenPerHour := float64(player.MaxSoul) * 0.10
-			earnedSoul := int((subjectiveSeconds / 3600.0) * soulRegenPerHour)
-			if earnedSoul > 0 {
-				player.SoulHP += earnedSoul
+			earnedSoulFloat := (subjectiveSeconds / 3600.0) * soulRegenPerHour
+			earnedSoulInt := int(earnedSoulFloat)
+			fraction := earnedSoulFloat - float64(earnedSoulInt)
+			if fraction > 0 && rand.Float64() < fraction {
+				earnedSoulInt += 1
+			}
+			if earnedSoulInt > 0 {
+				player.SoulHP += earnedSoulInt
 				if player.SoulHP > player.MaxSoul {
 					player.SoulHP = player.MaxSoul
 				}
+				poolChanged = true
+			}
+		}
+
+		if player.CurrentThought < player.MaxThought {
+			earnedThought := (subjectiveSeconds / 3600.0) * player.RegenRate
+			newThought := player.CurrentThought + earnedThought
+			if newThought > player.MaxThought {
+				newThought = player.MaxThought
+			}
+			if newThought != player.CurrentThought {
+				player.CurrentThought = newThought
 				poolChanged = true
 			}
 		}
@@ -348,11 +366,11 @@ func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models
 			UPDATE players
 			SET current_mana = $1, max_mana = $2, last_mana_update = $3,
 			    lifespan = $4, time_speed_multiplier = $5, aperture_stress = $6,
-			    last_cultivate_time = $7, hp = $8, soul_hp = $9
-			WHERE id = $10
+			    last_cultivate_time = $7, hp = $8, soul_hp = $9, current_thought = $10
+			WHERE id = $11
 		`, player.CurrentMana, player.MaxMana, player.LastManaUpdate,
 			player.Lifespan, player.TimeSpeedMultiplier, player.ApertureStress,
-			player.LastCultivateTime, player.HP, player.SoulHP, player.ID)
+			player.LastCultivateTime, player.HP, player.SoulHP, player.CurrentThought, player.ID)
 		if err != nil {
 			return player, err
 		}

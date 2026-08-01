@@ -1382,6 +1382,23 @@ func ProcessActiveTribulationGrid() error {
 	return tx.Commit()
 }
 
+func RegenerateImmortalApertures() error {
+	// Heal aperture_hp by 0.5% of max_aperture_hp per minute (minimum 10 HP per minute)
+	// If state is DAMAGED and aperture_hp reaches max_aperture_hp, set state back to STABLE
+	_, err := db.DB.Exec(`
+		UPDATE immortal_apertures
+		SET 
+			aperture_hp = LEAST(max_aperture_hp, aperture_hp + GREATEST(10, max_aperture_hp / 200)),
+			state = CASE 
+				WHEN state = 'DAMAGED' AND (aperture_hp + GREATEST(10, max_aperture_hp / 200)) >= max_aperture_hp THEN 'STABLE'
+				ELSE state
+			END,
+			updated_at = NOW()
+		WHERE state != 'TRIBULATION_ACTIVE' AND state != 'DESTROYED' AND aperture_hp < max_aperture_hp
+	`)
+	return err
+}
+
 func StartTribulationWorker(ctx context.Context) {
 	ticker60 := time.NewTicker(60 * time.Second)
 	ticker15 := time.NewTicker(15 * time.Second)
@@ -1397,6 +1414,10 @@ func StartTribulationWorker(ctx context.Context) {
 				err := CheckAndTriggerTribulations()
 				if err != nil {
 					logger.S.Errorf("Tribulation background worker error: %v", err)
+				}
+				errRegen := RegenerateImmortalApertures()
+				if errRegen != nil {
+					logger.S.Errorf("Aperture HP regeneration background worker error: %v", errRegen)
 				}
 			}
 		}
