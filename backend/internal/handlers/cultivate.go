@@ -382,8 +382,17 @@ func Ascension(c *gin.Context) {
 		if player.DaoMarks == nil {
 			player.DaoMarks = models.DaoMarksMap{}
 		}
-		player.DaoMarks["heaven"] = 100
-		player.DaoMarks["earth"] = 100
+		// Randomize the 2 paths chosen on ascension
+		pathsList := []string{
+			"fire", "water", "ice", "blood", "sword", "strength", "soul", "wisdom",
+			"time", "space", "wind", "lightning", "moon", "wood", "metal", "earth",
+			"heaven", "poison", "refinement", "darkness", "light",
+		}
+		rand.Shuffle(len(pathsList), func(i, j int) {
+			pathsList[i], pathsList[j] = pathsList[j], pathsList[i]
+		})
+		player.DaoMarks[pathsList[0]] = 100
+		player.DaoMarks[pathsList[1]] = 100
 
 		// Set first tribulation to 10 days from now (simulated real-time)
 		nextTrib := time.Now().Add(10 * 24 * time.Hour)

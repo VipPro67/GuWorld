@@ -413,7 +413,8 @@ func ResolveTribulation(c *gin.Context) {
 
 	if remainingEnemies == 0 && ap.ApertureHP > 0 {
 		// Clear Victory!
-		err = addDaoMarksTx(tx, playerID.String(), ev.Path, ev.RewardDaoMarks)
+		rewards := distributeDaoMarks(ev.Path, ev.RewardDaoMarks)
+		err = addMultipleDaoMarksTx(tx, playerID.String(), rewards)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Đạo Ngân: " + err.Error()})
 			return
@@ -445,7 +446,12 @@ func ResolveTribulation(c *gin.Context) {
 			return
 		}
 
-		msg = fmt.Sprintf("Chúc mừng đạo hữu vượt kiếp nạn thành công! Khai quang nhận %d Đạo Ngân hệ %s. Tiên Khiếu của bạn đã ổn định trở lại.%s", ev.RewardDaoMarks, strings.ToUpper(ev.Path), breakthroughMsg)
+		rewardStrings := []string{}
+		for path, amount := range rewards {
+			rewardStrings = append(rewardStrings, fmt.Sprintf("%d Đạo Ngân hệ %s", amount, strings.ToUpper(path)))
+		}
+		rewardText := strings.Join(rewardStrings, ", ")
+		msg = fmt.Sprintf("Chúc mừng đạo hữu vượt kiếp nạn thành công! Khai quang nhận %s. Tiên Khiếu của bạn đã ổn định trở lại.%s", rewardText, breakthroughMsg)
 
 		if didBreakthrough {
 			_, _ = tx.Exec(`
@@ -463,7 +469,8 @@ func ResolveTribulation(c *gin.Context) {
 		win := rand.Float64() < successChance
 		if win {
 			reducedReward := ev.RewardDaoMarks / 2
-			_ = addDaoMarksTx(tx, playerID.String(), ev.Path, reducedReward)
+			rewards := distributeDaoMarks(ev.Path, reducedReward)
+			_ = addMultipleDaoMarksTx(tx, playerID.String(), rewards)
 
 			handleSuccess(ev.TribulationType)
 			ap.ApertureHP = ap.MaxApertureHP / 2
@@ -494,7 +501,12 @@ func ResolveTribulation(c *gin.Context) {
 				WHERE id = $4
 			`, ap.ApertureHP, now, reducedReward, ev.ID)
 
-			msg = fmt.Sprintf("Đạo hữu vượt kiếp chật vật thành công! Nhận %d Đạo Ngân hệ %s, nhưng Tiên Khiếu bị chấn động mạnh (HP giảm còn 50%%), 1 Điểm tài nguyên ngẫu nhiên đã bị phá hủy.%s", reducedReward, strings.ToUpper(ev.Path), breakthroughMsg)
+			rewardStrings := []string{}
+			for path, amount := range rewards {
+				rewardStrings = append(rewardStrings, fmt.Sprintf("%d Đạo Ngân hệ %s", amount, strings.ToUpper(path)))
+			}
+			rewardText := strings.Join(rewardStrings, ", ")
+			msg = fmt.Sprintf("Đạo hữu vượt kiếp chật vật thành công! Nhận %s, nhưng Tiên Khiếu bị chấn động mạnh (HP giảm còn 50%%), 1 Điểm tài nguyên ngẫu nhiên đã bị phá hủy.%s", rewardText, breakthroughMsg)
 
 			if didBreakthrough {
 				_, _ = tx.Exec(`
@@ -607,6 +619,74 @@ func addDaoMarksTx(tx *sql.Tx, playerID string, path string, amount int) error {
 	return err
 }
 
+func addMultipleDaoMarksTx(tx *sql.Tx, playerID string, rewards map[string]int) error {
+	var daoJSON []byte
+	err := tx.QueryRow(`SELECT COALESCE(dao_marks, '{}') FROM players WHERE id = $1 FOR UPDATE`, playerID).Scan(&daoJSON)
+	if err != nil {
+		return err
+	}
+
+	daoMap := make(map[string]int)
+	if len(daoJSON) > 0 {
+		if err := json.Unmarshal(daoJSON, &daoMap); err != nil {
+			return err
+		}
+	}
+	for path, amount := range rewards {
+		daoMap[path] += amount
+	}
+
+	daoJSON, err = json.Marshal(daoMap)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(`UPDATE players SET dao_marks = $1 WHERE id = $2`, daoJSON, playerID)
+	return err
+}
+
+func distributeDaoMarks(mainPath string, totalMarks int) map[string]int {
+	rewards := make(map[string]int)
+	if totalMarks <= 0 {
+		return rewards
+	}
+	// Main path gets 70%
+	mainAmount := int(float64(totalMarks) * 0.7)
+	if mainAmount < 1 {
+		mainAmount = totalMarks
+	}
+	rewards[mainPath] = mainAmount
+
+	remaining := totalMarks - mainAmount
+	if remaining > 0 {
+		allPaths := []string{"fire", "water", "ice", "blood", "sword", "strength", "soul", "wisdom", "time", "space"}
+		otherPaths := []string{}
+		for _, p := range allPaths {
+			if p != mainPath {
+				otherPaths = append(otherPaths, p)
+			}
+		}
+		rand.Shuffle(len(otherPaths), func(i, j int) {
+			otherPaths[i], otherPaths[j] = otherPaths[j], otherPaths[i]
+		})
+
+		numExtra := rand.Intn(2) + 1 // 1 or 2 extra paths
+		if numExtra > len(otherPaths) {
+			numExtra = len(otherPaths)
+		}
+
+		if numExtra == 1 {
+			rewards[otherPaths[0]] = remaining
+		} else {
+			part1 := remaining / 2
+			part2 := remaining - part1
+			rewards[otherPaths[0]] = part1
+			rewards[otherPaths[1]] = part2
+		}
+	}
+	return rewards
+}
+
 // Background Worker Tick: Advance time and trigger tribulations
 func CheckAndTriggerTribulations() error {
 	// Query stable apertures
@@ -614,7 +694,7 @@ func CheckAndTriggerTribulations() error {
 		SELECT id, player_id, time_rate, aperture_hp, max_aperture_hp, internal_years_passed, next_tribulation_year, tribulation_count, essence_production_per_year,
 			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count
 		FROM immortal_apertures
-		WHERE state = 'STABLE'
+		WHERE state IN ('STABLE', 'DAMAGED')
 	`)
 	if err != nil {
 		return err
@@ -657,6 +737,11 @@ func CheckAndTriggerTribulations() error {
 		var currentLifespan float64
 		errLifespan := db.DB.QueryRow(`SELECT lifespan FROM players WHERE id = $1`, ap.PlayerID).Scan(&currentLifespan)
 		if errLifespan == nil {
+			if currentLifespan <= 0.0 {
+				// Lifespan already depleted, time does not flow and no message spam
+				continue
+			}
+
 			newLifespan := math.Max(0.0, currentLifespan-realYearsPassed)
 			_, _ = db.DB.Exec(`UPDATE players SET lifespan = $1 WHERE id = $2`, newLifespan, ap.PlayerID)
 
@@ -965,9 +1050,32 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	}
 	defer tx.Rollback()
 
-	// Pick a random path for the Calamity
-	paths := []string{"fire", "water", "ice", "blood", "sword", "strength", "soul", "wisdom", "time", "space"}
-	path := paths[rand.Intn(len(paths))]
+	// Pick a random path for the Calamity, prioritizing the player's Vital Gu path if they have one
+	var vitalGuID string
+	var vitalGuRank int
+	errVital := tx.QueryRow(`SELECT gu_id, gu_rank FROM player_gu WHERE player_id = $1 AND is_vital = true LIMIT 1`, playerID).Scan(&vitalGuID, &vitalGuRank)
+
+	supportedPaths := []string{"fire", "water", "ice", "blood", "sword", "strength", "soul", "wisdom", "time", "space"}
+	matchedPaths := []string{}
+	if errVital == nil && vitalGuID != "" {
+		if guItem, found := models.GetGu(vitalGuID, vitalGuRank); found {
+			for _, p := range guItem.Path {
+				normalizedP := strings.TrimSpace(strings.TrimSuffix(strings.ToLower(p), " path"))
+				for _, sp := range supportedPaths {
+					if normalizedP == sp {
+						matchedPaths = append(matchedPaths, sp)
+					}
+				}
+			}
+		}
+	}
+
+	var path string
+	if len(matchedPaths) > 0 && rand.Float64() < 0.7 {
+		path = matchedPaths[rand.Intn(len(matchedPaths))]
+	} else {
+		path = supportedPaths[rand.Intn(len(supportedPaths))]
+	}
 
 	var rank int
 	err = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, playerID).Scan(&rank)
