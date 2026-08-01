@@ -1614,7 +1614,7 @@ func RegenerateImmortalApertures() error {
 				ELSE state
 			END,
 			updated_at = NOW()
-		WHERE state != 'TRIBULATION_ACTIVE' AND state != 'DESTROYED' AND aperture_hp < max_aperture_hp
+		WHERE state != 'DESTROYED' AND aperture_hp < max_aperture_hp
 	`)
 	return err
 }

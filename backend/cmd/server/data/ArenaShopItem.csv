@@ -1,11 +1,4 @@
 id,price,qty,stock,is_default,sort_order
-GU_LIFESPAN_1,81,1,-1,true,0
-GU_LIFESPAN_10,81,1,-1,true,0
-GU_LIFESPAN_100,81,1,-1,true,0
-GU_LIFESPAN_1000,81,1,-1,true,0
-GU_LIFESPAN_5,81,1,-1,true,0
-GU_LIFESPAN_50,81,1,-1,true,0
-GU_LIFESPAN_500,81,1,-1,true,0
 blade_food,36,1,-1,true,0
 blood,81,1,-1,true,0
 cloud_dragon_scale,36,1,-1,true,0
