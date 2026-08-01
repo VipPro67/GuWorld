@@ -98,7 +98,7 @@ export const ImmortalApertureView: React.FC = () => {
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   const [selectedNode, setSelectedNode] = useState<ApertureResourceNode | null>(null);
   const [selectedEnemy, setSelectedEnemy] = useState<TribulationEnemy | null>(null);
-  const [selectedGu, setSelectedGu] = useState<string>("");
+  const [selectedGus, setSelectedGus] = useState<string[]>([]);
 
   const [sliderRate, setSliderRate] = useState<number>(aperture?.time_rate || 10.0);
   const [buildCategory, setBuildCategory] = useState<"plants" | "beasts" | "humans">("plants");
@@ -275,8 +275,8 @@ export const ImmortalApertureView: React.FC = () => {
   };
 
   const handleAttack = async () => {
-    if (!activeTribulation || !selectedEnemy || !selectedGu) return;
-    await attackTribulationEnemy(activeTribulation.event.id, selectedEnemy.id, selectedGu);
+    if (!activeTribulation || !selectedEnemy || selectedGus.length === 0) return;
+    await attackTribulationEnemy(activeTribulation.event.id, selectedEnemy.id, selectedGus);
   };
 
   const handleResolve = async () => {
@@ -918,7 +918,17 @@ export const ImmortalApertureView: React.FC = () => {
 
                     {/* Gu Select */}
                     <div className="space-y-2">
-                      <label className="text-xs text-slate-300 font-bold">Chọn Cổ Trùng (Chỉ Cổ Đang Trang Bị)</label>
+                      <div className="flex justify-between items-center">
+                        <label className="text-xs text-slate-300 font-bold">Chọn Cổ Trùng (Cho phép chọn nhiều)</label>
+                        {selectedGus.length > 0 && (
+                          <button
+                            onClick={() => setSelectedGus([])}
+                            className="text-[10px] text-amber-500 hover:text-amber-400 font-semibold"
+                          >
+                            Bỏ chọn tất cả
+                          </button>
+                        )}
+                      </div>
                       <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-800 rounded-xl p-2 bg-slate-950/50">
                         {activeGus.length === 0 ? (
                           <div className="text-center text-slate-500 py-6 text-xs leading-normal">
@@ -928,22 +938,36 @@ export const ImmortalApertureView: React.FC = () => {
                           activeGus.map((instance) => {
                             const spec = guDictionary[instance.gu_id];
                             if (!spec) return null;
-                            const isSelected = selectedGu === instance.gu_id;
+                            const isSelected = selectedGus.includes(instance.gu_id);
 
                             return (
                               <div
                                 key={instance.instance_id}
-                                onClick={() => setSelectedGu(instance.gu_id)}
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedGus(selectedGus.filter((id) => id !== instance.gu_id));
+                                  } else {
+                                    setSelectedGus([...selectedGus, instance.gu_id]);
+                                  }
+                                }}
                                 className={`p-2 rounded-lg text-xs flex justify-between items-center cursor-pointer border transition ${
                                   isSelected
                                     ? "bg-amber-950/40 border-amber-500/40 text-amber-200"
                                     : "bg-slate-900 border-transparent hover:border-slate-800 text-slate-400"
                                 }`}
                               >
-                                <div>
-                                  <div className="font-bold">{spec.name}</div>
-                                  <div className="text-[10px] text-slate-500">
-                                    Cấp: {spec.rank} | {spec.base_mana_cost} Mana
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => {}} // handled by div onClick
+                                    className="rounded border-slate-700 text-amber-600 focus:ring-amber-500 bg-slate-950 pointer-events-none"
+                                  />
+                                  <div>
+                                    <div className="font-bold">{spec.name}</div>
+                                    <div className="text-[10px] text-slate-500">
+                                      Cấp: {spec.rank} | {spec.base_mana_cost} Chân Nguyên
+                                    </div>
                                   </div>
                                 </div>
                                 <div className="text-right text-[10px] text-slate-400">
@@ -958,11 +982,11 @@ export const ImmortalApertureView: React.FC = () => {
 
                     <button
                       onClick={handleAttack}
-                      disabled={actionLoading || !selectedEnemy || !selectedGu}
+                      disabled={actionLoading || !selectedEnemy || selectedGus.length === 0}
                       className="w-full py-3 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 disabled:from-slate-850 disabled:to-slate-900 disabled:text-slate-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg"
                     >
                       <Sword className="w-4 h-4" />
-                      {actionLoading ? "Đang tiến hành công kích..." : "Phát Động Công Kích"}
+                      {actionLoading ? "Đang tiến hành công kích..." : `Phát Động Công Kích (${selectedGus.length} Cổ)`}
                     </button>
                   </div>
 

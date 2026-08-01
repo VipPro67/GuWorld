@@ -98,8 +98,9 @@ func GetActiveTribulation(c *gin.Context) {
 }
 
 type AttackEnemyRequest struct {
-	EnemyID string `json:"enemy_id" binding:"required"`
-	GuID    string `json:"gu_id" binding:"required"` // Gu bug ID used for attack
+	EnemyID string   `json:"enemy_id" binding:"required"`
+	GuID    string   `json:"gu_id"` // Gu bug ID used for attack (legacy/fallback)
+	GuIDs   []string `json:"gu_ids"` // List of Gu IDs to apply simultaneously
 }
 
 // AttackTribulationEnemy allows the player to use a Gu to damage a tribulation boss/enemy
@@ -120,6 +121,17 @@ func AttackTribulationEnemy(c *gin.Context) {
 	var req AttackEnemyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu yêu cầu không hợp lệ"})
+		return
+	}
+
+	// Support both single gu_id and multiple gu_ids
+	guIDs := req.GuIDs
+	if len(guIDs) == 0 && req.GuID != "" {
+		guIDs = []string{req.GuID}
+	}
+
+	if len(guIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu cần chọn ít nhất một Cổ trùng để công kích"})
 		return
 	}
 
@@ -165,29 +177,38 @@ func AttackTribulationEnemy(c *gin.Context) {
 		return
 	}
 
-	// Verify player has the Gu bug and it's active and equipped
-	var foundGu *models.GuInstance
-	for i := range player.GuInventory {
-		if player.GuInventory[i].GuID == req.GuID && player.GuInventory[i].Status == "ACTIVE" && player.GuInventory[i].Equipped {
-			foundGu = &player.GuInventory[i]
-			break
+	// Verify player has all the selected Gu bugs and they are active and equipped
+	var foundGus []*models.GuInstance
+	for _, targetGuID := range guIDs {
+		var foundGu *models.GuInstance
+		for i := range player.GuInventory {
+			if player.GuInventory[i].GuID == targetGuID && player.GuInventory[i].Status == "ACTIVE" && player.GuInventory[i].Equipped {
+				foundGu = &player.GuInventory[i]
+				break
+			}
 		}
+
+		if foundGu == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đạo hữu không sở hữu, chưa trang bị (equipped) hoặc Cổ trùng %s không ở trạng thái ACTIVE", targetGuID)})
+			return
+		}
+		foundGus = append(foundGus, foundGu)
 	}
 
-	if foundGu == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không sở hữu, chưa trang bị (equipped) hoặc Cổ trùng này không ở trạng thái ACTIVE"})
-		return
+	totalManaCost := 0
+	var guSpecs []models.GuDictionaryItem
+	for _, fg := range foundGus {
+		spec, ok := models.GetGuAny(fg.GuID)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đặc tính Cổ trùng %s không hợp lệ", fg.GuID)})
+			return
+		}
+		totalManaCost += spec.BaseManaCost
+		guSpecs = append(guSpecs, spec)
 	}
 
-	spec, ok := models.GetGuAny(req.GuID)
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đặc tính Cổ trùng không hợp lệ"})
-		return
-	}
-
-	manaCost := spec.BaseManaCost
-	if player.CurrentMana < manaCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Chân Nguyên không đủ để thi triển Sát Chiêu Cổ trùng"})
+	if player.CurrentMana < totalManaCost {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Chân Nguyên không đủ để thi triển Sát Chiêu (cần %d, hiện có %d)", totalManaCost, player.CurrentMana)})
 		return
 	}
 
@@ -205,44 +226,66 @@ func AttackTribulationEnemy(c *gin.Context) {
 		return
 	}
 
-	// 4. Calculate Player Damage (augmented by Dao Marks)
-	baseDmg := 35.0
-	activeEffects := models.GetFlatGuEffects(spec)
-	if d, hasDmg := activeEffects["damage"]; hasDmg {
-		baseDmg = d
-	}
-	dmgMult := 1.0
-	if m, hasMult := activeEffects["damage_multiplier"]; hasMult {
-		dmgMult = m
-	}
-
-	// Fetch Dao Mark Multiplier
+	// Fetch Dao Mark Multiplier once (could be different system/path for each Gu)
 	var daoJSON []byte
 	_ = tx.QueryRow(`SELECT COALESCE(dao_marks, '{}') FROM players WHERE id = $1`, playerID).Scan(&daoJSON)
 	daoMap := make(map[string]int)
 	if len(daoJSON) > 0 {
 		_ = json.Unmarshal(daoJSON, &daoMap)
 	}
-	daoMultiplier := 1.0
-	for _, path := range spec.Path {
-		cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-		daoAmount := daoMap[cleanPath]
 
-		mult := 1.0
-		if daoAmount > 0 {
-			if daoAmount <= 10000 {
-				mult = 1.0 + float64(daoAmount)/100.0
-			} else {
-				mult = 1.0 + 100.0 + float64(daoAmount-10000)/500.0
+	// 4. Calculate Player Damage (augmented by Dao Marks) and other effects across all Gu
+	totalFinalDmg := 0.0
+	totalHeal := 0.0
+	totalShield := 0.0
+	var guNames []string
+
+	for _, spec := range guSpecs {
+		guNames = append(guNames, spec.Name)
+		activeEffects := models.GetFlatGuEffects(spec)
+
+		baseDmg := 35.0
+		if d, hasDmg := activeEffects["damage"]; hasDmg {
+			baseDmg = d
+		}
+		dmgMult := 1.0
+		if m, hasMult := activeEffects["damage_multiplier"]; hasMult {
+			dmgMult = m
+		}
+
+		daoMultiplier := 1.0
+		for _, path := range spec.Path {
+			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
+			daoAmount := daoMap[cleanPath]
+
+			mult := 1.0
+			if daoAmount > 0 {
+				if daoAmount <= 10000 {
+					mult = 1.0 + float64(daoAmount)/100.0
+				} else {
+					mult = 1.0 + 100.0 + float64(daoAmount-10000)/500.0
+				}
+			}
+			if mult > daoMultiplier {
+				daoMultiplier = mult
 			}
 		}
-		if mult > daoMultiplier {
-			daoMultiplier = mult
+
+		finalDmg := baseDmg * daoMultiplier * dmgMult
+		totalFinalDmg += finalDmg
+
+		healVal, hasHeal := activeEffects["heal"]
+		if hasHeal && healVal > 0 {
+			totalHeal += healVal
+		}
+
+		shieldVal, hasShield := activeEffects["defense"]
+		if hasShield && shieldVal > 0 {
+			totalShield += shieldVal
 		}
 	}
 
-	finalDmg := baseDmg * daoMultiplier * dmgMult
-	netDmg := int(finalDmg) - en.Defense
+	netDmg := int(totalFinalDmg) - en.Defense
 	if netDmg < 10 {
 		netDmg = 10
 	}
@@ -254,18 +297,13 @@ func AttackTribulationEnemy(c *gin.Context) {
 	}
 
 	// 5. Player self-buffs from the Gu: heal, then raise a shield
-	healVal, hasHeal := activeEffects["heal"]
-	if hasHeal && healVal > 0 {
-		player.HP += healVal
+	if totalHeal > 0 {
+		player.HP += totalHeal
 		if player.HP > player.BaseHP {
 			player.HP = player.BaseHP
 		}
 	}
-	shieldVal, hasShield := activeEffects["defense"]
-	shield := 0.0
-	if hasShield && shieldVal > 0 {
-		shield = shieldVal
-	}
+	shield := totalShield
 
 	// 6. Enemy Counter-attacks! (Damages player HP and Aperture HP)
 	counterDmg := en.Attack
@@ -295,7 +333,7 @@ func AttackTribulationEnemy(c *gin.Context) {
 	_, _ = tx.Exec(`UPDATE immortal_apertures SET aperture_hp = $1 WHERE id = $2`, newApHP, apertureID)
 
 	// 7. Update Database State
-	player.CurrentMana -= manaCost
+	player.CurrentMana -= totalManaCost
 	_, err = tx.Exec(`
 		UPDATE players
 		SET current_mana = $1, hp = $2
@@ -322,15 +360,12 @@ func AttackTribulationEnemy(c *gin.Context) {
 	}
 
 	// Formulate log message
-	combatLog := fmt.Sprintf("Thi triển %s: Đạo hữu gây %d sát thương lên %s (Đạo Ngân buff x%.1f)", spec.Name, netDmg, en.Name, daoMultiplier)
-	if dmgMult != 1.0 {
-		combatLog += fmt.Sprintf(", sát thương nhân x%.1f", dmgMult)
+	combatLog := fmt.Sprintf("Thi triển %s: Đạo hữu gây %d sát thương lên %s", strings.Join(guNames, ", "), netDmg, en.Name)
+	if totalHeal > 0 {
+		combatLog += fmt.Sprintf(". Hồi phục %.0f HP", totalHeal)
 	}
-	if hasHeal && healVal > 0 {
-		combatLog += fmt.Sprintf(". Hồi phục %.0f HP", healVal)
-	}
-	if hasShield && shieldVal > 0 {
-		combatLog += fmt.Sprintf(". Tạo Khiên hộ thể %.0f điểm", shieldVal)
+	if totalShield > 0 {
+		combatLog += fmt.Sprintf(". Tạo Khiên hộ thể %.0f điểm", totalShield)
 	}
 	if absorbed > 0 {
 		combatLog += fmt.Sprintf(". Khiên hấp thụ %.0f sát thương phản chấn", absorbed)

@@ -949,7 +949,7 @@ interface GameState {
   setApertureLabor: (race: string, intensity: string) => Promise<boolean>;
   repairApertureNode: (nodeId: string) => Promise<boolean>;
   fetchActiveTribulation: () => Promise<void>;
-  attackTribulationEnemy: (eventId: string, enemyId: string, guId: string) => Promise<boolean>;
+  attackTribulationEnemy: (eventId: string, enemyId: string, guIds: string[]) => Promise<boolean>;
   resolveTribulation: (eventId: string) => Promise<boolean>;
 
   // Soul foundation actions
@@ -4350,7 +4350,7 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
-  attackTribulationEnemy: async (eventId: string, enemyId: string, guId: string) => {
+  attackTribulationEnemy: async (eventId: string, enemyId: string, guIds: string[]) => {
     const { token, actionLoading, logout } = get();
     if (!token || actionLoading) return false;
     set({ actionLoading: true, error: null });
@@ -4358,7 +4358,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/attack`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enemy_id: enemyId, gu_id: guId }),
+        body: JSON.stringify({ enemy_id: enemyId, gu_ids: guIds, gu_id: guIds[0] || "" }),
       });
       if (response.status === 401 || response.status === 403) {
         logout();
