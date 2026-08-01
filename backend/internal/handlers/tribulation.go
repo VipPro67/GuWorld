@@ -1573,19 +1573,16 @@ func ProcessActiveTribulationGrid() error {
 					nodes = remainingNodes
 				}
 			} else {
-				// Move towards the node
-				if absDx > absDy {
-					if dx > 0 {
-						en.X++
-					} else {
-						en.X--
-					}
-				} else {
-					if dy > 0 {
-						en.Y++
-					} else {
-						en.Y--
-					}
+				// Move towards the node (allows diagonal movement)
+				if dx > 0 {
+					en.X++
+				} else if dx < 0 {
+					en.X--
+				}
+				if dy > 0 {
+					en.Y++
+				} else if dy < 0 {
+					en.Y--
 				}
 				_, err = tx.Exec(`
 					UPDATE tribulation_enemies 
