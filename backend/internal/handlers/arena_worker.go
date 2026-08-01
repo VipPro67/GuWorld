@@ -27,7 +27,7 @@ func StartArenaSettlementWorker(ctx context.Context) {
 				logger.S.Info("Arena Settlement Worker stopped.")
 				return
 			case t := <-ticker.C:
-				if t.Hour() == 20 && t.Minute() == 30 {
+				if t.Hour() == 22 && t.Minute() == 10 {
 					currentDay := t.YearDay()
 					if lastSettlementDay != currentDay {
 						logger.S.Info("Running Daily Arena Settlement...")

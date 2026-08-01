@@ -105,7 +105,7 @@ export const ArenaView: React.FC = () => {
       <div className="text-[10px] text-zinc-550 font-mono max-w-xl">
         * Quy tắc Võ Đài: Cổ sư có thể khiêu chiến <span className="text-amber-500 font-bold">tự do</span>, tối đa 3 lần/ngày.
         Nếu chiến thắng kẻ có hạng cao hơn, hai bên sẽ <span className="text-emerald-600 dark:text-emerald-400 font-bold">hoán đổi vị trí xếp hạng</span> cho nhau.
-        Kết toán phát Xu Đấu Trường mỗi 22:00 hằng ngày.
+        Kết toán phát Xu Đấu Trường mỗi 22:10 hằng ngày.
       </div>
 
       {activeTab === 'shop' ? (
