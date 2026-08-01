@@ -321,6 +321,11 @@ export const ImmortalApertureView: React.FC = () => {
 
   // Filter player active Gu bugs
   const activeGus = player.gu_inventory.filter((gu) => gu.status === "ACTIVE" && gu.equipped === true);
+  //continue from activeGus, filter out only those that are in guDictionary and have effect active
+  const activeGusWithEffect = activeGus.filter((gu) => {
+    const spec = guDictionary[gu.gu_id];
+    return spec && spec.effects && spec.effects.active && spec.effects.active.length > 0;
+  });
 
   // Helper to check for path conflict with other nodes
   const checkConflict = (nd: ApertureResourceNode, all: ApertureResourceNode[]) => {
@@ -930,12 +935,12 @@ export const ImmortalApertureView: React.FC = () => {
                         )}
                       </div>
                       <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-800 rounded-xl p-2 bg-slate-950/50">
-                        {activeGus.length === 0 ? (
+                        {activeGusWithEffect.length === 0 ? (
                           <div className="text-center text-slate-500 py-6 text-xs leading-normal">
-                            Không tìm thấy Cổ trùng đang trang bị (equipped) và ACTIVE.
+                            Không tìm thấy Cổ trùng phù hợp.
                           </div>
                         ) : (
-                          activeGus.map((instance) => {
+                          activeGusWithEffect.map((instance) => {
                             const spec = guDictionary[instance.gu_id];
                             if (!spec) return null;
                             const isSelected = selectedGus.includes(instance.gu_id);
@@ -966,7 +971,7 @@ export const ImmortalApertureView: React.FC = () => {
                                   <div>
                                     <div className="font-bold">{spec.name}</div>
                                     <div className="text-[10px] text-slate-500">
-                                      Cấp: {spec.rank} | {spec.rank < 6 ? '' : spec.base_mana_cost + ' Tiên Nguyên'}
+                                      Cấp: {spec.rank} | {spec.rank < 6 ? '' : spec.base_mana_cost + manaName} | {spec.gu_type}
                                     </div>
                                   </div>
                                 </div>

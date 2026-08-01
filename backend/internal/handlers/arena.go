@@ -66,7 +66,7 @@ func GetArenaLeaderboard(c *gin.Context) {
 		FROM arena_rankings a
 		JOIN players p ON a.player_id = p.id
 		ORDER BY a.rank ASC
-		LIMIT 20
+		LIMIT 50
 	`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leaderboard"})
