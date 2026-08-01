@@ -15,7 +15,7 @@ recipe_four_orifice_fire_tower,GU_FOUR_ORIFICE_FIRE_TOWER,"{""GU_THREE_ORIFICE_F
 recipe_gold_cup_silver_goblet,GU_GOLD_CUP_SILVER_GOBLET,{},"{""primeval_stone"": 500}",0.5,1000,0
 recipe_heavenly_canopy,GU_CANOPY,"{""GU_WHITE_JADE"": 1}","{""water_defense_shell"": 1}",0.55,260,0
 recipe_hundred_year_wood_charm,GU_HUNDRED_YEAR_WOOD_CHARM,"{""GU_WOOD_CHARM"": 1}","{""tree_sap"": 5, ""hundred_year_lifespan_gu"": 1}",0.35,1200,0
-recipe_jia_destiny,GU_JIA_DESTINY,"{""GU_HEAVEN_SECRET"": 2}",{},1,0,200
+recipe_jia_destiny,GU_JIA_DESTINY,"{""GU_HEAVEN_SECRET"": 1}",{},0.05,0,200
 recipe_moon_halo,GU_MOON_HALO,"{""GU_MOONLIGHT"": 1, ""GU_LITTLE_LIGHT"": 2}",{},0.75,50,0
 recipe_moon_raiment,GU_MOON_RAIMENT,"{""GU_JADE_SKIN"": 1, ""GU_MOONLIGHT"": 1}",{},0.85,50,0
 recipe_moon_shadow,GU_MOON_SHADOW,"{""GU_ILLUSION_MOON"": 1}","{""moon_orchid_petal"": 5}",0.45,700,0

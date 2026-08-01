@@ -5,9 +5,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
-	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -48,13 +46,17 @@ func runArenaSettlement() {
 	}
 	defer tx.Rollback()
 
-	// Get top 50 rankings to award rewards
-	rows, err := tx.Query("SELECT player_id, rank FROM arena_rankings WHERE rank <= 50 ORDER BY rank ASC")
+	rows, err := tx.Query("SELECT player_id, rank FROM arena_rankings")
 	if err != nil {
 		logger.S.Error("ArenaSettlement Error: Failed to query rankings", err)
 		return
 	}
-	defer rows.Close()
+
+	type playerReward struct {
+		playerID    string
+		rewardCoins int
+	}
+	var rewards []playerReward
 
 	for rows.Next() {
 		var playerID string
@@ -74,20 +76,19 @@ func runArenaSettlement() {
 			rewardCoins = 200
 		}
 
-		// materials_inventory no longer stored on players table save it in public.player_inventory_items
+		rewards = append(rewards, playerReward{playerID: playerID, rewardCoins: rewardCoins})
+	}
+	rows.Close()
+
+	for _, r := range rewards {
 		_, errUpdate := tx.Exec(`
-			INSERT INTO player_inventory_items (player_id, item_id, category, quantity, updated_at)
-			VALUES ($1, 'arena_coin', 'materials', $2, NOW())
-			ON CONFLICT (player_id, item_id, category)
-			DO UPDATE SET quantity = player_inventory_items.quantity + EXCLUDED.quantity, updated_at = NOW()
-		`, playerID, rewardCoins)
+			UPDATE players 
+			SET materials_inventory = COALESCE(materials_inventory, '{}'::jsonb) || jsonb_build_object('arena_coin', COALESCE((materials_inventory->>'arena_coin')::int, 0) + $1)
+			WHERE id = $2
+		`, r.rewardCoins, r.playerID)
 
 		if errUpdate != nil {
-			logger.S.Errorf("ArenaSettlement Error: Failed to give reward to %s: %v", playerID, errUpdate)
-		} else {
-			if pUUID, errParse := uuid.Parse(playerID); errParse == nil {
-				auditlog.Logf(tx, &pUUID, "arena.settle_reward", "rank=%d rewardCoins=%d", rank, rewardCoins)
-			}
+			logger.S.Errorf("ArenaSettlement Error: Failed to give reward to %s: %v", r.playerID, errUpdate)
 		}
 	}
 
