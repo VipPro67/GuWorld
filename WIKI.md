@@ -33,7 +33,7 @@ Wiki này phản ánh các hệ thống đã có trong codebase hiện tại.
 - Cổ Tiên có tiên khiếu, đạo ngân, tiên nguyên/tài nguyên riêng.
 - Tai kiếp có worker kiểm tra tự động mỗi 60 giây. Khi năm nội bộ đạt mốc tiếp theo, worker spawn kiếp và resolve.
 - **Quái tai kiếp không phá hủy trực tiếp mỏ tài nguyên.** Khi tiếp cận node tài nguyên, mỗi minion mỗi nhát làm giảm `hp` mỏ theo loại kiếp: Địa Tai -1, Thiên Kiếp -2, Hạo Kiếp -4, Vạn Kiếp -8, Hỗn Độn Đại Nạn -16. Boss di chuyển quanh quẩn và đánh mỏ với sát thương gấp đôi minion.
-- **Combat tai kiếp hỗ trợ buff từ Cổ đang trang bị:** hiệu ứng `damage` (sát thương), `damage_multiplier` (nhân sát thương), `defense`/`shield_flat` (tạo Khiên hộ thể hấp thụ phản chấn), `heal`/`heal_flat` (hồi HP, tối đa bằng `base_hp`).
+- **Combat tai kiếp hỗ trợ buff từ Cổ đang trang bị:** hiệu ứng `damage` (sát thương), `damage_multiplier` (nhân sát thương), `defense`/`shield_flat` (tạo Khiên hộ thể hấp thụ phản chấn của quái lên cơ thể hoặc hấp thụ trực tiếp sát thương phản chấn lên Tiên Khiếu đối với Cổ Tiên), `heal`/`heal_flat` (hồi HP, tối đa bằng `base_hp`).
 - **Player chỉ được công kích khi HP Tiên Khiếu > 20% max HP.** Nếu Tiên Khiếu nguy cấp (≤ 20%), đạo hữu không thể ra tay — quái sẽ tiếp tục càn quét mỏ trong sự bất lực; hãy chờ Tiên Khiếu hồi phục hoặc kết toán vượt kiếp.
 - **Kiếp nạn theo cấp bậc:**
   - Rank 6: Địa Tai (10 năm), Thiên Kiếp (100 năm)
@@ -314,3 +314,27 @@ Cổ Nguyệt Phương Nguyên, một đại ma đầu bị ép đến đường
 ### Tu hành lưu phái & Cảnh giới
 - **Lưu phái:** Nhân đạo (Nhân Tổ); Khí đạo, Nô đạo (Nguyên Thủy Tiên Tôn); Trí đạo, Tinh đạo (Tinh Túc Tiên Tôn); Lực đạo, Biến hóa đạo (Cuồng Man Ma Tôn); Luật đạo (Vô Cực Ma Tôn); Hồn đạo (U Hồn Ma Tôn); Thâu đạo (Đạo Thiên Ma Tôn),...
 - **Cảnh giới lưu phái:** Phổ thông ➔ Chuẩn đại sư ➔ Đại sư ➔ Tông sư ➔ Đại tông sư ➔ Vô thượng đại tông sư ➔ Đạo chủ. (Đạo chủ là cảnh giới chỉ có Tôn Giả mới đạt tới, có thể thao túng đạo ngân trong thiên nhiên).
+
+## 19. Hướng Dẫn Tân Thủ (Wiki Guide)
+
+Hệ thống cung cấp trang Hướng Dẫn Tân Thủ chi tiết từng bước cho các hoạt động tại [Wiki Guide](file:///wiki/guide) bao gồm:
+
+### Thuật ngữ cốt lõi:
+- **Không Khiếu & Tiên Khiếu:** Phàm nhân sử dụng Không Khiếu tích lũy chân nguyên chiến đấu. Cổ Tiên (Rank 6+) sở hữu **Tiên Khiếu** (thế giới nhỏ độc lập bên trong cơ thể) tự sản sinh Tiên Nguyên với 4 phẩm cấp: Thấp, Trung, Cao, Cực Hạn dựa trên Nhân Khí lúc Thăng Tiên.
+- **Đạo Ngân (Dao Marks):** Vết khắc của quy luật tự nhiên, chia thành 49 lưu phái (Lực đạo, Hỏa đạo...). Mỗi điểm Đạo Ngân tăng **+1%** sát thương/phòng ngự cho các kỹ năng/Cổ trùng thuộc lưu phái đó (soft cap ở 10.000 điểm).
+- **Cảnh Giới Lưu Phái (Attainment):** Độ ngộ Chân Ý gồm 5 bậc: Phàm Thai ➔ Đại Sư ➔ Tông Sư ➔ Đại Tông Sư ➔ Vô Thượng Đại Tông Sư. Giúp nâng tỉ lệ thành công của sát chiêu và luyện Cổ.
+- **Bản Mệnh Cổ (Vital Gu):** Cổ trùng gắn liền sinh mệnh, không bao giờ mất khi thất bại dã ngoại.
+- **Độ No (Hunger):** Cổ trùng giảm Độ No mỗi 3 giờ. Cần cho ăn đúng loại thức ăn (thịt thú, khoáng thạch...), nếu về 0 Độ No Cổ sẽ **chết vĩnh viễn**.
+- **Sát Chiêu (Killer Moves):** Kỹ năng ghép từ 1 Cổ Hạch Tâm (Core Gu) và 0-8 Cổ Phụ Trợ (Support Gu) tăng sát thương, giảm mana, thêm khống chế (choáng, đóng băng, câm lặng) hoặc thời gian tụ lực.
+- **Kiếp Nạn (Tribulation):** Cổ Tiên phải chống chọi các kiếp nạn (Địa Tai, Thiên Kiếp...) định kỳ bảo vệ tài nguyên Tiên Khiếu. Vượt qua kiếp nạn nhận được lượng lớn Đạo Ngân.
+
+### Các hoạt động chính:
+1. **Tạo nhân vật & Thức tỉnh Linh Căn:** Chọn tên và thức tỉnh Linh Căn ngẫu nhiên.
+2. **Trùng kích Vách Khiếu:** Đột phá tu vi phàm nhân từ Rank 1 đến Rank 5 sử dụng Nguyên Thạch.
+3. **Khai thác mỏ & Thám hiểm:** Đào Nguyên Thạch dã ngoại (coi chừng Quái Mỏ) và mở bản đồ sương mù nhặt dược thảo.
+4. **Lắp ráp Sát Chiêu & Luyện Cổ:** Chế tạo nâng cấp Cổ trùng tại lò luyện và tự do phối hợp Cổ trùng tạo Sát Chiêu độc bản.
+5. **Ải PVE & Đấu Trường PVP:** Đi ải cốt truyện và khiêu chiến Cổ sư khác kiếm Chiến Công đổi đồ.
+6. **Thương hội & Tông môn:** Đấu giá vật phẩm tự do tại Bảo Hoàng Thiên và các hoạt động quyên góp, giao dịch bảo khố Tông Môn.
+7. **Thăng Tiên:** Đột phá lên Lục Chuyển Cổ Tiên ở Rank 5 Đỉnh Phong dựa trên tích lũy Nhân Khí (chance tỷ lệ thuận với Nhân Khí, tối đa 100k = 100% thành công). Thất bại phế bỏ tu vi về Rank 1.
+
+

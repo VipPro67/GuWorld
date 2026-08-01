@@ -292,32 +292,49 @@ func AttackTribulationEnemy(c *gin.Context) {
 	}
 	shield := totalShield
 
-	// 6. Enemy Counter-attacks! (Damages player HP and Aperture HP)
-	counterDmg := en.Attack
-	if en.IsBoss {
-		counterDmg = en.Attack * 2
-	}
-
-	playerHpDmg := float64(counterDmg) / 10.0
-	if player.Rank >= 6 {
-		playerHpDmg = float64(counterDmg) / 1000.0 // Protected by Dao Marks
-	}
+	// 6. Enemy Counter-attacks! (Damages player HP and Aperture HP) only if they survived
+	rawCounterDmg := 0
+	counterDmg := 0
+	playerHpDmg := 0.0
 	absorbed := 0.0
-	if shield > 0 {
-		absorbed = math.Min(shield, playerHpDmg)
-		shield -= absorbed
-		playerHpDmg -= absorbed
-	}
-	player.HP -= playerHpDmg
-	if player.HP <= 0 {
-		player.HP = 1.0 // Prevent instant death in normal mode
-	}
 
-	newApHP := apHP - counterDmg
-	if newApHP < 0 {
-		newApHP = 0
+	if !en.IsDead {
+		rawCounterDmg = en.Attack
+		if en.IsBoss {
+			rawCounterDmg = en.Attack * 2
+		}
+		counterDmg = rawCounterDmg
+
+		if player.Rank >= 6 {
+			// Gu Immortal: Shield protects the Immortal Aperture from raw counterDmg
+			if shield > 0 {
+				absorbed = math.Min(shield, float64(counterDmg))
+				shield -= absorbed
+				counterDmg -= int(absorbed)
+			}
+			// Body damage is a fraction of the remaining counterDmg
+			playerHpDmg = float64(counterDmg) / 1000.0
+		} else {
+			// Mortal: Shield protects body HP directly
+			playerHpDmg = float64(counterDmg) / 10.0
+			if shield > 0 {
+				absorbed = math.Min(shield, playerHpDmg)
+				shield -= absorbed
+				playerHpDmg -= absorbed
+			}
+		}
+
+		player.HP -= playerHpDmg
+		if player.HP <= 0 {
+			player.HP = 1.0 // Prevent instant death in normal mode
+		}
+
+		newApHP := apHP - counterDmg
+		if newApHP < 0 {
+			newApHP = 0
+		}
+		_, _ = tx.Exec(`UPDATE immortal_apertures SET aperture_hp = $1 WHERE id = $2`, newApHP, apertureID)
 	}
-	_, _ = tx.Exec(`UPDATE immortal_apertures SET aperture_hp = $1 WHERE id = $2`, newApHP, apertureID)
 
 	// 7. Update Database State
 	player.CurrentMana -= totalManaCost
@@ -347,19 +364,38 @@ func AttackTribulationEnemy(c *gin.Context) {
 	}
 
 	// Formulate log message
-	combatLog := fmt.Sprintf("Thi triển %s: Đạo hữu gây %d sát thương lên %s", strings.Join(guNames, ", "), netDmg, en.Name)
-	if totalHeal > 0 {
-		combatLog += fmt.Sprintf(". Hồi phục %.0f HP", totalHeal)
-	}
+	var playerActionMsg string
+	playerActionMsg = fmt.Sprintf("Kích hoạt %s => Gây %d sát thương lên %s", strings.Join(guNames, ", "), netDmg, en.Name)
+
+	extras := []string{}
 	if totalShield > 0 {
-		combatLog += fmt.Sprintf(". Tạo Khiên hộ thể %.0f điểm", totalShield)
+		extras = append(extras, fmt.Sprintf("tạo %.0f Khiên", totalShield))
 	}
-	if absorbed > 0 {
-		combatLog += fmt.Sprintf(". Khiên hấp thụ %.0f sát thương phản chấn", absorbed)
+	if totalHeal > 0 {
+		extras = append(extras, fmt.Sprintf("hồi phục %.0f HP", totalHeal))
 	}
-	combatLog += fmt.Sprintf(". Gánh chịu %d sát thương lên Tiên Khiếu", counterDmg)
+	if len(extras) > 0 {
+		playerActionMsg += ", " + strings.Join(extras, " và ")
+	}
+	playerActionMsg += "."
+
+	combatLog := playerActionMsg
 	if en.IsDead {
 		combatLog += fmt.Sprintf(" Kẻ địch %s đã bị tiêu diệt hoàn toàn!", en.Name)
+	} else {
+		targetType := "cơ thể"
+		dmgSuffered := int(playerHpDmg)
+		if player.Rank >= 6 {
+			targetType = "Tiên Khiếu"
+			dmgSuffered = counterDmg
+		}
+
+		counterMsg := fmt.Sprintf(" Kẻ địch %s phản công gây %d sát thương.", en.Name, rawCounterDmg)
+		if absorbed > 0 {
+			counterMsg += fmt.Sprintf(" Khiên hấp thụ %.0f sát thương.", absorbed)
+		}
+		counterMsg += fmt.Sprintf(" Đạo hữu gánh chịu %d sát thương lên %s.", dmgSuffered, targetType)
+		combatLog += counterMsg
 	}
 
 	c.JSON(http.StatusOK, gin.H{

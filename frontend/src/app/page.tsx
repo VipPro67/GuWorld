@@ -427,7 +427,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <label className="flex items-center gap-2 mt-4 mb-1 text-xs text-zinc-400 cursor-pointer select-none">
+             <label className="flex items-center gap-2 mt-4 mb-1 text-xs text-zinc-400 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={dontShowToday}
@@ -436,9 +436,19 @@ export default function Home() {
               />
               Không hiển thị lại hôm nay
             </label>
-            <button onClick={handleCloseChangelog} className="w-full mt-2 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-semibold transition-all cursor-pointer">
-              Đã hiểu!
-            </button>
+            <div className="flex gap-2.5 mt-2">
+              <a
+                href="/wiki"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 py-2 border border-amber-600/30 hover:border-amber-500/50 text-amber-400 hover:text-amber-300 rounded-xl text-xs font-semibold transition-all cursor-pointer text-center flex items-center justify-center gap-1.5"
+              >
+                📖 Xem Game Wiki
+              </a>
+              <button onClick={handleCloseChangelog} className="flex-1 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-semibold transition-all cursor-pointer">
+                Đã hiểu!
+              </button>
+            </div>
           </div>
         </div>
       )}

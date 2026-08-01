@@ -13,6 +13,7 @@ interface GuItem {
 
 const wikiGuidePages = [
   { slug: "roadmap", priority: 0.8 },
+  { slug: "guide", priority: 0.8 },
   { slug: "gameplay-baothach", priority: 0.7 },
   { slug: "gameplay-tongmon", priority: 0.7 },
   { slug: "gameplay-character", priority: 0.7 },

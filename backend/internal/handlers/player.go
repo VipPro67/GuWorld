@@ -525,11 +525,36 @@ func CompleteOnboarding(c *gin.Context) {
 	}
 	equippedGus := models.EquippedGusList{attackGuInstanceID, defenseGuInstanceID}
 
+	// Award 20x food of the selected Gus
+	gusToProcess := []string{req.AttackGuID, req.DefenseGuID}
+	for _, guID := range gusToProcess {
+		if guID == "" {
+			continue
+		}
+		spec, ok := models.GetGuAny(guID)
+		if !ok {
+			continue
+		}
+		for _, food := range spec.FoodTypes {
+			if food == "primeval_stone" {
+				player.PrimevalStones += 20
+			} else if food == "immortal_stone" {
+				player.ImmortalStones += 20.0
+			} else {
+				// Regular item
+				if err := InventorySvc.AddItem(tx, playerID.String(), food, "materials", 20); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add food items: " + err.Error()})
+					return
+				}
+			}
+		}
+	}
+
 	_, err = tx.Exec(`
 		UPDATE players
-		SET needs_onboarding = false, current_region = $1, equipped_gus = $2
-		WHERE id = $3
-	`, req.StartingRegion, equippedGus, playerID)
+		SET needs_onboarding = false, current_region = $1, equipped_gus = $2, primeval_stones = $3, immortal_stones = $4
+		WHERE id = $5
+	`, req.StartingRegion, equippedGus, player.PrimevalStones, player.ImmortalStones, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save onboarding: " + err.Error()})
 		return
@@ -548,6 +573,7 @@ func CompleteOnboarding(c *gin.Context) {
 	player.CurrentRegion = req.StartingRegion
 	player.GuInventory = newGu
 	player.EquippedGus = equippedGus
+	player.MaterialsInventory = loadMaterialsInventory(playerID.String())
 
 	c.JSON(http.StatusOK, player)
 }

@@ -126,6 +126,16 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
           <p className="text-xs text-zinc-500 mt-2 font-mono">
             Thiên địa ưu ái, tư chất sẽ được bộc lộ ngẫu nhiên
           </p>
+          <div className="mt-3">
+            <a
+              href="/wiki/guide"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] font-mono text-amber-400 hover:text-amber-300 hover:underline transition-colors"
+            >
+              📖 Xem Hướng Dẫn Tân Thủ
+            </a>
+          </div>
         </div>
 
         <div className="space-y-6">
