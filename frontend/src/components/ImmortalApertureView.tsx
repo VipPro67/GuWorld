@@ -224,7 +224,7 @@ export const ImmortalApertureView: React.FC = () => {
 
     if (enemy) {
       setSelectedEnemy(enemy);
-      setActiveTab("tribulation");
+      setActiveTab("map");
       return;
     }
 
@@ -320,7 +320,7 @@ export const ImmortalApertureView: React.FC = () => {
   const getApertureState = getStateName(aperture?.state);
 
   // Filter player active Gu bugs
-  const activeGus = player.gu_inventory.filter((gu) => gu.status === "ACTIVE");
+  const activeGus = player.gu_inventory.filter((gu) => gu.status === "ACTIVE" && gu.equipped === true);
 
   // Helper to check for path conflict with other nodes
   const checkConflict = (nd: ApertureResourceNode, all: ApertureResourceNode[]) => {
@@ -412,14 +412,20 @@ export const ImmortalApertureView: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab("map")}
-          className={`flex items-center gap-2 px-5 py-3 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
+          className={`flex items-center gap-2 px-5 py-3 rounded-lg text-sm font-semibold transition-all whitespace-nowrap relative ${
             activeTab === "map"
               ? "bg-gradient-to-r from-amber-500/20 to-yellow-600/20 border border-amber-500/40 text-amber-300"
               : "text-slate-400 hover:text-slate-200"
           }`}
         >
           <MapIcon className="w-4 h-4" />
-          Bản Đồ Lưới (20x20)
+          Bản Đồ & Phòng Thủ
+          {aperture?.state === "TRIBULATION_ACTIVE" && (
+            <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+            </span>
+          )}
         </button>
         <button
           onClick={() => setActiveTab("dao")}
@@ -453,23 +459,6 @@ export const ImmortalApertureView: React.FC = () => {
         >
           <Users className="w-4 h-4" />
           Dị Nhân
-        </button>
-        <button
-          onClick={() => setActiveTab("tribulation")}
-          className={`flex items-center gap-2 px-5 py-3 rounded-lg text-sm font-semibold transition-all whitespace-nowrap relative ${
-            activeTab === "tribulation"
-              ? "bg-gradient-to-r from-amber-500/20 to-yellow-600/20 border border-amber-500/40 text-amber-300"
-              : "text-slate-400 hover:text-slate-200"
-          }`}
-        >
-          <Skull className="w-4 h-4" />
-          Tai Kiếp & Phòng Thủ
-          {aperture?.state === "TRIBULATION_ACTIVE" && (
-            <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
-            </span>
-          )}
         </button>
       </div>
 
@@ -694,7 +683,7 @@ export const ImmortalApertureView: React.FC = () => {
                     Một tai kiếp cuồng bạo đã ập đến! Mau chóng vào phòng thủ bảo vệ Tiên Khiếu.
                   </p>
                   <button
-                    onClick={() => setActiveTab("tribulation")}
+                    onClick={() => setActiveTab("map")}
                     className="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm rounded-lg transition"
                   >
                     Vào Vượt Kiếp
@@ -865,13 +854,147 @@ export const ImmortalApertureView: React.FC = () => {
               </div>
             </div>
 
-            {/* Chi tiết ô chọn / Xây dựng */}
-            <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 flex flex-col justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800 pb-3 mb-4 flex items-center gap-2">
-                  <Plus className="w-5 h-5 text-cyan-400" />
-                  Hành Động Ô Đất
-                </h2>
+            {/* Chi tiết ô chọn / Xây dựng HOẶC Vượt Kiếp */}
+            <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 flex flex-col justify-between space-y-6">
+              {activeTribulation && aperture?.state === "TRIBULATION_ACTIVE" ? (
+                // COMBAT AND RESOLVE CONTROLS FOR TRIBULATION
+                <div className="space-y-6">
+                  {/* Calamity general info / combat actions */}
+                  <div className="space-y-4">
+                    <h3 className="text-md font-bold text-slate-200 border-b border-slate-800 pb-2 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      Chi Tiết Tai Kiếp
+                    </h3>
+
+                    <div className="p-4 bg-rose-950/20 border border-rose-500/20 rounded-xl space-y-2 text-xs">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-rose-300">
+                          {activeTribulation.event.tribulation_type === "EARTH_CALAMITY" ? "Địa Tai" : "Thiên Kiếp"}
+                        </span>
+                        <span className="text-slate-400">Độ khó: <span className="text-rose-400 font-bold">{activeTribulation.event.difficulty}</span></span>
+                      </div>
+                      <div className="text-sm font-bold text-slate-200 uppercase tracking-wide">
+                        {activeTribulation.event.path.toUpperCase()} PATH
+                      </div>
+                      <div className="text-yellow-400 font-extrabold flex items-center gap-1 pt-1 border-t border-rose-950/50">
+                        Phần thưởng: +{activeTribulation.event.reward_dao_marks} Đạo Ngân
+                      </div>
+                    </div>
+
+                    {/* Target Select Dropdown or small list */}
+                    <div className="space-y-3">
+                      <div className="text-xs font-bold text-slate-300 flex justify-between items-center">
+                        <span>Chọn Mục Tiêu Tấn Công</span>
+                        <span className="text-slate-500 font-normal">Còn lại: {activeTribulation.enemies.length} quái</span>
+                      </div>
+
+                      <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-800 rounded-xl p-2 bg-slate-950/50">
+                        {activeTribulation.enemies.map((enemy) => {
+                          const isSelected = selectedEnemy?.id === enemy.id;
+                          return (
+                            <div
+                              key={enemy.id}
+                              onClick={() => setSelectedEnemy(enemy)}
+                              className={`p-2 rounded-lg text-xs flex justify-between items-center cursor-pointer border transition ${
+                                isSelected
+                                  ? "bg-rose-950/40 border-rose-500/40 text-rose-200"
+                                  : "bg-slate-900 border-transparent hover:border-slate-800 text-slate-400"
+                              }`}
+                            >
+                              <div>
+                                <div className="font-bold flex items-center gap-1">
+                                  {enemy.is_boss ? "👑" : "👾"} {enemy.name}
+                                </div>
+                                <div className="text-[10px] text-slate-500">Tọa độ: ({enemy.x}, {enemy.y})</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="font-bold text-rose-400">{enemy.hp} HP</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Gu Select */}
+                    <div className="space-y-2">
+                      <label className="text-xs text-slate-300 font-bold">Chọn Cổ Trùng (Chỉ Cổ Đang Trang Bị)</label>
+                      <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-800 rounded-xl p-2 bg-slate-950/50">
+                        {activeGus.length === 0 ? (
+                          <div className="text-center text-slate-500 py-6 text-xs leading-normal">
+                            Không tìm thấy Cổ trùng đang trang bị (equipped) và ACTIVE.
+                          </div>
+                        ) : (
+                          activeGus.map((instance) => {
+                            const spec = guDictionary[instance.gu_id];
+                            if (!spec) return null;
+                            const isSelected = selectedGu === instance.gu_id;
+
+                            return (
+                              <div
+                                key={instance.instance_id}
+                                onClick={() => setSelectedGu(instance.gu_id)}
+                                className={`p-2 rounded-lg text-xs flex justify-between items-center cursor-pointer border transition ${
+                                  isSelected
+                                    ? "bg-amber-950/40 border-amber-500/40 text-amber-200"
+                                    : "bg-slate-900 border-transparent hover:border-slate-800 text-slate-400"
+                                }`}
+                              >
+                                <div>
+                                  <div className="font-bold">{spec.name}</div>
+                                  <div className="text-[10px] text-slate-500">
+                                    Cấp: {spec.rank} | {spec.base_mana_cost} Mana
+                                  </div>
+                                </div>
+                                <div className="text-right text-[10px] text-slate-400">
+                                  Đói: {instance.hunger}%
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleAttack}
+                      disabled={actionLoading || !selectedEnemy || !selectedGu}
+                      className="w-full py-3 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 disabled:from-slate-850 disabled:to-slate-900 disabled:text-slate-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg"
+                    >
+                      <Sword className="w-4 h-4" />
+                      {actionLoading ? "Đang tiến hành công kích..." : "Phát Động Công Kích"}
+                    </button>
+                  </div>
+
+                  {/* Resolve Panel */}
+                  <div className="space-y-4 pt-4 border-t border-slate-800">
+                    <h3 className="text-md font-bold text-slate-200 flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-emerald-400" />
+                      Kết Toán Vượt Kiếp
+                    </h3>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Để kết thúc tai kiếp hoàn toàn, hãy tiêu diệt toàn bộ kẻ địch trên bản đồ lưới trước khi nhấn kết toán để nhận **Đạo Ngân tối đa**. 
+                    </p>
+                    <p className="text-[11px] text-amber-500 font-semibold leading-relaxed">
+                      ⚠️ Cảnh báo: Kết toán khi còn quái vật sống chỉ có 25-50% cơ hội thắng lợi chật vật (nhận 1/2 quà), và có nguy cơ cao bị phá hủy 1 mỏ tài nguyên!
+                    </p>
+
+                    <button
+                      onClick={handleResolve}
+                      disabled={actionLoading}
+                      className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl transition shadow-lg"
+                    >
+                      {actionLoading ? "Đang xử lý..." : "Yêu Cầu Kết Toán Tai Kiếp"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // STANDARD LAND ACTION PANEL
+                <div>
+                  <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800 pb-3 mb-4 flex items-center gap-2">
+                    <Plus className="w-5 h-5 text-cyan-400" />
+                    Hành Động Ô Đất
+                  </h2>
 
                 {selectedCell ? (
                   <div className="space-y-6">
@@ -1145,8 +1268,9 @@ export const ImmortalApertureView: React.FC = () => {
                   </div>
                 )}
               </div>
+              )}
 
-              {selectedCell && (
+              {!activeTribulation && selectedCell && (
                 <button
                   onClick={() => { setSelectedCell(null); setSelectedNode(null); }}
                   className="mt-6 w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition"
@@ -1212,178 +1336,7 @@ export const ImmortalApertureView: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 4: TRIBULATION DEFENSE */}
-        {activeTab === "tribulation" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Calamity general info / combat actions */}
-            <div className="lg:col-span-2 bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 space-y-6">
-              <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800 pb-3 flex items-center gap-2">
-                <Skull className="w-5 h-5 text-rose-500 animate-pulse" />
-                Kiểm Soát Vượt Kiếp
-              </h2>
 
-              {activeTribulation ? (
-                <div className="space-y-6">
-                  {/* Calamity Details */}
-                  <div className="p-4 bg-rose-950/20 border border-rose-500/20 rounded-xl space-y-3">
-                    <div className="flex justify-between items-center flex-wrap gap-2">
-                      <div>
-                        <span className="text-xs text-rose-400 font-bold uppercase tracking-wider">Tai Kiếp Đang Diễn Ra</span>
-                        <h3 className="text-lg font-bold text-rose-200 mt-0.5">
-                          {activeTribulation.event.tribulation_type === "EARTH_CALAMITY" ? "Địa Tai" : "Thiên Kiếp"}: {activeTribulation.event.path.toUpperCase()} Path
-                        </h3>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs text-slate-400">Phần Thưởng Đạo Ngân</span>
-                        <div className="text-yellow-400 font-extrabold flex items-center gap-1 justify-end text-sm">
-                          <Sparkles className="w-4 h-4" />
-                          +{activeTribulation.event.reward_dao_marks} Đạo Ngân
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-4 text-xs text-slate-400">
-                      <div>Độ khó: <span className="text-rose-400 font-semibold">{activeTribulation.event.difficulty}</span></div>
-                      <div>Bắt đầu lúc: <span className="text-slate-300">{new Date(activeTribulation.event.started_at).toLocaleTimeString()} {new Date(activeTribulation.event.started_at).toLocaleDateString()}</span></div>
-                    </div>
-                  </div>
-
-                  {/* Combat panel */}
-                  <div className="space-y-4">
-                    <h4 className="font-bold text-slate-200 text-sm">Thi Triển Cổ Trùng Tấn Công</h4>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Enemy Select */}
-                      <div className="space-y-2">
-                        <label className="text-xs text-slate-400 font-semibold">Chọn Kẻ Địch Mục Tiêu</label>
-                        <div className="space-y-2 max-h-48 overflow-y-auto border border-slate-800 rounded-xl p-2 bg-slate-950/50">
-                          {activeTribulation.enemies.map((enemy) => {
-                            const isSelected = selectedEnemy?.id === enemy.id;
-                            return (
-                              <div
-                                key={enemy.id}
-                                onClick={() => setSelectedEnemy(enemy)}
-                                className={`p-2.5 rounded-lg text-xs flex justify-between items-center cursor-pointer border transition ${
-                                  isSelected
-                                    ? "bg-rose-950/40 border-rose-500/40 text-rose-200"
-                                    : "bg-slate-900 border-transparent hover:border-slate-800 text-slate-400"
-                                }`}
-                              >
-                                <div>
-                                  <div className="font-bold flex items-center gap-1">
-                                    {enemy.is_boss ? "👑" : "👾"} {enemy.name}
-                                  </div>
-                                  <div className="text-[10px] text-slate-500 mt-0.5">Vị trí: ({enemy.x}, {enemy.y})</div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="font-semibold text-rose-400">{enemy.hp} HP</div>
-                                  <div className="text-[10px] text-slate-500">Atk: {enemy.attack} | Def: {enemy.defense}</div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Gu Select */}
-                      <div className="space-y-2">
-                        <label className="text-xs text-slate-400 font-semibold">Chọn Cổ Trùng Sử Dụng</label>
-                        <div className="space-y-2 max-h-48 overflow-y-auto border border-slate-800 rounded-xl p-2 bg-slate-950/50">
-                          {activeGus.length === 0 ? (
-                            <div className="text-center text-slate-500 py-6 text-xs">
-                              Không có Cổ trùng nào ở trạng thái ACTIVE (Khả dụng).
-                            </div>
-                          ) : (
-                            activeGus.map((instance) => {
-                              const spec = guDictionary[instance.gu_id];
-                              if (!spec) return null;
-                              const isSelected = selectedGu === instance.gu_id;
-
-                              return (
-                                <div
-                                  key={instance.instance_id}
-                                  onClick={() => setSelectedGu(instance.gu_id)}
-                                  className={`p-2 rounded-lg text-xs flex justify-between items-center cursor-pointer border transition ${
-                                    isSelected
-                                      ? "bg-amber-950/40 border-amber-500/40 text-amber-200"
-                                      : "bg-slate-900 border-transparent hover:border-slate-800 text-slate-400"
-                                  }`}
-                                >
-                                  <div>
-                                    <div className="font-bold">{spec.name}</div>
-                                    <div className="text-[10px] text-slate-500 mt-0.5">
-                                      Hệ: {Array.isArray(spec.path) ? spec.path.map(translatePath).join(", ") : translatePath(spec.path)} | Cấp: {spec.rank}
-                                    </div>
-                                  </div>
-                                  <div className="text-right">
-                                    <div className="text-cyan-400 font-semibold">{spec.base_mana_cost} Mana</div>
-                                    <div className="text-[10px] text-slate-500">Độ đói: {instance.hunger}%</div>
-                                  </div>
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={handleAttack}
-                      disabled={actionLoading || !selectedEnemy || !selectedGu}
-                      className="w-full py-3 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 disabled:from-slate-800 disabled:to-slate-900 disabled:text-slate-500 text-white font-bold text-sm rounded-xl transition flex items-center justify-center gap-2"
-                    >
-                      <Sword className="w-5 h-5" />
-                      {actionLoading ? "Đang tiến hành công kích..." : "Phát Động Công Kích"}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="py-12 text-center space-y-4">
-                  <Check className="w-16 h-16 text-emerald-500 mx-auto animate-pulse" />
-                  <h3 className="text-lg font-bold text-slate-200">Tiên Khiếu Bình Yên</h3>
-                  <p className="text-slate-400 max-w-md mx-auto text-xs">
-                    Hiện tại Tiên Khiếu Phúc Địa của đạo hữu đang được bảo hộ tuyệt đối bởi quy tắc tiên giới. Tai kiếp chỉ xuất hiện định kỳ khi mốc năm nội bộ được lấp đầy.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Resolve or info summary panel */}
-            <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 flex flex-col justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800 pb-3 mb-4 flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-amber-400" />
-                  Kết Toán Vượt Kiếp
-                </h2>
-
-                {activeTribulation ? (
-                  <div className="space-y-4">
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Để kết thúc tai kiếp, người chơi cần tiêu diệt toàn bộ kẻ thù (Minion & Boss). 
-                      Nếu đã tiêu diệt hết, việc kết toán sẽ đảm bảo **Thắng lợi tuyệt đối** và nhận toàn bộ Đạo Ngân.
-                    </p>
-                    <p className="text-xs text-amber-500 font-medium">
-                      ⚠️ Cảnh báo: Nếu bạn cố tình nhấn Kết toán khi vẫn còn kẻ thù còn sống, hệ thống sẽ thực hiện giải quyết khẩn cấp với cơ hội thành công cực thấp (25%-50%), và có nguy cơ bị phá hủy mỏ tài nguyên nặng nề!
-                    </p>
-
-                    <button
-                      onClick={handleResolve}
-                      disabled={actionLoading}
-                      className="w-full mt-4 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm rounded-xl transition shadow-lg"
-                    >
-                      {actionLoading ? "Đang xử lý kết toán..." : "Yêu Cầu Kết Toán Tai Kiếp"}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-12 text-slate-500 text-center">
-                    <Shield className="w-12 h-12 text-slate-700 mb-2" />
-                    <p className="text-sm">Chưa có Tai Kiếp nào cần kết toán.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* TAB 5: ECOSYSTEM */}
         {activeTab === "ecosystem" && (

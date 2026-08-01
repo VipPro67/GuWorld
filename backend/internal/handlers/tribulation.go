@@ -155,17 +155,17 @@ func AttackTribulationEnemy(c *gin.Context) {
 		return
 	}
 
-	// Verify player has the Gu bug and it's active
+	// Verify player has the Gu bug and it's active and equipped
 	var foundGu *models.GuInstance
 	for i := range player.GuInventory {
-		if player.GuInventory[i].GuID == req.GuID && player.GuInventory[i].Status == "ACTIVE" {
+		if player.GuInventory[i].GuID == req.GuID && player.GuInventory[i].Status == "ACTIVE" && player.GuInventory[i].Equipped {
 			foundGu = &player.GuInventory[i]
 			break
 		}
 	}
 
 	if foundGu == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không sở hữu hoặc Cổ trùng này không ở trạng thái ACTIVE"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không sở hữu, chưa trang bị (equipped) hoặc Cổ trùng này không ở trạng thái ACTIVE"})
 		return
 	}
 
@@ -455,9 +455,9 @@ func ResolveTribulation(c *gin.Context) {
 
 		if didBreakthrough {
 			_, _ = tx.Exec(`
-				INSERT INTO messages (sender, content, channel, player_id, created_at)
-				VALUES ('Thiên Địa Chí Tôn', $1, 'private', $2, NOW())
-			`, breakthroughMsg, playerID)
+				INSERT INTO messages (sender_id, receiver_id, content, channel)
+				VALUES ('11111111-1111-1111-1111-111111111111', $1, $2, 'private')
+			`, playerID, breakthroughMsg)
 		}
 	} else {
 		// Player resolves manually with remaining enemies (yields high risk of damage)
@@ -510,9 +510,9 @@ func ResolveTribulation(c *gin.Context) {
 
 			if didBreakthrough {
 				_, _ = tx.Exec(`
-					INSERT INTO messages (sender, content, channel, player_id, created_at)
-					VALUES ('Thiên Địa Chí Tôn', $1, 'private', $2, NOW())
-				`, breakthroughMsg, playerID)
+					INSERT INTO messages (sender_id, receiver_id, content, channel)
+					VALUES ('11111111-1111-1111-1111-111111111111', $1, $2, 'private')
+				`, playerID, breakthroughMsg)
 			}
 		} else {
 			// Failed Tribulation — still increment counters so time moves on
@@ -753,8 +753,8 @@ func CheckAndTriggerTribulations() error {
 				`, ap.ID)
 
 				_, _ = db.DB.Exec(`
-					INSERT INTO messages (sender, content, channel, player_id, created_at)
-					VALUES ('Thiên Địa Chí Tôn', 'Đạo hữu đã hết thọ nguyên! Tiên Khiếu suy kiệt, dòng thời gian ngưng trệ. Hãy mau kiếm Thọ Cổ để hồi sinh!', 'private', $1, NOW())
+					INSERT INTO messages (sender_id, receiver_id, content, channel)
+					VALUES ('11111111-1111-1111-1111-111111111111', $1, 'Đạo hữu đã hết thọ nguyên! Tiên Khiếu suy kiệt, dòng thời gian ngưng trệ. Hãy mau kiếm Thọ Cổ để hồi sinh!', 'private')
 				`, ap.PlayerID)
 
 				logger.S.Warnf("Player %s lifespan depleted, aperture %s frozen", ap.PlayerID, ap.ID)
@@ -817,9 +817,9 @@ func CheckAndTriggerTribulations() error {
 
 						if isDestroyed {
 							_, _ = db.DB.Exec(`
-								INSERT INTO messages (sender, content, channel, player_id, created_at)
-								VALUES ('Tiên Khiếu Hệ Thống', 'Điểm tài nguyên ' || $1 || ' đã bị phá hủy do bất ổn sinh thái hoặc xung đột Đạo ngân!', 'private', $2, NOW())
-							`, nd.Name, ap.PlayerID)
+								INSERT INTO messages (sender_id, receiver_id, content, channel)
+								VALUES ('11111111-1111-1111-1111-111111111111', $1, 'Điểm tài nguyên ' || $2 || ' đã bị phá hủy do bất ổn sinh thái hoặc xung đột Đạo ngân!', 'private')
+							`, ap.PlayerID, nd.Name)
 						}
 					}
 				}
@@ -899,9 +899,9 @@ func CheckAndTriggerTribulations() error {
 								_, _ = db.DB.Exec(`UPDATE immortal_apertures SET aperture_hp = $1 WHERE id = $2`, ap.ApertureHP, ap.ID)
 
 								_, _ = db.DB.Exec(`
-									INSERT INTO messages (sender, content, channel, player_id, created_at)
-									VALUES ('Tiên Khiếu Hệ Thống', 'Bộ tộc ' || $1 || ' trong Tiên Khiếu đã nổi loạn do bị áp bức dữ dội! Một số điểm tài nguyên và Tiên Khiếu đã bị hư hại.', 'private', $2, NOW())
-								`, v.Race, ap.PlayerID)
+									INSERT INTO messages (sender_id, receiver_id, content, channel)
+									VALUES ('11111111-1111-1111-1111-111111111111', $1, 'Bộ tộc ' || $2 || ' trong Tiên Khiếu đã nổi loạn do bị áp bức dữ dội! Một số điểm tài nguyên và Tiên Khiếu đã bị hư hại.', 'private')
+								`, ap.PlayerID, v.Race)
 							}
 						}
 
@@ -1343,7 +1343,7 @@ func ProcessActiveTribulationGrid() error {
 			WHERE event_id = $1 AND is_dead = false
 		`, ev.EventID)
 		if err != nil {
-			continue
+			return fmt.Errorf("failed to query tribulation enemies: %w", err)
 		}
 
 		type TEnemy struct {
@@ -1356,9 +1356,11 @@ func ProcessActiveTribulationGrid() error {
 		var enemies []TEnemy
 		for enRows.Next() {
 			var en TEnemy
-			if err := enRows.Scan(&en.ID, &en.Name, &en.X, &en.Y, &en.Attack); err == nil {
-				enemies = append(enemies, en)
+			if err := enRows.Scan(&en.ID, &en.Name, &en.X, &en.Y, &en.Attack); err != nil {
+				enRows.Close()
+				return fmt.Errorf("failed to scan enemy row: %w", err)
 			}
+			enemies = append(enemies, en)
 		}
 		enRows.Close()
 
@@ -1373,7 +1375,7 @@ func ProcessActiveTribulationGrid() error {
 			WHERE aperture_id = $1 AND is_destroyed = false
 		`, ev.ApertureID)
 		if err != nil {
-			continue
+			return fmt.Errorf("failed to query aperture resource nodes: %w", err)
 		}
 
 		type TNode struct {
@@ -1386,9 +1388,11 @@ func ProcessActiveTribulationGrid() error {
 		var nodes []TNode
 		for nodeRows.Next() {
 			var nd TNode
-			if err := nodeRows.Scan(&nd.ID, &nd.Name, &nd.HP, &nd.X, &nd.Y); err == nil {
-				nodes = append(nodes, nd)
+			if err := nodeRows.Scan(&nd.ID, &nd.Name, &nd.HP, &nd.X, &nd.Y); err != nil {
+				nodeRows.Close()
+				return fmt.Errorf("failed to scan resource node row: %w", err)
 			}
+			nodes = append(nodes, nd)
 		}
 		nodeRows.Close()
 
@@ -1441,18 +1445,24 @@ func ProcessActiveTribulationGrid() error {
 					nearestNode.HP = 0
 					isDestroyed = true
 				}
-				_, _ = tx.Exec(`
+				_, err = tx.Exec(`
 					UPDATE aperture_resource_nodes 
 					SET hp = $1, is_destroyed = $2, updated_at = NOW() 
 					WHERE id = $3
 				`, nearestNode.HP, isDestroyed, nearestNode.ID)
+				if err != nil {
+					return fmt.Errorf("failed to update resource node HP: %w", err)
+				}
 
 				if isDestroyed {
 					// Send system message
-					_, _ = tx.Exec(`
-						INSERT INTO messages (sender, content, channel, player_id, created_at)
-						VALUES ('Tiên Khiếu Hệ Thống', 'Tai kiếp đã phá hủy hoàn toàn ' || $1 || '!', 'private', $2, NOW())
-					`, nearestNode.Name, ev.PlayerID)
+					_, err = tx.Exec(`
+						INSERT INTO messages (sender_id, receiver_id, content, channel)
+						VALUES ('11111111-1111-1111-1111-111111111111', $1, 'Tai kiếp đã phá hủy hoàn toàn ' || $2 || '!', 'private')
+					`, ev.PlayerID, nearestNode.Name)
+					if err != nil {
+						return fmt.Errorf("failed to insert message for destroyed node: %w", err)
+					}
 
 					// Remove from local list so other enemies target something else
 					var remainingNodes []TNode
@@ -1478,11 +1488,14 @@ func ProcessActiveTribulationGrid() error {
 						en.Y--
 					}
 				}
-				_, _ = tx.Exec(`
+				_, err = tx.Exec(`
 					UPDATE tribulation_enemies 
 					SET x = $1, y = $2, updated_at = NOW() 
 					WHERE id = $3
 				`, en.X, en.Y, en.ID)
+				if err != nil {
+					return fmt.Errorf("failed to update enemy coordinates: %w", err)
+				}
 			}
 		}
 	}
