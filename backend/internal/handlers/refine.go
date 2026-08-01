@@ -385,7 +385,10 @@ func RefineGu(c *gin.Context) {
 		player.GuInventory = newInventory
 	} else {
 		statusStr = "failed"
-		statusMsg = "Hợp luyện thất bại! Các nguyên liệu thường đã hóa thành tro bụi."
+		isUniqueImmortalFail := statusMsg != ""
+		if !isUniqueImmortalFail {
+			statusMsg = "Hợp luyện thất bại! Các nguyên liệu thường đã hóa thành tro bụi."
+		}
 
 		hasVitalSurvived := false
 		newInventory := models.GuInventory{}
@@ -400,7 +403,7 @@ func RefineGu(c *gin.Context) {
 					hasVitalSurvived = true
 				}
 				if spec, ok := models.GetGuAny(item.GuID); ok {
-				if msg, err := HandleGuEvent(&player, spec, item, "ON_REFINE_MATERIAL"); err == nil && msg != "" {
+					if msg, err := HandleGuEvent(&player, spec, item, "ON_REFINE_MATERIAL"); err == nil && msg != "" {
 						refineEventMsg = msg
 					}
 				}
@@ -412,26 +415,28 @@ func RefineGu(c *gin.Context) {
 			statusMsg += " " + refineEventMsg
 		}
 
-		if isForcedRefine {
-			player.HP -= 30.0
-			if player.HP < 10.0 {
-				player.HP = 10.0
-			}
-			nolee := rand.Float64() < 0.20
-			if nolee {
-				player.MaxMana = player.MaxMana * 0.95
-				if player.CurrentMana > player.MaxMana {
-					player.CurrentMana = player.MaxMana
+		if !isUniqueImmortalFail {
+			if isForcedRefine {
+				player.HP -= 30.0
+				if player.HP < 10.0 {
+					player.HP = 10.0
 				}
-				statusMsg = "Ép Luyện thất bại! Đạo hữu bị phản phệ dữ dội nổ Không Khiếu, tối đa Chân Nguyên bị suy giảm vĩnh viễn 5%!"
-			} else {
-				statusMsg = "Ép Luyện thất bại! Phản phệ chấn thương kinh mạch, tổn thất 30 HP."
+				nolee := rand.Float64() < 0.20
+				if nolee {
+					player.MaxMana = player.MaxMana * 0.95
+					if player.CurrentMana > player.MaxMana {
+						player.CurrentMana = player.MaxMana
+					}
+					statusMsg = "Ép Luyện thất bại! Đạo hữu bị phản phệ dữ dội nổ Không Khiếu, tối đa Chân Nguyên bị suy giảm vĩnh viễn 5%!"
+				} else {
+					statusMsg = "Ép Luyện thất bại! Phản phệ chấn thương kinh mạch, tổn thất 30 HP."
+				}
+				if hasVitalSurvived {
+					statusMsg += " Riêng Cổ Bản Mệnh vẫn sống sót nhưng rơi vào trạng thái Hấp Hối!"
+				}
+			} else if hasVitalSurvived {
+				statusMsg = "Hợp luyện thất bại! Các nguyên liệu thường đã hóa thành tro bụi, riêng Cổ Bản Mệnh của đạo hữu vẫn sống sót nhưng rơi vào trạng thái Hấp Hối!"
 			}
-			if hasVitalSurvived {
-				statusMsg += " Riêng Cổ Bản Mệnh vẫn sống sót nhưng rơi vào trạng thái Hấp Hối!"
-			}
-		} else if hasVitalSurvived {
-			statusMsg = "Hợp luyện thất bại! Các nguyên liệu thường đã hóa thành tro bụi, riêng Cổ Bản Mệnh của đạo hữu vẫn sống sót nhưng rơi vào trạng thái Hấp Hối!"
 		}
 	}
 
