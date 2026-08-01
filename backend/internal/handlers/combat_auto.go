@@ -693,10 +693,9 @@ func AutoCombatStart(c *gin.Context) {
 			}
 
 			tempLootJSON, _ := json.Marshal(player.TempLoot)
-			guJSON, _ := json.Marshal(player.GuInventory)
 
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, primeval_stones = $4, gu_inventory = $5, aptitude_percent = $6, lifespan = $7 WHERE id = $8`
-			args = append(args, finalPlayerHP, finalMana, tempLootJSON, player.PrimevalStones, guJSON, player.AptitudePercent, player.Lifespan, player.ID)
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, primeval_stones = $4, aptitude_percent = $5, lifespan = $6 WHERE id = $7`
+			args = append(args, finalPlayerHP, finalMana, tempLootJSON, player.PrimevalStones, player.AptitudePercent, player.Lifespan, player.ID)
 		}
 	} else {
 		if isVirtual {
@@ -763,6 +762,13 @@ func AutoCombatStart(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat outcome"})
 		return
+	}
+
+	if alliesAlive && !isVirtual {
+		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat outcome"})
+			return
+		}
 	}
 
 	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 3, $1) WHERE id = $2", MaxHumanQi, player.ID)

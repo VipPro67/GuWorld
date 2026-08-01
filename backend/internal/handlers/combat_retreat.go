@@ -232,13 +232,18 @@ func Retreat(c *gin.Context) {
 	updateQuery := `
 		UPDATE players
 		SET hp = $1, current_mana = $2, active_combat = $3, x = $4, y = $5, explored_cells = $6, primeval_stones = $7,
-		    gu_inventory = $8, temp_loot = $9, current_region = $10, human_qi = $11
-		WHERE id = $12
+		    temp_loot = $8, current_region = $9, human_qi = $10
+		WHERE id = $11
 	`
 	_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.ActiveCombat, player.X, player.Y, player.ExploredCells, player.PrimevalStones,
-		player.GuInventory, player.TempLoot, player.CurrentRegion, player.HumanQi, player.ID)
+		player.TempLoot, player.CurrentRegion, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player status after retreat"})
+		return
+	}
+
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player Gus after retreat"})
 		return
 	}
 

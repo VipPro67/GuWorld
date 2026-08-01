@@ -2,20 +2,60 @@ package server
 
 import (
 	"net/http"
+	"net/http/pprof"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
+const slowRequestThreshold = 5 * time.Second
+
+// requestLogging logs the start and end of every request so that hung
+// handlers are visible (Gin's own logger only prints after completion).
+// It also flags requests that exceed slowRequestThreshold.
+func requestLogging() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		method := c.Request.Method
+		path := c.Request.URL.Path
+		clientIP := c.ClientIP()
+
+		if method != http.MethodOptions {
+			logger.S.Debugf("REQ START %s %s from %s", method, path, clientIP)
+		}
+
+		c.Next()
+
+		duration := time.Since(start)
+		if method == http.MethodOptions {
+			return
+		}
+
+		status := c.Writer.Status()
+		switch {
+		case duration >= slowRequestThreshold:
+			logger.S.Warnf("REQ SLOW %s %s status=%d duration=%s from %s", method, path, status, duration, clientIP)
+		case duration >= 500*time.Millisecond:
+			logger.S.Infof("REQ END %s %s status=%d duration=%s from %s", method, path, status, duration, clientIP)
+		default:
+			logger.S.Debugf("REQ END %s %s status=%d duration=%s from %s", method, path, status, duration, clientIP)
+		}
+	}
+}
+
 // SetupRouter initializes the Gin router with middlewares and routes
 func SetupRouter() *gin.Engine {
 	gin.DefaultWriter = logger.GinWriter()
 	r := gin.Default()
+
+	r.Use(requestLogging())
 
 	// CORS Middleware
 	r.Use(func(c *gin.Context) {
@@ -59,6 +99,9 @@ func SetupRouter() *gin.Engine {
 
 	// Serve uploaded images
 	r.Static("/images", "./storage/images")
+
+	// Debug endpoints: goroutine/pprof dumps and DB pool stats
+	registerDebugEndpoints(r)
 
 	// API routes
 	api := r.Group("/api")
@@ -432,4 +475,39 @@ func SetupRouter() *gin.Engine {
 	}
 
 	return r
+}
+
+// registerDebugEndpoints exposes diagnostics used to investigate hung requests:
+// goroutine dumps (net/http/pprof) and live database connection pool stats.
+func registerDebugEndpoints(r *gin.Engine) {
+	debug := r.Group("/debug")
+	{
+		// net/http/pprof handler registry
+		pprofHandler := pprof.Handler("goroutine")
+		debug.GET("/pprof/goroutine", gin.WrapH(pprofHandler))
+		debug.GET("/pprof/heap", gin.WrapH(pprof.Handler("heap")))
+		debug.GET("/pprof/allocs", gin.WrapH(pprof.Handler("allocs")))
+		debug.GET("/pprof/block", gin.WrapH(pprof.Handler("block")))
+		debug.GET("/pprof/mutex", gin.WrapH(pprof.Handler("mutex")))
+		debug.GET("/pprof/goroutine/stack", func(c *gin.Context) {
+			buf := make([]byte, 8<<20)
+			n := runtime.Stack(buf, true)
+			c.Data(http.StatusOK, "text/plain", buf[:n])
+		})
+
+		debug.GET("/db-pool", func(c *gin.Context) {
+			stats := db.DB.Stats()
+			c.JSON(http.StatusOK, gin.H{
+				"max_open_connections": stats.MaxOpenConnections,
+				"open_connections":     stats.OpenConnections,
+				"in_use":               stats.InUse,
+				"idle":                 stats.Idle,
+				"wait_count":           stats.WaitCount,
+				"wait_duration":        stats.WaitDuration.String(),
+				"max_idle_closed":      stats.MaxIdleClosed,
+				"max_idle_time_closed": stats.MaxIdleTimeClosed,
+				"max_lifetime_closed":  stats.MaxLifetimeClosed,
+			})
+		})
+	}
 }

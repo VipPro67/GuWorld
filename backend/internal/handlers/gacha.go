@@ -40,14 +40,15 @@ var gachaPools = []GachaPool{
 		Name:        "Đá thường",
 		Description: "Mở Đá kỳ bí, có cơ hội nhận được Nguyên Thạch, vật liệu quý hiếm và Cổ trùng huyền bí!",
 		CostType:    "primeval_stones",
-		CostAmount:  1000,
+		CostAmount:  2500,
 		Rewards: []GachaRewardItem{
 			{Type: "primeval_stones", Min: 500, Max: 1500, Weight: 40.0, Label: "500~1.500 Nguyên Thạch"},
 			{Type: "item", Min: 1, Max: 1, Weight: 25.0, Label: "Vật liệu cấp thấp"},
 			{Type: "gu", Min: 1, Max: 1, Weight: 20.0, Label: "Cổ Trùng R1~R3"},
 			{Type: "primeval_stones", Min: 2000, Max: 5000, Weight: 10.0, Label: "2.000~5.000 Nguyên Thạch"},
 			{Type: "gu_rank", ID: "4,5", Min: 1, Max: 1, Weight: 4.0, Label: "Cổ Trùng R4~R5"},
-			{Type: "gu_rank", ID: "6,7,8,9", Min: 1, Max: 1, Weight: 1.0, Label: "Cổ Trùng R6+ Cao Cấp"},
+			{Type: "gu_rank", ID: "6,7", Min: 1, Max: 1, Weight: 0.5, Label: "Cổ Trùng R6+ Cao Cấp"},
+			{Type: "gu_rank", ID: "8,9", Min: 1, Max: 1, Weight: 0.1, Label: "Cổ Trùng R8+ Siêu Cấp"},
 		},
 	},
 	// {
@@ -188,6 +189,14 @@ func OpenGacha(c *gin.Context) {
 		"reward":  reward,
 		"message": buildGachaRewardLabel(reward) + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})
+
+	//SendSystemMessage while reward is gu and rank >= 6
+	if reward.Type == "gu" {
+		if spec, ok := models.GetGuAny(reward.ID); ok && spec.Rank >= 6 {
+			message := fmt.Sprintf("Đạo hữu %s đã mở được Cổ Trùng %s (R%d) từ Mở Thạch %s!", player.Username, spec.Name, spec.Rank, pool.Name)
+			SendSystemMessage("world", sql.NullString{Valid: false}, message)
+		}
+	}
 }
 
 func OpenGacha10(c *gin.Context) {

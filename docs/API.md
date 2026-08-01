@@ -4,6 +4,22 @@ Base path: `/api`.
 
 Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequired()` trừ khi ghi public.
 
+## Debug endpoints (ngoài `/api`)
+
+| Method | Path | Ghi chú |
+| --- | --- | --- |
+| GET | `/debug/pprof/goroutine` | Goroutine dump (chẩn đoán request treo). |
+| GET | `/debug/pprof/goroutine/stack` | Toàn bộ goroutine stack dạng text. |
+| GET | `/debug/pprof/heap` | Heap profile. |
+| GET | `/debug/pprof/allocs` | Allocation profile. |
+| GET | `/debug/pprof/block` | Block profile (bật `runtime.SetBlockProfileRate` để có data). |
+| GET | `/debug/pprof/mutex` | Mutex profile. |
+| GET | `/debug/db-pool` | DB connection pool stats (open/inUse/idle/wait). |
+
+> **Log request:** mọi request (trừ OPTIONS) được log `REQ START` khi bắt đầu và `REQ END` khi kết thúc kèm duration. Request > 5s được đánh dấu `REQ SLOW` — dùng để phát hiện handler đang treo mà log cũ không thấy (Gin chỉ log khi request hoàn thành).
+
+> **DB hardening:** connection string mặc định kèm `statement_timeout=15000ms`, `lock_timeout=10000ms` (override qua `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`). Query bị lock/treo sẽ tự abort thay vì treo vô hạn.
+
 > **SEO routes:** `robots.txt`, `sitemap.xml`, `/wiki`, `/wiki/[guId]` do Next.js frontend xử lý (SSG/ISR). Xem `frontend/src/app/`.
 
 ## Public / auth / payment entrypoints

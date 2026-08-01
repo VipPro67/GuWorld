@@ -101,6 +101,7 @@ func main() {
 	handlers.StartMineMonsterWorker(ctx)
 	handlers.StartMidnightMineWorker(ctx)
 	handlers.StartArenaSettlementWorker(ctx)
+	worker.StartPoolWatchdog(ctx, db.DB, 60*time.Second)
 
 	r := server.SetupRouter()
 
@@ -110,8 +111,10 @@ func main() {
 	}
 
 	srv := &http.Server{
-		Addr:    ":" + port,
-		Handler: r,
+		Addr:              ":" + port,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	go func() {

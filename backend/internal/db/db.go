@@ -30,6 +30,12 @@ func Connect() error {
 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		host, port, user, password, dbname, sslmode)
 
+	// Abort queries stuck on locks/deadlocks instead of hanging forever.
+	// Defaults: statement 15s, lock wait 10s. Override via env (ms).
+	statementTimeout := getEnv("DB_STATEMENT_TIMEOUT_MS", "15000")
+	lockTimeout := getEnv("DB_LOCK_TIMEOUT_MS", "10000")
+	connStr += fmt.Sprintf(" options=-c%%20statement_timeout=%s%%20-c%%20lock_timeout=%s", statementTimeout, lockTimeout)
+
 	var err error
 	DB, err = sql.Open("postgres", connStr)
 	if err != nil {
