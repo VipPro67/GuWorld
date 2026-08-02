@@ -232,10 +232,7 @@ func runGachaOpen(c *gin.Context, forced int) {
 			"message": buildGachaRewardLabel(rewards[0]) + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 		})
 	} else {
-		announcement := ""
-		for _, r := range rewards {
-			announcement += buildGachaRewardLabel(r) + "\n"
-		}
+		announcement := aggregateGachaRewards(rewards)
 		discountMsg := ""
 		if discounted {
 			discountMsg = " Đã giảm 10% chi phí mở."
@@ -532,3 +529,82 @@ func guRarityWeightByRank(rank int) float64 {
 		return 0.05
 	}
 }
+
+func aggregateGachaRewards(rewards []GachaResultItem) string {
+	type aggVal struct {
+		amount float64
+		label  string // base name without amount prefix
+		isRare bool
+	}
+
+	var order []string
+	aggMap := make(map[string]*aggVal)
+
+	for _, r := range rewards {
+		var key string
+		var name string
+
+		switch r.Type {
+		case "primeval_stones":
+			key = "primeval_stones"
+			name = "Nguyên Thạch"
+		case "lifespan":
+			key = "lifespan"
+			name = "năm Thọ Nguyên"
+		case "wall_progress":
+			key = "wall_progress"
+			name = "% Phá Vách"
+		case "human_qi":
+			key = "human_qi"
+			name = "Nhân Khí"
+		case "item":
+			key = "item:" + r.ID
+			name = r.ID
+			if spec, ok := models.ItemRegistry[r.ID]; ok {
+				name = spec.Name
+			}
+		case "gu":
+			key = "gu:" + r.ID
+			name = r.ID
+			if spec, ok := models.GetGuAny(r.ID); ok {
+				name = spec.Name
+			}
+		default:
+			key = r.Type + ":" + r.ID
+			name = r.Label
+		}
+
+		if _, exists := aggMap[key]; !exists {
+			order = append(order, key)
+			aggMap[key] = &aggVal{
+				amount: 0,
+				label:  name,
+				isRare: r.IsRare,
+			}
+		}
+		aggMap[key].amount += r.Amount
+	}
+
+	var lines []string
+	for _, key := range order {
+		val := aggMap[key]
+		var line string
+		if strings.HasPrefix(key, "item:") || strings.HasPrefix(key, "gu:") {
+			line = fmt.Sprintf("%.0fx %s", val.amount, val.label)
+		} else if key == "primeval_stones" {
+			line = fmt.Sprintf("%.0f %s", val.amount, val.label)
+		} else if key == "lifespan" {
+			line = fmt.Sprintf("+%.0f %s", val.amount, val.label)
+		} else if key == "wall_progress" {
+			line = fmt.Sprintf("+%.0f%% Phá Vách", val.amount*100)
+		} else if key == "human_qi" {
+			line = fmt.Sprintf("+%.0f %s", val.amount, val.label)
+		} else {
+			line = fmt.Sprintf("%.0f %s", val.amount, val.label)
+		}
+		lines = append(lines, line)
+	}
+
+	return strings.Join(lines, "\n")
+}
+

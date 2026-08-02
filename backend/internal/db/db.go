@@ -1371,6 +1371,7 @@ func InitSchema() error {
 		table  string
 		column string
 	}{
+		{"idx_players_username", "players", "username"},
 		{"idx_combat_history_player", "combat_history", "player_id"},
 		{"idx_messages_sender", "messages", "sender_id"},
 		{"idx_messages_receiver", "messages", "receiver_id"},

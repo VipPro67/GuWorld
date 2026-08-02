@@ -2570,7 +2570,8 @@ func UseItems(c *gin.Context) {
 
 	finalMessage := summaryMsg
 	if len(specialMessages) > 0 {
-		finalMessage += "\n" + strings.Join(specialMessages, "\n")
+		aggregatedSpecial := aggregateChestSpecialMessages(specialMessages)
+		finalMessage += "\n" + strings.Join(aggregatedSpecial, "\n")
 	}
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": finalMessage})
@@ -3809,3 +3810,76 @@ func TickRegen(c *gin.Context) {
 		"max_hp":       player.BaseHP,
 	})
 }
+
+func aggregateChestSpecialMessages(specialMessages []string) []string {
+	var stones int
+	materials := make(map[string]int)
+	var others []string
+	var chestNames []string
+
+	for _, msg := range specialMessages {
+		lines := strings.Split(msg, "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			// Skip the "Mở <Item> thành công!" or "Mở <Item> thất bại" line as it's redundant
+			if strings.HasPrefix(line, "Mở ") && strings.HasSuffix(line, "thành công!") {
+				chestName := strings.TrimSuffix(strings.TrimPrefix(line, "Mở "), " thành công!")
+				chestNames = append(chestNames, chestName)
+				continue
+			}
+
+			// 1. Stones pattern: "- 💎 Nhận được %d Nguyên Thạch"
+			var amt int
+			if _, err := fmt.Sscanf(line, "- 💎 Nhận được %d Nguyên Thạch", &amt); err == nil {
+				stones += amt
+				continue
+			}
+
+			// 2. Material/item pattern: "- Nhận được %dx %s"
+			if strings.HasPrefix(line, "- Nhận được ") {
+				rest := strings.TrimPrefix(line, "- Nhận được ")
+				if idx := strings.Index(rest, "x "); idx != -1 {
+					qtyStr := rest[:idx]
+					name := rest[idx+2:]
+					var q int
+					if _, err := fmt.Sscanf(qtyStr, "%d", &q); err == nil {
+						materials[name] += q
+						continue
+					}
+				}
+			}
+
+			// If not matched, keep it as is
+			others = append(others, line)
+		}
+	}
+
+	var result []string
+	if len(chestNames) > 0 {
+		counts := make(map[string]int)
+		for _, name := range chestNames {
+			counts[name]++
+		}
+		var headers []string
+		for name, count := range counts {
+			headers = append(headers, fmt.Sprintf("Mở %d lần %s thành công!", count, name))
+		}
+		result = append(result, headers...)
+	}
+
+	if stones > 0 {
+		result = append(result, fmt.Sprintf("- 💎 Nhận được %d Nguyên Thạch", stones))
+	}
+
+	for name, qty := range materials {
+		result = append(result, fmt.Sprintf("- Nhận được %dx %s", qty, name))
+	}
+
+	result = append(result, others...)
+
+	return result
+}
+
