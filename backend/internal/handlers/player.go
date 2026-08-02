@@ -2358,6 +2358,224 @@ func UseItem(c *gin.Context) {
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": strings.Join(messages, " ")})
 }
 
+// UseItemsRequest defines the request body for using multiple items
+type UseItemsRequest struct {
+	ItemIDs []string `json:"item_ids" binding:"required,min=1"`
+}
+
+// UseItems consumes multiple materials sequentially in a single transaction
+func UseItems(c *gin.Context) {
+	var req UseItemsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
+		return
+	}
+
+	initialHP := player.HP
+	initialMana := player.CurrentMana
+	initialLifespan := player.Lifespan
+	initialHumanQi := player.HumanQi
+	initialStones := player.PrimevalStones
+	initialSoul := 0
+	if player.DaoMarks != nil {
+		initialSoul = player.DaoMarks["soul"]
+	}
+
+	messages := []string{}
+	regenBuffs := make(map[string]string) // playerID -> itemID
+
+	for _, itemID := range req.ItemIDs {
+		item, ok := models.ItemRegistry[itemID]
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vật phẩm %s không tồn tại trong ItemRegistry", itemID)})
+			return
+		}
+
+		if item.Type != "Consumable" && item.Type != "SoulResource" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vật phẩm %s này không thể sử dụng trực tiếp", item.Name)})
+			return
+		}
+
+		// Determine which category the item is in
+		itemCategory := "consumables"
+		qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), itemID, "consumables")
+		if err != nil || qty <= 0 {
+			qty, err = InventorySvc.GetQuantity(tx, player.ID.String(), itemID, "materials")
+			if err != nil || qty <= 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không có vật phẩm %s này trong túi đồ", item.Name)})
+				return
+			}
+			itemCategory = "materials"
+		}
+
+		// 1. Validation phase
+		for effectKey := range item.Effects {
+			if valHandler, ok := ValidateItemEffects[effectKey]; ok {
+				_, err := valHandler(tx, &player, item)
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vật phẩm %s: %s", item.Name, err.Error())})
+					return
+				}
+			}
+		}
+
+		// 2. Application phase
+		itemMsg := []string{}
+		for effectKey := range item.Effects {
+			if appHandler, ok := ApplyItemEffects[effectKey]; ok {
+				msg, err := appHandler(tx, &player, item)
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Vật phẩm %s: %s", item.Name, err.Error())})
+					return
+				}
+				if msg != "" {
+					itemMsg = append(itemMsg, msg)
+				}
+
+				// If it's a regen item, set Redis cache later
+				if effectKey == "regen_hp_out_of_combat" {
+					regenBuffs[player.ID.String()] = item.ID
+				}
+			}
+		}
+
+		if len(itemMsg) == 0 {
+			itemMsg = append(itemMsg, fmt.Sprintf("Đạo hữu sử dụng thành công %s.", item.Name))
+		}
+		messages = append(messages, itemMsg...)
+
+		// Deduct item from the correct category
+		if err := InventorySvc.RemoveItem(tx, player.ID.String(), itemID, itemCategory, 1); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể xóa vật phẩm %s khỏi túi đồ", item.Name)})
+			return
+		}
+	}
+
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state: " + err.Error()})
+		return
+	}
+	_, err = tx.Exec(`
+		UPDATE players 
+		SET current_mana = $1, max_mana = $2, hp = $3, base_hp = $4,
+		    dao_marks = $5, primeval_stones = $6, lifespan = $7, human_qi = $8
+		WHERE id = $9`,
+		player.CurrentMana, player.MaxMana, player.HP, player.BaseHP, player.DaoMarks,
+		player.PrimevalStones, player.Lifespan, player.HumanQi,
+		player.ID,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state: " + err.Error()})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+
+	// Apply redis regen buffs
+	for pID, itemID := range regenBuffs {
+		redisKey := fmt.Sprintf("regen_buff:%s", pID)
+		cache.SetJSON(redisKey, itemID, 10*time.Minute)
+	}
+
+	// Group/consolidate stats change and messages
+	usedCounts := make(map[string]int)
+	itemNames := make(map[string]string)
+	for _, itemID := range req.ItemIDs {
+		if spec, ok := models.ItemRegistry[itemID]; ok {
+			usedCounts[itemID]++
+			itemNames[itemID] = spec.Name
+		}
+	}
+
+	var usageDetails []string
+	for itemID, count := range usedCounts {
+		usageDetails = append(usageDetails, fmt.Sprintf("%dx %s", count, itemNames[itemID]))
+	}
+	summaryMsg := fmt.Sprintf("Đạo hữu đã sử dụng thành công: %s.", strings.Join(usageDetails, ", "))
+
+	var statChanges []string
+	if diffHP := player.HP - initialHP; diffHP > 0 {
+		statChanges = append(statChanges, fmt.Sprintf("+%.0f HP", diffHP))
+	}
+	if diffMana := player.CurrentMana - initialMana; diffMana > 0 {
+		statChanges = append(statChanges, fmt.Sprintf("+%.0f Chân Nguyên", diffMana))
+	}
+	if diffLifespan := player.Lifespan - initialLifespan; diffLifespan > 0 {
+		statChanges = append(statChanges, fmt.Sprintf("+%.0f năm Thọ Nguyên", diffLifespan))
+	}
+	if diffHumanQi := player.HumanQi - initialHumanQi; diffHumanQi > 0 {
+		statChanges = append(statChanges, fmt.Sprintf("+%.0f Nhân Khí", diffHumanQi))
+	}
+	if diffStones := player.PrimevalStones - initialStones; diffStones > 0 {
+		statChanges = append(statChanges, fmt.Sprintf("+%d Nguyên Thạch", diffStones))
+	}
+	finalSoul := 0
+	if player.DaoMarks != nil {
+		finalSoul = player.DaoMarks["soul"]
+	}
+	if diffSoul := finalSoul - initialSoul; diffSoul > 0 {
+		statChanges = append(statChanges, fmt.Sprintf("+%d Hồn Lực", diffSoul))
+	}
+
+	if len(statChanges) > 0 {
+		summaryMsg += fmt.Sprintf(" Kết quả: %s.", strings.Join(statChanges, ", "))
+	}
+
+	var specialMessages []string
+	for _, m := range messages {
+		isStandard := false
+		lowerM := strings.ToLower(m)
+		if strings.Contains(lowerM, "hồi phục") && strings.Contains(lowerM, "hp") {
+			isStandard = true
+		} else if strings.Contains(lowerM, "phục hồi") && strings.Contains(lowerM, "chân nguyên") {
+			isStandard = true
+		} else if strings.Contains(lowerM, "thọ nguyên") {
+			isStandard = true
+		} else if strings.Contains(lowerM, "nhân khí") {
+			isStandard = true
+		} else if strings.Contains(lowerM, "hồn lực") || strings.Contains(lowerM, "hồn phách") {
+			isStandard = true
+		} else if strings.Contains(lowerM, "tiên khiếu") && strings.Contains(lowerM, "khôi phục") {
+			isStandard = true
+		} else if strings.Contains(lowerM, "sử dụng thành công") {
+			isStandard = true
+		}
+
+		if !isStandard && m != "" {
+			specialMessages = append(specialMessages, m)
+		}
+	}
+
+	finalMessage := summaryMsg
+	if len(specialMessages) > 0 {
+		finalMessage += "\n" + strings.Join(specialMessages, "\n")
+	}
+
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": finalMessage})
+}
+
 // SetVitalGuRequest represents the payload to select a vital Gu
 type SetVitalGuRequest struct {
 	GuInstanceID string `json:"gu_instance_id" binding:"required"`

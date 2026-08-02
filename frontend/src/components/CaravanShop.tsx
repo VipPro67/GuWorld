@@ -154,6 +154,11 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
     setErrorMessage(null);
     setSuccessMessage(null);
 
+    if (!buyQuantity || buyQuantity <= 0) {
+      setErrorMessage("Số lượng mua phải lớn hơn 0.");
+      return;
+    }
+
     const totalCost = selectedBuyItem.price * buyQuantity;
     if (player.primeval_stones < totalCost) {
       setErrorMessage("Không đủ Nguyên Thạch để thực hiện giao dịch này.");
@@ -193,6 +198,11 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
     if (!selectedSellItem) return;
     setErrorMessage(null);
     setSuccessMessage(null);
+
+    if (!sellQuantity || sellQuantity <= 0) {
+      setErrorMessage("Số lượng bán phải lớn hơn 0.");
+      return;
+    }
 
     if (sellQuantity > selectedSellItem.owned) {
       setErrorMessage("Số lượng bán vượt quá số lượng hiện có.");
@@ -477,28 +487,81 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
             </div>
 
             {selectedBuyItem.type !== "Gu" ? (
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-mono text-zinc-500 uppercase">
-                  Số lượng cần mua:
-                </label>
-                <div className="flex items-center justify-between border border-zinc-850 rounded-xl bg-zinc-900/20 overflow-hidden">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500 uppercase">
+                  <span>Số lượng cần mua:</span>
+                  <span>
+                    {selectedBuyItem.price > 0 && `(Có thể mua: ${Math.floor(player.primeval_stones / selectedBuyItem.price).toLocaleString()})`}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between border border-zinc-850 rounded-xl bg-zinc-900/20 overflow-hidden px-1">
                   <button
                     type="button"
                     disabled={buyQuantity <= 1}
-                    onClick={() => setBuyQuantity((prev) => prev - 1)}
-                    className="w-10 h-10 flex items-center justify-center font-bold text-zinc-400 hover:bg-zinc-900 active:bg-zinc-950 disabled:opacity-30"
+                    onClick={() => setBuyQuantity((prev) => Math.max(1, (prev || 0) - 1))}
+                    className="w-10 h-10 flex items-center justify-center font-bold text-zinc-400 hover:bg-zinc-900 active:bg-zinc-950 disabled:opacity-30 rounded-lg cursor-pointer transition-colors"
                   >
                     -
                   </button>
-                  <span className="font-bold text-zinc-100 font-mono text-sm">
-                    {buyQuantity}
-                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={selectedBuyItem.stock > 0 ? selectedBuyItem.stock : undefined}
+                    value={buyQuantity || ""}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      if (isNaN(val) || val <= 0) {
+                        setBuyQuantity(0);
+                      } else if (selectedBuyItem.stock > 0 && val > selectedBuyItem.stock) {
+                        setBuyQuantity(selectedBuyItem.stock);
+                      } else {
+                        setBuyQuantity(val);
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!buyQuantity || buyQuantity <= 0) setBuyQuantity(1);
+                    }}
+                    placeholder="1"
+                    className="w-24 text-center bg-transparent font-bold text-zinc-100 font-mono text-sm focus:outline-none focus:bg-zinc-900/50 rounded-lg py-1 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
                   <button
                     type="button"
-                    onClick={() => setBuyQuantity((prev) => prev + 1)}
-                    className="w-10 h-10 flex items-center justify-center font-bold text-zinc-400 hover:bg-zinc-900 active:bg-zinc-950"
+                    disabled={selectedBuyItem.stock > 0 && buyQuantity >= selectedBuyItem.stock}
+                    onClick={() => setBuyQuantity((prev) => {
+                      const next = (prev || 0) + 1;
+                      return selectedBuyItem.stock > 0 ? Math.min(next, selectedBuyItem.stock) : next;
+                    })}
+                    className="w-10 h-10 flex items-center justify-center font-bold text-zinc-400 hover:bg-zinc-900 active:bg-zinc-950 disabled:opacity-30 rounded-lg cursor-pointer transition-colors"
                   >
                     +
+                  </button>
+                </div>
+                <div className="flex gap-1.5 pt-0.5">
+                  {[10, 50, 100].map((step) => (
+                    <button
+                      key={step}
+                      type="button"
+                      onClick={() => {
+                        setBuyQuantity((prev) => {
+                          const next = (prev || 0) + step;
+                          return selectedBuyItem.stock > 0 ? Math.min(next, selectedBuyItem.stock) : next;
+                        });
+                      }}
+                      className="flex-1 py-1 text-[11px] font-mono text-zinc-400 bg-zinc-900/50 hover:bg-zinc-900 border border-zinc-850 hover:border-zinc-700 rounded-lg transition-all cursor-pointer"
+                    >
+                      +{step}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const affordable = selectedBuyItem.price > 0 ? Math.floor(player.primeval_stones / selectedBuyItem.price) : 999;
+                      const max = selectedBuyItem.stock > 0 ? Math.min(affordable, selectedBuyItem.stock) : affordable;
+                      setBuyQuantity(Math.max(1, max));
+                    }}
+                    className="flex-1 py-1 text-[11px] font-mono text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/30 rounded-lg transition-all cursor-pointer font-semibold"
+                  >
+                    Tối đa
                   </button>
                 </div>
               </div>
@@ -513,7 +576,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
               <span className="text-zinc-400">Tổng thanh toán:</span>
               <span className="text-amber-400 font-bold flex items-center gap-1 text-sm">
                 <Coins className="w-4 h-4 text-amber-500" />
-                {selectedBuyItem.price * buyQuantity} Nguyên Thạch
+                {(selectedBuyItem.price * (buyQuantity || 0)).toLocaleString()} Nguyên Thạch
               </span>
             </div>
 
@@ -577,30 +640,70 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
             </div>
 
             {selectedSellItem.type !== "Gu" ? (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500 uppercase">
                   <span>Số lượng cần bán:</span>
-                  <span>(Tối đa: {selectedSellItem.owned})</span>
+                  <span>(Tối đa: {selectedSellItem.owned.toLocaleString()})</span>
                 </div>
-                <div className="flex items-center justify-between border border-zinc-850 rounded-xl bg-zinc-900/20 overflow-hidden">
+                <div className="flex items-center justify-between border border-zinc-850 rounded-xl bg-zinc-900/20 overflow-hidden px-1">
                   <button
                     type="button"
                     disabled={sellQuantity <= 1}
-                    onClick={() => setSellQuantity((prev) => prev - 1)}
-                    className="w-10 h-10 flex items-center justify-center font-bold text-zinc-400 hover:bg-zinc-900 active:bg-zinc-950 disabled:opacity-30"
+                    onClick={() => setSellQuantity((prev) => Math.max(1, (prev || 0) - 1))}
+                    className="w-10 h-10 flex items-center justify-center font-bold text-zinc-400 hover:bg-zinc-900 active:bg-zinc-950 disabled:opacity-30 rounded-lg cursor-pointer transition-colors"
                   >
                     -
                   </button>
-                  <span className="font-bold text-zinc-100 font-mono text-sm">
-                    {sellQuantity}
-                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={selectedSellItem.owned}
+                    value={sellQuantity || ""}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      if (isNaN(val) || val <= 0) {
+                        setSellQuantity(0);
+                      } else if (val > selectedSellItem.owned) {
+                        setSellQuantity(selectedSellItem.owned);
+                      } else {
+                        setSellQuantity(val);
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!sellQuantity || sellQuantity <= 0) setSellQuantity(1);
+                    }}
+                    placeholder="1"
+                    className="w-24 text-center bg-transparent font-bold text-zinc-100 font-mono text-sm focus:outline-none focus:bg-zinc-900/50 rounded-lg py-1 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
                   <button
                     type="button"
                     disabled={sellQuantity >= selectedSellItem.owned}
-                    onClick={() => setSellQuantity((prev) => prev + 1)}
-                    className="w-10 h-10 flex items-center justify-center font-bold text-zinc-400 hover:bg-zinc-900 active:bg-zinc-950 disabled:opacity-30"
+                    onClick={() => setSellQuantity((prev) => Math.min(selectedSellItem.owned, (prev || 0) + 1))}
+                    className="w-10 h-10 flex items-center justify-center font-bold text-zinc-400 hover:bg-zinc-900 active:bg-zinc-950 disabled:opacity-30 rounded-lg cursor-pointer transition-colors"
                   >
                     +
+                  </button>
+                </div>
+                <div className="flex gap-1.5 pt-0.5">
+                  {[10, 50, 100].map((step) => (
+                    <button
+                      key={step}
+                      type="button"
+                      disabled={sellQuantity >= selectedSellItem.owned}
+                      onClick={() => {
+                        setSellQuantity((prev) => Math.min(selectedSellItem.owned, (prev || 0) + step));
+                      }}
+                      className="flex-1 py-1 text-[11px] font-mono text-zinc-400 bg-zinc-900/50 hover:bg-zinc-900 border border-zinc-850 hover:border-zinc-700 rounded-lg transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      +{step}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setSellQuantity(selectedSellItem.owned)}
+                    className="flex-1 py-1 text-[11px] font-mono text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/30 rounded-lg transition-all cursor-pointer font-semibold"
+                  >
+                    Tối đa
                   </button>
                 </div>
               </div>
@@ -615,7 +718,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
               <span className="text-zinc-400">Nguyên Thạch nhận về:</span>
               <span className="text-emerald-400 font-bold flex items-center gap-1 text-sm">
                 <Coins className="w-4 h-4 text-emerald-500" />
-                +{selectedSellItem.price * sellQuantity} Nguyên Thạch
+                +{(selectedSellItem.price * (sellQuantity || 0)).toLocaleString()} Nguyên Thạch
               </span>
             </div>
 

@@ -947,6 +947,7 @@ func InitSchema() error {
 				END IF;
 			END $$;`, "migrate_player_gu_from_inventory"},
 		{`ALTER TABLE players DROP COLUMN IF EXISTS gu_inventory;`, "drop_player_gu_inventory"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS temp_loot JSONB NOT NULL DEFAULT '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}';`, "temp_loot"},
 		{`UPDATE players SET temp_loot = COALESCE(temp_loot, '{}'::jsonb) WHERE temp_loot IS NULL;`, "fix_null_temp_loot"},
 		{`UPDATE players SET temp_loot = jsonb_set(temp_loot, '{gu_inventory}', COALESCE((SELECT jsonb_agg(CASE WHEN elem->>'rank' IS NULL OR elem->>'rank' = '' THEN elem || jsonb_build_object('rank', COALESCE((SELECT gd.rank FROM gu_dictionary gd WHERE gd.id = elem->>'gu_id' LIMIT 1), 1)) ELSE elem END) FROM jsonb_array_elements(COALESCE(temp_loot->'gu_inventory', '[]'::jsonb)) AS elem), '[]'::jsonb), false) WHERE temp_loot IS NOT NULL AND temp_loot::text != '{}' AND temp_loot::text != 'null';`, "backfill_temp_loot_rank"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS lifespan DOUBLE PRECISION NOT NULL DEFAULT 100.0;`, "lifespan"},
@@ -957,7 +958,6 @@ func InitSchema() error {
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS email VARCHAR(100) NULL;`, "email"},
 		{`CREATE UNIQUE INDEX IF NOT EXISTS players_email_idx ON players (email) WHERE email IS NOT NULL AND email != '';`, "players_email_idx"},
 		{`CREATE UNIQUE INDEX IF NOT EXISTS players_phone_number_idx ON players (phone_number) WHERE phone_number IS NOT NULL AND phone_number != '';`, "players_phone_number_idx"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS temp_loot JSONB NOT NULL DEFAULT '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}';`, "temp_loot"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS explore_count INTEGER NOT NULL DEFAULT 0;`, "explore_count"},
 		{`ALTER TABLE arena_rankings ADD COLUMN IF NOT EXISTS daily_challenges INTEGER NOT NULL DEFAULT 0;`, "arena_rankings.daily_challenges"},
 		{`ALTER TABLE arena_rankings ADD COLUMN IF NOT EXISTS last_challenge_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;`, "arena_rankings.last_challenge_at"},

@@ -19,6 +19,8 @@ interface GuInventoryProps {
   onUseGu?: (instanceId: string) => Promise<void>;
   onDropGu?: (instanceId: string) => Promise<boolean>;
   onDropGus?: (instanceIds: string[]) => Promise<boolean>;
+  onUseItems?: (itemIds: string[]) => Promise<boolean>;
+  onUseGus?: (instanceIds: string[]) => Promise<boolean>;
 }
 
 const getPathColor = (path: string): string => {
@@ -64,14 +66,22 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   itemDictionary,
   onEquipToggle,
   onUseItem,
+  onUseItems,
   onUpdateStatus,
   onSetVital,
   onUseGu,
+  onUseGus,
   onDropGu,
   onDropGus,
 }) => {
   const [selectedGuIds, setSelectedGuIds] = useState<Record<string, boolean>>({});
   const [isBatchMode, setIsBatchMode] = useState<boolean>(false);
+  // Single-item quantity use mode (Items tab)
+  const [useMultipleItemId, setUseMultipleItemId] = useState<string | null>(null);
+  const [useMultipleItemQty, setUseMultipleItemQty] = useState<number>(1);
+  // Single-group quantity use mode (Gu tab)
+  const [useMultipleGuGroupKey, setUseMultipleGuGroupKey] = useState<string | null>(null);
+  const [useMultipleGuQty, setUseMultipleGuQty] = useState<number>(1);
 
   const [feedingId, setFeedingId] = useState<string | null>(null);
   const [feedingGroupGuId, setFeedingGroupGuId] = useState<string | null>(null);
@@ -161,6 +171,10 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const materials = player.materials_inventory || {};
   const guList = player.gu_inventory || [];
 
+  const isConsumableItem = (spec: ItemSpec) => {
+    return spec.item_type === "Consumable" || spec.type === "Consumable" || spec.type === "SoulResource";
+  };
+
   const handleFeedClick = async (instanceId: string) => {
     setFeedingId(instanceId);
     try {
@@ -190,6 +204,20 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
     }
   };
 
+  const handleUseMultipleItem = async () => {
+    if (!useMultipleItemId || useMultipleItemQty < 1) return;
+    if (!onUseItems) return;
+
+    const spec = itemDictionary[useMultipleItemId];
+    const itemName = spec?.name || useMultipleItemId;
+    const confirmMsg = `Xác nhận sử dụng ${useMultipleItemQty}x ${itemName}?`;
+    if (!(await useGameStore.getState().showConfirm(confirmMsg))) return;
+
+    const itemIds = Array(useMultipleItemQty).fill(useMultipleItemId);
+    await onUseItems(itemIds);
+    setUseMultipleItemId(null);
+    setUseMultipleItemQty(1);
+  };
 
   const handleBatchDrop = async () => {
     const selectedIds = Object.keys(selectedGuIds).filter((id) => selectedGuIds[id]);
@@ -212,10 +240,46 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
     }
   };
 
+  const handleUseMultipleGus = async (groupKey: string, instances: GuInstance[]) => {
+    if (useMultipleGuQty < 1) return;
+    if (!onUseGus) return;
+
+    const eligibleInstances = instances.filter(isEligibleForUse);
+    const qty = Math.min(useMultipleGuQty, eligibleInstances.length);
+    if (qty === 0) {
+      useGameStore.getState().addToast("Không có Cổ trùng nào đủ điều kiện để sử dụng.", "info");
+      return;
+    }
+
+    const spec = guSpecFor(eligibleInstances[0].gu_id, eligibleInstances[0].rank);
+    const guName = spec?.name || eligibleInstances[0].gu_id;
+    const confirmMsg = `Xác nhận sử dụng ${qty}x ${guName}?`;
+    if (!(await useGameStore.getState().showConfirm(confirmMsg))) return;
+
+    const selectedIds = eligibleInstances.slice(0, qty).map(g => g.instance_id);
+    setUsingGuId("batch");
+    try {
+      await onUseGus(selectedIds);
+      setUseMultipleGuGroupKey(null);
+      setUseMultipleGuQty(1);
+    } finally {
+      setUsingGuId(null);
+    }
+  };
+
   const isEligibleForDrop = (gu: GuInstance) => {
     return !gu.is_vital && !gu.equipped;
   };
 
+  const isEligibleForUse = (gu: GuInstance) => {
+    const spec = guSpecFor(gu.gu_id, gu.rank);
+    if (!spec) return false;
+    return spec.gu_type === "Consumable" && gu.status !== "DEAD" && gu.status !== "SEALED";
+  };
+
+  const isEligibleForCurrentAction = (gu: GuInstance) => {
+    return isEligibleForDrop(gu);
+  };
 
   // Filter materials (only those with qty > 0 and matching searchTerm)
   const filteredMaterials = Object.keys(itemDictionary)
@@ -231,6 +295,8 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
       return matchesSearch;
     })
     .map((key) => ({ key, spec: itemDictionary[key], qty: materials[key] }));
+
+  const consumableMaterialRows = filteredMaterials.filter(({ spec }) => isConsumableItem(spec));
 
   // Dynamic filters calculation
   const allPaths = Array.from(
@@ -268,24 +334,23 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
     return matchesSearch && matchesPath && matchesRank;
   });
 
-  const eligibleGus = filteredGus.filter(isEligibleForDrop);
+  const eligibleGus = filteredGus.filter(isEligibleForCurrentAction);
   const selectedEligibleCount = eligibleGus.filter(g => selectedGuIds[g.instance_id]).length;
   const isAllEligibleSelected = eligibleGus.length > 0 && selectedEligibleCount === eligibleGus.length;
+  // Not used for Gu use mode anymore – only for batch drop
 
   const handleSelectAllToggle = () => {
+    const newSelected = { ...selectedGuIds };
     if (isAllEligibleSelected) {
-      const newSelected = { ...selectedGuIds };
       eligibleGus.forEach(g => {
         newSelected[g.instance_id] = false;
       });
-      setSelectedGuIds(newSelected);
     } else {
-      const newSelected = { ...selectedGuIds };
       eligibleGus.forEach(g => {
         newSelected[g.instance_id] = true;
       });
-      setSelectedGuIds(newSelected);
     }
+    setSelectedGuIds(newSelected);
   };
 
   const showMaterials = selectedTab === "material";
@@ -384,9 +449,11 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
       {/* Materials Inventory section */}
       {showMaterials && (
         <div className="space-y-2 text-left">
-          <span className="text-[10px] font-mono text-zinc-505 uppercase tracking-widest block font-bold">
-            Nguyên Liệu Sở Hữu
-          </span>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-[10px] font-mono text-zinc-505 uppercase tracking-widest block font-bold">
+              Nguyên Liệu Sở Hữu
+            </span>
+          </div>
           {filteredMaterials.length === 0 ? (
             <div className="text-[10px] text-zinc-600 italic">Hộp nguyên liệu trống.</div>
           ) : (
@@ -413,13 +480,25 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        {isConsumable && onUseItem && (
+                        {isConsumable && onUseItem && useMultipleItemId !== key && (
                           <button
                             onClick={() => handleUseItemClick(key)}
                             disabled={actionLoading || isUsing}
                             className="text-[9px] py-1 px-2 bg-emerald-950/30 text-emerald-400 border border-emerald-900/40 hover:bg-emerald-950/50 hover:border-emerald-800 rounded font-mono transition-all cursor-pointer font-bold"
                           >
                             {isUsing ? "..." : "Sử Dụng"}
+                          </button>
+                        )}
+                        {isConsumable && onUseItems && qty > 1 && useMultipleItemId !== key && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUseMultipleItemId(key);
+                              setUseMultipleItemQty(1);
+                            }}
+                            className="text-[9px] py-1 px-2 bg-amber-950/30 text-amber-400 border border-amber-900/40 hover:bg-amber-950/50 hover:border-amber-800 rounded font-mono transition-all cursor-pointer font-bold"
+                          >
+                            ✨ Nhiều
                           </button>
                         )}
                         <button
@@ -432,6 +511,44 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         </button>
                       </div>
                     </div>
+
+                    {/* Quantity picker for multi-use */}
+                    {useMultipleItemId === key && (
+                      <div className="flex items-center gap-2 px-3.5 py-2 border-t border-emerald-900/30 bg-emerald-950/10">
+                        <span className="text-[10px] text-emerald-400 font-mono font-bold whitespace-nowrap">Số lượng:</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={qty}
+                          value={useMultipleItemQty}
+                          onChange={(e) => setUseMultipleItemQty(Math.max(1, Math.min(qty, parseInt(e.target.value) || 1)))}
+                          className="w-16 bg-zinc-950 border border-emerald-900/50 text-emerald-300 text-xs font-mono text-center py-1 rounded-lg outline-none focus:border-emerald-500/60"
+                        />
+                        <span className="text-[9px] text-zinc-500 font-mono">/ {qty}</span>
+                        <button
+                          type="button"
+                          onClick={() => setUseMultipleItemQty(qty)}
+                          className="text-[9px] py-0.5 px-1.5 bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-zinc-200 rounded font-mono cursor-pointer"
+                        >
+                          Tất cả
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleUseMultipleItem}
+                          disabled={actionLoading}
+                          className="text-[9px] font-bold py-1 px-2.5 bg-emerald-600 text-white hover:bg-emerald-500 rounded font-mono transition-all cursor-pointer shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                        >
+                          Xác nhận
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setUseMultipleItemId(null); setUseMultipleItemQty(1); }}
+                          className="text-[9px] py-1 px-2 bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-zinc-200 rounded font-mono cursor-pointer"
+                        >
+                          Hủy
+                        </button>
+                      </div>
+                    )}
 
                     {isDetailOpen && (
                       <div className="px-3.5 pb-3 pt-0 border-t border-zinc-900/60 grid grid-cols-2 gap-2 text-[10px]">
@@ -513,7 +630,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
               Cổ Trùng Sở Hữu ({filteredGus.length} / {guList.length} con)
             </span>
 
-            {onDropGus && filteredGus.length > 0 && (
+            {(onDropGus || onUseGus) && filteredGus.length > 0 && (
               <div className="flex items-center gap-2">
                 {isBatchMode ? (
                   <>
@@ -537,7 +654,9 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                           : "bg-zinc-900 text-zinc-600 border border-zinc-850 cursor-not-allowed"
                       }`}
                     >
-                      {droppingId === "batch" ? "Đang thả..." : `Thả Đã Chọn (${selectedEligibleCount})`}
+                      {droppingId === "batch"
+                        ? "Đang thả..."
+                        : `Thả Đã Chọn (${selectedEligibleCount})`}
                     </button>
 
                     <button
@@ -552,13 +671,19 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                     </button>
                   </>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => setIsBatchMode(true)}
-                    className="text-[10px] font-bold py-1 px-2.5 bg-amber-950/20 text-amber-400 border border-amber-900 hover:bg-amber-950/40 rounded-lg font-mono transition-all cursor-pointer"
-                  >
-                    🗑️ Thả Hàng Loạt
-                  </button>
+                  <>
+                    {onDropGus && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsBatchMode(true);
+                        }}
+                        className="text-[10px] font-bold py-1 px-2.5 bg-rose-950/20 text-rose-400 border border-rose-900 hover:bg-rose-950/40 rounded-lg font-mono transition-all cursor-pointer"
+                      >
+                        🗑️ Thả Hàng Loạt
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -706,7 +831,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                     if (deadCount > 0) statusTextParts.push(`${deadCount} Đã Chết`);
                     const statusSummary = statusTextParts.join(", ");
 
-                    const eligibleGrpGus = instances.filter(isEligibleForDrop);
+                    const eligibleGrpGus = instances.filter(isEligibleForCurrentAction);
                     const grpSelectedCount = eligibleGrpGus.filter(g => selectedGuIds[g.instance_id]).length;
                     const isAllGrpSelected = eligibleGrpGus.length > 0 && grpSelectedCount === eligibleGrpGus.length;
 
@@ -763,7 +888,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                           </div>
 
                           {/* Group actions */}
-                          <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
+                          <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end flex-wrap">
                             {spec.gu_type !== "Consumable" && onFeedGroup && (
                               <button
                                 type="button"
@@ -790,6 +915,20 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                               </button>
                             )}
 
+                            {/* Per-group "Use Multiple" button for Consumable Gu */}
+                            {spec.gu_type === "Consumable" && onUseGus && instances.filter(isEligibleForUse).length > 1 && useMultipleGuGroupKey !== groupKey && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setUseMultipleGuGroupKey(groupKey);
+                                  setUseMultipleGuQty(1);
+                                }}
+                                className="text-[9px] font-bold py-1.5 px-3 rounded-xl bg-amber-950/20 text-amber-400 border border-amber-900 hover:bg-amber-950/40 font-mono transition-all cursor-pointer"
+                              >
+                                ✨ Sử dụng nhiều
+                              </button>
+                            )}
+
                             <button
                               type="button"
                               onClick={() => toggleGroupExpand(groupKey)}
@@ -800,6 +939,47 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                             </button>
                           </div>
                         </div>
+
+                        {/* Quantity picker for multi-use Gu group */}
+                        {useMultipleGuGroupKey === groupKey && (() => {
+                          const eligibleCount = instances.filter(isEligibleForUse).length;
+                          return (
+                            <div className="flex items-center gap-2 mt-3 px-3 py-2 border border-amber-900/30 bg-amber-950/10 rounded-xl flex-wrap">
+                              <span className="text-[10px] text-amber-400 font-mono font-bold whitespace-nowrap">Số lượng:</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={eligibleCount}
+                                value={useMultipleGuQty}
+                                onChange={(e) => setUseMultipleGuQty(Math.max(1, Math.min(eligibleCount, parseInt(e.target.value) || 1)))}
+                                className="w-16 bg-zinc-950 border border-amber-900/50 text-amber-300 text-xs font-mono text-center py-1 rounded-lg outline-none focus:border-amber-500/60"
+                              />
+                              <span className="text-[9px] text-zinc-500 font-mono">/ {eligibleCount} đủ điều kiện</span>
+                              <button
+                                type="button"
+                                onClick={() => setUseMultipleGuQty(eligibleCount)}
+                                className="text-[9px] py-0.5 px-1.5 bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-zinc-200 rounded font-mono cursor-pointer"
+                              >
+                                Tất cả
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleUseMultipleGus(groupKey, instances)}
+                                disabled={actionLoading || usingGuId === "batch"}
+                                className="text-[9px] font-bold py-1 px-2.5 bg-amber-600 text-white hover:bg-amber-500 rounded font-mono transition-all cursor-pointer shadow-[0_0_8px_rgba(245,158,11,0.2)]"
+                              >
+                                {usingGuId === "batch" ? "Đang sử dụng..." : "Xác nhận"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setUseMultipleGuGroupKey(null); setUseMultipleGuQty(1); }}
+                                className="text-[9px] py-1 px-2 bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-zinc-200 rounded font-mono cursor-pointer"
+                              >
+                                Hủy
+                              </button>
+                            </div>
+                          );
+                        })()}
 
                         {/* Expanded detail list */}
                         {isExpanded && (
@@ -821,7 +1001,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                     {isBatchMode && (
                                       <input
                                         type="checkbox"
-                                        disabled={!isEligibleForDrop(gu)}
+                                        disabled={!isEligibleForCurrentAction(gu)}
                                         checked={!!selectedGuIds[gu.instance_id]}
                                         onChange={(e) => {
                                           setSelectedGuIds((prev) => ({
@@ -830,10 +1010,10 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                           }));
                                         }}
                                         className={`rounded border-zinc-800 bg-zinc-950 text-amber-550 focus:ring-amber-550/50 cursor-pointer ${
-                                          !isEligibleForDrop(gu) ? "opacity-30 cursor-not-allowed" : ""
+                                          !isEligibleForCurrentAction(gu) ? "opacity-30 cursor-not-allowed" : ""
                                         }`}
                                         title={
-                                          !isEligibleForDrop(gu)
+                                          !isEligibleForCurrentAction(gu)
                                             ? "Không thể thả Bản Mệnh Cổ hoặc Cổ trùng đang xuất trận"
                                             : "Chọn Cổ trùng"
                                         }
@@ -1092,10 +1272,10 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                               section === "other" && Array.isArray(effects) && effects.length > 0 ? (
                                                 <span key={section} className="inline-flex items-center gap-1">
                                                   <span className="text-zinc-500 font-mono text-[9px] uppercase">{section}:</span>
-                                                  {effects.map((m: any, mi: number) => (
+                                                  {effects.map((effect, mi: number) => (
                                                     <span key={mi} className="bg-zinc-900/60 px-1.5 py-0.5 rounded border border-zinc-800/50 whitespace-nowrap">
-                                                      {m?.event_trigger || "?"} → {m?.action_code || "?"}
-                                                      {m?.params && Object.keys(m.params).length > 0 ? ` (${JSON.stringify(m.params)})` : ""}
+                                                      {effect?.event_trigger || "?"} → {effect?.action_code || "?"}
+                                                      {effect?.params && Object.keys(effect.params).length > 0 ? ` (${JSON.stringify(effect.params)})` : ""}
                                                     </span>
                                                   ))}
                                                 </span>

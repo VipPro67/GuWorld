@@ -73,9 +73,16 @@ func (s *RecipeService) Get(q QueryRower, playerID, recipeID string) (*RecipePro
 	return &r, nil
 }
 
+func (s *RecipeService) exec(tx *sql.Tx, query string, args ...interface{}) (sql.Result, error) {
+	if tx != nil {
+		return tx.Exec(query, args...)
+	}
+	return s.db.Exec(query, args...)
+}
+
 // Upsert inserts or updates a recipe progress row.
 func (s *RecipeService) Upsert(tx *sql.Tx, r *RecipeProgress) error {
-	_, err := tx.Exec(`
+	_, err := s.exec(tx, `
 		INSERT INTO player_recipe_progress (player_id, recipe_id, completion_rate, is_unlocked, deduce_count, last_deduce_at, favorite, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
 		ON CONFLICT (player_id, recipe_id) DO UPDATE SET
@@ -92,6 +99,6 @@ func (s *RecipeService) Upsert(tx *sql.Tx, r *RecipeProgress) error {
 
 // Delete removes a recipe progress row.
 func (s *RecipeService) Delete(tx *sql.Tx, playerID, recipeID string) error {
-	_, err := tx.Exec(`DELETE FROM player_recipe_progress WHERE player_id = $1 AND recipe_id = $2`, playerID, recipeID)
+	_, err := s.exec(tx, `DELETE FROM player_recipe_progress WHERE player_id = $1 AND recipe_id = $2`, playerID, recipeID)
 	return err
 }

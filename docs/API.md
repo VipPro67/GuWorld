@@ -53,6 +53,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | GET | `/player/stats` |
 | POST | `/player/explore/:id` |
 | POST | `/player/use-item` |
+| POST | `/player/use-items` |
 | POST | `/player/recharge` |
 | POST | `/player/clear-stress` |
 | GET | `/player/profile/:username` |

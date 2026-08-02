@@ -847,7 +847,9 @@ interface GameState {
   updateGuStatus: (instanceId: string, status: string) => Promise<void>;
   setVitalGu: (instanceId: string) => Promise<void>;
   useGu: (instanceId: string) => Promise<void>;
+  useGus: (instanceIds: string[]) => Promise<boolean>;
   useItem: (itemId: string) => Promise<void>;
+  useItems: (itemIds: string[]) => Promise<boolean>;
   movePlayer: (x: number, y: number, attackTargetId?: string) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
   fetchGrid: () => Promise<{ x: number; y: number; vision_radius: number; cells: any[]; explored_cells: string[]; stats: any; players_on_map?: any[] } | null>;
   dropGu: (instanceId: string) => Promise<boolean>;
@@ -3594,6 +3596,96 @@ export const useGameStore = create<GameState>((set, get) => {
     } finally {
       set({ actionLoading: false });
     }
+  },
+
+  useItems: async (itemIds) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading || !itemIds?.length) return false;
+
+    set({ actionLoading: true, error: null });
+
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/use-items`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ item_ids: itemIds }),
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      const data = await response.json();
+      if (!response.ok) {
+        set({ error: data.error });
+        get().addLog(`Sử dụng vật phẩm thất bại: ${data.error}`);
+        get().addToast(data.error || "Không thể sử dụng vật phẩm.", "error");
+        return false;
+      }
+
+      setPlayerFromServer(data.player);
+      const successMsg = data.message || "Đã sử dụng vật phẩm.";
+      get().addLog(successMsg);
+      get().addToast(successMsg, "success");
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Sử dụng vật phẩm thất bại: ${err.message}`);
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  useGus: async (instanceIds) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading || !instanceIds?.length) return false;
+
+    set({ actionLoading: true, error: null });
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (const guInstanceId of instanceIds) {
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/inventory/use-gu`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ gu_instance_id: guInstanceId }),
+        });
+
+        if (response.status === 401 || response.status === 403) {
+          logout();
+          throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+        }
+
+        const data = await response.json();
+        if (!response.ok) {
+          failedCount += 1;
+          get().addToast(data.error || `Không thể sử dụng Cổ trùng ${guInstanceId}.`, "error");
+          continue;
+        }
+
+        setPlayerFromServer(data.player);
+        const successMsg = data.message || `Đã sử dụng Cổ trùng ${guInstanceId}.`;
+        get().addLog(successMsg);
+        get().addToast(successMsg, "success");
+        successCount += 1;
+      } catch (err: any) {
+        failedCount += 1;
+        set({ error: err.message });
+        get().addLog(`Sử dụng Cổ trùng thất bại: ${err.message}`);
+        get().addToast(err.message, "error");
+      }
+    }
+
+    set({ actionLoading: false });
+    return successCount > 0 && failedCount === 0;
   },
 
   movePlayer: async (x, y, attackTargetId?) => {

@@ -196,6 +196,7 @@ func SetupRouter() *gin.Engine {
 			player.GET("/stats", handlers.GetPlayerStatsHandler)
 			player.POST("/explore/:id", handlers.Explore)
 			player.POST("/use-item", handlers.UseItem)
+			player.POST("/use-items", handlers.UseItems)
 			player.POST("/recharge", handlers.RechargeWithStones)
 			player.POST("/clear-stress", handlers.ClearStress)
 			player.POST("/sacrifice", handlers.SacrificeNPC)

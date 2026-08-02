@@ -69,8 +69,10 @@ export default function Home() {
     equipGu,
     updateGuStatus,
     useItem,
+    useItems,
     setVitalGu,
     useGu,
+    useGus,
     dropGu,
     dropGus,
     executeCombatTurn,
@@ -239,9 +241,11 @@ export default function Home() {
               itemDictionary={itemDictionary}
               onEquipToggle={equipGu}
               onUseItem={useItem}
+              onUseItems={useItems}
               onUpdateStatus={updateGuStatus}
               onSetVital={setVitalGu}
               onUseGu={useGu}
+              onUseGus={useGus}
               onDropGu={dropGu}
               onDropGus={dropGus}
             />
