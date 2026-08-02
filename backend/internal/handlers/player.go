@@ -1398,8 +1398,8 @@ func FeedGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
 	}
-	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2, hp = $3, max_mana = $4, current_mana = $5, lifespan = $6, human_qi = $7, max_soul = $8 WHERE id = $9`,
-		player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.HumanQi, player.MaxSoul, player.ID)
+	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2, hp = $3, max_mana = $4, current_mana = $5, lifespan = $6, human_qi = $7 WHERE id = $8`,
+		player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
@@ -2753,16 +2753,18 @@ func UseConsumableGu(c *gin.Context) {
 
 	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using Gu"})
+		fmt.Println("Failed to update player state after using Gu:", err)
 		return
 	}
 	_, err = tx.Exec(`
 		UPDATE players 
 		SET sub_rank = $1, rank = $2, primeval_stones = $3, max_mana = $4, current_mana = $5, equipped_gus = $6, dao_marks = $7, wall_progress = $8, hp = $9, lifespan = $10, aptitude_percent = $11, immortal_stones = $12, aperture_stress = $13, human_qi = $14, max_soul = $15
-		WHERE id = $15`,
+		WHERE id = $16`,
 		player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.DaoMarks, player.WallProgress, player.HP, player.Lifespan, player.AptitudePercent, player.ImmortalStones, player.ApertureStress, player.HumanQi, player.MaxSoul, player.ID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using Gu"})
+		fmt.Println("Failed to update player state after using Gu:", err)
 		return
 	}
 
