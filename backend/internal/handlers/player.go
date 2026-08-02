@@ -1398,8 +1398,8 @@ func FeedGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
 	}
-	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2, hp = $3, max_mana = $4, current_mana = $5, lifespan = $6, human_qi = $7 WHERE id = $8`,
-		player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.HumanQi, player.ID)
+	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2, hp = $3, max_mana = $4, current_mana = $5, lifespan = $6, human_qi = $7, max_soul = $8 WHERE id = $9`,
+		player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.HumanQi, player.MaxSoul, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
@@ -2653,11 +2653,10 @@ func DropGus(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "gu.drop_batch", EntityType: "gu_instance",
 		RequestSummary: fmt.Sprintf("Vứt bỏ hàng loạt %d Cổ trùng khỏi túi đồ", len(req.GuInstanceIDs)),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Đã vứt bỏ %d Cổ trùng khỏi túi đồ.", foundCount)})
 }
-
 
 // UseGuRequest represents request payload to use a consumable Gu
 type UseGuRequest struct {
