@@ -21,8 +21,6 @@ import { GachaPanel } from "@/components/GachaPanel";
 import AchievementsPanel from "@/components/AchievementsPanel";
 import { LobbyView } from "@/components/LobbyView";
 import { GlobalChatOverlay } from "@/components/GlobalChatOverlay";
-import { ToastContainer } from "@/components/ToastContainer";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ImmortalApertureView } from "@/components/ImmortalApertureView";
 import { DungeonView } from "@/components/DungeonView";
 import { SectView } from "@/components/SectView";
@@ -381,10 +379,6 @@ export default function Home() {
         </div>
         <p className="text-xs text-zinc-600 font-mono">Cổ Chân Nhân Web Game © 2026 • Thiết Kế Trực Quan Sinh Động</p>
       </footer>
-
-      {/* Toast Notification Container */}
-      <ToastContainer />
-      <ConfirmDialog />
 
       {/* Changelog Modal */}
       {player && showChangelog && (

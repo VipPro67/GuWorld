@@ -110,18 +110,17 @@ func SetupRouter() *gin.Engine {
 		api.GET("/dictionary", middleware.RateLimitByIP(40, time.Minute), handlers.GetDictionary)
 		api.GET("/recipes", middleware.RateLimitByIP(40, time.Minute), handlers.GetRecipes)
 
-		// Auth Endpoints — group: 20/min per IP, per-route: 3/min per IP
+		// Auth Endpoints — per-route: 9/min per IP
 		authGroup := api.Group("/auth")
-		authGroup.Use(middleware.RateLimitByGroup("auth", 20, time.Minute))
 		{
-			authGroup.POST("/send-otp", middleware.RateLimitByIP(3, time.Minute), handlers.SendOTP)
-			authGroup.POST("/register", middleware.RateLimitByIP(3, time.Minute), handlers.RegisterPlayer)
-			authGroup.POST("/login", middleware.RateLimitByIP(3, time.Minute), handlers.LoginPlayer)
+			authGroup.POST("/send-otp", middleware.RateLimitByIP(9, time.Minute), handlers.SendOTP)
+			authGroup.POST("/register", middleware.RateLimitByIP(9, time.Minute), handlers.RegisterPlayer)
+			authGroup.POST("/login", middleware.RateLimitByIP(9, time.Minute), handlers.LoginPlayer)
 			authGroup.POST("/logout", handlers.LogoutPlayer)
 			authGroup.GET("/me", middleware.AuthRequired(), handlers.GetCurrentPlayer)
 
 			// Google OAuth2
-			authGroup.GET("/google/login", middleware.RateLimitByIP(3, time.Minute), handlers.GoogleLogin)
+			authGroup.GET("/google/login", middleware.RateLimitByIP(9, time.Minute), handlers.GoogleLogin)
 			authGroup.GET("/google/callback", handlers.GoogleCallback)
 		}
 
@@ -197,7 +196,6 @@ func SetupRouter() *gin.Engine {
 		// Player endpoints — group: 60/min, per player: 30/min
 		player := api.Group("/player")
 		player.Use(middleware.AuthRequired())
-		player.Use(middleware.RateLimitByGroup("player", 60, time.Minute))
 		player.Use(middleware.RateLimitByPlayer(30, time.Minute))
 		{
 			player.GET("/status/:id", handlers.GetPlayerStatus)
@@ -263,7 +261,7 @@ func SetupRouter() *gin.Engine {
 		gacha := api.Group("/gacha")
 		gacha.Use(middleware.AuthRequired())
 		gacha.Use(middleware.RateLimitByGroup("gacha", 50, time.Minute))
-		gacha.Use(middleware.RateLimitByPlayer(15, time.Minute))
+		gacha.Use(middleware.RateLimitByPlayer(10, time.Minute))
 		{
 			gacha.GET("/pools", handlers.GetGachaPools)
 			gacha.POST("/open", handlers.OpenGacha)

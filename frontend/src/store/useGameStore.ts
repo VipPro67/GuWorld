@@ -1098,6 +1098,50 @@ const authFetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
   });
 };
 
+// ── apiFetch: wraps authFetch with automatic error toasts ────────────
+// Usage: const res = await apiFetch(url, opts)
+//   opts.silent = true  → skip auto-toast (handler manages errors itself)
+//   opts.raw     = true → return raw Response without auto error handling
+interface ApiFetchInit extends RequestInit {
+  silent?: boolean;
+  raw?: boolean;
+}
+
+const apiFetch = async (input: RequestInfo | URL, init: ApiFetchInit = {}): Promise<Response> => {
+  const { silent, raw, ...fetchInit } = init;
+  try {
+    const response = await authFetch(input, fetchInit);
+
+    if (raw) return response;
+
+    if (response.status === 401 || response.status === 403) {
+      if (!silent) {
+        const state = useGameStore.getState();
+        state.addToast("Phiên làm việc hết hạn. Vui lòng đăng nhập lại.", "error");
+        state.logout();
+      }
+      return response;
+    }
+
+    if (!response.ok && !silent) {
+      let errorMsg = "Lỗi từ server";
+      try {
+        const errData = await response.clone().json();
+        errorMsg = errData.error || errorMsg;
+      } catch {}
+      useGameStore.getState().addToast(errorMsg, "error");
+    }
+
+    return response;
+  } catch (err: any) {
+    if (!silent) {
+      const msg = err?.name === "AbortError" ? "Yêu cầu đã hết thời gian" : (err.message || "Lỗi kết nối");
+      useGameStore.getState().addToast(msg, "error");
+    }
+    throw err;
+  }
+};
+
 const PLAYER_EVENT_TYPES = [
   "mana.snapshot",
   "player.updated",
@@ -1344,6 +1388,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
     } finally {
       set({ isLoading: false });
@@ -1367,6 +1412,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
     } finally {
       set({ isLoading: false });
@@ -1423,6 +1469,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
     } finally {
       set({ isLoading: false });
@@ -1449,6 +1496,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
     } finally {
       set({ isLoading: false });
@@ -1959,6 +2007,7 @@ export const useGameStore = create<GameState>((set, get) => {
       set({ inspectedProfile: data, inspectedUsernameQuery: username });
     } catch (err: any) {
       console.error("Profile fetch failed:", err.message);
+      get().addToast("Lỗi tải hồ sơ.", "error");
       get().addToast(`Không thể trinh thám hồ sơ: ${err.message}`, "error");
     } finally {
       set({ profileLoading: false });
@@ -1991,6 +2040,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       console.error("Profile settings update failed:", err.message);
+      get().addToast("Lỗi cập nhật hồ sơ.", "error");
       set({ error: err.message });
       addToast(`Cập nhật thất bại: ${err.message}`, "error");
       return false;
@@ -2027,6 +2077,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return data.avatar_url as string;
     } catch (err: any) {
       console.error("Avatar upload failed:", err.message);
+      get().addToast("Lỗi tải ảnh đại diện.", "error");
       set({ error: err.message });
       addToast(`Upload thất bại: ${err.message}`, "error");
       return null;
@@ -2341,6 +2392,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return { success: data.success, message: data.message };
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Trùng kích lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally { set({ actionLoading: false }); }
@@ -2366,6 +2418,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return { success: true, message: data.message };
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Nạp nguyên thạch lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally {
@@ -2391,6 +2444,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return { success: true, message: data.message };
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Dùng Cổ Xá Lợi lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally { set({ actionLoading: false }); }
@@ -2412,6 +2466,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return { success: data.success, message: data.message };
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Thăng tiên lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally { set({ actionLoading: false }); }
@@ -2458,6 +2513,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return { success: true, message: data.message };
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Đổi mã quà lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally { set({ actionLoading: false }); }
@@ -2475,6 +2531,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err: any) {
       console.error("Achievements fetch error:", err.message);
+      get().addToast("Lỗi tải thành tích.", "error");
     }
   },
   claimAchievement: async (achievementId) => {
@@ -2496,6 +2553,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return { success: true, message: data.message };
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Nhận thưởng thành tựu lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally { set({ actionLoading: false }); }
@@ -2517,6 +2575,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return { success: true, message: data.message };
     } catch (err: any) {
       console.error("Select title/frame error:", err.message);
+      get().addToast("Lỗi chọn danh hiệu.", "error");
       return { success: false, message: err.message };
     }
   },
@@ -2533,6 +2592,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err: any) {
       console.error("Gacha pools error:", err.message);
+      get().addToast("Lỗi tải bách khoa.", "error");
     }
   },
 
@@ -2554,6 +2614,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return { success: true, message: data.message, reward: data.reward, rewards: data.rewards };
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Mở Đá  lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally { set({ actionLoading: false }); }
@@ -2575,6 +2636,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return { success: true, message: data.message };
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Lỗi độ kiếp: ${err.message}`);
       return { success: false, message: err.message };
     } finally { set({ actionLoading: false }); }
@@ -2643,6 +2705,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return { success: true, message: data.message };
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Tịnh hóa lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally {
@@ -2680,6 +2743,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return { success: true, message: data.message };
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Hiến tế lỗi: ${err.message}`);
       return { success: false, message: err.message };
     } finally {
@@ -2862,6 +2926,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return data;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Tấn công thất bại: ${err.message}`);
       return null;
     } finally {
@@ -2898,6 +2963,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return data;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Mô phỏng thất bại: ${err.message}`);
       return null;
     } finally {
@@ -2929,6 +2995,7 @@ export const useGameStore = create<GameState>((set, get) => {
       get().addLog(data.log || "Đạo hữu đã rút lui an toàn.");
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Rút lui thất bại: ${err.message}`);
     } finally {
       set({ actionLoading: false });
@@ -2959,6 +3026,7 @@ export const useGameStore = create<GameState>((set, get) => {
       get().addLog(data.log || "Đạo hữu đã bỏ chạy an toàn.");
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Bỏ chạy thất bại: ${err.message}`);
     } finally {
       set({ actionLoading: false });
@@ -3044,6 +3112,7 @@ export const useGameStore = create<GameState>((set, get) => {
       set({ marketplaceListings: Array.isArray(data) ? data : [] });
     } catch (err) {
       console.error("market listings failed", err);
+      get().addToast("Lỗi tải thị trường.", "error");
     }
   },
 
@@ -3076,6 +3145,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Đăng bán thất bại: ${err.message}`);
       return false;
     } finally { set({ actionLoading: false }); }
@@ -3094,7 +3164,7 @@ export const useGameStore = create<GameState>((set, get) => {
       await get().initializeSession();
       await get().fetchMarketplaceListings();
       return true;
-    } catch (err: any) { set({ error: err.message }); get().addLog(`Đặt giá thất bại: ${err.message}`); return false; } finally { set({ actionLoading: false }); }
+    } catch (err: any) { set({ error: err.message }); get().addLog(`Đặt giá thất bại: ${err.message}`); get().addToast(err.message || "Đặt giá thất bại.", "error"); return false; } finally { set({ actionLoading: false }); }
   },
 
   cancelMarketplaceListing: async (listingId) => {
@@ -3110,7 +3180,7 @@ export const useGameStore = create<GameState>((set, get) => {
       await get().initializeSession();
       await get().fetchMarketplaceListings();
       return true;
-    } catch (err: any) { set({ error: err.message }); get().addLog(`Hủy listing thất bại: ${err.message}`); return false; } finally { set({ actionLoading: false }); }
+    } catch (err: any) { set({ error: err.message }); get().addLog(`Hủy listing thất bại: ${err.message}`); get().addToast(err.message || "Hủy listing thất bại.", "error"); return false; } finally { set({ actionLoading: false }); }
   },
 
   buyMarketplaceListing: async (listingId, quantity) => {
@@ -3132,6 +3202,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Mua hàng thất bại: ${err.message}`);
       return false;
     } finally { set({ actionLoading: false }); }
@@ -3148,6 +3219,7 @@ export const useGameStore = create<GameState>((set, get) => {
       set({ activeTrade: data.trade });
     } catch (err) {
       console.error("Failed to fetch active trade", err);
+      get().addToast("Lỗi tải giao dịch.", "error");
     }
   },
 
@@ -3329,6 +3401,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Mua hàng thất bại: ${err.message}`);
       return false;
     } finally {
@@ -3355,6 +3428,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Bán hàng thất bại: ${err.message}`);
       return false;
     } finally { set({ actionLoading: false }); }
@@ -3378,6 +3452,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Vứt Cổ thất bại: ${err.message}`);
       return false;
     } finally { set({ actionLoading: false }); }
@@ -3400,6 +3475,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Vứt Cổ hàng loạt thất bại: ${err.message}`);
       return false;
     } finally { set({ actionLoading: false }); }
@@ -3475,6 +3551,7 @@ export const useGameStore = create<GameState>((set, get) => {
       get().addLog(data.message || "Cập nhật trạng thái Cổ trùng thành công!");
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Lỗi cập nhật trạng thái: ${err.message}`);
     } finally {
       set({ actionLoading: false });
@@ -3721,6 +3798,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return data;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Di chuyển thất bại: ${err.message}`);
       return null;
     } finally {
@@ -3751,6 +3829,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return data;
     } catch (err: any) {
       console.error("Grid fetch failed:", err.message);
+      get().addToast("Lỗi tải bản đồ.", "error");
       return null;
     }
   },
@@ -3772,6 +3851,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Lỗi tạo party: ${err.message}`);
       return false;
     } finally { set({ actionLoading: false }); }
@@ -3787,6 +3867,7 @@ export const useGameStore = create<GameState>((set, get) => {
       set({ party: data.party });
     } catch (err) {
       console.error("fetch party status failed", err);
+      get().addToast("Lỗi tải trạng thái đội.", "error");
     }
   },
 
@@ -3808,6 +3889,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Mời tổ đội thất bại: ${err.message}`);
       return false;
     } finally { set({ actionLoading: false }); }
@@ -3830,6 +3912,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Rời tổ đội thất bại: ${err.message}`);
       return false;
     } finally { set({ actionLoading: false }); }
@@ -3848,6 +3931,7 @@ export const useGameStore = create<GameState>((set, get) => {
       });
     } catch (err) {
       console.error("fetch arena leaderboard failed", err);
+      get().addToast("Lỗi tải bảng xếp hạng.", "error");
     }
   },
 
@@ -3862,6 +3946,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err) {
       console.error("fetch arena shop failed", err);
+      get().addToast("Lỗi tải cửa hàng đấu trường.", "error");
     }
   },
 
@@ -3915,6 +4000,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Khiêu chiến võ đài lỗi: ${err.message}`);
       return false;
     } finally { set({ actionLoading: false }); }
@@ -3936,6 +4022,7 @@ export const useGameStore = create<GameState>((set, get) => {
       });
     } catch (err) {
       console.error("fetch leaderboard failed", err);
+      get().addToast("Lỗi tải bảng xếp hạng.", "error");
     } finally {
       set({ leaderboardLoading: false });
     }
@@ -3952,6 +4039,7 @@ export const useGameStore = create<GameState>((set, get) => {
       get().addLog(data.show_on_leaderboard ? "Đã tham gia bảng xếp hạng" : "Đã rút khỏi bảng xếp hạng");
     } catch (err) {
       console.error("toggle leaderboard visibility failed", err);
+      get().addToast("Lỗi thay đổi hiển thị.", "error");
     }
   },
 
@@ -3965,6 +4053,7 @@ export const useGameStore = create<GameState>((set, get) => {
       set({ leaderboardShowOnLeaderboard: data.show_on_leaderboard });
     } catch (err) {
       console.error("fetch leaderboard settings failed", err);
+      get().addToast("Lỗi tải cài đặt bảng xếp hạng.", "error");
     }
   },
 
@@ -3986,6 +4075,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Truyền tin lỗi: ${err.message}`);
       return false;
     } finally { set({ actionLoading: false }); }
@@ -4001,6 +4091,7 @@ export const useGameStore = create<GameState>((set, get) => {
       set({ inbox: Array.isArray(data.inbox) ? data.inbox : [] });
     } catch (err) {
       console.error("fetch inbox failed", err);
+      get().addToast("Lỗi tải hộp thư.", "error");
     }
   },
 
@@ -4022,6 +4113,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Lỗi gửi tin nhắn: ${err.message}`);
       return false;
     } finally { set({ actionLoading: false }); }
@@ -4037,6 +4129,7 @@ export const useGameStore = create<GameState>((set, get) => {
       set({ baoHoangMessages: Array.isArray(data.messages) ? data.messages : [] });
     } catch (err) {
       console.error("fetch chat messages failed", err);
+      get().addToast("Lỗi tải tin nhắn.", "error");
     }
   },
 
@@ -4052,6 +4145,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err) {
       console.error("fetch mine slots failed", err);
+      get().addToast("Lỗi tải mỏ.", "error");
     }
   },
 
@@ -4171,6 +4265,7 @@ export const useGameStore = create<GameState>((set, get) => {
       set({ aperture: data });
     } catch (err) {
       console.error("Failed to fetch aperture:", err);
+      get().addToast("Lỗi tải tiên thể.", "error");
       set({ aperture: null });
     }
   },
@@ -4190,6 +4285,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err) {
       console.error("Failed to fetch Dao Marks:", err);
+      get().addToast("Lỗi tải dấu đạo.", "error");
     }
   },
 
@@ -4208,6 +4304,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err) {
       console.error("Failed to fetch aperture nodes:", err);
+      get().addToast("Lỗi tải tiên thể.", "error");
     }
   },
 
@@ -4351,6 +4448,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err) {
       console.error("Failed to fetch variant humans:", err);
+      get().addToast("Lỗi tải tiên thể.", "error");
     }
   },
 
@@ -4462,6 +4560,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err) {
       console.error("Failed to fetch active tribulation:", err);
+      get().addToast("Lỗi tải thiên kiếp.", "error");
     }
   },
 
@@ -4592,6 +4691,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err) {
       console.error("Failed to fetch active instance:", err);
+      get().addToast("Lỗi tải phó bản.", "error");
     }
   },
 
@@ -4670,6 +4770,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err) {
       console.error("Failed to fetch sects:", err);
+      get().addToast("Lỗi tải danh sách tông môn.", "error");
     }
   },
 
@@ -4753,6 +4854,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err) {
       console.error("Failed to fetch my sect status:", err);
+      get().addToast("Lỗi tải thông tin tông môn.", "error");
     }
   },
 
@@ -4891,6 +4993,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err) {
       console.error("Failed to fetch sect missions:", err);
+      get().addToast("Lỗi tải nhiệm vụ tông môn.", "error");
     }
   },
 
@@ -4977,6 +5080,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err) {
       console.error("Failed to fetch sect members:", err);
+      get().addToast("Lỗi tải thành viên tông môn.", "error");
     }
   },
 
@@ -5143,6 +5247,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err) {
       console.error("Failed to fetch join requests:", err);
+      get().addToast("Lỗi tải yêu cầu gia nhập.", "error");
     }
   },
 
@@ -5182,6 +5287,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err) {
       console.error("Failed to fetch promotion requests:", err);
+      get().addToast("Lỗi tải yêu cầu thăng chức.", "error");
     }
   },
 
@@ -5228,6 +5334,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err) {
       console.error("Failed to fetch feedbacks:", err);
+      get().addToast("Lỗi tải phản hồi.", "error");
     }
   },
 
@@ -5346,6 +5453,7 @@ export const useGameStore = create<GameState>((set, get) => {
       return true;
     } catch (err: any) {
       set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
     }
   },
