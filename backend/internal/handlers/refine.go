@@ -331,17 +331,17 @@ func RefineGu(c *gin.Context) {
 	var newGuInstance models.GuInstance
 	var statusMsg string
 	var statusStr string
+	var isUniqueImmortalFail bool
 
-	if success {
-		// Tiên cổ duy nhất check
-		spec, ok := models.GetGu(recipe.TargetGuID, recipe.TargetRank)
-		if ok && spec.Rank >= 6 {
-			exists, _ := db.CheckImmortalGuExists(tx, recipe.TargetGuID, recipe.TargetRank, req.SelectedGuInstanceIDs)
-			if exists {
-				success = false
-				statusStr = "failed"
-				statusMsg = "Tiên cổ là duy nhất, đã tồn tại trong thiên hạ, luyện chế thất bại!"
-			}
+	// Tiên cổ duy nhất check
+	spec, ok := models.GetGu(recipe.TargetGuID, recipe.TargetRank)
+	if ok && spec.Rank >= 6 {
+		exists, _ := db.CheckImmortalGuExists(tx, recipe.TargetGuID, recipe.TargetRank, req.SelectedGuInstanceIDs)
+		if exists {
+			success = false
+			statusStr = "failed"
+			statusMsg = "Tiên cổ là duy nhất, đã tồn tại trong thiên hạ, luyện chế thất bại!"
+			isUniqueImmortalFail = true
 		}
 	}
 
@@ -390,7 +390,6 @@ func RefineGu(c *gin.Context) {
 
 	} else {
 		statusStr = "failed"
-		isUniqueImmortalFail := statusMsg != ""
 		if !isUniqueImmortalFail {
 			statusMsg = "Hợp luyện thất bại! Các nguyên liệu thường đã hóa thành tro bụi."
 		}
