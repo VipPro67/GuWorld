@@ -279,16 +279,6 @@ export const LobbyView: React.FC = () => {
       locked: false,
     },
     {
-      id: "dungeon",
-      label: "Phó Bản",
-      icon: Compass,
-      gradient: "from-purple-500 to-indigo-600",
-      glow: "group-hover:shadow-[0_0_25px_rgba(139,92,246,0.45)]",
-      borderColor: "border-purple-400/30",
-      iconColor: "text-purple-400",
-      locked: false,
-    },
-    {
       id: "beasts",
       label: "Thần Thú",
       icon: Lock,
