@@ -510,24 +510,9 @@ func ResolveTribulation(c *gin.Context) {
 	didBreakthrough := false
 	breakthroughMsg := ""
 
-	// Helper: increment counters for the type, recalc next_year, check breakthrough
+	// Helper: recalc next_year, check breakthrough
 	handleSuccess := func(tribType string) {
-		// Increment the specific tribulation counter
-		switch tribType {
-		case "EARTH_CALAMITY":
-			ap.EarthCalamityCount++
-		case "HEAVENLY_TRIBULATION":
-			ap.HeavenlyTribulationCount++
-		case "GRAND_TRIBULATION":
-			ap.GrandTribulationCount++
-		case "MYRIAD_TRIBULATION":
-			ap.MyriadTribulationCount++
-		case "CHAOS_CALAMITY":
-			ap.ChaosCalamityCount++
-		}
-
 		ap.State = "STABLE"
-		ap.TribulationCount++
 		ap.ApertureHP = ap.MaxApertureHP
 
 		// Recalculate next tribulation year based on rank & counters
@@ -657,19 +642,7 @@ func ResolveTribulation(c *gin.Context) {
 				`, playerID, breakthroughMsg)
 			}
 		} else {
-			// Failed Tribulation — still increment counters so time moves on
-			switch ev.TribulationType {
-			case "EARTH_CALAMITY":
-				ap.EarthCalamityCount++
-			case "HEAVENLY_TRIBULATION":
-				ap.HeavenlyTribulationCount++
-			case "GRAND_TRIBULATION":
-				ap.GrandTribulationCount++
-			case "MYRIAD_TRIBULATION":
-				ap.MyriadTribulationCount++
-			case "CHAOS_CALAMITY":
-				ap.ChaosCalamityCount++
-			}
+			// Failed Tribulation — counters are already incremented on spawn
 			ap.State = "DAMAGED"
 
 			var playerRank int
@@ -1378,19 +1351,7 @@ func autoResolveEvent(eventID string, playerID string) {
 		return
 	}
 
-	// On failure, still increment counter so time moves on
-	switch ev.TribulationType {
-	case "EARTH_CALAMITY":
-		ap.EarthCalamityCount++
-	case "HEAVENLY_TRIBULATION":
-		ap.HeavenlyTribulationCount++
-	case "GRAND_TRIBULATION":
-		ap.GrandTribulationCount++
-	case "MYRIAD_TRIBULATION":
-		ap.MyriadTribulationCount++
-	case "CHAOS_CALAMITY":
-		ap.ChaosCalamityCount++
-	}
+	// On failure, counters are already incremented on spawn
 
 	var playerRank int
 	_ = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, playerID).Scan(&playerRank)
