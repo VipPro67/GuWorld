@@ -485,8 +485,8 @@ func PlaceBid(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Phiên đấu giá đã kết thúc"})
 		return
 	}
-	if currency != "primeval" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đấu giá chỉ dùng Nguyên Thạch"})
+	if currency != "primeval" && currency != "immortal" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại tiền tệ không hợp lệ"})
 		return
 	}
 	if req.Amount <= current {
@@ -497,20 +497,46 @@ func PlaceBid(c *gin.Context) {
 	if bidder.Valid && bidder.String == player.ID.String() {
 		neededAmount = req.Amount - current
 	}
-	if float64(player.PrimevalStones) < neededAmount {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch"})
-		return
+
+	// Check balance and deduct based on currency type
+	currencyName := "Nguyên Thạch"
+	if currency == "immortal" {
+		currencyName = "Tiên Nguyên Thạch"
 	}
-	player.PrimevalStones -= int(neededAmount)
+
+	if currency == "primeval" {
+		if float64(player.PrimevalStones) < neededAmount {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ " + currencyName})
+			return
+		}
+		player.PrimevalStones -= int(neededAmount)
+	} else {
+		if player.ImmortalStones < neededAmount {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ " + currencyName})
+			return
+		}
+		player.ImmortalStones -= neededAmount
+	}
+
+	// Refund previous bidder if different person
 	if bidder.Valid && bidder.String != player.ID.String() {
-		_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id=$2`, int(current), bidder.String)
+		if currency == "primeval" {
+			_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id=$2`, int(current), bidder.String)
+		} else {
+			_, err = tx.Exec(`UPDATE players SET immortal_stones = immortal_stones + $1 WHERE id=$2`, current, bidder.String)
+		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tiền cho người đặt giá trước"})
 			return
 		}
 	}
 	AddHumanQi(&player, 3.0)
-	_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, human_qi=$2 WHERE id=$3`, player.PrimevalStones, player.HumanQi, player.ID)
+
+	if currency == "primeval" {
+		_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, human_qi=$2 WHERE id=$3`, player.PrimevalStones, player.HumanQi, player.ID)
+	} else {
+		_, err = tx.Exec(`UPDATE players SET immortal_stones=$1, human_qi=$2 WHERE id=$3`, player.ImmortalStones, player.HumanQi, player.ID)
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "update failed"})
 		return
@@ -527,14 +553,14 @@ func PlaceBid(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.bid", EntityType: "auction",
 		EntityID:       req.ListingID,
-		RequestSummary: fmt.Sprintf("giá=%.0f | hiện tại=%.0f", req.Amount, current),
+		RequestSummary: fmt.Sprintf("giá=%.0f | hiện tại=%.0f | %s", req.Amount, current, currency),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	if sellerID != authID {
 		auditlog.Log(db.DB, auditlog.Entry{
 			PlayerID: &sellerID, Action: "marketplace.bid_notify", EntityType: "auction",
 			EntityID:       req.ListingID,
-			RequestSummary: fmt.Sprintf("người mua=%s | giá=%.0f", authID, req.Amount),
+			RequestSummary: fmt.Sprintf("người mua=%s | giá=%.0f | %s", authID, req.Amount, currency),
 			IPAddress:      c.ClientIP(), Success: true,
 		})
 	}

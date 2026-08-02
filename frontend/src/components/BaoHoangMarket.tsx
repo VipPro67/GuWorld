@@ -37,6 +37,7 @@ interface Listing {
   listing_type: "MARKET" | "AUCTION" | "TRADE";
   target_buyer_id?: string;
   target_buyer_username?: string;
+  created_at?: string;
 }
 
 interface Props {
@@ -97,6 +98,30 @@ export function BaoHoangMarket({
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "Gu" | "Material" | "Recipe">("all");
+
+  // Sell tab search inputs
+  const [guTypeSearch, setGuTypeSearch] = useState("");
+  const [materialSearch, setMaterialSearch] = useState("");
+  const [recipeSearch, setRecipeSearch] = useState("");
+
+  // Custom End Time state
+  const [customEndMode, setCustomEndMode] = useState<boolean>(false);
+  const [customEndTime, setCustomEndTime] = useState<string>("");
+  const [minCustomTime, setMinCustomTime] = useState<string>("");
+
+  // Advanced filters for listings
+  const [sortBy, setSortBy] = useState<"newest" | "price_asc" | "price_desc" | "expiry_asc">("newest");
+  const [filterRank, setFilterRank] = useState<number | "all">("all");
+  const [showOnlyMine, setShowOnlyMine] = useState<boolean>(false);
+
+  // Helper function to remove Vietnamese diacritics
+  const removeAccents = (str: string): string => {
+    return str
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/g, "d")
+      .replace(/Đ/g, "D");
+  };
   
   const [bidAmounts, setBidAmounts] = useState<Record<string, number>>({});
   const [activePurchaseListing, setActivePurchaseListing] = useState<Listing | null>(null);
@@ -197,7 +222,7 @@ export function BaoHoangMarket({
       return;
     }
     if (durationHours < 1) {
-      setMessage({ type: "error", text: "Thời gian đăng bán phải từ 24 giờ (1 Ngày)." });
+      setMessage({ type: "error", text: "Thời gian đăng bán phải tối thiểu là 1 giờ." });
       return;
     }
 
@@ -300,7 +325,8 @@ export function BaoHoangMarket({
       setMessage({ type: "success", text: "Mua hàng thành công! Linh vật đã được gửi vào túi đồ." });
       return;
     }
-    setMessage({ type: "error", text: "Giao dịch thất bại. Hãy thử lại." });
+    const storeError = useGameStore.getState().error;
+    setMessage({ type: "error", text: `Giao dịch thất bại: ${storeError || "Hãy thử lại."}` });
   };
 
   const handleBid = async (
@@ -308,21 +334,25 @@ export function BaoHoangMarket({
     amount: number,
     currentPrice: number,
     displayName: string,
-    skipConfirm = false
+    skipConfirm = false,
+    currency: string = "primeval"
   ) => {
     if (actionLoading) return;
+
+    const currencyName = currency === "immortal" ? "Tiên Nguyên Thạch" : "Nguyên Thạch";
+    const balance = currency === "immortal" ? player.immortal_stones : player.primeval_stones;
 
     if (amount <= currentPrice) {
       setMessage({ type: "error", text: "Giá đặt phải cao hơn giá hiện tại của phiên đấu giá." });
       return;
     }
-    if (player.primeval_stones < amount) {
-      setMessage({ type: "error", text: "Đạo hữu không đủ Nguyên Thạch để đặt giá này." });
+    if (balance < amount) {
+      setMessage({ type: "error", text: `Đạo hữu không đủ ${currencyName} để đặt giá này.` });
       return;
     }
 
     if (!skipConfirm) {
-      const confirmMsg = `Đạo hữu có chắc chắn muốn đặt giá thầu ${amount} Nguyên Thạch cho "${displayName}" không?`;
+      const confirmMsg = `Đạo hữu có chắc chắn muốn đặt giá thầu ${amount} ${currencyName} cho "${displayName}" không?`;
       if (!await useGameStore.getState().showConfirm(confirmMsg)) {
         return;
       }
@@ -334,7 +364,8 @@ export function BaoHoangMarket({
       setMessage({ type: "success", text: "Đặt giá đấu thầu thành công." });
       return;
     }
-    setMessage({ type: "error", text: "Đặt giá thất bại. Có thể đã có người thầu giá cao hơn." });
+    const storeError = useGameStore.getState().error;
+    setMessage({ type: "error", text: `Đặt giá thất bại: ${storeError || "Có thể đã có người thầu giá cao hơn."}` });
   };
 
   const handleCancel = async (listingId: string) => {
@@ -346,22 +377,52 @@ export function BaoHoangMarket({
       setMessage({ type: "success", text: "Đã hủy đăng bán và hoàn trả linh vật vào hành lý." });
       return;
     }
-    setMessage({ type: "error", text: "Không thể hủy phiên giao dịch lúc này." });
+    const storeError = useGameStore.getState().error;
+    setMessage({ type: "error", text: `Không thể hủy phiên giao dịch: ${storeError || "Vui lòng thử lại lúc khác."}` });
   };
 
-  // Filter listings
-  const filteredListings = listings.filter((l) => {
-    if (tab === "market" && l.listing_type !== "MARKET") return false;
-    if (tab === "auction" && l.listing_type !== "AUCTION") return false;
-    
-    if (filterType !== "all" && l.item_type !== filterType) return false;
-    
-    if (searchQuery) {
-      const name = getDisplayName(l).toLowerCase();
-      if (!name.includes(searchQuery.toLowerCase())) return false;
-    }
-    return true;
-  });
+  // Filter and sort listings
+  const filteredListings = listings
+    .filter((l) => {
+      if (tab === "market" && l.listing_type !== "MARKET") return false;
+      if (tab === "auction" && l.listing_type !== "AUCTION") return false;
+      
+      if (filterType !== "all" && l.item_type !== filterType) return false;
+      
+      // Filter by "Only Mine"
+      if (showOnlyMine && l.seller_id !== player.id) return false;
+
+      // Filter by Rank (only for Gu)
+      if (filterRank !== "all") {
+        if (l.item_type !== "Gu") return false;
+        let rank = 0;
+        if (Array.isArray(l.item_data) && l.item_data.length > 0) {
+          rank = (l.item_data[0] as any)?.rank || 0;
+        }
+        if (rank !== filterRank) return false;
+      }
+      
+      // Filter by searchQuery (without diacritics)
+      if (searchQuery) {
+        const nameNormalized = removeAccents(getDisplayName(l).toLowerCase());
+        const queryNormalized = removeAccents(searchQuery.toLowerCase());
+        if (!nameNormalized.includes(queryNormalized)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "price_asc") {
+        return a.current_price - b.current_price;
+      }
+      if (sortBy === "price_desc") {
+        return b.current_price - a.current_price;
+      }
+      if (sortBy === "expiry_asc") {
+        return new Date(a.end_time).getTime() - new Date(b.end_time).getTime();
+      }
+      // "newest"
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    });
 
   if (!Array.isArray(guInventory) || !materials || typeof materials !== 'object') {
     return (
@@ -452,39 +513,86 @@ export function BaoHoangMarket({
         </div>
 
         {tab !== "sell" && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={onRefresh}
-              disabled={actionLoading}
-              className="bg-zinc-950/80 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-100 p-2 rounded-xl text-zinc-400 transition-all cursor-pointer shrink-0"
-              title="Làm mới"
-            >
-              <RefreshCw className={`w-4 h-4 ${actionLoading ? "animate-spin" : ""}`} />
-            </button>
-            
-            {/* Search Input */}
-            <div className="relative flex-1 min-w-[140px]">
-              <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Tìm tên bảo vật..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-zinc-950/80 border border-zinc-850 hover:border-zinc-700 focus:border-amber-500/30 text-xs text-zinc-200 pl-9 pr-4 py-2 rounded-xl focus:outline-none focus:ring-0 transition-all placeholder:text-zinc-600 font-serif"
-              />
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2 flex-wrap w-full">
+              <button
+                type="button"
+                onClick={onRefresh}
+                disabled={actionLoading}
+                className="bg-zinc-950/80 border border-zinc-800 hover:border-zinc-700 hover:text-zinc-100 p-2.5 rounded-xl text-zinc-400 transition-all cursor-pointer shrink-0"
+                title="Làm mới"
+              >
+                <RefreshCw className={`w-4 h-4 ${actionLoading ? "animate-spin" : ""}`} />
+              </button>
+              
+              {/* Search Input */}
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Tìm tên bảo vật (hỗ trợ không dấu)..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-zinc-950/80 border border-zinc-850 hover:border-zinc-700 focus:border-amber-500/30 text-xs text-zinc-200 pl-9 pr-4 py-2.5 rounded-xl focus:outline-none focus:ring-0 transition-all placeholder:text-zinc-600 font-serif"
+                />
+              </div>
+
+              {/* Type Filter */}
+              <select
+                value={filterType}
+                onChange={(e) => {
+                  setFilterType(e.target.value as any);
+                  if (e.target.value !== "Gu") setFilterRank("all");
+                }}
+                className="bg-zinc-950/80 border border-zinc-850 hover:border-zinc-700 text-xs text-zinc-400 px-3 py-2.5 rounded-xl focus:outline-none focus:ring-0 font-serif shrink-0 cursor-pointer"
+              >
+                <option value="all">Tất cả loại</option>
+                <option value="Gu">Cổ Trùng</option>
+                <option value="Material">Vật Phẩm</option>
+                <option value="Recipe">Bí Phương</option>
+              </select>
+
+              {/* Sort By Filter */}
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="bg-zinc-950/80 border border-zinc-850 hover:border-zinc-700 text-xs text-zinc-400 px-3 py-2.5 rounded-xl focus:outline-none focus:ring-0 font-serif shrink-0 cursor-pointer"
+              >
+                <option value="newest">Mới đăng</option>
+                <option value="price_asc">Giá: Thấp → Cao</option>
+                <option value="price_desc">Giá: Cao → Thấp</option>
+                <option value="expiry_asc">Thời hạn: Ngắn nhất</option>
+              </select>
             </div>
 
-            {/* Type Filter */}
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value as any)}
-              className="bg-zinc-950/80 border border-zinc-850 hover:border-zinc-700 text-xs text-zinc-400 px-3 py-2 rounded-xl focus:outline-none focus:ring-0 font-serif shrink-0"
-            >
-              <option value="all">Tất cả loại</option>
-              <option value="Gu">Cổ Trùng</option>
-              <option value="Material">Vật Phẩm</option>
-              <option value="Recipe">Bí Phương</option>
-            </select>
+            {/* Advanced Sub-filters */}
+            <div className="flex items-center gap-4 flex-wrap bg-zinc-950/40 px-4 py-2.5 rounded-xl border border-zinc-900 text-xs text-zinc-400">
+              {filterType === "Gu" && (
+                <div className="flex items-center gap-2">
+                  <span className="font-serif">Lọc theo Rank Cổ:</span>
+                  <select
+                    value={filterRank}
+                    onChange={(e) => setFilterRank(e.target.value === "all" ? "all" : Number(e.target.value))}
+                    className="bg-zinc-950 border border-zinc-850 rounded-lg text-[11px] px-2.5 py-1 focus:outline-none focus:ring-0 font-mono text-zinc-300 cursor-pointer"
+                  >
+                    <option value="all">Tất cả Rank</option>
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((r) => (
+                      <option key={r} value={r}>Rank {r}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <label className="flex items-center gap-2 cursor-pointer select-none font-serif hover:text-zinc-300 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={showOnlyMine}
+                  onChange={(e) => setShowOnlyMine(e.target.checked)}
+                  className="rounded border-zinc-800 bg-zinc-950 text-amber-500 focus:ring-0 focus:ring-offset-0 cursor-pointer w-3.5 h-3.5"
+                />
+                <span>Chỉ hiển thị giao dịch của ta</span>
+              </label>
+            </div>
           </div>
         )}
       </div>
@@ -564,43 +672,87 @@ export function BaoHoangMarket({
               </label>
 
               {itemType === "Gu" && (
-                <div className="space-y-2 block sm:col-span-2">
-                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Chọn Cổ trùng đăng bán</span>
+                <div className="space-y-3 block sm:col-span-2 border border-zinc-900/60 p-4 rounded-xl bg-zinc-950/20">
+                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block font-serif text-amber-300/90">Chọn Cổ trùng đăng bán</span>
                   
-                  {/* Select Gu Type */}
-                  <select
-                    value={selectedGuType}
-                    onChange={(e) => {
-                      setSelectedGuType(e.target.value);
-                      setSelectedGus([]);
-                    }}
-                    className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-serif"
-                  >
-                    <option value="">-- Chọn loại Cổ trùng cần bán --</option>
-                    {(() => {
-                      const tradeable = guInventory.filter((g) => !g.is_vital && g.status !== "DEAD");
-                      const typesMap: Record<string, number> = {};
-                      tradeable.forEach((g) => {
-                        typesMap[g.gu_id] = (typesMap[g.gu_id] || 0) + 1;
-                      });
-                      return Object.entries(typesMap).map(([guId, count]) => {
-                        const name = guDictionary[guId]?.name || guId;
-                        const rank = guDictionary[guId]?.rank || 1;
-                        return (
-                          <option key={guId} value={guId}>
-                            {name} [Rank {rank}] ({count} con khả dụng)
-                          </option>
-                        );
-                      });
-                    })()}
-                  </select>
+                  {/* Ô tìm kiếm loài Cổ trùng */}
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Nhập tên loài Cổ trùng cần tìm..."
+                      value={guTypeSearch}
+                      onChange={(e) => setGuTypeSearch(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 text-xs text-zinc-300 pl-9 pr-4 py-2.5 rounded-xl focus:outline-none placeholder:text-zinc-600 font-serif"
+                    />
+                  </div>
+
+                  {/* Grid các loài Cổ trùng tìm thấy */}
+                  <div className="space-y-1">
+                    <span className="text-[9px] text-zinc-500 block italic font-serif">Danh sách loài Cổ khả dụng trong rương (click chọn):</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                      {(() => {
+                        const tradeable = guInventory.filter((g) => !g.is_vital && g.status !== "DEAD");
+                        const typesMap: Record<string, { count: number; name: string; rank: number }> = {};
+                        tradeable.forEach((g) => {
+                          if (!typesMap[g.gu_id]) {
+                            const name = guDictionary[g.gu_id]?.name || g.gu_id;
+                            const rank = guDictionary[g.gu_id]?.rank || g.rank || 1;
+                            typesMap[g.gu_id] = { count: 0, name, rank };
+                          }
+                          typesMap[g.gu_id].count++;
+                        });
+
+                        const filteredTypes = Object.entries(typesMap).filter(([guId, info]) => {
+                          if (!guTypeSearch) return true;
+                          const normName = removeAccents(info.name.toLowerCase());
+                          const normId = removeAccents(guId.toLowerCase());
+                          const normSearch = removeAccents(guTypeSearch.toLowerCase());
+                          return normName.includes(normSearch) || normId.includes(normSearch);
+                        });
+
+                        if (filteredTypes.length === 0) {
+                          return (
+                            <div className="col-span-full py-4 text-center text-xs text-zinc-650 font-serif italic">
+                              Không tìm thấy loài Cổ trùng phù hợp.
+                            </div>
+                          );
+                        }
+
+                        return filteredTypes.map(([guId, info]) => {
+                          const isSelected = selectedGuType === guId;
+                          return (
+                            <button
+                              key={guId}
+                              type="button"
+                              onClick={() => {
+                                setSelectedGuType(guId);
+                                setSelectedGus([]);
+                              }}
+                              className={`p-2.5 rounded-xl border text-left text-xs transition-all flex flex-col gap-1 cursor-pointer select-none ${
+                                isSelected
+                                  ? "bg-amber-500/10 border-amber-500/40 text-amber-400"
+                                  : "bg-zinc-950/60 border-zinc-900 hover:border-zinc-800 text-zinc-400"
+                              }`}
+                            >
+                              <div className="font-bold font-serif truncate">{info.name}</div>
+                              <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500">
+                                <span>Rank {info.rank}</span>
+                                <span>Số lượng: {info.count} con</span>
+                              </div>
+                            </button>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
 
                   {/* If a Gu Type is selected, show the instances list with checkboxes */}
                   {selectedGuType && (
-                    <div className="border border-zinc-900 rounded-xl p-3 bg-zinc-950/40 space-y-2">
+                    <div className="border border-zinc-900 rounded-xl p-3 bg-zinc-950/40 space-y-2 mt-2">
                       <div className="flex justify-between items-center pb-2 border-b border-zinc-900/60">
                         <span className="text-[10px] text-zinc-400 font-mono">
-                          Đã chọn {selectedGus.length} con
+                          Đã chọn {selectedGus.length} con Cổ trùng thuộc loài này
                         </span>
                         <div className="flex gap-2">
                           <button
@@ -615,7 +767,7 @@ export function BaoHoangMarket({
                           >
                             Chọn tất cả
                           </button>
-                          <span className="text-zinc-755 font-mono">|</span>
+                          <span className="text-zinc-700 font-mono">|</span>
                           <button
                             type="button"
                             onClick={() => setSelectedGus([])}
@@ -660,8 +812,8 @@ export function BaoHoangMarket({
                                 </div>
                                 <div className="flex items-center gap-2 text-[10px]">
                                   <span className="text-zinc-500">{hungerText}</span>
-                                  <span className="text-zinc-650">•</span>
-                                  <span className={g.equipped ? "text-emerald-500 font-bold" : g.status === "SLEEPING" ? "text-amber-500/80" : g.status === "SEALED" ? "text-cyan-400" : "text-zinc-405"}>
+                                  <span className="text-zinc-700">•</span>
+                                  <span className={g.equipped ? "text-emerald-500 font-bold" : g.status === "SLEEPING" ? "text-amber-500/80" : g.status === "SEALED" ? "text-cyan-400" : "text-zinc-500"}>
                                     {statusText}
                                   </span>
                                 </div>
@@ -675,83 +827,238 @@ export function BaoHoangMarket({
               )}
 
               {itemType === "Recipe" && (
-                <label className="space-y-2 block">
-                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Chọn Bí Phương cần bán</span>
-                  <select
-                    value={selectedRecipe}
-                    onChange={(e) => setSelectedRecipe(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-serif"
-                  >
-                    <option value="">-- Chọn công thức ({player.unlocked_recipes?.length || 0} khả dụng) --</option>
-                    {player.unlocked_recipes?.map((ur) => (
-                      <option key={ur.recipe_id} value={ur.recipe_id}>
-                        {getRecipeDisplayName(ur.recipe_id)} ({ur.completion_rate}%)
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="space-y-3 block sm:col-span-2 border border-zinc-900/60 p-4 rounded-xl bg-zinc-950/20">
+                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block font-serif text-violet-300/90">Chọn Bí Phương cần bán</span>
+                  
+                  {/* Ô tìm kiếm bí phương */}
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Nhập tên bí phương/công thức cần tìm..."
+                      value={recipeSearch}
+                      onChange={(e) => setRecipeSearch(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 text-xs text-zinc-300 pl-9 pr-4 py-2.5 rounded-xl focus:outline-none placeholder:text-zinc-600 font-serif"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="text-[9px] text-zinc-500 block italic font-serif">Danh sách công thức đã mở (click chọn):</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                      {(() => {
+                        const recipes = player.unlocked_recipes || [];
+                        const filteredRecipes = recipes.filter((ur) => {
+                          const name = getRecipeDisplayName(ur.recipe_id);
+                          if (!recipeSearch) return true;
+                          
+                          const normName = removeAccents(name.toLowerCase());
+                          const normId = removeAccents(ur.recipe_id.toLowerCase());
+                          const normSearch = removeAccents(recipeSearch.toLowerCase());
+                          return normName.includes(normSearch) || normId.includes(normSearch);
+                        });
+
+                        if (filteredRecipes.length === 0) {
+                          return (
+                            <div className="col-span-full py-4 text-center text-xs text-zinc-650 font-serif italic">
+                              Không tìm thấy công thức phù hợp đã mở khóa.
+                            </div>
+                          );
+                        }
+
+                        return filteredRecipes.map((ur) => {
+                          const isSelected = selectedRecipe === ur.recipe_id;
+                          return (
+                            <button
+                              key={ur.recipe_id}
+                              type="button"
+                              onClick={() => setSelectedRecipe(ur.recipe_id)}
+                              className={`p-2.5 rounded-xl border text-left text-xs transition-all flex flex-col gap-1 cursor-pointer select-none ${
+                                isSelected
+                                  ? "bg-violet-500/10 border-violet-500/40 text-violet-400 font-bold"
+                                  : "bg-zinc-950/60 border-zinc-900 hover:border-zinc-800 text-zinc-400"
+                              }`}
+                            >
+                              <div className="font-serif truncate">{getRecipeDisplayName(ur.recipe_id)}</div>
+                              <div className="text-[10px] font-mono text-zinc-500">
+                                Tiến độ: {ur.completion_rate}%
+                              </div>
+                            </button>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                </div>
               )}
 
               {itemType === "Material" && (
-                <label className="space-y-2 block">
-                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Chọn Vật phẩm</span>
-                  <select
-                    value={selectedMaterial}
-                    onChange={(e) => setSelectedMaterial(e.target.value)}
-                    className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-serif"
-                  >
-                    <option value="">-- Chọn vật phẩm ({materialKeys.length} khả dụng) --</option>
-                    {materialKeys.map((k) => (
-                      <option key={k} value={k}>
-                        {itemDictionary[k]?.name || k} (Đang có x{materials[k]})
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="space-y-3 block sm:col-span-2 border border-zinc-900/60 p-4 rounded-xl bg-zinc-950/20">
+                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block font-serif text-emerald-300/90">Chọn Vật phẩm cần bán</span>
+                  
+                  {/* Ô tìm kiếm vật phẩm */}
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Nhập tên vật phẩm/nguyên liệu cần tìm..."
+                      value={materialSearch}
+                      onChange={(e) => setMaterialSearch(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 text-xs text-zinc-300 pl-9 pr-4 py-2.5 rounded-xl focus:outline-none placeholder:text-zinc-600 font-serif"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="text-[9px] text-zinc-500 block italic font-serif">Danh sách vật phẩm khả dụng (click chọn):</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                      {(() => {
+                        const filteredMaterials = materialKeys.filter((k) => {
+                          const qty = materials[k] || 0;
+                          if (qty <= 0) return false;
+                          
+                          const name = itemDictionary[k]?.name || k;
+                          if (!materialSearch) return true;
+                          
+                          const normName = removeAccents(name.toLowerCase());
+                          const normKey = removeAccents(k.toLowerCase());
+                          const normSearch = removeAccents(materialSearch.toLowerCase());
+                          return normName.includes(normSearch) || normKey.includes(normSearch);
+                        });
+
+                        if (filteredMaterials.length === 0) {
+                          return (
+                            <div className="col-span-full py-4 text-center text-xs text-zinc-650 font-serif italic">
+                              Không tìm thấy vật phẩm phù hợp trong rương.
+                            </div>
+                          );
+                        }
+
+                        return filteredMaterials.map((k) => {
+                          const isSelected = selectedMaterial === k;
+                          const name = itemDictionary[k]?.name || k;
+                          const qty = materials[k];
+                          return (
+                            <button
+                              key={k}
+                              type="button"
+                              onClick={() => {
+                                setSelectedMaterial(k);
+                                if (quantity > qty) setQuantity(qty);
+                              }}
+                              className={`p-2.5 rounded-xl border text-left text-xs transition-all flex flex-col gap-1 cursor-pointer select-none ${
+                                isSelected
+                                  ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold"
+                                  : "bg-zinc-950/60 border-zinc-900 hover:border-zinc-800 text-zinc-400"
+                              }`}
+                            >
+                              <div className="font-serif truncate">{name}</div>
+                              <div className="text-[10px] font-mono text-zinc-500">
+                                Đang có: x{qty}
+                              </div>
+                            </button>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
-            {/* Step 3: Quantity & Price */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <label className="space-y-2">
-                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Số lượng</span>
-                <input
-                  type="number"
-                  min={1}
-                  disabled={itemType !== "Material"}
-                  value={quantity}
-                  onChange={(e) => setQuantity(Number(e.target.value))}
-                  className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-mono disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-              </label>
+            {/* Step 3: Quantity, Price & Duration */}
+            <div className="space-y-3 block sm:col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <label className="space-y-2">
+                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Số lượng</span>
+                  <input
+                    type="number"
+                    min={1}
+                    disabled={itemType !== "Material"}
+                    value={quantity}
+                    onChange={(e) => setQuantity(Number(e.target.value))}
+                    className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                </label>
 
-              <label className="space-y-2">
-                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">
-                  {listingType === "MARKET" ? "Đơn giá bán" : "Giá khởi điểm"}
-                </span>
-                <input
-                  type="number"
-                  min={1}
-                  value={price}
-                  onChange={(e) => setPrice(Number(e.target.value))}
-                  className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-mono"
-                  placeholder="100"
-                />
-              </label>
+                <label className="space-y-2">
+                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">
+                    {listingType === "MARKET" ? "Đơn giá bán" : "Giá khởi điểm"}
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={price}
+                    onChange={(e) => setPrice(Number(e.target.value))}
+                    className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-mono"
+                    placeholder="100"
+                  />
+                </label>
 
-              <label className="space-y-2">
-                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Thời hạn thầu</span>
-                <select
-                  value={durationHours}
-                  onChange={(e) => setDurationHours(Number(e.target.value))}
-                  className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-serif"
-                >
-                  <option value={24}>1 Ngày (24 Giờ)</option>
-                  <option value={72}>3 Ngày (72 Giờ)</option>
-                  <option value={168}>7 Ngày (168 Giờ)</option>
-                  <option value={720}>30 Ngày (720 Giờ)</option>
-                </select>
-              </label>
+                <label className="space-y-2">
+                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Thời hạn thầu</span>
+                  <select
+                    value={customEndMode ? "custom" : durationHours}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "custom") {
+                        setCustomEndMode(true);
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        const formatted = tomorrow.toISOString().substring(0, 16);
+                        
+                        // Khởi tạo minCustomTime là 1 giờ sau thời điểm hiện tại
+                        const minTime = new Date(Date.now() + 3600000);
+                        const formattedMin = minTime.toISOString().substring(0, 16);
+                        
+                        setMinCustomTime(formattedMin);
+                        setCustomEndTime(formatted);
+                        setDurationHours(24);
+                      } else {
+                        setCustomEndMode(false);
+                        setDurationHours(Number(val));
+                      }
+                    }}
+                    className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-serif cursor-pointer"
+                  >
+                    <option value={24}>1 Ngày (24 Giờ)</option>
+                    <option value={72}>3 Ngày (72 Giờ)</option>
+                    <option value={168}>7 Ngày (168 Giờ)</option>
+                    <option value={720}>30 Ngày (720 Giờ)</option>
+                    <option value="custom">Tùy chọn mốc thời gian...</option>
+                  </select>
+                </label>
+              </div>
+
+              {/* Input datetime-local for custom end time */}
+              {customEndMode && (
+                <div className="p-3 bg-zinc-950/60 border border-zinc-900 rounded-xl space-y-2 animate-in slide-in-from-top-2 duration-200">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <label className="flex-1 space-y-1">
+                      <span className="text-[9px] text-zinc-500 block uppercase tracking-wider font-bold">Mốc kết thúc trong tương lai:</span>
+                      <input
+                        type="datetime-local"
+                        value={customEndTime}
+                        min={minCustomTime}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustomEndTime(val);
+                          if (val) {
+                            const diffMs = new Date(val).getTime() - Date.now();
+                            const hours = Math.ceil(diffMs / 3600000);
+                            setDurationHours(Math.max(1, hours));
+                          }
+                        }}
+                        className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-850 rounded-lg p-2 text-xs text-zinc-350 focus:outline-none font-mono cursor-pointer"
+                      />
+                    </label>
+                    <div className="flex flex-col justify-end text-[10px] text-zinc-500 font-serif leading-relaxed px-1 shrink-0">
+                      <div>Đơn hàng sẽ kết thúc sau:</div>
+                      <div className="text-amber-400 font-bold font-mono text-[11px]">
+                        {durationHours} giờ (~ {Math.floor(durationHours / 24)} ngày {durationHours % 24} giờ)
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Currency Option */}
@@ -1257,7 +1564,8 @@ export function BaoHoangMarket({
                   bidAmount,
                   listing.current_price,
                   getDisplayName(listing),
-                  true
+                  true,
+                  listing.currency
                 );
               }}
               className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 font-serif font-bold text-xs tracking-wider transition-all text-zinc-950 shadow-lg cursor-pointer active:scale-[0.98]"
