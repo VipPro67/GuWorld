@@ -923,10 +923,20 @@ func Simulate(state *CombatState) []CombatLog {
 
 			// Fallback: basic attack if no valid action
 			if !hasExecutedAny {
+				daoMult := 1.0
+				if actor.DaoMarks != nil {
+					if amt, ok := actor.DaoMarks["strength"]; ok && amt > 0 {
+						if amt <= 10000 {
+							daoMult = 1.0 + float64(amt)/100.0
+						} else {
+							daoMult = 1.0 + 100.0 + float64(amt-10000)/500.0
+						}
+					}
+				}
 				fallbackAction := &SimAction{
 					ActionType: "BASIC_ATTACK",
 					Name:       "Đánh thường",
-					Damage:     float64(actor.BaseDmg),
+					Damage:     float64(actor.BaseDmg) * daoMult,
 					ManaCost:   0,
 					TargetType: "SINGLE",
 				}
@@ -938,6 +948,12 @@ func Simulate(state *CombatState) []CombatLog {
 						netDmg = 1
 					}
 					applied := applyDamageToTarget(actor, target, netDmg, &turnLogs, turn, false)
+					detailMsg := fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %d HP)", actor.Name, fallbackAction.Name, target.Name, applied, target.HP)
+					if daoMult > 1.0 {
+						baseDmgVal := float64(actor.BaseDmg)
+						daoDmgVal := baseDmgVal * (daoMult - 1.0)
+						detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f + %.0f sát thương do Đạo Ngân (còn %d HP)", actor.Name, fallbackAction.Name, target.Name, baseDmgVal, daoDmgVal, target.HP)
+					}
 					turnLogs = append(turnLogs, CombatLog{
 						Turn:      turn,
 						ActorId:   actor.ID,
@@ -945,7 +961,7 @@ func Simulate(state *CombatState) []CombatLog {
 						Action:    "BASIC_ATTACK",
 						TargetId:  target.ID,
 						Damage:    int(applied),
-						Detail:    fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %d HP)", actor.Name, fallbackAction.Name, target.Name, applied, target.HP),
+						Detail:    detailMsg,
 					})
 				}
 			}

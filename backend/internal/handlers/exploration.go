@@ -199,9 +199,15 @@ func GetGrid(c *gin.Context) {
 		visionRadius = 1
 	}
 
+	// Cap the visual vision radius to 2 (corresponding to a 5x5 grid) to prevent UI breakage
+	visualVisionRadius := visionRadius
+	if visualVisionRadius > 2 {
+		visualVisionRadius = 2
+	}
+
 	cells := []models.Cell{}
-	for dx := -visionRadius; dx <= visionRadius; dx++ {
-		for dy := -visionRadius; dy <= visionRadius; dy++ {
+	for dx := -visualVisionRadius; dx <= visualVisionRadius; dx++ {
+		for dy := -visualVisionRadius; dy <= visualVisionRadius; dy++ {
 			cx := player.X + dx
 			cy := player.Y + dy
 			if cx >= 0 && cx < 100 && cy >= 0 && cy < 100 {
@@ -233,7 +239,7 @@ func GetGrid(c *gin.Context) {
 		  AND (current_region IN ('qing_mao_mountain', 'gu_luan_slope', 'three_kings_inheritance') OR last_mana_update >= NOW() - INTERVAL '15 minutes')
 		  AND x >= $3 AND x <= $4
 		  AND y >= $5 AND y <= $6
-	`, player.CurrentRegion, player.ID, player.X-visionRadius, player.X+visionRadius, player.Y-visionRadius, player.Y+visionRadius)
+	`, player.CurrentRegion, player.ID, player.X-visualVisionRadius, player.X+visualVisionRadius, player.Y-visualVisionRadius, player.Y+visualVisionRadius)
 	if errQuery == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -251,7 +257,7 @@ func GetGrid(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"x":              player.X,
 		"y":              player.Y,
-		"vision_radius":  visionRadius,
+		"vision_radius":  visualVisionRadius,
 		"cells":          cells,
 		"explored_cells": player.ExploredCells,
 		"stats":          stats,

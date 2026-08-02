@@ -503,12 +503,32 @@ func CombatAttack(c *gin.Context) {
 						targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, "SINGLE", prefX, prefY, false)
 						if len(targetsIdx) > 0 {
 							targetEnemy := &player.ActiveCombat.Enemies[targetsIdx[0]]
-							netDmg := 5.0 - targetEnemy.BaseDefense
+							daoMult := 1.0
+							if refCaster.DaoMarks != nil {
+								if amt, ok := refCaster.DaoMarks["strength"]; ok && amt > 0 {
+									if amt <= 10000 {
+										daoMult = 1.0 + float64(amt)/100.0
+									} else {
+										daoMult = 1.0 + 100.0 + float64(amt-10000)/500.0
+									}
+								}
+							}
+							dmgVal := refCaster.BaseAttack
+							if dmgVal <= 0 {
+								dmgVal = 5.0
+							}
+							fullDmg := dmgVal * daoMult
+							netDmg := fullDmg - targetEnemy.BaseDefense
 							if netDmg < 1.0 {
 								netDmg = 1.0
 							}
 							dmgLog := applyDamageWithLogs(refCaster.Name, targetEnemy.Name, targetEnemy, netDmg)
-							logs = append(logs, fmt.Sprintf("-> %s đánh thường (Basic Attack)!", refCaster.Name), dmgLog)
+							if daoMult > 1.0 {
+								dmgDao := fullDmg - dmgVal
+								logs = append(logs, fmt.Sprintf("-> %s đánh thường (Basic Attack) [Gốc: %.1f, Đạo Ngân: +%.1f]!", refCaster.Name, dmgVal, dmgDao), dmgLog)
+							} else {
+								logs = append(logs, fmt.Sprintf("-> %s đánh thường (Basic Attack)!", refCaster.Name), dmgLog)
+							}
 						}
 					}
 				}

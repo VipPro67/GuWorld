@@ -1850,10 +1850,31 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 			if spec.Effects.Passive != nil {
 				passive := spec.Effects.Passive
 				mult := getPathMasteryMultiplier(player, spec.Path)
-				stats["attack"] += passive.StatBaseAttack * mult
-				stats["defense"] += passive.StatBaseDefense * mult
-				stats["speed"] += passive.StatBaseSpeed * mult
-				stats["hp"] += passive.StatBaseHP * mult
+
+				daoMult := 1.0
+				if player.DaoMarks != nil {
+					maxDaoMult := 1.0
+					for _, path := range spec.Path {
+						cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
+						if amt, ok := player.DaoMarks[cleanPath]; ok && amt > 0 {
+							var pm float64
+							if amt <= 10000 {
+								pm = 1.0 + float64(amt)/100.0
+							} else {
+								pm = 1.0 + 100.0 + float64(amt-10000)/500.0
+							}
+							if pm > maxDaoMult {
+								maxDaoMult = pm
+							}
+						}
+					}
+					daoMult = maxDaoMult
+				}
+
+				stats["attack"] += passive.StatBaseAttack * mult * daoMult
+				stats["defense"] += passive.StatBaseDefense * mult * daoMult
+				stats["speed"] += passive.StatBaseSpeed * mult * daoMult
+				stats["hp"] += passive.StatBaseHP * mult * daoMult
 				if player.BaseHP > 0 {
 					missingHpRate := 1.0 - player.HP/player.BaseHP
 					stats["damage_multiplier"] += missingHpRate * passive.DamageMultiplierOnHit

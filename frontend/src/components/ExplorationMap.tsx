@@ -331,16 +331,47 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
   }
 
   // 100x100 Coordinates Viewport Grid rendering
-  const visionRadius = gridData?.vision_radius || 1;
+  // Cap the UI vision radius to 2 (corresponding to a 5x5 grid) to prevent UI breakage
+  const visionRadius = Math.min(gridData?.vision_radius || 1, 2);
   const cols = 2 * visionRadius + 1;
 
-  // Sort cells top-to-bottom (Y), left-to-right (X)
-  const sortedCells = gridData
-    ? [...gridData.cells].sort((a, b) => {
-        if (a.y !== b.y) return a.y - b.y;
-        return a.x - b.x;
-      })
-    : [];
+  // Generate a complete 2D array grid centered on the player (size cols x cols)
+  // to ensure perfect alignment even at map boundaries (where out-of-bounds cells are returned as empty placeholder cells).
+  interface GridCellItem {
+    x: number;
+    y: number;
+    isOutOfBounds: boolean;
+    cellData: {
+      x: number;
+      y: number;
+      cell_type: string;
+      content: string;
+    };
+  }
+
+  const gridCells: GridCellItem[] = [];
+  if (gridData) {
+    for (let dy = -visionRadius; dy <= visionRadius; dy++) {
+      for (let dx = -visionRadius; dx <= visionRadius; dx++) {
+        const cx = player.x + dx;
+        const cy = player.y + dy;
+        const outOfBounds = cx < 0 || cx >= 100 || cy < 0 || cy >= 100;
+        
+        const existingCell = gridData.cells.find((c: { x: number; y: number; cell_type: string; content: string }) => c.x === cx && c.y === cy);
+        gridCells.push({
+          x: cx,
+          y: cy,
+          isOutOfBounds: outOfBounds,
+          cellData: existingCell || {
+            x: cx,
+            y: cy,
+            cell_type: "Empty",
+            content: "",
+          },
+        });
+      }
+    }
+  }
 
   const movementRange = gridData?.stats?.movement || 1;
 
@@ -393,56 +424,66 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                   gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
                 }}
               >
-                {sortedCells.map((cell) => {
-                  const isPlayerCell = cell.x === player.x && cell.y === player.y;
+                {gridCells.map(({ x, y, isOutOfBounds, cellData }) => {
+                  const isPlayerCell = x === player.x && y === player.y;
 
-                  const dx = Math.abs(cell.x - player.x);
-                  const dy = Math.abs(cell.y - player.y);
+                  const dx = Math.abs(x - player.x);
+                  const dy = Math.abs(y - player.y);
                   const distance = Math.max(dx, dy);
 
-                  const isMovable = distance > 0 && distance <= movementRange;
-                  const hasEntity = cell.cell_type !== "Empty";
+                  const isMovable = !isOutOfBounds && distance > 0 && distance <= movementRange;
+                  const hasEntity = cellData.cell_type !== "Empty";
 
                   // Other players on this cell
-                  const otherPlayersOnCell = gridData?.players_on_map?.filter(
-                    (p: any) => p.x === cell.x && p.y === cell.y
-                  ) || [];
+                  const otherPlayersOnCell = isOutOfBounds
+                    ? []
+                    : gridData?.players_on_map?.filter(
+                        (p: { x: number; y: number; id: string; username: string; avatar_url: string }) => p.x === x && p.y === y
+                      ) || [];
 
                   return (
                     <div
-                      key={`${cell.x},${cell.y}`}
-                      onClick={() => isMovable && handleGridCellClick(cell.x, cell.y)}
+                      key={`${x},${y}`}
+                      onClick={() => isMovable && handleGridCellClick(x, y)}
                       className={`aspect-square rounded-xl border flex flex-col justify-center items-center relative transition-all duration-300 ${
                         isPlayerCell
                           ? "bg-emerald-500/10 border-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.2)] animate-pulse"
                           : isMovable
                           ? "bg-zinc-950/30 border-zinc-800 hover:bg-emerald-950/20 hover:border-emerald-500/30 cursor-pointer"
+                          : isOutOfBounds
+                          ? "bg-zinc-950/80 border-transparent opacity-20 cursor-not-allowed"
                           : "bg-zinc-950/50 border-zinc-950 opacity-40 cursor-not-allowed"
                       }`}
-                      title={`Tọa độ: (${cell.x}, ${cell.y}) ${
-                        isPlayerCell ? "[Vị trí của bạn]" : ""
-                      }${
-                        cell.cell_type !== "Empty"
-                          ? ` | ${
-                              cell.cell_type === "Monster" || cell.cell_type === "Boss"
-                                ? "Quái vật"
-                                : cell.cell_type === "Resource"
-                                ? "Linh tài"
-                                : cell.cell_type === "WildGu"
-                                ? "Cổ trùng hoang dã"
-                                : cell.cell_type
-                            }: ${getEntityName(cell.cell_type, cell.content)}`
-                          : ""
-                      }${
-                        otherPlayersOnCell.length > 0
-                          ? ` | Cổ sư: ${otherPlayersOnCell.map((p: any) => p.username).join(", ")}`
-                          : ""
-                      }`}
+                      title={
+                        isOutOfBounds
+                          ? "Hư vô (Ngoại biên bản đồ)"
+                          : `Tọa độ: (${x}, ${y}) ${
+                              isPlayerCell ? "[Vị trí của bạn]" : ""
+                            }${
+                              cellData.cell_type !== "Empty"
+                                ? ` | ${
+                                    cellData.cell_type === "Monster" || cellData.cell_type === "Boss"
+                                      ? "Quái vật"
+                                      : cellData.cell_type === "Resource"
+                                      ? "Linh tài"
+                                      : cellData.cell_type === "WildGu"
+                                      ? "Cổ trùng hoang dã"
+                                      : cellData.cell_type
+                                  }: ${getEntityName(cellData.cell_type, cellData.content)}`
+                                : ""
+                            }${
+                              otherPlayersOnCell.length > 0
+                                ? ` | Cổ sư: ${otherPlayersOnCell.map((p: { username: string }) => p.username).join(", ")}`
+                                : ""
+                            }`
+                      }
                     >
                       {/* Coordinates indicator overlay */}
-                      <span className="text-[7px] text-zinc-700 font-mono absolute top-1.5">
-                        {cell.x},{cell.y}
-                      </span>
+                      {!isOutOfBounds && (
+                        <span className="text-[7px] text-zinc-700 font-mono absolute top-1.5">
+                          {x},{y}
+                        </span>
+                      )}
 
                       {/* Cell Entity View */}
                       <div className="flex gap-1 relative z-10">
@@ -460,7 +501,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                             onClick={async (e) => {
                               e.stopPropagation();
                               if (await showConfirm(`Đạo hữu muốn khiêu chiến (PVP) với ${otherPlayersOnCell[0].username}?\n\nChọn [OK] để Tấn Công.\nChọn [Hủy] để Trinh Thám.`)) {
-                                movePlayer(cell.x, cell.y, otherPlayersOnCell[0].id);
+                                movePlayer(x, y, otherPlayersOnCell[0].id);
                               } else {
                                 fetchPlayerProfile(otherPlayersOnCell[0].username);
                               }
@@ -475,13 +516,13 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                             )}
                           </div>
                         )}
-                        {!isPlayerCell && otherPlayersOnCell.length === 0 && getCellIcon(cell.cell_type, cell.content)}
+                        {!isPlayerCell && otherPlayersOnCell.length === 0 && !isOutOfBounds && getCellIcon(cellData.cell_type, cellData.content)}
                       </div>
 
                       {/* Tiny text label */}
-                      {hasEntity && !isPlayerCell && otherPlayersOnCell.length === 0 && (
+                      {hasEntity && !isPlayerCell && otherPlayersOnCell.length === 0 && !isOutOfBounds && (
                         <span className="text-[7px] font-mono text-zinc-400 absolute bottom-1 px-1 truncate max-w-full text-center">
-                          {getEntityName(cell.cell_type, cell.content)}
+                          {getEntityName(cellData.cell_type, cellData.content)}
                         </span>
                       )}
                     </div>
