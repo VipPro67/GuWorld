@@ -106,89 +106,99 @@ func SetupRouter() *gin.Engine {
 	// API routes
 	api := r.Group("/api")
 	{
-		// Public Dictionary and Recipes
-		api.GET("/dictionary", handlers.GetDictionary)
-		api.GET("/recipes", handlers.GetRecipes)
+		// Public endpoints — per IP
+		api.GET("/dictionary", middleware.RateLimitByIP(40, time.Minute), handlers.GetDictionary)
+		api.GET("/recipes", middleware.RateLimitByIP(40, time.Minute), handlers.GetRecipes)
 
-		// Public Auth Endpoints
+		// Auth Endpoints — group: 20/min per IP, per-route: 3/min per IP
 		authGroup := api.Group("/auth")
+		authGroup.Use(middleware.RateLimitByGroup("auth", 20, time.Minute))
 		{
-			authGroup.POST("/send-otp", middleware.RateLimit(5, time.Minute), handlers.SendOTP)
-			authGroup.POST("/register", middleware.RateLimit(5, time.Minute), handlers.RegisterPlayer)
-			authGroup.POST("/login", middleware.RateLimit(5, time.Minute), handlers.LoginPlayer)
+			authGroup.POST("/send-otp", middleware.RateLimitByIP(3, time.Minute), handlers.SendOTP)
+			authGroup.POST("/register", middleware.RateLimitByIP(3, time.Minute), handlers.RegisterPlayer)
+			authGroup.POST("/login", middleware.RateLimitByIP(3, time.Minute), handlers.LoginPlayer)
 			authGroup.POST("/logout", handlers.LogoutPlayer)
 			authGroup.GET("/me", middleware.AuthRequired(), handlers.GetCurrentPlayer)
 
 			// Google OAuth2
-			authGroup.GET("/google/login", middleware.RateLimit(5, time.Minute), handlers.GoogleLogin)
-			authGroup.GET("/google/callback", middleware.RateLimit(10, time.Minute), handlers.GoogleCallback)
+			authGroup.GET("/google/login", middleware.RateLimitByIP(3, time.Minute), handlers.GoogleLogin)
+			authGroup.GET("/google/callback", handlers.GoogleCallback)
 		}
 
 		api.GET("/topup/packages", handlers.GetTopupPackages)
 		api.POST("/webhooks/payos", handlers.PayOSWebhook)
-		api.GET("/admin/topup-orders", middleware.AuthRequired(), handlers.AdminListTopupOrders)
-		api.GET("/admin/wallet-transactions", middleware.AuthRequired(), handlers.AdminListWalletTransactions)
-		api.GET("/admin/players/online", middleware.AuthRequired(), handlers.AdminListOnlinePlayers)
-		api.GET("/admin/players", middleware.AuthRequired(), handlers.AdminListPlayers)
-		api.GET("/admin/players/:id", middleware.AuthRequired(), handlers.AdminGetPlayerDetail)
-		api.GET("/admin/players/:id/items", middleware.AuthRequired(), handlers.AdminListPlayerItems)
-		api.GET("/admin/players/:id/gus", middleware.AuthRequired(), handlers.AdminListPlayerGus)
-		api.PUT("/admin/players/:id", middleware.AuthRequired(), handlers.AdminUpdatePlayer)
-		api.GET("/admin/gus/search", middleware.AuthRequired(), handlers.AdminSearchGus)
-		api.POST("/admin/players/:id/items", middleware.AuthRequired(), handlers.AdminAddPlayerItems)
-		api.DELETE("/admin/players/:id/items", middleware.AuthRequired(), handlers.AdminRemovePlayerItems)
-		api.POST("/admin/players/:id/gus", middleware.AuthRequired(), handlers.AdminAddPlayerGus)
-		api.DELETE("/admin/players/:id/gus/:instance_id", middleware.AuthRequired(), handlers.AdminRemovePlayerGu)
-		api.PUT("/admin/players/:id/stones", middleware.AuthRequired(), handlers.AdminChangePlayerStones)
-		api.GET("/admin/sects", middleware.AuthRequired(), handlers.AdminListSects)
-		api.GET("/admin/sects/:id", middleware.AuthRequired(), handlers.AdminGetSectDetail)
-		api.PUT("/admin/sects/:id", middleware.AuthRequired(), handlers.AdminUpdateSect)
-		api.POST("/admin/sects/:id/members/:memberId/leader", middleware.AuthRequired(), handlers.AdminSetSectLeader)
-		api.DELETE("/admin/sects/:id/members/:memberId", middleware.AuthRequired(), handlers.AdminKickSectMember)
-		api.POST("/admin/sects/:id/members", middleware.AuthRequired(), handlers.AdminAddToSect)
-		api.DELETE("/admin/sects/:id", middleware.AuthRequired(), handlers.AdminDeleteSect)
-		api.GET("/admin/sects/:id/missions", middleware.AuthRequired(), handlers.AdminListSectMissions)
-		api.POST("/admin/sects/:id/missions", middleware.AuthRequired(), handlers.AdminCreateSectMission)
-		api.DELETE("/admin/sects/:id/missions/:missionId", middleware.AuthRequired(), handlers.AdminDeleteSectMission)
-		api.POST("/admin/sects/:id/vault/stock", middleware.AuthRequired(), handlers.AdminStockSectVault)
-		api.DELETE("/admin/sects/:id/vault/stock", middleware.AuthRequired(), handlers.AdminRemoveSectVaultItem)
-		api.POST("/admin/data/import", middleware.AuthRequired(), handlers.AdminImportData)
-		api.POST("/admin/data/export", middleware.AuthRequired(), handlers.AdminExportData)
-		api.POST("/admin/clear-cache", middleware.AuthRequired(), handlers.AdminClearCache)
-		api.GET("/admin/audit-logs", middleware.AuthRequired(), handlers.AdminGetAuditLogs)
-		api.GET("/admin/shop", middleware.AuthRequired(), handlers.AdminListShopItems)
-		api.POST("/admin/shop", middleware.AuthRequired(), handlers.AdminCreateShopItem)
-		api.PUT("/admin/shop/:id", middleware.AuthRequired(), handlers.AdminUpdateShopItem)
-		api.DELETE("/admin/shop/:id", middleware.AuthRequired(), handlers.AdminDeleteShopItem)
-		api.GET("/admin/arena-shop", middleware.AuthRequired(), handlers.AdminListArenaShopItems)
-		api.POST("/admin/arena-shop", middleware.AuthRequired(), handlers.AdminCreateArenaShopItem)
-		api.PUT("/admin/arena-shop/:id", middleware.AuthRequired(), handlers.AdminUpdateArenaShopItem)
-		api.DELETE("/admin/arena-shop/:id", middleware.AuthRequired(), handlers.AdminDeleteArenaShopItem)
-		api.GET("/admin/mine-slots", middleware.AuthRequired(), handlers.AdminListMineSlots)
-		api.PUT("/admin/mine-slots/:id", middleware.AuthRequired(), handlers.AdminUpdateMineSlot)
-		api.POST("/admin/mine-slots/:id/reset", middleware.AuthRequired(), handlers.AdminResetMineSlot)
-		api.GET("/admin/gu-dictionary", middleware.AuthRequired(), handlers.AdminListGuItems)
-		api.POST("/admin/gu-dictionary", middleware.AuthRequired(), handlers.AdminCreateGuItem)
-		api.PUT("/admin/gu-dictionary/:id", middleware.AuthRequired(), handlers.AdminUpdateGuItem)
-		api.DELETE("/admin/gu-dictionary/:id", middleware.AuthRequired(), handlers.AdminDeleteGuItem)
-		api.GET("/admin/item-dictionary", middleware.AuthRequired(), handlers.AdminListItemItems)
-		api.POST("/admin/item-dictionary", middleware.AuthRequired(), handlers.AdminCreateItemItem)
-		api.PUT("/admin/item-dictionary/:id", middleware.AuthRequired(), handlers.AdminUpdateItemItem)
-		api.DELETE("/admin/item-dictionary/:id", middleware.AuthRequired(), handlers.AdminDeleteItemItem)
-		api.GET("/admin/recipes", middleware.AuthRequired(), handlers.AdminListRecipes)
-		api.POST("/admin/recipes", middleware.AuthRequired(), handlers.AdminCreateRecipe)
-		api.PUT("/admin/recipes/:id", middleware.AuthRequired(), handlers.AdminUpdateRecipe)
-		api.DELETE("/admin/recipes/:id", middleware.AuthRequired(), handlers.AdminDeleteRecipe)
-		api.POST("/admin/gift-codes", middleware.AuthRequired(), handlers.AdminCreateGiftCode)
-		api.GET("/admin/gift-codes", middleware.AuthRequired(), handlers.AdminListGiftCodes)
-		api.POST("/admin/upload-image", middleware.AuthRequired(), handlers.AdminUploadImage)
+
+		// Admin endpoints — group: 80/min per IP
+		admin := api.Group("/admin")
+		admin.Use(middleware.AuthRequired())
+		admin.Use(middleware.RateLimitByGroup("admin", 80, time.Minute))
+		{
+			admin.GET("/topup-orders", handlers.AdminListTopupOrders)
+			admin.GET("/wallet-transactions", handlers.AdminListWalletTransactions)
+			admin.GET("/players/online", handlers.AdminListOnlinePlayers)
+			admin.GET("/players", handlers.AdminListPlayers)
+			admin.GET("/players/:id", handlers.AdminGetPlayerDetail)
+			admin.GET("/players/:id/items", handlers.AdminListPlayerItems)
+			admin.GET("/players/:id/gus", handlers.AdminListPlayerGus)
+			admin.PUT("/players/:id", handlers.AdminUpdatePlayer)
+			admin.GET("/gus/search", handlers.AdminSearchGus)
+			admin.POST("/players/:id/items", handlers.AdminAddPlayerItems)
+			admin.DELETE("/players/:id/items", handlers.AdminRemovePlayerItems)
+			admin.POST("/players/:id/gus", handlers.AdminAddPlayerGus)
+			admin.DELETE("/players/:id/gus/:instance_id", handlers.AdminRemovePlayerGu)
+			admin.PUT("/players/:id/stones", handlers.AdminChangePlayerStones)
+			admin.GET("/sects", handlers.AdminListSects)
+			admin.GET("/sects/:id", handlers.AdminGetSectDetail)
+			admin.PUT("/sects/:id", handlers.AdminUpdateSect)
+			admin.POST("/sects/:id/members/:memberId/leader", handlers.AdminSetSectLeader)
+			admin.DELETE("/sects/:id/members/:memberId", handlers.AdminKickSectMember)
+			admin.POST("/sects/:id/members", handlers.AdminAddToSect)
+			admin.DELETE("/sects/:id", handlers.AdminDeleteSect)
+			admin.GET("/sects/:id/missions", handlers.AdminListSectMissions)
+			admin.POST("/sects/:id/missions", handlers.AdminCreateSectMission)
+			admin.DELETE("/sects/:id/missions/:missionId", handlers.AdminDeleteSectMission)
+			admin.POST("/sects/:id/vault/stock", handlers.AdminStockSectVault)
+			admin.DELETE("/sects/:id/vault/stock", handlers.AdminRemoveSectVaultItem)
+			admin.POST("/data/import", handlers.AdminImportData)
+			admin.POST("/data/export", handlers.AdminExportData)
+			admin.POST("/clear-cache", handlers.AdminClearCache)
+			admin.GET("/audit-logs", handlers.AdminGetAuditLogs)
+			admin.GET("/shop", handlers.AdminListShopItems)
+			admin.POST("/shop", handlers.AdminCreateShopItem)
+			admin.PUT("/shop/:id", handlers.AdminUpdateShopItem)
+			admin.DELETE("/shop/:id", handlers.AdminDeleteShopItem)
+			admin.GET("/arena-shop", handlers.AdminListArenaShopItems)
+			admin.POST("/arena-shop", handlers.AdminCreateArenaShopItem)
+			admin.PUT("/arena-shop/:id", handlers.AdminUpdateArenaShopItem)
+			admin.DELETE("/arena-shop/:id", handlers.AdminDeleteArenaShopItem)
+			admin.GET("/mine-slots", handlers.AdminListMineSlots)
+			admin.PUT("/mine-slots/:id", handlers.AdminUpdateMineSlot)
+			admin.POST("/mine-slots/:id/reset", handlers.AdminResetMineSlot)
+			admin.GET("/gu-dictionary", handlers.AdminListGuItems)
+			admin.POST("/gu-dictionary", handlers.AdminCreateGuItem)
+			admin.PUT("/gu-dictionary/:id", handlers.AdminUpdateGuItem)
+			admin.DELETE("/gu-dictionary/:id", handlers.AdminDeleteGuItem)
+			admin.GET("/item-dictionary", handlers.AdminListItemItems)
+			admin.POST("/item-dictionary", handlers.AdminCreateItemItem)
+			admin.PUT("/item-dictionary/:id", handlers.AdminUpdateItemItem)
+			admin.DELETE("/item-dictionary/:id", handlers.AdminDeleteItemItem)
+			admin.GET("/recipes", handlers.AdminListRecipes)
+			admin.POST("/recipes", handlers.AdminCreateRecipe)
+			admin.PUT("/recipes/:id", handlers.AdminUpdateRecipe)
+			admin.DELETE("/recipes/:id", handlers.AdminDeleteRecipe)
+			admin.POST("/gift-codes", handlers.AdminCreateGiftCode)
+			admin.GET("/gift-codes", handlers.AdminListGiftCodes)
+			admin.POST("/upload-image", handlers.AdminUploadImage)
+		}
 		api.GET("/wallet", middleware.AuthRequired(), handlers.GetWallet)
-		api.POST("/topup/orders", middleware.AuthRequired(), middleware.RateLimit(10, time.Minute), handlers.CreateTopupOrder)
+		api.POST("/topup/orders", middleware.AuthRequired(), middleware.RateLimitByPlayer(10, time.Minute), handlers.CreateTopupOrder)
 		api.GET("/topup/orders/:orderCode", middleware.AuthRequired(), handlers.GetTopupOrder)
 
-		// Protected Cultivation Endpoints
+		// Player endpoints — group: 60/min, per player: 30/min
 		player := api.Group("/player")
 		player.Use(middleware.AuthRequired())
+		player.Use(middleware.RateLimitByGroup("player", 60, time.Minute))
+		player.Use(middleware.RateLimitByPlayer(30, time.Minute))
 		{
 			player.GET("/events", handlers.StreamPlayerEvents)
 			player.GET("/status/:id", handlers.GetPlayerStatus)
@@ -213,8 +223,11 @@ func SetupRouter() *gin.Engine {
 			player.GET("/audit-logs", handlers.GetMyAuditLogs)
 		}
 
+		// Mine — group: 40/min, per player: 25/min
 		mine := api.Group("/mine")
 		mine.Use(middleware.AuthRequired())
+		mine.Use(middleware.RateLimitByGroup("mine", 40, time.Minute))
+		mine.Use(middleware.RateLimitByPlayer(25, time.Minute))
 		{
 			mine.GET("/slots", handlers.GetMineSlots)
 			mine.POST("/occupy", handlers.OccupyMineSlot)
@@ -223,8 +236,11 @@ func SetupRouter() *gin.Engine {
 			mine.POST("/attack", handlers.AttackMineSlot)
 		}
 
+		// Cultivate — group: 30/min, per player: 20/min
 		cultivate := api.Group("/cultivate")
 		cultivate.Use(middleware.AuthRequired())
+		cultivate.Use(middleware.RateLimitByGroup("cultivate", 30, time.Minute))
+		cultivate.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			cultivate.POST("/break-wall", handlers.BreakWall)
 			cultivate.POST("/use-relic-gu", handlers.UseRelicGu)
@@ -232,32 +248,43 @@ func SetupRouter() *gin.Engine {
 			cultivate.POST("/tribulation", handlers.Tribulation)
 		}
 
+		// Quest — group: 40/min, per player: 25/min
 		quest := api.Group("/quest")
 		quest.Use(middleware.AuthRequired())
+		quest.Use(middleware.RateLimitByGroup("quest", 40, time.Minute))
+		quest.Use(middleware.RateLimitByPlayer(25, time.Minute))
 		{
 			quest.GET("", handlers.ListQuests)
 			quest.POST("/complete", handlers.CompleteQuest)
 		}
 
+		// Gacha — group: 50/min, per player: 15/min
 		gacha := api.Group("/gacha")
 		gacha.Use(middleware.AuthRequired())
+		gacha.Use(middleware.RateLimitByGroup("gacha", 50, time.Minute))
+		gacha.Use(middleware.RateLimitByPlayer(15, time.Minute))
 		{
 			gacha.GET("/pools", handlers.GetGachaPools)
 			gacha.POST("/open", handlers.OpenGacha)
 			gacha.POST("/open10", handlers.OpenGacha10)
 		}
 
+		// Achievement — group: 30/min, per player: 20/min
 		achievement := api.Group("/achievements")
 		achievement.Use(middleware.AuthRequired())
+		achievement.Use(middleware.RateLimitByGroup("achievement", 30, time.Minute))
+		achievement.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			achievement.GET("", handlers.GetAchievements)
 			achievement.POST("/claim", handlers.ClaimAchievement)
 			achievement.POST("/select", handlers.SelectTitleFrame)
 		}
 
-		// Protected Inventory Endpoints
+		// Party — group: 30/min, per player: 20/min
 		party := api.Group("/party")
 		party.Use(middleware.AuthRequired())
+		party.Use(middleware.RateLimitByGroup("party", 30, time.Minute))
+		party.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			party.POST("/create", handlers.CreateParty)
 			party.GET("/status", handlers.GetPartyStatus)
@@ -265,8 +292,11 @@ func SetupRouter() *gin.Engine {
 			party.POST("/leave", handlers.LeaveParty)
 		}
 
+		// Inventory — group: 30/min, per player: 20/min
 		inventory := api.Group("/inventory")
 		inventory.Use(middleware.AuthRequired())
+		inventory.Use(middleware.RateLimitByGroup("inventory", 30, time.Minute))
+		inventory.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			inventory.POST("/feed", handlers.FeedGu)
 			inventory.POST("/feed-group", handlers.FeedGroup)
@@ -279,17 +309,21 @@ func SetupRouter() *gin.Engine {
 			inventory.POST("/drop-batch", handlers.DropGus)
 		}
 
-		// Protected Refining Endpoints
+		// Refining — group: 30/min, per player: 20/min
 		refining := api.Group("/refine")
 		refining.Use(middleware.AuthRequired())
+		refining.Use(middleware.RateLimitByGroup("refining", 30, time.Minute))
+		refining.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			refining.POST("", handlers.RefineGu)
 			refining.POST("/deduce", handlers.DeduceRecipe)
 		}
 
-		// Protected Killer Move Endpoints
+		// Killer Moves — group: 30/min, per player: 20/min
 		killerMoves := api.Group("/killer-moves")
 		killerMoves.Use(middleware.AuthRequired())
+		killerMoves.Use(middleware.RateLimitByGroup("killer-moves", 30, time.Minute))
+		killerMoves.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			killerMoves.POST("/calculate", handlers.CalculateKillerMove)
 			killerMoves.POST("", handlers.CreateKillerMove)
@@ -298,9 +332,11 @@ func SetupRouter() *gin.Engine {
 			killerMoves.DELETE("/:id", handlers.DeleteKillerMove)
 		}
 
-		// Protected Combat & Explore Node Endpoints
+		// Combat — group: 60/min, per player: 30/min
 		combat := api.Group("/combat")
 		combat.Use(middleware.AuthRequired())
+		combat.Use(middleware.RateLimitByGroup("combat", 60, time.Minute))
+		combat.Use(middleware.RateLimitByPlayer(30, time.Minute))
 		{
 			combat.POST("/start", handlers.AutoCombatStart)
 			combat.POST("/attack", handlers.CombatAttack)
@@ -309,9 +345,11 @@ func SetupRouter() *gin.Engine {
 			combat.GET("/history/:id", handlers.GetCombatHistory)
 		}
 
-		// Protected Immortal Aperture Endpoints
+		// Immortal Aperture — group: 30/min, per player: 20/min
 		aperture := api.Group("/immortal-aperture")
 		aperture.Use(middleware.AuthRequired())
+		aperture.Use(middleware.RateLimitByGroup("aperture", 30, time.Minute))
+		aperture.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			aperture.GET("", handlers.GetImmortalAperture)
 			aperture.GET("/nodes", handlers.GetApertureNodes)
@@ -325,25 +363,31 @@ func SetupRouter() *gin.Engine {
 			aperture.GET("/variant-humans", handlers.GetApertureVariantHumans)
 		}
 
-		// Protected Dao Marks Endpoints
+		// Dao Marks — group: 20/min, per player: 15/min
 		daoMarks := api.Group("/dao-marks")
 		daoMarks.Use(middleware.AuthRequired())
+		daoMarks.Use(middleware.RateLimitByGroup("dao-marks", 20, time.Minute))
+		daoMarks.Use(middleware.RateLimitByPlayer(15, time.Minute))
 		{
 			daoMarks.GET("", handlers.GetDaoMarks)
 		}
 
-		// Protected Tribulation Endpoints
+		// Tribulations — group: 30/min, per player: 20/min
 		tribulations := api.Group("/tribulations")
 		tribulations.Use(middleware.AuthRequired())
+		tribulations.Use(middleware.RateLimitByGroup("tribulations", 30, time.Minute))
+		tribulations.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			tribulations.GET("/active", handlers.GetActiveTribulation)
 			tribulations.POST("/:eventId/attack", handlers.AttackTribulationEnemy)
 			tribulations.POST("/:eventId/resolve", handlers.ResolveTribulation)
 		}
 
-		// Arena Endpoints
+		// Arena — group: 40/min, per player: 25/min
 		arena := api.Group("/arena")
 		arena.Use(middleware.AuthRequired())
+		arena.Use(middleware.RateLimitByGroup("arena", 40, time.Minute))
+		arena.Use(middleware.RateLimitByPlayer(25, time.Minute))
 		{
 			arena.GET("/leaderboard", handlers.GetArenaLeaderboard)
 			arena.POST("/challenge", handlers.ChallengeArena)
@@ -351,18 +395,22 @@ func SetupRouter() *gin.Engine {
 			arena.POST("/shop/buy", handlers.BuyArenaShopItem)
 		}
 
-		// Leaderboard Endpoints
+		// Leaderboard — group: 30/min, per player: 20/min
 		leaderboard := api.Group("/leaderboard")
 		leaderboard.Use(middleware.AuthRequired())
+		leaderboard.Use(middleware.RateLimitByGroup("leaderboard", 30, time.Minute))
+		leaderboard.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			leaderboard.GET("/:category", handlers.GetLeaderboard)
 			leaderboard.POST("/toggle", handlers.ToggleLeaderboardVisibility)
 			leaderboard.GET("/settings", handlers.GetLeaderboardSettings)
 		}
 
-		// Chat / Mail Endpoints
+		// Chat — group: 150/min, per player: 30/min
 		chat := api.Group("/chat")
 		chat.Use(middleware.AuthRequired())
+		chat.Use(middleware.RateLimitByGroup("chat", 150, time.Minute))
+		chat.Use(middleware.RateLimitByPlayer(30, time.Minute))
 		{
 			chat.POST("/mail/send", handlers.SendPrivateMail)
 			chat.GET("/mail/inbox", handlers.GetInbox)
@@ -371,20 +419,23 @@ func SetupRouter() *gin.Engine {
 			chat.GET("/bao-hoang/events", handlers.SubscribeBaoHoangMessages)
 		}
 
-		api.POST("/explore", middleware.AuthRequired(), handlers.ExploreNode)
-		api.POST("/explore/retreat/:id", middleware.AuthRequired(), handlers.Retreat)
-		api.POST("/explore/flee/:id", middleware.AuthRequired(), handlers.Flee)
+		// Explore — per player: 25/min
+		api.POST("/explore", middleware.AuthRequired(), middleware.RateLimitByPlayer(25, time.Minute), handlers.ExploreNode)
+		api.POST("/explore/retreat/:id", middleware.AuthRequired(), middleware.RateLimitByPlayer(25, time.Minute), handlers.Retreat)
+		api.POST("/explore/flee/:id", middleware.AuthRequired(), middleware.RateLimitByPlayer(25, time.Minute), handlers.Flee)
 		api.GET("/explore/grid", middleware.AuthRequired(), handlers.GetGrid)
 		api.GET("/explore/regions", middleware.AuthRequired(), handlers.GetRegions)
-		api.POST("/explore/move", middleware.AuthRequired(), handlers.MovePlayer)
+		api.POST("/explore/move", middleware.AuthRequired(), middleware.RateLimitByPlayer(25, time.Minute), handlers.MovePlayer)
 
-		// Shop Endpoints
+		// Shop — group: 30/min, per player: 10/min
 		api.GET("/shop/packages", middleware.AuthRequired(), handlers.GetPremiumShopPackages)
 		api.GET("/shop/list", handlers.GetShopList)
 		shop := api.Group("/shop")
 		shop.Use(middleware.AuthRequired())
+		shop.Use(middleware.RateLimitByGroup("shop", 30, time.Minute))
+		shop.Use(middleware.RateLimitByPlayer(10, time.Minute))
 		{
-			shop.POST("/buy-package", middleware.RateLimit(20, time.Minute), handlers.BuyPremiumPackage)
+			shop.POST("/buy-package", handlers.BuyPremiumPackage)
 			shop.POST("/buy", handlers.BuyShopItem)
 			shop.POST("/sell", handlers.SellShopItem)
 			shop.GET("/bao-hoang/listings", handlers.ListListings)
@@ -395,9 +446,11 @@ func SetupRouter() *gin.Engine {
 			shop.POST("/bao-hoang/settle", handlers.SettleExpiredAuctions)
 		}
 
-		// Direct P2P Trade Endpoints
+		// Trade — group: 25/min, per player: 8/min
 		trade := api.Group("/trade")
 		trade.Use(middleware.AuthRequired())
+		trade.Use(middleware.RateLimitByGroup("trade", 25, time.Minute))
+		trade.Use(middleware.RateLimitByPlayer(8, time.Minute))
 		{
 			trade.POST("/initiate", handlers.InitiateTrade)
 			trade.GET("/active", handlers.GetActiveTrade)
@@ -410,27 +463,32 @@ func SetupRouter() *gin.Engine {
 			trade.POST("/confirm/:id", handlers.ConfirmTrade)
 		}
 
-		// Protected Soul Endpoints
+		// Soul — group: 20/min, per player: 15/min
 		soul := api.Group("/soul")
 		soul.Use(middleware.AuthRequired())
+		soul.Use(middleware.RateLimitByGroup("soul", 20, time.Minute))
+		soul.Use(middleware.RateLimitByPlayer(15, time.Minute))
 		{
 			soul.POST("/use-guts", handlers.UseGutsGu)
 			soul.POST("/refine", handlers.RefineSoul)
-
 		}
 
-		// Protected Instance Endpoints
+		// Instance — group: 30/min, per player: 20/min
 		instance := api.Group("/instance")
 		instance.Use(middleware.AuthRequired())
+		instance.Use(middleware.RateLimitByGroup("instance", 30, time.Minute))
+		instance.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			instance.GET("/active", handlers.GetActiveInstance)
 			instance.POST("/enter", handlers.EnterInstance)
 			instance.POST("/action", handlers.ActionInstance)
 		}
 
-		// Protected Sect Endpoints
+		// Sect — group: 40/min, per player: 25/min
 		sect := api.Group("/sects")
 		sect.Use(middleware.AuthRequired())
+		sect.Use(middleware.RateLimitByGroup("sect", 40, time.Minute))
+		sect.Use(middleware.RateLimitByPlayer(25, time.Minute))
 		{
 			sect.GET("", handlers.GetSects)
 			sect.POST("/:id/join", handlers.JoinSect)
@@ -462,11 +520,13 @@ func SetupRouter() *gin.Engine {
 			sect.POST("/mines/attack", handlers.AttackSectMine)
 		}
 
-		// Feedback Endpoints
-		api.GET("/feedback", handlers.GetFeedbacks)
-		api.GET("/feedback/:id/comments", handlers.GetFeedbackComments)
+		// Feedback — group: 30/min, per player: 20/min
+		api.GET("/feedback", middleware.RateLimitByIP(40, time.Minute), handlers.GetFeedbacks)
+		api.GET("/feedback/:id/comments", middleware.RateLimitByIP(40, time.Minute), handlers.GetFeedbackComments)
 		feedback := api.Group("/feedback")
 		feedback.Use(middleware.AuthRequired())
+		feedback.Use(middleware.RateLimitByGroup("feedback", 30, time.Minute))
+		feedback.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			feedback.POST("", handlers.SubmitFeedback)
 			feedback.POST("/:id/vote", handlers.VoteFeedback)

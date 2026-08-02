@@ -12,6 +12,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
+	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/server"
 	"github.com/vippro67/GuWorld/backend/internal/services"
@@ -66,6 +67,11 @@ func main() {
 	} else {
 		_ = cache.Delete("game_dictionary_unified")
 	}
+
+	// Initialize rate limiter store (Redis primary, in-memory fallback)
+	rateLimitStore := middleware.NewFallbackStore()
+	middleware.SetDefaultStore(rateLimitStore)
+	rateLimitStore.StartRedisWatchdog(30 * time.Second)
 
 	err = models.LoadGuRegistry(db.DB)
 	if err != nil {
