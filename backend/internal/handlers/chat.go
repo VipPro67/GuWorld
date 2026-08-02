@@ -89,7 +89,7 @@ func SendPrivateMail(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Truyền tin thành công! Cổ trùng đã cất cánh bay đi. Nhân Khí +%.0f.", qiGained)})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Truyền tin thành công! Cổ trùng đã cất cánh bay đi. Nhân Khí +%.0f.", qiGained)})
 }
 
 func GetInbox(c *gin.Context) {
@@ -258,7 +258,7 @@ func SendBaoHoangChat(c *gin.Context) {
 	if fee > 0 {
 		msg = fmt.Sprintf("Đã truyền tin nhắn thành công! Trừ %d Nguyên Thạch phí truyền phát. Nhân Khí +%.0f.", fee, qiGained)
 	}
-	c.JSON(http.StatusOK, gin.H{"message": msg})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": msg})
 }
 
 func GetBaoHoangMessages(c *gin.Context) {

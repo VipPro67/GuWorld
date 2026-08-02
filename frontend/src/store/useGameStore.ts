@@ -1196,6 +1196,9 @@ export const useGameStore = create<GameState>((set, get) => {
 
   const setPlayerFromServer = (player: Player | null, extraState: Partial<GameState> = {}) => {
     const normalizedPlayer = normalizePlayer(player);
+    if (normalizedPlayer && !normalizedPlayer.materials_inventory) {
+      normalizedPlayer.materials_inventory = get().player?.materials_inventory || {};
+    }
     set({
       ...extraState,
       player: normalizedPlayer,
@@ -1654,6 +1657,11 @@ export const useGameStore = create<GameState>((set, get) => {
 
   subscribeAllBaoHoangMessages: () => {
     if (typeof window === "undefined" || !get().token) return;
+
+    // Fast path: world + sect already connected — skip Gu inventory scan
+    if (worldMessagesSource && sectMessagesSource) {
+      return;
+    }
 
     // 1. World Channel
     if (!worldMessagesSource) {
@@ -2226,6 +2234,7 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
   fetchRecipes: async () => {
+    if (get().recipesLoaded) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/recipes`);
       if (response.status === 401 || response.status === 403) {
@@ -4071,7 +4080,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Gửi thư thất bại");
       get().addLog(data.message || "Đã gửi thư truyền tin!");
-      await get().initializeSession(); // update stone count
+      if (data.player) setPlayerFromServer(data.player);
       return true;
     } catch (err: any) {
       set({ error: err.message });
@@ -4109,7 +4118,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Gửi tin nhắn thất bại");
       get().addLog(data.message || "Đã phát truyền tin nhắn!");
-      await get().initializeSession(); // refresh player state (mana, inventory, etc)
+      if (data.player) setPlayerFromServer(data.player);
       return true;
     } catch (err: any) {
       set({ error: err.message });

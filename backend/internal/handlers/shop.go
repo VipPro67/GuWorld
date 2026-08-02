@@ -244,10 +244,7 @@ func BuyShopItem(c *gin.Context) {
 
 	// 6. Save player state
 	qiGained := AddHumanQi(&player, 5.0)
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu túi đồ"})
-		return
-	}
+	// No Gu inventory changes — skip SavePlayerGus
 	updateQuery := `
 		UPDATE players
 		SET primeval_stones = $1, human_qi = $2
@@ -267,6 +264,7 @@ func BuyShopItem(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("%s x%d | %d Nguyên Thạch", selectedItem.Name, req.Quantity, totalCost),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
+	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Giao dịch thành công! Nhân Khí +%.0f.", qiGained)})
 }
 
@@ -366,10 +364,7 @@ func SellShopItem(c *gin.Context) {
 		}
 	}
 	qiGained := AddHumanQi(&player, 5.0)
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save sell transaction"})
-		return
-	}
+	// No Gu inventory changes — skip SavePlayerGus
 	_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, equipped_gus=$2, human_qi=$3 WHERE id=$4`,
 		player.PrimevalStones, player.EquippedGus, player.HumanQi, player.ID)
 	if err != nil {
@@ -399,5 +394,6 @@ func SellShopItem(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("%s x%d | nhận %d Nguyên Thạch", itemName, req.Quantity, totalGain),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
+	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công, nhận Nguyên Thạch! Nhân Khí +%.0f.", qiGained)})
 }

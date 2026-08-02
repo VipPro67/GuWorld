@@ -756,8 +756,7 @@ func GetPlayerStatus(c *gin.Context) {
 }
 
 // GetPlayerInventoryGus returns the full Gu inventory of the authenticated player.
-// The player status endpoint only projects equipped/vital Gus, so the full
-// inventory is lazy-loaded here on demand.
+// Uses a lightweight query against player_gu directly instead of loading the full player row.
 func GetPlayerInventoryGus(c *gin.Context) {
 	authID, ok := middleware.GetPlayerID(c)
 	if !ok {
@@ -765,19 +764,22 @@ func GetPlayerInventoryGus(c *gin.Context) {
 		return
 	}
 
-	player, err := PlayerSvc.Load(db.DB, authID, false)
+	guInv, err := db.LoadPlayerGus(db.DB, authID.String(), false)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Player not found"})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player: " + err.Error()})
-		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load Gu inventory: " + err.Error()})
 		return
 	}
 
+	equippedGus := make([]string, 0)
+	for _, gu := range guInv {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			equippedGus = append(equippedGus, gu.InstanceID)
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"gu_inventory": player.GuInventory,
-		"equipped_gus": player.EquippedGus,
+		"gu_inventory": guInv,
+		"equipped_gus": equippedGus,
 	})
 }
 
@@ -1394,7 +1396,7 @@ func FeedGu(c *gin.Context) {
 	qiGained := AddHumanQi(&player, 2.0)
 
 	// 6. Update database
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	if err := db.UpdatePlayerGu(tx, *targetGu); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
 	}
@@ -1786,8 +1788,6 @@ func loadCompletedQuests(playerID string) models.CompletedQuestsList {
 
 // responseWithPlayer sends a JSON response with the player object, ensuring MaterialsInventory and CompletedQuests are populated.
 func responseWithPlayer(c *gin.Context, status int, player models.Player, extra ...gin.H) {
-	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
-	player.CompletedQuests = loadCompletedQuests(player.ID.String())
 	resp := gin.H{"player": player}
 	for _, e := range extra {
 		for k, v := range e {
@@ -2068,7 +2068,7 @@ func EquipGu(c *gin.Context) {
 		}
 	}
 
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	if err := db.UpdatePlayerGu(tx, *targetGu); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state"})
 		return
 	}
@@ -2179,7 +2179,7 @@ func UpdateGuStatus(c *gin.Context) {
 		}
 	}
 
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	if err := db.UpdatePlayerGu(tx, *targetGu); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update Gu inventory status"})
 		return
 	}
@@ -2291,16 +2291,11 @@ func UseItem(c *gin.Context) {
 		return
 	}
 
-	// Determine which category the item is in
-	itemCategory := "consumables"
-	qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), req.ItemID, "consumables")
+	// Determine which category the item is in (single query)
+	qty, itemCategory, err := InventorySvc.GetQuantityInAnyCategory(tx, player.ID.String(), req.ItemID, "consumables", "materials")
 	if err != nil || qty <= 0 {
-		qty, err = InventorySvc.GetQuantity(tx, player.ID.String(), req.ItemID, "materials")
-		if err != nil || qty <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm này trong túi đồ"})
-			return
-		}
-		itemCategory = "materials"
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm này trong túi đồ"})
+		return
 	}
 
 	messages := []string{}
@@ -2346,10 +2341,7 @@ func UseItem(c *gin.Context) {
 		return
 	}
 
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state" + err.Error()})
-		return
-	}
+	// No Gu inventory changes — skip SavePlayerGus
 	_, err = tx.Exec(`
 		UPDATE players 
 		SET current_mana = $1, max_mana = $2, hp = $3, base_hp = $4,
@@ -2369,10 +2361,9 @@ func UseItem(c *gin.Context) {
 		return
 	}
 
+	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": strings.Join(messages, " ")})
 }
-
-// UseItemsRequest defines the request body for using multiple items
 type UseItemsRequest struct {
 	ItemIDs []string `json:"item_ids" binding:"required,min=1"`
 }
@@ -2429,16 +2420,11 @@ func UseItems(c *gin.Context) {
 			return
 		}
 
-		// Determine which category the item is in
-		itemCategory := "consumables"
-		qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), itemID, "consumables")
+		// Determine which category the item is in (single query)
+		qty, itemCategory, err := InventorySvc.GetQuantityInAnyCategory(tx, player.ID.String(), itemID, "consumables", "materials")
 		if err != nil || qty <= 0 {
-			qty, err = InventorySvc.GetQuantity(tx, player.ID.String(), itemID, "materials")
-			if err != nil || qty <= 0 {
-				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không có vật phẩm %s này trong túi đồ", item.Name)})
-				return
-			}
-			itemCategory = "materials"
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không có vật phẩm %s này trong túi đồ", item.Name)})
+			return
 		}
 
 		// 1. Validation phase
@@ -2484,10 +2470,7 @@ func UseItems(c *gin.Context) {
 		}
 	}
 
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state: " + err.Error()})
-		return
-	}
+	// No Gu inventory changes — skip SavePlayerGus
 	_, err = tx.Exec(`
 		UPDATE players 
 		SET current_mana = $1, max_mana = $2, hp = $3, base_hp = $4,
@@ -2588,6 +2571,7 @@ func UseItems(c *gin.Context) {
 		finalMessage += "\n" + strings.Join(aggregatedSpecial, "\n")
 	}
 
+	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": finalMessage})
 }
 
@@ -2782,7 +2766,7 @@ func DropGu(c *gin.Context) {
 			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 		}
 	}
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	if err := db.RemovePlayerGu(tx, player.GuInventory[idx].InstanceID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gu"})
 		return
 	}
@@ -2984,7 +2968,7 @@ func UseConsumableGu(c *gin.Context) {
 	// Delete from inventory
 	RemoveGuFromInventory(&player, targetGu.InstanceID)
 
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	if err := db.RemovePlayerGu(tx, targetGu.InstanceID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using Gu"})
 		fmt.Println("Failed to update player state after using Gu:", err)
 		return
@@ -3105,11 +3089,7 @@ func UseSupportGu(c *gin.Context) {
 	qiGained := AddHumanQi(&player, float64(3))
 
 	logMsg := strings.Join(logs, " ")
-	// Save to DB
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using support Gu"})
-		return
-	}
+	// Save to DB — support Gu stays in inventory, no need to rewrite inventory
 	_, err = tx.Exec(`
 		UPDATE players 
 		SET max_mana = $1, current_mana = $2, aptitude_percent = $3, hp = $4, aperture_stress = $5, human_qi = $6

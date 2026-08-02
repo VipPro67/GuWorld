@@ -30,13 +30,22 @@ export const TradeRoomModal: React.FC = () => {
     setExpandedGus((prev) => ({ ...prev, [guId]: !prev[guId] }));
   };
 
+  const isSender = player ? player.id === activeTrade?.sender_id : false;
+  const myOffer = activeTrade ? (isSender ? activeTrade.sender_offer : activeTrade.receiver_offer) : null;
+
+  // Initialize stone inputs from database offer
+  useEffect(() => {
+    if (myOffer) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPrimevalInput(myOffer.primeval_stones || 0);
+      setImmortalInput(myOffer.immortal_stones || 0);
+    }
+  }, [activeTrade, myOffer]);
+
   // Safety checks
   if (!player || !activeTrade) return null;
 
-  const isSender = player.id === activeTrade.sender_id;
-  
   // Destructure statuses and offers
-  const myOffer = isSender ? activeTrade.sender_offer : activeTrade.receiver_offer;
   const myLocked = isSender ? activeTrade.sender_locked : activeTrade.receiver_locked;
   const myConfirmed = isSender ? activeTrade.sender_confirmed : activeTrade.receiver_confirmed;
 
@@ -44,14 +53,6 @@ export const TradeRoomModal: React.FC = () => {
   const oppLocked = isSender ? activeTrade.receiver_locked : activeTrade.sender_locked;
   const oppConfirmed = isSender ? activeTrade.receiver_confirmed : activeTrade.sender_confirmed;
   const oppUsername = isSender ? activeTrade.receiver_username : activeTrade.sender_username;
-
-  // Initialize stone inputs from database offer
-  useEffect(() => {
-    if (myOffer) {
-      setPrimevalInput(myOffer.primeval_stones || 0);
-      setImmortalInput(myOffer.immortal_stones || 0);
-    }
-  }, [activeTrade]);
 
   // Sync Stone offers to backend
   const syncStones = () => {
@@ -180,6 +181,24 @@ export const TradeRoomModal: React.FC = () => {
     return identifier.replace(/^GU_/, "").replace(/_/g, " ");
   };
 
+  const getGuRank = (identifier: string) => {
+    // If it is an instance ID found in gu_details
+    const guIdFromDetails = activeTrade.gu_details?.[identifier];
+    if (guIdFromDetails) {
+      return guDictionary[guIdFromDetails]?.rank || 1;
+    }
+    // If it is a spec ID directly
+    if (guDictionary[identifier]) {
+      return guDictionary[identifier].rank || 1;
+    }
+    // If it is an instance ID from local inventory
+    const localGu = (player.gu_inventory || []).find((g) => g.instance_id === identifier);
+    if (localGu) {
+      return guDictionary[localGu.gu_id]?.rank || 1;
+    }
+    return 1;
+  };
+
   const getMatName = (matId: string) => {
     return itemDictionary[matId]?.name || matId;
   };
@@ -285,9 +304,13 @@ export const TradeRoomModal: React.FC = () => {
                   <div className="flex flex-wrap gap-1.5">
                     {(myOffer.gus as string[]).map((instId: string) => {
                       const guName = getGuName(instId);
+                      const guRank = getGuRank(instId);
                       return (
-                        <span key={instId} className="text-xs px-2.5 py-1 rounded-xl bg-emerald-950/30 border border-emerald-900/40 text-emerald-400 flex items-center gap-1">
-                          {guName}
+                        <span key={instId} className="text-xs px-2.5 py-1 rounded-xl bg-emerald-950/30 border border-emerald-900/40 text-emerald-400 flex items-center gap-1.5">
+                          <span>{guName}</span>
+                          <span className="text-[9px] font-mono opacity-80 px-1 bg-emerald-900/20 border border-emerald-800/35 rounded text-emerald-300">
+                            Rank {guRank}
+                          </span>
                           {!myLocked && (
                             <button onClick={() => toggleGu(instId)} className="hover:text-red-400 cursor-pointer ml-1">
                               <X className="w-3 h-3" />
@@ -611,9 +634,13 @@ export const TradeRoomModal: React.FC = () => {
                   <div className="flex flex-wrap gap-1.5">
                     {(oppOffer.gus as string[]).map((instId: string, index: number) => {
                       const guName = getGuName(instId);
+                      const guRank = getGuRank(instId);
                       return (
-                        <span key={index} className="text-xs px-2.5 py-1 rounded-xl bg-emerald-950/20 border border-emerald-900/20 text-emerald-400 select-none">
-                          {guName}
+                        <span key={index} className="text-xs px-2.5 py-1 rounded-xl bg-emerald-950/20 border border-emerald-900/20 text-emerald-400 select-none flex items-center gap-1.5">
+                          <span>{guName}</span>
+                          <span className="text-[9px] font-mono opacity-80 px-1 bg-emerald-900/20 border border-emerald-800/35 rounded text-emerald-300">
+                            Rank {guRank}
+                          </span>
                         </span>
                       );
                     })}

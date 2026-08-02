@@ -1958,6 +1958,7 @@ func AdminGetAuditLogs(c *gin.Context) {
 	entityType := c.Query("entity_type")
 	playerIDStr := c.Query("player_id")
 	successStr := c.Query("success")
+	search := c.Query("search")
 	limitStr := c.DefaultQuery("limit", "50")
 	offsetStr := c.DefaultQuery("offset", "0")
 
@@ -1999,6 +2000,11 @@ func AdminGetAuditLogs(c *gin.Context) {
 			query += " AND success = $" + strconv.Itoa(argCount)
 			args = append(args, success)
 		}
+	}
+	if search != "" {
+		argCount++
+		query += " AND (action ILIKE $" + strconv.Itoa(argCount) + " OR request_summary ILIKE $" + strconv.Itoa(argCount) + " OR entity_id ILIKE $" + strconv.Itoa(argCount) + " OR error_message ILIKE $" + strconv.Itoa(argCount) + ")"
+		args = append(args, "%"+search+"%")
 	}
 
 	query += " ORDER BY created_at DESC LIMIT $" + strconv.Itoa(argCount+1) + " OFFSET $" + strconv.Itoa(argCount+2)
@@ -2059,6 +2065,11 @@ func AdminGetAuditLogs(c *gin.Context) {
 			countQuery += " AND success = $" + strconv.Itoa(ci)
 			countArgs = append(countArgs, success)
 		}
+	}
+	if search != "" {
+		ci++
+		countQuery += " AND (action ILIKE $" + strconv.Itoa(ci) + " OR request_summary ILIKE $" + strconv.Itoa(ci) + " OR entity_id ILIKE $" + strconv.Itoa(ci) + " OR error_message ILIKE $" + strconv.Itoa(ci) + ")"
+		countArgs = append(countArgs, "%"+search+"%")
 	}
 
 	var total int

@@ -66,6 +66,36 @@ func (s *InventoryService) GetQuantity(q QueryRower, playerID, itemID, category 
 	return qty, nil
 }
 
+// GetQuantityInAnyCategory checks multiple categories in a single query.
+// Returns (quantity, foundCategory, error).
+func (s *InventoryService) GetQuantityInAnyCategory(q QueryRower, playerID, itemID string, categories ...string) (int, string, error) {
+	if len(categories) == 0 {
+		return 0, "", nil
+	}
+	placeholders := make([]string, len(categories))
+	args := []interface{}{playerID, itemID}
+	for i, cat := range categories {
+		placeholders[i] = fmt.Sprintf("$%d", i+3)
+		args = append(args, cat)
+	}
+	query := fmt.Sprintf(`
+		SELECT quantity, category FROM player_inventory_items
+		WHERE player_id = $1 AND item_id = $2 AND category IN (%s)
+		LIMIT 1
+	`, strings.Join(placeholders, ","))
+
+	var qty int
+	var cat string
+	err := q.QueryRow(query, args...).Scan(&qty, &cat)
+	if err == sql.ErrNoRows {
+		return 0, "", nil
+	}
+	if err != nil {
+		return 0, "", err
+	}
+	return qty, cat, nil
+}
+
 // AddItem adds quantity to an existing item or inserts a new row.
 // If tx is nil, operates directly on the DB.
 func (s *InventoryService) AddItem(tx *sql.Tx, playerID, itemID, category string, quantity int) error {

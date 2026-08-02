@@ -771,6 +771,7 @@ func BuyListing(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("người mua=%s | sl=%d | %.0f %s", authID, purchaseQty, totalPrice, currency),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
+	buyer.MaterialsInventory = loadMaterialsInventory(buyer.ID.String())
 	responseWithPlayer(c, http.StatusOK, buyer, gin.H{"message": "Mua hàng thành công"})
 }
 
