@@ -200,7 +200,6 @@ func SetupRouter() *gin.Engine {
 		player.Use(middleware.RateLimitByGroup("player", 60, time.Minute))
 		player.Use(middleware.RateLimitByPlayer(30, time.Minute))
 		{
-			player.GET("/events", handlers.StreamPlayerEvents)
 			player.GET("/status/:id", handlers.GetPlayerStatus)
 			player.GET("/inventory/gus", handlers.GetPlayerInventoryGus)
 			player.GET("/stats", handlers.GetPlayerStatsHandler)
@@ -222,6 +221,8 @@ func SetupRouter() *gin.Engine {
 			player.PUT("/combat-settings", handlers.UpdateCombatSettings)
 			player.GET("/audit-logs", handlers.GetMyAuditLogs)
 		}
+		// SSE — no rate limit
+		api.GET("/player/events", middleware.AuthRequired(), handlers.StreamPlayerEvents)
 
 		// Mine — group: 40/min, per player: 25/min
 		mine := api.Group("/mine")
@@ -406,15 +407,13 @@ func SetupRouter() *gin.Engine {
 			leaderboard.GET("/settings", handlers.GetLeaderboardSettings)
 		}
 
-		// Chat — group: 150/min, per player: 30/min
+		// Chat — no group limit, per-route IP limit
 		chat := api.Group("/chat")
 		chat.Use(middleware.AuthRequired())
-		chat.Use(middleware.RateLimitByGroup("chat", 150, time.Minute))
-		chat.Use(middleware.RateLimitByPlayer(30, time.Minute))
 		{
 			chat.POST("/mail/send", handlers.SendPrivateMail)
 			chat.GET("/mail/inbox", handlers.GetInbox)
-			chat.POST("/bao-hoang/send", handlers.SendBaoHoangChat)
+			chat.POST("/bao-hoang/send", middleware.RateLimitByIP(30, time.Minute), handlers.SendBaoHoangChat)
 			chat.GET("/bao-hoang/messages", handlers.GetBaoHoangMessages)
 			chat.GET("/bao-hoang/events", handlers.SubscribeBaoHoangMessages)
 		}
@@ -454,7 +453,6 @@ func SetupRouter() *gin.Engine {
 		{
 			trade.POST("/initiate", handlers.InitiateTrade)
 			trade.GET("/active", handlers.GetActiveTrade)
-			trade.GET("/events", handlers.SubscribeTradeEvents)
 			trade.POST("/accept/:id", handlers.AcceptTrade)
 			trade.POST("/decline/:id", handlers.DeclineTrade)
 			trade.POST("/cancel/:id", handlers.CancelTrade)
@@ -462,6 +460,8 @@ func SetupRouter() *gin.Engine {
 			trade.POST("/lock/:id", handlers.LockTrade)
 			trade.POST("/confirm/:id", handlers.ConfirmTrade)
 		}
+		// SSE — no rate limit
+		api.GET("/trade/events", middleware.AuthRequired(), handlers.SubscribeTradeEvents)
 
 		// Soul — group: 20/min, per player: 15/min
 		soul := api.Group("/soul")
