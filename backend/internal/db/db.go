@@ -66,6 +66,11 @@ func InitSchema() error {
 		logger.S.Warnf("failed to create uuid-ossp extension: %v", err)
 	}
 
+	_, err = DB.Exec(`CREATE EXTENSION IF NOT EXISTS "unaccent";`)
+	if err != nil {
+		logger.S.Warnf("failed to create unaccent extension: %v", err)
+	}
+
 	// 1. Create item_dictionary
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS item_dictionary (
@@ -1170,8 +1175,7 @@ func InitSchema() error {
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			gift_code_id UUID NOT NULL REFERENCES gift_codes(id) ON DELETE CASCADE,
 			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			redeemed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-			UNIQUE(gift_code_id, player_id)
+			redeemed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 		);`, "create_gift_code_redemptions_table"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS current_thought DOUBLE PRECISION NOT NULL DEFAULT 100.0;`, "current_thought"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS max_thought DOUBLE PRECISION NOT NULL DEFAULT 100.0;`, "max_thought"},
@@ -1179,6 +1183,8 @@ func InitSchema() error {
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS immortal_state JSONB NOT NULL DEFAULT '{}';`, "immortal_state"},
 		{`ALTER TABLE auction ADD COLUMN IF NOT EXISTS duration_hours INTEGER NOT NULL DEFAULT 24;`, "duration_hours"},
 		{`ALTER TABLE immortal_apertures ALTER COLUMN immortal_essence TYPE BIGINT;`, "alter_immortal_essence_type"},
+		{`ALTER TABLE gift_code_redemptions DROP CONSTRAINT IF EXISTS gift_code_redemptions_gift_code_id_player_id_key;`, "drop_gift_code_redemptions_unique_constraint"},
+		{`CREATE INDEX IF NOT EXISTS gift_code_redemptions_gift_code_id_player_id_idx ON gift_code_redemptions(gift_code_id, player_id);`, "create_gift_code_redemptions_index"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {
@@ -1399,6 +1405,8 @@ func InitSchema() error {
 		{"idx_audit_logs_player", "audit_logs", "player_id"},
 		{"idx_audit_logs_action", "audit_logs", "action"},
 		{"idx_audit_logs_created", "audit_logs", "created_at"},
+		{"idx_messages_receiver_channel_created", "messages", "receiver_id, channel, created_at DESC"},
+		{"idx_auction_status_endtime_buyer", "auction", "status, end_time, target_buyer_id"},
 	}
 	for _, idx := range indexes {
 		_, err := DB.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s (%s)", idx.name, idx.table, idx.column))

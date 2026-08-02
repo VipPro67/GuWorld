@@ -120,6 +120,7 @@ func main() {
 	handlers.StartMineMonsterWorker(ctx)
 	handlers.StartMidnightMineWorker(ctx)
 	handlers.StartArenaSettlementWorker(ctx)
+	handlers.StartAuctionSettlementWorker(ctx)
 	worker.StartPoolWatchdog(ctx, db.DB, 60*time.Second)
 
 	r := server.SetupRouter()

@@ -206,16 +206,16 @@ func rawEffectNumber(raw json.RawMessage) (float64, bool) {
 
 var GuRegistry = make(map[string]map[int]GuDictionaryItem)
 
-// GuIDsByName returns all gu ids whose name contains the given search term (case-insensitive).
+// GuIDsByName returns all gu ids whose name or ID contains the given search term (case/accent-insensitive).
 func GuIDsByName(search string) []string {
 	if search == "" {
 		return nil
 	}
-	lower := strings.ToLower(search)
+	cleanSearch := RemoveAccents(search)
 	var ids []string
 	for id, ranks := range GuRegistry {
 		for _, item := range ranks {
-			if strings.Contains(strings.ToLower(item.Name), lower) {
+			if strings.Contains(RemoveAccents(item.Name), cleanSearch) || strings.Contains(strings.ToLower(id), cleanSearch) {
 				ids = append(ids, id)
 				break
 			}

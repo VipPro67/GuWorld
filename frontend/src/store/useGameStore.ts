@@ -778,6 +778,8 @@ interface GameState {
   fetchPlayerStatus: (id: string) => Promise<void>;
   fetchGuInventory: () => Promise<void>;
   guInventoryLoaded: boolean;
+  subscribeEvents: () => void;
+  unsubscribeEvents: () => void;
   subscribePlayerEvents: () => void;
   unsubscribePlayerEvents: () => void;
   playerEventsConnected: boolean;
@@ -1158,11 +1160,7 @@ type PlayerRealtimeEvent = {
   data: Partial<Player> & { id: string; aperture_stress_level?: string };
 };
 
-let playerEventsSource: EventSource | null = null;
-let tradeEventsSource: EventSource | null = null;
-let worldMessagesSource: EventSource | null = null;
-let generalMessagesSource: EventSource | null = null;
-let sectMessagesSource: EventSource | null = null;
+let unifiedEventsSource: EventSource | null = null;
 
 export function guSpecFor(guId?: string, rank?: number): GuSpec | undefined {
   if (!guId) return undefined;
@@ -1527,16 +1525,15 @@ export const useGameStore = create<GameState>((set, get) => {
   setPlayerFromServer: (player) => setPlayerFromServer(player),
   getEstimatedMana: () => estimateManaFromSnapshot(get().manaSnapshot),
 
-  subscribePlayerEvents: () => {
+  subscribeEvents: () => {
     if (typeof window === "undefined" || !get().token) return;
 
-    if (playerEventsSource) {
-      playerEventsSource.close();
-      playerEventsSource = null;
+    if (unifiedEventsSource) {
+      return;
     }
 
-    const source = new EventSource(`${BACKEND_URL}/api/player/events?token=${encodeURIComponent(get().token!)}`);
-    playerEventsSource = source;
+    const source = new EventSource(`${BACKEND_URL}/api/events?token=${encodeURIComponent(get().token!)}`);
+    unifiedEventsSource = source;
 
     const mergePlayerEvent = (event: MessageEvent<string>) => {
       try {
@@ -1556,9 +1553,9 @@ export const useGameStore = create<GameState>((set, get) => {
           }),
         });
 
-        if (payload.type === "combat.started") {
+        if (event.type === "combat.started") {
           get().addLog("Chiến đấu realtime đã bắt đầu.");
-        } else if (payload.type === "combat.ended") {
+        } else if (event.type === "combat.ended") {
           get().addLog("Chiến đấu realtime đã kết thúc.");
         }
       } catch (err) {
@@ -1570,42 +1567,6 @@ export const useGameStore = create<GameState>((set, get) => {
       source.addEventListener(eventType, mergePlayerEvent as EventListener);
     });
 
-    source.onopen = () => {
-      set({ playerEventsConnected: true, playerEventsRetries: 0 });
-    };
-    source.onerror = () => {
-      set({ playerEventsConnected: false });
-      source.close();
-      // Auto-reconnect with exponential backoff
-      const retries = get().playerEventsRetries || 0;
-      const delay = Math.min(1000 * Math.pow(2, retries), 30000);
-      set({ playerEventsRetries: retries + 1 });
-      setTimeout(() => {
-        if (get().token) get().subscribePlayerEvents();
-      }, delay);
-    };
-  },
-
-  unsubscribePlayerEvents: () => {
-    if (playerEventsSource) {
-      playerEventsSource.close();
-      playerEventsSource = null;
-    }
-    set({ playerEventsConnected: false });
-  },
-
-
-  subscribeTradeEvents: () => {
-    if (typeof window === "undefined" || !get().token) return;
-
-    if (tradeEventsSource) {
-      tradeEventsSource.close();
-      tradeEventsSource = null;
-    }
-
-    const source = new EventSource(`${BACKEND_URL}/api/trade/events?token=${encodeURIComponent(get().token!)}`);
-    tradeEventsSource = source;
-
     source.addEventListener("trade.updated", (event) => {
       try {
         const payload = JSON.parse((event as MessageEvent<string>).data);
@@ -1614,13 +1575,116 @@ export const useGameStore = create<GameState>((set, get) => {
         console.error("Failed to process trade event", err);
       }
     });
+
+    source.addEventListener("chat.messages.world", (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent<string>).data);
+        const messages = Array.isArray(payload.messages) ? payload.messages : [];
+        set((state) => {
+          const active = state.activeChannel || "world";
+          const open = state.chatOpen;
+          const isCurrent = active === "world" && open;
+          const newUnread = { ...state.unreadChannels };
+          if (!isCurrent) {
+            newUnread.world = true;
+          }
+          return {
+            chatMessages: { ...state.chatMessages, world: messages },
+            unreadChannels: newUnread,
+            baoHoangMessages: active === "world" ? messages : state.baoHoangMessages,
+          };
+        });
+      } catch (err) {
+        console.error("Failed to process world chat event", err);
+      }
+    });
+
+    source.addEventListener("chat.messages.general", (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent<string>).data);
+        const messages = Array.isArray(payload.messages) ? payload.messages : [];
+        set((state) => {
+          const active = state.activeChannel || "world";
+          const open = state.chatOpen;
+          const isCurrent = active === "general" && open;
+          const newUnread = { ...state.unreadChannels };
+          if (!isCurrent) {
+            newUnread.general = true;
+          }
+          return {
+            chatMessages: { ...state.chatMessages, general: messages },
+            unreadChannels: newUnread,
+            baoHoangMessages: active === "general" ? messages : state.baoHoangMessages,
+          };
+        });
+      } catch (err) {
+        console.error("Failed to process general chat event", err);
+      }
+    });
+
+    source.addEventListener("chat.messages.sect", (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent<string>).data);
+        const messages = Array.isArray(payload.messages) ? payload.messages : [];
+        set((state) => {
+          const active = state.activeChannel || "world";
+          const open = state.chatOpen;
+          const isCurrent = active === "sect" && open;
+          const newUnread = { ...state.unreadChannels };
+          if (!isCurrent) {
+            newUnread.sect = true;
+          }
+          return {
+            chatMessages: { ...state.chatMessages, sect: messages },
+            unreadChannels: newUnread,
+            baoHoangMessages: active === "sect" ? messages : state.baoHoangMessages,
+          };
+        });
+      } catch (err) {
+        console.error("Failed to process sect chat event", err);
+      }
+    });
+
+    source.onopen = () => {
+      set({ playerEventsConnected: true, playerEventsRetries: 0 });
+    };
+
+    source.onerror = () => {
+      set({ playerEventsConnected: false });
+      source.close();
+      unifiedEventsSource = null;
+      // Auto-reconnect with exponential backoff
+      const retries = get().playerEventsRetries || 0;
+      const delay = Math.min(1000 * Math.pow(2, retries), 30000);
+      set({ playerEventsRetries: retries + 1 });
+      setTimeout(() => {
+        if (get().token) get().subscribeEvents();
+      }, delay);
+    };
+  },
+
+  unsubscribeEvents: () => {
+    if (unifiedEventsSource) {
+      unifiedEventsSource.close();
+      unifiedEventsSource = null;
+    }
+    set({ playerEventsConnected: false });
+  },
+
+  subscribePlayerEvents: () => {
+    get().subscribeEvents();
+  },
+
+  unsubscribePlayerEvents: () => {
+    get().unsubscribeEvents();
+  },
+
+  subscribeTradeEvents: () => {
+    get().subscribeEvents();
   },
 
   unsubscribeTradeEvents: () => {
-    if (tradeEventsSource) {
-      tradeEventsSource.close();
-      tradeEventsSource = null;
-    }
+    get().unsubscribeEvents();
   },
 
   setActiveChannel: (channel) => {
@@ -1647,135 +1711,20 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
   subscribeBaoHoangMessages: (channel) => {
-    get().subscribeAllBaoHoangMessages();
+    get().subscribeEvents();
     get().setActiveChannel(channel as any);
   },
 
   unsubscribeBaoHoangMessages: () => {
-    get().unsubscribeAllBaoHoangMessages();
+    // Handled at main connection level
   },
 
   subscribeAllBaoHoangMessages: () => {
-    if (typeof window === "undefined" || !get().token) return;
-
-    // Fast path: world + sect already connected — skip Gu inventory scan
-    if (worldMessagesSource && sectMessagesSource) {
-      return;
-    }
-
-    // 1. World Channel
-    if (!worldMessagesSource) {
-      const source = new EventSource(`${BACKEND_URL}/api/chat/bao-hoang/events?channel=world&token=${encodeURIComponent(get().token!)}`);
-      worldMessagesSource = source;
-      source.addEventListener("chat.messages", (event) => {
-        try {
-          const payload = JSON.parse((event as MessageEvent<string>).data);
-          const messages = Array.isArray(payload.messages) ? payload.messages : [];
-          set((state) => {
-            const active = state.activeChannel || "world";
-            const open = state.chatOpen;
-            const isCurrent = active === "world" && open;
-            const newUnread = { ...state.unreadChannels };
-            if (!isCurrent) {
-              newUnread.world = true;
-            }
-            return {
-              chatMessages: { ...state.chatMessages, world: messages },
-              unreadChannels: newUnread,
-              baoHoangMessages: active === "world" ? messages : state.baoHoangMessages,
-            };
-          });
-        } catch (err) {
-          console.error("Failed to process world chat event", err);
-        }
-      });
-    }
-
-    // 2. General Channel (Bảo Hoàng Thiên)
-    const player = get().player;
-    const hasConnectingHeaven = player?.gu_inventory?.some(g => g.gu_id === "GU_CONNECTING_HEAVEN" && g.status !== "DEAD") ?? false;
-    const hasDivineSense = player?.gu_inventory?.some(g => g.gu_id === "GU_DIVINE_SENSE" && g.status !== "DEAD") ?? false;
-    if (hasConnectingHeaven && hasDivineSense) {
-      if (!generalMessagesSource) {
-        const source = new EventSource(`${BACKEND_URL}/api/chat/bao-hoang/events?channel=general&token=${encodeURIComponent(get().token!)}`);
-        generalMessagesSource = source;
-        source.addEventListener("chat.messages", (event) => {
-          try {
-            const payload = JSON.parse((event as MessageEvent<string>).data);
-            const messages = Array.isArray(payload.messages) ? payload.messages : [];
-            set((state) => {
-              const active = state.activeChannel || "world";
-              const open = state.chatOpen;
-              const isCurrent = active === "general" && open;
-              const newUnread = { ...state.unreadChannels };
-              if (!isCurrent) {
-                newUnread.general = true;
-              }
-              return {
-                chatMessages: { ...state.chatMessages, general: messages },
-                unreadChannels: newUnread,
-                baoHoangMessages: active === "general" ? messages : state.baoHoangMessages,
-              };
-            });
-          } catch (err) {
-            console.error("Failed to process general chat event", err);
-          }
-        });
-      }
-    } else {
-      if (generalMessagesSource) {
-        generalMessagesSource.close();
-        generalMessagesSource = null;
-      }
-    }
-
-    // 3. Sect Channel – always try to connect; backend validates membership
-    if (!sectMessagesSource) {
-      const source = new EventSource(`${BACKEND_URL}/api/chat/bao-hoang/events?channel=sect&token=${encodeURIComponent(get().token!)}`);
-      sectMessagesSource = source;
-      source.addEventListener("chat.messages", (event) => {
-        try {
-          const payload = JSON.parse((event as MessageEvent<string>).data);
-          const messages = Array.isArray(payload.messages) ? payload.messages : [];
-          set((state) => {
-            const active = state.activeChannel || "world";
-            const open = state.chatOpen;
-            const isCurrent = active === "sect" && open;
-            const newUnread = { ...state.unreadChannels };
-            if (!isCurrent) {
-              newUnread.sect = true;
-            }
-            return {
-              chatMessages: { ...state.chatMessages, sect: messages },
-              unreadChannels: newUnread,
-              baoHoangMessages: active === "sect" ? messages : state.baoHoangMessages,
-            };
-          });
-        } catch (err) {
-          console.error("Failed to process sect chat event", err);
-        }
-      });
-      source.addEventListener("error", () => {
-        // Backend rejected (not in sect) – clean up silently
-        source.close();
-        sectMessagesSource = null;
-      });
-    }
+    get().subscribeEvents();
   },
 
   unsubscribeAllBaoHoangMessages: () => {
-    if (worldMessagesSource) {
-      worldMessagesSource.close();
-      worldMessagesSource = null;
-    }
-    if (generalMessagesSource) {
-      generalMessagesSource.close();
-      generalMessagesSource = null;
-    }
-    if (sectMessagesSource) {
-      sectMessagesSource.close();
-      sectMessagesSource = null;
-    }
+    // Handled at main connection level
   },
 
   fetchReferrals: async () => {

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -353,12 +354,6 @@ func CreateListing(c *gin.Context) {
 }
 
 func ListListings(c *gin.Context) {
-	if err := settleExpiredAuctions(); err != nil {
-		logger.S.Errorf("Failed to settle expired auctions: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to settle expired auctions"})
-		return
-	}
-
 	authID, ok := middleware.GetPlayerID(c)
 	cacheKey := "market_listings_public"
 	if ok {
@@ -1069,4 +1064,22 @@ func GetItemName(itemType string, itemDataJSON []byte) string {
 		}
 	}
 	return "Vật phẩm không rõ"
+}
+
+// StartAuctionSettlementWorker runs a background loop to periodically settle expired auctions.
+func StartAuctionSettlementWorker(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := settleExpiredAuctions(); err != nil {
+					logger.S.Errorf("Failed to settle expired auctions: %v", err)
+				}
+			}
+		}
+	}()
 }

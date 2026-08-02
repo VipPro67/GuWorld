@@ -40,9 +40,9 @@ func adminPlayerSearchClause(searchBy, search string) (string, []interface{}) {
 	case "id":
 		return `players.id::text ILIKE $1`, []interface{}{like}
 	case "username":
-		return `username ILIKE $1`, []interface{}{like}
+		return `unaccent(username) ILIKE unaccent($1)`, []interface{}{like}
 	case "email":
-		return `COALESCE(email, '') ILIKE $1`, []interface{}{like}
+		return `unaccent(COALESCE(email, '')) ILIKE unaccent($1)`, []interface{}{like}
 	case "item":
 		itemIDs := models.ItemIDsByName(search)
 		if len(itemIDs) > 0 {
@@ -56,7 +56,7 @@ func adminPlayerSearchClause(searchBy, search string) (string, []interface{}) {
 		}
 		return `EXISTS (SELECT 1 FROM player_gu pg WHERE pg.player_id = players.id AND pg.gu_id ILIKE $1)`, []interface{}{like}
 	default: // all
-		clauses := []string{`username ILIKE $1`, `COALESCE(email, '') ILIKE $1`}
+		clauses := []string{`unaccent(username) ILIKE unaccent($1)`, `unaccent(COALESCE(email, '')) ILIKE unaccent($1)`}
 		args := []interface{}{like}
 		argIdx := 2
 

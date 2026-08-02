@@ -221,6 +221,7 @@ func SetupRouter() *gin.Engine {
 		}
 		// SSE — no rate limit
 		api.GET("/player/events", middleware.AuthRequired(), handlers.StreamPlayerEvents)
+		api.GET("/events", middleware.AuthRequired(), handlers.StreamUnifiedEvents)
 
 		// Mine — group: 40/min, per player: 25/min
 		mine := api.Group("/mine")

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -179,5 +180,142 @@ func apertureStressLevel(stress float64) string {
 		return "medium"
 	default:
 		return "low"
+	}
+}
+
+// StreamUnifiedEvents combines player events, trade events, and chat channel messages into a single connection.
+func StreamUnifiedEvents(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Streaming unsupported"})
+		return
+	}
+
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache, no-transform")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("X-Accel-Buffering", "no")
+	c.Writer.Header().Set("Content-Encoding", "identity")
+
+	// 1. Subscribe to Trade
+	tradeCh := subscribeTrade(playerID)
+	defer unsubscribeTrade(playerID, tradeCh)
+
+	// 2. Resolve Sect for Sect Chat
+	var sectID string
+	err := db.DB.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID)
+	hasSect := err == nil && sectID != ""
+
+	// 3. Subscribe to Chat Channels
+	worldCh := subscribeChat(chatChannelKey("world", sql.NullString{}))
+	defer unsubscribeChat(chatChannelKey("world", sql.NullString{}), worldCh)
+
+	var sectCh chan chatEventPayload
+	if hasSect {
+		sectCh = subscribeChat(chatChannelKey("sect", sql.NullString{String: sectID, Valid: true}))
+		defer unsubscribeChat(chatChannelKey("sect", sql.NullString{String: sectID, Valid: true}), sectCh)
+	}
+
+	// Check eligibility for General Chat: must have GU_CONNECTING_HEAVEN and GU_DIVINE_SENSE
+	tx, err := db.DB.Begin()
+	var hasConnectingHeaven, hasDivineSense bool
+	if err == nil {
+		player, errEval := evaluateManaTx(tx, playerID)
+		if errEval == nil {
+			for _, gu := range player.GuInventory {
+				if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
+					hasConnectingHeaven = true
+				}
+				if gu.GuID == "GU_DIVINE_SENSE" && gu.Status != "DEAD" {
+					hasDivineSense = true
+				}
+			}
+		}
+		_ = tx.Rollback()
+	}
+
+	var generalCh chan chatEventPayload
+	if hasConnectingHeaven && hasDivineSense {
+		generalCh = subscribeChat(chatChannelKey("general", sql.NullString{}))
+		defer unsubscribeChat(chatChannelKey("general", sql.NullString{}), generalCh)
+	}
+
+	// Send initial data to initialize client state
+	// Player snapshot
+	if err := writePlayerSnapshotEvent(c, playerID, ManaEventSnapshot); err != nil {
+		writeSSEError(c, err)
+		flusher.Flush()
+		return
+	}
+
+	// Trade state
+	if err := writeTradeEvent(c, playerID); err != nil {
+		// Log warning but don't fail connection
+	}
+
+	// Chat history for subscribed channels
+	if err := writeChatEvent(c, "world", chatChannelKey("world", sql.NullString{})); err != nil {
+		// Log warning but don't fail connection
+	}
+	if hasSect {
+		if err := writeChatEvent(c, "sect", chatChannelKey("sect", sql.NullString{String: sectID, Valid: true})); err != nil {
+			// Log warning
+		}
+	}
+	if hasConnectingHeaven && hasDivineSense {
+		if err := writeChatEvent(c, "general", chatChannelKey("general", sql.NullString{})); err != nil {
+			// Log warning
+		}
+	}
+
+	flusher.Flush()
+
+	ticker := time.NewTicker(playerEventsHeartbeatInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-c.Request.Context().Done():
+			return
+
+		case <-ticker.C:
+			db.DB.Exec(`UPDATE players SET last_activity = NOW() WHERE id = $1`, playerID)
+			if err := writePlayerSnapshotEvent(c, playerID, PlayerEventHeartbeat); err != nil {
+				writeSSEError(c, err)
+				flusher.Flush()
+				return
+			}
+			flusher.Flush()
+
+		case payload := <-tradeCh:
+			if err := writeSSE(c, "trade.updated", payload); err != nil {
+				return
+			}
+			flusher.Flush()
+
+		case payload := <-worldCh:
+			if err := writeSSE(c, "chat.messages.world", payload); err != nil {
+				return
+			}
+			flusher.Flush()
+
+		case payload := <-generalCh:
+			if err := writeSSE(c, "chat.messages.general", payload); err != nil {
+				return
+			}
+			flusher.Flush()
+
+		case payload := <-sectCh:
+			if err := writeSSE(c, "chat.messages.sect", payload); err != nil {
+				return
+			}
+			flusher.Flush()
+		}
 	}
 }

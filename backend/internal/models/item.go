@@ -50,15 +50,15 @@ type ItemSpec struct {
 // ItemRegistry holds the memory map cache of all Item specifications.
 var ItemRegistry = make(map[string]ItemSpec)
 
-// ItemIDsByName returns all item ids whose name contains the given search term (case-insensitive).
+// ItemIDsByName returns all item ids whose name or ID contains the given search term (case/accent-insensitive).
 func ItemIDsByName(search string) []string {
 	if search == "" {
 		return nil
 	}
-	lower := strings.ToLower(search)
+	cleanSearch := RemoveAccents(search)
 	var ids []string
 	for id, spec := range ItemRegistry {
-		if strings.Contains(strings.ToLower(spec.Name), lower) {
+		if strings.Contains(RemoveAccents(spec.Name), cleanSearch) || strings.Contains(strings.ToLower(id), cleanSearch) {
 			ids = append(ids, id)
 		}
 	}
