@@ -349,17 +349,6 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		}
 		player.MaxSoul += int(val)
 		return fmt.Sprintf("Linh Hồn tối đa tăng thêm %.0f điểm.", val), nil
-	case "ADD_DAO_MARKS":
-		val, _ := params["value"].(float64)
-		path, _ := params["path"].(string)
-		if path == "" {
-			path = "soul"
-		}
-		if player.DaoMarks == nil {
-			player.DaoMarks = make(models.DaoMarksMap)
-		}
-		player.DaoMarks[path] += int(val)
-		return fmt.Sprintf("Đạo ngân tăng thêm %.0f điểm cho %s.", val, path), nil
 	// ── New action codes ──────────────────────────────────────────────
 	case "TIME_ACCELERATION":
 		val, _ := params["value"].(float64)

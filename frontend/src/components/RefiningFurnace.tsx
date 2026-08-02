@@ -269,6 +269,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
             const discovered: RefiningRecipe = {
               id: `user_${Date.now()}`,
               target_gu_id: response.new_gu.gu_id,
+              target_rank: response.new_gu.rank,
               required_gus: requiredSlots.reduce((acc, slot) => { acc[slot.guId] = (acc[slot.guId] || 0) + 1; return acc; }, {} as Record<string, number>),
               required_materials: selectedRecipe.required_materials,
               success_rate: selectedRecipe.success_rate,
@@ -419,7 +420,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
 
                 return (
                   <div
-                    key={guId}
+                    key={groupKey}
                     className="border border-zinc-900 bg-zinc-950/40 rounded-xl overflow-hidden"
                   >
                     {/* Group Header Row */}
@@ -436,7 +437,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                       <div className="space-y-0.5 max-w-[75%]">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-xs font-bold text-zinc-200 group-hover:text-amber-400 transition-colors font-serif">
-                            {spec.name}
+                            {spec.name} (Bậc {spec.rank})
                           </span>
                           <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-zinc-900 border border-zinc-850 text-zinc-400">
                             x{totalAvailable}
@@ -575,7 +576,12 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
               >
                 <div className="flex items-center gap-3">
                   <span className="text-amber-400 font-bold font-serif text-sm">
-                    {selectedRecipe ? (guDictionary[selectedRecipe.target_gu_id]?.name || selectedRecipe.target_gu_id) : "Chọn công thức hợp luyện..."}
+                    {selectedRecipe ? (() => {
+                      const spec = guSpecFor(selectedRecipe.target_gu_id, selectedRecipe.target_rank) || guDictionary[selectedRecipe.target_gu_id];
+                      const name = spec?.name || selectedRecipe.target_gu_id;
+                      const rank = selectedRecipe.target_rank || spec?.rank || 1;
+                      return `${name} (Bậc ${rank})`;
+                    })() : "Chọn công thức hợp luyện..."}
                   </span>
                 </div>
                 <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-300 ${isDropdownOpen ? "rotate-180" : ""}`} />
@@ -625,7 +631,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                       </div>
                     ) : (
                       filteredRecipes.map((recipe) => {
-                        const targetGu = guSpecFor(recipe.target_gu_id, recipe.target_rank) || { name: recipe.target_gu_id };
+                        const targetGu = guSpecFor(recipe.target_gu_id, recipe.target_rank) || { name: recipe.target_gu_id, rank: recipe.target_rank };
                         const isActive = recipe.id === selectedRecipeId;
                         return (
                           <div
@@ -640,7 +646,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                                 : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200 border border-transparent"
                             }`}
                           >
-                            <span className="font-serif">{targetGu.name}</span>
+                            <span className="font-serif">{targetGu.name} (Bậc {targetGu.rank || 1})</span>
                             <div className="flex items-center gap-2">
                               {recipe.completion_rate !== undefined && recipe.completion_rate < 100.0 && (
                                 <span className="text-[9px] text-rose-400 bg-rose-950/20 border border-rose-900/20 px-1.5 py-0.5 rounded font-mono">
@@ -671,7 +677,12 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                     Sản Vật Hợp Thành
                   </span>
                   <h4 className="text-lg font-bold text-zinc-100 font-serif">
-                    {guSpecFor(selectedRecipe.target_gu_id, selectedRecipe.target_rank)?.name || selectedRecipe.target_gu_id}
+                    {(() => {
+                      const spec = guSpecFor(selectedRecipe.target_gu_id, selectedRecipe.target_rank) || guDictionary[selectedRecipe.target_gu_id];
+                      const name = spec?.name || selectedRecipe.target_gu_id;
+                      const rank = selectedRecipe.target_rank || spec?.rank || 1;
+                      return `${name} (Bậc ${rank})`;
+                    })()}
                   </h4>
                   <p className="text-xs text-zinc-400 max-w-md mx-auto line-clamp-1 italic leading-relaxed">
                     {guSpecFor(selectedRecipe.target_gu_id, selectedRecipe.target_rank)?.description || ""}
@@ -681,7 +692,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                 {/* Slots Crucible Row */}
                 <div className="flex flex-wrap justify-center items-center gap-3 py-2">
                   {requiredSlots.map((slot) => {
-                    const reqGuSpec = guSpecFor(slot.guId) || { name: slot.guId };
+                    const reqGuSpec: { name: string; rank?: number } = guSpecFor(slot.guId) || { name: slot.guId };
                     const slottedInstanceId = slottedGus[slot.index];
                     const slottedGu = player.gu_inventory.find(
                       (g) => g.instance_id === slottedInstanceId
@@ -706,9 +717,9 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                               {isMaskedSlot ? "Bậc ???" : `Bậc ${slottedGu.rank}`}
                             </span>
                             <div className="text-xs font-bold text-zinc-200 truncate font-serif">
-                              {isMaskedSlot ? "Cổ Trùng Ẩn (Đã đặt)" : (guSpecFor(slottedGu.gu_id, slottedGu.rank)?.name || slottedGu.gu_id)}
+                              {isMaskedSlot ? "Cổ Trùng Ẩn (Đã đặt)" : `${guSpecFor(slottedGu.gu_id, slottedGu.rank)?.name || slottedGu.gu_id} (Bậc ${slottedGu.rank})`}
                             </div>
-                            <div className="text-[9px] text-zinc-500">
+                            <div className="text-[9px] text-zinc-505">
                               Độ no: {slottedGu.hunger}/100
                             </div>
                             <span className="text-[8px] text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity block font-bold font-mono uppercase tracking-wider pt-1 border-t border-zinc-900">
@@ -721,7 +732,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                             <div className="text-[10px] text-zinc-500 font-semibold max-w-[80px] leading-tight">
                               Xếp vào:<br />
                               <span className="text-amber-500/80 font-bold">
-                                {isMaskedSlot ? "Cổ Trùng Ẩn" : reqGuSpec.name}
+                                {isMaskedSlot ? "Cổ Trùng Ẩn" : `${reqGuSpec.name} (Bậc ${reqGuSpec.rank || 1})`}
                               </span>
                             </div>
                           </div>
@@ -958,7 +969,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                   <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-900 space-y-2.5">
                     <div className="flex justify-between items-center">
                       <span className="text-base font-bold text-zinc-100 font-serif">
-                        {guSpecFor(refineResult.new_gu.gu_id, refineResult.new_gu.rank)?.name || refineResult.new_gu.gu_id}
+                        {guSpecFor(refineResult.new_gu.gu_id, refineResult.new_gu.rank)?.name || refineResult.new_gu.gu_id} (Bậc {refineResult.new_gu.rank})
                       </span>
                       <span className="text-[9px] font-mono border border-amber-500/30 px-1.5 py-0.2 rounded text-amber-400 font-bold uppercase">
                         Bậc {refineResult.new_gu.rank}
