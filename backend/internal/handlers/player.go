@@ -1797,6 +1797,20 @@ func responseWithPlayer(c *gin.Context, status int, player models.Player, extra 
 	c.JSON(status, resp)
 }
 
+// responseWithPlayerData sends a JSON response with pre-loaded player data,
+// avoiding redundant DB queries for MaterialsInventory and CompletedQuests.
+func responseWithPlayerData(c *gin.Context, status int, player models.Player, materials map[string]int, quests models.CompletedQuestsList, extra ...gin.H) {
+	player.MaterialsInventory = materials
+	player.CompletedQuests = quests
+	resp := gin.H{"player": player}
+	for _, e := range extra {
+		for k, v := range e {
+			resp[k] = v
+		}
+	}
+	c.JSON(status, resp)
+}
+
 // loadMaterialsInventory fetches the player's materials inventory as a flat id->quantity map.
 func loadMaterialsInventory(playerID string) map[string]int {
 	if InventorySvc == nil {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"math"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,14 +33,37 @@ func (s *PlayerService) DB() *sql.DB {
 }
 
 // Load reads a full player row from the database.
+// The Gu inventory load runs in parallel with the row load for better performance.
 func (s *PlayerService) Load(q QueryRower, id uuid.UUID, forUpdate bool) (models.Player, error) {
+	// Start Gu inventory load in background
+	var (
+		inv     models.GuInventory
+		invErr  error
+		invOnce sync.Once
+		invDone = make(chan struct{})
+	)
+	if s.db != nil {
+		go func() {
+			defer close(invDone)
+			g, err := db.LoadPlayerGus(s.db, id.String(), false)
+			invOnce.Do(func() {
+				inv = g
+				invErr = err
+			})
+		}()
+	}
+
 	player, err := s.loadRow(q, id, forUpdate)
 	if err != nil {
+		if s.db != nil {
+			<-invDone
+		}
 		return player, err
 	}
+
 	if s.db != nil {
-		// Load the full Gu inventory from the player_gu table.
-		if inv, err := db.LoadPlayerGus(s.db, id.String(), false); err == nil {
+		<-invDone
+		if invErr == nil {
 			player.GuInventory = inv
 		}
 	}

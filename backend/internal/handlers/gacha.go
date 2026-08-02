@@ -6,6 +6,8 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -92,6 +94,158 @@ type GachaOpenRequest struct {
 	Quantity int    `json:"quantity"`
 }
 
+// ── Pre-computed weighted pools (built once per gacha open) ──────────
+
+type weightedGuEntry struct {
+	id     string
+	weight float64
+}
+
+type weightedMaterialEntry struct {
+	id     string
+	weight float64
+}
+
+type precomputedPools struct {
+	guByRank   map[string][]weightedGuEntry // "1,2,3" → pool
+	materials  []weightedMaterialEntry
+	totalByRank map[string]float64
+	totalMat    float64
+}
+
+func precomputeGachaPools(excludedImmortal map[string]bool) precomputedPools {
+	pc := precomputedPools{
+		guByRank:    make(map[string][]weightedGuEntry),
+		totalByRank: make(map[string]float64),
+	}
+
+	// Build material pool once
+	for id, spec := range models.ItemRegistry {
+		if spec.Type != "Material" {
+			continue
+		}
+		w := rankDropMultiplier(spec.Rank)
+		if w > 0 {
+			pc.materials = append(pc.materials, weightedMaterialEntry{id: id, weight: w})
+			pc.totalMat += w
+		}
+	}
+
+	// Build Gu pools for all rank combinations used in gacha
+	rankFilters := []string{"1", "2", "3", "4,5", "6,7", "8,9"}
+	for _, rf := range rankFilters {
+		var pool []weightedGuEntry
+		var total float64
+		rankSet := make(map[int]bool)
+		for _, rs := range strings.Split(rf, ",") {
+			r := 0
+			fmt.Sscanf(rs, "%d", &r)
+			rankSet[r] = true
+		}
+		for id, ranks := range models.GuRegistry {
+			if excludedImmortal[id] {
+				continue
+			}
+			for _, spec := range ranks {
+				if rankSet[spec.Rank] {
+					w := guRarityWeightByRank(spec.Rank)
+					if w > 0 {
+						pool = append(pool, weightedGuEntry{id: id, weight: w})
+						total += w
+					}
+				}
+			}
+		}
+		pc.guByRank[rf] = pool
+		pc.totalByRank[rf] = total
+	}
+
+	return pc
+}
+
+func (pc *precomputedPools) rollGu(rankKey string) string {
+	pool := pc.guByRank[rankKey]
+	total := pc.totalByRank[rankKey]
+	if len(pool) == 0 || total <= 0 {
+		return ""
+	}
+	r := rand.Float64() * total
+	for _, g := range pool {
+		r -= g.weight
+		if r <= 0 {
+			return g.id
+		}
+	}
+	return pool[0].id
+}
+
+func (pc *precomputedPools) rollMaterial() string {
+	if len(pc.materials) == 0 || pc.totalMat <= 0 {
+		return ""
+	}
+	r := rand.Float64() * pc.totalMat
+	for _, m := range pc.materials {
+		r -= m.weight
+		if r <= 0 {
+			return m.id
+		}
+	}
+	return pc.materials[0].id
+}
+
+// ── Immortal Gu cache (5-minute TTL) ────────────────────────────────
+
+type immortalCache struct {
+	mu        sync.RWMutex
+	data      map[string]bool
+	loadedAt  int64 // unix timestamp
+	ttlSec    int64
+}
+
+var globalImmortalCache = &immortalCache{ttlSec: 300}
+
+func getCachedImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
+	c := globalImmortalCache
+	c.mu.RLock()
+	if c.data != nil && timeNowUnix()-c.loadedAt < c.ttlSec {
+		result := make(map[string]bool, len(c.data))
+		for k, v := range c.data {
+			result[k] = v
+		}
+		c.mu.RUnlock()
+		return result, nil
+	}
+	c.mu.RUnlock()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// Double-check after acquiring write lock
+	if c.data != nil && timeNowUnix()-c.loadedAt < c.ttlSec {
+		result := make(map[string]bool, len(c.data))
+		for k, v := range c.data {
+			result[k] = v
+		}
+		return result, nil
+	}
+
+	data, err := db.GetExistingImmortalGuIDs(tx)
+	if err != nil {
+		return nil, err
+	}
+	c.data = data
+	c.loadedAt = timeNowUnix()
+
+	result := make(map[string]bool, len(data))
+	for k, v := range data {
+		result[k] = v
+	}
+	return result, nil
+}
+
+func timeNowUnix() int64 {
+	return time.Now().Unix()
+}
+
 func OpenGacha(c *gin.Context) {
 	runGachaOpen(c, 0)
 }
@@ -163,23 +317,38 @@ func runGachaOpen(c *gin.Context, forced int) {
 		return
 	}
 
-	excludedImmortal, err := db.GetExistingImmortalGuIDs(tx)
+	excludedImmortal, err := getCachedImmortalGuIDs(tx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi database"})
 		return
 	}
 
+	// Pre-compute weighted pools once
+	pc := precomputeGachaPools(excludedImmortal)
+
+	// Roll all rewards, batch items, apply non-item rewards in-memory
 	rewards := make([]GachaResultItem, quantity)
+	itemQtyMap := make(map[string]int)
 	for i := 0; i < quantity; i++ {
-		rewards[i] = rollGachaReward(pool, excludedImmortal)
-		if err := applyGachaReward(tx, &player, rewards[i]); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi áp dụng phần thưởng"})
-			return
+		rewards[i] = rollGachaRewardPrecomputed(pool, pc, excludedImmortal)
+		switch rewards[i].Type {
+		case "item":
+			itemQtyMap[rewards[i].ID] += int(rewards[i].Amount)
+		default:
+			applyGachaRewardInMemory(&player, rewards[i])
 		}
 		if rewards[i].Type == "gu" {
 			if spec, ok := models.GetGuAny(rewards[i].ID); ok && spec.Rank >= 6 {
 				excludedImmortal[rewards[i].ID] = true
 			}
+		}
+	}
+
+	// Bulk upsert all item rewards in 1 query
+	if len(itemQtyMap) > 0 {
+		if err := InventorySvc.BulkAddItems(tx, player.ID.String(), "materials", itemQtyMap); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật vật phẩm"})
+			return
 		}
 	}
 
@@ -227,7 +396,7 @@ func runGachaOpen(c *gin.Context, forced int) {
 	})
 
 	if quantity == 1 {
-		responseWithPlayer(c, http.StatusOK, player, gin.H{
+		responseWithPlayerData(c, http.StatusOK, player, player.MaterialsInventory, loadCompletedQuests(player.ID.String()), gin.H{
 			"reward":  rewards[0],
 			"message": buildGachaRewardLabel(rewards[0]) + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 		})
@@ -237,20 +406,25 @@ func runGachaOpen(c *gin.Context, forced int) {
 		if discounted {
 			discountMsg = " Đã giảm 10% chi phí mở."
 		}
-		responseWithPlayer(c, http.StatusOK, player, gin.H{
+		responseWithPlayerData(c, http.StatusOK, player, player.MaterialsInventory, loadCompletedQuests(player.ID.String()), gin.H{
 			"rewards": rewards,
 			"message": fmt.Sprintf("Mở %d lần thành công! Nhân Khí +%.0f.%s\n", quantity, qiGained, discountMsg) + announcement,
 		})
 	}
 
-	// SendSystemMessage for any rare Gu (rank >= 6) obtained
+	// Batch rare Gu system messages into a single message
+	var rareDrops []string
 	for _, r := range rewards {
 		if r.Type == "gu" {
 			if spec, ok := models.GetGuAny(r.ID); ok && spec.Rank >= 6 {
-				message := fmt.Sprintf("Đạo hữu %s đã mở được Cổ Trùng %s (R%d) từ Mở Thạch %s!", player.Username, spec.Name, spec.Rank, pool.Name)
-				SendSystemMessage("world", sql.NullString{Valid: false}, message)
+				rareDrops = append(rareDrops, fmt.Sprintf("%s (R%d)", spec.Name, spec.Rank))
 			}
 		}
+	}
+	if len(rareDrops) > 0 {
+		dropList := strings.Join(rareDrops, ", ")
+		message := fmt.Sprintf("Đạo hữu %s đã mở được Cổ Trùng %s từ Mở Thạch %s!", player.Username, dropList, pool.Name)
+		SendSystemMessage("world", sql.NullString{Valid: false}, message)
 	}
 }
 
@@ -263,6 +437,11 @@ type GachaResultItem struct {
 }
 
 func rollGachaReward(pool *GachaPool, excludedImmortal map[string]bool) GachaResultItem {
+	pc := precomputeGachaPools(excludedImmortal)
+	return rollGachaRewardPrecomputed(pool, pc, excludedImmortal)
+}
+
+func rollGachaRewardPrecomputed(pool *GachaPool, pc precomputedPools, excludedImmortal map[string]bool) GachaResultItem {
 	var totalWeight float64
 	for _, r := range pool.Rewards {
 		totalWeight += r.Weight
@@ -287,7 +466,7 @@ func rollGachaReward(pool *GachaPool, excludedImmortal map[string]bool) GachaRes
 
 	switch chosen.Type {
 	case "item":
-		itemID := rollWeightedMaterial()
+		itemID := pc.rollMaterial()
 		if itemID == "" {
 			return GachaResultItem{Type: "primeval_stones", Amount: 100, Label: "100 Nguyên Thạch"}
 		}
@@ -298,7 +477,7 @@ func rollGachaReward(pool *GachaPool, excludedImmortal map[string]bool) GachaRes
 		return GachaResultItem{Type: "item", ID: itemID, Amount: 1, Label: fmt.Sprintf("1x %s", itemName), IsRare: isRare}
 
 	case "gu":
-		guID := rollWeightedGu([]string{"1", "2", "3"}, excludedImmortal)
+		guID := pc.rollGu("1,2,3")
 		if guID == "" {
 			return GachaResultItem{Type: "primeval_stones", Amount: 100, Label: "100 Nguyên Thạch"}
 		}
@@ -309,8 +488,7 @@ func rollGachaReward(pool *GachaPool, excludedImmortal map[string]bool) GachaRes
 		return GachaResultItem{Type: "gu", ID: guID, Amount: 1, Label: fmt.Sprintf("1x %s", guName), IsRare: isRare}
 
 	case "gu_rank":
-		rankList := strings.Split(chosen.ID, ",")
-		guID := rollWeightedGu(rankList, excludedImmortal)
+		guID := pc.rollGu(chosen.ID)
 		if guID == "" {
 			return GachaResultItem{Type: "primeval_stones", Amount: 100, Label: "100 Nguyên Thạch"}
 		}
@@ -437,7 +615,9 @@ func deductGachaCostAmount(player *models.Player, costType string, amount float6
 	return nil
 }
 
-func applyGachaReward(tx *sql.Tx, player *models.Player, reward GachaResultItem) error {
+// applyGachaRewardInMemory modifies player state in-memory only (no DB calls).
+// Item rewards are handled separately via BulkAddItems.
+func applyGachaRewardInMemory(player *models.Player, reward GachaResultItem) {
 	switch reward.Type {
 	case "primeval_stones":
 		player.PrimevalStones += int(reward.Amount)
@@ -453,8 +633,6 @@ func applyGachaReward(tx *sql.Tx, player *models.Player, reward GachaResultItem)
 		if player.WallProgress > 1.0 {
 			player.WallProgress = 1.0
 		}
-	case "item":
-		InventorySvc.AddItem(tx, player.ID.String(), reward.ID, "materials", int(reward.Amount))
 	case "gu":
 		guSpec, _ := models.GetGuAny(reward.ID)
 		newGu := models.GuInstance{
@@ -467,7 +645,6 @@ func applyGachaReward(tx *sql.Tx, player *models.Player, reward GachaResultItem)
 		}
 		player.GuInventory = append(player.GuInventory, newGu)
 	}
-	return nil
 }
 
 func buildGachaUpdateQuery(player *models.Player) (string, []interface{}) {

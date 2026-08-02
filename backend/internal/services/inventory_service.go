@@ -2,6 +2,8 @@ package services
 
 import (
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -126,5 +128,51 @@ func (s *InventoryService) SetQuantity(tx *sql.Tx, playerID, itemID, category st
 // DeleteAll removes all inventory rows for a player (e.g. on delete).
 func (s *InventoryService) DeleteAll(tx *sql.Tx, playerID string) error {
 	_, err := tx.Exec(`DELETE FROM player_inventory_items WHERE player_id = $1`, playerID)
+	return err
+}
+
+// BulkAddItems upserts multiple items in a single query using unnest.
+// items maps itemID → total quantity to add.
+func (s *InventoryService) BulkAddItems(tx *sql.Tx, playerID, category string, items map[string]int) error {
+	if len(items) == 0 {
+		return nil
+	}
+
+	ids := make([]string, 0, len(items))
+	qtys := make([]int, 0, len(items))
+	for id, qty := range items {
+		if qty <= 0 {
+			continue
+		}
+		ids = append(ids, id)
+		qtys = append(qtys, qty)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	// Build a VALUES list for INSERT ... ON CONFLICT
+	valueStrings := make([]string, len(ids))
+	valueArgs := make([]interface{}, 0, len(ids)*4)
+	argIdx := 1
+	for i, id := range ids {
+		valueStrings[i] = fmt.Sprintf("($%d, $%d, $%d, $%d, NOW())", argIdx, argIdx+1, argIdx+2, argIdx+3)
+		valueArgs = append(valueArgs, playerID, id, category, qtys[i])
+		argIdx += 4
+	}
+
+	query := fmt.Sprintf(`
+		INSERT INTO player_inventory_items (player_id, item_id, category, quantity, updated_at)
+		VALUES %s
+		ON CONFLICT (player_id, item_id, category)
+		DO UPDATE SET quantity = player_inventory_items.quantity + EXCLUDED.quantity, updated_at = NOW()
+	`, strings.Join(valueStrings, ", "))
+
+	var err error
+	if tx != nil {
+		_, err = tx.Exec(query, valueArgs...)
+	} else {
+		_, err = s.db.Exec(query, valueArgs...)
+	}
 	return err
 }

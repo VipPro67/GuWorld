@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -119,16 +120,53 @@ func UpdatePlayerGu(tx Execer, gu models.GuInstance) error {
 }
 
 // SavePlayerGus replaces a player's full Gu inventory in the player_gu table.
+// Uses bulk INSERT via unnest to avoid N+1 round-trips.
 func SavePlayerGus(tx *sql.Tx, playerID string, inv models.GuInventory) error {
 	if _, err := tx.Exec(`DELETE FROM player_gu WHERE player_id = $1`, playerID); err != nil {
 		return err
 	}
-	for _, gu := range inv {
-		if err := AddPlayerGu(tx, playerID, gu); err != nil {
-			return err
+	if len(inv) == 0 {
+		return nil
+	}
+
+	n := len(inv)
+	ids := make([]string, n)
+	guIDs := make([]string, n)
+	ranks := make([]int, n)
+	hunger := make([]int, n)
+	states := make([]string, n)
+	equipped := make([]bool, n)
+	vital := make([]bool, n)
+	intTimes := make([]float64, n)
+	growths := make([]float64, n)
+	equippedAts := make([]string, n) // "NULL" or timestamp string
+
+	for i, gu := range inv {
+		ids[i] = gu.InstanceID
+		guIDs[i] = gu.GuID
+		ranks[i] = gu.Rank
+		hunger[i] = gu.Hunger
+		states[i] = gu.Status
+		equipped[i] = gu.Equipped
+		vital[i] = gu.IsVital
+		intTimes[i] = gu.IntegrationTime
+		growths[i] = gu.GrowthHours
+		if gu.EquippedAt != nil {
+			equippedAts[i] = gu.EquippedAt.Format("2006-01-02T15:04:05Z")
+		} else {
+			equippedAts[i] = ""
 		}
 	}
-	return nil
+
+	query := `INSERT INTO player_gu (id, player_id, gu_id, gu_rank, rank, level, hunger, state, location, is_locked, equipped, is_vital, integration_time, equipped_at, growth_hours)
+		SELECT unnest($1::text[]), $2, unnest($3::text[]), unnest($4::int[]), unnest($4::int[]), 1, unnest($5::int[]), unnest($6::text[]), 'INVENTORY', false, unnest($7::bool[]), unnest($8::bool[]), unnest($9::float[]), NULLIF(unnest($10::text[]), '')::timestamptz, unnest($11::float[])`
+
+	_, err := tx.Exec(query,
+		pq.Array(ids), playerID,
+		pq.Array(guIDs), pq.Array(ranks), pq.Array(hunger), pq.Array(states),
+		pq.Array(equipped), pq.Array(vital), pq.Array(intTimes),
+		pq.Array(equippedAts), pq.Array(growths))
+	return err
 }
 
 // CountPlayerGusByGuID returns how many Gu instances of a given gu_id exist across all players.
