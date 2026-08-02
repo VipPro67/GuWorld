@@ -169,9 +169,14 @@ func AttackTribulationEnemy(c *gin.Context) {
 	// 2. Fetch Player stats
 	var player models.Player
 	err = tx.QueryRow(`
-		SELECT id, username, rank, current_mana, max_mana, hp, base_hp, primeval_stones, `+db.GuInventoryAggregate("players.id")+`
+		SELECT id, username, rank, sub_rank, current_mana, max_mana, hp, base_hp, primeval_stones, `+db.GuInventoryAggregate("players.id")+`, dao_marks, path_masteries, growth_data
 		FROM players WHERE id = $1
-	`, playerID).Scan(&player.ID, &player.Username, &player.Rank, &player.CurrentMana, &player.MaxMana, &player.HP, &player.BaseHP, &player.PrimevalStones, &player.GuInventory)
+	`, playerID).Scan(
+		&player.ID, &player.Username, &player.Rank, &player.SubRank,
+		&player.CurrentMana, &player.MaxMana, &player.HP, &player.BaseHP,
+		&player.PrimevalStones, &player.GuInventory, &player.DaoMarks,
+		&player.PathMasteries, &player.GrowthData,
+	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy thông tin cổ sư"})
 		return
@@ -246,11 +251,13 @@ func AttackTribulationEnemy(c *gin.Context) {
 	totalShield := 0.0
 	var guNames []string
 
-	for _, spec := range guSpecs {
-		guNames = append(guNames, spec.Name)
+	actor := models.CombatantFromPlayer(&player, CalculatePlayerStats(&player))
 
-		dmg, def, _, errGu := CalculateGuEffect(&player, &spec)
-		if errGu == nil {
+	for _, spec := range guSpecs {
+		dmgBase, defBase, _, errGuBase := CalculateGuEffectForCombatant(&actor, &spec, false)
+		dmg, def, _, errGu := CalculateGuEffectForCombatant(&actor, &spec, true)
+
+		if errGu == nil && errGuBase == nil {
 			totalFinalDmg += dmg
 			totalShield += def
 		} else {
@@ -260,8 +267,12 @@ func AttackTribulationEnemy(c *gin.Context) {
 				baseDmg = d
 			}
 			totalFinalDmg += baseDmg
+			dmg = baseDmg
+			dmgBase = baseDmg
 			if shieldVal, hasShield := activeEffects["defense"]; hasShield && shieldVal > 0 {
 				totalShield += shieldVal
+				def = shieldVal
+				defBase = shieldVal
 			}
 		}
 
@@ -270,6 +281,34 @@ func AttackTribulationEnemy(c *gin.Context) {
 		if hasHeal && healVal > 0 {
 			totalHeal += healVal
 		}
+
+		// Build detailed logs for this specific Gu
+		var details []string
+		if dmg > 0 {
+			dmgDao := dmg - dmgBase
+			if dmgDao > 0 {
+				details = append(details, fmt.Sprintf("gây %.0f sát thương [Gốc: %.0f, Đạo Ngân: +%.0f]", dmg, dmgBase, dmgDao))
+			} else {
+				details = append(details, fmt.Sprintf("gây %.0f sát thương", dmg))
+			}
+		}
+		if def > 0 {
+			defDao := def - defBase
+			if defDao > 0 {
+				details = append(details, fmt.Sprintf("tạo %.0f Khiên [Gốc: %.0f, Đạo Ngân: +%.0f]", def, defBase, defDao))
+			} else {
+				details = append(details, fmt.Sprintf("tạo %.0f Khiên", def))
+			}
+		}
+		if hasHeal && healVal > 0 {
+			details = append(details, fmt.Sprintf("hồi %.0f HP", healVal))
+		}
+
+		guDesc := spec.Name
+		if len(details) > 0 {
+			guDesc += fmt.Sprintf(" (%s)", strings.Join(details, ", "))
+		}
+		guNames = append(guNames, guDesc)
 	}
 
 	netDmg := int(totalFinalDmg) - en.Defense

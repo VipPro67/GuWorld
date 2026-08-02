@@ -412,6 +412,7 @@ func CombatAttack(c *gin.Context) {
 					}
 
 					for _, spec := range selectedSpecs {
+						dmgBase, defBase, _, _ := CalculateGuEffectForCombatant(refCaster, &spec, false)
 						dmg, def, cost, errGu := CalculateGuEffectForCombatant(refCaster, &spec, true)
 						if errGu == nil && refCaster.CurrentMana >= cost {
 							refCaster.CurrentMana -= cost
@@ -446,20 +447,43 @@ func CombatAttack(c *gin.Context) {
 								if refCaster.HP > refCaster.MaxHP {
 									refCaster.HP = refCaster.MaxHP
 								}
-								logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s, khôi phục %.1f HP bản thân (HP hiện tại: %.1f).", refCaster.Name, spec.Name, healVal, refCaster.HP))
+								healBase := defBase
+								if healBase <= 0 {
+									healBase = 30.0
+								}
+								healDao := healVal - healBase
+								if healDao > 0 {
+									logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s, khôi phục %.1f HP bản thân (HP hiện tại: %.1f) [Gốc: %.1f, Đạo Ngân: +%.1f].", refCaster.Name, spec.Name, healVal, refCaster.HP, healBase, healDao))
+								} else {
+									logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s, khôi phục %.1f HP bản thân (HP hiện tại: %.1f).", refCaster.Name, spec.Name, healVal, refCaster.HP))
+								}
 							} else if isDefense {
 								shieldVal := def * 10.0
 								if shieldVal <= 0 {
 									shieldVal = 150.0
 								}
 								refCaster.VirtualShield += shieldVal
-								logs = append(logs, fmt.Sprintf("-> %s thi triển %s phòng thủ, nhận %.1f Khiên hộ thể (Virtual Shield: %.1f).", refCaster.Name, spec.Name, shieldVal, refCaster.VirtualShield))
+								shieldBase := defBase * 10.0
+								if shieldBase <= 0 {
+									shieldBase = 150.0
+								}
+								shieldDao := shieldVal - shieldBase
+								if shieldDao > 0 {
+									logs = append(logs, fmt.Sprintf("-> %s thi triển %s phòng thủ, nhận %.1f Khiên hộ thể (Virtual Shield: %.1f) [Gốc: %.1f, Đạo Ngân: +%.1f].", refCaster.Name, spec.Name, shieldVal, refCaster.VirtualShield, shieldBase, shieldDao))
+								} else {
+									logs = append(logs, fmt.Sprintf("-> %s thi triển %s phòng thủ, nhận %.1f Khiên hộ thể (Virtual Shield: %.1f).", refCaster.Name, spec.Name, shieldVal, refCaster.VirtualShield))
+								}
 							} else if isAttack {
 								hasBypass := spec.Effects.Active != nil && spec.Effects.Active.CurveAttack
 								targetType := spec.Effects.Active.TargetSelector;
 								targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, targetType, prefX, prefY, hasBypass)
 								if len(targetsIdx) > 0 {
-									logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s!", refCaster.Name, spec.Name))
+									dmgDao := dmg - dmgBase
+									if dmgDao > 0 {
+										logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s! (Sức mạnh: %.1f [Gốc: %.1f, Đạo Ngân: +%.1f])", refCaster.Name, spec.Name, dmg, dmgBase, dmgDao))
+									} else {
+										logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s!", refCaster.Name, spec.Name))
+									}
 									for _, eIdx := range targetsIdx {
 										tEnemy := &player.ActiveCombat.Enemies[eIdx]
 										netDmg := dmg - tEnemy.BaseDefense
