@@ -1,9 +1,11 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import { ShoppingCart } from "lucide-react";
 
 export const ArenaShopView: React.FC = () => {
   const { arenaShopItems, fetchArenaShop, buyArenaItem, actionLoading } = useGameStore();
+  const [searchTerm, setSearchTerm] = useState("");
+  const filteredItems = arenaShopItems.filter((item: any) => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   useEffect(() => {
     fetchArenaShop();
@@ -11,8 +13,9 @@ export const ArenaShopView: React.FC = () => {
 
   return (
     <div className="space-y-4">
+        <input type="text" placeholder="Search items..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-2 border rounded bg-zinc-800 text-zinc-300" />
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-        {arenaShopItems.map((item: any) => (
+        {filteredItems.map((item: any) => (
           <div key={item.id} className="bg-zinc-950/60 border border-zinc-800 rounded-2xl p-4 flex flex-col justify-between items-start hover:border-amber-900/50 transition-all group">
             <div>
               <h4 className="text-amber-500 font-bold font-serif text-sm group-hover:text-amber-400">{item.name}</h4>

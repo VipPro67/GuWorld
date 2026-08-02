@@ -2216,7 +2216,7 @@ export const AdminView: React.FC = () => {
             <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2"><Package className="w-4 h-4 text-emerald-400" />Danh Sách Vật Phẩm</h3>
-                <button onClick={() => setItemEdit({ id: "", name: "", item_type: "Material", rank: 1, effects: {}, description: "", base_price: 0, image_url: "" })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
+                <button onClick={() => setItemEdit({ id: "", name: "", item_type: "Material", rank: 1, effects: {}, description: "", base_price: 0, image_url: "", _isNew: true })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
               </div>
               <div className="relative mb-3">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
@@ -3190,9 +3190,9 @@ export const AdminView: React.FC = () => {
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setItemEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
               <button onClick={async () => {
-                const isNew = !itemEdit.id || itemEdit.id.startsWith("__");
+                const isNew = !!itemEdit._isNew;
                 const itemUrl = isNew ? `${BACKEND_URL}/api/admin/item-dictionary` : `${BACKEND_URL}/api/admin/item-dictionary/${itemEdit.id}`;
-                const clean = {...itemEdit, effects: Object.fromEntries(Object.entries(itemEdit.effects || {}).filter(([k]) => k.trim() !== ""))};
+                const clean = {...itemEdit, effects: Object.fromEntries(Object.entries(itemEdit.effects || {}).filter(([k]) => k.trim() !== ""))}; delete clean._isNew;
                 const ok = await exec(itemUrl, isNew ? "POST" : "PUT", clean);
                 if (ok) { setItemEdit(null); fetchItems(); }
               }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
