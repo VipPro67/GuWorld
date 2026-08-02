@@ -342,7 +342,24 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		years := val
 		player.Lifespan += years
 		return fmt.Sprintf("Cổ trùng Thọ Nguyên hòa tan vào không khiếu! Đạo hữu được ban thêm vĩnh viễn %.0f năm thọ mệnh.", years), nil
-
+	case "ADD_SOUL_MAX":
+		val, _ := params["value"].(float64)
+		if player.MaxSoul == 0 {
+			player.MaxSoul = 10
+		}
+		player.MaxSoul += int(val)
+		return fmt.Sprintf("Linh Hồn tối đa tăng thêm %.0f điểm.", val), nil
+	case "ADD_DAO_MARKS":
+		val, _ := params["value"].(float64)
+		path, _ := params["path"].(string)
+		if path == "" {
+			path = "soul"
+		}
+		if player.DaoMarks == nil {
+			player.DaoMarks = make(models.DaoMarksMap)
+		}
+		player.DaoMarks[path] += int(val)
+		return fmt.Sprintf("Đạo ngân tăng thêm %.0f điểm cho %s.", val, path), nil
 	// ── New action codes ──────────────────────────────────────────────
 	case "TIME_ACCELERATION":
 		val, _ := params["value"].(float64)
