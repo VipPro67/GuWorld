@@ -208,7 +208,7 @@ func CreateListing(c *gin.Context) {
 		// Remove recipe from seller's unlocked list
 		RecipeSvc.Delete(tx, player.ID.String(), req.ItemID)
 		req.Quantity = 1 // Recipes are single instance
-		
+
 		itemDataJSON, err = json.Marshal(recipeToSell)
 		if err != nil {
 			logger.S.Errorf("Failed to marshal recipe: %v", err)
@@ -345,9 +345,9 @@ func CreateListing(c *gin.Context) {
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.create_listing", EntityType: "auction",
-		EntityID: listingID,
+		EntityID:       listingID,
 		RequestSummary: fmt.Sprintf("%s | %s | sl=%d | %.0f %s | loại=%s", req.ItemType, req.ItemID, req.Quantity, req.Price, req.Currency, req.ListingType),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đăng bán thành công", "listing_id": listingID})
 }
@@ -526,16 +526,16 @@ func PlaceBid(c *gin.Context) {
 	}
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.bid", EntityType: "auction",
-		EntityID: req.ListingID,
+		EntityID:       req.ListingID,
 		RequestSummary: fmt.Sprintf("giá=%.0f | hiện tại=%.0f", req.Amount, current),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	if sellerID != authID {
 		auditlog.Log(db.DB, auditlog.Entry{
 			PlayerID: &sellerID, Action: "marketplace.bid_notify", EntityType: "auction",
-			EntityID: req.ListingID,
+			EntityID:       req.ListingID,
 			RequestSummary: fmt.Sprintf("người mua=%s | giá=%.0f", authID, req.Amount),
-			IPAddress: c.ClientIP(), Success: true,
+			IPAddress:      c.ClientIP(), Success: true,
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đặt giá thành công"})
@@ -698,6 +698,7 @@ func BuyListing(c *gin.Context) {
 
 	if err := updatePlayerInventory(tx, buyer); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật kho đồ người mua"})
+		fmt.Println("Error updating buyer inventory:", err)
 		return
 	}
 
@@ -734,15 +735,15 @@ func BuyListing(c *gin.Context) {
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.buy", EntityType: "auction",
-		EntityID: req.ListingID,
+		EntityID:       req.ListingID,
 		RequestSummary: fmt.Sprintf("seller=%s | sl=%d | %.0f %s", sellerID, purchaseQty, totalPrice, currency),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &sellerID, Action: "marketplace.sold", EntityType: "auction",
-		EntityID: req.ListingID,
+		EntityID:       req.ListingID,
 		RequestSummary: fmt.Sprintf("người mua=%s | sl=%d | %.0f %s", authID, purchaseQty, totalPrice, currency),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	responseWithPlayer(c, http.StatusOK, buyer, gin.H{"message": "Mua hàng thành công"})
 }
@@ -855,9 +856,9 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 		bidderUUID, _ := uuid.Parse(highestBidderID.String)
 		auditlog.Log(tx, auditlog.Entry{
 			PlayerID: &bidderUUID, Action: "marketplace.settle_auction_win", EntityType: "auction",
-			EntityID: auctionID,
+			EntityID:       auctionID,
 			RequestSummary: fmt.Sprintf("seller=%s | %.0f %s | sl=%d", sellerID, currentPrice, currency, qty),
-			Success: true,
+			Success:        true,
 		})
 	} else {
 		auditlog.Log(tx, auditlog.Entry{

@@ -98,6 +98,16 @@ export const LobbyView: React.FC = () => {
   const timeSpeedMultiplier = player?.time_speed_multiplier || 1;
   const hpRegenRealHourly = (player?.hp_regen_rate || 0) * timeSpeedMultiplier;
   const manaRegenRealHourly = (player?.mana_regen_rate || 0) * timeSpeedMultiplier;
+  const thoughtRegenRealHourly = (player?.thought_regen_rate || 0) * timeSpeedMultiplier;
+  const soulRegenRealHourly = (player?.max_soul || 0) * 0.10 * timeSpeedMultiplier;
+
+  const displayedThoughtPercent = player
+    ? (player.max_thought > 0 ? Math.min(100, ((player.current_thought || 0) / player.max_thought) * 100) : 0)
+    : 0;
+
+  const displayedSoulPercent = player
+    ? (player.max_soul > 0 ? Math.min(100, ((player.soul_hp || 0) / player.max_soul) * 100) : 0)
+    : 0;
 
   const formatTimeRemaining = (current: number, max: number, realRegenPerHour: number) => {
     if (current >= max || realRegenPerHour <= 0) return "Đã đầy";
@@ -347,8 +357,8 @@ export const LobbyView: React.FC = () => {
       {/* 1. CHARACTER & RESOURCE HUD */}
       {player && (
         <div className="bg-zinc-950/60 border border-zinc-900 rounded-2xl sm:rounded-3xl p-3 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-6 shadow-xl backdrop-blur-md">
-          {/* Left Block: Avatar & Name & Tu vi */}
-          <div className="flex items-center gap-3 sm:gap-4 w-full md:w-auto">
+          {/* Left Block: Avatar & Name & Tu vi (Reduced width & wrapped text) */}
+          <div className="flex items-center gap-3 sm:gap-4 w-full md:w-48 shrink-0">
             <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold border-2 border-zinc-900 shrink-0 overflow-hidden">
               {player.avatar_url ? (
                 <img src={player.avatar_url} alt={player.username} className="w-full h-full object-cover" />
@@ -357,64 +367,121 @@ export const LobbyView: React.FC = () => {
               )}
             </div>
             <div className="flex flex-col min-w-0">
-              <h2 className="text-base sm:text-lg font-serif font-bold text-zinc-100 truncate">
+              <h2 className="text-base sm:text-lg font-serif font-bold text-zinc-100 break-words whitespace-normal leading-tight">
                 {player.username}
               </h2>
-              <span className="text-xs text-zinc-500 font-mono font-semibold">
+              <span className="text-xs text-zinc-500 font-mono font-semibold break-words whitespace-normal leading-tight mt-1">
                 {getRankName(player.rank, player.sub_rank, aperture)}
               </span>
             </div>
           </div>
 
-          {/* Center Block: HP & Mana Bars */}
-          <div className="flex flex-col gap-2.5 w-full md:w-80 grow max-w-md">
-            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
-              <div className="flex flex-col">
-                <span>Máu</span>
+          {/* Center Block: HP, Mana, Thought & Soul Bars (Optimized to 1 line each) */}
+          <div className="flex flex-col gap-2 w-full md:w-[380px] grow max-w-md">
+            {/* HP Bar */}
+            <div 
+              className="flex items-center justify-between text-[11px] font-mono text-zinc-400 gap-2 hover:bg-zinc-900/10 p-0.5 rounded cursor-help transition-all"
+              title={player && hpRegenRealHourly > 0 && displayedHP < displayedMaxHP ? `Hồi máu: +${hpRegenRealHourly.toFixed(1)}/giờ • ${formatTimeRemaining(displayedHP, displayedMaxHP, hpRegenRealHourly)}` : "Máu đầy"}
+            >
+              <div className="w-24 sm:w-28 flex items-center justify-between shrink-0 min-w-0">
+                <span className="font-semibold text-zinc-300">Máu</span>
                 {player && hpRegenRealHourly > 0 && displayedHP < displayedMaxHP && (
-                  <span className="text-[8px] text-zinc-500">
-                    +{hpRegenRealHourly.toFixed(1)}/giờ • {formatTimeRemaining(displayedHP, displayedMaxHP, hpRegenRealHourly)}
+                  <span className="text-[9px] text-emerald-500/80 font-semibold">
+                    +{hpRegenRealHourly.toFixed(1)}/g
                   </span>
                 )}
               </div>
-              <span>
-                {Math.round(displayedHP)} / {Math.round(displayedMaxHP)}
+              <div className="flex-1 bg-zinc-950 rounded-full h-2 border border-zinc-900 overflow-hidden relative">
+                <div
+                  className="bg-gradient-to-r from-red-600 to-rose-500 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${displayedHPPercent}%` }}
+                />
+              </div>
+              <span className="w-20 text-right text-[10.5px] text-zinc-350 shrink-0 font-medium font-mono">
+                {Math.round(displayedHP)}/{Math.round(displayedMaxHP)}
               </span>
-            </div>
-            <div className="w-full bg-zinc-950 rounded-full h-2.5 border border-zinc-900 overflow-hidden mb-2">
-              <div
-                className="bg-gradient-to-r from-red-600 to-rose-500 h-full rounded-full transition-all duration-300"
-                style={{ width: `${displayedHPPercent}%` }}
-              />
             </div>
 
             {/* Mana Bar */}
-            <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
-              <div className="flex flex-col">
-                <span>{player.rank >= 6 ? "Tiên Nguyên" : "Chân Nguyên"}</span>
+            <div 
+              className="flex items-center justify-between text-[11px] font-mono text-zinc-400 gap-2 hover:bg-zinc-900/10 p-0.5 rounded cursor-help transition-all"
+              title={player && manaRegenRealHourly > 0 && (player.rank >= 6 || displayedMana < displayedMaxMana) ? `${player.rank >= 6 ? 'Hồi Tiên Nguyên' : 'Hồi Chân Nguyên'}: +${manaRegenRealHourly.toFixed(1)}/giờ${player.rank < 6 ? ` • ${formatTimeRemaining(displayedMana, displayedMaxMana, manaRegenRealHourly)}` : ""}` : "Năng lượng đầy"}
+            >
+              <div className="w-24 sm:w-28 flex items-center justify-between shrink-0 min-w-0">
+                <span className="font-semibold text-zinc-300 truncate">
+                  {player.rank >= 6 ? "Tiên Nguyên" : "Chân Nguyên"}
+                </span>
                 {player && manaRegenRealHourly > 0 && (player.rank >= 6 || displayedMana < displayedMaxMana) && (
-                  <span className="text-[8px] text-zinc-500">
-                    +{manaRegenRealHourly.toFixed(1)}/giờ{player.rank < 6 ? ` • ${formatTimeRemaining(displayedMana, displayedMaxMana, manaRegenRealHourly)}` : ""}
+                  <span className="text-[9px] text-emerald-500/80 font-semibold">
+                    +{manaRegenRealHourly.toFixed(1)}/g
                   </span>
                 )}
               </div>
-              <span>
+              <div className="flex-1 bg-zinc-950 rounded-full h-2 border border-zinc-900 overflow-hidden relative">
+                <div
+                  className="bg-gradient-to-r from-cyan-600 to-blue-500 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${player.rank >= 6 ? 100 : displayedManaPercent}%` }}
+                />
+              </div>
+              <span className="w-20 text-right text-[10.5px] text-zinc-350 shrink-0 font-medium font-mono">
                 {player.rank >= 6
                   ? `${Math.round(displayedMana)}`
-                  : `${Math.round(displayedMana)} / ${Math.round(displayedMaxMana)}`}
+                  : `${Math.round(displayedMana)}/${Math.round(displayedMaxMana)}`}
               </span>
             </div>
-            <div className="w-full bg-zinc-950 rounded-full h-2.5 border border-zinc-900 overflow-hidden">
-              <div
-                className="bg-gradient-to-r from-cyan-600 to-blue-500 h-full rounded-full transition-all duration-300"
-                style={{ width: `${player.rank >= 6 ? 100 : displayedManaPercent}%` }}
-              />
+
+            {/* Thought Bar */}
+            <div 
+              className="flex items-center justify-between text-[11px] font-mono text-zinc-400 gap-2 hover:bg-zinc-900/10 p-0.5 rounded cursor-help transition-all"
+              title={player && thoughtRegenRealHourly > 0 && (player.current_thought < player.max_thought) ? `Hồi Niệm Lực: +${thoughtRegenRealHourly.toFixed(1)}/giờ • ${formatTimeRemaining(player.current_thought, player.max_thought, thoughtRegenRealHourly)}` : "Niệm Lực đầy"}
+            >
+              <div className="w-24 sm:w-28 flex items-center justify-between shrink-0 min-w-0">
+                <span className="font-semibold text-zinc-300">Niệm Lực</span>
+                {player && thoughtRegenRealHourly > 0 && player.current_thought < player.max_thought && (
+                  <span className="text-[9px] text-emerald-500/80 font-semibold">
+                    +{thoughtRegenRealHourly.toFixed(1)}/g
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 bg-zinc-950 rounded-full h-2 border border-zinc-900 overflow-hidden relative">
+                <div
+                  className="bg-gradient-to-r from-violet-600 to-purple-500 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${displayedThoughtPercent}%` }}
+                />
+              </div>
+              <span className="w-20 text-right text-[10.5px] text-zinc-350 shrink-0 font-medium font-mono">
+                {(player.current_thought ?? 0).toFixed(1)}/{(player.max_thought ?? 100).toFixed(0)}
+              </span>
+            </div>
+
+            {/* Soul Bar */}
+            <div 
+              className="flex items-center justify-between text-[11px] font-mono text-zinc-400 gap-2 hover:bg-zinc-900/10 p-0.5 rounded cursor-help transition-all"
+              title={player && soulRegenRealHourly > 0 && player.soul_hp < player.max_soul ? `Hồi Linh Hồn: +${soulRegenRealHourly.toFixed(1)}/giờ • ${formatTimeRemaining(player.soul_hp, player.max_soul, soulRegenRealHourly)}` : "Linh Hồn đầy"}
+            >
+              <div className="w-24 sm:w-28 flex items-center justify-between shrink-0 min-w-0">
+                <span className="font-semibold text-zinc-300">Linh Hồn</span>
+                {player && soulRegenRealHourly > 0 && player.soul_hp < player.max_soul && (
+                  <span className="text-[9px] text-emerald-500/80 font-semibold">
+                    +{soulRegenRealHourly.toFixed(1)}/g
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 bg-zinc-950 rounded-full h-2 border border-zinc-900 overflow-hidden relative">
+                <div
+                  className="bg-gradient-to-r from-indigo-600 to-purple-500 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${displayedSoulPercent}%` }}
+                />
+              </div>
+              <span className="w-20 text-right text-[10.5px] text-zinc-350 shrink-0 font-medium font-mono">
+                {player.soul_hp}/{player.max_soul}
+              </span>
             </div>
           </div>
-          {/* Right Block: Resources */}
-          <div className="flex justify-around md:justify-end items-center gap-4 sm:gap-6 w-full md:w-auto border-t md:border-t-0 border-zinc-900/60 pt-3 md:pt-0 shrink-0">
+          {/* Right Block: Resources (Stacked vertically) */}
+          <div className="flex flex-col justify-center items-center md:items-end gap-3 w-full md:w-auto border-t md:border-t-0 border-zinc-900/60 pt-3 md:pt-0 shrink-0">
             {/* Primeval Stones */}
-            <div className="flex flex-col items-center">
+            <div className="flex flex-col items-center md:items-end">
               <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">Nguyên Thạch</span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <Coins className="w-4 h-4 text-yellow-500" />
@@ -425,7 +492,7 @@ export const LobbyView: React.FC = () => {
             </div>
 
             {/* Immortal Stones */}
-            <div className="flex flex-col items-center">
+            <div className="flex flex-col items-center md:items-end">
               <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest">Tiên Nguyên Thạch</span>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <Sparkles className="w-4 h-4 text-violet-400" />
