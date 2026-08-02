@@ -31,7 +31,6 @@ var ApplyItemEffects = map[string]ItemEffectHandler{
 	"heal_aperture":          healApertureEffect,
 	"regen_hp_out_of_combat": regenHPOutOfCombatEffect,
 	"increase_human_qi":      increaseHumanQi,
-	"increase_dao_marks":     increaseDaoMarksEffect,
 }
 
 func healApertureEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {

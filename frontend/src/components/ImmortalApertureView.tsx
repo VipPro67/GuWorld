@@ -910,10 +910,14 @@ export const ImmortalApertureView: React.FC = () => {
                                 <div className="font-bold flex items-center gap-1">
                                   {enemy.is_boss ? "👑" : "👾"} {enemy.name}
                                 </div>
-                                <div className="text-[10px] text-slate-500">Tọa độ: ({enemy.x}, {enemy.y})</div>
+                                <div className="text-[10px] text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
+                                  <span>Tọa độ: ({enemy.x}, {enemy.y})</span>
+                                  <span className="text-rose-400 font-semibold">⚔️ Công: {enemy.attack.toLocaleString()}</span>
+                                  <span className="text-emerald-400 font-semibold">🛡️ Thủ: {enemy.defense.toLocaleString()}</span>
+                                </div>
                               </div>
                               <div className="text-right">
-                                <div className="font-bold text-rose-400">{enemy.hp} HP</div>
+                                <div className="font-bold text-rose-400">{enemy.hp.toLocaleString()} HP</div>
                               </div>
                             </div>
                           );

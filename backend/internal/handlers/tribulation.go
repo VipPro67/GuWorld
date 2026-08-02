@@ -156,13 +156,13 @@ func AttackTribulationEnemy(c *gin.Context) {
 		return
 	}
 
-	// 1b. Player may only fight back while the Aperture is above 20% max HP
+	// 1b. Player may only fight back while the Aperture is above 5% max HP
 	var apHP, apMaxHP int
 	err = tx.QueryRow(`
 		SELECT aperture_hp, max_aperture_hp FROM immortal_apertures WHERE id = $1
 	`, apertureID).Scan(&apHP, &apMaxHP)
-	if err == nil && apHP*5 <= apMaxHP {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Khiếu đang nguy cấp (HP ≤ 20%)! Quái tai kiếp đang càn quét, đạo hữu không thể ra tay. Hãy chờ Tiên Khiếu hồi phục hoặc kết toán vượt kiếp."})
+	if err == nil && apHP*20 <= apMaxHP {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tiên Khiếu đang nguy cấp (HP ≤ 5%)! Quái tai kiếp đang càn quét, đạo hữu không thể ra tay. Hãy chờ Tiên Khiếu hồi phục hoặc kết toán vượt kiếp."})
 		return
 	}
 
@@ -253,92 +253,92 @@ func AttackTribulationEnemy(c *gin.Context) {
 
 	actor := models.CombatantFromPlayer(&player, CalculatePlayerStats(&player))
 
-	if len(guSpecs) == 0 {
-		daoMult := 1.0
-		if actor.DaoMarks != nil {
-			if amt, ok := actor.DaoMarks["strength"]; ok && amt > 0 {
-				if amt <= 10000 {
-					daoMult = 1.0 + float64(amt)/100.0
-				} else {
-					daoMult = 1.0 + 100.0 + float64(amt-10000)/500.0
-				}
-			}
-		}
-		dmgVal := actor.BaseAttack
-		if dmgVal <= 0 {
-			dmgVal = 10.0
-		}
-		fullDmg := dmgVal * daoMult
-		totalFinalDmg = fullDmg
-		if daoMult > 1.0 {
-			dmgDao := fullDmg - dmgVal
-			guNames = append(guNames, fmt.Sprintf("Đánh thường (gây %.0f sát thương [Gốc: %.0f, Đạo Ngân: +%.0f])", fullDmg, dmgVal, dmgDao))
-		} else {
-			guNames = append(guNames, fmt.Sprintf("Đánh thường (gây %.0f sát thương)", dmgVal))
-		}
-	} else {
-		for _, spec := range guSpecs {
-			dmgBase, defBase, _, errGuBase := CalculateGuEffectForCombatant(&actor, &spec, false)
-			dmg, def, _, errGu := CalculateGuEffectForCombatant(&actor, &spec, true)
-
-			if errGu == nil && errGuBase == nil {
-				totalFinalDmg += dmg
-				totalShield += def
+	// Always apply Basic Attack (Đánh thường)
+	daoMult := 1.0
+	if actor.DaoMarks != nil {
+		if amt, ok := actor.DaoMarks["strength"]; ok && amt > 0 {
+			if amt <= 10000 {
+				daoMult = 1.0 + float64(amt)/100.0
 			} else {
-				activeEffects := models.GetFlatGuEffects(spec)
-				baseDmg := 35.0
-				if d, hasDmg := activeEffects["damage"]; hasDmg {
-					baseDmg = d
-				}
-				totalFinalDmg += baseDmg
-				dmg = baseDmg
-				dmgBase = baseDmg
-				if shieldVal, hasShield := activeEffects["defense"]; hasShield && shieldVal > 0 {
-					totalShield += shieldVal
-					def = shieldVal
-					defBase = shieldVal
-				}
+				daoMult = 1.0 + 100.0 + float64(amt-10000)/500.0
 			}
-
-			activeEffects := models.GetFlatGuEffects(spec)
-			healVal, hasHeal := activeEffects["heal"]
-			if hasHeal && healVal > 0 {
-				totalHeal += healVal
-			}
-
-			// Build detailed logs for this specific Gu
-			var details []string
-			if dmg > 0 {
-				dmgDao := dmg - dmgBase
-				if dmgDao > 0 {
-					details = append(details, fmt.Sprintf("gây %.0f sát thương [Gốc: %.0f, Đạo Ngân: +%.0f]", dmg, dmgBase, dmgDao))
-				} else {
-					details = append(details, fmt.Sprintf("gây %.0f sát thương", dmg))
-				}
-			}
-			if def > 0 {
-				defDao := def - defBase
-				if defDao > 0 {
-					details = append(details, fmt.Sprintf("tạo %.0f Khiên [Gốc: %.0f, Đạo Ngân: +%.0f]", def, defBase, defDao))
-				} else {
-					details = append(details, fmt.Sprintf("tạo %.0f Khiên", def))
-				}
-			}
-			if hasHeal && healVal > 0 {
-				details = append(details, fmt.Sprintf("hồi %.0f HP", healVal))
-			}
-
-			guDesc := spec.Name
-			if len(details) > 0 {
-				guDesc += fmt.Sprintf(" (%s)", strings.Join(details, ", "))
-			}
-			guNames = append(guNames, guDesc)
 		}
+	}
+	dmgVal := actor.BaseAttack
+	if dmgVal <= 0 {
+		dmgVal = 10.0
+	}
+	fullDmg := dmgVal * daoMult
+	totalFinalDmg = fullDmg
+	if daoMult > 1.0 {
+		dmgDao := fullDmg - dmgVal
+		guNames = append(guNames, fmt.Sprintf("Đánh thường (gây %.0f sát thương [Gốc: %.0f, Đạo Ngân: +%.0f])", fullDmg, dmgVal, dmgDao))
+	} else {
+		guNames = append(guNames, fmt.Sprintf("Đánh thường (gây %.0f sát thương)", dmgVal))
+	}
+
+	// Apply selected active Gu effects
+	for _, spec := range guSpecs {
+		dmgBase, defBase, _, errGuBase := CalculateGuEffectForCombatant(&actor, &spec, false)
+		dmg, def, _, errGu := CalculateGuEffectForCombatant(&actor, &spec, true)
+
+		if errGu == nil && errGuBase == nil {
+			totalFinalDmg += dmg
+			totalShield += def
+		} else {
+			activeEffects := models.GetFlatGuEffects(spec)
+			baseDmg := 35.0
+			if d, hasDmg := activeEffects["damage"]; hasDmg {
+				baseDmg = d
+			}
+			totalFinalDmg += baseDmg
+			dmg = baseDmg
+			dmgBase = baseDmg
+			if shieldVal, hasShield := activeEffects["defense"]; hasShield && shieldVal > 0 {
+				totalShield += shieldVal
+				def = shieldVal
+				defBase = shieldVal
+			}
+		}
+
+		activeEffects := models.GetFlatGuEffects(spec)
+		healVal, hasHeal := activeEffects["heal"]
+		if hasHeal && healVal > 0 {
+			totalHeal += healVal
+		}
+
+		// Build detailed logs for this specific Gu
+		var details []string
+		if dmg > 0 {
+			dmgDao := dmg - dmgBase
+			if dmgDao > 0 {
+				details = append(details, fmt.Sprintf("gây %.0f sát thương [Gốc: %.0f, Đạo Ngân: +%.0f]", dmg, dmgBase, dmgDao))
+			} else {
+				details = append(details, fmt.Sprintf("gây %.0f sát thương", dmg))
+			}
+		}
+		if def > 0 {
+			defDao := def - defBase
+			if defDao > 0 {
+				details = append(details, fmt.Sprintf("tạo %.0f Khiên [Gốc: %.0f, Đạo Ngân: +%.0f]", def, defBase, defDao))
+			} else {
+				details = append(details, fmt.Sprintf("tạo %.0f Khiên", def))
+			}
+		}
+		if hasHeal && healVal > 0 {
+			details = append(details, fmt.Sprintf("hồi %.0f HP", healVal))
+		}
+
+		guDesc := spec.Name
+		if len(details) > 0 {
+			guDesc += fmt.Sprintf(" (%s)", strings.Join(details, ", "))
+		}
+		guNames = append(guNames, guDesc)
 	}
 
 	netDmg := int(totalFinalDmg) - en.Defense
-	if netDmg < 10 {
-		netDmg = 10
+	if netDmg < 0 {
+		netDmg = 0
 	}
 
 	en.HP -= netDmg
@@ -367,7 +367,7 @@ func AttackTribulationEnemy(c *gin.Context) {
 		if en.IsBoss {
 			rawCounterDmg = en.Attack * 2
 		}
-		
+
 		// Subtract player defense from counter attack damage
 		counterDmg = rawCounterDmg - int(actor.BaseDefense)
 		if counterDmg < 10 {
@@ -434,7 +434,11 @@ func AttackTribulationEnemy(c *gin.Context) {
 
 	// Formulate log message
 	var playerActionMsg string
-	playerActionMsg = fmt.Sprintf("Kích hoạt %s => Gây %d sát thương lên %s", strings.Join(guNames, ", "), netDmg, en.Name)
+	if netDmg > 0 {
+		playerActionMsg = fmt.Sprintf("Kích hoạt %s => Gây %d sát thương lên %s", strings.Join(guNames, ", "), netDmg, en.Name)
+	} else {
+		playerActionMsg = fmt.Sprintf("Kích hoạt %s => Không thể xuyên qua phòng ngự của %s (gây 0 sát thương)", strings.Join(guNames, ", "), en.Name)
+	}
 
 	extras := []string{}
 	if totalShield > 0 {
