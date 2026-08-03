@@ -62,6 +62,7 @@ var gachaPools = []GachaPool{
 		CostType:    "lifespan",
 		CostAmount:  50,
 		Rewards: []GachaRewardItem{
+			{Type: "gu_rank", ID: "3,4", Min: 1, Max: 1, Weight: 30.0, Label: "Cổ Trùng R3~R4"},
 			{Type: "gu_rank", ID: "5", Min: 1, Max: 1, Weight: 35.0, Label: "Cổ Trùng R5"},
 			{Type: "gu_rank", ID: "6", Min: 1, Max: 1, Weight: 20.0, Label: "Cổ Trùng R6"},
 			{Type: "gu_rank", ID: "7", Min: 1, Max: 1, Weight: 10.0, Label: "Cổ Trùng R7"},
@@ -135,20 +136,7 @@ func precomputeGachaPools(excludedImmortal map[string]bool) precomputedPools {
 	}
 
 	// Build Gu pools for all rank combinations used in gacha
-	rankFilterSet := map[string]bool{
-		"1,2,3": true, // Default for type "gu"
-	}
-	for _, p := range gachaPools {
-		for _, r := range p.Rewards {
-			if r.Type == "gu_rank" && r.ID != "" {
-				rankFilterSet[r.ID] = true
-			}
-		}
-	}
-	var rankFilters []string
-	for rf := range rankFilterSet {
-		rankFilters = append(rankFilters, rf)
-	}
+	rankFilters := []string{"1", "2", "3", "4,5", "6,7", "8,9"}
 	for _, rf := range rankFilters {
 		var pool []weightedGuEntry
 		var total float64
