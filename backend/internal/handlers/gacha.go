@@ -65,7 +65,6 @@ var gachaPools = []GachaPool{
 			{Type: "primeval_stones", Min: 500, Max: 1500, Weight: 40.0, Label: "500~1.500 Nguyên Thạch"},
 			{Type: "item", Min: 1, Max: 1, Weight: 25.0, Label: "Vật liệu cấp thấp"},
 			{Type: "gu", Min: 1, Max: 1, Weight: 20.0, Label: "Cổ Trùng R1~R3"},
-			{Type: "primeval_stones", Min: 2000, Max: 5000, Weight: 10.0, Label: "2.000~5.000 Nguyên Thạch"},
 			{Type: "gu_rank", ID: "4,5", Min: 1, Max: 1, Weight: 4.0, Label: "Cổ Trùng R4~R5"},
 			{Type: "gu_rank", ID: "6", Min: 1, Max: 1, Weight: 0.8, Label: "Cổ Trùng R6+ Cao Cấp"},
 			{Type: "gu_rank", ID: "7", Min: 1, Max: 1, Weight: 0.04, Label: "Cổ Trùng R7+ Cao Cấp"},
