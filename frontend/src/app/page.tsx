@@ -55,9 +55,6 @@ export default function Home() {
     guDictionary,
     itemDictionary,
     fetchDictionary,
-    recipes,
-    fetchRecipes,
-    fetchQuests,
     refineGu,
     exploreNode,
     retreat,
@@ -107,10 +104,8 @@ export default function Home() {
   // 1. Session Restoration on Mount
   useEffect(() => {
     fetchDictionary();
-    fetchRecipes();
-    fetchQuests();
     initializeSession();
-  }, [initializeSession, fetchDictionary, fetchRecipes, fetchQuests]);
+  }, [initializeSession, fetchDictionary]);
 
   // 2. Sparse authoritative status sync. Mana is rendered from a local snapshot between server actions.
   useEffect(() => {
@@ -263,7 +258,6 @@ export default function Home() {
               player={player}
               guDictionary={guDictionary}
               itemDictionary={itemDictionary}
-              recipes={recipes}
               actionLoading={actionLoading}
               onRefine={refineGu}
             />

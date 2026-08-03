@@ -26,6 +26,7 @@ export const TradeRoomModal: React.FC = () => {
   const [selectedMatQty, setSelectedMatQty] = useState<number>(1);
   const [activeTab, setActiveTab] = useState<"stones" | "gus" | "materials">("stones");
   const [expandedGus, setExpandedGus] = useState<Record<string, boolean>>({});
+  const [tradeFilterRank, setTradeFilterRank] = useState<number | "all">("all");
   const toggleGuGroup = (guId: string) => {
     setExpandedGus((prev) => ({ ...prev, [guId]: !prev[guId] }));
   };
@@ -208,13 +209,25 @@ export const TradeRoomModal: React.FC = () => {
     (matId) => {
       const playerQty = player.materials_inventory[matId] || 0;
       const offeredQty = myOffer?.materials?.[matId] || 0;
-      return playerQty > offeredQty;
+      if (playerQty <= offeredQty) return false;
+      if (tradeFilterRank !== "all") {
+        const rank = itemDictionary[matId]?.rank || 0;
+        if (rank !== tradeFilterRank) return false;
+      }
+      return true;
     }
   );
 
   // Filter player Gus (Exclude Vital Gus, Equipped Gus and Dead Gus)
   const tradeableGus = (player.gu_inventory || []).filter(
-    (g) => !g.is_vital && !g.equipped && g.status !== "DEAD"
+    (g) => {
+      if (g.is_vital || g.equipped || g.status === "DEAD") return false;
+      if (tradeFilterRank !== "all") {
+        const rank = guDictionary[g.gu_id]?.rank || g.rank || 0;
+        if (rank !== tradeFilterRank) return false;
+      }
+      return true;
+    }
   );
 
   return (
@@ -393,15 +406,32 @@ export const TradeRoomModal: React.FC = () => {
               </div>
 
               {/* Selector Content Area */}
-              <div className="flex-1 p-4 overflow-y-auto max-h-[200px]">
+              <div className="flex-1 p-4 overflow-y-auto max-h-[250px]">
                 {myLocked ? (
                   <div className="h-full flex items-center justify-center text-center flex-col gap-1 text-zinc-500 font-serif">
-                    <Lock className="w-5 h-5 text-zinc-600" />
+                    <Lock className="w-5 h-5 text-zinc-650" />
                     <p className="text-xs">Giao dịch đã được khóa</p>
-                    <p className="text-[10px] text-zinc-600 font-mono">Vui lòng hủy khóa nếu muốn sửa ưu đãi</p>
+                    <p className="text-[10px] text-zinc-660 font-mono">Vui lòng hủy khóa nếu muốn sửa ưu đãi</p>
                   </div>
                 ) : (
                   <>
+                    {/* Rank Filter if in gus or materials tab */}
+                    {(activeTab === "gus" || activeTab === "materials") && (
+                      <div className="flex items-center gap-2 mb-3 bg-zinc-950/60 p-2.5 rounded-xl border border-zinc-900">
+                        <span className="text-[10px] text-zinc-400 font-serif font-bold uppercase tracking-wider">Lọc theo Rank:</span>
+                        <select
+                          value={tradeFilterRank}
+                          onChange={(e) => setTradeFilterRank(e.target.value === "all" ? "all" : Number(e.target.value))}
+                          className="bg-zinc-950 border border-zinc-900 rounded-lg text-[10px] px-2.5 py-1 focus:outline-none font-mono text-zinc-300 cursor-pointer"
+                        >
+                          <option value="all">Tất cả Rank</option>
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((r) => (
+                            <option key={r} value={r}>Rank {r}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
                     {/* Stones selectors */}
                     {activeTab === "stones" && (
                       <div className="space-y-4">

@@ -24,6 +24,7 @@ import {
   Check,
   TrendingUp,
   Leaf,
+  RefreshCw,
 } from "lucide-react";
 
 
@@ -155,6 +156,104 @@ const formatGuName = (name: string) => {
   return clean.slice(0, 6) + ".";
 };
 
+interface TribulationRealTimeInfoProps {
+  aperture: ImmortalAperture;
+  isCompact?: boolean;
+}
+
+const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ aperture, isCompact }) => {
+  const [timeLeftText, setTimeLeftText] = useState<string>("");
+  const [arrivalTimeText, setArrivalTimeText] = useState<string>("");
+  const [isPassed, setIsPassed] = useState<boolean>(false);
+
+  useEffect(() => {
+    const updateTime = () => {
+      if (aperture.state === "TRIBULATION_ACTIVE") {
+        setTimeLeftText("Đang diễn ra");
+        setArrivalTimeText("Đang chiến đấu");
+        setIsPassed(true);
+        return;
+      }
+
+      const rate = aperture.time_rate || 1.0;
+      const internalYearsLeft = aperture.next_tribulation_year - aperture.internal_years_passed;
+      if (internalYearsLeft <= 0) {
+        setTimeLeftText("Đang ập đến");
+        setArrivalTimeText("Bất cứ lúc nào");
+        setIsPassed(true);
+        return;
+      }
+
+      const remainingRealSeconds = (internalYearsLeft * 432000.0) / rate;
+      const updatedAtMs = new Date(aperture.updated_at).getTime();
+      const arrivalTimeMs = updatedAtMs + remainingRealSeconds * 1000;
+      const now = Date.now();
+      const diff = arrivalTimeMs - now;
+
+      if (diff <= 0) {
+        setTimeLeftText("Đang ập đến");
+        setArrivalTimeText("Bất cứ lúc nào");
+        setIsPassed(true);
+        return;
+      }
+
+      setIsPassed(false);
+
+      const arrivalDate = new Date(arrivalTimeMs);
+      const hours = String(arrivalDate.getHours()).padStart(2, '0');
+      const minutes = String(arrivalDate.getMinutes()).padStart(2, '0');
+      const seconds = String(arrivalDate.getSeconds()).padStart(2, '0');
+      const day = String(arrivalDate.getDate()).padStart(2, '0');
+      const month = String(arrivalDate.getMonth() + 1).padStart(2, '0');
+      const year = arrivalDate.getFullYear();
+      
+      setArrivalTimeText(`${hours}:${minutes}:${seconds} ${day}/${month}/${year}`);
+
+      const diffHours = Math.floor(diff / (60 * 60 * 1000));
+      const diffMinutes = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+      const diffSeconds = Math.floor((diff % (60 * 1000)) / 1000);
+
+      const parts = [];
+      if (diffHours > 0) parts.push(`${diffHours}g`);
+      if (diffMinutes > 0 || diffHours > 0) parts.push(`${diffMinutes}p`);
+      parts.push(`${diffSeconds}s`);
+      setTimeLeftText(parts.join(" "));
+    };
+
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, [aperture.next_tribulation_year, aperture.internal_years_passed, aperture.time_rate, aperture.state, aperture.updated_at]);
+
+  if (isCompact) {
+    return (
+      <div className="flex justify-between items-center text-[10px] text-zinc-400 font-mono">
+        <span>Thời gian thực:</span>
+        <span className={isPassed ? "text-rose-400 font-bold animate-pulse" : "text-amber-400 font-bold"}>
+          {arrivalTimeText} ({timeLeftText})
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1 bg-slate-950/40 p-3 rounded-lg border border-slate-800/50 mt-2">
+      <div className="flex justify-between items-center text-xs">
+        <span className="text-slate-400">Thời gian thực tế đến:</span>
+        <span className={`font-mono font-semibold ${isPassed ? "text-rose-400 font-bold animate-pulse" : "text-amber-400 font-bold"}`}>
+          {arrivalTimeText}
+        </span>
+      </div>
+      <div className="flex justify-between items-center text-xs">
+        <span className="text-slate-400">Còn lại :</span>
+        <span className={`font-mono font-semibold ${isPassed ? "text-rose-400 font-bold animate-pulse" : "text-cyan-400 font-bold"}`}>
+          {timeLeftText}
+        </span>
+      </div>
+    </div>
+  );
+};
+
 export const Aperture: React.FC<ApertureProps> = ({
   player,
   guDictionary,
@@ -235,12 +334,12 @@ export const Aperture: React.FC<ApertureProps> = ({
   const [combatSettingsLoaded, setCombatSettingsLoaded] = useState(false);
 
   React.useEffect(() => {
-    if (!combatSettingsLoaded && !store.combatSettingsLoading) {
+    if (activeTab === "settings" && !combatSettingsLoaded && !store.combatSettingsLoading) {
       store.fetchCombatSettings().then(() => {
         setCombatSettingsLoaded(true);
       });
     }
-  }, [combatSettingsLoaded]);
+  }, [activeTab, combatSettingsLoaded]);
 
   React.useEffect(() => {
     const cs = store.combatSettings || saved;
@@ -262,8 +361,28 @@ export const Aperture: React.FC<ApertureProps> = ({
   }, [player.is_disguised, player.fake_rank, player.fake_sub_rank, player.fake_vital_gu, player.rank, player.sub_rank]);
 
   React.useEffect(() => {
-    void store.fetchReferrals();
-  }, []);
+    if (activeTab === "referrals") {
+      void store.fetchReferrals();
+    } else if (activeTab === "aperture" && isImmortal) {
+      store.fetchAperture();
+      store.fetchDaoMarks();
+      store.fetchActiveTribulation();
+    }
+  }, [activeTab, isImmortal]);
+
+  const [isReloading, setIsReloading] = useState(false);
+  const handleReloadAll = async () => {
+    setIsReloading(true);
+    const promises: Promise<any>[] = [store.fetchReferrals()];
+    if (isImmortal) {
+      promises.push(store.fetchAperture(), store.fetchDaoMarks(), store.fetchActiveTribulation());
+    }
+    if (activeTab === "settings") {
+      promises.push(store.fetchCombatSettings());
+    }
+    await Promise.all(promises);
+    setIsReloading(false);
+  };
 
   const aperture = store.aperture;
   const essenceProd = aperture?.essence_production_per_year ?? 10;
@@ -385,9 +504,16 @@ export const Aperture: React.FC<ApertureProps> = ({
         </p>
 
 
-
-        {/* Tab Selection */}
-        <div className="flex gap-2 w-full bg-zinc-950/60 p-1.5 rounded-2xl border border-zinc-900 mb-5 z-10">
+        {/* Reload + Tab Selection */}
+        <div className="flex gap-2 w-full bg-zinc-950/60 p-1.5 rounded-2xl border border-zinc-900 mb-5 z-10 items-center">
+          <button
+            onClick={handleReloadAll}
+            disabled={isReloading}
+            className="px-2.5 py-1.5 rounded-xl text-zinc-400 hover:text-amber-400 border border-transparent hover:border-amber-500/20 transition-all cursor-pointer disabled:opacity-50 shrink-0"
+            title="Tải lại dữ liệu"
+          >
+            <RefreshCw className={`w-4 h-4 ${isReloading ? "animate-spin" : ""}`} />
+          </button>
           <button
             onClick={() => setActiveTab("aperture")}
             className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${activeTab === "aperture"
@@ -407,10 +533,7 @@ export const Aperture: React.FC<ApertureProps> = ({
             Trưởng Thành
           </button>
           <button
-            onClick={() => {
-              setActiveTab("referrals");
-              void store.fetchReferrals();
-            }}
+            onClick={() => setActiveTab("referrals")}
             className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${activeTab === "referrals"
               ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
               : "text-zinc-500 hover:text-zinc-300"
@@ -1691,12 +1814,6 @@ function BlessedLandControls() {
   const aperture = store.aperture;
   const [rechargeStones, setRechargeStones] = React.useState<number>(10);
 
-  React.useEffect(() => {
-    store.fetchAperture();
-    store.fetchDaoMarks();
-    store.fetchActiveTribulation();
-  }, []);
-
   if (!player) return null;
 
   // Render helper for grade
@@ -1771,6 +1888,7 @@ function BlessedLandControls() {
                     style={{ width: `${Math.min(100, (aperture.internal_years_passed / aperture.next_tribulation_year) * 100)}%` }}
                   />
                 </div>
+                <TribulationRealTimeInfo aperture={aperture} isCompact={true} />
               </div>
             </>
           )}

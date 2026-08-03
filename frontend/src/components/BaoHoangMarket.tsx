@@ -112,6 +112,7 @@ export function BaoHoangMarket({
   // Advanced filters for listings
   const [sortBy, setSortBy] = useState<"newest" | "price_asc" | "price_desc" | "expiry_asc">("newest");
   const [filterRank, setFilterRank] = useState<number | "all">("all");
+  const [sellFilterRank, setSellFilterRank] = useState<number | "all">("all");
   const [showOnlyMine, setShowOnlyMine] = useState<boolean>(false);
 
   // Helper function to remove Vietnamese diacritics
@@ -392,12 +393,29 @@ export function BaoHoangMarket({
       // Filter by "Only Mine"
       if (showOnlyMine && l.seller_id !== player.id) return false;
 
-      // Filter by Rank (only for Gu)
+      // Filter by Rank (Gu, Material, Recipe)
       if (filterRank !== "all") {
-        if (l.item_type !== "Gu") return false;
         let rank = 0;
-        if (Array.isArray(l.item_data) && l.item_data.length > 0) {
-          rank = (l.item_data[0] as any)?.rank || 0;
+        if (l.item_type === "Gu") {
+          if (Array.isArray(l.item_data) && l.item_data.length > 0) {
+            rank = (l.item_data[0] as { rank?: number })?.rank || 0;
+          } else if (typeof l.item_data === "string") {
+            rank = guDictionary[l.item_data]?.rank || 0;
+          }
+        } else if (l.item_type === "Material") {
+          let itemId = "";
+          if (typeof l.item_data === "string") {
+            itemId = l.item_data;
+          } else if (Array.isArray(l.item_data) && l.item_data.length > 0) {
+            itemId = (l.item_data[0] as { gu_id?: string })?.gu_id || "";
+          }
+          rank = itemDictionary[itemId]?.rank || 0;
+        } else if (l.item_type === "Recipe") {
+          const rData = typeof l.item_data === "object" && !Array.isArray(l.item_data) ? l.item_data : null;
+          const recipeId = rData ? rData.recipe_id : String(l.item_data);
+          const targetGuId = recipeId.replace("recipe_", "GU_").toUpperCase();
+          const targetGuIdAlt = recipeId.replace("recipe_", "GU").toUpperCase();
+          rank = guDictionary[targetGuId]?.rank || guDictionary[targetGuIdAlt]?.rank || 0;
         }
         if (rank !== filterRank) return false;
       }
@@ -567,21 +585,19 @@ export function BaoHoangMarket({
 
             {/* Advanced Sub-filters */}
             <div className="flex items-center gap-4 flex-wrap bg-zinc-950/40 px-4 py-2.5 rounded-xl border border-zinc-900 text-xs text-zinc-400">
-              {filterType === "Gu" && (
-                <div className="flex items-center gap-2">
-                  <span className="font-serif">Lọc theo Rank Cổ:</span>
-                  <select
-                    value={filterRank}
-                    onChange={(e) => setFilterRank(e.target.value === "all" ? "all" : Number(e.target.value))}
-                    className="bg-zinc-950 border border-zinc-850 rounded-lg text-[11px] px-2.5 py-1 focus:outline-none focus:ring-0 font-mono text-zinc-300 cursor-pointer"
-                  >
-                    <option value="all">Tất cả Rank</option>
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((r) => (
-                      <option key={r} value={r}>Rank {r}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <span className="font-serif">Lọc theo Rank:</span>
+                <select
+                  value={filterRank}
+                  onChange={(e) => setFilterRank(e.target.value === "all" ? "all" : Number(e.target.value))}
+                  className="bg-zinc-950 border border-zinc-850 rounded-lg text-[11px] px-2.5 py-1 focus:outline-none focus:ring-0 font-mono text-zinc-300 cursor-pointer"
+                >
+                  <option value="all">Tất cả Rank</option>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((r) => (
+                    <option key={r} value={r}>Rank {r}</option>
+                  ))}
+                </select>
+              </div>
 
               <label className="flex items-center gap-2 cursor-pointer select-none font-serif hover:text-zinc-300 transition-colors">
                 <input
@@ -671,6 +687,20 @@ export function BaoHoangMarket({
                 </select>
               </label>
 
+              <label className="space-y-2">
+                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Lọc theo Rank hành lý</span>
+                <select
+                  value={sellFilterRank}
+                  onChange={(e) => setSellFilterRank(e.target.value === "all" ? "all" : Number(e.target.value))}
+                  className="w-full bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none focus:ring-0 font-serif cursor-pointer"
+                >
+                  <option value="all">Tất cả Rank</option>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((r) => (
+                    <option key={r} value={r}>Rank {r}</option>
+                  ))}
+                </select>
+              </label>
+
               {itemType === "Gu" && (
                 <div className="space-y-3 block sm:col-span-2 border border-zinc-900/60 p-4 rounded-xl bg-zinc-950/20">
                   <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block font-serif text-amber-300/90">Chọn Cổ trùng đăng bán</span>
@@ -704,6 +734,7 @@ export function BaoHoangMarket({
                         });
 
                         const filteredTypes = Object.entries(typesMap).filter(([guId, info]) => {
+                          if (sellFilterRank !== "all" && info.rank !== sellFilterRank) return false;
                           if (!guTypeSearch) return true;
                           const normName = removeAccents(info.name.toLowerCase());
                           const normId = removeAccents(guId.toLowerCase());
@@ -848,6 +879,11 @@ export function BaoHoangMarket({
                       {(() => {
                         const recipes = player.unlocked_recipes || [];
                         const filteredRecipes = recipes.filter((ur) => {
+                          const targetGuID = ur.recipe_id.replace("recipe_", "GU_").toUpperCase();
+                          const targetGuIDAlt = ur.recipe_id.replace("recipe_", "GU").toUpperCase();
+                          const rank = guDictionary[targetGuID]?.rank || guDictionary[targetGuIDAlt]?.rank || 0;
+                          if (sellFilterRank !== "all" && rank !== sellFilterRank) return false;
+
                           const name = getRecipeDisplayName(ur.recipe_id);
                           if (!recipeSearch) return true;
                           
@@ -915,6 +951,9 @@ export function BaoHoangMarket({
                           const qty = materials[k] || 0;
                           if (qty <= 0) return false;
                           
+                          const rank = itemDictionary[k]?.rank || 0;
+                          if (sellFilterRank !== "all" && rank !== sellFilterRank) return false;
+
                           const name = itemDictionary[k]?.name || k;
                           if (!materialSearch) return true;
                           
@@ -1202,10 +1241,28 @@ export function BaoHoangMarket({
                       </div>
                       <h4 className="text-zinc-100 font-serif font-bold text-sm leading-snug group-hover:text-amber-300 transition-colors pt-0.5">
                         {getDisplayName(listing)}
-                        {listing.item_type === "Gu" && (() => {
+                        {(() => {
                           let rank = 0;
-                          if (Array.isArray(listing.item_data) && listing.item_data.length > 0) {
-                            rank = (listing.item_data[0] as any)?.rank || 0;
+                          if (listing.item_type === "Gu") {
+                            if (Array.isArray(listing.item_data) && listing.item_data.length > 0) {
+                              rank = (listing.item_data[0] as { rank?: number })?.rank || 0;
+                            } else if (typeof listing.item_data === "string") {
+                              rank = guDictionary[listing.item_data]?.rank || 0;
+                            }
+                          } else if (listing.item_type === "Material") {
+                            let itemId = "";
+                            if (typeof listing.item_data === "string") {
+                              itemId = listing.item_data;
+                            } else if (Array.isArray(listing.item_data) && listing.item_data.length > 0) {
+                              itemId = (listing.item_data[0] as { gu_id?: string })?.gu_id || "";
+                            }
+                            rank = itemDictionary[itemId]?.rank || 0;
+                          } else if (listing.item_type === "Recipe") {
+                            const rData = typeof listing.item_data === "object" && !Array.isArray(listing.item_data) ? listing.item_data : null;
+                            const recipeId = rData ? rData.recipe_id : String(listing.item_data);
+                            const targetGuId = recipeId.replace("recipe_", "GU_").toUpperCase();
+                            const targetGuIdAlt = recipeId.replace("recipe_", "GU").toUpperCase();
+                            rank = guDictionary[targetGuId]?.rank || guDictionary[targetGuIdAlt]?.rank || 0;
                           }
                           return rank > 0 ? (
                             <span className="text-[10px] font-mono border border-amber-500/20 px-1.5 py-0.2 rounded text-amber-400 uppercase ml-2">

@@ -25,10 +25,10 @@ type MineRates struct {
 }
 
 var MineRarityRates = map[string]MineRates{
-	"Truyền Thuyết": {StonesPerMin: 15.0, QiPerMin: 3.75, ChestChance: 0.01},
-	"Sử Thi":        {StonesPerMin: 12.5, QiPerMin: 3.125, ChestChance: 0.0075},
-	"Hiếm":          {StonesPerMin: 11.0, QiPerMin: 2.75, ChestChance: 0.006},
-	"Thường":        {StonesPerMin: 10.0, QiPerMin: 2.5, ChestChance: 0.005},
+	"Siêu Cấp":     {StonesPerMin: 60.0, QiPerMin: 15.0, ChestChance: 0.04},
+	"Truyền Thuyết": {StonesPerMin: 30.0, QiPerMin: 7.5, ChestChance: 0.02},
+	"Sử Thi":        {StonesPerMin: 25.0, QiPerMin: 6.25, ChestChance: 0.015},
+	"Hiếm":          {StonesPerMin: 22.0, QiPerMin: 5.5, ChestChance: 0.012},
 }
 
 type MineSlotResponse struct {
@@ -666,14 +666,14 @@ func AssignMonstersToMines() {
 	for _, slot := range abandonedSlots {
 		var targetRank int
 		switch slot.Rarity {
-		case "Thường":
-			targetRank = 2
-		case "Hiếm":
-			targetRank = 3
-		case "Sử Thi":
-			targetRank = 4
+		case "Siêu Cấp":
+			targetRank = 6
 		case "Truyền Thuyết":
 			targetRank = 5
+		case "Sử Thi":
+			targetRank = 4
+		case "Hiếm":
+			targetRank = 3
 		default:
 			targetRank = 2
 		}
@@ -769,14 +769,14 @@ func AssignMonstersToEmptyMines() {
 	for _, slot := range emptySlots {
 		var targetRank int
 		switch slot.Rarity {
-		case "Thường":
-			targetRank = 2
-		case "Hiếm":
-			targetRank = 3
-		case "Sử Thi":
-			targetRank = 4
+		case "Siêu Cấp":
+			targetRank = 6
 		case "Truyền Thuyết":
 			targetRank = 5
+		case "Sử Thi":
+			targetRank = 4
+		case "Hiếm":
+			targetRank = 3
 		default:
 			targetRank = 2
 		}

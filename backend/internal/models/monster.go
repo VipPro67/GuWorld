@@ -138,6 +138,15 @@ func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, sub
 	attack = baseAttack * rankMultiplier * typeMultiplier * subRankMultiplier
 	defense = baseDefense * rankMultiplier * typeMultiplier * subRankMultiplier
 
+	// Scale down attack and defense for tribulation entities to balance against players
+	if strings.ToUpper(monsterType) == "TRIBULATION_MONSTER" {
+		attack *= 0.10
+		defense *= 0.10
+	} else if strings.ToUpper(monsterType) == "TRIBULATION_BOSS" {
+		attack *= 0.05
+		defense *= 0.02
+	}
+
 	if defense < 0 {
 		defense = 0
 	}

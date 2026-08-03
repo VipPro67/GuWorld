@@ -2773,10 +2773,11 @@ export const AdminView: React.FC = () => {
               <div>
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Phẩm chất</label>
                 <select value={mineEditRarity} onChange={e => setMineEditRarity(e.target.value)} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50">
-                  <option value="Thường">Thường</option>
-                  <option value="Hiếm">Hiếm</option>
+                  <option value="Siêu Cấp">Siêu Cấp</option>
+                  <option value="Truyền Thuyết">Truyện Thuyết</option>
                   <option value="Sử Thi">Sử Thi</option>
-                  <option value="Truyền Thuyết">Truyền Thuyết</option>
+                  <option value="Hiếm">Hiếm</option>
+                  <option value="Thường">Thường</option>
                 </select>
               </div>
             </div>

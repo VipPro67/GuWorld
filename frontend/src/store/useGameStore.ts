@@ -1865,7 +1865,6 @@ export const useGameStore = create<GameState>((set, get) => {
         localStorage.setItem("gu_player_id", player.id);
       }
       void get().fetchMySectStatus();
-      void get().fetchRecipes();
       get().subscribePlayerEvents();
       get().subscribeTradeEvents();
       const today = new Date().toISOString().split('T')[0];

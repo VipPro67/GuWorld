@@ -530,10 +530,10 @@ func ResolveTribulation(c *gin.Context) {
 	var ap models.ImmortalAperture
 	err = tx.QueryRow(`
 		SELECT id, aperture_hp, max_aperture_hp, tribulation_count, next_tribulation_year,
-			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count
+			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, internal_years_passed
 		FROM immortal_apertures WHERE id = $1
 	`, ev.ApertureID).Scan(&ap.ID, &ap.ApertureHP, &ap.MaxApertureHP, &ap.TribulationCount, &ap.NextTribulationYear,
-		&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount)
+		&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.InternalYearsPassed)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy thông tin Tiên Khiếu"})
 		return
@@ -566,6 +566,13 @@ func ResolveTribulation(c *gin.Context) {
 			ap.RankStartYear = ap.InternalYearsPassed
 			didBreakthrough = true
 			breakthroughMsg = fmt.Sprintf(" Đột phá! Đạo hữu đã tiến vào %s!", getRankName(newRank))
+
+			// Recalculate next tribulation year based on the new rank!
+			nextYear, _ = models.GetNextTribulationInfo(newRank, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
+			if nextYear < 10 {
+				nextYear = 10
+			}
+			ap.NextTribulationYear = nextYear
 		}
 	}
 
@@ -738,10 +745,124 @@ func ResolveTribulation(c *gin.Context) {
 		return
 	}
 
+	// Check if the player is immediately due for another tribulation
+	_ = checkAndTriggerSingleAperture(ev.ApertureID)
+
+	var finalState string
+	_ = db.DB.QueryRow(`SELECT state FROM immortal_apertures WHERE id = $1`, ev.ApertureID).Scan(&finalState)
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": msg + " Nhân Khí +10.",
-		"state":   ap.State,
+		"state":   finalState,
 	})
+}
+
+func checkAndTriggerSingleAperture(apertureID string) error {
+	var ap struct {
+		ID                       string
+		PlayerID                 string
+		TimeRate                 float64
+		ApertureHP               int
+		MaxApertureHP            int
+		InternalYearsPassed      float64
+		NextTribulationYear      float64
+		TribulationCount         int
+		EssenceProductionPerYear int
+		RankStartYear            float64
+		EarthCalamityCount       int
+		HeavenlyTribulationCount int
+		GrandTribulationCount    int
+		MyriadTribulationCount   int
+		ChaosCalamityCount       int
+		State                    string
+	}
+
+	err := db.DB.QueryRow(`
+		SELECT id, player_id, time_rate, aperture_hp, max_aperture_hp, internal_years_passed, next_tribulation_year, tribulation_count, essence_production_per_year,
+			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, state
+		FROM immortal_apertures
+		WHERE id = $1
+	`, apertureID).Scan(&ap.ID, &ap.PlayerID, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.TribulationCount, &ap.EssenceProductionPerYear,
+		&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.State)
+	if err != nil {
+		return err
+	}
+
+	if ap.State != "STABLE" && ap.State != "DAMAGED" {
+		return nil
+	}
+
+	var rank int
+	err = db.DB.QueryRow(`SELECT rank FROM players WHERE id = $1`, ap.PlayerID).Scan(&rank)
+	if err != nil {
+		return err
+	}
+
+	calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
+	if calcNextYear < 10 {
+		calcNextYear = 10
+	}
+
+	if ap.InternalYearsPassed >= calcNextYear {
+		// Determine all types due at this year
+		typesToInc := []string{}
+		for _, tc := range models.GetTribulationTypesForRank(rank) {
+			ty := tc.Interval * float64(models.GetTribTypeCount(&models.ImmortalAperture{
+				EarthCalamityCount:       ap.EarthCalamityCount,
+				HeavenlyTribulationCount: ap.HeavenlyTribulationCount,
+				GrandTribulationCount:    ap.GrandTribulationCount,
+				MyriadTribulationCount:   ap.MyriadTribulationCount,
+				ChaosCalamityCount:       ap.ChaosCalamityCount,
+			}, tc.Type)+1)
+			if math.Abs(ty-calcNextYear) < 0.1 {
+				typesToInc = append(typesToInc, tc.Type)
+			}
+		}
+
+		// Increment counters for ALL types due at this year
+		for _, tt := range typesToInc {
+			switch tt {
+			case "EARTH_CALAMITY":
+				ap.EarthCalamityCount++
+			case "HEAVENLY_TRIBULATION":
+				ap.HeavenlyTribulationCount++
+			case "GRAND_TRIBULATION":
+				ap.GrandTribulationCount++
+			case "MYRIAD_TRIBULATION":
+				ap.MyriadTribulationCount++
+			case "CHAOS_CALAMITY":
+				ap.ChaosCalamityCount++
+			}
+		}
+
+		_, err = db.DB.Exec(`
+			UPDATE immortal_apertures 
+			SET earth_calamity_count = $1, heavenly_tribulation_count = $2, grand_tribulation_count = $3,
+				myriad_tribulation_count = $4, chaos_calamity_count = $5, tribulation_count = tribulation_count + 1,
+				internal_years_passed = $6, updated_at = NOW()
+			WHERE id = $7
+		`, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount, ap.InternalYearsPassed, ap.ID)
+		if err != nil {
+			return err
+		}
+
+		spawnType := calcNextType
+		err = spawnTribulationEventWorker(ap.ID, ap.PlayerID, ap.TribulationCount+1, ap.ApertureHP, ap.InternalYearsPassed, spawnType)
+		if err != nil {
+			return err
+		}
+	} else {
+		_, err = db.DB.Exec(`
+			UPDATE immortal_apertures 
+			SET next_tribulation_year = $1, updated_at = NOW()
+			WHERE id = $2
+		`, calcNextYear, ap.ID)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func addDaoMarksTx(tx *sql.Tx, playerID string, path string, amount int) error {
@@ -1227,9 +1348,52 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	}
 
 	var rank int
-	err = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, playerID).Scan(&rank)
+	var daoMarksRaw []byte
+	err = tx.QueryRow(`SELECT rank, dao_marks FROM players WHERE id = $1`, playerID).Scan(&rank, &daoMarksRaw)
 	if err != nil {
 		return err
+	}
+
+	var daoMarks map[string]int
+	if len(daoMarksRaw) > 0 {
+		_ = json.Unmarshal(daoMarksRaw, &daoMarks)
+	}
+
+	maxDao := 0
+	for _, val := range daoMarks {
+		if val > maxDao {
+			maxDao = val
+		}
+	}
+
+	expectedDao := 40000.0
+	switch rank {
+	case 6:
+		expectedDao = 40000.0
+	case 7:
+		expectedDao = 220000.0
+	case 8:
+		expectedDao = 1400000.0
+	case 9:
+		expectedDao = 8500000.0
+	default:
+		if rank < 6 {
+			expectedDao = 1000.0
+		} else {
+			expectedDao = 8500000.0
+		}
+	}
+
+	daoBalancingMult := 1.0
+	if expectedDao > 0 {
+		ratio := float64(maxDao) / expectedDao
+		if ratio < 0.25 {
+			ratio = 0.25
+		}
+		if rank < 9 && ratio > 3.0 {
+			ratio = 3.0
+		}
+		daoBalancingMult = ratio
 	}
 
 	difficulty := 1 + tribCount
@@ -1300,9 +1464,9 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	// Apply difficulty scaling
 	diffMultiplier := 1.0 + float64(difficulty)*0.2
 	scaledHP, scaledAtk, scaledDef := models.ScaleMonsterStats(boss.MaxHP, boss.BaseAttack, boss.BaseDefense, bossRank, bossSubRank, boss.Type)
-	bossHP := int(scaledHP * diffMultiplier)
-	bossAtk := int(scaledAtk * diffMultiplier)
-	bossDef := int(scaledDef * diffMultiplier)
+	bossHP := int(scaledHP * diffMultiplier * daoBalancingMult)
+	bossAtk := int(scaledAtk * diffMultiplier * daoBalancingMult)
+	bossDef := int(scaledDef * diffMultiplier * daoBalancingMult)
 
 	_, err = tx.Exec(`
 		INSERT INTO tribulation_enemies (event_id, name, enemy_type, path, hp, max_hp, attack, defense, x, y, is_boss, is_dead)
@@ -1330,9 +1494,9 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	minionCount := 1 + rand.Intn(3)
 	for i := 0; i < minionCount; i++ {
 		scaledHPm, scaledAtkm, scaledDefm := models.ScaleMonsterStats(minion.MaxHP, minion.BaseAttack, minion.BaseDefense, bossRank, bossSubRank, minion.Type)
-		mHP := int(scaledHPm * diffMultiplier)
-		mAtk := int(scaledAtkm * diffMultiplier)
-		mDef := int(scaledDefm * diffMultiplier)
+		mHP := int(scaledHPm * diffMultiplier * daoBalancingMult)
+		mAtk := int(scaledAtkm * diffMultiplier * daoBalancingMult)
+		mDef := int(scaledDefm * diffMultiplier * daoBalancingMult)
 
 		_, err = tx.Exec(`
 			INSERT INTO tribulation_enemies (event_id, name, enemy_type, path, hp, max_hp, attack, defense, x, y, is_dead)

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useGameStore, ApertureResourceNode, TribulationEnemy, GuInstance } from "@/store/useGameStore";
+import { useGameStore, ApertureResourceNode, TribulationEnemy, GuInstance, ImmortalAperture } from "@/store/useGameStore";
 import {
   Shield,
   Activity,
@@ -22,6 +22,7 @@ import {
   Lock as LockIcon,
   Users,
   Leaf,
+  RefreshCw,
 } from "lucide-react";
 import { translatePath } from "@/lib/translate";
 
@@ -63,6 +64,104 @@ const CountdownTimer: React.FC<{ node: ApertureResourceNode; timeRate: number; o
   }, [node, timeRate]);
 
   return <span>{timeLeft}</span>;
+};
+
+interface TribulationRealTimeInfoProps {
+  aperture: ImmortalAperture;
+  isCompact?: boolean;
+}
+
+const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ aperture, isCompact }) => {
+  const [timeLeftText, setTimeLeftText] = useState<string>("");
+  const [arrivalTimeText, setArrivalTimeText] = useState<string>("");
+  const [isPassed, setIsPassed] = useState<boolean>(false);
+
+  useEffect(() => {
+    const updateTime = () => {
+      if (aperture.state === "TRIBULATION_ACTIVE") {
+        setTimeLeftText("Đang diễn ra");
+        setArrivalTimeText("Đang chiến đấu");
+        setIsPassed(true);
+        return;
+      }
+
+      const rate = aperture.time_rate || 1.0;
+      const internalYearsLeft = aperture.next_tribulation_year - aperture.internal_years_passed;
+      if (internalYearsLeft <= 0) {
+        setTimeLeftText("Đang ập đến");
+        setArrivalTimeText("Bất cứ lúc nào");
+        setIsPassed(true);
+        return;
+      }
+
+      const remainingRealSeconds = (internalYearsLeft * 432000.0) / rate;
+      const updatedAtMs = new Date(aperture.updated_at).getTime();
+      const arrivalTimeMs = updatedAtMs + remainingRealSeconds * 1000;
+      const now = Date.now();
+      const diff = arrivalTimeMs - now;
+
+      if (diff <= 0) {
+        setTimeLeftText("Đang ập đến");
+        setArrivalTimeText("Bất cứ lúc nào");
+        setIsPassed(true);
+        return;
+      }
+
+      setIsPassed(false);
+
+      const arrivalDate = new Date(arrivalTimeMs);
+      const hours = String(arrivalDate.getHours()).padStart(2, '0');
+      const minutes = String(arrivalDate.getMinutes()).padStart(2, '0');
+      const seconds = String(arrivalDate.getSeconds()).padStart(2, '0');
+      const day = String(arrivalDate.getDate()).padStart(2, '0');
+      const month = String(arrivalDate.getMonth() + 1).padStart(2, '0');
+      const year = arrivalDate.getFullYear();
+      
+      setArrivalTimeText(`${hours}:${minutes}:${seconds} ${day}/${month}/${year}`);
+
+      const diffHours = Math.floor(diff / (60 * 60 * 1000));
+      const diffMinutes = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+      const diffSeconds = Math.floor((diff % (60 * 1000)) / 1000);
+
+      const parts = [];
+      if (diffHours > 0) parts.push(`${diffHours}g`);
+      if (diffMinutes > 0 || diffHours > 0) parts.push(`${diffMinutes}p`);
+      parts.push(`${diffSeconds}s`);
+      setTimeLeftText(parts.join(" "));
+    };
+
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, [aperture.next_tribulation_year, aperture.internal_years_passed, aperture.time_rate, aperture.state, aperture.updated_at]);
+
+  if (isCompact) {
+    return (
+      <div className="flex justify-between items-center text-[10px] text-zinc-400 font-mono">
+        <span>Thời gian thực:</span>
+        <span className={isPassed ? "text-rose-400 font-bold animate-pulse" : "text-amber-400 font-bold"}>
+          {arrivalTimeText} ({timeLeftText})
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1 bg-slate-950/40 p-3 rounded-lg border border-slate-800/50 mt-2">
+      <div className="flex justify-between items-center text-xs">
+        <span className="text-slate-400">Thời gian thực tế đến:</span>
+        <span className={`font-mono font-semibold ${isPassed ? "text-rose-400 font-bold animate-pulse" : "text-amber-400 font-bold"}`}>
+          {arrivalTimeText}
+        </span>
+      </div>
+      <div className="flex justify-between items-center text-xs">
+        <span className="text-slate-400">Còn lại :</span>
+        <span className={`font-mono font-semibold ${isPassed ? "text-rose-400 font-bold animate-pulse" : "text-cyan-400 font-bold"}`}>
+          {timeLeftText}
+        </span>
+      </div>
+    </div>
+  );
 };
 
 export const ImmortalApertureView: React.FC = () => {
@@ -125,13 +224,35 @@ export const ImmortalApertureView: React.FC = () => {
     }
   }, [aperture]);
 
+  const [isReloading, setIsReloading] = useState(false);
+
   useEffect(() => {
     fetchAperture();
-    fetchDaoMarks();
-    fetchApertureNodes();
     fetchActiveTribulation();
-    fetchVariantHumans();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "map") {
+      fetchApertureNodes();
+    } else if (activeTab === "dao") {
+      fetchDaoMarks();
+    } else if (activeTab === "ecosystem" || activeTab === "variant_humans") {
+      fetchVariantHumans();
+      fetchApertureNodes();
+    }
+  }, [activeTab]);
+
+  const handleReloadAll = async () => {
+    setIsReloading(true);
+    await Promise.all([
+      fetchAperture(),
+      fetchDaoMarks(),
+      fetchApertureNodes(),
+      fetchActiveTribulation(),
+      fetchVariantHumans(),
+    ]);
+    setIsReloading(false);
+  };
 
   // Auto-refresh when tribulation is active to show enemy movement
   useEffect(() => {
@@ -393,6 +514,14 @@ export const ImmortalApertureView: React.FC = () => {
               Trạng thái: {getApertureState.text}
             </div>
             <button
+              onClick={handleReloadAll}
+              disabled={isReloading}
+              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium rounded-xl border border-slate-700 transition disabled:opacity-50"
+              title="Tải lại dữ liệu"
+            >
+              <RefreshCw className={`w-4 h-4 ${isReloading ? "animate-spin" : ""}`} />
+            </button>
+            <button
               onClick={() => setView("dashboard")}
               className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium rounded-xl border border-slate-700 transition"
             >
@@ -565,8 +694,8 @@ export const ImmortalApertureView: React.FC = () => {
               </div>
 
               {/* Time Flow Slider */}
-              <div className="bg-slate-950/50 p-6 rounded-xl border border-slate-800 space-y-4">
-                {/* <div className="flex justify-between items-center">
+              {/* <div className="bg-slate-950/50 p-6 rounded-xl border border-slate-800 space-y-4">
+                <div className="flex justify-between items-center">
                   <div>
                     <h3 className="text-md font-bold text-slate-200 flex items-center gap-1.5">
                       <Hourglass className="w-4 h-4 text-cyan-400" />
@@ -577,9 +706,9 @@ export const ImmortalApertureView: React.FC = () => {
                     </p>
                   </div>
                   <span className="text-xl font-bold text-cyan-400">x{sliderRate.toFixed(1)}</span>
-                </div> */}
+                </div> 
 
-                {/* <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4">
                   <input
                     type="range"
                     min="1"
@@ -596,7 +725,7 @@ export const ImmortalApertureView: React.FC = () => {
                   >
                     Xác Nhận
                   </button>
-                </div> */}
+                </div>
 
 
 
@@ -608,7 +737,7 @@ export const ImmortalApertureView: React.FC = () => {
                     </span>
                   </div>
                 )}
-              </div>
+              </div> */}
             </div>
 
             {/* Time / Next Tribulation Year */}
@@ -678,6 +807,7 @@ export const ImmortalApertureView: React.FC = () => {
                       style={{ width: `${Math.min(100, (aperture.internal_years_passed / aperture.next_tribulation_year) * 100)}%` }}
                     />
                   </div>
+                  <TribulationRealTimeInfo aperture={aperture} isCompact={false} />
                 </div>
               </div>
 

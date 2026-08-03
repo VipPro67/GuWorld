@@ -1011,7 +1011,8 @@ export const SectView: React.FC = () => {
 
                       <div className="flex justify-between items-start">
                         <h4 className="text-sm font-bold font-serif text-zinc-200">{mine.name}</h4>
-                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${mine.rarity === "Truyền Thuyết" ? "bg-amber-950/30 text-amber-400 border-amber-500/30" :
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${mine.rarity === "Siêu Cấp" ? "bg-amber-950/30 text-amber-300 border-amber-400/40" :
+                            mine.rarity === "Truyền Thuyết" ? "bg-amber-950/30 text-amber-400 border-amber-500/30" :
                             mine.rarity === "Sử Thi" ? "bg-purple-950/30 text-purple-400 border-purple-500/30" :
                               mine.rarity === "Hiếm" ? "bg-blue-950/30 text-blue-400 border-blue-500/30" :
                                 "bg-zinc-900/50 text-zinc-400 border-zinc-700"

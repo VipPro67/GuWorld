@@ -1460,9 +1460,9 @@ func FillApertureEnvironment(ap *models.ImmortalAperture, daoMarks models.DaoMar
 	}
 
 	if maxAmount > 100000 {
-		ap.Terrain = fmt.Sprintf("Bí Cảnh %s Đạo", strings.Title(dominantPath))
+		ap.Terrain = fmt.Sprintf("Bí Cảnh %s Đạo", translatePath(dominantPath))
 	} else if maxAmount > 20000 {
-		ap.Terrain = fmt.Sprintf("Địa Mạch %s Đạo", strings.Title(dominantPath))
+		ap.Terrain = fmt.Sprintf("Địa Mạch %s Đạo", translatePath(dominantPath))
 	} else if maxAmount > 5000 {
 		switch dominantPath {
 		case "fire":
@@ -1478,9 +1478,76 @@ func FillApertureEnvironment(ap *models.ImmortalAperture, daoMarks models.DaoMar
 		case "lightning":
 			ap.Terrain = "Lôi Điện Hải Vực"
 		default:
-			ap.Terrain = fmt.Sprintf("Vùng Đặc Thù %s Đạo", strings.Title(dominantPath))
+			ap.Terrain = fmt.Sprintf("Vùng Đặc Thù %s Đạo", translatePath(dominantPath))
 		}
 	} else {
 		ap.Terrain = "Thảo Nguyên Trù Phú"
 	}
 }
+
+var pathTranslations = map[string]string{
+	"blade":          "Đao",
+	"blood":          "Huyết",
+	"bone":           "Cốt",
+	"cloud":          "Vân",
+	"concealment":    "Ẩn Nặc",
+	"creation":       "Tạo Hóa",
+	"dark":           "Ám",
+	"death":          "Tử Vong",
+	"destruction":    "Hủy Diệt",
+	"dream":          "Mộng",
+	"earth":          "Thổ",
+	"enchantment":    "Phù Chú",
+	"enslavement":    "Nô",
+	"fire":           "Viêm",
+	"food":           "Thực",
+	"formation":      "Trận",
+	"heaven":         "Thiên",
+	"human":          "Nhân",
+	"ice":            "Băng",
+	"illusion":       "Huyễn",
+	"information":    "Tín",
+	"investigation":  "Trinh Sát",
+	"life":           "Sinh",
+	"light":          "Quang",
+	"lightning":      "Lôi",
+	"luck":           "Vận",
+	"metal":          "Kim",
+	"moon":           "Nguyệt",
+	"movement":       "Di Động",
+	"painting":       "Họa",
+	"phantom":        "Hư",
+	"poison":         "Độc",
+	"qi":             "Khí",
+	"refinement":     "Luyện",
+	"rule":           "Luật",
+	"shadow":         "Ảnh",
+	"smoke":          "Yên Vụ",
+	"soul":           "Hồn",
+	"sound":          "Âm",
+	"space":          "Vũ",
+	"strength":       "Lực",
+	"sun":            "Nhật",
+	"sword":          "Kiếm",
+	"theft":          "Trộm",
+	"theme":          "Chủ Đề",
+	"time":           "Trụ",
+	"transformation": "Biến Hóa",
+	"water":          "Thủy",
+	"wind":           "Phong",
+	"wisdom":         "Trí",
+	"wood":           "Mộc",
+	"star":           "Tinh",
+	"weapon":         "Binh",
+	"yin":            "Âm",
+	"yang":           "Dương",
+}
+
+func translatePath(path string) string {
+	lower := strings.ToLower(strings.TrimSpace(path))
+	if val, ok := pathTranslations[lower]; ok {
+		return val
+	}
+	return strings.Title(path)
+}
+

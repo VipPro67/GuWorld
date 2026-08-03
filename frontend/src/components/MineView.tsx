@@ -47,6 +47,14 @@ export const MineView: React.FC = () => {
 
   const getRarityStyles = (rarity: string) => {
     switch (rarity) {
+      case "Siêu Cấp":
+        return {
+          textColor: "text-amber-300 font-extrabold shadow-amber-900/50",
+          glowColor: "shadow-[0_0_25px_rgba(251,191,36,0.5)] border-amber-400/40 bg-amber-950/20",
+          crystalFill: "url(#grad-superior)",
+          crystalColor: "#fbbf24",
+          bgGradient: "from-amber-950/40 via-zinc-900/90 to-zinc-950/90 border-amber-400/30",
+        };
       case "Truyền Thuyết":
         return {
           textColor: "text-rose-400 font-extrabold shadow-rose-900/50",
@@ -112,6 +120,12 @@ export const MineView: React.FC = () => {
       {/* SVG gradients definition */}
       <svg className="absolute w-0 h-0" width="0" height="0">
         <defs>
+          <linearGradient id="grad-superior" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#fef3c7" />
+            <stop offset="30%" stopColor="#fbbf24" />
+            <stop offset="60%" stopColor="#f59e0b" />
+            <stop offset="100%" stopColor="#92400e" />
+          </linearGradient>
           <linearGradient id="grad-legendary" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#fda4af" />
             <stop offset="50%" stopColor="#f43f5e" />

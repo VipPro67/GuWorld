@@ -46,28 +46,28 @@ var gachaPools = []GachaPool{
 		Rewards: []GachaRewardItem{
 			{Type: "primeval_stones", Min: 500, Max: 1500, Weight: 40.0, Label: "500~1.500 Nguyên Thạch"},
 			{Type: "item", Min: 1, Max: 1, Weight: 25.0, Label: "Vật liệu cấp thấp"},
-			{Type: "gu", Min: 1, Max: 1, Weight: 20.0, Label: "Cổ Trùng R1~R3"},
 			{Type: "primeval_stones", Min: 2000, Max: 5000, Weight: 10.0, Label: "2.000~5.000 Nguyên Thạch"},
-			{Type: "gu_rank", ID: "4,5", Min: 1, Max: 1, Weight: 4.0, Label: "Cổ Trùng R4~R5"},
-			{Type: "gu_rank", ID: "6", Min: 1, Max: 1, Weight: 0.8, Label: "Cổ Trùng R6+ Cao Cấp"},
-			{Type: "gu_rank", ID: "7", Min: 1, Max: 1, Weight: 0.04, Label: "Cổ Trùng R7+ Cao Cấp"},
-			{Type: "gu_rank", ID: "8", Min: 1, Max: 1, Weight: 0.004, Label: "Cổ Trùng R8+ Siêu Cấp"},
-			{Type: "gu_rank", ID: "9", Min: 1, Max: 1, Weight: 0.00004, Label: "Cổ Trùng R9+ Siêu Cấp"},
+			{Type: "gu_rank", ID: "1", Min: 1, Max: 1, Weight: 12.0, Label: "Cổ Trùng R1"},
+			{Type: "gu_rank", ID: "2", Min: 1, Max: 1, Weight: 6.0, Label: "Cổ Trùng R2"},
+			{Type: "gu_rank", ID: "3", Min: 1, Max: 1, Weight: 2.0, Label: "Cổ Trùng R3"},
+			{Type: "gu_rank", ID: "4", Min: 1, Max: 1, Weight: 3.0, Label: "Cổ Trùng R4"},
+			{Type: "gu_rank", ID: "5", Min: 1, Max: 1, Weight: 1.0, Label: "Cổ Trùng R5"},
+			{Type: "gu_rank", ID: "6", Min: 1, Max: 1, Weight: 0.8, Label: "Cổ Trùng R6 (Tiên Cổ)"},
+			{Type: "gu_rank", ID: "7", Min: 1, Max: 1, Weight: 0.04, Label: "Cổ Trùng R7 (Tiên Cổ)"},
+			{Type: "gu_rank", ID: "8", Min: 1, Max: 1, Weight: 0.004, Label: "Cổ Trùng R8 (Tiên Cổ)"},
+			{Type: "gu_rank", ID: "9", Min: 1, Max: 1, Weight: 0.00004, Label: "Cổ Trùng R9 (Tiên Cổ)"},
 		},
 	},
 	{
 		ID:          "tho_nguyen",
 		Name:        "Thọ Nguyên",
-		Description: "Đánh đổi thọ nguyên để nhận phúc duyên! Càng đánh cược thì càng có thể gia tăng thọ nguyên vĩnh viễn và đột phá tu vi!",
+		Description: "Đánh đổi thọ nguyên để nhận phúc duyên Nguyên Thạch! Càng đánh cược thì càng có thể nhận lượng lớn Nguyên Thạch!",
 		CostType:    "lifespan",
 		CostAmount:  50,
 		Rewards: []GachaRewardItem{
-			{Type: "gu_rank", ID: "3,4", Min: 1, Max: 1, Weight: 30.0, Label: "Cổ Trùng R3~R4"},
-			{Type: "gu_rank", ID: "5", Min: 1, Max: 1, Weight: 35.0, Label: "Cổ Trùng R5"},
-			{Type: "gu_rank", ID: "6", Min: 1, Max: 1, Weight: 20.0, Label: "Cổ Trùng R6"},
-			{Type: "gu_rank", ID: "7", Min: 1, Max: 1, Weight: 10.0, Label: "Cổ Trùng R7"},
-			{Type: "gu_rank", ID: "8", Min: 1, Max: 1, Weight: 4.0, Label: "Cổ Trùng R8"},
-			{Type: "gu_rank", ID: "9", Min: 1, Max: 1, Weight: 1.0, Label: "Cổ Trùng R9"},
+			{Type: "primeval_stones", Min: 5000, Max: 15000, Weight: 70.0, Label: "5.000~15.000 Nguyên Thạch"},
+			{Type: "primeval_stones", Min: 15000, Max: 30000, Weight: 25.0, Label: "15.000~30.000 Nguyên Thạch"},
+			{Type: "primeval_stones", Min: 30000, Max: 100000, Weight: 5.0, Label: "30.000~100.000 Nguyên Thạch"},
 		},
 	},
 	// {
@@ -136,7 +136,7 @@ func precomputeGachaPools(excludedImmortal map[string]bool) precomputedPools {
 	}
 
 	// Build Gu pools for all rank combinations used in gacha
-	rankFilters := []string{"1", "2", "3", "4,5", "6,7", "8,9"}
+	rankFilters := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "1,2,3", "3,4", "4,5", "6,7", "8,9"}
 	for _, rf := range rankFilters {
 		var pool []weightedGuEntry
 		var total float64
@@ -209,41 +209,7 @@ type immortalCache struct {
 var globalImmortalCache = &immortalCache{ttlSec: 300}
 
 func getCachedImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
-	c := globalImmortalCache
-	c.mu.RLock()
-	if c.data != nil && timeNowUnix()-c.loadedAt < c.ttlSec {
-		result := make(map[string]bool, len(c.data))
-		for k, v := range c.data {
-			result[k] = v
-		}
-		c.mu.RUnlock()
-		return result, nil
-	}
-	c.mu.RUnlock()
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	// Double-check after acquiring write lock
-	if c.data != nil && timeNowUnix()-c.loadedAt < c.ttlSec {
-		result := make(map[string]bool, len(c.data))
-		for k, v := range c.data {
-			result[k] = v
-		}
-		return result, nil
-	}
-
-	data, err := db.GetExistingImmortalGuIDs(tx)
-	if err != nil {
-		return nil, err
-	}
-	c.data = data
-	c.loadedAt = timeNowUnix()
-
-	result := make(map[string]bool, len(data))
-	for k, v := range data {
-		result[k] = v
-	}
-	return result, nil
+	return db.GetExistingImmortalGuIDs(tx)
 }
 
 func timeNowUnix() int64 {
@@ -341,9 +307,10 @@ func runGachaOpen(c *gin.Context, forced int) {
 		default:
 			applyGachaRewardInMemory(&player, rewards[i])
 		}
-		if rewards[i].Type == "gu" {
+		if rewards[i].Type == "gu" || rewards[i].Type == "gu_rank" {
 			if spec, ok := models.GetGuAny(rewards[i].ID); ok && spec.Rank >= 6 {
 				excludedImmortal[rewards[i].ID] = true
+				pc = precomputeGachaPools(excludedImmortal)
 			}
 		}
 	}

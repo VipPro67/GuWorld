@@ -126,6 +126,8 @@ func ClaimSectMineRewards(c *gin.Context) {
 
 	baseStonesPerMin := 10.0
 	switch rarity {
+	case "Siêu Cấp":
+		baseStonesPerMin = 200.0
 	case "Truyền Thuyết":
 		baseStonesPerMin = 100.0
 	case "Sử Thi":

@@ -285,9 +285,9 @@ body {
   animation: gold-glow 2s infinite ease-in-out;
 }
 
-@keyframes slide-in-right {
+@keyframes slide-in-left {
   0% {
-    transform: translateX(120%);
+    transform: translateX(-120%);
     opacity: 0;
   }
   100% {
@@ -297,6 +297,6 @@ body {
 }
 
 .animate-toast-in {
-  animation: slide-in-right 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: slide-in-left 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 

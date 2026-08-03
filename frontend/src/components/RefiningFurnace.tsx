@@ -8,7 +8,6 @@ interface RefiningFurnaceProps {
   player: Player;
   guDictionary: Record<string, GuSpec>;
   itemDictionary: Record<string, ItemSpec>;
-  recipes: RefiningRecipe[];
   actionLoading: boolean;
   onRefine: (recipeId: string, selectedInstanceIds: string[]) => Promise<{ status: "success" | "failed"; message: string; new_gu?: GuInstance } | null>;
 }
@@ -17,10 +16,15 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   player,
   guDictionary,
   itemDictionary,
-  recipes,
   actionLoading,
   onRefine,
 }) => {
+  const fetchRecipes = useGameStore((state) => state.fetchRecipes);
+  const recipes = useGameStore((state) => state.recipes);
+
+  useEffect(() => {
+    fetchRecipes();
+  }, [fetchRecipes]);
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [slottedGus, setSlottedGus] = useState<Record<number, string>>({}); // slotIndex -> guInstanceId
   const [isRefining, setIsRefining] = useState(false);

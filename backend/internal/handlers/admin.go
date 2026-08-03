@@ -2415,7 +2415,7 @@ func AdminUpdateMineSlot(c *gin.Context) {
 	idx := 1
 
 	if req.Rarity != nil {
-		validRarities := map[string]bool{"Thường": true, "Hiếm": true, "Sử Thi": true, "Truyền Thuyết": true}
+		validRarities := map[string]bool{"Siêu Cấp": true, "Thường": true, "Hiếm": true, "Sử Thi": true, "Truyền Thuyết": true}
 		if !validRarities[*req.Rarity] {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Phẩm chất không hợp lệ"})
 			return

@@ -396,19 +396,49 @@ func InitSchema() error {
 	var mineCount int
 	err = DB.QueryRow("SELECT COUNT(*) FROM mine_slots").Scan(&mineCount)
 	if err == nil && mineCount == 0 {
-		for i := 1; i <= 20; i++ {
-			rarity := "Thường"
-			if i == 1 {
-				rarity = "Truyền Thuyết"
-			} else if i <= 5 {
-				rarity = "Hiếm"
+		// 31 slots: 1 Siêu Cấp, 3 Truyện Thuyết, 9 Sử Thi, 18 Hiếm
+		slotRarities := map[int]string{}
+		for i := 1; i <= 31; i++ {
+			switch {
+			case i == 1:
+				slotRarities[i] = "Siêu Cấp"
+			case i <= 4:
+				slotRarities[i] = "Truyện Thuyết"
+			case i <= 13:
+				slotRarities[i] = "Sử Thi"
+			default:
+				slotRarities[i] = "Hiếm"
 			}
-			_, err = DB.Exec("INSERT INTO mine_slots (id, rarity, abandoned_at) VALUES ($1, $2, NOW())", i, rarity)
+		}
+		for i := 1; i <= 31; i++ {
+			_, err = DB.Exec("INSERT INTO mine_slots (id, rarity, abandoned_at) VALUES ($1, $2, NOW()) ON CONFLICT (id) DO NOTHING", i, slotRarities[i])
 			if err != nil {
 				logger.S.Errorf("Failed to seed mine %d: %v", i, err)
 			}
 		}
-		logger.S.Info("Seeded 20 initial world mine slots.")
+		logger.S.Info("Seeded 31 initial world mine slots.")
+	}
+
+	// Migration: upgrade existing 20-slot DB to 31-slot layout
+	if mineCount > 0 && mineCount <= 20 {
+		logger.S.Info("Migrating mine slots from 20 to 31 layout...")
+		// Update rarities for existing slots
+		updates := map[int]string{
+			1: "Siêu Cấp",
+			2: "Truyện Thuyết", 3: "Truyện Thuyết", 4: "Truyện Thuyết",
+			5: "Sử Thi", 6: "Sử Thi", 7: "Sử Thi", 8: "Sử Thi", 9: "Sử Thi",
+			10: "Sử Thi", 11: "Sử Thi", 12: "Sử Thi", 13: "Sử Thi",
+		}
+		for id, rarity := range updates {
+			_, _ = DB.Exec("UPDATE mine_slots SET rarity = $1 WHERE id = $2", rarity, id)
+		}
+		// Remove old CommonModule slots (id 14-20 if they were Thường)
+		_, _ = DB.Exec("DELETE FROM mine_slots WHERE id > 20")
+		// Insert new slots 21-31 (all Hiếm)
+		for i := 21; i <= 31; i++ {
+			_, _ = DB.Exec("INSERT INTO mine_slots (id, rarity, abandoned_at) VALUES ($1, 'Hiếm', NOW()) ON CONFLICT (id) DO NOTHING", i)
+		}
+		logger.S.Info("Mine slots migrated to 31 layout.")
 	}
 
 	// Migrate existing mine_slots to have monster_id and abandoned_at if not exist
