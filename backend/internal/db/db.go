@@ -256,14 +256,16 @@ func InitSchema() error {
 		myriad_tribulation_count INTEGER NOT NULL DEFAULT 0,
 		chaos_calamity_count INTEGER NOT NULL DEFAULT 0,
 		state VARCHAR(30) NOT NULL DEFAULT 'STABLE',
-		created_at TIMESTAMP DEFAULT now(),
-		updated_at TIMESTAMP DEFAULT now()
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 	);`)
 	if err != nil {
 		return fmt.Errorf("failed to create immortal_apertures table: %w", err)
 	}
 
 	// Migration: add new columns if missing (safe for existing DBs)
+	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ALTER COLUMN created_at TYPE TIMESTAMP WITH TIME ZONE;`)
+	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ALTER COLUMN updated_at TYPE TIMESTAMP WITH TIME ZONE;`)
 	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS rank_start_year DOUBLE PRECISION NOT NULL DEFAULT 0;`)
 	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS earth_calamity_count INTEGER NOT NULL DEFAULT 0;`)
 	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS heavenly_tribulation_count INTEGER NOT NULL DEFAULT 0;`)
@@ -287,14 +289,29 @@ func InitSchema() error {
 		production_type VARCHAR(50),
 		production_amount INTEGER NOT NULL DEFAULT 0,
 		production_interval_hours INTEGER NOT NULL DEFAULT 24,
-		last_collected_at TIMESTAMP,
+		last_collected_at TIMESTAMP WITH TIME ZONE,
 		is_destroyed BOOLEAN NOT NULL DEFAULT false,
-		created_at TIMESTAMP DEFAULT now(),
-		updated_at TIMESTAMP DEFAULT now()
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 	);`)
 	if err != nil {
 		return fmt.Errorf("failed to create aperture_resource_nodes table: %w", err)
 	}
+
+	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ALTER COLUMN last_collected_at TYPE TIMESTAMP WITH TIME ZONE;`)
+	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ALTER COLUMN created_at TYPE TIMESTAMP WITH TIME ZONE;`)
+	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ALTER COLUMN updated_at TYPE TIMESTAMP WITH TIME ZONE;`)
+
+	// 7b. Defense columns for aperture_resource_nodes
+	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS node_category VARCHAR(20) NOT NULL DEFAULT 'RESOURCE';`)
+	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS defense_power INTEGER NOT NULL DEFAULT 0;`)
+	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS attack_range INTEGER NOT NULL DEFAULT 0;`)
+	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS hp_bonus INTEGER NOT NULL DEFAULT 0;`)
+	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS damage_reduction INTEGER NOT NULL DEFAULT 0;`)
+	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS blocks_movement BOOLEAN NOT NULL DEFAULT false;`)
+	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS required_gu_id VARCHAR(50);`)
+	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS required_gu_rank INTEGER DEFAULT 0;`)
+	_, _ = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_aperture_nodes_category ON aperture_resource_nodes(aperture_id, node_category);`)
 
 	// 8. Create tribulation_events table
 	_, err = DB.Exec(`
@@ -309,12 +326,15 @@ func InitSchema() error {
 		aperture_hp_before INTEGER NOT NULL,
 		aperture_hp_after INTEGER,
 		reward_dao_marks INTEGER NOT NULL DEFAULT 0,
-		started_at TIMESTAMP DEFAULT now(),
-		ended_at TIMESTAMP
+		started_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+		ended_at TIMESTAMP WITH TIME ZONE
 	);`)
 	if err != nil {
 		return fmt.Errorf("failed to create tribulation_events table: %w", err)
 	}
+
+	_, _ = DB.Exec(`ALTER TABLE tribulation_events ALTER COLUMN started_at TYPE TIMESTAMP WITH TIME ZONE;`)
+	_, _ = DB.Exec(`ALTER TABLE tribulation_events ALTER COLUMN ended_at TYPE TIMESTAMP WITH TIME ZONE;`)
 
 	// 9. Create tribulation_enemies table
 	_, err = DB.Exec(`

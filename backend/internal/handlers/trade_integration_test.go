@@ -73,28 +73,36 @@ func TestP2PTradeFlow_ConnectingHeaven(t *testing.T) {
 	}
 	InventorySvc.AddItem(nil, player2ID.String(), "copper_ore", "materials", 5)
 
-	// Helper to give Connecting Heaven Gu
-	giveConnectingHeaven := func(playerID uuid.UUID) {
+	// Helper to give a specific Gu to a player
+	giveGu := func(playerID uuid.UUID, guID string, rank int) string {
+		instID := uuid.New().String()
+		existing, _ := db.LoadPlayerGus(db.DB, playerID.String(), false)
 		guInv := models.GuInventory{
 			{
-				InstanceID: uuid.New().String(),
-				GuID:       "GU_CONNECTING_HEAVEN",
-				Rank:       5,
+				InstanceID: instID,
+				GuID:       guID,
+				Rank:       rank,
 				Hunger:     100,
 				Status:     "SLEEPING",
 			},
 		}
+		guInv = append(guInv, existing...)
 		tx, err := db.DB.Begin()
 		if err != nil {
 			t.Fatalf("failed to begin tx: %v", err)
 		}
 		defer tx.Rollback()
 		if err := db.SavePlayerGus(tx, playerID.String(), guInv); err != nil {
-			t.Fatalf("failed to give Connecting Heaven Gu: %v", err)
+			t.Fatalf("failed to give Gu: %v", err)
 		}
 		if err := tx.Commit(); err != nil {
 			t.Fatalf("failed to commit: %v", err)
 		}
+		return instID
+	}
+
+	giveConnectingHeaven := func(playerID uuid.UUID) {
+		giveGu(playerID, "GU_CONNECTING_HEAVEN", 5)
 	}
 
 	// Initiate trade request (should fail because players lack Connecting Heaven Gu)
@@ -112,6 +120,7 @@ func TestP2PTradeFlow_ConnectingHeaven(t *testing.T) {
 	// Give Connecting Heaven to both players
 	giveConnectingHeaven(player1ID)
 	giveConnectingHeaven(player2ID)
+	boarInstID := giveGu(player1ID, "GU_WHITE_BOAR", 1)
 
 	// Initiate trade request (should succeed now)
 	w = httptest.NewRecorder()
@@ -139,7 +148,7 @@ func TestP2PTradeFlow_ConnectingHeaven(t *testing.T) {
 		t.Fatalf("AcceptTrade failed: %s", w.Body.String())
 	}
 
-	// Update offer from player 1 (offer 100 Primeval, 3 iron_ore)
+	// Update offer from player 1 (offer 100 Primeval, 3 iron_ore, and 1 GU_WHITE_BOAR)
 	w = httptest.NewRecorder()
 	c, _ = gin.CreateTestContext(w)
 	c.Set("player_id", player1ID)
@@ -147,7 +156,7 @@ func TestP2PTradeFlow_ConnectingHeaven(t *testing.T) {
 	offer1Body, _ := json.Marshal(TradeOffer{
 		PrimevalStones: 100,
 		ImmortalStones: 0,
-		Gus:            []string{},
+		Gus:            []string{boarInstID},
 		Materials:      map[string]int{"iron_ore": 3},
 	})
 	c.Request = httptest.NewRequest("POST", "/api/trade/offer/"+tradeID, bytes.NewBuffer(offer1Body))
@@ -259,5 +268,14 @@ func TestP2PTradeFlow_ConnectingHeaven(t *testing.T) {
 	db.DB.QueryRow(`SELECT status FROM trades WHERE id = $1`, tradeID).Scan(&status)
 	if status != "COMPLETED" {
 		t.Errorf("Expected trade status to be COMPLETED, got %s", status)
+	}
+
+	// Verify Gu transfer
+	var boarOwner string
+	err = db.DB.QueryRow(`SELECT player_id FROM player_gu WHERE id = $1`, boarInstID).Scan(&boarOwner)
+	if err != nil {
+		t.Errorf("Failed to query swapped Gu owner: %v", err)
+	} else if boarOwner != player2ID.String() {
+		t.Errorf("Expected swapped Gu owner to be Player 2 (%s), got %s", player2ID, boarOwner)
 	}
 }

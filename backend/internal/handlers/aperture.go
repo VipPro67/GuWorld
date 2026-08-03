@@ -28,6 +28,15 @@ type ResourceNodeTemplate struct {
 	ProdKey           string // e.g. "moon_orchid_petal"
 	ProdAmount        int
 	ProdIntervalHours int
+	NodeCategory      string   // "RESOURCE" | "DEFENSE"
+	HPMax             int      // max HP for node (default 1000)
+	DefensePower      int      // damage per tick (WATCHTOWER)
+	AttackRange       int      // radius in cells (Manhattan distance)
+	HPBonus           int      // bonus HP to nearby nodes (GUARDIAN_STATUE)
+	DamageReduction   int      // % damage reduction (BARRACKS, FORCE_FIELD)
+	BlocksMovement    bool     // wall blocks enemy movement
+	CostGu            []string // required Gu IDs
+	CostGuRank        int      // minimum rank for each required Gu
 }
 
 var ResourceNodeTemplates = map[string]ResourceNodeTemplate{
@@ -130,6 +139,66 @@ var ResourceNodeTemplates = map[string]ResourceNodeTemplate{
 		ProdAmount:        4,
 		ProdIntervalHours: 18,
 	},
+	// ---- DEFENSE STRUCTURES ----
+	"WALL": {
+		NodeType:       "WALL",
+		Name:           "Tường Thành Tiên Khiếu",
+		Path:           "Earth Path",
+		CostStones:     800,
+		NodeCategory:   "DEFENSE",
+		HPMax:          3000,
+		BlocksMovement: true,
+		CostGu:         []string{"GU_BEAST_SKIN", "GU_STONE_SKIN"},
+		CostGuRank:     1,
+	},
+	"WATCHTOWER": {
+		NodeType:       "WATCHTOWER",
+		Name:           "Tháp Canh Tiên Khiếu",
+		Path:           "Metal Path",
+		CostStones:     1200,
+		NodeCategory:   "DEFENSE",
+		HPMax:          2000,
+		DefensePower:   5,
+		AttackRange:    3,
+		CostGu:         []string{"GU_IRON_SKIN", "GU_HALF_STONE"},
+		CostGuRank:     2,
+	},
+	"GUARDIAN_STATUE": {
+		NodeType:     "GUARDIAN_STATUE",
+		Name:         "Tượng Hộ Mệnh Tiên Khiếu",
+		Path:         "Earth Path",
+		CostStones:   1500,
+		NodeCategory: "DEFENSE",
+		HPMax:        2500,
+		HPBonus:      500,
+		AttackRange:  2,
+		CostGu:       []string{"GU_WHITE_JADE", "GU_MOON_RAIMENT"},
+		CostGuRank:   2,
+	},
+	"BARRACKS": {
+		NodeType:        "BARRACKS",
+		Name:            "Doanh Trại Tiên Khiếu",
+		Path:            "Human Path",
+		CostStones:      2000,
+		NodeCategory:    "DEFENSE",
+		HPMax:           4000,
+		DamageReduction: 15,
+		AttackRange:     0, // 0 = affects all nodes in aperture
+		CostGu:          []string{"GU_GOLDEN_BELL_SHIELD", "GU_IVORY_ARMOR"},
+		CostGuRank:      4,
+	},
+	"FORCE_FIELD": {
+		NodeType:        "FORCE_FIELD",
+		Name:            "Trường Lực Tiên Khiếu",
+		Path:            "Metal Path",
+		CostStones:      2500,
+		NodeCategory:    "DEFENSE",
+		HPMax:           1500,
+		DamageReduction: 30,
+		AttackRange:     2,
+		CostGu:          []string{"GU_SUPREME_SHIELD", "GU_GOLDEN_BELL_SHIELD"},
+		CostGuRank:      4,
+	},
 }
 
 // GetImmortalAperture returns the player's immortal aperture, creating one if not exists (Rank >= 6)
@@ -194,6 +263,25 @@ func GetImmortalAperture(c *gin.Context) {
 
 	ap.CreatedAt = createdAt
 	ap.UpdatedAt = updatedAt
+
+	// Project internal_years_passed forward based on real time elapsed since updated_at.
+	// This ensures the frontend always gets accurate time values even if other handlers
+	// (e.g. SetApertureTimeRate) update updated_at without projecting internal years.
+	if ap.State == "STABLE" || ap.State == "DAMAGED" {
+		now := time.Now()
+		elapsedSec := now.Sub(updatedAt).Seconds()
+		if elapsedSec > 0 && ap.TimeRate > 0 {
+			elapsedInternalYears := elapsedSec * ap.TimeRate / 36000.0
+			ap.InternalYearsPassed += elapsedInternalYears
+			ap.UpdatedAt = now
+			_, _ = tx.Exec(`
+				UPDATE immortal_apertures
+				SET internal_years_passed = $1, updated_at = $2
+				WHERE id = $3
+			`, ap.InternalYearsPassed, now, ap.ID)
+		}
+	}
+
 	FillApertureEnvironment(&ap, player.DaoMarks)
 
 	if err := tx.Commit(); err != nil {
@@ -389,7 +477,12 @@ func GetApertureNodes(c *gin.Context) {
 	}
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT n.id, n.aperture_id, n.node_type, n.name, n.path, n.level, n.hp, n.max_hp, n.x, n.y, n.production_type, n.production_amount, n.production_interval_hours, n.last_collected_at, n.is_destroyed, n.created_at, n.updated_at
+		SELECT n.id, n.aperture_id, n.node_type, n.name, n.path, n.level, n.hp, n.max_hp, n.x, n.y,
+			n.production_type, n.production_amount, n.production_interval_hours, n.last_collected_at,
+			n.is_destroyed, n.created_at, n.updated_at,
+			COALESCE(n.node_category, 'RESOURCE'), COALESCE(n.defense_power, 0), COALESCE(n.attack_range, 0),
+			COALESCE(n.hp_bonus, 0), COALESCE(n.damage_reduction, 0), COALESCE(n.blocks_movement, false),
+			COALESCE(n.required_gu_id, ''), COALESCE(n.required_gu_rank, 0)
 		FROM aperture_resource_nodes n
 		JOIN immortal_apertures a ON n.aperture_id = a.id
 		WHERE a.player_id = $1 AND n.is_destroyed = false
@@ -404,7 +497,12 @@ func GetApertureNodes(c *gin.Context) {
 	for rows.Next() {
 		var n models.ApertureResourceNode
 		var lastCol sql.NullTime
-		err = rows.Scan(&n.ID, &n.ApertureID, &n.NodeType, &n.Name, &n.Path, &n.Level, &n.HP, &n.MaxHP, &n.X, &n.Y, &n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol, &n.IsDestroyed, &n.CreatedAt, &n.UpdatedAt)
+		err = rows.Scan(&n.ID, &n.ApertureID, &n.NodeType, &n.Name, &n.Path, &n.Level, &n.HP, &n.MaxHP, &n.X, &n.Y,
+			&n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol,
+			&n.IsDestroyed, &n.CreatedAt, &n.UpdatedAt,
+			&n.NodeCategory, &n.DefensePower, &n.AttackRange,
+			&n.HPBonus, &n.DamageReduction, &n.BlocksMovement,
+			&n.RequiredGuID, &n.RequiredGuRank)
 		if err == nil {
 			if lastCol.Valid {
 				n.LastCollectedAt = &lastCol.Time
@@ -520,7 +618,33 @@ func PlaceApertureNode(c *gin.Context) {
 		return
 	}
 
+	// 2b. Limit unique defense structures (Barracks: max 1)
+	if req.NodeType == "BARRACKS" {
+		var barrackCount int
+		err = tx.QueryRow(`
+			SELECT COUNT(1) FROM aperture_resource_nodes
+			WHERE aperture_id = $1 AND node_type = 'BARRACKS' AND is_destroyed = false
+		`, ap.ID).Scan(&barrackCount)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra Doanh Trại"})
+			return
+		}
+		if barrackCount >= 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Mỗi Tiên Khiếu chỉ được xây dựng tối đa 1 Doanh Trại."})
+			return
+		}
+	}
+
 	// 3. Deduct cost or item
+	nodeCategory := template.NodeCategory
+	if nodeCategory == "" {
+		nodeCategory = "RESOURCE"
+	}
+	nodeHPMax := template.HPMax
+	if nodeHPMax <= 0 {
+		nodeHPMax = 1000
+	}
+
 	nodeItemID := "node_" + strings.ToLower(req.NodeType)
 	qty, err := InventorySvc.GetQuantity(tx, playerID.String(), nodeItemID, "materials")
 	if err != nil {
@@ -550,14 +674,47 @@ func PlaceApertureNode(c *gin.Context) {
 		}
 	}
 
+	// 3b. Consume required Gu items for defense structures
+	if len(template.CostGu) > 0 {
+		for _, requiredGuID := range template.CostGu {
+			var guInstanceID string
+			err = tx.QueryRow(`
+				SELECT id FROM player_gu 
+				WHERE player_id = $1 AND gu_id = $2 AND gu_rank >= $3 AND state = 'ACTIVE'
+				LIMIT 1
+			`, playerID, requiredGuID, template.CostGuRank).Scan(&guInstanceID)
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cần sở hữu Cổ trùng %s (rank %d+) để xây dựng %s", requiredGuID, template.CostGuRank, template.Name)})
+				return
+			} else if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn cổ trùng"})
+				return
+			}
+			// Consume the Gu (destroy it)
+			_, err = tx.Exec(`DELETE FROM player_gu WHERE id = $1`, guInstanceID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tiêu hao cổ trùng"})
+				return
+			}
+		}
+	}
+
 	// 4. Insert node
 	var node models.ApertureResourceNode
 	var createdAt time.Time
 	err = tx.QueryRow(`
-		INSERT INTO aperture_resource_nodes (aperture_id, node_type, name, path, level, hp, max_hp, x, y, production_type, production_amount, production_interval_hours, last_collected_at)
-		VALUES ($1, $2, $3, $4, 1, 1000, 1000, $5, $6, $7, $8, $9, NOW())
+		INSERT INTO aperture_resource_nodes (aperture_id, node_type, name, path, level, hp, max_hp, x, y,
+			production_type, production_amount, production_interval_hours, last_collected_at,
+			node_category, defense_power, attack_range, hp_bonus, damage_reduction, blocks_movement,
+			required_gu_id, required_gu_rank)
+		VALUES ($1, $2, $3, $4, 1, $5, $5, $6, $7, $8, $9, $10, NOW(),
+			$11, $12, $13, $14, $15, $16, $17, $18)
 		RETURNING id, created_at
-	`, ap.ID, template.NodeType, template.Name, template.Path, req.X, req.Y, template.ProdType, template.ProdAmount, template.ProdIntervalHours).Scan(&node.ID, &createdAt)
+	`, ap.ID, template.NodeType, template.Name, template.Path, nodeHPMax, req.X, req.Y,
+		template.ProdType, template.ProdAmount, template.ProdIntervalHours,
+		nodeCategory, template.DefensePower, template.AttackRange, template.HPBonus,
+		template.DamageReduction, template.BlocksMovement,
+		strings.Join(template.CostGu, ","), template.CostGuRank).Scan(&node.ID, &createdAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu điểm tài nguyên: " + err.Error()})
 		return
@@ -585,13 +742,21 @@ func PlaceApertureNode(c *gin.Context) {
 	node.Name = template.Name
 	node.Path = template.Path
 	node.Level = 1
-	node.HP = 1000
-	node.MaxHP = 1000
+	node.HP = nodeHPMax
+	node.MaxHP = nodeHPMax
 	node.X = req.X
 	node.Y = req.Y
 	node.ProductionType = template.ProdType
 	node.ProductionAmount = template.ProdAmount
 	node.ProductionIntervalHours = template.ProdIntervalHours
+	node.NodeCategory = nodeCategory
+	node.DefensePower = template.DefensePower
+	node.AttackRange = template.AttackRange
+	node.HPBonus = template.HPBonus
+	node.DamageReduction = template.DamageReduction
+	node.BlocksMovement = template.BlocksMovement
+	node.RequiredGuID = strings.Join(template.CostGu, ",")
+	node.RequiredGuRank = template.CostGuRank
 	node.CreatedAt = createdAt
 	node.UpdatedAt = createdAt
 
@@ -1192,11 +1357,16 @@ func SetApertureTimeRate(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
+	// Project internal_years_passed forward using the OLD rate before changing it.
+	// This prevents the frontend from miscalculating the arrival time when
+	// updated_at is set to NOW() but internal_years_passed is stale.
+	now := time.Now()
 	res, err := tx.Exec(`
 		UPDATE immortal_apertures
-		SET time_rate = $1, updated_at = NOW()
-		WHERE player_id = $2
-	`, req.TimeRate, playerID)
+		SET internal_years_passed = internal_years_passed + GREATEST(0, EXTRACT(EPOCH FROM (NOW() - updated_at))) * time_rate / 36000.0,
+			time_rate = $1, updated_at = $2
+		WHERE player_id = $3
+	`, req.TimeRate, now, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật dòng thời gian"})
 		return
@@ -1353,6 +1523,146 @@ func RepairApertureNode(c *gin.Context) {
 	_ = tx.Commit()
 
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Sửa chữa thành công %s! Tiêu tốn %d Nguyên Thạch.", n.Name, cost)})
+}
+
+const MaxNodeLevel = 5
+
+// UpgradeApertureNode upgrades a resource/defense node to the next level
+func UpgradeApertureNode(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	nodeIDStr := c.Param("id")
+	nodeID, err := uuid.Parse(nodeIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Mã tài nguyên không hợp lệ"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	// Fetch node
+	var n models.ApertureResourceNode
+	err = tx.QueryRow(`
+		SELECT n.id, n.aperture_id, n.name, n.node_type, n.level, n.max_hp, n.is_destroyed,
+			COALESCE(n.node_category, 'RESOURCE'), COALESCE(n.defense_power, 0), COALESCE(n.attack_range, 0),
+			COALESCE(n.hp_bonus, 0), COALESCE(n.damage_reduction, 0), COALESCE(n.production_amount, 0)
+		FROM aperture_resource_nodes n
+		JOIN immortal_apertures a ON n.aperture_id = a.id
+		WHERE n.id = $1 AND a.player_id = $2
+	`, nodeID, playerID).Scan(&n.ID, &n.ApertureID, &n.Name, &n.NodeType, &n.Level, &n.MaxHP, &n.IsDestroyed,
+		&n.NodeCategory, &n.DefensePower, &n.AttackRange,
+		&n.HPBonus, &n.DamageReduction, &n.ProductionAmount)
+
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ tài nguyên không tồn tại hoặc không thuộc đạo hữu"})
+		return
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn điểm tài nguyên"})
+		return
+	}
+
+	if n.IsDestroyed {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể nâng cấp công trình đã bị phá hủy!"})
+		return
+	}
+
+	if n.Level >= MaxNodeLevel {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đã đạt cấp tối đa (%d). Không thể nâng cấp thêm.", MaxNodeLevel)})
+		return
+	}
+
+	// Calculate upgrade cost: base cost * level * 1.5
+	template, ok := ResourceNodeTemplates[n.NodeType]
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại node không hợp lệ"})
+		return
+	}
+	upgradeCost := int(float64(template.CostStones) * float64(n.Level) * 1.5)
+	if upgradeCost < 100 {
+		upgradeCost = 100
+	}
+
+	// Check player stones
+	var stones int
+	err = tx.QueryRow(`SELECT primeval_stones FROM players WHERE id = $1`, playerID).Scan(&stones)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})
+		return
+	}
+
+	if stones < upgradeCost {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Nguyên Thạch không đủ để nâng cấp (Yêu cầu: %d, Hiện có: %d).", upgradeCost, stones)})
+		return
+	}
+
+	// Deduct stones
+	_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2`, upgradeCost, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Nguyên Thạch"})
+		return
+	}
+
+	// Calculate new stats
+	newLevel := n.Level + 1
+	newMaxHP := n.MaxHP + 500
+	hpGain := newMaxHP - n.MaxHP // HP increased by this amount
+
+	newProductionAmount := n.ProductionAmount
+	newDefensePower := n.DefensePower
+	newHPBonus := n.HPBonus
+
+	if n.NodeCategory == "RESOURCE" {
+		// Resource nodes: +50% production per level
+		newProductionAmount = int(float64(n.ProductionAmount) * 1.5)
+		if newProductionAmount == n.ProductionAmount {
+			newProductionAmount = n.ProductionAmount + 1
+		}
+	} else {
+		// Defense nodes: +25% defense stats per level
+		if n.DefensePower > 0 {
+			newDefensePower = int(float64(n.DefensePower) * 1.25)
+			if newDefensePower == n.DefensePower {
+				newDefensePower = n.DefensePower + 1
+			}
+		}
+		if n.HPBonus > 0 {
+			newHPBonus = int(float64(n.HPBonus) * 1.25)
+			if newHPBonus == n.HPBonus {
+				newHPBonus = n.HPBonus + 1
+			}
+		}
+	}
+
+	// Apply upgrade
+	_, err = tx.Exec(`
+		UPDATE aperture_resource_nodes
+		SET level = $1, max_hp = $2, hp = hp + $3,
+			production_amount = $4, defense_power = $5, hp_bonus = $6,
+			updated_at = NOW()
+		WHERE id = $7
+	`, newLevel, newMaxHP, hpGain, newProductionAmount, newDefensePower, newHPBonus, nodeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi nâng cấp: " + err.Error()})
+		return
+	}
+
+	_ = tx.Commit()
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    fmt.Sprintf("Nâng cấp %s lên cấp %d thành công!", n.Name, newLevel),
+		"new_level":  newLevel,
+		"new_max_hp": newMaxHP,
+		"cost":       upgradeCost,
+	})
 }
 
 func GetApertureVariantHumans(c *gin.Context) {

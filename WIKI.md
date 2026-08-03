@@ -101,6 +101,25 @@ Wiki này phản ánh các hệ thống đã có trong codebase hiện tại.
 - Hệ sinh thái node có kiểm tra xung đột đường tu/path và cân bằng plant/herbivore/carnivore.
 - Dị nhân trong tiên khiếu có population, happiness, oppression, rebellion rate và labor intensity.
 
+### Công Trình Phòng Thủ
+
+Ngoài các mỏ tài nguyên, đạo hữu có thể xây dựng **công trình phòng thủ** để bảo vệ Tiên Khiếu trước thiên kiếp. Mỗi công trình yêu cầu **Tiên Nguyên (Đá)** + **Cổ trùng** (tiêu hao vĩnh viễn).
+
+| Công Trình | Chi Phí | HP | Hiệu Ứng |
+|---|---|---|---|
+| 🧱 **Tường Thành** | 800 Đá + 2 Cổ (Thú Bì, Thạch Bì rank 1+) | 3.000 | Chặn kẻ thù di chuyển qua ô. Kẻ thù phải phá hủy tường trước khi đi tiếp. |
+| 🗼 **Tháp Canh** | 1.200 Đá + 2 Cổ (Thiết Bì, Bán Thạch rank 2+) | 2.000 | Bắn kẻ thù trong phạm vi 3 ô, gây 5 sát thương/kỳ (15 giây). |
+| 🗿 **Tượng Hộ Mệnh** | 1.500 Đá + 2 Cổ (Bạch Ngọc, Nguyệt Nghê rank 2+) | 2.500 | Tăng +500 HP cho các công trình trong phạm vi 2 ô. |
+| ⚔️ **Doanh Trại** | 2.000 Đá + 2 Cổ (Kim Chung, Tượng Nha rank 4+) | 4.000 | Giảm 15% sát thương cho TẤT CẢ công trình trong Tiên Khiếu. |
+| 🔮 **Trường Lực** | 2.500 Đá + 2 Cổ (Chí Tôn, Kim Chung rank 4+) | 1.500 | Giảm 30% sát thương cho công trình trong phạm vi 2 ô. |
+
+**Lưu ý quan trọng:**
+- Cổ trùng bị **tiêu hao vĩnh viễn** khi xây dựng (không thể thu hồi).
+- Phép giảm sát thương cộng dồn tối đa **80%**.
+- Tường Thành là chướng ngại vật bắt buộc — kẻ thù không thể đi xuyên qua mà phải phá hủy trước.
+- Tháp Canh gây sát thương trực tiếp lên HP kẻ thù mỗi 15 giây.
+- Công trình phòng thủ **không sản xuất tài nguyên** — chỉ có hiệu ứng phòng thủ.
+
 ### Gia tốc thời gian (Time Rate)
 
 - `time_rate` (1.0x - 100.0x) điều chỉnh tốc độ thời gian bên trong Tiên Khiếu.

@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1908,6 +1909,327 @@ func CalculatePlayerStats(player *models.Player) map[string]float64 {
 	stats["storage"] += math.Floor(stats["attack"] * 0.5)
 
 	return stats
+}
+
+// ── Passive Stats Breakdown ──────────────────────────────────────────────────
+
+// PassiveStatSource describes one source contributing to a passive stat.
+type PassiveStatSource struct {
+	Source string  `json:"source"` // e.g. "base", "growth", "gu:GU_JADE_SKIN"
+	Name   string  `json:"name"`   // human-readable label
+	Value  float64 `json:"value"`  // raw contribution before multipliers
+	Mult   float64 `json:"mult"`   // path mastery multiplier applied
+	Dao    float64 `json:"dao"`    // dao mark multiplier applied
+	Final  float64 `json:"final"`  // actual contribution = value * mult * dao
+}
+
+// PassiveStatDetail holds the breakdown for one stat key.
+type PassiveStatDetail struct {
+	Key     string             `json:"key"`
+	Total   float64            `json:"total"`
+	Sources []PassiveStatSource `json:"sources"`
+}
+
+// PassiveStatsResult is the full passive stats response.
+type PassiveStatsResult struct {
+	Stats   map[string]float64  `json:"stats"`   // flat totals (same as CalculatePlayerStats)
+	Details []PassiveStatDetail `json:"details"` // per-stat breakdown
+}
+
+// GetPassiveStats computes a detailed breakdown of all passive stats, attributing
+// each contribution to its source (base cultivation, growth boosts, equipped Gu).
+func GetPassiveStats(player *models.Player) PassiveStatsResult {
+	strengthMarks := 0
+	if player.DaoMarks != nil {
+		strengthMarks = player.DaoMarks["strength"]
+	}
+
+	// ── Base stats from Rank / SubRank ──
+	baseAttack := 10.0 + float64(player.Rank-1)*10.0 + float64(player.SubRank-1)*2.0 + float64(strengthMarks)/10.0
+	baseDefense := 5.0 + float64(player.Rank-1)*5.0 + float64(player.SubRank-1)*1.0
+	baseSpeed := 10.0 + float64(player.Rank-1)*2.0 + float64(player.SubRank-1)*0.5
+
+	// Accumulator: key -> []PassiveStatSource
+	acc := map[string][]PassiveStatSource{}
+	addSrc := func(key, source, name string, value, mult, dao float64) {
+		final := value * mult * dao
+		if final == 0 && value == 0 {
+			return
+		}
+		acc[key] = append(acc[key], PassiveStatSource{
+			Source: source, Name: name, Value: value, Mult: mult, Dao: dao, Final: final,
+		})
+	}
+
+	// Base sources
+	addSrc("attack", "base", "Cơ bản (Cấp bậc)", baseAttack, 1, 1)
+	addSrc("defense", "base", "Cơ bản (Cấp bậc)", baseDefense, 1, 1)
+	addSrc("speed", "base", "Cơ bản (Cấp bậc)", baseSpeed, 1, 1)
+	addSrc("healing", "base", "Cơ bản", 0, 1, 1)
+	addSrc("movement", "base", "Cơ bản", 1.0, 1, 1)
+	addSrc("investigation", "base", "Cơ bản", 1.0, 1, 1)
+	addSrc("storage", "base", "Cơ bản", 100.0, 1, 1)
+
+	// Growth boosts
+	if player.GrowthData.Boosts.Attack > 0 {
+		addSrc("attack", "growth", "Trưởng thành Cổ", player.GrowthData.Boosts.Attack, 1, 1)
+	}
+	if player.GrowthData.Boosts.Defense > 0 {
+		addSrc("defense", "growth", "Trưởng thành Cổ", player.GrowthData.Boosts.Defense, 1, 1)
+	}
+	if player.GrowthData.Boosts.Speed > 0 {
+		addSrc("speed", "growth", "Trưởng thành Cổ", player.GrowthData.Boosts.Speed, 1, 1)
+	}
+
+	// Equipped active Gu passives
+	for _, gu := range player.GuInventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			spec, ok := models.GetGuAny(gu.GuID)
+			if !ok || spec.Effects.Passive == nil {
+				continue
+			}
+			passive := spec.Effects.Passive
+			mult := getPathMasteryMultiplier(player, spec.Path)
+
+			daoMult := 1.0
+			if player.DaoMarks != nil {
+				maxDaoMult := 1.0
+				for _, path := range spec.Path {
+					cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
+					if amt, ok := player.DaoMarks[cleanPath]; ok && amt > 0 {
+						var pm float64
+						if amt <= 10000 {
+							pm = 1.0 + float64(amt)/100.0
+						} else {
+							pm = 1.0 + 100.0 + float64(amt-10000)/500.0
+						}
+						if pm > maxDaoMult {
+							maxDaoMult = pm
+						}
+					}
+				}
+				daoMult = maxDaoMult
+			}
+
+			srcID := "gu:" + gu.GuID
+			if passive.StatBaseAttack > 0 {
+				addSrc("attack", srcID, spec.Name, passive.StatBaseAttack, mult, daoMult)
+			}
+			if passive.StatBaseDefense > 0 {
+				addSrc("defense", srcID, spec.Name, passive.StatBaseDefense, mult, daoMult)
+			}
+			if passive.StatBaseSpeed > 0 {
+				addSrc("speed", srcID, spec.Name, passive.StatBaseSpeed, mult, daoMult)
+			}
+			if passive.StatBaseHP > 0 {
+				addSrc("hp", srcID, spec.Name, passive.StatBaseHP, mult, daoMult)
+			}
+			if passive.DamageMultiplierOnHit > 0 && player.BaseHP > 0 {
+				missingHpRate := 1.0 - player.HP/player.BaseHP
+				addSrc("damage_multiplier", srcID, spec.Name, missingHpRate*passive.DamageMultiplierOnHit, 1, 1)
+			}
+			if passive.SoulRefinement > 0 {
+				addSrc("soul", srcID, spec.Name, passive.SoulRefinement, 1, 1)
+			}
+			if passive.StorageCapacity > 0 {
+				addSrc("storage", srcID, spec.Name, passive.StorageCapacity, 1, 1)
+			}
+			if passive.Movement > 0 {
+				addSrc("movement", srcID, spec.Name, passive.Movement, 1, 1)
+			}
+			if passive.Investigation > 0 {
+				addSrc("investigation", srcID, spec.Name, passive.Investigation, 1, 1)
+			}
+			if passive.Hearing > 0 {
+				addSrc("hearing", srcID, spec.Name, passive.Hearing, 1, 1)
+			}
+			if passive.Evasion > 0 {
+				addSrc("evasion", srcID, spec.Name, passive.Evasion, 1, 1)
+			}
+			if passive.CleansingPower > 0 {
+				addSrc("healing", srcID, spec.Name, passive.CleansingPower*15.0, 1, 1)
+			}
+		}
+	}
+
+	// Build totals and details
+	stats := make(map[string]float64)
+	var details []PassiveStatDetail
+	for key, srcs := range acc {
+		total := 0.0
+		for _, s := range srcs {
+			total += s.Final
+		}
+		stats[key] = total
+		details = append(details, PassiveStatDetail{Key: key, Total: total, Sources: srcs})
+	}
+
+	// Dynamic storage bonus
+	storageBonus := math.Floor(stats["attack"] * 0.5)
+	stats["storage"] += storageBonus
+	for i := range details {
+		if details[i].Key == "storage" {
+			details[i].Sources = append(details[i].Sources, PassiveStatSource{
+				Source: "dynamic", Name: "Lực tấn công (×0.5)", Value: storageBonus, Mult: 1, Dao: 1, Final: storageBonus,
+			})
+			details[i].Total += storageBonus
+			break
+		}
+	}
+
+	// Sort details by key for stable output
+	sort.Slice(details, func(i, j int) bool { return details[i].Key < details[j].Key })
+
+	return PassiveStatsResult{Stats: stats, Details: details}
+}
+
+// GetPassiveStatsHandler returns a detailed breakdown of all passive stats for the authenticated player.
+func GetPassiveStatsHandler(c *gin.Context) {
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		return
+	}
+
+	result := GetPassiveStats(&player)
+	c.JSON(http.StatusOK, result)
+}
+
+// ── Đạo Ngân (Dao Silver) Calculation ───────────────────────────────────────
+
+// DaoNganPathDetail describes the contribution of one dao path to the đạo ngân score.
+type DaoNganPathDetail struct {
+	Path       string  `json:"path"`       // e.g. "strength", "fire", "sword"
+	Amount     int     `json:"amount"`     // raw dao mark count
+	Multiplier float64 `json:"multiplier"` // combat multiplier from this path
+	Power      float64 `json:"power"`      // effective power contribution
+}
+
+// DaoNganResult is the full đạo ngân calculation response.
+type DaoNganResult struct {
+	TotalDaoNgan    float64             `json:"total_dao_ngan"`    // composite đạo ngân score
+	TotalMarks      int                 `json:"total_marks"`       // sum of all dao marks
+	UniquePathCount int                 `json:"unique_path_count"` // number of paths with marks
+	AverageMultiplier float64           `json:"average_multiplier"` // mean multiplier across paths
+	MaxMultiplier   float64             `json:"max_multiplier"`    // highest single-path multiplier
+	MaxPath         string              `json:"max_path"`          // path with highest multiplier
+	Paths           []DaoNganPathDetail `json:"paths"`             // per-path breakdown
+}
+
+// CalculateDaoNgan computes the composite "đạo ngân" (dao silver) score
+// from all of a player's dao marks.
+//
+// Đạo Ngân represents the cumulative cultivation attainment across all dao paths.
+// The formula sums each path's effective power:
+//
+//	power(marks) = marks * multiplier(marks)
+//
+// where multiplier follows the standard combat formula:
+//
+//	marks <= 10000: multiplier = 1.0 + marks/100
+//	marks  > 10000: multiplier = 101.0 + (marks-10000)/500  (soft cap)
+//
+// TotalDaoNgan = Σ power(path) for all paths with marks > 0
+func CalculateDaoNgan(daoMarks models.DaoMarksMap) DaoNganResult {
+	result := DaoNganResult{
+		Paths: make([]DaoNganPathDetail, 0),
+	}
+
+	if daoMarks == nil {
+		return result
+	}
+
+	var totalPower float64
+	var totalMarks int
+	var maxMult float64
+	var maxPath string
+	var sumMult float64
+
+	for path, amount := range daoMarks {
+		if amount <= 0 {
+			continue
+		}
+
+		var mult float64
+		if amount <= 10000 {
+			mult = 1.0 + float64(amount)/100.0
+		} else {
+			mult = 1.0 + 100.0 + float64(amount-10000)/500.0
+		}
+
+		power := float64(amount) * mult
+
+		result.Paths = append(result.Paths, DaoNganPathDetail{
+			Path:       path,
+			Amount:     amount,
+			Multiplier: mult,
+			Power:      power,
+		})
+
+		totalPower += power
+		totalMarks += amount
+		sumMult += mult
+		result.UniquePathCount++
+
+		if mult > maxMult {
+			maxMult = mult
+			maxPath = path
+		}
+	}
+
+	// Sort paths by power descending
+	sort.Slice(result.Paths, func(i, j int) bool {
+		return result.Paths[i].Power > result.Paths[j].Power
+	})
+
+	result.TotalDaoNgan = totalPower
+	result.TotalMarks = totalMarks
+	result.MaxMultiplier = maxMult
+	result.MaxPath = maxPath
+	if result.UniquePathCount > 0 {
+		result.AverageMultiplier = sumMult / float64(result.UniquePathCount)
+	}
+
+	return result
+}
+
+// GetDaoNganHandler returns the đạo ngân calculation for the authenticated player.
+func GetDaoNganHandler(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var daoJSON []byte
+	err := db.DB.QueryRowContext(c.Request.Context(),
+		`SELECT COALESCE(dao_marks, '{}') FROM players WHERE id = $1`, playerID,
+	).Scan(&daoJSON)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load Dao Marks"})
+		return
+	}
+
+	daoMap := make(models.DaoMarksMap)
+	if len(daoJSON) > 0 {
+		_ = json.Unmarshal(daoJSON, &daoMap)
+	}
+
+	result := CalculateDaoNgan(daoMap)
+	c.JSON(http.StatusOK, result)
 }
 
 // EquipGu toggles whether a Gu instance is equipped

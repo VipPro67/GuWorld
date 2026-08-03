@@ -60,6 +60,14 @@ type ApertureResourceNode struct {
 	IsDestroyed             bool       `json:"is_destroyed"`
 	CreatedAt               time.Time  `json:"created_at"`
 	UpdatedAt               time.Time  `json:"updated_at"`
+	NodeCategory            string     `json:"node_category"`
+	DefensePower            int        `json:"defense_power"`
+	AttackRange             int        `json:"attack_range"`
+	HPBonus                 int        `json:"hp_bonus"`
+	DamageReduction         int        `json:"damage_reduction"`
+	BlocksMovement          bool       `json:"blocks_movement"`
+	RequiredGuID            string     `json:"required_gu_id"`
+	RequiredGuRank          int        `json:"required_gu_rank"`
 }
 
 type TribulationEvent struct {

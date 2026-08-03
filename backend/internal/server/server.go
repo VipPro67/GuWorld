@@ -201,6 +201,7 @@ func SetupRouter() *gin.Engine {
 			player.GET("/status/:id", handlers.GetPlayerStatus)
 			player.GET("/inventory/gus", handlers.GetPlayerInventoryGus)
 			player.GET("/stats", handlers.GetPlayerStatsHandler)
+			player.GET("/passive-stats", handlers.GetPassiveStatsHandler)
 			player.POST("/explore/:id", handlers.Explore)
 			player.POST("/use-item", handlers.UseItem)
 			player.POST("/use-items", handlers.UseItems)
@@ -350,6 +351,7 @@ func SetupRouter() *gin.Engine {
 			aperture.POST("/time-rate", handlers.SetApertureTimeRate)
 			aperture.POST("/labor", handlers.SetApertureLabor)
 			aperture.POST("/nodes/:id/repair", handlers.RepairApertureNode)
+			aperture.POST("/nodes/:id/upgrade", handlers.UpgradeApertureNode)
 			aperture.GET("/variant-humans", handlers.GetApertureVariantHumans)
 		}
 
@@ -359,6 +361,7 @@ func SetupRouter() *gin.Engine {
 		daoMarks.Use(middleware.RateLimitByPlayer(15, time.Minute))
 		{
 			daoMarks.GET("", handlers.GetDaoMarks)
+			daoMarks.GET("/dao-ngan", handlers.GetDaoNganHandler)
 		}
 
 		// Tribulations — group: 30/min, per player: 20/min

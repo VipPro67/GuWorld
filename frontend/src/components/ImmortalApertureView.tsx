@@ -186,6 +186,7 @@ export const ImmortalApertureView: React.FC = () => {
     setApertureTimeRate,
     setApertureLabor,
     repairApertureNode,
+    upgradeApertureNode,
     fetchActiveTribulation,
     attackTribulationEnemy,
     resolveTribulation,
@@ -200,7 +201,7 @@ export const ImmortalApertureView: React.FC = () => {
   const [selectedGus, setSelectedGus] = useState<string[]>([]);
 
   const [sliderRate, setSliderRate] = useState<number>(aperture?.time_rate || 10.0);
-  const [buildCategory, setBuildCategory] = useState<"plants" | "beasts" | "humans">("plants");
+  const [buildCategory, setBuildCategory] = useState<"plants" | "beasts" | "humans" | "defense">("plants");
 
   const essenceProd = aperture?.essence_production_per_year ?? 10;
   const rank = player?.rank ?? 6;
@@ -280,6 +281,15 @@ export const ImmortalApertureView: React.FC = () => {
     if (success) {
       setSelectedNode(null);
       setSelectedCell(null);
+    }
+  };
+
+  const handleUpgrade = async (nodeId: string) => {
+    const success = await upgradeApertureNode(nodeId);
+    if (success) {
+      // Refresh selected node data
+      const updated = apertureNodes.find(n => n.id === nodeId);
+      if (updated) setSelectedNode(updated);
     }
   };
 
@@ -957,6 +967,26 @@ export const ImmortalApertureView: React.FC = () => {
                               cellIcon = "🦅";
                               cellColor = "bg-sky-950/40 border-sky-500/30";
                               break;
+                            case "WALL":
+                              cellIcon = "🧱";
+                              cellColor = "bg-orange-950/50 border-orange-500/40";
+                              break;
+                            case "WATCHTOWER":
+                              cellIcon = "🗼";
+                              cellColor = "bg-blue-950/50 border-blue-500/40";
+                              break;
+                            case "GUARDIAN_STATUE":
+                              cellIcon = "🗿";
+                              cellColor = "bg-emerald-950/50 border-emerald-500/40";
+                              break;
+                            case "BARRACKS":
+                              cellIcon = "⚔️";
+                              cellColor = "bg-red-950/50 border-red-500/40";
+                              break;
+                            case "FORCE_FIELD":
+                              cellIcon = "🔮";
+                              cellColor = "bg-purple-950/50 border-purple-500/40";
+                              break;
                             default:
                               cellIcon = "🏡";
                               cellColor = "bg-slate-800 border-slate-700";
@@ -995,6 +1025,9 @@ export const ImmortalApertureView: React.FC = () => {
                 <div className="flex items-center gap-1">💎 Ngọc Thạch</div>
                 <div className="flex items-center gap-1">🪙 Mạch Nguyên Thạch</div>
                 <div className="flex items-center gap-1 text-rose-400">💀 Quái Tai Kiếp</div>
+                <div className="flex items-center gap-1 text-orange-400">🧱 Tường Thành</div>
+                <div className="flex items-center gap-1 text-blue-400">🗼 Tháp Canh</div>
+                <div className="flex items-center gap-1 text-emerald-400">🗿 Tượng Hộ Mệnh</div>
               </div>
             </div>
 
@@ -1193,8 +1226,8 @@ export const ImmortalApertureView: React.FC = () => {
                             {selectedNode.is_destroyed && <span className="text-rose-500 font-bold">Bị phá hủy</span>}
                           </div>
 
-                          {/* Ecosystem details */}
-                          {!selectedNode.is_destroyed && (() => {
+                          {/* Ecosystem details - only for resource nodes */}
+                          {!selectedNode.is_destroyed && selectedNode.node_category !== "DEFENSE" && (() => {
                             const checkConflict = (nd: ApertureResourceNode) => {
                               for (const other of apertureNodes) {
                                 if (other.id === nd.id || other.is_destroyed) continue;
@@ -1258,6 +1291,33 @@ export const ImmortalApertureView: React.FC = () => {
                             );
                           })()}
 
+                          {/* Defense Structure Details */}
+                          {!selectedNode.is_destroyed && selectedNode.node_category === "DEFENSE" && (() => {
+                            return (
+                              <div className="p-3 bg-slate-900/40 rounded-lg border border-slate-805 text-[10px] space-y-1 text-slate-400">
+                                <div className="font-bold text-slate-300">Thông Tin Công Trình Phòng Thủ:</div>
+                                {selectedNode.blocks_movement && (
+                                  <div>• <span className="text-amber-400 font-medium">Tường Thành</span>: Chặn kẻ thù di chuyển qua ô này</div>
+                                )}
+                                {selectedNode.defense_power > 0 && (
+                                  <div>• <span className="text-cyan-400 font-medium">Tháp Canh</span>: Gây {selectedNode.defense_power} sát thương/kẻ thù trong phạm vi {selectedNode.attack_range} ô</div>
+                                )}
+                                {selectedNode.hp_bonus > 0 && (
+                                  <div>• <span className="text-emerald-400 font-medium">Tượng Hộ Mệnh</span>: Tăng +{selectedNode.hp_bonus} HP cho công trình trong phạm vi {selectedNode.attack_range} ô</div>
+                                )}
+                                {selectedNode.damage_reduction > 0 && selectedNode.attack_range === 0 && (
+                                  <div>• <span className="text-blue-400 font-medium">Doanh Trại</span>: Giảm {selectedNode.damage_reduction}% sát thương cho TẤT CẢ công trình</div>
+                                )}
+                                {selectedNode.damage_reduction > 0 && selectedNode.attack_range > 0 && (
+                                  <div>• <span className="text-purple-400 font-medium">Trường Lực</span>: Giảm {selectedNode.damage_reduction}% sát thương cho công trình trong phạm vi {selectedNode.attack_range} ô</div>
+                                )}
+                                {selectedNode.required_gu_id && (
+                                  <div>• Cổ trùng đã hy sinh: <span className="text-rose-400 font-medium">{selectedNode.required_gu_id}</span> (rank {selectedNode.required_gu_rank}+)</div>
+                                )}
+                              </div>
+                            );
+                          })()}
+
                           {/* Countdown Timer */}
                           {!selectedNode.is_destroyed && (
                             <div className="text-xs text-slate-400 flex justify-between">
@@ -1268,8 +1328,8 @@ export const ImmortalApertureView: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Collect timing indicator */}
-                          {!selectedNode.is_destroyed && (
+                          {/* Collect timing indicator - only for resource nodes */}
+                          {!selectedNode.is_destroyed && selectedNode.node_category !== "DEFENSE" && (
                             <div className="pt-2">
                               {canCollect(selectedNode, aperture?.time_rate) ? (
                                 <button
@@ -1300,6 +1360,55 @@ export const ImmortalApertureView: React.FC = () => {
                                 >
                                   {actionLoading ? "Đang sửa..." : selectedNode.is_destroyed ? `Tái thiết phế tích (${repairCost} Đá)` : `Sửa chữa độ bền (${repairCost} Đá)`}
                                 </button>
+                              </div>
+                            );
+                          })()}
+
+                          {/* Upgrade Node Section */}
+                          {!selectedNode.is_destroyed && (() => {
+                            const MAX_LEVEL = 5;
+                            const isMaxLevel = selectedNode.level >= MAX_LEVEL;
+                            const template = (() => {
+                              const costs: Record<string, number> = {
+                                MOON_ORCHID_FIELD: 500, GREEN_BAMBOO_GROVE: 600, JADE_STONE_MINE: 1000,
+                                PRIMEVAL_MINE: 1500, SWORD_LEAF_GRASS: 800, SPIRIT_DEER_PASTURE: 1200,
+                                SILVER_WOLF_DEN: 2000, HAIRY_MAN_SETTLEMENT: 3000, ROCKMAN_TRIBE: 3000,
+                                FEATHERMAN_CANYON: 3000, WALL: 800, WATCHTOWER: 1200,
+                                GUARDIAN_STATUE: 1500, BARRACKS: 2000, FORCE_FIELD: 2500,
+                              };
+                              return costs[selectedNode.node_type] || 500;
+                            })();
+                            const upgradeCost = Math.max(100, Math.floor(template * selectedNode.level * 1.5));
+                            const canUpgrade = player.primeval_stones >= upgradeCost;
+
+                            return (
+                              <div className="pt-2 border-t border-slate-800">
+                                {isMaxLevel ? (
+                                  <div className="text-center text-xs text-emerald-400 font-semibold py-2">
+                                    ⭐ Đã đạt cấp tối đa (Lv.{MAX_LEVEL})
+                                  </div>
+                                ) : (
+                                  <div className="space-y-1">
+                                    <div className="text-[10px] text-slate-400 flex justify-between">
+                                      <span>Nâng cấp lên Lv.{selectedNode.level + 1}:</span>
+                                      <span className={canUpgrade ? "text-amber-400" : "text-rose-400"}>
+                                        {upgradeCost} Nguyên Thạch
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-500">
+                                      {selectedNode.node_category === "RESOURCE"
+                                        ? `+50% sản lượng, +500 HP`
+                                        : `+25% hiệu ứng phòng thủ, +500 HP`}
+                                    </div>
+                                    <button
+                                      onClick={() => handleUpgrade(selectedNode.id)}
+                                      disabled={actionLoading || !canUpgrade}
+                                      className="w-full py-2 bg-gradient-to-r from-amber-600 to-yellow-600 disabled:from-slate-800 disabled:to-slate-900 disabled:text-slate-500 text-white font-bold text-xs rounded-lg transition"
+                                    >
+                                      {actionLoading ? "Đang nâng cấp..." : `Nâng Cấp (Lv.${selectedNode.level} → ${selectedNode.level + 1})`}
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             );
                           })()}
@@ -1344,6 +1453,12 @@ export const ImmortalApertureView: React.FC = () => {
                       const qtyRock = player.materials_inventory?.["node_rockman_tribe"] || 0;
                       const qtyFeather = player.materials_inventory?.["node_featherman_canyon"] || 0;
 
+                      const qtyWall = player.materials_inventory?.["node_wall"] || 0;
+                      const qtyWatchtower = player.materials_inventory?.["node_watchtower"] || 0;
+                      const qtyGuardianStatue = player.materials_inventory?.["node_guardian_statue"] || 0;
+                      const qtyBarracks = player.materials_inventory?.["node_barracks"] || 0;
+                      const qtyForceField = player.materials_inventory?.["node_force_field"] || 0;
+
                       type NodeOption = {
                         id: string;
                         name: string;
@@ -1369,6 +1484,13 @@ export const ImmortalApertureView: React.FC = () => {
                           { id: "JADE_STONE_MINE", name: "💎 Mỏ Ngọc Thạch Bản Địa", desc: "Sản xuất Ngọc Thạch. Phí: 1000 Đá.", cost: 1000, qty: qtyJade },
                           { id: "PRIMEVAL_MINE", name: "🪙 Mạch Nguyên Thạch Tiên Khiếu", desc: "Sản sinh Nguyên Thạch cực nhanh. Phí: 1500 Đá.", cost: 1500, qty: qtyPrimeval },
                         ],
+                        defense: [
+                          { id: "WALL", name: "🧱 Tường Thành", desc: "Chặn kẻ thù di chuyển. HP: 3000. Chi phí: 800 Đá + 2 Cổ trùng (Thú Bì, Thạch Bì).", cost: 800, qty: qtyWall },
+                          { id: "WATCHTOWER", name: "🗼 Tháp Canh", desc: "Bắn kẻ thù phạm vi 3 ô. HP: 2000. Chi phí: 1200 Đá + 2 Cổ trùng (Thiết Bì, Bán Thạch).", cost: 1200, qty: qtyWatchtower },
+                          { id: "GUARDIAN_STATUE", name: "🗿 Tượng Hộ Mệnh", desc: "Tăng 500 HP node lân cận (phạm vi 2 ô). HP: 2500. Chi phí: 1500 Đá + 2 Cổ trùng (Bạch Ngọc, Nguyệt Nghê).", cost: 1500, qty: qtyGuardianStatue },
+                          { id: "BARRACKS", name: "⚔️ Doanh Trại", desc: "Giảm 15% sát thương toàn bộ Tiên Khiếu. HP: 4000. Chi phí: 2000 Đá + 2 Cổ trùng (Kim Chung, Tượng Nha).", cost: 2000, qty: qtyBarracks },
+                          { id: "FORCE_FIELD", name: "🔮 Trường Lực", desc: "Giảm 30% sát thương phạm vi 2 ô. HP: 1500. Chi phí: 2500 Đá + 2 Cổ trùng (Chí Tôn, Kim Chung).", cost: 2500, qty: qtyForceField },
+                        ],
                       };
 
                       return (
@@ -1390,7 +1512,7 @@ export const ImmortalApertureView: React.FC = () => {
 
                           {/* Category Tabs */}
                           <div className="flex bg-slate-950/80 p-1 rounded-lg border border-slate-800 text-[10px]">
-                            {["plants", "beasts", "humans"].map((cat) => (
+                            {["plants", "beasts", "humans", "defense"].map((cat) => (
                               <button
                                 key={cat}
                                 onClick={() => setBuildCategory(cat as any)}
@@ -1398,7 +1520,7 @@ export const ImmortalApertureView: React.FC = () => {
                                   buildCategory === cat ? "bg-slate-800 text-amber-400" : "text-slate-400"
                                 }`}
                               >
-                                {cat === "plants" ? "Thực Vật" : cat === "beasts" ? "Sinh Vật" : "Khai Khoáng & Dị Nhân"}
+                                {cat === "plants" ? "Thực Vật" : cat === "beasts" ? "Sinh Vật" : cat === "humans" ? "Khai Khoáng & Dị Nhân" : "Phòng Thủ"}
                               </button>
                             ))}
                           </div>

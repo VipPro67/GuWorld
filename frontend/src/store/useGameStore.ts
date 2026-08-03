@@ -374,6 +374,14 @@ export interface ApertureResourceNode {
   is_destroyed: boolean;
   created_at: string;
   updated_at: string;
+  node_category: string;
+  defense_power: number;
+  attack_range: number;
+  hp_bonus: number;
+  damage_reduction: number;
+  blocks_movement: boolean;
+  required_gu_id: string;
+  required_gu_rank: number;
 }
 
 export interface ApertureVariantHuman {
@@ -835,6 +843,8 @@ interface GameState {
     total_ref: number;
   } | null;
   fetchReferrals: () => Promise<void>;
+  passiveStats: { stats: Record<string, number>; details: { key: string; total: number; sources: { source: string; name: string; value: number; mult: number; dao: number; final: number }[] }[] } | null;
+  fetchPassiveStats: () => Promise<void>;
   simulateDeposit: (stones: number) => Promise<boolean>;
   addLog: (message: string) => void;
   currentView: string;
@@ -953,6 +963,7 @@ interface GameState {
   setApertureTimeRate: (rate: number) => Promise<boolean>;
   setApertureLabor: (race: string, intensity: string) => Promise<boolean>;
   repairApertureNode: (nodeId: string) => Promise<boolean>;
+  upgradeApertureNode: (nodeId: string) => Promise<boolean>;
   fetchActiveTribulation: () => Promise<void>;
   attackTribulationEnemy: (eventId: string, enemyId: string, guIds: string[]) => Promise<boolean>;
   resolveTribulation: (eventId: string) => Promise<boolean>;
@@ -1254,6 +1265,7 @@ export const useGameStore = create<GameState>((set, get) => {
   guInventoryLoaded: false,
   logs: ["Chào mừng đạo hữu đến với Cổ Giới. Hãy tu luyện và sinh tồn."],
   referralsData: null,
+  passiveStats: null,
   guDictionary: {},
   guByRank: {},
   itemDictionary: {},
@@ -1736,6 +1748,18 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err) {
       console.error("Failed to fetch referrals", err);
+    }
+  },
+
+  fetchPassiveStats: async () => {
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/passive-stats`);
+      if (response.ok) {
+        const data = await response.json();
+        set({ passiveStats: data });
+      }
+    } catch (err) {
+      console.error("Failed to fetch passive stats", err);
     }
   },
 
@@ -4492,6 +4516,36 @@ export const useGameStore = create<GameState>((set, get) => {
       await get().initializeSession();
       await get().fetchApertureNodes();
       await get().fetchVariantHumans();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  upgradeApertureNode: async (nodeId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/upgrade`, {
+        method: "POST",
+      });
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể nâng cấp công trình");
+      }
+      get().addToast(data.message || "Nâng cấp thành công!", "success");
+      get().addLog(data.message || "Đã nâng cấp công trình.");
+      await get().initializeSession();
+      await get().fetchApertureNodes();
       return true;
     } catch (err: any) {
       set({ error: err.message });

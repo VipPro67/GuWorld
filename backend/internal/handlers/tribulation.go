@@ -1691,7 +1691,10 @@ func ProcessActiveTribulationGrid() error {
 
 		// Fetch non-destroyed resource nodes
 		nodeRows, err := tx.Query(`
-			SELECT id, name, hp, x, y 
+			SELECT id, name, hp, x, y,
+				COALESCE(node_category, 'RESOURCE'), COALESCE(blocks_movement, false),
+				COALESCE(defense_power, 0), COALESCE(attack_range, 0),
+				COALESCE(hp_bonus, 0), COALESCE(damage_reduction, 0)
 			FROM aperture_resource_nodes 
 			WHERE aperture_id = $1 AND is_destroyed = false
 		`, ev.ApertureID)
@@ -1700,16 +1703,25 @@ func ProcessActiveTribulationGrid() error {
 		}
 
 		type TNode struct {
-			ID   string
-			Name string
-			HP   int
-			X    int
-			Y    int
+			ID              string
+			Name            string
+			HP              int
+			X               int
+			Y               int
+			NodeCategory    string
+			BlocksMovement  bool
+			DefensePower    int
+			AttackRange     int
+			HPBonus         int
+			DamageReduction int
 		}
 		var nodes []TNode
 		for nodeRows.Next() {
 			var nd TNode
-			if err := nodeRows.Scan(&nd.ID, &nd.Name, &nd.HP, &nd.X, &nd.Y); err != nil {
+			if err := nodeRows.Scan(&nd.ID, &nd.Name, &nd.HP, &nd.X, &nd.Y,
+				&nd.NodeCategory, &nd.BlocksMovement,
+				&nd.DefensePower, &nd.AttackRange,
+				&nd.HPBonus, &nd.DamageReduction); err != nil {
 				nodeRows.Close()
 				return fmt.Errorf("failed to scan resource node row: %w", err)
 			}
@@ -1757,7 +1769,7 @@ func ProcessActiveTribulationGrid() error {
 
 		// Process each enemy
 		for _, en := range enemies {
-			// Find nearest node
+			// Find nearest non-wall node (prefer defense nodes, then resource)
 			var nearestNode *TNode
 			minDist := 999999
 			for i := range nodes {
@@ -1774,6 +1786,11 @@ func ProcessActiveTribulationGrid() error {
 				if dist < minDist {
 					minDist = dist
 					nearestNode = nd
+				} else if dist == minDist && nearestNode != nil {
+					// Tiebreak: prefer defense nodes over resource nodes
+					if nd.NodeCategory == "DEFENSE" && nearestNode.NodeCategory != "DEFENSE" {
+						nearestNode = nd
+					}
 				}
 			}
 
@@ -1794,7 +1811,53 @@ func ProcessActiveTribulationGrid() error {
 
 			if absDx <= 1 && absDy <= 1 {
 				// Enemy is adjacent or on top of the node, attack!
-				nearestNode.HP -= en.NodeDmg
+				// Calculate damage buffs/reductions from nearby defense structures
+				effectiveDmg := en.NodeDmg
+				totalDamageReduction := 0
+				totalHPBonus := 0
+
+				for i := range nodes {
+					buffNode := &nodes[i]
+					if buffNode.ID == nearestNode.ID || buffNode.HP <= 0 {
+						continue
+					}
+					// Manhattan distance from buff node to target node
+					bdx := buffNode.X - nearestNode.X
+					if bdx < 0 {
+						bdx = -bdx
+					}
+					bdy := buffNode.Y - nearestNode.Y
+					if bdy < 0 {
+						bdy = -bdy
+					}
+					bdist := bdx + bdy
+
+					// Guardian Statue: bonus HP to nearby nodes
+					if buffNode.HPBonus > 0 && buffNode.AttackRange > 0 && bdist <= buffNode.AttackRange {
+						totalHPBonus += buffNode.HPBonus
+					}
+					// Barracks: damage reduction to ALL nodes (attack_range=0 means global)
+					if buffNode.DamageReduction > 0 && buffNode.AttackRange == 0 {
+						totalDamageReduction += buffNode.DamageReduction
+					}
+					// Force Field: damage reduction to nearby nodes
+					if buffNode.DamageReduction > 0 && buffNode.AttackRange > 0 && bdist <= buffNode.AttackRange {
+						totalDamageReduction += buffNode.DamageReduction
+					}
+				}
+
+				// Cap damage reduction at 80%
+				if totalDamageReduction > 80 {
+					totalDamageReduction = 80
+				}
+				// Apply damage reduction
+				effectiveDmg = en.NodeDmg * (100 - totalDamageReduction) / 100
+				if effectiveDmg < 1 {
+					effectiveDmg = 1
+				}
+
+				// Apply damage (HP cannot go below 0, but node survives if HP > 0 even with bonus)
+				nearestNode.HP -= effectiveDmg
 				isDestroyed := false
 				if nearestNode.HP <= 0 {
 					nearestNode.HP = 0
@@ -1830,23 +1893,150 @@ func ProcessActiveTribulationGrid() error {
 				}
 			} else {
 				// Move towards the node (allows diagonal movement)
+				// Wall block check: if the target cell has a wall, redirect to attack it
+				targetX := en.X
 				if dx > 0 {
-					en.X++
+					targetX = en.X + 1
 				} else if dx < 0 {
-					en.X--
+					targetX = en.X - 1
 				}
+				targetY := en.Y
 				if dy > 0 {
-					en.Y++
+					targetY = en.Y + 1
 				} else if dy < 0 {
-					en.Y--
+					targetY = en.Y - 1
 				}
-				_, err = tx.Exec(`
-					UPDATE tribulation_enemies 
-					SET x = $1, y = $2, updated_at = NOW() 
-					WHERE id = $3
-				`, en.X, en.Y, en.ID)
-				if err != nil {
-					return fmt.Errorf("failed to update enemy coordinates: %w", err)
+
+				// Check if target cell has a wall blocking movement
+				var wallNode *TNode
+				for i := range nodes {
+					nd := &nodes[i]
+					if nd.BlocksMovement && nd.X == targetX && nd.Y == targetY && nd.HP > 0 {
+						wallNode = nd
+						break
+					}
+				}
+
+				if wallNode != nil {
+					// Wall blocks path - attack the wall instead
+					nearestNode = wallNode
+					// Calculate damage buffs/reductions
+					effectiveDmg := en.NodeDmg
+					totalDamageReduction := 0
+					for i := range nodes {
+						buffNode := &nodes[i]
+						if buffNode.ID == wallNode.ID || buffNode.HP <= 0 {
+							continue
+						}
+						bdx := buffNode.X - wallNode.X
+						if bdx < 0 {
+							bdx = -bdx
+						}
+						bdy := buffNode.Y - wallNode.Y
+						if bdy < 0 {
+							bdy = -bdy
+						}
+						bdist := bdx + bdy
+						if buffNode.DamageReduction > 0 && buffNode.AttackRange == 0 {
+							totalDamageReduction += buffNode.DamageReduction
+						}
+						if buffNode.DamageReduction > 0 && buffNode.AttackRange > 0 && bdist <= buffNode.AttackRange {
+							totalDamageReduction += buffNode.DamageReduction
+						}
+					}
+					if totalDamageReduction > 80 {
+						totalDamageReduction = 80
+					}
+					effectiveDmg = en.NodeDmg * (100 - totalDamageReduction) / 100
+					if effectiveDmg < 1 {
+						effectiveDmg = 1
+					}
+
+					nearestNode.HP -= effectiveDmg
+					isDestroyed := false
+					if nearestNode.HP <= 0 {
+						nearestNode.HP = 0
+						isDestroyed = true
+					}
+					_, err = tx.Exec(`
+						UPDATE aperture_resource_nodes 
+						SET hp = $1, is_destroyed = $2, updated_at = NOW() 
+						WHERE id = $3
+					`, nearestNode.HP, isDestroyed, nearestNode.ID)
+					if err != nil {
+						return fmt.Errorf("failed to update wall HP: %w", err)
+					}
+
+					if isDestroyed {
+						_, err = tx.Exec(`
+							INSERT INTO messages (sender_id, receiver_id, content, channel)
+							VALUES ('11111111-1111-1111-1111-111111111111', $1, 'Tai kiếp đã phá hủy Tường Thành!', 'private')
+						`, ev.PlayerID)
+						if err != nil {
+							return fmt.Errorf("failed to insert message for destroyed wall: %w", err)
+						}
+						var remainingNodes []TNode
+						for _, nd := range nodes {
+							if nd.ID != wallNode.ID {
+								remainingNodes = append(remainingNodes, nd)
+							}
+						}
+						nodes = remainingNodes
+					}
+				} else {
+					// No wall blocking, move normally
+					if dx > 0 {
+						en.X++
+					} else if dx < 0 {
+						en.X--
+					}
+					if dy > 0 {
+						en.Y++
+					} else if dy < 0 {
+						en.Y--
+					}
+					_, err = tx.Exec(`
+						UPDATE tribulation_enemies 
+						SET x = $1, y = $2, updated_at = NOW() 
+						WHERE id = $3
+					`, en.X, en.Y, en.ID)
+					if err != nil {
+						return fmt.Errorf("failed to update enemy coordinates: %w", err)
+					}
+				}
+			}
+		}
+
+		// Watchtower attacks: towers shoot at enemies in range
+		for i := range nodes {
+			tower := &nodes[i]
+			if tower.NodeCategory != "DEFENSE" || tower.DefensePower <= 0 || tower.AttackRange <= 0 || tower.HP <= 0 {
+				continue
+			}
+			for _, en := range enemies {
+				// Manhattan distance from tower to enemy
+				wdx := tower.X - en.X
+				if wdx < 0 {
+					wdx = -wdx
+				}
+				wdy := tower.Y - en.Y
+				if wdy < 0 {
+					wdy = -wdy
+				}
+				wdist := wdx + wdy
+				if wdist <= tower.AttackRange {
+					// Tower shoots at enemy - deal defense_power as direct HP damage to enemy
+					// We need to update enemy HP in DB (enemies have HP in tribulation_enemies)
+					_, err = tx.Exec(`
+						UPDATE tribulation_enemies 
+						SET hp = GREATEST(hp - $1, 0), 
+							is_dead = CASE WHEN hp - $1 <= 0 THEN true ELSE false END,
+							updated_at = NOW() 
+						WHERE id = $2
+					`, tower.DefensePower, en.ID)
+					if err != nil {
+						return fmt.Errorf("failed to apply watchtower damage: %w", err)
+					}
 				}
 			}
 		}

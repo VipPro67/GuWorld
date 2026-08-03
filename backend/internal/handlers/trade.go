@@ -690,6 +690,12 @@ func ConfirmTrade(c *gin.Context) {
 		AddHumanQi(&sender, 10.0)
 		AddHumanQi(&receiver, 10.0)
 
+		// Delete player_gu records for both players first to prevent unique constraint conflicts during swap
+		if _, err := tx.Exec(`DELETE FROM player_gu WHERE player_id = $1 OR player_id = $2`, sender.ID, receiver.ID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể dọn dẹp Cổ trùng cũ để giao dịch"})
+			return
+		}
+
 		// Update both players in database
 		if err := updatePlayerInventory(tx, sender); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ người gửi"})

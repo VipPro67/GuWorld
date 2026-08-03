@@ -260,6 +260,8 @@ export const Aperture: React.FC<ApertureProps> = ({
 }) => {
   const store = useGameStore();
   const manaSnapshot = store.manaSnapshot;
+  const passiveStats = store.passiveStats;
+  const fetchPassiveStats = store.fetchPassiveStats;
   const [manaNow, setManaNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -315,6 +317,12 @@ export const Aperture: React.FC<ApertureProps> = ({
   const [giftCodeInput, setGiftCodeInput] = useState("");
   const [giftCodeMsg, setGiftCodeMsg] = useState<string | null>(null);
   const [giftCodeLoading, setGiftCodeLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === "growth") {
+      fetchPassiveStats();
+    }
+  }, [activeTab, fetchPassiveStats]);
 
   // Disguise/stealth settings state
   const [isDisguised, setIsDisguised] = useState(player.is_disguised || false);
@@ -844,38 +852,34 @@ export const Aperture: React.FC<ApertureProps> = ({
             <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
                 <Zap className="w-5 h-5 text-amber-400" />
-                <span className="font-serif font-bold text-zinc-100 text-sm">Bị Động Cổ Trùng Đang Trang Bị</span>
+                <span className="font-serif font-bold text-zinc-100 text-sm">Thống Kê Bị Động</span>
               </div>
               {(() => {
-                const passiveTotals: Record<string, number> = {};
-                for (const gu of player.gu_inventory) {
-                  if (!gu.equipped || gu.status !== "ACTIVE") continue;
-                  const spec = guDictionary[gu.gu_id];
-                  if (!spec?.effects?.passive) continue;
-                  const p = spec.effects.passive;
-                  for (const [k, v] of Object.entries(p)) {
-                    if (typeof v === "number" && v !== 0) {
-                      passiveTotals[k] = (passiveTotals[k] || 0) + v;
-                    }
-                  }
-                }
+                if (!passiveStats) return <div className="text-xs text-zinc-500 italic py-2">Đang tải...</div>;
                 const labels: Record<string, string> = {
-                  stat_base_attack: "Công Kích", stat_base_defense: "Phòng Ngự", stat_base_hp: "Máu",
-                  stat_base_speed: "Tốc Độ", soul_refinement: "Hồn Lực", storage_capacity: "Vật Chứa",
-                  movement: "Di Chuyển", evasion: "Né Tránh", investigation: "Trinh Sát",
-                  hearing: "Thính Giác", mana_regen_mult: "Hồi Pháp",
-                  damage_multiplier_on_hit: "Sát Thương Khi Mất Máu",
+                  attack: "Công Kích", defense: "Phòng Ngự", hp: "Máu",
+                  speed: "Tốc Độ", healing: "Hồi Phục", soul_refinement: "Hồn Lực",
+                  storage: "Vật Chứa", movement: "Di Chuyển", evasion: "Né Tránh",
+                  investigation: "Trinh Sát", hearing: "Thính Giác",
+                  mana_regen_mult: "Hồi Pháp", damage_multiplier_on_hit: "Sát Thương Khi Mất Máu",
                   refine_mana_tier: "Tinh Luyện", cleansing_power: "Tẩy Trừ",
                   path_conflict_reduction: "Giảm Xung Đột",
                 };
-                const entries = Object.entries(passiveTotals).filter(([k]) => labels[k]);
-                if (entries.length === 0) return <div className="text-xs text-zinc-500 italic py-2">Không có Cổ trùng bị động nào đang trang bị.</div>;
+                const details = passiveStats.details.filter(d => d.total !== 0);
+                if (details.length === 0) return <div className="text-xs text-zinc-500 italic py-2">Không có chỉ số bị động nào.</div>;
                 return (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {entries.map(([k, v]) => (
-                      <div key={k} className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
-                        <div className="text-[10px] text-zinc-500 font-mono">{labels[k] || k}</div>
-                        <div className="text-base font-bold text-zinc-100 font-mono">+{v.toFixed(1)}</div>
+                    {details.map(d => (
+                      <div key={d.key} className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
+                        <div className="text-[10px] text-zinc-500 font-mono">{labels[d.key] || d.key}</div>
+                        <div className="text-base font-bold text-zinc-100 font-mono">+{d.total.toFixed(1)}</div>
+                        {d.sources.length > 1 && (
+                          <div className="mt-1 text-[9px] text-zinc-600 leading-tight">
+                            {d.sources.map((s, i) => (
+                              <div key={i}>{s.name}: +{s.final.toFixed(1)}</div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

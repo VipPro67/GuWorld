@@ -51,6 +51,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | GET | `/player/status/:id` | Projects only equipped/vital Gus. |
 | GET | `/player/inventory/gus` | Full Gu inventory (lazy-loaded). |
 | GET | `/player/stats` |
+| GET | `/player/passive-stats` | Detailed passive stats breakdown with per-source attribution. |
 | POST | `/player/explore/:id` |
 | POST | `/player/use-item` |
 | POST | `/player/use-items` |
@@ -139,6 +140,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | POST | `/immortal-aperture/nodes/:id/repair` |
 | GET | `/immortal-aperture/variant-humans` |
 | GET | `/dao-marks` |
+| GET | `/dao-marks/dao-ngan` | Đạo ngân (composite dao power) calculation. |
 | GET | `/tribulations/active` |
 | POST | `/tribulations/:eventId/attack` |
 | POST | `/tribulations/:eventId/resolve` |
