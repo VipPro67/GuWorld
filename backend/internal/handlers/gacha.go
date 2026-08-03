@@ -49,23 +49,30 @@ var gachaPools = []GachaPool{
 			{Type: "gu", Min: 1, Max: 1, Weight: 20.0, Label: "Cổ Trùng R1~R3"},
 			{Type: "primeval_stones", Min: 2000, Max: 5000, Weight: 10.0, Label: "2.000~5.000 Nguyên Thạch"},
 			{Type: "gu_rank", ID: "4,5", Min: 1, Max: 1, Weight: 4.0, Label: "Cổ Trùng R4~R5"},
-			{Type: "gu_rank", ID: "6,7", Min: 1, Max: 1, Weight: 0.004, Label: "Cổ Trùng R6+ Cao Cấp"},
-			{Type: "gu_rank", ID: "8,9", Min: 1, Max: 1, Weight: 0.00004, Label: "Cổ Trùng R8+ Siêu Cấp"},
+			{Type: "gu_rank", ID: "6", Min: 1, Max: 1, Weight: 0.008, Label: "Cổ Trùng R6+ Cao Cấp"},
+			{Type: "gu_rank", ID: "7", Min: 1, Max: 1, Weight: 0.0004, Label: "Cổ Trùng R7+ Cao Cấp"},
+			{Type: "gu_rank", ID: "8", Min: 1, Max: 1, Weight: 0.00004, Label: "Cổ Trùng R8+ Siêu Cấp"},
+			{Type: "gu_rank", ID: "9", Min: 1, Max: 1, Weight: 0.000004, Label: "Cổ Trùng R9+ Siêu Cấp"},
 		},
 	},
-	// {
-	// 	ID:          "tho_nguyen_co_tu",
-	// 	Name:        "Thọ Nguyên Cổ Từ",
-	// 	Description: "Đánh đổi thọ nguyên để nhận phúc duyên! Càng đánh cược thì càng có thể gia tăng thọ nguyên vĩnh viễn và đột phá tu vi!",
-	// 	CostType:    "lifespan",
-	// 	CostAmount:  50,
-	// 	Rewards: []GachaRewardItem{
-	// 		{Type: "lifespan", Min: 5, Max: 10, Weight: 50.0, Label: "+5~10 năm Thọ Nguyên"},
-	// 		{Type: "wall_progress", Min: 0.05, Max: 0.15, Weight: 25.0, Label: "+5%~15% Phá Vách"},
-	// 		{Type: "human_qi", Min: 500, Max: 2000, Weight: 15.0, Label: "+500~2.000 Nhân Khí"},
-	// 		{Type: "lifespan", Min: 10, Max: 30, Weight: 10.0, Label: "+10~30 năm Thọ Nguyên"},
-	// 	},
-	// },
+	{
+		ID:          "tho_nguyen",
+		Name:        "Thọ Nguyên",
+		Description: "Đánh đổi thọ nguyên để nhận phúc duyên! Càng đánh cược thì càng có thể gia tăng thọ nguyên vĩnh viễn và đột phá tu vi!",
+		CostType:    "lifespan",
+		CostAmount:  50,
+		Rewards: []GachaRewardItem{
+			{Type: "primeval_stones", Min: 500, Max: 1500, Weight: 40.0, Label: "500~1.500 Nguyên Thạch"},
+			{Type: "item", Min: 1, Max: 1, Weight: 25.0, Label: "Vật liệu cấp thấp"},
+			{Type: "gu", Min: 1, Max: 1, Weight: 20.0, Label: "Cổ Trùng R1~R3"},
+			{Type: "primeval_stones", Min: 2000, Max: 5000, Weight: 10.0, Label: "2.000~5.000 Nguyên Thạch"},
+			{Type: "gu_rank", ID: "4,5", Min: 1, Max: 1, Weight: 4.0, Label: "Cổ Trùng R4~R5"},
+			{Type: "gu_rank", ID: "6", Min: 1, Max: 1, Weight: 0.8, Label: "Cổ Trùng R6+ Cao Cấp"},
+			{Type: "gu_rank", ID: "7", Min: 1, Max: 1, Weight: 0.04, Label: "Cổ Trùng R7+ Cao Cấp"},
+			{Type: "gu_rank", ID: "8", Min: 1, Max: 1, Weight: 0.004, Label: "Cổ Trùng R8+ Siêu Cấp"},
+			{Type: "gu_rank", ID: "9", Min: 1, Max: 1, Weight: 0.0004, Label: "Cổ Trùng R9+ Siêu Cấp"},
+		},
+	},
 	// {
 	// 	ID:          "van_menh_co_tu",
 	// 	Name:        "Vận Mệnh Cổ Từ",
@@ -107,8 +114,8 @@ type weightedMaterialEntry struct {
 }
 
 type precomputedPools struct {
-	guByRank   map[string][]weightedGuEntry // "1,2,3" → pool
-	materials  []weightedMaterialEntry
+	guByRank    map[string][]weightedGuEntry // "1,2,3" → pool
+	materials   []weightedMaterialEntry
 	totalByRank map[string]float64
 	totalMat    float64
 }
@@ -196,10 +203,10 @@ func (pc *precomputedPools) rollMaterial() string {
 // ── Immortal Gu cache (5-minute TTL) ────────────────────────────────
 
 type immortalCache struct {
-	mu        sync.RWMutex
-	data      map[string]bool
-	loadedAt  int64 // unix timestamp
-	ttlSec    int64
+	mu       sync.RWMutex
+	data     map[string]bool
+	loadedAt int64 // unix timestamp
+	ttlSec   int64
 }
 
 var globalImmortalCache = &immortalCache{ttlSec: 300}
@@ -784,4 +791,3 @@ func aggregateGachaRewards(rewards []GachaResultItem) string {
 
 	return strings.Join(lines, "\n")
 }
-

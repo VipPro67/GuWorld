@@ -8,7 +8,7 @@ export const ToastContainer: React.FC = () => {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 max-w-sm w-full pointer-events-none px-4 sm:px-0">
+    <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[9999] flex flex-col gap-2 sm:gap-3 max-w-[280px] sm:max-w-sm w-full pointer-events-none">
       {toasts.map((toast) => {
         return (
           <ToastItem
@@ -63,7 +63,7 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
 
   return (
     <div
-      className={`pointer-events-auto flex items-start gap-3 w-full p-4 rounded-2xl border ${config.borderColor} bg-zinc-950/90 backdrop-blur-md shadow-xl ${config.shadowColor} transition-all duration-300 transform translate-x-0 animate-toast-in relative overflow-hidden`}
+      className={`pointer-events-auto flex items-start gap-2 sm:gap-3 w-full p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border ${config.borderColor} bg-zinc-950/90 backdrop-blur-md shadow-xl ${config.shadowColor} transition-all duration-300 transform translate-x-0 animate-toast-in relative overflow-hidden`}
       style={{
         boxShadow: `0 8px 32px 0 rgba(0, 0, 0, 0.6), 0 0 15px ${config.glowColor}`,
       }}
@@ -73,12 +73,12 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
 
       {/* Icon */}
       <div className={`shrink-0 mt-0.5 ${config.iconColor}`}>
-        <Icon className="w-5 h-5" />
+        <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
       </div>
 
       {/* Message content */}
-      <div className="flex-grow pr-4">
-        <p className="text-xs sm:text-sm font-mono font-medium text-zinc-200 leading-relaxed break-words">
+      <div className="flex-grow pr-3 sm:pr-4">
+        <p className="text-[11px] sm:text-sm font-mono font-medium text-zinc-200 leading-snug sm:leading-relaxed break-words">
           {message}
         </p>
       </div>
@@ -88,7 +88,7 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
         onClick={onClose}
         className="shrink-0 p-0.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/60 transition-all cursor-pointer"
       >
-        <X className="w-4 h-4" />
+        <X className="w-3.5 h-3.5 sm:w-4 h-4" />
       </button>
     </div>
   );
