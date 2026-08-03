@@ -1716,7 +1716,7 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 			}
 		}
 
-		yearsPassed := secondsPassed / 4320000.0
+		yearsPassed := secondsPassed / 43200.0
 		player.Lifespan -= yearsPassed
 		if player.Lifespan < 0 {
 			player.Lifespan = 0
@@ -2364,6 +2364,7 @@ func UseItem(c *gin.Context) {
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": strings.Join(messages, " ")})
 }
+
 type UseItemsRequest struct {
 	ItemIDs []string `json:"item_ids" binding:"required,min=1"`
 }
@@ -3876,4 +3877,3 @@ func aggregateChestSpecialMessages(specialMessages []string) []string {
 
 	return result
 }
-
