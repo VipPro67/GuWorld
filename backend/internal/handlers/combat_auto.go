@@ -661,18 +661,33 @@ func AutoCombatStart(c *gin.Context) {
 				err = tx.QueryRow("SELECT rarity, occupier_id, monster_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &currentOccupierStr, &monsterIDStr, &lastClaimedAt)
 				if err == nil && currentOccupierStr != nil && lastClaimedAt != nil {
 					stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
-					if stones > 0 || qi > 0.0 || chests > 0 {
-						_ = AddMineRewardsToPlayerTx(tx, player.ID, stones/2, qi/2.0, chests/2)
-						player.PrimevalStones += stones / 2
-						if chests/2 > 0 {
-							InventorySvc.AddItem(tx, player.ID.String(), "mine_chest", "materials", chests/2)
+					stonesHalf := stones / 2
+					qiHalf := qi / 2.0
+					chestsHalf := chests / 2
+					if stonesHalf > 0 || qiHalf > 0.0 || chestsHalf > 0 {
+						if errMine := AddMineRewardsToPlayerTx(tx, player.ID, stonesHalf, qiHalf, chestsHalf); errMine != nil {
+							logger.S.Errorf("Failed to add mine rewards to player %s (slot %d): %v", player.ID, slotID, errMine)
+						} else {
+							player.PrimevalStones += stonesHalf
+							logs = append(logs, simulator.CombatLog{
+								Turn:   simState.Turn,
+								Action: "MINE_LOOT",
+								Detail: fmt.Sprintf("Cướp mỏ thành công! +%d Nguyên Thạch, +%.0f Nhân Khí, +%d Rương Mỏ", stonesHalf, qiHalf, chestsHalf),
+							})
 						}
+					} else {
 						logs = append(logs, simulator.CombatLog{
 							Turn:   simState.Turn,
 							Action: "MINE_LOOT",
-							Detail: fmt.Sprintf("Cướp được %d Nguyên Thạch và %d rương từ đối thủ!", stones/2, chests/2),
+							Detail: "Mỏ đối thủ chưa tích lũy đủ tài nguyên để cướp.",
 						})
 					}
+				} else if err == nil {
+					logs = append(logs, simulator.CombatLog{
+						Turn:   simState.Turn,
+						Action: "MINE_LOOT",
+						Detail: "Mỏ không có người chiếm giữ, không thể cướp tài nguyên.",
+					})
 				}
 
 				now := time.Now()
