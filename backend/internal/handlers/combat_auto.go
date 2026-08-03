@@ -328,6 +328,21 @@ func AutoCombatStart(c *gin.Context) {
 			eHP = int(enemy.MaxHP)
 			enemyMana = int(enemy.MaxMana)
 		}
+		// Calculate enemy VirtualShield from their Gu inventory
+		enemyShield := 0
+		for _, guInst := range enemy.GuInventory {
+			if guInst.Status != "ACTIVE" {
+				continue
+			}
+			spec, ok := models.GetGu(guInst.GuID, guInst.Rank)
+			if !ok {
+				continue
+			}
+			if spec.Effects.Active != nil && spec.Effects.Active.ShieldFlat > 0 {
+				enemyShield += int(spec.Effects.Active.ShieldFlat)
+			}
+		}
+
 		simEnemy := &simulator.CombatantAuto{
 			ID:      enemy.ID,
 			Name:    enemy.Name,
@@ -341,6 +356,7 @@ func AutoCombatStart(c *gin.Context) {
 			BaseDmg: int(enemy.BaseAttack),
 			BaseDef: int(enemy.BaseDefense),
 			Speed:   enemy.Speed,
+			VirtualShield: enemyShield,
 			DaoMarks: func() simulator.DaoMarks {
 				dm := make(simulator.DaoMarks)
 				for k, v := range enemy.DaoMarks {
