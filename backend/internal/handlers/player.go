@@ -1716,7 +1716,7 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 			}
 		}
 
-		yearsPassed := secondsPassed / 432000.0
+		yearsPassed := secondsPassed / 4320000.0
 		player.Lifespan -= yearsPassed
 		if player.Lifespan < 0 {
 			player.Lifespan = 0

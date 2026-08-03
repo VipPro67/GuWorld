@@ -94,7 +94,7 @@ const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ apert
         return;
       }
 
-      const remainingRealSeconds = (internalYearsLeft * 432000.0) / rate;
+      const remainingRealSeconds = (internalYearsLeft * 4320000.0) / rate;
       const updatedAtMs = new Date(aperture.updated_at).getTime();
       const arrivalTimeMs = updatedAtMs + remainingRealSeconds * 1000;
       const now = Date.now();

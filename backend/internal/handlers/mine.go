@@ -75,22 +75,13 @@ func CalculateMineRewards(slotID int, rarity string, lastClaimedAt time.Time) (i
 func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int, qi float64, chests int) error {
 	var currentStones int
 	var currentQi float64
-	var matsBytes []byte
 
 	err := tx.QueryRow(`
-		SELECT primeval_stones, human_qi, materials_inventory
+		SELECT primeval_stones, human_qi
 		FROM players WHERE id = $1 FOR UPDATE
-	`, playerID).Scan(&currentStones, &currentQi, &matsBytes)
+	`, playerID).Scan(&currentStones, &currentQi)
 	if err != nil {
 		return err
-	}
-
-	var mats models.MaterialsInventory
-	if len(matsBytes) > 0 {
-		json.Unmarshal(matsBytes, &mats)
-	}
-	if mats == nil {
-		mats = make(models.MaterialsInventory)
 	}
 
 	currentStones += stones
@@ -99,21 +90,21 @@ func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int, qi flo
 		currentQi = 100000.0
 	}
 
-	if chests > 0 {
-		mats["mine_chest"] += chests
-	}
-
-	matsJSON, err := json.Marshal(mats)
+	_, err = tx.Exec(`
+		UPDATE players
+		SET primeval_stones = $1, human_qi = $2
+		WHERE id = $3
+	`, currentStones, currentQi, playerID)
 	if err != nil {
 		return err
 	}
 
-	_, err = tx.Exec(`
-		UPDATE players
-		SET primeval_stones = $1, human_qi = $2, materials_inventory = $3
-		WHERE id = $4
-	`, currentStones, currentQi, matsJSON, playerID)
-	return err
+	if chests > 0 {
+		if err := InventorySvc.AddItem(tx, playerID.String(), "mine_chest", "materials", chests); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func GetMineSlots(c *gin.Context) {

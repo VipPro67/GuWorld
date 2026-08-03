@@ -81,12 +81,7 @@ func runArenaSettlement() {
 	rows.Close()
 
 	for _, r := range rewards {
-		_, errUpdate := tx.Exec(`
-			UPDATE players 
-			SET materials_inventory = COALESCE(materials_inventory, '{}'::jsonb) || jsonb_build_object('arena_coin', COALESCE((materials_inventory->>'arena_coin')::int, 0) + $1)
-			WHERE id = $2
-		`, r.rewardCoins, r.playerID)
-
+		errUpdate := InventorySvc.AddItem(tx, r.playerID, "arena_coin", "materials", r.rewardCoins)
 		if errUpdate != nil {
 			logger.S.Errorf("ArenaSettlement Error: Failed to give reward to %s: %v", r.playerID, errUpdate)
 		}

@@ -1000,8 +1000,8 @@ func CheckAndTriggerTribulations() error {
 
 	for _, ap := range apertures {
 		// Advance internal year: 60s tick interval
-		subjectiveYearsPassed := 60.0 * ap.TimeRate / 432000.0
-		realYearsPassed := 60.0 / 432000.0
+		subjectiveYearsPassed := 60.0 * ap.TimeRate / 4320000.0
+		realYearsPassed := 60.0 / 4320000.0
 
 		// Deduct cultivator lifespan (real time, not scaled by TimeRate)
 		var currentLifespan float64
@@ -1912,5 +1912,5 @@ func StartTribulationWorker(ctx context.Context) {
 		}
 	}()
 
-	logger.S.Info("Tribulation and internal year worker started successfully (Interval: 60s/15s)")
+	logger.S.Info("Tribulation and internal year worker started successfully (Interval: 60s)")
 }

@@ -494,10 +494,9 @@ func PlaceApertureNode(c *gin.Context) {
 
 	var stones int
 	var immortalStones float64
-	var matsJSON []byte
 	err = tx.QueryRow(`
-		SELECT primeval_stones, immortal_stones, materials_inventory FROM players WHERE id = $1
-	`, playerID).Scan(&stones, &immortalStones, &matsJSON)
+		SELECT primeval_stones, immortal_stones FROM players WHERE id = $1
+	`, playerID).Scan(&stones, &immortalStones)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})
 		return
@@ -522,23 +521,16 @@ func PlaceApertureNode(c *gin.Context) {
 	}
 
 	// 3. Deduct cost or item
-	var materials map[string]int
-	_ = json.Unmarshal(matsJSON, &materials)
-	if materials == nil {
-		materials = make(map[string]int)
-	}
-
 	nodeItemID := "node_" + strings.ToLower(req.NodeType)
-	hasItem := materials[nodeItemID] > 0
+	qty, err := InventorySvc.GetQuantity(tx, playerID.String(), nodeItemID, "materials")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn túi đồ"})
+		return
+	}
+	hasItem := qty > 0
 
 	if hasItem {
-		materials[nodeItemID]--
-		if materials[nodeItemID] <= 0 {
-			delete(materials, nodeItemID)
-		}
-		updatedMats, _ := json.Marshal(materials)
-		_, err = tx.Exec(`UPDATE players SET materials_inventory = $1 WHERE id = $2`, updatedMats, playerID)
-		if err != nil {
+		if err := InventorySvc.RemoveItem(tx, playerID.String(), nodeItemID, "materials", 1); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ vật phẩm cơ sở"})
 			return
 		}
@@ -888,26 +880,9 @@ func CollectApertureResource(c *gin.Context) {
 			prodKey = template.ProdKey
 		}
 
-		// Fetch current player materials
-		var matsJSON []byte
-		err = tx.QueryRow(`SELECT materials_inventory FROM players WHERE id = $1`, playerID).Scan(&matsJSON)
+		err = InventorySvc.AddItem(tx, playerID.String(), prodKey, "materials", totalReward)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy túi đồ"})
-			return
-		}
-
-		var materials map[string]int
-		_ = json.Unmarshal(matsJSON, &materials)
-		if materials == nil {
-			materials = make(map[string]int)
-		}
-
-		materials[prodKey] += totalReward
-		updatedMats, _ := json.Marshal(materials)
-
-		_, err = tx.Exec(`UPDATE players SET materials_inventory = $1 WHERE id = $2`, updatedMats, playerID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật túi đồ"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng vật phẩm thu hoạch"})
 			return
 		}
 
@@ -998,26 +973,10 @@ func UninstallApertureNode(c *gin.Context) {
 	}
 
 	// 2. Add refund item to materials_inventory
-	var matsJSON []byte
-	err = tx.QueryRow(`SELECT materials_inventory FROM players WHERE id = $1`, playerID).Scan(&matsJSON)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy túi đồ"})
-		return
-	}
-
-	var materials map[string]int
-	_ = json.Unmarshal(matsJSON, &materials)
-	if materials == nil {
-		materials = make(map[string]int)
-	}
-
 	nodeItemID := "node_" + strings.ToLower(n.NodeType)
-	materials[nodeItemID]++
-	updatedMats, _ := json.Marshal(materials)
-
-	_, err = tx.Exec(`UPDATE players SET materials_inventory = $1 WHERE id = $2`, updatedMats, playerID)
+	err = InventorySvc.AddItem(tx, playerID.String(), nodeItemID, "materials", 1)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật túi đồ khi thu hồi mỏ"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hoàn trả vật phẩm khi thu hồi mỏ"})
 		return
 	}
 
