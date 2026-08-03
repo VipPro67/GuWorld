@@ -62,12 +62,12 @@ var gachaPools = []GachaPool{
 		CostType:    "lifespan",
 		CostAmount:  50,
 		Rewards: []GachaRewardItem{
-			{Type: "gu", Min: 1, Max: 1, Weight: 100.0, Label: "Cổ Trùng R1~R3"},
-			{Type: "gu_rank", ID: "4,5", Min: 1, Max: 1, Weight: 50, Label: "Cổ Trùng R4~R5"},
-			{Type: "gu_rank", ID: "6", Min: 1, Max: 1, Weight: 5, Label: "Cổ Trùng R6+ Cao Cấp"},
-			{Type: "gu_rank", ID: "7", Min: 1, Max: 1, Weight: 2.5, Label: "Cổ Trùng R7+ Cao Cấp"},
-			{Type: "gu_rank", ID: "8", Min: 1, Max: 1, Weight: 1.25, Label: "Cổ Trùng R8+ Siêu Cấp"},
-			{Type: "gu_rank", ID: "9", Min: 1, Max: 1, Weight: 0.75, Label: "Cổ Trùng R9+ Siêu Cấp"},
+			{Type: "gu_rank", ID: "3,4", Min: 1, Max: 1, Weight: 30.0, Label: "Cổ Trùng R3~R4"},
+			{Type: "gu_rank", ID: "5", Min: 1, Max: 1, Weight: 35.0, Label: "Cổ Trùng R5"},
+			{Type: "gu_rank", ID: "6", Min: 1, Max: 1, Weight: 20.0, Label: "Cổ Trùng R6"},
+			{Type: "gu_rank", ID: "7", Min: 1, Max: 1, Weight: 10.0, Label: "Cổ Trùng R7"},
+			{Type: "gu_rank", ID: "8", Min: 1, Max: 1, Weight: 4.0, Label: "Cổ Trùng R8"},
+			{Type: "gu_rank", ID: "9", Min: 1, Max: 1, Weight: 1.0, Label: "Cổ Trùng R9"},
 		},
 	},
 	// {
