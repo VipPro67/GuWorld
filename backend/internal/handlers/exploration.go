@@ -250,6 +250,33 @@ func GetGrid(c *gin.Context) {
 		}
 	}
 
+	// Always include party members regardless of distance for position sync
+	if player.PartyID != nil {
+		seenIDs := map[string]bool{}
+		for _, np := range nearbyPlayers {
+			seenIDs[np.ID] = true
+		}
+		partyRows, errParty := tx.Query(`
+			SELECT id, username, avatar_url, x, y
+			FROM players
+			WHERE party_id = $1
+			  AND id != $2
+			  AND current_region = $3
+		`, player.PartyID, player.ID, player.CurrentRegion)
+		if errParty == nil {
+			defer partyRows.Close()
+			for partyRows.Next() {
+				var np NearbyPlayer
+				if errScan := partyRows.Scan(&np.ID, &np.Username, &np.AvatarURL, &np.X, &np.Y); errScan == nil {
+					if !seenIDs[np.ID] {
+						nearbyPlayers = append(nearbyPlayers, np)
+						seenIDs[np.ID] = true
+					}
+				}
+			}
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		logger.S.Error("GetGrid commit warning:", err)
 	}
@@ -333,7 +360,7 @@ func MovePlayer(c *gin.Context) {
 	}
 
 	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": errLeader.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errLeader.Error()})
 		return
 	}
 

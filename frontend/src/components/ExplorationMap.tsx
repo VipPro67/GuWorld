@@ -90,6 +90,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
   }, [regionsLoaded, fetchRegions]);
 
   const isExploringActiveRegion = player.current_region !== "Southern_Border" && player.current_region !== "Lobby";
+  const isPartyMemberNotLeader = party !== null && party.leader_id !== player.id;
 
   const loadGrid = async () => {
     if (!isExploringActiveRegion) return;
@@ -170,7 +171,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
   };
 
   const handleGridCellClick = async (cx: number, cy: number) => {
-    if (actionLoading || player.active_combat) return;
+    if (actionLoading || player.active_combat || isPartyMemberNotLeader) return;
 
     // Check distance range
     const dx = Math.abs(cx - player.x);
@@ -417,6 +418,11 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
           <div className="text-[10px] text-zinc-500 font-mono max-w-xl">
             * Nhấp vào một ô trong phạm vi thân pháp (<span className="text-emerald-400 font-bold">{movementRange} ô</span>) để di chuyển. 
           </div>
+          {isPartyMemberNotLeader && (
+            <div className="text-[10px] text-amber-500 font-mono max-w-xl">
+              * Chỉ có Trưởng nhóm mới có thể di chuyển trên bản đồ.
+            </div>
+          )}
 
           {/* Grid Canvas */}
           <div className="flex justify-center items-center py-2">
@@ -434,7 +440,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                   const dy = Math.abs(y - player.y);
                   const distance = Math.max(dx, dy);
 
-                  const isMovable = !isOutOfBounds && distance > 0 && distance <= movementRange;
+                  const isMovable = !isOutOfBounds && distance > 0 && distance <= movementRange && !isPartyMemberNotLeader;
                   const hasEntity = cellData.cell_type !== "Empty";
 
                   // Other players on this cell
