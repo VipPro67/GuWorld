@@ -58,15 +58,7 @@ func healApertureEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec)
 	`, player.ID).Scan(&apID, &apertureHP, &maxApertureHP, &state)
 
 	if err == sql.ErrNoRows {
-		// Tự động khởi tạo tiên khiếu cho người chơi cũ (nếu chưa có)
-		ap, createErr := createAperture(tx, player.ID.String(), player.HumanQi, player.CurrentMana)
-		if createErr != nil {
-			return "", fmt.Errorf("không thể tự động khởi tạo Tiên Khiếu: %w", createErr)
-		}
-		apID = ap.ID
-		apertureHP = ap.ApertureHP
-		maxApertureHP = ap.MaxApertureHP
-		state = ap.State
+		return "", fmt.Errorf("không tìm thấy Tiên Khiếu của đạo hữu.")
 	} else if err != nil {
 		return "", fmt.Errorf("lỗi khi truy vấn Tiên Khiếu: %w", err)
 	}
