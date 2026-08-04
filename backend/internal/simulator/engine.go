@@ -887,21 +887,33 @@ func Simulate(state *CombatState) []CombatLog {
 						})
 					}
 
-					if a.LifeStealPct > 0 && totalDamageDealt > 0 {
-						healAmount := int(float64(totalDamageDealt) * a.LifeStealPct)
+				if a.LifeStealPct > 0 && totalDamageDealt > 0 {
+					healAmount := int(float64(totalDamageDealt) * a.LifeStealPct)
+					hpNeeded := actor.MaxHP - actor.HP
+					if healAmount <= hpNeeded {
 						actor.HP += healAmount
-						if actor.HP > actor.MaxHP {
-							actor.HP = actor.MaxHP
-						}
 						turnLogs = append(turnLogs, CombatLog{
 							Turn:      turn,
 							ActorId:   actor.ID,
 							ActorName: actor.Name,
 							Action:    "LIFESTEAL",
 							Damage:    healAmount,
-							Detail:    fmt.Sprintf("%s hút %d máu từ sát chiêu!", actor.Name, healAmount),
+							Detail:    fmt.Sprintf("%s hút %d máu từ sát chiêu, hồi phục HP!", actor.Name, healAmount),
+						})
+					} else {
+						actor.HP = actor.MaxHP
+						excess := healAmount - hpNeeded
+						actor.VirtualShield += excess
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    "LIFESTEAL_SHIELD",
+							Damage:    excess,
+							Detail:    fmt.Sprintf("%s hút %d máu từ sát chiêu, HP đầy, chuyển %d thành khiên!", actor.Name, healAmount, excess),
 						})
 					}
+				}
 				} else {
 					turnLogs = append(turnLogs, CombatLog{
 						Turn:      turn,

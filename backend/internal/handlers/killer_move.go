@@ -894,13 +894,21 @@ func applyKillerMoveToCombat(combat *models.CombatState, casterID, targetID stri
 				finalDamage += phantomDmg
 			}
 
-			// Lifesteal
+			// Lifesteal – heal HP first, excess becomes VirtualShield
 			if hasLifesteal && lifestealPct > 0 {
 				healAmount := finalDamage * (lifestealPct / 100.0)
 				for a := range combat.Allies {
 					if combat.Allies[a].ID == casterID {
-						combat.Allies[a].HP = math.Min(combat.Allies[a].MaxHP, combat.Allies[a].HP+healAmount)
-						*logs = append(*logs, fmt.Sprintf("%s hút %.1f máu từ sát chiêu!", combat.Allies[a].Name, healAmount))
+						hpNeeded := combat.Allies[a].MaxHP - combat.Allies[a].HP
+						if healAmount <= hpNeeded {
+							combat.Allies[a].HP = math.Min(combat.Allies[a].MaxHP, combat.Allies[a].HP+healAmount)
+							*logs = append(*logs, fmt.Sprintf("%s hút %.1f máu từ sát chiêu, hồi phục HP!", combat.Allies[a].Name, healAmount))
+						} else {
+							combat.Allies[a].HP = combat.Allies[a].MaxHP
+							excess := healAmount - hpNeeded
+							combat.Allies[a].VirtualShield += excess
+							*logs = append(*logs, fmt.Sprintf("%s hút %.1f máu từ sát chiêu, HP đầy, chuyển %.1f thành khiên hộ thể!", combat.Allies[a].Name, healAmount, excess))
+						}
 						break
 					}
 				}

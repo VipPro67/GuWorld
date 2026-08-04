@@ -211,23 +211,33 @@ func BuildCombatAction(ctx *CombatContext, spec models.GuDictionaryItem) (Action
 }
 
 func ApplyPostDamageEffects(ctx *CombatContext, playerAction *Action, enemyAction *Action, playerHit bool, enemyHit bool, playerNetDmg float64, enemyNetDmg float64) {
-	// 1. Lifesteal
+	// 1. Lifesteal – heal HP first, excess becomes VirtualShield
 	if playerHit && playerNetDmg > 0 && playerAction.LifeStealRate > 0 {
 		heal := playerNetDmg * playerAction.LifeStealRate
-		ctx.Attacker.HP += heal
-		if ctx.Attacker.HP > ctx.Attacker.MaxHP {
+		hpNeeded := ctx.Attacker.MaxHP - ctx.Attacker.HP
+		if heal <= hpNeeded {
+			ctx.Attacker.HP += heal
+			ctx.Logs = append(ctx.Logs, fmt.Sprintf("-> Đạo hữu hút máu địch, hồi phục %.1f HP.", heal))
+		} else {
 			ctx.Attacker.HP = ctx.Attacker.MaxHP
+			excess := heal - hpNeeded
+			ctx.Attacker.VirtualShield += excess
+			ctx.Logs = append(ctx.Logs, fmt.Sprintf("-> Đạo hữu hút máu địch (%.1f), HP đầy, chuyển %.1f thành khiên hộ thể.", heal, excess))
 		}
-		ctx.Logs = append(ctx.Logs, fmt.Sprintf("-> Đạo hữu hút máu địch, hồi phục %.1f HP.", heal))
 	}
 
 	if enemyHit && enemyNetDmg > 0 && enemyAction.LifeStealRate > 0 {
 		heal := enemyNetDmg * enemyAction.LifeStealRate
-		ctx.Defender.HP += heal
-		if ctx.Defender.HP > ctx.Defender.MaxHP {
+		hpNeeded := ctx.Defender.MaxHP - ctx.Defender.HP
+		if heal <= hpNeeded {
+			ctx.Defender.HP += heal
+			ctx.Logs = append(ctx.Logs, fmt.Sprintf("-> Kẻ địch hút máu đối phương, hồi phục %.1f HP.", heal))
+		} else {
 			ctx.Defender.HP = ctx.Defender.MaxHP
+			excess := heal - hpNeeded
+			ctx.Defender.VirtualShield += excess
+			ctx.Logs = append(ctx.Logs, fmt.Sprintf("-> Kẻ địch hút máu đối phương (%.1f), HP đầy, chuyển %.1f thành khiên hộ thể.", heal, excess))
 		}
-		ctx.Logs = append(ctx.Logs, fmt.Sprintf("-> Kẻ địch hút máu đối phương, hồi phục %.1f HP.", heal))
 	}
 
 	// 2. Status Effects
