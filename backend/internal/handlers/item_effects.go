@@ -371,8 +371,7 @@ func rollGuDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) string 
 }
 
 func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) string {
-	// Query all recipe IDs from DB
-	rows, err := db.DB.Query(`SELECT id, target_gu_id FROM refining_recipes`)
+	rows, err := db.DB.Query(`SELECT target_gu_id, target_rank, variant FROM refining_recipes`)
 	if err != nil {
 		return ""
 	}
@@ -384,9 +383,13 @@ func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) string
 	}
 	var allRecipes []recipeInfo
 	for rows.Next() {
-		var ri recipeInfo
-		if err := rows.Scan(&ri.id, &ri.targetGuID); err == nil {
-			allRecipes = append(allRecipes, ri)
+		var targetGuID string
+		var targetRank, variant int
+		if err := rows.Scan(&targetGuID, &targetRank, &variant); err == nil {
+			allRecipes = append(allRecipes, recipeInfo{
+				id:         fmt.Sprintf("recipe_%s_%d_%d", targetGuID, targetRank, variant),
+				targetGuID: targetGuID,
+			})
 		}
 	}
 	if len(allRecipes) == 0 {

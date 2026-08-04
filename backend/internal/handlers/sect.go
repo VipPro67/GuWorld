@@ -1117,8 +1117,12 @@ func BuyFromSectVault(c *gin.Context) {
 
 		// Dynamic recipe cost based on target Gu rank via pricing package
 		{
-			var targetGuRank int
-			_ = tx.QueryRow(`SELECT COALESCE(gd.rank,1) FROM refining_recipes rr JOIN gu_dictionary gd ON gd.id=rr.target_gu_id AND gd.rank=rr.target_rank WHERE rr.id=$1`, req.ItemID).Scan(&targetGuRank)
+			var targetGuRank int = 1
+			if _, tr, _, err := ParseRecipeID(req.ItemID); err == nil {
+				targetGuRank = tr
+			} else {
+				_ = tx.QueryRow(`SELECT COALESCE(gd.rank,1) FROM refining_recipes rr JOIN gu_dictionary gd ON gd.id=rr.target_gu_id AND gd.rank=rr.target_rank WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text)=$1`, req.ItemID).Scan(&targetGuRank)
+			}
 			cost = pricing.RecipeCostByGuRank(targetGuRank)
 		}
 		if m.ContributionPoints < cost {

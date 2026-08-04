@@ -237,8 +237,10 @@ func adminItemKind(itemID string) string {
 		return "item"
 	}
 	var exists bool
-	if err := db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM refining_recipes WHERE id = $1)`, itemID).Scan(&exists); err == nil && exists {
-		return "recipe"
+	if targetGuID, targetRank, variant, err := ParseRecipeID(itemID); err == nil {
+		if err := db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM refining_recipes WHERE target_gu_id = $1 AND target_rank = $2 AND variant = $3)`, targetGuID, targetRank, variant).Scan(&exists); err == nil && exists {
+			return "recipe"
+		}
 	}
 	return ""
 }
@@ -645,7 +647,11 @@ func AdminListPlayerItems(c *gin.Context) {
 			}
 			name := recipeID
 			var targetGuID string
-			_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(target_gu_id,'') FROM refining_recipes WHERE id = $1`, recipeID).Scan(&targetGuID)
+			if tg, _, _, err := ParseRecipeID(recipeID); err == nil {
+				targetGuID = tg
+			} else {
+				_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(target_gu_id,'') FROM refining_recipes WHERE ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) = $1`, recipeID).Scan(&targetGuID)
+			}
 			if spec, ok := models.GetGuAny(targetGuID); ok && spec.Name != "" {
 				name = spec.Name
 			}
@@ -2103,11 +2109,11 @@ func AdminListShopItems(c *gin.Context) {
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT c.id, c.price, c.stock, c.is_default, c.sort_order,
 			COALESCE(i.name, g.name, 'Công thức ' || rg.name, c.id) AS name,
-			CASE WHEN r.id IS NOT NULL THEN 'Recipe' ELSE COALESCE(i.item_type, 'Gu') END AS item_type
+			CASE WHEN r.target_gu_id IS NOT NULL THEN 'Recipe' ELSE COALESCE(i.item_type, 'Gu') END AS item_type
 		FROM caravan_shop_items c
 		LEFT JOIN item_dictionary i ON c.id = i.id
 		LEFT JOIN gu_dictionary g ON c.id = g.id
-		LEFT JOIN refining_recipes r ON c.id = r.id
+		LEFT JOIN refining_recipes r ON c.id = ('recipe_' || r.target_gu_id || '_' || r.target_rank::text || '_' || r.variant::text)
 		LEFT JOIN gu_dictionary rg ON r.target_gu_id = rg.id
 		ORDER BY c.sort_order, c.id
 	`)
@@ -2150,7 +2156,7 @@ func AdminCreateShopItem(c *gin.Context) {
 
 	// Verify item exists in item_dictionary, gu_dictionary, or refining_recipes
 	var exists bool
-	_ = db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM item_dictionary WHERE id=$1 UNION SELECT 1 FROM gu_dictionary WHERE id=$1 UNION SELECT 1 FROM refining_recipes WHERE id=$1)`, req.ID).Scan(&exists)
+	_ = db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM item_dictionary WHERE id=$1 UNION SELECT 1 FROM gu_dictionary WHERE id=$1 UNION SELECT 1 FROM refining_recipes WHERE ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) = $1)`, req.ID).Scan(&exists)
 	if !exists {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại trong item_dictionary, gu_dictionary hoặc công thức"})
 		return
@@ -2230,7 +2236,7 @@ func AdminListArenaShopItems(c *gin.Context) {
 		FROM arena_shop_items a
 		LEFT JOIN item_dictionary i ON a.id = i.id
 		LEFT JOIN gu_dictionary g ON a.id = g.id
-		LEFT JOIN refining_recipes r ON a.id = r.id
+		LEFT JOIN refining_recipes r ON a.id = ('recipe_' || r.target_gu_id || '_' || r.target_rank::text || '_' || r.variant::text)
 		LEFT JOIN gu_dictionary rg ON r.target_gu_id = rg.id
 		ORDER BY a.sort_order, a.id
 	`)
@@ -2277,7 +2283,7 @@ func AdminCreateArenaShopItem(c *gin.Context) {
 
 	// Verify item exists in item_dictionary, gu_dictionary, or refining_recipes
 	var exists bool
-	_ = db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM item_dictionary WHERE id=$1 UNION SELECT 1 FROM gu_dictionary WHERE id=$1 UNION SELECT 1 FROM refining_recipes WHERE id=$1)`, req.ID).Scan(&exists)
+	_ = db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM item_dictionary WHERE id=$1 UNION SELECT 1 FROM gu_dictionary WHERE id=$1 UNION SELECT 1 FROM refining_recipes WHERE ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) = $1)`, req.ID).Scan(&exists)
 	if !exists {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại trong item_dictionary, gu_dictionary hoặc công thức"})
 		return
@@ -2772,7 +2778,7 @@ func AdminDeleteItemItem(c *gin.Context) {
 
 func AdminListRecipes(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok { return }
-	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT r.id, r.target_gu_id, COALESCE(g.name, ''), r.required_gus, r.required_materials, r.success_rate, r.primeval_stones_cost, COALESCE(r.immortal_essence_stones_cost,0) FROM refining_recipes r LEFT JOIN gu_dictionary g ON r.target_gu_id = g.id AND r.target_rank = g.rank ORDER BY r.id`)
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT r.target_gu_id, r.target_rank, r.variant, COALESCE(g.name, ''), r.required_gus, r.required_materials, r.success_rate, r.primeval_stones_cost, COALESCE(r.immortal_essence_stones_cost,0) FROM refining_recipes r LEFT JOIN gu_dictionary g ON r.target_gu_id = g.id AND r.target_rank = g.rank ORDER BY r.target_gu_id, r.target_rank, r.variant`)
 	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
 	defer rows.Close()
 
@@ -2789,7 +2795,11 @@ func AdminListRecipes(c *gin.Context) {
 	items := []RecipeRow{}
 	for rows.Next() {
 		var r RecipeRow
-		if err := rows.Scan(&r.ID, &r.TargetGuID, &r.TargetGuName, &r.RequiredGus, &r.RequiredMaterials, &r.SuccessRate, &r.PrimevalStonesCost, &r.ImmortalEssenceStonesCost); err != nil { continue }
+		var targetGuID string
+		var targetRank, variant int
+		if err := rows.Scan(&targetGuID, &targetRank, &variant, &r.TargetGuName, &r.RequiredGus, &r.RequiredMaterials, &r.SuccessRate, &r.PrimevalStonesCost, &r.ImmortalEssenceStonesCost); err != nil { continue }
+		r.TargetGuID = targetGuID
+		r.ID = fmt.Sprintf("recipe_%s_%d_%d", targetGuID, targetRank, variant)
 		items = append(items, r)
 	}
 	c.JSON(http.StatusOK, items)
@@ -2809,7 +2819,7 @@ type AdminRecipeInput struct {
 func AdminCreateRecipe(c *gin.Context) {
 	adminID, ok := requireAdmin(c); if !ok { return }
 	var req AdminRecipeInput
-	if err := c.ShouldBindJSON(&req); err != nil || req.ID == "" || req.TargetGuID == "" {
+	if err := c.ShouldBindJSON(&req); err != nil || req.TargetGuID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
@@ -2821,16 +2831,30 @@ func AdminCreateRecipe(c *gin.Context) {
 	if req.SuccessRate <= 0 { req.SuccessRate = 0.5 }
 	if len(req.RequiredGus) == 0 { req.RequiredGus = json.RawMessage(`{}`) }
 	if len(req.RequiredMaterials) == 0 { req.RequiredMaterials = json.RawMessage(`{}`) }
-	_, err := db.DB.Exec(`INSERT INTO refining_recipes(id,target_gu_id,target_rank,required_gus,required_materials,success_rate,primeval_stones_cost,immortal_essence_stones_cost) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
-		req.ID, req.TargetGuID, targetRank, req.RequiredGus, req.RequiredMaterials, req.SuccessRate, req.PrimevalStonesCost, req.ImmortalEssenceStonesCost)
+
+	variant := 1
+	if tg, tr, v, err := ParseRecipeID(req.ID); err == nil && tg == req.TargetGuID && tr == targetRank {
+		variant = v
+	} else {
+		_ = db.DB.QueryRow(`SELECT COALESCE(MAX(variant), 0) + 1 FROM refining_recipes WHERE target_gu_id = $1 AND target_rank = $2`, req.TargetGuID, targetRank).Scan(&variant)
+	}
+
+	_, err := db.DB.Exec(`INSERT INTO refining_recipes(target_gu_id,target_rank,variant,required_gus,required_materials,success_rate,primeval_stones_cost,immortal_essence_stones_cost) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
+		req.TargetGuID, targetRank, variant, req.RequiredGus, req.RequiredMaterials, req.SuccessRate, req.PrimevalStonesCost, req.ImmortalEssenceStonesCost)
 	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
-	auditlog.Logf(db.DB, &adminID, "admin.create_recipe", "id=%s target=%s", req.ID, req.TargetGuID)
-	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo cổ phương"})
+	generatedID := fmt.Sprintf("recipe_%s_%d_%d", req.TargetGuID, targetRank, variant)
+	auditlog.Logf(db.DB, &adminID, "admin.create_recipe", "id=%s target=%s", generatedID, req.TargetGuID)
+	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo cổ phương", "recipe_id": generatedID})
 }
 
 func AdminUpdateRecipe(c *gin.Context) {
 	adminID, ok := requireAdmin(c); if !ok { return }
 	recipeID := c.Param("id")
+	targetGuID, targetRank, variant, err := ParseRecipeID(recipeID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID cổ phương không hợp lệ"})
+		return
+	}
 	var req AdminRecipeInput
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
@@ -2845,8 +2869,10 @@ func AdminUpdateRecipe(c *gin.Context) {
 	if len(req.RequiredGus) > 0 { sets = append(sets, "required_gus=$"+strconv.Itoa(idx)); args = append(args, req.RequiredGus); idx++ }
 	if len(req.RequiredMaterials) > 0 { sets = append(sets, "required_materials=$"+strconv.Itoa(idx)); args = append(args, req.RequiredMaterials); idx++ }
 	if len(sets) == 0 { c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu"}); return }
-	args = append(args, recipeID)
-	_, err := db.DB.Exec(`UPDATE refining_recipes SET `+strings.Join(sets, ", ")+` WHERE id=$`+strconv.Itoa(idx), args...)
+
+	args = append(args, targetGuID, targetRank, variant)
+	whereClause := fmt.Sprintf(" WHERE target_gu_id=$%d AND target_rank=$%d AND variant=$%d", idx, idx+1, idx+2)
+	_, err = db.DB.Exec(`UPDATE refining_recipes SET `+strings.Join(sets, ", ")+whereClause, args...)
 	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
 	auditlog.Logf(db.DB, &adminID, "admin.update_recipe", "id=%s", recipeID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật cổ phương"})
@@ -2855,7 +2881,12 @@ func AdminUpdateRecipe(c *gin.Context) {
 func AdminDeleteRecipe(c *gin.Context) {
 	adminID, ok := requireAdmin(c); if !ok { return }
 	recipeID := c.Param("id")
-	_, err := db.DB.Exec(`DELETE FROM refining_recipes WHERE id=$1`, recipeID)
+	targetGuID, targetRank, variant, err := ParseRecipeID(recipeID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID cổ phương không hợp lệ"})
+		return
+	}
+	_, err = db.DB.Exec(`DELETE FROM refining_recipes WHERE target_gu_id=$1 AND target_rank=$2 AND variant=$3`, targetGuID, targetRank, variant)
 	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
 	auditlog.Logf(db.DB, &adminID, "admin.delete_recipe", "id=%s", recipeID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa cổ phương"})

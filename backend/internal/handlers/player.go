@@ -1061,7 +1061,7 @@ func Explore(c *gin.Context) {
 	if rollRecipe < 5 {
 		// Fetch all recipe IDs from refining_recipes
 		var allRecipeIDs []string
-		rows, err := tx.Query(`SELECT id FROM refining_recipes`)
+		rows, err := tx.Query(`SELECT ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) FROM refining_recipes`)
 		if err == nil {
 			for rows.Next() {
 				var rID string
@@ -1101,10 +1101,14 @@ func Explore(c *gin.Context) {
 
 				// Find target Gu name
 				var targetGuName string
+				var targetGuID string
+				if tg, _, _, err := ParseRecipeID(chosenCandidate); err == nil {
+					targetGuID = tg
+				}
 				_ = tx.QueryRow(`
 					SELECT name FROM gu_dictionary 
-					WHERE id = (SELECT target_gu_id FROM refining_recipes WHERE id = $1)
-				`, chosenCandidate).Scan(&targetGuName)
+					WHERE id = $1
+				`, targetGuID).Scan(&targetGuName)
 
 				if targetGuName == "" {
 					targetGuName = chosenCandidate

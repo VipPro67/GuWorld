@@ -1054,8 +1054,12 @@ func GetItemName(itemType string, itemDataJSON []byte) string {
 		var rec models.UnlockedRecipe
 		if err := json.Unmarshal(itemDataJSON, &rec); err == nil {
 			var targetGuID string
-			err := db.DB.QueryRow(`SELECT target_gu_id FROM refining_recipes WHERE id = $1`, rec.RecipeID).Scan(&targetGuID)
-			if err == nil {
+			if tg, _, _, err := ParseRecipeID(rec.RecipeID); err == nil {
+				targetGuID = tg
+			} else {
+				_ = db.DB.QueryRow(`SELECT target_gu_id FROM refining_recipes WHERE ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) = $1`, rec.RecipeID).Scan(&targetGuID)
+			}
+			if targetGuID != "" {
 				if spec, ok := models.GetGuAny(targetGuID); ok {
 					return fmt.Sprintf("Phương thức phối chế %s", spec.Name)
 				}

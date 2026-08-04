@@ -141,17 +141,33 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create gu_dictionary table: %w", err)
 	}
 
+	// Drop old refining_recipes table if it contains the legacy id column
+	_, err = DB.Exec(`
+	DO $$
+	BEGIN
+		IF EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name = 'refining_recipes' AND column_name = 'id'
+		) THEN
+			DROP TABLE IF EXISTS refining_recipes CASCADE;
+		END IF;
+	END $$;`)
+	if err != nil {
+		return fmt.Errorf("failed to check/drop legacy refining_recipes table: %w", err)
+	}
+
 	// 3. Create refining_recipes
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS refining_recipes (
-		id VARCHAR(50) PRIMARY KEY,
 		target_gu_id VARCHAR(50) NOT NULL,
-		target_rank INTEGER NOT NULL DEFAULT 1,
+		target_rank INTEGER NOT NULL,
+		variant INTEGER NOT NULL DEFAULT 1,
 		required_gus JSONB NOT NULL,
 		required_materials JSONB NOT NULL,
 		success_rate DOUBLE PRECISION NOT NULL,
 		primeval_stones_cost INTEGER DEFAULT 0,
 		immortal_essence_stones_cost DOUBLE PRECISION DEFAULT 0,
+		PRIMARY KEY (target_gu_id, target_rank, variant),
 		FOREIGN KEY (target_gu_id, target_rank) REFERENCES gu_dictionary(id, rank) ON DELETE CASCADE
 	);`)
 	if err != nil {
@@ -1899,6 +1915,7 @@ func seedRecipesFromCSV(filename string) error {
 	idIdx := col("id")
 	targetIdx := col("target_gu_id")
 	targetRankIdx := col("target_rank")
+	variantIdx := col("variant")
 	reqGusIdx := col("required_gus")
 	reqMatsIdx := col("required_materials")
 	rateIdx := col("success_rate")
@@ -1916,6 +1933,7 @@ func seedRecipesFromCSV(filename string) error {
 		return strings.TrimSpace(row[idx])
 	}
 
+	variantMap := make(map[string]int)
 	seeded, skipped := 0, 0
 	for {
 		row, err := r.Read()
@@ -1931,6 +1949,7 @@ func seedRecipesFromCSV(filename string) error {
 		}
 		targetGuID := get(row, targetIdx)
 		targetRankStr := get(row, targetRankIdx)
+		variantStr := get(row, variantIdx)
 		reqGus := get(row, reqGusIdx)
 		reqMats := get(row, reqMatsIdx)
 		if reqMats == "" {
@@ -1943,6 +1962,17 @@ func seedRecipesFromCSV(filename string) error {
 		targetRank := 1
 		if targetRankStr != "" {
 			fmt.Sscanf(targetRankStr, "%d", &targetRank)
+		}
+
+		variant := 0
+		if variantStr != "" {
+			fmt.Sscanf(variantStr, "%d", &variant)
+		}
+
+		if variant <= 0 {
+			key := fmt.Sprintf("%s_%d", targetGuID, targetRank)
+			variantMap[key]++
+			variant = variantMap[key]
 		}
 
 		rate := 0.5
@@ -1961,13 +1991,13 @@ func seedRecipesFromCSV(filename string) error {
 		}
 
 		_, err = DB.Exec(`
-			INSERT INTO refining_recipes (id, target_gu_id, target_rank, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost)
+			INSERT INTO refining_recipes (target_gu_id, target_rank, variant, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost)
 			VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8)
-			ON CONFLICT (id) DO UPDATE
-			SET target_gu_id=EXCLUDED.target_gu_id, target_rank=EXCLUDED.target_rank, required_gus=EXCLUDED.required_gus,
+			ON CONFLICT (target_gu_id, target_rank, variant) DO UPDATE
+			SET required_gus=EXCLUDED.required_gus,
 			    required_materials=EXCLUDED.required_materials, success_rate=EXCLUDED.success_rate,
 			    primeval_stones_cost=EXCLUDED.primeval_stones_cost, immortal_essence_stones_cost=EXCLUDED.immortal_essence_stones_cost
-		`, id, targetGuID, targetRank, reqGus, reqMats, rate, stoneCost, immortalCost)
+		`, targetGuID, targetRank, variant, reqGus, reqMats, rate, stoneCost, immortalCost)
 		if err != nil {
 			return fmt.Errorf("upsert recipe %s: %w", id, err)
 		}
@@ -2922,8 +2952,8 @@ func ExportToCSV() error {
 		},
 		{
 			filename: "Recipe.csv",
-			columns:  []string{"id", "target_gu_id", "required_gus", "required_materials", "success_rate", "primeval_stones_cost", "immortal_essence_stones_cost"},
-			query:    `SELECT id, target_gu_id, COALESCE(required_gus::text,'[]'), COALESCE(required_materials::text,'{}'), COALESCE(success_rate,0), COALESCE(primeval_stones_cost,0), COALESCE(immortal_essence_stones_cost,0) FROM refining_recipes ORDER BY id`,
+			columns:  []string{"id", "target_gu_id", "target_rank", "variant", "required_gus", "required_materials", "success_rate", "primeval_stones_cost", "immortal_essence_stones_cost"},
+			query:    `SELECT ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) AS id, target_gu_id, target_rank, variant, COALESCE(required_gus::text,'[]'), COALESCE(required_materials::text,'{}'), COALESCE(success_rate,0), COALESCE(primeval_stones_cost,0), COALESCE(immortal_essence_stones_cost,0) FROM refining_recipes ORDER BY target_gu_id, target_rank, variant`,
 		},
 		{
 			filename: "ShopItem.csv",

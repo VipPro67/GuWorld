@@ -25,7 +25,7 @@ func loadArenaShopItems() ([]ArenaShopItem, error) {
 		FROM arena_shop_items a
 		LEFT JOIN item_dictionary i ON a.id = i.id
 		LEFT JOIN gu_dictionary g ON a.id = g.id
-		LEFT JOIN refining_recipes r ON a.id = r.id
+		LEFT JOIN refining_recipes r ON a.id = ('recipe_' || r.target_gu_id || '_' || r.target_rank::text || '_' || r.variant::text)
 		LEFT JOIN gu_dictionary rg ON r.target_gu_id = rg.id
 		ORDER BY a.sort_order ASC, a.id ASC
 	`)
@@ -79,7 +79,7 @@ func BuyArenaShopItem(c *gin.Context) {
 		FROM arena_shop_items a
 		LEFT JOIN item_dictionary i ON a.id = i.id
 		LEFT JOIN gu_dictionary g ON a.id = g.id
-		LEFT JOIN refining_recipes r ON a.id = r.id
+		LEFT JOIN refining_recipes r ON a.id = ('recipe_' || r.target_gu_id || '_' || r.target_rank::text || '_' || r.variant::text)
 		LEFT JOIN gu_dictionary rg ON r.target_gu_id = rg.id
 		WHERE a.id = $1
 	`, req.ItemID).Scan(&targetPrice, &targetQty, &targetStock, &targetName)
