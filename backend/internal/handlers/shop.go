@@ -229,28 +229,46 @@ func BuyShopItem(c *gin.Context) {
 			}
 			player.GuInventory = append(player.GuInventory, newInstance)
 		}
-	case "Material":
-	case "Recipe":
-	case "RefiningRecipe":
-	case "Food":
-		InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "materials", req.Quantity)
+	case "Material", "Recipe", "RefiningRecipe", "Food":
+		if err := InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "materials", req.Quantity); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi thêm vật phẩm vào túi đồ"})
+			return
+		}
 	case "Consumable":
-		InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "consumables", req.Quantity)
+		if err := InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "consumables", req.Quantity); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi thêm vật phẩm tiêu hao vào túi đồ"})
+			return
+		}
 	case "Treasure":
-		InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "treasures", req.Quantity)
+		if err := InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "treasures", req.Quantity); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi thêm bảo vật vào túi đồ"})
+			return
+		}
 	case "ImmortalMaterial":
-		InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "immortal_materials", req.Quantity)
+		if err := InventorySvc.AddItem(tx, player.ID.String(), selectedItem.ID, "immortal_materials", req.Quantity); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi thêm tiên tài vào túi đồ"})
+			return
+		}
 	}
 
 	// 6. Save player state
 	qiGained := AddHumanQi(&player, 5.0)
-	// No Gu inventory changes — skip SavePlayerGus
+	if selectedItem.Type == "Gu" {
+		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu Cổ trùng mới vào CSDL"})
+			return
+		}
+	}
 	updateQuery := `
 		UPDATE players
 		SET primeval_stones = $1, human_qi = $2
 		WHERE id = $3
 	`
 	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.HumanQi, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state"})
+		return
+	}
 
 	// Commit Transaction
 	if err = tx.Commit(); err != nil {
@@ -364,7 +382,12 @@ func SellShopItem(c *gin.Context) {
 		}
 	}
 	qiGained := AddHumanQi(&player, 5.0)
-	// No Gu inventory changes — skip SavePlayerGus
+	if req.ItemType == "Gu" {
+		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Gu inventory changes"})
+			return
+		}
+	}
 	_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, equipped_gus=$2, human_qi=$3 WHERE id=$4`,
 		player.PrimevalStones, player.EquippedGus, player.HumanQi, player.ID)
 	if err != nil {
