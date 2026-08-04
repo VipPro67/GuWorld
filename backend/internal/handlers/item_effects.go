@@ -9,6 +9,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -141,8 +142,34 @@ func removeNegativeStatusEffect(tx *sql.Tx, player *models.Player, item models.I
 	return "", nil
 }
 
+func formatSummaryOfRewards(reward map[string]interface{}) string {
+	if reward == nil {
+		return "Không có phần thưởng"
+	}
+	rewardType, _ := reward["type"].(string)
+	switch rewardType {
+	case "stones":
+		qty, _ := reward["quantity"].(int)
+		return fmt.Sprintf("Nhận được %d Nguyên Thạch", qty)
+	case "gu":
+		name, _ := reward["name"].(string)
+		return fmt.Sprintf("Nhận được Cổ trùng [%s]", name)
+	case "recipe":
+		name, _ := reward["name"].(string)
+		rate, _ := reward["completion_rate"].(float64)
+		return fmt.Sprintf("Nhận được Bí phương [%s] (%.0f%%)", name, rate)
+	case "material":
+		name, _ := reward["name"].(string)
+		qty, _ := reward["quantity"].(int)
+		return fmt.Sprintf("Nhận được %dx %s", qty, name)
+	default:
+		return fmt.Sprintf("Nhận được %v", reward)
+	}
+}
+
 func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
 	msg := fmt.Sprintf("Mở %s thành công!\n", item.Name)
+	var reward map[string]interface{}
 
 	// ── 50 % → Nguyên Thạch  |  50 % → Vật phẩm (vật liệu / cổ trùng / bí phương)
 	if rand.Float64() < 0.50 {
@@ -150,6 +177,10 @@ func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec
 		stones := 100 + rand.Intn(401)
 		player.PrimevalStones += stones
 		msg += fmt.Sprintf("- 💎 Nhận được %d Nguyên Thạch\n", stones)
+		reward = map[string]interface{}{
+			"type":     "stones",
+			"quantity": stones,
+		}
 	} else {
 		// ── ITEM POOL ──
 		// Roll type: Material 92.5%, Gu 5%, Recipe 2.5%
@@ -157,26 +188,49 @@ func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec
 
 		if roll < 5.0 {
 			// ── GU DROP (5%) ──
-			guMsg := rollGuDrop(tx, player, item)
+			var guMsg string
+			guMsg, reward = rollGuDrop(tx, player, item)
 			if guMsg != "" {
 				msg += guMsg
 			} else {
 				// Fallback to materials if no valid Gu found
-				msg += rollMaterialDrop(tx, player, item)
+				var matMsg string
+				matMsg, reward = rollMaterialDrop(tx, player, item)
+				msg += matMsg
 			}
 		} else if roll < 7.5 {
 			// ── RECIPE DROP (2.5%) ──
-			recipeMsg := rollRecipeDrop(tx, player, item)
+			var recipeMsg string
+			recipeMsg, reward = rollRecipeDrop(tx, player, item)
 			if recipeMsg != "" {
 				msg += recipeMsg
 			} else {
-				msg += rollMaterialDrop(tx, player, item)
+				var matMsg string
+				matMsg, reward = rollMaterialDrop(tx, player, item)
+				msg += matMsg
 			}
 		} else {
 			// ── MATERIAL DROP (92.5%) ──
-			msg += rollMaterialDrop(tx, player, item)
+			var matMsg string
+			matMsg, reward = rollMaterialDrop(tx, player, item)
+			msg += matMsg
 		}
 	}
+
+	// Write Audit Log
+	auditlog.Log(tx, auditlog.Entry{
+		PlayerID:       &player.ID,
+		Action:         "item.open_mine_chest",
+		EntityType:     "item",
+		EntityID:       item.ID,
+		RequestSummary: fmt.Sprintf("Mở %s | %s", item.Name, formatSummaryOfRewards(reward)),
+		Metadata: map[string]interface{}{
+			"chest_id":   item.ID,
+			"chest_name": item.Name,
+			"reward":     reward,
+		},
+		Success: true,
+	})
 
 	return msg, nil
 }
@@ -252,7 +306,7 @@ func itemRarityWeight(rarity int) float64 {
 	}
 }
 
-func rollMaterialDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) string {
+func rollMaterialDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, map[string]interface{}) {
 	// Build weighted pool of materials
 	type weightedMat struct {
 		id     string
@@ -273,7 +327,7 @@ func rollMaterialDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) s
 	}
 
 	if len(pool) == 0 || totalWeight <= 0 {
-		return "- Hòm trống rỗng, không có gì đặc biệt.\n"
+		return "- Hòm trống rỗng, không có gì đặc biệt.\n", map[string]interface{}{"type": "none"}
 	}
 
 	// Weighted random pick
@@ -295,10 +349,15 @@ func rollMaterialDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) s
 	if spec, ok := models.ItemRegistry[chosen]; ok {
 		matName = spec.Name
 	}
-	return fmt.Sprintf("- Nhận được 1x %s\n", matName)
+	return fmt.Sprintf("- Nhận được 1x %s\n", matName), map[string]interface{}{
+		"type":     "material",
+		"id":       chosen,
+		"name":     matName,
+		"quantity": 1,
+	}
 }
 
-func rollGuDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) string {
+func rollGuDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, map[string]interface{}) {
 	excludedImmortal, err := db.GetExistingImmortalGuIDs(tx)
 	if err != nil {
 		logger.S.Warnf("rollGuDrop: failed to load existing immortal Gu: %v", err)
@@ -326,7 +385,7 @@ func rollGuDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) string 
 	}
 
 	if len(pool) == 0 || totalWeight <= 0 {
-		return ""
+		return "", nil
 	}
 
 	// Weighted random pick
@@ -357,6 +416,12 @@ func rollGuDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) string 
 	}
 	player.GuInventory = append(player.GuInventory, newInstance)
 
+	// Save player Gu inventory changes immediately
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		logger.S.Errorf("rollGuDrop: failed to save player Gu inventory: %v", err)
+		return "", nil
+	}
+
 	guName := chosenID
 	isImmortal := false
 	if spec.ID != "" {
@@ -364,16 +429,25 @@ func rollGuDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) string 
 		isImmortal = spec.Rank >= 6 // Assuming rank 6+ is immortal
 	}
 
-	if isImmortal {
-		return fmt.Sprintf("- Thiên đại cơ duyên! Đạo hữu nhận được Tiên Cổ: [%s]! (Độ no: %d%%)\n", guName, hunger)
+	rewardMeta := map[string]interface{}{
+		"type":        "gu",
+		"id":          chosenID,
+		"name":        guName,
+		"instance_id": newInstance.InstanceID,
+		"rank":        spec.Rank,
+		"hunger":      hunger,
 	}
-	return fmt.Sprintf("- Cơ duyên xảo hợp! Đạo hữu nhận được Cổ trùng: [%s] (Độ no: %d%%)\n", guName, hunger)
+
+	if isImmortal {
+		return fmt.Sprintf("- Thiên đại cơ duyên! Đạo hữu nhận được Tiên Cổ: [%s]! (Độ no: %d%%)\n", guName, hunger), rewardMeta
+	}
+	return fmt.Sprintf("- Cơ duyên xảo hợp! Đạo hữu nhận được Cổ trùng: [%s] (Độ no: %d%%)\n", guName, hunger), rewardMeta
 }
 
-func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) string {
+func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) (string, map[string]interface{}) {
 	rows, err := db.DB.Query(`SELECT target_gu_id, target_rank, variant FROM refining_recipes`)
 	if err != nil {
-		return ""
+		return "", nil
 	}
 	defer rows.Close()
 
@@ -393,7 +467,7 @@ func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) string
 		}
 	}
 	if len(allRecipes) == 0 {
-		return ""
+		return "", nil
 	}
 
 	// Build map of already-unlocked recipes
@@ -411,7 +485,7 @@ func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) string
 		}
 	}
 	if len(candidates) == 0 {
-		return "" // All recipes at 100%
+		return "", nil // All recipes at 100%
 	}
 
 	chosen := candidates[rand.Intn(len(candidates))]
@@ -424,12 +498,21 @@ func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) string
 	}
 
 	// Add or update recipe
-	RecipeSvc.Upsert(tx, &services.RecipeProgress{
+	if err := RecipeSvc.Upsert(tx, &services.RecipeProgress{
 		PlayerID:       player.ID.String(),
 		RecipeID:       chosen.id,
 		CompletionRate: completionRate,
 		IsUnlocked:     true,
-	})
+	}); err != nil {
+		logger.S.Errorf("rollRecipeDrop: failed to upsert recipe progress: %v", err)
+		return "", nil
+	}
 
-	return fmt.Sprintf("- Lĩnh ngộ bí phương: [%s] (Độ hoàn thiện: %.0f%%)\n", targetGuName, completionRate)
+	return fmt.Sprintf("- Lĩnh ngộ bí phương: [%s] (Độ hoàn thiện: %.0f%%)\n", targetGuName, completionRate), map[string]interface{}{
+		"type":            "recipe",
+		"id":              chosen.id,
+		"target_gu_id":    chosen.targetGuID,
+		"name":            targetGuName,
+		"completion_rate": completionRate,
+	}
 }
