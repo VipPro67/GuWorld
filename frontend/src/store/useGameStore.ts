@@ -886,9 +886,12 @@ interface GameState {
 
   // Party State & Actions
   party: { id: string; leader_id: string; members: { id: string; username: string; avatar_url?: string }[] } | null;
+  partyInvitations: { id: string; party_id: string; inviter_name: string; inviter_avatar?: string }[];
   createParty: () => Promise<boolean>;
   fetchPartyStatus: () => Promise<void>;
+  fetchPartyInvitations: () => Promise<void>;
   invitePlayer: (username: string) => Promise<boolean>;
+  respondPartyInvitation: (id: string, action: "accept" | "reject") => Promise<boolean>;
   leaveParty: () => Promise<boolean>;
 
   // Arena State & Actions
@@ -1294,6 +1297,7 @@ export const useGameStore = create<GameState>((set, get) => {
   marketplaceListings: [],
   activeTrade: null,
   party: null,
+  partyInvitations: [],
   arenaLeaderboard: [],
   leaderboardEntries: [],
   leaderboardCategory: "rank",
@@ -3895,6 +3899,48 @@ export const useGameStore = create<GameState>((set, get) => {
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");
       get().addLog(`Rời tổ đội thất bại: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  fetchPartyInvitations: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/party/invitations`);
+      if (response.status === 401 || response.status === 403) { logout(); return; }
+      const data = await response.json();
+      set({ partyInvitations: data.invitations || [] });
+    } catch (err) {
+      console.error("fetch party invitations failed", err);
+    }
+  },
+
+  respondPartyInvitation: async (id, action) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/party/invitations/${id}/respond`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Thao tác thất bại.");
+      if (action === "accept") {
+        set({ party: data.party });
+        await get().initializeSession();
+      }
+      set((state) => ({
+        partyInvitations: state.partyInvitations.filter((inv) => inv.id !== id),
+      }));
+      get().addLog(data.message || `Đã ${action === "accept" ? "chấp nhận" : "từ chối"} lời mời.`);
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
       return false;
     } finally { set({ actionLoading: false }); }
   },

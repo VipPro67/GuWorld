@@ -55,7 +55,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     players_on_map?: any[];
   } | null>(null);
 
-  const { fetchGrid, movePlayer, party, createParty, fetchPartyStatus, invitePlayer, leaveParty, retreat, fetchPlayerProfile, showConfirm } = useGameStore();
+  const { fetchGrid, movePlayer, party, partyInvitations, createParty, fetchPartyStatus, fetchPartyInvitations, invitePlayer, respondPartyInvitation, leaveParty, retreat, fetchPlayerProfile, showConfirm } = useGameStore();
   const [inviteUsername, setInviteUsername] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [partyLoading, setPartyLoading] = useState(false);
@@ -98,9 +98,12 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
       setGridData(data);
     }
     fetchPartyStatus();
+    fetchPartyInvitations();
   };
 
   useEffect(() => {
+    fetchPartyStatus();
+    fetchPartyInvitations();
     loadGrid();
     
     let intervalId: NodeJS.Timeout;
@@ -579,6 +582,53 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                 >
                   {partyLoading ? "Đang lập tổ..." : "Lập Tổ Đội Mới"}
                 </button>
+
+                {partyInvitations && partyInvitations.length > 0 && (
+                  <div className="pt-4 border-t border-zinc-900/60 text-left space-y-2">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono block">
+                      Lời mời vào tổ đội ({partyInvitations.length})
+                    </span>
+                    <div className="space-y-1.5 max-h-[150px] overflow-y-auto pr-1">
+                      {partyInvitations.map((inv) => (
+                        <div
+                          key={inv.id}
+                          className="flex items-center justify-between bg-zinc-950/60 border border-zinc-900 rounded-lg p-2.5 text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-5 h-5 rounded-full bg-zinc-800 text-zinc-300 flex items-center justify-center font-bold text-[8px] overflow-hidden shrink-0">
+                              {inv.inviter_avatar ? (
+                                <img src={inv.inviter_avatar} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                inv.inviter_name.slice(0, 2).toUpperCase()
+                              )}
+                            </div>
+                            <span className="font-semibold text-zinc-300">
+                              {inv.inviter_name}
+                            </span>
+                          </div>
+                          <div className="flex gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => respondPartyInvitation(inv.id, "accept")}
+                              disabled={partyLoading}
+                              className="px-2 py-1 bg-emerald-950/30 border border-emerald-500/30 text-emerald-400 font-bold rounded text-[10px] hover:bg-emerald-950/50 cursor-pointer"
+                            >
+                              Đồng ý
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => respondPartyInvitation(inv.id, "reject")}
+                              disabled={partyLoading}
+                              className="px-2 py-1 bg-rose-950/15 border border-rose-950/40 text-rose-400 font-bold rounded text-[10px] hover:bg-rose-950/30 cursor-pointer"
+                            >
+                              Từ chối
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-4">

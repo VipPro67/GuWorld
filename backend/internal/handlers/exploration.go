@@ -332,6 +332,11 @@ func MovePlayer(c *gin.Context) {
 		return
 	}
 
+	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": errLeader.Error()})
+		return
+	}
+
 	cleanupExpiredClearedCells(&player, clearedCellCooldown)
 
 	if player.ActiveCombat != nil {

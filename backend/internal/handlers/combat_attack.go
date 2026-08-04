@@ -53,6 +53,11 @@ func CombatAttack(c *gin.Context) {
 		return
 	}
 
+	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": errLeader.Error()})
+		return
+	}
+
 	if player.ActiveCombat == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không trong trạng thái chiến đấu."})
 		return

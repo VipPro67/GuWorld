@@ -52,6 +52,11 @@ func ExploreNode(c *gin.Context) {
 		return
 	}
 
+	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": errLeader.Error()})
+		return
+	}
+
 	if player.ActiveCombat != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang trong chiến đấu! Hãy dứt điểm kẻ địch trước."})
 		return

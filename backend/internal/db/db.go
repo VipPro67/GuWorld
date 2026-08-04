@@ -1260,6 +1260,15 @@ func InitSchema() error {
 		{`ALTER TABLE tribulation_events ALTER COLUMN reward_dao_marks TYPE BIGINT;`, "alter_tribulation_events_reward_dao_marks_type"},
 		{`ALTER TABLE immortal_apertures ALTER COLUMN aperture_hp TYPE BIGINT;`, "alter_immortal_apertures_aperture_hp_type"},
 		{`ALTER TABLE immortal_apertures ALTER COLUMN max_aperture_hp TYPE BIGINT;`, "alter_immortal_apertures_max_aperture_hp_type"},
+		{`CREATE TABLE IF NOT EXISTS party_invitations (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			party_id UUID NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
+			inviter_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			invitee_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(party_id, invitee_id)
+		);`, "create_party_invitations_table"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {

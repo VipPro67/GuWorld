@@ -286,6 +286,8 @@ func SetupRouter() *gin.Engine {
 			party.GET("/status", handlers.GetPartyStatus)
 			party.POST("/invite", handlers.InvitePlayer)
 			party.POST("/leave", handlers.LeaveParty)
+			party.GET("/invitations", handlers.GetPendingInvitations)
+			party.POST("/invitations/:id/respond", handlers.RespondToInvitation)
 		}
 
 		// Inventory — group: 30/min, per player: 20/min
