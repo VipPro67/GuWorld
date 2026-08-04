@@ -1836,79 +1836,7 @@ type EquipGuRequest struct {
 
 // CalculatePlayerStats computes dynamic stats based on equipped active Gu bugs and passive mods
 func CalculatePlayerStats(player *models.Player) map[string]float64 {
-	strengthMarks := 0
-	if player.DaoMarks != nil {
-		strengthMarks = player.DaoMarks["strength"]
-	}
-	stats := map[string]float64{
-		"attack":        10.0 + float64(player.Rank-1)*10.0 + float64(player.SubRank-1)*2.0 + float64(strengthMarks)/10.0,
-		"defense":       5.0 + float64(player.Rank-1)*5.0 + float64(player.SubRank-1)*1.0,
-		"speed":         10.0 + float64(player.Rank-1)*2.0 + float64(player.SubRank-1)*0.5,
-		"healing":       0.0,
-		"movement":      1.0,
-		"investigation": 1.0,
-		"storage":       100.0,
-	}
-
-	// Apply permanent growth boosts (HP is excluded: worker bakes it into BaseHP)
-	stats["attack"] += player.GrowthData.Boosts.Attack
-	stats["defense"] += player.GrowthData.Boosts.Defense
-	stats["speed"] += player.GrowthData.Boosts.Speed
-
-	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			spec, ok := models.GetGuAny(gu.GuID)
-			if !ok {
-				continue
-			}
-
-			if spec.Effects.Passive != nil {
-				passive := spec.Effects.Passive
-				mult := getPathMasteryMultiplier(player, spec.Path)
-
-				daoMult := 1.0
-				if player.DaoMarks != nil {
-					maxDaoMult := 1.0
-					for _, path := range spec.Path {
-						cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-						if amt, ok := player.DaoMarks[cleanPath]; ok && amt > 0 {
-							var pm float64
-							if amt <= 10000 {
-								pm = 1.0 + float64(amt)/100.0
-							} else {
-								pm = 1.0 + 100.0 + float64(amt-10000)/500.0
-							}
-							if pm > maxDaoMult {
-								maxDaoMult = pm
-							}
-						}
-					}
-					daoMult = maxDaoMult
-				}
-
-				stats["attack"] += passive.StatBaseAttack * mult * daoMult
-				stats["defense"] += passive.StatBaseDefense * mult * daoMult
-				stats["speed"] += passive.StatBaseSpeed * mult * daoMult
-				stats["hp"] += passive.StatBaseHP * mult * daoMult
-				if player.BaseHP > 0 {
-					missingHpRate := 1.0 - player.HP/player.BaseHP
-					stats["damage_multiplier"] += missingHpRate * passive.DamageMultiplierOnHit
-				}
-				stats["soul"] += passive.SoulRefinement
-				stats["storage"] += passive.StorageCapacity
-				stats["movement"] += passive.Movement
-				stats["investigation"] += passive.Investigation
-				stats["hearing"] += passive.Hearing
-				stats["evasion"] += passive.Evasion
-				stats["healing"] += passive.CleansingPower * 15.0
-			}
-		}
-	}
-
-	// Add storage capacity bonus based on dynamic strength/attack
-	stats["storage"] += math.Floor(stats["attack"] * 0.5)
-
-	return stats
+	return GetPassiveStats(player).Stats
 }
 
 // ── Passive Stats Breakdown ──────────────────────────────────────────────────
@@ -2049,11 +1977,22 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 			if passive.CleansingPower > 0 {
 				addSrc("healing", srcID, spec.Name, passive.CleansingPower*15.0, 1, 1)
 			}
+			if passive.Luck > 0 {
+				addSrc("luck", srcID, spec.Name, passive.Luck, 1, 1)
+			}
 		}
 	}
 
 	// Build totals and details
-	stats := make(map[string]float64)
+	stats := map[string]float64{
+		"attack":        0.0,
+		"defense":       0.0,
+		"speed":         0.0,
+		"healing":       0.0,
+		"movement":      0.0,
+		"investigation": 0.0,
+		"storage":       0.0,
+	}
 	var details []PassiveStatDetail
 	for key, srcs := range acc {
 		total := 0.0
@@ -2064,18 +2003,22 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 		details = append(details, PassiveStatDetail{Key: key, Total: total, Sources: srcs})
 	}
 
-	// Dynamic storage bonus
-	storageBonus := math.Floor(stats["attack"] * 0.5)
-	stats["storage"] += storageBonus
-	for i := range details {
-		if details[i].Key == "storage" {
-			details[i].Sources = append(details[i].Sources, PassiveStatSource{
-				Source: "dynamic", Name: "Lực tấn công (×0.5)", Value: storageBonus, Mult: 1, Dao: 1, Final: storageBonus,
-			})
-			details[i].Total += storageBonus
-			break
+	// Dynamic storage bonus 
+	// Only calculated if player rank < 6, as higher ranks have infinite storage
+	if player.Rank < 6 {
+		storageBonus := math.Floor(stats["attack"] * 0.5)
+		stats["storage"] += storageBonus
+		for i := range details {
+			if details[i].Key == "storage" {
+				details[i].Sources = append(details[i].Sources, PassiveStatSource{
+					Source: "dynamic", Name: "Lực tấn công (×0.5)", Value: storageBonus, Mult: 1, Dao: 1, Final: storageBonus,
+				})
+				details[i].Total += storageBonus
+				break
+			}
 		}
 	}
+	
 
 	// Sort details by key for stable output
 	sort.Slice(details, func(i, j int) bool { return details[i].Key < details[j].Key })

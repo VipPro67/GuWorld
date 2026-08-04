@@ -905,6 +905,18 @@ hu_ca_sect,tìm cổ xuân thu thiền,:)),DONATE,GU_SPRING_AUTUMN_CICADA,1,1000
 hu_ca_sect,tìm cổ xuân thu thiền,:)),DONATE,GU_SPRING_AUTUMN_CICADA,1,100000,NGOAI_MON
 hu_ca_sect,đóng góp linh thảo thang,thu thập,GATHER,ITEM_HERBAL_SOUP,1,1000000000,TRUONG_LAO
 phong_gia,s,s,GATHER,ITEM_HERBAL_SOUP,1,2000,TRUONG_LAO
+shang_clan,Nv đê,H,GATHER,beast_meat,1000,1000,NGOAI_MON
+shang_clan,Nv đê,H,GATHER,beast_bones,1000,1000000,NGOAI_MON
+shang_clan,Nv đê,H,GATHER,beast_bones,10000,100000,NGOAI_MON
+shang_clan,Nv đê,H,GATHER,beast_bones,1200,1000,NGOAI_MON
+thin_a_nht_gia_i_i_minh,Cắt 🐦 thiên ý,Cắt 🐦 thiên ý,DONATE,GU_FATE,1,3667,NGOAI_MON
+thin_a_nht_gia_i_i_minh,Phong sát vũ dung,Phong sát,GATHER,ITEM_HEALING_PELLET_SMALL,1,3667,NGOAI_MON
+thin_a_nht_gia_i_i_minh,Thằng nào đớp hết cổ phòng thủ bấc 5 của tông rồi,Thằng nào đớp hết cổ phòng thủ bấc 5 của tông rồi,DONATE,GU_BLOOD_CURTAIN_SKY_FLOWER,1,3000,TINH_ANH
+u_chin_mn,Gay thì nhận nhiệm vụ,ai gay mới nhận nhé,GATHER,ITEM_MEDICINAL_PASTE,10,1000,NOI_MON
+u_chin_mn,VÌ MỘT ĐẤU CHIẾN MÔN TRƯỜNG TỒN,Tìm huyết thần cổ sẽ có thưởng :>,DONATE,GU_BLOOD_DEITY,1,999999999,NGOAI_MON
+vnh_sinh_cu_o,Huyết thần cổ,Huyết thần cổ,DONATE,GU_BLOOD_DEITY,1,1000000,NGOAI_MON
+vnh_sinh_cu_o,Thiên lôi cổ,Thiên lôi cổ,DONATE,GU_HEAVENLY_THUNDER,1,1000000,NGOAI_MON
+vnh_sinh_cu_o,Túc mệnh cổ,Túc mệnh cổ,DONATE,GU_FATE,1,1000000,NGOAI_MON
 wan_hang_sect,Đóng góp Nanh Lợn Rừng,Thu thập và đóng góp 3x Nanh Lợn Rừng (wild_boar_tusk) chế tạo giáo mác cho đệ tử canh gác biên giới.,GATHER,wild_boar_tusk,3,120,NGOAI_MON
 wan_hang_sect,Đóng góp Nanh Lợn Rừng,Thu thập và đóng góp 3x Nanh Lợn Rừng (wild_boar_tusk) chế tạo giáo mác cho đệ tử canh gác biên giới.,GATHER,wild_boar_tusk,3,120,NGOAI_MON
 wan_hang_sect,Đóng góp Nanh Lợn Rừng,Thu thập và đóng góp 3x Nanh Lợn Rừng (wild_boar_tusk) chế tạo giáo mác cho đệ tử canh gác biên giới.,GATHER,wild_boar_tusk,3,120,NGOAI_MON
@@ -1338,3 +1350,4 @@ wan_hang_sect,Đóng góp Nanh Lợn Rừng,Thu thập và đóng góp 3x Nanh L
 wan_hang_sect,Đóng góp Nanh Lợn Rừng,Thu thập và đóng góp 3x Nanh Lợn Rừng (wild_boar_tusk) chế tạo giáo mác cho đệ tử canh gác biên giới.,GATHER,wild_boar_tusk,3,120,NGOAI_MON
 wan_hang_sect,Đóng góp Nanh Lợn Rừng,Thu thập và đóng góp 3x Nanh Lợn Rừng (wild_boar_tusk) chế tạo giáo mác cho đệ tử canh gác biên giới.,GATHER,wild_boar_tusk,3,120,NGOAI_MON
 xian_he_sect,Ko bt,Kobt,GATHER,life_water,1,10080,NGOAI_MON
+xian_he_sect,Nhiệm vụ nhập môn,Cái rắm,DONATE,GU_DESTRUCTION_NOVA,100,1,NGOAI_MON

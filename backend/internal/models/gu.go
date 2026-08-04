@@ -61,6 +61,7 @@ type PassiveEffect struct {
 	Evasion               float64 `json:"evasion,omitempty"`
 	RefineManaTier        float64 `json:"refine_mana_tier,omitempty"`
 	CleansingPower        float64 `json:"cleansing_power,omitempty"`
+	Luck                  float64 `json:"luck,omitempty"`
 }
 
 type SpecialMechanic struct {

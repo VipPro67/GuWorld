@@ -31,7 +31,7 @@ Nguồn dữ liệu chính nằm trong các file CSV ở `backend/`. Khi backend
 Tạo ngay tại thời điểm người chơi thăng tiên lên Rank 6. `grade` được roll theo Nhân Khí lúc thăng tiên (LOW / MID / HIGH / EXTREME). Các cột chính:
 - `time_rate` (DOUBLE PRECISION, DEFAULT 10) — gia tốc thời gian nội bộ
 - `grade` (VARCHAR) — LOW / MID / HIGH / EXTREME
-- `aperture_hp`, `max_aperture_hp` — HP của Tiên Khiếu
+- `aperture_hp`, `max_aperture_hp` (BIGINT) — HP của Tiên Khiếu (BIGINT để tránh tràn số ở cấp độ cao)
 - `area_size` — diện tích grid, quyết định số node tối đa
 - `immortal_essence`, `essence_production_per_year` — Tiên Nguyên
 - `rank_start_year` — năm bắt đầu rank hiện tại (dùng cho auto-breakthrough)
@@ -79,6 +79,36 @@ Node tài nguyên đặt trong Tiên Khiếu:
 - `x`, `y` — toạ độ grid (0-19)
 - `production_type`, `production_amount`, `production_interval_hours` — sản lượng
 - `is_destroyed` — trạng thái hỏng
+
+### Bảng `tribulation_events`
+
+Lưu các sự kiện Kiếp Nạn của Tiên Khiếu:
+- `id` (UUID PRIMARY KEY)
+- `aperture_id` (UUID FK → `immortal_apertures(id)`)
+- `player_id` (UUID FK → `players(id)`)
+- `tribulation_type` (VARCHAR) — EARTH_CALAMITY / HEAVENLY_TRIBULATION / GRAND_TRIBULATION / MYRIAD_TRIBULATION / CHAOS_CALAMITY
+- `path` (VARCHAR) — Đường hướng kiếp nạn (ví dụ: fire, water, ice)
+- `difficulty` (INTEGER)
+- `status` (VARCHAR) — ACTIVE / SUCCESS / FAILED
+- `aperture_hp_before` (BIGINT) — HP Tiên Khiếu trước kiếp nạn
+- `aperture_hp_after` (BIGINT) — HP Tiên Khiếu sau kiếp nạn (NULL nếu chưa kết thúc)
+- `reward_dao_marks` (BIGINT) — Số Đạo Ngân thưởng
+- `started_at` / `ended_at` (TIMESTAMPTZ)
+
+### Bảng `tribulation_enemies`
+
+Lưu các quái vật sinh ra trong Kiếp Nạn Tiên Khiếu:
+- `id` (UUID PRIMARY KEY)
+- `event_id` (UUID FK → `tribulation_events(id)`)
+- `name` (VARCHAR)
+- `enemy_type` (VARCHAR) — BOSS / MINION
+- `path` (VARCHAR)
+- `hp`, `max_hp` (BIGINT) — HP hiện tại và tối đa của quái vật (dùng BIGINT chống tràn số ở rank cao)
+- `attack`, `defense` (BIGINT) — Tấn công và phòng thủ của quái vật (dùng BIGINT chống tràn số)
+- `target_node_id` (UUID NULL FK → `aperture_resource_nodes(id)`)
+- `x`, `y` (INTEGER) — Toạ độ grid (0-19)
+- `is_boss` (BOOLEAN)
+- `is_dead` (BOOLEAN)
 
 ## Nhóm dữ liệu gameplay
 
