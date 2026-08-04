@@ -929,7 +929,51 @@ func distributeDaoMarks(mainPath string, totalMarks int) map[string]int {
 
 	remaining := totalMarks - mainAmount
 	if remaining > 0 {
-		allPaths := []string{"fire", "water", "ice", "blood", "sword", "strength", "soul", "wisdom", "time", "space"}
+		allPaths := []string{
+	"fire",
+	"water",
+	"sword",
+	"time",
+	"space",
+	"qi",
+	"blood",
+	"strength",
+	"wisdom",
+	"transformation",
+	"soul",
+	"illusion",
+	"refinement",
+	"rule",
+	"wood",
+	"earth",
+	"wind",
+	"light",
+	"dark",
+	"ice",
+	"lightning",
+	"poison",
+	"sound",
+	"star",
+	"cloud",
+	"dream",
+	"theft",
+	"information",
+	"bone",
+	"phantom",
+	"luck",
+	"food",
+	"painting",
+	"heaven",
+	"human",
+	"weapon",
+	"formation",
+	"yin",
+	"yang",
+	"metal",
+	"moon",
+	"sun",
+	"enslavement",
+}
 		otherPaths := []string{}
 		for _, p := range allPaths {
 			if p != mainPath {
