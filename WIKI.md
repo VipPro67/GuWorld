@@ -267,6 +267,7 @@ Hệ thống môn phái hiện có:
 ## 15. Party và Arena
 
 - Party: tạo party, xem trạng thái, mời người chơi, rời party.
+- **Chiến đấu tổ đội (Party PvE):** Khi các thành viên trong tổ đội đứng cùng một ô trên bản đồ, họ sẽ cùng tham gia vào các trận chiến PvE (cả Turn-based lẫn Auto Combat/Simulation). Đồng đội sẽ tự động chiến đấu bằng các Cổ trùng đang trang bị, Sát chiêu và Thiết lập tự động của chính họ. Phần thưởng chiến thắng (Nguyên thạch, Nguyên liệu, Cổ trùng) sẽ được chia đều cho tất cả thành viên tham chiến, và tiêu hao (HP, Mana, Dược phẩm) cũng được cập nhật tương ứng.
 - Arena: leaderboard và challenge người chơi khác.
 
 ## 16. Chat, mail và feedback

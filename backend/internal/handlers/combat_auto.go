@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -89,232 +90,31 @@ func AutoCombatStart(c *gin.Context) {
 		VirtualMode: isVirtual,
 	}
 
-	// ── Pre-compute SimActions using real combat formulas ──
-
-	playerStats := CalculatePlayerStats(&player)
-	actor := models.CombatantFromPlayer(&player, playerStats)
-
-	var allActions []simulator.SimAction
-
-	// ── Build owned equipped+ACTIVE Gu sets for validation ──
-	ownedGuTypeSet := make(map[string]bool)                  // gu_id → true
-	ownedGuInstanceSet := make(map[string]bool)              // instance_id → true
-	equippedInstByGuID := make(map[string]models.GuInstance) // gu_id → highest-rank equipped ACTIVE instance
-	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			ownedGuTypeSet[gu.GuID] = true
-			ownedGuInstanceSet[gu.InstanceID] = true
-			if best, ok := equippedInstByGuID[gu.GuID]; !ok || gu.Rank > best.Rank {
-				equippedInstByGuID[gu.GuID] = gu
-			}
-		}
+	simPlayer, err := buildSimCombatant(tx, &player, isVirtual, true, &req.Loadout)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize initiator stats"})
+		return
 	}
-
-	// Resolve a loadout GuID to its actual equipped instance spec (match ID + rank)
-	loadoutSpec := func(guID string) (models.GuDictionaryItem, bool) {
-		if inst, ok := equippedInstByGuID[guID]; ok {
-			return models.GetGu(guID, inst.Rank)
-		}
-		return models.GuDictionaryItem{}, false
-	}
-
-	// All selected Gu (core + support, no distinction)
-	for _, guID := range req.Loadout.GuIds {
-		if !ownedGuTypeSet[guID] {
-			continue
-		}
-		if spec, ok := loadoutSpec(guID); ok {
-			if hasCombatActiveEffects(&spec) {
-				act, err := buildSimActionFromGu(&actor, &spec, "GU_SKILL")
-				if err != nil {
-					continue
-				}
-				act.SourceID = guID
-				allActions = append(allActions, act)
-			}
-		}
-	}
-
-	// ── Build active Gu set for killer move component validation ──
-	activeGuSet := ownedGuInstanceSet
-
-	// Killer moves
-	for _, kmID := range req.Loadout.KillerMoveIds {
-		km, slots, err := loadKillerMoveTx(tx, player.ID, kmID)
-		if err != nil {
-			continue
-		}
-		// Skip killer move if any component Gu is missing or inactive
-		if !activeGuSet[km.CorePlayerGuID] {
-			continue
-		}
-		allSlotsValid := true
-		for _, slot := range slots {
-			if !activeGuSet[slot.PlayerGuID] {
-				allSlotsValid = false
-				break
-			}
-		}
-		if !allSlotsValid {
-			continue
-		}
-		act := buildSimActionFromKillerMove(km, slots, player.DaoMarks)
-		act.SourceID = kmID
-		allActions = append(allActions, act)
-	}
-
-	// Basic attack fallback
-	allActions = append(allActions, simulator.SimAction{
-		ActionType: "BASIC_ATTACK",
-		Name:       "Đánh thường",
-		Damage:     playerStats["attack"],
-		ManaCost:   0,
-	})
-
-	// ── Apply global damage multipliers from loadout Gus (e.g. Thái Độ Cổ) ──
-	globalMultiplier := 1.0
-	scanMultiplier := func(spec models.GuDictionaryItem) {
-		if spec.Effects.Active != nil && spec.Effects.Active.DamageMult > 1.0 {
-			globalMultiplier *= spec.Effects.Active.DamageMult
-		}
-	}
-	for _, guID := range req.Loadout.GuIds {
-		if spec, ok := loadoutSpec(guID); ok {
-			scanMultiplier(spec)
-		}
-	}
-	if globalMultiplier > 1.0 {
-		for i := range allActions {
-			allActions[i].Damage *= globalMultiplier
-		}
-	}
-
-	// ── Apply persistent tactics (priority + conditions) to actions ──
-	settings := player.CombatSettings
-	for i := range allActions {
-		act := &allActions[i]
-		switch act.ActionType {
-		case "GU_SKILL":
-			for _, t := range settings.GuPriorities {
-				if t.GuID == act.SourceID {
-					act.Priority = t.Priority
-					act.UseCondition = t.UseCondition
-					act.ConditionValue = t.ConditionValue
-					break
-				}
-			}
-		case "KILLER_MOVE":
-			for _, t := range settings.KMPriorities {
-				if t.KillerMoveID == act.SourceID {
-					act.Priority = t.Priority
-					act.UseCondition = t.UseCondition
-					act.ConditionValue = t.ConditionValue
-					break
-				}
-			}
-		}
-		// BASIC_ATTACK always lowest priority
-		if act.ActionType == "BASIC_ATTACK" {
-			act.Priority = 999
-		}
-	}
-
-	// ── Virtual Shield from loadout ──
-	virtualShield := 0
-	scanShield := func(spec models.GuDictionaryItem) {
-		if spec.Effects.Active != nil && spec.Effects.Active.ShieldFlat > 0 {
-			virtualShield += int(spec.Effects.Active.ShieldFlat)
-		}
-	}
-	for _, guID := range req.Loadout.GuIds {
-		if spec, ok := loadoutSpec(guID); ok {
-			scanShield(spec)
-		}
-	}
-
-	playerDaoMarks := make(simulator.DaoMarks)
-	for k, v := range player.DaoMarks {
-		playerDaoMarks[k] = v
-	}
-
-	// ── Scan inventory for healing items ──
-	healPotency := 0.0
-	healCharges := 0
-	invItems, _ := InventorySvc.ListByPlayer(authID.String())
-	for _, inv := range invItems {
-		if inv.Quantity <= 0 {
-			continue
-		}
-		item, ok := models.ItemRegistry[inv.ItemID]
-		if !ok || item.Type != "Consumable" {
-			continue
-		}
-		if healVal, ok := item.Effects["restore_hp"]; ok && healVal > 0 {
-			if healPotency == 0 {
-				healPotency = healVal
-			}
-			healCharges += int(inv.Quantity)
-		}
-	}
-
-	baseHP := player.BaseHP + playerStats["hp"]
-	simMaxHP := int(baseHP)
-	if simMaxHP <= 0 {
-		simMaxHP = 100
-	}
-	simHP := simMaxHP
-	if !isVirtual {
-		simHP = int(player.HP)
-	}
-	if simHP > simMaxHP {
-		simHP = simMaxHP
-	}
-	if simHP <= 0 {
-		simHP = simMaxHP
-	}
-
-	simMana := int(player.MaxMana)
-	if !isVirtual {
-		simMana = int(player.CurrentMana)
-	}
-
-	simStones := player.PrimevalStones
-	simImmortalStones := player.ImmortalStones
-	if isVirtual {
-		simStones = 999999
-		simImmortalStones = 999999
-	}
-
-	simPlayer := &simulator.CombatantAuto{
-		ID:            player.ID.String(),
-		Name:          player.Username,
-		Kind:          "Player",
-		GridX:         2,
-		GridY:         2,
-		MaxHP:         simMaxHP,
-		HP:            simHP,
-		MaxMana:       int(player.MaxMana),
-		Mana:          simMana,
-		BaseDmg:       int(playerStats["attack"]),
-		BaseDef:       int(playerStats["defense"]),
-		Speed:         playerStats["speed"],
-		VirtualShield: virtualShield,
-		DaoMarks:      playerDaoMarks,
-		Loadout:       &req.Loadout,
-		Actions:       allActions,
-
-		AutoHealHP:      req.Loadout.AutoHealHP,
-		HealThreshold:   req.Loadout.HealThreshold,
-		AutoRestoreMana: isVirtual || req.Loadout.AutoRestoreMana,
-		ManaThreshold:   req.Loadout.ManaThreshold,
-		HealCharges:     healCharges,
-		HealPotency:     healPotency,
-		PrimevalStones:  simStones,
-		ImmortalStones:  simImmortalStones,
-		RefineManaTier:  getRefineManaTier(player.Rank, player.GuInventory),
-	}
-
 	simState.Allies = append(simState.Allies, simPlayer)
+
+	// Load other party members as simulated allies
+	for _, ally := range player.ActiveCombat.Allies {
+		if ally.ID != player.ID.String() {
+			allyUUID, errParse := uuid.Parse(ally.ID)
+			if errParse == nil {
+				mPlayer, errMember := evaluateManaTx(tx, allyUUID)
+				if errMember == nil {
+					simAlly, errBuild := buildSimCombatant(tx, &mPlayer, isVirtual, false, nil)
+					if errBuild == nil {
+						simAlly.GridX = ally.GridX
+						simAlly.GridY = ally.GridY
+						simAlly.HP = int(ally.HP) // Use their combat starting HP
+						simState.Allies = append(simState.Allies, simAlly)
+					}
+				}
+			}
+		}
+	}
 
 	// ── Build enemies ──
 	for idx := range player.ActiveCombat.Enemies {
@@ -400,29 +200,18 @@ func AutoCombatStart(c *gin.Context) {
 
 	// ── Build combatant info for frontend replay ──
 	var combatantInfos []CombatantInfo
-	combatantInfos = append(combatantInfos, CombatantInfo{
-		ID:      simPlayer.ID,
-		Name:    simPlayer.Name,
-		Kind:    "ally",
-		MaxHP:   simPlayer.MaxHP,
-		HP:      simPlayer.HP,
-		MaxMana: simPlayer.MaxMana,
-		Mana:    simPlayer.Mana,
-		GridX:   simPlayer.GridX,
-		GridY:   simPlayer.GridY,
-		Shield:  virtualShield,
-	})
-	for _, a := range player.ActiveCombat.Allies {
+	for _, ally := range simState.Allies {
 		combatantInfos = append(combatantInfos, CombatantInfo{
-			ID:      a.ID,
-			Name:    a.Name,
+			ID:      ally.ID,
+			Name:    ally.Name,
 			Kind:    "ally",
-			MaxHP:   int(a.MaxHP),
-			HP:      int(a.HP),
-			MaxMana: int(a.MaxMana),
-			Mana:    int(a.CurrentMana),
-			GridX:   a.GridX,
-			GridY:   a.GridY,
+			MaxHP:   ally.MaxHP,
+			HP:      ally.HP,
+			MaxMana: ally.MaxMana,
+			Mana:    ally.Mana,
+			GridX:   ally.GridX,
+			GridY:   ally.GridY,
+			Shield:  ally.VirtualShield,
 		})
 	}
 	for _, e := range player.ActiveCombat.Enemies {
@@ -574,7 +363,6 @@ func AutoCombatStart(c *gin.Context) {
 		Detail: fmt.Sprintf("=== %s ===", enemyTypeName),
 	}}, logs...)
 
-	var lootMsg string
 	if alliesAlive {
 		if isVirtual {
 			if player.ActiveCombat != nil && player.ActiveCombat.TargetPlayerID != "" && player.ActiveCombat.TargetPlayerID != "dummy" {
@@ -601,6 +389,27 @@ func AutoCombatStart(c *gin.Context) {
 			args = append(args, player.ID)
 		} else {
 			isExplore := player.CurrentRegion != "Southern_Border" && player.CurrentRegion != "Lobby"
+			var partyMembers []uuid.UUID
+			if player.PartyID != nil {
+				var membersRaw []byte
+				errPart := tx.QueryRow("SELECT members FROM parties WHERE id = $1", player.PartyID).Scan(&membersRaw)
+				if errPart == nil {
+					var members []PartyMember
+					json.Unmarshal(membersRaw, &members)
+					for _, m := range members {
+						mUUID, errParse := uuid.Parse(m.ID)
+						if errParse == nil {
+							var sameCell bool
+							errCell := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE id = $1 AND x = $2 AND y = $3 AND current_region = $4)", mUUID, player.X, player.Y, player.CurrentRegion).Scan(&sameCell)
+							if errCell == nil && sameCell {
+								partyMembers = append(partyMembers, mUUID)
+							}
+						}
+					}
+				}
+			}
+
+			var lootDetailLogs []string
 			if player.ActiveCombat != nil && player.ActiveCombat.LootTableID != "" {
 				lt, err := db.LoadLootTable(tx, player.ActiveCombat.LootTableID)
 				if err == nil {
@@ -614,56 +423,184 @@ func AutoCombatStart(c *gin.Context) {
 						}
 					}
 
-					stoneQty := loot.Items["primeval_stone"]
-					if isExplore {
-						player.TempLoot.PrimevalStones += stoneQty
+					if len(partyMembers) > 1 {
+						lootDetailLogs = append(lootDetailLogs, "=== PHÂN CHIA CHIẾN LỢI PHẨM TỔ ĐỘI ===")
+						stoneQty := loot.Items["primeval_stone"]
+						if stoneQty > 0 {
+							splitStones := stoneQty / len(partyMembers)
+							if splitStones < 1 {
+								splitStones = 1
+							}
+							for _, memberID := range partyMembers {
+								if memberID == player.ID {
+									if isExplore {
+										player.TempLoot.PrimevalStones += splitStones
+										lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch (giữ tạm thời).", splitStones))
+									} else {
+										player.PrimevalStones += splitStones
+										lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch.", splitStones))
+									}
+								} else {
+									if isExplore {
+										var targetLoot models.TempLoot
+										var targetLootBytes []byte
+										_ = tx.QueryRow("SELECT temp_loot FROM players WHERE id = $1 FOR UPDATE", memberID).Scan(&targetLootBytes)
+										if len(targetLootBytes) > 0 {
+											json.Unmarshal(targetLootBytes, &targetLoot)
+										}
+										targetLoot.PrimevalStones += splitStones
+										_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, memberID)
+									} else {
+										_, _ = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", splitStones, memberID)
+									}
+									var uname string
+									_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", memberID).Scan(&uname)
+									lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s nhận được %d Nguyên Thạch.", uname, splitStones))
+								}
+							}
+						}
+
 						for matID, qty := range loot.Items {
 							if matID == "primeval_stone" {
 								continue
 							}
-							if player.TempLoot.MaterialsInventory == nil {
-								player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
+							for q := 0; q < qty; q++ {
+								winnerID := partyMembers[rand.Intn(len(partyMembers))]
+								if winnerID == player.ID {
+									if isExplore {
+										if player.TempLoot.MaterialsInventory == nil {
+											player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
+										}
+										player.TempLoot.MaterialsInventory[matID]++
+										lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhặt được 1x %s (giữ tạm thời).", matID))
+									} else {
+										if err := InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", 1); err != nil {
+											logger.S.Errorf("Failed to add loot item %s to player %s: %v", matID, player.ID, err)
+										}
+										lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhặt được 1x %s.", matID))
+									}
+								} else {
+									var uname string
+									_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
+
+									if isExplore {
+										var targetLoot models.TempLoot
+										var targetLootBytes []byte
+										_ = tx.QueryRow("SELECT temp_loot FROM players WHERE id = $1 FOR UPDATE", winnerID).Scan(&targetLootBytes)
+										if len(targetLootBytes) > 0 {
+											json.Unmarshal(targetLootBytes, &targetLoot)
+										}
+										if targetLoot.MaterialsInventory == nil {
+											targetLoot.MaterialsInventory = make(models.MaterialsInventory)
+										}
+										targetLoot.MaterialsInventory[matID]++
+										_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, winnerID)
+									} else {
+										if err := InventorySvc.AddItem(tx, winnerID.String(), matID, "materials", 1); err != nil {
+											logger.S.Errorf("Failed to distribute loot %s to party member %s: %v", matID, winnerID, err)
+										}
+									}
+									lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s nhặt được 1x %s.", uname, matID))
+								}
 							}
-							player.TempLoot.MaterialsInventory[matID] += qty
 						}
-						for _, guID := range loot.Gus {
-							guSpec, _ := models.GetGuAny(guID)
+
+						for _, gID := range loot.Gus {
+							winnerID := partyMembers[rand.Intn(len(partyMembers))]
+							guSpec, _ := models.GetGuAny(gID)
 							newGu := models.GuInstance{
-								InstanceID: uuid.New().String(), GuID: guID, Rank: guSpec.Rank, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
+								InstanceID: uuid.New().String(),
+								GuID:       gID,
+								Rank:       guSpec.Rank,
+								Hunger:     100,
+								Status:     "ACTIVE",
+								Equipped:   false,
 							}
-							player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, newGu)
+							if winnerID == player.ID {
+								if isExplore {
+									player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, newGu)
+									lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn bắt được 1x %s (giữ tạm thời)!", gID))
+								} else {
+									player.GuInventory = append(player.GuInventory, newGu)
+									lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn bắt được 1x %s!", gID))
+								}
+							} else {
+								var uname string
+								_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
+
+								if isExplore {
+									var targetLoot models.TempLoot
+									var targetLootBytes []byte
+									_ = tx.QueryRow("SELECT temp_loot FROM players WHERE id = $1 FOR UPDATE", winnerID).Scan(&targetLootBytes)
+									if len(targetLootBytes) > 0 {
+										json.Unmarshal(targetLootBytes, &targetLoot)
+									}
+									targetLoot.GuInventory = append(targetLoot.GuInventory, newGu)
+									_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, winnerID)
+								} else {
+									targetGuInv, err := db.LoadPlayerGus(tx, winnerID.String(), false)
+									if err != nil {
+										targetGuInv = models.GuInventory{}
+									}
+									targetGuInv = append(targetGuInv, newGu)
+									_ = db.SavePlayerGus(tx, winnerID.String(), targetGuInv)
+								}
+								lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, gID))
+							}
 						}
 					} else {
-						player.PrimevalStones += stoneQty
-						for matID, qty := range loot.Items {
-							if matID == "primeval_stone" {
-								continue
+						stoneQty := loot.Items["primeval_stone"]
+						if isExplore {
+							player.TempLoot.PrimevalStones += stoneQty
+							for matID, qty := range loot.Items {
+								if matID == "primeval_stone" {
+									continue
+								}
+								if player.TempLoot.MaterialsInventory == nil {
+									player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
+								}
+								player.TempLoot.MaterialsInventory[matID] += qty
 							}
-							InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", qty)
-						}
-						for _, guID := range loot.Gus {
-							guSpec, _ := models.GetGuAny(guID)
-							newGu := models.GuInstance{
-								InstanceID: uuid.New().String(), GuID: guID, Rank: guSpec.Rank, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
+							for _, guID := range loot.Gus {
+								guSpec, _ := models.GetGuAny(guID)
+								newGu := models.GuInstance{
+									InstanceID: uuid.New().String(), GuID: guID, Rank: guSpec.Rank, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
+								}
+								player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, newGu)
 							}
-							player.GuInventory = append(player.GuInventory, newGu)
+						} else {
+							player.PrimevalStones += stoneQty
+							for matID, qty := range loot.Items {
+								if matID == "primeval_stone" {
+									continue
+								}
+								InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", qty)
+							}
+							for _, guID := range loot.Gus {
+								guSpec, _ := models.GetGuAny(guID)
+								newGu := models.GuInstance{
+									InstanceID: uuid.New().String(), GuID: guID, Rank: guSpec.Rank, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
+								}
+								player.GuInventory = append(player.GuInventory, newGu)
+							}
 						}
-					}
 
-					if stoneQty > 0 || len(loot.Items) > 1 || len(loot.Gus) > 0 {
-						lootMsg = fmt.Sprintf("Nhặt được: %d Nguyên Thạch, %d nguyên liệu, %d Cổ trùng.", stoneQty, len(loot.Items)-1, len(loot.Gus))
-						if len(loot.Items) <= 1 && len(loot.Gus) == 0 {
-							lootMsg = fmt.Sprintf("Nhặt được: %d Nguyên Thạch.", stoneQty)
+						if stoneQty > 0 || len(loot.Items) > 1 || len(loot.Gus) > 0 {
+							lootMsg := fmt.Sprintf("Nhặt được: %d Nguyên Thạch, %d nguyên liệu, %d Cổ trùng.", stoneQty, len(loot.Items)-1, len(loot.Gus))
+							if len(loot.Items) <= 1 && len(loot.Gus) == 0 {
+								lootMsg = fmt.Sprintf("Nhặt được: %d Nguyên Thạch.", stoneQty)
+							}
+							lootDetailLogs = append(lootDetailLogs, lootMsg)
 						}
 					}
 				}
 			}
 
-			if lootMsg != "" {
+			for _, lMsg := range lootDetailLogs {
 				logs = append(logs, simulator.CombatLog{
 					Turn:   simState.Turn,
 					Action: "LOOT",
-					Detail: lootMsg,
+					Detail: lMsg,
 				})
 			}
 
@@ -793,6 +730,61 @@ func AutoCombatStart(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat outcome"})
 		return
+	}
+
+	// Update simulated allies' database status (HP, Mana, Stones, Items)
+	if !isVirtual {
+		for _, simAlly := range simState.Allies {
+			if simAlly.ID == player.ID.String() {
+				continue
+			}
+			allyUUID := uuid.MustParse(simAlly.ID)
+
+			// Deduct items/stones used by simulator for this ally
+			allyItemsUsed := simAlly.ItemsUsedInBattle
+			if allyItemsUsed > 0 {
+				remaining := allyItemsUsed
+				invItems, _ := InventorySvc.ListByPlayer(simAlly.ID)
+				for _, inv := range invItems {
+					if remaining <= 0 {
+						break
+					}
+					item, ok := models.ItemRegistry[inv.ItemID]
+					if !ok || item.Type != "Consumable" {
+						continue
+					}
+					if _, hasHeal := item.Effects["restore_hp"]; hasHeal {
+						remove := inv.Quantity
+						if remove > remaining {
+							remove = remaining
+						}
+						_ = InventorySvc.RemoveItem(tx, simAlly.ID, inv.ItemID, "materials", remove)
+						remaining -= remove
+					}
+				}
+			}
+
+			allyHP := simAlly.HP
+			if allyHP <= 0 {
+				allyHP = 1
+			}
+
+			_, errUpd := tx.Exec(`
+				UPDATE players
+				SET hp = $1, current_mana = $2, primeval_stones = $3, immortal_stones = $4, active_combat = NULL
+				WHERE id = $5
+			`, allyHP, simAlly.Mana, simAlly.PrimevalStones, simAlly.ImmortalStones, allyUUID)
+			if errUpd != nil {
+				logger.S.Errorf("Failed to update ally %s outcome: %v", simAlly.Name, errUpd)
+			}
+		}
+	} else {
+		for _, simAlly := range simState.Allies {
+			if simAlly.ID == player.ID.String() {
+				continue
+			}
+			_, _ = tx.Exec("UPDATE players SET active_combat = NULL WHERE id = $1", uuid.MustParse(simAlly.ID))
+		}
 	}
 
 	if alliesAlive && !isVirtual {
@@ -996,4 +988,284 @@ func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlo
 
 	act.TargetType = "SINGLE"
 	return act
+}
+
+func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInitiator bool, reqLoadout *simulator.CombatLoadout) (*simulator.CombatantAuto, error) {
+	playerStats := CalculatePlayerStats(player)
+	actor := models.CombatantFromPlayer(player, playerStats)
+
+	var allActions []simulator.SimAction
+
+	// Build owned equipped+ACTIVE Gu sets for validation
+	ownedGuTypeSet := make(map[string]bool)                  // gu_id → true
+	ownedGuInstanceSet := make(map[string]bool)              // instance_id → true
+	equippedInstByGuID := make(map[string]models.GuInstance) // gu_id → highest-rank equipped ACTIVE instance
+	for _, gu := range player.GuInventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			ownedGuTypeSet[gu.GuID] = true
+			ownedGuInstanceSet[gu.InstanceID] = true
+			if best, ok := equippedInstByGuID[gu.GuID]; !ok || gu.Rank > best.Rank {
+				equippedInstByGuID[gu.GuID] = gu
+			}
+		}
+	}
+
+	// Resolve a loadout GuID to its actual equipped instance spec (match ID + rank)
+	loadoutSpec := func(guID string) (models.GuDictionaryItem, bool) {
+		if inst, ok := equippedInstByGuID[guID]; ok {
+			return models.GetGu(guID, inst.Rank)
+		}
+		return models.GuDictionaryItem{}, false
+	}
+
+	var selectedGuIDs []string
+	var selectedKMIDs []string
+	var autoHealHP bool
+	var healThreshold float64
+	var autoRestoreMana bool
+	var manaThreshold float64
+
+	if isInitiator && reqLoadout != nil {
+		selectedGuIDs = reqLoadout.GuIds
+		selectedKMIDs = reqLoadout.KillerMoveIds
+		autoHealHP = reqLoadout.AutoHealHP
+		healThreshold = reqLoadout.HealThreshold
+		autoRestoreMana = reqLoadout.AutoRestoreMana
+		manaThreshold = reqLoadout.ManaThreshold
+	} else {
+		// Non-initiator: automatically select all equipped, active Gus
+		for guID := range equippedInstByGuID {
+			selectedGuIDs = append(selectedGuIDs, guID)
+		}
+
+		// Automatically select all active killer moves they have
+		kmRows, err := tx.Query("SELECT id FROM killer_moves WHERE player_id = $1", player.ID)
+		if err == nil {
+			var kmIDs []string
+			for kmRows.Next() {
+				var kmID string
+				if errScan := kmRows.Scan(&kmID); errScan == nil {
+					kmIDs = append(kmIDs, kmID)
+				}
+			}
+			kmRows.Close()
+
+			for _, kmID := range kmIDs {
+				km, slots, errLoad := loadKillerMoveTx(tx, player.ID, kmID)
+				if errLoad == nil {
+					// Check if component Gus are active
+					if ownedGuInstanceSet[km.CorePlayerGuID] {
+						allSlotsValid := true
+						for _, slot := range slots {
+							if !ownedGuInstanceSet[slot.PlayerGuID] {
+								allSlotsValid = false
+								break
+							}
+						}
+						if allSlotsValid {
+							selectedKMIDs = append(selectedKMIDs, kmID)
+						}
+					}
+				}
+			}
+		}
+
+		// Use saved settings
+		autoHealHP = player.CombatSettings.AutoHealHP
+		healThreshold = player.CombatSettings.HealThreshold
+		autoRestoreMana = player.CombatSettings.AutoRestoreMana
+		manaThreshold = player.CombatSettings.ManaThreshold
+	}
+
+	// Add selected Gus
+	for _, guID := range selectedGuIDs {
+		if !ownedGuTypeSet[guID] {
+			continue
+		}
+		if spec, ok := loadoutSpec(guID); ok {
+			if hasCombatActiveEffects(&spec) {
+				act, err := buildSimActionFromGu(&actor, &spec, "GU_SKILL")
+				if err != nil {
+					continue
+				}
+				act.SourceID = guID
+				allActions = append(allActions, act)
+			}
+		}
+	}
+
+	// Add killer moves
+	for _, kmID := range selectedKMIDs {
+		km, slots, err := loadKillerMoveTx(tx, player.ID, kmID)
+		if err != nil {
+			continue
+		}
+		act := buildSimActionFromKillerMove(km, slots, player.DaoMarks)
+		act.SourceID = kmID
+		allActions = append(allActions, act)
+	}
+
+	// Basic attack fallback
+	allActions = append(allActions, simulator.SimAction{
+		ActionType: "BASIC_ATTACK",
+		Name:       "Đánh thường",
+		Damage:     playerStats["attack"],
+		ManaCost:   0,
+	})
+
+	// Global damage multipliers from loadout Gus
+	globalMultiplier := 1.0
+	scanMultiplier := func(spec models.GuDictionaryItem) {
+		if spec.Effects.Active != nil && spec.Effects.Active.DamageMult > 1.0 {
+			globalMultiplier *= spec.Effects.Active.DamageMult
+		}
+	}
+	for _, guID := range selectedGuIDs {
+		if spec, ok := loadoutSpec(guID); ok {
+			scanMultiplier(spec)
+		}
+	}
+	if globalMultiplier > 1.0 {
+		for i := range allActions {
+			allActions[i].Damage *= globalMultiplier
+		}
+	}
+
+	// Apply persistent tactics (priority + conditions) to actions
+	settings := player.CombatSettings
+	for i := range allActions {
+		act := &allActions[i]
+		switch act.ActionType {
+		case "GU_SKILL":
+			for _, t := range settings.GuPriorities {
+				if t.GuID == act.SourceID {
+					act.Priority = t.Priority
+					act.UseCondition = t.UseCondition
+					act.ConditionValue = t.ConditionValue
+					break
+				}
+			}
+		case "KILLER_MOVE":
+			for _, t := range settings.KMPriorities {
+				if t.KillerMoveID == act.SourceID {
+					act.Priority = t.Priority
+					act.UseCondition = t.UseCondition
+					act.ConditionValue = t.ConditionValue
+					break
+				}
+			}
+		}
+		if act.ActionType == "BASIC_ATTACK" {
+			act.Priority = 999
+		}
+	}
+
+	// Virtual Shield from loadout
+	virtualShield := 0
+	scanShield := func(spec models.GuDictionaryItem) {
+		if spec.Effects.Active != nil && spec.Effects.Active.ShieldFlat > 0 {
+			virtualShield += int(spec.Effects.Active.ShieldFlat)
+		}
+	}
+	for _, guID := range selectedGuIDs {
+		if spec, ok := loadoutSpec(guID); ok {
+			scanShield(spec)
+		}
+	}
+
+	playerDaoMarks := make(simulator.DaoMarks)
+	for k, v := range player.DaoMarks {
+		playerDaoMarks[k] = v
+	}
+
+	// Scan inventory for healing items
+	healPotency := 0.0
+	healCharges := 0
+	invItems, _ := InventorySvc.ListByPlayer(player.ID.String())
+	for _, inv := range invItems {
+		if inv.Quantity <= 0 {
+			continue
+		}
+		item, ok := models.ItemRegistry[inv.ItemID]
+		if !ok || item.Type != "Consumable" {
+			continue
+		}
+		if healVal, ok := item.Effects["restore_hp"]; ok && healVal > 0 {
+			if healPotency == 0 {
+				healPotency = healVal
+			}
+			healCharges += int(inv.Quantity)
+		}
+	}
+
+	baseHP := player.BaseHP + playerStats["hp"]
+	simMaxHP := int(baseHP)
+	if simMaxHP <= 0 {
+		simMaxHP = 100
+	}
+	simHP := simMaxHP
+	if !isVirtual {
+		simHP = int(player.HP)
+	}
+	if simHP > simMaxHP {
+		simHP = simMaxHP
+	}
+	if simHP <= 0 {
+		simHP = simMaxHP
+	}
+
+	simMana := int(player.MaxMana)
+	if !isVirtual {
+		simMana = int(player.CurrentMana)
+	}
+
+	simStones := player.PrimevalStones
+	simImmortalStones := player.ImmortalStones
+	if isVirtual {
+		simStones = 999999
+		simImmortalStones = 999999
+	}
+
+	simCombatant := &simulator.CombatantAuto{
+		ID:            player.ID.String(),
+		Name:          player.Username,
+		Kind:          "Player",
+		GridX:         2,
+		GridY:         2,
+		MaxHP:         simMaxHP,
+		HP:            simHP,
+		MaxMana:       int(player.MaxMana),
+		Mana:          simMana,
+		BaseDmg:       int(playerStats["attack"]),
+		BaseDef:       int(playerStats["defense"]),
+		Speed:         playerStats["speed"],
+		VirtualShield: virtualShield,
+		DaoMarks:      playerDaoMarks,
+		Actions:       allActions,
+
+		AutoHealHP:      autoHealHP,
+		HealThreshold:   healThreshold,
+		AutoRestoreMana: isVirtual || autoRestoreMana,
+		ManaThreshold:   manaThreshold,
+		HealCharges:     healCharges,
+		HealPotency:     healPotency,
+		PrimevalStones:  simStones,
+		ImmortalStones:  simImmortalStones,
+		RefineManaTier:  getRefineManaTier(player.Rank, player.GuInventory),
+	}
+
+	if isInitiator && reqLoadout != nil {
+		simCombatant.Loadout = reqLoadout
+	} else {
+		simCombatant.Loadout = &simulator.CombatLoadout{
+			GuIds:           selectedGuIDs,
+			KillerMoveIds:   selectedKMIDs,
+			AutoHealHP:      autoHealHP,
+			HealThreshold:   healThreshold,
+			AutoRestoreMana: autoRestoreMana,
+			ManaThreshold:   manaThreshold,
+		}
+	}
+
+	return simCombatant, nil
 }
