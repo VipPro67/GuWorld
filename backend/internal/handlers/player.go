@@ -1678,9 +1678,6 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 		regenRatePerHour = energyRegenRatePerHour(player)
 	}
 
-	// Add mana regen tick bonus from equipped active Gus (e.g. Heavenly Essence Lotus)
-	regenRatePerHour += models.GetPlayerManaRegenTickBonus(player.Rank, player.GuInventory)
-
 	if player.Lifespan <= 0 {
 		regenRatePerHour = regenRatePerHour * 0.5
 	}

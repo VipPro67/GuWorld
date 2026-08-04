@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"strings"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -132,9 +131,6 @@ func applyOnTickEffects(db *sql.DB, playerID string) error {
 		}
 
 		tnMultiplier := 1.0
-		if strings.HasPrefix(guID, "GU_HEAVENLY_ESSENCE_LOTUS") {
-			tnMultiplier = models.GetThienNguyenMultiplier(playerRank, guRank)
-		}
 		for _, mech := range other {
 			if mech.EventTrigger != "ON_TICK" {
 				continue

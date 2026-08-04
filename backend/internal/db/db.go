@@ -1615,9 +1615,10 @@ func normalizedGuEffectsJSON(raw string, rowLabel string) string {
 		"house":      map[string]interface{}{},
 		"explore":    map[string]interface{}{},
 		"refinement": map[string]interface{}{},
+		"growth":     map[string]interface{}{},
 		"other":      []interface{}{},
 	}
-	knownSections := []string{"active", "support", "passive", "house", "explore", "refinement", "other"}
+	knownSections := []string{"active", "support", "passive", "house", "explore", "refinement", "growth", "other"}
 	sectionFound := false
 	for _, section := range knownSections {
 		if rawSection, ok := parsed[section]; ok {
