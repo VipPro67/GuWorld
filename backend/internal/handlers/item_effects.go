@@ -46,7 +46,50 @@ func healApertureEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec)
 	if player.ApertureDamage < 0 {
 		player.ApertureDamage = 0
 	}
-	return fmt.Sprintf("Đạo hữu sử dụng %s, khôi phục %.0f hư tổn tiên khiếu!", item.Name, val), nil
+
+	// Cập nhật HP tiên khiếu trong bảng immortal_apertures
+	var apID string
+	var apertureHP, maxApertureHP int
+	var state string
+	err := tx.QueryRow(`
+		SELECT id, aperture_hp, max_aperture_hp, state 
+		FROM immortal_apertures 
+		WHERE player_id = $1
+	`, player.ID).Scan(&apID, &apertureHP, &maxApertureHP, &state)
+
+	if err == sql.ErrNoRows {
+		// Tự động khởi tạo tiên khiếu cho người chơi cũ (nếu chưa có)
+		ap, createErr := createAperture(tx, player.ID.String(), player.HumanQi, player.CurrentMana)
+		if createErr != nil {
+			return "", fmt.Errorf("không thể tự động khởi tạo Tiên Khiếu: %w", createErr)
+		}
+		apID = ap.ID
+		apertureHP = ap.ApertureHP
+		maxApertureHP = ap.MaxApertureHP
+		state = ap.State
+	} else if err != nil {
+		return "", fmt.Errorf("lỗi khi truy vấn Tiên Khiếu: %w", err)
+	}
+
+	newHP := apertureHP + int(val)
+	if newHP > maxApertureHP {
+		newHP = maxApertureHP
+	}
+	newState := state
+	if state == "DAMAGED" && newHP >= maxApertureHP {
+		newState = "STABLE"
+	}
+
+	_, err = tx.Exec(`
+		UPDATE immortal_apertures 
+		SET aperture_hp = $1, state = $2, updated_at = NOW() 
+		WHERE id = $3
+	`, newHP, newState, apID)
+	if err != nil {
+		return "", fmt.Errorf("lỗi khi cập nhật sinh lực Tiên Khiếu: %w", err)
+	}
+
+	return fmt.Sprintf("Đạo hữu sử dụng %s, khôi phục %.0f sinh lực Tiên Khiếu!", item.Name, val), nil
 }
 
 func regenHPOutOfCombatEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {

@@ -163,7 +163,7 @@ Người chơi có thể:
 
 - Item dictionary nằm trong `backend/Item.csv`.
 - Vật phẩm có type, rarity, rank, path, effects, tags và description.
-- Item effects hiện có gồm hồi mana/HP, soul boost, đạo ngân, xóa trạng thái xấu và điều kiện chỉ phàm nhân/chỉ Cổ Tiên.
+- Item effects hiện có gồm hồi mana/HP, trị liệu/hồi phục sinh lực Tiên Khiếu (`heal_aperture`), soul boost, đạo ngân, xóa trạng thái xấu và điều kiện chỉ phàm nhân/chỉ Cổ Tiên.
 
 ## 6. Luyện Cổ và suy diễn công thức
 

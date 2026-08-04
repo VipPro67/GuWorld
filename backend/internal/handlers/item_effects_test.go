@@ -119,3 +119,175 @@ func TestOpenMineChestEffect_AuditLog(t *testing.T) {
 
 	t.Logf("Audit log summary: %s", requestSummary)
 }
+
+func TestHealApertureEffect(t *testing.T) {
+	var envLoaded bool
+	for _, envPath := range []string{".env", "../../.env", "../../../.env", "backend/.env"} {
+		if err := godotenv.Load(envPath); err == nil {
+			envLoaded = true
+			break
+		}
+	}
+	if !envLoaded {
+		t.Log("Warning: could not load env file")
+	}
+
+	err := db.Connect()
+	if err != nil {
+		t.Skipf("Skipping integration test: %v", err)
+		return
+	}
+	defer db.DB.Close()
+
+	if err := db.InitSchema(); err != nil {
+		t.Fatalf("Failed to initialize database: %v", err)
+	}
+
+	playerID := uuid.New()
+	// Insert immortal player (Rank 6)
+	_, err = db.DB.Exec(`INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, hp, base_hp, current_region, email, ref_code)
+		VALUES ($1, 'TestImmortalHeal', '', 6, 1, 'Giáp', 90, 100.0, 100.0, 1000, 100.0, 100.0, 'Nam Hoang', 'immortal_heal@test.com', $2)`, playerID, "REF-IMM-"+playerID.String()[:8])
+	if err != nil {
+		t.Fatalf("Failed to insert test player: %v", err)
+	}
+	defer func() {
+		db.DB.Exec(`DELETE FROM players WHERE id = $1`, playerID)
+		db.DB.Exec(`DELETE FROM immortal_apertures WHERE player_id = $1`, playerID)
+	}()
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		t.Fatalf("Failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback()
+
+	// Create an aperture row directly with 5000 HP
+	apertureID := uuid.New()
+	_, err = tx.Exec(`
+		INSERT INTO immortal_apertures (id, player_id, grade, time_rate, aperture_hp, max_aperture_hp, area_size, immortal_essence, essence_production_per_year, internal_years_passed, next_tribulation_year, state)
+		VALUES ($1, $2, 'HIGH', 30.0, 5000, 10000, 9000000, 10, 30, 0, 10, 'DAMAGED')
+	`, apertureID, playerID)
+	if err != nil {
+		t.Fatalf("Failed to insert immortal aperture: %v", err)
+	}
+
+	player := &models.Player{
+		Account: models.Account{
+			ID: playerID,
+		},
+		CultivationState: models.CultivationState{
+			Rank: 6,
+		},
+	}
+
+	itemSpec := models.ItemSpec{
+		ID:   "test_immortal_water",
+		Name: "Tiên Tuyền Thủy",
+		Effects: map[string]float64{
+			"heal_aperture": 500,
+		},
+	}
+
+	msg, err := healApertureEffect(tx, player, itemSpec)
+	if err != nil {
+		t.Fatalf("healApertureEffect failed: %v", err)
+	}
+	if msg == "" {
+		t.Errorf("expected non-empty message")
+	}
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Failed to commit transaction: %v", err)
+	}
+
+	// Verify updated HP
+	var updatedHP int
+	err = db.DB.QueryRow(`SELECT aperture_hp FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&updatedHP)
+	if err != nil {
+		t.Fatalf("Failed to query aperture HP: %v", err)
+	}
+	if updatedHP != 5500 {
+		t.Errorf("Expected aperture HP 5500, got %d", updatedHP)
+	}
+}
+
+func TestHealApertureEffect_AutoCreate(t *testing.T) {
+	var envLoaded bool
+	for _, envPath := range []string{".env", "../../.env", "../../../.env", "backend/.env"} {
+		if err := godotenv.Load(envPath); err == nil {
+			envLoaded = true
+			break
+		}
+	}
+	if !envLoaded {
+		t.Log("Warning: could not load env file")
+	}
+
+	err := db.Connect()
+	if err != nil {
+		t.Skipf("Skipping integration test: %v", err)
+		return
+	}
+	defer db.DB.Close()
+
+	if err := db.InitSchema(); err != nil {
+		t.Fatalf("Failed to initialize database: %v", err)
+	}
+
+	playerID := uuid.New()
+	// Insert immortal player (Rank 6)
+	_, err = db.DB.Exec(`INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, hp, base_hp, current_region, email, ref_code)
+		VALUES ($1, 'TestImmortalHeal2', '', 6, 1, 'Giáp', 90, 100.0, 100.0, 1000, 100.0, 100.0, 'Nam Hoang', 'immortal_heal2@test.com', $2)`, playerID, "REF-IMM2-"+playerID.String()[:8])
+	if err != nil {
+		t.Fatalf("Failed to insert test player: %v", err)
+	}
+	defer func() {
+		db.DB.Exec(`DELETE FROM players WHERE id = $1`, playerID)
+		db.DB.Exec(`DELETE FROM immortal_apertures WHERE player_id = $1`, playerID)
+	}()
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		t.Fatalf("Failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback()
+
+	player := &models.Player{
+		Account: models.Account{
+			ID: playerID,
+		},
+		CultivationState: models.CultivationState{
+			Rank: 6,
+		},
+	}
+
+	itemSpec := models.ItemSpec{
+		ID:   "test_immortal_water",
+		Name: "Tiên Tuyền Thủy",
+		Effects: map[string]float64{
+			"heal_aperture": 500,
+		},
+	}
+
+	msg, err := healApertureEffect(tx, player, itemSpec)
+	if err != nil {
+		t.Fatalf("healApertureEffect failed: %v", err)
+	}
+	if msg == "" {
+		t.Errorf("expected non-empty message")
+	}
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Failed to commit transaction: %v", err)
+	}
+
+	// Verify aperture row is created and HP is updated (note: since it is newly created, it starts at max HP, which depends on rolled grade. Roll could yield HIGH -> 30000, MID -> 15000, etc.)
+	var updatedHP, maxHP int
+	err = db.DB.QueryRow(`SELECT aperture_hp, max_aperture_hp FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&updatedHP, &maxHP)
+	if err != nil {
+		t.Fatalf("Failed to query aperture HP: %v", err)
+	}
+	if updatedHP != maxHP {
+		t.Errorf("Expected newly created aperture to have max HP (%d), got %d", maxHP, updatedHP)
+	}
+}
