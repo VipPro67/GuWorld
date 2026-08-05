@@ -280,7 +280,7 @@ func SetupRouter() *gin.Engine {
 		// Party — group: 30/min, per player: 20/min
 		party := api.Group("/party")
 		party.Use(middleware.AuthRequired())
-		party.Use(middleware.RateLimitByPlayer(20, time.Minute))
+		party.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			party.POST("/create", handlers.CreateParty)
 			party.GET("/status", handlers.GetPartyStatus)
@@ -437,7 +437,7 @@ func SetupRouter() *gin.Engine {
 		// Trade — group: 25/min, per player: 8/min
 		trade := api.Group("/trade")
 		trade.Use(middleware.AuthRequired())
-		trade.Use(middleware.RateLimitByPlayer(30, time.Minute))
+		trade.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			trade.POST("/initiate", handlers.InitiateTrade)
 			trade.GET("/active", handlers.GetActiveTrade)
