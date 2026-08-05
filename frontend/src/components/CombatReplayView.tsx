@@ -6,6 +6,7 @@ import {
   Zap, FlaskConical, Sparkles, Flame, Play, Pause,
   ArrowLeft, ChevronRight, Droplets,
 } from "lucide-react";
+import { formatNumber } from "@/lib/utils";
 
 export interface CombatLogEntry {
   turn: number;
@@ -171,21 +172,21 @@ function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
       if (log.damage && ["DAMAGE", "DOT_TICK", "THORNS", "PHANTOM_ATTACK"].includes(log.action)) {
         events.push({
           id: ++nextEventId, actorId: log.actor_id, targetId: log.target_id,
-          text: `-${log.damage.toLocaleString()}`,
+          text: `-${formatNumber(log.damage)}`,
           type: log.is_crit ? "crit" : "damage",
         });
       }
       if (["HEAL", "ITEM_HEAL", "LIFESTEAL"].includes(log.action)) {
         events.push({
           id: ++nextEventId, actorId: log.actor_id,
-          text: `+${log.damage?.toLocaleString() || ""}`,
+          text: `+${formatNumber(log.damage || 0)}`,
           type: "heal",
         });
       }
       if (log.action === "SHIELD_GAIN") {
         events.push({
           id: ++nextEventId, actorId: log.actor_id,
-          text: `🛡 +${log.damage?.toLocaleString() || ""}`,
+          text: `🛡 +${formatNumber(log.damage || 0)}`,
           type: "shield",
         });
       }
@@ -589,7 +590,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             {/* Shield */}
             {c.shield > 0 && (
               <div className="text-[6px] font-mono text-cyan-400/80 mt-0.5 flex items-center gap-0.5">
-                🛡 {Math.round(c.shield)}
+                🛡 {formatNumber(Math.round(c.shield))}
               </div>
             )}
           </>
@@ -652,12 +653,12 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
 
             {/* Vital stats */}
             <div className="grid grid-cols-2 gap-2 bg-zinc-950/60 rounded-xl p-3 mt-2">
-              <div><span className="text-zinc-500">Sinh lực</span><br /><span className="text-emerald-400 font-bold text-sm">{c.hp}/{c.maxHp}</span></div>
-              <div><span className="text-zinc-500">Chân nguyên</span><br /><span className="text-purple-400 font-bold text-sm">{c.mp}/{c.maxMp}</span></div>
-              <div><span className="text-zinc-500">Tấn công</span><br /><span className="text-rose-400 font-bold">{c.damage}</span></div>
-              <div><span className="text-zinc-500">Phòng thủ</span><br /><span className="text-blue-400 font-bold">{c.defense}</span></div>
-              <div><span className="text-zinc-500">Tốc độ</span><br /><span className="text-cyan-400 font-bold">{c.speed}</span></div>
-              <div><span className="text-zinc-500">Khiên</span><br /><span className="text-indigo-400 font-bold">{c.shield}</span></div>
+              <div><span className="text-zinc-500">Sinh lực</span><br /><span className="text-emerald-400 font-bold text-sm">{formatNumber(c.hp)}/{formatNumber(c.maxHp)}</span></div>
+              <div><span className="text-zinc-500">Chân nguyên</span><br /><span className="text-purple-400 font-bold text-sm">{formatNumber(c.mp)}/{formatNumber(c.maxMp)}</span></div>
+              <div><span className="text-zinc-500">Tấn công</span><br /><span className="text-rose-400 font-bold">{formatNumber(c.damage)}</span></div>
+              <div><span className="text-zinc-500">Phòng thủ</span><br /><span className="text-blue-400 font-bold">{formatNumber(c.defense)}</span></div>
+              <div><span className="text-zinc-500">Tốc độ</span><br /><span className="text-cyan-400 font-bold">{formatNumber(c.speed)}</span></div>
+              <div><span className="text-zinc-500">Khiên</span><br /><span className="text-indigo-400 font-bold">{formatNumber(c.shield)}</span></div>
             </div>
 
             {/* Position */}
@@ -897,27 +898,27 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           <div className="grid grid-cols-3 gap-3 text-xs">
             <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
               <div className="text-zinc-500">Sát thương gây</div>
-              <div className="font-bold text-lg text-amber-400">{summary.totalDmgDealt.toLocaleString()}</div>
+              <div className="font-bold text-lg text-amber-400">{formatNumber(summary.totalDmgDealt)}</div>
             </div>
             <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
               <div className="text-zinc-500">Sát thương nhận</div>
-              <div className="font-bold text-lg text-rose-400">{summary.totalDmgTaken.toLocaleString()}</div>
+              <div className="font-bold text-lg text-rose-400">{formatNumber(summary.totalDmgTaken)}</div>
             </div>
             <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
               <div className="text-zinc-500">Khiên dùng</div>
-              <div className="font-bold text-lg text-blue-400">{summary.shieldsUsed.toLocaleString()}</div>
+              <div className="font-bold text-lg text-blue-400">{formatNumber(summary.shieldsUsed)}</div>
             </div>
             <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
               <div className="text-zinc-500">Mana tiêu hao</div>
-              <div className="font-bold text-lg text-purple-400">{summary.manaCost.toLocaleString()}</div>
+              <div className="font-bold text-lg text-purple-400">{formatNumber(summary.manaCost)}</div>
             </div>
             <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
               <div className="text-zinc-500">Số item dùng</div>
-              <div className="font-bold text-lg text-emerald-400">{summary.itemsUsed.toLocaleString()}</div>
+              <div className="font-bold text-lg text-emerald-400">{formatNumber(summary.itemsUsed)}</div>
             </div>
             <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
               <div className="text-zinc-500">Nguyên Thạch dùng</div>
-              <div className="font-bold text-lg text-orange-400">{summary.stonesUsed.toLocaleString()}</div>
+              <div className="font-bold text-lg text-orange-400">{formatNumber(summary.stonesUsed)}</div>
             </div>
           </div>
         </div>
@@ -987,7 +988,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
                 </span>
                 {log.damage && log.damage > 0 && !["DOT_TICK", "SHIELD_GAIN", "SHIELD_ABSORB", "HEAL", "ITEM_HEAL", "LIFESTEAL"].includes(log.action) && (
                   <span className="text-red-400 font-bold shrink-0 ml-auto">
-                    -{log.damage.toLocaleString()}
+                    -{formatNumber(log.damage)}
                   </span>
                 )}
                 {log.is_crit && (

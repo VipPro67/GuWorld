@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { translateStat } from "@/lib/translate";
 import { GuInstance, GuSpec, KillerMove, Player, useGameStore } from "@/store/useGameStore";
+import { getPathColor } from "@/lib/utils";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -275,7 +276,11 @@ function KillerMovePreviewPanel({ preview, error, isCalculating, isSaving, saved
           <Stat label="Chân/Tiên nguyên" value={`${preview.total_mana_cost.toFixed(1)} / ${player.current_mana.toFixed(1)}`} />
           <Stat label="Sát thương" value={preview.damage_value.toFixed(1)} />
           <Stat label="Phòng ngự" value={preview.defense_value.toFixed(1)} />
-          <Stat label="Lưu phái" value={preview.path} />
+          <Stat label="Lưu phái" value={
+            <span className={`inline-block rounded-full border px-2 py-0.5 text-xs ${getPathColor(preview.path).bg} ${getPathColor(preview.path).text} ${getPathColor(preview.path).border}`}>
+              {preview.path}
+            </span>
+          } />
           <Stat label="Loại" value={preview.move_type} />
           <Stat label="Cooldown" value={`${preview.cooldown} lượt`} />
           <EffectSection title="Hiệu ứng dung hợp" effects={preview.effects || {}} emptyText="Không có hiệu ứng được cộng." />
@@ -359,7 +364,7 @@ function KillerMoveManagerPanel({ moves, guDictionary, player, onRefresh, onDele
                   <span className="rounded-full border border-purple-400/30 px-2 py-0.5 text-xs text-purple-200">{(move.stability ?? 0).toFixed(1)}%</span>
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-400">
-                  <span>{move.path}</span>
+                  <span className={`inline-block rounded-full border px-2 py-0.5 ${getPathColor(move.path).bg} ${getPathColor(move.path).text} ${getPathColor(move.path).border}`}>{move.path}</span>
                   <span>{move.move_type}</span>
                   <span>Mana {(move.total_mana_cost ?? 0).toFixed(1)}</span>
                   <span>{move.slots?.length || 0} Cổ</span>
@@ -436,7 +441,7 @@ function EffectChips({ effects }: { effects: Record<string, number> }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return <div className="flex justify-between rounded-xl bg-slate-900 px-4 py-3"><span className="text-slate-400">{label}</span><strong className="text-amber-100">{value}</strong></div>;
 }
 

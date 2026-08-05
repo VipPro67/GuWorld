@@ -25,6 +25,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { translatePath } from "@/lib/translate";
+import { formatNumber } from "@/lib/utils";
 
 const CountdownTimer: React.FC<{ node: ApertureResourceNode; timeRate: number; onComplete?: () => void }> = ({ node, timeRate, onComplete }) => {
   const [timeLeft, setTimeLeft] = useState<string>("");
@@ -1085,12 +1086,12 @@ export const ImmortalApertureView: React.FC = () => {
                                 </div>
                                 <div className="text-[10px] text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
                                   <span>Tọa độ: ({enemy.x}, {enemy.y})</span>
-                                  <span className="text-rose-400 font-semibold">⚔️ Công: {enemy.attack.toLocaleString()}</span>
-                                  <span className="text-emerald-400 font-semibold">🛡️ Thủ: {enemy.defense.toLocaleString()}</span>
+                                  <span className="text-rose-400 font-semibold">⚔️ Công: {formatNumber(enemy.attack)}</span>
+                                  <span className="text-emerald-400 font-semibold">🛡️ Thủ: {formatNumber(enemy.defense)}</span>
                                 </div>
                               </div>
                               <div className="text-right">
-                                <div className="font-bold text-rose-400">{enemy.hp.toLocaleString()} HP</div>
+                                <div className="font-bold text-rose-400">{formatNumber(enemy.hp)} HP</div>
                               </div>
                             </div>
                           );

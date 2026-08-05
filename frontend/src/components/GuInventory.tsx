@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Player, GuSpec, ItemSpec, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
 import { Flower2, Wine, Gem, ShieldAlert, Sparkles, HelpCircle, Search, Shield, Zap, ChevronDown, ChevronUp, Lock, Unlock } from "lucide-react";
 import { translateGuType, translateItemType, translatePath } from "@/lib/translate";
+import { getPathColor as _getPathColor } from "@/lib/utils";
 
 interface GuInventoryProps {
   player: Player;
@@ -24,20 +25,8 @@ interface GuInventoryProps {
 }
 
 const getPathColor = (path: string): string => {
-  switch (path) {
-    case "Moon Path":
-      return "text-indigo-400 bg-indigo-950/30 border-indigo-900/40";
-    case "Strength Path":
-      return "text-orange-400 bg-orange-950/30 border-orange-900/40";
-    case "Earth Path":
-      return "text-amber-400 bg-amber-950/30 border-amber-900/40";
-    case "Refinement Path":
-      return "text-emerald-400 bg-emerald-950/30 border-emerald-900/40";
-    case "Rule Path":
-      return "text-sky-400 bg-sky-950/30 border-sky-900/40";
-    default:
-      return "text-zinc-400 bg-zinc-950/30 border-zinc-900/40";
-  }
+  const c = _getPathColor(path);
+  return `${c.bg} ${c.text} ${c.border}`;
 };
 
 const FormatKey = (key: string): string => {
@@ -779,21 +768,23 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                 return a.spec.name.localeCompare(b.spec.name);
               });
 
-              return (
-                <div className="space-y-4">
-                  {guGroups.map(({
-                    guId,
-                    groupKey,
-                    spec,
-                    instances,
-                    hasVital,
-                    activeCount,
-                    sleepingCount,
-                    sealedCount,
-                    dyingCount,
-                    deadCount,
-                    equippedCount,
-                  }) => {
+              // Split into equipped and rest
+              const equippedGroups = guGroups.filter(g => g.equippedCount > 0);
+              const restGroups = guGroups.filter(g => g.equippedCount === 0);
+
+              const renderGroup = ({
+                guId,
+                groupKey,
+                spec,
+                instances,
+                hasVital,
+                activeCount,
+                sleepingCount,
+                sealedCount,
+                dyingCount,
+                deadCount,
+                equippedCount,
+              }: typeof guGroups[number]) => {
                     const isExpanded = !!expandedGroups[groupKey];
                     const totalCount = instances.length;
                     
@@ -1314,7 +1305,32 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         )}
                       </div>
                     );
-                  })}
+                  };
+
+              return (
+                <div className="space-y-6">
+                  {equippedGroups.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-bold text-emerald-400 mb-3 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Đang Trang Bị ({equippedGroups.reduce((sum, g) => sum + g.equippedCount, 0)})
+                      </h3>
+                      <div className="space-y-4">
+                        {equippedGroups.map(renderGroup)}
+                      </div>
+                    </div>
+                  )}
+                  {restGroups.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-bold text-zinc-500 mb-3 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+                        Còn Lại ({restGroups.reduce((sum, g) => sum + g.instances.length, 0)})
+                      </h3>
+                      <div className="space-y-4">
+                        {restGroups.map(renderGroup)}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })()

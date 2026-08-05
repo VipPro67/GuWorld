@@ -24,6 +24,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { LogConsole } from "./LogConsole";
+import { formatNumber } from "@/lib/utils";
 
 interface HubItem {
   id: string;
@@ -476,7 +477,7 @@ export const LobbyView: React.FC = () => {
               <div className="flex items-center gap-1.5 mt-0.5">
                 <Coins className="w-4 h-4 text-yellow-500" />
                 <span className="text-sm font-bold text-yellow-500/90 font-mono">
-                  {player.primeval_stones?.toLocaleString()}
+                  {formatNumber(player.primeval_stones || 0)}
                 </span>
               </div>
             </div>
@@ -487,7 +488,7 @@ export const LobbyView: React.FC = () => {
               <div className="flex items-center gap-1.5 mt-0.5">
                 <Sparkles className="w-4 h-4 text-violet-400" />
                 <span className="text-sm font-bold text-purple-400 font-mono">
-                  {player.immortal_stones?.toLocaleString()}
+                  {formatNumber(player.immortal_stones || 0)}
                 </span>
               </div>
             </div>

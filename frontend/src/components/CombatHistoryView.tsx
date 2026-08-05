@@ -12,6 +12,7 @@ import {
   Eye,
 } from "lucide-react";
 import { CombatReplayView, type CombatLogEntry } from "./CombatReplayView";
+import { formatNumber } from "@/lib/utils";
 
 export const CombatHistoryView: React.FC = () => {
   const { combatHistory, combatHistoryLoading, fetchCombatHistory, setView, fetchCombatHistoryEntry, player } = useGameStore();
@@ -105,7 +106,7 @@ export const CombatHistoryView: React.FC = () => {
                 <div className="flex items-center gap-4 text-[11px] text-zinc-500">
                   <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {entry.region}</span>
                   <span className="flex items-center gap-1"><Heart className="w-3 h-3" /> HP còn: {summary.final_player_hp ?? "?"}</span>
-                  <span className="flex items-center gap-1"><Swords className="w-3 h-3" /> DMG: {summary.total_damage_dealt?.toLocaleString() || 0}</span>
+                  <span className="flex items-center gap-1"><Swords className="w-3 h-3" /> DMG: {formatNumber(summary.total_damage_dealt || 0)}</span>
                   <span><Eye className="w-3 h-3 inline" /> {entry.logs?.length || 0} bước</span>
                 </div>
               </div>

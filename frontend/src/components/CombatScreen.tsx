@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { Player, CombatState, Combatant, GuSpec, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
 import { Sparkles, Play, Swords, Eye, Shield, Zap, ChevronDown, ChevronUp, Wand2, AlertTriangle } from "lucide-react";
 import { CombatReplayView } from "./CombatReplayView";
+import { formatNumber, getPathColor } from "@/lib/utils";
 
 interface CombatScreenProps {
   player: Player;
@@ -474,7 +475,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
               </span>
               {enemyInfoRevealed.showHP && (
                 <span className="text-zinc-500 shrink-0">
-                  {c.max_hp?.toLocaleString() || "?"} HP
+                  {formatNumber(c.max_hp || 0)} HP
                 </span>
               )}
               {enemyInfoRevealed.showStats && (
@@ -740,13 +741,13 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
-                        pathMatch ? 'bg-purple-900/40 text-purple-300' : 'bg-zinc-800 text-zinc-500'
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full border ${
+                        pathMatch ? `${getPathColor(move.path).bg} ${getPathColor(move.path).text} ${getPathColor(move.path).border}` : 'bg-zinc-800 text-zinc-500'
                       }`}>
                         {move.path}
                       </span>
-                      <span className="text-[10px] text-zinc-500">DMG {move.damage_value.toFixed(0)}</span>
-                      <span className="text-[10px] text-zinc-500">Mana {move.total_mana_cost.toFixed(0)}</span>
+                      <span className="text-[10px] text-zinc-500">DMG {formatNumber(Math.round(move.damage_value))}</span>
+                      <span className="text-[10px] text-zinc-500">Mana {formatNumber(Math.round(move.total_mana_cost))}</span>
                     </div>
                   </div>
                 );
