@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { GuInstance, Player, GuSpec, ItemSpec, useGameStore } from "@/store/useGameStore";
 import {
   AlertCircle,
@@ -1385,9 +1386,9 @@ export function BaoHoangMarket({
       )}
 
       {/* Retail Buyout Modal */}
-      {activePurchaseListing && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-zinc-950/95 border border-zinc-800 rounded-3xl p-6 max-w-sm w-full space-y-5 relative shadow-2xl">
+      {activePurchaseListing && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200" onClick={() => setActivePurchaseListing(null)}>
+          <div className="bg-zinc-950/95 border border-zinc-800 rounded-3xl p-6 max-w-sm w-full space-y-5 relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
             {/* Close button */}
             <button
               onClick={() => setActivePurchaseListing(null)}
@@ -1513,13 +1514,14 @@ export function BaoHoangMarket({
               Mua
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Auction Bid Modal */}
-      {activeBidListing && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-zinc-950/95 border border-zinc-800 rounded-3xl p-6 max-w-sm w-full space-y-5 relative shadow-2xl">
+      {activeBidListing && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200" onClick={() => setActiveBidListing(null)}>
+          <div className="bg-zinc-950/95 border border-zinc-800 rounded-3xl p-6 max-w-sm w-full space-y-5 relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
             {/* Close button */}
             <button
               onClick={() => setActiveBidListing(null)}
@@ -1630,7 +1632,8 @@ export function BaoHoangMarket({
               Đấu Thầu
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

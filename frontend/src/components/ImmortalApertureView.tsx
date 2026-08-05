@@ -457,6 +457,7 @@ export const ImmortalApertureView: React.FC = () => {
     const spec = guDictionary[gu.gu_id];
     return spec && spec.effects && spec.effects.active && Object.keys(spec.effects.active).length > 0;
   });
+  const allEligibleGuIds = Array.from(new Set(activeGusWithEffect.map((gu) => gu.gu_id)));
 
   // Helper to check for path conflict with other nodes
   const checkConflict = (nd: ApertureResourceNode, all: ApertureResourceNode[]) => {
@@ -1101,14 +1102,27 @@ export const ImmortalApertureView: React.FC = () => {
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
                         <label className="text-xs text-slate-300 font-bold">Chọn Cổ Trùng</label>
-                        {selectedGus.length > 0 && (
-                          <button
-                            onClick={() => setSelectedGus([])}
-                            className="text-[10px] text-amber-500 hover:text-amber-400 font-semibold"
-                          >
-                            Bỏ chọn tất cả
-                          </button>
-                        )}
+                        <div className="flex gap-2 items-center">
+                          {allEligibleGuIds.length > 0 && selectedGus.length < allEligibleGuIds.length && (
+                            <button
+                              onClick={() => setSelectedGus(allEligibleGuIds)}
+                              className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold cursor-pointer"
+                            >
+                              Chọn tất cả
+                            </button>
+                          )}
+                          {allEligibleGuIds.length > 0 && selectedGus.length < allEligibleGuIds.length && selectedGus.length > 0 && (
+                            <span className="text-[10px] text-slate-700">|</span>
+                          )}
+                          {selectedGus.length > 0 && (
+                            <button
+                              onClick={() => setSelectedGus([])}
+                              className="text-[10px] text-amber-500 hover:text-amber-400 font-semibold cursor-pointer"
+                            >
+                              Bỏ chọn tất cả
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-800 rounded-xl p-2 bg-slate-950/50">
                         {activeGusWithEffect.length === 0 ? (
