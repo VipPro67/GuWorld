@@ -98,8 +98,6 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     if (data) {
       setGridData(data);
     }
-    fetchPartyStatus();
-    fetchPartyInvitations();
   };
 
   useEffect(() => {
