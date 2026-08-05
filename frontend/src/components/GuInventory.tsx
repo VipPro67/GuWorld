@@ -206,6 +206,10 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
   const handleUseMultipleItem = async () => {
     if (!useMultipleItemId || useMultipleItemQty < 1) return;
+    if (useMultipleItemQty > 100) {
+      useGameStore.getState().addToast("Chỉ có thể sử dụng tối đa 100 vật phẩm một lúc", "info");
+      return;
+    }
     if (!onUseItems) return;
 
     const spec = itemDictionary[useMultipleItemId];
@@ -519,15 +523,15 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         <input
                           type="number"
                           min={1}
-                          max={qty}
+                          max={Math.min(qty, 100)}
                           value={useMultipleItemQty}
-                          onChange={(e) => setUseMultipleItemQty(Math.max(1, Math.min(qty, parseInt(e.target.value) || 1)))}
+                          onChange={(e) => setUseMultipleItemQty(Math.max(1, Math.min(qty, 100, parseInt(e.target.value) || 1)))}
                           className="w-16 bg-zinc-950 border border-emerald-900/50 text-emerald-300 text-xs font-mono text-center py-1 rounded-lg outline-none focus:border-emerald-500/60"
                         />
                         <span className="text-[9px] text-zinc-500 font-mono">/ {qty}</span>
                         <button
                           type="button"
-                          onClick={() => setUseMultipleItemQty(qty)}
+                          onClick={() => setUseMultipleItemQty(Math.min(qty, 100))}
                           className="text-[9px] py-0.5 px-1.5 bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-zinc-200 rounded font-mono cursor-pointer"
                         >
                           Tất cả

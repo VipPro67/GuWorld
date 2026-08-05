@@ -2635,11 +2635,15 @@ type UseItemsRequest struct {
 	ItemIDs []string `json:"item_ids" binding:"required,min=1"`
 }
 
-// UseItems consumes multiple materials sequentially in a single transaction
 func UseItems(c *gin.Context) {
 	var req UseItemsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.ItemIDs) > 100 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chỉ có thể sử dụng tối đa 100 vật phẩm một lúc"})
 		return
 	}
 
