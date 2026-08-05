@@ -75,21 +75,21 @@ var gachaPools = []GachaPool{
 			{Type: "gu_rank", ID: "8", Min: 1, Max: 1, Weight: 0.5, Label: "Cổ Trùng R8 (Tiên Cổ)"},
 			{Type: "gu_rank", ID: "9", Min: 1, Max: 1, Weight: 0.04, Label: "Cổ Trùng R9 (Tiên Cổ)"}},
 	},
-	// {
-	// 	ID:          "van_menh_co_tu",
-	// 	Name:        "Vận Mệnh Cổ Từ",
-	// 	Description: "Truyền thuyết về Cổ Từ Vận Mệnh chứa đựng những Tiên Cổ siêu phàm! Mở ra để thử vận may đột phá Tiên Đạo!",
-	// 	CostType:    "primeval_stones",
-	// 	CostAmount:  5000,
-	// 	Rewards: []GachaRewardItem{
-	// 		{Type: "gu_rank", ID: "3,4", Min: 1, Max: 1, Weight: 30.0, Label: "Cổ Trùng R3~R4"},
-	// 		{Type: "gu_rank", ID: "5", Min: 1, Max: 1, Weight: 35.0, Label: "Cổ Trùng R5"},
-	// 		{Type: "gu_rank", ID: "6", Min: 1, Max: 1, Weight: 20.0, Label: "Cổ Trùng R6"},
-	// 		{Type: "gu_rank", ID: "7", Min: 1, Max: 1, Weight: 10.0, Label: "Cổ Trùng R7"},
-	// 		{Type: "gu_rank", ID: "8", Min: 1, Max: 1, Weight: 4.0, Label: "Cổ Trùng R8"},
-	// 		{Type: "gu_rank", ID: "9", Min: 1, Max: 1, Weight: 1.0, Label: "Cổ Trùng R9"},
-	// 	},
-	// },
+	{
+		ID:          "van_menh_co_tu",
+		Name:        "Vận Mệnh Cổ Từ",
+		Description: "Truyền thuyết về Cổ Từ Vận Mệnh chứa đựng những Tiên Cổ siêu phàm! Mở ra để thử vận may đột phá Tiên Đạo!",
+		CostType:    "primeval_stones",
+		CostAmount:  5000,
+		Rewards: []GachaRewardItem{
+			{Type: "gu_rank", ID: "3,4", Min: 1, Max: 1, Weight: 30.0, Label: "Cổ Trùng R3~R4"},
+			{Type: "gu_rank", ID: "5", Min: 1, Max: 1, Weight: 35.0, Label: "Cổ Trùng R5"},
+			{Type: "gu_rank", ID: "6", Min: 1, Max: 1, Weight: 20.0, Label: "Cổ Trùng R6"},
+			{Type: "gu_rank", ID: "7", Min: 1, Max: 1, Weight: 10.0, Label: "Cổ Trùng R7"},
+			{Type: "gu_rank", ID: "8", Min: 1, Max: 1, Weight: 4.0, Label: "Cổ Trùng R8"},
+			{Type: "gu_rank", ID: "9", Min: 1, Max: 1, Weight: 1.0, Label: "Cổ Trùng R9"},
+		},
+	},
 }
 
 func GetGachaPools(c *gin.Context) {
@@ -210,8 +210,6 @@ type immortalCache struct {
 	loadedAt int64 // unix timestamp
 	ttlSec   int64
 }
-
-var globalImmortalCache = &immortalCache{ttlSec: 300}
 
 func getCachedImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
 	return db.GetExistingImmortalGuIDs(tx)
@@ -585,6 +583,11 @@ func deductGachaCostAmount(player *models.Player, costType string, amount float6
 			return fmt.Errorf("Không đủ Thọ Nguyên. Cần %.0f năm Thọ Nguyên", amount)
 		}
 		player.Lifespan -= amount
+	case "immortal_stones":
+		if float64(player.ImmortalStones) < amount {
+			return fmt.Errorf("Không đủ Tiên Thạch. Cần %.0f Tiên Thạch", amount)
+		}
+		player.ImmortalStones -= float64(amount)
 	default:
 		return fmt.Errorf("Loại chi phí không hợp lệ: %s", costType)
 	}
