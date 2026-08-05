@@ -103,6 +103,9 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
   useEffect(() => {
     fetchPartyStatus();
     fetchPartyInvitations();
+  }, []);
+
+  useEffect(() => {
     loadGrid();
     
     let intervalId: NodeJS.Timeout;
