@@ -239,7 +239,7 @@ func SetupRouter() *gin.Engine {
 		// Cultivate — group: 30/min, per player: 20/min
 		cultivate := api.Group("/cultivate")
 		cultivate.Use(middleware.AuthRequired())
-		cultivate.Use(middleware.RateLimitByPlayer(20, time.Minute))
+		cultivate.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			cultivate.POST("/break-wall", handlers.BreakWall)
 			cultivate.POST("/use-relic-gu", handlers.UseRelicGu)
