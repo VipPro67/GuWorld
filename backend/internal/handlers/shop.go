@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"strings"
 
 	"time"
 
@@ -419,4 +420,175 @@ func SellShopItem(c *gin.Context) {
 	})
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công, nhận Nguyên Thạch! Nhân Khí +%.0f.", qiGained)})
+}
+
+type SellShopItemInfo struct {
+	ItemID   string `json:"item_id" binding:"required"`
+	Quantity int    `json:"quantity" binding:"required,min=1"`
+	ItemType string `json:"item_type" binding:"required"`
+}
+
+type SellShopBulkRequest struct {
+	PlayerID string             `json:"player_id" binding:"required"`
+	Items    []SellShopItemInfo `json:"items" binding:"required,dive"`
+}
+
+func SellShopItemsBulk(c *gin.Context) {
+	var req SellShopBulkRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	playerUUID, err := uuid.Parse(req.PlayerID)
+	if err != nil || playerUUID != authID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: Aperture mismatch"})
+		return
+	}
+
+	if len(req.Items) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm nào được chọn"})
+		return
+	}
+	if len(req.Items) > 50 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Mỗi lần thanh lý tối đa 50 loại vật phẩm!"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock player Aperture"})
+		return
+	}
+
+	totalGain := 0
+	guSold := false
+	var auditSummaries []string
+
+	for _, item := range req.Items {
+		if item.ItemType == "Material" || item.ItemType == "Consumable" {
+			cat := "materials"
+			if item.ItemType == "Consumable" {
+				cat = "consumables"
+			}
+			qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), item.ItemID, cat)
+			if qty < item.Quantity {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ vật phẩm %s để bán", item.ItemID)})
+				return
+			}
+			InventorySvc.RemoveItem(tx, player.ID.String(), item.ItemID, cat, item.Quantity)
+
+			var unitSellPrice int
+			if shopItem, err := findCaravanShopItem(item.ItemID); err == nil {
+				unitSellPrice = pricing.SellPrice(shopItem.Price)
+			} else {
+				var dbBasePrice, rank int
+				_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, item.ItemID).Scan(&dbBasePrice, &rank)
+				unitSellPrice = pricing.SellPrice(pricing.ItemBasePrice(dbBasePrice, rank))
+			}
+			gain := unitSellPrice * item.Quantity
+			totalGain += gain
+
+			var name string
+			_ = db.DB.QueryRow(`SELECT name FROM item_dictionary WHERE id = $1`, item.ItemID).Scan(&name)
+			if name == "" {
+				name = item.ItemID
+			}
+			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%d)", name, item.Quantity, gain))
+
+		} else if item.ItemType == "Gu" {
+			removed := 0
+			var newInv models.GuInventory
+			for _, gu := range player.GuInventory {
+				if gu.GuID == item.ItemID && !gu.IsVital && !gu.Equipped && gu.Status != "DEAD" && removed < item.Quantity {
+					removed++
+					continue
+				}
+				newInv = append(newInv, gu)
+			}
+			if removed < item.Quantity {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Cổ trùng %s để bán hoặc Cổ là Bản Mệnh/Đang thiết bị/Đã chết", item.ItemID)})
+				return
+			}
+			player.GuInventory = newInv
+			guSold = true
+
+			var unitSellPrice int
+			if shopItem, err := findCaravanShopItem(item.ItemID); err == nil {
+				unitSellPrice = pricing.SellPrice(shopItem.Price)
+			} else {
+				var dbBasePrice, rank int
+				_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1`, item.ItemID).Scan(&dbBasePrice, &rank)
+				unitSellPrice = pricing.SellPrice(pricing.GuBasePrice(dbBasePrice, rank))
+			}
+			gain := unitSellPrice * item.Quantity
+			totalGain += gain
+
+			var name string
+			if spec, ok := models.GetGuAny(item.ItemID); ok {
+				name = spec.Name
+			}
+			if name == "" {
+				name = item.ItemID
+			}
+			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%d)", name, item.Quantity, gain))
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "item_type phải là Gu hoặc Material"})
+			return
+		}
+	}
+
+	player.PrimevalStones += totalGain
+
+	player.EquippedGus = []string{}
+	for _, gu := range player.GuInventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
+		}
+	}
+
+	qiGained := AddHumanQi(&player, float64(len(req.Items))*5.0)
+
+	if guSold {
+		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Gu inventory changes"})
+			return
+		}
+	}
+
+	_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, equipped_gus=$2, human_qi=$3 WHERE id=$4`,
+		player.PrimevalStones, player.EquippedGus, player.HumanQi, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save sell transaction"})
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+
+	summaryStr := strings.Join(auditSummaries, ", ")
+	if len(summaryStr) > 250 {
+		summaryStr = summaryStr[:247] + "..."
+	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "shop.sell_bulk", EntityType: "shop_item",
+		EntityID:       "bulk",
+		RequestSummary: fmt.Sprintf("Bán nhiều: %s | nhận %d Nguyên Thạch", summaryStr, totalGain),
+		IPAddress:      c.ClientIP(), Success: true,
+	})
+
+	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công %d loại vật phẩm, nhận +%d Nguyên Thạch! Nhân Khí +%.0f.", len(req.Items), totalGain, qiGained)})
 }

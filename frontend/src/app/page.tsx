@@ -61,6 +61,7 @@ export default function Home() {
     fleeCombat,
     buyShopItem,
     sellShopItem,
+    sellShopItemsBulk,
     equipGu,
     updateGuStatus,
     useItem,
@@ -280,6 +281,7 @@ export default function Home() {
               actionLoading={actionLoading}
               onBuy={buyShopItem}
               onSell={sellShopItem}
+              onSellBulk={sellShopItemsBulk}
             />
           </div>
         ) : currentView === "auction" ? (

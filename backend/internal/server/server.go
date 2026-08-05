@@ -426,6 +426,7 @@ func SetupRouter() *gin.Engine {
 			shop.POST("/buy-package", handlers.BuyPremiumPackage)
 			shop.POST("/buy", handlers.BuyShopItem)
 			shop.POST("/sell", handlers.SellShopItem)
+			shop.POST("/sell-bulk", handlers.SellShopItemsBulk)
 			shop.GET("/bao-hoang/listings", handlers.ListListings)
 			shop.POST("/bao-hoang/listings", handlers.CreateListing)
 			shop.POST("/bao-hoang/buy", handlers.BuyListing)

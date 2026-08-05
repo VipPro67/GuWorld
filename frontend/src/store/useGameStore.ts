@@ -868,6 +868,7 @@ interface GameState {
   dropGus: (instanceIds: string[]) => Promise<boolean>;
   buyShopItem: (itemId: string, quantity: number) => Promise<boolean>;
   sellShopItem: (itemId: string, quantity: number, itemType: "Gu" | "Material") => Promise<boolean>;
+  sellShopItemsBulk: (items: { item_id: string; quantity: number; item_type: "Gu" | "Material" }[]) => Promise<boolean>;
   marketplaceListings: any[];
   fetchMarketplaceListings: () => Promise<void>;
   createMarketplaceListing: (payload: { itemType: "Gu" | "Material" | "Recipe"; guInstanceId?: string; guInstanceIds?: string[]; itemId?: string; quantity: number; price: number; durationHours: number; currency: "primeval" | "immortal"; listingType: "MARKET" | "AUCTION" | "TRADE"; targetBuyerUsername?: string }) => Promise<boolean>;
@@ -3404,6 +3405,30 @@ export const useGameStore = create<GameState>((set, get) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ player_id: player.id, item_id: itemId, quantity, item_type: itemType }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Bán hàng thất bại.");
+      setPlayerFromServer(data.player);
+      get().addLog(data.message || "Bán hàng thành công!");
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message || "Thao tác thất bại.", "error");
+      get().addLog(`Bán hàng thất bại: ${err.message}`);
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  sellShopItemsBulk: async (items) => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/shop/sell-bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_id: player.id, items }),
       });
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();

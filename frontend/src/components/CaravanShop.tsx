@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Player, useGameStore } from "@/store/useGameStore";
-import { ShoppingBag, Coins, Sparkles, AlertCircle, ShoppingCart, ArrowLeftRight, Trash2, Search } from "lucide-react";
+import { ShoppingBag, Coins, Sparkles, AlertCircle, ShoppingCart, ArrowLeftRight, Trash2, Search, Check } from "lucide-react";
 
 interface ShopItem {
   id: string;
@@ -18,35 +18,41 @@ interface CaravanShopProps {
   player: Player;
   actionLoading: boolean;
   onBuy: (itemId: string, quantity: number) => Promise<boolean>;
-  onSell: (itemId: string, quantity: number, itemType: "Gu" | "Material") => Promise<boolean>;
+  onSell?: (itemId: string, quantity: number, itemType: "Gu" | "Material") => Promise<boolean>;
+  onSellBulk: (items: { item_id: string; quantity: number; item_type: "Gu" | "Material" }[]) => Promise<boolean>;
 }
 
 export const CaravanShop: React.FC<CaravanShopProps> = ({
   player,
   actionLoading,
   onBuy,
-  onSell,
+  onSellBulk,
 }) => {
-  const { guDictionary, itemDictionary } = useGameStore();
+  const { guDictionary, itemDictionary, addToast } = useGameStore();
   const [shopItems, setShopItems] = useState<ShopItem[]>([]);
   const [fetchingList, setFetchingList] = useState(false);
   const [mode, setMode] = useState<"buy" | "sell">("buy");
   const [shopTab, setShopTab] = useState<"Gu" | "Material" | "Consumable">("Gu");
-  const [sellTab, setSellTab] = useState<"Gu" | "Material">("Gu");
+  const [sellTab, setSellTab] = useState<"All" | "Gu" | "Material">("All");
   const [sellSearch, setSellSearch] = useState("");
 
   // Selection states for Modals
   const [selectedBuyItem, setSelectedBuyItem] = useState<ShopItem | null>(null);
   const [buyQuantity, setBuyQuantity] = useState(1);
 
-  const [selectedSellItem, setSelectedSellItem] = useState<{
+
+
+  // Bulk selection states
+  const [selectedSellItems, setSelectedSellItems] = useState<Record<string, {
     id: string;
     name: string;
+    type: "Gu" | "Material";
     owned: number;
     price: number;
-    type: "Gu" | "Material";
-  } | null>(null);
-  const [sellQuantity, setSellQuantity] = useState(1);
+    quantityToSell: number;
+    rank: number;
+  }>>({});
+  const [showReviewDrawer, setShowReviewDrawer] = useState(false);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -110,7 +116,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
 
   // Filtered lists for Sell Mode
   const sellableMaterials = Object.entries(player.materials_inventory || {})
-    .filter(([_, qty]) => qty > 0)
+    .filter(([, qty]) => qty > 0)
     .map(([itemId, qty]) => {
       const spec = itemDictionary[itemId];
       return {
@@ -120,12 +126,13 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
         type: "Material" as const,
         owned: qty,
         price: getItemSellPrice(itemId, "Material"),
+        rank: spec?.rank || 1,
       };
     });
 
   const sellableGus = Object.entries(
     (player.gu_inventory || [])
-      .filter((gu) => !gu.is_vital && gu.status === "ACTIVE" && !gu.equipped)
+      .filter((gu) => !gu.is_vital && !gu.equipped && gu.status !== "DEAD")
       .reduce((acc, gu) => {
         acc[gu.gu_id] = (acc[gu.gu_id] || 0) + 1;
         return acc;
@@ -139,6 +146,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
       type: "Gu" as const,
       owned: count,
       price: getItemSellPrice(guId, "Gu"),
+      rank: spec?.rank || 1,
     };
   });
 
@@ -187,38 +195,150 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
   const filteredSellGus = sellableGus.filter((item) => matchSellItem(item, sellSearch));
   const filteredSellMaterials = sellableMaterials.filter((item) => matchSellItem(item, sellSearch));
 
-  const handleOpenSellModal = (item: typeof sellableGus[0] | typeof sellableMaterials[0]) => {
-    setSelectedSellItem(item);
-    setSellQuantity(1);
-    setErrorMessage(null);
-    setSuccessMessage(null);
+  const sellableAll = [...sellableGus, ...sellableMaterials];
+  const filteredSellAll = [...filteredSellGus, ...filteredSellMaterials];
+
+  const activeSellList = sellTab === "All" ? filteredSellAll : (sellTab === "Gu" ? filteredSellGus : filteredSellMaterials);
+
+  const toggleSelectItem = (item: {
+    id: string;
+    name: string;
+    type: "Gu" | "Material";
+    owned: number;
+    price: number;
+    rank: number;
+  }) => {
+    setSelectedSellItems((prev) => {
+      const key = `${item.type}-${item.id}`;
+      const next = { ...prev };
+      if (next[key]) {
+        delete next[key];
+      } else {
+        if (Object.keys(prev).length >= 50) {
+          setErrorMessage("Mỗi lần thanh lý tối đa 50 loại vật phẩm!");
+          setTimeout(() => setErrorMessage(null), 4000);
+          return prev;
+        }
+        next[key] = {
+          ...item,
+          quantityToSell: item.owned,
+        };
+      }
+      return next;
+    });
   };
 
-  const handleConfirmSell = async () => {
-    if (!selectedSellItem) return;
+  const updateQuantity = (key: string, qty: number) => {
+    setSelectedSellItems((prev) => {
+      if (!prev[key]) return prev;
+      const item = prev[key];
+      let newQty = qty;
+      if (isNaN(qty) || qty <= 0) {
+        newQty = 1;
+      } else if (qty > item.owned) {
+        newQty = item.owned;
+      }
+      return {
+        ...prev,
+        [key]: {
+          ...item,
+          quantityToSell: newQty,
+        },
+      };
+    });
+  };
+
+  const handleQuickSelectByRank = (rankNum: number) => {
+    const list = sellTab === "All" ? sellableAll : (sellTab === "Gu" ? sellableGus : sellableMaterials);
+    const itemsToSelect = list.filter(item => item.rank === rankNum);
+    setSelectedSellItems((prev) => {
+      const next = { ...prev };
+      let addedCount = Object.keys(prev).length;
+      for (const item of itemsToSelect) {
+        const key = `${item.type}-${item.id}`;
+        if (!next[key]) {
+          if (addedCount >= 50) {
+            setErrorMessage("Mỗi lần thanh lý tối đa 50 loại vật phẩm! Đã tự động giới hạn ở 50.");
+            setTimeout(() => setErrorMessage(null), 4500);
+            break;
+          }
+          next[key] = {
+            ...item,
+            quantityToSell: item.owned,
+          };
+          addedCount++;
+        } else {
+          next[key] = {
+            ...next[key],
+            quantityToSell: item.owned,
+          };
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllCurrent = () => {
+    const list = sellTab === "All" ? sellableAll : (sellTab === "Gu" ? sellableGus : sellableMaterials);
+    setSelectedSellItems((prev) => {
+      const next = { ...prev };
+      let addedCount = Object.keys(prev).length;
+      for (const item of list) {
+        const key = `${item.type}-${item.id}`;
+        if (!next[key]) {
+          if (addedCount >= 50) {
+            setErrorMessage("Mỗi lần thanh lý tối đa 50 loại vật phẩm! Đã tự động giới hạn ở 50.");
+            setTimeout(() => setErrorMessage(null), 4500);
+            break;
+          }
+          next[key] = {
+            ...item,
+            quantityToSell: item.owned,
+          };
+          addedCount++;
+        } else {
+          next[key] = {
+            ...next[key],
+            quantityToSell: item.owned,
+          };
+        }
+      }
+      return next;
+    });
+  };
+
+  const totalBulkGain = Object.values(selectedSellItems).reduce((sum, item) => sum + (item.price * item.quantityToSell), 0);
+
+  const handleConfirmBulkSell = async () => {
+    const items = Object.values(selectedSellItems).map(item => ({
+      item_id: item.id,
+      quantity: item.quantityToSell,
+      item_type: item.type,
+    }));
+    if (items.length === 0) return;
+
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    if (!sellQuantity || sellQuantity <= 0) {
-      setErrorMessage("Số lượng bán phải lớn hơn 0.");
-      return;
-    }
-
-    if (sellQuantity > selectedSellItem.owned) {
-      setErrorMessage("Số lượng bán vượt quá số lượng hiện có.");
-      return;
-    }
-
-    const success = await onSell(selectedSellItem.id, sellQuantity, selectedSellItem.type);
+    const success = await onSellBulk(items);
     if (success) {
-      setSuccessMessage(`Đã bán thành công! Nhận về +${selectedSellItem.price * sellQuantity} Nguyên Thạch.`);
-      setTimeout(() => {
-        setSelectedSellItem(null);
-      }, 1000);
+      setSuccessMessage(`Đã thanh lý thành công ${items.length} loại vật phẩm!`);
+      if (addToast) {
+        addToast(`Đã thanh lý thành công ${items.length} loại vật phẩm! Nhận về +${totalBulkGain.toLocaleString()} Nguyên Thạch.`, "success");
+      }
+      setSelectedSellItems({});
+      setShowReviewDrawer(false);
+      setTimeout(() => setSuccessMessage(null), 4000);
     } else {
-      setErrorMessage("Giao dịch thất bại. Hãy thử lại sau.");
+      setErrorMessage("Thanh lý hàng loạt thất bại. Vui lòng kiểm tra lại túi đồ.");
+      if (addToast) {
+        addToast("Thanh lý hàng loạt thất bại. Vui lòng kiểm tra lại túi đồ.", "error");
+      }
+      setTimeout(() => setErrorMessage(null), 4000);
     }
   };
+
+
 
   return (
     <>
@@ -304,7 +424,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
         </div>
       ) : (
         <div className="flex gap-2 bg-zinc-950/85 p-1.5 rounded-xl border border-zinc-900">
-          {(["Gu", "Material"] as const).map((tab) => (
+          {(["All", "Gu", "Material"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setSellTab(tab)}
@@ -314,7 +434,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                   : "text-zinc-500 hover:text-zinc-300"
               }`}
             >
-              {tab === "Gu" ? "Cổ Trùng Bản Thân" : "Nguyên Liệu & Tiêu Hao"}
+              {tab === "All" ? "Tất Cả" : tab === "Gu" ? "Cổ Trùng Bản Thân" : "Nguyên Liệu & Tiêu Hao"}
             </button>
           ))}
         </div>
@@ -339,6 +459,136 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
               <Trash2 className="w-3 h-3" />
             </button>
           )}
+        </div>
+      )}
+      {/* Bulk action bar (Inline below search bar) */}
+      {mode === "sell" && Object.keys(selectedSellItems).length > 0 && (
+        <div className="bg-zinc-950/80 border border-rose-500/30 rounded-2xl p-4 shadow-xl flex flex-col gap-3 animate-in fade-in duration-300">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-zinc-900 pb-2">
+            <div className="flex items-center gap-2">
+              <div className="bg-rose-950/20 border border-rose-500/30 p-1.5 rounded-lg">
+                <ArrowLeftRight className="w-4 h-4 text-rose-450" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-zinc-200 font-serif">Thanh Lý Hàng Loạt</h4>
+                <p className="text-[10px] text-zinc-500">
+                  Đã chọn <span className={Object.keys(selectedSellItems).length >= 50 ? "text-rose-400 font-bold" : "text-zinc-300 font-mono"}>{Object.keys(selectedSellItems).length}</span>/50 loại
+                </p>
+              </div>
+            </div>
+
+            {/* Quick select buttons */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[9px] font-mono text-zinc-500">Chọn nhanh:</span>
+              <button
+                type="button"
+                onClick={() => handleQuickSelectByRank(1)}
+                className="px-2 py-0.5 text-[9px] font-mono rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-zinc-800 transition-colors"
+              >
+                Rank 1
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickSelectByRank(2)}
+                className="px-2 py-0.5 text-[9px] font-mono rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-zinc-800 transition-colors"
+              >
+                Rank 2
+              </button>
+              <button
+                type="button"
+                onClick={handleSelectAllCurrent}
+                className="px-2 py-0.5 text-[9px] font-mono rounded bg-rose-950/10 hover:bg-rose-950/20 text-rose-450 border border-rose-950/20 transition-colors"
+              >
+                Tất cả tab này
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedSellItems({})}
+                className="px-2 py-0.5 text-[9px] font-mono rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 border border-zinc-800 transition-colors"
+              >
+                Bỏ chọn hết
+              </button>
+            </div>
+          </div>
+
+          {/* Notification messages inside bulk sell bar */}
+          {errorMessage && (
+            <div className="bg-rose-950/20 border border-rose-900/40 rounded-xl p-2.5 flex items-start gap-2 text-[11px] text-rose-400 leading-normal font-mono animate-shake">
+              <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
+          {successMessage && (
+            <div className="bg-emerald-950/20 border border-emerald-900/40 rounded-xl p-2.5 flex items-start gap-2 text-[11px] text-emerald-400 leading-normal font-mono">
+              <Sparkles className="w-4 h-4 text-emerald-500 shrink-0 animate-bounce" />
+              <span>{successMessage}</span>
+            </div>
+          )}
+
+          {/* Collapsible item list for review */}
+          {showReviewDrawer && (
+            <div className="max-h-32 overflow-y-auto border-b border-zinc-900/60 pb-2 space-y-1.5 pr-2 scrollbar-thin">
+              {Object.entries(selectedSellItems).map(([itemKey, selectedItem]) => (
+                <div key={itemKey} className="flex justify-between items-center bg-zinc-900/30 border border-zinc-900/50 rounded-lg p-2 text-[11px] font-mono">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[8px] px-1.5 py-0.2 rounded ${selectedItem.type === "Gu" ? "bg-violet-950/20 text-violet-400 border border-violet-900/30" : "bg-cyan-950/20 text-cyan-400 border border-cyan-900/30"}`}>
+                      {selectedItem.type === "Gu" ? "Cổ" : "Linh tài"}
+                    </span>
+                    <span className="text-zinc-300 font-bold">{selectedItem.name}</span>
+                    <span className="text-zinc-500">x{selectedItem.quantityToSell}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-emerald-400 font-bold flex items-center gap-0.5">
+                      +{selectedItem.price * selectedItem.quantityToSell}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSellItems(prev => {
+                        const next = { ...prev };
+                        delete next[itemKey];
+                        return next;
+                      })}
+                      className="text-zinc-600 hover:text-rose-455 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Bottom row: Total gain & actions */}
+          <div className="flex justify-between items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setShowReviewDrawer(!showReviewDrawer)}
+              className="flex items-center gap-1 text-[10px] text-zinc-450 hover:text-zinc-200 transition-colors font-mono cursor-pointer"
+            >
+              {showReviewDrawer ? "Thu gọn chi tiết" : "Xem chi tiết đã chọn"}
+              <span className="text-[9px]">{showReviewDrawer ? "▲" : "▼"}</span>
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <span className="text-[10px] text-zinc-500 font-mono block">Tổng thu hồi</span>
+                <span className="text-emerald-450 font-bold flex items-center justify-end gap-1 text-sm font-mono">
+                  <Coins className="w-4 h-4 text-emerald-500" />
+                  +{totalBulkGain.toLocaleString()}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleConfirmBulkSell}
+                disabled={actionLoading || Object.keys(selectedSellItems).length === 0}
+                className="px-5 py-2 text-xs font-mono font-bold rounded-xl bg-rose-600 hover:bg-rose-500 text-zinc-950 cursor-pointer shadow-lg active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              >
+                {actionLoading ? "Đang xử lý..." : "Xác Nhận Bán"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -410,7 +660,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
         )
       ) : (
         // Sell Mode List
-        (sellTab === "Gu" ? filteredSellGus : filteredSellMaterials).length === 0 ? (
+        activeSellList.length === 0 ? (
           <div className="py-12 flex flex-col items-center justify-center gap-2 text-zinc-600">
             <Trash2 className="w-8 h-8 text-zinc-700" />
             <span className="text-xs font-mono">
@@ -418,50 +668,117 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
             </span>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {(sellTab === "Gu" ? filteredSellGus : filteredSellMaterials).map((item) => (
-              <div
-                key={item.id}
-                className="bg-zinc-950/30 border border-zinc-900/80 rounded-2xl p-4 flex flex-col justify-between hover:border-rose-950/50 hover:bg-zinc-950/60 transition-all group"
-              >
-                <div className="space-y-2 mb-3">
-                  <div className="flex justify-between items-start">
-                    <span className="text-[9px] font-mono border border-zinc-900 px-2 py-0.5 rounded text-rose-600 dark:text-rose-400 bg-rose-950/10">
-                      Sở hữu: {item.owned}x
-                    </span>
-                    <span className="text-xs font-mono font-bold text-emerald-400 flex items-center gap-1">
-                      <Coins className="w-3.5 h-3.5 text-emerald-500" />
-                      +{item.price} <span className="text-[10px] text-zinc-500 font-normal">/ cái</span>
-                    </span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-6">
+            {activeSellList.map((item) => {
+              const key = `${item.type}-${item.id}`;
+              const isSelected = !!selectedSellItems[key];
+              const selectedItem = selectedSellItems[key];
+              return (
+                <div
+                  key={key}
+                  onClick={() => toggleSelectItem(item)}
+                  className={`bg-zinc-950/30 border rounded-2xl p-4 flex flex-col justify-between hover:bg-zinc-950/60 transition-all group relative cursor-pointer ${
+                    isSelected
+                      ? "border-rose-500/50 bg-rose-500/5 shadow-md shadow-rose-950/20"
+                      : "border-zinc-900/80 hover:border-rose-950/50"
+                  }`}
+                >
+                  <div className="space-y-2 mb-3">
+                    <div className="flex justify-between items-start pr-8">
+                      <span className="text-[9px] font-mono border border-zinc-900 px-2 py-0.5 rounded text-rose-600 dark:text-rose-400 bg-rose-950/10">
+                        Sở hữu: {item.owned}x
+                      </span>
+                      <span className="text-xs font-mono font-bold text-emerald-400 flex items-center gap-1">
+                        <Coins className="w-3.5 h-3.5 text-emerald-500" />
+                        +{item.price} <span className="text-[10px] text-zinc-500 font-normal">/ cái</span>
+                      </span>
+                    </div>
+
+                    {/* Selection Checkbox */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelectItem(item);
+                      }}
+                      className={`absolute top-4 right-4 w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
+                        isSelected
+                          ? "bg-rose-600 border-rose-500 text-zinc-950"
+                          : "bg-zinc-900 border-zinc-800 hover:border-rose-500/30 text-transparent"
+                      }`}
+                    >
+                      <Check className="w-3.5 h-3.5 text-zinc-950 font-bold" />
+                    </button>
+
+                    <h4 className="text-base font-bold text-zinc-200 font-serif group-hover:text-rose-400 transition-colors">
+                      {item.name}
+                    </h4>
+                    <details className="mt-1" onClick={(e) => e.stopPropagation()}>
+                      <summary className="text-[10px] text-zinc-500 hover:text-rose-405 cursor-pointer select-none list-none font-mono outline-none inline-flex items-center gap-1 transition-colors">
+                        [+] Xem mô tả
+                      </summary>
+                      <p className="text-xs text-zinc-405 leading-normal mt-2 border-l-2 border-zinc-850 pl-2">
+                        {item.description}
+                      </p>
+                    </details>
                   </div>
-                  <h4 className="text-base font-bold text-zinc-200 font-serif group-hover:text-rose-405 transition-colors">
-                    {item.name}
-                  </h4>
-                  <details className="mt-1">
-                    <summary className="text-[10px] text-zinc-500 hover:text-rose-400 cursor-pointer select-none list-none font-mono outline-none inline-flex items-center gap-1 transition-colors">
-                      [+] Xem mô tả
-                    </summary>
-                    <p className="text-xs text-zinc-405 leading-normal mt-2 border-l-2 border-zinc-800 pl-2">
-                      {item.description}
-                    </p>
-                  </details>
+                  <div className="border-t border-zinc-900/60 pt-3 flex items-center justify-between">
+                    <span className="text-[10px] text-zinc-650 font-mono">
+                      {isSelected
+                        ? `Trị giá chọn: ${item.price * selectedItem.quantityToSell} Nguyên Thạch`
+                        : `Tổng trị giá: ${item.price * item.owned} Nguyên Thạch`}
+                    </span>
+
+                    {/* Quantity controls or select button */}
+                    {isSelected ? (
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(key, selectedItem.quantityToSell - 1)}
+                          className="w-7 h-7 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-zinc-400 font-bold transition-all text-xs"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          min={1}
+                          max={item.owned}
+                          value={selectedItem.quantityToSell}
+                          onChange={(e) => updateQuantity(key, parseInt(e.target.value, 10))}
+                          className="w-10 text-center bg-zinc-900/80 border border-zinc-800 rounded-lg py-1 text-xs font-mono font-bold text-zinc-200 focus:outline-none focus:border-rose-500/40"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(key, selectedItem.quantityToSell + 1)}
+                          className="w-7 h-7 flex items-center justify-center bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 rounded-lg text-zinc-400 font-bold transition-all text-xs"
+                        >
+                          +
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(key, item.owned)}
+                          className="px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-lg text-[10px] font-mono text-rose-400 transition-all font-semibold"
+                        >
+                          Max
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelectItem(item);
+                        }}
+                        className="py-1.5 px-4 text-xs font-bold rounded-xl flex items-center gap-1 transition-all cursor-pointer bg-rose-900/20 hover:bg-rose-900/40 border border-rose-900/30 text-rose-300 active:scale-[0.98]"
+                      >
+                        <ArrowLeftRight className="w-3.5 h-3.5" />
+                        <span>Chọn bán</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="border-t border-zinc-900/60 pt-3 flex items-center justify-between">
-                  <span className="text-[10px] text-zinc-600 font-mono">
-                    Trị giá bán: {item.price * item.owned} Nguyên Thạch
-                  </span>
-                  <button
-                    type="button"
-                    disabled={actionLoading}
-                    onClick={() => handleOpenSellModal(item)}
-                    className="py-1.5 px-4 text-xs font-bold rounded-xl flex items-center gap-1 transition-all cursor-pointer bg-rose-900/20 hover:bg-rose-900/40 border border-rose-900/30 text-rose-300 active:scale-[0.98]"
-                  >
-                    <ArrowLeftRight className="w-3.5 h-3.5" />
-                    <span>Bán Lại</span>
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )
       )}
@@ -619,147 +936,9 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
         document.body
       )}
 
-      {/* Sell Quantity Modal */}
-      {selectedSellItem && createPortal(
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in" onClick={() => setSelectedSellItem(null)}>
-          <div className="bg-zinc-950 border border-zinc-850 rounded-3xl p-6 max-w-sm w-full space-y-4" onClick={(e) => e.stopPropagation()}>
-            <div>
-              <h4 className="text-lg font-bold text-zinc-100 font-serif">
-                Xác Nhận Bán Lại
-              </h4>
-              <p className="text-xs text-zinc-400 mt-1">
-                Bán lại {selectedSellItem.name} cho Giả gia thương đội.
-              </p>
-            </div>
 
-            <div className="bg-zinc-900/40 border border-zinc-850 rounded-xl p-3 flex justify-between text-xs font-mono">
-              <span className="text-zinc-400">Giá thu hồi:</span>
-              <span className="text-emerald-400 font-bold flex items-center gap-1">
-                <Coins className="w-3.5 h-3.5" /> +{selectedSellItem.price} Nguyên Thạch
-              </span>
-            </div>
 
-            {selectedSellItem.type !== "Gu" ? (
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500 uppercase">
-                  <span>Số lượng cần bán:</span>
-                  <span>(Tối đa: {selectedSellItem.owned.toLocaleString()})</span>
-                </div>
-                <div className="flex items-center justify-between border border-zinc-850 rounded-xl bg-zinc-900/20 overflow-hidden px-1">
-                  <button
-                    type="button"
-                    disabled={sellQuantity <= 1}
-                    onClick={() => setSellQuantity((prev) => Math.max(1, (prev || 0) - 1))}
-                    className="w-10 h-10 flex items-center justify-center font-bold text-zinc-400 hover:bg-zinc-900 active:bg-zinc-950 disabled:opacity-30 rounded-lg cursor-pointer transition-colors"
-                  >
-                    -
-                  </button>
-                  <input
-                    type="number"
-                    min={1}
-                    max={selectedSellItem.owned}
-                    value={sellQuantity || ""}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value, 10);
-                      if (isNaN(val) || val <= 0) {
-                        setSellQuantity(0);
-                      } else if (val > selectedSellItem.owned) {
-                        setSellQuantity(selectedSellItem.owned);
-                      } else {
-                        setSellQuantity(val);
-                      }
-                    }}
-                    onBlur={() => {
-                      if (!sellQuantity || sellQuantity <= 0) setSellQuantity(1);
-                    }}
-                    placeholder="1"
-                    className="w-24 text-center bg-transparent font-bold text-zinc-100 font-mono text-sm focus:outline-none focus:bg-zinc-900/50 rounded-lg py-1 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
-                  <button
-                    type="button"
-                    disabled={sellQuantity >= selectedSellItem.owned}
-                    onClick={() => setSellQuantity((prev) => Math.min(selectedSellItem.owned, (prev || 0) + 1))}
-                    className="w-10 h-10 flex items-center justify-center font-bold text-zinc-400 hover:bg-zinc-900 active:bg-zinc-950 disabled:opacity-30 rounded-lg cursor-pointer transition-colors"
-                  >
-                    +
-                  </button>
-                </div>
-                <div className="flex gap-1.5 pt-0.5">
-                  {[10, 50, 100].map((step) => (
-                    <button
-                      key={step}
-                      type="button"
-                      disabled={sellQuantity >= selectedSellItem.owned}
-                      onClick={() => {
-                        setSellQuantity((prev) => Math.min(selectedSellItem.owned, (prev || 0) + step));
-                      }}
-                      className="flex-1 py-1 text-[11px] font-mono text-zinc-400 bg-zinc-900/50 hover:bg-zinc-900 border border-zinc-850 hover:border-zinc-700 rounded-lg transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      +{step}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setSellQuantity(selectedSellItem.owned)}
-                    className="flex-1 py-1 text-[11px] font-mono text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/30 rounded-lg transition-all cursor-pointer font-semibold"
-                  >
-                    Tối đa
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="text-xs text-zinc-500 italic py-1">
-                * Cổ trùng là sinh linh độc bản, chỉ có thể thanh lý từng con một.
-              </div>
-            )}
 
-            {/* Total Gain Display */}
-            <div className="flex justify-between items-center pt-2 font-mono border-t border-dashed border-zinc-900 text-xs">
-              <span className="text-zinc-400">Nguyên Thạch nhận về:</span>
-              <span className="text-emerald-400 font-bold flex items-center gap-1 text-sm">
-                <Coins className="w-4 h-4 text-emerald-500" />
-                +{(selectedSellItem.price * (sellQuantity || 0)).toLocaleString()} Nguyên Thạch
-              </span>
-            </div>
-
-            {/* Messages */}
-            {errorMessage && (
-              <div className="bg-rose-950/20 border border-rose-900/40 rounded-xl p-3 flex items-start gap-2 text-[11px] text-rose-450 leading-normal font-mono animate-shake">
-                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
-                <span>{errorMessage}</span>
-              </div>
-            )}
-
-            {successMessage && (
-              <div className="bg-emerald-950/20 border border-emerald-900/40 rounded-xl p-3 flex items-start gap-2 text-[11px] text-emerald-450 leading-normal font-mono">
-                <Sparkles className="w-4 h-4 text-emerald-500 shrink-0" />
-                <span>{successMessage}</span>
-              </div>
-            )}
-
-            {/* Action buttons */}
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <button
-                type="button"
-                disabled={actionLoading}
-                onClick={() => setSelectedSellItem(null)}
-                className="py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:bg-zinc-900 font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer"
-              >
-                Hủy Bỏ
-              </button>
-              <button
-                type="button"
-                disabled={actionLoading || !!successMessage}
-                onClick={handleConfirmSell}
-                className="py-2.5 rounded-xl bg-rose-600/35 hover:bg-rose-600/50 border border-rose-500/40 text-rose-100 font-bold text-xs active:scale-[0.98] transition-all cursor-pointer"
-              >
-                Xác Nhận Bán
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
     </div>
     </>
   );
