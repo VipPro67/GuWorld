@@ -47,6 +47,74 @@ import { translateGuType, translateItemType } from "@/lib/translate";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
+const EFFECT_SUGGESTIONS: Record<string, { key: string; label: string; type: "string" | "number" | "boolean" }[]> = {
+  active: [
+    { key: "damage_flat", label: "Damage Flat (Sát thương cố định)", type: "number" },
+    { key: "damage_mult", label: "Damage Mult (Hệ số sát thương)", type: "number" },
+    { key: "damage_path", label: "Damage Path (Hệ sát thương)", type: "string" },
+    { key: "heal_flat", label: "Heal Flat (Hồi máu)", type: "number" },
+    { key: "shield_flat", label: "Shield Flat (Hộ thuẫn)", type: "number" },
+    { key: "mana_regen", label: "Mana Regen (Hồi mana)", type: "number" },
+    { key: "lifesteal_rate", label: "Life Steal Rate (Tỉ lệ hút máu)", type: "number" },
+    { key: "apply_status", label: "Apply Status (Áp dụng trạng thái)", type: "string" },
+    { key: "status_tick_damage", label: "Status Tick Dmg (ST trạng thái/tick)", type: "number" },
+    { key: "status_duration_ticks", label: "Status Duration Ticks (Thời gian trạng thái)", type: "number" },
+    { key: "refine_mana_tier", label: "Refine Mana Tier", type: "number" },
+    { key: "cleansing_power", label: "Cleansing Power", type: "number" },
+    { key: "range", label: "Range (Tầm đánh)", type: "number" },
+    { key: "target_selector", label: "Target Selector (Chọn mục tiêu)", type: "string" },
+    { key: "target_count", label: "Target Count (Số lượng mục tiêu)", type: "number" },
+    { key: "summon_monster_id", label: "Summon Monster ID (ID Quái triệu hồi)", type: "string" },
+    { key: "summon_position", label: "Summon Position (Vị trí triệu hồi)", type: "string" },
+    { key: "inherit_stats_percent", label: "Inherit Stats % (Thừa kế thuộc tính %)", type: "number" },
+    { key: "phantom_damage_scale", label: "Phantom Damage Scale", type: "number" },
+    { key: "summon_count_per_tick", label: "Summon Count/Tick", type: "number" },
+    { key: "summon_phantom", label: "Summon Phantom (Triệu hồi ảo ảnh)", type: "boolean" },
+    { key: "generate_gu", label: "Generate Gu (Tạo cổ trùng)", type: "boolean" },
+    { key: "blood_drain", label: "Blood Drain (Hút máu)", type: "boolean" },
+    { key: "wood_transformation", label: "Wood Transformation (Biến đổi gỗ)", type: "boolean" },
+    { key: "curve_attack", label: "Curve Attack (Tấn công cong)", type: "boolean" },
+    { key: "replicate", label: "Replicate (Nhân bản)", type: "boolean" },
+    { key: "summon_growth_phantoms", label: "Summon Growth Phantoms", type: "boolean" }
+  ],
+  passive: [
+    { key: "stat_base_attack", label: "Base Attack (Tấn công cơ bản)", type: "number" },
+    { key: "stat_base_defense", label: "Base Defense (Phòng thủ cơ bản)", type: "number" },
+    { key: "stat_base_hp", label: "Base HP (HP cơ bản)", type: "number" },
+    { key: "stat_base_speed", label: "Base Speed (Tốc độ cơ bản)", type: "number" },
+    { key: "mana_regen_mult", label: "Mana Regen Mult (Hệ số hồi mana)", type: "number" },
+    { key: "soul_refinement", label: "Soul Refinement", type: "number" },
+    { key: "movement", label: "Movement (Tốc độ di chuyển)", type: "number" },
+    { key: "evasion", label: "Evasion (Né tránh)", type: "number" },
+    { key: "storage_capacity", label: "Storage (Dung lượng chứa)", type: "number" },
+    { key: "investigation", label: "Investigation (Khảo sát/Điều tra)", type: "number" },
+    { key: "hearing", label: "Hearing (Thính giác)", type: "number" },
+    { key: "path_conflict_reduction", label: "Path Conflict Reduct (Giảm xung đột hệ)", type: "number" },
+    { key: "damage_multiplier_on_hit", label: "Damage Mult On Hit (Hệ số ST khi đánh)", type: "number" },
+    { key: "refine_mana_tier", label: "Refine Mana Tier", type: "number" },
+    { key: "cleansing_power", label: "Cleansing Power", type: "number" },
+    { key: "luck", label: "Luck (May mắn)", type: "number" }
+  ],
+  growth: [
+    { key: "max_attack", label: "Max Attack (Tấn công tối đa)", type: "number" },
+    { key: "max_defense", label: "Max Defense (Phòng thủ tối đa)", type: "number" },
+    { key: "max_hp", label: "Max HP (HP tối đa)", type: "number" },
+    { key: "max_speed", label: "Max Speed (Tốc độ tối đa)", type: "number" },
+    { key: "hours_to_max", label: "Hours To Max (Số giờ đạt tối đa)", type: "number" }
+  ]
+};
+
+const getEffectFieldType = (cat: string, key: string): "string" | "number" | "boolean" => {
+  const suggestions = EFFECT_SUGGESTIONS[cat] || [];
+  const found = suggestions.find(s => s.key === key);
+  if (found) return found.type;
+  for (const c of Object.keys(EFFECT_SUGGESTIONS)) {
+    const f = EFFECT_SUGGESTIONS[c].find(s => s.key === key);
+    if (f) return f.type;
+  }
+  return "number";
+};
+
 function getCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
   const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
@@ -3021,95 +3089,163 @@ export const AdminView: React.FC = () => {
             {/* Gu Effects - structured */}
             <div className="mt-4 border-t border-zinc-800 pt-4">
               <h4 className="text-xs font-bold text-zinc-400 mb-3 uppercase tracking-wider">Hiệu Ứng</h4>
-              {["active", "passive", "house"].map(cat => {
+              {["active", "passive", "house", "growth"].map(cat => {
                 const eff = guEdit.effects?.[cat] || {};
-                const activeEff = [
-                  { key: "damage_flat", label: "Damage Flat", type: "float" },
-                  { key: "damage_mult", label: "Damage Mult", type: "float" },
-                  { key: "damage_path", label: "Damage Path", type: "string" },
-                  { key: "heal_flat", label: "Heal Flat", type: "float" },
-                  { key: "shield_flat", label: "Shield Flat", type: "float" },
-                  { key: "mana_regen", label: "Mana Regen", type: "float" },
-                  { key: "lifesteal_rate", label: "Life Steal", type: "float" },
-                  { key: "apply_status", label: "Apply Status", type: "string" },
-                  { key: "status_tick_damage", label: "Status Tick Dmg", type: "float" },
-                  { key: "status_duration_ticks", label: "Status Duration Ticks", type: "float" },
-                  { key: "refine_mana_tier", label: "Refine Mana Tier", type: "float" },
-                  { key: "cleansing_power", label: "Cleansing Power", type: "float" },
-                  { key: "range", label: "Range", type: "float" },
-                  { key: "target_selector", label: "Target Selector", type: "string" },
-                  { key: "target_count", label: "Target Count", type: "float" },
-                  { key: "summon_monster_id", label: "Summon Monster ID", type: "string" },
-                  { key: "summon_position", label: "Summon Position", type: "string" },
-                  { key: "inherit_stats_percent", label: "Inherit Stats %", type: "float" },
-                  { key: "phantom_damage_scale", label: "Phantom Damage Scale", type: "float" },
-                  { key: "summon_count_per_tick", label: "Summon Count/Tick", type: "float" },
-                ];
-                const passiveEff = [
-                  { key: "stat_base_attack", label: "Base Attack", type: "float" },
-                  { key: "stat_base_defense", label: "Base Defense", type: "float" },
-                  { key: "stat_base_hp", label: "Base HP", type: "float" },
-                  { key: "stat_base_speed", label: "Base Speed", type: "float" },
-                  { key: "mana_regen_mult", label: "Mana Regen Mult", type: "float" },
-                  { key: "soul_refinement", label: "Soul Refinement", type: "float" },
-                  { key: "movement", label: "Movement", type: "float" },
-                  { key: "evasion", label: "Evasion", type: "float" },
-                  { key: "storage_capacity", label: "Storage", type: "float" },
-                  { key: "investigation", label: "Investigation", type: "float" },
-                  { key: "hearing", label: "Hearing", type: "float" },
-                  { key: "path_conflict_reduction", label: "Path Conflict Reduct", type: "float" },
-                  { key: "damage_multiplier_on_hit", label: "Damage Mult On Hit", type: "float" },
-                  { key: "refine_mana_tier", label: "Refine Mana Tier", type: "float" },
-                  { key: "cleansing_power", label: "Cleansing Power", type: "float" },
-                ];
-
-                const boolKeys = cat === "active" ? ["summon_phantom", "generate_gu", "blood_drain", "wood_transformation", "curve_attack", "replicate", "summon_growth_phantoms"] : [];
-                const fields = cat === "active" ? activeEff : cat === "passive" ? passiveEff : [];
                 return (
                   <details key={cat} className="mb-2 bg-zinc-800/30 rounded-lg">
                     <summary className="px-3 py-2 text-xs font-bold text-zinc-400 uppercase cursor-pointer">{cat} ({Object.keys(eff).length} fields)</summary>
-                    <div className="px-3 pb-3 grid grid-cols-3 gap-2">
-                      {fields.map(f => (
-                        <div key={f.key}>
-                          <label className="text-[10px] text-zinc-500 block">{f.label}</label>
-                          {f.type === "string" ? (
-                            <input value={eff[f.key] || ""} onChange={e => { const newEff = {...guEdit.effects}; newEff[cat] = {...newEff[cat], [f.key]: e.target.value}; setGuEdit({...guEdit, effects: newEff}) }} className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-xs text-zinc-200" />
-                          ) : (
-                            <input type="number" step="any" value={eff[f.key] || 0} onChange={e => { const v = parseFloat(e.target.value) || 0; const newEff = {...guEdit.effects}; newEff[cat] = {...newEff[cat], [f.key]: v}; setGuEdit({...guEdit, effects: newEff}) }} className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-xs text-zinc-200" />
-                          )}
-                        </div>
-                      ))}
-                      {boolKeys.map(k => (
-                        <label key={k} className="flex items-center gap-1.5 pt-4">
-                          <input type="checkbox" checked={!!eff[k]} onChange={e => { const newEff = {...guEdit.effects}; newEff[cat] = {...newEff[cat], [k]: e.target.checked}; setGuEdit({...guEdit, effects: newEff}) }} className="rounded bg-zinc-800 border-zinc-700 w-3 h-3" />
-                          <span className="text-[10px] text-zinc-400">{k}</span>
-                        </label>
-                      ))}
+                    <div className="px-3 pb-3">
+                      {Object.entries(eff).map(([k, val], idx) => {
+                        const v = val as any;
+                        const fieldType = typeof v === "boolean" ? "boolean" : typeof v === "number" ? "number" : "string";
+                        return (
+                          <div key={idx} className="flex gap-2 items-center mb-1.5">
+                            <div className="flex-1">
+                              <input
+                                list={`suggestions-${cat}`}
+                                value={k}
+                                onChange={e => {
+                                  const newKey = e.target.value;
+                                  const newEff = { ...guEdit.effects };
+                                  const catEff = { ...newEff[cat] };
+                                  let currentVal = catEff[k];
+                                  
+                                  const suggestedType = getEffectFieldType(cat, newKey);
+                                  if (suggestedType === "boolean" && typeof currentVal !== "boolean") {
+                                    currentVal = false;
+                                  } else if (suggestedType === "number" && typeof currentVal !== "number") {
+                                    currentVal = 0;
+                                  } else if (suggestedType === "string" && typeof currentVal !== "string") {
+                                    currentVal = "";
+                                  }
+
+                                  delete catEff[k];
+                                  catEff[newKey] = currentVal;
+                                  newEff[cat] = catEff;
+                                  setGuEdit({ ...guEdit, effects: newEff });
+                                }}
+                                className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200 font-mono"
+                                placeholder="Key"
+                              />
+                            </div>
+                            <div className="w-16">
+                              <select
+                                value={fieldType}
+                                onChange={e => {
+                                  const newType = e.target.value;
+                                  const newEff = { ...guEdit.effects };
+                                  const catEff = { ...newEff[cat] };
+                                  if (newType === "boolean") {
+                                    catEff[k] = false;
+                                  } else if (newType === "number") {
+                                    catEff[k] = 0;
+                                  } else {
+                                    catEff[k] = "";
+                                  }
+                                  newEff[cat] = catEff;
+                                  setGuEdit({ ...guEdit, effects: newEff });
+                                }}
+                                className="w-full px-1 py-1 bg-zinc-800 border border-zinc-700 rounded text-[10px] text-zinc-300 font-medium focus:ring-0 focus:outline-none cursor-pointer"
+                              >
+                                <option value="number">Số</option>
+                                <option value="string">Chữ</option>
+                                <option value="boolean">Bool</option>
+                              </select>
+                            </div>
+                            <div className="w-36">
+                              {fieldType === "boolean" ? (
+                                <label className="flex items-center gap-1.5 pt-1.5 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={!!v}
+                                    onChange={e => {
+                                      const newEff = { ...guEdit.effects };
+                                      const catEff = { ...newEff[cat] };
+                                      catEff[k] = e.target.checked;
+                                      newEff[cat] = catEff;
+                                      setGuEdit({ ...guEdit, effects: newEff });
+                                    }}
+                                    className="rounded bg-zinc-800 border-zinc-700 w-3.5 h-3.5 text-amber-600"
+                                  />
+                                  <span className="text-[10px] text-zinc-400">Kích hoạt</span>
+                                </label>
+                              ) : fieldType === "number" ? (
+                                <input
+                                  type="number"
+                                  step="any"
+                                  value={v === undefined || v === null ? "" : v}
+                                  onChange={e => {
+                                    const val = parseFloat(e.target.value);
+                                    const newEff = { ...guEdit.effects };
+                                    const catEff = { ...newEff[cat] };
+                                    catEff[k] = isNaN(val) ? 0 : val;
+                                    newEff[cat] = catEff;
+                                    setGuEdit({ ...guEdit, effects: newEff });
+                                  }}
+                                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200"
+                                  placeholder="Giá trị"
+                                />
+                              ) : (
+                                <input
+                                  type="text"
+                                  value={v || ""}
+                                  onChange={e => {
+                                    const newEff = { ...guEdit.effects };
+                                    const catEff = { ...newEff[cat] };
+                                    catEff[k] = e.target.value;
+                                    newEff[cat] = catEff;
+                                    setGuEdit({ ...guEdit, effects: newEff });
+                                  }}
+                                  className="w-full px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200"
+                                  placeholder="Giá trị"
+                                />
+                              )}
+                            </div>
+                            <button
+                              onClick={() => {
+                                const newEff = { ...guEdit.effects };
+                                const catEff = { ...newEff[cat] };
+                                delete catEff[k];
+                                newEff[cat] = catEff;
+                                setGuEdit({ ...guEdit, effects: newEff });
+                              }}
+                              className="text-red-400 hover:text-red-300 p-1 cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                      <button
+                        onClick={() => {
+                          const newEff = { ...guEdit.effects || {} };
+                          if (!newEff[cat]) newEff[cat] = {};
+                          let keyName = "";
+                          if (newEff[cat].hasOwnProperty("")) {
+                            let counter = 1;
+                            while (newEff[cat].hasOwnProperty(`new_effect_${counter}`)) {
+                              counter++;
+                            }
+                            keyName = `new_effect_${counter}`;
+                          }
+                          newEff[cat] = { ...newEff[cat], [keyName]: "" };
+                          setGuEdit({ ...guEdit, effects: newEff });
+                        }}
+                        className="text-xs text-amber-400 hover:text-amber-300 cursor-pointer mt-1"
+                      >
+                        + Thêm hiệu ứng
+                      </button>
+                      <datalist id={`suggestions-${cat}`}>
+                        {(EFFECT_SUGGESTIONS[cat] || []).map(item => (
+                          <option key={item.key} value={item.key}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </datalist>
                     </div>
                   </details>
                 );
               })}
-              {/* Growth section - Permanent stat growth */}
-              <details className="mb-2 bg-zinc-800/30 rounded-lg">
-                <summary className="px-3 py-2 text-xs font-bold text-zinc-400 uppercase cursor-pointer">growth ({Object.keys(guEdit.effects?.growth || {}).length} fields)</summary>
-                <div className="px-3 pb-3 grid grid-cols-3 gap-2">
-                  {[
-                    { key: "max_attack", label: "Max Attack", type: "float" },
-                    { key: "max_defense", label: "Max Defense", type: "float" },
-                    { key: "max_hp", label: "Max HP", type: "float" },
-                    { key: "max_speed", label: "Max Speed", type: "float" },
-                    { key: "hours_to_max", label: "Hours To Max", type: "float" },
-                  ].map(f => {
-                    const eff = guEdit.effects?.growth || {};
-                    return (
-                      <div key={f.key}>
-                        <label className="text-[10px] text-zinc-500 block">{f.label}</label>
-                        <input type="number" step="any" value={eff[f.key] || 0} onChange={e => { const v = parseFloat(e.target.value) || 0; const newEff = {...guEdit.effects}; newEff.growth = {...newEff.growth, [f.key]: v}; setGuEdit({...guEdit, effects: newEff}) }} className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-xs text-zinc-200" />
-                      </div>
-                    );
-                  })}
-                </div>
-              </details>
               {/* Other section - Special Mechanics */}
               <details className="mb-2 bg-zinc-800/30 rounded-lg">
                 <summary className="px-3 py-2 text-xs font-bold text-zinc-400 uppercase cursor-pointer">other ({(guEdit.effects?.other || []).length} mechanics)</summary>
@@ -3142,6 +3278,17 @@ export const AdminView: React.FC = () => {
               <button onClick={async () => {
                 const isNew = !!guEdit._isNew;
                 const { _isNew, ...body } = guEdit;
+                if (body.effects) {
+                  const cleaned = { ...body.effects };
+                  ["active", "passive", "house", "growth"].forEach(cat => {
+                    if (cleaned[cat]) {
+                      cleaned[cat] = Object.fromEntries(
+                        Object.entries(cleaned[cat]).filter(([k]) => k.trim() !== "")
+                      );
+                    }
+                  });
+                  body.effects = cleaned;
+                }
                 const url = isNew ? `${BACKEND_URL}/api/admin/gu-dictionary` : `${BACKEND_URL}/api/admin/gu-dictionary/${guEdit.id}`;
                 const method = isNew ? "POST" : "PUT";
                 const ok = await exec(url, method, body);
@@ -3204,8 +3351,8 @@ export const AdminView: React.FC = () => {
               {/* Effects key-value pairs */}
               <div className="border-t border-zinc-800 pt-3">
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">Hiệu ứng — key: value</label>
-                {Object.entries(itemEdit.effects || {}).map(([k, v]) => (
-                  <div key={k} className="flex gap-2 mb-1.5">
+                {Object.entries(itemEdit.effects || {}).map(([k, v], idx) => (
+                  <div key={idx} className="flex gap-2 mb-1.5">
                     <input value={k} onChange={e => { const newEff = {...itemEdit.effects}; const val = newEff[k]; delete newEff[k]; newEff[e.target.value] = val; setItemEdit({...itemEdit, effects: newEff}) }} className="flex-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" placeholder="key" />
                     <input type="number" step="any" value={v as number} onChange={e => setItemEdit({...itemEdit, effects: {...itemEdit.effects, [k]: parseFloat(e.target.value) || 0}})} className="w-24 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" placeholder="value" />
                     <button onClick={() => { const newEff = {...itemEdit.effects}; delete newEff[k]; setItemEdit({...itemEdit, effects: newEff}) }} className="text-red-400 hover:text-red-300 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
