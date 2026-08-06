@@ -114,7 +114,6 @@ type SimAction struct {
 	Defense      float64 // shield value granted to self (excludes dao bonus)
 	Healing      float64 // HP restored to self (excludes dao bonus)
 	ManaCost     float64 // mana consumed on use
-	StunTurns    int     // turns of stun applied to target
 	BleedPerTurn float64 // bleed DoT per turn (applied to target)
 	PoisonPerTurn float64 // poison DoT per turn (applied to target)
 	LifeStealPct float64 // percentage of damage dealt healed back (0-1)
@@ -123,7 +122,8 @@ type SimAction struct {
 	ThornsDmg    float64 // reflect damage to attacker
 
 	// ── New status effect fields (tier-based) ──
-	SlowTier     int     // tier (1-5) for slow debuff on target
+	StunTier      int     // tier (1-5) for stun on target
+	SlowTier      int     // tier (1-5) for slow debuff on target
 	WeakTier     int     // tier (1-5) for weak debuff on target
 	FreezeTier   int     // tier (1-5) for freeze debuff on target
 	SilenceTier  int     // tier (1-5) for silence debuff on target

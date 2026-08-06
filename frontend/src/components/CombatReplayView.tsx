@@ -198,13 +198,20 @@ function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
         });
       }
       if (["GU_SKILL", "KILLER_MOVE", "BASIC_ATTACK"].includes(log.action)) {
-        const skillName = log.detail?.split("sử dụng")[1]?.trim();
-        if (skillName) {
-          events.push({
-            id: ++nextEventId, actorId: log.actor_id,
-            text: skillName,
-            type: "skill",
-          });
+        const detail = log.detail || "";
+        const idxDung = detail.indexOf("dùng [");
+        const idxSuDung = detail.indexOf("sử dụng");
+        const idx = idxDung >= 0 ? idxDung : idxSuDung;
+        if (idx >= 0) {
+          const afterKeyword = detail.substring(idx).replace(/^.*?\[([^\]]+)\].*$/, "[$1]");
+          const bracketMatch = detail.substring(idx).match(/\[([^\]]+)\]/);
+          if (bracketMatch) {
+            events.push({
+              id: ++nextEventId, actorId: log.actor_id,
+              text: bracketMatch[1],
+              type: "skill",
+            });
+          }
         }
       }
 

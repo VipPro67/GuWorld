@@ -558,15 +558,57 @@ func CombatAttack(c *gin.Context) {
 									} else {
 										logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s!", refCaster.Name, spec.Name))
 									}
-									for _, eIdx := range targetsIdx {
-										tEnemy := &player.ActiveCombat.Enemies[eIdx]
-										netDmg := dmg - tEnemy.BaseDefense
-										if netDmg < 1.0 {
-											netDmg = 1.0
-										}
-										dmgLog := applyDamageWithLogs(refCaster.Name, tEnemy.Name, tEnemy, netDmg)
-										logs = append(logs, dmgLog)
+								for _, eIdx := range targetsIdx {
+									tEnemy := &player.ActiveCombat.Enemies[eIdx]
+									netDmg := dmg - tEnemy.BaseDefense
+									if netDmg < 1.0 {
+										netDmg = 1.0
 									}
+									dmgLog := applyDamageWithLogs(refCaster.Name, tEnemy.Name, tEnemy, netDmg)
+									logs = append(logs, dmgLog)
+
+									// Apply status effects from Gu to target
+									if spec.Effects.Active != nil {
+										active := spec.Effects.Active
+										switch active.ApplyStatus {
+										case "SILENCE":
+											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+												Type: "silence", Value: 1, Turns: active.StatusDurationTicks,
+											})
+											logs = append(logs, fmt.Sprintf("%s bị Im lặng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
+										case "STUN":
+											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+												Type: "stun", Value: 1, Turns: active.StatusDurationTicks,
+											})
+											logs = append(logs, fmt.Sprintf("%s bị Choáng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
+										case "FREEZE":
+											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+												Type: "freeze", Value: 1, Turns: active.StatusDurationTicks,
+											})
+											logs = append(logs, fmt.Sprintf("%s bị Đóng băng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
+										case "SLOW":
+											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+												Type: "slow", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
+											})
+											logs = append(logs, fmt.Sprintf("%s bị Chậm %d%% %d lượt!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
+										case "WEAK":
+											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+												Type: "weak", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
+											})
+											logs = append(logs, fmt.Sprintf("%s bị Yếu %d%% %d lượt!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
+										case "BLEED":
+											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+												Type: "bleed", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
+											})
+											logs = append(logs, fmt.Sprintf("%s bị Chảy máu (%.0f/lượt %d lượt)!", tEnemy.Name, active.StatusTickDamage, active.StatusDurationTicks))
+										case "POISON":
+											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+												Type: "poison", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
+											})
+											logs = append(logs, fmt.Sprintf("%s bị Độc (%.0f/lượt %d lượt)!", tEnemy.Name, active.StatusTickDamage, active.StatusDurationTicks))
+										}
+									}
+								}
 								}
 							} else {
 								logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s (Hỗ trợ)!", refCaster.Name, spec.Name))

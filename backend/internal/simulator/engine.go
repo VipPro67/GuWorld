@@ -894,16 +894,17 @@ func Simulate(state *CombatState) []CombatLog {
 								Detail:    fmt.Sprintf("%s bị trúng độc (%.0f/lượt trong 3 lượt)!", target.Name, a.PoisonPerTurn),
 							})
 						}
-						if a.StunTurns > 0 {
+						if a.StunTier > 0 {
+							dur := TierToDuration(EffectStun, a.StunTier)
 							target.ActiveEffects = append(target.ActiveEffects, Effect{
-								ID: EffectStun, Type: "debuff", Tier: 0, Value: a.StunTurns, Duration: a.StunTurns,
+								ID: EffectStun, Type: "debuff", Tier: a.StunTier, Value: 1, Duration: dur,
 							})
 							turnLogs = append(turnLogs, CombatLog{
 								Turn:      turn,
 								ActorId:   target.ID,
 								ActorName: target.Name,
 								Action:    "STUN_APPLIED",
-								Detail:    fmt.Sprintf("%s bị choáng trong %d lượt!", target.Name, a.StunTurns),
+								Detail:    fmt.Sprintf("%s dùng [%s] → %s bị choáng %d lượt!", actor.Name, a.Name, target.Name, dur),
 							})
 						}
 
@@ -959,7 +960,7 @@ func Simulate(state *CombatState) []CombatLog {
 								ActorId:   target.ID,
 								ActorName: target.Name,
 								Action:    "SILENCE_APPLIED",
-								Detail:    fmt.Sprintf("%s bị im lặng, không thể dùng kỹ năng trong %d lượt!", target.Name, dur),
+								Detail:    fmt.Sprintf("%s dùng [%s] → %s bị im lặng %d lượt!", actor.Name, a.Name, target.Name, dur),
 							})
 						}
 

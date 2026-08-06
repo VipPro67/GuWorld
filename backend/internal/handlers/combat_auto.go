@@ -949,7 +949,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 			act.PoisonPerTurn += active.StatusTickDamage
 		}
 		if active.ApplyStatus == "STUN" {
-			act.StunTurns = active.StatusDurationTicks
+			act.StunTier = active.StatusDurationTicks
 		}
 		if active.ApplyStatus == "SLOW" {
 			act.SlowTier = active.StatusDurationTicks
@@ -1052,7 +1052,7 @@ func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlo
 			act.PoisonPerTurn += v
 		}
 		if v, ok := effects["stun"]; ok {
-			act.StunTurns = int(v)
+			act.StunTier = int(v)
 		}
 		if v, ok := effects["life_steal"]; ok {
 			act.LifeStealPct += v / 100.0
