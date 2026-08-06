@@ -32,6 +32,7 @@ import {
   UserPlus,
   Edit3,
   ListTodo,
+  List,
   BookOpen,
   Database,
   FlaskConical,
@@ -43,6 +44,9 @@ import {
   Copy,
   Upload,
   PawPrint,
+  ShoppingBag,
+  Swords,
+  MapPin,
 } from "lucide-react";
 import { translateGuType, translateItemType } from "@/lib/translate";
 
@@ -440,6 +444,7 @@ export const AdminView: React.FC = () => {
   const [stonesImmortal, setStonesImmortal] = useState("");
 
   const [actionLoading, setActionLoading] = useState(false);
+  const [tableLoading, setTableLoading] = useState<string | null>(null);
   const [section, setSection] = useState<"players" | "sects" | "data" | "logs" | "shop" | "mines" | "gift_codes">("players");
   const [playersTab, setPlayersTab] = useState<"list" | "online">("list");
 
@@ -500,7 +505,7 @@ export const AdminView: React.FC = () => {
   const [onlineLoading, setOnlineLoading] = useState(false);
 
   // ----- Dictionary state -----
-  const [dataTab, setDataTab] = useState<"import" | "gus" | "items" | "recipes">("import");
+  const [dataTab, setDataTab] = useState<"import" | "tables" | "gus" | "items" | "recipes" | "monsters" | "loot_tables">("import");
   const [gus, setGus] = useState<any[]>([]);
   const [gusLoading, setGusLoading] = useState(false);
   const [guEdit, setGuEdit] = useState<any | null>(null);
@@ -511,6 +516,18 @@ export const AdminView: React.FC = () => {
   const [recipes, setRecipes] = useState<any[]>([]);
   const [recipesLoading, setRecipesLoading] = useState(false);
   const [recipeEdit, setRecipeEdit] = useState<any | null>(null);
+  const [monsters, setMonsters] = useState<any[]>([]);
+  const [monstersLoading, setMonstersLoading] = useState(false);
+  const [monsterEdit, setMonsterEdit] = useState<any | null>(null);
+  const [monsterSearch, setMonsterSearch] = useState("");
+  const [monsterSortField, setMonsterSortField] = useState<string>("id");
+  const [monsterSortDir, setMonsterSortDir] = useState<"asc" | "desc">("asc");
+  const [lootTables, setLootTables] = useState<any[]>([]);
+  const [lootTablesLoading, setLootTablesLoading] = useState(false);
+  const [lootTableEdit, setLootTableEdit] = useState<any | null>(null);
+  const [lootTableSearch, setLootTableSearch] = useState("");
+  const [lootTableSortField, setLootTableSortField] = useState<string>("id");
+  const [lootTableSortDir, setLootTableSortDir] = useState<"asc" | "desc">("asc");
   const [dictGuSearch, setDictGuSearch] = useState("");
   const [guSortField, setGuSortField] = useState<string>("id");
   const [guSortDir, setGuSortDir] = useState<"asc" | "desc">("asc");
@@ -663,6 +680,16 @@ export const AdminView: React.FC = () => {
     try { const res = await authFetch(`${BACKEND_URL}/api/admin/recipes`); if (res.ok) { const data = await res.json(); if (Array.isArray(data)) setRecipes(data); else setRecipes([]); } }
     catch {} finally { setRecipesLoading(false); }
   }, []);
+  const fetchMonsters = useCallback(async () => {
+    setMonstersLoading(true);
+    try { const res = await authFetch(`${BACKEND_URL}/api/admin/monsters`); if (res.ok) { const data = await res.json(); setMonsters(Array.isArray(data) ? data : []); } }
+    catch {} finally { setMonstersLoading(false); }
+  }, []);
+  const fetchLootTables = useCallback(async () => {
+    setLootTablesLoading(true);
+    try { const res = await authFetch(`${BACKEND_URL}/api/admin/loot-tables`); if (res.ok) { const data = await res.json(); setLootTables(Array.isArray(data) ? data : []); } }
+    catch {} finally { setLootTablesLoading(false); }
+  }, []);
 
   const ensureShopSearchLoaded = useCallback(async () => {
     if (shopSearchLoaded) return;
@@ -742,7 +769,7 @@ export const AdminView: React.FC = () => {
     if (section === "gift_codes") fetchGiftCodes();
   }, [section, fetchGiftCodes]);
 
-  useEffect(() => { if (section === "data") { if (dataTab === "gus") fetchGus(); else if (dataTab === "items") fetchItems(); else if (dataTab === "recipes") fetchRecipes(); } }, [section, dataTab, fetchGus, fetchItems, fetchRecipes]);
+  useEffect(() => { if (section === "data") { if (dataTab === "gus") fetchGus(); else if (dataTab === "items") fetchItems(); else if (dataTab === "recipes") fetchRecipes(); else if (dataTab === "monsters") fetchMonsters(); else if (dataTab === "loot_tables") fetchLootTables(); } }, [section, dataTab, fetchGus, fetchItems, fetchRecipes, fetchMonsters, fetchLootTables]);
 
   useEffect(() => {
     if (section === "players" && playersTab === "online") fetchOnlinePlayers();
@@ -2300,6 +2327,9 @@ export const AdminView: React.FC = () => {
             <button onClick={() => setDataTab("import")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${dataTab === "import" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <Database className="w-3.5 h-3.5 inline mr-1.5" />Import / Export
             </button>
+            <button onClick={() => setDataTab("tables")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${dataTab === "tables" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <List className="w-3.5 h-3.5 inline mr-1.5" />Bảng dữ liệu
+            </button>
             <button onClick={() => setDataTab("gus")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${dataTab === "gus" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <Bug className="w-3.5 h-3.5 inline mr-1.5" />Cổ trùng
             </button>
@@ -2308,6 +2338,12 @@ export const AdminView: React.FC = () => {
             </button>
             <button onClick={() => setDataTab("recipes")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${dataTab === "recipes" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <FlaskConical className="w-3.5 h-3.5 inline mr-1.5" />Cổ phương
+            </button>
+            <button onClick={() => setDataTab("monsters")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${dataTab === "monsters" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <PawPrint className="w-3.5 h-3.5 inline mr-1.5" />Quái vật
+            </button>
+            <button onClick={() => setDataTab("loot_tables")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${dataTab === "loot_tables" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <Gift className="w-3.5 h-3.5 inline mr-1.5" />Bảng Loot
             </button>
           </div>
 
@@ -2333,6 +2369,71 @@ export const AdminView: React.FC = () => {
                   <Trash2 className="w-4 h-4" />
                   {actionLoading ? "Đang xử lý..." : "Xóa Cache Dictionary"}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {dataTab === "tables" && (
+            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-6">
+              <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2 mb-2">
+                <List className="w-4 h-4 text-emerald-400" />
+                Import / Export từng bảng
+              </h3>
+              <p className="text-xs text-zinc-500 mb-6">
+                Import hoặc export dữ liệu cho từng bảng riêng lẻ. Mỗi thao tác chỉ xử lý một bảng.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {[
+                  { key: "item", label: "Vật phẩm", icon: Package, csv: "Item.csv" },
+                  { key: "gu", label: "Cổ trùng", icon: Bug, csv: "Gu.csv" },
+                  { key: "recipe", label: "Cổ phương", icon: FlaskConical, csv: "Recipe.csv" },
+                  { key: "shop_item", label: "Cửa hàng", icon: ShoppingBag, csv: "ShopItem.csv" },
+                  { key: "arena_shop_item", label: "Cửa hàng Đấu trường", icon: Swords, csv: "ArenaShopItem.csv" },
+                  { key: "region", label: "Khu vực", icon: Globe, csv: "Region.csv" },
+                  { key: "loot_table", label: "Bảng loot", icon: Gift, csv: "LootTable.csv" },
+                  { key: "monster", label: "Quái vật", icon: PawPrint, csv: "Monster.csv" },
+                  { key: "monster_spawn", label: "Spawn quái", icon: MapPin, csv: "MonsterSpawn.csv" },
+                  { key: "sect", label: "Tông môn", icon: Building2, csv: "Sect.csv" },
+                  { key: "sect_mission", label: "Nhiệm vụ tông môn", icon: ListTodo, csv: "SectMission.csv" },
+                  { key: "quest", label: "Nhiệm vụ", icon: BookOpen, csv: "Quest.csv" },
+                ].map(t => (
+                  <div key={t.key} className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4 flex flex-col gap-3">
+                    <div className="flex items-center gap-2">
+                      <t.icon className="w-4 h-4 text-amber-400" />
+                      <span className="text-xs font-semibold text-zinc-200">{t.label}</span>
+                      <span className="text-[10px] text-zinc-500 font-mono ml-auto">{t.csv}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        disabled={tableLoading === t.key}
+                        onClick={async () => {
+                          if (!confirm(`Import "${t.label}" từ CSV? Dữ liệu sẽ được UPSERT.`)) return;
+                          setTableLoading(t.key);
+                          const ok = await exec(`${BACKEND_URL}/api/admin/data/import/${t.key}`, "POST", {});
+                          setTableLoading(null);
+                          if (ok) addToast(`Import ${t.label} thành công!`, "success");
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-[11px] font-semibold transition-all cursor-pointer"
+                      >
+                        <Upload className="w-3 h-3" />
+                        {tableLoading === t.key ? "..." : "Import"}
+                      </button>
+                      <button
+                        disabled={tableLoading === t.key}
+                        onClick={async () => {
+                          setTableLoading(t.key);
+                          const ok = await exec(`${BACKEND_URL}/api/admin/data/export/${t.key}`, "POST", {});
+                          setTableLoading(null);
+                          if (ok) addToast(`Export ${t.label} thành công!`, "success");
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-[11px] font-semibold transition-all cursor-pointer"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        {tableLoading === t.key ? "..." : "Export"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -2477,6 +2578,113 @@ export const AdminView: React.FC = () => {
                         </td>
                       </tr>
                     ))}</tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {dataTab === "monsters" && (
+            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2"><PawPrint className="w-4 h-4 text-amber-400" />Danh Sách Quái Vật</h3>
+                <button onClick={() => setMonsterEdit({ id: "", name: "", type: "beast", max_hp: 100, base_attack: 10, base_defense: 5, gu_inventory: [], item_inventory: {}, dao_marks: {}, path_masteries: {}, ai_profile: "beast_basic", loot_table_id: "", description: "", is_active: true, is_capturable: false, capture_chance: 0.20, pet_hunger_per_hour: 2.0, _isNew: true })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
+              </div>
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                <input value={monsterSearch} onChange={e => setMonsterSearch(e.target.value)} placeholder="Tìm kiếm theo ID hoặc tên..." className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 placeholder-zinc-500" />
+              </div>
+              {monstersLoading ? <div className="flex justify-center py-8"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div> : monsters.length === 0 ? <div className="text-center py-8 text-zinc-500 text-xs">Không có quái vật nào.</div> : (
+                <div className="overflow-x-auto rounded-xl border border-zinc-800/80 max-h-[500px] overflow-y-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px] sticky top-0">
+                      {["ID", "Tên", "Loại", "HP", "Tấn công", "Phòng thủ", "Loot"].map(col => {
+                        const fieldMap: Record<string, string> = { "ID": "id", "Tên": "name", "Loại": "type", "HP": "max_hp", "Tấn công": "base_attack", "Phòng thủ": "base_defense", "Loot": "loot_table_id" };
+                        const f = fieldMap[col];
+                        return <th key={col} onClick={() => { if (f) { if (monsterSortField === f) setMonsterSortDir(d => d === "asc" ? "desc" : "asc"); else { setMonsterSortField(f); setMonsterSortDir("asc"); } } }} className={`px-3 py-2.5 font-semibold ${f ? "cursor-pointer hover:text-zinc-200 select-none" : "cursor-default"} ${monsterSortField === f ? "text-amber-400" : ""}`}>{col}{monsterSortField === f ? (monsterSortDir === "asc" ? " ▲" : " ▼") : ""}</th>
+                      })}
+                      <th className="px-3 py-2.5"></th>
+                    </tr></thead>
+                    <tbody>{(() => {
+                      const q = monsterSearch.toLowerCase();
+                      const filtered = q ? monsters.filter((m: any) => (m.id?.toLowerCase() || "").includes(q) || (m.name?.toLowerCase() || "").includes(q)) : [...monsters];
+                      filtered.sort((a: any, b: any) => {
+                        let va = a[monsterSortField], vb = b[monsterSortField];
+                        if (typeof va === "string") va = va.toLowerCase();
+                        if (typeof vb === "string") vb = vb.toLowerCase();
+                        if (va < vb) return monsterSortDir === "asc" ? -1 : 1;
+                        if (va > vb) return monsterSortDir === "asc" ? 1 : -1;
+                        return 0;
+                      });
+                      return filtered.map((m: any) => (
+                        <tr key={m.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                          <td className="px-3 py-2.5 text-zinc-500 font-mono">{m.id}</td>
+                          <td className="px-3 py-2.5 font-semibold text-zinc-200">{m.name}</td>
+                          <td className="px-3 py-2.5 text-zinc-300">{m.type}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-red-400">{m.max_hp}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-orange-400">{m.base_attack}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-blue-400">{m.base_defense}</td>
+                          <td className="px-3 py-2.5 text-zinc-400 font-mono text-[10px]">{m.loot_table_id || "-"}</td>
+                          <td className="px-3 py-2.5 text-right">
+                            <button onClick={() => setMonsterEdit({ ...m, gu_inventory: typeof m.gu_inventory === "string" ? JSON.parse(m.gu_inventory) : m.gu_inventory || [], item_inventory: typeof m.item_inventory === "string" ? JSON.parse(m.item_inventory) : m.item_inventory || {}, dao_marks: typeof m.dao_marks === "string" ? JSON.parse(m.dao_marks) : m.dao_marks || {}, path_masteries: typeof m.path_masteries === "string" ? JSON.parse(m.path_masteries) : m.path_masteries || {} })} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
+                            <button onClick={async () => { if (!confirm(`Xóa quái vật ${m.name}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/monsters/${m.id}`, "DELETE"); if (ok) fetchMonsters(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
+                          </td>
+                        </tr>
+                      ));
+                    })()}</tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {dataTab === "loot_tables" && (
+            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2"><Gift className="w-4 h-4 text-amber-400" />Danh Sách Bảng Loot</h3>
+                <button onClick={() => setLootTableEdit({ id: "", name: "", entries: [], _isNew: true })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
+              </div>
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                <input value={lootTableSearch} onChange={e => setLootTableSearch(e.target.value)} placeholder="Tìm kiếm theo ID hoặc tên..." className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 placeholder-zinc-500" />
+              </div>
+              {lootTablesLoading ? <div className="flex justify-center py-8"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div> : lootTables.length === 0 ? <div className="text-center py-8 text-zinc-500 text-xs">Không có bảng loot nào.</div> : (
+                <div className="overflow-x-auto rounded-xl border border-zinc-800/80 max-h-[500px] overflow-y-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px] sticky top-0">
+                      {["ID", "Tên", "Số loot"].map(col => {
+                        const fieldMap: Record<string, string> = { "ID": "id", "Tên": "name" };
+                        const f = fieldMap[col];
+                        return <th key={col} onClick={() => { if (f) { if (lootTableSortField === f) setLootTableSortDir(d => d === "asc" ? "desc" : "asc"); else { setLootTableSortField(f); setLootTableSortDir("asc"); } } }} className={`px-3 py-2.5 font-semibold ${f ? "cursor-pointer hover:text-zinc-200 select-none" : "cursor-default"} ${lootTableSortField === f ? "text-amber-400" : ""}`}>{col}{lootTableSortField === f ? (lootTableSortDir === "asc" ? " ▲" : " ▼") : ""}</th>
+                      })}
+                      <th className="px-3 py-2.5"></th>
+                    </tr></thead>
+                    <tbody>{(() => {
+                      const q = lootTableSearch.toLowerCase();
+                      const filtered = q ? lootTables.filter((t: any) => (t.id?.toLowerCase() || "").includes(q) || (t.name?.toLowerCase() || "").includes(q)) : [...lootTables];
+                      filtered.sort((a: any, b: any) => {
+                        let va = a[lootTableSortField], vb = b[lootTableSortField];
+                        if (typeof va === "string") va = va.toLowerCase();
+                        if (typeof vb === "string") vb = vb.toLowerCase();
+                        if (va < vb) return lootTableSortDir === "asc" ? -1 : 1;
+                        if (va > vb) return lootTableSortDir === "asc" ? 1 : -1;
+                        return 0;
+                      });
+                      return filtered.map((t: any) => {
+                        const entries = typeof t.entries === "string" ? JSON.parse(t.entries) : (t.entries || []);
+                        return (
+                          <tr key={t.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                            <td className="px-3 py-2.5 text-zinc-500 font-mono">{t.id}</td>
+                            <td className="px-3 py-2.5 font-semibold text-zinc-200">{t.name}</td>
+                            <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{entries.length}</td>
+                            <td className="px-3 py-2.5 text-right">
+                              <button onClick={() => setLootTableEdit({ ...t, entries })} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
+                              <button onClick={async () => { if (!confirm(`Xóa bảng loot ${t.name}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/loot-tables/${t.id}`, "DELETE"); if (ok) fetchLootTables(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}</tbody>
                   </table>
                 </div>
               )}
@@ -3552,6 +3760,113 @@ export const AdminView: React.FC = () => {
               }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
               <datalist id="gu-list">{gus.map((g: any) => <option key={g.id} value={g.id} />)}</datalist>
               <datalist id="item-list">{items.map((it: any) => <option key={it.id} value={it.id} />)}</datalist>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Monster Edit Modal */}
+      {monsterEdit !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setMonsterEdit(null)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-lg mx-4 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">{monsterEdit._isNew ? "Thêm" : "Sửa"} Quái Vật</h3>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID</label><input value={monsterEdit.id || ""} onChange={e => setMonsterEdit({...monsterEdit, id: e.target.value})} disabled={!monsterEdit._isNew} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 disabled:opacity-50" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tên</label><input value={monsterEdit.name || ""} onChange={e => setMonsterEdit({...monsterEdit, name: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Loại</label>
+                  <select value={monsterEdit.type || "beast"} onChange={e => setMonsterEdit({...monsterEdit, type: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200">
+                    {["beast", "humanoid", "spirit", "undead", "elemental", "demon", "mechanical", "plant"].map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">AI Profile</label>
+                  <select value={monsterEdit.ai_profile || "beast_basic"} onChange={e => setMonsterEdit({...monsterEdit, ai_profile: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200">
+                    {["beast_basic", "humanoid_basic", "boss_basic", "passive"].map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">HP</label><input type="number" min={1} value={monsterEdit.max_hp || 100} onChange={e => setMonsterEdit({...monsterEdit, max_hp: parseFloat(e.target.value) || 100})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tấn công</label><input type="number" min={0} value={monsterEdit.base_attack || 0} onChange={e => setMonsterEdit({...monsterEdit, base_attack: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Phòng thủ</label><input type="number" min={0} value={monsterEdit.base_defense || 0} onChange={e => setMonsterEdit({...monsterEdit, base_defense: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Loot Table ID</label><input value={monsterEdit.loot_table_id || ""} onChange={e => setMonsterEdit({...monsterEdit, loot_table_id: e.target.value})} placeholder="VD: loot_beast_small" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" list="loot-table-list" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Mô tả</label><input value={monsterEdit.description || ""} onChange={e => setMonsterEdit({...monsterEdit, description: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="flex items-center gap-2 pt-5"><input type="checkbox" checked={monsterEdit.is_active !== false} onChange={e => setMonsterEdit({...monsterEdit, is_active: e.target.checked})} className="rounded" /><label className="text-xs text-zinc-300">Hoạt động</label></div>
+                <div className="flex items-center gap-2 pt-5"><input type="checkbox" checked={monsterEdit.is_capturable === true} onChange={e => setMonsterEdit({...monsterEdit, is_capturable: e.target.checked})} className="rounded" /><label className="text-xs text-zinc-300">Bắt được</label></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tỉ lệ bắt</label><input type="number" step="0.01" min={0} max={1} value={monsterEdit.capture_chance || 0.20} onChange={e => setMonsterEdit({...monsterEdit, capture_chance: parseFloat(e.target.value) || 0.20})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              </div>
+              <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Đói/giờ (pet)</label><input type="number" step="0.1" min={0} value={monsterEdit.pet_hunger_per_hour || 2.0} onChange={e => setMonsterEdit({...monsterEdit, pet_hunger_per_hour: parseFloat(e.target.value) || 2.0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              {/* JSONB fields as raw JSON */}
+              <div className="border-t border-zinc-800 pt-3">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">gu_inventory (JSON)</label>
+                <textarea value={typeof monsterEdit.gu_inventory === "string" ? monsterEdit.gu_inventory : JSON.stringify(monsterEdit.gu_inventory || [], null, 2)} onChange={e => { try { setMonsterEdit({...monsterEdit, gu_inventory: JSON.parse(e.target.value)}); } catch {} }} rows={3} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 font-mono" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">item_inventory (JSON)</label>
+                <textarea value={typeof monsterEdit.item_inventory === "string" ? monsterEdit.item_inventory : JSON.stringify(monsterEdit.item_inventory || {}, null, 2)} onChange={e => { try { setMonsterEdit({...monsterEdit, item_inventory: JSON.parse(e.target.value)}); } catch {} }} rows={3} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 font-mono" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">dao_marks (JSON)</label>
+                <textarea value={typeof monsterEdit.dao_marks === "string" ? monsterEdit.dao_marks : JSON.stringify(monsterEdit.dao_marks || {}, null, 2)} onChange={e => { try { setMonsterEdit({...monsterEdit, dao_marks: JSON.parse(e.target.value)}); } catch {} }} rows={2} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 font-mono" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setMonsterEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
+              <button onClick={async () => {
+                const isNew = !!monsterEdit._isNew;
+                const url = isNew ? `${BACKEND_URL}/api/admin/monsters` : `${BACKEND_URL}/api/admin/monsters/${monsterEdit.id}`;
+                const { _isNew, ...clean } = monsterEdit;
+                const ok = await exec(url, isNew ? "POST" : "PUT", clean);
+                if (ok) { setMonsterEdit(null); fetchMonsters(); }
+              }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
+              <datalist id="loot-table-list">{lootTables.map((lt: any) => <option key={lt.id} value={lt.id} />)}</datalist>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loot Table Edit Modal */}
+      {lootTableEdit !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setLootTableEdit(null)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-lg mx-4 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">{lootTableEdit._isNew ? "Thêm" : "Sửa"} Bảng Loot</h3>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID</label><input value={lootTableEdit.id || ""} onChange={e => setLootTableEdit({...lootTableEdit, id: e.target.value})} disabled={!lootTableEdit._isNew} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 disabled:opacity-50" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tên</label><input value={lootTableEdit.name || ""} onChange={e => setLootTableEdit({...lootTableEdit, name: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" /></div>
+              </div>
+              <div className="border-t border-zinc-800 pt-3">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">Danh sách loot</label>
+                {(Array.isArray(lootTableEdit.entries) ? lootTableEdit.entries : []).map((entry: any, idx: number) => (
+                  <div key={idx} className="flex gap-2 mb-2 items-center">
+                    <input value={entry.item_id || ""} onChange={e => { const newEntries = [...lootTableEdit.entries]; newEntries[idx] = {...newEntries[idx], item_id: e.target.value}; setLootTableEdit({...lootTableEdit, entries: newEntries}); }} placeholder="item_id" className="flex-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" list="item-list-lt" />
+                    <input value={entry.gu_id || ""} onChange={e => { const newEntries = [...lootTableEdit.entries]; newEntries[idx] = {...newEntries[idx], gu_id: e.target.value}; setLootTableEdit({...lootTableEdit, entries: newEntries}); }} placeholder="gu_id" className="flex-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" list="gu-list-lt" />
+                    <input type="number" min={1} value={entry.min_qty || 1} onChange={e => { const newEntries = [...lootTableEdit.entries]; newEntries[idx] = {...newEntries[idx], min_qty: parseInt(e.target.value) || 1}; setLootTableEdit({...lootTableEdit, entries: newEntries}); }} placeholder="min" className="w-14 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" />
+                    <input type="number" min={1} value={entry.max_qty || 1} onChange={e => { const newEntries = [...lootTableEdit.entries]; newEntries[idx] = {...newEntries[idx], max_qty: parseInt(e.target.value) || 1}; setLootTableEdit({...lootTableEdit, entries: newEntries}); }} placeholder="max" className="w-14 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" />
+                    <input type="number" step="0.01" min={0} max={1} value={entry.chance || 0.5} onChange={e => { const newEntries = [...lootTableEdit.entries]; newEntries[idx] = {...newEntries[idx], chance: parseFloat(e.target.value) || 0.5}; setLootTableEdit({...lootTableEdit, entries: newEntries}); }} placeholder="%" className="w-16 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" />
+                    <button onClick={() => { const newEntries = lootTableEdit.entries.filter((_: any, i: number) => i !== idx); setLootTableEdit({...lootTableEdit, entries: newEntries}); }} className="text-red-400 hover:text-red-300 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
+                  </div>
+                ))}
+                <button onClick={() => setLootTableEdit({...lootTableEdit, entries: [...(lootTableEdit.entries || []), { item_id: "", gu_id: "", min_qty: 1, max_qty: 1, chance: 0.5 }]})} className="text-xs text-amber-400 hover:text-amber-300 cursor-pointer mt-1">+ Thêm loot entry</button>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setLootTableEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
+              <button onClick={async () => {
+                const isNew = !!lootTableEdit._isNew;
+                const url = isNew ? `${BACKEND_URL}/api/admin/loot-tables` : `${BACKEND_URL}/api/admin/loot-tables/${lootTableEdit.id}`;
+                const { _isNew, ...clean } = lootTableEdit;
+                const ok = await exec(url, isNew ? "POST" : "PUT", clean);
+                if (ok) { setLootTableEdit(null); fetchLootTables(); }
+              }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
+              <datalist id="item-list-lt">{items.map((it: any) => <option key={it.id} value={it.id} />)}</datalist>
+              <datalist id="gu-list-lt">{gus.map((g: any) => <option key={g.id} value={g.id} />)}</datalist>
             </div>
           </div>
         </div>

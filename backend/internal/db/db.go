@@ -3085,3 +3085,127 @@ func ExportToCSV() error {
 	logger.S.Info("All CSV data exported successfully")
 	return nil
 }
+
+// AvailableTables returns the list of table keys that can be individually imported/exported.
+func AvailableTables() []string {
+	return []string{
+		"item", "gu", "recipe", "shop_item", "arena_shop_item",
+		"region", "loot_table", "monster", "monster_spawn",
+		"sect", "sect_mission", "quest",
+	}
+}
+
+// TableImport imports a single table from its CSV file.
+func TableImport(table string) error {
+	switch table {
+	case "item":
+		return seedItemsFromCSV("Item.csv")
+	case "gu":
+		return seedGusFromCSV("Gu.csv")
+	case "recipe":
+		return seedRecipesFromCSV("Recipe.csv")
+	case "shop_item":
+		return seedShopItemsFromCSV("ShopItem.csv")
+	case "arena_shop_item":
+		return seedArenaShopItemsFromCSV("ArenaShopItem.csv")
+	case "region":
+		return seedRegionsFromCSV("Region.csv")
+	case "loot_table":
+		return seedLootTablesFromCSV("LootTable.csv")
+	case "monster":
+		return seedMonsterTemplatesFromCSV("Monster.csv")
+	case "monster_spawn":
+		return seedMonsterSpawnsFromCSV("MonsterSpawn.csv")
+	case "sect":
+		return seedSectsFromCSV("Sect.csv")
+	case "sect_mission":
+		return seedSectMissionsFromCSV("SectMission.csv")
+	case "quest":
+		return seedQuestsFromCSV()
+	default:
+		return fmt.Errorf("unknown table: %s", table)
+	}
+}
+
+// TableExport exports a single table to its CSV file.
+func TableExport(table string) error {
+	ensureDataDir()
+	type exportDef struct {
+		filename string
+		columns  []string
+		query    string
+	}
+	defs := map[string]exportDef{
+		"item": {
+			filename: "Item.csv",
+			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url"},
+			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'{}'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,'') FROM item_dictionary ORDER BY id`,
+		},
+		"gu": {
+			filename: "Gu.csv",
+			columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
+			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'{"active":{},"support":{},"passive":{},"house":{}}'), COALESCE(rarity,''), COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
+		},
+		"recipe": {
+			filename: "Recipe.csv",
+			columns:  []string{"id", "target_gu_id", "target_rank", "variant", "required_gus", "required_materials", "success_rate", "primeval_stones_cost", "immortal_essence_stones_cost"},
+			query:    `SELECT ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) AS id, target_gu_id, target_rank, variant, COALESCE(required_gus::text,'[]'), COALESCE(required_materials::text,'{}'), COALESCE(success_rate,0), COALESCE(primeval_stones_cost,0), COALESCE(immortal_essence_stones_cost,0) FROM refining_recipes ORDER BY target_gu_id, target_rank, variant`,
+		},
+		"shop_item": {
+			filename: "ShopItem.csv",
+			columns:  []string{"id", "price", "stock", "is_default", "sort_order"},
+			query:    `SELECT id, price, COALESCE(stock,-1), is_default, COALESCE(sort_order,0) FROM caravan_shop_items ORDER BY id`,
+		},
+		"arena_shop_item": {
+			filename: "ArenaShopItem.csv",
+			columns:  []string{"id", "price", "qty", "stock", "is_default", "sort_order"},
+			query:    `SELECT id, price, COALESCE(qty,1), COALESCE(stock,-1), is_default, COALESCE(sort_order,0) FROM arena_shop_items ORDER BY id`,
+		},
+		"region": {
+			filename: "Region.csv",
+			columns:  []string{"id", "name", "description", "width", "height", "min_rank", "max_rank", "is_active"},
+			query:    `SELECT id, name, COALESCE(description,''), COALESCE(width,100), COALESCE(height,100), COALESCE(min_rank,1), COALESCE(max_rank,5), COALESCE(is_active,true) FROM regions ORDER BY id`,
+		},
+		"loot_table": {
+			filename: "LootTable.csv",
+			columns:  []string{"id", "name", "entries"},
+			query:    `SELECT id, name, COALESCE(entries::text,'[]') FROM loot_tables ORDER BY id`,
+		},
+		"monster": {
+			filename: "Monster.csv",
+			columns:  []string{"id", "name", "type", "max_hp", "base_attack", "base_defense", "gu_inventory", "item_inventory", "dao_marks", "path_masteries", "ai_profile", "loot_table_id", "description", "is_active"},
+			query:    `SELECT id, name, type, max_hp, base_attack, base_defense, COALESCE(gu_inventory::text,'[]'), COALESCE(item_inventory::text,'{}'), COALESCE(dao_marks::text,'{}'), COALESCE(path_masteries::text,'{}'), COALESCE(ai_profile,'beast_basic'), COALESCE(loot_table_id,''), COALESCE(description,''), COALESCE(is_active,true) FROM monster_templates ORDER BY id`,
+		},
+		"monster_spawn": {
+			filename: "MonsterSpawn.csv",
+			columns:  []string{"region_id", "monster_id", "x", "y", "spawn_mode", "chance", "respawn_seconds", "min_rank", "max_rank", "is_boss_spawn", "is_active"},
+			query:    `SELECT region_id, monster_id, x, y, COALESCE(spawn_mode,'Random'), COALESCE(chance,1.0), COALESCE(respawn_seconds,300), COALESCE(min_rank,1), COALESCE(max_rank,9), COALESCE(is_boss_spawn,false), COALESCE(is_active,true) FROM monster_spawns ORDER BY region_id, monster_id`,
+		},
+		"sect": {
+			filename: "Sect.csv",
+			columns:  []string{"id", "name", "description", "region", "vault_gu", "vault_materials", "vault_recipes"},
+			query:    `SELECT id, name, COALESCE(description,''), COALESCE(region,''), COALESCE(vault_gu::text,'[]'), COALESCE(vault_materials::text,'{}'), COALESCE(vault_recipes::text,'[]') FROM sects ORDER BY id`,
+		},
+		"sect_mission": {
+			filename: "SectMission.csv",
+			columns:  []string{"sect_id", "title", "description", "mission_type", "target_id", "target_amount", "reward_contribution", "required_member_rank"},
+			query:    `SELECT sect_id, title, COALESCE(description,''), COALESCE(mission_type,'GATHER'), COALESCE(target_id,''), COALESCE(target_amount,1), COALESCE(reward_contribution,0), COALESCE(required_member_rank,'NGOAI_MON') FROM sect_missions ORDER BY sect_id, title`,
+		},
+		"quest": {
+			filename: "Quest.csv",
+			columns:  []string{"id", "title", "desc", "req_desc", "message", "rewards"},
+			query:    `SELECT id, title, description, req_desc, message, COALESCE(rewards::text,'[]') FROM quests ORDER BY id`,
+		},
+	}
+
+	d, ok := defs[table]
+	if !ok {
+		return fmt.Errorf("unknown table: %s", table)
+	}
+	p := filepath.Join("data", d.filename)
+	if err := writeCSV(p, d.columns, d.query); err != nil {
+		return fmt.Errorf("export %s: %w", p, err)
+	}
+	logger.S.Infof("Exported %s", p)
+	return nil
+}

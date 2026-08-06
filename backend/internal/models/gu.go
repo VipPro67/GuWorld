@@ -162,6 +162,39 @@ func GetFlatGuEffects(gu Gu) map[string]float64 {
 		if gu.Effects.Active.ApplyStatus == "BLEED" {
 			res["bleed"] = gu.Effects.Active.StatusTickDamage
 		}
+		if gu.Effects.Active.ApplyStatus == "POISON" {
+			res["poison"] = gu.Effects.Active.StatusTickDamage
+		}
+		if gu.Effects.Active.ApplyStatus == "STUN" {
+			res["stun"] = float64(gu.Effects.Active.StatusDurationTicks)
+		}
+		if gu.Effects.Active.ApplyStatus == "SLOW" {
+			res["slow"] = gu.Effects.Active.StatusTickDamage
+		}
+		if gu.Effects.Active.ApplyStatus == "WEAK" {
+			res["weak"] = gu.Effects.Active.StatusTickDamage
+		}
+		if gu.Effects.Active.ApplyStatus == "FREEZE" {
+			res["freeze"] = float64(gu.Effects.Active.StatusDurationTicks)
+		}
+		if gu.Effects.Active.ApplyStatus == "SILENCE" {
+			res["silence"] = float64(gu.Effects.Active.StatusDurationTicks)
+		}
+		if gu.Effects.Active.ApplyStatus == "THORNS" {
+			res["thorns_buff"] = gu.Effects.Active.StatusTickDamage
+		}
+		if gu.Effects.Active.ApplyStatus == "REGEN" {
+			res["regen"] = gu.Effects.Active.StatusTickDamage
+		}
+		if gu.Effects.Active.ApplyStatus == "ATK_UP" {
+			res["atk_up"] = gu.Effects.Active.StatusTickDamage
+		}
+		if gu.Effects.Active.ApplyStatus == "DEF_UP" {
+			res["def_up"] = gu.Effects.Active.StatusTickDamage
+		}
+		if gu.Effects.Active.ApplyStatus == "TAUNT" {
+			res["taunt"] = float64(gu.Effects.Active.StatusDurationTicks)
+		}
 		if gu.Effects.Active.LifeStealRate > 0 {
 			res["lifesteal"] = gu.Effects.Active.LifeStealRate
 		}

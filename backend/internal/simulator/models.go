@@ -12,6 +12,95 @@ type CombatLoadout struct {
 	ManaThreshold   float64 `json:"ManaThreshold"`
 }
 
+// ── Status Effect Type Constants ─────────────────────────────────────────
+// Tier system: Value stores the tier (1-5), actual % computed by tierToPercent().
+const (
+	EffectSlow     = "slow"     // reduces speed → changes turn order
+	EffectWeak     = "weak"     // reduces damage dealt
+	EffectFreeze   = "freeze"   // like stun but can be broken by taking damage
+	EffectSilence  = "silence"  // prevents skill use, only basic attack
+	EffectThorns   = "thorns"   // reflects damage when hit
+	EffectRegen    = "regen"    // heals HP each turn
+	EffectAtkUp    = "atk_up"   // increases attack damage
+	EffectDefUp    = "def_up"   // increases defense
+	EffectTaunt    = "taunt"    // forces enemies to attack the taunter
+	EffectStun     = "stun"     // skips turn entirely
+	EffectBleed    = "bleed"    // DoT bleed
+	EffectPoison   = "poison"   // DoT poison
+)
+
+// tierToPercent converts a tier (1-5) to a percentage value for the effect.
+// slow:    T1=15%, T2=25%, T3=35%, T4=45%, T5=55%
+// weak:    T1=10%, T2=20%, T3=30%, T4=40%, T5=50%
+// freeze:  T1=1t,  T2=1t,  T3=2t,  T4=2t,  T5=3t (duration)
+// silence: T1=1t,  T2=1t,  T3=2t,  T4=2t,  T5=3t
+// thorns:  T1=10%, T2=15%, T3=20%, T4=25%, T5=30% (of damage received)
+// regen:   T1=3%,  T2=5%,  T3=8%,  T4=12%, T5=16% (of max HP per turn)
+// atk_up:  T1=10%, T2=15%, T3=20%, T4=25%, T5=30%
+// def_up:  T1=10%, T2=15%, T3=20%, T4=25%, T5=30%
+// stun:    T1=1t,  T2=1t,  T3=2t,  T4=2t,  T5=3t
+// taunt:   T1=1t,  T2=2t,  T3=2t,  T4=3t,  T5=3t
+func TierToPercent(effectType string, tier int) float64 {
+	if tier < 1 {
+		tier = 1
+	}
+	if tier > 5 {
+		tier = 5
+	}
+	switch effectType {
+	case EffectSlow:
+		return []float64{0, 15, 25, 35, 45, 55}[tier]
+	case EffectWeak:
+		return []float64{0, 10, 20, 30, 40, 50}[tier]
+	case EffectFreeze, EffectSilence:
+		return []float64{0, 1, 1, 2, 2, 3}[tier] // duration in turns
+	case EffectThorns:
+		return []float64{0, 10, 15, 20, 25, 30}[tier] // % of damage reflected
+	case EffectRegen:
+		return []float64{0, 3, 5, 8, 12, 16}[tier] // % of max HP
+	case EffectAtkUp, EffectDefUp:
+		return []float64{0, 10, 15, 20, 25, 30}[tier]
+	case EffectStun:
+		return []float64{0, 1, 1, 2, 2, 3}[tier]
+	case EffectTaunt:
+		return []float64{0, 1, 2, 2, 3, 3}[tier]
+	default:
+		return 0
+	}
+}
+
+// tierToDuration returns the default duration (in turns) for an effect at given tier.
+func TierToDuration(effectType string, tier int) int {
+	if tier < 1 {
+		tier = 1
+	}
+	if tier > 5 {
+		tier = 5
+	}
+	switch effectType {
+	case EffectSlow:
+		return []int{0, 3, 3, 4, 4, 5}[tier]
+	case EffectWeak:
+		return []int{0, 3, 3, 4, 4, 5}[tier]
+	case EffectFreeze:
+		return []int{0, 1, 1, 2, 2, 3}[tier]
+	case EffectSilence:
+		return []int{0, 2, 2, 3, 3, 4}[tier]
+	case EffectThorns:
+		return []int{0, 3, 3, 4, 4, 5}[tier]
+	case EffectRegen:
+		return []int{0, 3, 4, 4, 5, 5}[tier]
+	case EffectAtkUp, EffectDefUp:
+		return []int{0, 3, 3, 4, 4, 5}[tier]
+	case EffectStun:
+		return []int{0, 1, 1, 2, 2, 3}[tier]
+	case EffectTaunt:
+		return []int{0, 2, 2, 3, 3, 4}[tier]
+	default:
+		return 1
+	}
+}
+
 // SimAction is a pre-computed action from a Gu, killer move, or basic attack.
 // It is produced by the handler using CalculateGuEffectForCombatant + BuildCombatAction
 // and consumed by the simulator engine.
@@ -33,6 +122,17 @@ type SimAction struct {
 	PhantomDmg   float64 // bonus phantom damage
 	ThornsDmg    float64 // reflect damage to attacker
 
+	// ── New status effect fields (tier-based) ──
+	SlowTier     int     // tier (1-5) for slow debuff on target
+	WeakTier     int     // tier (1-5) for weak debuff on target
+	FreezeTier   int     // tier (1-5) for freeze debuff on target
+	SilenceTier  int     // tier (1-5) for silence debuff on target
+	ThornsTier   int     // tier (1-5) for thorns buff on self
+	RegenTier    int     // tier (1-5) for regen buff on self
+	AtkUpTier    int     // tier (1-5) for attack up buff on self
+	DefUpTier    int     // tier (1-5) for defense up buff on self
+	TauntTier    int     // tier (1-5) for taunt buff on self
+
 	// Backlash from using Gu rank > actor rank
 	BacklashDamage float64 // HP damage taken by caster from Gu backlash
 
@@ -51,16 +151,17 @@ type SimAction struct {
 
 // Effect represents an active buff or debuff on a combatant.
 type Effect struct {
-	ID       string // e.g. "poison", "shield", "stun"
-	Type     string // "buff", "debuff"
-	Value    int
-	Duration int // remaining turns
+	ID       string // effect constant (EffectSlow, EffectWeak, etc.)
+	Type     string // "buff" or "debuff"
+	Tier     int    // tier level (1-5) for scaling
+	Value    int    // computed percent or duration (from TierToPercent / TierToDuration)
+	Duration int    // remaining turns
 }
 
-// DoTEffect tracks a damage-over-time effect on a combatant.
+// DoTEffect tracks a damage-over-time or heal-over-time effect on a combatant.
 type DoTEffect struct {
-	Type  string  // "bleed", "poison"
-	Value float64 // damage per turn
+	Type  string  // "bleed", "poison", "regen"
+	Value float64 // damage or heal per turn
 	Turns int     // remaining turns
 }
 
@@ -96,8 +197,18 @@ type CombatantAuto struct {
 	// Active effects (Shields, Stuns, etc.)
 	ActiveEffects []Effect
 
-	// Damage-over-time effects
+	// Damage-over-time effects (bleed, poison, regen)
 	ActiveDoT []DoTEffect
+
+	// ── Derived combat stats (computed each turn from active effects) ──
+	EffectiveSpeed    float64 // speed after slow debuff
+	DamageMultiplier  float64 // multiplier from weak debuff / atk_up buff (default 1.0)
+	DefenseMultiplier float64 // multiplier from def_up buff (default 1.0)
+	ThornsDamage      float64 // % of damage reflected back (from thorns buff)
+	IsSilenced        bool    // cannot use skills, only basic attack
+	IsFrozen          bool    // loses turn like stun, can break on damage
+	HasTaunt          bool    // forces enemies to attack this unit
+	TaunterID         string  // ID of the taunter (for target redirection)
 
 	// Auto-use settings
 	AutoHealHP      bool

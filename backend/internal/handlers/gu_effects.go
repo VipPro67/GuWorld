@@ -156,6 +156,94 @@ func BuildCombatAction(ctx *CombatContext, spec models.GuDictionaryItem) (Action
 		})
 		action.Logs = append(action.Logs, fmt.Sprintf("%s gây trạng thái xuất huyết (trừ %.1f HP mỗi lượt).", spec.Name, active.StatusTickDamage))
 	}
+	if active.ApplyStatus == "POISON" {
+		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
+			Type:  "poison",
+			Value: active.StatusTickDamage,
+			Turns: active.StatusDurationTicks,
+		})
+		action.Logs = append(action.Logs, fmt.Sprintf("%s gây trạng thái trúng độc (trừ %.1f HP mỗi lượt).", spec.Name, active.StatusTickDamage))
+	}
+	if active.ApplyStatus == "STUN" {
+		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
+			Type:  "stun",
+			Value: 1,
+			Turns: active.StatusDurationTicks,
+		})
+		action.Logs = append(action.Logs, fmt.Sprintf("%s gây choáng (%d lượt).", spec.Name, active.StatusDurationTicks))
+	}
+	if active.ApplyStatus == "SLOW" {
+		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
+			Type:  "slow",
+			Value: active.StatusTickDamage,
+			Turns: active.StatusDurationTicks,
+		})
+		action.Logs = append(action.Logs, fmt.Sprintf("%s gây chậm (%.0f%% speed, %d lượt).", spec.Name, active.StatusTickDamage, active.StatusDurationTicks))
+	}
+	if active.ApplyStatus == "WEAK" {
+		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
+			Type:  "weak",
+			Value: active.StatusTickDamage,
+			Turns: active.StatusDurationTicks,
+		})
+		action.Logs = append(action.Logs, fmt.Sprintf("%s gây yếu (%.0f%% giảm dmg, %d lượt).", spec.Name, active.StatusTickDamage, active.StatusDurationTicks))
+	}
+	if active.ApplyStatus == "FREEZE" {
+		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
+			Type:  "freeze",
+			Value: 1,
+			Turns: active.StatusDurationTicks,
+		})
+		action.Logs = append(action.Logs, fmt.Sprintf("%s gây đóng băng (%d lượt).", spec.Name, active.StatusDurationTicks))
+	}
+	if active.ApplyStatus == "SILENCE" {
+		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
+			Type:  "silence",
+			Value: 1,
+			Turns: active.StatusDurationTicks,
+		})
+		action.Logs = append(action.Logs, fmt.Sprintf("%s gây im lặng (%d lượt).", spec.Name, active.StatusDurationTicks))
+	}
+	if active.ApplyStatus == "THORNS" {
+		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
+			Type:  "thorns_buff",
+			Value: active.StatusTickDamage,
+			Turns: active.StatusDurationTicks,
+		})
+		action.Logs = append(action.Logs, fmt.Sprintf("%s nhận Khiên Gai (phản %.0f%% sát thương, %d lượt).", spec.Name, active.StatusTickDamage, active.StatusDurationTicks))
+	}
+	if active.ApplyStatus == "REGEN" {
+		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
+			Type:  "regen",
+			Value: active.StatusTickDamage,
+			Turns: active.StatusDurationTicks,
+		})
+		action.Logs = append(action.Logs, fmt.Sprintf("%s nhận Hồi Sinh (%.0f%% HP max/lượt, %d lượt).", spec.Name, active.StatusTickDamage, active.StatusDurationTicks))
+	}
+	if active.ApplyStatus == "ATK_UP" {
+		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
+			Type:  "atk_up",
+			Value: active.StatusTickDamage,
+			Turns: active.StatusDurationTicks,
+		})
+		action.Logs = append(action.Logs, fmt.Sprintf("%s nhận +%.0f%% Công Kích (%d lượt).", spec.Name, active.StatusTickDamage, active.StatusDurationTicks))
+	}
+	if active.ApplyStatus == "DEF_UP" {
+		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
+			Type:  "def_up",
+			Value: active.StatusTickDamage,
+			Turns: active.StatusDurationTicks,
+		})
+		action.Logs = append(action.Logs, fmt.Sprintf("%s nhận +%.0f%% Phòng Thủ (%d lượt).", spec.Name, active.StatusTickDamage, active.StatusDurationTicks))
+	}
+	if active.ApplyStatus == "TAUNT" {
+		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
+			Type:  "taunt",
+			Value: 1,
+			Turns: active.StatusDurationTicks,
+		})
+		action.Logs = append(action.Logs, fmt.Sprintf("%s khiêu khích (%d lượt).", spec.Name, active.StatusDurationTicks))
+	}
 	if active.LifeStealRate > 0 {
 		action.LifeStealRate += active.LifeStealRate
 	}
@@ -474,12 +562,19 @@ func tickStatusEffects(player *models.Player, ctx *CombatContext) {
 	var nextEnemyEffects []models.StatusEffect
 	for _, se := range player.ActiveCombat.EnemyStatusEffects {
 		if se.Turns > 0 {
-			if se.Type == "bleed" || se.Type == "poison" {
+			switch se.Type {
+			case "bleed", "poison":
 				player.ActiveCombat.EnemyHP -= se.Value
 				if player.ActiveCombat.EnemyHP < 0 {
 					player.ActiveCombat.EnemyHP = 0
 				}
 				ctx.Logs = append(ctx.Logs, fmt.Sprintf("-> Địch chịu %.1f sát thương từ hiệu ứng %s (còn %d lượt).", se.Value, se.Type, se.Turns-1))
+			case "regen":
+				player.ActiveCombat.EnemyHP += se.Value
+				if player.ActiveCombat.EnemyHP > player.ActiveCombat.EnemyMaxHP {
+					player.ActiveCombat.EnemyHP = player.ActiveCombat.EnemyMaxHP
+				}
+				ctx.Logs = append(ctx.Logs, fmt.Sprintf("-> Địch hồi %.1f HP từ Hồi Sinh (còn %d lượt).", se.Value, se.Turns-1))
 			}
 			se.Turns--
 			if se.Turns > 0 {
@@ -493,12 +588,19 @@ func tickStatusEffects(player *models.Player, ctx *CombatContext) {
 	var nextPlayerEffects []models.StatusEffect
 	for _, se := range player.ActiveCombat.PlayerStatusEffects {
 		if se.Turns > 0 {
-			if se.Type == "bleed" || se.Type == "poison" {
+			switch se.Type {
+			case "bleed", "poison":
 				player.HP -= se.Value
 				if player.HP < 0 {
 					player.HP = 0
 				}
 				ctx.Logs = append(ctx.Logs, fmt.Sprintf("-> Đạo hữu chịu %.1f sát thương từ hiệu ứng %s (còn %d lượt).", se.Value, se.Type, se.Turns-1))
+			case "regen":
+				player.HP += se.Value
+				if player.HP > player.BaseHP {
+					player.HP = player.BaseHP
+				}
+				ctx.Logs = append(ctx.Logs, fmt.Sprintf("-> Đạo hữu hồi %.1f HP từ Hồi Sinh (còn %d lượt).", se.Value, se.Turns-1))
 			}
 			se.Turns--
 			if se.Turns > 0 {

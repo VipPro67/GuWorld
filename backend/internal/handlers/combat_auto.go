@@ -948,6 +948,36 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		if active.ApplyStatus == "POISON" {
 			act.PoisonPerTurn += active.StatusTickDamage
 		}
+		if active.ApplyStatus == "STUN" {
+			act.StunTurns = active.StatusDurationTicks
+		}
+		if active.ApplyStatus == "SLOW" {
+			act.SlowTier = active.StatusDurationTicks
+		}
+		if active.ApplyStatus == "WEAK" {
+			act.WeakTier = active.StatusDurationTicks
+		}
+		if active.ApplyStatus == "FREEZE" {
+			act.FreezeTier = active.StatusDurationTicks
+		}
+		if active.ApplyStatus == "SILENCE" {
+			act.SilenceTier = active.StatusDurationTicks
+		}
+		if active.ApplyStatus == "THORNS" {
+			act.ThornsTier = active.StatusDurationTicks
+		}
+		if active.ApplyStatus == "REGEN" {
+			act.RegenTier = active.StatusDurationTicks
+		}
+		if active.ApplyStatus == "ATK_UP" {
+			act.AtkUpTier = active.StatusDurationTicks
+		}
+		if active.ApplyStatus == "DEF_UP" {
+			act.DefUpTier = active.StatusDurationTicks
+		}
+		if active.ApplyStatus == "TAUNT" {
+			act.TauntTier = active.StatusDurationTicks
+		}
 		if active.LifeStealRate > 0 {
 			act.LifeStealPct += active.LifeStealRate
 		}
@@ -1041,6 +1071,34 @@ func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlo
 		}
 		if v, ok := effects["heal"]; ok {
 			act.Healing += v
+		}
+		// ── New tier-based effects ──
+		if v, ok := effects["slow"]; ok {
+			act.SlowTier = int(v)
+		}
+		if v, ok := effects["weak"]; ok {
+			act.WeakTier = int(v)
+		}
+		if v, ok := effects["freeze"]; ok {
+			act.FreezeTier = int(v)
+		}
+		if v, ok := effects["silence"]; ok {
+			act.SilenceTier = int(v)
+		}
+		if v, ok := effects["thorns_buff"]; ok {
+			act.ThornsTier = int(v)
+		}
+		if v, ok := effects["regen"]; ok {
+			act.RegenTier = int(v)
+		}
+		if v, ok := effects["atk_up"]; ok {
+			act.AtkUpTier = int(v)
+		}
+		if v, ok := effects["def_up"]; ok {
+			act.DefUpTier = int(v)
+		}
+		if v, ok := effects["taunt"]; ok {
+			act.TauntTier = int(v)
 		}
 	}
 

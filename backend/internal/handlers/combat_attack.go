@@ -82,6 +82,7 @@ func CombatAttack(c *gin.Context) {
 
 	var turnLogs []string
 
+	// ── Tick status effects for all allies ──
 	for i := range player.ActiveCombat.Allies {
 		c := &player.ActiveCombat.Allies[i]
 		if c.HP <= 0 {
@@ -91,12 +92,20 @@ func CombatAttack(c *gin.Context) {
 		for j := 0; j < len(c.StatusEffects); j++ {
 			eff := c.StatusEffects[j]
 			if eff.Turns > 0 {
-				if eff.Type == "poison" || eff.Type == "bleed" {
+				switch eff.Type {
+				case "poison", "bleed":
 					c.HP -= eff.Value
 					if c.HP < 0 {
 						c.HP = 0
 					}
 					turnLogs = append(turnLogs, fmt.Sprintf("%s mất %.1f HP do %s (Còn %d lượt).", c.Name, eff.Value, eff.Type, eff.Turns))
+				case "regen":
+					healVal := eff.Value
+					c.HP += healVal
+					if c.HP > c.MaxHP {
+						c.HP = c.MaxHP
+					}
+					turnLogs = append(turnLogs, fmt.Sprintf("%s hồi %.1f HP do Hồi Sinh (Còn %d lượt).", c.Name, healVal, eff.Turns))
 				}
 				eff.Turns--
 			}
@@ -107,6 +116,7 @@ func CombatAttack(c *gin.Context) {
 		c.StatusEffects = activeEffs
 	}
 
+	// ── Tick status effects for all enemies ──
 	for i := range player.ActiveCombat.Enemies {
 		c := &player.ActiveCombat.Enemies[i]
 		if c.HP <= 0 {
@@ -116,12 +126,20 @@ func CombatAttack(c *gin.Context) {
 		for j := 0; j < len(c.StatusEffects); j++ {
 			eff := c.StatusEffects[j]
 			if eff.Turns > 0 {
-				if eff.Type == "poison" || eff.Type == "bleed" {
+				switch eff.Type {
+				case "poison", "bleed":
 					c.HP -= eff.Value
 					if c.HP < 0 {
 						c.HP = 0
 					}
 					turnLogs = append(turnLogs, fmt.Sprintf("%s mất %.1f HP do %s (Còn %d lượt).", c.Name, eff.Value, eff.Type, eff.Turns))
+				case "regen":
+					healVal := eff.Value
+					c.HP += healVal
+					if c.HP > c.MaxHP {
+						c.HP = c.MaxHP
+					}
+					turnLogs = append(turnLogs, fmt.Sprintf("%s hồi %.1f HP do Hồi Sinh (Còn %d lượt).", c.Name, healVal, eff.Turns))
 				}
 				eff.Turns--
 			}
@@ -339,8 +357,16 @@ func CombatAttack(c *gin.Context) {
 					return nil
 				}
 				for _, eff := range refCaster.StatusEffects {
-					if eff.Type == "stun" && eff.Turns > 0 {
-						return []string{fmt.Sprintf("-> %s bị choáng và mất lượt!", refCaster.Name)}
+					if (eff.Type == "stun" || eff.Type == "freeze") && eff.Turns > 0 {
+						return []string{fmt.Sprintf("-> %s bị choáng/đóng băng và mất lượt!", refCaster.Name)}
+					}
+				}
+				// Check silence — force basic attack only
+				isSilenced := false
+				for _, eff := range refCaster.StatusEffects {
+					if eff.Type == "silence" && eff.Turns > 0 {
+						isSilenced = true
+						break
 					}
 				}
 
@@ -398,12 +424,45 @@ func CombatAttack(c *gin.Context) {
 					if len(targetsIdx) > 0 {
 						targetEnemy := &player.ActiveCombat.Enemies[targetsIdx[0]]
 						dmgValue := playerStats["attack"] * 2.5
+						// Apply weak debuff
+						for _, eff := range refCaster.StatusEffects {
+							if eff.Type == "weak" && eff.Turns > 0 {
+								dmgValue *= (1.0 - eff.Value/100.0)
+							}
+						}
 						netDmg := dmgValue - targetEnemy.BaseDefense
 						if netDmg < 1.0 {
 							netDmg = 1.0
 						}
 						dmgLog := applyDamageWithLogs(refCaster.Name, targetEnemy.Name, targetEnemy, netDmg)
 						logs = append(logs, fmt.Sprintf("-> %s kích hoạt Bộc Phá Sát Chiêu (Unleash Charge)!", refCaster.Name), dmgLog)
+					}
+				} else if isSilenced {
+					// Silence: force basic attack only
+					targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, "SINGLE", prefX, prefY, false)
+					if len(targetsIdx) > 0 {
+						targetEnemy := &player.ActiveCombat.Enemies[targetsIdx[0]]
+						daoMult := 1.0
+						if refCaster.DaoMarks != nil {
+							if amt, ok := refCaster.DaoMarks["strength"]; ok && amt > 0 {
+								if amt <= 10000 {
+									daoMult = 1.0 + float64(amt)/100.0
+								} else {
+									daoMult = 1.0 + 100.0 + float64(amt-10000)/500.0
+								}
+							}
+						}
+						dmgVal := refCaster.BaseAttack
+						if dmgVal <= 0 {
+							dmgVal = 5.0
+						}
+						fullDmg := dmgVal * daoMult
+						netDmg := fullDmg - targetEnemy.BaseDefense
+						if netDmg < 1.0 {
+							netDmg = 1.0
+						}
+						dmgLog := applyDamageWithLogs(refCaster.Name, targetEnemy.Name, targetEnemy, netDmg)
+						logs = append(logs, fmt.Sprintf("-> %s bị Im Lặng, chỉ có thể đánh thường!", refCaster.Name), dmgLog)
 					}
 				} else {
 					if looseGuFailureChance > 0 && rand.Float64() < looseGuFailureChance {
@@ -430,6 +489,16 @@ func CombatAttack(c *gin.Context) {
 								}
 								logs = append(logs, fmt.Sprintf("[Phản Phệ] Cổ trùng Rank cao phản phệ %s, trừ %.0f HP (còn %.0f HP)!", refCaster.Name, backlashHP, refCaster.HP))
 							}
+
+							// Apply weak debuff to damage
+							weakMult := 1.0
+							for _, eff := range refCaster.StatusEffects {
+								if eff.Type == "weak" && eff.Turns > 0 {
+									weakMult *= (1.0 - eff.Value/100.0)
+								}
+							}
+							dmg *= weakMult
+							dmgBase *= weakMult
 
 							isHealing := false
 							isDefense := spec.Type == "Defense"
@@ -522,6 +591,12 @@ func CombatAttack(c *gin.Context) {
 							if dmgVal <= 0 {
 								dmgVal = 5.0
 							}
+							// Apply weak debuff
+							for _, eff := range refCaster.StatusEffects {
+								if eff.Type == "weak" && eff.Turns > 0 {
+									dmgVal *= (1.0 - eff.Value/100.0)
+								}
+							}
 							fullDmg := dmgVal * daoMult
 							netDmg := fullDmg - targetEnemy.BaseDefense
 							if netDmg < 1.0 {
@@ -556,8 +631,8 @@ func CombatAttack(c *gin.Context) {
 						return nil
 					}
 					for _, eff := range refAlly.StatusEffects {
-						if eff.Type == "stun" && eff.Turns > 0 {
-							return []string{fmt.Sprintf("-> %s bị choáng và mất lượt!", refAlly.Name)}
+						if (eff.Type == "stun" || eff.Type == "freeze") && eff.Turns > 0 {
+							return []string{fmt.Sprintf("-> %s bị choáng/đóng băng và mất lượt!", refAlly.Name)}
 						}
 					}
 
@@ -595,8 +670,8 @@ func CombatAttack(c *gin.Context) {
 						return nil
 					}
 					for _, eff := range refEnemy.StatusEffects {
-						if eff.Type == "stun" && eff.Turns > 0 {
-							return []string{fmt.Sprintf("-> %s bị choáng và mất lượt!", refEnemy.Name)}
+						if (eff.Type == "stun" || eff.Type == "freeze") && eff.Turns > 0 {
+							return []string{fmt.Sprintf("-> %s bị choáng/đóng băng và mất lượt!", refEnemy.Name)}
 						}
 					}
 
@@ -668,7 +743,26 @@ func CombatAttack(c *gin.Context) {
 	}
 
 	sort.Slice(actions, func(i, j int) bool {
-		return actions[i].Speed > actions[j].Speed
+		speedI := actions[i].Speed
+		speedJ := actions[j].Speed
+		// Apply slow debuff to effective speed
+		refI, _, _ := findCombatant(player.ActiveCombat, actions[i].InitiatorID)
+		if refI != nil {
+			for _, eff := range refI.StatusEffects {
+				if eff.Type == "slow" && eff.Turns > 0 {
+					speedI *= (1.0 - eff.Value/100.0)
+				}
+			}
+		}
+		refJ, _, _ := findCombatant(player.ActiveCombat, actions[j].InitiatorID)
+		if refJ != nil {
+			for _, eff := range refJ.StatusEffects {
+				if eff.Type == "slow" && eff.Turns > 0 {
+					speedJ *= (1.0 - eff.Value/100.0)
+				}
+			}
+		}
+		return speedI > speedJ
 	})
 
 	for _, act := range actions {
