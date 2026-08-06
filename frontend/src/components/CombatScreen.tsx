@@ -176,20 +176,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const isCombatGu = (gu: GuInstance): boolean => {
     const spec = guSpecFor(gu.gu_id, gu.rank);
     if (!spec?.effects?.active) return false;
-    const a = spec.effects.active;
-    return (a.damage_flat ?? 0) > 0
-      || (a.damage_mult ?? 0) > 0
-      || (a.shield_flat ?? 0) > 0
-      || !!a.apply_status
-      || (a.lifesteal_rate ?? 0) > 0
-      || (a.heal_flat ?? 0) > 0
-      || !!a.blood_drain
-      || !!a.summon_phantom
-      || (a.refine_mana_tier ?? 0) > 0
-      || !!a.wood_transformation
-      || (a.mana_regen ?? 0) > 0
-      || (a.cleansing_power ?? 0) > 0
-      || (a.capture_bonus ?? 0) > 0;
+    return true; // For now, consider all active effect Gu as combat-relevant
   };
 
   const eligibleGus = (player.gu_inventory || []).filter((gu) => gu.status === "ACTIVE" && gu.equipped && isCombatGu(gu));
