@@ -111,7 +111,7 @@ type CombatantAuto struct {
 	// Battle inventory
 	HealCharges    int     // how many healing items available
 	HealPotency    float64 // how much HP each heal restores
-	PrimevalStones int
+	PrimevalStones float64
 	ImmortalStones float64
 
 	// Tracking

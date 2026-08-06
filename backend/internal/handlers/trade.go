@@ -15,7 +15,7 @@ import (
 )
 
 type TradeOffer struct {
-	PrimevalStones int            `json:"primeval_stones"`
+	PrimevalStones float64        `json:"primeval_stones"`
 	ImmortalStones float64        `json:"immortal_stones"`
 	Gus            []string       `json:"gus"`       // slice of Gu instance IDs
 	Materials      map[string]int `json:"materials"` // map of itemID -> quantity

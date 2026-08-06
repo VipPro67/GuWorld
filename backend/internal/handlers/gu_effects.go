@@ -321,12 +321,12 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		return fmt.Sprintf("%s đẩy tu vi lên Đỉnh Phong nhưng làm Không khiếu hóa đá.", spec.Name), nil
 	case "GIVE_STONES":
 		val, _ := params["value"].(float64)
-		amount := int(val)
+		amount := val
 		if amount == 0 {
 			amount = 500
 		}
 		player.PrimevalStones += amount
-		return fmt.Sprintf("Nhận ngay %d Nguyên Thạch.", amount), nil
+		return fmt.Sprintf("Nhận ngay %.0f Nguyên Thạch.", amount), nil
 	case "SOUL_BOOST":
 		val, _ := params["value"].(float64)
 		if player.DaoMarks == nil {
@@ -394,7 +394,7 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		if val <= 0 {
 			val = 1.0
 		}
-		player.PrimevalStones += int(val)
+		player.PrimevalStones += val
 		return "", nil
 	case "MANA_REGEN_TICK":
 		val, _ := params["value"].(float64)

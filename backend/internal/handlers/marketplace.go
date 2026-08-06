@@ -56,7 +56,7 @@ func getFeeTier(durationHours int) int {
 	}
 }
 
-func getUpfrontFee(listingType string, durationHours int) int {
+func getUpfrontFee(listingType string, durationHours int) float64 {
 	tier := getFeeTier(durationHours)
 	if listingType == "AUCTION" {
 		switch tier {
@@ -194,7 +194,7 @@ func CreateListing(c *gin.Context) {
 		upfrontFee = 0
 	}
 	if player.PrimevalStones < upfrontFee {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch để chi trả phí đăng bán cơ bản (cần %d Nguyên Thạch)", upfrontFee)})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch để chi trả phí đăng bán cơ bản (cần %.0f Nguyên Thạch)", upfrontFee)})
 		return
 	}
 	player.PrimevalStones -= upfrontFee
@@ -500,11 +500,11 @@ func PlaceBid(c *gin.Context) {
 	}
 
 	if currency == "primeval" {
-		if float64(player.PrimevalStones) < neededAmount {
+		if player.PrimevalStones < neededAmount {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ " + currencyName})
 			return
 		}
-		player.PrimevalStones -= int(neededAmount)
+		player.PrimevalStones -= neededAmount
 	} else {
 		if player.ImmortalStones < neededAmount {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ " + currencyName})
@@ -516,7 +516,7 @@ func PlaceBid(c *gin.Context) {
 	// Refund previous bidder if different person
 	if bidder.Valid && bidder.String != player.ID.String() {
 		if currency == "primeval" {
-			_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id=$2`, int(current), bidder.String)
+			_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id=$2`, current, bidder.String)
 		} else {
 			_, err = tx.Exec(`UPDATE players SET immortal_stones = immortal_stones + $1 WHERE id=$2`, current, bidder.String)
 		}
@@ -644,11 +644,11 @@ func BuyListing(c *gin.Context) {
 
 	totalPrice := float64(purchaseQty) * currentPrice
 	if currency == "primeval" {
-		if float64(buyer.PrimevalStones) < totalPrice {
+		if buyer.PrimevalStones < totalPrice {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch"})
 			return
 		}
-		buyer.PrimevalStones -= int(totalPrice)
+		buyer.PrimevalStones -= totalPrice
 	} else {
 		if buyer.ImmortalStones < totalPrice {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Tiên Nguyên Thạch"})
@@ -686,7 +686,7 @@ func BuyListing(c *gin.Context) {
 	payout := totalPrice - commission
 
 	if currency == "primeval" {
-		seller.PrimevalStones += int(payout)
+		seller.PrimevalStones += payout
 	} else {
 		seller.ImmortalStones += payout
 	}
@@ -842,13 +842,13 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 		commission := currentPrice * getCommissionPct(listingType, durationHours)
 		payout := currentPrice - commission
 
-		if currency == "primeval" {
-			seller.PrimevalStones += int(payout)
-		} else {
-			seller.ImmortalStones += payout
-		}
+	if currency == "primeval" {
+		seller.PrimevalStones += payout
+	} else {
+		seller.ImmortalStones += payout
+	}
 
-		if err := addAuctionItemToPlayer(tx, &buyer, itemType, itemData, qty); err != nil {
+	if err := addAuctionItemToPlayer(tx, &buyer, itemType, itemData, qty); err != nil {
 			return err
 		}
 

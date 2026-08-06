@@ -506,7 +506,7 @@ func BuyPremiumPackage(c *gin.Context) {
 		switch reward.Currency {
 		case CurrencyPrimevalStone:
 			before := int64(player.PrimevalStones)
-			player.PrimevalStones += int(reward.Amount)
+			player.PrimevalStones += float64(reward.Amount)
 			wallet.PrimevalStone = int64(player.PrimevalStones)
 			if err = insertWalletTx(tx, playerID, "PACKAGE_REWARD", CurrencyPrimevalStone, reward.Amount, before, int64(player.PrimevalStones), nil, &pkg.ID, "Thưởng gói tu luyện"); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch thưởng Nguyên Thạch"})

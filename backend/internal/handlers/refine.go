@@ -589,7 +589,7 @@ func DeduceRecipe(c *gin.Context) {
 
 	// Cost verification — Deduce tiêu hao Thought thay vì Mana
 	thoughtCost := 15.0
-	stoneCost := 10
+	stoneCost := 10.0
 
 	hasWisdomGu := false
 	for _, gu := range player.GuInventory {
@@ -608,7 +608,7 @@ func DeduceRecipe(c *gin.Context) {
 		return
 	}
 	if player.PrimevalStones < stoneCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch (cần %d)", stoneCost)})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch (cần %.0f)", stoneCost)})
 		return
 	}
 

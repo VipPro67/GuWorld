@@ -770,16 +770,16 @@ func CombatAttack(c *gin.Context) {
 		}
 
 		if isPVP && !isVirtual {
-			stolenStones := 10
+			stolenStones := 10.0
 			if player.ActiveCombat.TargetPlayerID != "dummy" {
 				targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID)
 				if parseErr == nil {
-					var targetStones int
+					var targetStones float64
 					var targetHP float64
 					var targetLootBytes []byte
 					err = tx.QueryRow("SELECT primeval_stones, hp, temp_loot FROM players WHERE id = $1 FOR UPDATE", targetUUID).Scan(&targetStones, &targetHP, &targetLootBytes)
 					if err == nil {
-						stolenStones = int(float64(targetStones) * 0.10)
+						stolenStones = targetStones * 0.10
 						if stolenStones < 1 {
 							stolenStones = 1
 						}
@@ -814,13 +814,13 @@ func CombatAttack(c *gin.Context) {
 
 						_, _ = tx.Exec("UPDATE players SET primeval_stones = $1, hp = $2, temp_loot = $3 WHERE id = $4", targetStones, targetHP, emptyLoot, targetUUID)
 
-						ctx.Logs = append(ctx.Logs, fmt.Sprintf("Thu hoạch toàn bộ chiến lợi phẩm tạm thời của bại binh! Hút được %d Nguyên Thạch, %d Cổ trùng, và các nguyên liệu khác từ đối phương.", targetLoot.PrimevalStones, len(targetLoot.GuInventory)))
+						ctx.Logs = append(ctx.Logs, fmt.Sprintf("Thu hoạch toàn bộ chiến lợi phẩm tạm thời của bại binh! Hút được %.0f Nguyên Thạch, %d Cổ trùng, và các nguyên liệu khác từ đối phương.", targetLoot.PrimevalStones, len(targetLoot.GuInventory)))
 					}
 
 					}
 			}
 			player.PrimevalStones += stolenStones
-			ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chiến thắng PVP vang dội! Đạo hữu cướp đoạt %d Nguyên Thạch từ đối phương!", stolenStones))
+			ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chiến thắng PVP vang dội! Đạo hữu cướp đoạt %.0f Nguyên Thạch từ đối phương!", stolenStones))
 		} else {
 			isExplore := player.CurrentRegion != "Southern_Border" && player.CurrentRegion != "Lobby"
 			if player.ActiveCombat != nil && player.ActiveCombat.LootTableID != "" {
@@ -846,10 +846,10 @@ func CombatAttack(c *gin.Context) {
 							for _, memberID := range partyMembers {
 								if memberID == player.ID {
 									if isExplore {
-										player.TempLoot.PrimevalStones += splitStones
+										player.TempLoot.PrimevalStones += float64(splitStones)
 										ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch (giữ tạm thời).", splitStones))
 									} else {
-										player.PrimevalStones += splitStones
+										player.PrimevalStones += float64(splitStones)
 										ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch.", splitStones))
 									}
 								} else {
@@ -860,7 +860,7 @@ func CombatAttack(c *gin.Context) {
 										if len(targetLootBytes) > 0 {
 											json.Unmarshal(targetLootBytes, &targetLoot)
 										}
-										targetLoot.PrimevalStones += splitStones
+										targetLoot.PrimevalStones += float64(splitStones)
 										_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, memberID)
 									} else {
 										_, _ = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", splitStones, memberID)
@@ -1007,7 +1007,7 @@ func CombatAttack(c *gin.Context) {
 					if errMine := AddMineRewardsToPlayerTx(tx, player.ID, stonesHalf, qiHalf, chestsHalf); errMine != nil {
 						logger.S.Errorf("Failed to add mine rewards to player %s (slot %d): %v", player.ID, slotID, errMine)
 					} else {
-						player.PrimevalStones += stonesHalf
+						player.PrimevalStones += float64(stonesHalf)
 						player.HumanQi += qiHalf
 						ctx.Logs = append(ctx.Logs, fmt.Sprintf("Cướp mỏ thành công! +%d Nguyên Thạch, +%.0f Nhân Khí, +%d Rương Mỏ", stonesHalf, qiHalf, chestsHalf))
 					}

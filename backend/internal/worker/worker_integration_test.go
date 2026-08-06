@@ -224,13 +224,13 @@ func TestApplyOnTickEffects(t *testing.T) {
 		t.Fatalf("applyOnTickEffects: %v", err)
 	}
 
-	var stones int
+	var stones float64
 	var hp float64
 	if err := db.QueryRow(`SELECT primeval_stones, hp FROM players WHERE id = 'aaaaaaaa-0000-0000-0000-000000000004'`).Scan(&stones, &hp); err != nil {
 		t.Fatalf("read p4: %v", err)
 	}
 	if stones != 10 {
-		t.Errorf("expected +10 primeval stones, got %d", stones)
+		t.Errorf("expected +10 primeval stones, got %v", stones)
 	}
 	if hp != 100 {
 		t.Errorf("expected hp unchanged (100), got %v", hp)

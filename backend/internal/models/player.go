@@ -225,7 +225,7 @@ type Player struct {
 type TempLoot struct {
 	GuInventory        GuInventory        `json:"gu_inventory"`
 	MaterialsInventory MaterialsInventory `json:"materials_inventory"`
-	PrimevalStones     int                `json:"primeval_stones"`
+	PrimevalStones     float64            `json:"primeval_stones"`
 }
 
 // Scan implements the sql.Scanner interface for TempLoot

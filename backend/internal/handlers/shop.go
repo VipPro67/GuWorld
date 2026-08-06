@@ -184,7 +184,7 @@ func BuyShopItem(c *gin.Context) {
 	}
 
 	// 4. Validate Funds
-	totalCost := selectedItem.Price * req.Quantity
+	totalCost := float64(selectedItem.Price * req.Quantity)
 	if player.PrimevalStones < totalCost {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để giao dịch."})
 		return
@@ -280,7 +280,7 @@ func BuyShopItem(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "shop.buy", EntityType: "shop_item",
 		EntityID:       selectedItem.ID,
-		RequestSummary: fmt.Sprintf("%s x%d | %d Nguyên Thạch", selectedItem.Name, req.Quantity, totalCost),
+		RequestSummary: fmt.Sprintf("%s x%d | %.0f Nguyên Thạch", selectedItem.Name, req.Quantity, totalCost),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
@@ -323,7 +323,7 @@ func SellShopItem(c *gin.Context) {
 		return
 	}
 
-	totalGain := 0
+	totalGain := 0.0
 	if req.ItemType == "Material" || req.ItemType == "Consumable" {
 		cat := "materials"
 		if req.ItemType == "Consumable" {
@@ -344,7 +344,7 @@ func SellShopItem(c *gin.Context) {
 			_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, req.ItemID).Scan(&dbBasePrice, &rank)
 			unitSellPrice = pricing.SellPrice(pricing.ItemBasePrice(dbBasePrice, rank))
 		}
-		totalGain = unitSellPrice * req.Quantity
+		totalGain = float64(unitSellPrice * req.Quantity)
 	} else if req.ItemType == "Gu" {
 		removed := 0
 		newInv := models.GuInventory{}
@@ -369,7 +369,7 @@ func SellShopItem(c *gin.Context) {
 			_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1`, req.ItemID).Scan(&dbBasePrice, &rank)
 			unitSellPrice = pricing.SellPrice(pricing.GuBasePrice(dbBasePrice, rank))
 		}
-		totalGain = unitSellPrice * req.Quantity
+		totalGain = float64(unitSellPrice * req.Quantity)
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "item_type phải là Gu hoặc Material"})
 		return
@@ -415,7 +415,7 @@ func SellShopItem(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "shop.sell", EntityType: "shop_item",
 		EntityID:       req.ItemID,
-		RequestSummary: fmt.Sprintf("%s x%d | nhận %d Nguyên Thạch", itemName, req.Quantity, totalGain),
+		RequestSummary: fmt.Sprintf("%s x%d | nhận %.0f Nguyên Thạch", itemName, req.Quantity, totalGain),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
@@ -471,7 +471,7 @@ func SellShopItemsBulk(c *gin.Context) {
 		return
 	}
 
-	totalGain := 0
+	totalGain := 0.0
 	guSold := false
 	var auditSummaries []string
 
@@ -496,7 +496,7 @@ func SellShopItemsBulk(c *gin.Context) {
 				_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, item.ItemID).Scan(&dbBasePrice, &rank)
 				unitSellPrice = pricing.SellPrice(pricing.ItemBasePrice(dbBasePrice, rank))
 			}
-			gain := unitSellPrice * item.Quantity
+			gain := float64(unitSellPrice * item.Quantity)
 			totalGain += gain
 
 			var name string
@@ -504,7 +504,7 @@ func SellShopItemsBulk(c *gin.Context) {
 			if name == "" {
 				name = item.ItemID
 			}
-			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%d)", name, item.Quantity, gain))
+			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%.0f)", name, item.Quantity, gain))
 
 		} else if item.ItemType == "Gu" {
 			removed := 0
@@ -531,7 +531,7 @@ func SellShopItemsBulk(c *gin.Context) {
 				_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1`, item.ItemID).Scan(&dbBasePrice, &rank)
 				unitSellPrice = pricing.SellPrice(pricing.GuBasePrice(dbBasePrice, rank))
 			}
-			gain := unitSellPrice * item.Quantity
+			gain := float64(unitSellPrice * item.Quantity)
 			totalGain += gain
 
 			var name string
@@ -541,7 +541,7 @@ func SellShopItemsBulk(c *gin.Context) {
 			if name == "" {
 				name = item.ItemID
 			}
-			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%d)", name, item.Quantity, gain))
+			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%.0f)", name, item.Quantity, gain))
 		} else {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "item_type phải là Gu hoặc Material"})
 			return
@@ -585,10 +585,10 @@ func SellShopItemsBulk(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "shop.sell_bulk", EntityType: "shop_item",
 		EntityID:       "bulk",
-		RequestSummary: fmt.Sprintf("Bán nhiều: %s | nhận %d Nguyên Thạch", summaryStr, totalGain),
+		RequestSummary: fmt.Sprintf("Bán nhiều: %s | nhận %.0f Nguyên Thạch", summaryStr, totalGain),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công %d loại vật phẩm, nhận +%d Nguyên Thạch! Nhân Khí +%.0f.", len(req.Items), totalGain, qiGained)})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công %d loại vật phẩm, nhận +%.0f Nguyên Thạch! Nhân Khí +%.0f.", len(req.Items), totalGain, qiGained)})
 }

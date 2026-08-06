@@ -494,7 +494,7 @@ func AdminChangePlayerStones(c *gin.Context) {
 	}
 
 	var req struct {
-		PrimevalStones *int     `json:"primeval_stones"`
+		PrimevalStones *float64 `json:"primeval_stones"`
 		ImmortalStones *float64 `json:"immortal_stones"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -537,7 +537,7 @@ func AdminChangePlayerStones(c *gin.Context) {
 	tx.Commit()
 	summary := ""
 	if req.PrimevalStones != nil {
-		summary += fmt.Sprintf("primeval_stones=%d ", *req.PrimevalStones)
+		summary += fmt.Sprintf("primeval_stones=%.0f ", *req.PrimevalStones)
 	}
 	if req.ImmortalStones != nil {
 		summary += fmt.Sprintf("immortal_stones=%.0f ", *req.ImmortalStones)
@@ -2789,7 +2789,7 @@ func AdminListRecipes(c *gin.Context) {
 		RequiredGus               json.RawMessage `json:"required_gus"`
 		RequiredMaterials         json.RawMessage `json:"required_materials"`
 		SuccessRate               float64         `json:"success_rate"`
-		PrimevalStonesCost        int             `json:"primeval_stones_cost"`
+		PrimevalStonesCost        float64         `json:"primeval_stones_cost"`
 		ImmortalEssenceStonesCost float64         `json:"immortal_essence_stones_cost"`
 	}
 	items := []RecipeRow{}
@@ -2812,7 +2812,7 @@ type AdminRecipeInput struct {
 	RequiredGus               json.RawMessage `json:"required_gus"`
 	RequiredMaterials         json.RawMessage `json:"required_materials"`
 	SuccessRate               float64         `json:"success_rate"`
-	PrimevalStonesCost        int             `json:"primeval_stones_cost"`
+	PrimevalStonesCost        float64         `json:"primeval_stones_cost"`
 	ImmortalEssenceStonesCost float64         `json:"immortal_essence_stones_cost"`
 }
 

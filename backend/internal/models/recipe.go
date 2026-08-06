@@ -17,7 +17,7 @@ type RefiningRecipe struct {
 	RequiredGus               RequiredGusMap       `json:"required_gus"`
 	RequiredMaterials         RequiredMaterialsMap `json:"required_materials"`
 	SuccessRate               float64              `json:"success_rate"`
-	PrimevalStonesCost        int                  `json:"primeval_stones_cost"`
+	PrimevalStonesCost        float64              `json:"primeval_stones_cost"`
 	ImmortalEssenceStonesCost float64              `json:"immortal_essence_stones_cost"`
 	CompletionRate            float64              `json:"completion_rate"`
 }

@@ -312,7 +312,7 @@ func AutoCombatStart(c *gin.Context) {
 
 	// ── Deduct items/stones used by simulator (skip for virtual mode) ──
 	itemsUsed := simPlayer.ItemsUsedInBattle
-	stonesSpent := 0
+	stonesSpent := 0.0
 	immortalStonesSpent := 0
 
 	if !isVirtual {
@@ -356,7 +356,7 @@ func AutoCombatStart(c *gin.Context) {
 		logs = append(logs, simulator.CombatLog{
 			Turn:   simState.Turn,
 			Action: "AUTO_STONE_USAGE",
-			Detail: fmt.Sprintf("Đã tự động dùng %d Nguyên Thạch hồi phục chân nguyên.", stonesSpent),
+			Detail: fmt.Sprintf("Đã tự động dùng %.0f Nguyên Thạch hồi phục chân nguyên.", stonesSpent),
 		})
 	}
 	if immortalStonesSpent > 0 {
@@ -466,10 +466,10 @@ func AutoCombatStart(c *gin.Context) {
 							for _, memberID := range partyMembers {
 								if memberID == player.ID {
 									if isExplore {
-										player.TempLoot.PrimevalStones += splitStones
+										player.TempLoot.PrimevalStones += float64(splitStones)
 										lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch (giữ tạm thời).", splitStones))
 									} else {
-										player.PrimevalStones += splitStones
+										player.PrimevalStones += float64(splitStones)
 										lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch.", splitStones))
 									}
 								} else {
@@ -480,7 +480,7 @@ func AutoCombatStart(c *gin.Context) {
 										if len(targetLootBytes) > 0 {
 											json.Unmarshal(targetLootBytes, &targetLoot)
 										}
-										targetLoot.PrimevalStones += splitStones
+										targetLoot.PrimevalStones += float64(splitStones)
 										_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, memberID)
 									} else {
 										_, _ = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", splitStones, memberID)
@@ -583,7 +583,7 @@ func AutoCombatStart(c *gin.Context) {
 					} else {
 						stoneQty := loot.Items["primeval_stone"]
 						if isExplore {
-							player.TempLoot.PrimevalStones += stoneQty
+							player.TempLoot.PrimevalStones += float64(stoneQty)
 							for matID, qty := range loot.Items {
 								if matID == "primeval_stone" {
 									continue
@@ -601,7 +601,7 @@ func AutoCombatStart(c *gin.Context) {
 								player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, newGu)
 							}
 						} else {
-							player.PrimevalStones += stoneQty
+							player.PrimevalStones += float64(stoneQty)
 							for matID, qty := range loot.Items {
 								if matID == "primeval_stone" {
 									continue
@@ -653,7 +653,7 @@ func AutoCombatStart(c *gin.Context) {
 						if errMine := AddMineRewardsToPlayerTx(tx, player.ID, stonesHalf, qiHalf, chestsHalf); errMine != nil {
 							logger.S.Errorf("Failed to add mine rewards to player %s (slot %d): %v", player.ID, slotID, errMine)
 						} else {
-							player.PrimevalStones += stonesHalf
+							player.PrimevalStones += float64(stonesHalf)
 							logs = append(logs, simulator.CombatLog{
 								Turn:   simState.Turn,
 								Action: "MINE_LOOT",
@@ -897,7 +897,7 @@ func AutoCombatStart(c *gin.Context) {
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "combat.finish",
-		RequestSummary: fmt.Sprintf("winner=%s enemy=%s type=%s stonesSpent=%d itemsUsed=%d", winner, enemyName, enemyType, stonesSpent, itemsUsed),
+		RequestSummary: fmt.Sprintf("winner=%s enemy=%s type=%s stonesSpent=%.0f itemsUsed=%d", winner, enemyName, enemyType, stonesSpent, itemsUsed),
 		IPAddress:      c.ClientIP(), Success: alliesAlive,
 	})
 	c.JSON(http.StatusOK, gin.H{

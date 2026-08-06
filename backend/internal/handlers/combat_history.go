@@ -31,7 +31,7 @@ type CombatSummary struct {
 	ShieldsUsed       int `json:"shields_used"`
 	FinalPlayerHP     int `json:"final_player_hp"`
 	ItemsUsed         int `json:"items_used"`
-	StonesUsed        int `json:"stones_used"`
+	StonesUsed        float64 `json:"stones_used"`
 	LootCount         int `json:"loot_count"`
 }
 
@@ -63,7 +63,7 @@ func toInterfaceSlice(logs []simulator.CombatLog) []interface{} {
 	return s
 }
 
-func buildCombatSummaryFromLogs(logs []simulator.CombatLog, finalHP, itemsUsed, stonesSpent int) CombatSummary {
+func buildCombatSummaryFromLogs(logs []simulator.CombatLog, finalHP, itemsUsed int, stonesSpent float64) CombatSummary {
 	var totalDmgDealt, totalDmgTaken, shieldsUsed int
 	for _, log := range logs {
 		if log.Damage > 0 {

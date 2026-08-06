@@ -280,7 +280,7 @@ func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCod
 				player.HumanQi = 100000.0
 			}
 		case "primeval_stones":
-			player.PrimevalStones += int(r.Amount)
+			player.PrimevalStones += r.Amount
 		case "immortal_stones":
 			player.ImmortalStones += r.Amount
 		case "dao_mark":

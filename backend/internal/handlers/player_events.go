@@ -37,7 +37,7 @@ type PlayerRealtimeSnapshot struct {
 	BaseHP              float64             `json:"base_hp"`
 	Rank                int                 `json:"rank"`
 	SubRank             int                 `json:"sub_rank"`
-	PrimevalStones      int                 `json:"primeval_stones"`
+	PrimevalStones      float64             `json:"primeval_stones"`
 	ImmortalStones      float64             `json:"immortal_stones"`
 	WallProgress        float64             `json:"wall_progress"`
 	HumanQi             float64             `json:"human_qi"`

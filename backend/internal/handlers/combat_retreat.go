@@ -91,8 +91,8 @@ func Retreat(c *gin.Context) {
 			}
 
 			if totalStones > 0 {
-				splitStones := totalStones / len(partyMembers)
-				remainderStones := totalStones % len(partyMembers)
+				splitStones := totalStones / float64(len(partyMembers))
+				remainderStones := totalStones - splitStones*float64(len(partyMembers))
 				for _, mID := range partyMembers {
 					shares[mID].PrimevalStones = splitStones
 				}
@@ -128,7 +128,7 @@ func Retreat(c *gin.Context) {
 				if mID == player.ID {
 					continue
 				}
-				var targetStones int
+				var targetStones float64
 				errLoad := tx.QueryRow(`
 					SELECT primeval_stones
 					FROM players WHERE id = $1 FOR UPDATE`, mID,
@@ -156,7 +156,7 @@ func Retreat(c *gin.Context) {
 			logMsg = "Đạo hữu trở về an toàn từ hành trình khám phá nhóm.\n"
 			logMsg += "=== TỔNG THU HOẠCH TỔ ĐỘI ===\n"
 			if totalStones > 0 {
-				logMsg += fmt.Sprintf("- Nguyên Thạch: %d\n", totalStones)
+				logMsg += fmt.Sprintf("- Nguyên Thạch: %.0f\n", totalStones)
 			}
 			for itemID, qty := range totalMats {
 				if qty > 0 {
@@ -180,7 +180,7 @@ func Retreat(c *gin.Context) {
 				logMsg += fmt.Sprintf("[%s] nhận được:\n", uname)
 				hasLoot := false
 				if share.PrimevalStones > 0 {
-					logMsg += fmt.Sprintf("  + %d Nguyên Thạch\n", share.PrimevalStones)
+					logMsg += fmt.Sprintf("  + %.0f Nguyên Thạch\n", share.PrimevalStones)
 					hasLoot = true
 				}
 				for itemID, qty := range share.MaterialsInventory {
@@ -203,7 +203,7 @@ func Retreat(c *gin.Context) {
 			logMsg = "Đạo hữu trở về an toàn từ hành trình.\n"
 			logMsg += "=== TÀI NGUYÊN THU HOẠCH ===\n"
 			if totalStones > 0 {
-				logMsg += fmt.Sprintf("- Nguyên Thạch: +%d\n", totalStones)
+				logMsg += fmt.Sprintf("- Nguyên Thạch: +%.0f\n", totalStones)
 			}
 			for itemID, qty := range totalMats {
 				if qty > 0 {
@@ -254,7 +254,7 @@ func Retreat(c *gin.Context) {
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "combat.retreat",
-		RequestSummary: fmt.Sprintf("hadCombat=%v stones=%d gus=%d mats=%d", player.ActiveCombat != nil, player.TempLoot.PrimevalStones, len(player.TempLoot.GuInventory), len(player.TempLoot.MaterialsInventory)),
+		RequestSummary: fmt.Sprintf("hadCombat=%v stones=%.0f gus=%d mats=%d", player.ActiveCombat != nil, player.TempLoot.PrimevalStones, len(player.TempLoot.GuInventory), len(player.TempLoot.MaterialsInventory)),
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	responseWithPlayer(c, http.StatusOK, player, gin.H{

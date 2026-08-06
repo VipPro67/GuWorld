@@ -91,7 +91,7 @@ func applyOnTickEffects(db *sql.DB, playerID string) error {
 	defer tx.Rollback()
 
 	var currentMana, maxMana, immortalStones float64
-	var primevalStones int
+	var primevalStones float64
 	var playerRank int
 	var hp, baseHP float64
 	err = tx.QueryRow(`
@@ -102,7 +102,7 @@ func applyOnTickEffects(db *sql.DB, playerID string) error {
 		return err
 	}
 
-	tickStones := 0
+	tickStones := 0.0
 	tickHP := 0.0
 	tickImmortalStones := 0.0
 
@@ -151,7 +151,7 @@ func applyOnTickEffects(db *sql.DB, playerID string) error {
 				if val <= 0 {
 					val = 1.0
 				}
-				tickStones += int(float64(val) * tnMultiplier)
+				tickStones += val * tnMultiplier
 			case "GENERATE_IMMORTAL_STONES_TICK":
 				val, _ := params["value"].(float64)
 				if val <= 0 {

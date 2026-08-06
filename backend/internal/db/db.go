@@ -165,7 +165,7 @@ func InitSchema() error {
 		required_gus JSONB NOT NULL,
 		required_materials JSONB NOT NULL,
 		success_rate DOUBLE PRECISION NOT NULL,
-		primeval_stones_cost INTEGER DEFAULT 0,
+		primeval_stones_cost DOUBLE PRECISION DEFAULT 0,
 		immortal_essence_stones_cost DOUBLE PRECISION DEFAULT 0,
 		PRIMARY KEY (target_gu_id, target_rank, variant),
 		FOREIGN KEY (target_gu_id, target_rank) REFERENCES gu_dictionary(id, rank) ON DELETE CASCADE
@@ -186,7 +186,7 @@ func InitSchema() error {
 		aptitude_percent INTEGER NOT NULL,
 		current_mana DOUBLE PRECISION NOT NULL,
 		max_mana DOUBLE PRECISION NOT NULL,
-		primeval_stones INTEGER DEFAULT 0,
+		primeval_stones DOUBLE PRECISION DEFAULT 0,
 		immortal_stones DOUBLE PRECISION DEFAULT 0,
 		hp DOUBLE PRECISION NOT NULL DEFAULT 100,
 		base_hp DOUBLE PRECISION NOT NULL DEFAULT 100,

@@ -176,7 +176,7 @@ func ClaimAchievement(c *gin.Context) {
 
 	// Apply reward
 	if ach.RewardType == "primeval_stones" {
-		player.PrimevalStones += int(ach.RewardVal)
+		player.PrimevalStones += float64(ach.RewardVal)
 	} else if ach.RewardType == "immortal_stones" {
 		player.ImmortalStones += ach.RewardVal
 	} else if ach.RewardType == "item" {

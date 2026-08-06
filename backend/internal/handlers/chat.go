@@ -173,7 +173,7 @@ func SendBaoHoangChat(c *gin.Context) {
 		return
 	}
 
-	var fee int
+	var fee float64
 	switch req.Channel {
 	case "world":
 		fee = 10
@@ -201,7 +201,7 @@ func SendBaoHoangChat(c *gin.Context) {
 	}
 
 	if player.PrimevalStones < fee {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch! Cần %d Nguyên Thạch để gửi tin nhắn kênh này.", fee)})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch! Cần %.0f Nguyên Thạch để gửi tin nhắn kênh này.", fee)})
 		return
 	}
 
@@ -256,7 +256,7 @@ func SendBaoHoangChat(c *gin.Context) {
 
 	msg := "Đã truyền tin nhắn thành công! Nhân Khí +1."
 	if fee > 0 {
-		msg = fmt.Sprintf("Đã truyền tin nhắn thành công! Trừ %d Nguyên Thạch phí truyền phát. Nhân Khí +%.0f.", fee, qiGained)
+		msg = fmt.Sprintf("Đã truyền tin nhắn thành công! Trừ %.0f Nguyên Thạch phí truyền phát. Nhân Khí +%.0f.", fee, qiGained)
 	}
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": msg})
 }

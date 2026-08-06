@@ -877,9 +877,9 @@ func RechargeWithStones(c *gin.Context) {
 	neededMana := player.MaxMana - player.CurrentMana
 
 	// Tính số Nguyên Thạch TỐI ĐA cần dùng để sạc đầy Không khiếu
-	maxUsableStones := int(math.Ceil(neededMana / manaPerStone))
+	maxUsableStones := math.Ceil(neededMana / manaPerStone)
 
-	stonesToUse := req.Stones
+	stonesToUse := float64(req.Stones)
 	if stonesToUse > maxUsableStones {
 		stonesToUse = maxUsableStones
 	}
@@ -890,7 +890,7 @@ func RechargeWithStones(c *gin.Context) {
 	}
 
 	// Tính toán số chân nguyên cộng vào
-	addedMana := float64(stonesToUse) * manaPerStone
+	addedMana := stonesToUse * manaPerStone
 
 	// Tránh việc nạp bị lố MaxMana do làm tròn math.Ceil
 	if player.CurrentMana+addedMana > player.MaxMana {
@@ -919,14 +919,14 @@ func RechargeWithStones(c *gin.Context) {
 	}
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message": fmt.Sprintf("Nạp %d nguyên thạch, khôi phục %.4f%% chân nguyên.", stonesToUse, addedMana),
+		"message": fmt.Sprintf("Nạp %.0f nguyên thạch, khôi phục %.4f%% chân nguyên.", stonesToUse, addedMana),
 	})
 }
 
 // ExploreResponse represents the action of exploring
 type ExploreResponse struct {
 	Player       models.Player `json:"player"`
-	RewardStones int           `json:"reward_stones"`
+	RewardStones float64           `json:"reward_stones"`
 	Log          string        `json:"log"`
 }
 
@@ -976,7 +976,7 @@ func Explore(c *gin.Context) {
 
 	// 3. Deduct energy and roll reward stones
 	player.CurrentMana -= energyCost
-	rewardStones := 1 + rand.Intn(3) // 1 to 3 primeval stones
+	rewardStones := float64(1 + rand.Intn(3)) // 1 to 3 primeval stones
 	player.PrimevalStones += rewardStones
 	player.LastManaUpdate = time.Now()
 
@@ -1294,7 +1294,7 @@ func FeedGu(c *gin.Context) {
 
 		for _, food := range foodOptions {
 			if food == "primeval_stone" {
-				cost := int(math.Pow(2, float64(targetGu.Rank)))
+				cost := math.Pow(2, float64(targetGu.Rank))
 				if player.PrimevalStones >= cost {
 					chosenFoodItem = food
 					break
@@ -1372,9 +1372,9 @@ func FeedGu(c *gin.Context) {
 			}
 			player.ImmortalStones -= cost
 		case "primeval_stone":
-			cost := int(math.Pow(2, float64(targetGu.Rank)))
+			cost := math.Pow(2, float64(targetGu.Rank))
 			if player.PrimevalStones < cost {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %d Nguyên Thạch cho Cổ trùng hạng %d.", cost, targetGu.Rank)})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %.0f Nguyên Thạch cho Cổ trùng hạng %d.", cost, targetGu.Rank)})
 				return
 			}
 			player.PrimevalStones -= cost
@@ -2797,7 +2797,7 @@ func UseItems(c *gin.Context) {
 		statChanges = append(statChanges, fmt.Sprintf("+%.0f Nhân Khí", diffHumanQi))
 	}
 	if diffStones := player.PrimevalStones - initialStones; diffStones > 0 {
-		statChanges = append(statChanges, fmt.Sprintf("+%d Nguyên Thạch", diffStones))
+		statChanges = append(statChanges, fmt.Sprintf("+%.0f Nguyên Thạch", diffStones))
 	}
 	finalSoul := 0
 	if player.DaoMarks != nil {
