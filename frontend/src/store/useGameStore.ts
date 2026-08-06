@@ -54,6 +54,8 @@ export interface CombatState {
   enemy_type?: string;
   enemy_rank?: number;
   enemy_sub_rank?: number;
+  combat_mode?: string;
+  mine_slot_id?: number;
 }
 
 export interface PlayerPet {
@@ -3048,7 +3050,13 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Bỏ chạy thất bại.");
       }
 
-      setPlayerFromServer(data.player, { currentView: "explore" });
+      const combat = player.active_combat;
+      let returnView = "explore";
+      if (combat) {
+        if (combat.combat_mode === "virtual") returnView = "arena";
+        else if (combat.mine_slot_id) returnView = "mine";
+      }
+      setPlayerFromServer(data.player, { currentView: returnView });
       get().addLog(data.log || "Đạo hữu đã bỏ chạy an toàn.");
     } catch (err: any) {
       set({ error: err.message });
@@ -4087,7 +4095,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Khiêu chiến thất bại");
-      setPlayerFromServer(data.player, { currentView: "dashboard" }); // Force update player state which triggers combat screen
+      setPlayerFromServer(data.player, { currentView: "arena" });
       get().addLog(data.message || "Đã thách đấu đối thủ!");
       return true;
     } catch (err: any) {
