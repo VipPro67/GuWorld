@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useGameStore, Sect, SectMission, GuInstance } from "@/store/useGameStore";
+import { translatePath } from "@/lib/translate";
 import {
   Shield,
   Activity,
@@ -22,6 +23,7 @@ import {
   Flame,
   Search,
   X,
+  Check,
 } from "lucide-react";
 
 export const SectView: React.FC = () => {
@@ -42,6 +44,7 @@ export const SectView: React.FC = () => {
     donateSectStones,
     donateSectMaterials,
     donateSectGu,
+    donateSectBulk,
     buyFromSectVault,
     fetchSectMissions,
     acceptSectMission,
@@ -130,6 +133,35 @@ export const SectView: React.FC = () => {
   const [selectedMatId, setSelectedMatId] = useState<string>("");
   const [donateMatAmount, setDonateMatAmount] = useState<number>(1);
   const [selectedGuInstId, setSelectedGuInstId] = useState<string>("");
+  const [donateSearch, setDonateSearch] = useState("");
+  const [donateRankFilter, setDonateRankFilter] = useState<string>("All");
+  const [donatePathFilter, setDonatePathFilter] = useState<string>("All");
+
+  const [selectedDonateMaterials, setSelectedDonateMaterials] = useState<Record<string, {
+    material_id: string;
+    name: string;
+    owned: number;
+    valuePerItem: number;
+    amountToDonate: number;
+  }>>({});
+  const [selectedDonateGus, setSelectedDonateGus] = useState<Record<string, {
+    key: string;
+    gu_id: string;
+    rank: number;
+    name: string;
+    valuePerItem: number;
+    ownedCount: number;
+    amountToDonate: number;
+    instances: GuInstance[];
+  }>>({});
+
+  useEffect(() => {
+    setDonateSearch("");
+    setDonateRankFilter("All");
+    setDonatePathFilter("All");
+    setSelectedDonateMaterials({});
+    setSelectedDonateGus({});
+  }, [donateType, activeTab]);
 
   // Sect management sub-tab
   const [mgmtTab, setMgmtTab] = useState<"members" | "missions" | "stock" | "requests">("members");
@@ -1528,30 +1560,51 @@ export const SectView: React.FC = () => {
 
           {/* Donate Stone Panel */}
           {donateType === "stones" && (
-            <div className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4 max-w-lg mx-auto w-full">
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-zinc-500 font-mono">Nguyên Thạch của đạo hữu:</span>
-                <span className="font-mono font-bold text-yellow-500">{player.primeval_stones} Đá</span>
+            <div className="bg-zinc-950/20 border border-zinc-900 rounded-2xl p-6 flex flex-col gap-6 max-w-xl mx-auto w-full shadow-lg relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-yellow-500/5 rounded-full blur-xl -z-10" />
+              
+              <div className="flex justify-between items-center bg-zinc-900/40 px-4 py-3 rounded-xl border border-zinc-800/80">
+                <span className="text-zinc-400 font-serif font-bold text-xs">Tài sản hiện có:</span>
+                <span className="font-mono font-bold text-amber-500 flex items-center gap-1 text-sm">
+                  <Coins className="w-4 h-4 text-amber-500" />
+                  {player.primeval_stones.toLocaleString()} Nguyên Thạch
+                </span>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-zinc-400 font-serif font-bold">Số lượng quyên góp</label>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs text-zinc-350 font-serif font-bold">Số lượng dâng nộp</label>
                 <div className="relative">
                   <input
                     type="number"
                     value={donateStones}
                     onChange={(e) => setDonateStones(Math.max(1, parseInt(e.target.value) || 0))}
-                    className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-4 py-2.5 text-sm font-mono text-zinc-100 focus:outline-none focus:border-blue-500/50"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-4 pr-20 py-3 text-sm font-mono text-zinc-100 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30"
                   />
                   <button
+                    type="button"
                     onClick={() => setDonateStones(player.primeval_stones)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded-md transition-colors"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-800/30 px-3 py-1.5 rounded-lg transition-all font-semibold font-mono"
                   >
-                    Tối đa
+                    TỐI ĐA
                   </button>
                 </div>
-                <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
-                  Tỷ giá quyên góp: 1 Nguyên Thạch = 1 Điểm cống hiến
+
+                {/* Preset shortcuts */}
+                <div className="grid grid-cols-4 gap-2 mt-1">
+                  {[100, 1000, 5000, 10000].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setDonateStones(Math.min(player.primeval_stones, preset))}
+                      className="py-1.5 text-[10px] font-mono text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-lg transition-all"
+                    >
+                      +{preset.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+                
+                <span className="text-[10px] text-zinc-500 font-mono mt-1 flex items-center gap-1">
+                  ℹ️ Tỷ giá quyên góp: 1 Nguyên Thạch = 1 Điểm cống hiến.
                 </span>
               </div>
 
@@ -1564,135 +1617,541 @@ export const SectView: React.FC = () => {
                   await donateSectStones(donateStones);
                 }}
                 disabled={player.primeval_stones <= 0 || actionLoading}
-                className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-semibold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-bold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 tracking-wide"
               >
                 <Gift className="w-4 h-4" />
-                Dâng Nộp Linh Thạch (Nhận +{donateStones} Pts)
+                DÂNG NỘP LINH THẠCH (Nhận +{donateStones.toLocaleString()} Pts)
               </button>
             </div>
           )}
 
           {/* Donate Material Panel */}
-          {donateType === "materials" && (
-            <div className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4 max-w-lg mx-auto w-full">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-zinc-400 font-serif font-bold">Chọn linh tài quyên góp</label>
-                <select
-                  value={selectedMatId}
-                  onChange={(e) => {
-                    setSelectedMatId(e.target.value);
-                    setDonateMatAmount(1);
-                  }}
-                  className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-blue-500/50"
-                >
-                  <option value="">-- Chọn một loại linh tài --</option>
-                  {playerMaterials.map(([matId, qty]) => {
-                    const spec = itemDictionary[matId];
-                    return (
-                      <option key={matId} value={matId}>
-                        {spec?.name || matId} (Hiện có: {qty}x | Trị giá: {getMaterialValue(matId)} Pts/Cái)
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
+          {donateType === "materials" && (() => {
+            const availableDonateMatRanks = Array.from(
+              new Set(playerMaterials.map(([matId]) => itemDictionary[matId]?.rank || 1))
+            ).sort((a, b) => a - b);
 
-              {selectedMatId && (() => {
-                const maxQty = player.materials_inventory[selectedMatId] || 0;
-                const valuePerItem = getMaterialValue(selectedMatId);
-                const totalGainedPoints = donateMatAmount * valuePerItem;
+            const availableDonateMatPaths = Array.from(
+              new Set(playerMaterials.flatMap(([matId]) => itemDictionary[matId]?.path ? [itemDictionary[matId].path] : []))
+            ).filter(Boolean).sort();
 
-                return (
-                  <>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs text-zinc-400 font-serif font-bold">Số lượng nộp</label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          value={donateMatAmount}
-                          onChange={(e) => setDonateMatAmount(Math.max(1, Math.min(maxQty, parseInt(e.target.value) || 1)))}
-                          className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-4 py-2.5 text-sm font-mono text-zinc-100 focus:outline-none focus:border-blue-500/50"
-                        />
+            const filteredMaterials = playerMaterials.filter(([matId]) => {
+              const spec = itemDictionary[matId];
+              const name = spec?.name || matId;
+              const rank = spec?.rank || 1;
+              const paths = spec?.path ? [spec.path] : [];
+
+              const matchesSearch = !donateSearch || name.toLowerCase().includes(donateSearch.toLowerCase()) || matId.toLowerCase().includes(donateSearch.toLowerCase());
+              const matchesRank = donateRankFilter === "All" || rank.toString() === donateRankFilter;
+              const matchesPath = donatePathFilter === "All" || paths.includes(donatePathFilter);
+
+              return matchesSearch && matchesRank && matchesPath;
+            });
+
+            const selectedCount = Object.keys(selectedDonateMaterials).length;
+            const totalGainedPoints = Object.values(selectedDonateMaterials).reduce(
+              (sum, item) => sum + item.amountToDonate * item.valuePerItem,
+              0
+            );
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+                {/* Left side: Selector List */}
+                <div className="md:col-span-2 bg-zinc-950/20 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4">
+                  <div className="flex justify-between items-center border-b border-zinc-900 pb-3">
+                    <div>
+                      <h4 className="text-sm font-bold text-zinc-200 font-serif">Danh Sách Linh Tài</h4>
+                      <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Tích chọn linh tài và số lượng cần quyên hiến.</p>
+                    </div>
+                    <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-2.5 py-1 rounded-lg border border-zinc-800">
+                      Tìm thấy: {filteredMaterials.length} loại
+                    </span>
+                  </div>
+
+                  {/* Search & Filters */}
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={donateSearch}
+                      onChange={(e) => setDonateSearch(e.target.value)}
+                      placeholder="Tìm kiếm linh tài..."
+                      className="flex-1 bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-blue-500/50"
+                    />
+                    <div className="flex gap-2">
+                      <select
+                        value={donateRankFilter}
+                        onChange={(e) => setDonateRankFilter(e.target.value)}
+                        className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-300 focus:outline-none focus:border-blue-500/50 cursor-pointer outline-none"
+                      >
+                        <option value="All">Tất cả Hạng</option>
+                        {availableDonateMatRanks.map((rank) => (
+                          <option key={rank} value={rank.toString()}>Hạng {rank}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={donatePathFilter}
+                        onChange={(e) => setDonatePathFilter(e.target.value)}
+                        className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-300 focus:outline-none focus:border-blue-500/50 cursor-pointer outline-none"
+                      >
+                        <option value="All">Tất cả Phái</option>
+                        {availableDonateMatPaths.map((path) => (
+                          <option key={path} value={path}>{translatePath(path)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Grid layout for items */}
+                  <div className="max-h-[480px] overflow-y-auto pr-1 grid grid-cols-1 sm:grid-cols-2 gap-3 scrollbar-thin">
+                    {filteredMaterials.length === 0 ? (
+                      <div className="col-span-full text-center py-12 text-xs text-zinc-600 font-mono">Không tìm thấy linh tài nào phù hợp</div>
+                    ) : (
+                      filteredMaterials.map(([matId, qty]) => {
+                        const spec = itemDictionary[matId];
+                        const valPerItem = getMaterialValue(matId);
+                        const isSelected = !!selectedDonateMaterials[matId];
+                        const selectedItem = selectedDonateMaterials[matId];
+
+                        const toggleSelect = () => {
+                          setSelectedDonateMaterials(prev => {
+                            const next = { ...prev };
+                            if (next[matId]) {
+                              delete next[matId];
+                            } else {
+                              next[matId] = {
+                                material_id: matId,
+                                name: spec?.name || matId,
+                                owned: qty,
+                                valuePerItem: valPerItem,
+                                amountToDonate: 1
+                              };
+                            }
+                            return next;
+                          });
+                        };
+
+                        const updateAmount = (val: number) => {
+                          const amount = Math.max(1, Math.min(qty, val));
+                          setSelectedDonateMaterials(prev => ({
+                            ...prev,
+                            [matId]: {
+                              ...prev[matId],
+                              amountToDonate: amount
+                            }
+                          }));
+                        };
+
+                        return (
+                          <div
+                            key={matId}
+                            onClick={toggleSelect}
+                            className={`bg-zinc-950/40 border rounded-xl p-3 flex flex-col justify-between gap-3.5 transition-all cursor-pointer select-none ${
+                              isSelected
+                                ? "border-blue-600/50 bg-blue-900/5 shadow-md shadow-blue-950/10"
+                                : "border-zinc-900 hover:border-zinc-800"
+                            }`}
+                          >
+                            <div className="flex gap-2.5 min-w-0 items-start">
+                              {/* Checkbox */}
+                              <div className={`w-4.5 h-4.5 rounded border flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                                isSelected ? "bg-blue-600 border-blue-500 text-white" : "bg-zinc-900 border-zinc-800"
+                              }`}>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[3px]" />}
+                              </div>
+
+                              <div className="min-w-0">
+                                <h5 className="text-xs font-bold text-zinc-200 truncate">{spec?.name || matId}</h5>
+                                <p className="text-[10px] text-zinc-500 font-mono mt-1">
+                                  Hạng {spec?.rank || 1} • Giá trị: <span className="text-zinc-300 font-semibold">{valPerItem} Pts</span>
+                                </p>
+                                <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
+                                  Đang có: <span className="text-zinc-200 font-semibold">{qty}x</span>
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Quantity control */}
+                            {isSelected && (
+                              <div className="flex items-center justify-between border-t border-zinc-900/80 pt-2" onClick={e => e.stopPropagation()}>
+                                <span className="text-[10px] text-zinc-500 font-mono">Quyên góp:</span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateAmount(selectedItem.amountToDonate - 1)}
+                                    className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-all text-[10px]"
+                                  >
+                                    -
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={qty}
+                                    value={selectedItem.amountToDonate}
+                                    onChange={(e) => updateAmount(parseInt(e.target.value, 10) || 1)}
+                                    className="w-8 text-center bg-zinc-950 border border-zinc-900 rounded py-0.5 text-[10px] font-mono font-bold text-zinc-200 focus:outline-none"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => updateAmount(selectedItem.amountToDonate + 1)}
+                                    className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-all text-[10px]"
+                                  >
+                                    +
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateAmount(qty)}
+                                    className="ml-1 px-1.5 py-0.5 bg-blue-950 text-blue-400 border border-blue-900/30 rounded text-[9px] font-mono transition-all font-semibold"
+                                  >
+                                    Max
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Right side: Summary & Submit Action */}
+                <div className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4 h-fit md:sticky md:top-4">
+                  <h4 className="text-xs font-bold text-zinc-350 font-serif border-b border-zinc-900 pb-2.5">
+                    Tóm Tắt Quyên Góp ({selectedCount} loại)
+                  </h4>
+
+                  {selectedCount === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
+                      <Package className="w-8 h-8 text-zinc-700 stroke-[1.5]" />
+                      <span className="text-[11px] text-zinc-500 font-mono">
+                        Chọn linh tài từ danh sách để dâng nộp.
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Selected Items Itemized List */}
+                      <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                        {Object.values(selectedDonateMaterials).map((item) => (
+                          <div key={item.material_id} className="flex justify-between items-center text-[10px] font-mono bg-zinc-950/20 border border-zinc-950 rounded-lg p-2">
+                            <span className="text-zinc-300 truncate max-w-[120px]">{item.name}</span>
+                            <span className="text-zinc-500">
+                              x{item.amountToDonate} → <span className="text-yellow-500/90 font-bold">+{item.amountToDonate * item.valuePerItem} Pts</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="border-t border-zinc-900 pt-3.5 space-y-3.5">
+                        <div className="flex justify-between items-center text-xs font-mono">
+                          <span className="text-zinc-400 font-serif font-bold">Tổng cống hiến:</span>
+                          <span className="text-yellow-500 font-bold text-sm">+{totalGainedPoints} Pts</span>
+                        </div>
                         <button
-                          onClick={() => setDonateMatAmount(maxQty)}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded-md transition-colors"
+                          onClick={async () => {
+                            const materialsPayload = Object.values(selectedDonateMaterials).map(item => ({
+                              material_id: item.material_id,
+                              amount: item.amountToDonate
+                            }));
+                            const ok = await donateSectBulk({ materials: materialsPayload, gus: [] });
+                            if (ok) setSelectedDonateMaterials({});
+                          }}
+                          disabled={actionLoading}
+                          className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-semibold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
                         >
-                          Tối đa
+                          <Gift className="w-4 h-4" />
+                          QUYÊN GÓP HÀNG LOẠT
                         </button>
                       </div>
-                    </div>
-
-                    <button
-                      onClick={async () => {
-                        if (donateMatAmount <= 0 || donateMatAmount > maxQty) {
-                          addToast("Số lượng quyên góp không hợp lệ!", "error");
-                          return;
-                        }
-                        const ok = await donateSectMaterials(selectedMatId, donateMatAmount);
-                        if (ok) setSelectedMatId("");
-                      }}
-                      disabled={actionLoading}
-                      className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-semibold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                    >
-                      <Gift className="w-4 h-4" />
-                      Quyên Góp Linh Tài (Nhận +{totalGainedPoints} Pts)
-                    </button>
-                  </>
-                );
-              })()}
-            </div>
-          )}
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Donate Gu Panel */}
-          {donateType === "gu" && (
-            <div className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4 max-w-lg mx-auto w-full">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-zinc-400 font-serif font-bold">Chọn Cổ trùng trong túi đồ</label>
-                <select
-                  value={selectedGuInstId}
-                  onChange={(e) => setSelectedGuInstId(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-blue-500/50"
-                >
-                  <option value="">-- Chọn Cổ trùng quyên hiến --</option>
-                  {playerDonatableGus.map((g) => {
-                    const spec = guDictionary[g.gu_id];
-                    const rank = spec?.rank || 1;
-                    const val = getGuValue(g.gu_id);
-                    return (
-                      <option key={g.instance_id} value={g.instance_id}>
-                        {spec?.name || g.gu_id} (Rank: {rank} | Nhận: {val} Pts)
-                      </option>
-                    );
-                  })}
-                </select>
-                <span className="text-[10px] text-zinc-500 font-mono mt-0.5 leading-relaxed">
-                  ⚠️ Lưu ý: Bản Mệnh Cổ và Cổ Trùng đang trang bị không thể quyên góp môn phái.
-                </span>
+          {donateType === "gu" && (() => {
+            // Group by gu_id and rank
+            const groupedGusMap: Record<string, {
+              gu_id: string;
+              rank: number;
+              name: string;
+              value: number;
+              instances: GuInstance[];
+            }> = {};
+
+            playerDonatableGus.forEach((g) => {
+              const spec = guDictionary[g.gu_id];
+              const rank = g.rank || spec?.rank || 1;
+              const name = spec?.name || g.gu_id;
+              const val = getGuValue(g.gu_id);
+              const key = `${g.gu_id}_rank_${rank}`;
+
+              if (!groupedGusMap[key]) {
+                groupedGusMap[key] = {
+                  gu_id: g.gu_id,
+                  rank,
+                  name,
+                  value: val,
+                  instances: []
+                };
+              }
+              groupedGusMap[key].instances.push(g);
+            });
+
+            const groupedGusList = Object.values(groupedGusMap);
+
+            const availableDonateGuRanks = Array.from(
+              new Set(groupedGusList.map((g) => g.rank))
+            ).sort((a, b) => a - b);
+
+            const availableDonateGuPaths = Array.from(
+              new Set(groupedGusList.flatMap((g) => guDictionary[g.gu_id]?.path || []))
+            ).filter(Boolean).sort();
+
+            const filteredGus = groupedGusList.filter((g) => {
+              const matchesSearch = !donateSearch || g.name.toLowerCase().includes(donateSearch.toLowerCase()) || g.gu_id.toLowerCase().includes(donateSearch.toLowerCase());
+              const matchesRank = donateRankFilter === "All" || g.rank.toString() === donateRankFilter;
+              
+              const spec = guDictionary[g.gu_id];
+              const paths = spec?.path || [];
+              const matchesPath = donatePathFilter === "All" || paths.includes(donatePathFilter);
+
+              return matchesSearch && matchesRank && matchesPath;
+            });
+
+            const selectedCount = Object.keys(selectedDonateGus).length;
+            const totalGainedPoints = Object.values(selectedDonateGus).reduce(
+              (sum, item) => sum + item.amountToDonate * item.valuePerItem,
+              0
+            );
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+                {/* Left side: Selector List */}
+                <div className="md:col-span-2 bg-zinc-950/20 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4">
+                  <div className="flex justify-between items-center border-b border-zinc-900 pb-3">
+                    <div>
+                      <h4 className="text-sm font-bold text-zinc-200 font-serif">Danh Sách Cổ Trùng</h4>
+                      <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Tích chọn các Cổ trùng muốn hiến tế cho tông môn.</p>
+                    </div>
+                    <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-2.5 py-1 rounded-lg border border-zinc-800">
+                      Có thể quyên hiến: {playerDonatableGus.length} con
+                    </span>
+                  </div>
+
+                  {/* Search & Filters */}
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={donateSearch}
+                      onChange={(e) => setDonateSearch(e.target.value)}
+                      placeholder="Tìm kiếm cổ trùng..."
+                      className="flex-1 bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-blue-500/50"
+                    />
+                    <div className="flex gap-2">
+                      <select
+                        value={donateRankFilter}
+                        onChange={(e) => setDonateRankFilter(e.target.value)}
+                        className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-300 focus:outline-none focus:border-blue-500/50 cursor-pointer outline-none"
+                      >
+                        <option value="All">Tất cả Hạng</option>
+                        {availableDonateGuRanks.map((rank) => (
+                          <option key={rank} value={rank.toString()}>Hạng {rank}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={donatePathFilter}
+                        onChange={(e) => setDonatePathFilter(e.target.value)}
+                        className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-300 focus:outline-none focus:border-blue-500/50 cursor-pointer outline-none"
+                      >
+                        <option value="All">Tất cả Phái</option>
+                        {availableDonateGuPaths.map((path) => (
+                          <option key={path} value={path}>{translatePath(path)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Grid layout for Gu items */}
+                  <div className="max-h-[480px] overflow-y-auto pr-1 grid grid-cols-1 sm:grid-cols-2 gap-3 scrollbar-thin">
+                    {filteredGus.length === 0 ? (
+                      <div className="col-span-full text-center py-12 text-xs text-zinc-600 font-mono">Không tìm thấy cổ trùng phù hợp</div>
+                    ) : (
+                      filteredGus.map((g) => {
+                        const spec = guDictionary[g.gu_id];
+                        const key = `${g.gu_id}_rank_${g.rank}`;
+                        const isSelected = !!selectedDonateGus[key];
+                        const selectedItem = selectedDonateGus[key];
+
+                        const toggleSelect = () => {
+                          setSelectedDonateGus(prev => {
+                            const next = { ...prev };
+                            if (next[key]) {
+                              delete next[key];
+                            } else {
+                              next[key] = {
+                                key,
+                                gu_id: g.gu_id,
+                                rank: g.rank,
+                                name: g.name,
+                                valuePerItem: g.value,
+                                ownedCount: g.instances.length,
+                                amountToDonate: 1,
+                                instances: g.instances
+                              };
+                            }
+                            return next;
+                          });
+                        };
+
+                        const updateAmount = (val: number) => {
+                          const amount = Math.max(1, Math.min(g.instances.length, val));
+                          setSelectedDonateGus(prev => ({
+                            ...prev,
+                            [key]: {
+                              ...prev[key],
+                              amountToDonate: amount
+                            }
+                          }));
+                        };
+
+                        return (
+                          <div
+                            key={key}
+                            onClick={toggleSelect}
+                            className={`bg-zinc-950/40 border rounded-xl p-3 flex flex-col justify-between gap-3.5 transition-all cursor-pointer select-none ${
+                              isSelected
+                                ? "border-blue-600/50 bg-blue-900/5 shadow-md shadow-blue-950/10"
+                                : "border-zinc-900 hover:border-zinc-800"
+                            }`}
+                          >
+                            <div className="flex items-start gap-2.5 min-w-0 flex-1 pr-2">
+                              {/* Checkbox */}
+                              <div className={`w-4.5 h-4.5 rounded border flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                                isSelected ? "bg-blue-600 border-blue-500 text-white" : "bg-zinc-900 border-zinc-800"
+                              }`}>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[3px]" />}
+                              </div>
+
+                              <div className="min-w-0">
+                                <h5 className="text-xs font-bold text-zinc-200 truncate">{g.name}</h5>
+                                <p className="text-[10px] text-zinc-500 font-mono mt-1">
+                                  Hạng {g.rank} • Lưu Phái: <span className="text-zinc-300 font-medium">{(spec?.path || []).map(translatePath).join(", ") || "Không"}</span>
+                                </p>
+                                <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                                  Đang có: <span className="text-zinc-300 font-semibold">{g.instances.length} con</span>
+                                </p>
+                                <p className="text-[10px] text-yellow-500/90 font-mono mt-0.5 font-semibold">
+                                  Trị giá: +{g.value} Pts/Con
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Quantity control */}
+                            {isSelected && (
+                              <div className="flex items-center justify-between border-t border-zinc-900/80 pt-2" onClick={e => e.stopPropagation()}>
+                                <span className="text-[10px] text-zinc-500 font-mono">Hiến tế:</span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateAmount(selectedItem.amountToDonate - 1)}
+                                    className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-all text-[10px]"
+                                  >
+                                    -
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={g.instances.length}
+                                    value={selectedItem.amountToDonate}
+                                    onChange={(e) => updateAmount(parseInt(e.target.value, 10) || 1)}
+                                    className="w-8 text-center bg-zinc-950 border border-zinc-900 rounded py-0.5 text-[10px] font-mono font-bold text-zinc-200 focus:outline-none"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => updateAmount(selectedItem.amountToDonate + 1)}
+                                    className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-all text-[10px]"
+                                  >
+                                    +
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateAmount(g.instances.length)}
+                                    className="ml-1 px-1.5 py-0.5 bg-blue-950 text-blue-400 border border-blue-900/30 rounded text-[9px] font-mono transition-all font-semibold"
+                                  >
+                                    Max
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  <span className="text-[9.5px] text-zinc-500 font-mono leading-relaxed mt-1 flex items-start gap-1">
+                    ⚠️ Lưu ý: Bản Mệnh Cổ và Cổ Trùng đang trang bị không thể quyên hiến cho tông môn.
+                  </span>
+                </div>
+
+                {/* Right side: Summary & Submit Action */}
+                <div className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4 h-fit md:sticky md:top-4">
+                  <h4 className="text-xs font-bold text-zinc-350 font-serif border-b border-zinc-900 pb-2.5">
+                    Tóm Tắt Quyên Góp ({selectedCount} loại)
+                  </h4>
+
+                  {selectedCount === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
+                      <Sparkles className="w-8 h-8 text-zinc-700 stroke-[1.5]" />
+                      <span className="text-[11px] text-zinc-500 font-mono">
+                        Chọn cổ trùng để hiến tế tông môn.
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Selected Gu Itemized List */}
+                      <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                        {Object.values(selectedDonateGus).map((item) => (
+                          <div key={item.key} className="flex justify-between items-center text-[10px] font-mono bg-zinc-950/20 border border-zinc-950 rounded-lg p-2">
+                            <span className="text-zinc-300 truncate max-w-[120px]">{item.name}</span>
+                            <span className="text-zinc-500">
+                              x{item.amountToDonate} → <span className="text-yellow-500/90 font-bold">+{item.amountToDonate * item.valuePerItem} Pts</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="border-t border-zinc-900 pt-3.5 space-y-3.5">
+                        <div className="flex justify-between items-center text-xs font-mono">
+                          <span className="text-zinc-400 font-serif font-bold">Tổng cống hiến:</span>
+                          <span className="text-yellow-500 font-bold text-sm">+{totalGainedPoints} Pts</span>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            const gusPayload = Object.values(selectedDonateGus).flatMap(item => {
+                              return item.instances.slice(0, item.amountToDonate).map(gi => ({
+                                gu_instance_id: gi.instance_id
+                              }));
+                            });
+                            const ok = await donateSectBulk({ materials: [], gus: gusPayload });
+                            if (ok) setSelectedDonateGus({});
+                          }}
+                          disabled={actionLoading}
+                          className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-semibold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          <Gift className="w-4 h-4" />
+                          HIẾN TẾ HÀNG LOẠT
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
-
-              {selectedGuInstId && (() => {
-                const targetGu = playerDonatableGus.find(g => g.instance_id === selectedGuInstId);
-                if (!targetGu) return null;
-                const spec = guDictionary[targetGu.gu_id];
-                const value = getGuValue(targetGu.gu_id);
-
-                return (
-                  <button
-                    onClick={async () => {
-                      const ok = await donateSectGu(selectedGuInstId);
-                      if (ok) setSelectedGuInstId("");
-                    }}
-                    disabled={actionLoading}
-                    className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-semibold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Gift className="w-4 h-4" />
-                    Hiến Tế Cổ Trùng (Nhận +{value} Pts)
-                  </button>
-                );
-              })()}
-            </div>
-          )}
-        </div>
+            );
+          })()}
+      </div>
       )}
 
       {activeTab === "manage" && (

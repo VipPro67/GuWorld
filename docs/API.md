@@ -219,6 +219,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | POST | `/sects/donate/stones` |
 | POST | `/sects/donate/materials` |
 | POST | `/sects/donate/gu` |
+| POST | `/sects/donate/bulk` | Quyên góp hàng loạt linh tài và cổ trùng. Body: `{"materials": [{"material_id": "...", "amount": 5}], "gus": [{"gu_instance_id": "..."}]}`. |
 | POST | `/sects/vault/buy` | Đổi vật phẩm từ bảo khố. Body: `{"item_type": "gu|material|recipe", "item_id": "...", "quantity": 5}` (`quantity` mặc định 1; recipe chỉ nhận 1). |
 | GET | `/sects/missions` |
 | POST | `/sects/missions/:missionId/accept` |

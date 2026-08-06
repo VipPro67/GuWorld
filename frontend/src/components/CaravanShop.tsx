@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Player, useGameStore } from "@/store/useGameStore";
 import { ShoppingBag, Coins, Sparkles, AlertCircle, ShoppingCart, ArrowLeftRight, Trash2, Search, Check } from "lucide-react";
+import { translatePath } from "@/lib/translate";
 
 interface ShopItem {
   id: string;
@@ -35,6 +36,8 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
   const [shopTab, setShopTab] = useState<"Gu" | "Material" | "Consumable">("Gu");
   const [sellTab, setSellTab] = useState<"All" | "Gu" | "Material">("All");
   const [sellSearch, setSellSearch] = useState("");
+  const [sellRankFilter, setSellRankFilter] = useState<string>("All");
+  const [sellPathFilter, setSellPathFilter] = useState<string>("All");
 
   // Selection states for Modals
   const [selectedBuyItem, setSelectedBuyItem] = useState<ShopItem | null>(null);
@@ -77,6 +80,12 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
     };
     fetchShopList();
   }, [BACKEND_URL]);
+
+  // Reset filters when changing tab or mode
+  useEffect(() => {
+    setSellRankFilter("All");
+    setSellPathFilter("All");
+  }, [sellTab, mode]);
 
   const sellBackRatio = 0.10;
 
@@ -127,6 +136,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
         owned: qty,
         price: getItemSellPrice(itemId, "Material"),
         rank: spec?.rank || 1,
+        paths: spec?.path ? [spec.path] : [],
       };
     });
 
@@ -147,6 +157,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
       owned: count,
       price: getItemSellPrice(guId, "Gu"),
       rank: spec?.rank || 1,
+      paths: spec?.path || [],
     };
   });
 
@@ -192,10 +203,34 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
     return normalizeText(item.name).includes(q) || normalizeText(item.id).includes(q);
   };
 
-  const filteredSellGus = sellableGus.filter((item) => matchSellItem(item, sellSearch));
-  const filteredSellMaterials = sellableMaterials.filter((item) => matchSellItem(item, sellSearch));
-
   const sellableAll = [...sellableGus, ...sellableMaterials];
+
+  // Base list for current active sell tab (before filters)
+  const currentTabBaseList = sellTab === "All" ? sellableAll : (sellTab === "Gu" ? sellableGus : sellableMaterials);
+
+  // Dynamic filter lists
+  const availableRanks = Array.from(
+    new Set(currentTabBaseList.map((item) => item.rank))
+  ).filter(Boolean).sort((a: number, b: number) => a - b);
+
+  const availablePaths = Array.from(
+    new Set(currentTabBaseList.flatMap((item) => item.paths || []))
+  ).filter(Boolean).sort();
+
+  const filteredSellGus = sellableGus.filter((item) => {
+    const matchesSearch = matchSellItem(item, sellSearch);
+    const matchesRank = sellRankFilter === "All" || item.rank.toString() === sellRankFilter;
+    const matchesPath = sellPathFilter === "All" || item.paths.includes(sellPathFilter);
+    return matchesSearch && matchesRank && matchesPath;
+  });
+
+  const filteredSellMaterials = sellableMaterials.filter((item) => {
+    const matchesSearch = matchSellItem(item, sellSearch);
+    const matchesRank = sellRankFilter === "All" || item.rank.toString() === sellRankFilter;
+    const matchesPath = sellPathFilter === "All" || item.paths.includes(sellPathFilter);
+    return matchesSearch && matchesRank && matchesPath;
+  });
+
   const filteredSellAll = [...filteredSellGus, ...filteredSellMaterials];
 
   const activeSellList = sellTab === "All" ? filteredSellAll : (sellTab === "Gu" ? filteredSellGus : filteredSellMaterials);
@@ -440,25 +475,59 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
         </div>
       )}
 
-      {/* Sell Search Bar */}
+      {/* Sell Search Bar & Filters */}
       {mode === "sell" && (
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
-          <input
-            type="text"
-            value={sellSearch}
-            onChange={(e) => setSellSearch(e.target.value)}
-            placeholder="Tìm kiếm vật phẩm..."
-            className="w-full bg-zinc-950/60 border border-zinc-900 rounded-xl pl-9 pr-4 py-2 text-xs font-mono text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-rose-500/40 transition-colors"
-          />
-          {sellSearch && (
-            <button
-              onClick={() => setSellSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+        <div className="flex flex-col sm:flex-row gap-2">
+          {/* Search Input */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+            <input
+              type="text"
+              value={sellSearch}
+              onChange={(e) => setSellSearch(e.target.value)}
+              placeholder="Tìm kiếm vật phẩm..."
+              className="w-full bg-zinc-950/60 border border-zinc-900 rounded-xl pl-9 pr-4 py-2.5 text-xs font-mono text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-rose-500/40 transition-colors"
+            />
+            {sellSearch && (
+              <button
+                onClick={() => setSellSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Filters Selectors */}
+          <div className="flex gap-2 w-full sm:w-auto">
+            {/* Rank Selector */}
+            <select
+              value={sellRankFilter}
+              onChange={(e) => setSellRankFilter(e.target.value)}
+              className="flex-1 sm:flex-none bg-zinc-950/60 border border-zinc-900 rounded-xl px-3 py-2.5 text-xs font-mono text-zinc-300 focus:outline-none focus:border-rose-500/40 cursor-pointer min-w-[100px] outline-none"
             >
-              <Trash2 className="w-3 h-3" />
-            </button>
-          )}
+              <option value="All" className="bg-zinc-950 text-zinc-300">Tất cả Hạng</option>
+              {availableRanks.map((rank) => (
+                <option key={rank} value={rank.toString()} className="bg-zinc-950 text-zinc-300">
+                  Hạng {rank}
+                </option>
+              ))}
+            </select>
+
+            {/* Path Selector */}
+            <select
+              value={sellPathFilter}
+              onChange={(e) => setSellPathFilter(e.target.value)}
+              className="flex-1 sm:flex-none bg-zinc-950/60 border border-zinc-900 rounded-xl px-3 py-2.5 text-xs font-mono text-zinc-300 focus:outline-none focus:border-rose-500/40 cursor-pointer min-w-[120px] outline-none"
+            >
+              <option value="All" className="bg-zinc-950 text-zinc-300">Tất cả Phái</option>
+              {availablePaths.map((path) => (
+                <option key={path} value={path} className="bg-zinc-950 text-zinc-300">
+                  {translatePath(path)}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       )}
       {/* Bulk action bar (Inline below search bar) */}

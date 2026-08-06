@@ -1035,6 +1035,10 @@ interface GameState {
   donateSectStones: (amount: number) => Promise<boolean>;
   donateSectMaterials: (materialId: string, amount: number) => Promise<boolean>;
   donateSectGu: (guInstanceId: string) => Promise<boolean>;
+  donateSectBulk: (payload: {
+    materials: { material_id: string; amount: number }[];
+    gus: { gu_instance_id: string }[];
+  }) => Promise<boolean>;
   buyFromSectVault: (itemType: string, itemId: string, quantity?: number) => Promise<boolean>;
   fetchSectMissions: () => Promise<void>;
   acceptSectMission: (missionId: string) => Promise<boolean>;
@@ -5223,6 +5227,34 @@ export const useGameStore = create<GameState>((set, get) => {
       if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
       get().addToast(data.message || "Quyên góp Cổ trùng thành công!", "success");
       get().addLog(data.message || `Quyên góp Cổ trùng.`);
+      await get().fetchMySectStatus();
+      await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  donateSectBulk: async (payload: {
+    materials: { material_id: string; amount: number }[];
+    gus: { gu_instance_id: string }[];
+  }) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/donate/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Quyên góp hàng loạt thất bại.");
+      get().addToast(data.message || "Quyên góp hàng loạt thành công!", "success");
+      get().addLog(data.message || `Quyên góp hàng loạt vật phẩm.`);
       await get().fetchMySectStatus();
       await get().initializeSession();
       return true;

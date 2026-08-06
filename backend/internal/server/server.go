@@ -512,6 +512,7 @@ func SetupRouter() *gin.Engine {
 			sect.POST("/donate/stones", handlers.DonateStones)
 			sect.POST("/donate/materials", handlers.DonateMaterials)
 			sect.POST("/donate/gu", handlers.DonateGu)
+			sect.POST("/donate/bulk", handlers.DonateBulk)
 			sect.POST("/vault/buy", handlers.BuyFromSectVault)
 			sect.GET("/missions", handlers.GetSectMissions)
 			sect.POST("/missions/:missionId/accept", handlers.AcceptSectMission)

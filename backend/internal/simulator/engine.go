@@ -851,6 +851,16 @@ func Simulate(state *CombatState) []CombatLog {
 								Damage:    int(totalDmg),
 								Detail:    damageDetail,
 							})
+						} else if target.VirtualShield > 0 {
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   actor.ID,
+								ActorName: actor.Name,
+								Action:    a.ActionType,
+								TargetId:  target.ID,
+								Damage:    0,
+								Detail:    fmt.Sprintf("%s dùng [%s] lên %s, toàn bộ sát thương bị khiên hấp thụ (còn %d khiên)", actor.Name, a.Name, target.Name, target.VirtualShield),
+							})
 						}
 
 						if a.PhantomDmg > 0 {

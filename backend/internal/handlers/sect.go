@@ -925,6 +925,257 @@ func DonateGu(c *gin.Context) {
 	})
 }
 
+// BulkDonateRequest represents a collection of materials and Gus to donate
+type BulkDonateRequest struct {
+	Materials []DonateMaterialsRequest `json:"materials"`
+	Gus       []DonateGuRequest        `json:"gus"`
+}
+
+// DonateBulk converts multiple player materials and Gu bugs to contribution points in a single transaction
+func DonateBulk(c *gin.Context) {
+	var req BulkDonateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
+		return
+	}
+
+	var m SectMember
+	err = tx.QueryRow(`
+		SELECT id, sect_id, contribution_points
+		FROM sect_members
+		WHERE player_id = $1
+	`, playerID).Scan(&m.ID, &m.SectID, &m.ContributionPoints)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
+		return
+	}
+
+	totalGainedContribution := 0
+	var auditSummaries []string
+
+	// 1. Process Materials
+	if len(req.Materials) > 0 {
+		// Fetch sect vault materials
+		var vaultMaterialsRaw json.RawMessage
+		err = tx.QueryRow(`SELECT vault_materials FROM sects WHERE id = $1`, m.SectID).Scan(&vaultMaterialsRaw)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sect vault materials"})
+			return
+		}
+		vaultMats := make(map[string]int)
+		if len(vaultMaterialsRaw) > 0 {
+			_ = json.Unmarshal(vaultMaterialsRaw, &vaultMats)
+		}
+
+		for _, matReq := range req.Materials {
+			qty, _ := InventorySvc.GetQuantity(tx, playerID.String(), matReq.MaterialID, "materials")
+			if qty < matReq.Amount {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đạo hữu không có đủ linh tài: %s", matReq.MaterialID)})
+				return
+			}
+
+			// Calculate contribution points dynamically
+			var dbBasePrice, matRank int
+			if err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, matReq.MaterialID).Scan(&dbBasePrice, &matRank); err != nil {
+				matRank = 1
+				dbBasePrice = 0
+			}
+			pointsPerItem := pricing.DonatePoints(pricing.ItemBasePrice(dbBasePrice, matRank))
+			gained := pointsPerItem * matReq.Amount
+			totalGainedContribution += gained
+
+			// Update Inventory
+			InventorySvc.RemoveItem(tx, playerID.String(), matReq.MaterialID, "materials", matReq.Amount)
+
+			// Update Sect Vault map
+			vaultMats[matReq.MaterialID] += matReq.Amount
+
+			// Get friendly name
+			materialName := matReq.MaterialID
+			_ = tx.QueryRow(`SELECT name FROM item_dictionary WHERE id = $1`, matReq.MaterialID).Scan(&materialName)
+			if materialName == "" {
+				materialName = matReq.MaterialID
+			}
+			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d", materialName, matReq.Amount))
+		}
+
+		// Save updated materials vault
+		newVaultMats, _ := json.Marshal(vaultMats)
+		_, err = tx.Exec(`UPDATE sects SET vault_materials = $1 WHERE id = $2`, newVaultMats, m.SectID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault materials"})
+			return
+		}
+	}
+
+	// 2. Process Gu Instances
+	if len(req.Gus) > 0 {
+		// Fetch sect vault Gu
+		var vaultGuRaw json.RawMessage
+		err = tx.QueryRow(`SELECT vault_gu FROM sects WHERE id = $1`, m.SectID).Scan(&vaultGuRaw)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sect vault gu"})
+			return
+		}
+		var vaultGus []SectVaultGuItem
+		if len(vaultGuRaw) > 0 {
+			_ = json.Unmarshal(vaultGuRaw, &vaultGus)
+		}
+
+		// Keep track of instance IDs we want to remove
+		gusToRemove := make(map[string]bool)
+		for _, guReq := range req.Gus {
+			gusToRemove[guReq.GuInstanceID] = true
+		}
+
+		// Process each target Gu instance
+		var newGuInventory []models.GuInstance
+		for _, gi := range player.GuInventory {
+			if gusToRemove[gi.InstanceID] {
+				if gi.IsVital {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể quyên góp Bản Mệnh Cổ!"})
+					return
+				}
+				if gi.Equipped {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Vui lòng tháo Cổ trùng ra trước khi quyên góp!"})
+					return
+				}
+
+				// Fetch base price
+				var guRank, guBasePrice int
+				err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1 AND rank = $2`, gi.GuID, gi.Rank).Scan(&guBasePrice, &guRank)
+				if err != nil {
+					guRank = 1
+					guBasePrice = 0
+				}
+				effectiveBase := pricing.GuBasePrice(guBasePrice, guRank)
+				gained := pricing.DonatePoints(effectiveBase)
+				vaultItemCost := pricing.VaultCost(effectiveBase)
+
+				totalGainedContribution += gained
+
+				// Update Vault Gu count
+				donatedGuFound := false
+				for idx, v := range vaultGus {
+					if v.ID == gi.GuID {
+						vaultGus[idx].Quantity++
+						donatedGuFound = true
+						break
+					}
+				}
+				if !donatedGuFound {
+					vaultGus = append(vaultGus, SectVaultGuItem{
+						ID:       gi.GuID,
+						Cost:     vaultItemCost,
+						Quantity: 1,
+					})
+				}
+
+				guName := gi.GuID
+				if spec, ok := models.GetGuAny(gi.GuID); ok {
+					guName = spec.Name
+				}
+				auditSummaries = append(auditSummaries, guName)
+			} else {
+				newGuInventory = append(newGuInventory, gi)
+			}
+		}
+
+		// Verify that all requested Gus were actually found and processed
+		if len(player.GuInventory)-len(newGuInventory) != len(req.Gus) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Một hoặc nhiều Cổ trùng không tồn tại trong túi đồ!"})
+			return
+		}
+
+		player.GuInventory = newGuInventory
+
+		// Save player Gu inventory
+		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update gu inventory"})
+			return
+		}
+
+		// Save updated Gu vault
+		newVaultGus, _ := json.Marshal(vaultGus)
+		_, err = tx.Exec(`UPDATE sects SET vault_gu = $1 WHERE id = $2`, newVaultGus, m.SectID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault Gu list"})
+			return
+		}
+	}
+
+	if totalGainedContribution <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm nào được quyên góp."})
+		return
+	}
+
+	// Update Human Qi (5.0 per unique item type/instance donated)
+	numItems := len(req.Materials) + len(req.Gus)
+	qiGained := AddHumanQi(&player, 5.0*float64(numItems))
+
+	m.ContributionPoints += totalGainedContribution
+
+	// Update Sect funds
+	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, totalGainedContribution, m.SectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect funds"})
+		return
+	}
+
+	// Update player points
+	_, err = tx.Exec(`UPDATE sect_members SET contribution_points = $1 WHERE player_id = $2`, m.ContributionPoints, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update contribution"})
+		return
+	}
+
+	// Update player Human Qi
+	_, err = tx.Exec(`UPDATE players SET human_qi = $1 WHERE id = $2`, player.HumanQi, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update human qi"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		return
+	}
+
+	// Trigger System Chat Notification on Sect channel
+	summaryStr := strings.Join(auditSummaries, ", ")
+	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("Đạo hữu %s đã quyên góp hàng loạt vật phẩm: %s cho tông môn.", player.Username, summaryStr))
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.donate_bulk", EntityType: "sect",
+		EntityID: m.SectID, RequestSummary: fmt.Sprintf("Bulk: %s → %d điểm", summaryStr, totalGainedContribution),
+		IPAddress: c.ClientIP(), Success: true,
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":             fmt.Sprintf("Quyên góp hàng loạt thành công! Nhân Khí +%.0f.", qiGained),
+		"contribution_points": m.ContributionPoints,
+	})
+}
+
 // BuyFromSectVault processes vault purchases
 func BuyFromSectVault(c *gin.Context) {
 	var req VaultBuyRequest
