@@ -1,0 +1,53 @@
+"target_gu_id","target_rank","variant","required_gus","required_materials","success_rate","primeval_stones_cost","immortal_essence_stones_cost"
+GU_BIG_BELLY_TOAD,2,1,{},"{""water_weed"": 2, ""yellow_mud"": 2}",0.7,90,0.0
+GU_BLACK_BRISTLE,2,1,"{""GU_GREEN_SILK"": 1}","{""black_boar_tusk"": 1}",0.75,80,0.0
+GU_BLOOD_MOON,3,1,"{""GU_BLOOD_QI"": 1, ""GU_MOON_HALO"": 1}",{},0.7,250,0.0
+GU_BONE_WINGS,4,1,{},"{""beast_bones"": 5, ""summit_stone"": 1, ""cold_ice_grass"": 1, ""golden_crow_meteor"": 1, ""nine_palace_flower"": 1}",0.35,1200,0.0
+GU_DREAM_SWEAT_BUTTERFLY,3,1,"{""GU_WHITE_COCOON"": 1}","{""nectar"": 3}",0.5,300,0.0
+GU_EARTH_COMMUNICATION,2,1,"{""GU_FLESH_EAR"": 1, ""GU_EARTH_WORM"": 1}","{""ginseng"": 2}",0.75,70,0.0
+GU_EARTH_ESCAPE,5,1,{},"{""yellow_mud"": 5, ""earth_horse_hoof"": 1}",0.45,1800,0.0
+GU_ELECTRIC_CENTIPEDE,4,1,{},"{""iron_ore"": 2, ""lightning_pearl"": 3}",0.45,900,0.0
+GU_FIVE_ORIFICE_FIRE_PAGODA,5,1,"{""GU_FOUR_ORIFICE_FIRE_TOWER"": 1}","{""sun_flame"": 5}",0.35,3000,0.0
+GU_FIXED_IMMORTAL_TRAVEL,6,1,"{""GU_SUN_RAY"": 1, ""GU_STAR_GEM"": 1, ""GU_AZURE_BAMBOO"": 1, ""GU_DIVINE_TRAVEL"": 1}","{""glory_of_the_immemorial_light"": 1}",0.01,0,50.0
+GU_FLYING_BEAR_PHANTOM,6,1,{},"{""soul_core"": 1, ""beast_bones"": 5, ""flying_bear_meat"": 5}",0.12,0,30.0
+GU_FOUR_FLAVORS_LIQUOR,2,1,"{""GU_LIQUOR_WORM"": 2}","{""sour_wine"": 1, ""spicy_wine"": 1, ""sweet_wine"": 1, ""bitter_wine"": 1}",0.6,120,0.0
+GU_FOUR_ORIFICE_FIRE_TOWER,4,1,"{""GU_THREE_ORIFICE_FIRE_HOUSE"": 1}","{""sun_flame"": 3}",0.5,1000,0.0
+GU_GOLD_CUP_SILVER_GOBLET,4,1,{},"{""primeval_stone"": 500}",0.5,1000,0.0
+GU_CANOPY,3,1,"{""GU_WHITE_JADE"": 1}","{""water_defense_shell"": 1}",0.55,260,0.0
+GU_HUNDRED_YEAR_WOOD_CHARM,4,1,"{""GU_WOOD_CHARM"": 1}","{""tree_sap"": 5, ""hundred_year_lifespan_gu"": 1}",0.35,1200,0.0
+GU_MOON_HALO,2,1,"{""GU_MOONLIGHT"": 1, ""GU_LITTLE_LIGHT"": 2}",{},0.75,50,0.0
+GU_MOON_RAIMENT,2,1,"{""GU_JADE_SKIN"": 1, ""GU_MOONLIGHT"": 1}",{},0.85,50,0.0
+GU_MOON_SHADOW,4,1,"{""GU_ILLUSION_MOON"": 1}","{""moon_orchid_petal"": 5}",0.45,700,0.0
+GU_MOON_SILVER,2,1,"{""GU_MOONLIGHT"": 1, ""GU_SILVER_STONE"": 1}",{},0.85,40,0.0
+GU_MOON_WHIRL,2,1,"{""GU_MOONLIGHT"": 1, ""GU_WHIRLWIND"": 1}",{},0.85,50,0.0
+GU_NINE_EYES_LIQUOR,4,1,"{""GU_SEVEN_FRAGRANCES_LIQUOR"": 2}","{""nine_beast_kings_eyes"": 1}",0.2,5000,0.0
+GU_OIL_HARVEST,5,1,{},"{""black_oil_refined"": 2, ""gold_dragonfish_scale"": 1}",0.5,1600,0.0
+GU_SEVEN_FRAGRANCES_LIQUOR,3,1,"{""GU_FOUR_FLAVORS_LIQUOR"": 2}","{""seven_spices"": 1}",0.4,800,0.0
+GU_SINGLE_BLADE,6,1,{},"{""sword_qi"": 3, ""blade_food"": 3}",0.12,0,30.0
+GU_STEALTH_SCALES,2,1,"{""GU_FISH_SCALE"": 1, ""GU_STEALTH_STONE"": 1}",{},0.8,80,0.0
+GU_STRENGTH_INFUSION,4,1,{},"{""beast_meat"": 5, ""primeval_stone"": 200}",0.55,800,0.0
+GU_TREASURE_MOONLIGHT_KING,5,1,"{""GU_MOON_RAIMENT"": 1}","{""jade_stone"": 3, ""moon_orchid_petal"": 10}",0.25,5000,0.0
+GU_WHITE_COCOON,2,1,"{""GU_LIQUOR_WORM"": 1}","{""white_lotus_giant_silkworm"": 1}",0.65,120,0.0
+GU_WHITE_JADE,2,1,"{""GU_JADE_SKIN"": 1, ""GU_WHITE_BOAR"": 1}","{""wild_boar_tusk"": 1}",0.8,60,0.0
+GU_YELLOW_BRONZE_TOAD,3,1,"{""GU_LAZY_EARTH_TOAD"": 1}","{""copper_ore"": 3, ""yellow_mud"": 5, ""copper_spike"": 2}",0.55,300,0.0
+GU_JIA_DESTINY,8,1,"{""GU_HEAVEN_SECRET"": 1}",{},0.05,0,200.0
+GU_BLOOD_QI,2,1,"{""GU_BLOOD_CROWN"": 1}",{},1.0,0,0.0
+GU_BLOOD_STONE,2,1,"{""GU_BLOOD_FLESH_PILL"": 1}",{},1.0,10,0.0
+GU_BLOOD_LOTUS,3,1,"{""GU_BLOOD_STONE"": 1}",{},1.0,20,0.0
+GU_BLOOD_MOUNTAIN,4,1,"{""GU_BLOOD_LOTUS"": 1}",{},1.0,50,0.0
+GU_BLOOD_HEAVEN,5,1,"{""GU_BLOOD_MOUNTAIN"": 1}",{},1.0,100,0.0
+GU_BLOOD_GOD_CHILD,6,1,"{""GU_BLOOD_HEAVEN"": 5, ""GU_BLOOD_RIVER_PYTHON"": 5}",{},1.0,0,10.0
+GU_BLOOD_SCRIPTURE,6,1,"{""GU_BLOOD_TICK"": 5, ""GU_BLOOD_HEAVEN"": 5}",{},1.0,0,10.0
+GU_STRENGTH_FIST,6,1,"{""GU_BERSERK"": 1, ""GU_KING_STRENGTH"": 1, ""GU_ALL_OUT_EFFORT"": 1, ""GU_TEN_JUN_STRENGTH"": 1}",{},0.1,300,0.0
+GU_DIAMOND,6,1,"{""GU_WHITE_BOAR"": 1, ""GU_IVORY_ARMOR"": 1}",{},0.1,300,0.0
+GU_OCEAN_ARMOR,6,1,"{""GU_WATER_CLEANSING"": 1, ""GU_WHITE_FORM_IMMORTAL_SNAKE"": 1}",{},0.1,300,0.0
+WAVEBLADE_GU,6,1,"{""GU_RIVER_SWALLOWING_TOAD"": 1, ""GU_WHITE_FORM_IMMORTAL_SNAKE"": 1}",{},0.1,300,0.0
+GU_EARTH_BASTION,6,1,"{""GU_SPRING_EGG"": 1}",{},0.1,300,0.0
+GU_MOUNTAIN_FIST,6,1,"{""GU_SPRING_EGG"": 1, ""GU_EARTH_ESCAPE"": 1}",{},0.1,300,0.0
+GU_IRON_HIDE,6,1,"{""GU_GOLDEN_BELL_SHIELD"": 1, ""GU_GOLDEN_HORN_CENTIPEDE"": 1}",{},0.1,300,0.0
+GU_METAL_EDGE,6,1,"{""GU_IRON_HAND_CAPTURE"": 1, ""GU_GOLDEN_BELL_SHIELD"": 1}",{},0.1,300,0.0
+GU_STORM_SHELL,6,1,"{""GU_ELECTRIC_CENTIPEDE"": 1}","{""lightning_pearl"": 10}",0.1,300,0.0
+GU_THUNDER_SPEAR,6,1,"{""GU_ELECTRIC_CENTIPEDE"": 1}","{""lightning_pearl"": 10}",0.1,300,0.0
+GU_EMBER_MANTLE,6,1,"{""GU_FIRE_CLOAK"": 1, ""GU_FOUR_ORIFICE_FIRE_TOWER"": 1}",{},0.1,300,0.0
+GU_BLAZING_CLAW,6,1,"{""GU_FOUR_ORIFICE_FIRE_TOWER"": 1, ""GU_FIVE_ORIFICE_FIRE_PAGODA"": 1}",{},0.1,300,0.0
+GU_SPRING_AUTUMN_CICADA,6,1,"{""GU_SPRING_AUTUMN_CICADA"": 1}","{""immortal_essence"": 5, ""time_river_water"": 10, ""glory_of_the_immemorial_light"": 1}",0.15,0,100.0
