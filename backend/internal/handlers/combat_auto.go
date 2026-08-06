@@ -445,7 +445,7 @@ func AutoCombatStart(c *gin.Context) {
 			if player.ActiveCombat != nil && player.ActiveCombat.LootTableID != "" {
 				lt, err := db.LoadLootTable(tx, player.ActiveCombat.LootTableID)
 				if err == nil {
-					loot := RollLoot(lt)
+					loot := RollLoot(lt, player.ActiveCombat.EnemyRank)
 
 					if player.ActiveCombat.EnemyGuInventory != nil && len(player.ActiveCombat.EnemyGuInventory) > 0 {
 						for _, eg := range player.ActiveCombat.EnemyGuInventory {

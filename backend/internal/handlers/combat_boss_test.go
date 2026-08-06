@@ -85,7 +85,7 @@ func TestRollLoot(t *testing.T) {
 		},
 	}
 
-	loot := RollLoot(lt)
+	loot := RollLoot(lt, 1)
 	if loot.Items["gu_skin"] < 2 || loot.Items["gu_skin"] > 5 {
 		t.Errorf("expected gu_skin quantity between 2 and 5, got %d", loot.Items["gu_skin"])
 	}

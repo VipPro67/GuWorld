@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"math"
 	"math/rand"
 
 	"github.com/google/uuid"
@@ -14,18 +15,83 @@ type RolledLoot struct {
 	Gus   []string
 }
 
-func RollLoot(lt models.LootTable) RolledLoot {
+func lootChanceMultiplier(rank int) float64 {
+	switch rank {
+	case 1:
+		return 1.0
+	case 2:
+		return 1.1
+	case 3:
+		return 1.2
+	case 4:
+		return 1.4
+	case 5:
+		return 1.6
+	case 6:
+		return 1.0
+	case 7:
+		return 1.5
+	case 8:
+		return 2.5
+	case 9:
+		return 4.0
+	default:
+		if rank > 9 {
+			return 4.0
+		}
+		return 1.0
+	}
+}
+
+func lootQuantityMultiplier(rank int) float64 {
+	switch rank {
+	case 1:
+		return 1.0
+	case 2:
+		return 2.0
+	case 3:
+		return 3.0
+	case 4:
+		return 4.0
+	case 5:
+		return 5.0
+	case 6:
+		return 1.0
+	case 7:
+		return 3.0
+	case 8:
+		return 5.0
+	case 9:
+		return 8.0
+	default:
+		if rank > 9 {
+			return 8.0
+		}
+		return 1.0
+	}
+}
+
+func RollLoot(lt models.LootTable, rank int) RolledLoot {
 	rolled := RolledLoot{
 		Items: make(map[string]int),
 		Gus:   []string{},
 	}
+	chanceMul := lootChanceMultiplier(rank)
+	qtyMul := lootQuantityMultiplier(rank)
+
 	for _, entry := range lt.Entries {
-		if rand.Float64() <= entry.Chance {
+		effectiveChance := math.Min(entry.Chance*chanceMul, 1.0)
+		if rand.Float64() <= effectiveChance {
 			qty := 1
-			if entry.MaxQty > entry.MinQty && entry.MinQty > 0 {
-				qty = entry.MinQty + rand.Intn(entry.MaxQty-entry.MinQty+1)
-			} else if entry.MinQty > 0 {
-				qty = entry.MinQty
+			effectiveMin := int(math.Round(float64(entry.MinQty) * qtyMul))
+			effectiveMax := int(math.Round(float64(entry.MaxQty) * qtyMul))
+			if effectiveMax > effectiveMin && effectiveMin > 0 {
+				qty = effectiveMin + rand.Intn(effectiveMax-effectiveMin+1)
+			} else if effectiveMin > 0 {
+				qty = effectiveMin
+			}
+			if qty < 1 {
+				qty = 1
 			}
 			if entry.ItemID != "" {
 				rolled.Items[entry.ItemID] += qty
