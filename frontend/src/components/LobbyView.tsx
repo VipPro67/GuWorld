@@ -22,6 +22,7 @@ import {
   Gift,
   Award,
   Trophy,
+  PawPrint,
 } from "lucide-react";
 import { LogConsole } from "./LogConsole";
 import { formatNumber } from "@/lib/utils";
@@ -43,15 +44,15 @@ const formatRelativeTime = (createdAtStr: string): string => {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffSec = Math.max(0, Math.floor(diffMs / 1000));
-  
+
   if (diffSec < 60) return "vừa xong";
-  
+
   const diffMin = Math.floor(diffSec / 60);
   if (diffMin < 60) return `${diffMin}p trước`;
-  
+
   const diffHour = Math.floor(diffMin / 60);
   if (diffHour < 24) return `${diffHour}g trước`;
-  
+
   const diffDay = Math.floor(diffHour / 24);
   return `${diffDay} ngày trước`;
 };
@@ -149,15 +150,16 @@ export const LobbyView: React.FC = () => {
       borderColor: "border-amber-400/20",
       iconColor: "text-amber-100",
     },
-    // {
-    //   id: "kill-moves",
-    //   label: "Sát Chiêu",
-    //   icon: Sword,
-    //   gradient: "from-rose-500 to-red-600",
-    //   glow: "group-hover:shadow-[0_0_20px_rgba(239,68,68,0.4)]",
-    //   borderColor: "border-rose-400/20",
-    //   iconColor: "text-rose-100",
-    // },
+    {
+      id: "aperture",
+      label: "Tiên Khiếu",
+      icon: Sparkles,
+      gradient: player && player.rank >= 6 ? "from-indigo-500 to-purple-600" : "from-zinc-800 to-zinc-950",
+      glow: player && player.rank >= 6 ? "group-hover:shadow-[0_0_25px_rgba(99,102,241,0.45)]" : "",
+      borderColor: player && player.rank >= 6 ? "border-indigo-400/30" : "border-zinc-800",
+      iconColor: player && player.rank >= 6 ? "text-indigo-400" : "text-zinc-600",
+      locked: !player || player.rank < 6,
+    },
     // {
     //   id: "premium-store",
     //   label: "Cát Bảo Các",
@@ -185,6 +187,7 @@ export const LobbyView: React.FC = () => {
       borderColor: "border-violet-400/20",
       iconColor: "text-violet-100",
     },
+
     {
       id: "gacha",
       label: "Đổ Thạch",
@@ -242,6 +245,7 @@ export const LobbyView: React.FC = () => {
       borderColor: "border-teal-400/30",
       iconColor: "text-teal-500",
     },
+    
     {
       id: "mine",
       label: "Mỏ Linh Thạch",
@@ -278,26 +282,42 @@ export const LobbyView: React.FC = () => {
       borderColor: "border-blue-400/30",
       iconColor: "text-blue-400",
       locked: false,
-    },
-    {
-      id: "beasts",
-      label: "Thần Thú",
+    }, {
+      id: "kill-moves",
+      label: "Sát Chiêu",
+      // icon: Sword,
+      // gradient: "from-rose-500 to-red-600",
+      // glow: "group-hover:shadow-[0_0_20px_rgba(239,68,68,0.4)]",
+      // borderColor: "border-rose-400/20",
+      // iconColor: "text-rose-100",
+      locked: true, // Locked for dev
       icon: Lock,
       gradient: "from-zinc-800 to-zinc-950",
       glow: "",
       borderColor: "border-zinc-800",
       iconColor: "text-zinc-600",
-      locked: true,
+    },
+
+    {
+      id: "pets",
+      label: "Nô Thú",
+      //icon: PawPrint,
+      icon: Lock,
+      gradient: "from-purple-500 to-fuchsia-600",
+      glow: "group-hover:shadow-[0_0_20px_rgba(168,85,247,0.4)]",
+      borderColor: "border-purple-400/20",
+      iconColor: "text-purple-100",
+      locked: true, // Locked for dev
     },
     {
-      id: "aperture",
-      label: "Tiên Khiếu",
-      icon: Sparkles,
-      gradient: player && player.rank >= 6 ? "from-indigo-500 to-purple-600" : "from-zinc-800 to-zinc-950",
-      glow: player && player.rank >= 6 ? "group-hover:shadow-[0_0_25px_rgba(99,102,241,0.45)]" : "",
-      borderColor: player && player.rank >= 6 ? "border-indigo-400/30" : "border-zinc-800",
-      iconColor: player && player.rank >= 6 ? "text-indigo-400" : "text-zinc-600",
-      locked: !player || player.rank < 6,
+      id: "world-map",
+      label: "Ngũ Vực",
+      icon: Compass,
+      gradient: "from-teal-500 to-emerald-600",
+      glow: "group-hover:shadow-[0_0_25px_rgba(20,184,166,0.45)]",
+      borderColor: "border-teal-400/30",
+      iconColor: "text-teal-500",
+      locked: true, // Locked for dev
     },
   ];
 
@@ -318,6 +338,7 @@ export const LobbyView: React.FC = () => {
       "Thất Tiên",
       "Bát Tiên",
       "Cửu Tôn",
+      "Thập ???",
     ];
     const rName = rankNames[rank - 1] || `${rank} Chuyển`;
     if (rank >= 6) {
@@ -370,7 +391,7 @@ export const LobbyView: React.FC = () => {
           {/* Center Block: HP, Mana, Thought & Soul Bars (Optimized to 1 line each) */}
           <div className="flex flex-col gap-2 w-full md:w-[380px] grow max-w-md">
             {/* HP Bar */}
-            <div 
+            <div
               className="flex items-center justify-between text-[11px] font-mono text-zinc-400 gap-2 hover:bg-zinc-900/10 p-0.5 rounded cursor-help transition-all"
               title={player && hpRegenRealHourly > 0 && displayedHP < displayedMaxHP ? `Hồi máu: +${hpRegenRealHourly.toFixed(1)}/giờ • ${formatTimeRemaining(displayedHP, displayedMaxHP, hpRegenRealHourly)}` : "Máu đầy"}
             >
@@ -394,7 +415,7 @@ export const LobbyView: React.FC = () => {
             </div>
 
             {/* Mana Bar */}
-            <div 
+            <div
               className="flex items-center justify-between text-[11px] font-mono text-zinc-400 gap-2 hover:bg-zinc-900/10 p-0.5 rounded cursor-help transition-all"
               title={player && manaRegenRealHourly > 0 && (player.rank >= 6 || displayedMana < displayedMaxMana) ? `${player.rank >= 6 ? 'Hồi Tiên Nguyên' : 'Hồi Chân Nguyên'}: +${manaRegenRealHourly.toFixed(1)}/giờ${player.rank < 6 ? ` • ${formatTimeRemaining(displayedMana, displayedMaxMana, manaRegenRealHourly)}` : ""}` : "Năng lượng đầy"}
             >
@@ -422,7 +443,7 @@ export const LobbyView: React.FC = () => {
             </div>
 
             {/* Thought Bar */}
-            <div 
+            <div
               className="flex items-center justify-between text-[11px] font-mono text-zinc-400 gap-2 hover:bg-zinc-900/10 p-0.5 rounded cursor-help transition-all"
               title={player && thoughtRegenRealHourly > 0 && (player.current_thought < player.max_thought) ? `Hồi Niệm Lực: +${thoughtRegenRealHourly.toFixed(1)}/giờ • ${formatTimeRemaining(player.current_thought, player.max_thought, thoughtRegenRealHourly)}` : "Niệm Lực đầy"}
             >
@@ -446,7 +467,7 @@ export const LobbyView: React.FC = () => {
             </div>
 
             {/* Soul Bar */}
-            <div 
+            <div
               className="flex items-center justify-between text-[11px] font-mono text-zinc-400 gap-2 hover:bg-zinc-900/10 p-0.5 rounded cursor-help transition-all"
               title={player && soulRegenRealHourly > 0 && player.soul_hp < player.max_soul ? `Hồi Linh Hồn: +${soulRegenRealHourly.toFixed(1)}/giờ • ${formatTimeRemaining(player.soul_hp, player.max_soul, soulRegenRealHourly)}` : "Linh Hồn đầy"}
             >
@@ -562,7 +583,7 @@ export const LobbyView: React.FC = () => {
       <div className="flex flex-col gap-3 sm:gap-5">
         <div className="flex items-center justify-between border-b border-zinc-900/60 pb-2">
           <h2 className="text-xs uppercase tracking-widest text-zinc-500 font-mono font-semibold">
-            Hoạt động thế giới
+            Hoạt động khác
           </h2>
           <span className="text-[10px] text-zinc-600 font-mono">
             {activityItems.length} hoạt động
@@ -576,18 +597,16 @@ export const LobbyView: React.FC = () => {
               <div
                 key={item.id}
                 onClick={() => handleItemClick(item)}
-                className={`flex flex-col items-center p-2 rounded-2xl transition-all duration-300 select-none ${
-                  item.locked
+                className={`flex flex-col items-center p-2 rounded-2xl transition-all duration-300 select-none ${item.locked
                     ? "opacity-50 cursor-not-allowed"
                     : "hover:bg-zinc-900/20 cursor-pointer group"
-                }`}
+                  }`}
               >
                 <div
-                  className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center ${
-                    item.locked
+                  className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center ${item.locked
                       ? "bg-zinc-950 border border-zinc-900"
                       : "bg-zinc-950 border border-zinc-900 hover:border-zinc-800 transition-all duration-300 group-hover:scale-110 shadow-md active:scale-95"
-                  } relative ${item.glow}`}
+                    } relative ${item.glow}`}
                 >
                   {!item.locked && (
                     <div className={`absolute inset-1 rounded-full border border-dashed border-zinc-800 opacity-60`} />
@@ -599,11 +618,10 @@ export const LobbyView: React.FC = () => {
                     </div>
                   )}
                 </div>
-                <span className={`font-serif text-[11px] sm:text-xs font-semibold mt-3 tracking-wide text-center transition-colors ${
-                  item.locked
+                <span className={`font-serif text-[11px] sm:text-xs font-semibold mt-3 tracking-wide text-center transition-colors ${item.locked
                     ? "text-zinc-600"
                     : "text-zinc-400 group-hover:text-zinc-100"
-                }`}>
+                  }`}>
                   {item.label}
                 </span>
               </div>

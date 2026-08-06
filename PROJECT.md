@@ -13,7 +13,7 @@ GuWorld là web RPG text-based có backend Go/Gin và frontend Next.js. Gameplay
 - `backend/internal/db/db.go`: schema PostgreSQL, migration dạng `CREATE/ALTER IF NOT EXISTS`, seed CSV.
 - `backend/internal/models`: struct domain cho player, Cổ, item, recipe, combat, aperture, monster, cell, feedback, killer move.
 - `backend/internal/handlers`: logic API theo từng module gameplay.
-- `backend/internal/worker`: worker đói Cổ.
+- `backend/internal/worker`: worker đói Cổ, worker đói sủng vật.
 - `backend/internal/cache`: Redis client optional.
 - `frontend/src/app`: Next.js App Router pages/layout.
 - `frontend/src/store/useGameStore.ts`: Zustand store, API client phía frontend và state gameplay.
@@ -48,6 +48,8 @@ GuWorld là web RPG text-based có backend Go/Gin và frontend Next.js. Gameplay
 
 - Grid map theo vùng, di chuyển, explore node, retreat.
 - Combat PvE dùng Cổ, charge, target theo hàng/cột/vị trí, status effects, loot tạm.
+- Bắt quái vật làm sủng vật (Monster Capture): rank check, hpFactor, typeFactor, capture bonus.
+- Sủng vật (Pets): CRUD, feed, formation, sleep, merge, hunger worker, chiến đấu tự động.
 - Party tạo/mời/rời.
 - Instance template/session/action.
 
@@ -84,6 +86,7 @@ GuWorld là web RPG text-based có backend Go/Gin và frontend Next.js. Gameplay
 - `BaoHoangMarket`, `TradeRoomModal`, `CaravanShop`.
 - `PremiumWallet`, `PremiumShopView`, `TopupView`.
 - `FeedbackView`, `PlayerProfileModal`, toast/log UI.
+- `PetPanel`: quản lý sủng vật (formation, feed, sleep, release, merge).
 
 ## Dữ liệu seed hiện tại
 

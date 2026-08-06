@@ -1,0 +1,410 @@
+package handlers
+
+import (
+	"net/http"
+	"math"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/models"
+)
+
+type FeedPetRequest struct {
+	PetID  string `json:"pet_id" binding:"required"`
+	ItemID string `json:"item_id" binding:"required"`
+}
+
+type FormationRequest struct {
+	Slots []string `json:"slots" binding:"required"` // ordered list of pet IDs
+}
+
+type SleepRequest struct {
+	PetID    string `json:"pet_id" binding:"required"`
+	Sleeping bool   `json:"sleeping"`
+}
+
+type ReleaseRequest struct {
+	PetID string `json:"pet_id" binding:"required"`
+}
+
+type MergeRequest struct {
+	TargetID  string   `json:"target_id" binding:"required"`
+	SourceIDs []string `json:"source_ids" binding:"required"`
+}
+
+func ListPlayerPets(c *gin.Context) {
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	pets, err := models.LoadPlayerPets(db.DB, authID.String())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load pets"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"pets": pets})
+}
+
+func FeedPet(c *gin.Context) {
+	var req FeedPetRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	// Load pet
+	var petID, nickname, state string
+	var hunger, maxHunger float64
+	err = tx.QueryRow(`
+		SELECT id, nickname, hunger, max_hunger, state
+		FROM player_pets WHERE id = $1 AND player_id = $2 FOR UPDATE
+	`, req.PetID, authID).Scan(&petID, &nickname, &hunger, &maxHunger, &state)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Pet không tồn tại."})
+		return
+	}
+
+	// Check item exists in inventory
+	qty, err := InventorySvc.GetQuantity(tx, authID.String(), req.ItemID, "consumables")
+	if err != nil || qty <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm này trong túi đồ."})
+		return
+	}
+
+	// Get item hunger value
+	item, ok := models.ItemRegistry[req.ItemID]
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không hợp lệ."})
+		return
+	}
+
+	hungerValue := item.Effects["hunger"]
+	if hungerValue <= 0 {
+		hungerValue = 30.0 // default
+	}
+
+	// Consume item
+	if err := InventorySvc.RemoveItem(tx, authID.String(), req.ItemID, "consumables", 1); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tiêu hao vật phẩm."})
+		return
+	}
+
+	// Feed
+	newHunger := hunger + hungerValue
+	if newHunger > maxHunger {
+		newHunger = maxHunger
+	}
+	_, err = tx.Exec(`UPDATE player_pets SET hunger = $1, updated_at = NOW() WHERE id = $2`, newHunger, petID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update pet hunger"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"pet_id": petID,
+		"nickname": nickname,
+		"hunger": newHunger,
+		"max_hunger": maxHunger,
+		"restored": hungerValue,
+		"item_used": req.ItemID,
+	})
+}
+
+func SetPetSleep(c *gin.Context) {
+	var req SleepRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	newState := "ACTIVE"
+	if req.Sleeping {
+		newState = "SLEEPING"
+	}
+
+	result, err := db.DB.Exec(`
+		UPDATE player_pets SET state = $1, updated_at = NOW()
+		WHERE id = $2 AND player_id = $3
+	`, newState, req.PetID, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update pet state"})
+		return
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Pet không tồn tại."})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"pet_id": req.PetID, "state": newState})
+}
+
+func SetPetFormation(c *gin.Context) {
+	var req FormationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	// Load current player rank for max formation slots
+	var playerRank int
+	err := db.DB.QueryRow(`SELECT rank FROM players WHERE id = $1`, authID).Scan(&playerRank)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		return
+	}
+
+	// Calculate max formation slots (1 + rank, cap 4)
+	maxSlots := 1 + playerRank
+	if maxSlots > 4 {
+		maxSlots = 4
+	}
+
+	if len(req.Slots) > maxSlots {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Quá số slot đội hình cho phép (tối đa " + itoa(maxSlots) + ")."})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	// Reset all formation slots
+	_, err = tx.Exec(`UPDATE player_pets SET formation_slot = 0 WHERE player_id = $1`, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reset formation"})
+		return
+	}
+
+	// Set new formation
+	for i, petIDStr := range req.Slots {
+		petUUID, errParse := uuid.Parse(petIDStr)
+		if errParse != nil {
+			continue
+		}
+		_, errUpd := tx.Exec(`
+			UPDATE player_pets SET formation_slot = $1, updated_at = NOW()
+			WHERE id = $2 AND player_id = $3
+		`, i+1, petUUID, authID)
+		if errUpd != nil {
+			continue
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"formation": req.Slots, "max_slots": maxSlots})
+}
+
+func ReleasePet(c *gin.Context) {
+	var req ReleaseRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	result, err := db.DB.Exec(`
+		DELETE FROM player_pets WHERE id = $1 AND player_id = $2
+	`, req.PetID, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to release pet"})
+		return
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Pet không tồn tại."})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"released": true, "pet_id": req.PetID})
+}
+
+func MergePets(c *gin.Context) {
+	var req MergeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	if len(req.SourceIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cần chọn ít nhất 1 pet nguồn để gộp."})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	// Load target
+	var targetID, targetTemplateID, targetNickname string
+	var targetRank, targetSubRank, targetCount int
+	var targetHP, targetMaxHP, targetAtk, targetDef, targetSpeed float64
+	err = tx.QueryRow(`
+		SELECT id, monster_template_id, nickname, rank, sub_rank, hp, max_hp, base_attack, base_defense, speed, count
+		FROM player_pets WHERE id = $1 AND player_id = $2 FOR UPDATE
+	`, req.TargetID, authID).Scan(
+		&targetID, &targetTemplateID, &targetNickname, &targetRank, &targetSubRank,
+		&targetHP, &targetMaxHP, &targetAtk, &targetDef, &targetSpeed, &targetCount,
+	)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Target pet không tồn tại."})
+		return
+	}
+
+	// Validate all sources: same template, same player, formation_slot=0
+	validSources := 0
+	for _, srcID := range req.SourceIDs {
+		var srcTemplateID string
+		var srcFormationSlot int
+		errSrc := tx.QueryRow(`
+			SELECT monster_template_id, formation_slot
+			FROM player_pets WHERE id = $1 AND player_id = $2 FOR UPDATE
+		`, srcID, authID).Scan(&srcTemplateID, &srcFormationSlot)
+		if errSrc != nil {
+			continue
+		}
+		if srcTemplateID != targetTemplateID {
+			continue
+		}
+		if srcFormationSlot > 0 {
+			continue // can't merge from formation
+		}
+		validSources++
+	}
+
+	if validSources == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có pet nguồn hợp lệ (cùng loại, không trong đội hình)."})
+		return
+	}
+
+	// Merge: increase count, recompute stats
+	newCount := targetCount + validSources
+	packScale := mathPow(float64(newCount), 0.65)
+	newMaxHP := mathRound(targetMaxHP * packScale)
+	newAtk := mathRound(targetAtk * packScale)
+	newDef := mathRound(targetDef * packScale)
+
+	_, err = tx.Exec(`
+		UPDATE player_pets
+		SET count = $1, hp = $2, max_hp = $3, base_attack = $4, base_defense = $5, updated_at = NOW()
+		WHERE id = $6
+	`, newCount, newMaxHP, newMaxHP, newAtk, newDef, targetID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to merge pets"})
+		return
+	}
+
+	// Delete valid sources
+	for _, srcID := range req.SourceIDs {
+		var srcTemplateID string
+		var srcFormationSlot int
+		errSrc := tx.QueryRow(`
+			SELECT monster_template_id, formation_slot
+			FROM player_pets WHERE id = $1 AND player_id = $2
+		`, srcID, authID).Scan(&srcTemplateID, &srcFormationSlot)
+		if errSrc != nil {
+			continue
+		}
+		if srcTemplateID != targetTemplateID || srcFormationSlot > 0 {
+			continue
+		}
+		_, _ = tx.Exec(`DELETE FROM player_pets WHERE id = $1 AND player_id = $2`, srcID, authID)
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+
+	displayName := targetNickname
+	if newCount > 1 {
+		displayName = "Bầy " + targetNickname + " (" + itoa(newCount) + ")"
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"target_id": targetID,
+		"nickname":  displayName,
+		"count":     newCount,
+		"max_hp":    newMaxHP,
+		"attack":    newAtk,
+		"defense":   newDef,
+	})
+}
+
+func mathPow(x, y float64) float64 {
+	if y == 0 {
+		return 1
+	}
+	if x <= 0 {
+		return 0
+	}
+	// x^y = exp(y * ln(x))
+	return math.Exp(y * math.Log(x))
+}
+
+func mathRound(x float64) float64 {
+	return math.Round(x*10) / 10
+}
+
+func itoa(n int) string {
+	return strconv.Itoa(n)
+}

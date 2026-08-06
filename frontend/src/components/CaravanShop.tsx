@@ -608,6 +608,10 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredBuyItems.map((item) => {
               const canAfford = player.primeval_stones >= item.price;
+              const ownedQty = item.type === "Gu"
+                ? (player.gu_inventory?.filter((g) => g.gu_id === item.id && g.status !== "DEAD").length || 0)
+                : (player.materials_inventory?.[item.id] || 0);
+
               return (
                 <div
                   key={item.id}
@@ -636,9 +640,14 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                     </details>
                   </div>
                   <div className="border-t border-zinc-900/60 pt-3 flex items-center justify-between">
-                    <span className="text-[10px] text-zinc-600 font-mono">
-                      Kho hàng: {item.stock > 0 ? `${item.stock} cái` : "Vô hạn"}
-                    </span>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[10px] text-zinc-600 font-mono">
+                        Kho hàng: {item.stock > 0 ? `${item.stock} cái` : "Vô hạn"}
+                      </span>
+                      <span className="text-[10px] text-zinc-500 font-mono">
+                        Bạn có: <span className="text-emerald-500 font-bold">x{ownedQty}</span>
+                      </span>
+                    </div>
                     <button
                       type="button"
                       disabled={actionLoading}
@@ -796,11 +805,22 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
               </p>
             </div>
 
-            <div className="bg-zinc-900/40 border border-zinc-850 rounded-xl p-3 flex justify-between text-xs font-mono">
-              <span className="text-zinc-400">Đơn giá:</span>
-              <span className="text-amber-400 font-bold flex items-center gap-1">
-                <Coins className="w-3.5 h-3.5" /> {selectedBuyItem.price} Nguyên Thạch
-              </span>
+            <div className="bg-zinc-900/40 border border-zinc-850 rounded-xl p-3 space-y-1.5 text-xs font-mono">
+              <div className="flex justify-between">
+                <span className="text-zinc-400">Đơn giá:</span>
+                <span className="text-amber-400 font-bold flex items-center gap-1">
+                  <Coins className="w-3.5 h-3.5" /> {selectedBuyItem.price} Nguyên Thạch
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-zinc-800/40 pt-1.5">
+                <span className="text-zinc-400">Bạn có:</span>
+                <span className="text-emerald-500 font-bold">
+                  {selectedBuyItem.type === "Gu"
+                    ? `x${player.gu_inventory?.filter((g) => g.gu_id === selectedBuyItem.id && g.status !== "DEAD").length || 0}`
+                    : `x${player.materials_inventory?.[selectedBuyItem.id] || 0}`
+                  }
+                </span>
+              </div>
             </div>
 
             {selectedBuyItem.type !== "Gu" ? (

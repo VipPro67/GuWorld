@@ -98,13 +98,25 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 
 ## Exploration and combat
 
-| Method | Path |
-| --- | --- |
-| POST | `/combat/attack` |
-| POST | `/explore` |
-| POST | `/explore/retreat/:id` |
-| GET | `/explore/grid` |
-| POST | `/explore/move` |
+| Method | Path | Ghi chú |
+| --- | --- | --- |
+| POST | `/combat/attack` | |
+| POST | `/combat/capture` | Bắt quái vật làm sủng vật. |
+| POST | `/explore` | |
+| POST | `/explore/retreat/:id` | |
+| GET | `/explore/grid` | |
+| POST | `/explore/move` | |
+
+## Sủng vật (Pets)
+
+| Method | Path | Ghi chú |
+| --- | --- | --- |
+| GET | `/pets` | Danh sách sủng vật của người chơi. |
+| POST | `/pets/feed` | Cho sủng vật ăn. Body: `{"pet_id": "...", "item_id": "..."}`. |
+| POST | `/pets/formation` | Đặt vị trí trong đội hình. Body: `{"pet_id": "...", "slot": 1}`. Slot 0 = storage. |
+| POST | `/pets/sleep` | Chuyển sủng vật active ↔ sleeping. Body: `{"pet_id": "..."}`. |
+| POST | `/pets/release` | Thả sủng vật. Body: `{"pet_id": "..."}`. |
+| POST | `/pets/merge` | Gộp sủng vật cùng loại. Body: `{"source_ids": ["..."], "target_id": "..."}`. |
 
 ## Party, arena, mine
 
@@ -254,5 +266,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | DELETE | `/admin/players/:id/items` | Xóa item hoặc cổ phương khỏi người chơi. Body: `{item_id, quantity}`. Nếu là recipe → thu hồi (delete) khỏi `player_recipe_progress`. Trả `kind` = `item`/`recipe`. |
 | POST | `/admin/players/:id/gus` | Thêm gu cho người chơi. |
 | DELETE | `/admin/players/:id/gus/:instance_id` | Xóa gu theo instance_id. |
+| GET | `/admin/players/:id/pets` | Lazy-load sủng vật của người chơi. Params: `page`, `limit`, `q` (search monster name/ID). |
+| DELETE | `/admin/players/:id/pets/:pet_id` | Xóa vĩnh viễn sủng vật. |
 | PUT | `/admin/players/:id/stones` | Đổi đá (stones) của người chơi. |
 | GET | `/admin/audit-logs` | Audit log (bao gồm `admin.update_player`). |

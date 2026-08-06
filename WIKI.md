@@ -209,6 +209,34 @@ Người chơi có thể:
 - Combat state hỗ trợ ally/enemy đội hình, status effects, cooldown, mana/HP, loot tạm.
 - Thắng trận áp dụng loot; thua trận cập nhật trạng thái theo handler combat.
 
+### Bắt sủng vật (Monster Capture)
+
+Trong chiến đấu, đạo hữu có thể bắt quái vật làm sủng vật:
+
+- **Điều kiện:** Quái vật phải có cờ `is_capturable` trong Monster dictionary (hiện tại: Dế Mèn, Ong Vàng, Rắn Hổ, Bọ Cạp, Nhện Độc).
+- **Rank requirement:** Cổ trùng bắt buộc phải **rank ≥ rank quái** mới có thể bắt.
+- **Công thức bắt:**
+  ```
+  baseChance × typeFactor × hpFactor × (1 + captureBonus) × luckMultiplier
+  ```
+  - `baseChance`: 0.25 (rank 1) → 0.10 (rank 5) — giảm dần theo rank
+  - `typeFactor`: 1.0 (insect) / 0.8 (reptile) / 0.6 (beast) / 0.4 (spirit) / 0.2 (divine)
+  - `hpFactor`: `(1 - enemy.hp%)^0.5` — quái càng yếu càng dễ bắt (full HP ≈ 0%)
+  - `captureBonus`: tổng từ thuộc tính `capture_bonus` của các Cổ đang trang bị
+  - `luckMultiplier`: random 0.9-1.1
+- **Kết quả:** Nếu roll < baseChance → bắt thành công, quái biến thành sủng vật trong `player_pets`, xóa khỏi combat. Nếu roll ≥ baseChance → bỏ lỡ, tiếp tục chiến đấu.
+
+### Sủng vật (Pets)
+
+Sủng vật là quái vật đã bắt, hỗ trợ chiến đấu:
+
+- **Team:** Tối đa 4 sủng vật trong đội hình (tăng theo rank, Rank 1 = 2 slot, Rank 5 = 4 slot).
+- **Chiến đấu:** Sủng vật tự động tấn công quái địch mỗi lượt bằng BASIC_ATTACK (ATK × 1.0).
+- **Độ no:** Giảm theo `pet_hunger_per_hour` (mặc định 2/giờ). Sủng vật đang ngủ giảm 50%. Khi về 0 → **chết vĩnh viễn** (xóa khỏi DB).
+- **Cho ăn:** Dùng vật phẩm có effect `hunger` (Thịt Lợn Rừng +40, Rượu Thanh Trúc +30, Ngọc Thạch +25, Nguyệt Lan +20).
+- **Gộp:** Cùng `monster_template_id` có thể gộp thành 1 gói. Chỉ số × `N^0.65`, độ no × `1 + 0.3*(N-1)`.
+- **Chết:** HP = 0 trong combat hoặc hết độ no → xóa vĩnh viễn. Không thể hồi sinh.
+
 ## 10. Phó bản
 
 - Instance có template, session active và action theo option index.

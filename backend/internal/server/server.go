@@ -145,6 +145,8 @@ func SetupRouter() *gin.Engine {
 			admin.DELETE("/players/:id/items", handlers.AdminRemovePlayerItems)
 			admin.POST("/players/:id/gus", handlers.AdminAddPlayerGus)
 			admin.DELETE("/players/:id/gus/:instance_id", handlers.AdminRemovePlayerGu)
+			admin.GET("/players/:id/pets", handlers.AdminListPlayerPets)
+			admin.DELETE("/players/:id/pets/:pet_id", handlers.AdminDeletePlayerPet)
 			admin.PUT("/players/:id/stones", handlers.AdminChangePlayerStones)
 			admin.GET("/sects", handlers.AdminListSects)
 			admin.GET("/sects/:id", handlers.AdminGetSectDetail)
@@ -315,6 +317,19 @@ func SetupRouter() *gin.Engine {
 			refining.POST("/deduce", handlers.DeduceRecipe)
 		}
 
+		// Pets — group: 30/min, per player: 20/min
+		pets := api.Group("/pets")
+		pets.Use(middleware.AuthRequired())
+		pets.Use(middleware.RateLimitByPlayer(20, time.Minute))
+		{
+			pets.GET("", handlers.ListPlayerPets)
+			pets.POST("/feed", handlers.FeedPet)
+			pets.POST("/formation", handlers.SetPetFormation)
+			pets.POST("/sleep", handlers.SetPetSleep)
+			pets.POST("/release", handlers.ReleasePet)
+			pets.POST("/merge", handlers.MergePets)
+		}
+
 		// Killer Moves — group: 30/min, per player: 20/min
 		killerMoves := api.Group("/killer-moves")
 		killerMoves.Use(middleware.AuthRequired())
@@ -332,10 +347,11 @@ func SetupRouter() *gin.Engine {
 		combat.Use(middleware.AuthRequired())
 		combat.Use(middleware.RateLimitByPlayer(30, time.Minute))
 		{
-			combat.POST("/start", handlers.AutoCombatStart)
-			combat.POST("/attack", handlers.CombatAttack)
-			combat.POST("/cast-killer-move", handlers.CastKillerMove)
-			combat.GET("/history", handlers.ListCombatHistory)
+		combat.POST("/start", handlers.AutoCombatStart)
+		combat.POST("/attack", handlers.CombatAttack)
+		combat.POST("/cast-killer-move", handlers.CastKillerMove)
+		combat.POST("/capture", handlers.CaptureMonster)
+		combat.GET("/history", handlers.ListCombatHistory)
 			combat.GET("/history/:id", handlers.GetCombatHistory)
 		}
 

@@ -42,6 +42,7 @@ import {
   Clock,
   Copy,
   Upload,
+  PawPrint,
 } from "lucide-react";
 import { translateGuType, translateItemType } from "@/lib/translate";
 
@@ -383,7 +384,7 @@ function guLocationLabel(loc: string): string {
 
 export const AdminView: React.FC = () => {
   const { player, setView, addToast, guDictionary, itemDictionary } = useGameStore();
-  const [activeTab, setActiveTab] = useState<"items" | "gus">("items");
+  const [activeTab, setActiveTab] = useState<"items" | "gus" | "pets">("items");
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -411,6 +412,13 @@ export const AdminView: React.FC = () => {
   const [playerGusLimit] = useState(20);
   const [playerGusLoading, setPlayerGusLoading] = useState(false);
   const [playerGusSearch, setPlayerGusSearch] = useState("");
+
+  const [playerPets, setPlayerPets] = useState<any[]>([]);
+  const [playerPetsTotal, setPlayerPetsTotal] = useState(0);
+  const [playerPetsPage, setPlayerPetsPage] = useState(1);
+  const [playerPetsLimit] = useState(20);
+  const [playerPetsLoading, setPlayerPetsLoading] = useState(false);
+  const [playerPetsSearch, setPlayerPetsSearch] = useState("");
 
   // Edit player modal
   const [showEditPlayer, setShowEditPlayer] = useState(false);
@@ -824,6 +832,20 @@ export const AdminView: React.FC = () => {
     } catch {} finally { setPlayerGusLoading(false); }
   }, [playerGusPage, playerGusLimit, playerGusSearch]);
 
+  const fetchPlayerPets = useCallback(async (id: string) => {
+    setPlayerPetsLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(playerPetsPage), limit: String(playerPetsLimit) });
+      if (playerPetsSearch.trim()) params.set("search", playerPetsSearch.trim());
+      const res = await authFetch(`${BACKEND_URL}/api/admin/players/${id}/pets?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setPlayerPets(data.data || []);
+        setPlayerPetsTotal(data.total || 0);
+      }
+    } catch {} finally { setPlayerPetsLoading(false); }
+  }, [playerPetsPage, playerPetsLimit, playerPetsSearch]);
+
   useEffect(() => {
     if (selectedId && activeTab === "items") fetchPlayerItems(selectedId);
   }, [selectedId, activeTab, playerItemsPage, playerItemsSearch, fetchPlayerItems]);
@@ -831,6 +853,10 @@ export const AdminView: React.FC = () => {
   useEffect(() => {
     if (selectedId && activeTab === "gus") fetchPlayerGus(selectedId);
   }, [selectedId, activeTab, playerGusPage, playerGusSearch, fetchPlayerGus]);
+
+  useEffect(() => {
+    if (selectedId && activeTab === "pets") fetchPlayerPets(selectedId);
+  }, [selectedId, activeTab, playerPetsPage, playerPetsSearch, fetchPlayerPets]);
 
   const exec = async (url: string, method: string, body?: any) => {
     setActionLoading(true);
@@ -1027,6 +1053,9 @@ export const AdminView: React.FC = () => {
               <button onClick={() => setActiveTab("gus")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${activeTab === "gus" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
                 <Bug className="w-3.5 h-3.5 inline mr-1.5" />Cổ trùng ({detail.gu_count || 0})
               </button>
+              <button onClick={() => setActiveTab("pets")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${activeTab === "pets" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+                <PawPrint className="w-3.5 h-3.5 inline mr-1.5" />Sủng vật ({playerPetsTotal})
+              </button>
             </div>
 
             {/* Items Tab */}
@@ -1191,6 +1220,93 @@ export const AdminView: React.FC = () => {
                           Sau <ChevronRight className="w-4 h-4" />
                         </button>
                       </div>
+                    </div>
+                  </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Pets Tab */}
+            {activeTab === "pets" && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                    <input type="text" value={playerPetsSearch} onChange={e => setPlayerPetsSearch(e.target.value)} onKeyDown={e => { if (e.key === "Enter") setPlayerPetsPage(1); }} placeholder="Tìm sủng vật..." className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 placeholder:text-zinc-600" />
+                  </div>
+                  <button onClick={() => { setPlayerPetsPage(1); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-300 transition-colors cursor-pointer">
+                    <Search className="w-3.5 h-3.5" /> Tìm
+                  </button>
+                </div>
+
+                {playerPetsLoading ? (
+                  <div className="flex flex-col items-center py-12"><RefreshCw className="w-6 h-6 text-purple-400 animate-spin" /><span className="text-xs text-zinc-500 font-mono mt-2">Đang tải sủng vật...</span></div>
+                ) : playerPets.length === 0 ? (
+                  <div className="text-center py-12 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl">
+                    <PawPrint className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
+                    <p className="text-xs text-zinc-500">Không có sủng vật nào</p>
+                  </div>
+                ) : (
+                  <>
+                  <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-zinc-800/60 text-zinc-500">
+                          <th className="px-3 py-2 font-mono font-semibold">ID</th>
+                          <th className="px-3 py-2 font-mono font-semibold">Monster</th>
+                          <th className="px-3 py-2 font-mono font-semibold">Rank</th>
+                          <th className="px-3 py-2 font-mono font-semibold">HP</th>
+                          <th className="px-3 py-2 font-mono font-semibold">ATK</th>
+                          <th className="px-3 py-2 font-mono font-semibold">DEF</th>
+                          <th className="px-3 py-2 font-mono font-semibold">No</th>
+                          <th className="px-3 py-2 font-mono font-semibold">Trạng thái</th>
+                          <th className="px-3 py-2 font-mono font-semibold">Formation</th>
+                          <th className="px-3 py-2 font-mono font-semibold text-right">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-800/40">
+                        {playerPets.map((pet: any) => (
+                          <tr key={pet.id} className="hover:bg-zinc-900/30 transition-colors">
+                            <td className="px-3 py-2 font-mono text-zinc-400">{pet.id.substring(0, 8)}...</td>
+                            <td className="px-3 py-2 font-bold text-zinc-200">{pet.monster_name || pet.monster_template_id}</td>
+                            <td className="px-3 py-2 text-zinc-300">Rank {pet.rank}</td>
+                            <td className="px-3 py-2 text-red-400">{Math.round(pet.current_hp)}/{Math.round(pet.max_hp)}</td>
+                            <td className="px-3 py-2 text-amber-400">{Math.round(pet.attack)}</td>
+                            <td className="px-3 py-2 text-blue-400">{Math.round(pet.defense)}</td>
+                            <td className="px-3 py-2 text-purple-400">{Math.round(pet.hunger)}%</td>
+                            <td className="px-3 py-2">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${pet.status === "active" ? "bg-emerald-900/40 text-emerald-400" : "bg-zinc-800 text-zinc-500"}`}>
+                                {pet.status === "active" ? "Hoạt động" : "Ngủ"}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-zinc-300">{pet.formation_slot === 0 ? "Storage" : `Slot ${pet.formation_slot}`}</td>
+                            <td className="px-3 py-2 text-right">
+                              <button
+                                onClick={async () => {
+                                  if (!confirm(`Xóa vĩnh viễn sủng vật ${pet.monster_name || pet.monster_template_id}?`)) return;
+                                  const res = await authFetch(`${BACKEND_URL}/api/admin/players/${selectedId}/pets/${pet.id}`, { method: "DELETE" });
+                                  if (res.ok) fetchPlayerPets(selectedId!);
+                                }}
+                                className="px-2 py-1 rounded bg-red-900/40 hover:bg-red-800 text-red-400 text-[10px] font-bold transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3 h-3 inline" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-zinc-500 font-mono">
+                    <span>Trang {playerPetsPage} / {Math.max(1, Math.ceil(playerPetsTotal / playerPetsLimit))} • Tổng: {playerPetsTotal}</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => setPlayerPetsPage(Math.max(1, playerPetsPage - 1))} disabled={playerPetsPage <= 1 || playerPetsLoading} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 disabled:opacity-40 transition-colors cursor-pointer">
+                        <ChevronLeft className="w-4 h-4" /> Trước
+                      </button>
+                      <button onClick={() => setPlayerPetsPage(playerPetsPage + 1)} disabled={playerPetsPage >= Math.ceil(playerPetsTotal / playerPetsLimit) || playerPetsLoading} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 disabled:opacity-40 transition-colors cursor-pointer">
+                        Sau <ChevronRight className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                   </>

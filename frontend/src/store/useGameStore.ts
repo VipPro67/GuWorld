@@ -56,6 +56,28 @@ export interface CombatState {
   enemy_sub_rank?: number;
 }
 
+export interface PlayerPet {
+  id: string;
+  player_id: string;
+  monster_template_id: string;
+  nickname: string;
+  rank: number;
+  sub_rank: number;
+  hp: number;
+  max_hp: number;
+  base_attack: number;
+  base_defense: number;
+  speed: number;
+  count: number;
+  hunger: number;
+  max_hunger: number;
+  pet_hunger_per_hour: number;
+  state: string;
+  formation_slot: number;
+  captured_at: string;
+  updated_at: string;
+}
+
 export interface CombatHistoryEntry {
   id: string;
   player_id: string;
@@ -504,6 +526,9 @@ export interface MonsterSpec {
   ai_profile: string;
   loot_table_id: string;
   description: string;
+  is_capturable?: boolean;
+  capture_chance?: number;
+  pet_hunger_per_hour?: number;
 }
 
 
@@ -939,6 +964,17 @@ interface GameState {
   claimMineRewards: (slotId: number) => Promise<boolean>;
   abandonMineSlot: (slotId: number) => Promise<boolean>;
   attackMineSlot: (slotId: number) => Promise<boolean>;
+
+  // Pet State & Actions
+  playerPets: PlayerPet[];
+  playerPetsLoaded: boolean;
+  fetchPlayerPets: () => Promise<void>;
+  feedPet: (petId: string, itemId: string) => Promise<boolean>;
+  setPetFormation: (petIds: string[]) => Promise<boolean>;
+  setPetSleep: (petId: string, sleeping: boolean) => Promise<boolean>;
+  releasePet: (petId: string) => Promise<boolean>;
+  mergePets: (targetId: string, sourceIds: string[]) => Promise<boolean>;
+  captureMonster: () => Promise<{ captured: boolean; message: string } | null>;
 
   // Toast System State & Actions
   toasts: ToastMessage[];
@@ -4297,6 +4333,165 @@ export const useGameStore = create<GameState>((set, get) => {
       get().addLog(`Tấn công mỏ lỗi: ${err.message}`);
       get().addToast(err.message, "error");
       return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  // ── Pet Actions ──
+  playerPets: [],
+  playerPetsLoaded: false,
+
+  fetchPlayerPets: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/pets`);
+      if (response.status === 401 || response.status === 403) { logout(); return; }
+      const data = await response.json();
+      if (response.ok) {
+        set({ playerPets: data.pets || [], playerPetsLoaded: true });
+      }
+    } catch {}
+  },
+
+  feedPet: async (petId, itemId) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/pets/feed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pet_id: petId, item_id: itemId }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Cho ăn thất bại");
+      get().addToast(data.message || `Đã cho ăn +${data.restored} hunger`, "success");
+      await get().fetchPlayerPets();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  setPetFormation: async (petIds) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/pets/formation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slots: petIds }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Cập nhật đội hình thất bại");
+      get().addToast("Đội hình đã cập nhật", "success");
+      await get().fetchPlayerPets();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  setPetSleep: async (petId, sleeping) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/pets/sleep`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pet_id: petId, sleeping }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Cập nhật trạng thái thất bại");
+      await get().fetchPlayerPets();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  releasePet: async (petId) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/pets/release`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pet_id: petId }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Thả pet thất bại");
+      get().addToast("Đã thả pet", "success");
+      await get().fetchPlayerPets();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  mergePets: async (targetId, sourceIds) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/pets/merge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target_id: targetId, source_ids: sourceIds }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Gộp bầy thất bại");
+      get().addToast(data.message || `Đã gộp thành ${data.count} cá thể!`, "success");
+      await get().fetchPlayerPets();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  captureMonster: async () => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return null;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/combat/capture`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_id: player.id }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Bắt thất bại");
+      setPlayerFromServer(data.player);
+      if (data.captured) {
+        get().addToast(data.message || "Bắt thành công!", "success");
+        await get().fetchPlayerPets();
+      } else {
+        get().addToast(data.message || "Bắt thất bại!", "error");
+      }
+      return { captured: data.captured, message: data.message };
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return null;
     } finally { set({ actionLoading: false }); }
   },
 

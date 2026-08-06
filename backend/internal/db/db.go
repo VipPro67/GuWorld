@@ -593,6 +593,16 @@ func InitSchema() error {
 		DROP COLUMN IF EXISTS current_mana;
 	`)
 
+	// Monster capture columns
+	_, err = DB.Exec(`
+		ALTER TABLE monster_templates ADD COLUMN IF NOT EXISTS is_capturable BOOLEAN NOT NULL DEFAULT false;
+		ALTER TABLE monster_templates ADD COLUMN IF NOT EXISTS capture_chance DOUBLE PRECISION NOT NULL DEFAULT 0.20;
+		ALTER TABLE monster_templates ADD COLUMN IF NOT EXISTS pet_hunger_per_hour DOUBLE PRECISION NOT NULL DEFAULT 2.0;
+	`)
+	if err != nil {
+		logger.S.Warnf("failed to add monster_templates capture columns: %v", err)
+	}
+
 	// 4.8. Create monster_spawns
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS monster_spawns (
@@ -1387,6 +1397,45 @@ func InitSchema() error {
 	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_inventory_player ON player_inventory_items(player_id);`)
 	if err != nil {
 		logger.S.Warnf("failed to create idx_inventory_player: %v", err)
+	}
+
+	// Player pets table
+	_, err = DB.Exec(`
+		CREATE TABLE IF NOT EXISTS player_pets (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+			monster_template_id VARCHAR(50) NOT NULL REFERENCES monster_templates(id),
+			nickname VARCHAR(60) NOT NULL DEFAULT '',
+			rank INT NOT NULL DEFAULT 1,
+			sub_rank INT NOT NULL DEFAULT 1,
+			hp DOUBLE PRECISION NOT NULL,
+			max_hp DOUBLE PRECISION NOT NULL,
+			base_attack DOUBLE PRECISION NOT NULL,
+			base_defense DOUBLE PRECISION NOT NULL,
+			speed DOUBLE PRECISION NOT NULL DEFAULT 10,
+			count INT NOT NULL DEFAULT 1,
+			hunger DOUBLE PRECISION NOT NULL DEFAULT 100,
+			max_hunger DOUBLE PRECISION NOT NULL DEFAULT 100,
+			pet_hunger_per_hour DOUBLE PRECISION NOT NULL DEFAULT 2.0,
+			state VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+			formation_slot INT NOT NULL DEFAULT 0,
+			captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);`)
+	if err != nil {
+		logger.S.Warnf("failed to create player_pets table: %v", err)
+	}
+	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS player_pets_player_idx ON player_pets (player_id);`)
+	if err != nil {
+		logger.S.Warnf("failed to create player_pets index: %v", err)
+	}
+	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS player_pets_formation_idx ON player_pets (player_id, formation_slot);`)
+	if err != nil {
+		logger.S.Warnf("failed to create player_pets formation index: %v", err)
+	}
+	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS player_pets_monster_idx ON player_pets (player_id, monster_template_id);`)
+	if err != nil {
+		logger.S.Warnf("failed to create player_pets monster index: %v", err)
 	}
 
 	// Phase 6 tables: player_quest_progress
@@ -2362,6 +2411,7 @@ func seedMonsterTemplatesFromCSV(filename string) error {
 	hpIdx, attackIdx, defenseIdx := col("max_hp"), col("base_attack"), col("base_defense")
 	guIdx, itemIdx, daoIdx, masteryIdx := col("gu_inventory"), col("item_inventory"), col("dao_marks"), col("path_masteries")
 	aiIdx, lootIdx, descIdx, activeIdx := col("ai_profile"), col("loot_table_id"), col("description"), col("is_active")
+	capturableIdx, captureChanceIdx, hungerRateIdx := col("is_capturable"), col("capture_chance"), col("pet_hunger_per_hour")
 	if idIdx < 0 || nameIdx < 0 || typeIdx < 0 || hpIdx < 0 || attackIdx < 0 || defenseIdx < 0 {
 		return fmt.Errorf("Monster.csv missing required columns")
 	}
@@ -2401,14 +2451,28 @@ func seedMonsterTemplatesFromCSV(filename string) error {
 		if av == "false" || av == "0" || av == "no" {
 			active = false
 		}
+		capturable := false
+		cv := strings.ToLower(get(row, capturableIdx))
+		if cv == "true" || cv == "1" || cv == "yes" {
+			capturable = true
+		}
+		captureChance := 0.20
+		if v := get(row, captureChanceIdx); v != "" {
+			fmt.Sscanf(v, "%f", &captureChance)
+		}
+		petHungerRate := 2.0
+		if v := get(row, hungerRateIdx); v != "" {
+			fmt.Sscanf(v, "%f", &petHungerRate)
+		}
 		_, err = DB.Exec(`
-			INSERT INTO monster_templates (id, name, type, max_hp, base_attack, base_defense, gu_inventory, item_inventory, dao_marks, path_masteries, ai_profile, loot_table_id, description, is_active, updated_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12,$13,$14,NOW())
+			INSERT INTO monster_templates (id, name, type, max_hp, base_attack, base_defense, gu_inventory, item_inventory, dao_marks, path_masteries, ai_profile, loot_table_id, description, is_active, is_capturable, capture_chance, pet_hunger_per_hour, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12,$13,$14,$15,$16,$17,NOW())
 			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, type=EXCLUDED.type,
 			max_hp=EXCLUDED.max_hp, base_attack=EXCLUDED.base_attack, base_defense=EXCLUDED.base_defense,
 			gu_inventory=EXCLUDED.gu_inventory, item_inventory=EXCLUDED.item_inventory, dao_marks=EXCLUDED.dao_marks, path_masteries=EXCLUDED.path_masteries,
-			ai_profile=EXCLUDED.ai_profile, loot_table_id=EXCLUDED.loot_table_id, description=EXCLUDED.description, is_active=EXCLUDED.is_active, updated_at=NOW()
-		`, id, get(row, nameIdx), get(row, typeIdx), maxHP, attack, defense, guInv, itemInv, daoMarks, masteries, ai, get(row, lootIdx), get(row, descIdx), active)
+			ai_profile=EXCLUDED.ai_profile, loot_table_id=EXCLUDED.loot_table_id, description=EXCLUDED.description, is_active=EXCLUDED.is_active,
+			is_capturable=EXCLUDED.is_capturable, capture_chance=EXCLUDED.capture_chance, pet_hunger_per_hour=EXCLUDED.pet_hunger_per_hour, updated_at=NOW()
+		`, id, get(row, nameIdx), get(row, typeIdx), maxHP, attack, defense, guInv, itemInv, daoMarks, masteries, ai, get(row, lootIdx), get(row, descIdx), active, capturable, captureChance, petHungerRate)
 		if err != nil {
 			return fmt.Errorf("upsert monster %s: %w", id, err)
 		}

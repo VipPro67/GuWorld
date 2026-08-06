@@ -23,6 +23,7 @@ import { LobbyView } from "@/components/LobbyView";
 import { GlobalChatOverlay } from "@/components/GlobalChatOverlay";
 import { ImmortalApertureView } from "@/components/ImmortalApertureView";
 import { DungeonView } from "@/components/DungeonView";
+import { PetPanel } from "@/components/PetPanel";
 import { SectView } from "@/components/SectView";
 import { WikiView } from "@/components/WikiView";
 import { CombatHistoryView } from "@/components/CombatHistoryView";
@@ -89,6 +90,8 @@ export default function Home() {
     cancelTrade,
     showChangelog,
     setShowChangelog,
+    playerPets,
+    monsterDictionary,
   } = useGameStore();
 
   const [dontShowToday, setDontShowToday] = useState(false);
@@ -312,6 +315,16 @@ export default function Home() {
         ) : currentView === "achievements" ? (
           <div className="w-full max-w-4xl mx-auto">
             <AchievementsPanel />
+          </div>
+        ) : currentView === "pets" ? (
+          <div className="w-full max-w-4xl mx-auto">
+            <PetPanel
+              player={player}
+              pets={playerPets}
+              itemDictionary={itemDictionary}
+              monsterDictionary={monsterDictionary}
+              actionLoading={actionLoading}
+            />
           </div>
         ) : currentView === "mine" ? (
           <MineView />

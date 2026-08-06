@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Player, CombatState, Combatant, GuSpec, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
-import { Sparkles, Play, Swords, Eye, Shield, Zap, ChevronDown, ChevronUp, Wand2, AlertTriangle } from "lucide-react";
+import { Sparkles, Play, Swords, Eye, Shield, Zap, ChevronDown, ChevronUp, Wand2, AlertTriangle, PawPrint } from "lucide-react";
 import { CombatReplayView } from "./CombatReplayView";
 import { formatNumber, getPathColor } from "@/lib/utils";
 
@@ -73,6 +73,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const combatSettings = useGameStore((state) => state.combatSettings);
   const fetchCombatSettings = useGameStore((state) => state.fetchCombatSettings);
   const addToast = useGameStore((state) => state.addToast);
+  const monsterDictionary = useGameStore((state) => state.monsterDictionary);
 
   useEffect(() => {
     void fetchKillerMoves();
@@ -108,7 +109,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       || (a.refine_mana_tier ?? 0) > 0
       || !!a.wood_transformation
       || (a.mana_regen ?? 0) > 0
-      || (a.cleansing_power ?? 0) > 0;
+      || (a.cleansing_power ?? 0) > 0
+      || (a.capture_bonus ?? 0) > 0;
   };
 
   const eligibleGus = (player.gu_inventory || []).filter((gu) => gu.status === "ACTIVE" && gu.equipped && isCombatGu(gu));
@@ -810,6 +812,26 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             <Play className="w-5 h-5" />
             BẮT ĐẦU
           </button>
+          {(() => {
+            const monsterSpec = monsterDictionary[enemy.enemy_template_id || ""];
+            const isCapturable = monsterSpec?.is_capturable;
+            if (!isCapturable) return null;
+            return (
+              <button
+                onClick={async () => {
+                  const result = await useGameStore.getState().captureMonster();
+                  if (result?.captured) {
+                    handleExitSimulation();
+                  }
+                }}
+                disabled={actionLoading}
+                className="px-6 bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 text-white font-bold py-4 rounded-xl transition-all shadow-[0_0_15px_rgba(168,85,247,0.3)] disabled:opacity-50 flex items-center gap-2"
+              >
+                <PawPrint className="w-5 h-5" />
+                BẮT
+              </button>
+            );
+          })()}
           {onRetreat && (
             <button
               onClick={onRetreat}

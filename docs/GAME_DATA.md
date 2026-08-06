@@ -9,7 +9,7 @@ Nguồn dữ liệu chính nằm trong các file CSV ở `backend/`. Khi backend
 | `backend/Gu.csv` | 242 | Dictionary Cổ: rank, path, type, mana cost, effects, hunger, food, targeting, rarity, role/tags. Chuẩn scale sức mạnh theo rank xem `docs/GuRankScaling.md`. |
 | `backend/Item.csv` | 136 | Vật phẩm, nguyên liệu, tiền tệ, consumable, effects/tags/description. |
 | `backend/Recipe.csv` | 31 | Công thức luyện Cổ: target, Cổ/nguyên liệu yêu cầu, success rate, cost. |
-| `backend/Monster.csv` | 13 | Monster templates: chỉ số, Gu inventory, loot table, AI profile. |
+| `backend/Monster.csv` | 13 | Monster templates: chỉ số, Gu inventory, loot table, AI profile, bắt sủng vật. |
 | `backend/LootTable.csv` | 8 | Bảng loot cho combat/monster. |
 | `backend/MonsterSpawn.csv` | 1 | Rule spawn monster theo region/toạ độ/rank. |
 | `backend/Region.csv` | 3 | Vùng map: kích thước, mô tả, rank range. |
@@ -160,3 +160,34 @@ Không có seed CSV cho bảng này. Row được tạo tự động qua `INSERT
 - `CREATE TABLE IF NOT EXISTS` toàn bộ ở `backend/internal/db/db.go`. Không có migration riêng.
 - `ALTER TABLE ADD COLUMN IF NOT EXISTS` dùng cho các cột mới thêm vào sau.
 - Thêm cột mới vào schema + thêm ALTER TABLE, restart server để áp dụng.
+
+### Bảng `player_pets` (Sủng vật)
+
+Bảng lưu sủng vật bắt được từ quái vật trong combat.
+
+| Cột | Kiểu | Ghi chú |
+| --- | --- | --- |
+| `id` | UUID PK | |
+| `player_id` | UUID FK | → `players(id)` ON DELETE CASCADE |
+| `monster_template_id` | VARCHAR(80) FK | → `monster_templates(id)` |
+| `monster_name` | VARCHAR(100) | Tên quái tại thời điểm bắt |
+| `rank` | INTEGER | Rank của quái vật |
+| `current_hp` | DOUBLE PRECISION | HP hiện tại |
+| `max_hp` | DOUBLE PRECISION | HP tối đa |
+| `attack` | DOUBLE PRECISION | Tấn công |
+| `defense` | DOUBLE PRECISION | Phòng thủ |
+| `hunger` | DOUBLE PRECISION | Độ no (0-100) |
+| `status` | VARCHAR(20) | `active` hoặc `sleeping` |
+| `formation_slot` | INTEGER | 0 = storage, 1..N = formation slot |
+| `created_at` | TIMESTAMPTZ | |
+| `updated_at` | TIMESTAMPTZ | Dùng cho hunger decay theo elapsed time |
+
+Indexes: `idx_player_pets_player_id`, `idx_player_pets_player_id_template`.
+
+### Cột bắt sủng vật trong `monster_templates`
+
+| Cột | Kiểu | Ghi chú |
+| --- | --- | --- |
+| `is_capturable` | BOOLEAN | DEFAULT FALSE. Có thể bắt làm sủng vật không |
+| `capture_chance` | DOUBLE PRECISION | Tỷ lệ bắt cơ bản (0.0-1.0). rank 1 = 0.25, rank 5 = 0.10 |
+| `pet_hunger_per_hour` | DOUBLE PRECISION | Tốc độ đói mỗi giờ. Mặc định 2 |

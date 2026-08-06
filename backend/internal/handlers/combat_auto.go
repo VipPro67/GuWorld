@@ -104,18 +104,45 @@ func AutoCombatStart(c *gin.Context) {
 
 	// Load other party members as simulated allies
 	for _, ally := range player.ActiveCombat.Allies {
-		if ally.ID != player.ID.String() {
-			allyUUID, errParse := uuid.Parse(ally.ID)
-			if errParse == nil {
-				mPlayer, errMember := evaluateManaTx(tx, allyUUID)
-				if errMember == nil {
-					simAlly, errBuild := buildSimCombatant(tx, &mPlayer, isVirtual, false, nil)
-					if errBuild == nil {
-						simAlly.GridX = ally.GridX
-						simAlly.GridY = ally.GridY
-						simAlly.HP = int(ally.HP) // Use their combat starting HP
-						simState.Allies = append(simState.Allies, simAlly)
-					}
+		if ally.ID == player.ID.String() {
+			continue
+		}
+		// Pet allies: build sim combatant directly from ally data
+		if ally.Kind == "Pet" {
+			simPet := &simulator.CombatantAuto{
+				ID:      ally.ID,
+				Name:    ally.Name,
+				Kind:    "Pet",
+				GridX:   ally.GridX,
+				GridY:   ally.GridY,
+				MaxHP:   int(ally.MaxHP),
+				HP:      int(ally.HP),
+				MaxMana: 10,
+				Mana:    10,
+				BaseDmg: int(ally.BaseAttack),
+				BaseDef: int(ally.BaseDefense),
+				Speed:   ally.Speed,
+				Actions: []simulator.SimAction{{
+					ActionType: "BASIC_ATTACK",
+					Name:       "Đánh thường",
+					Damage:     ally.BaseAttack,
+					ManaCost:   0,
+				}},
+			}
+			simState.Allies = append(simState.Allies, simPet)
+			continue
+		}
+		// Party member allies
+		allyUUID, errParse := uuid.Parse(ally.ID)
+		if errParse == nil {
+			mPlayer, errMember := evaluateManaTx(tx, allyUUID)
+			if errMember == nil {
+				simAlly, errBuild := buildSimCombatant(tx, &mPlayer, isVirtual, false, nil)
+				if errBuild == nil {
+					simAlly.GridX = ally.GridX
+					simAlly.GridY = ally.GridY
+					simAlly.HP = int(ally.HP) // Use their combat starting HP
+					simState.Allies = append(simState.Allies, simAlly)
 				}
 			}
 		}
@@ -789,6 +816,32 @@ func AutoCombatStart(c *gin.Context) {
 				continue
 			}
 			_, _ = tx.Exec("UPDATE players SET active_combat = NULL WHERE id = $1", uuid.MustParse(simAlly.ID))
+		}
+	}
+
+	// Resolve pet deaths and HP after combat
+	if !isVirtual {
+		for _, simAlly := range simState.Allies {
+			if simAlly.Kind != "Pet" {
+				continue
+			}
+			if simAlly.HP <= 0 {
+				// Pet died in combat — delete permanently
+				_, _ = tx.Exec(`DELETE FROM player_pets WHERE id = $1 AND player_id = $2`, simAlly.ID, player.ID)
+				_, _ = tx.Exec(`
+					INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
+					VALUES ($1, 'pet.died_in_combat', 'player_pet', $2, $3, '{}', '', false, 'Pet chết trong chiến đấu', NOW())
+				`, player.ID, simAlly.ID, fmt.Sprintf("%s chết khi chiến đấu với %s", simAlly.Name, player.ActiveCombat.EnemyName))
+				logs = append(logs, simulator.CombatLog{
+					Turn:   simState.Turn,
+					Action: "PET_DEATH",
+					Detail: fmt.Sprintf("%s đã chết trong chiến đấu!", simAlly.Name),
+				})
+			} else {
+				// Pet survived — update HP
+				_, _ = tx.Exec(`UPDATE player_pets SET hp = $1, updated_at = NOW() WHERE id = $2 AND player_id = $3`,
+					float64(simAlly.HP), simAlly.ID, player.ID)
+			}
 		}
 	}
 

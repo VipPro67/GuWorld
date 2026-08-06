@@ -37,6 +37,7 @@ type ActiveEffect struct {
 	CleansingPower     float64 `json:"cleansing_power,omitempty"`
 	SummonPhantom      bool    `json:"summon_phantom,omitempty"`
 	GenerateGu         bool    `json:"generate_gu,omitempty"`
+	CaptureBonus       float64 `json:"capture_bonus,omitempty"` // +% tỉ lệ bắt monster (0..1)
 
 	SummonGrowthPhantoms bool    `json:"summon_growth_phantoms,omitempty"`
 	SummonCountPerTick   float64 `json:"summon_count_per_tick,omitempty"`
@@ -181,6 +182,9 @@ func GetFlatGuEffects(gu Gu) map[string]float64 {
 		}
 		if gu.Effects.Passive.Investigation > 0 {
 			res["success_rate_bonus"] = gu.Effects.Passive.Investigation
+		}
+		if gu.Effects.Active.CaptureBonus > 0 {
+			res["capture_bonus"] = gu.Effects.Active.CaptureBonus
 		}
 		if gu.Effects.Passive.PathConflictReduction > 0 {
 			res["path_conflict_reduction"] = gu.Effects.Passive.PathConflictReduction

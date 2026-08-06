@@ -1302,10 +1302,11 @@ export const SectView: React.FC = () => {
                       const maxQty = vg.quantity !== undefined ? vg.quantity : 1;
                       const totalCost = vg.cost * qty;
                       const unaffordable = (member?.contribution_points || 0) < totalCost;
+                      const ownedCount = player?.gu_inventory?.filter((g: any) => g.gu_id === vg.id && g.status !== "DEAD").length || 0;
                       return (
                         <div
                           key={vg.id}
-                          className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex items-center justify-between gap-4 transition-all duration-300"
+                          className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300"
                         >
                           <div className="flex flex-col min-w-0">
                             <h4 className="text-sm font-serif font-bold text-zinc-100">
@@ -1313,13 +1314,19 @@ export const SectView: React.FC = () => {
                             </h4>
                             <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
                               Phân loại: {spec?.gu_type || "Cổ"} | Hạng: {spec?.rank || 1} | Số lượng: {vg.quantity !== undefined ? `${vg.quantity} con` : "Vô hạn"}
+                              {player && (
+                                <>
+                                  {" | "}
+                                  Bạn có: <span className="text-emerald-500 font-semibold">{ownedCount} con</span>
+                                </>
+                              )}
                             </span>
                             <p className="text-xs text-zinc-500 leading-snug line-clamp-2 mt-1.5">
                               {spec?.description || "Không có mô tả bí thuật..."}
                             </p>
                           </div>
 
-                          <div className="flex flex-col items-end gap-2 shrink-0">
+                          <div className="flex flex-row items-center justify-between w-full sm:w-auto sm:flex-col sm:items-end gap-3 shrink-0 pt-3 sm:pt-0 border-t border-zinc-800/40 sm:border-0">
                             {!outOfStock && (
                               <div className="flex items-center gap-2">
                                 {renderQtyStepper(qtyKey, maxQty)}
@@ -1362,10 +1369,12 @@ export const SectView: React.FC = () => {
                     const totalCost = cost * buyQty;
                     const unaffordable = (member?.contribution_points || 0) < totalCost;
 
+                    const ownedCount = player?.materials_inventory?.[matId] || 0;
+
                     return (
                       <div
                         key={matId}
-                        className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex items-center justify-between gap-4 transition-all duration-300"
+                        className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300"
                       >
                         <div className="flex flex-col min-w-0">
                           <h4 className="text-sm font-serif font-bold text-zinc-100">
@@ -1373,13 +1382,19 @@ export const SectView: React.FC = () => {
                           </h4>
                           <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
                             Còn lại bảo khố: {qty}x
+                            {player && (
+                              <>
+                                {" | "}
+                                Bạn có: <span className="text-emerald-500 font-semibold">{ownedCount}x</span>
+                              </>
+                            )}
                           </span>
                           <p className="text-xs text-zinc-500 leading-snug line-clamp-2 mt-1.5">
                             {spec?.description || "Nguyên liệu chế tác / luyện cổ trùng..."}
                           </p>
                         </div>
 
-                        <div className="flex flex-col items-end gap-2 shrink-0">
+                        <div className="flex flex-row items-center justify-between w-full sm:w-auto sm:flex-col sm:items-end gap-3 shrink-0 pt-3 sm:pt-0 border-t border-zinc-800/40 sm:border-0">
                           {qty > 0 && (
                             <div className="flex items-center gap-2">
                               {renderQtyStepper(qtyKey, qty)}
@@ -1419,10 +1434,12 @@ export const SectView: React.FC = () => {
                     const cost = getRecipeCost(targetGuSpec?.rank || 1);
                     const unaffordable = (member?.contribution_points || 0) < cost;
 
+                    const isUnlocked = player?.unlocked_recipes?.some(ur => ur.recipe_id === recipeId) || false;
+
                     return (
                       <div
                         key={recipeId}
-                        className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex items-center justify-between gap-4 transition-all duration-300"
+                        className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300"
                       >
                         <div className="flex flex-col min-w-0">
                           <h4 className="text-sm font-serif font-bold text-zinc-100">
@@ -1430,13 +1447,21 @@ export const SectView: React.FC = () => {
                           </h4>
                           <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
                             Bao gồm: Nguyên liệu & Tỷ lệ luyện chế thành công môn phái đúc rút.
+                            {player && (
+                              <>
+                                {" | "}
+                                Trạng thái: <span className={isUnlocked ? "text-emerald-500 font-semibold" : "text-zinc-400"}>
+                                  {isUnlocked ? "Đã học" : "Chưa học"}
+                                </span>
+                              </>
+                            )}
                           </span>
                           <p className="text-xs text-zinc-500 leading-snug line-clamp-2 mt-1.5">
                             Giải khóa công thức hợp thành tại lò luyện Cổ trùng của bạn.
                           </p>
                         </div>
 
-                        <div className="flex flex-col items-end gap-2 shrink-0">
+                        <div className="flex flex-row items-center justify-between w-full sm:w-auto sm:flex-col sm:items-end gap-3 shrink-0 pt-3 sm:pt-0 border-t border-zinc-800/40 sm:border-0">
                           <div className="text-right">
                             <span className="text-[9px] text-zinc-500 font-mono block">Cống hiến cần</span>
                             <span className="text-xs font-mono font-bold text-yellow-500">{cost} Pts</span>
@@ -1445,10 +1470,10 @@ export const SectView: React.FC = () => {
                             onClick={async () => {
                               await buyFromSectVault("recipe", recipeId);
                             }}
-                            disabled={unaffordable || actionLoading}
+                            disabled={unaffordable || isUnlocked || actionLoading}
                             className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-950 disabled:border-zinc-900 disabled:text-zinc-600 disabled:opacity-50 text-white font-semibold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
                           >
-                            Học Công Thức
+                            {isUnlocked ? "Đã Học" : "Học Công Thức"}
                           </button>
                         </div>
                       </div>

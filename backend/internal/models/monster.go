@@ -10,19 +10,22 @@ import (
 
 
 type MonsterTemplate struct {
-	ID            string             `json:"id"`
-	Name          string             `json:"name"`
-	Type          string             `json:"type"`
-	MaxHP         float64            `json:"max_hp"`
-	BaseAttack    float64            `json:"base_attack"`
-	BaseDefense   float64            `json:"base_defense"`
-	GuInventory   GuInventory        `json:"gu_inventory"`
-	ItemInventory MaterialsInventory `json:"item_inventory"`
-	DaoMarks      map[string]int     `json:"dao_marks"`
-	PathMasteries map[string]string  `json:"path_masteries"`
-	AIProfile     string             `json:"ai_profile"`
-	LootTableID   string             `json:"loot_table_id"`
-	Description   string             `json:"description"`
+	ID               string             `json:"id"`
+	Name             string             `json:"name"`
+	Type             string             `json:"type"`
+	MaxHP            float64            `json:"max_hp"`
+	BaseAttack       float64            `json:"base_attack"`
+	BaseDefense      float64            `json:"base_defense"`
+	GuInventory      GuInventory        `json:"gu_inventory"`
+	ItemInventory    MaterialsInventory `json:"item_inventory"`
+	DaoMarks         map[string]int     `json:"dao_marks"`
+	PathMasteries    map[string]string  `json:"path_masteries"`
+	AIProfile        string             `json:"ai_profile"`
+	LootTableID      string             `json:"loot_table_id"`
+	Description      string             `json:"description"`
+	IsCapturable     bool               `json:"is_capturable"`
+	CaptureChance    float64            `json:"capture_chance"`
+	PetHungerPerHour float64            `json:"pet_hunger_per_hour"`
 }
 
 type LootEntry struct {
@@ -231,7 +234,10 @@ var MonsterRegistry = make(map[string]MonsterTemplate)
 
 func LoadMonsterRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
-		SELECT id, name, type, max_hp, base_attack, base_defense, gu_inventory, item_inventory, dao_marks, path_masteries, ai_profile, loot_table_id, description
+		SELECT id, name, type, max_hp, base_attack, base_defense, gu_inventory, item_inventory, dao_marks, path_masteries, ai_profile, loot_table_id, description,
+		       COALESCE(is_capturable, false),
+		       COALESCE(capture_chance, 0.20),
+		       COALESCE(pet_hunger_per_hour, 2.0)
 		FROM monster_templates
 		WHERE is_active = true
 	`)
@@ -250,6 +256,7 @@ func LoadMonsterRegistry(db *sql.DB) error {
 			&mon.ID, &mon.Name, &mon.Type,
 			&mon.MaxHP, &mon.BaseAttack, &mon.BaseDefense,
 			&guInvRaw, &itemInvRaw, &daoMarksRaw, &masteriesRaw, &mon.AIProfile, &mon.LootTableID, &mon.Description,
+			&mon.IsCapturable, &mon.CaptureChance, &mon.PetHungerPerHour,
 		)
 		if err != nil {
 			logger.S.Warnf("failed to scan monster template row: %v", err)

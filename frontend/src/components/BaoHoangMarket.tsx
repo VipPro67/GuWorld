@@ -992,7 +992,7 @@ export function BaoHoangMarket({
                             >
                               <div className="font-serif truncate">{name}</div>
                               <div className="text-[10px] font-mono text-zinc-500">
-                                Đang có: x{qty}
+                                Bạn có: x{qty}
                               </div>
                             </button>
                           );

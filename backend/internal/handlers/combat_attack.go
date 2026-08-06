@@ -688,6 +688,20 @@ func CombatAttack(c *gin.Context) {
 
 		for _, ally := range player.ActiveCombat.Allies {
 			if ally.ID != player.ID.String() {
+				if ally.Kind == "Pet" {
+					// Pet ally — resolve death or update HP
+					if ally.HP <= 0 {
+						_, _ = tx.Exec(`DELETE FROM player_pets WHERE id = $1 AND player_id = $2`, ally.ID, player.ID)
+						_, _ = tx.Exec(`
+							INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
+							VALUES ($1, 'pet.died_in_combat', 'player_pet', $2, $3, '{}', '', false, 'Pet chết trong chiến đấu', NOW())
+						`, player.ID, ally.ID, fmt.Sprintf("%s chết khi chiến đấu", ally.Name))
+					} else {
+						_, _ = tx.Exec(`UPDATE player_pets SET hp = $1, updated_at = NOW() WHERE id = $2 AND player_id = $3`,
+							ally.HP, ally.ID, player.ID)
+					}
+					continue
+				}
 				allyUUID, errParse := uuid.Parse(ally.ID)
 				if errParse == nil {
 					allyHP := ally.HP

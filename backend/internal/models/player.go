@@ -158,6 +158,7 @@ type CombatState struct {
 	ItemsUsedCount      int               `json:"items_used_count"`
 	ItemCooldowns       map[string]int    `json:"item_cooldowns,omitempty"`
 	Allies              []Combatant       `json:"allies,omitempty"`
+	PetIDs              []string          `json:"pet_ids,omitempty"`
 	Enemies             []Combatant       `json:"enemies,omitempty"`
 }
 
