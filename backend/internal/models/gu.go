@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -42,6 +43,21 @@ type ActiveEffect struct {
 	SummonGrowthPhantoms bool    `json:"summon_growth_phantoms,omitempty"`
 	SummonCountPerTick   float64 `json:"summon_count_per_tick,omitempty"`
 	PhantomDamageScale   float64 `json:"phantom_damage_scale,omitempty"`
+
+	// Shorthand status effect fields — tier value (e.g. "freeze": 1 = speed T1)
+	// Normalized to ApplyStatus + StatusDurationTicks during loading.
+	Freeze  float64 `json:"freeze,omitempty"`
+	Slow    float64 `json:"slow,omitempty"`
+	Weak    float64 `json:"weak,omitempty"`
+	Stun    float64 `json:"stun,omitempty"`
+	Silence float64 `json:"silence,omitempty"`
+	Bleed   float64 `json:"bleed,omitempty"`
+	Poison  float64 `json:"poison,omitempty"`
+	Thorns  float64 `json:"thorns,omitempty"`
+	Regen   float64 `json:"regen,omitempty"`
+	AtkUp   float64 `json:"atk_up,omitempty"`
+	DefUp   float64 `json:"def_up,omitempty"`
+	Taunt   float64 `json:"taunt,omitempty"`
 }
 
 type PassiveEffect struct {
@@ -62,6 +78,8 @@ type PassiveEffect struct {
 	RefineManaTier        float64 `json:"refine_mana_tier,omitempty"`
 	CleansingPower        float64 `json:"cleansing_power,omitempty"`
 	Luck                  float64 `json:"luck,omitempty"`
+	ControlPower          float64 `json:"control_power,omitempty"`
+	SuccessRateBonus      float64 `json:"success_rate_bonus,omitempty"`
 }
 
 type SpecialMechanic struct {
@@ -133,14 +151,84 @@ func (g *GuEffects) Scan(value interface{}) error {
 		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 	}
 
-	// Khởi tạo Other là mảng rỗng thay vì nil để dễ dùng
 	if err := json.Unmarshal(b, g); err != nil {
 		return err
+	}
+	if g.Active != nil {
+		g.Active.normalize()
 	}
 	if g.Other == nil {
 		g.Other = []SpecialMechanic{}
 	}
 	return nil
+}
+
+// normalize converts shorthand status keys (freeze:1) to ApplyStatus format.
+func (a *ActiveEffect) normalize() {
+	if a.Freeze > 0 && a.ApplyStatus == "" {
+		a.ApplyStatus = "FREEZE"
+		a.StatusDurationTicks = int(a.Freeze)
+		a.Freeze = 0
+	}
+	if a.Slow > 0 && a.ApplyStatus == "" {
+		a.ApplyStatus = "SLOW"
+		a.StatusTickDamage = a.Slow
+		a.StatusDurationTicks = int(a.Slow)
+		a.Slow = 0
+	}
+	if a.Weak > 0 && a.ApplyStatus == "" {
+		a.ApplyStatus = "WEAK"
+		a.StatusTickDamage = a.Weak
+		a.StatusDurationTicks = int(a.Weak)
+		a.Weak = 0
+	}
+	if a.Stun > 0 && a.ApplyStatus == "" {
+		a.ApplyStatus = "STUN"
+		a.StatusDurationTicks = int(a.Stun)
+		a.Stun = 0
+	}
+	if a.Silence > 0 && a.ApplyStatus == "" {
+		a.ApplyStatus = "SILENCE"
+		a.StatusDurationTicks = int(a.Silence)
+		a.Silence = 0
+	}
+	if a.Bleed > 0 && a.ApplyStatus == "" {
+		a.ApplyStatus = "BLEED"
+		a.StatusTickDamage = a.Bleed
+		a.StatusDurationTicks = int(a.Bleed)
+		a.Bleed = 0
+	}
+	if a.Poison > 0 && a.ApplyStatus == "" {
+		a.ApplyStatus = "POISON"
+		a.StatusTickDamage = a.Poison
+		a.StatusDurationTicks = int(a.Poison)
+		a.Poison = 0
+	}
+	if a.Thorns > 0 && a.ApplyStatus == "" {
+		a.ApplyStatus = "THORNS"
+		a.StatusDurationTicks = int(a.Thorns)
+		a.Thorns = 0
+	}
+	if a.Regen > 0 && a.ApplyStatus == "" {
+		a.ApplyStatus = "REGEN"
+		a.StatusDurationTicks = int(a.Regen)
+		a.Regen = 0
+	}
+	if a.AtkUp > 0 && a.ApplyStatus == "" {
+		a.ApplyStatus = "ATK_UP"
+		a.StatusDurationTicks = int(a.AtkUp)
+		a.AtkUp = 0
+	}
+	if a.DefUp > 0 && a.ApplyStatus == "" {
+		a.ApplyStatus = "DEF_UP"
+		a.StatusDurationTicks = int(a.DefUp)
+		a.DefUp = 0
+	}
+	if a.Taunt > 0 && a.ApplyStatus == "" {
+		a.ApplyStatus = "TAUNT"
+		a.StatusDurationTicks = int(a.Taunt)
+		a.Taunt = 0
+	}
 }
 
 func (g GuEffects) Value() (driver.Value, error) {
@@ -347,6 +435,7 @@ func LoadGuRegistry(db *sql.DB) error {
 
 	GuRegistry = newRegistry
 	logger.S.Infof("Loaded %d Gu bugs from database registry into memory cache", count)
+	_ = cache.Delete("game_dictionary_unified")
 
 	allPathsCache = nil
 	logger.S.Infof("Built all-paths cache: %d unique dao paths", len(AllGuPaths()))

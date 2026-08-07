@@ -1787,16 +1787,22 @@ func FeedGroup(c *gin.Context) {
 		return
 	}
 
-	getAvailableFood := func() string {
+	getAvailableFood := func(targetRank int) string {
 		for _, food := range foodOptions {
-			qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), food, "materials")
-			if qty > 0 {
-				itemSpec, ok := models.ItemRegistry[food]
-				if ok {
-					isFood := itemSpec.Type == "Food"
-					if isFood {
-						return food
-					}
+			if food == "primeval_stone" {
+				cost := math.Pow(2, float64(targetRank))
+				if player.PrimevalStones >= cost {
+					return food
+				}
+			} else if food == "immortal_stone" {
+				cost := float64(targetRank)
+				if player.ImmortalStones >= cost {
+					return food
+				}
+			} else if !strings.HasPrefix(food, "GU_") {
+				qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), food, "materials")
+				if qty > 0 {
+					return food
 				}
 			}
 		}
@@ -1825,7 +1831,7 @@ func FeedGroup(c *gin.Context) {
 		if gu.GuID == req.GuID && (req.Rank == nil || gu.Rank == *req.Rank) && gu.Status != "DEAD" && gu.Status != "SEALED" && gu.Hunger < specs.MaxHunger {
 			fedThisGu := false
 			for gu.Hunger < specs.MaxHunger {
-				chosenFood := getAvailableFood()
+				chosenFood := getAvailableFood(gu.Rank)
 				consumedGuIndex := -1
 				if chosenFood == "" {
 					consumedGuIndex = getAvailableGuFood(gu.InstanceID)
@@ -1838,7 +1844,14 @@ func FeedGroup(c *gin.Context) {
 				foodID := ""
 				// Consume food
 				if chosenFood != "" {
-					InventorySvc.RemoveItem(tx, player.ID.String(), chosenFood, "materials", 1)
+					switch chosenFood {
+					case "primeval_stone":
+						player.PrimevalStones -= math.Pow(2, float64(gu.Rank))
+					case "immortal_stone":
+						player.ImmortalStones -= float64(gu.Rank)
+					default:
+						InventorySvc.RemoveItem(tx, player.ID.String(), chosenFood, "materials", 1)
+					}
 					foodID = chosenFood
 					foodConsumed[chosenFood]++
 				} else {
@@ -1877,6 +1890,12 @@ func FeedGroup(c *gin.Context) {
 
 	// 4. Update database
 	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
+		return
+	}
+	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2 WHERE id = $3`,
+		player.PrimevalStones, player.ImmortalStones, player.ID)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
 	}
