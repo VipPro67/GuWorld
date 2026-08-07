@@ -27,6 +27,10 @@ func SendOTP(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Định dạng Email không hợp lệ!"})
 		return
 	}
+	if isDisposableEmail(req.Email) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Email tạm thời không được chấp nhận. Vui lòng dùng email thật!"})
+		return
+	}
 
 	// 1. Check if email already registered
 	var emailExists bool

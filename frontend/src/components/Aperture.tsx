@@ -899,7 +899,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                   if (!gu.equipped || gu.status !== "ACTIVE") return false;
                   const spec = guDictionary[gu.gu_id];
                   if (!spec?.effects?.growth?.hours_to_max) return false;
-                  const isDone = (player.growth_data?.fully_grown || []).some(fg => fg.gu_id === gu.gu_id);
+                  const isDone = (player.growth_data?.fully_grown || []).some(fg => fg.gu_id === gu.gu_id && fg.rank === gu.rank);
                   return !isDone;
                 });
                 const fullyGrown = player.growth_data?.fully_grown || [];

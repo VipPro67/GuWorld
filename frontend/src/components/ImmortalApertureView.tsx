@@ -191,6 +191,7 @@ export const ImmortalApertureView: React.FC = () => {
     fetchActiveTribulation,
     attackTribulationEnemy,
     resolveTribulation,
+    useItems: consumeItems,
     setView,
     showConfirm,
   } = useGameStore();
@@ -200,6 +201,7 @@ export const ImmortalApertureView: React.FC = () => {
   const [selectedNode, setSelectedNode] = useState<ApertureResourceNode | null>(null);
   const [selectedEnemy, setSelectedEnemy] = useState<TribulationEnemy | null>(null);
   const [selectedGus, setSelectedGus] = useState<string[]>([]);
+  const [showHealMenu, setShowHealMenu] = useState(false);
 
   const [sliderRate, setSliderRate] = useState<number>(aperture?.time_rate || 10.0);
   const [buildCategory, setBuildCategory] = useState<"plants" | "beasts" | "humans" | "defense">("plants");
@@ -291,6 +293,14 @@ export const ImmortalApertureView: React.FC = () => {
       // Refresh selected node data
       const updated = apertureNodes.find(n => n.id === nodeId);
       if (updated) setSelectedNode(updated);
+    }
+  };
+
+  const handleUseHealingItem = async (itemId: string) => {
+    const success = await consumeItems([itemId]);
+    if (success) {
+      await fetchAperture();
+      setShowHealMenu(false);
     }
   };
 
@@ -689,21 +699,6 @@ export const ImmortalApertureView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Integrity HP Bar */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400 font-medium">Độ Ổn Định Linh Khiếu</span>
-                  <span className="text-slate-200 font-bold">
-                    {aperture.aperture_hp} / {aperture.max_aperture_hp}
-                  </span>
-                </div>
-                <div className="w-full bg-slate-950/80 h-3 rounded-full overflow-hidden border border-slate-800">
-                  <div
-                    className="h-full bg-gradient-to-r from-rose-500 to-emerald-500 transition-all duration-500"
-                    style={{ width: `${(aperture.aperture_hp / aperture.max_aperture_hp) * 100}%` }}
-                  />
-                </div>
-              </div>
 
               {/* Time Flow Slider */}
               {/* <div className="bg-slate-950/50 p-6 rounded-xl border border-slate-800 space-y-4">
@@ -849,8 +844,91 @@ export const ImmortalApertureView: React.FC = () => {
         )}
 
         {/* TAB 2: RESOURCE GRID MAP */}
-        {activeTab === "map" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {activeTab === "map" && aperture && (
+          <div className="space-y-6">
+            {/* Aperture Stability Card */}
+            <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex-1 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400 font-medium flex items-center gap-1.5">
+                      <Shield className="w-4 h-4 text-emerald-400" />
+                      Độ Ổn Định Linh Khiếu
+                    </span>
+                    <span className="text-slate-200 font-bold">
+                      {aperture.aperture_hp} / {aperture.max_aperture_hp}
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-950/80 h-3 rounded-full overflow-hidden border border-slate-800">
+                    <div
+                      className="h-full bg-gradient-to-r from-rose-500 to-emerald-500 transition-all duration-500"
+                      style={{ width: `${(aperture.aperture_hp / aperture.max_aperture_hp) * 100}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Healing Button */}
+                {aperture.aperture_hp < aperture.max_aperture_hp && (() => {
+                  const healingItems = Object.entries(player.materials_inventory || {})
+                    .filter(([, qty]) => qty > 0)
+                    .map(([itemId, qty]) => ({
+                      itemId,
+                      qty,
+                      spec: itemDictionary[itemId],
+                    }))
+                    .filter(item => item.spec && item.spec.effects && item.spec.effects.heal_aperture !== undefined);
+
+                  if (healingItems.length === 0) return null;
+
+                  return (
+                    <div className="relative shrink-0">
+                      {healingItems.length === 1 ? (
+                        <button
+                          onClick={() => handleUseHealingItem(healingItems[0].itemId)}
+                          disabled={actionLoading}
+                          className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:brightness-110 text-slate-950 font-bold text-xs rounded-lg transition flex items-center gap-2 shadow-lg shadow-emerald-950/20"
+                        >
+                          <Heart className="w-3.5 h-3.5 fill-current text-slate-950" />
+                          Hồi Phục ({healingItems[0].spec.name})
+                        </button>
+                      ) : (
+                        <div>
+                          <button
+                            onClick={() => setShowHealMenu(!showHealMenu)}
+                            disabled={actionLoading}
+                            className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:brightness-110 text-slate-950 font-bold text-xs rounded-lg transition flex items-center gap-2 shadow-lg shadow-emerald-950/20"
+                          >
+                            <Heart className="w-3.5 h-3.5 fill-current text-slate-950" />
+                            Hồi Phục Linh Khiếu
+                          </button>
+                          {showHealMenu && (
+                            <div className="absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-750 rounded-xl shadow-2xl p-2 z-20 space-y-1">
+                              <div className="text-[10px] text-slate-500 font-semibold px-2 py-1 uppercase tracking-wider">Chọn dược phẩm</div>
+                              {healingItems.map(item => (
+                                <button
+                                  key={item.itemId}
+                                  onClick={() => handleUseHealingItem(item.itemId)}
+                                  disabled={actionLoading}
+                                  className="w-full text-left px-2 py-2 hover:bg-slate-800 rounded-lg text-xs flex justify-between items-center transition text-slate-200"
+                                >
+                                  <div>
+                                    <div className="font-bold">{item.spec.name}</div>
+                                    <div className="text-[10px] text-slate-400">Số lượng: {item.qty}</div>
+                                  </div>
+                                  <div className="text-emerald-400 font-bold">+{item.spec.effects?.heal_aperture} HP</div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Lưới Grid Bản Đồ */}
             <div className="lg:col-span-2 bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 flex flex-col items-center">
               <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800 pb-3 w-full mb-4 flex items-center gap-2">
@@ -1589,7 +1667,8 @@ export const ImmortalApertureView: React.FC = () => {
               )}
             </div>
           </div>
-        )}
+        </div>
+      )}
 
         {/* TAB 3: DAO MARKS */}
         {activeTab === "dao" && (

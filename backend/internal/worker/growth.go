@@ -113,7 +113,7 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 			continue
 		}
 
-		spec, ok := models.GetGuAny(gu.GuID)
+		spec, ok := models.GetGu(gu.GuID, gu.Rank)
 		if !ok || spec.Effects.Growth == nil || spec.Effects.Growth.HoursToMax <= 0 {
 			continue
 		}
@@ -123,7 +123,7 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 		// Check if this Gu type is already fully grown
 		isFullyGrown := false
 		for _, fg := range growthData.FullyGrown {
-			if fg.GuID == gu.GuID {
+			if fg.GuID == gu.GuID && fg.Rank == gu.Rank {
 				isFullyGrown = true
 				break
 			}
@@ -164,6 +164,7 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 		if gu.GrowthHours >= spec.Effects.Growth.HoursToMax {
 			growthData.FullyGrown = append(growthData.FullyGrown, models.FullyGrownInfo{
 				GuID:    gu.GuID,
+				Rank:    gu.Rank,
 				Attack:  spec.Effects.Growth.MaxAttack,
 				Defense: spec.Effects.Growth.MaxDefense,
 				HP:      spec.Effects.Growth.MaxHP,

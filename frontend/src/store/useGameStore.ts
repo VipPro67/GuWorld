@@ -168,7 +168,7 @@ export interface Player {
   hp_regen_rate: number;
   growth_data?: {
     boosts: { attack: number; defense: number; hp: number; speed: number };
-    fully_grown: { gu_id: string; attack: number; defense: number; hp: number; speed: number }[];
+    fully_grown: { gu_id: string; rank: number; attack: number; defense: number; hp: number; speed: number }[];
   };
 }
 

@@ -259,6 +259,7 @@ type GrowthBoosts struct {
 
 type FullyGrownInfo struct {
 	GuID    string  `json:"gu_id"`
+	Rank    int     `json:"rank"`
 	Attack  float64 `json:"attack,omitempty"`
 	Defense float64 `json:"defense,omitempty"`
 	HP      float64 `json:"hp,omitempty"`

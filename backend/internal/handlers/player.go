@@ -39,6 +39,270 @@ func isValidEmail(email string) bool {
 	return emailRegex.MatchString(email)
 }
 
+var disposableEmailDomains = map[string]bool{
+	"0-mail.com": true, "10minutemail.com": true, "10minutemail.net": true, "20minutemail.com": true,
+	"33mail.com": true, "3d-painting.com": true, "4warding.com": true, "4warding.net": true, "4warding.org": true,
+	"60minutemail.com": true, "675hosting.com": true, "675hosting.net": true, "675hosting.org": true,
+	"6paq.com": true, "6url.com": true, "75hosting.com": true, "75hosting.net": true, "75hosting.org": true,
+	"7tags.com": true, "9ox.net": true, "a-bc.net": true, "a45.in": true, "abyssmail.com": true,
+	"adbetron.com": true, "afrobacon.com": true, "ajaxapp.net": true, "amilegit.com": true,
+	"amiri.net": true, "amiriindustries.com": true, "anappthat.com": true, "anonbox.net": true,
+	"anonmails.de": true, "anonymail.dk": true, "anonymbox.com": true, "antichef.com": true,
+	"antichef.net": true, "antireg.ru": true, "antispam.de": true, "antispammail.de": true,
+	"armyspy.com": true, "artman-conception.com": true, "avoidc.com": true, "baxomale.ht.cx": true,
+	"beddly.com": true, "bigprofessor.so": true, "binkmail.com": true, "bio-muesli.net": true,
+	"blogmyway.org": true, "bobmail.info": true, "bootybay.de": true, "boun.cr": true,
+	"bouncr.com": true, "boxformail.in": true, "breakthru.com": true, "brefmail.com": true,
+	"brennendesreich.de": true, "broadbandninja.com": true, "bsnow.net": true, "bu.mintemail.com": true,
+	"buffemail.com": true, "bugmenever.com": true, "bumpymail.com": true, "bund.us": true,
+	"bundes-li.ga": true, "burnthespam.info": true, "burstmail.info": true, "buxap.com": true,
+	"buyusedlibrarybooks.org": true, "byom.de": true, "c2.hu": true, "cachedot.net": true,
+	"casualdx.com": true, "cellurl.com": true, "centermail.com": true, "centermail.net": true,
+	"chammy.info": true, "cheaphub.net": true, "cheatmail.de": true, "chogmail.com": true,
+	"choicemail1.com": true, "clixser.com": true, "clrmail.com": true, "cmail.com": true,
+	"cmail.net": true, "cmail.org": true, "coldemail.info": true, "consumerriot.com": true,
+	"cool.fr.nf": true, "correo.blogos.net": true, "cosmorph.com": true, "courrieltemporaire.com": true,
+	"crapmail.org": true, "crazymailing.com": true, "cubiclink.com": true, "curryworld.de": true,
+	"cust.in": true, "cuvox.de": true, "d3p.dk": true, "dacoolest.com": true, "daintly.com": true,
+	"dandikmail.com": true, "dayrep.com": true, "dbunker.com": true, "dcemail.com": true,
+	"deadaddress.com": true, "deadspam.com": true, "debuggingguy.com": true, "delikkt.de": true,
+	"despam.it": true, "devnullmail.com": true, "digdig.org": true, "digitalsanctuary.com": true,
+	"discard.email": true, "discardmail.com": true, "discardmail.de": true, "disposable-email.ml": true,
+	"disposableaddress.com": true, "disposableemailaddresses.com": true, "disposableinbox.com": true,
+	"dispose.it": true, "disposeamail.com": true, "disposemail.com": true, "dispostable.com": true,
+	"dmarc.rocks": true, "dodgeit.com": true, "dodsi.com": true, "doiea.com": true,
+	"domozmail.com": true, "donemail.ru": true, "dontsendmespam.de": true, "dotmsg.com": true,
+	"dropmail.me": true, "dzfh.de": true, "e-mail.com": true, "e-mail.org": true,
+	"e4ward.com": true, "easytrashmail.com": true, "einrot.com": true, "einrot.de": true,
+	"eintagsmail.de": true, "email-temp.com": true, "email60.com": true, "emailage.com": true,
+	"emaildienst.de": true, "emailfake.com": true, "emailgenerator.de": true, "emailgo.de": true,
+	"emailias.com": true, "emailigo.de": true, "emailinfive.com": true, "emaillime.com": true,
+	"emailmiser.com": true, "emailondeck.com": true, "emailproxsy.com": true, "emailtemporanea.com": true,
+	"emailtemporanea.net": true, "emailtemporar.ro": true, "emailtemporario.com.br": true, "emailthe.net": true,
+	"emailtmp.com": true, "emailto.de": true, "emailwarden.com": true, "emailxfer.com": true,
+	"emeil.in": true, "emeil.ir": true, "emil.com": true, "emkei.cf": true, "emkei.ga": true,
+	"emkei.gq": true, "emkei.ml": true, "emkei.tk": true, "emlpro.com": true, "emltrk.com": true,
+	"empireanime.xyz": true, "enterto.com": true, "ephemail.net": true, "erasedebt.gq": true,
+	"etranquil.com": true, "etranquil.net": true, "etranquil.org": true, "evopo.com": true,
+	"explodemail.com": true, "eyepaste.com": true, "ez.lv": true, "fake-box.com": true,
+	"fakeinbox.com": true, "fakeinformation.com": true, "fakemail.fr": true, "fakemailgenerator.com": true,
+	"fakemailz.com": true, "fammix.com": true, "fansworldwide.de": true, "fantasymail.de": true,
+	"fastacura.com": true, "fastchevy.com": true, "fastchrysler.com": true, "fastkawasaki.com": true,
+	"fastmazda.com": true, "fastmitsubishi.com": true, "fastnissan.com": true, "fastsubaru.com": true,
+	"fastsuzuki.com": true, "fasttoyota.com": true, "fastyamaha.com": true, "fightallspam.com": true,
+	"filzmail.com": true, "fivemail.de": true, "fleckens.hu": true, "flemail.ru": true,
+	"flyspam.com": true, "footard.com": true, "forgetmail.com": true, "frapmail.com": true,
+	"free-temp.net": true, "freebulgaria.bg": true, "freemails.cf": true, "freemails.ga": true,
+	"freemails.ml": true, "freundin.ru": true, "friendlymail.co.uk": true, "front14.org": true,
+	"fsagc.xyz": true, "fuckingduh.com": true, "fudgerub.com": true, "fuwamofu.com": true,
+	"fw2.me": true, "fw6m0bd.com": true, "gafy.net": true, "gamno.config.work": true,
+	"garliclife.com": true, "gelitik.in": true, "get-mail.cf": true, "get-mail.ga": true,
+	"get-mail.ml": true, "get-mail.tk": true, "getairmail.com": true, "getmails.eu": true,
+	"getnada.com": true, "getonemail.com": true, "getsimpleemail.com": true, "giantmail.de": true,
+	"gishpuppy.com": true, "gmal.com": true, "gmial.com": true, "go2usa.info": true,
+	"goat.si": true, "gorillaswithdirtyarmpits.com": true, "gotmail.com": true, "gotmail.net": true,
+	"gotmail.org": true, "gowikibooks.com": true, "gowikicampus.com": true, "gowikicars.com": true,
+	"gowikifilms.com": true, "gowikigames.com": true, "gowikimusic.com": true, "gowikimusic.great-host.in": true,
+	"gowikinetwork.com": true, "gowikitravel.com": true, "gowikitv.com": true, "grandmamail.com": true,
+	"great-host.in": true, "greencafe24.com": true, "greendike.com": true, "greenhousemail.com": true,
+	"greensloth.com": true, "grr.la": true, "gsrv.co.uk": true, "guerrillamail.biz": true,
+	"guerrillamail.com": true, "guerrillamail.de": true, "guerrillamail.net": true, "guerrillamail.org": true,
+	"guerrillamailblock.com": true, "gustr.com": true, "h.mintemail.com": true, "h8s.org": true,
+	"hacccc.com": true, "haltospam.com": true, "harakirimail.com": true, "hartbot.de": true,
+	"hat-geld.de": true, "hatespam.org": true, "herp.in": true, "hidemail.de": true,
+	"hidzz.com": true, "hmamail.com": true, "hochsitze.com": true, "hopemail.biz": true,
+	"hotpop.com": true, "hulapla.de": true, "hushmail.com": true, "ieatspam.eu": true,
+	"ieatspam.info": true, "ihateyoualot.info": true, "iheartspam.org": true, "ikbenspamvrij.nl": true,
+	"imails.info": true, "imgof.com": true, "imgv.de": true, "immo-gerance.info": true,
+	"imstations.com": true, "inbax.tk": true, "inbox.si": true, "inboxalias.com": true,
+	"inboxbear.com": true, "inboxclean.com": true, "inboxclean.org": true, "inboxdesign.me": true,
+	"inboxed.im": true, "inboxed.pw": true, "inboxkitten.com": true, "inboxproxy.com": true,
+	"incognitomail.com": true, "incognitomail.net": true, "incognitomail.org": true, "indieclad.com": true,
+	"infocom.zp.ua": true, "insorg-mail.info": true, "instant-mail.de": true, "ip6.li": true,
+	"irish2me.com": true, "iwi.net": true, "j6j2y0.com": true, "jamit.com.au": true,
+	"jetable.com": true, "jetable.fr.nf": true, "jetable.net": true, "jetable.org": true,
+	"jnxjn.com": true, "jobbikszimpatizans.hu": true, "jourrapide.com": true, "jsrsolutions.com": true,
+	"junk1e.com": true, "jwk4227uf.com": true, "kasmail.com": true, "kaspop.com": true,
+	"keepmymail.com": true, "kemptvillebaseball.com": true, "kiani.com": true, "killmail.com": true,
+	"killmail.net": true, "kimsdisk.com": true, "kingsq.ga": true, "kiois.com": true,
+	"kiryubox.cu.cc": true, "klassmaster.com": true, "klassmaster.net": true, "klzlk.com": true,
+	"kook.ml": true, "koszmail.pl": true, "kuku.cf": true, "kulturbetrieb.info": true,
+	"kurzepost.de": true, "l33r.eu": true, "lackmail.net": true, "lakqs.com": true,
+	"lawlita.com": true, "leeching.net": true, "letthemeatspam.com": true, "lhsdv.com": true,
+	"lifebyfood.com": true, "link2mail.net": true, "linkedintuts2016.pw": true, "litedrop.com": true,
+	"loadby.us": true, "login-email.ml": true, "loh.pp.ua": true, "loin.in": true,
+	"lol.ovpn.to": true, "lookugly.com": true, "lopl.co.cc": true, "lortemail.dk": true,
+	"lovemeleaveme.com": true, "lroid.com": true, "lron.us": true, "luckymail.org": true,
+	"maboard.com": true, "macr2.com": true, "mail-card.net": true, "mail-easy.fr": true,
+	"mail-filter.com": true, "mail-temporaire.fr": true, "mail-tester.com": true, "mail.by": true,
+	"mail.illistno.com": true, "mail.zp.ua": true, "mail0.ga": true, "mail114.net": true,
+	"mail1a.de": true, "mail21.cc": true, "mail2rss.org": true, "mail333.com": true,
+	"mail4trash.com": true, "mail666.ru": true, "mail707.com": true, "mail72.com": true,
+	"mailaboki.com": true, "mailalias.ga": true, "mailback.com": true, "mailbidon.com": true,
+	"mailbiz.biz": true, "mailblocks.com": true, "mailbox72.biz": true, "mailbox80.biz": true,
+	"mailbucket.org": true, "mailcat.biz": true, "mailcatch.com": true, "mailde.de": true,
+	"mailde.info": true, "maildrop.cc": true, "maildrop.cf": true, "maildrop.ga": true,
+	"maildrop.gq": true, "maildrop.ml": true, "maildu.de": true, "maildx.com": true,
+	"maileater.com": true, "mailexpire.com": true, "mailf5.com": true, "mailfa.tk": true,
+	"mailfall.com": true, "mailforspam.com": true, "mailfree.ga": true, "mailfree.ml": true,
+	"mailfreeonline.com": true, "mailfs.com": true, "mailgogo.tk": true, "mailguard.me": true,
+	"mailgutter.com": true, "mailhazard.com": true, "mailhazard.us": true, "mailhex.com": true,
+	"mailhz.me": true, "mailimate.com": true, "mailin8r.com": true, "mailinater.com": true,
+	"mailinator.com": true, "mailinator.net": true, "mailinator.org": true, "mailinator.us": true,
+	"mailinator2.com": true, "mailincubator.com": true, "mailismagic.com": true, "mailita.tk": true,
+	"mailjunk.cf": true, "mailjunk.ga": true, "mailjunk.gq": true, "mailjunk.ml": true,
+	"mailjunk.tk": true, "mailmate.com": true, "mailme.ir": true, "mailme.lv": true,
+	"mailmetrash.com": true, "mailmoat.com": true, "mailmoth.com": true, "mailms.com": true,
+	"mailnator.com": true, "mailnesia.com": true, "mailnull.com": true, "mailorg.org": true,
+	"mailpick.biz": true, "mailpooch.com": true, "mailproxsy.com": true, "mailquack.com": true,
+	"mailrock.biz": true, "mailscrap.com": true, "mailseal.de": true, "mailshell.com": true,
+	"mailsiphon.com": true, "mailslapping.com": true, "mailslite.com": true, "mailspam.xyz": true,
+	"mailspam.tk": true, "mailt.net": true, "mailtemp.fr": true, "mailtemporaire.com": true,
+	"mailtemporaire.fr": true, "mailtmp.com": true, "mailto.space": true, "mailtome.de": true,
+	"mailtothis.com": true, "mailtraps.com": true, "mailtrash.net": true, "mailtrix.net": true,
+	"mailtv.net": true, "mailtv.tv": true, "mailwithyou.com": true, "mailzi.ru": true,
+	"mailzilla.com": true, "mailzilla.org": true, "manifestgenerator.com": true, "manybrain.com": true,
+	"mbx.cc": true, "mciek.com": true, "meantinc.com": true, "mega.zik.dj": true,
+	"meinspamschutz.de": true, "meltmail.com": true, "messagebeamer.de": true, "mezimages.net": true,
+	"mfsa.ru": true, "mierdamail.com": true, "migmail.net": true, "migmail.pl": true,
+	"migumail.com": true, "mindmail.ga": true, "ministry-of-silly-walks.de": true, "mintemail.com": true,
+	"misterpinball.de": true, "mjukglass.nu": true, "moakt.com": true, "moburl.com": true,
+	"mohmal.com": true, "momentics.ru": true, "moncourrier.fr.nf": true, "monemail.fr.nf": true,
+	"monmail.fr.nf": true, "monumentmail.com": true, "morahdsl.cf": true, "mt2009.com": true,
+	"mt2014.com": true, "mt2015.com": true, "muellemail.com": true, "muellmail.com": true,
+	"mundomail.net": true, "mutant.me": true, "mvrht.com": true, "mvrht.net": true,
+	"mwarrior.org": true, "mx0.wwwnew.eu": true, "my10minutemail.com": true, "mycard.net.ua": true,
+	"mycleaninbox.net": true, "mydemo.equipment": true, "myecho.es": true, "mymail-in.net": true,
+	"mymail90.com": true, "mymailoasis.com": true, "mynetstore.de": true, "mypartyclip.de": true,
+	"myphantomemail.com": true, "mysamp.de": true, "myspaceinc.com": true, "myspaceinc.net": true,
+	"myspaceinc.org": true, "myspacepimpedup.com": true, "myspamless.com": true, "mytemp.email": true,
+	"mytempemail.com": true, "mytrashmail.com": true, "n4paml3w6qn.com": true, "nabuma.com": true,
+	"negated.com": true, "neomailbox.com": true, "nepwk.com": true, "nervmich.net": true,
+	"nervtmich.net": true, "netmails.com": true, "netmails.net": true, "netzidiot.de": true,
+	"neverbox.com": true, "nice-4u.com": true, "nincsmail.com": true, "nincsmail.hu": true,
+	"nnh.com": true, "no-spam.ws": true, "noblepioneer.com": true, "nobulk.com": true,
+	"noclickemail.com": true, "nogmailspam.info": true, "nomail.pw": true, "nomail.xl.cx": true,
+	"nomail2me.com": true, "nomorespamemails.com": true, "nonspam.eu": true, "nonspammer.de": true,
+	"noref.in": true, "nospam.ze.tc": true, "nospam4.us": true, "nospamfor.us": true,
+	"nospammail.net": true, "nospamthanks.info": true, "notmailinator.com": true, "nowmymail.com": true,
+	"ntlhelp.net": true, "nurfuerspam.de": true, "nus.edu.sg": true, "o2stk.org": true,
+	"objectmail.com": true, "obobbo.com": true, "odaymail.com": true, "odnorazovoe.ru": true,
+	"one-time.email": true, "oneoffemail.com": true, "oneoffmail.com": true, "onewaymail.com": true,
+	"online.ms": true, "oopi.org": true, "opayq.com": true, "ordinaryamerican.net": true,
+	"otherinbox.com": true, "ourklips.com": true, "outlawspam.com": true, "ovpn.to": true,
+	"owlpic.com": true, "pancakemail.com": true, "paplease.com": true, "pcusers.otherinbox.com": true,
+	"pepbot.com": true, "pfui.ru": true, "pimpedupmyspace.com": true, "pjjkp.com": true,
+	"plexolan.de": true, "poczta.onet.pl": true, "politikerclub.de": true, "pooae.com": true,
+	"pookmail.com": true, "postacin.com": true, "powerencry.com": true, "privacy.net": true,
+	"privy-mail.com": true, "privymail.de": true, "proxymail.eu": true, "prtnx.com": true,
+	"prtz.eu": true, "punkass.com": true, "put2.net": true, "putthisinyourspamdatabase.com": true,
+	"pwrby.com": true, "qbi.kr": true, "quickemail.info": true, "quickinbox.com": true,
+	"quickmail.nl": true, "rcpt.at": true, "reallymymail.com": true, "realtyalerts.ca": true,
+	"receiveee.com": true, "recode.me": true, "recursor.net": true, "regbypass.com": true,
+	"rejectmail.com": true, "remail.cf": true, "remail.ga": true, "rmqkr.net": true,
+	"royal.net": true, "rppkn.com": true, "rtrtr.com": true, "s0ny.net": true,
+	"safe-mail.net": true, "safersignup.de": true, "safetymail.info": true, "safetypost.de": true,
+	"sandelf.de": true, "saynotospams.com": true, "schafmail.de": true, "schrott-email.de": true,
+	"secretemail.de": true, "secure-mail.biz": true, "selfdestructingmail.com": true, "sendspamhere.com": true,
+	"sharklasers.com": true, "shieldedmail.com": true, "shiftmail.com": true, "shitmail.de": true,
+	"shitmail.org": true, "shitware.nl": true, "shmeriously.com": true, "shortmail.net": true,
+	"shotmail.ru": true, "showslow.de": true, "sibmail.com": true, "sinnlos-mail.de": true,
+	"siteposter.net": true, "skeefmail.com": true, "slapsfromlastnight.com": true,
+	"slaskpost.se": true, "slipry.net": true, "slopsbox.com": true, "slusare.info": true,
+	"smashmail.de": true, "smellfear.com": true, "smellrear.com": true, "snakemail.com": true,
+	"sneakemail.com": true, "sneakmail.de": true, "snkmail.com": true, "sofimail.com": true,
+	"soisz.com": true, "solvemail.info": true, "soodonims.com": true, "spam.la": true,
+	"spam.su": true, "spam4.me": true, "spamail.de": true, "spamarrest.com": true,
+	"spamavert.com": true, "spambob.com": true, "spambob.net": true, "spambob.org": true,
+	"spambog.com": true, "spambog.de": true, "spambog.net": true, "spambog.ru": true,
+	"spambox.info": true, "spambox.irishspringrealty.com": true, "spambox.us": true,
+	"spamcannon.com": true, "spamcannon.net": true, "spamcero.com": true, "spamcon.org": true,
+	"spamcorptastic.com": true, "spamcowboy.com": true, "spamcowboy.net": true, "spamcowboy.org": true,
+	"spamday.com": true, "spamdecoy.net": true, "spamex.com": true, "spamfighter.cf": true,
+	"spamfighter.ga": true, "spamfighter.gq": true, "spamfighter.ml": true, "spamfighter.tk": true,
+	"spamfree.eu": true, "spamfree24.com": true, "spamfree24.de": true, "spamfree24.eu": true,
+	"spamfree24.info": true, "spamfree24.net": true, "spamfree24.org": true, "spamgoes.in": true,
+	"spamgourmet.com": true, "spamgourmet.net": true, "spamgourmet.org": true, "spamherelots.com": true,
+	"spamhereplease.com": true, "spamhole.com": true, "spamify.com": true, "spaminator.de": true,
+	"spamkill.info": true, "spaml.com": true, "spaml.de": true, "spammotel.com": true,
+	"spamobox.com": true, "spamoff.de": true, "spamproof.be": true, "spamsalad.in": true,
+	"spamsphere.com": true, "spamspot.com": true, "spamthis.co.uk": true, "spamthisplease.com": true,
+	"spamtrail.com": true, "spamtrap.ro": true, "speedgaus.net": true, "sperma.cf": true,
+	"spikio.com": true, "spoofmail.de": true, "squizzy.de": true, "ssoia.com": true,
+	"startfu.com": true, "stealthypost.org": true, "stexsy.com": true, "stinkefinger.net": true,
+	"stop-my-spam.cf": true, "stop-my-spam.ga": true, "stop-my-spam.ml": true, "stop-my-spam.tk": true,
+	"streetwisemail.com": true, "stuffmail.de": true, "super-auswahl.de": true, "supergreatmail.com": true,
+	"supermailer.jp": true, "superrito.com": true, "suremail.info": true, "sute.jp": true,
+	"svk.jp": true, "tafmail.com": true, "taglead.com": true, "talkinator.com": true,
+	"tapchicuoihoi.com": true, "techemail.com": true, "teerest.com": true, "temp-mail.net": true,
+	"tempail.com": true, "tempalias.com": true, "tempe-mail.com": true, "tempemail.biz": true,
+	"tempemail.co.za": true, "tempemail.com": true, "tempemail.net": true, "tempinbox.co.uk": true,
+	"tempinbox.com": true, "tempmail.co": true, "tempmail.de": true, "tempmail.eu": true,
+	"tempmail.it": true, "tempmail.net": true, "tempmail.ninja": true, "tempmail.org": true,
+	"tempmail.pro": true, "tempmail.plus": true, "tempmail.us": true, "tempmail2.com": true,
+	"tempmaildemo.com": true, "tempmailer.com": true, "tempmailer.de": true, "tempmailid.com": true,
+	"tempomail.com": true, "temporarily.de": true, "temporarioemail.com.br": true, "temporaryemail.net": true,
+	"temporaryemail.us": true, "temporaryforwarding.com": true, "temporaryinbox.com": true, "temporarymailaddress.com": true,
+	"tempsky.com": true, "tempthe.net": true, "tempymail.com": true, "thanksnospam.info": true,
+	"thankyou2010.com": true, "thisisnotmyrealemail.com": true, "thismail.net": true,
+	"throwawayemailaddress.com": true, "throwawaymail.com": true, "throya.com": true,
+	"tilien.com": true, "tittbit.in": true, "tizi.com": true, "tmail.com": true,
+	"tmailinator.com": true, "toiea.com": true, "toomail.biz": true, "topranklist.de": true,
+	"tradermail.info": true, "trash-amil.com": true, "trash-mail.at": true, "trash-mail.cf": true,
+	"trash-mail.com": true, "trash-mail.de": true, "trash-mail.ga": true, "trash-mail.gq": true,
+	"trash-mail.ml": true, "trash-mail.tk": true, "trash2009.com": true, "trash2010.com": true,
+	"trash2011.com": true, "trashcanmail.com": true, "trashdevil.com": true, "trashdevil.de": true,
+	"trashemail.de": true, "trashimail.de": true, "trashinbox.com": true, "trashmail.at": true,
+	"trashmail.com": true, "trashmail.de": true, "trashmail.io": true, "trashmail.me": true,
+	"trashmail.net": true, "trashmail.org": true, "trashmail.ws": true, "trashmailer.com": true,
+	"trashymail.com": true, "trashymail.net": true, "trbvm.com": true, "trbvn.com": true,
+	"trbvo.com": true, "trialmail.de": true, "trimsj.com": true, "trollproject.com": true,
+	"tryalert.com": true, "turoid.com": true, "twinmail.de": true, "tyldd.com": true,
+	"uggsrock.com": true, "umail.net": true, "uroid.com": true, "us.af": true,
+	"venompen.com": true, "veryrealemail.com": true, "vidchart.com": true, "viditag.com": true,
+	"viewcastmedia.com": true, "viewcastmedia.net": true, "viewcastmedia.org": true,
+	"visal168.com": true, "visal168.cf": true, "visal168.ga": true, "visal168.gq": true,
+	"visal168.ml": true, "visal168.tk": true, "vomoto.com": true, "vpn.st": true,
+	"vsimcard.com": true, "vubby.com": true, "wasteland.rfc822.org": true, "webcontact-france.eu": true,
+	"webm4il.info": true, "wegas.ru": true, "wegwerf-email-addressen.de": true, "wegwerf-email-adressen.de": true,
+	"wegwerf-email.de": true, "wegwerf-email.net": true, "wegwerf-emails.de": true, "wegwerfadresse.de": true,
+	"wegwerfemail.com": true, "wegwerfemail.de": true, "wegwerfemail.info": true, "wegwerfemail.net": true,
+	"wegwerfemail.org": true, "wegwerfmail.de": true, "wegwerfmail.info": true, "wegwerfmail.net": true,
+	"wegwerfmail.org": true, "wetrainbayarea.com": true, "wetrainbayarea.org": true,
+	"wh4f.org": true, "whyspam.me": true, "willhackforfood.biz": true, "willselfdestruct.com": true,
+	"winemaven.info": true, "wizaz.com": true, "wronghead.com": true, "wuzup.net": true,
+	"xagloo.com": true, "xemaps.com": true, "xents.com": true, "xmaily.com": true,
+	"xoxy.net": true, "yep.it": true, "yogamaven.com": true, "yopmail.com": true,
+	"yopmail.fr": true, "yopmail.net": true, "yopmail.org": true, "you-spam.com": true,
+	"ypmail.webarnak.fr.eu.org": true, "yuurok.com": true, "zebins.com": true,
+	"zebins.eu": true, "zehnminuten.de": true, "zehnminutenmail.de": true, "zippymail.info": true,
+	"zoaxe.com": true, "zoemail.com": true, "zoemail.net": true, "zoemail.org": true,
+	"zomg.info": true, "zxcv.com": true, "zxcvbnm.com": true, "ezehe.com": true,
+	"tempmail.cn": true, "gmail.com.de": true, "emailfake.org": true,
+	"tmpmail.org": true, "tmp.email": true, "10m.email": true, "linshiyou.com": true,
+	"moakt.cc": true, "emailnator.com": true, "eyso.net": true, "mytrashmailer.com": true,
+	"mailgoy.com": true, "mailsac.com": true, "10minutemail.info": true, "anotherdomain.com": true,
+	"mybink.io": true, "nada.email": true, "nada.ltd": true, "gmailx.de": true,
+}
+
+func isDisposableEmail(email string) bool {
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return false
+	}
+	domain := strings.ToLower(parts[1])
+	return disposableEmailDomains[domain]
+}
+
+func isValidUsername(username string) bool {
+	for _, r := range username {
+		if !unicode.IsLetter(r) && r != '-' && !unicode.IsSpace(r) {
+			return false
+		}
+	}
+	return true
+}
+
 // CreatePlayerRequest represents the incoming registration payload
 type CreatePlayerRequest struct {
 	Username       string `json:"username" binding:"required,min=3,max=30"`
@@ -156,6 +420,17 @@ func RegisterPlayer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	req.Username = strings.TrimSpace(req.Username)
+	if len(req.Username) < 3 || len(req.Username) > 30 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hiệu phải từ 3 đến 30 ký tự!"})
+		return
+	}
+	if !isValidUsername(req.Username) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hiệu chỉ được chứa chữ cái, dấu gạch ngang và khoảng trắng!"})
+		return
+	}
+
 	validRegions := map[string]bool{
 		"Southern_Border":   true,
 		"Central_Continent": true,
@@ -175,6 +450,10 @@ func RegisterPlayer(c *gin.Context) {
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	if !isValidEmail(req.Email) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Định dạng Email không hợp lệ!"})
+		return
+	}
+	if isDisposableEmail(req.Email) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Email tạm thời không được chấp nhận. Vui lòng dùng email thật!"})
 		return
 	}
 
@@ -2275,7 +2554,7 @@ func EquipGu(c *gin.Context) {
 	}
 
 	guName := targetGu.GuID
-	spec, specOk := models.GetGuAny(targetGu.GuID)
+	spec, specOk := models.GetGu(targetGu.GuID, targetGu.Rank)
 	if specOk {
 		guName = spec.Name
 	}
@@ -2285,7 +2564,7 @@ func EquipGu(c *gin.Context) {
 	isFullyGrown := false
 	if hasGrowth {
 		for _, fg := range player.GrowthData.FullyGrown {
-			if fg.GuID == targetGu.GuID {
+			if fg.GuID == targetGu.GuID && fg.Rank == targetGu.Rank {
 				isFullyGrown = true
 				break
 			}
@@ -2320,16 +2599,17 @@ func EquipGu(c *gin.Context) {
 					player.GrowthData.Boosts.Speed += spd
 					player.BaseHP += hp
 				}
-				// Check if fully grown now, add to FullyGrown list
-				if targetGu.GrowthHours >= spec.Effects.Growth.HoursToMax {
-					player.GrowthData.FullyGrown = append(player.GrowthData.FullyGrown, models.FullyGrownInfo{
-						GuID:    targetGu.GuID,
-						Attack:  spec.Effects.Growth.MaxAttack,
-						Defense: spec.Effects.Growth.MaxDefense,
-						HP:      spec.Effects.Growth.MaxHP,
-						Speed:   spec.Effects.Growth.MaxSpeed,
-					})
-				}
+			// Check if fully grown now, add to FullyGrown list
+			if targetGu.GrowthHours >= spec.Effects.Growth.HoursToMax {
+				player.GrowthData.FullyGrown = append(player.GrowthData.FullyGrown, models.FullyGrownInfo{
+					GuID:    targetGu.GuID,
+					Rank:    targetGu.Rank,
+					Attack:  spec.Effects.Growth.MaxAttack,
+					Defense: spec.Effects.Growth.MaxDefense,
+					HP:      spec.Effects.Growth.MaxHP,
+					Speed:   spec.Effects.Growth.MaxSpeed,
+				})
+			}
 			}
 		}
 	}
