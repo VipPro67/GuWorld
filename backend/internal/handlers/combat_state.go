@@ -12,6 +12,19 @@ import (
 )
 
 func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.Player) *models.CombatState {
+	if base.EnemyType == "PVP" && base.EnemyGuInventory != nil {
+		var filteredGu []models.GuInstance
+		for _, g := range base.EnemyGuInventory {
+			if g.Equipped && g.Status == "ACTIVE" {
+				spec, ok := models.GetGu(g.GuID, g.Rank)
+				if ok && hasCombatActiveEffects(&spec) {
+					filteredGu = append(filteredGu, g)
+				}
+			}
+		}
+		base.EnemyGuInventory = filteredGu
+	}
+
 	playerStats := CalculatePlayerStats(player)
 	playerCombatant := models.CombatantFromPlayer(player, playerStats)
 	playerCombatant.HP = player.HP

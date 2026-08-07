@@ -491,6 +491,7 @@ func MovePlayer(c *gin.Context) {
 			EnemyMaxMana:       targetPlayer.MaxMana,
 			EnemyDamage:        targetStats["attack"],
 			EnemyDefense:       targetStats["defense"],
+			EnemySpeed:         targetStats["speed"],
 			EnemyRank:          targetPlayer.Rank,
 			EnemySubRank:       targetPlayer.SubRank,
 			EnemyGuInventory:   targetPlayer.GuInventory,

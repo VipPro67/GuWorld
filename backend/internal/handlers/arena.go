@@ -213,6 +213,7 @@ func ChallengeArena(c *gin.Context) {
 		EnemyMaxMana:       targetPlayer.MaxMana,
 		EnemyDamage:        targetStats["attack"],
 		EnemyDefense:       targetStats["defense"],
+		EnemySpeed:         targetStats["speed"],
 		EnemyRank:          enemyRank,
 		EnemySubRank:       enemySubRank,
 		EnemyGuInventory:   enemyGuInventory,

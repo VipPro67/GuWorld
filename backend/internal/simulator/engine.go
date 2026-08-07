@@ -933,6 +933,23 @@ func Simulate(state *CombatState) []CombatLog {
 								Detail:    fmt.Sprintf("%s bị chậm %d%% trong %d lượt!", target.Name, pct, dur),
 							})
 						}
+						if a.SlowDamageTier > 0 {
+							pct := int(TierToPercent(EffectSlowDamage, a.SlowDamageTier))
+							dur := TierToDuration(EffectSlowDamage, a.SlowDamageTier)
+							target.ActiveEffects = append(target.ActiveEffects, Effect{
+								ID: EffectSlowDamage, Type: "debuff", Tier: a.SlowDamageTier, Value: pct, Duration: dur,
+							})
+							target.ActiveDoT = append(target.ActiveDoT, DoTEffect{
+								Type: EffectSlowDamage, Value: float64(pct), Turns: dur,
+							})
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   target.ID,
+								ActorName: target.Name,
+								Action:    "SLOW_DAMAGE_APPLIED",
+								Detail:    fmt.Sprintf("%s bị chậm sát thương %d%% và mất %d HP/lượt trong %d lượt!", target.Name, pct, pct, dur),
+							})
+						}
 						if a.WeakTier > 0 {
 							pct := int(TierToPercent(EffectWeak, a.WeakTier))
 							dur := TierToDuration(EffectWeak, a.WeakTier)

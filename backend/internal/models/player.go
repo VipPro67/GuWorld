@@ -142,6 +142,7 @@ type CombatState struct {
 	EnemyMaxMana        float64           `json:"enemy_max_mana,omitempty"`
 	EnemyDamage         float64           `json:"enemy_damage"`
 	EnemyDefense        float64           `json:"enemy_defense"`
+	EnemySpeed          float64           `json:"enemy_speed,omitempty"`
 	EnemyRank           int               `json:"enemy_rank,omitempty"`
 	EnemySubRank        int               `json:"enemy_sub_rank,omitempty"`
 	EnemyGuInventory    GuInventory       `json:"enemy_gu_inventory,omitempty"`

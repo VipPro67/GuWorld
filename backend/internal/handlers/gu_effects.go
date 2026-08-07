@@ -180,6 +180,14 @@ func BuildCombatAction(ctx *CombatContext, spec models.GuDictionaryItem) (Action
 		})
 		action.Logs = append(action.Logs, fmt.Sprintf("%s gây chậm (%.0f%% speed, %d lượt).", spec.Name, active.StatusTickDamage, active.StatusDurationTicks))
 	}
+	if active.ApplyStatus == "SLOW_DAMAGE" {
+		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
+			Type:  "slow_damage",
+			Value: active.StatusTickDamage,
+			Turns: active.StatusDurationTicks,
+		})
+		action.Logs = append(action.Logs, fmt.Sprintf("%s gây chậm sát thương (%.0f%% speed và trừ %.1f HP mỗi lượt, %d lượt).", spec.Name, active.StatusTickDamage, active.StatusTickDamage, active.StatusDurationTicks))
+	}
 	if active.ApplyStatus == "WEAK" {
 		action.StatusEffects = append(action.StatusEffects, models.StatusEffect{
 			Type:  "weak",

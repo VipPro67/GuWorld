@@ -954,6 +954,9 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		if active.ApplyStatus == "SLOW" {
 			act.SlowTier = active.StatusDurationTicks
 		}
+		if active.ApplyStatus == "SLOW_DAMAGE" {
+			act.SlowDamageTier = active.StatusDurationTicks
+		}
 		if active.ApplyStatus == "WEAK" {
 			act.WeakTier = active.StatusDurationTicks
 		}
@@ -1075,6 +1078,9 @@ func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlo
 		// ── New tier-based effects ──
 		if v, ok := effects["slow"]; ok {
 			act.SlowTier = int(v)
+		}
+		if v, ok := effects["slow_damage"]; ok {
+			act.SlowDamageTier = int(v)
 		}
 		if v, ok := effects["weak"]; ok {
 			act.WeakTier = int(v)

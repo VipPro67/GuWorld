@@ -93,7 +93,7 @@ func CombatAttack(c *gin.Context) {
 			eff := c.StatusEffects[j]
 			if eff.Turns > 0 {
 				switch eff.Type {
-				case "poison", "bleed":
+				case "poison", "bleed", "slow_damage":
 					c.HP -= eff.Value
 					if c.HP < 0 {
 						c.HP = 0
@@ -127,7 +127,7 @@ func CombatAttack(c *gin.Context) {
 			eff := c.StatusEffects[j]
 			if eff.Turns > 0 {
 				switch eff.Type {
-				case "poison", "bleed":
+				case "poison", "bleed", "slow_damage":
 					c.HP -= eff.Value
 					if c.HP < 0 {
 						c.HP = 0
@@ -591,6 +591,11 @@ func CombatAttack(c *gin.Context) {
 												Type: "slow", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
 											})
 											logs = append(logs, fmt.Sprintf("%s bị Chậm %d%% %d lượt!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
+										case "SLOW_DAMAGE":
+											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+												Type: "slow_damage", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
+											})
+											logs = append(logs, fmt.Sprintf("%s bị Chậm sát thương %d%% và mất %d HP/lượt trong %d lượt!", tEnemy.Name, int(active.StatusTickDamage), int(active.StatusTickDamage), active.StatusDurationTicks))
 										case "WEAK":
 											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
 												Type: "weak", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
@@ -784,14 +789,14 @@ func CombatAttack(c *gin.Context) {
 		}
 	}
 
-	sort.Slice(actions, func(i, j int) bool {
+	sort.SliceStable(actions, func(i, j int) bool {
 		speedI := actions[i].Speed
 		speedJ := actions[j].Speed
 		// Apply slow debuff to effective speed
 		refI, _, _ := findCombatant(player.ActiveCombat, actions[i].InitiatorID)
 		if refI != nil {
 			for _, eff := range refI.StatusEffects {
-				if eff.Type == "slow" && eff.Turns > 0 {
+				if (eff.Type == "slow" || eff.Type == "slow_damage") && eff.Turns > 0 {
 					speedI *= (1.0 - eff.Value/100.0)
 				}
 			}
@@ -799,7 +804,7 @@ func CombatAttack(c *gin.Context) {
 		refJ, _, _ := findCombatant(player.ActiveCombat, actions[j].InitiatorID)
 		if refJ != nil {
 			for _, eff := range refJ.StatusEffects {
-				if eff.Type == "slow" && eff.Turns > 0 {
+				if (eff.Type == "slow" || eff.Type == "slow_damage") && eff.Turns > 0 {
 					speedJ *= (1.0 - eff.Value/100.0)
 				}
 			}

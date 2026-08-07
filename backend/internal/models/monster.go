@@ -220,6 +220,7 @@ func CombatantFromActiveCombat(cs *CombatState) Combatant {
 		MaxMana:       cs.EnemyMaxMana,
 		BaseAttack:    cs.EnemyDamage,
 		BaseDefense:   cs.EnemyDefense,
+		Speed:         cs.EnemySpeed,
 		GuInventory:   cs.EnemyGuInventory,
 		DaoMarks:      cs.EnemyDaoMarks,
 		PathMasteries: cs.EnemyPathMasteries,

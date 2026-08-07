@@ -40,6 +40,8 @@ func tickDoTs(c *CombatantAuto, turn int) []CombatLog {
 				label = "Xuất huyết"
 			case EffectPoison:
 				label = "Độc"
+			case EffectSlowDamage:
+				label = "Tê Cóng"
 			default:
 				label = dot.Type
 			}
@@ -96,6 +98,12 @@ func tickStatusEffects(c *CombatantAuto, turn int) []CombatLog {
 					Action: "EFFECT_EXPIRED",
 					Detail: fmt.Sprintf("%s hết bị chậm!", c.Name),
 				})
+			case EffectSlowDamage:
+				logs = append(logs, CombatLog{
+					Turn: turn, ActorId: c.ID, ActorName: c.Name,
+					Action: "EFFECT_EXPIRED",
+					Detail: fmt.Sprintf("%s hết bị chậm sát thương!", c.Name),
+				})
 			case EffectWeak:
 				logs = append(logs, CombatLog{
 					Turn: turn, ActorId: c.ID, ActorName: c.Name,
@@ -131,7 +139,7 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 	speedMult := 1.0
 	for _, eff := range c.ActiveEffects {
 		switch eff.ID {
-		case EffectSlow:
+		case EffectSlow, EffectSlowDamage:
 			speedMult *= (1.0 - float64(eff.Value)/100.0)
 		case EffectWeak:
 			c.DamageMultiplier *= (1.0 - float64(eff.Value)/100.0)

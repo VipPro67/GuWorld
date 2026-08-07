@@ -16,6 +16,7 @@ type CombatLoadout struct {
 // Tier system: Value stores the tier (1-5), actual % computed by tierToPercent().
 const (
 	EffectSlow     = "slow"     // reduces speed → changes turn order
+	EffectSlowDamage = "slow_damage" // reduces speed and deals damage per turn
 	EffectWeak     = "weak"     // reduces damage dealt
 	EffectFreeze   = "freeze"   // like stun but can be broken by taking damage
 	EffectSilence  = "silence"  // prevents skill use, only basic attack
@@ -48,7 +49,7 @@ func TierToPercent(effectType string, tier int) float64 {
 		tier = 5
 	}
 	switch effectType {
-	case EffectSlow:
+	case EffectSlow, EffectSlowDamage:
 		return []float64{0, 15, 25, 35, 45, 55}[tier]
 	case EffectWeak:
 		return []float64{0, 10, 20, 30, 40, 50}[tier]
@@ -78,7 +79,7 @@ func TierToDuration(effectType string, tier int) int {
 		tier = 5
 	}
 	switch effectType {
-	case EffectSlow:
+	case EffectSlow, EffectSlowDamage:
 		return []int{0, 3, 3, 4, 4, 5}[tier]
 	case EffectWeak:
 		return []int{0, 3, 3, 4, 4, 5}[tier]
@@ -124,6 +125,7 @@ type SimAction struct {
 	// ── New status effect fields (tier-based) ──
 	StunTier      int     // tier (1-5) for stun on target
 	SlowTier      int     // tier (1-5) for slow debuff on target
+	SlowDamageTier int     // tier (1-5) for slow damage debuff on target
 	WeakTier     int     // tier (1-5) for weak debuff on target
 	FreezeTier   int     // tier (1-5) for freeze debuff on target
 	SilenceTier  int     // tier (1-5) for silence debuff on target

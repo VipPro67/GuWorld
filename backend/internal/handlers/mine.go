@@ -568,6 +568,7 @@ func AttackMineSlot(c *gin.Context) {
 			EnemyMaxMana:       defender.MaxMana,
 			EnemyDamage:        defenderStats["attack"],
 			EnemyDefense:       defenderStats["defense"],
+			EnemySpeed:         defenderStats["speed"],
 			EnemyRank:          defender.Rank,
 			EnemySubRank:       defender.SubRank,
 			EnemyGuInventory:   defender.GuInventory,
