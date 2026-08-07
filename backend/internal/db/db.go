@@ -168,7 +168,7 @@ func InitSchema() error {
 		primeval_stones_cost DOUBLE PRECISION DEFAULT 0,
 		immortal_essence_stones_cost DOUBLE PRECISION DEFAULT 0,
 		PRIMARY KEY (target_gu_id, target_rank, variant),
-		FOREIGN KEY (target_gu_id, target_rank) REFERENCES gu_dictionary(id, rank) ON DELETE CASCADE
+		FOREIGN KEY (target_gu_id, target_rank) REFERENCES gu_dictionary(id, rank) ON UPDATE CASCADE ON DELETE RESTRICT
 	);`)
 	if err != nil {
 		return fmt.Errorf("failed to create refining_recipes table: %w", err)
@@ -910,7 +910,7 @@ func InitSchema() error {
 		gu_id VARCHAR(50) NOT NULL,
 		gu_rank INTEGER NOT NULL DEFAULT 1,
 		rank INTEGER NOT NULL DEFAULT 1,
-		FOREIGN KEY (gu_id, gu_rank) REFERENCES gu_dictionary(id, rank),
+		FOREIGN KEY (gu_id, gu_rank) REFERENCES gu_dictionary(id, rank) ON UPDATE CASCADE ON DELETE RESTRICT,
 		level INTEGER NOT NULL DEFAULT 1,
 		hunger DOUBLE PRECISION NOT NULL DEFAULT 100,
 		state VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
@@ -987,8 +987,8 @@ func InitSchema() error {
 		{`ALTER TABLE player_gu DROP CONSTRAINT IF EXISTS player_gu_gu_id_gu_rank_fkey;`, "drop_player_gu_fk2"},
 		{`ALTER TABLE gu_dictionary DROP CONSTRAINT IF EXISTS gu_dictionary_pkey;`, "drop_gu_dict_pk"},
 		{`ALTER TABLE gu_dictionary ADD PRIMARY KEY (id, rank);`, "add_gu_dict_pk"},
-		{`ALTER TABLE refining_recipes ADD FOREIGN KEY (target_gu_id, target_rank) REFERENCES gu_dictionary(id, rank) ON DELETE CASCADE;`, "add_recipe_fk"},
-		{`ALTER TABLE player_gu ADD FOREIGN KEY (gu_id, gu_rank) REFERENCES gu_dictionary(id, rank);`, "add_player_gu_fk"},
+		{`ALTER TABLE refining_recipes ADD FOREIGN KEY (target_gu_id, target_rank) REFERENCES gu_dictionary(id, rank) ON UPDATE CASCADE ON DELETE RESTRICT;`, "add_recipe_fk"},
+		{`ALTER TABLE player_gu ADD FOREIGN KEY (gu_id, gu_rank) REFERENCES gu_dictionary(id, rank) ON UPDATE CASCADE ON DELETE RESTRICT;`, "add_player_gu_fk"},
 		{`ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS equipped BOOLEAN NOT NULL DEFAULT false;`, "player_gu.equipped"},
 		{`ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS is_vital BOOLEAN NOT NULL DEFAULT false;`, "player_gu.is_vital"},
 		{`ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS integration_time DOUBLE PRECISION NOT NULL DEFAULT 0;`, "player_gu.integration_time"},
