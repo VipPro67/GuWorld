@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"math"
+	"strings"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -131,6 +133,9 @@ func applyOnTickEffects(db *sql.DB, playerID string) error {
 		}
 
 		tnMultiplier := 1.0
+		if strings.HasPrefix(guID, "GU_HEAVENLY_ESSENCE_LOTUS") {
+			tnMultiplier = getThienNguyenMultiplier(playerRank, guRank)
+		}
 		for _, mech := range other {
 			if mech.EventTrigger != "ON_TICK" {
 				continue
@@ -310,4 +315,33 @@ func runHungerDecayBatch(db *sql.DB) error {
 	}
 
 	return tx.Commit()
+}
+
+func getThienNguyenMultiplier(playerRank, guRank int) float64 {
+	if playerRank == guRank {
+		return 2.0
+	}
+	immortalCost := func(diff int) float64 {
+		return math.Pow(100, float64(diff))
+	}
+	mortalCost := map[int]float64{1: 1, 2: 2, 3: 5, 4: 20, 5: 100}
+	if playerRank >= 6 && guRank >= 6 {
+		diff := playerRank - guRank
+		if diff > 0 {
+			return 2.0 / immortalCost(diff)
+		}
+		return 2.0 * immortalCost(-diff)
+	}
+	if playerRank >= 6 {
+		return 2.0 / immortalCost(playerRank-guRank)
+	}
+	if guRank >= 6 {
+		return 0
+	}
+	playerCost := mortalCost[playerRank]
+	guCost := mortalCost[guRank]
+	if playerCost == 0 || guCost == 0 {
+		return 0
+	}
+	return 2.0 * guCost / playerCost
 }

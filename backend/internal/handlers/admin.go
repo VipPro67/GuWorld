@@ -131,13 +131,15 @@ func AdminListPlayers(c *gin.Context) {
 	for rows.Next() {
 		var id uuid.UUID
 		var username, email, currentRegion, aptitudeType string
-		var rank, subRank, primevalStones int
+		var rank, subRank int
+		var primevalStones float64
 		var currentMana, maxMana, hp, baseHP, immortalStones, wallProgress, humanQi, lifespan float64
 		var isAdmin bool
 		var createdAt time.Time
 
 		if err := rows.Scan(&id, &username, &email, &rank, &subRank, &currentMana, &maxMana, &hp, &baseHP, &primevalStones, &immortalStones, &isAdmin, &createdAt, &currentRegion, &aptitudeType, &wallProgress, &humanQi, &lifespan); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc dữ liệu người chơi"})
+			fmt.Println("Error scanning player row:", err)
 			return
 		}
 		players = append(players, gin.H{
@@ -193,35 +195,35 @@ func AdminGetPlayerDetail(c *gin.Context) {
 	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM player_inventory_items WHERE player_id=$1`, playerID).Scan(&itemCount)
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":                   player.ID,
-		"username":             player.Username,
-		"email":                player.Email,
-		"rank":                 player.Rank,
-		"sub_rank":             player.SubRank,
-		"aptitude_type":        player.AptitudeType,
-		"aptitude_percent":     player.AptitudePercent,
-		"aptitude_grade":       player.AptitudeGrade,
-		"current_mana":         player.CurrentMana,
-		"max_mana":             player.MaxMana,
-		"primeval_stones":      player.PrimevalStones,
-		"immortal_stones":      player.ImmortalStones,
-		"hp":                   player.HP,
-		"base_hp":              player.BaseHP,
-		"wall_progress":        player.WallProgress,
-		"human_qi":             player.HumanQi,
-		"current_region":       player.CurrentRegion,
-		"is_admin":             player.IsAdmin,
-		"created_at":           player.CreatedAt,
-		"lifespan":             player.Lifespan,
-		"soul_hp":              player.SoulHP,
-		"max_soul":             player.MaxSoul,
-		"soul_tier":            player.SoulTier,
-		"explore_count":        player.ExploreCount,
-		"aperture_stress":      player.ApertureStress,
-		"avatar_url":           player.AvatarURL,
-		"bio":                  player.Bio,
-		"gu_count":             guCount,
-		"item_count":           itemCount,
+		"id":               player.ID,
+		"username":         player.Username,
+		"email":            player.Email,
+		"rank":             player.Rank,
+		"sub_rank":         player.SubRank,
+		"aptitude_type":    player.AptitudeType,
+		"aptitude_percent": player.AptitudePercent,
+		"aptitude_grade":   player.AptitudeGrade,
+		"current_mana":     player.CurrentMana,
+		"max_mana":         player.MaxMana,
+		"primeval_stones":  player.PrimevalStones,
+		"immortal_stones":  player.ImmortalStones,
+		"hp":               player.HP,
+		"base_hp":          player.BaseHP,
+		"wall_progress":    player.WallProgress,
+		"human_qi":         player.HumanQi,
+		"current_region":   player.CurrentRegion,
+		"is_admin":         player.IsAdmin,
+		"created_at":       player.CreatedAt,
+		"lifespan":         player.Lifespan,
+		"soul_hp":          player.SoulHP,
+		"max_soul":         player.MaxSoul,
+		"soul_tier":        player.SoulTier,
+		"explore_count":    player.ExploreCount,
+		"aperture_stress":  player.ApertureStress,
+		"avatar_url":       player.AvatarURL,
+		"bio":              player.Bio,
+		"gu_count":         guCount,
+		"item_count":       itemCount,
 	})
 }
 
@@ -246,7 +248,8 @@ func adminItemKind(itemID string) string {
 }
 
 func AdminAddPlayerItems(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -301,13 +304,14 @@ func AdminAddPlayerItems(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.add_items",
 		EntityType: "player", EntityID: playerID.String(),
 		RequestSummary: fmt.Sprintf("%s=%s qty=%d", kind, req.ItemID, req.Quantity),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã thêm thành công", "kind": kind, "item_id": req.ItemID, "quantity": req.Quantity})
 }
 
 func AdminRemovePlayerItems(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -351,7 +355,7 @@ func AdminRemovePlayerItems(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.remove_items",
 		EntityType: "player", EntityID: playerID.String(),
 		RequestSummary: fmt.Sprintf("%s=%s qty=%d", kind, req.ItemID, req.Quantity),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa thành công", "kind": kind, "item_id": req.ItemID, "quantity": req.Quantity})
 }
@@ -362,7 +366,8 @@ type AdminAddGuRequest struct {
 }
 
 func AdminAddPlayerGus(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -418,13 +423,14 @@ func AdminAddPlayerGus(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.add_gus",
 		EntityType: "player", EntityID: playerID.String(),
 		RequestSummary: fmt.Sprintf("gu=%s qty=%d", req.GuID, req.Quantity),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã thêm cổ trùng thành công", "gu_id": req.GuID, "quantity": req.Quantity})
 }
 
 func AdminRemovePlayerGu(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -477,13 +483,14 @@ func AdminRemovePlayerGu(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.remove_gu",
 		EntityType: "player", EntityID: playerID.String(),
 		RequestSummary: fmt.Sprintf("instance=%s", instanceID),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa cổ trùng thành công"})
 }
 
 func AdminChangePlayerStones(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -546,7 +553,7 @@ func AdminChangePlayerStones(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.change_stones",
 		EntityType: "player", EntityID: playerID.String(),
 		RequestSummary: summary,
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật tài nguyên thành công"})
 }
@@ -1289,7 +1296,8 @@ type AdminSectUpdateRequest struct {
 }
 
 func AdminUpdateSect(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -1353,13 +1361,14 @@ func AdminUpdateSect(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.update_sect",
 		EntityType: "sect", EntityID: sectID,
 		RequestSummary: fmt.Sprintf("sets=%d", len(sets)),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật tông môn thành công"})
 }
 
 func AdminSetSectLeader(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -1409,13 +1418,14 @@ func AdminSetSectLeader(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.set_sect_leader",
 		EntityType: "sect", EntityID: sectID,
 		RequestSummary: fmt.Sprintf("memberId=%s", memberIDStr),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã bổ nhiệm tân Chưởng môn thành công"})
 }
 
 func AdminKickSectMember(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -1456,7 +1466,7 @@ func AdminKickSectMember(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.kick_sect_member",
 		EntityType: "sect", EntityID: sectID,
 		RequestSummary: fmt.Sprintf("memberId=%s", memberIDStr),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa thành viên khỏi tông môn"})
 }
@@ -1467,7 +1477,8 @@ type AdminSectAddMemberRequest struct {
 }
 
 func AdminAddToSect(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -1541,7 +1552,7 @@ func AdminAddToSect(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.add_to_sect",
 		EntityType: "sect", EntityID: sectID,
 		RequestSummary: fmt.Sprintf("player=%s rank=%s", req.PlayerID, req.MemberRank),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã thêm " + username + " vào tông môn thành công"})
 }
@@ -1555,7 +1566,8 @@ type AdminStockVaultRequest struct {
 }
 
 func AdminStockSectVault(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -1636,13 +1648,14 @@ func AdminStockSectVault(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.stock_sect_vault",
 		EntityType: "sect", EntityID: sectID,
 		RequestSummary: fmt.Sprintf("type=%s item=%s qty=%d", req.ItemType, req.ItemID, req.Quantity),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã thêm vào bảo khố thành công"})
 }
 
 func AdminRemoveSectVaultItem(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -1719,7 +1732,7 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.remove_sect_vault",
 		EntityType: "sect", EntityID: sectID,
 		RequestSummary: fmt.Sprintf("type=%s item=%s qty=%d", req.ItemType, req.ItemID, req.Quantity),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa khỏi bảo khố thành công"})
 }
@@ -1741,15 +1754,15 @@ func AdminListSectMissions(c *gin.Context) {
 	defer rows.Close()
 
 	type Mission struct {
-		ID                  string `json:"id"`
-		SectID              string `json:"sect_id"`
-		Title               string `json:"title"`
-		Description         string `json:"description"`
-		MissionType         string `json:"mission_type"`
-		TargetID            string `json:"target_id"`
-		TargetAmount        int    `json:"target_amount"`
-		RewardContribution  int    `json:"reward_contribution"`
-		RequiredMemberRank  string `json:"required_member_rank"`
+		ID                 string `json:"id"`
+		SectID             string `json:"sect_id"`
+		Title              string `json:"title"`
+		Description        string `json:"description"`
+		MissionType        string `json:"mission_type"`
+		TargetID           string `json:"target_id"`
+		TargetAmount       int    `json:"target_amount"`
+		RewardContribution int    `json:"reward_contribution"`
+		RequiredMemberRank string `json:"required_member_rank"`
 	}
 
 	var missions []Mission
@@ -1774,7 +1787,8 @@ type AdminCreateMissionRequest struct {
 }
 
 func AdminCreateSectMission(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -1801,13 +1815,14 @@ func AdminCreateSectMission(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.create_sect_mission",
 		EntityType: "sect", EntityID: sectID,
 		RequestSummary: fmt.Sprintf("title=%s type=%s target=%s qty=%d", req.Title, req.MissionType, req.TargetID, req.TargetAmount),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo nhiệm vụ thành công"})
 }
 
 func AdminDeleteSectMission(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -1823,13 +1838,14 @@ func AdminDeleteSectMission(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.delete_sect_mission",
 		EntityType: "sect_mission", EntityID: missionID,
 		RequestSummary: "",
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa nhiệm vụ thành công"})
 }
 
 func AdminDeleteSect(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -1853,7 +1869,7 @@ func AdminDeleteSect(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.delete_sect",
 		EntityType: "sect", EntityID: sectID,
 		RequestSummary: fmt.Sprintf("name=%s", name),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã giải tán tông môn " + name})
 }
@@ -1861,7 +1877,8 @@ func AdminDeleteSect(c *gin.Context) {
 // AdminImportData seeds all dictionary tables from CSV files.
 // POST /api/admin/data/import
 func AdminImportData(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -1888,7 +1905,7 @@ func AdminImportData(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.import_data",
 		EntityType: "system", EntityID: "",
 		RequestSummary: "data import from CSV",
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Import dữ liệu từ CSV thành công"})
 }
@@ -1896,7 +1913,8 @@ func AdminImportData(c *gin.Context) {
 // AdminExportData exports all dictionary tables to CSV files.
 // POST /api/admin/data/export
 func AdminExportData(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -1909,7 +1927,7 @@ func AdminExportData(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.export_data",
 		EntityType: "system", EntityID: "",
 		RequestSummary: "data export to CSV",
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Export dữ liệu ra CSV thành công"})
 }
@@ -1926,7 +1944,8 @@ func AdminListTables(c *gin.Context) {
 // AdminImportTable imports a single table from its CSV file.
 // POST /api/admin/data/import/:table
 func AdminImportTable(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 	table := c.Param("table")
@@ -1960,7 +1979,7 @@ func AdminImportTable(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.import_table",
 		EntityType: "table", EntityID: table,
 		RequestSummary: "import table " + table + " from CSV",
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Import bảng " + table + " thành công"})
 }
@@ -1968,7 +1987,8 @@ func AdminImportTable(c *gin.Context) {
 // AdminExportTable exports a single table to its CSV file.
 // POST /api/admin/data/export/:table
 func AdminExportTable(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 	table := c.Param("table")
@@ -1982,7 +2002,7 @@ func AdminExportTable(c *gin.Context) {
 		PlayerID: &adminID, Action: "admin.export_table",
 		EntityType: "table", EntityID: table,
 		RequestSummary: "export table " + table + " to CSV",
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Export bảng " + table + " thành công"})
 }
@@ -2155,9 +2175,9 @@ func AdminGetAuditLogs(c *gin.Context) {
 	_ = db.DB.QueryRowContext(c.Request.Context(), countQuery, countArgs...).Scan(&total)
 
 	c.JSON(http.StatusOK, gin.H{
-		"data":  logs,
-		"total": total,
-		"limit": limit,
+		"data":   logs,
+		"total":  total,
+		"limit":  limit,
 		"offset": offset,
 	})
 }
@@ -2217,7 +2237,8 @@ type AdminShopItemRequest struct {
 }
 
 func AdminCreateShopItem(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -2247,7 +2268,8 @@ func AdminCreateShopItem(c *gin.Context) {
 }
 
 func AdminUpdateShopItem(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -2270,7 +2292,8 @@ func AdminUpdateShopItem(c *gin.Context) {
 }
 
 func AdminDeleteShopItem(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -2341,7 +2364,8 @@ type AdminArenaShopItemRequest struct {
 }
 
 func AdminCreateArenaShopItem(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -2374,7 +2398,8 @@ func AdminCreateArenaShopItem(c *gin.Context) {
 }
 
 func AdminUpdateArenaShopItem(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -2400,7 +2425,8 @@ func AdminUpdateArenaShopItem(c *gin.Context) {
 }
 
 func AdminDeleteArenaShopItem(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -2419,16 +2445,16 @@ func AdminDeleteArenaShopItem(c *gin.Context) {
 // -------- Admin: Mine Slot Management --------
 
 type AdminMineSlot struct {
-	ID              int        `json:"id"`
-	Rarity          string     `json:"rarity"`
-	OccupierID      *string    `json:"occupier_id"`
-	OccupierName    *string    `json:"occupier_name"`
-	MonsterID       *string    `json:"monster_id"`
-	MonsterRank     int        `json:"monster_rank"`
-	MonsterSubRank  int        `json:"monster_sub_rank"`
-	OccupiedAt      *time.Time `json:"occupied_at"`
-	LastClaimedAt   *time.Time `json:"last_claimed_at"`
-	AbandonedAt     *time.Time `json:"abandoned_at"`
+	ID             int        `json:"id"`
+	Rarity         string     `json:"rarity"`
+	OccupierID     *string    `json:"occupier_id"`
+	OccupierName   *string    `json:"occupier_name"`
+	MonsterID      *string    `json:"monster_id"`
+	MonsterRank    int        `json:"monster_rank"`
+	MonsterSubRank int        `json:"monster_sub_rank"`
+	OccupiedAt     *time.Time `json:"occupied_at"`
+	LastClaimedAt  *time.Time `json:"last_claimed_at"`
+	AbandonedAt    *time.Time `json:"abandoned_at"`
 }
 
 func AdminListMineSlots(c *gin.Context) {
@@ -2473,7 +2499,8 @@ type AdminUpdateMineSlotRequest struct {
 }
 
 func AdminUpdateMineSlot(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -2532,7 +2559,8 @@ func AdminUpdateMineSlot(c *gin.Context) {
 }
 
 func AdminResetMineSlot(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok {
+	adminID, ok := requireAdmin(c)
+	if !ok {
 		return
 	}
 
@@ -2577,26 +2605,26 @@ func AdminListGuItems(c *gin.Context) {
 	defer rows.Close()
 
 	type GuRow struct {
-		ID          string          `json:"id"`
-		Name        string          `json:"name"`
-		Rank        int             `json:"rank"`
-		Path        json.RawMessage `json:"path"`
-		GuType      string          `json:"gu_type"`
-		BaseManaCost float64        `json:"base_mana_cost"`
-		Effects     json.RawMessage `json:"effects"`
-		FoodTypes   json.RawMessage `json:"food_types"`
-		HungerRate  int             `json:"hunger_rate"`
-		MaxHunger   int             `json:"max_hunger"`
-		Description string          `json:"description"`
-		TargetType  string          `json:"target_type"`
-		Rarity      string          `json:"rarity"`
-		IsImmortal  bool            `json:"is_immortal"`
-		PrimaryRole string          `json:"primary_role"`
-		CombatRoles json.RawMessage `json:"combat_roles"`
-		CombatTags  json.RawMessage `json:"combat_tags"`
-		SupportTags json.RawMessage `json:"support_tags"`
-		BasePrice   int             `json:"base_price"`
-		ImageURL    string          `json:"image_url"`
+		ID           string          `json:"id"`
+		Name         string          `json:"name"`
+		Rank         int             `json:"rank"`
+		Path         json.RawMessage `json:"path"`
+		GuType       string          `json:"gu_type"`
+		BaseManaCost float64         `json:"base_mana_cost"`
+		Effects      json.RawMessage `json:"effects"`
+		FoodTypes    json.RawMessage `json:"food_types"`
+		HungerRate   int             `json:"hunger_rate"`
+		MaxHunger    int             `json:"max_hunger"`
+		Description  string          `json:"description"`
+		TargetType   string          `json:"target_type"`
+		Rarity       string          `json:"rarity"`
+		IsImmortal   bool            `json:"is_immortal"`
+		PrimaryRole  string          `json:"primary_role"`
+		CombatRoles  json.RawMessage `json:"combat_roles"`
+		CombatTags   json.RawMessage `json:"combat_tags"`
+		SupportTags  json.RawMessage `json:"support_tags"`
+		BasePrice    int             `json:"base_price"`
+		ImageURL     string          `json:"image_url"`
 	}
 
 	items := []GuRow{}
@@ -2614,46 +2642,61 @@ func AdminListGuItems(c *gin.Context) {
 }
 
 type AdminGuInput struct {
-	ID          string          `json:"id"`
-	Name        string          `json:"name"`
-	Rank        int             `json:"rank"`
-	Path        []string        `json:"path"`
-	GuType      string          `json:"gu_type"`
-	BaseManaCost float64        `json:"base_mana_cost"`
-	Effects     json.RawMessage `json:"effects"`
-	FoodTypes   []string        `json:"food_types"`
-	HungerRate  int             `json:"hunger_rate"`
-	MaxHunger   int             `json:"max_hunger"`
-	Description string          `json:"description"`
-	TargetType  string          `json:"target_type"`
-	Rarity      string          `json:"rarity"`
-	IsImmortal  bool            `json:"is_immortal"`
-	PrimaryRole string          `json:"primary_role"`
-	CombatRoles []string        `json:"combat_roles"`
-	CombatTags  []string        `json:"combat_tags"`
-	SupportTags []string        `json:"support_tags"`
-	BasePrice   int             `json:"base_price"`
-	ImageURL    string          `json:"image_url"`
+	ID           string          `json:"id"`
+	Name         string          `json:"name"`
+	Rank         int             `json:"rank"`
+	Path         []string        `json:"path"`
+	GuType       string          `json:"gu_type"`
+	BaseManaCost float64         `json:"base_mana_cost"`
+	Effects      json.RawMessage `json:"effects"`
+	FoodTypes    []string        `json:"food_types"`
+	HungerRate   int             `json:"hunger_rate"`
+	MaxHunger    int             `json:"max_hunger"`
+	Description  string          `json:"description"`
+	TargetType   string          `json:"target_type"`
+	Rarity       string          `json:"rarity"`
+	IsImmortal   bool            `json:"is_immortal"`
+	PrimaryRole  string          `json:"primary_role"`
+	CombatRoles  []string        `json:"combat_roles"`
+	CombatTags   []string        `json:"combat_tags"`
+	SupportTags  []string        `json:"support_tags"`
+	BasePrice    int             `json:"base_price"`
+	ImageURL     string          `json:"image_url"`
 }
 
 func guValidate(req *AdminGuInput) (bool, string) {
-	if req.ID == "" { return false, "ID là bắt buộc" }
-	if req.Name == "" { return false, "Tên là bắt buộc" }
-	if req.Rank < 1 { return false, "Rank phải >= 1" }
+	if req.ID == "" {
+		return false, "ID là bắt buộc"
+	}
+	if req.Name == "" {
+		return false, "Tên là bắt buộc"
+	}
+	if req.Rank < 1 {
+		return false, "Rank phải >= 1"
+	}
 	validTypes := map[string]bool{"Active": true, "Buff": true, "Consumable": true, "Control": true, "Defense": true, "Healing": true, "Investigation": true, "Movement": true, "Passive": true, "Refinement": true, "Special": true, "Storage": true, "Summon": true, "Support": true, "Transformation": true, "Vital": true}
-	if !validTypes[req.GuType] { return false, "gu_type không hợp lệ" }
-	if req.HungerRate < 1 { return false, "hunger_rate phải >= 1" }
+	if !validTypes[req.GuType] {
+		return false, "gu_type không hợp lệ"
+	}
+	if req.HungerRate < 1 {
+		return false, "hunger_rate phải >= 1"
+	}
 	return true, ""
 }
 
 func marshalArray(arr []string) json.RawMessage {
-	if arr == nil { arr = []string{} }
+	if arr == nil {
+		arr = []string{}
+	}
 	b, _ := json.Marshal(arr)
 	return b
 }
 
 func AdminCreateGuItem(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok { return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
 	var req AdminGuInput
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
@@ -2663,9 +2706,15 @@ func AdminCreateGuItem(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
 		return
 	}
-	if req.MaxHunger <= 0 { req.MaxHunger = 100 }
-	if req.TargetType == "" { req.TargetType = "SINGLE" }
-	if len(req.Effects) == 0 { req.Effects = json.RawMessage(`{"active":{},"passive":{},"house":{}}`) }
+	if req.MaxHunger <= 0 {
+		req.MaxHunger = 100
+	}
+	if req.TargetType == "" {
+		req.TargetType = "SINGLE"
+	}
+	if len(req.Effects) == 0 {
+		req.Effects = json.RawMessage(`{"active":{},"passive":{},"house":{}}`)
+	}
 
 	_, err := db.DB.Exec(`INSERT INTO gu_dictionary (id,name,rank,path,gu_type,base_mana_cost,effects,food_types,hunger_rate,max_hunger,description,target_type,rarity,is_immortal,primary_role,combat_roles,combat_tags,support_tags,base_price,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
 		req.ID, req.Name, req.Rank, marshalArray(req.Path), req.GuType, req.BaseManaCost, req.Effects, marshalArray(req.FoodTypes),
@@ -2681,7 +2730,10 @@ func AdminCreateGuItem(c *gin.Context) {
 }
 
 func AdminUpdateGuItem(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok { return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
 	guID := c.Param("id")
 	var req AdminGuInput
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -2689,31 +2741,103 @@ func AdminUpdateGuItem(c *gin.Context) {
 		return
 	}
 	// Use existing ID from URL if not in body
-	if req.ID == "" { req.ID = guID }
+	if req.ID == "" {
+		req.ID = guID
+	}
 
 	if req.Name == "" {
 		// Partial update — only update provided fields
 		sets := []string{}
 		args := []interface{}{}
 		idx := 1
-		if req.Rank > 0 { sets = append(sets, "rank=$"+strconv.Itoa(idx)); args = append(args, req.Rank); idx++ }
-		if req.GuType != "" { sets = append(sets, "gu_type=$"+strconv.Itoa(idx)); args = append(args, req.GuType); idx++ }
-		if req.BaseManaCost > 0 || true { sets = append(sets, "base_mana_cost=$"+strconv.Itoa(idx)); args = append(args, req.BaseManaCost); idx++ }
-		if req.HungerRate > 0 { sets = append(sets, "hunger_rate=$"+strconv.Itoa(idx)); args = append(args, req.HungerRate); idx++ }
-		if req.MaxHunger > 0 { sets = append(sets, "max_hunger=$"+strconv.Itoa(idx)); args = append(args, req.MaxHunger); idx++ }
-		if req.Path != nil { sets = append(sets, "path=$"+strconv.Itoa(idx)); args = append(args, marshalArray(req.Path)); idx++ }
-		if req.FoodTypes != nil { sets = append(sets, "food_types=$"+strconv.Itoa(idx)); args = append(args, marshalArray(req.FoodTypes)); idx++ }
-		if req.CombatRoles != nil { sets = append(sets, "combat_roles=$"+strconv.Itoa(idx)); args = append(args, marshalArray(req.CombatRoles)); idx++ }
-		if req.CombatTags != nil { sets = append(sets, "combat_tags=$"+strconv.Itoa(idx)); args = append(args, marshalArray(req.CombatTags)); idx++ }
-		if req.SupportTags != nil { sets = append(sets, "support_tags=$"+strconv.Itoa(idx)); args = append(args, marshalArray(req.SupportTags)); idx++ }
-		if req.Description != "" || true { sets = append(sets, "description=$"+strconv.Itoa(idx)); args = append(args, req.Description); idx++ }
-		if req.TargetType != "" { sets = append(sets, "target_type=$"+strconv.Itoa(idx)); args = append(args, req.TargetType); idx++ }
-		if req.Rarity != "" || true { sets = append(sets, "rarity=$"+strconv.Itoa(idx)); args = append(args, req.Rarity); idx++ }
-		if req.PrimaryRole != "" || true { sets = append(sets, "primary_role=$"+strconv.Itoa(idx)); args = append(args, req.PrimaryRole); idx++ }
-		sets = append(sets, "is_immortal=$"+strconv.Itoa(idx)); args = append(args, req.IsImmortal); idx++
-		if req.BasePrice > 0 || true { sets = append(sets, "base_price=$"+strconv.Itoa(idx)); args = append(args, req.BasePrice); idx++ }
-		if req.ImageURL != "" { sets = append(sets, "image_url=$"+strconv.Itoa(idx)); args = append(args, req.ImageURL); idx++ }
-		if len(req.Effects) > 0 { sets = append(sets, "effects=$"+strconv.Itoa(idx)); args = append(args, req.Effects); idx++ }
+		if req.Rank > 0 {
+			sets = append(sets, "rank=$"+strconv.Itoa(idx))
+			args = append(args, req.Rank)
+			idx++
+		}
+		if req.GuType != "" {
+			sets = append(sets, "gu_type=$"+strconv.Itoa(idx))
+			args = append(args, req.GuType)
+			idx++
+		}
+		if req.BaseManaCost > 0 || true {
+			sets = append(sets, "base_mana_cost=$"+strconv.Itoa(idx))
+			args = append(args, req.BaseManaCost)
+			idx++
+		}
+		if req.HungerRate > 0 {
+			sets = append(sets, "hunger_rate=$"+strconv.Itoa(idx))
+			args = append(args, req.HungerRate)
+			idx++
+		}
+		if req.MaxHunger > 0 {
+			sets = append(sets, "max_hunger=$"+strconv.Itoa(idx))
+			args = append(args, req.MaxHunger)
+			idx++
+		}
+		if req.Path != nil {
+			sets = append(sets, "path=$"+strconv.Itoa(idx))
+			args = append(args, marshalArray(req.Path))
+			idx++
+		}
+		if req.FoodTypes != nil {
+			sets = append(sets, "food_types=$"+strconv.Itoa(idx))
+			args = append(args, marshalArray(req.FoodTypes))
+			idx++
+		}
+		if req.CombatRoles != nil {
+			sets = append(sets, "combat_roles=$"+strconv.Itoa(idx))
+			args = append(args, marshalArray(req.CombatRoles))
+			idx++
+		}
+		if req.CombatTags != nil {
+			sets = append(sets, "combat_tags=$"+strconv.Itoa(idx))
+			args = append(args, marshalArray(req.CombatTags))
+			idx++
+		}
+		if req.SupportTags != nil {
+			sets = append(sets, "support_tags=$"+strconv.Itoa(idx))
+			args = append(args, marshalArray(req.SupportTags))
+			idx++
+		}
+		if req.Description != "" || true {
+			sets = append(sets, "description=$"+strconv.Itoa(idx))
+			args = append(args, req.Description)
+			idx++
+		}
+		if req.TargetType != "" {
+			sets = append(sets, "target_type=$"+strconv.Itoa(idx))
+			args = append(args, req.TargetType)
+			idx++
+		}
+		if req.Rarity != "" || true {
+			sets = append(sets, "rarity=$"+strconv.Itoa(idx))
+			args = append(args, req.Rarity)
+			idx++
+		}
+		if req.PrimaryRole != "" || true {
+			sets = append(sets, "primary_role=$"+strconv.Itoa(idx))
+			args = append(args, req.PrimaryRole)
+			idx++
+		}
+		sets = append(sets, "is_immortal=$"+strconv.Itoa(idx))
+		args = append(args, req.IsImmortal)
+		idx++
+		if req.BasePrice > 0 || true {
+			sets = append(sets, "base_price=$"+strconv.Itoa(idx))
+			args = append(args, req.BasePrice)
+			idx++
+		}
+		if req.ImageURL != "" {
+			sets = append(sets, "image_url=$"+strconv.Itoa(idx))
+			args = append(args, req.ImageURL)
+			idx++
+		}
+		if len(req.Effects) > 0 {
+			sets = append(sets, "effects=$"+strconv.Itoa(idx))
+			args = append(args, req.Effects)
+			idx++
+		}
 
 		if len(sets) == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu"})
@@ -2726,10 +2850,19 @@ func AdminUpdateGuItem(c *gin.Context) {
 			return
 		}
 	} else {
-		if valid, msg := guValidate(&req); !valid { c.JSON(http.StatusBadRequest, gin.H{"error": msg}); return }
-		if req.MaxHunger <= 0 { req.MaxHunger = 100 }
-		if req.TargetType == "" { req.TargetType = "SINGLE" }
-		if len(req.Effects) == 0 { req.Effects = json.RawMessage(`{"active":{},"passive":{},"house":{}}`) }
+		if valid, msg := guValidate(&req); !valid {
+			c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+			return
+		}
+		if req.MaxHunger <= 0 {
+			req.MaxHunger = 100
+		}
+		if req.TargetType == "" {
+			req.TargetType = "SINGLE"
+		}
+		if len(req.Effects) == 0 {
+			req.Effects = json.RawMessage(`{"active":{},"passive":{},"house":{}}`)
+		}
 		_, err := db.DB.Exec(`UPDATE gu_dictionary SET name=$1,rank=$2,path=$3,gu_type=$4,base_mana_cost=$5,effects=$6,food_types=$7,hunger_rate=$8,max_hunger=$9,description=$10,target_type=$11,rarity=$12,is_immortal=$13,primary_role=$14,combat_roles=$15,combat_tags=$16,support_tags=$17,base_price=$18,image_url=$19 WHERE id=$20`,
 			req.Name, req.Rank, marshalArray(req.Path), req.GuType, req.BaseManaCost, req.Effects, marshalArray(req.FoodTypes),
 			req.HungerRate, req.MaxHunger, req.Description, req.TargetType, req.Rarity, req.IsImmortal, req.PrimaryRole,
@@ -2745,7 +2878,10 @@ func AdminUpdateGuItem(c *gin.Context) {
 }
 
 func AdminDeleteGuItem(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok { return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
 	guID := c.Param("id")
 
 	var ownedCount int
@@ -2771,9 +2907,14 @@ func AdminDeleteGuItem(c *gin.Context) {
 // -------- Admin: Item Dictionary CRUD --------
 
 func AdminListItemItems(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok { return }
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, item_type, rank, effects, COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,'') FROM item_dictionary ORDER BY name`)
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	defer rows.Close()
 
 	type ItemRow struct {
@@ -2789,7 +2930,9 @@ func AdminListItemItems(c *gin.Context) {
 	items := []ItemRow{}
 	for rows.Next() {
 		var r ItemRow
-		if err := rows.Scan(&r.ID, &r.Name, &r.ItemType, &r.Rank, &r.Effects, &r.Description, &r.BasePrice, &r.ImageURL); err != nil { continue }
+		if err := rows.Scan(&r.ID, &r.Name, &r.ItemType, &r.Rank, &r.Effects, &r.Description, &r.BasePrice, &r.ImageURL); err != nil {
+			continue
+		}
 		items = append(items, r)
 	}
 	c.JSON(http.StatusOK, items)
@@ -2807,52 +2950,107 @@ type AdminItemInput struct {
 }
 
 func AdminCreateItemItem(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok { return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
 	var req AdminItemInput
 	if err := c.ShouldBindJSON(&req); err != nil || req.ID == "" || req.Name == "" || req.ItemType == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ (id, name, item_type là bắt buộc)"})
 		return
 	}
-	if req.Rank < 1 { req.Rank = 1 }
-	if len(req.Effects) == 0 { req.Effects = json.RawMessage(`{}`) }
+	if req.Rank < 1 {
+		req.Rank = 1
+	}
+	if len(req.Effects) == 0 {
+		req.Effects = json.RawMessage(`{}`)
+	}
 	_, err := db.DB.Exec(`INSERT INTO item_dictionary(id,name,item_type,rank,effects,description,base_price,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
 		req.ID, req.Name, req.ItemType, req.Rank, req.Effects, req.Description, req.BasePrice, req.ImageURL)
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	models.LoadItemRegistry(db.DB)
 	auditlog.Logf(db.DB, &adminID, "admin.create_item", "id=%s", req.ID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo vật phẩm"})
 }
 
 func AdminUpdateItemItem(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok { return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
 	itemID := c.Param("id")
 	var req AdminItemInput
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
-	sets := []string{}; args := []interface{}{}; idx := 1
-	if req.Name != "" { sets = append(sets, "name=$"+strconv.Itoa(idx)); args = append(args, req.Name); idx++ }
-	if req.ItemType != "" { sets = append(sets, "item_type=$"+strconv.Itoa(idx)); args = append(args, req.ItemType); idx++ }
-	if req.Rank > 0 { sets = append(sets, "rank=$"+strconv.Itoa(idx)); args = append(args, req.Rank); idx++ }
-	if req.Description != "" || true { sets = append(sets, "description=$"+strconv.Itoa(idx)); args = append(args, req.Description); idx++ }
-	if req.BasePrice > 0 || true { sets = append(sets, "base_price=$"+strconv.Itoa(idx)); args = append(args, req.BasePrice); idx++ }
-	if req.ImageURL != "" { sets = append(sets, "image_url=$"+strconv.Itoa(idx)); args = append(args, req.ImageURL); idx++ }
-	if len(req.Effects) > 0 { sets = append(sets, "effects=$"+strconv.Itoa(idx)); args = append(args, req.Effects); idx++ }
-	if len(sets) == 0 { c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu"}); return }
+	sets := []string{}
+	args := []interface{}{}
+	idx := 1
+	if req.Name != "" {
+		sets = append(sets, "name=$"+strconv.Itoa(idx))
+		args = append(args, req.Name)
+		idx++
+	}
+	if req.ItemType != "" {
+		sets = append(sets, "item_type=$"+strconv.Itoa(idx))
+		args = append(args, req.ItemType)
+		idx++
+	}
+	if req.Rank > 0 {
+		sets = append(sets, "rank=$"+strconv.Itoa(idx))
+		args = append(args, req.Rank)
+		idx++
+	}
+	if req.Description != "" || true {
+		sets = append(sets, "description=$"+strconv.Itoa(idx))
+		args = append(args, req.Description)
+		idx++
+	}
+	if req.BasePrice > 0 || true {
+		sets = append(sets, "base_price=$"+strconv.Itoa(idx))
+		args = append(args, req.BasePrice)
+		idx++
+	}
+	if req.ImageURL != "" {
+		sets = append(sets, "image_url=$"+strconv.Itoa(idx))
+		args = append(args, req.ImageURL)
+		idx++
+	}
+	if len(req.Effects) > 0 {
+		sets = append(sets, "effects=$"+strconv.Itoa(idx))
+		args = append(args, req.Effects)
+		idx++
+	}
+	if len(sets) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu"})
+		return
+	}
 	args = append(args, itemID)
 	_, err := db.DB.Exec(`UPDATE item_dictionary SET `+strings.Join(sets, ", ")+` WHERE id=$`+strconv.Itoa(idx), args...)
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	models.LoadItemRegistry(db.DB)
 	auditlog.Logf(db.DB, &adminID, "admin.update_item", "id=%s", itemID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật vật phẩm"})
 }
 
 func AdminDeleteItemItem(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok { return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
 	itemID := c.Param("id")
 	_, err := db.DB.Exec(`DELETE FROM item_dictionary WHERE id=$1`, itemID)
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	models.LoadItemRegistry(db.DB)
 	auditlog.Logf(db.DB, &adminID, "admin.delete_item", "id=%s", itemID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa vật phẩm"})
@@ -2861,9 +3059,14 @@ func AdminDeleteItemItem(c *gin.Context) {
 // -------- Admin: Recipe CRUD --------
 
 func AdminListRecipes(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok { return }
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT r.target_gu_id, r.target_rank, r.variant, COALESCE(g.name, ''), r.required_gus, r.required_materials, r.success_rate, r.primeval_stones_cost, COALESCE(r.immortal_essence_stones_cost,0) FROM refining_recipes r LEFT JOIN gu_dictionary g ON r.target_gu_id = g.id AND r.target_rank = g.rank ORDER BY r.target_gu_id, r.target_rank, r.variant`)
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	defer rows.Close()
 
 	type RecipeRow struct {
@@ -2881,7 +3084,9 @@ func AdminListRecipes(c *gin.Context) {
 		var r RecipeRow
 		var targetGuID string
 		var targetRank, variant int
-		if err := rows.Scan(&targetGuID, &targetRank, &variant, &r.TargetGuName, &r.RequiredGus, &r.RequiredMaterials, &r.SuccessRate, &r.PrimevalStonesCost, &r.ImmortalEssenceStonesCost); err != nil { continue }
+		if err := rows.Scan(&targetGuID, &targetRank, &variant, &r.TargetGuName, &r.RequiredGus, &r.RequiredMaterials, &r.SuccessRate, &r.PrimevalStonesCost, &r.ImmortalEssenceStonesCost); err != nil {
+			continue
+		}
 		r.TargetGuID = targetGuID
 		r.ID = fmt.Sprintf("recipe_%s_%d_%d", targetGuID, targetRank, variant)
 		items = append(items, r)
@@ -2901,20 +3106,34 @@ type AdminRecipeInput struct {
 }
 
 func AdminCreateRecipe(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok { return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
 	var req AdminRecipeInput
 	if err := c.ShouldBindJSON(&req); err != nil || req.TargetGuID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
 	targetRank := 1
-	if req.TargetRank > 0 { targetRank = req.TargetRank }
+	if req.TargetRank > 0 {
+		targetRank = req.TargetRank
+	}
 	var exists bool
 	db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1 AND rank=$2)`, req.TargetGuID, targetRank).Scan(&exists)
-	if !exists { c.JSON(http.StatusBadRequest, gin.H{"error": "target_gu_id không tồn tại"}); return }
-	if req.SuccessRate <= 0 { req.SuccessRate = 0.5 }
-	if len(req.RequiredGus) == 0 { req.RequiredGus = json.RawMessage(`{}`) }
-	if len(req.RequiredMaterials) == 0 { req.RequiredMaterials = json.RawMessage(`{}`) }
+	if !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "target_gu_id không tồn tại"})
+		return
+	}
+	if req.SuccessRate <= 0 {
+		req.SuccessRate = 0.5
+	}
+	if len(req.RequiredGus) == 0 {
+		req.RequiredGus = json.RawMessage(`{}`)
+	}
+	if len(req.RequiredMaterials) == 0 {
+		req.RequiredMaterials = json.RawMessage(`{}`)
+	}
 
 	variant := 1
 	if tg, tr, v, err := ParseRecipeID(req.ID); err == nil && tg == req.TargetGuID && tr == targetRank {
@@ -2925,14 +3144,20 @@ func AdminCreateRecipe(c *gin.Context) {
 
 	_, err := db.DB.Exec(`INSERT INTO refining_recipes(target_gu_id,target_rank,variant,required_gus,required_materials,success_rate,primeval_stones_cost,immortal_essence_stones_cost) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
 		req.TargetGuID, targetRank, variant, req.RequiredGus, req.RequiredMaterials, req.SuccessRate, req.PrimevalStonesCost, req.ImmortalEssenceStonesCost)
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	generatedID := fmt.Sprintf("recipe_%s_%d_%d", req.TargetGuID, targetRank, variant)
 	auditlog.Logf(db.DB, &adminID, "admin.create_recipe", "id=%s target=%s", generatedID, req.TargetGuID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo cổ phương", "recipe_id": generatedID})
 }
 
 func AdminUpdateRecipe(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok { return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
 	recipeID := c.Param("id")
 	targetGuID, targetRank, variant, err := ParseRecipeID(recipeID)
 	if err != nil {
@@ -2944,26 +3169,65 @@ func AdminUpdateRecipe(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
-	sets := []string{}; args := []interface{}{}; idx := 1
-	if req.TargetGuID != "" { sets = append(sets, "target_gu_id=$"+strconv.Itoa(idx)); args = append(args, req.TargetGuID); idx++ }
-	if req.TargetRank > 0 { sets = append(sets, "target_rank=$"+strconv.Itoa(idx)); args = append(args, req.TargetRank); idx++ }
-	if req.SuccessRate > 0 { sets = append(sets, "success_rate=$"+strconv.Itoa(idx)); args = append(args, req.SuccessRate); idx++ }
-	if req.PrimevalStonesCost > 0 { sets = append(sets, "primeval_stones_cost=$"+strconv.Itoa(idx)); args = append(args, req.PrimevalStonesCost); idx++ }
-	if req.ImmortalEssenceStonesCost > 0 { sets = append(sets, "immortal_essence_stones_cost=$"+strconv.Itoa(idx)); args = append(args, req.ImmortalEssenceStonesCost); idx++ }
-	if len(req.RequiredGus) > 0 { sets = append(sets, "required_gus=$"+strconv.Itoa(idx)); args = append(args, req.RequiredGus); idx++ }
-	if len(req.RequiredMaterials) > 0 { sets = append(sets, "required_materials=$"+strconv.Itoa(idx)); args = append(args, req.RequiredMaterials); idx++ }
-	if len(sets) == 0 { c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu"}); return }
+	sets := []string{}
+	args := []interface{}{}
+	idx := 1
+	if req.TargetGuID != "" {
+		sets = append(sets, "target_gu_id=$"+strconv.Itoa(idx))
+		args = append(args, req.TargetGuID)
+		idx++
+	}
+	if req.TargetRank > 0 {
+		sets = append(sets, "target_rank=$"+strconv.Itoa(idx))
+		args = append(args, req.TargetRank)
+		idx++
+	}
+	if req.SuccessRate > 0 {
+		sets = append(sets, "success_rate=$"+strconv.Itoa(idx))
+		args = append(args, req.SuccessRate)
+		idx++
+	}
+	if req.PrimevalStonesCost > 0 {
+		sets = append(sets, "primeval_stones_cost=$"+strconv.Itoa(idx))
+		args = append(args, req.PrimevalStonesCost)
+		idx++
+	}
+	if req.ImmortalEssenceStonesCost > 0 {
+		sets = append(sets, "immortal_essence_stones_cost=$"+strconv.Itoa(idx))
+		args = append(args, req.ImmortalEssenceStonesCost)
+		idx++
+	}
+	if len(req.RequiredGus) > 0 {
+		sets = append(sets, "required_gus=$"+strconv.Itoa(idx))
+		args = append(args, req.RequiredGus)
+		idx++
+	}
+	if len(req.RequiredMaterials) > 0 {
+		sets = append(sets, "required_materials=$"+strconv.Itoa(idx))
+		args = append(args, req.RequiredMaterials)
+		idx++
+	}
+	if len(sets) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu"})
+		return
+	}
 
 	args = append(args, targetGuID, targetRank, variant)
 	whereClause := fmt.Sprintf(" WHERE target_gu_id=$%d AND target_rank=$%d AND variant=$%d", idx, idx+1, idx+2)
 	_, err = db.DB.Exec(`UPDATE refining_recipes SET `+strings.Join(sets, ", ")+whereClause, args...)
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_recipe", "id=%s", recipeID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật cổ phương"})
 }
 
 func AdminDeleteRecipe(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok { return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
 	recipeID := c.Param("id")
 	targetGuID, targetRank, variant, err := ParseRecipeID(recipeID)
 	if err != nil {
@@ -2971,7 +3235,10 @@ func AdminDeleteRecipe(c *gin.Context) {
 		return
 	}
 	_, err = db.DB.Exec(`DELETE FROM refining_recipes WHERE target_gu_id=$1 AND target_rank=$2 AND variant=$3`, targetGuID, targetRank, variant)
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_recipe", "id=%s", recipeID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa cổ phương"})
 }
@@ -2986,7 +3253,9 @@ type OnlinePlayerRow struct {
 }
 
 func AdminListOnlinePlayers(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok { return }
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
 
 	minutesStr := c.DefaultQuery("minutes", "5")
 	minutes, err := strconv.Atoi(minutesStr)
@@ -3026,7 +3295,9 @@ func AdminListOnlinePlayers(c *gin.Context) {
 // -------- Admin: Monster Template CRUD --------
 
 func AdminListMonsters(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok { return }
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, type, max_hp, base_attack, base_defense,
 		COALESCE(gu_inventory,'[]'::jsonb), COALESCE(item_inventory,'{}'::jsonb),
 		COALESCE(dao_marks,'{}'::jsonb), COALESCE(path_masteries,'{}'::jsonb),
@@ -3034,7 +3305,10 @@ func AdminListMonsters(c *gin.Context) {
 		COALESCE(description,''), COALESCE(is_active,true),
 		COALESCE(is_capturable,false), COALESCE(capture_chance,0.20), COALESCE(pet_hunger_per_hour,2.0)
 		FROM monster_templates ORDER BY name`)
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	defer rows.Close()
 
 	type MonsterRow struct {
@@ -3062,7 +3336,9 @@ func AdminListMonsters(c *gin.Context) {
 		if err := rows.Scan(&r.ID, &r.Name, &r.Type, &r.MaxHP, &r.BaseAttack, &r.BaseDefense,
 			&r.GuInventory, &r.ItemInventory, &r.DaoMarks, &r.PathMasteries,
 			&r.AIProfile, &r.LootTableID, &r.Description, &r.IsActive,
-			&r.IsCapturable, &r.CaptureChance, &r.PetHungerPerHour); err != nil { continue }
+			&r.IsCapturable, &r.CaptureChance, &r.PetHungerPerHour); err != nil {
+			continue
+		}
 		items = append(items, r)
 	}
 	c.JSON(http.StatusOK, items)
@@ -3089,7 +3365,10 @@ type AdminMonsterInput struct {
 }
 
 func AdminCreateMonster(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok { return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
 	var req AdminMonsterInput
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
@@ -3099,70 +3378,174 @@ func AdminCreateMonster(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id, name, type là bắt buộc"})
 		return
 	}
-	if req.MaxHP <= 0 { req.MaxHP = 100 }
-	if req.AIProfile == "" { req.AIProfile = "beast_basic" }
-	if len(req.GuInventory) == 0 { req.GuInventory = json.RawMessage(`[]`) }
-	if len(req.ItemInventory) == 0 { req.ItemInventory = json.RawMessage(`{}`) }
-	if len(req.DaoMarks) == 0 { req.DaoMarks = json.RawMessage(`{}`) }
-	if len(req.PathMasteries) == 0 { req.PathMasteries = json.RawMessage(`{}`) }
-	if req.CaptureChance <= 0 { req.CaptureChance = 0.20 }
-	if req.PetHungerPerHour <= 0 { req.PetHungerPerHour = 2.0 }
+	if req.MaxHP <= 0 {
+		req.MaxHP = 100
+	}
+	if req.AIProfile == "" {
+		req.AIProfile = "beast_basic"
+	}
+	if len(req.GuInventory) == 0 {
+		req.GuInventory = json.RawMessage(`[]`)
+	}
+	if len(req.ItemInventory) == 0 {
+		req.ItemInventory = json.RawMessage(`{}`)
+	}
+	if len(req.DaoMarks) == 0 {
+		req.DaoMarks = json.RawMessage(`{}`)
+	}
+	if len(req.PathMasteries) == 0 {
+		req.PathMasteries = json.RawMessage(`{}`)
+	}
+	if req.CaptureChance <= 0 {
+		req.CaptureChance = 0.20
+	}
+	if req.PetHungerPerHour <= 0 {
+		req.PetHungerPerHour = 2.0
+	}
 	isActive := true
-	if req.IsActive != nil { isActive = *req.IsActive }
+	if req.IsActive != nil {
+		isActive = *req.IsActive
+	}
 	isCapturable := false
-	if req.IsCapturable != nil { isCapturable = *req.IsCapturable }
+	if req.IsCapturable != nil {
+		isCapturable = *req.IsCapturable
+	}
 
 	_, err := db.DB.Exec(`INSERT INTO monster_templates(id,name,type,max_hp,base_attack,base_defense,gu_inventory,item_inventory,dao_marks,path_masteries,ai_profile,loot_table_id,description,is_active,is_capturable,capture_chance,pet_hunger_per_hour) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
 		req.ID, req.Name, req.Type, req.MaxHP, req.BaseAttack, req.BaseDefense,
 		req.GuInventory, req.ItemInventory, req.DaoMarks, req.PathMasteries,
 		req.AIProfile, req.LootTableID, req.Description, isActive, isCapturable,
 		req.CaptureChance, req.PetHungerPerHour)
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo: " + err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo: " + err.Error()})
+		return
+	}
 	models.LoadMonsterRegistry(db.DB)
 	auditlog.Logf(db.DB, &adminID, "admin.create_monster", "id=%s name=%s", req.ID, req.Name)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo quái vật"})
 }
 
 func AdminUpdateMonster(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok { return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
 	monsterID := c.Param("id")
 	var req AdminMonsterInput
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
-	sets := []string{}; args := []interface{}{}; idx := 1
-	if req.Name != "" { sets = append(sets, "name=$"+strconv.Itoa(idx)); args = append(args, req.Name); idx++ }
-	if req.Type != "" { sets = append(sets, "type=$"+strconv.Itoa(idx)); args = append(args, req.Type); idx++ }
-	if req.MaxHP > 0 { sets = append(sets, "max_hp=$"+strconv.Itoa(idx)); args = append(args, req.MaxHP); idx++ }
-	if req.BaseAttack > 0 { sets = append(sets, "base_attack=$"+strconv.Itoa(idx)); args = append(args, req.BaseAttack); idx++ }
-	if req.BaseDefense > 0 { sets = append(sets, "base_defense=$"+strconv.Itoa(idx)); args = append(args, req.BaseDefense); idx++ }
-	if req.AIProfile != "" { sets = append(sets, "ai_profile=$"+strconv.Itoa(idx)); args = append(args, req.AIProfile); idx++ }
-	if req.LootTableID != "" || true { sets = append(sets, "loot_table_id=$"+strconv.Itoa(idx)); args = append(args, req.LootTableID); idx++ }
-	if req.Description != "" || true { sets = append(sets, "description=$"+strconv.Itoa(idx)); args = append(args, req.Description); idx++ }
-	if req.GuInventory != nil { sets = append(sets, "gu_inventory=$"+strconv.Itoa(idx)); args = append(args, req.GuInventory); idx++ }
-	if req.ItemInventory != nil { sets = append(sets, "item_inventory=$"+strconv.Itoa(idx)); args = append(args, req.ItemInventory); idx++ }
-	if req.DaoMarks != nil { sets = append(sets, "dao_marks=$"+strconv.Itoa(idx)); args = append(args, req.DaoMarks); idx++ }
-	if req.PathMasteries != nil { sets = append(sets, "path_masteries=$"+strconv.Itoa(idx)); args = append(args, req.PathMasteries); idx++ }
-	if req.IsActive != nil { sets = append(sets, "is_active=$"+strconv.Itoa(idx)); args = append(args, *req.IsActive); idx++ }
-	if req.IsCapturable != nil { sets = append(sets, "is_capturable=$"+strconv.Itoa(idx)); args = append(args, *req.IsCapturable); idx++ }
-	if req.CaptureChance > 0 { sets = append(sets, "capture_chance=$"+strconv.Itoa(idx)); args = append(args, req.CaptureChance); idx++ }
-	if req.PetHungerPerHour > 0 { sets = append(sets, "pet_hunger_per_hour=$"+strconv.Itoa(idx)); args = append(args, req.PetHungerPerHour); idx++ }
-	if len(sets) == 0 { c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu"}); return }
+	sets := []string{}
+	args := []interface{}{}
+	idx := 1
+	if req.Name != "" {
+		sets = append(sets, "name=$"+strconv.Itoa(idx))
+		args = append(args, req.Name)
+		idx++
+	}
+	if req.Type != "" {
+		sets = append(sets, "type=$"+strconv.Itoa(idx))
+		args = append(args, req.Type)
+		idx++
+	}
+	if req.MaxHP > 0 {
+		sets = append(sets, "max_hp=$"+strconv.Itoa(idx))
+		args = append(args, req.MaxHP)
+		idx++
+	}
+	if req.BaseAttack > 0 {
+		sets = append(sets, "base_attack=$"+strconv.Itoa(idx))
+		args = append(args, req.BaseAttack)
+		idx++
+	}
+	if req.BaseDefense > 0 {
+		sets = append(sets, "base_defense=$"+strconv.Itoa(idx))
+		args = append(args, req.BaseDefense)
+		idx++
+	}
+	if req.AIProfile != "" {
+		sets = append(sets, "ai_profile=$"+strconv.Itoa(idx))
+		args = append(args, req.AIProfile)
+		idx++
+	}
+	if req.LootTableID != "" || true {
+		sets = append(sets, "loot_table_id=$"+strconv.Itoa(idx))
+		args = append(args, req.LootTableID)
+		idx++
+	}
+	if req.Description != "" || true {
+		sets = append(sets, "description=$"+strconv.Itoa(idx))
+		args = append(args, req.Description)
+		idx++
+	}
+	if req.GuInventory != nil {
+		sets = append(sets, "gu_inventory=$"+strconv.Itoa(idx))
+		args = append(args, req.GuInventory)
+		idx++
+	}
+	if req.ItemInventory != nil {
+		sets = append(sets, "item_inventory=$"+strconv.Itoa(idx))
+		args = append(args, req.ItemInventory)
+		idx++
+	}
+	if req.DaoMarks != nil {
+		sets = append(sets, "dao_marks=$"+strconv.Itoa(idx))
+		args = append(args, req.DaoMarks)
+		idx++
+	}
+	if req.PathMasteries != nil {
+		sets = append(sets, "path_masteries=$"+strconv.Itoa(idx))
+		args = append(args, req.PathMasteries)
+		idx++
+	}
+	if req.IsActive != nil {
+		sets = append(sets, "is_active=$"+strconv.Itoa(idx))
+		args = append(args, *req.IsActive)
+		idx++
+	}
+	if req.IsCapturable != nil {
+		sets = append(sets, "is_capturable=$"+strconv.Itoa(idx))
+		args = append(args, *req.IsCapturable)
+		idx++
+	}
+	if req.CaptureChance > 0 {
+		sets = append(sets, "capture_chance=$"+strconv.Itoa(idx))
+		args = append(args, req.CaptureChance)
+		idx++
+	}
+	if req.PetHungerPerHour > 0 {
+		sets = append(sets, "pet_hunger_per_hour=$"+strconv.Itoa(idx))
+		args = append(args, req.PetHungerPerHour)
+		idx++
+	}
+	if len(sets) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu"})
+		return
+	}
 	sets = append(sets, "updated_at=NOW()")
 	args = append(args, monsterID)
 	_, err := db.DB.Exec(`UPDATE monster_templates SET `+strings.Join(sets, ", ")+` WHERE id=$`+strconv.Itoa(idx), args...)
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
+		return
+	}
 	models.LoadMonsterRegistry(db.DB)
 	auditlog.Logf(db.DB, &adminID, "admin.update_monster", "id=%s", monsterID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật quái vật"})
 }
 
 func AdminDeleteMonster(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok { return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
 	monsterID := c.Param("id")
 	_, err := db.DB.Exec(`DELETE FROM monster_templates WHERE id=$1`, monsterID)
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
+		return
+	}
 	models.LoadMonsterRegistry(db.DB)
 	auditlog.Logf(db.DB, &adminID, "admin.delete_monster", "id=%s", monsterID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa quái vật"})
@@ -3171,9 +3554,14 @@ func AdminDeleteMonster(c *gin.Context) {
 // -------- Admin: Loot Table CRUD --------
 
 func AdminListLootTables(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok { return }
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, COALESCE(entries,'[]'::jsonb) FROM loot_tables ORDER BY name`)
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	defer rows.Close()
 
 	type LootTableRow struct {
@@ -3184,7 +3572,9 @@ func AdminListLootTables(c *gin.Context) {
 	items := []LootTableRow{}
 	for rows.Next() {
 		var r LootTableRow
-		if err := rows.Scan(&r.ID, &r.Name, &r.Entries); err != nil { continue }
+		if err := rows.Scan(&r.ID, &r.Name, &r.Entries); err != nil {
+			continue
+		}
 		items = append(items, r)
 	}
 	c.JSON(http.StatusOK, items)
@@ -3197,7 +3587,10 @@ type AdminLootTableInput struct {
 }
 
 func AdminCreateLootTable(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok { return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
 	var req AdminLootTableInput
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
@@ -3207,40 +3600,70 @@ func AdminCreateLootTable(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id và name là bắt buộc"})
 		return
 	}
-	if len(req.Entries) == 0 { req.Entries = json.RawMessage(`[]`) }
+	if len(req.Entries) == 0 {
+		req.Entries = json.RawMessage(`[]`)
+	}
 
 	_, err := db.DB.Exec(`INSERT INTO loot_tables(id,name,entries) VALUES($1,$2,$3::jsonb)`,
 		req.ID, req.Name, req.Entries)
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo: " + err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_loot_table", "id=%s name=%s", req.ID, req.Name)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo bảng loot"})
 }
 
 func AdminUpdateLootTable(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok { return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
 	tableID := c.Param("id")
 	var req AdminLootTableInput
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
-	sets := []string{}; args := []interface{}{}; idx := 1
-	if req.Name != "" { sets = append(sets, "name=$"+strconv.Itoa(idx)); args = append(args, req.Name); idx++ }
-	if req.Entries != nil { sets = append(sets, "entries=$"+strconv.Itoa(idx)+"::jsonb"); args = append(args, req.Entries); idx++ }
-	if len(sets) == 0 { c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu"}); return }
+	sets := []string{}
+	args := []interface{}{}
+	idx := 1
+	if req.Name != "" {
+		sets = append(sets, "name=$"+strconv.Itoa(idx))
+		args = append(args, req.Name)
+		idx++
+	}
+	if req.Entries != nil {
+		sets = append(sets, "entries=$"+strconv.Itoa(idx)+"::jsonb")
+		args = append(args, req.Entries)
+		idx++
+	}
+	if len(sets) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu"})
+		return
+	}
 	sets = append(sets, "updated_at=NOW()")
 	args = append(args, tableID)
 	_, err := db.DB.Exec(`UPDATE loot_tables SET `+strings.Join(sets, ", ")+` WHERE id=$`+strconv.Itoa(idx), args...)
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_loot_table", "id=%s", tableID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật bảng loot"})
 }
 
 func AdminDeleteLootTable(c *gin.Context) {
-	adminID, ok := requireAdmin(c); if !ok { return }
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
 	tableID := c.Param("id")
 	_, err := db.DB.Exec(`DELETE FROM loot_tables WHERE id=$1`, tableID)
-	if err != nil { c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()}); return }
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
+		return
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_loot_table", "id=%s", tableID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa bảng loot"})
 }

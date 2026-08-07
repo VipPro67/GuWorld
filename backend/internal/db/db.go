@@ -1982,8 +1982,8 @@ func seedRecipesFromCSV(filename string) error {
 	stoneCostIdx := col("primeval_stones_cost")
 	immortalCostIdx := col("immortal_essence_stones_cost")
 
-	if idIdx < 0 || targetIdx < 0 || reqGusIdx < 0 {
-		return fmt.Errorf("Recipe.csv missing required columns (id, target_gu_id, required_gus)")
+	if targetIdx < 0 || reqGusIdx < 0 {
+		return fmt.Errorf("Recipe.csv missing required columns (target_gu_id, required_gus)")
 	}
 
 	get := func(row []string, idx int) string {
@@ -2003,13 +2003,20 @@ func seedRecipesFromCSV(filename string) error {
 		if err != nil || len(row) == 0 {
 			continue
 		}
-		id := get(row, idIdx)
-		if id == "" {
+		targetGuID := get(row, targetIdx)
+		if targetGuID == "" {
 			continue
 		}
-		targetGuID := get(row, targetIdx)
 		targetRankStr := get(row, targetRankIdx)
 		variantStr := get(row, variantIdx)
+
+		id := ""
+		if idIdx >= 0 {
+			id = get(row, idIdx)
+		}
+		if id == "" {
+			id = fmt.Sprintf("%s_R%s_V%s", targetGuID, targetRankStr, variantStr)
+		}
 		reqGus := get(row, reqGusIdx)
 		reqMats := get(row, reqMatsIdx)
 		if reqMats == "" {
