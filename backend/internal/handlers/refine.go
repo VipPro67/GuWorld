@@ -50,6 +50,37 @@ type RefineRequest struct {
 
 // GetRecipes returns list of all seeded refining formulas unlocked by the player
 func GetRecipes(c *gin.Context) {
+	if c.Query("all") == "true" {
+		var masterRecipes []models.RefiningRecipe
+		if err := cache.GetJSON("master_refining_recipes", &masterRecipes); err != nil {
+			rows, err := db.DB.QueryContext(c.Request.Context(), `
+				SELECT target_gu_id, target_rank, variant, required_gus, required_materials, success_rate, primeval_stones_cost, immortal_essence_stones_cost 
+				FROM refining_recipes
+			`)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query recipes catalog"})
+				return
+			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var recipe models.RefiningRecipe
+				err = rows.Scan(
+					&recipe.TargetGuID, &recipe.TargetRank, &recipe.Variant, &recipe.RequiredGus,
+					&recipe.RequiredMaterials, &recipe.SuccessRate, &recipe.PrimevalStonesCost,
+					&recipe.ImmortalEssenceStonesCost,
+				)
+				if err == nil {
+					recipe.ID = fmt.Sprintf("recipe_%s_%d_%d", recipe.TargetGuID, recipe.TargetRank, recipe.Variant)
+					masterRecipes = append(masterRecipes, recipe)
+				}
+			}
+			_ = cache.SetJSON("master_refining_recipes", masterRecipes, 1*time.Hour)
+		}
+		c.JSON(http.StatusOK, masterRecipes)
+		return
+	}
+
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
 		tokenStr, err := c.Cookie("gu_auth_token")

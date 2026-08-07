@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export interface ActiveEffect {
   damage_flat?: number;
   damage_mult?: number;
@@ -103,4 +104,69 @@ export async function fetchAllGus(): Promise<GuDictionaryItem[]> {
 export async function fetchGuById(id: string): Promise<GuDictionaryItem | null> {
   const gus = await fetchAllGus();
   return gus.find((g) => g.id === id) || null;
+}
+
+export interface ItemSpec {
+  id: string;
+  name: string;
+  item_type: string;
+  type?: string;
+  rarity?: number;
+  rank?: number;
+  path?: string;
+  effects?: Record<string, number>;
+  tags?: string[];
+  description: string;
+  base_price?: number;
+  image_url?: string;
+}
+
+export interface RefiningRecipe {
+  id: string;
+  target_gu_id: string;
+  target_rank?: number;
+  variant?: number;
+  required_gus: Record<string, number>;
+  required_materials: Record<string, number>;
+  success_rate: number;
+  primeval_stones_cost: number;
+  immortal_essence_stones_cost: number;
+  completion_rate?: number;
+}
+
+export async function fetchDictionaryUnified(): Promise<{ gus: GuDictionaryItem[]; items: ItemSpec[] }> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/dictionary`, {
+      cache: "force-cache",
+      next: { revalidate: 3600 },
+    });
+    if (!res.ok) return { gus: [], items: [] };
+    const data = await res.json();
+    const gu: Record<string, GuDictionaryItem> = data.gu || {};
+    const itemsRecord: Record<string, ItemSpec> = data.items || {};
+    
+    const gus = Object.values(gu);
+    const items = Object.values(itemsRecord).map((item) => ({
+      ...item,
+      item_type: item.item_type || item.type || "Material",
+    }));
+    
+    return { gus, items };
+  } catch {
+    return { gus: [], items: [] };
+  }
+}
+
+export async function fetchMasterRecipes(): Promise<RefiningRecipe[]> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/recipes?all=true`, {
+      cache: "force-cache",
+      next: { revalidate: 3600 },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data || [];
+  } catch {
+    return [];
+  }
 }

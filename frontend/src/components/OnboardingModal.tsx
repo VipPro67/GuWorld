@@ -128,12 +128,12 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
           </p>
           <div className="mt-3">
             <a
-              href="/wiki/guide"
+              href="/wiki"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-[11px] font-mono text-amber-400 hover:text-amber-300 hover:underline transition-colors"
             >
-              📖 Xem Hướng Dẫn Tân Thủ
+              📖 Xem Hướng Dẫn & Bách Khoa Wiki Mới
             </a>
           </div>
         </div>
