@@ -112,8 +112,8 @@ func (s *PlayerService) loadRow(q QueryRower, id uuid.UUID, forUpdate bool) (mod
 		       COALESCE(ref_code, ''), COALESCE(avatar_url, ''), combat_settings,
 		       COALESCE(needs_onboarding, false),
 		       COALESCE(current_thought, 100.0), COALESCE(max_thought, 100.0), COALESCE(thought_regen_rate, 1.0),
-		       COALESCE(immortal_state, '{}')
-		FROM players
+  COALESCE(immortal_state, '{}'), growth_data
+FROM players
 		WHERE id = $1
 	`
 	if forUpdate {
@@ -139,6 +139,7 @@ func (s *PlayerService) loadRow(q QueryRower, id uuid.UUID, forUpdate bool) (mod
 		&player.NeedsOnboarding,
 		&player.CurrentThought, &player.MaxThought, &player.RegenRate,
 		&player.ImmortalState,
+	&player.GrowthData,
 	)
 	if err != nil {
 		return player, err

@@ -121,15 +121,26 @@ func UpdatePlayerGu(tx Execer, gu models.GuInstance) error {
 
 // SavePlayerGus replaces a player's full Gu inventory in the player_gu table.
 // Uses bulk INSERT via unnest to avoid N+1 round-trips.
+// Invalid Gu instances (missing from gu_dictionary) are silently dropped to
+// prevent FK violations after admin deletes a Gu type from the dictionary.
 func SavePlayerGus(tx *sql.Tx, playerID string, inv models.GuInventory) error {
 	if _, err := tx.Exec(`DELETE FROM player_gu WHERE player_id = $1`, playerID); err != nil {
 		return err
 	}
-	if len(inv) == 0 {
+
+	// Filter out Gus whose (gu_id, gu_rank) no longer exist in gu_dictionary
+	filtered := make(models.GuInventory, 0, len(inv))
+	for i := range inv {
+		if _, ok := models.GetGu(inv[i].GuID, inv[i].Rank); ok {
+			filtered = append(filtered, inv[i])
+		}
+	}
+
+	if len(filtered) == 0 {
 		return nil
 	}
 
-	n := len(inv)
+	n := len(filtered)
 	ids := make([]string, n)
 	guIDs := make([]string, n)
 	ranks := make([]int, n)
@@ -141,7 +152,7 @@ func SavePlayerGus(tx *sql.Tx, playerID string, inv models.GuInventory) error {
 	growths := make([]float64, n)
 	equippedAts := make([]string, n) // "NULL" or timestamp string
 
-	for i, gu := range inv {
+	for i, gu := range filtered {
 		ids[i] = gu.InstanceID
 		guIDs[i] = gu.GuID
 		ranks[i] = gu.Rank

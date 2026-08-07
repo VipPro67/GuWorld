@@ -2747,6 +2747,17 @@ func AdminUpdateGuItem(c *gin.Context) {
 func AdminDeleteGuItem(c *gin.Context) {
 	adminID, ok := requireAdmin(c); if !ok { return }
 	guID := c.Param("id")
+
+	var ownedCount int
+	if err := db.DB.QueryRow(`SELECT COUNT(*) FROM player_gu WHERE gu_id = $1`, guID).Scan(&ownedCount); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra sở hữu: " + err.Error()})
+		return
+	}
+	if ownedCount > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể xóa: có %d Cổ trùng loại này đang được người chơi sở hữu", ownedCount)})
+		return
+	}
+
 	_, err := db.DB.Exec(`DELETE FROM gu_dictionary WHERE id=$1`, guID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})

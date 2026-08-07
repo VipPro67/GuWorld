@@ -300,15 +300,18 @@ func runGachaOpen(c *gin.Context, forced int) {
 	_, err = tx.Exec(updateQuery, updateArgs...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật người chơi"})
+		fmt.Println("Error updating player:", err)
 		return
 	}
 	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cổ trùng"})
+		fmt.Println("Error saving player Gu inventory:", err)
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi commit"})
+		fmt.Println("Error committing transaction:", err)
 		return
 	}
 

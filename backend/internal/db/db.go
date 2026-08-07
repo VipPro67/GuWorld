@@ -940,6 +940,8 @@ func InitSchema() error {
 	// Backwards-compatible column migrations
 	migrations := []struct{ sql, errMsg string }{
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) NOT NULL DEFAULT '';`, "password_hash"},
+		{`ALTER TABLE players ALTER COLUMN primeval_stones TYPE DOUBLE PRECISION;`, "primeval_stones_type"},
+		{`ALTER TABLE refining_recipes ALTER COLUMN primeval_stones_cost TYPE DOUBLE PRECISION;`, "primeval_stones_cost_type"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS materials_inventory JSONB NOT NULL DEFAULT '{}';`, "materials_inventory"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS hp DOUBLE PRECISION NOT NULL DEFAULT 100;`, "hp"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS base_hp DOUBLE PRECISION NOT NULL DEFAULT 100;`, "base_hp"},
