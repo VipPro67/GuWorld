@@ -1762,6 +1762,7 @@ var pathTranslations = map[string]string{
 	"concealment":    "Ẩn Nặc",
 	"creation":       "Tạo Hóa",
 	"dark":           "Ám",
+	"darkness":       "Ám",
 	"death":          "Tử Vong",
 	"destruction":    "Hủy Diệt",
 	"dream":          "Mộng",

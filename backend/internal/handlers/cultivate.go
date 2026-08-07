@@ -383,11 +383,7 @@ func Ascension(c *gin.Context) {
 			player.DaoMarks = models.DaoMarksMap{}
 		}
 		// Randomize the 2 paths chosen on ascension
-		pathsList := []string{
-			"fire", "water", "ice", "blood", "sword", "strength", "soul", "wisdom",
-			"time", "space", "wind", "lightning", "moon", "wood", "metal", "earth",
-			"heaven", "poison", "refinement", "darkness", "light",
-		}
+		pathsList := models.AllGuPaths()
 		rand.Shuffle(len(pathsList), func(i, j int) {
 			pathsList[i], pathsList[j] = pathsList[j], pathsList[i]
 		})

@@ -347,6 +347,33 @@ func LoadGuRegistry(db *sql.DB) error {
 
 	GuRegistry = newRegistry
 	logger.S.Infof("Loaded %d Gu bugs from database registry into memory cache", count)
+
+	allPathsCache = nil
+	logger.S.Infof("Built all-paths cache: %d unique dao paths", len(AllGuPaths()))
 	return nil
+}
+
+var allPathsCache []string
+
+func AllGuPaths() []string {
+	if allPathsCache != nil {
+		return allPathsCache
+	}
+	pathSet := make(map[string]struct{})
+	for _, ranks := range GuRegistry {
+		for _, item := range ranks {
+			for _, p := range item.Path {
+				normalized := strings.TrimSpace(strings.TrimSuffix(strings.ToLower(p), " path"))
+				if normalized != "" {
+					pathSet[normalized] = struct{}{}
+				}
+			}
+		}
+	}
+	allPathsCache = make([]string, 0, len(pathSet))
+	for p := range pathSet {
+		allPathsCache = append(allPathsCache, p)
+	}
+	return allPathsCache
 }
 

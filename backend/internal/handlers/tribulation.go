@@ -929,51 +929,7 @@ func distributeDaoMarks(mainPath string, totalMarks int) map[string]int {
 
 	remaining := totalMarks - mainAmount
 	if remaining > 0 {
-		allPaths := []string{
-	"fire",
-	"water",
-	"sword",
-	"time",
-	"space",
-	"qi",
-	"blood",
-	"strength",
-	"wisdom",
-	"transformation",
-	"soul",
-	"illusion",
-	"refinement",
-	"rule",
-	"wood",
-	"earth",
-	"wind",
-	"light",
-	"dark",
-	"ice",
-	"lightning",
-	"poison",
-	"sound",
-	"star",
-	"cloud",
-	"dream",
-	"theft",
-	"information",
-	"bone",
-	"phantom",
-	"luck",
-	"food",
-	"painting",
-	"heaven",
-	"human",
-	"weapon",
-	"formation",
-	"yin",
-	"yang",
-	"metal",
-	"moon",
-	"sun",
-	"enslavement",
-}
+		allPaths := models.AllGuPaths()
 		otherPaths := []string{}
 		for _, p := range allPaths {
 			if p != mainPath {
@@ -1369,7 +1325,7 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	var vitalGuRank int
 	errVital := tx.QueryRow(`SELECT gu_id, gu_rank FROM player_gu WHERE player_id = $1 AND is_vital = true LIMIT 1`, playerID).Scan(&vitalGuID, &vitalGuRank)
 
-	supportedPaths := []string{"fire", "water", "ice", "blood", "sword", "strength", "soul", "wisdom", "time", "space"}
+	supportedPaths := models.AllGuPaths()
 	matchedPaths := []string{}
 	if errVital == nil && vitalGuID != "" {
 		if guItem, found := models.GetGu(vitalGuID, vitalGuRank); found {
