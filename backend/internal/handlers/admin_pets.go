@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"database/sql"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -63,6 +65,12 @@ func AdminDeletePlayerPet(c *gin.Context) {
 		return
 	}
 
+	var nickname string
+	_ = db.DB.QueryRow(`SELECT nickname FROM player_pets WHERE id = $1`, petID).Scan(&nickname)
+	if nickname == "" {
+		nickname = petID
+	}
+
 	result, err := db.DB.Exec(`DELETE FROM player_pets WHERE id = $1 AND player_id = $2`, petID, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete pet"})
@@ -74,6 +82,10 @@ func AdminDeletePlayerPet(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Pet not found"})
 		return
 	}
+
+	var username string
+	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("[Hệ thống] Admin đã thu hồi Linh thú '%s' của đạo hữu %s", nickname, username))
 
 	c.JSON(http.StatusOK, gin.H{"deleted": true, "pet_id": petID})
 }

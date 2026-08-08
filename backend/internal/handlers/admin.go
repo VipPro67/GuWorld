@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -305,6 +306,21 @@ func AdminAddPlayerItems(c *gin.Context) {
 	}
 
 	tx.Commit()
+
+	var username string
+	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
+	itemName := req.ItemID
+	if spec, ok := models.ItemRegistry[req.ItemID]; ok {
+		itemName = spec.Name
+	} else if kind == "recipe" {
+		if targetGuID, _, _, err := ParseRecipeID(req.ItemID); err == nil {
+			if guSpec, ok := models.GetGuAny(targetGuID); ok {
+				itemName = "Công thức luyện " + guSpec.Name
+			}
+		}
+	}
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("[Hệ thống] Admin đã thêm vào túi đồ của đạo hữu %s: %s (SL: %d)", username, itemName, req.Quantity))
+
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.add_items",
 		EntityType: "player", EntityID: playerID.String(),
@@ -356,6 +372,21 @@ func AdminRemovePlayerItems(c *gin.Context) {
 	}
 
 	tx.Commit()
+
+	var username string
+	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
+	itemName := req.ItemID
+	if spec, ok := models.ItemRegistry[req.ItemID]; ok {
+		itemName = spec.Name
+	} else if kind == "recipe" {
+		if targetGuID, _, _, err := ParseRecipeID(req.ItemID); err == nil {
+			if guSpec, ok := models.GetGuAny(targetGuID); ok {
+				itemName = "Công thức luyện " + guSpec.Name
+			}
+		}
+	}
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("[Hệ thống] Admin đã thu hồi từ túi đồ của đạo hữu %s: %s (SL: %d)", username, itemName, req.Quantity))
+
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.remove_items",
 		EntityType: "player", EntityID: playerID.String(),
@@ -424,6 +455,15 @@ func AdminAddPlayerGus(c *gin.Context) {
 	}
 
 	tx.Commit()
+
+	var username string
+	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
+	guName := req.GuID
+	if spec, ok := models.GetGuAny(req.GuID); ok {
+		guName = spec.Name
+	}
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("[Hệ thống] Admin đã ban tặng Cổ trùng cho đạo hữu %s: %s (SL: %d)", username, guName, req.Quantity))
+
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.add_gus",
 		EntityType: "player", EntityID: playerID.String(),
@@ -465,10 +505,12 @@ func AdminRemovePlayerGu(c *gin.Context) {
 	}
 
 	found := false
+	var removedGuID string
 	newInv := models.GuInventory{}
 	for _, gu := range player.GuInventory {
 		if gu.InstanceID == instanceID {
 			found = true
+			removedGuID = gu.GuID
 			continue
 		}
 		newInv = append(newInv, gu)
@@ -484,6 +526,13 @@ func AdminRemovePlayerGu(c *gin.Context) {
 	}
 
 	tx.Commit()
+
+	guName := removedGuID
+	if spec, ok := models.GetGuAny(removedGuID); ok {
+		guName = spec.Name
+	}
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("[Hệ thống] Admin đã thu hồi Cổ trùng khỏi đạo hữu %s: %s", player.Username, guName))
+
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.remove_gu",
 		EntityType: "player", EntityID: playerID.String(),
@@ -547,6 +596,20 @@ func AdminChangePlayerStones(c *gin.Context) {
 	}
 
 	tx.Commit()
+
+	var username string
+	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
+	msgContent := fmt.Sprintf("[Hệ thống] Admin đã điều chỉnh tài nguyên của đạo hữu %s: ", username)
+	msgParts := []string{}
+	if req.PrimevalStones != nil {
+		msgParts = append(msgParts, fmt.Sprintf("%.0f Nguyên Thạch", *req.PrimevalStones))
+	}
+	if req.ImmortalStones != nil {
+		msgParts = append(msgParts, fmt.Sprintf("%.0f Tiên Thạch", *req.ImmortalStones))
+	}
+	msgContent += strings.Join(msgParts, ", ")
+	_ = SendSystemMessage("world", sql.NullString{}, msgContent)
+
 	summary := ""
 	if req.PrimevalStones != nil {
 		summary += fmt.Sprintf("primeval_stones=%.0f ", *req.PrimevalStones)
@@ -1019,6 +1082,11 @@ func AdminUpdatePlayer(c *gin.Context) {
 	}
 
 	tx.Commit()
+
+	var username string
+	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("[Hệ thống] Admin đã cập nhật thông tin của đạo hữu %s: %s", username, strings.Join(sets, ", ")))
+
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
 		Action:         "admin.update_player",
@@ -1407,6 +1475,10 @@ func AdminUpdateSect(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật tông môn"})
 		return
 	}
+
+	var sectName string
+	_ = db.DB.QueryRow(`SELECT name FROM sects WHERE id = $1`, sectID).Scan(&sectName)
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("[Hệ thống] Admin đã cập nhật thông tin của tông môn %s: %s", sectName, strings.Join(sets, ", ")))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.update_sect",

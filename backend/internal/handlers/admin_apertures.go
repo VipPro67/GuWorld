@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -366,6 +367,10 @@ func AdminUpdateAperture(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể commit transaction"})
 		return
 	}
+
+	var username string
+	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("[Hệ thống] Admin đã cập nhật Tiên Khiếu của đạo hữu %s: %s", username, strings.Join(sets, ", ")))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
