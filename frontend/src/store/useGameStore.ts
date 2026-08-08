@@ -247,28 +247,71 @@ export interface ManaSnapshot {
   hp: number;
   base_hp: number;
   healing_stat: number;
+  mana_regen_tick_per_hour?: number;
+  mana_regen_mult?: number;
 }
 
+// manaRegenScale is the per-rank "cost" used to scale MANA_REGEN_TICK so a Gu
+// gives its full value only when its rank matches the player's, and less when
+// the player outranks it. Index 0 = rank 1. Mirrors backend models.ManaRegenScale.
+const manaRegenScale = [1, 2, 5, 20, 100, 1000, 100000, 10000000, 100000000];
+
+// manaRegenTickFactor returns the multiplier applied to a MANA_REGEN_TICK
+// value: 1.0 when player and Gu ranks match, otherwise cost[guRank]/cost[playerRank].
+const manaRegenTickFactor = (playerRank: number, guRank: number): number => {
+  if (playerRank === guRank) return 1;
+  if (playerRank < 1 || playerRank > manaRegenScale.length || guRank < 1 || guRank > manaRegenScale.length) return 1;
+  return manaRegenScale[guRank - 1] / manaRegenScale[playerRank - 1];
+};
+
+// manaRegenTickPerHour sums the per-hour mana contribution of every equipped
+// ACTIVE Gu carrying an ON_TICK MANA_REGEN_TICK effect.
+const manaRegenTickPerHour = (player: Player, guDictionary: Record<string, GuSpec>): number => {
+  if (!player.gu_inventory) return 0;
+  let total = 0;
+  for (const gu of player.gu_inventory) {
+    if (!gu.equipped || gu.status !== "ACTIVE") continue;
+    const spec = guDictionary[gu.gu_id];
+    if (!spec || !spec.effects?.other) continue;
+    for (const mech of spec.effects.other) {
+      if (mech.event_trigger !== "ON_TICK" || mech.action_code !== "MANA_REGEN_TICK") continue;
+      let val = mech.params?.value;
+      if (typeof val !== "number" || val <= 0) val = 0.5;
+      total += val * manaRegenTickFactor(player.rank, gu.rank);
+    }
+  }
+  return total;
+};
+
 const getManaRegenRatePerHour = (snapshot: ManaSnapshot): number => {
+  let rate: number;
   if (snapshot.rank >= 6) {
     const subRank = Math.min(4, Math.max(1, snapshot.sub_rank || 1));
     const subRankFactor = 1.0 + (subRank - 1) * 0.15;
     const essenceProduction = snapshot.essence_production_per_year ?? 10;
-    return (essenceProduction / 120.0) * subRankFactor;
+    rate = (essenceProduction / 120.0) * subRankFactor;
+  } else {
+    switch (snapshot.aptitude_type) {
+      case "Giáp":
+        rate = 8.0;
+        break;
+      case "Ất":
+        rate = 6.0;
+        break;
+      case "Bính":
+        rate = 4.0;
+        break;
+      case "Đinh":
+        rate = 2.0;
+        break;
+      default:
+        rate = 2.0;
+    }
   }
 
-  switch (snapshot.aptitude_type) {
-    case "Giáp":
-      return 8.0;
-    case "Ất":
-      return 6.0;
-    case "Bính":
-      return 4.0;
-    case "Đinh":
-      return 2.0;
-    default:
-      return 2.0;
-  }
+  rate += snapshot.mana_regen_tick_per_hour || 0;
+  rate *= snapshot.mana_regen_mult || 1;
+  return rate;
 };
 
 export const estimateManaFromSnapshot = (snapshot: ManaSnapshot | null, nowMs = Date.now()): number | null => {
@@ -348,6 +391,8 @@ const createManaSnapshotFromPlayer = (player: Player, guDictionary: Record<strin
   hp: player.hp,
   base_hp: player.base_hp,
   healing_stat: calculateHealingStat(player, guDictionary),
+  mana_regen_tick_per_hour: manaRegenTickPerHour(player, guDictionary),
+  mana_regen_mult: player.constitution ? 2 : 1,
 });
 
 export interface ImmortalAperture {
@@ -4535,6 +4580,10 @@ export const useGameStore = create<GameState>((set, get) => {
       }
       const data = await response.json();
       set({ aperture: data });
+      const player = get().player;
+      if (player) {
+        set({ manaSnapshot: createManaSnapshotFromPlayer(player, get().guDictionary, data.time_rate) });
+      }
     } catch (err) {
       console.error("Failed to fetch aperture:", err);
       get().addToast("Lỗi tải tiên thể.", "error");

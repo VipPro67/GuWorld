@@ -67,8 +67,15 @@ export const LobbyView: React.FC = () => {
     mySectStatus,
     addToast,
     aperture,
+    fetchAperture,
   } = useGameStore();
   const [manaNow, setManaNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (player && player.rank >= 6 && !aperture) {
+      void fetchAperture();
+    }
+  }, [player, aperture, fetchAperture]);
 
   useEffect(() => {
     if (!player || !manaSnapshot) return;
