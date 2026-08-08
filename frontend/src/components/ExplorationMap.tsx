@@ -767,7 +767,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
 
                   {/* Gu Inventory */}
                   {tempLoot.gu_inventory.map((gu, idx) => {
-                    const spec = guDictionary[gu.gu_id] || { name: gu.gu_id, path: "Không rõ" };
+                    const spec = guDictionary[gu.gu_id] || { name: gu.gu_id, path: ["Không rõ"] };
                     return (
                       <div
                         key={gu.instance_id || idx}
@@ -779,7 +779,9 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                           </div>
                           <div>
                             <span className="font-semibold text-zinc-300 block leading-tight">{spec.name}</span>
-                            <span className="text-[8px] text-zinc-550 font-mono">{spec.path && spec.path.map(translatePath).join(" / ")}</span>
+                            <span className="text-[8px] text-zinc-550 font-mono">
+                              {spec.path && (Array.isArray(spec.path) ? spec.path.map(translatePath).join(" / ") : translatePath(spec.path))}
+                            </span>
                           </div>
                         </div>
                         <span className="text-[8px] font-mono text-emerald-400 bg-emerald-950/20 border border-emerald-900/30 px-1 py-0.5 rounded uppercase tracking-wide shrink-0">
