@@ -26,7 +26,13 @@ import {
   Leaf,
   RefreshCw,
 } from "lucide-react";
+import { formatNumber } from "@/lib/utils";
 
+function formatStat(val: number): string {
+  return Math.abs(val) >= 10000 
+    ? formatNumber(val) 
+    : (val % 1 === 0 ? val.toString() : val.toFixed(2));
+}
 
 interface ApertureProps {
   player: Player;
@@ -906,25 +912,25 @@ export const Aperture: React.FC<ApertureProps> = ({
                     {b.attack > 0 && (
                       <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
                         <div className="text-[10px] text-zinc-500 font-mono">Công Kích</div>
-                        <div className="text-lg font-bold text-zinc-100 font-mono">+{b.attack}</div>
+                        <div className="text-lg font-bold text-zinc-100 font-mono">+{(b.attack || 0).toFixed(2)}</div>
                       </div>
                     )}
                     {b.defense > 0 && (
                       <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
                         <div className="text-[10px] text-zinc-500 font-mono">Phòng Ngự</div>
-                        <div className="text-lg font-bold text-zinc-100 font-mono">+{b.defense}</div>
+                        <div className="text-lg font-bold text-zinc-100 font-mono">+{(b.defense || 0).toFixed(2)}</div>
                       </div>
                     )}
                     {b.hp > 0 && (
                       <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
                         <div className="text-[10px] text-zinc-500 font-mono">Máu Tối Đa</div>
-                        <div className="text-lg font-bold text-zinc-100 font-mono">+{b.hp}</div>
+                        <div className="text-lg font-bold text-zinc-100 font-mono">+{(b.hp || 0).toFixed(2)}</div>
                       </div>
                     )}
                     {b.speed > 0 && (
                       <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
                         <div className="text-[10px] text-zinc-500 font-mono">Tốc Độ</div>
-                        <div className="text-lg font-bold text-zinc-100 font-mono">+{b.speed}</div>
+                        <div className="text-lg font-bold text-zinc-100 font-mono">+{(b.speed || 0).toFixed(2)}</div>
                       </div>
                     )}
                   </div>
@@ -956,11 +962,11 @@ export const Aperture: React.FC<ApertureProps> = ({
                     {details.map(d => (
                       <div key={d.key} className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
                         <div className="text-[10px] text-zinc-500 font-mono">{labels[d.key] || d.key}</div>
-                        <div className="text-base font-bold text-zinc-100 font-mono">+{d.total.toFixed(1)}</div>
+                        <div className="text-base font-bold text-zinc-100 font-mono">+{formatStat(d.total)}</div>
                         {d.sources.length > 1 && (
                           <div className="mt-1 text-[9px] text-zinc-600 leading-tight">
                             {d.sources.map((s, i) => (
-                              <div key={i}>{s.name}: +{s.final.toFixed(1)}</div>
+                              <div key={i}>{s.name}: +{formatStat(s.final)}</div>
                             ))}
                           </div>
                         )}

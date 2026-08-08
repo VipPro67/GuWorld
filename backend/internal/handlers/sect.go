@@ -596,7 +596,12 @@ func DonateStones(c *gin.Context) {
 	}
 
 	player.PrimevalStones -= float64(req.Amount)
-	m.ContributionPoints += req.Amount // 1:1 ratio
+	newContribution := int64(m.ContributionPoints) + int64(req.Amount)
+	if newContribution > 2147483647 {
+		m.ContributionPoints = 2147483647
+	} else {
+		m.ContributionPoints = int(newContribution)
+	}
 
 	// Increase sect funds
 	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, req.Amount, m.SectID)
@@ -694,7 +699,12 @@ func DonateMaterials(c *gin.Context) {
 	gainedContribution := pointsPerItem * req.Amount
 	InventorySvc.RemoveItem(tx, playerID.String(), req.MaterialID, "materials", req.Amount)
 
-	m.ContributionPoints += gainedContribution
+	newContribution := int64(m.ContributionPoints) + int64(gainedContribution)
+	if newContribution > 2147483647 {
+		m.ContributionPoints = 2147483647
+	} else {
+		m.ContributionPoints = int(newContribution)
+	}
 	qiGained := AddHumanQi(&player, 5.0)
 
 	// Increase sect funds
@@ -874,7 +884,12 @@ func DonateGu(c *gin.Context) {
 
 	// Remove Gu
 	player.GuInventory = append(player.GuInventory[:targetIdx], player.GuInventory[targetIdx+1:]...)
-	m.ContributionPoints += gainedContribution
+	newContribution := int64(m.ContributionPoints) + int64(gainedContribution)
+	if newContribution > 2147483647 {
+		m.ContributionPoints = 2147483647
+	} else {
+		m.ContributionPoints = int(newContribution)
+	}
 	qiGained := AddHumanQi(&player, 5.0)
 
 	// Increase sect funds
@@ -1132,7 +1147,12 @@ func DonateBulk(c *gin.Context) {
 	numItems := len(req.Materials) + len(req.Gus)
 	qiGained := AddHumanQi(&player, 5.0*float64(numItems))
 
-	m.ContributionPoints += totalGainedContribution
+	newContribution := int64(m.ContributionPoints) + int64(totalGainedContribution)
+	if newContribution > 2147483647 {
+		m.ContributionPoints = 2147483647
+	} else {
+		m.ContributionPoints = int(newContribution)
+	}
 
 	// Update Sect funds
 	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, totalGainedContribution, m.SectID)
@@ -1724,7 +1744,12 @@ func CompleteSectMission(c *gin.Context) {
 		return
 	}
 
-	m.ContributionPoints += sm.RewardContribution
+	newContribution := int64(m.ContributionPoints) + int64(sm.RewardContribution)
+	if newContribution > 2147483647 {
+		m.ContributionPoints = 2147483647
+	} else {
+		m.ContributionPoints = int(newContribution)
+	}
 	_, err = tx.Exec(`UPDATE sect_members SET contribution_points = $1 WHERE player_id = $2`, m.ContributionPoints, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add contribution points"})
@@ -2795,7 +2820,7 @@ func ActionPromotionRequest(c *gin.Context) {
 		}
 
 		if costPoints > 0 {
-			_, err = tx.Exec(`UPDATE sect_members SET contribution_points = contribution_points + $1 WHERE player_id = $2`, costPoints, targetPlayerID)
+			_, err = tx.Exec(`UPDATE sect_members SET contribution_points = LEAST(2147483647, contribution_points + $1) WHERE player_id = $2`, costPoints, targetPlayerID)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refund contribution points: " + err.Error()})
 				return
