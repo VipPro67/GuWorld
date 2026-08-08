@@ -23,6 +23,16 @@ func ResolveSingleTarget(team []models.Combatant, prefX, prefY int, hasBypass bo
 				return prefX, prefY, true
 			}
 		}
+		// Fallback prioritizing GridX (1,2,3) then GridY (1,2,3)
+		for _, col := range []int{1, 2, 3} {
+			for _, targetY := range []int{1, 2, 3} {
+				for _, c := range alive {
+					if c.GridX == col && c.GridY == targetY {
+						return c.GridX, c.GridY, true
+					}
+				}
+			}
+		}
 		return alive[0].GridX, alive[0].GridY, true
 	}
 
@@ -34,12 +44,26 @@ func ResolveSingleTarget(team []models.Combatant, prefX, prefY int, hasBypass bo
 			}
 		}
 		if len(colAlive) > 0 {
-			for _, c := range colAlive {
-				if c.GridX == prefX && c.GridY == prefY {
-					return c.GridX, c.GridY, true
+			// Fallback: prioritize GridY = 1, then 2, then 3
+			for _, targetY := range []int{1, 2, 3} {
+				for _, c := range colAlive {
+					if c.GridY == targetY {
+						return c.GridX, c.GridY, true
+					}
 				}
 			}
 			return colAlive[0].GridX, colAlive[0].GridY, true
+		}
+	}
+	
+	// Final fallback: prioritize GridX (1,2,3) then GridY (1,2,3)
+	for _, col := range []int{1, 2, 3} {
+		for _, targetY := range []int{1, 2, 3} {
+			for _, c := range alive {
+				if c.GridX == col && c.GridY == targetY {
+					return c.GridX, c.GridY, true
+				}
+			}
 		}
 	}
 	return alive[0].GridX, alive[0].GridY, true
@@ -91,10 +115,30 @@ func ResolveTargets(team []models.Combatant, targetType string, targetX, targetY
 	}
 
 	if len(targets) == 0 {
-		for idx, c := range team {
-			if c.HP > 0 {
-				targets = append(targets, idx)
+		found := false
+		for _, col := range []int{1, 2, 3} {
+			for _, targetY := range []int{1, 2, 3} {
+				for idx, c := range team {
+					if c.HP > 0 && c.GridX == col && c.GridY == targetY {
+						targets = append(targets, idx)
+						found = true
+						break
+					}
+				}
+				if found {
+					break
+				}
+			}
+			if found {
 				break
+			}
+		}
+		if !found {
+			for idx, c := range team {
+				if c.HP > 0 {
+					targets = append(targets, idx)
+					break
+				}
 			}
 		}
 	}

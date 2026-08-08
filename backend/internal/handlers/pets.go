@@ -191,10 +191,10 @@ func SetPetFormation(c *gin.Context) {
 		return
 	}
 
-	// Calculate max formation slots (1 + rank, cap 4)
+	// Calculate max formation slots (1 + rank, cap 8)
 	maxSlots := 1 + playerRank
-	if maxSlots > 4 {
-		maxSlots = 4
+	if maxSlots > 8 {
+		maxSlots = 8
 	}
 
 	if len(req.Slots) > maxSlots {

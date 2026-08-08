@@ -1012,6 +1012,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 			act.TargetX = actor.GridX
 			act.TargetY = actor.GridY
 		}
+		act.Bypass = active.CurveAttack
 	}
 
 	if act.TargetType == "" {
@@ -1362,7 +1363,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		Name:          player.Username,
 		Kind:          "Player",
 		GridX:         2,
-		GridY:         2,
+		GridY:         3,
 		MaxHP:         simMaxHP,
 		HP:            simHP,
 		MaxMana:       int(player.MaxMana),

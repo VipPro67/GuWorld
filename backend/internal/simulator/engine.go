@@ -141,28 +141,30 @@ func cloneCombatant(c *CombatantAuto) *CombatantAuto {
 	return &clone
 }
 
-func getTarget(enemies []*CombatantAuto) *CombatantAuto {
-	for _, e := range enemies {
-		if e.GridX == 1 && e.HP > 0 {
-			return e
+func getFirstAliveDeterministic(alive []*CombatantAuto) *CombatantAuto {
+	for _, col := range []int{1, 2, 3} {
+		for _, targetY := range []int{1, 2, 3} {
+			for _, e := range alive {
+				if e.GridX == col && e.GridY == targetY {
+					return e
+				}
+			}
 		}
 	}
-	for _, e := range enemies {
-		if e.GridX == 2 && e.HP > 0 {
-			return e
-		}
-	}
-	for _, e := range enemies {
-		if e.GridX == 3 && e.HP > 0 {
-			return e
-		}
-	}
-	for _, e := range enemies {
-		if e.HP > 0 {
-			return e
-		}
+	if len(alive) > 0 {
+		return alive[0]
 	}
 	return nil
+}
+
+func getTarget(enemies []*CombatantAuto) *CombatantAuto {
+	var alive []*CombatantAuto
+	for _, e := range enemies {
+		if e.HP > 0 {
+			alive = append(alive, e)
+		}
+	}
+	return getFirstAliveDeterministic(alive)
 }
 
 // resolveTargets returns indices of alive targets based on the action's targeting type.
@@ -198,8 +200,10 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 			return hits
 		}
 		// fallback: first alive row
-		hits = append(hits, alive[0])
-		return hits
+		if fallback := getFirstAliveDeterministic(alive); fallback != nil {
+			return []*CombatantAuto{fallback}
+		}
+		return []*CombatantAuto{alive[0]}
 
 	case "COL":
 		var hits []*CombatantAuto
@@ -211,8 +215,10 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 		if len(hits) > 0 {
 			return hits
 		}
-		hits = append(hits, alive[0])
-		return hits
+		if fallback := getFirstAliveDeterministic(alive); fallback != nil {
+			return []*CombatantAuto{fallback}
+		}
+		return []*CombatantAuto{alive[0]}
 
 	case "CROSS":
 		var hits []*CombatantAuto
@@ -232,55 +238,60 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 		if len(hits) > 0 {
 			return hits
 		}
-		hits = append(hits, alive[0])
-		return hits
+		if fallback := getFirstAliveDeterministic(alive); fallback != nil {
+			return []*CombatantAuto{fallback}
+		}
+		return []*CombatantAuto{alive[0]}
 
 	case "ALL":
 		return alive
 
 	default: // "SINGLE"
-		// priority by GridX (front first), then GridY mid
 		var best *CombatantAuto
-		for _, e := range alive {
-			if e.GridX == targetX && e.GridY == targetY {
-				best = e
-				break
-			}
-		}
-		if best == nil {
+		if action.Bypass {
+			// 1. Exact match targetX, targetY
 			for _, e := range alive {
-				if e.GridX == targetX {
+				if e.GridX == targetX && e.GridY == targetY {
 					best = e
 					break
 				}
 			}
-		}
-		if best == nil {
-			for _, e := range alive {
-				if e.GridX == 1 && e.HP > 0 {
-					best = e
-					break
+			// 2. Match targetX, prioritize GridY 1 -> 3
+			if best == nil {
+				for _, yVal := range []int{1, 2, 3} {
+					for _, e := range alive {
+						if e.GridX == targetX && e.GridY == yVal {
+							best = e
+							break
+						}
+					}
+					if best != nil {
+						break
+					}
 				}
 			}
 		}
+		// 3. Fallback to columns 1, 2, 3, prioritizing GridY 1 -> 3 (standard non-bypass targeting)
 		if best == nil {
-			for _, e := range alive {
-				if e.GridX == 2 && e.HP > 0 {
-					best = e
-					break
+			for _, col := range []int{1, 2, 3} {
+				for _, yVal := range []int{1, 2, 3} {
+					for _, e := range alive {
+						if e.GridX == col && e.GridY == yVal {
+							best = e
+							break
+						}
+					}
+					if best != nil {
+						break
+					}
 				}
-			}
-		}
-		if best == nil {
-			for _, e := range alive {
-				if e.GridX == 3 && e.HP > 0 {
-					best = e
+				if best != nil {
 					break
 				}
 			}
 		}
 		if best == nil && len(alive) > 0 {
-			best = alive[0]
+			best = getFirstAliveDeterministic(alive)
 		}
 		if best != nil {
 			return []*CombatantAuto{best}

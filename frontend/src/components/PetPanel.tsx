@@ -52,7 +52,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
   const formationPets = pets.filter((p) => p.formation_slot > 0).sort((a, b) => a.formation_slot - b.formation_slot);
   const storagePets = pets.filter((p) => p.formation_slot === 0);
 
-  const maxSlots = Math.min(1 + player.rank, 4);
+  const maxSlots = Math.min(1 + player.rank, 8);
 
   const foodItems = Object.entries(itemDictionary).filter(([, item]) => {
     const effects = item.effects as Record<string, number>;

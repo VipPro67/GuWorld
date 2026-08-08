@@ -715,7 +715,7 @@ func CombatAttack(c *gin.Context) {
 						}
 					}
 
-					targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, "SINGLE", 1, 2, false)
+					targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, "SINGLE", 2, 3, false)
 					if len(targetsIdx) > 0 {
 						tEnemy := &player.ActiveCombat.Enemies[targetsIdx[0]]
 						dmgVal := refAlly.BaseAttack
@@ -754,7 +754,7 @@ func CombatAttack(c *gin.Context) {
 						}
 					}
 
-					targetsIdx := ResolveTargets(player.ActiveCombat.Allies, "SINGLE", 2, 2, false)
+					targetsIdx := ResolveTargets(player.ActiveCombat.Allies, "SINGLE", 2, 3, false)
 					if len(targetsIdx) > 0 {
 						targetAlly := &player.ActiveCombat.Allies[targetsIdx[0]]
 						enemyCtx := &CombatContext{

@@ -151,15 +151,15 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 	}
 
 	allySlots := [][2]int{
-		{2, 2},
-		{2, 1},
-		{2, 3},
-		{3, 2},
-		{3, 1},
-		{3, 3},
-		{1, 2},
-		{1, 1},
-		{1, 3},
+		{2, 3}, // index 0 (player) -> visual center-back (middle row, leftmost column)
+		{2, 1}, // index 1 (pet slot 1) -> visual center-front (middle row, rightmost column)
+		{1, 1}, // index 2 (pet slot 2) -> visual top-front (top row, rightmost column)
+		{3, 1}, // index 3 (pet slot 3) -> visual bottom-front (bottom row, rightmost column)
+		{2, 2}, // index 4 (pet slot 4) -> visual center-mid (middle row, middle column)
+		{1, 2}, // index 5 (pet slot 5) -> visual top-mid (top row, middle column)
+		{3, 2}, // index 6 (pet slot 6) -> visual bottom-mid (bottom row, middle column)
+		{1, 3}, // index 7 (pet slot 7) -> visual top-back (top row, leftmost column)
+		{3, 3}, // index 8 (pet slot 8) -> visual bottom-back (bottom row, leftmost column)
 	}
 	for idx := range base.Allies {
 		if idx < len(allySlots) {
@@ -172,15 +172,15 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 	}
 
 	enemySlots := [][2]int{
-		{2, 2},
-		{1, 2},
-		{1, 1},
-		{1, 3},
-		{2, 1},
-		{2, 3},
-		{3, 2},
-		{3, 1},
-		{3, 3},
+		{2, 3}, // index 0 (boss/main enemy) -> visual center-back (middle row, rightmost column)
+		{2, 1}, // index 1 -> visual center-front (middle row, leftmost column)
+		{1, 1}, // index 2 -> visual top-front (top row, leftmost column)
+		{3, 1}, // index 3 -> visual bottom-front (bottom row, leftmost column)
+		{2, 2}, // index 4 -> visual center-mid (middle row, middle column)
+		{1, 2}, // index 5 -> visual top-mid (top row, middle column)
+		{3, 2}, // index 6 -> visual bottom-mid (bottom row, middle column)
+		{1, 3}, // index 7 -> visual top-back (top row, rightmost column)
+		{3, 3}, // index 8 -> visual bottom-back (bottom row, rightmost column)
 	}
 	for idx := range base.Enemies {
 		if idx < len(enemySlots) {

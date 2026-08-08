@@ -145,6 +145,7 @@ type SimAction struct {
 	TargetType string // "SINGLE" | "ROW" | "COL" | "CROSS" | "ALL"
 	TargetX    int    // preferred grid X (1=Front, 2=Mid, 3=Back)
 	TargetY    int    // preferred grid Y (1=Top, 2=Mid, 3=Bottom)
+	Bypass     bool   // true if action bypasses frontline protection (e.g. CurveAttack)
 
 	// Priority (lower = higher priority, 0 = highest). Used by engine for action ordering.
 	Priority int
