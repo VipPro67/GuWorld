@@ -15,7 +15,8 @@ type CombatLoadout struct {
 // ── Status Effect Type Constants ─────────────────────────────────────────
 // Tier system: Value stores the tier (1-5), actual % computed by tierToPercent().
 const (
-	EffectSlow     = "slow"     // reduces speed → changes turn order
+	EffectSlow      = "slow"       // reduces speed → changes turn order (MentalResistance gated)
+	EffectSlow1     = "slow1"      // reduces speed → guaranteed apply (no resist check)
 	EffectSlowDamage = "slow_damage" // reduces speed and deals damage per turn
 	EffectWeak     = "weak"     // reduces damage dealt
 	EffectFreeze   = "freeze"   // like stun but can be broken by taking damage
@@ -31,7 +32,8 @@ const (
 )
 
 // tierToPercent converts a tier (1-5) to a percentage value for the effect.
-// slow:    T1=15%, T2=25%, T3=35%, T4=45%, T5=55%
+// slow:    T1=15%, T2=25%, T3=35%, T4=45%, T5=55% (MentalResistance gated)
+// slow1:   T1=15%, T2=25%, T3=35%, T4=45%, T5=55% (guaranteed apply)
 // weak:    T1=10%, T2=20%, T3=30%, T4=40%, T5=50%
 // freeze:  T1=1t,  T2=1t,  T3=2t,  T4=2t,  T5=3t (duration)
 // silence: T1=1t,  T2=1t,  T3=2t,  T4=2t,  T5=3t
@@ -49,7 +51,7 @@ func TierToPercent(effectType string, tier int) float64 {
 		tier = 5
 	}
 	switch effectType {
-	case EffectSlow, EffectSlowDamage:
+	case EffectSlow, EffectSlow1, EffectSlowDamage:
 		return []float64{0, 15, 25, 35, 45, 55}[tier]
 	case EffectWeak:
 		return []float64{0, 10, 20, 30, 40, 50}[tier]
@@ -79,7 +81,7 @@ func TierToDuration(effectType string, tier int) int {
 		tier = 5
 	}
 	switch effectType {
-	case EffectSlow, EffectSlowDamage:
+	case EffectSlow, EffectSlow1, EffectSlowDamage:
 		return []int{0, 3, 3, 4, 4, 5}[tier]
 	case EffectWeak:
 		return []int{0, 3, 3, 4, 4, 5}[tier]
@@ -124,7 +126,8 @@ type SimAction struct {
 
 	// ── New status effect fields (tier-based) ──
 	StunTier      int     // tier (1-5) for stun on target
-	SlowTier      int     // tier (1-5) for slow debuff on target
+	SlowTier      int     // tier (1-5) for slow debuff on target (gated)
+	Slow1Tier     int     // tier (1-5) for slow debuff on target (guaranteed)
 	SlowDamageTier int     // tier (1-5) for slow damage debuff on target
 	WeakTier     int     // tier (1-5) for weak debuff on target
 	FreezeTier   int     // tier (1-5) for freeze debuff on target

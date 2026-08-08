@@ -92,7 +92,7 @@ func tickStatusEffects(c *CombatantAuto, turn int) []CombatLog {
 					Action: "EFFECT_EXPIRED",
 					Detail: fmt.Sprintf("%s hết bị im lặng!", c.Name),
 				})
-			case EffectSlow:
+			case EffectSlow, EffectSlow1:
 				logs = append(logs, CombatLog{
 					Turn: turn, ActorId: c.ID, ActorName: c.Name,
 					Action: "EFFECT_EXPIRED",
@@ -139,7 +139,7 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 	speedMult := 1.0
 	for _, eff := range c.ActiveEffects {
 		switch eff.ID {
-		case EffectSlow, EffectSlowDamage:
+		case EffectSlow, EffectSlow1, EffectSlowDamage:
 			speedMult *= (1.0 - float64(eff.Value)/100.0)
 		case EffectWeak:
 			c.DamageMultiplier *= (1.0 - float64(eff.Value)/100.0)

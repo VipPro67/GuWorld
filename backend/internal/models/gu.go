@@ -48,6 +48,7 @@ type ActiveEffect struct {
 	// Normalized to ApplyStatus + StatusDurationTicks during loading.
 	Freeze  float64 `json:"freeze,omitempty"`
 	Slow    float64 `json:"slow,omitempty"`
+	Slow1   float64 `json:"slow1,omitempty"`
 	Weak    float64 `json:"weak,omitempty"`
 	Stun    float64 `json:"stun,omitempty"`
 	Silence float64 `json:"silence,omitempty"`
@@ -176,6 +177,12 @@ func (a *ActiveEffect) normalize() {
 		a.StatusDurationTicks = int(a.Slow)
 		a.Slow = 0
 	}
+	if a.Slow1 > 0 && a.ApplyStatus == "" {
+		a.ApplyStatus = "SLOW1"
+		a.StatusTickDamage = a.Slow1
+		a.StatusDurationTicks = int(a.Slow1)
+		a.Slow1 = 0
+	}
 	if a.Weak > 0 && a.ApplyStatus == "" {
 		a.ApplyStatus = "WEAK"
 		a.StatusTickDamage = a.Weak
@@ -258,6 +265,9 @@ func GetFlatGuEffects(gu Gu) map[string]float64 {
 		}
 		if gu.Effects.Active.ApplyStatus == "SLOW" {
 			res["slow"] = gu.Effects.Active.StatusTickDamage
+		}
+		if gu.Effects.Active.ApplyStatus == "SLOW1" {
+			res["slow1"] = gu.Effects.Active.StatusTickDamage
 		}
 		if gu.Effects.Active.ApplyStatus == "WEAK" {
 			res["weak"] = gu.Effects.Active.StatusTickDamage

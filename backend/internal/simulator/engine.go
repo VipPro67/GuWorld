@@ -975,6 +975,20 @@ func Simulate(state *CombatState) []CombatLog {
 								Detail:    fmt.Sprintf("%s bị chậm %d%% trong %d lượt!", target.Name, pct, dur),
 							})
 						}
+						if a.Slow1Tier > 0 {
+							pct := int(TierToPercent(EffectSlow1, a.Slow1Tier))
+							dur := TierToDuration(EffectSlow1, a.Slow1Tier)
+							target.ActiveEffects = append(target.ActiveEffects, Effect{
+								ID: EffectSlow1, Type: "debuff", Tier: a.Slow1Tier, Value: pct, Duration: dur,
+							})
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   target.ID,
+								ActorName: target.Name,
+								Action:    "SLOW1_APPLIED",
+								Detail:    fmt.Sprintf("%s bị chậm %d%% trong %d lượt (không thể kháng)!", target.Name, pct, dur),
+							})
+						}
 						if a.SlowDamageTier > 0 && !resistControl(target) {
 							pct := int(TierToPercent(EffectSlowDamage, a.SlowDamageTier))
 							dur := TierToDuration(EffectSlowDamage, a.SlowDamageTier)
