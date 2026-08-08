@@ -682,15 +682,43 @@ func ResolveTribulation(c *gin.Context) {
 			}
 		} else {
 			// Failed Tribulation — counters are already incremented on spawn
-			ap.State = "DAMAGED"
-
 			var playerRank int
 			_ = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, playerID).Scan(&playerRank)
+			// Compute nextYear using the incremented counts
 			nextYear, _ := models.GetNextTribulationInfo(playerRank, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
 			if nextYear < 10 {
 				nextYear = 10
 			}
 			ap.NextTribulationYear = nextYear
+
+			// Revert counts now
+			if ap.TribulationCount > 0 {
+				ap.TribulationCount--
+			}
+			switch ev.TribulationType {
+			case "EARTH_CALAMITY":
+				if ap.EarthCalamityCount > 0 {
+					ap.EarthCalamityCount--
+				}
+			case "HEAVENLY_TRIBULATION":
+				if ap.HeavenlyTribulationCount > 0 {
+					ap.HeavenlyTribulationCount--
+				}
+			case "GRAND_TRIBULATION":
+				if ap.GrandTribulationCount > 0 {
+					ap.GrandTribulationCount--
+				}
+			case "MYRIAD_TRIBULATION":
+				if ap.MyriadTribulationCount > 0 {
+					ap.MyriadTribulationCount--
+				}
+			case "CHAOS_CALAMITY":
+				if ap.ChaosCalamityCount > 0 {
+					ap.ChaosCalamityCount--
+				}
+			}
+
+			ap.State = "DAMAGED"
 			ap.ApertureHP = ap.MaxApertureHP / 10
 
 			_, _ = tx.Exec(`
@@ -713,11 +741,11 @@ func ResolveTribulation(c *gin.Context) {
 				UPDATE immortal_apertures 
 				SET state = $1, next_tribulation_year = $2, aperture_hp = $3,
 					earth_calamity_count = $4, heavenly_tribulation_count = $5, grand_tribulation_count = $6,
-					myriad_tribulation_count = $7, chaos_calamity_count = $8
-				WHERE id = $9
+					myriad_tribulation_count = $7, chaos_calamity_count = $8, tribulation_count = $9
+				WHERE id = $10
 			`, ap.State, ap.NextTribulationYear, ap.ApertureHP,
 				ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount,
-				ap.MyriadTribulationCount, ap.ChaosCalamityCount, ap.ID)
+				ap.MyriadTribulationCount, ap.ChaosCalamityCount, ap.TribulationCount, ap.ID)
 
 			_, _ = tx.Exec(`
 				UPDATE tribulation_events
@@ -1315,11 +1343,11 @@ func CheckAndTriggerTribulations() error {
 		}
 	}
 
-	// 2. Check and auto-resolve pending active tribulations that exceeded 24 hours
+	// 2. Check and auto-resolve pending active tribulations that exceeded 6 hours
 	autoRows, err := db.DB.Query(`
 		SELECT id, player_id
 		FROM tribulation_events
-		WHERE status = 'ACTIVE' AND started_at < NOW() - INTERVAL '24 hours'
+		WHERE status = 'ACTIVE' AND started_at < NOW() - INTERVAL '6 hours'
 	`)
 	if err == nil {
 		type EventResolve struct {
@@ -1586,14 +1614,40 @@ func autoResolveEvent(eventID string, playerID string) {
 		return
 	}
 
-	// On failure, counters are already incremented on spawn
-
 	var playerRank int
 	_ = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, playerID).Scan(&playerRank)
+	// Compute nextYear using the incremented counts
 	nextYear, _ := models.GetNextTribulationInfo(playerRank, ap.EarthCalamityCount, ap.HeavenlyTribulationCount,
 		ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
 	if nextYear < 10 {
 		nextYear = 10
+	}
+
+	// Revert counts now
+	if ap.TribulationCount > 0 {
+		ap.TribulationCount--
+	}
+	switch ev.TribulationType {
+	case "EARTH_CALAMITY":
+		if ap.EarthCalamityCount > 0 {
+			ap.EarthCalamityCount--
+		}
+	case "HEAVENLY_TRIBULATION":
+		if ap.HeavenlyTribulationCount > 0 {
+			ap.HeavenlyTribulationCount--
+		}
+	case "GRAND_TRIBULATION":
+		if ap.GrandTribulationCount > 0 {
+			ap.GrandTribulationCount--
+		}
+	case "MYRIAD_TRIBULATION":
+		if ap.MyriadTribulationCount > 0 {
+			ap.MyriadTribulationCount--
+		}
+	case "CHAOS_CALAMITY":
+		if ap.ChaosCalamityCount > 0 {
+			ap.ChaosCalamityCount--
+		}
 	}
 
 	var feathermanPop int
@@ -1613,11 +1667,11 @@ func autoResolveEvent(eventID string, playerID string) {
 		UPDATE immortal_apertures 
 		SET state = 'DAMAGED', next_tribulation_year = $1, aperture_hp = $2,
 			earth_calamity_count = $3, heavenly_tribulation_count = $4, grand_tribulation_count = $5,
-			myriad_tribulation_count = $6, chaos_calamity_count = $7
-		WHERE id = $8
+			myriad_tribulation_count = $6, chaos_calamity_count = $7, tribulation_count = $8
+		WHERE id = $9
 	`, nextYear, newHP,
 		ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount,
-		ap.MyriadTribulationCount, ap.ChaosCalamityCount, ev.ApertureID)
+		ap.MyriadTribulationCount, ap.ChaosCalamityCount, ap.TribulationCount, ev.ApertureID)
 
 	_, _ = tx.Exec(`
 		UPDATE tribulation_events

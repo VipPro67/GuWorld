@@ -80,6 +80,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 - **Quái tai kiếp không phá hủy trực tiếp mỏ tài nguyên.** Khi tiếp cận node tài nguyên, mỗi minion mỗi nhát làm giảm `hp` mỏ theo loại kiếp: Địa Tai -1, Thiên Kiếp -2, Hạo Kiếp -4, Vạn Kiếp -8, Hỗn Độn Đại Nạn -16. Boss di chuyển quanh quẩn và đánh mỏ với sát thương gấp đôi minion.
 - **Combat tai kiếp hỗ trợ buff từ Cổ đang trang bị:** hiệu ứng `damage` (sát thương), `damage_multiplier` (nhân sát thương), `defense`/`shield_flat` (tạo Khiên hộ thể hấp thụ phản chấn của quái lên cơ thể hoặc hấp thụ trực tiếp sát thương phản chấn lên Tiên Khiếu đối với Cổ Tiên), `heal`/`heal_flat` (hồi HP, tối đa bằng `base_hp`).
 - **Player chỉ được công kích khi HP Tiên Khiếu > 20% max HP.** Nếu Tiên Khiếu nguy cấp (≤ 20%), đạo hữu không thể ra tay — quái sẽ tiếp tục càn quét mỏ trong sự bất lực; hãy chờ Tiên Khiếu hồi phục hoặc kết toán vượt kiếp.
+- **Kết toán tai kiếp:** Nếu kết toán khi còn quái trên bản đồ lưới (chấp nhận rủi ro hoặc hết hạn 6 giờ thực tế tự động kết toán), đạo hữu có nguy cơ thất bại. Khi vượt kiếp thất bại, bộ đếm số lượng tai kiếp (tổng số tai kiếp và số lượng theo từng loại) sẽ không tăng (chỉ tích lũy khi thành công), nhưng thời gian/mốc năm của tai kiếp kế tiếp (`next_tribulation_year`) vẫn sẽ được đẩy lên mốc tiếp theo để người chơi có thời gian hồi phục và không bị dồn dập tai kiếp ngay lập tức.
 - **Kiếp nạn theo cấp bậc:**
   - Rank 6: Địa Tai (10 năm), Thiên Kiếp (100 năm)
   - Rank 7: Địa Tai (10 năm), Thiên Kiếp (50 năm), Hạo Kiếp (100 năm)
