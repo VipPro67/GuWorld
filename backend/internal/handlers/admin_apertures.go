@@ -207,10 +207,10 @@ type AdminUpdateApertureRequest struct {
 	TribulationCount         *int                `json:"tribulation_count"`
 	RankStartYear            *float64            `json:"rank_start_year"`
 	EarthCalamityCount       *int                `json:"earth_calamity_count"`
-	HeavenlyTribulationCount  *int                `json:"heavenly_tribulation_count"`
-	GrandTribulationCount     *int                `json:"grand_tribulation_count"`
-	MyriadTribulationCount    *int                `json:"myriad_tribulation_count"`
-	ChaosCalamityCount        *int                `json:"chaos_calamity_count"`
+	HeavenlyTribulationCount *int                `json:"heavenly_tribulation_count"`
+	GrandTribulationCount    *int                `json:"grand_tribulation_count"`
+	MyriadTribulationCount   *int                `json:"myriad_tribulation_count"`
+	ChaosCalamityCount       *int                `json:"chaos_calamity_count"`
 	State                    *string             `json:"state"`
 	DaoMarks                 *models.DaoMarksMap `json:"dao_marks"`
 }
@@ -370,7 +370,7 @@ func AdminUpdateAperture(c *gin.Context) {
 
 	var username string
 	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
-	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("[Hệ thống] Admin đã cập nhật Tiên Khiếu của đạo hữu %s: %s", username, strings.Join(sets, ", ")))
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã cập nhật Tiên Khiếu của đạo hữu %s: %s", username, formatChangedFields(sets, args)))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &adminID,

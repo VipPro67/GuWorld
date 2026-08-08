@@ -319,7 +319,7 @@ func AdminAddPlayerItems(c *gin.Context) {
 			}
 		}
 	}
-	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("[Hệ thống] Admin đã thêm vào túi đồ của đạo hữu %s: %s (SL: %d)", username, itemName, req.Quantity))
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã thêm vào túi đồ của đạo hữu %s: %s (SL: %d)", username, itemName, req.Quantity))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.add_items",
@@ -385,7 +385,7 @@ func AdminRemovePlayerItems(c *gin.Context) {
 			}
 		}
 	}
-	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("[Hệ thống] Admin đã thu hồi từ túi đồ của đạo hữu %s: %s (SL: %d)", username, itemName, req.Quantity))
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã thu hồi từ túi đồ của đạo hữu %s: %s (SL: %d)", username, itemName, req.Quantity))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.remove_items",
@@ -462,7 +462,7 @@ func AdminAddPlayerGus(c *gin.Context) {
 	if spec, ok := models.GetGuAny(req.GuID); ok {
 		guName = spec.Name
 	}
-	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("[Hệ thống] Admin đã ban tặng Cổ trùng cho đạo hữu %s: %s (SL: %d)", username, guName, req.Quantity))
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã ban tặng Cổ trùng cho đạo hữu %s: %s (SL: %d)", username, guName, req.Quantity))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.add_gus",
@@ -531,7 +531,7 @@ func AdminRemovePlayerGu(c *gin.Context) {
 	if spec, ok := models.GetGuAny(removedGuID); ok {
 		guName = spec.Name
 	}
-	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("[Hệ thống] Admin đã thu hồi Cổ trùng khỏi đạo hữu %s: %s", player.Username, guName))
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã thu hồi Cổ trùng khỏi đạo hữu %s: %s", player.Username, guName))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.remove_gu",
@@ -599,7 +599,7 @@ func AdminChangePlayerStones(c *gin.Context) {
 
 	var username string
 	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
-	msgContent := fmt.Sprintf("[Hệ thống] Admin đã điều chỉnh tài nguyên của đạo hữu %s: ", username)
+	msgContent := fmt.Sprintf("Admin đã điều chỉnh tài nguyên của đạo hữu %s: ", username)
 	msgParts := []string{}
 	if req.PrimevalStones != nil {
 		msgParts = append(msgParts, fmt.Sprintf("%.0f Nguyên Thạch", *req.PrimevalStones))
@@ -829,30 +829,30 @@ func AdminListPlayerGus(c *gin.Context) {
 }
 
 type AdminUpdatePlayerRequest struct {
-	Rank            *int     `json:"rank"`
-	SubRank         *int     `json:"sub_rank"`
-	AptitudeType    *string  `json:"aptitude_type"`
-	AptitudePercent *float64 `json:"aptitude_percent"`
-	AptitudeGrade   *string  `json:"aptitude_grade"`
-	CurrentMana     *float64 `json:"current_mana"`
-	MaxMana         *float64 `json:"max_mana"`
-	HP              *float64 `json:"hp"`
-	BaseHP          *float64 `json:"base_hp"`
-	WallProgress    *float64 `json:"wall_progress"`
-	HumanQi         *float64 `json:"human_qi"`
-	Lifespan        *float64 `json:"lifespan"`
-	CurrentRegion   *string  `json:"current_region"`
-	IsAdmin         *bool    `json:"is_admin"`
-	SoulHP          *float64 `json:"soul_hp"`
-	MaxSoul         *float64 `json:"max_soul"`
-	SoulTier        *string  `json:"soul_tier"`
-	ExploreCount    *int     `json:"explore_count"`
-	ApertureStress  *float64 `json:"aperture_stress"`
-	Bio             *string  `json:"bio"`
-	AvatarURL       *string  `json:"avatar_url"`
-	Race            *string  `json:"race"`
-	Gender          *string  `json:"gender"`
-	Constitution    *string  `json:"constitution"`
+	Rank            *int      `json:"rank"`
+	SubRank         *int      `json:"sub_rank"`
+	AptitudeType    *string   `json:"aptitude_type"`
+	AptitudePercent *float64  `json:"aptitude_percent"`
+	AptitudeGrade   *string   `json:"aptitude_grade"`
+	CurrentMana     *float64  `json:"current_mana"`
+	MaxMana         *float64  `json:"max_mana"`
+	HP              *float64  `json:"hp"`
+	BaseHP          *float64  `json:"base_hp"`
+	WallProgress    *float64  `json:"wall_progress"`
+	HumanQi         *float64  `json:"human_qi"`
+	Lifespan        *float64  `json:"lifespan"`
+	CurrentRegion   *string   `json:"current_region"`
+	IsAdmin         *bool     `json:"is_admin"`
+	SoulHP          *float64  `json:"soul_hp"`
+	MaxSoul         *float64  `json:"max_soul"`
+	SoulTier        *string   `json:"soul_tier"`
+	ExploreCount    *int      `json:"explore_count"`
+	ApertureStress  *float64  `json:"aperture_stress"`
+	Bio             *string   `json:"bio"`
+	AvatarURL       *string   `json:"avatar_url"`
+	Race            *string   `json:"race"`
+	Gender          *string   `json:"gender"`
+	Constitution    *string   `json:"constitution"`
 	Statuses        *[]string `json:"statuses"`
 }
 
@@ -1085,7 +1085,7 @@ func AdminUpdatePlayer(c *gin.Context) {
 
 	var username string
 	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
-	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("[Hệ thống] Admin đã cập nhật thông tin của đạo hữu %s: %s", username, strings.Join(sets, ", ")))
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã cập nhật thông tin của đạo hữu %s: %s", username, formatChangedFields(sets, args)))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
@@ -1478,7 +1478,7 @@ func AdminUpdateSect(c *gin.Context) {
 
 	var sectName string
 	_ = db.DB.QueryRow(`SELECT name FROM sects WHERE id = $1`, sectID).Scan(&sectName)
-	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("[Hệ thống] Admin đã cập nhật thông tin của tông môn %s: %s", sectName, strings.Join(sets, ", ")))
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã cập nhật thông tin của tông môn %s: %s", sectName, formatChangedFields(sets, args)))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.update_sect",
@@ -3789,4 +3789,174 @@ func AdminDeleteLootTable(c *gin.Context) {
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_loot_table", "id=%s", tableID)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa bảng loot"})
+}
+
+func formatChangedFields(sets []string, args []interface{}) string {
+	var fields []string
+	for i, s := range sets {
+		parts := strings.Split(s, "=")
+		if len(parts) == 0 {
+			continue
+		}
+		fieldName := strings.TrimSpace(parts[0])
+		if fieldName == "updated_at" {
+			continue
+		}
+		if i >= len(args) {
+			continue
+		}
+		val := args[i]
+
+		translated := fieldName
+		valStr := fmt.Sprintf("%v", val)
+
+		switch fieldName {
+		case "rank":
+			translated = "Cảnh giới"
+		case "sub_rank":
+			translated = "Tiểu cảnh giới"
+		case "aptitude_type":
+			translated = "Hệ tư chất"
+		case "aptitude_percent":
+			translated = "Tỉ lệ tư chất"
+			valStr = fmt.Sprintf("%.1f%%", val)
+		case "aptitude_grade":
+			translated = "Phẩm cấp tư chất"
+		case "current_mana":
+			translated = "Mana hiện tại"
+			valStr = fmt.Sprintf("%.0f", val)
+		case "max_mana":
+			translated = "Mana tối đa"
+			valStr = fmt.Sprintf("%.0f", val)
+		case "hp":
+			translated = "HP"
+			valStr = fmt.Sprintf("%.0f", val)
+		case "base_hp":
+			translated = "HP cơ bản"
+			valStr = fmt.Sprintf("%.0f", val)
+		case "wall_progress":
+			translated = "Tiến trình phá bức tường"
+			valStr = fmt.Sprintf("%.1f%%", val)
+		case "human_qi":
+			translated = "Nhân khí"
+			valStr = fmt.Sprintf("%.0f", val)
+		case "lifespan":
+			translated = "Thọ nguyên"
+			valStr = fmt.Sprintf("%.0f năm", val)
+		case "current_region":
+			translated = "Khu vực"
+		case "soul_hp":
+			translated = "HP linh hồn"
+			valStr = fmt.Sprintf("%.0f", val)
+		case "max_soul":
+			translated = "Linh hồn tối đa"
+			valStr = fmt.Sprintf("%.0f", val)
+		case "soul_tier":
+			translated = "Cấp bậc linh hồn"
+		case "explore_count":
+			translated = "Số lượt thám hiểm"
+		case "aperture_stress":
+			translated = "Áp lực tiên khiếu"
+			valStr = fmt.Sprintf("%.1f%%", val)
+		case "bio":
+			translated = "Tiểu sử"
+		case "avatar_url":
+			translated = "Ảnh đại diện"
+		case "race":
+			translated = "Chủng tộc"
+		case "gender":
+			translated = "Giới tính"
+		case "constitution":
+			translated = "Thể chất"
+		case "statuses":
+			translated = "Trạng thái"
+		case "is_admin":
+			translated = "Quyền Admin"
+		case "name":
+			translated = "Tên"
+		case "description":
+			translated = "Mô tả"
+		case "region":
+			translated = "Khu vực"
+		case "level":
+			translated = "Cấp độ"
+		case "funds":
+			translated = "Ngân quỹ"
+		case "require_approval":
+			translated = "Yêu cầu phê duyệt"
+			if b, ok := val.(bool); ok {
+				if b {
+					valStr = "Có"
+				} else {
+					valStr = "Không"
+				}
+			}
+		case "grade":
+			translated = "Phẩm cấp"
+			gradeMap := map[string]string{"LOW": "Hạ Phẩm", "MID": "Trung Phẩm", "HIGH": "Thượng Phẩm", "EXTREME": "Chí Tôn"}
+			if str, ok := val.(string); ok {
+				if mapped, found := gradeMap[str]; found {
+					valStr = mapped
+				}
+			}
+		case "time_rate":
+			translated = "Tốc độ thời gian"
+			valStr = fmt.Sprintf("%.1fx", val)
+		case "aperture_hp":
+			translated = "HP Tiên Khiếu"
+		case "max_aperture_hp":
+			translated = "HP tối đa"
+		case "area_size":
+			translated = "Diện tích"
+			valStr = fmt.Sprintf("%v mẫu", val)
+		case "immortal_essence":
+			translated = "Tiên Nguyên"
+		case "essence_production_per_year":
+			translated = "Sản lượng Tiên Nguyên/năm"
+		case "internal_years_passed":
+			translated = "Thời gian trôi qua"
+			valStr = fmt.Sprintf("%.3f năm", val)
+		case "next_tribulation_year":
+			translated = "Năm chịu kiếp tiếp theo"
+			valStr = fmt.Sprintf("Năm %.1f", val)
+		case "tribulation_count":
+			translated = "Số lần độ kiếp"
+		case "rank_start_year":
+			translated = "Năm bắt đầu cảnh giới"
+			valStr = fmt.Sprintf("Năm %.1f", val)
+		case "earth_calamity_count":
+			translated = "Số lần Địa Tai"
+		case "heavenly_tribulation_count":
+			translated = "Số lần Thiên Kiếp"
+		case "grand_tribulation_count":
+			translated = "Số lần Đại Kiếp"
+		case "myriad_tribulation_count":
+			translated = "Số lần Vạn Kiếp"
+		case "chaos_calamity_count":
+			translated = "Số lần Hỗn Độn Kiếp"
+		case "state":
+			translated = "Trạng thái"
+			stateMap := map[string]string{"STABLE": "Ổn định", "TRIBULATION_PENDING": "Đợi Kiếp", "TRIBULATION_ACTIVE": "Đang Kiếp", "DAMAGED": "Tổn hại", "DESTROYED": "Phá huỷ"}
+			if str, ok := val.(string); ok {
+				if mapped, found := stateMap[str]; found {
+					valStr = mapped
+				}
+			}
+		case "dao_marks":
+			translated = "Đạo ngân"
+			if bytes, ok := val.([]byte); ok {
+				var m map[string]interface{}
+				if err := json.Unmarshal(bytes, &m); err == nil {
+					parts := []string{}
+					for k, v := range m {
+						parts = append(parts, fmt.Sprintf("%s: %v", k, v))
+					}
+					valStr = strings.Join(parts, ", ")
+				}
+			}
+		}
+
+		fields = append(fields, fmt.Sprintf("%s (%s)", translated, valStr))
+	}
+	return strings.Join(fields, ", ")
 }

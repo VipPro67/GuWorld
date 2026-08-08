@@ -85,7 +85,7 @@ func AdminDeletePlayerPet(c *gin.Context) {
 
 	var username string
 	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
-	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("[Hệ thống] Admin đã thu hồi Linh thú '%s' của đạo hữu %s", nickname, username))
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã thu hồi Linh thú '%s' của đạo hữu %s", nickname, username))
 
 	c.JSON(http.StatusOK, gin.H{"deleted": true, "pet_id": petID})
 }
