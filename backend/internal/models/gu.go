@@ -466,3 +466,50 @@ func AllGuPaths() []string {
 	return allPathsCache
 }
 
+// ManaRegenScale is the per-rank "cost" used to scale MANA_REGEN_TICK so a Gu
+// gives its full value only when its rank matches the player's, and less when
+// the player outranks it. Index 0 = rank 1.
+var ManaRegenScale = []float64{1, 2, 5, 20, 100, 1000, 100000, 10000000, 100000000}
+
+// ManaRegenTickFactor returns the multiplier applied to a MANA_REGEN_TICK
+// value: 1.0 when player and Gu ranks match, otherwise cost[guRank]/cost[playerRank].
+func ManaRegenTickFactor(playerRank, guRank int) float64 {
+	if playerRank == guRank {
+		return 1.0
+	}
+	if playerRank < 1 || playerRank > len(ManaRegenScale) || guRank < 1 || guRank > len(ManaRegenScale) {
+		return 1.0
+	}
+	return ManaRegenScale[guRank-1] / ManaRegenScale[playerRank-1]
+}
+
+// ManaRegenTickPerHour sums the per-hour mana contribution of every equipped
+// ACTIVE Gu that carries an ON_TICK MANA_REGEN_TICK effect.
+func ManaRegenTickPerHour(inventory []GuInstance, playerRank int) float64 {
+	var total float64
+	for _, gu := range inventory {
+		if !gu.Equipped || gu.Status != "ACTIVE" {
+			continue
+		}
+		spec, ok := GetGu(gu.GuID, gu.Rank)
+		if !ok {
+			continue
+		}
+		for _, mech := range spec.Effects.Other {
+			if mech.EventTrigger != "ON_TICK" || mech.ActionCode != "MANA_REGEN_TICK" {
+				continue
+			}
+			var params map[string]interface{}
+			if len(mech.Params) > 0 {
+				json.Unmarshal(mech.Params, &params)
+			}
+			val, _ := params["value"].(float64)
+			if val <= 0 {
+				val = 0.5
+			}
+			total += val * ManaRegenTickFactor(playerRank, gu.Rank)
+		}
+	}
+	return total
+}
+

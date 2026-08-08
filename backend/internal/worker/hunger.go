@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"math"
-	"strings"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -84,7 +82,8 @@ func findOnTickPlayers(db *sql.DB) []string {
 // applyOnTickEffects handles the rare ON_TICK effects (HOT_TICK,
 // GENERATE_STONES_TICK, GENERATE_IMMORTAL_STONES_TICK) for a single player's
 // equipped ACTIVE Gus. It only updates player counters (hp / stones), never
-// hunger or Gu state.
+// hunger or Gu state. MANA_REGEN_TICK is handled separately as an hourly rate
+// (see models.ManaRegenTickPerHour), so it is not applied here.
 func applyOnTickEffects(db *sql.DB, playerID string) error {
 	tx, err := db.Begin()
 	if err != nil {
@@ -92,14 +91,13 @@ func applyOnTickEffects(db *sql.DB, playerID string) error {
 	}
 	defer tx.Rollback()
 
-	var currentMana, maxMana, immortalStones float64
+	var immortalStones float64
 	var primevalStones float64
-	var playerRank int
 	var hp, baseHP float64
 	err = tx.QueryRow(`
-		SELECT primeval_stones, current_mana, max_mana, immortal_stones, rank, hp, base_hp
+		SELECT primeval_stones, immortal_stones, hp, base_hp
 		FROM players WHERE id = $1`, playerID).Scan(
-		&primevalStones, &currentMana, &maxMana, &immortalStones, &playerRank, &hp, &baseHP)
+		&primevalStones, &immortalStones, &hp, &baseHP)
 	if err != nil {
 		return err
 	}
@@ -109,7 +107,7 @@ func applyOnTickEffects(db *sql.DB, playerID string) error {
 	tickImmortalStones := 0.0
 
 	rows, err := tx.Query(`
-		SELECT pg.gu_id, pg.gu_rank, gd.effects->'other'
+		SELECT gd.effects->'other'
 		FROM player_gu pg
 		JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank
 		WHERE pg.player_id = $1 AND pg.equipped AND pg.state = 'ACTIVE'`, playerID)
@@ -119,10 +117,8 @@ func applyOnTickEffects(db *sql.DB, playerID string) error {
 	defer rows.Close()
 
 	for rows.Next() {
-		var guID string
-		var guRank int
 		var otherRaw []byte
-		if err := rows.Scan(&guID, &guRank, &otherRaw); err != nil {
+		if err := rows.Scan(&otherRaw); err != nil {
 			return err
 		}
 		var other []models.SpecialMechanic
@@ -132,10 +128,6 @@ func applyOnTickEffects(db *sql.DB, playerID string) error {
 			}
 		}
 
-		tnMultiplier := 1.0
-		if strings.HasPrefix(guID, "GU_HEAVENLY_ESSENCE_LOTUS") {
-			tnMultiplier = getThienNguyenMultiplier(playerRank, guRank)
-		}
 		for _, mech := range other {
 			if mech.EventTrigger != "ON_TICK" {
 				continue
@@ -150,19 +142,19 @@ func applyOnTickEffects(db *sql.DB, playerID string) error {
 				if val <= 0 {
 					val = 5.0
 				}
-				tickHP += val * tnMultiplier
+				tickHP += val
 			case "GENERATE_STONES_TICK":
 				val, _ := params["value"].(float64)
 				if val <= 0 {
 					val = 1.0
 				}
-				tickStones += val * tnMultiplier
+				tickStones += val
 			case "GENERATE_IMMORTAL_STONES_TICK":
 				val, _ := params["value"].(float64)
 				if val <= 0 {
 					val = 1.0
 				}
-				tickImmortalStones += val * tnMultiplier
+				tickImmortalStones += val
 			}
 		}
 	}
@@ -315,33 +307,4 @@ func runHungerDecayBatch(db *sql.DB) error {
 	}
 
 	return tx.Commit()
-}
-
-func getThienNguyenMultiplier(playerRank, guRank int) float64 {
-	if playerRank == guRank {
-		return 2.0
-	}
-	immortalCost := func(diff int) float64 {
-		return math.Pow(100, float64(diff))
-	}
-	mortalCost := map[int]float64{1: 1, 2: 2, 3: 5, 4: 20, 5: 100}
-	if playerRank >= 6 && guRank >= 6 {
-		diff := playerRank - guRank
-		if diff > 0 {
-			return 2.0 / immortalCost(diff)
-		}
-		return 2.0 * immortalCost(-diff)
-	}
-	if playerRank >= 6 {
-		return 2.0 / immortalCost(playerRank-guRank)
-	}
-	if guRank >= 6 {
-		return 0
-	}
-	playerCost := mortalCost[playerRank]
-	guCost := mortalCost[guRank]
-	if playerCost == 0 || guCost == 0 {
-		return 0
-	}
-	return 2.0 * guCost / playerCost
 }

@@ -2014,6 +2014,8 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 		regenRatePerHour = regenRatePerHour * 0.5
 	}
 
+	regenRatePerHour += models.ManaRegenTickPerHour(player.GuInventory, player.Rank)
+
 	player.ManaRegenRate = regenRatePerHour * (1.0 + gamefx.Get(player).ManaRegenBonus)
 
 	stats := CalculatePlayerStats(player)
@@ -2680,20 +2682,6 @@ func EquipGu(c *gin.Context) {
 		if specFound && specForEquip.Type == "Consumable" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể trang bị Cổ trùng loại Consumable."})
 			return
-		}
-
-		// Thien Nguyen Bao Lien special cross-rank equip rules
-		if specFound && strings.HasPrefix(targetGu.GuID, "GU_HEAVENLY_ESSENCE_LOTUS") {
-			if player.Rank < 6 && targetGu.Rank >= 6 {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Phàm nhân không thể điều khiển Thiên Nguyên Bảo Hoàng Liên Tiên Cổ!"})
-				return
-			}
-		} else if specFound {
-			// All other Gu: standard rank check
-			if player.Rank < targetGu.Rank {
-				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không Khiếu Rank %d không thể trang bị Cổ trùng Rank %d!", player.Rank, targetGu.Rank)})
-				return
-			}
 		}
 
 		targetGu.Equipped = true

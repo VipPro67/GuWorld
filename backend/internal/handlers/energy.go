@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"math"
 	"strings"
 
@@ -88,62 +87,7 @@ func energyRegenRatePerHour(player *models.Player) float64 {
 		rate *= 0.4 + refineTier*0.1
 	}
 
-	// Add MANA_REGEN_TICK bonus from equipped active Gus (like Heavenly Essence Lotus)
-	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			spec, ok := models.GetGu(gu.GuID, gu.Rank)
-			if ok && spec.Effects.Other != nil {
-				tnMultiplier := 1.0
-				if strings.HasPrefix(gu.GuID, "GU_HEAVENLY_ESSENCE_LOTUS") {
-					tnMultiplier = getThienNguyenMultiplier(player.Rank, gu.Rank)
-				}
-				for _, mech := range spec.Effects.Other {
-					if mech.EventTrigger == "ON_TICK" && mech.ActionCode == "MANA_REGEN_TICK" {
-						var params map[string]interface{}
-						if len(mech.Params) > 0 {
-							json.Unmarshal(mech.Params, &params)
-						}
-						val, _ := params["value"].(float64)
-						if val <= 0 {
-							val = 0.5
-						}
-						rate += val * tnMultiplier
-					}
-				}
-			}
-		}
-	}
-
 	return rate * (1.0 + gamefx.Get(player).ManaRegenBonus)
-}
-
-func getThienNguyenMultiplier(playerRank, guRank int) float64 {
-	if playerRank == guRank {
-		return 2.0
-	}
-	immortalCost := func(diff int) float64 {
-		return math.Pow(100, float64(diff))
-	}
-	mortalCost := map[int]float64{1: 1, 2: 2, 3: 5, 4: 20, 5: 100}
-	if playerRank >= 6 && guRank >= 6 {
-		diff := playerRank - guRank
-		if diff > 0 {
-			return 2.0 / immortalCost(diff)
-		}
-		return 2.0 * immortalCost(-diff)
-	}
-	if playerRank >= 6 {
-		return 2.0 / immortalCost(playerRank-guRank)
-	}
-	if guRank >= 6 {
-		return 0
-	}
-	playerCost := mortalCost[playerRank]
-	guCost := mortalCost[guRank]
-	if playerCost == 0 || guCost == 0 {
-		return 0
-	}
-	return 2.0 * guCost / playerCost
 }
 
 func calculateEnergyCost(player *models.Player, guSpec *models.GuDictionaryItem) float64 {
