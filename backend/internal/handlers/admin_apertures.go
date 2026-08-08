@@ -241,9 +241,10 @@ func AdminUpdateAperture(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	// Verify aperture exists and load player ID
+	// Verify aperture exists and load player ID & old dao marks
 	var playerID string
-	err = tx.QueryRow(`SELECT player_id FROM immortal_apertures WHERE id = $1`, apertureID).Scan(&playerID)
+	var oldDaoJSON []byte
+	err = tx.QueryRow(`SELECT player_id, dao_marks FROM immortal_apertures WHERE id = $1`, apertureID).Scan(&playerID, &oldDaoJSON)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy tiên khiếu"})
 		return
@@ -370,7 +371,44 @@ func AdminUpdateAperture(c *gin.Context) {
 
 	var username string
 	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
-	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã cập nhật Tiên Khiếu của đạo hữu %s: %s", username, formatChangedFields(sets, args)))
+
+	var sysSets []string
+	var sysArgs []interface{}
+
+	for idx, s := range sets {
+		if strings.HasPrefix(s, "dao_marks=") {
+			var oldDao models.DaoMarksMap
+			if len(oldDaoJSON) > 0 {
+				_ = json.Unmarshal(oldDaoJSON, &oldDao)
+			}
+			if oldDao == nil {
+				oldDao = make(models.DaoMarksMap)
+			}
+			changedDao := make(models.DaoMarksMap)
+			if req.DaoMarks != nil {
+				for k, newVal := range *req.DaoMarks {
+					if oldDao[k] != newVal {
+						changedDao[k] = newVal
+					}
+				}
+				for k := range oldDao {
+					if _, ok := (*req.DaoMarks)[k]; !ok {
+						changedDao[k] = 0
+					}
+				}
+			}
+			if len(changedDao) > 0 {
+				changedJSON, _ := json.Marshal(changedDao)
+				sysSets = append(sysSets, s)
+				sysArgs = append(sysArgs, changedJSON)
+			}
+		} else {
+			sysSets = append(sysSets, s)
+			sysArgs = append(sysArgs, args[idx])
+		}
+	}
+
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã cập nhật Tiên Khiếu của đạo hữu %s: %s", username, formatChangedFields(sysSets, sysArgs)))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &adminID,

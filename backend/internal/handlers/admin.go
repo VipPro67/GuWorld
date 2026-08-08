@@ -3947,9 +3947,49 @@ func formatChangedFields(sets []string, args []interface{}) string {
 			if bytes, ok := val.([]byte); ok {
 				var m map[string]interface{}
 				if err := json.Unmarshal(bytes, &m); err == nil {
+					pathToVietnamese := map[string]string{
+						"strength":       "Lực đạo",
+						"wisdom":         "Trí đạo",
+						"dark":           "Ám đạo",
+						"dream":          "Mộng đạo",
+						"life":           "Sinh đạo",
+						"space":          "Không đạo",
+						"sun":            "Thái dương đạo",
+						"earth":          "Thổ đạo",
+						"enslavement":    "Nô đạo",
+						"soul":           "Hồn đạo",
+						"blood":          "Huyết đạo",
+						"creation":       "Tạo hóa đạo",
+						"metal":          "Kim đạo",
+						"transformation": "Biến hóa đạo",
+						"destruction":    "Hủy diệt đạo",
+						"fire":           "Hỏa đạo",
+						"enchantment":    "Mị đạo",
+						"ice":            "Băng đạo",
+						"water":          "Thủy đạo",
+						"rule":           "Luật đạo",
+						"shadow":         "Ảnh đạo",
+						"sound":          "Âm đạo",
+						"sword":          "Kiếm đạo",
+						"cloud":          "Vân đạo",
+						"death":          "Tử đạo",
+						"information":    "Tín đạo",
+						"lightning":      "Lôi đạo",
+						"moon":           "Thái âm đạo",
+						"refinement":     "Luyện đạo",
+						"theft":          "Thâu đạo",
+						"theme":          "Họa đạo",
+						"luck":           "Vận đạo",
+						"wood":           "Mộc đạo",
+						"concealment":    "Ẩn đạo",
+					}
 					parts := []string{}
 					for k, v := range m {
-						parts = append(parts, fmt.Sprintf("%s: %v", k, v))
+						pathName := k
+						if viName, found := pathToVietnamese[k]; found {
+							pathName = viName
+						}
+						parts = append(parts, fmt.Sprintf("%s: %v", pathName, v))
 					}
 					valStr = strings.Join(parts, ", ")
 				}
