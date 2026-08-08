@@ -605,7 +605,7 @@ func AdminChangePlayerStones(c *gin.Context) {
 		msgParts = append(msgParts, fmt.Sprintf("%.0f Nguyên Thạch", *req.PrimevalStones))
 	}
 	if req.ImmortalStones != nil {
-		msgParts = append(msgParts, fmt.Sprintf("%.0f Tiên Thạch", *req.ImmortalStones))
+		msgParts = append(msgParts, fmt.Sprintf("%.0f Tiên Nguyên Thạch", *req.ImmortalStones))
 	}
 	msgContent += strings.Join(msgParts, ", ")
 	_ = SendSystemMessage("world", sql.NullString{}, msgContent)

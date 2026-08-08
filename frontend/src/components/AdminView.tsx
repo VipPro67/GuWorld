@@ -636,26 +636,66 @@ export const AdminView: React.FC = () => {
         }
       }
 
-      const payload = {
-        grade: apertureForm.grade,
-        time_rate: Number(apertureForm.time_rate),
-        aperture_hp: Number(apertureForm.aperture_hp),
-        max_aperture_hp: Number(apertureForm.max_aperture_hp),
-        area_size: Number(apertureForm.area_size),
-        immortal_essence: Number(apertureForm.immortal_essence),
-        essence_production_per_year: Number(apertureForm.essence_production_per_year),
-        internal_years_passed: Number(apertureForm.internal_years_passed),
-        next_tribulation_year: Number(apertureForm.next_tribulation_year),
-        tribulation_count: Number(apertureForm.tribulation_count),
-        rank_start_year: Number(apertureForm.rank_start_year),
-        earth_calamity_count: Number(apertureForm.earth_calamity_count),
-        heavenly_tribulation_count: Number(apertureForm.heavenly_tribulation_count),
-        grand_tribulation_count: Number(apertureForm.grand_tribulation_count),
-        myriad_tribulation_count: Number(apertureForm.myriad_tribulation_count),
-        chaos_calamity_count: Number(apertureForm.chaos_calamity_count),
-        state: apertureForm.state,
-        dao_marks,
+      const payload: any = {};
+      const addIfChanged = (key: string, originalVal: any, newVal: any) => {
+        if (originalVal !== newVal) {
+          payload[key] = newVal;
+        }
       };
+
+      if (apertureDetail) {
+        addIfChanged("grade", apertureDetail.grade, apertureForm.grade);
+        addIfChanged("time_rate", Number(apertureDetail.time_rate), Number(apertureForm.time_rate));
+        addIfChanged("aperture_hp", Number(apertureDetail.aperture_hp), Number(apertureForm.aperture_hp));
+        addIfChanged("max_aperture_hp", Number(apertureDetail.max_aperture_hp), Number(apertureForm.max_aperture_hp));
+        addIfChanged("area_size", Number(apertureDetail.area_size), Number(apertureForm.area_size));
+        addIfChanged("immortal_essence", Number(apertureDetail.immortal_essence), Number(apertureForm.immortal_essence));
+        addIfChanged("essence_production_per_year", Number(apertureDetail.essence_production_per_year), Number(apertureForm.essence_production_per_year));
+        addIfChanged("internal_years_passed", Number(apertureDetail.internal_years_passed), Number(apertureForm.internal_years_passed));
+        addIfChanged("next_tribulation_year", Number(apertureDetail.next_tribulation_year), Number(apertureForm.next_tribulation_year));
+        addIfChanged("tribulation_count", Number(apertureDetail.tribulation_count), Number(apertureForm.tribulation_count));
+        addIfChanged("rank_start_year", Number(apertureDetail.rank_start_year), Number(apertureForm.rank_start_year));
+        addIfChanged("earth_calamity_count", Number(apertureDetail.earth_calamity_count), Number(apertureForm.earth_calamity_count));
+        addIfChanged("heavenly_tribulation_count", Number(apertureDetail.heavenly_tribulation_count), Number(apertureForm.heavenly_tribulation_count));
+        addIfChanged("grand_tribulation_count", Number(apertureDetail.grand_tribulation_count), Number(apertureForm.grand_tribulation_count));
+        addIfChanged("myriad_tribulation_count", Number(apertureDetail.myriad_tribulation_count), Number(apertureForm.myriad_tribulation_count));
+        addIfChanged("chaos_calamity_count", Number(apertureDetail.chaos_calamity_count), Number(apertureForm.chaos_calamity_count));
+        addIfChanged("state", apertureDetail.state, apertureForm.state);
+        
+        const originalDao = JSON.stringify(apertureDetail.dao_marks || {});
+        const newDao = JSON.stringify(dao_marks);
+        if (originalDao !== newDao) {
+          payload["dao_marks"] = dao_marks;
+        }
+      } else {
+        // Fallback fallback if detail is not loaded
+        Object.assign(payload, {
+          grade: apertureForm.grade,
+          time_rate: Number(apertureForm.time_rate),
+          aperture_hp: Number(apertureForm.aperture_hp),
+          max_aperture_hp: Number(apertureForm.max_aperture_hp),
+          area_size: Number(apertureForm.area_size),
+          immortal_essence: Number(apertureForm.immortal_essence),
+          essence_production_per_year: Number(apertureForm.essence_production_per_year),
+          internal_years_passed: Number(apertureForm.internal_years_passed),
+          next_tribulation_year: Number(apertureForm.next_tribulation_year),
+          tribulation_count: Number(apertureForm.tribulation_count),
+          rank_start_year: Number(apertureForm.rank_start_year),
+          earth_calamity_count: Number(apertureForm.earth_calamity_count),
+          heavenly_tribulation_count: Number(apertureForm.heavenly_tribulation_count),
+          grand_tribulation_count: Number(apertureForm.grand_tribulation_count),
+          myriad_tribulation_count: Number(apertureForm.myriad_tribulation_count),
+          chaos_calamity_count: Number(apertureForm.chaos_calamity_count),
+          state: apertureForm.state,
+          dao_marks,
+        });
+      }
+
+      if (Object.keys(payload).length === 0) {
+        setSelectedApertureId(null);
+        setApertureDetail(null);
+        return;
+      }
 
       const res = await authFetch(`${BACKEND_URL}/api/admin/apertures/${selectedApertureId}`, {
         method: "PUT",
@@ -1161,6 +1201,17 @@ export const AdminView: React.FC = () => {
               <Edit3 className="w-3.5 h-3.5" />
               Sửa thông tin
             </button>
+            <button onClick={() => {
+              if (detail) {
+                setSection("apertures");
+                setApertureSearchDebounce(detail.username);
+                setSelectedId(null);
+                setDetail(null);
+              }
+            }} disabled={!detail} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50">
+              <Globe className="w-3.5 h-3.5 text-amber-500" />
+              Xem Tiên Khiếu
+            </button>
             <button onClick={() => { setSelectedId(null); setDetail(null); }} disabled={actionLoading} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 hover:text-white transition-colors cursor-pointer">
               <X className="w-3.5 h-3.5" />
               Đóng
@@ -1608,7 +1659,7 @@ export const AdminView: React.FC = () => {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tu vi (rank 1-9)</label>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tu vi (1-9)</label>
                   <input type="number" min={1} max={9} value={editPlayerForm.rank || ""} onChange={e => setEditPlayerForm(f => ({ ...f, rank: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
@@ -1616,7 +1667,7 @@ export const AdminView: React.FC = () => {
                   <input type="number" min={1} max={4} value={editPlayerForm.sub_rank || ""} onChange={e => setEditPlayerForm(f => ({ ...f, sub_rank: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Thiên phú (aptitude_type)</label>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Thiên phú</label>
                   <input type="text" value={editPlayerForm.aptitude_type || ""} onChange={e => setEditPlayerForm(f => ({ ...f, aptitude_type: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
@@ -1636,15 +1687,15 @@ export const AdminView: React.FC = () => {
                   <input type="number" value={editPlayerForm.max_mana || ""} onChange={e => setEditPlayerForm(f => ({ ...f, max_mana: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Máu hiện tại (hp)</label>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Máu hiện tại</label>
                   <input type="number" value={editPlayerForm.hp || ""} onChange={e => setEditPlayerForm(f => ({ ...f, hp: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Máu tối đa (base_hp)</label>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Máu tối đa</label>
                   <input type="number" value={editPlayerForm.base_hp || ""} onChange={e => setEditPlayerForm(f => ({ ...f, base_hp: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tuổi thọ (lifespan)</label>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tuổi thọ</label>
                   <input type="number" value={editPlayerForm.lifespan || ""} onChange={e => setEditPlayerForm(f => ({ ...f, lifespan: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
@@ -1652,27 +1703,27 @@ export const AdminView: React.FC = () => {
                   <input type="text" value={editPlayerForm.current_region || ""} onChange={e => setEditPlayerForm(f => ({ ...f, current_region: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tường đạo (wall_progress)</label>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tiến trình phá bức tường</label>
                   <input type="number" value={editPlayerForm.wall_progress || ""} onChange={e => setEditPlayerForm(f => ({ ...f, wall_progress: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Nhân khí (human_qi)</label>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Nhân khí</label>
                   <input type="number" value={editPlayerForm.human_qi || ""} onChange={e => setEditPlayerForm(f => ({ ...f, human_qi: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Hồn lực (soul_hp)</label>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Hồn lực</label>
                   <input type="number" value={editPlayerForm.soul_hp || ""} onChange={e => setEditPlayerForm(f => ({ ...f, soul_hp: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Hồn lực tối đa (max_soul)</label>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Hồn lực tối đa</label>
                   <input type="number" value={editPlayerForm.max_soul || ""} onChange={e => setEditPlayerForm(f => ({ ...f, max_soul: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tầng hồn (soul_tier)</label>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tầng hồn</label>
                   <input type="text" value={editPlayerForm.soul_tier || ""} onChange={e => setEditPlayerForm(f => ({ ...f, soul_tier: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Số lần khai phá (explore_count)</label>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Số lần khai phá</label>
                   <input type="number" min={0} value={editPlayerForm.explore_count || ""} onChange={e => setEditPlayerForm(f => ({ ...f, explore_count: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
@@ -1684,19 +1735,19 @@ export const AdminView: React.FC = () => {
                   <input type="text" value={editPlayerForm.avatar_url || ""} onChange={e => setEditPlayerForm(f => ({ ...f, avatar_url: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Chủng tộc (race)</label>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Chủng tộc</label>
                   <input type="text" value={editPlayerForm.race || ""} onChange={e => setEditPlayerForm(f => ({ ...f, race: e.target.value }))} placeholder="human, fur_people, merman, feathered..." className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Giới tính (gender: male, female)</label>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Giới tính</label>
                   <input type="text" value={editPlayerForm.gender || ""} onChange={e => setEditPlayerForm(f => ({ ...f, gender: e.target.value }))} placeholder="male" className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Thể chất (constitution)</label>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Thể chất</label>
                   <input type="text" value={editPlayerForm.constitution || ""} onChange={e => setEditPlayerForm(f => ({ ...f, constitution: e.target.value }))} placeholder="desolate_ancient_moon_body, northern_dark_ice_soul_body..." className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Trạng thái (statuses, cách nhau dấu phẩy: severely_wounded)</label>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Trạng thái (cách nhau bằng dấu phẩy)</label>
                   <input type="text" value={editPlayerForm.statuses || ""} onChange={e => setEditPlayerForm(f => ({ ...f, statuses: e.target.value }))} placeholder="trống" className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
                 <div className="flex items-end pb-1">
@@ -1707,7 +1758,7 @@ export const AdminView: React.FC = () => {
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-bold text-zinc-500 font-mono">Tiểu sử (bio)</label>
+                <label className="text-[11px] font-bold text-zinc-500 font-mono">Tiểu sử</label>
                 <textarea value={editPlayerForm.bio || ""} onChange={e => setEditPlayerForm(f => ({ ...f, bio: e.target.value }))} rows={2} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
               </div>
               <div className="flex gap-3 justify-end">

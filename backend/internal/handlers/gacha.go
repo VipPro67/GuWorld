@@ -552,7 +552,7 @@ func deductGachaCostAmount(player *models.Player, costType string, amount float6
 		player.Lifespan -= amount
 	case "immortal_stones":
 		if float64(player.ImmortalStones) < amount {
-			return fmt.Errorf("Không đủ Tiên Thạch. Cần %.0f Tiên Thạch", amount)
+			return fmt.Errorf("Không đủ Tiên Nguyên Thạch. Cần %.0f Tiên Nguyên Thạch", amount)
 		}
 		player.ImmortalStones -= float64(amount)
 	default:
