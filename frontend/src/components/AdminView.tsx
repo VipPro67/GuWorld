@@ -446,8 +446,21 @@ export const AdminView: React.FC = () => {
 
   const [actionLoading, setActionLoading] = useState(false);
   const [tableLoading, setTableLoading] = useState<string | null>(null);
-  const [section, setSection] = useState<"players" | "sects" | "data" | "logs" | "shop" | "mines" | "gift_codes">("players");
+  const [section, setSection] = useState<"players" | "sects" | "data" | "logs" | "shop" | "mines" | "gift_codes" | "apertures">("players");
   const [playersTab, setPlayersTab] = useState<"list" | "online">("list");
+
+  // ----- Aperture state -----
+  const [apertures, setApertures] = useState<any[]>([]);
+  const [aperturesTotal, setAperturesTotal] = useState(0);
+  const [aperturesLoading, setAperturesLoading] = useState(false);
+  const [aperturesPage, setAperturesPage] = useState(1);
+  const [aperturesLimit] = useState(50);
+  const [aperturesSearch, setAperturesSearch] = useState("");
+  const [selectedApertureId, setSelectedApertureId] = useState<string | null>(null);
+  const [apertureDetail, setApertureDetail] = useState<any | null>(null);
+  const [apertureDetailLoading, setApertureDetailLoading] = useState(false);
+  const [apertureForm, setApertureForm] = useState<any>({});
+  const [apertureSaving, setApertureSaving] = useState(false);
 
   // ----- Audit log state -----
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -574,6 +587,96 @@ export const AdminView: React.FC = () => {
       if (res.ok) setSectMissions(await res.json());
     } catch {} finally { setSectMissionsLoading(false); }
   }, []);
+
+  const fetchApertures = useCallback(async () => {
+    setAperturesLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", aperturesPage.toString());
+      params.set("limit", aperturesLimit.toString());
+      if (aperturesSearch) params.set("search", aperturesSearch);
+      const res = await authFetch(`${BACKEND_URL}/api/admin/apertures?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setApertures(data.data || []);
+        setAperturesTotal(data.total || 0);
+      }
+    } catch {} finally {
+      setAperturesLoading(false);
+    }
+  }, [aperturesPage, aperturesLimit, aperturesSearch]);
+
+  const fetchApertureDetail = useCallback(async (id: string) => {
+    setApertureDetailLoading(true);
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/admin/apertures/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setApertureDetail(data.aperture);
+        setApertureForm({
+          ...data.aperture,
+          dao_marks_array: Object.entries(data.aperture.dao_marks || {}).map(([path, amount]) => ({ path, amount })),
+        });
+      }
+    } catch {} finally {
+      setApertureDetailLoading(false);
+    }
+  }, []);
+
+  const saveApertureDetail = async () => {
+    if (!selectedApertureId) return;
+    setApertureSaving(true);
+    try {
+      const dao_marks: Record<string, number> = {};
+      if (apertureForm.dao_marks_array) {
+        for (const entry of apertureForm.dao_marks_array) {
+          if (entry.path.trim()) {
+            dao_marks[entry.path.trim()] = Number(entry.amount) || 0;
+          }
+        }
+      }
+
+      const payload = {
+        grade: apertureForm.grade,
+        time_rate: Number(apertureForm.time_rate),
+        aperture_hp: Number(apertureForm.aperture_hp),
+        max_aperture_hp: Number(apertureForm.max_aperture_hp),
+        area_size: Number(apertureForm.area_size),
+        immortal_essence: Number(apertureForm.immortal_essence),
+        essence_production_per_year: Number(apertureForm.essence_production_per_year),
+        internal_years_passed: Number(apertureForm.internal_years_passed),
+        next_tribulation_year: Number(apertureForm.next_tribulation_year),
+        tribulation_count: Number(apertureForm.tribulation_count),
+        rank_start_year: Number(apertureForm.rank_start_year),
+        earth_calamity_count: Number(apertureForm.earth_calamity_count),
+        heavenly_tribulation_count: Number(apertureForm.heavenly_tribulation_count),
+        grand_tribulation_count: Number(apertureForm.grand_tribulation_count),
+        myriad_tribulation_count: Number(apertureForm.myriad_tribulation_count),
+        chaos_calamity_count: Number(apertureForm.chaos_calamity_count),
+        state: apertureForm.state,
+        dao_marks,
+      };
+
+      const res = await authFetch(`${BACKEND_URL}/api/admin/apertures/${selectedApertureId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        setSelectedApertureId(null);
+        setApertureDetail(null);
+        fetchApertures();
+      } else {
+        const err = await res.json();
+        alert("Lỗi: " + (err.error || "Không thể lưu tiên khiếu"));
+      }
+    } catch (err: any) {
+      alert("Lỗi kết nối: " + err.message);
+    } finally {
+      setApertureSaving(false);
+    }
+  };
 
   const fetchSects = useCallback(async () => {
     setSectsLoading(true);
@@ -728,6 +831,25 @@ export const AdminView: React.FC = () => {
   useEffect(() => {
     if (section === "sects") fetchSects();
   }, [section, fetchSects]);
+
+  useEffect(() => {
+    if (section === "apertures") fetchApertures();
+  }, [section, fetchApertures]);
+
+  const [apertureSearchDebounce, setApertureSearchDebounce] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setAperturesSearch(apertureSearchDebounce);
+      setAperturesPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [apertureSearchDebounce]);
+
+  useEffect(() => {
+    if (selectedApertureId) {
+      fetchApertureDetail(selectedApertureId);
+    }
+  }, [selectedApertureId, fetchApertureDetail]);
 
   useEffect(() => {
     if (section === "logs") fetchAuditLogs();
@@ -2161,6 +2283,9 @@ export const AdminView: React.FC = () => {
         <button onClick={() => setSection("gift_codes")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "gift_codes" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
           <Gift className="w-3.5 h-3.5 inline mr-1.5" />Mã Quà
         </button>
+        <button onClick={() => setSection("apertures")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "apertures" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+          <Globe className="w-3.5 h-3.5 inline mr-1.5" />Tiên Khiếu
+        </button>
       </div>
 
       {/* Players section */}
@@ -3365,6 +3490,294 @@ export const AdminView: React.FC = () => {
             </div>
           )}
         </>
+      )}
+
+      {/* Apertures section */}
+      {section === "apertures" && (
+        <>
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 mb-4">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5" />
+              <input
+                value={apertureSearchDebounce}
+                onChange={e => setApertureSearchDebounce(e.target.value)}
+                placeholder="Tìm tiên khiếu theo tên người chơi, email, ID tiên khiếu..."
+                className="w-full pl-9 pr-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-500/50"
+              />
+            </div>
+            <button onClick={fetchApertures} disabled={aperturesLoading} className="flex items-center justify-center gap-1.5 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:text-white transition-all disabled:opacity-50 cursor-pointer">
+              <RefreshCw className={`w-3.5 h-3.5 ${aperturesLoading ? "animate-spin" : ""}`} /> Làm mới
+            </button>
+          </div>
+
+          {aperturesLoading && apertures.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 space-y-3">
+              <RefreshCw className="w-8 h-8 text-amber-400 animate-spin" />
+              <span className="text-xs text-zinc-500 font-mono">Đang tải danh sách tiên khiếu...</span>
+            </div>
+          ) : apertures.length === 0 ? (
+            <div className="text-center py-16 bg-zinc-900/10 border border-dashed border-zinc-800 rounded-xl space-y-2">
+              <Globe className="w-10 h-10 text-zinc-700 mx-auto" />
+              <p className="text-sm text-zinc-400 font-medium">Không tìm thấy tiên khiếu nào.</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto rounded-xl border border-zinc-800/80 bg-zinc-950/20">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
+                      <th className="px-3 py-2.5 font-semibold">Người chơi</th>
+                      <th className="px-3 py-2.5 font-semibold">Phẩm cấp</th>
+                      <th className="px-3 py-2.5 font-semibold">Trạng thái</th>
+                      <th className="px-3 py-2.5 font-semibold text-right">Tốc độ TG</th>
+                      <th className="px-3 py-2.5 font-semibold text-right">HP Tiên Khiếu</th>
+                      <th className="px-3 py-2.5 font-semibold text-right">Diện tích</th>
+                      <th className="px-3 py-2.5 font-semibold text-right">Tiên Nguyên</th>
+                      <th className="px-3 py-2.5 font-semibold text-right">Thiên Kiếp Kế</th>
+                      <th className="px-3 py-2.5 font-semibold text-right">Số Kiếp Nạn</th>
+                      <th className="px-3 py-2.5 font-semibold text-center">Hành động</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {apertures.map((ap: any) => (
+                      <tr key={ap.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                        <td className="px-3 py-2.5">
+                          <span className="font-semibold text-zinc-200 block">{ap.username}</span>
+                          <span className="text-[10px] text-zinc-500 font-mono">{ap.id}</span>
+                        </td>
+                        <td className="px-3 py-2.5 font-bold text-zinc-300">
+                          {ap.grade === "LOW" ? "Hạ Phẩm" : ap.grade === "MID" ? "Trung Phẩm" : ap.grade === "HIGH" ? "Thượng Phẩm" : ap.grade === "EXTREME" ? "Chí Tôn" : ap.grade}
+                        </td>
+                        <td className="px-3 py-2.5 font-semibold">
+                          <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-mono ${
+                            ap.state === "STABLE" ? "bg-emerald-950/55 text-emerald-400 border border-emerald-800/30" : 
+                            ap.state === "TRIBULATION_PENDING" ? "bg-amber-950/55 text-amber-400 border border-amber-800/30" : 
+                            ap.state === "TRIBULATION_ACTIVE" ? "bg-red-950/55 text-red-400 border border-red-800/30 animate-pulse" : 
+                            "bg-zinc-800 text-zinc-400"
+                          }`}>
+                            {ap.state === "STABLE" ? "Ổn định" : ap.state === "TRIBULATION_PENDING" ? "Đợi Kiếp" : ap.state === "TRIBULATION_ACTIVE" ? "Đang Kiếp" : ap.state}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{ap.time_rate}x</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{ap.aperture_hp?.toLocaleString()}/{ap.max_aperture_hp?.toLocaleString()}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{ap.area_size?.toLocaleString()} mẫu</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-yellow-500 font-bold">{ap.immortal_essence?.toLocaleString()}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">Năm {ap.next_tribulation_year?.toFixed(1)}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{ap.tribulation_count}</td>
+                        <td className="px-3 py-2.5 text-center">
+                          <button onClick={() => setSelectedApertureId(ap.id)} className="px-2 py-1 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/20 hover:border-amber-500/40 text-amber-400 rounded text-[10px] font-bold cursor-pointer transition-colors">
+                            Sửa
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              {aperturesTotal > aperturesLimit && (
+                <div className="flex items-center justify-between mt-4 text-xs font-semibold text-zinc-500">
+                  <div>Tổng số: <span className="text-zinc-300">{aperturesTotal.toLocaleString()}</span> tiên khiếu</div>
+                  <div className="flex items-center gap-3">
+                    <span>Trang {aperturesPage}/{Math.ceil(aperturesTotal / aperturesLimit) || 1}</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => setAperturesPage(Math.max(1, aperturesPage - 1))} disabled={aperturesPage <= 1 || aperturesLoading} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 disabled:opacity-40 transition-colors cursor-pointer">
+                        <ChevronLeft className="w-4 h-4" /> Trước
+                      </button>
+                      <button onClick={() => setAperturesPage(aperturesPage + 1)} disabled={aperturesPage >= Math.ceil(aperturesTotal / aperturesLimit) || aperturesLoading} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800 disabled:opacity-40 transition-colors cursor-pointer">
+                        Sau <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+
+      {/* Aperture Edit Modal */}
+      {selectedApertureId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => { setSelectedApertureId(null); setApertureDetail(null); }}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-3xl mx-4 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+              <div>
+                <h3 className="text-sm font-serif font-bold text-zinc-200">Chỉnh sửa Tiên Khiếu</h3>
+                <p className="text-xs text-zinc-500 font-mono mt-0.5">Người chơi: <span className="text-amber-400 font-semibold">{apertureDetailLoading ? "Đang tải..." : apertureDetail?.player_id ? apertureDetail.player_id : ""} ({apertureDetailLoading ? "..." : (apertureForm.username || "")})</span></p>
+              </div>
+              <button onClick={() => { setSelectedApertureId(null); setApertureDetail(null); }} className="p-1 rounded bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 transition-colors cursor-pointer">
+                <X className="w-4 h-4 text-zinc-400" />
+              </button>
+            </div>
+
+            {apertureDetailLoading ? (
+              <div className="flex flex-col items-center justify-center py-20 space-y-3">
+                <RefreshCw className="w-8 h-8 text-amber-400 animate-spin" />
+                <span className="text-xs text-zinc-500 font-mono">Đang tải chi tiết tiên khiếu...</span>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Basic Properties */}
+                <div className="bg-zinc-950/40 border border-zinc-800/60 rounded-xl p-4 space-y-3">
+                  <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Thuộc tính cơ bản</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Phẩm cấp</label>
+                      <select value={apertureForm.grade || "LOW"} onChange={e => setApertureForm({ ...apertureForm, grade: e.target.value })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200">
+                        <option value="LOW">Hạ Phẩm Tiên Khiếu (Lục chuyển)</option>
+                        <option value="MID">Trung Phẩm Tiên Khiếu (Lục chuyển)</option>
+                        <option value="HIGH">Thượng Phẩm Tiên Khiếu (Lục chuyển)</option>
+                        <option value="EXTREME">Chí Tôn Tiên Khiếu (Chí Tôn)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Trạng thái</label>
+                      <select value={apertureForm.state || "STABLE"} onChange={e => setApertureForm({ ...apertureForm, state: e.target.value })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200">
+                        <option value="STABLE">Ổn định (Stable)</option>
+                        <option value="TRIBULATION_PENDING">Chờ thiên kiếp (Pending)</option>
+                        <option value="TRIBULATION_ACTIVE">Đang chịu kiếp (Active)</option>
+                        <option value="DAMAGED">Bị tổn hại (Damaged)</option>
+                        <option value="DESTROYED">Bị phá huỷ (Destroyed)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tốc độ thời gian (x)</label>
+                      <input type="number" step="0.1" value={apertureForm.time_rate || 0} onChange={e => setApertureForm({ ...apertureForm, time_rate: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">HP Hiện tại</label>
+                      <input type="number" value={apertureForm.aperture_hp || 0} onChange={e => setApertureForm({ ...apertureForm, aperture_hp: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">HP Tối đa</label>
+                      <input type="number" value={apertureForm.max_aperture_hp || 0} onChange={e => setApertureForm({ ...apertureForm, max_aperture_hp: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Diện tích (mẫu)</label>
+                      <input type="number" value={apertureForm.area_size || 0} onChange={e => setApertureForm({ ...apertureForm, area_size: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tiên Nguyên hiện tại</label>
+                      <input type="number" value={apertureForm.immortal_essence || 0} onChange={e => setApertureForm({ ...apertureForm, immortal_essence: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-yellow-500 font-bold" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Sản lượng TN / năm</label>
+                      <input type="number" value={apertureForm.essence_production_per_year || 0} onChange={e => setApertureForm({ ...apertureForm, essence_production_per_year: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Thời gian trôi qua (năm)</label>
+                      <input type="number" step="0.001" value={apertureForm.internal_years_passed || 0} onChange={e => setApertureForm({ ...apertureForm, internal_years_passed: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tribulation Properties */}
+                <div className="bg-zinc-950/40 border border-zinc-800/60 rounded-xl p-4 space-y-3">
+                  <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Thông tin Thiên Kiếp / Địa Tai</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Năm chịu kiếp tiếp theo</label>
+                      <input type="number" step="0.1" value={apertureForm.next_tribulation_year || 0} onChange={e => setApertureForm({ ...apertureForm, next_tribulation_year: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Năm bắt đầu cảnh giới hiện tại</label>
+                      <input type="number" step="0.1" value={apertureForm.rank_start_year || 0} onChange={e => setApertureForm({ ...apertureForm, rank_start_year: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tổng số lần độ kiếp</label>
+                      <input type="number" value={apertureForm.tribulation_count || 0} onChange={e => setApertureForm({ ...apertureForm, tribulation_count: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Số lần Địa Tai</label>
+                      <input type="number" value={apertureForm.earth_calamity_count || 0} onChange={e => setApertureForm({ ...apertureForm, earth_calamity_count: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Số lần Thiên Kiếp</label>
+                      <input type="number" value={apertureForm.heavenly_tribulation_count || 0} onChange={e => setApertureForm({ ...apertureForm, heavenly_tribulation_count: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Số lần Đại Kiếp</label>
+                      <input type="number" value={apertureForm.grand_tribulation_count || 0} onChange={e => setApertureForm({ ...apertureForm, grand_tribulation_count: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Số lần Vạn Kiếp</label>
+                      <input type="number" value={apertureForm.myriad_tribulation_count || 0} onChange={e => setApertureForm({ ...apertureForm, myriad_tribulation_count: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Số lần Hỗn Độn Kiếp</label>
+                      <input type="number" value={apertureForm.chaos_calamity_count || 0} onChange={e => setApertureForm({ ...apertureForm, chaos_calamity_count: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dao Marks Editor */}
+                <div className="bg-zinc-950/40 border border-zinc-800/60 rounded-xl p-4 space-y-3">
+                  <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center justify-between">
+                    <span>Đạo Ngân của Tiên Khiếu</span>
+                    <button type="button" onClick={() => {
+                      const arr = [...(apertureForm.dao_marks_array || []), { path: "", amount: 0 }];
+                      setApertureForm({ ...apertureForm, dao_marks_array: arr });
+                    }} className="flex items-center gap-1 text-[10px] font-bold text-amber-500 hover:text-amber-400 bg-amber-950/40 hover:bg-amber-950/70 border border-amber-900/50 px-2 py-1 rounded cursor-pointer transition-all">
+                      <Plus className="w-3 h-3" /> Thêm Đạo Ngân
+                    </button>
+                  </h4>
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                    {!apertureForm.dao_marks_array || apertureForm.dao_marks_array.length === 0 ? (
+                      <p className="text-xs text-zinc-500 italic">Chưa có đạo ngân nào trong tiên khiếu.</p>
+                    ) : (
+                      apertureForm.dao_marks_array.map((entry: any, index: number) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <input
+                            value={entry.path}
+                            onChange={e => {
+                              const arr = [...apertureForm.dao_marks_array];
+                              arr[index].path = e.target.value;
+                              setApertureForm({ ...apertureForm, dao_marks_array: arr });
+                            }}
+                            placeholder="Hệ Đạo ngân (ví dụ: strength, fire, refinement...)"
+                            className="flex-1 px-3 py-1.5 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none"
+                          />
+                          <input
+                            type="number"
+                            value={entry.amount}
+                            onChange={e => {
+                              const arr = [...apertureForm.dao_marks_array];
+                              arr[index].amount = parseInt(e.target.value) || 0;
+                              setApertureForm({ ...apertureForm, dao_marks_array: arr });
+                            }}
+                            className="w-32 px-3 py-1.5 bg-zinc-850 border border-zinc-700 rounded-lg text-xs text-zinc-200 text-right focus:outline-none font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const arr = apertureForm.dao_marks_array.filter((_: any, idx: number) => idx !== index);
+                              setApertureForm({ ...apertureForm, dao_marks_array: arr });
+                            }}
+                            className="p-1.5 text-red-500 hover:text-red-400 hover:bg-red-950/20 border border-transparent hover:border-red-900/30 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-2 border-t border-zinc-800/80 pt-4">
+                  <button type="button" onClick={() => { setSelectedApertureId(null); setApertureDetail(null); }} className="px-4 py-2 bg-zinc-850 border border-zinc-700 hover:bg-zinc-800 text-zinc-300 rounded-lg text-xs font-semibold cursor-pointer transition-colors">
+                    Hủy
+                  </button>
+                  <button type="button" onClick={saveApertureDetail} disabled={apertureSaving} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5">
+                    {apertureSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : null}
+                    Lưu thay đổi
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Gu Edit Modal */}
