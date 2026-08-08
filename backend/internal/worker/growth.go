@@ -107,49 +107,103 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 	hasGrowthGu := false
 	now := time.Now()
 
+	// ── Growth runs ONCE per (gu_id, rank) type ─────────────────────────
+	// The player's bonus is tracked by type, not by instance: owning several
+	// copies of the same Gu only ever grows it once. The type's progress is the
+	// max growth_hours across all owned instances, and only the equipped ACTIVE
+	// instance holding the most progress ("carrier") accumulates time. This keeps
+	// progress continuous across equip/unequip/swaps and prevents duplicates from
+	// stacking stats or getting frozen mid-way.
+	type typeKey struct {
+		guID string
+		rank int
+	}
+	type growthGroup struct {
+		spec     models.GuDictionaryItem
+		active   []int // indices of equipped+ACTIVE instances
+		maxHours float64
+	}
+	groups := make(map[typeKey]*growthGroup)
+
 	for i := range guInv {
 		gu := &guInv[i]
-		if !gu.Equipped || gu.Status != "ACTIVE" {
-			continue
-		}
-
 		spec, ok := models.GetGu(gu.GuID, gu.Rank)
 		if !ok || spec.Effects.Growth == nil || spec.Effects.Growth.HoursToMax <= 0 {
 			continue
 		}
+		key := typeKey{guID: gu.GuID, rank: gu.Rank}
+		g, exists := groups[key]
+		if !exists {
+			g = &growthGroup{spec: spec}
+			groups[key] = g
+		}
+		if gu.GrowthHours > g.maxHours {
+			g.maxHours = gu.GrowthHours
+		}
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			g.active = append(g.active, i)
+		}
+	}
 
+	for _, g := range groups {
+		spec := g.spec
 		hasGrowthGu = true
 
-		// Check if this Gu type is already fully grown
-		isFullyGrown := false
+		// Type already fully grown → permanent, never grows again.
+		typeDone := false
 		for _, fg := range growthData.FullyGrown {
-			if fg.GuID == gu.GuID && fg.Rank == gu.Rank {
-				isFullyGrown = true
+			if fg.GuID == spec.ID && fg.Rank == spec.Rank {
+				typeDone = true
 				break
 			}
 		}
-		if isFullyGrown {
-			gu.EquippedAt = nil
-			_, err = tx.Exec(`UPDATE player_gu SET equipped_at = NULL, updated_at = NOW() WHERE id = $1`, gu.InstanceID)
-			if err != nil {
-				return err
-			}
+		if typeDone {
 			continue
 		}
 
-		// Initialize EquippedAt for legacy Gus equipped before growth feature existed
-		if gu.EquippedAt == nil || gu.EquippedAt.IsZero() {
-			gu.EquippedAt = &now
-			_, err = tx.Exec(`UPDATE player_gu SET equipped_at = $1, updated_at = NOW() WHERE id = $2`, now, gu.InstanceID)
-			if err != nil {
+		if len(g.active) == 0 {
+			continue
+		}
+
+		// Initialize EquippedAt for legacy Gus equipped before growth feature existed.
+		for _, idx := range g.active {
+			gu := &guInv[idx]
+			if gu.EquippedAt == nil || gu.EquippedAt.IsZero() {
+				gu.EquippedAt = &now
+				if _, err = tx.Exec(`UPDATE player_gu SET equipped_at = $1, updated_at = NOW() WHERE id = $2`, now, gu.InstanceID); err != nil {
+					return err
+				}
+			}
+		}
+
+		// Carrier = the active instance holding the type's progress.
+		carrier := g.active[0]
+		for _, idx := range g.active[1:] {
+			if guInv[idx].GrowthHours > guInv[carrier].GrowthHours {
+				carrier = idx
+			}
+		}
+		gu := &guInv[carrier]
+
+		// Bump non-carrier active anchors so their elapsed time never counts twice.
+		for _, idx := range g.active {
+			if idx == carrier {
+				continue
+			}
+			guInv[idx].EquippedAt = &now
+			if _, err = tx.Exec(`UPDATE player_gu SET equipped_at = $1, updated_at = NOW() WHERE id = $2`, now, guInv[idx].InstanceID); err != nil {
 				return err
 			}
-			continue
 		}
 
 		elapsed := now.Sub(*gu.EquippedAt).Hours()
 		if elapsed <= 0 {
 			continue
+		}
+
+		// Resume from the type's max progress so swapping instances doesn't reset it.
+		if gu.GrowthHours < g.maxHours {
+			gu.GrowthHours = g.maxHours
 		}
 
 		atk, def, hpBoost, spd := ApplyGrowthProgressWorker(gu, spec, elapsed)
@@ -172,11 +226,10 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 			})
 		}
 
-		// Persist growth_hours / equipped_at per Gu (no full-inventory rewrite).
-		_, err = tx.Exec(`
+		// Persist growth_hours / equipped_at for the carrier (no full-inventory rewrite).
+		if _, err = tx.Exec(`
 			UPDATE player_gu SET growth_hours = $1, equipped_at = $2, updated_at = NOW() WHERE id = $3`,
-			gu.GrowthHours, gu.EquippedAt, gu.InstanceID)
-		if err != nil {
+			gu.GrowthHours, gu.EquippedAt, gu.InstanceID); err != nil {
 			return err
 		}
 	}

@@ -130,6 +130,23 @@ const R = 80;
 const CIRC = 2 * Math.PI * R;
 const ORBIT_R = 114;
 
+// Owned growth type keyed by (gu_id, rank). Growth runs once per type, so we
+// aggregate progress by type and keep it visible even when unequipped.
+function collectOwnedGrowthTypes(player: Player, guDictionary: Record<string, GuSpec>): { gu_id: string; rank: number; growth_hours: number }[] {
+  const map = new Map<string, { gu_id: string; rank: number; growth_hours: number }>();
+  (player.gu_inventory || []).forEach((gu) => {
+    const spec = guDictionary[gu.gu_id];
+    if (!spec?.effects?.growth?.hours_to_max) return;
+    const key = `${gu.gu_id}@${gu.rank}`;
+    const gh = gu.growth_hours || 0;
+    const existing = map.get(key);
+    if (!existing || gh > existing.growth_hours) {
+      map.set(key, { gu_id: gu.gu_id, rank: gu.rank, growth_hours: gh });
+    }
+  });
+  return Array.from(map.values());
+}
+
 // Build a sinusoidal wave path that spans 3× the orb width
 function buildWavePath(amplitude: number, wavelength: number, phase: number): string {
   const steps = 60;
@@ -319,10 +336,18 @@ export const Aperture: React.FC<ApertureProps> = ({
   const [giftCodeLoading, setGiftCodeLoading] = useState(false);
 
   useEffect(() => {
-    if (activeTab === "growth") {
-      fetchPassiveStats();
-    }
-  }, [activeTab, fetchPassiveStats]);
+    if (activeTab !== "growth") return;
+    fetchPassiveStats();
+    // Growth accumulates on the server every 60s; poll so the progress bars
+    // visibly advance instead of looking frozen.
+    const interval = setInterval(() => {
+      if (player?.id) {
+        store.fetchPlayerStatus(player.id);
+        fetchPassiveStats();
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [activeTab, fetchPassiveStats, player?.id]);
 
   // Disguise/stealth settings state
   const [isDisguised, setIsDisguised] = useState(player.is_disguised || false);
@@ -951,39 +976,47 @@ export const Aperture: React.FC<ApertureProps> = ({
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
                 <Leaf className="w-5 h-5 text-amber-400" />
                 <span className="font-serif font-bold text-zinc-100 text-sm">Cổ Trùng Đang Có Hiệu Ứng</span>
-                <span className="ml-auto text-[10px] text-zinc-500 font-mono">{(player.growth_data?.fully_grown || []).length} loại</span>
+                <span className="ml-auto text-[10px] text-zinc-500 font-mono">{(() => {
+                  const types = collectOwnedGrowthTypes(player, guDictionary);
+                  const doneSet = new Set((player.growth_data?.fully_grown || []).map(fg => `${fg.gu_id}@${fg.rank}`));
+                  return `${types.filter(t => !doneSet.has(`${t.gu_id}@${t.rank}`)).length} đang / ${types.length} loại`;
+                })()}</span>
               </div>
               {(() => {
-                const growing = (player.gu_inventory || []).filter(gu => {
-                  if (!gu.equipped || gu.status !== "ACTIVE") return false;
-                  const spec = guDictionary[gu.gu_id];
-                  if (!spec?.effects?.growth?.hours_to_max) return false;
-                  const isDone = (player.growth_data?.fully_grown || []).some(fg => fg.gu_id === gu.gu_id && fg.rank === gu.rank);
-                  return !isDone;
-                });
+                // 1 GU ID + rank chỉ tăng 1 lần: tiến độ gom theo loại (gu_id+rank)
+                // và giữ vĩnh viễn, kể cả khi Cổ trùng đã được gỡ ra khỏi Không Khiếu.
                 const fullyGrown = player.growth_data?.fully_grown || [];
+                const doneSet = new Set(fullyGrown.map(fg => `${fg.gu_id}@${fg.rank}`));
+                const ownedTypes = collectOwnedGrowthTypes(player, guDictionary);
+                const growing = ownedTypes.filter(t => !doneSet.has(`${t.gu_id}@${t.rank}`));
                 const hasAny = growing.length > 0 || fullyGrown.length > 0;
-                if (!hasAny) return <div className="text-xs text-zinc-500 italic py-2">Chưa có Cổ trùng nào đang có hiệu ứng.</div>;
+                if (!hasAny) return <div className="text-xs text-zinc-500 italic py-2">Chưa có Cổ trùng nào có hiệu ứng.</div>;
                 return (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {growing.map((gu, i) => {
-                      const spec = guDictionary[gu.gu_id];
+                    {growing.map(t => {
+                      const spec = guDictionary[t.gu_id];
                       const g = spec?.effects?.growth;
                       const maxH = g?.hours_to_max || 168;
-                      const curH = gu.growth_hours || 0;
-                      const pct = Math.min(100, Math.round((curH / maxH) * 100));
+                      const curH = t.growth_hours || 0;
+                      const pct = Math.min(100, Math.round((curH / maxH) * 1000) / 10);
                       const parts: string[] = [];
                       if (g?.max_attack) parts.push(`Công +${g.max_attack}`);
                       if (g?.max_defense) parts.push(`Thủ +${g.max_defense}`);
                       if (g?.max_hp) parts.push(`Máu +${g.max_hp}`);
                       if (g?.max_speed) parts.push(`Tốc +${g.max_speed}`);
+                      const isEquipped = (player.gu_inventory || []).some(x => x.gu_id === t.gu_id && x.rank === t.rank && x.equipped && x.status === "ACTIVE");
                       return (
-                        <div key={gu.instance_id} className="flex items-center gap-3 bg-zinc-950/40 p-3 rounded-xl border border-zinc-800">
+                        <div key={`grow-${t.gu_id}-${t.rank}`} className="flex items-center gap-3 bg-zinc-950/40 p-3 rounded-xl border border-zinc-800">
                           <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold text-amber-500">
-                            {(spec?.name || gu.gu_id).slice(0, 2)}
+                            {(spec?.name || t.gu_id).slice(0, 2)}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs font-bold text-zinc-200 font-mono truncate">{spec?.name || gu.gu_id}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-zinc-200 font-mono truncate">{spec?.name || t.gu_id}</span>
+                              {isEquipped && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-emerald-950/50 text-emerald-400 border border-emerald-900/50 font-mono shrink-0">Đang trang bị</span>
+                              )}
+                            </div>
                             <div className="text-[10px] text-zinc-400">{parts.join(" | ")}</div>
                             <div className="mt-1.5 flex items-center gap-2">
                               <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
@@ -1002,7 +1035,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                       if (fg.hp > 0) parts.push(`Máu +${fg.hp}`);
                       if (fg.speed > 0) parts.push(`Tốc +${fg.speed}`);
                       return (
-                        <div key={`fg-${i}`} className="flex items-center gap-3 bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
+                        <div key={`fg-${fg.gu_id}-${fg.rank}-${i}`} className="flex items-center gap-3 bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
                           <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400">
                             {(guDictionary[fg.gu_id]?.name || fg.gu_id).slice(0, 2)}
                           </div>

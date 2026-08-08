@@ -293,7 +293,23 @@ func (g *GrowthData) Scan(value interface{}) error {
 		*g = GrowthData{Boosts: GrowthBoosts{}, FullyGrown: []FullyGrownInfo{}}
 		return nil
 	}
-	return json.Unmarshal(b, g)
+	if err := json.Unmarshal(b, g); err != nil {
+		return err
+	}
+	// Normalize so fully_grown is always an array, never null.
+	if g.FullyGrown == nil {
+		g.FullyGrown = []FullyGrownInfo{}
+	}
+	return nil
+}
+
+// MarshalJSON ensures fully_grown serializes as [] instead of null when empty.
+func (g GrowthData) MarshalJSON() ([]byte, error) {
+	type alias GrowthData
+	if g.FullyGrown == nil {
+		g.FullyGrown = []FullyGrownInfo{}
+	}
+	return json.Marshal(alias(g))
 }
 
 func (g GrowthData) Value() (driver.Value, error) {
