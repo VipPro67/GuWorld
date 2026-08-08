@@ -169,9 +169,13 @@ function GuPageContent({ gu }: { gu: GuDictionaryItem }) {
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <nav className="text-xs text-[var(--text-muted)] font-mono mb-6">
+        <nav className="text-xs text-[var(--text-muted)] font-mono mb-6 flex items-center gap-3">
+          <Link href="/" className="hover:text-[var(--brand)] transition-colors font-bold text-emerald-400">
+            ← Quay về Game
+          </Link>
+          <span className="text-zinc-700">|</span>
           <Link href="/wiki" className="hover:text-[var(--brand)] transition-colors">
-            ← Thư Viện Cổ Trùng
+            Thư Viện Cổ Trùng
           </Link>
         </nav>
 

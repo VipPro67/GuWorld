@@ -7,6 +7,7 @@ import {
   Compass,
   Flame,
   HelpCircle,
+  Clock,
 } from "lucide-react";
 
 export interface WikiPage {
@@ -59,7 +60,7 @@ export const wikiPages: WikiPage[] = [
                 <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono text-[9px]">Hoàn thành</span>
               </h4>
               <p className="text-[var(--text-muted)] mt-1 leading-relaxed">
-                Xây dựng hệ thống phàm nhân cơ bản, trùng kích vách khiếu, các cổ trùng rank 1-5, thương đội Caravan, lò luyện cổ và chợ đấu giá Bảo Hoàng Thiên.
+                Xây dựng hệ thống phàm nhân cơ bản, trùng kích vách khiếu, các Cổ trùng từ Nhất Chuyển đến Ngũ Chuyển, thương đội Caravan, lò luyện cổ và chợ đấu giá Bảo Hoàng Thiên.
               </p>
             </div>
 
@@ -91,7 +92,7 @@ export const wikiPages: WikiPage[] = [
                 <span>Phase 7 (Thăng Tiên & Độ Kiếp)</span>
               </h4>
               <p className="text-[var(--text-secondary)] mt-1 leading-relaxed">
-                Hoàn thiện cơ chế <strong>Thăng Tiên (Cấp 5 đỉnh phong thăng lên Cấp 6)</strong> và <strong>Độ Kiếp (Cổ Tiên vượt Địa Tai, Thiên Kiếp)</strong>. Xây dựng sinh thái Tiên Khiếu độc lập, chăn nuôi, trồng trọt và khai thác dị nhân.
+                Hoàn thiện cơ chế <strong>Thăng Tiên (Ngũ Chuyển Đỉnh Phong thăng lên Lục Chuyển)</strong> và <strong>Độ Kiếp (Cổ Tiên vượt Địa Tai, Thiên Kiếp)</strong>. Xây dựng sinh thái Tiên Khiếu độc lập, chăn nuôi, trồng trọt và khai thác dị nhân.
               </p>
             </div>
 
@@ -138,7 +139,7 @@ export const wikiPages: WikiPage[] = [
                   <strong>Đạo Ngân vận hành tốt hơn:</strong> Đạo Ngân hiển thị và áp dụng hiệu ứng chính xác cho cả đồng đội lẫn địch trong chiến đấu tự động.
                 </li>
                 <li>
-                  <strong>Thăng Tiên theo Nhân Khí:</strong> Tỉ lệ thành công tỉ lệ thuận với Nhân Khí (0 → 0%, 100.000 → chắc chắn thành công). Thành công lên Lục Chuyển Cổ Tiên, nhận thưởng và khai mở Tiên Khiếu — cấp bậc Tiên Khiếu được định đoạt bởi Nhân Khí lúc thăng tiên. Thất bại: Nhân Khí về 0, tu vi phế bỏ rơi về Rank 1.
+                  <strong>Thăng Tiên theo Nhân Khí:</strong> Tỉ lệ thành công tỉ lệ thuận với Nhân Khí (0 → 0%, 100.000 → chắc chắn thành công). Thành công lên Lục Chuyển Cổ Tiên, nhận thưởng và khai mở Tiên Khiếu — phẩm cấp Tiên Khiếu được định đoạt bởi Nhân Khí lúc thăng tiên. Thất bại: Nhân Khí về 0, tu vi phế bỏ rơi về Nhất Chuyển.
                 </li>
               </ul>
             </div>
@@ -253,7 +254,7 @@ export const wikiPages: WikiPage[] = [
     id: "guide",
     title: "Hướng Dẫn Tân Thủ",
     category: "gameplay",
-    keywords: ["hướng dẫn", "tân thủ", "new player", "guide", "bắt đầu", "hoạt động", "đạo ngân", "tiên khiếu", "sát chiêu", "kiếp nạn"],
+    keywords: ["hướng dẫn", "tân thủ", "new player", "guide", "bắt đầu", "hoạt động", "đạo ngân", "tiên khiếu", "sát chiêu", "kiếp nạn", "lộ trình", "hàng ngày", "timeline"],
     content: (
       <div className="space-y-6">
         <div className="p-4 rounded-2xl bg-indigo-950/30 border border-indigo-500/20 flex gap-3 items-start">
@@ -261,7 +262,7 @@ export const wikiPages: WikiPage[] = [
           <div>
             <h4 className="text-sm font-serif font-bold text-indigo-200">Chào mừng Đạo Hữu gia nhập GuWorld</h4>
             <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
-              GuWorld là thế giới Cổ sư mô phỏng chân thực hành trình nghịch thiên cải mệnh theo nguyên tác tiểu thuyết <strong>Cổ Chân Nhân</strong>. Dưới đây là hướng dẫn chi tiết về các thuật ngữ cốt lõi và các bước tham gia hoạt động để đạo hữu dễ dàng bước lên con đường tu tiên.
+              GuWorld là thế giới Cổ sư mô phỏng chân thực hành trình nghịch thiên cải mệnh theo nguyên tác tiểu thuyết <strong>Cổ Chân Nhân</strong>. Dưới đây là hướng dẫn chi tiết về các thuật ngữ cốt lõi và lộ trình hoạt động theo thời gian để đạo hữu dễ dàng bước lên con đường tu tiên.
             </p>
           </div>
         </div>
@@ -274,8 +275,8 @@ export const wikiPages: WikiPage[] = [
             <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-2 text-xs">
               <h4 className="font-bold text-indigo-300">Không Khiếu & Tiên Khiếu (Aperture)</h4>
               <p className="text-[var(--text-muted)] leading-relaxed">
-                • <strong>Không Khiếu:</strong> Nơi chứa chân nguyên của Cổ sư phàm nhân (Cấp 1-5).<br />
-                • <strong>Tiên Khiếu:</strong> Thế giới thu nhỏ độc lập bên trong cơ thể Cổ Tiên (Cấp 6+). Tiên Khiếu tự động sản sinh <strong>Tiên Nguyên</strong> và có gia tốc thời gian riêng biệt. Tiên Khiếu được chia thành 4 phẩm cấp: <strong>Thấp, Trung, Cao, Cực Hạn</strong> phụ thuộc vào lượng Nhân Khí khi thăng tiên.
+                • <strong>Không Khiếu:</strong> Nơi chứa Chân Nguyên của Cổ sư phàm nhân (Nhất Chuyển đến Ngũ Chuyển).<br />
+                • <strong>Tiên Khiếu:</strong> Thế giới thu nhỏ độc lập bên trong cơ thể Cổ Tiên (Lục Chuyển trở lên). Tiên Khiếu tự động sản sinh <strong>Tiên Nguyên</strong> và có gia tốc thời gian riêng biệt. Tiên Khiếu được chia thành 4 phẩm cấp: <strong>Thấp, Trung, Cao, Cực Hạn</strong> phụ thuộc vào lượng Nhân Khí khi thăng tiên.
               </p>
             </div>
 
@@ -302,64 +303,57 @@ export const wikiPages: WikiPage[] = [
           </div>
         </div>
 
-        {/* Step-by-step Guide */}
+        {/* Timeline Guide */}
         <div className="space-y-4 pt-4 border-t border-zinc-900">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Các Bước Thực Hiện Hoạt Động</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Lộ Trình Tu Tiên Theo Thời Gian</h3>
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            Hành trình của một Cổ sư diễn ra theo dòng thời gian thực. Dưới đây là lộ trình gợi ý từ lúc bước vào Cổ giới cho đến lúc thăng tiên và đối đầu kiếp nạn.
+          </p>
 
-          {/* Step 1 */}
+          {/* Phase 1 */}
           <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3">
             <h3 className="text-sm font-serif font-bold text-indigo-300 flex items-center gap-2">
               <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-950 text-indigo-400 text-xs font-mono border border-indigo-500/20">1</span>
-              Tạo Nhân Vật & Thức Tỉnh Linh Căn
+              Ngay Lập Tức: Tạo Nhân Vật & Thức Tỉnh Linh Căn
             </h3>
             <div className="text-xs text-[var(--text-secondary)] leading-relaxed space-y-2">
               <p>
-                Bước vào Cổ giới, đạo hữu sẽ đặt tên Cổ sư của mình. Hệ thống sẽ tự động thức tỉnh <strong>Linh Căn</strong> ngẫu nhiên.
+                Bước vào Cổ giới, đạo hữu sẽ đặt tên Cổ sư của mình và chọn <strong>Chủng tộc</strong>, <strong>Giới tính</strong>. Hệ thống sẽ tự động thức tỉnh <strong>Linh Căn</strong> ngẫu nhiên với một trong bốn phẩm cấp: <strong>Giáp, Ất, Bính, Đinh</strong>.
               </p>
               <p>
-                Linh Căn quyết định hướng phát triển ban đầu của bạn. Sử dụng các Cổ trùng có cùng hệ thuộc tính với Linh Căn sẽ giúp gia tăng đáng kể hiệu năng chiến đấu.
+                Linh Căn quyết định hướng phát triển ban đầu của bạn: tư chất Giáp/Ất giúp trùng kích vách khiếu nhanh hơn rõ rệt. Sử dụng các Cổ trùng có cùng hệ thuộc tính với Linh Căn sẽ giúp gia tăng đáng kể hiệu năng chiến đấu.
               </p>
+              <div className="p-3 rounded-lg bg-indigo-950/20 border border-indigo-500/10 text-indigo-300">
+                ⏱️ <strong>Gợi ý:</strong> Ngay khi tạo xong, hãy hoàn tất luồng onboarding, nhận Cổ trùng ban đầu và bắt đầu trùng kích vách khiếu — Chân Nguyên khởi đầu rất thấp nên mỗi giờ hồi phục đều đáng giá.
+              </div>
             </div>
           </div>
 
-          {/* Step 2 */}
+          {/* Phase 2 */}
           <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3">
             <h3 className="text-sm font-serif font-bold text-indigo-300 flex items-center gap-2">
               <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-950 text-indigo-400 text-xs font-mono border border-indigo-500/20">2</span>
-              Trùng Kích Vách Khiếu (Đột Phá Tu Vi)
+              Những Ngày Đầu: Trùng Kích & Khai Thác Tài Nguyên
             </h3>
             <div className="text-xs text-[var(--text-secondary)] leading-relaxed space-y-2">
               <p>
-                Tu vi phàm nhân chia làm 5 Cảnh giới (Rank 1 đến Rank 5), mỗi Cảnh giới có 4 cấp bậc nhỏ (Sơ Kỳ, Trung Kỳ, Hậu Kỳ, Đỉnh Phong).
+                Tu vi phàm nhân chia làm 5 Cảnh giới (Nhất Chuyển đến Ngũ Chuyển), mỗi Cảnh giới có 4 cấp bậc nhỏ (Sơ Giai, Trung Giai, Cao Giai, Đỉnh Phong). Mỗi lần trùng kích làm tăng <strong>+5 áp lực vách khiếu</strong> — hãy nhớ theo dõi thanh áp lực.
               </p>
-              <p>
-                Để đột phá, đạo hữu vào mục <strong>Không Khiếu</strong>, tiêu hao chân nguyên và sử dụng <strong>Nguyên Thạch</strong> hoặc <strong>Xá Lợi Cổ</strong> để phá vỡ Vách Khiếu. Sử dụng càng nhiều Nguyên Thạch đột phá sẽ giúp gia tăng tỉ lệ thành công.
-              </p>
+              <ul className="list-disc list-inside pl-2 space-y-1">
+                <li><strong>Khai Thác Mỏ (Mining):</strong> Đào khoáng và Nguyên Thạch dã ngoại. Đôi khi bạn sẽ chạm trán <strong>Quái Mỏ</strong> hung hãn bảo vệ quặng, cần tiêu diệt chúng để tiếp tục khai thác. Mỏ được tái lập mỗi ngày lúc 00:00.</li>
+                <li><strong>Thám Hiểm (Exploration):</strong> Di chuyển qua các ô đất sương mù trên bản đồ để nhận khoáng sản quý, thảo dược và gặp gỡ các kỳ ngộ nhận thưởng. Mỗi ngày có <strong>tối đa 10 lượt thám hiểm</strong> (chỉ 5 lượt nếu đi theo tổ đội).</li>
+              </ul>
+              <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/20 text-amber-300">
+                ⏱️ <strong>Quy luật thời gian:</strong> Áp lực vách khiếu giảm <strong>phân nửa mỗi 2 giờ đời thật</strong>. Chân Nguyên hồi tự động theo tư chất (Giáp 8/giờ, Ất 6/giờ, Bính 4/giờ, Đinh 2/giờ) — đừng để Chân Nguyên bị lãng phí vì thanh đầy.
+              </div>
             </div>
           </div>
 
-          {/* Step 3 */}
+          {/* Phase 3 */}
           <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3">
             <h3 className="text-sm font-serif font-bold text-indigo-300 flex items-center gap-2">
               <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-950 text-indigo-400 text-xs font-mono border border-indigo-500/20">3</span>
-              Khai Thác Mỏ & Thám Hiểm Bản Đồ
-            </h3>
-            <div className="text-xs text-[var(--text-secondary)] leading-relaxed space-y-2">
-              <p>
-                Để tích lũy tài nguyên và Nguyên Thạch chế tạo, hãy sử dụng <strong>Thể Lực (Stamina)</strong> tham gia hai hoạt động chính:
-              </p>
-              <ul className="list-disc list-inside pl-2 space-y-1">
-                <li><strong>Khai Thác Mỏ (Mining):</strong> Đào khoáng và Nguyên Thạch dã ngoại. Đôi khi bạn sẽ chạm trán **Quái Mỏ** hung hãn bảo vệ quặng, cần tiêu diệt chúng để tiếp tục khai thác.</li>
-                <li><strong>Thám Hiểm (Exploration):</strong> Di chuyển qua các ô đất sương mù trên bản đồ để nhận khoáng sản quý, thảo dược và gặp gỡ các kỳ ngộ nhận thưởng.</li>
-              </ul>
-            </div>
-          </div>
-
-          {/* Step 4 */}
-          <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3">
-            <h3 className="text-sm font-serif font-bold text-indigo-300 flex items-center gap-2">
-              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-950 text-indigo-400 text-xs font-mono border border-indigo-500/20">4</span>
-              Trang Bị Cổ Trùng & Cho Ăn Hằng Ngày
+              Mỗi Ngày: Cho Cổ Trùng Ăn & Trang Bị
             </h3>
             <div className="text-xs text-[var(--text-secondary)] leading-relaxed space-y-2">
               <p>
@@ -367,78 +361,145 @@ export const wikiPages: WikiPage[] = [
               </p>
               <ul className="list-disc list-inside pl-2 space-y-1">
                 <li><strong>Cổ Chủ Động:</strong> Cung cấp các chiêu thức chiến đấu để kéo vào phím tắt kích hoạt thủ công.</li>
-                <li><strong>Cổ Bị Động & Tăng Trưởng:</strong> Tự động cộng các chỉ số thuộc tính vĩnh viễn (HP, Tấn công, Tốc độ) khi được trang bị.</li>
+                <li><strong>Cổ Bị Động & Tăng Trưởng:</strong> Tự động cộng các chỉ số thuộc tính vĩnh viễn (Sinh Lực, Tấn công, Tốc độ) khi được trang bị.</li>
               </ul>
-              <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/20 text-amber-300 mt-2 font-serif">
-                ⚠️ <strong>Quy luật sinh tồn:</strong> Cổ trùng tiêu hao <strong>Độ No (Hunger)</strong> liên tục mỗi 3 giờ. Hãy tích lũy đúng loại thức ăn (thịt thú, khoáng vật, ngọc lộ...) và cho chúng ăn kịp thời. Cổ trùng đói về 0 độ no sẽ <strong>chết vĩnh viễn và biến mất khỏi hòm đồ</strong>!
+              <div className="p-3 rounded-lg bg-rose-950/20 border border-rose-500/10 text-rose-300">
+                ⚠️ <strong>Quy luật sinh tồn:</strong> Cổ trùng tiêu hao <strong>Độ No (Hunger)</strong> liên tục <strong>mỗi 3 giờ</strong>. Hãy tích lũy đúng loại thức ăn (thịt thú, khoáng vật, ngọc lộ...) và cho chúng ăn kịp thời. Cổ trùng đói về 0 độ no sẽ <strong>chết vĩnh viễn và biến mất khỏi hòm đồ</strong>!
               </div>
             </div>
           </div>
 
-          {/* Step 5 */}
+          {/* Phase 4 */}
           <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3">
             <h3 className="text-sm font-serif font-bold text-indigo-300 flex items-center gap-2">
-              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-950 text-indigo-400 text-xs font-mono border border-indigo-500/20">5</span>
-              Luyện Cổ (Chế Tạo) & Lắp Ráp Sát Chiêu
+              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-950 text-indigo-400 text-xs font-mono border border-indigo-500/20">4</span>
+              Sau Vài Ngày: Luyện Cổ & Lắp Ráp Sát Chiêu
             </h3>
             <div className="text-xs text-[var(--text-secondary)] leading-relaxed space-y-2">
               <p>
                 • <strong>Luyện Cổ:</strong> Sử dụng các công thức (Recipe) tại lò luyện để dung hợp các loại Cổ trùng bậc thấp và nguyên liệu phụ để tạo ra Cổ trùng cấp cao hơn. Quá trình này có tỷ lệ thất bại tự nhiên làm mất nguyên liệu phụ.
               </p>
               <p>
-                • <strong>Sát Chiêu (Killer Moves):</strong> Lắp ráp kỹ năng tối thượng bằng cách kết hợp <strong>1 Cổ Hạch Tâm (Core Gu)</strong> quyết định lưu phái/sát thương gốc cùng tối đa <strong>8 Cổ Phụ Trợ (Support Gu)</strong> để bổ sung các hiệu ứng khống chế (choáng, đóng băng, câm lặng), tăng phạm vi tấn công và giảm mana tiêu hao.
+                • <strong>Sát Chiêu (Killer Moves):</strong> Lắp ráp kỹ năng tối thượng bằng cách kết hợp <strong>1 Cổ Hạch Tâm (Core Gu)</strong> quyết định lưu phái/sát thương gốc cùng tối đa <strong>8 Cổ Phụ Trợ (Support Gu)</strong> để bổ sung các hiệu ứng khống chế (choáng, đóng băng, câm lặng), tăng phạm vi tấn công và giảm hao Chân Nguyên.
               </p>
+              <div className="p-3 rounded-lg bg-indigo-950/20 border border-indigo-500/10 text-indigo-300">
+                ⏱️ <strong>Gợi ý:</strong> Mỗi sát chiêu mới tạo ra nhận <strong>+5 Nhân Khí</strong> — hãy ưu tiên tạo vài sát chiêu căn bản sớm để vừa có chiêu thức dùng khi chiến đấu, vừa tích Nhân Khí phục vụ Thăng Tiên về sau.
+              </div>
             </div>
           </div>
 
-          {/* Step 6 */}
+          {/* Phase 5 */}
+          <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3">
+            <h3 className="text-sm font-serif font-bold text-indigo-300 flex items-center gap-2">
+              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-950 text-indigo-400 text-xs font-mono border border-indigo-500/20">5</span>
+              Hằng Ngày: Ải Cốt Truyện & Đấu Trường
+            </h3>
+            <div className="text-xs text-[var(--text-secondary)] leading-relaxed space-y-2">
+              <p>
+                • <strong>Ải Cốt Truyện:</strong> Sử dụng kỹ năng Cổ trùng và Sát Chiêu vượt các ải quái vật để nhận tu vi, Nguyên thạch và Cổ trùng sơ cấp. Mỗi trận chiến đều tích lũy Nhân Khí.
+              </p>
+              <p>
+                • <strong>Đấu Trường:</strong> Khiêu chiến đội hình Cổ sư của người chơi khác để tích lũy <strong>Chiến Công</strong>. Chiến công dùng để đổi các bảo vật và Cổ trùng độc quyền tại Cửa Hàng Đấu Trường.
+              </p>
+              <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/20 text-amber-300">
+                ⏱️ <strong>Giới hạn hàng ngày:</strong> Mỗi ngày đạo hữu được khiêu chiến Võ Đài tối đa <strong>99 trận</strong>; hạn mức đấu trường được làm mới theo ngày. Dùng hết lượt để tối đa hóa Chiến Công và Nhân Khí tích lũy.
+              </div>
+            </div>
+          </div>
+
+          {/* Phase 6 */}
           <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3">
             <h3 className="text-sm font-serif font-bold text-indigo-300 flex items-center gap-2">
               <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-950 text-indigo-400 text-xs font-mono border border-indigo-500/20">6</span>
-              Vượt Ải Cốt Truyện & Đấu Trường PVP
+              Định Kỳ: Giao Thương Bảo Hoàng Thiên & Tông Môn
             </h3>
             <div className="text-xs text-[var(--text-secondary)] leading-relaxed space-y-2">
               <p>
-                • <strong>Ải Cốt Truyện (PVE):</strong> Sử dụng kỹ năng Cổ trùng và Sát Chiêu vượt các ải quái vật để nhận Exp tu vi, Nguyên thạch và Cổ trùng sơ cấp.
-              </p>
-              <p>
-                • <strong>Đấu Trường (PVP):</strong> Khiêu chiến đội hình Cổ sư của người chơi khác để tích lũy <strong>Chiến Công</strong>. Chiến công dùng để đổi các bảo vật và Cổ trùng độc quyền tại Cửa Hàng Đấu Trường.
-              </p>
-            </div>
-          </div>
-
-          {/* Step 7 */}
-          <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3">
-            <h3 className="text-sm font-serif font-bold text-indigo-300 flex items-center gap-2">
-              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-950 text-indigo-400 text-xs font-mono border border-indigo-500/20">7</span>
-              Giao Thương Bảo Hoàng Thiên & Tông Môn
-            </h3>
-            <div className="text-xs text-[var(--text-secondary)] leading-relaxed space-y-2">
-              <p>
-                • <strong>Bảo Hoàng Thiên:</strong> Chợ giao dịch tự do liên server. Đạo hữu có thể bày bán Cổ trùng, tiên tài, nguyên liệu để đổi lấy Nguyên Thạch hoặc Tiên Nguyên Thạch từ người chơi khác.
+                • <strong>Bảo Hoàng Thiên:</strong> Chợ giao dịch tự do liên server. Đạo hữu có thể bày bán Cổ trùng, tiên tài, nguyên liệu để đổi lấy Nguyên Thạch hoặc Tiên Nguyên Thạch từ người chơi khác. Mỗi lần niêm yết hoặc giao dịch thành công đều nhận Nhân Khí.
               </p>
               <p>
                 • <strong>Tông Môn (Bang Hội):</strong> Tham gia tông môn, thực hiện quyên góp tài sản để nhận Điểm Cống Hiến, cùng bang hội chiếm mỏ tài nguyên dã ngoại và dùng Điểm Cống Hiến để đổi đồ trong Bảo Khố Tông Môn.
               </p>
+              <div className="p-3 rounded-lg bg-indigo-950/20 border border-indigo-500/10 text-indigo-300">
+                ⏱️ <strong>Khảo hạch tông môn:</strong> <strong>Tiểu Khảo</strong> mỗi 3 ngày (lên Nội Môn), <strong>Trung Khảo</strong> mỗi 8 ngày (đệ tử Tinh Anh), <strong>Đại Khảo</strong> mỗi 15 ngày (đệ tử Chân Truyền). Hãy canh ngày tham gia đủ kỳ khảo hạch để không lỡ thăng cấp trong tông môn.
+              </div>
             </div>
           </div>
 
-          {/* Step 8 */}
+          {/* Phase 7 */}
           <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3">
             <h3 className="text-sm font-serif font-bold text-indigo-300 flex items-center gap-2">
-              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-950 text-indigo-400 text-xs font-mono border border-indigo-500/20">8</span>
-              Thăng Tiên & Đối Phó Kiếp Nạn (Late Game)
+              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-950 text-indigo-400 text-xs font-mono border border-indigo-500/20">7</span>
+              Trung Kỳ: Dưỡng Hồn Phách & Tích Nhân Khí
             </h3>
             <div className="text-xs text-[var(--text-secondary)] leading-relaxed space-y-2">
               <p>
-                Khi đạt <strong>Cấp 5 Đỉnh Phong</strong>, đạo hữu có thể tiến hành thăng tiên để đột phá thành <strong>Cổ Tiên (Rank 6+)</strong>.
+                • <strong>Tráng Hồn:</strong> Dùng Guts Gu để tăng <strong>+10 Hồn Phách</strong> (Soul HP & Max Soul), tăng khả năng khống chế hoang thú và đạo pháp.
               </p>
               <p>
-                Tích lũy <strong>Nhân Khí (Human Qi)</strong> thông qua các hoạt động hàng ngày trước khi thăng tiên để gia tăng tỉ lệ thành công (tối đa 100k Nhân Khí = chắc chắn 100% thành công). Nếu thăng tiên thất bại, tu vi sẽ bị phế bỏ rơi về Rank 1.
+                • <strong>Luyện Hồn:</strong> Khi đạt giới hạn tầng Hồn hiện tại, hãy đến <strong>Cốc Lạc Phách</strong> để luyện hồn bứt phá lên tầng mới (Nhân Hồn ➔ Bách Nhân Hồn ➔ Thiên Nhân Hồn...). Sau luyện hồn, Hồn Phách sẽ suy yếu mạnh và cần thời gian dưỡng hồi.
+              </p>
+              <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/20 text-amber-300">
+                ⏱️ <strong>Quy luật thời gian:</strong> Hồn Phách hồi phục theo thời gian thực (~10% Max Soul mỗi giờ, nhân với gia tốc thời gian). Hãy sắp xếp luyện hồn vào lúc có thời gian nghỉ dài để linh hồn kịp hồi phục.
+              </div>
+            </div>
+          </div>
+
+          {/* Phase 8 */}
+          <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3">
+            <h3 className="text-sm font-serif font-bold text-indigo-300 flex items-center gap-2">
+              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-950 text-indigo-400 text-xs font-mono border border-indigo-500/20">8</span>
+              Hậu Kỳ: Thăng Tiên & Đối Phó Kiếp Nạn
+            </h3>
+            <div className="text-xs text-[var(--text-secondary)] leading-relaxed space-y-2">
+              <p>
+                Khi đạt <strong>Ngũ Chuyển Đỉnh Phong</strong>, đạo hữu có thể tiến hành thăng tiên để đột phá thành <strong>Cổ Tiên (Lục Chuyển trở lên)</strong>.
               </p>
               <p>
-                Sau khi thăng tiên, đạo hữu sẽ sở hữu <strong>Tiên Khiếu</strong> riêng biệt và phải đối đầu với các <strong>Kiếp Nạn</strong> (Địa Tai, Thiên Kiếp...) định kỳ. Vượt qua kiếp nạn thành công sẽ nhận được lượng lớn Đạo Ngân để gia tăng sức mạnh vượt bậc.
+                Tích lũy <strong>Nhân Khí (Human Qi)</strong> thông qua các hoạt động hàng ngày trước khi thăng tiên để gia tăng tỉ lệ thành công (tối đa 100k Nhân Khí = chắc chắn 100% thành công). Nếu thăng tiên thất bại, tu vi sẽ bị phế bỏ rơi về Nhất Chuyển.
               </p>
+              <p>
+                Sau khi thăng tiên, đạo hữu sẽ sở hữu <strong>Tiên Khiếu</strong> riêng biệt và phải đối đầu với các <strong>Kiếp Nạn</strong> (Địa Tai, Thiên Kiếp...) định kỳ. Kiếp đầu tiên giáng lâm sau <strong>10 ngày đời thật</strong>. Vượt qua kiếp nạn thành công sẽ nhận được lượng lớn Đạo Ngân để gia tăng sức mạnh vượt bậc.
+              </p>
+            </div>
+          </div>
+
+          {/* Daily rhythm summary */}
+          <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 space-y-3">
+            <h3 className="text-sm font-serif font-bold text-emerald-300 flex items-center gap-2">
+              <Clock className="w-4 h-4" /> Nhịp Điệu Sinh Hoạt Của Một Cổ Sư
+            </h3>
+            <div className="overflow-hidden rounded-2xl border border-[var(--border)]">
+              <table className="w-full text-left text-xs font-mono">
+                <thead className="bg-zinc-950 text-[var(--text-secondary)] border-b border-[var(--border)]">
+                  <tr>
+                    <th className="p-3">Mốc thời gian</th>
+                    <th className="p-3">Việc cần làm</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-900 text-[var(--text-primary)] bg-[var(--surface)]">
+                  <tr>
+                    <td className="p-3 font-bold text-[var(--text-primary)]">Liên tục (mỗi giờ)</td>
+                    <td className="p-3">Chân Nguyên tự hồi theo tư chất (8/6/4/2 mỗi giờ). Đừng để thanh đầy lãng phí.</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-bold text-[var(--text-primary)]">Mỗi 2 giờ</td>
+                    <td className="p-3">Áp lực vách khiếu tự giảm phân nửa — thời điểm lý tưởng để trùng kích tiếp.</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-bold text-[var(--text-primary)]">Mỗi 3 giờ</td>
+                    <td className="p-3">Cổ trùng giảm Độ No — kiểm tra và cho ăn kịp thời tránh chết Cổ.</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-bold text-[var(--text-primary)]">Mỗi ngày (00:00)</td>
+                    <td className="p-3">Làm mới lượt thám hiểm (10 lượt), khiêu chiến Đấu Trường (99 trận), tái lập mỏ khai thác.</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-bold text-[var(--text-primary)]">Sau 10 ngày thăng tiên</td>
+                    <td className="p-3">Kiếp nạn đầu tiên giáng lâm — chuẩn bị phòng thủ Tiên Khiếu và chiến lực.</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -466,7 +527,7 @@ export const wikiPages: WikiPage[] = [
               <h4 className="text-sm font-serif font-bold text-[var(--text-primary)]">Nguyên Thạch</h4>
             </div>
             <p className="text-[11px] text-[var(--text-muted)] leading-relaxed mt-1">
-              Tiền tệ phổ biến của phàm nhân (Cấp 1-5). Chứa chân nguyên tự nhiên để hồi phục năng lượng cho Cổ sư và là nguyên liệu bắt buộc để kích hoạt/tăng hiệu suất trùng kích vách khiếu.
+              Tiền tệ phổ biến của phàm nhân (Nhất Chuyển đến Ngũ Chuyển). Chứa chân nguyên tự nhiên để hồi phục năng lượng cho Cổ sư và là nguyên liệu bắt buộc để kích hoạt/tăng hiệu suất trùng kích vách khiếu.
             </p>
           </div>
 
@@ -545,11 +606,17 @@ export const wikiPages: WikiPage[] = [
     id: "gameplay-character",
     title: "Nhân Vật",
     category: "gameplay",
-    keywords: ["nhân vật", "character", "hồ sơ", "profile", "chỉ số", "linh căn", "kỹ năng", "thông thạo"],
+    keywords: ["nhân vật", "character", "hồ sơ", "profile", "chỉ số", "linh căn", "kỹ năng", "thông thạo", "hồn phách", "nhân khí", "tư chất"],
     content: (
       <div className="space-y-6">
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-          Hồ sơ nhân vật chứa toàn bộ thông tin tu vi, không khiếu, các chỉ số cốt lõi và các Body Mods vĩnh viễn tích lũy từ dung hợp Cổ trùng. Nhấp vào các thẻ bên dưới để xem hướng dẫn chi tiết từng mục:
+          Hồ sơ nhân vật chứa toàn bộ thông tin tu vi, không khiếu, các chỉ số cốt lõi, Hồn Phách và các Body Mods vĩnh viễn tích lũy từ dung hợp Cổ trùng. Đây là &quot;gương mặt&quot; của đạo hữu trong giới tu tiên: thân phận, chủng tộc, thể chất, cảnh giới lưu phái lẫn ngụy trang đều được phản chiếu tại đây.
+        </p>
+        <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/20 text-xs text-[var(--text-secondary)] leading-relaxed">
+          <strong className="text-amber-200">Tổng quan một Cổ sư:</strong> Mỗi đạo hữu là một phàm nhân thức tỉnh Không Khiếu (hoặc Cổ Tiên sở hữu Tiên Khiếu) được định hình bởi ba lớp: <strong>tu vi</strong> (Cảnh giới + Tiểu Cảnh Giới), <strong>thân thể</strong> (chủng tộc, giới tính, thể chất, trạng thái) và <strong>linh hồn</strong> (Hồn Phách, thông thạo lưu phái, Đạo Ngân).
+        </div>
+        <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+          Nhấp vào các thẻ bên dưới để xem hướng dẫn chi tiết từng mục:
         </p>
       </div>
     ),
@@ -557,22 +624,22 @@ export const wikiPages: WikiPage[] = [
       {
         title: "Chỉ số",
         targetId: "gameplay-character-chiso",
-        description: "Các chỉ số cơ bản của Cổ sư phàm nhân và Cổ tiên."
+        description: "Cảnh giới, Sinh Lực, Chân Nguyên, Hồn Phách, Nhân Khí, Thọ nguyên."
       },
       {
         title: "Thuộc tính & Áp lực",
         targetId: "gameplay-character-thuoctinh",
-        description: "Tình trạng Không Khiếu, Áp lực vách khiếu và hình phạt."
+        description: "Chủng tộc, thể chất, trạng thái và Áp lực vách khiếu."
       },
       {
         title: "Linh Căn (Tư chất)",
         targetId: "gameplay-character-linhcan",
-        description: "Hệ thống tư chất không khiếu: Giáp, Ất, Bính, Đinh."
+        description: "Phẩm cấp Giáp/Ất/Bính/Đinh và cách nâng tư chất Không khiếu."
       },
       {
         title: "Thông thạo (Cảnh giới)",
         targetId: "gameplay-character-thongthao",
-        description: "Cảnh giới lưu phái: Đại sư, Tông sư, Đại tông sư."
+        description: "Cảnh giới lưu phái và hệ thống Đạo Ngân 49 lưu phái."
       },
       {
         title: "Kỹ năng (Cổ & Sát chiêu)",
@@ -586,11 +653,14 @@ export const wikiPages: WikiPage[] = [
     title: "Chỉ Số Nhân Vật",
     category: "gameplay",
     subCategory: "gameplay-character",
-    keywords: ["chỉ số", "stats", "hp", "mana", "chân nguyên", "tu vi", "level", "rank", "subrank"],
+    keywords: ["chỉ số", "stats", "hp", "mana", "chân nguyên", "tu vi", "level", "rank", "subrank", "hồn phách", "nhân khí", "thọ nguyên", "lifespan", "soul"],
     content: (
       <div className="space-y-6">
         <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Các chỉ số tu luyện</h3>
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+            Bảng dưới liệt kê toàn bộ chỉ số phản ánh trên hồ sơ nhân vật. Phàm nhân (Nhất Chuyển – Ngũ Chuyển) dùng Không Khiếu, còn Cổ Tiên (Lục Chuyển trở lên) chuyển sang Tiên Khiếu với quy luật riêng.
+          </p>
 
           <div className="overflow-hidden rounded-2xl border border-[var(--border)]">
             <table className="w-full text-left text-xs font-mono">
@@ -604,23 +674,53 @@ export const wikiPages: WikiPage[] = [
               <tbody className="divide-y divide-zinc-900 text-[var(--text-primary)] bg-[var(--surface)]">
                 <tr>
                   <td className="p-3 font-bold text-[var(--text-primary)]">Cảnh Giới</td>
-                  <td className="p-3">Đại cảnh giới tu vi của nhân vật, từ Cấp 1 đến Cấp 9.</td>
-                  <td className="p-3">Mở khóa tính năng mới (Cấp 6 mở Tiên Khiếu, v.v.).</td>
+                  <td className="p-3">Đại cảnh giới tu vi của nhân vật, từ Nhất Chuyển đến Cửu Chuyển. Nhất–Ngũ Chuyển là phàm nhân, Lục Chuyển trở lên là Cổ Tiên.</td>
+                  <td className="p-3">Mở khóa tính năng mới (Lục Chuyển mở Tiên Khiếu, v.v.).</td>
                 </tr>
                 <tr>
-                  <td className="p-3 font-bold text-[var(--text-primary)]">Sub-Rank</td>
-                  <td className="p-3">Tiểu cảnh giới: Sơ Giai, Trung Giai, Cao Giai, Đỉnh Phong.</td>
-                  <td className="p-3">Mốc để trùng kích vách khiếu đột phá lên cấp mới.</td>
+                  <td className="p-3 font-bold text-[var(--text-primary)]">Tiểu Cảnh Giới (Sub-Rank)</td>
+                  <td className="p-3">Tiểu cảnh giới: Sơ Giai, Trung Giai, Cao Giai, Đỉnh Phong. Chỉ tồn tại ở phàm nhân (Chuyển 1–5).</td>
+                  <td className="p-3">Mốc để trùng kích vách khiếu đột phá lên Chuyển mới.</td>
                 </tr>
                 <tr>
-                  <td className="p-3 font-bold text-[var(--text-primary)]">Sinh Lực</td>
-                  <td className="p-3">Sức chịu đựng của cơ thể. Phàm nhân mặc định cố định ở mức rất thấp (100 HP).</td>
+                  <td className="p-3 font-bold text-[var(--text-primary)]">Sinh Lực (HP / Base HP)</td>
+                  <td className="p-3">Sức chịu đựng của cơ thể. Phàm nhân khởi đầu cố định ở mức rất thấp (100 Sinh Lực).</td>
                   <td className="p-3">Nếu tụt về 0 trong chiến đấu, bạn sẽ bị trọng thương hoặc chết vĩnh viễn.</td>
                 </tr>
                 <tr>
                   <td className="p-3 font-bold text-[var(--text-primary)]">Chân Nguyên / Tiên Nguyên</td>
-                  <td className="p-3">Năng lượng trong không khiếu. Dùng để kích hoạt Cổ trùng ra chiêu.</td>
-                  <td className="p-3">Tiêu hao liên tục trong chiến đấu và hồi phục tự động theo tư chất.</td>
+                  <td className="p-3">Năng lượng trong Không Khiếu (phàm nhân) hoặc Tiên Khiếu (Cổ Tiên). Dùng để kích hoạt Cổ trùng ra chiêu.</td>
+                  <td className="p-3">Tiêu hao liên tục trong chiến đấu và hồi phục tự động theo tư chất (Cổ Tiên hồi chậm hơn nhưng trữ lượng khổng lồ).</td>
+                </tr>
+                <tr>
+                  <td className="p-3 font-bold text-[var(--text-primary)]">Hồn Phách (Soul HP / Max Soul)</td>
+                  <td className="p-3">Nội lực tinh thần giới hạn số lượng hoang thú, Cổ trùng và đạo pháp khống chế mà linh hồn chịu đựng được.</td>
+                  <td className="p-3">Tráng Hồn tăng 10 điểm; đạt giới hạn tầng Hồn phải Luyện Hồn tại Cốc Lạc Phách để bứt phá tầng mới.</td>
+                </tr>
+                <tr>
+                  <td className="p-3 font-bold text-[var(--text-primary)]">Tầng Hồn (Soul Tier)</td>
+                  <td className="p-3">Phẩm cấp linh hồn: Nhân Hồn ➔ Bách Nhân Hồn ➔ Thiên Nhân Hồn ➔ Vạn Nhân Hồn ➔ Bách Vạn Nhân Hồn ➔ Thiên Vạn Nhân Hồn.</td>
+                  <td className="p-3">Mỗi tầng nâng giới hạn tối đa của Hồn Phách lên một bậc.</td>
+                </tr>
+                <tr>
+                  <td className="p-3 font-bold text-[var(--text-primary)]">Nhân Khí (Human Qi)</td>
+                  <td className="p-3">Tài nguyên phản ánh hoạt động tích cực của đạo hữu trong giới tu tiên, giới hạn tối đa 100.000.</td>
+                  <td className="p-3">Quyết định tỉ lệ Thăng Tiên thành công và phẩm cấp Tiên Khiếu khi mở.</td>
+                </tr>
+                <tr>
+                  <td className="p-3 font-bold text-[var(--text-primary)]">Tư chất Không Khiếu</td>
+                  <td className="p-3">Phẩm cấp Linh Căn (Giáp/Ất/Bính/Đinh kèm hệ số phần trăm).</td>
+                  <td className="p-3">Ảnh hưởng trữ lượng Chân Nguyên tối đa, tốc độ hồi phục và hiệu suất phá vách.</td>
+                </tr>
+                <tr>
+                  <td className="p-3 font-bold text-[var(--text-primary)]">Thọ nguyên (Lifespan)</td>
+                  <td className="p-3">Tuổi thọ còn lại của cơ thể, hao mòn dần theo thời gian thực (nhân với hệ số thời gian tu luyện).</td>
+                  <td className="p-3">Về 0 đồng nghĩa sinh mệnh tàn lụi — cần tăng tu vi hoặc dùng ngoại lực kéo dài.</td>
+                </tr>
+                <tr>
+                  <td className="p-3 font-bold text-[var(--text-primary)]">Áp lực vách khiếu</td>
+                  <td className="p-3">Mức độ tổn thương của Không Khiếu khi trùng kích quá độ.</td>
+                  <td className="p-3">Vượt 80% làm suy giảm hiệu quả; chạm 100% Không Khiếu bị nứt vỡ (rớt tu vi, mất vĩnh viễn Chân Nguyên tối đa).</td>
                 </tr>
               </tbody>
             </table>
@@ -634,7 +734,7 @@ export const wikiPages: WikiPage[] = [
     title: "Thuộc tính & Áp lực vách khiếu",
     category: "gameplay",
     subCategory: "gameplay-character",
-    keywords: ["stress", "áp lực", "vách khiếu", "không khiếu", "aperture stress", "nứt", "rớt cấp", "tịnh thủy"],
+    keywords: ["stress", "áp lực", "vách khiếu", "không khiếu", "aperture stress", "nứt", "rớt cấp", "tịnh thủy", "chủng tộc", "thể chất", "trạng thái"],
     content: (
       <div className="space-y-6">
         <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/20 flex gap-3 items-start">
@@ -650,11 +750,21 @@ export const wikiPages: WikiPage[] = [
         <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Hệ thống áp lực</h3>
           <ul className="list-disc list-inside text-xs text-[var(--text-secondary)] space-y-2 leading-relaxed">
-            <li>Mỗi lần click nút <strong>Trùng Kích Vách Khiếu</strong>, thanh áp lực tăng thêm <strong>20%</strong>.</li>
-            <li>Thanh áp lực tự động giảm dần theo thời gian thực (ví dụ: giảm 10% mỗi giờ đời thật).</li>
-            <li>Nếu áp lực vượt mốc <strong>80%</strong>, tỉ lệ trùng kích đột phá thành công bị suy giảm nghiêm trọng.</li>
-            <li>Nếu áp lực chạm mốc <strong>100%</strong>, Không khiếu bị nứt: Nhân vật bị **mất vĩnh viễn 5% Max Mana** và có nguy cơ <strong>rớt cấp tu vi hiện tại</strong>!</li>
+            <li>Mỗi lần click nút <strong>Trùng Kích Vách Khiếu</strong>, thanh áp lực tăng thêm <strong>+5</strong>.</li>
+            <li>Thanh áp lực tự động suy giảm theo thời gian thực: cứ <strong>mỗi 2 giờ đời thật</strong>, áp lực giảm đi <strong>phân nửa</strong>.</li>
+            <li>Nếu áp lực vượt mốc <strong>80%</strong>, hiệu quả trùng kích chỉ còn <strong>25%</strong> so với bình thường.</li>
+            <li>Nếu áp lực chạm mốc <strong>100%</strong>, Không khiếu bị nứt: đạo hữu <strong>mất vĩnh viễn 5% Chân Nguyên tối đa</strong>, tiến độ vách khiếu về 0, áp lực giảm về 50% và <strong>rớt xuống một Tiểu Cảnh Giới (hoặc một Chuyển nếu đang ở Sơ Giai)</strong>!</li>
           </ul>
+          <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-xs leading-relaxed text-[var(--text-secondary)]">
+            💡 <strong>Mẹo:</strong> Sử dụng vật phẩm tiêu hao <strong>Tịnh Thủy Cổ</strong> để lập tức thanh lọc, đưa thanh Áp lực vách khiếu về 0% ngay tức khắc.
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Thuộc tính thân thể</h3>
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+            Ngoài tu vi, hồ sơ còn ghi nhận <strong>Chủng tộc</strong> (Nhân Tộc, Người Lông, Nhân Ngư, Thạch Nhân, Long Nhân...), <strong>Giới tính</strong>, <strong>Thể chất</strong> (Hoang Cổ Nguyệt Thể, Thanh Liên Đại Nhật Thể...) và mảng <strong>Trạng thái</strong> (ví dụ Trọng Thương giảm 20% chiến lực). Các giá trị này mang hiệu ứng riêng lên tu luyện và chiến đấu, xem chi tiết trong mục Hồ Sơ.
+          </p>
         </div>
       </div>
     )
@@ -664,7 +774,7 @@ export const wikiPages: WikiPage[] = [
     title: "Linh Căn & Tư Chất Không Khiếu",
     category: "gameplay",
     subCategory: "gameplay-character",
-    keywords: ["tư chất", "linh căn", "aptitude", "giáp", "ất", "bính", "đinh", "hệ số", "multiplier"],
+    keywords: ["tư chất", "linh căn", "aptitude", "giáp", "ất", "bính", "đinh", "hệ số", "multiplier", "hiến tế"],
     content: (
       <div className="space-y-6">
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
@@ -676,7 +786,7 @@ export const wikiPages: WikiPage[] = [
             <span className="text-2xl font-bold text-emerald-400">Giáp (A)</span>
             <h4 className="text-xs text-[var(--text-primary)] mt-2 font-bold">Tư chất Thượng đẳng</h4>
             <p className="text-[10px] text-[var(--text-muted)] mt-1 leading-relaxed">
-              Hệ số tu luyện: <strong>1.4x</strong>. Chân Nguyên dồi dào, vách khiếu vững chắc nhất.
+              Hệ số tu luyện: <strong>1.4x</strong> · Hồi Chân Nguyên <strong>8/giờ</strong>. Tỉ lệ mở ra 80–99%.
             </p>
           </div>
 
@@ -684,7 +794,7 @@ export const wikiPages: WikiPage[] = [
             <span className="text-2xl font-bold text-cyan-400">Ất (B)</span>
             <h4 className="text-xs text-[var(--text-primary)] mt-2 font-bold">Tư chất Trung đẳng</h4>
             <p className="text-[10px] text-[var(--text-muted)] mt-1 leading-relaxed">
-              Hệ số tu luyện: <strong>1.1x</strong>. Tốc độ đột phá ổn định, dễ dàng vượt qua phàm nhân.
+              Hệ số tu luyện: <strong>1.1x</strong> · Hồi Chân Nguyên <strong>6/giờ</strong>. Tỉ lệ mở ra 60–79%.
             </p>
           </div>
 
@@ -692,7 +802,7 @@ export const wikiPages: WikiPage[] = [
             <span className="text-2xl font-bold text-amber-500">Bính (C)</span>
             <h4 className="text-xs text-[var(--text-primary)] mt-2 font-bold">Tư chất Hạ đẳng</h4>
             <p className="text-[10px] text-[var(--text-muted)] mt-1 leading-relaxed">
-              Hệ số tu luyện: <strong>0.85x</strong>. Cần nỗ lực nhiều hoặc dùng ngoại lực hỗ trợ.
+              Hệ số tu luyện: <strong>0.85x</strong> · Hồi Chân Nguyên <strong>4/giờ</strong>. Tỉ lệ mở ra 40–59%.
             </p>
           </div>
 
@@ -700,9 +810,19 @@ export const wikiPages: WikiPage[] = [
             <span className="text-2xl font-bold text-rose-500">Đinh (D)</span>
             <h4 className="text-xs text-[var(--text-primary)] mt-2 font-bold">Tư chất Cực hạ</h4>
             <p className="text-[10px] text-[var(--text-muted)] mt-1 leading-relaxed">
-              Hệ số tu luyện: <strong>0.6x</strong>. Vô cùng khó khăn. Khuyên dùng Tửu Trùng và Xá Lợi Cổ để tu luyện.
+              Hệ số tu luyện: <strong>0.6x</strong> · Hồi Chân Nguyên <strong>2/giờ</strong>. Tỉ lệ mở ra 20–39%.
             </p>
           </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Cách nâng tư chất</h3>
+          <ul className="list-disc list-inside text-xs text-[var(--text-secondary)] space-y-2 leading-relaxed">
+            <li><strong>Hiến tế NPC</strong> bằng Huyết Sọ Cổ: nghiền nát cốt nhục đệ tử môn phái để tăng <strong>+5% tư chất</strong> (tối đa 99%), nhưng làm tăng <strong>+40 áp lực vách khiếu</strong>.</li>
+            <li><strong>Hiệu ứng Cổ:</strong> một số Cổ trùng có hiệu ứng tăng trực tiếp tư chất Không khiếu (tối đa 99%).</li>
+            <li>Khi tư chất thay đổi, phẩm cấp Linh Căn tự động cập nhật theo ngưỡng: ≥80% = Giáp, ≥60% = Ất, ≥40% = Bính, dưới 40% = Đinh.</li>
+            <li>Gợi ý cho đạo hữu Bính/Đinh: tận dụng <strong>Tửu Trùng</strong> và <strong>Xá Lợi Cổ</strong> để bù lại tốc độ tu luyện chậm chạp.</li>
+          </ul>
         </div>
       </div>
     )
@@ -712,11 +832,11 @@ export const wikiPages: WikiPage[] = [
     title: "Thông Thạo & Cảnh Giới Lưu Phái",
     category: "gameplay",
     subCategory: "gameplay-character",
-    keywords: ["cảnh giới", "thông thạo", "attainment", "đại sư", "tông sư", "đại tông sư", "vô thượng", "chân ý", "master", "grandmaster"],
+    keywords: ["cảnh giới", "thông thạo", "attainment", "đại sư", "tông sư", "đại tông sư", "vô thượng", "chân ý", "master", "grandmaster", "đạo ngân"],
     content: (
       <div className="space-y-6">
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-          Cảnh giới lưu phái thể hiện sự thấu hiểu của linh hồn bạn đối với quy luật vạn vật thế gian. Tích lũy cảnh giới lưu phái thông qua việc rèn luyện sát chiêu chiến đấu hoặc hấp thu Chân Ý khi thám hiểm Mộng Cảnh.
+          Cảnh giới lưu phái thể hiện sự thấu hiểu của linh hồn bạn đối với quy luật vạn vật thế gian. Tích lũy cảnh giới lưu phái thông qua việc rèn luyện sát chiêu chiến đấu hoặc hấp thu Chân Ý khi thám hiểm Mộng Cảnh. Song song đó, <strong>Đạo Ngân</strong> (vết khắc của quy luật tự nhiên) ghi lại độ lĩnh ngộ theo từng lưu phái.
         </p>
 
         <div className="space-y-4">
@@ -760,6 +880,44 @@ export const wikiPages: WikiPage[] = [
             </div>
           </div>
         </div>
+
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Đạo Ngân (Dao Marks)</h3>
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+            Đạo Ngân là điểm lĩnh ngộ tích lũy theo từng lưu phái trong số <strong>49 lưu phái</strong> (Lực đạo, Hỏa đạo, Thủy đạo, Phong đạo, Lôi đạo, Hồn đạo, Thời gian đạo, Không gian đạo...). Mỗi điểm Đạo Ngân gia tăng sát thương và phòng ngự cho Cổ/Kỹ năng thuộc lưu phái đó.
+          </p>
+          <div className="overflow-hidden rounded-2xl border border-[var(--border)]">
+            <table className="w-full text-left text-xs font-mono">
+              <thead className="bg-zinc-950 text-[var(--text-secondary)] border-b border-[var(--border)]">
+                <tr>
+                  <th className="p-3">Nguồn nhận Đạo Ngân</th>
+                  <th className="p-3">Mô tả</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-900 text-[var(--text-primary)] bg-[var(--surface)]">
+                <tr>
+                  <td className="p-3 font-bold text-[var(--text-primary)]">Thăng Tiên</td>
+                  <td className="p-3">Ban đầu nhận 100 điểm mỗi lưu phái cho hai đường ngẫu nhiên.</td>
+                </tr>
+                <tr>
+                  <td className="p-3 font-bold text-[var(--text-primary)]">Tai Kiếp</td>
+                  <td className="p-3">Vượt qua Địa Tai, Thiên Kiếp, Hạo Kiếp... nhận lượng Đạo Ngân lớn theo độ khó.</td>
+                </tr>
+                <tr>
+                  <td className="p-3 font-bold text-[var(--text-primary)]">Sát Chiêu</td>
+                  <td className="p-3">Rèn luyện sát chiêu tích lũy Đạo Ngân vào lưu phái cốt lõi.</td>
+                </tr>
+                <tr>
+                  <td className="p-3 font-bold text-[var(--text-primary)]">Hiệu ứng Cổ / vật phẩm</td>
+                  <td className="p-3">Một số Cổ và vật phẩm có hiệu ứng tăng Đạo Ngân trực tiếp.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-xs leading-relaxed text-[var(--text-secondary)]">
+            💡 <strong>Công thức sát thương:</strong> Mỗi điểm Đạo Ngân = <strong>+1%</strong> sát thương/phòng ngự cho lưu phái đó, áp dụng cả trong chiến đấu thường lẫn tự động. Vượt quá 10.000 điểm, hiệu quả giảm xuống còn <strong>+0.2%/điểm</strong> (soft cap).
+          </div>
+        </div>
       </div>
     )
   },
@@ -768,7 +926,7 @@ export const wikiPages: WikiPage[] = [
     title: "Kỹ năng & Sát Chiêu",
     category: "gameplay",
     subCategory: "gameplay-character",
-    keywords: ["kỹ năng", "sát chiêu", "combo", "active", "passive", "body mods", "killer moves"],
+    keywords: ["kỹ năng", "sát chiêu", "combo", "active", "passive", "body mods", "killer moves", "cổ hạch tâm"],
     content: (
       <div className="space-y-6">
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
@@ -776,12 +934,24 @@ export const wikiPages: WikiPage[] = [
         </p>
 
         <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Cấu trúc Sát Chiêu</h3>
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            Sát Chiêu (Killer Move) là kỹ năng ghép từ <strong>1 Cổ Hạch Tâm (Core Gu)</strong> và <strong>0–8 Cổ Phụ Trợ (Support Gu)</strong>. Cổ phụ trợ có thể tăng sát thương, giảm hao Chân Nguyên, thêm khống chế (choáng, đóng băng, câm lặng) hoặc rút ngắn thời gian tụ lực.
+          </p>
+          <ul className="list-disc list-inside text-xs text-[var(--text-secondary)] space-y-2 leading-relaxed">
+            <li><strong>Cổ Hạch Tâm</strong> quyết định lưu phái và hiệu ứng chính của sát chiêu; sát chiêu rèn luyện tích lũy Đạo Ngân vào lưu phái cốt lõi.</li>
+            <li><strong>Body Mods</strong> là cải tạo thân thể vĩnh viễn tích lũy từ dung hợp Cổ trùng, phản ánh qua các chỉ số thân thể trên hồ sơ.</li>
+            <li>Trạng thái thân thể (ví dụ Trọng Thương) làm suy giảm sức mạnh sát chiêu cho đến khi hồi phục.</li>
+          </ul>
+        </div>
+
+        <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Sát Chiêu Phối Hợp</h3>
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
             Bằng cách trang bị và kích hoạt đồng thời một nhóm Cổ trùng bổ trợ nhau trong lượt đánh, bạn sẽ tạo ra sát chiêu cộng hưởng sức mạnh khủng khiếp:
           </p>
           <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-xs space-y-2 text-[var(--text-secondary)] leading-relaxed">
-            <li>💥 <strong>Lực Đạo combo:</strong> Trang bị đồng thời <strong>Toàn Lực Ứng Phó Cổ</strong> (kích hoạt 100% thú ảnh) và <strong>Khổ Lực Cổ</strong> (tăng sát thương dựa trên HP đã mất) để tối đa lượng damage bộc phát.</li>
+            <li>💥 <strong>Lực Đạo combo:</strong> Trang bị đồng thời <strong>Toàn Lực Ứng Phó Cổ</strong> (kích hoạt 100% thú ảnh) và <strong>Khổ Lực Cổ</strong> (tăng sát thương dựa trên Sinh Lực đã mất) để tối đa lượng sát thương bộc phát.</li>
             <li>❤️ <strong>Trị liệu combo:</strong> Sử dụng <strong>Tự Lực Cánh Sinh Cổ</strong> hồi phục sinh lực dựa trên chỉ số Sức mạnh thể chất của bạn. Sức mạnh càng lớn hồi máu càng nhiều.</li>
           </div>
         </div>
@@ -796,7 +966,7 @@ export const wikiPages: WikiPage[] = [
     content: (
       <div className="space-y-6">
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-          Cổ trùng được chia làm 9 Chuyển. Cấp 1-5 là Phàm Cổ, Cấp 6-9 là Tiên Cổ (độc nhất vô nhị). Chúng được chia thành các nhóm chính: Công kích, Phòng ngự, Trinh sát, Trị liệu, Phụ trợ và Di động.
+          Cổ trùng được chia làm 9 Chuyển. Nhất Chuyển đến Ngũ Chuyển là Phàm Cổ, Lục Chuyển đến Cửu Chuyển là Tiên Cổ (độc nhất vô nhị). Chúng được chia thành các nhóm chính: Công kích, Phòng ngự, Trinh sát, Trị liệu, Phụ trợ và Di động.
         </p>
 
         <div className="space-y-4">
@@ -1082,7 +1252,7 @@ export const wikiPages: WikiPage[] = [
               Hệ thống thành tựu với 23 mốc thành tựu, mỗi thành tựu có điều kiện mở khóa và phần thưởng riêng. Quản lý tại tab <strong>"Thành Tựu"</strong> trong Không Khiếu.
             </p>
             <ul className="list-disc list-inside space-y-1">
-              <li><strong>Thành tựu chiến đấu:</strong> Tân Thủ Nhập Môn, các mốc Rank 2-9.</li>
+              <li><strong>Thành tựu chiến đấu:</strong> Tân Thủ Nhập Môn, các mốc Nhị Chuyển đến Cửu Chuyển.</li>
               <li><strong>Thành tựu độ kiếp:</strong> Vượt 1, 5, 10 kiếp nạn.</li>
               <li><strong>Thành tựu Cổ trùng:</strong> Sở hữu 10, 25, 50 loại Cổ khác nhau.</li>
               <li><strong>Thành tựu khám phá:</strong> Khám phá 100, 500, 1.000 ô địa đồ.</li>
@@ -1090,7 +1260,7 @@ export const wikiPages: WikiPage[] = [
               <li><strong>Thành tựu tu luyện:</strong> Nhân Khí, Hồn Phách, Phá Vách.</li>
             </ul>
             <p>
-              Một số thành tựu cấp cao (từ Rank 4 trở lên, 10 kiếp, 50 Cổ, 1.000 ô địa đồ, 1 triệu Nguyên Thạch, 10.000 Nhân Khí, Phá Vách 100%) mở khóa <strong>Khung Frame</strong> và <strong>Danh Hiệu</strong>. Có thể trang bị danh hiệu và frame tại tab Thành Tựu — danh hiệu sẽ hiển thị cạnh tên trong khung chat.
+              Một số thành tựu cấp cao (từ Tứ Chuyển trở lên, 10 kiếp, 50 Cổ, 1.000 ô địa đồ, 1 triệu Nguyên Thạch, 10.000 Nhân Khí, Phá Vách 100%) mở khóa <strong>Khung Frame</strong> và <strong>Danh Hiệu</strong>. Có thể trang bị danh hiệu và frame tại tab Thành Tựu — danh hiệu sẽ hiển thị cạnh tên trong khung chat.
             </p>
           </div>
         </div>
@@ -1103,7 +1273,7 @@ export const wikiPages: WikiPage[] = [
           </div>
           <ul className="list-disc list-inside space-y-1 text-xs text-[var(--text-secondary)] leading-relaxed">
             <li><strong>Sửa Speed:</strong> Tốc độ từ Growth và Passive giờ ảnh hưởng thứ tự đánh trong combat (trước bị ignore).</li>
-            <li><strong>Sửa MaxHP:</strong> Không còn bị ghi đè cứng ở 100. Growth HP + Passive HP giờ hoạt động đúng.</li>
+            <li><strong>Sửa MaxHP:</strong> Sinh Lực tối đa không còn bị ghi đè cứng ở 100. Sinh Lực từ Growth và Passive giờ hoạt động đúng.</li>
             <li><strong>Growth cho legacy Cổ:</strong> Worker tự tạo EquippedAt cho Cổ đã equip trước khi feature growth ra mắt.</li>
             <li><strong>Auto-Combat loadout:</strong> Chỉ hiện Cổ có Active Skill. Passive + Growth auto-apply từ toàn bộ Cổ đang trang bị.</li>
             <li><strong>Gift Code mới:</strong> <span className="font-mono text-emerald-400">CHODAUGIA</span>, <span className="font-mono text-emerald-400">PHUONGNGUYEN</span>, <span className="font-mono text-amber-400">BACHNGUNGBANG</span>. Nhập tại tab Phúc Lợi trong Không Khiếu.</li>

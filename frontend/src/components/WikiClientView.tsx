@@ -13,7 +13,8 @@ import {
   Sparkles, 
   Coins, 
   ChevronRight, 
-  SlidersHorizontal
+  SlidersHorizontal,
+  ArrowLeft
 } from "lucide-react";
 import { type GuDictionaryItem } from "@/lib/gu-dict";
 import { type ItemSpec, type RefiningRecipe } from "@/store/useGameStore";
@@ -308,17 +309,26 @@ export default function WikiClientView({
         
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-950/60 border border-indigo-500/20 flex items-center justify-center">
-              <span className="text-lg">📖</span>
-            </div>
-            <div>
-              <h1 className="text-2xl font-serif font-bold tracking-wider bg-gradient-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">
-                Cổ Giới Thư Viện
-              </h1>
-              <p className="text-xs text-[var(--text-muted)] font-mono mt-0.5">
-                Tra cứu Bách khoa Toàn thư của Cổ Giới
-              </p>
+          <div className="flex flex-wrap items-center gap-4">
+            <Link
+              href="/"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/60 border border-zinc-850 hover:border-emerald-500/30 text-zinc-400 hover:text-emerald-400 transition-all font-mono text-xs cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Quay về Game
+            </Link>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-950/60 border border-indigo-500/20 flex items-center justify-center">
+                <span className="text-lg">📖</span>
+              </div>
+              <div>
+                <h1 className="text-2xl font-serif font-bold tracking-wider bg-gradient-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">
+                  Cổ Giới Thư Viện
+                </h1>
+                <p className="text-xs text-[var(--text-muted)] font-mono mt-0.5">
+                  Tra cứu Bách khoa Toàn thư của Cổ Giới
+                </p>
+              </div>
             </div>
           </div>
           

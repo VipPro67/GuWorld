@@ -68,6 +68,13 @@ function WikiPageContent({ page }: { page: WikiPage }) {
       <div className="max-w-4xl mx-auto px-4 py-8">
         <nav className="flex items-center gap-1.5 text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-6">
           <Link
+            href="/"
+            className="hover:text-[var(--brand)] transition-colors font-bold text-emerald-400"
+          >
+            Quay về Game
+          </Link>
+          <ChevronRight className="w-3 h-3" />
+          <Link
             href="/wiki"
             className="hover:text-[var(--brand)] transition-colors"
           >
