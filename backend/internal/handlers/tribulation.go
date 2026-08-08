@@ -1362,8 +1362,13 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	}
 
 	var rank int
+	err = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, playerID).Scan(&rank)
+	if err != nil {
+		return err
+	}
+
 	var daoMarksRaw []byte
-	err = tx.QueryRow(`SELECT rank, dao_marks FROM players WHERE id = $1`, playerID).Scan(&rank, &daoMarksRaw)
+	err = tx.QueryRow(`SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&daoMarksRaw)
 	if err != nil {
 		return err
 	}

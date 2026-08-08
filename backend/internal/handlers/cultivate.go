@@ -407,10 +407,13 @@ func Ascension(c *gin.Context) {
 		msg = "Thăng tiên thành công! Bạn đã khai Tiên Khiếu."
 		SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Đạo hữu %s đã thăng tiên thành công! Người người ngưỡng mộ", player.Account.Username))
 		updateQuery := `
-			UPDATE players SET rank = $1, sub_rank = $2, human_qi = $3, dao_marks = $4, next_tribulation_time = $5, immortal_stones = $6
-			WHERE id = $7
+			UPDATE players SET rank = $1, sub_rank = $2, human_qi = $3, next_tribulation_time = $4, immortal_stones = $5
+			WHERE id = $6
 		`
-		_, err = tx.Exec(updateQuery, player.Rank, player.SubRank, player.HumanQi, player.DaoMarks, player.NextTribulationTime, player.ImmortalStones, player.ID)
+		_, err = tx.Exec(updateQuery, player.Rank, player.SubRank, player.HumanQi, player.NextTribulationTime, player.ImmortalStones, player.ID)
+		if err == nil {
+			_, err = tx.Exec(`UPDATE immortal_apertures SET dao_marks = $1 WHERE player_id = $2`, player.DaoMarks, player.ID)
+		}
 	} else {
 		// Failure penalty: Drop back to Rank 1 SubRank 1, lose Human Qi
 		player.Rank = 1
