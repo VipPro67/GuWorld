@@ -537,6 +537,7 @@ func ResolveTribulation(c *gin.Context) {
 	now := time.Now()
 	didBreakthrough := false
 	breakthroughMsg := ""
+	updatedDaoMarks := make(map[string]int)
 
 	// Helper: recalc next_year, check breakthrough
 	handleSuccess := func(tribType string) {
@@ -573,11 +574,12 @@ func ResolveTribulation(c *gin.Context) {
 	if remainingEnemies == 0 {
 		// Clear Victory! All enemies defeated = guaranteed success
 		rewards := distributeDaoMarks(ev.Path, ev.RewardDaoMarks)
-		err = addMultipleDaoMarksTx(tx, playerID.String(), rewards)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Đạo Ngân: " + err.Error()})
+		daoMap, errDao := addMultipleDaoMarksTx(tx, playerID.String(), rewards)
+		if errDao != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Đạo Ngân: " + errDao.Error()})
 			return
 		}
+		updatedDaoMarks = daoMap
 
 		handleSuccess(ev.TribulationType)
 
@@ -629,10 +631,12 @@ func ResolveTribulation(c *gin.Context) {
 		if win {
 			reducedReward := ev.RewardDaoMarks / 2
 			rewards := distributeDaoMarks(ev.Path, reducedReward)
-			if err := addMultipleDaoMarksTx(tx, playerID.String(), rewards); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Đạo Ngân: " + err.Error()})
+			daoMap, errDao := addMultipleDaoMarksTx(tx, playerID.String(), rewards)
+			if errDao != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Đạo Ngân: " + errDao.Error()})
 				return
 			}
+			updatedDaoMarks = daoMap
 
 			handleSuccess(ev.TribulationType)
 			ap.ApertureHP = ap.MaxApertureHP / 2
@@ -745,9 +749,20 @@ func ResolveTribulation(c *gin.Context) {
 	var finalState string
 	_ = db.DB.QueryRow(`SELECT state FROM immortal_apertures WHERE id = $1`, ev.ApertureID).Scan(&finalState)
 
+	var finalDaoMarks map[string]int
+	if len(updatedDaoMarks) > 0 {
+		finalDaoMarks = updatedDaoMarks
+	} else {
+		var finalDaoJSON []byte
+		if err2 := db.DB.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&finalDaoJSON); err2 == nil {
+			json.Unmarshal(finalDaoJSON, &finalDaoMarks)
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"message": msg + " Nhân Khí +10.",
-		"state":   finalState,
+		"message":   msg + " Nhân Khí +10.",
+		"state":     finalState,
+		"dao_marks": finalDaoMarks,
 	})
 }
 
@@ -892,7 +907,7 @@ func addDaoMarksTx(tx *sql.Tx, playerID string, path string, amount int) error {
 	return err
 }
 
-func addMultipleDaoMarksTx(tx *sql.Tx, playerID string, rewards map[string]int) error {
+func addMultipleDaoMarksTx(tx *sql.Tx, playerID string, rewards map[string]int) (map[string]int, error) {
 	mult := daoMarkGainMultiplierTx(tx, playerID)
 	for path, amount := range rewards {
 		rewards[path] = int(float64(amount) * mult)
@@ -900,13 +915,13 @@ func addMultipleDaoMarksTx(tx *sql.Tx, playerID string, rewards map[string]int) 
 	var daoJSON []byte
 	err := tx.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1 FOR UPDATE`, playerID).Scan(&daoJSON)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	daoMap := make(map[string]int)
 	if len(daoJSON) > 0 {
 		if err := json.Unmarshal(daoJSON, &daoMap); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	for path, amount := range rewards {
@@ -915,11 +930,14 @@ func addMultipleDaoMarksTx(tx *sql.Tx, playerID string, rewards map[string]int) 
 
 	daoJSON, err = json.Marshal(daoMap)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	_, err = tx.Exec(`UPDATE immortal_apertures SET dao_marks = $1 WHERE player_id = $2`, daoJSON, playerID)
-	return err
+	if err != nil {
+		return nil, err
+	}
+	return daoMap, nil
 }
 
 func distributeDaoMarks(mainPath string, totalMarks int) map[string]int {
