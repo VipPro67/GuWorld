@@ -353,7 +353,7 @@ Hệ thống môn phái hiện có:
 ## 16. Chat, mail và feedback
 
 - Mail riêng: gửi và xem inbox.
-- Bảo Hoàng chat theo channel, fetch message và subscribe SSE.
+- Bảo Hoàng chat theo channel, fetch message và subscribe SSE. Hệ thống tích hợp bộ lọc chặn spam (giới hạn thời gian gửi 1.5s, cấm trùng lặp tin nhắn trong 10s, cấm lặp từ hoặc chuỗi ký tự liên tiếp) và chặn từ ngữ tục tĩu nhạy cảm.
 - Feedback (Thỉnh Thiên Đạo): mỗi sớ trình là một topic. Xem danh sách, gửi góp ý, bình chọn, góp ý (comment), cập nhật trạng thái/developer response.
 - **Quyền theo trạng thái topic:**
   - `pending` (chờ duyệt): không bình chọn, không góp ý.

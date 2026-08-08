@@ -160,6 +160,11 @@ func SendBaoHoangChat(c *gin.Context) {
 		req.Channel = "world"
 	}
 
+	if err := ValidateChatMessage(authID.String(), req.Content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	tx, err := db.DB.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
