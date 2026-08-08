@@ -380,7 +380,7 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create tribulation_enemies table: %w", err)
 	}
 
-	// dao_marks (relational mirror) removed: dao marks live only in players.dao_marks JSONB
+	// dao_marks (relational mirror) removed: dao marks live in immortal_apertures.dao_marks JSONB
 	_, err = DB.Exec(`DROP TABLE IF EXISTS dao_marks;`)
 	if err != nil {
 		return fmt.Errorf("failed to drop legacy dao_marks table: %w", err)
@@ -954,7 +954,7 @@ func InitSchema() error {
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS y INTEGER NOT NULL DEFAULT 50;`, "y"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS explored_cells JSONB NOT NULL DEFAULT '["50,50"]';`, "explored_cells"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS current_region VARCHAR(50) NOT NULL DEFAULT 'Southern_Border';`, "current_region"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS dao_marks JSONB NOT NULL DEFAULT '{"strength": 0}';`, "dao_marks"},
+
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS active_combat JSONB DEFAULT NULL;`, "active_combat"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS path_masteries JSONB NOT NULL DEFAULT '{}';`, "path_masteries"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS equipped_gus JSONB NOT NULL DEFAULT '[]';`, "equipped_gus"},
@@ -1294,9 +1294,7 @@ func InitSchema() error {
 		{`ALTER TABLE players DROP COLUMN IF EXISTS wisdom;`, "drop_wisdom_column"},
 		{`UPDATE players SET time_speed_multiplier = 1.0;`, "reset_time_speed_multiplier"},
 		{`ALTER TABLE players DROP COLUMN IF EXISTS tribulation_count;`, "drop_tribulation_count_column"},
-		{`ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS dao_marks JSONB NOT NULL DEFAULT '{"strength": 0}';`, "add_dao_marks_to_apertures"},
-		{`UPDATE immortal_apertures ia SET dao_marks = p.dao_marks FROM players p WHERE ia.player_id = p.id AND p.dao_marks IS NOT NULL;`, "migrate_dao_marks_data"},
-		{`ALTER TABLE players DROP COLUMN IF EXISTS dao_marks;`, "drop_dao_marks_from_players"},
+
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {
