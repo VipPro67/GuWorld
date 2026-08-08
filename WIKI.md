@@ -8,6 +8,51 @@ Wiki này phản ánh các hệ thống đã có trong codebase hiện tại.
 - Hồ sơ hỗ trợ bio, avatar, đổi mật khẩu và cơ chế ngụy trang thông tin công khai.
 - Referral có thống kê người được mời và phần thưởng/mốc xử lý ở backend.
 
+### Chủng tộc, Giới tính, Thể chất, Trạng thái
+
+Khi đăng ký, đạo hữu chọn **Chủng tộc** (mặc định Nhân Tộc) và **Giới tính**. Trong quá trình chơi, **Thể chất** và **Trạng thái** có thể thay đổi qua sự kiện/quà hoặc Admin. Mỗi giá trị mang hiệu ứng riêng:
+
+**Chủng tộc:**
+
+| Chủng tộc | Hiệu ứng |
+| --- | --- |
+| Nhân Tộc (`human`) | Không bonus (mặc định) |
+| Người Lông (`fur_people`) | **+10% tỉ lệ Luyện Cổ thành công** |
+| Nhân Ngư (`merman`) | Thủy Đạo +10% affinity, +5% sát thương Thủy Đạo |
+| Vũ Dân (`feathered`) | +10% tốc độ, Không Gian Đạo +5% affinity |
+| Mặc Nhân (`inkman`) | Trí Tuệ Đạo +8%, Hồn Đạo +5% affinity |
+| Thạch Nhân (`rockman`) | +15% phòng thủ, -10% tốc độ |
+| Tuyết Dân (`snowman`) | Hàn Băng Đạo +15% affinity, -10% sát thương Hỏa nhận |
+| Thú Nhân (`variant_beastman`) | +8% tấn công, +5% phòng thủ, -5% tỉ lệ Luyện Cổ |
+| Long Nhân (`dragonman`) | +10% tấn công, +10% phòng thủ, -5% tỉ lệ Luyện Cổ |
+| Cự Dương Huyết Mạch (`giant_sun_descendant`) | +5 Vận, +5% hiệu quả tu luyện |
+
+**Giới tính:** Nam (`male`) / Nữ (`female`) — chưa có hiệu ứng (chỉ hiển thị).
+
+**Trạng thái:**
+
+| Trạng thái | Hiệu ứng |
+| --- | --- |
+| Trọng Thương (`severely_wounded`) | **-20%** tấn công, phòng thủ, tốc độ |
+
+**Thể chất (10 loại — tất cả đều +10% hồi mana):**
+
+| Thể chất | Hiệu ứng |
+| --- | --- |
+| Hoang Cổ Nguyệt Thể (`desolate_ancient_moon_body`) | +20% hiệu quả tu luyện, +15% max mana |
+| Thanh Liên Đại Nhật Thể (`verdant_great_sun_body`) | Hỏa Đạo +20% affinity, +10% tấn công |
+| Bắc Minh Băng Phách Thể (`northern_dark_ice_soul_body`) | Hàn Băng Đạo +20% affinity, +10% phòng thủ |
+| Cổ Nguyệt Âm Đức Thể (`ancient_yin_virtue_body`) | Hồn Đạo +15% affinity, +10% hồi phục nhận |
+| Hạo Kiếp Viêm Quang Lôi Quang Thể (`blazing_glory_lightning_brilliance_body`) | Lôi Đạo +20% affinity, +10% tốc độ |
+| Thuần Mộng Cầu Chân Thể (`pure_dream_reality_seeker_body`) | Mộng Đạo +25% affinity, +15% sát thương Mộng Đạo |
+| Vô Cực Thiên Ngân Thể (`unrestrained_heavenly_mark_body`) | +15% Đạo Ngân nhận được |
+| Đại Lực Chân Vũ Thể (`great_strength_true_martial_body`) | Lực Đạo +20% affinity, +15% tấn công |
+| Tiêu Dao Liên Tâm Thể (`carefree_lotus_heart_body`) | Trí Tuệ Đạo +15% affinity, +20% kháng tâm lý |
+| Cổ Hồn Âm Đức Thể (`ancient_soul_virtue_body`) | Hồn Đạo +20% affinity, +15% phòng thủ hồn |
+
+Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuses`). Danh sách và con số hiệu ứng được định nghĩa tập trung tại `backend/internal/gamefx/fx.go`.
+
+
 ## 2. Tu luyện
 
 ### Rank và tiểu cảnh giới

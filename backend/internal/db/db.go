@@ -207,7 +207,11 @@ func InitSchema() error {
 		earned_achievements JSONB NOT NULL DEFAULT '[]',
 		selected_title VARCHAR(100) NOT NULL DEFAULT '',
 		selected_frame VARCHAR(50) NOT NULL DEFAULT '',
-		growth_data JSONB NOT NULL DEFAULT '{"boosts":{"attack":0,"defense":0,"hp":0,"speed":0},"fully_grown":[]}'
+		growth_data JSONB NOT NULL DEFAULT '{"boosts":{"attack":0,"defense":0,"hp":0,"speed":0},"fully_grown":[]}',
+		race VARCHAR(50) NOT NULL DEFAULT '',
+		gender VARCHAR(20) NOT NULL DEFAULT '',
+		constitution VARCHAR(100) NOT NULL DEFAULT '',
+		statuses JSONB NOT NULL DEFAULT '[]'
 	);
 	`
 	_, err = DB.Exec(query)
@@ -1197,6 +1201,10 @@ func InitSchema() error {
 		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS usage_count INTEGER NOT NULL DEFAULT 0;`, "usage_count"},
 
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS needs_onboarding BOOLEAN NOT NULL DEFAULT false;`, "needs_onboarding"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS race VARCHAR(50) NOT NULL DEFAULT '';`, "race"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS gender VARCHAR(20) NOT NULL DEFAULT '';`, "gender"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS constitution VARCHAR(100) NOT NULL DEFAULT '';`, "constitution"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS statuses JSONB NOT NULL DEFAULT '[]';`, "statuses"},
 		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS success_rate DOUBLE PRECISION NOT NULL DEFAULT 0;`, "add_success_rate"},
 		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS channel_time INTEGER NOT NULL DEFAULT 1;`, "add_channel_time"},
 		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS is_reliable BOOLEAN NOT NULL DEFAULT FALSE;`, "add_is_reliable"},

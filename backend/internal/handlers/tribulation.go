@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -256,16 +257,7 @@ func AttackTribulationEnemy(c *gin.Context) {
 	actor := models.CombatantFromPlayer(&player, CalculatePlayerStats(&player))
 
 	// Always apply Basic Attack (Đánh thường)
-	daoMult := 1.0
-	if actor.DaoMarks != nil {
-		if amt, ok := actor.DaoMarks["strength"]; ok && amt > 0 {
-			if amt <= 10000 {
-				daoMult = 1.0 + float64(amt)/100.0
-			} else {
-				daoMult = 1.0 + 100.0 + float64(amt-10000)/500.0
-			}
-		}
-	}
+	daoMult := gamefx.DaoMultiplierForPaths(actor.DaoMarks, []string{"strength"}, gamefx.Get(&player).DaoNganBonus)
 	dmgVal := actor.BaseAttack
 	if dmgVal <= 0 {
 		dmgVal = 10.0
@@ -281,8 +273,8 @@ func AttackTribulationEnemy(c *gin.Context) {
 
 	// Apply selected active Gu effects
 	for _, spec := range guSpecs {
-		dmgBase, defBase, _, errGuBase := CalculateGuEffectForCombatant(&actor, &spec, false)
-		dmg, def, _, errGu := CalculateGuEffectForCombatant(&actor, &spec, true)
+		dmgBase, defBase, _, errGuBase := CalculateGuEffectForCombatant(&actor, &spec, false, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)
+		dmg, def, _, errGu := CalculateGuEffectForCombatant(&actor, &spec, true, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)
 
 		if errGu == nil && errGuBase == nil {
 			totalFinalDmg += dmg
@@ -867,7 +859,16 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 	return nil
 }
 
+func daoMarkGainMultiplierTx(tx *sql.Tx, playerID string) float64 {
+	var constitution string
+	if err := tx.QueryRow(`SELECT COALESCE(constitution, '') FROM players WHERE id = $1`, playerID).Scan(&constitution); err != nil {
+		return 1.0
+	}
+	return 1.0 + gamefx.Get(&models.Player{CharacterState: models.CharacterState{Constitution: constitution}}).DaoMarkGainBonus
+}
+
 func addDaoMarksTx(tx *sql.Tx, playerID string, path string, amount int) error {
+	amount = int(float64(amount) * daoMarkGainMultiplierTx(tx, playerID))
 	var daoJSON []byte
 	err := tx.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1 FOR UPDATE`, playerID).Scan(&daoJSON)
 	if err != nil {
@@ -892,6 +893,10 @@ func addDaoMarksTx(tx *sql.Tx, playerID string, path string, amount int) error {
 }
 
 func addMultipleDaoMarksTx(tx *sql.Tx, playerID string, rewards map[string]int) error {
+	mult := daoMarkGainMultiplierTx(tx, playerID)
+	for path, amount := range rewards {
+		rewards[path] = int(float64(amount) * mult)
+	}
 	var daoJSON []byte
 	err := tx.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1 FOR UPDATE`, playerID).Scan(&daoJSON)
 	if err != nil {

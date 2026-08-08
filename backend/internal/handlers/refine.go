@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
@@ -368,7 +369,7 @@ func RefineGu(c *gin.Context) {
 		}
 	}
 
-	finalSuccessRate := recipe.SuccessRate + attainmentBonus
+	finalSuccessRate := recipe.SuccessRate + attainmentBonus + gamefx.Get(&player).RefineBonus
 	hasWisdomGu := false
 	for _, gu := range player.GuInventory {
 		if gu.GuID == "GU_WISDOM_GU" && gu.Equipped && gu.Status == "ACTIVE" {

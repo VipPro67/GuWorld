@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -36,7 +37,7 @@ func getActorPathMasteryMultiplier(actor *models.Combatant, paths []string) floa
 	return masteryMultiplier
 }
 
-func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDictionaryItem, applyDao bool) (effectiveDamage float64, effectiveDefense float64, manaCost float64, err error) {
+func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDictionaryItem, applyDao bool, bonuses ...map[string]float64) (effectiveDamage float64, effectiveDefense float64, manaCost float64, err error) {
 	powerScale := 1.0
 
 	var baseDmg float64
@@ -114,23 +115,15 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 	masteryMultiplier := getActorPathMasteryMultiplier(actor, guSpec.Path)
 
 	daoMultiplier := 1.0
-	if applyDao && actor.DaoMarks != nil {
-		maxDaoMultiplier := 1.0
-		for _, path := range guSpec.Path {
-			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-			if amt, ok := actor.DaoMarks[cleanPath]; ok && amt > 0 {
-				var mult float64
-				if amt <= 10000 {
-					mult = 1.0 + float64(amt)/100.0
-				} else {
-					mult = 1.0 + 100.0 + float64(amt-10000)/500.0
-				}
-				if mult > maxDaoMultiplier {
-					maxDaoMultiplier = mult
-				}
-			}
-		}
-		daoMultiplier = maxDaoMultiplier
+	var daoBonus, pathDamage map[string]float64
+	if len(bonuses) > 0 {
+		daoBonus = bonuses[0]
+	}
+	if len(bonuses) > 1 {
+		pathDamage = bonuses[1]
+	}
+	if applyDao {
+		daoMultiplier = gamefx.DaoMultiplierForPaths(actor.DaoMarks, guSpec.Path, daoBonus)
 	}
 
 	// Gu skill damage scales with player's base attack so it stays relevant vs basic attack
@@ -139,6 +132,7 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 	} else {
 		effectiveDamage = 0
 	}
+	effectiveDamage *= gamefx.PathDamageMultiplierForPaths(guSpec.Path, pathDamage)
 	effectiveDefense = baseDef * powerScale * masteryMultiplier * daoMultiplier
 	if baseDef > 0 {
 		effectiveDefense += actor.BaseDefense * powerScale * masteryMultiplier * daoMultiplier
@@ -151,7 +145,7 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 
 func CalculateGuEffect(player *models.Player, guSpec *models.GuDictionaryItem) (effectiveDamage float64, effectiveDefense float64, manaCost float64, err error) {
 	actor := models.CombatantFromPlayer(player, CalculatePlayerStats(player))
-	dmg, def, cost, err := CalculateGuEffectForCombatant(&actor, guSpec, true)
+	dmg, def, cost, err := CalculateGuEffectForCombatant(&actor, guSpec, true, gamefx.Get(player).DaoNganBonus, gamefx.Get(player).PathDamageBonus)
 	player.HP = actor.HP
 	return dmg, def, cost, err
 }

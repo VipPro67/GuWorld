@@ -169,6 +169,7 @@ interface PlayerDetail {
   soul_hp: number; max_soul: number; soul_tier: string;
   explore_count: number; aperture_stress: number;
   avatar_url: string; bio: string;
+  race: string; gender: string; constitution: string; statuses?: string[];
   gu_count: number;
   item_count: number;
 }
@@ -1029,6 +1030,8 @@ export const AdminView: React.FC = () => {
                   max_soul: String(detail.max_soul ?? ""), soul_tier: detail.soul_tier || "",
                   explore_count: String(detail.explore_count ?? ""), aperture_stress: String(detail.aperture_stress ?? ""),
                   bio: detail.bio || "", avatar_url: detail.avatar_url || "",
+                  race: detail.race || "", gender: detail.gender || "", constitution: detail.constitution || "",
+                  statuses: (detail.statuses || []).join(", "),
                 });
                 setShowEditPlayer(true);
               }
@@ -1558,6 +1561,22 @@ export const AdminView: React.FC = () => {
                   <label className="text-[11px] font-bold text-zinc-500 font-mono">Avatar URL</label>
                   <input type="text" value={editPlayerForm.avatar_url || ""} onChange={e => setEditPlayerForm(f => ({ ...f, avatar_url: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Chủng tộc (race)</label>
+                  <input type="text" value={editPlayerForm.race || ""} onChange={e => setEditPlayerForm(f => ({ ...f, race: e.target.value }))} placeholder="human, fur_people, merman, feathered..." className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Giới tính (gender: male, female)</label>
+                  <input type="text" value={editPlayerForm.gender || ""} onChange={e => setEditPlayerForm(f => ({ ...f, gender: e.target.value }))} placeholder="male" className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Thể chất (constitution)</label>
+                  <input type="text" value={editPlayerForm.constitution || ""} onChange={e => setEditPlayerForm(f => ({ ...f, constitution: e.target.value }))} placeholder="desolate_ancient_moon_body, northern_dark_ice_soul_body..." className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Trạng thái (statuses, cách nhau dấu phẩy: severely_wounded)</label>
+                  <input type="text" value={editPlayerForm.statuses || ""} onChange={e => setEditPlayerForm(f => ({ ...f, statuses: e.target.value }))} placeholder="trống" className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
                 <div className="flex items-end pb-1">
                   <label className="flex items-center gap-2 text-[11px] font-bold text-zinc-500 font-mono cursor-pointer">
                     <input type="checkbox" checked={editPlayerForm.is_admin === "true"} onChange={e => setEditPlayerForm(f => ({ ...f, is_admin: String(e.target.checked) }))} className="accent-amber-500 w-4 h-4" />
@@ -1599,6 +1618,12 @@ export const AdminView: React.FC = () => {
                   set("aperture_stress", detail.aperture_stress, num(editPlayerForm.aperture_stress));
                   set("bio", detail.bio || "", editPlayerForm.bio);
                   set("avatar_url", detail.avatar_url || "", editPlayerForm.avatar_url);
+                  set("race", detail.race || "", editPlayerForm.race);
+                  set("gender", detail.gender || "", editPlayerForm.gender);
+                  set("constitution", detail.constitution || "", editPlayerForm.constitution);
+                  const statusesRaw = (editPlayerForm.statuses || "").split(",").map(s => s.trim()).filter(Boolean);
+                  const statusesChanged = JSON.stringify(statusesRaw) !== JSON.stringify(detail.statuses || []);
+                  if (statusesChanged) body["statuses"] = statusesRaw;
                   if (Object.keys(body).length === 0) {
                     if (addToast) addToast("Không có thay đổi nào", "info");
                     return;

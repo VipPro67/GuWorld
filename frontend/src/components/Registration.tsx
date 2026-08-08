@@ -23,7 +23,8 @@ interface RegistrationProps {
     attackGuId?: string,
     defenseGuId?: string,
     vitalGuChoice?: string,
-    otp?: string
+    otp?: string,
+    gender?: string
   ) => Promise<boolean>;
   onLogin: (email: string, password: string) => Promise<boolean>;
   onSendOTP: (email: string) => Promise<boolean>;
@@ -31,6 +32,11 @@ interface RegistrationProps {
   error: string | null;
   onClearError: () => void;
 }
+
+const GENDERS = [
+  { id: "male", name: "Nam" },
+  { id: "female", name: "Nữ" },
+];
 
 export const Registration: React.FC<RegistrationProps> = ({
   onRegister,
@@ -49,6 +55,7 @@ export const Registration: React.FC<RegistrationProps> = ({
   const [otpSuccessMessage, setOtpSuccessMessage] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [referralCode, setReferralCode] = useState("");
+  const [gender, setGender] = useState("male");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -98,7 +105,8 @@ export const Registration: React.FC<RegistrationProps> = ({
         "GU_MOONLIGHT",
         "GU_STONE_SKIN",
         "ATTACK",
-        otp.trim()
+        otp.trim(),
+        gender
       );
     }
   };
@@ -299,6 +307,34 @@ export const Registration: React.FC<RegistrationProps> = ({
                 maxLength={6}
                 required
               />
+            </div>
+          </div>
+        )}
+
+        {/* Gender - Only in registration */}
+        {!isLoginTab && (
+          <div>
+            <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5">
+              Giới Tính
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {GENDERS.map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => {
+                    onClearError();
+                    setGender(g.id);
+                  }}
+                  className={`py-2.5 rounded-xl border font-serif text-xs font-bold transition-all cursor-pointer ${
+                    gender === g.id
+                      ? "bg-amber-950/40 border-amber-500/50 text-amber-300"
+                      : "bg-zinc-950/80 border-zinc-800 text-zinc-400 hover:border-zinc-700"
+                  }`}
+                >
+                  {g.name}
+                </button>
+              ))}
             </div>
           </div>
         )}

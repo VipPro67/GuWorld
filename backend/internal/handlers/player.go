@@ -23,6 +23,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/auth"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
@@ -315,6 +316,8 @@ type CreatePlayerRequest struct {
 	DefenseGuID    string `json:"defense_gu_id"`
 	VitalGuChoice  string `json:"vital_gu_choice"`
 	OTP            string `json:"otp" binding:"required"`
+	Race           string `json:"race"`
+	Gender         string `json:"gender"`
 }
 
 // CreatePlayerResponse represents the output payload for registration/login
@@ -443,6 +446,17 @@ func RegisterPlayer(c *gin.Context) {
 	}
 	if !validRegions[req.StartingRegion] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Starting region không hợp lệ"})
+		return
+	}
+
+	// Chủng tộc luôn mặc định Nhân Tộc khi tạo tài khoản —
+	// các chủng tộc khác nhận được qua hoạt động/sự kiện trong game.
+	req.Race = "human"
+	if req.Gender == "" {
+		req.Gender = "male"
+	}
+	if !gamefx.ValidGenders()[req.Gender] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Giới tính không hợp lệ"})
 		return
 	}
 
@@ -626,13 +640,13 @@ func RegisterPlayer(c *gin.Context) {
 
 	var player models.Player
 	query := `
-		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, active_combat, lifespan, time_speed_multiplier, email, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, avatar_url, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding)
-		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, $11, '{}'::jsonb, $8, '{}'::jsonb, NULL, 100.0, 1.0, $9, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $10, true)
-		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, avatar_url, needs_onboarding
+		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, active_combat, lifespan, time_speed_multiplier, email, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, avatar_url, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding, race, gender)
+		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, $11, '{}'::jsonb, $8, '{}'::jsonb, NULL, 100.0, 1.0, $9, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $10, true, $12, $13)
+		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, avatar_url, needs_onboarding, race, gender, constitution, statuses
 	`
 
 	var activeCombatBytes []byte
-	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, req.StartingRegion, req.Email, refCode, equippedGus).Scan(
+	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, req.StartingRegion, req.Email, refCode, equippedGus, req.Race, req.Gender).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
 		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
@@ -644,7 +658,7 @@ func RegisterPlayer(c *gin.Context) {
 		&player.Lifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
 		&player.Email, &player.GoogleID, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
-		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.AvatarURL, &player.NeedsOnboarding,
+		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.AvatarURL, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.Statuses,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create player: " + err.Error()})
@@ -854,9 +868,10 @@ func CompleteOnboarding(c *gin.Context) {
 	player.GuInventory = newGu
 	player.EquippedGus = equippedGus
 	player.MaterialsInventory = loadMaterialsInventory(playerID.String())
-
+	player.MaxMana = gamefx.EffectiveMaxMana(&player)
 	c.JSON(http.StatusOK, player)
 }
+
 
 // LoginRequest represents credentials login payload.
 // Email is the canonical login identifier; Username is accepted only as a
@@ -893,7 +908,7 @@ func LoginPlayer(c *gin.Context) {
 	var passwordHash string
 
 	query := `
-		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), COALESCE(avatar_url, '')
+		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), COALESCE(avatar_url, ''), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses
 		FROM players
 		WHERE LOWER(email) = $1
 	`
@@ -911,6 +926,7 @@ func LoginPlayer(c *gin.Context) {
 		&player.Email, &player.GoogleID, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
 		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.AvatarURL,
+		&player.Race, &player.Gender, &player.Constitution, &player.Statuses,
 	)
 	if err == nil {
 		if player.Rank >= 6 {
@@ -1997,20 +2013,21 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 		regenRatePerHour = regenRatePerHour * 0.5
 	}
 
-	player.ManaRegenRate = regenRatePerHour
+	player.ManaRegenRate = regenRatePerHour * (1.0 + gamefx.Get(player).ManaRegenBonus)
 
 	stats := CalculatePlayerStats(player)
 	healingStat := stats["healing"]
-	regenHPPerHour := (player.BaseHP * 0.05) + healingStat
+	regenHPPerHour := ((player.BaseHP * 0.05) + healingStat) * (1.0 + gamefx.Get(player).HealingReceivedBonus)
 	player.HPRegenRate = regenHPPerHour
 
 	secondsPassed := now.Sub(player.LastManaUpdate).Seconds()
 	if secondsPassed > 0 {
 		subjectiveSeconds := secondsPassed * player.TimeSpeedMultiplier
-		earnedMana := (subjectiveSeconds / 3600.0) * regenRatePerHour
+		earnedMana := (subjectiveSeconds / 3600.0) * regenRatePerHour * (1.0 + gamefx.Get(player).ManaRegenBonus)
+		effMaxMana := gamefx.EffectiveMaxMana(player)
 		newMana := player.CurrentMana + earnedMana
-		if newMana > player.MaxMana {
-			newMana = player.MaxMana
+		if newMana > effMaxMana {
+			newMana = effMaxMana
 		}
 		if newMana != player.CurrentMana {
 			player.CurrentMana = newMana
@@ -2083,6 +2100,16 @@ func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	return PlayerSvc.EvaluateAndPersistMana(tx, id)
 }
 
+// GrantRace sets a player's race after validating the key. Dùng cho các hoạt động
+// trong game (quest, item, kỳ ngộ...) khi người chơi nhận được chủng tộc mới.
+func GrantRace(tx *sql.Tx, playerID uuid.UUID, race string) error {
+	if race != "" && !gamefx.ValidRaces()[race] {
+		return fmt.Errorf("chủng tộc không hợp lệ: %s", race)
+	}
+	_, err := tx.Exec(`UPDATE players SET race = $1 WHERE id = $2`, race, playerID)
+	return err
+}
+
 // loadCompletedQuests returns the list of quest IDs the player has completed.
 func loadCompletedQuests(playerID string) models.CompletedQuestsList {
 	if QuestSvc == nil {
@@ -2101,6 +2128,7 @@ func loadCompletedQuests(playerID string) models.CompletedQuestsList {
 
 // responseWithPlayer sends a JSON response with the player object, ensuring MaterialsInventory and CompletedQuests are populated.
 func responseWithPlayer(c *gin.Context, status int, player models.Player, extra ...gin.H) {
+	player.MaxMana = gamefx.EffectiveMaxMana(&player)
 	resp := gin.H{"player": player}
 	for _, e := range extra {
 		for k, v := range e {
@@ -2113,6 +2141,7 @@ func responseWithPlayer(c *gin.Context, status int, player models.Player, extra 
 // responseWithPlayerData sends a JSON response with pre-loaded player data,
 // avoiding redundant DB queries for MaterialsInventory and CompletedQuests.
 func responseWithPlayerData(c *gin.Context, status int, player models.Player, materials map[string]int, quests models.CompletedQuestsList, extra ...gin.H) {
+	player.MaxMana = gamefx.EffectiveMaxMana(&player)
 	player.MaterialsInventory = materials
 	player.CompletedQuests = quests
 	resp := gin.H{"player": player}
@@ -2330,7 +2359,88 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 			}
 		}
 	}
+
+	// Character effects from race / constitution / statuses (percentage modifiers)
+	charFX := gamefx.Get(player)
+	for key, pct := range charFX.StatMods {
+		cur, ok := stats[key]
+		if !ok || cur == 0 {
+			continue
+		}
+		delta := cur * pct
+		if delta == 0 {
+			continue
+		}
+		stats[key] += delta
+		srcName := "Trạng thái"
+		srcID := "status"
+		for _, status := range player.Statuses {
+			label := gamefx.StatusDisplayName(status)
+			if srcID == "status" {
+				srcName = label
+				srcID = "status:" + status
+			} else {
+				srcName += ", " + label
+			}
+		}
+		found := false
+		for i := range details {
+			if details[i].Key == key {
+				details[i].Sources = append(details[i].Sources, PassiveStatSource{
+					Source: srcID, Name: srcName, Value: delta, Mult: 1, Dao: 1, Final: delta,
+				})
+				details[i].Total += delta
+				found = true
+				break
+			}
+		}
+		if !found {
+			details = append(details, PassiveStatDetail{Key: key, Total: stats[key], Sources: []PassiveStatSource{{
+				Source: srcID, Name: srcName, Value: delta, Mult: 1, Dao: 1, Final: delta,
+			}}})
+		}
+	}
 	
+
+	// Derived defensive bonuses from constitution (soul defense, mental resistance)
+	constitutionName := "Thể chất"
+	if player.Constitution != "" {
+		constitutionName = gamefx.ConstitutionDisplayName(player.Constitution)
+	}
+	if charFX.SoulDefenseBonus > 0 {
+		delta := charFX.SoulDefenseBonus * 100.0
+		stats["soul_defense"] += delta
+		details = append(details, PassiveStatDetail{Key: "soul_defense", Total: delta, Sources: []PassiveStatSource{{
+			Source: "constitution:" + player.Constitution, Name: constitutionName, Value: delta, Mult: 1, Dao: 1, Final: delta,
+		}}})
+	}
+	if charFX.MentalResistanceBonus > 0 {
+		delta := charFX.MentalResistanceBonus * 100.0
+		stats["mental_resistance"] += delta
+		details = append(details, PassiveStatDetail{Key: "mental_resistance", Total: delta, Sources: []PassiveStatSource{{
+			Source: "constitution:" + player.Constitution, Name: constitutionName, Value: delta, Mult: 1, Dao: 1, Final: delta,
+		}}})
+	}
+
+	// Race-derived bonuses (path resistance, luck)
+	raceName := "Chủng tộc"
+	if player.Race != "" {
+		raceName = gamefx.RaceDisplayName(player.Race)
+	}
+	for path, pct := range charFX.PathResistanceBonus {
+		delta := pct * 100.0
+		key := path + "_resistance"
+		stats[key] += delta
+		details = append(details, PassiveStatDetail{Key: key, Total: delta, Sources: []PassiveStatSource{{
+			Source: "race:" + player.Race, Name: raceName, Value: delta, Mult: 1, Dao: 1, Final: delta,
+		}}})
+	}
+	if charFX.LuckBonus > 0 {
+		stats["luck"] += charFX.LuckBonus
+		details = append(details, PassiveStatDetail{Key: "luck", Total: charFX.LuckBonus, Sources: []PassiveStatSource{{
+			Source: "race:" + player.Race, Name: raceName, Value: charFX.LuckBonus, Mult: 1, Dao: 1, Final: charFX.LuckBonus,
+		}}})
+	}
 
 	// Sort details by key for stable output
 	sort.Slice(details, func(i, j int) bool { return details[i].Key < details[j].Key })
@@ -2398,7 +2508,7 @@ type DaoNganResult struct {
 //	marks  > 10000: multiplier = 101.0 + (marks-10000)/500  (soft cap)
 //
 // TotalDaoNgan = Σ power(path) for all paths with marks > 0
-func CalculateDaoNgan(daoMarks models.DaoMarksMap) DaoNganResult {
+func CalculateDaoNgan(daoMarks models.DaoMarksMap, daoBonus ...map[string]float64) DaoNganResult {
 	result := DaoNganResult{
 		Paths: make([]DaoNganPathDetail, 0),
 	}
@@ -2413,17 +2523,17 @@ func CalculateDaoNgan(daoMarks models.DaoMarksMap) DaoNganResult {
 	var maxPath string
 	var sumMult float64
 
+	bonus := map[string]float64{}
+	if len(daoBonus) > 0 {
+		bonus = daoBonus[0]
+	}
+
 	for path, amount := range daoMarks {
 		if amount <= 0 {
 			continue
 		}
 
-		var mult float64
-		if amount <= 10000 {
-			mult = 1.0 + float64(amount)/100.0
-		} else {
-			mult = 1.0 + 100.0 + float64(amount-10000)/500.0
-		}
+		mult := gamefx.DaoPathMultiplier(amount, bonus[path])
 
 		power := float64(amount) * mult
 
@@ -2485,7 +2595,17 @@ func GetDaoNganHandler(c *gin.Context) {
 		_ = json.Unmarshal(daoJSON, &daoMap)
 	}
 
-	result := CalculateDaoNgan(daoMap)
+	var constitution string
+	_ = db.DB.QueryRowContext(c.Request.Context(),
+		`SELECT COALESCE(constitution, '') FROM players WHERE id = $1`, playerID,
+	).Scan(&constitution)
+
+	daoBonus := map[string]float64{}
+	if constitution != "" {
+		daoBonus = gamefx.Get(&models.Player{CharacterState: models.CharacterState{Constitution: constitution}}).DaoNganBonus
+	}
+
+	result := CalculateDaoNgan(daoMap, daoBonus)
 	c.JSON(http.StatusOK, result)
 }
 
@@ -4112,7 +4232,7 @@ func GoogleCallback(c *gin.Context) {
 
 	// 1. Try to search by google_id
 	err = tx.QueryRow(`
-		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregate("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false)
+		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregate("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses
 		FROM players
 		WHERE google_id = $1
 	`, googleUser.ID).Scan(
@@ -4127,7 +4247,7 @@ func GoogleCallback(c *gin.Context) {
 		&player.Lifespan, &player.TimeSpeedMultiplier,
 		&player.Email, &player.GoogleID, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
-		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding,
+		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.Statuses,
 	)
 
 	if err == nil {
@@ -4140,7 +4260,7 @@ func GoogleCallback(c *gin.Context) {
 	if !hasPlayer {
 		// 2. Try to search by email (Merge Account!)
 		err = tx.QueryRow(`
-			SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregate("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false)
+			SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregate("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses
 			FROM players
 			WHERE email = $1
 		`, googleUser.Email).Scan(
@@ -4155,7 +4275,7 @@ func GoogleCallback(c *gin.Context) {
 			&player.Lifespan, &player.TimeSpeedMultiplier,
 			&player.Email, &player.GoogleID, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 			&player.ApertureStress, &player.LastCultivateTime,
-			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding,
+			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.Statuses,
 		)
 
 		if err == nil {
@@ -4277,9 +4397,9 @@ func GoogleCallback(c *gin.Context) {
 		refCode := "REF-" + strings.ToUpper(uuid.New().String()[:8])
 
 		queryInsert := `
-			INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, active_combat, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding)
-			VALUES ($1, '', 1, 1, $2, $3, $4, $5, $6, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, $10, '{}'::jsonb, 'Southern_Border', '{}'::jsonb, NULL, 100.0, 1.0, $7, $8, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', 1, 1, '', false, $9, true)
-			RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, needs_onboarding
+			INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, active_combat, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding, race, gender)
+			VALUES ($1, '', 1, 1, $2, $3, $4, $5, $6, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, 50, 50, '["50,50"]'::jsonb, $10, '{}'::jsonb, 'Southern_Border', '{}'::jsonb, NULL, 100.0, 1.0, $7, $8, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', 1, 1, '', false, $9, true, 'human', 'male')
+			RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, needs_onboarding, race, gender, constitution, statuses
 		`
 
 		err = tx.QueryRow(queryInsert, username, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, googleUser.Email, googleUser.ID, refCode, equippedGus).Scan(
@@ -4294,7 +4414,7 @@ func GoogleCallback(c *gin.Context) {
 			&player.Lifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
 			&player.Email, &player.GoogleID, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
 			&player.ApertureStress, &player.LastCultivateTime,
-			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding,
+			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.Statuses,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create new player record: " + err.Error()})

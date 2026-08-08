@@ -173,6 +173,34 @@ func (s BodyState) Apply(p *Player) {
 	p.ApertureDamage = s.ApertureDamage
 }
 
+// CharacterState groups the player's race (chủng tộc), gender (giới tính),
+// constitution (thể chất) and active statuses (trạng thái). Values are stored
+// as English keys; effects are resolved by handlers.CharacterEffects.
+type CharacterState struct {
+	Race         string     `json:"race"`
+	Gender       string     `json:"gender"`
+	Constitution string     `json:"constitution"`
+	Statuses     StatusList `json:"statuses"`
+}
+
+// NewCharacterState extracts character data from a Player.
+func NewCharacterState(p *Player) CharacterState {
+	return CharacterState{
+		Race:         p.Race,
+		Gender:       p.Gender,
+		Constitution: p.Constitution,
+		Statuses:     p.Statuses,
+	}
+}
+
+// Apply writes character fields back to a Player.
+func (s CharacterState) Apply(p *Player) {
+	p.Race = s.Race
+	p.Gender = s.Gender
+	p.Constitution = s.Constitution
+	p.Statuses = s.Statuses
+}
+
 // SoulState groups soul-related fields.
 type SoulState struct {
 	SoulHP          int    `json:"soul_hp"`

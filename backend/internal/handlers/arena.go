@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -223,6 +224,9 @@ func ChallengeArena(c *gin.Context) {
 		EnemyPathMasteries: targetPlayer.PathMasteries,
 		TargetPlayerID:     targetPlayer.ID.String(),
 	}
+	enemyCharFX := gamefx.Get(&targetPlayer)
+	pvpCombat.EnemyPathResistance = enemyCharFX.PathResistanceBonus
+	pvpCombat.EnemyMentalResistance = enemyCharFX.MentalResistanceBonus
 
 	// Full mana for attacker in virtual mode
 	player.CurrentMana = player.MaxMana

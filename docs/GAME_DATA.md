@@ -42,6 +42,49 @@ Tạo ngay tại thời điểm người chơi thăng tiên lên Rank 6. `grade`
 
 Đạo Ngân chỉ lưu trong cột JSONB `players.dao_marks` (ví dụ `{"strength": 100, "fire": 2500}`). Bảng quan hệ `dao_marks` đã bị xóa — không còn mirror. Path được normalize dạng lowercase (không có hậu tố `" path"`) khi lưu.
 
+### Nhân vật — bảng `players` (race / gender / constitution / statuses)
+
+Các cột mô tả nhân dạng và trạng thái của người chơi, giá trị lưu bằng **key tiếng Anh**, effect được resolve tập trung trong `backend/internal/handlers/character_effects.go`:
+
+| Cột | Kiểu | Giá trị | Effect |
+| --- | --- | --- | --- |
+| `race` | VARCHAR(50) | Xem bảng chủng tộc bên dưới. Mặc định `human` lúc đăng ký | Hiệu ứng theo từng chủng tộc |
+| `gender` | VARCHAR(20) | `male`, `female` | Chưa có effect (chỉ hiển thị) |
+| `constitution` | VARCHAR(100) | Xem bảng thể chất bên dưới | Hiệu ứng theo từng thể chất; **mọi thể chất đều +10% hồi mana** |
+| `statuses` | JSONB (`[]string`) | `severely_wounded` (Trọng Thương) | -20% attack/defense/speed |
+
+Chọn lúc đăng ký (`race`, `gender`); `constitution`/`statuses` đổi qua Admin panel (`PUT /api/admin/players/:id`) hoặc event trong game.
+
+**Bảng chủng tộc (race) — định nghĩa tập trung tại `backend/internal/gamefx/fx.go`:**
+
+| Key | Tên Việt | Hiệu ứng |
+| --- | --- | --- |
+| `human` | Nhân Tộc | Không bonus đặc biệt (mặc định) |
+| `fur_people` | Người Lông | +10% tỉ lệ Luyện Cổ thành công |
+| `merman` | Nhân Ngư | Thủy Đạo +10% affinity, +5% sát thương Thủy Đạo |
+| `feathered` | Vũ Dân | +10% tốc độ, Không Gian Đạo +5% affinity |
+| `inkman` | Mặc Nhân | Trí Tuệ Đạo +8%, Hồn Đạo +5% affinity |
+| `rockman` | Thạch Nhân | +15% phòng thủ, -10% tốc độ |
+| `snowman` | Tuyết Dân | Hàn Băng Đạo +15% affinity, -10% sát thương Hỏa nhận |
+| `variant_beastman` | Thú Nhân | +8% tấn công, +5% phòng thủ, -5% tỉ lệ Luyện Cổ |
+| `dragonman` | Long Nhân | +10% tấn công, +10% phòng thủ, -5% tỉ lệ Luyện Cổ |
+| `giant_sun_descendant` | Cự Dương Huyết Mạch | +5 Vận, +5% hiệu quả tu luyện |
+
+**Bảng thể chất (constitution) — định nghĩa tập trung tại `backend/internal/gamefx/fx.go`:**
+
+| Key | Tên Việt | Hiệu ứng |
+| --- | --- | --- |
+| `desolate_ancient_moon_body` | Hoang Cổ Nguyệt Thể | +20% hiệu quả tu luyện, +15% max mana |
+| `verdant_great_sun_body` | Thanh Liên Đại Nhật Thể | Hỏa Đạo +20% affinity, +10% attack |
+| `northern_dark_ice_soul_body` (alias `north_ming_ice_body`) | Bắc Minh Băng Phách Thể | Hàn Băng Đạo +20% affinity, +10% defense |
+| `ancient_yin_virtue_body` | Cổ Nguyệt Âm Đức Thể | Hồn Đạo +15% affinity, +10% healing nhận |
+| `blazing_glory_lightning_brilliance_body` | Hạo Kiếp Viêm Quang Lôi Quang Thể | Lôi Đạo +20% affinity, +10% speed |
+| `pure_dream_reality_seeker_body` | Thuần Mộng Cầu Chân Thể | Mộng Đạo +25% affinity, +15% sát thương Mộng Đạo |
+| `unrestrained_heavenly_mark_body` | Vô Cực Thiên Ngân Thể | +15% Đạo Ngân nhận được |
+| `great_strength_true_martial_body` | Đại Lực Chân Vũ Thể | Lực Đạo +20% affinity, +15% attack |
+| `carefree_lotus_heart_body` | Tiêu Dao Liên Tâm Thể | Trí Tuệ Đạo +15% affinity, +20% kháng tâm lý |
+| `ancient_soul_virtue_body` | Cổ Hồn Âm Đức Thể | Hồn Đạo +20% affinity, +15% phòng thủ hồn |
+
 ### Cổ của người chơi — bảng `player_gu`
 
 Cột `players.gu_inventory` (JSONB) đã được **thay thế hoàn toàn** bằng bảng quan hệ `player_gu`. Mỗi row = một Cổ instance của một người chơi:

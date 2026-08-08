@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -112,7 +113,8 @@ func (s *PlayerService) loadRow(q QueryRower, id uuid.UUID, forUpdate bool) (mod
 		       COALESCE(ref_code, ''), COALESCE(avatar_url, ''), combat_settings,
 		       COALESCE(needs_onboarding, false),
 		       COALESCE(current_thought, 100.0), COALESCE(max_thought, 100.0), COALESCE(thought_regen_rate, 1.0),
-   COALESCE(immortal_state, '{}'), growth_data
+   COALESCE(immortal_state, '{}'), growth_data,
+		       COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses
 FROM players
 		WHERE id = $1
 	`
@@ -139,7 +141,8 @@ FROM players
 		&player.NeedsOnboarding,
 		&player.CurrentThought, &player.MaxThought, &player.RegenRate,
 		&player.ImmortalState,
-	&player.GrowthData,
+		&player.GrowthData,
+		&player.Race, &player.Gender, &player.Constitution, &player.Statuses,
 	)
 	if err != nil {
 		return player, err
@@ -217,8 +220,9 @@ func isImmortalCultivator(player *models.Player) bool {
 // normalizeEnergyPool adjusts the mana pool for immortal cultivators.
 func normalizeEnergyPool(player *models.Player) bool {
 	if !isImmortalCultivator(player) {
-		if player.CurrentMana > player.MaxMana {
-			player.CurrentMana = player.MaxMana
+		effMax := gamefx.EffectiveMaxMana(player)
+		if player.CurrentMana > effMax {
+			player.CurrentMana = effMax
 			return true
 		}
 		return false
@@ -231,7 +235,7 @@ func normalizeEnergyPool(player *models.Player) bool {
 	return false
 }
 
-// applyProjectedStatus computes mana regen, HP regen, lifespan decay, and stress decay, 
+// applyProjectedStatus computes mana regen, HP regen, lifespan decay, and stress decay,
 func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float64, now time.Time) (poolChanged, stressChanged bool) {
 	poolChanged = normalizeEnergyPool(player)
 	stressChanged = false
@@ -255,7 +259,7 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 		regenRatePerHour = regenRatePerHour * 0.5
 	}
 
-	player.ManaRegenRate = regenRatePerHour
+	player.ManaRegenRate = regenRatePerHour * (1.0 + gamefx.Get(player).ManaRegenBonus)
 
 	secondsPassed := now.Sub(player.LastManaUpdate).Seconds()
 	if secondsPassed > 0 {
@@ -264,10 +268,11 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 			effectiveMultiplier = player.TimeSpeedMultiplier * timeRate
 		}
 		subjectiveSeconds := secondsPassed * effectiveMultiplier
-		earnedMana := (subjectiveSeconds / 3600.0) * regenRatePerHour
+		earnedMana := (subjectiveSeconds / 3600.0) * regenRatePerHour * (1.0 + gamefx.Get(player).ManaRegenBonus)
+		effMaxMana := gamefx.EffectiveMaxMana(player)
 		newMana := player.CurrentMana + earnedMana
-		if newMana > player.MaxMana {
-			newMana = player.MaxMana
+		if newMana > effMaxMana {
+			newMana = effMaxMana
 		}
 		if newMana != player.CurrentMana {
 			player.CurrentMana = newMana
@@ -275,7 +280,7 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 		}
 
 		if player.HP > 0 && player.HP < player.BaseHP {
-			hpRegenPerHour := player.BaseHP * 0.05
+			hpRegenPerHour := player.BaseHP * 0.05 * (1.0 + gamefx.Get(player).HealingReceivedBonus)
 			earnedHP := (secondsPassed * player.TimeSpeedMultiplier / 3600.0) * hpRegenPerHour
 			newHP := player.HP + earnedHP
 			if newHP > player.BaseHP {
@@ -346,16 +351,19 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 
 // energyRegenRatePerHour computes mana regen rate based on aptitude.
 func energyRegenRatePerHour(player *models.Player) float64 {
+	var rate float64
 	if player.Rank >= 6 {
-		return 0.5
+		rate = 0.5
+	} else {
+		aptitudeMap := map[string]float64{
+			"Giáp": 8.0, "Ất": 6.0, "Bính": 4.0, "Đinh": 2.0,
+		}
+		rate = aptitudeMap[player.AptitudeType]
+		if rate == 0 {
+			rate = 4.0
+		}
 	}
-	aptitudeMap := map[string]float64{
-		"Giáp": 8.0, "Ất": 6.0, "Bính": 4.0, "Đinh": 2.0,
-	}
-	if rate, ok := aptitudeMap[player.AptitudeType]; ok {
-		return rate
-	}
-	return 4.0
+	return rate * (1.0 + gamefx.Get(player).ManaRegenBonus)
 }
 
 // ProjectStatus computes the read-only projected status for UI refreshes.

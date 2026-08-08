@@ -539,7 +539,7 @@ export const Aperture: React.FC<ApertureProps> = ({
               : "text-zinc-500 hover:text-zinc-300"
               }`}
           >
-            Trưởng Thành
+            Bản Thân
           </button>
           <button
             onClick={() => setActiveTab("referrals")}
@@ -807,6 +807,64 @@ export const Aperture: React.FC<ApertureProps> = ({
 
         {activeTab === "growth" && (
           <div className="w-full z-10 space-y-5">
+            {/* Character Identity */}
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4">
+              <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
+                <User className="w-5 h-5 text-amber-400" />
+                <span className="font-serif font-bold text-zinc-100 text-sm">Thân Phận</span>
+              </div>
+              {(() => {
+                const raceLabels: Record<string, string> = {
+                  human: "Nhân Tộc", fur_people: "Người Lông", merman: "Nhân Ngư",
+                  feathered: "Vũ Dân", inkman: "Mặc Nhân", rockman: "Thạch Nhân",
+                  snowman: "Tuyết Dân", variant_beastman: "Thú Nhân", dragonman: "Long Nhân",
+                  giant_sun_descendant: "Cự Dương Huyết Mạch",
+                };
+                const genderLabels: Record<string, string> = { male: "Nam", female: "Nữ" };
+                const constitutionLabels: Record<string, string> = {
+                  desolate_ancient_moon_body: "Hoang Cổ Nguyệt Thể",
+                  verdant_great_sun_body: "Thanh Liên Đại Nhật Thể",
+                  northern_dark_ice_soul_body: "Bắc Minh Băng Phách Thể",
+                  north_ming_ice_body: "Bắc Minh Băng Phách Thể",
+                  ancient_yin_virtue_body: "Cổ Nguyệt Âm Đức Thể",
+                  blazing_glory_lightning_brilliance_body: "Hạo Kiếp Viêm Quang Lôi Quang Thể",
+                  pure_dream_reality_seeker_body: "Thuần Mộng Cầu Chân Thể",
+                  unrestrained_heavenly_mark_body: "Vô Cực Thiên Ngân Thể",
+                  great_strength_true_martial_body: "Đại Lực Chân Vũ Thể",
+                  carefree_lotus_heart_body: "Tiêu Dao Liên Tâm Thể",
+                  ancient_soul_virtue_body: "Cổ Hồn Âm Đức Thể",
+                };
+                const statusLabels: Record<string, string> = { severely_wounded: "Trọng Thương" };
+                const cell = (label: string, value: string, accent = false) => (
+                  <div className={`p-3 rounded-xl border ${accent ? "bg-zinc-950/40 border-zinc-800" : "bg-zinc-950/40 border-zinc-900"}`}>
+                    <div className="text-[10px] text-zinc-500 font-mono">{label}</div>
+                    <div className="text-base font-bold text-zinc-100 font-mono mt-0.5">{value}</div>
+                  </div>
+                );
+                return (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {cell("Chủng Tộc", raceLabels[player.race] || player.race || "Nhân Tộc")}
+                    {cell("Giới Tính", genderLabels[player.gender] || player.gender || "Không rõ")}
+                    {cell("Thể Chất", constitutionLabels[player.constitution] || player.constitution || "Không có", true)}
+                    <div className="p-3 rounded-xl border bg-zinc-950/40 border-zinc-900">
+                      <div className="text-[10px] text-zinc-500 font-mono">Trạng Thái</div>
+                      {player.statuses && player.statuses.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {player.statuses.map((s: string) => (
+                            <span key={s} className="text-[10px] px-2 py-0.5 rounded-lg bg-rose-950/40 text-rose-400 border border-rose-900/40 font-mono font-semibold">
+                              {statusLabels[s] || s}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-base font-bold text-zinc-100 font-mono mt-0.5">Bình thường</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
             {/* Growth Boosts */}
             <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">

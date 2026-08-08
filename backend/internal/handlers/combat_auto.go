@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
@@ -1300,6 +1301,8 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		playerDaoMarks[k] = v
 	}
 
+	charFX := gamefx.Get(player)
+
 	// Scan inventory for healing items
 	healPotency := 0.0
 	healCharges := 0
@@ -1363,6 +1366,11 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		Speed:         playerStats["speed"],
 		VirtualShield: virtualShield,
 		DaoMarks:      playerDaoMarks,
+		DaoBonus:        charFX.DaoNganBonus,
+		PathDamageBonus: charFX.PathDamageBonus,
+		PathResistance:  charFX.PathResistanceBonus,
+		HealingReceived: charFX.HealingReceivedBonus,
+		MentalResistance: charFX.MentalResistanceBonus,
 		Actions:       allActions,
 
 		AutoHealHP:      autoHealHP,

@@ -5,6 +5,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -113,7 +114,7 @@ func energyRegenRatePerHour(player *models.Player) float64 {
 		}
 	}
 
-	return rate
+	return rate * (1.0 + gamefx.Get(player).ManaRegenBonus)
 }
 
 func getThienNguyenMultiplier(playerRank, guRank int) float64 {

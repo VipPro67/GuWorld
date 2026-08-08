@@ -6,12 +6,14 @@ import (
 	"math/rand"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -25,6 +27,34 @@ type CombatAttackRequest struct {
 	TargetY       int      `json:"target_y"`
 	ItemID        string   `json:"item_id"`
 	UseStones     string   `json:"use_stones"`
+}
+
+// enemyPathResistance returns the defender's maximum path-resistance fraction
+// for the given paths (PVP enemies may carry character effects).
+func enemyPathResistance(player *models.Player, paths []string) float64 {
+	if player == nil || player.ActiveCombat == nil || len(player.ActiveCombat.EnemyPathResistance) == 0 {
+		return 0
+	}
+	if len(paths) == 0 {
+		paths = []string{"strength"}
+	}
+	maxR := 0.0
+	for _, p := range paths {
+		clean := strings.TrimSuffix(strings.ToLower(p), " path")
+		if r := player.ActiveCombat.EnemyPathResistance[clean]; r > maxR {
+			maxR = r
+		}
+	}
+	return maxR
+}
+
+// enemyResistsControl returns true if the PVP defender's mental resistance
+// causes a control effect to be resisted.
+func enemyResistsControl(player *models.Player) bool {
+	if player == nil || player.ActiveCombat == nil || player.ActiveCombat.EnemyMentalResistance <= 0 {
+		return false
+	}
+	return rand.Float64() < player.ActiveCombat.EnemyMentalResistance
 }
 
 func CombatAttack(c *gin.Context) {
@@ -283,7 +313,7 @@ func CombatAttack(c *gin.Context) {
 					selectedGus = append(selectedGus, inst)
 					selectedSpecs = append(selectedSpecs, spec)
 
-					_, _, cost, errVal := CalculateGuEffectForCombatant(&playerCombatant, &spec, true)
+					_, _, cost, errVal := CalculateGuEffectForCombatant(&playerCombatant, &spec, true, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)
 					if errVal == nil {
 						totalManaCost += cost
 					}
@@ -442,22 +472,13 @@ func CombatAttack(c *gin.Context) {
 					targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, "SINGLE", prefX, prefY, false)
 					if len(targetsIdx) > 0 {
 						targetEnemy := &player.ActiveCombat.Enemies[targetsIdx[0]]
-						daoMult := 1.0
-						if refCaster.DaoMarks != nil {
-							if amt, ok := refCaster.DaoMarks["strength"]; ok && amt > 0 {
-								if amt <= 10000 {
-									daoMult = 1.0 + float64(amt)/100.0
-								} else {
-									daoMult = 1.0 + 100.0 + float64(amt-10000)/500.0
-								}
-							}
-						}
+						daoMult := gamefx.DaoMultiplierForPaths(refCaster.DaoMarks, []string{"strength"}, gamefx.Get(&player).DaoNganBonus)
 						dmgVal := refCaster.BaseAttack
 						if dmgVal <= 0 {
 							dmgVal = 5.0
 						}
 						fullDmg := dmgVal * daoMult
-						netDmg := fullDmg - targetEnemy.BaseDefense
+						netDmg := (fullDmg - targetEnemy.BaseDefense) * (1.0 - enemyPathResistance(&player, []string{"strength"}))
 						if netDmg < 1.0 {
 							netDmg = 1.0
 						}
@@ -476,8 +497,8 @@ func CombatAttack(c *gin.Context) {
 					}
 
 					for _, spec := range selectedSpecs {
-						dmgBase, defBase, _, _ := CalculateGuEffectForCombatant(refCaster, &spec, false)
-						dmg, def, cost, errGu := CalculateGuEffectForCombatant(refCaster, &spec, true)
+						dmgBase, defBase, _, _ := CalculateGuEffectForCombatant(refCaster, &spec, false, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)
+						dmg, def, cost, errGu := CalculateGuEffectForCombatant(refCaster, &spec, true, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)
 						if errGu == nil && refCaster.CurrentMana >= cost {
 							refCaster.CurrentMana -= cost
 							if refCaster.Rank < spec.Rank {
@@ -517,6 +538,7 @@ func CombatAttack(c *gin.Context) {
 								if healVal <= 0 {
 									healVal = 30.0
 								}
+								healVal *= (1.0 + gamefx.Get(&player).HealingReceivedBonus)
 								refCaster.HP += healVal
 								if refCaster.HP > refCaster.MaxHP {
 									refCaster.HP = refCaster.MaxHP
@@ -558,49 +580,63 @@ func CombatAttack(c *gin.Context) {
 									} else {
 										logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s!", refCaster.Name, spec.Name))
 									}
-								for _, eIdx := range targetsIdx {
-									tEnemy := &player.ActiveCombat.Enemies[eIdx]
-									netDmg := dmg - tEnemy.BaseDefense
-									if netDmg < 1.0 {
-										netDmg = 1.0
-									}
-									dmgLog := applyDamageWithLogs(refCaster.Name, tEnemy.Name, tEnemy, netDmg)
+							for _, eIdx := range targetsIdx {
+								tEnemy := &player.ActiveCombat.Enemies[eIdx]
+								netDmg := dmg - tEnemy.BaseDefense
+								netDmg *= (1.0 - enemyPathResistance(&player, spec.Path))
+								if netDmg < 1.0 {
+									netDmg = 1.0
+								}
+								dmgLog := applyDamageWithLogs(refCaster.Name, tEnemy.Name, tEnemy, netDmg)
 									logs = append(logs, dmgLog)
 
 									// Apply status effects from Gu to target
 									if spec.Effects.Active != nil {
 										active := spec.Effects.Active
+										resisted := enemyResistsControl(&player)
 										switch active.ApplyStatus {
 										case "SILENCE":
-											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-												Type: "silence", Value: 1, Turns: active.StatusDurationTicks,
-											})
-											logs = append(logs, fmt.Sprintf("%s bị Im lặng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
+											if !resisted {
+												tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+													Type: "silence", Value: 1, Turns: active.StatusDurationTicks,
+												})
+												logs = append(logs, fmt.Sprintf("%s bị Im lặng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
+											}
 										case "STUN":
-											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-												Type: "stun", Value: 1, Turns: active.StatusDurationTicks,
-											})
-											logs = append(logs, fmt.Sprintf("%s bị Choáng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
+											if !resisted {
+												tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+													Type: "stun", Value: 1, Turns: active.StatusDurationTicks,
+												})
+												logs = append(logs, fmt.Sprintf("%s bị Choáng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
+											}
 										case "FREEZE":
-											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-												Type: "freeze", Value: 1, Turns: active.StatusDurationTicks,
-											})
-											logs = append(logs, fmt.Sprintf("%s bị Đóng băng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
+											if !resisted {
+												tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+													Type: "freeze", Value: 1, Turns: active.StatusDurationTicks,
+												})
+												logs = append(logs, fmt.Sprintf("%s bị Đóng băng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
+											}
 										case "SLOW":
-											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-												Type: "slow", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
-											})
-											logs = append(logs, fmt.Sprintf("%s bị Chậm %d%% %d lượt!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
+											if !resisted {
+												tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+													Type: "slow", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
+												})
+												logs = append(logs, fmt.Sprintf("%s bị Chậm %d%% %d lượt!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
+											}
 										case "SLOW_DAMAGE":
-											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-												Type: "slow_damage", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
-											})
-											logs = append(logs, fmt.Sprintf("%s bị Chậm sát thương %d%% và mất %d HP/lượt trong %d lượt!", tEnemy.Name, int(active.StatusTickDamage), int(active.StatusTickDamage), active.StatusDurationTicks))
+											if !resisted {
+												tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+													Type: "slow_damage", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
+												})
+												logs = append(logs, fmt.Sprintf("%s bị Chậm sát thương %d%% và mất %d HP/lượt trong %d lượt!", tEnemy.Name, int(active.StatusTickDamage), int(active.StatusTickDamage), active.StatusDurationTicks))
+											}
 										case "WEAK":
-											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-												Type: "weak", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
-											})
-											logs = append(logs, fmt.Sprintf("%s bị Yếu %d%% %d lượt!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
+											if !resisted {
+												tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+													Type: "weak", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
+												})
+												logs = append(logs, fmt.Sprintf("%s bị Yếu %d%% %d lượt!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
+											}
 										case "BLEED":
 											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
 												Type: "bleed", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
@@ -624,16 +660,7 @@ func CombatAttack(c *gin.Context) {
 						targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, "SINGLE", prefX, prefY, false)
 						if len(targetsIdx) > 0 {
 							targetEnemy := &player.ActiveCombat.Enemies[targetsIdx[0]]
-							daoMult := 1.0
-							if refCaster.DaoMarks != nil {
-								if amt, ok := refCaster.DaoMarks["strength"]; ok && amt > 0 {
-									if amt <= 10000 {
-										daoMult = 1.0 + float64(amt)/100.0
-									} else {
-										daoMult = 1.0 + 100.0 + float64(amt-10000)/500.0
-									}
-								}
-							}
+							daoMult := gamefx.DaoMultiplierForPaths(refCaster.DaoMarks, []string{"strength"}, gamefx.Get(&player).DaoNganBonus)
 							dmgVal := refCaster.BaseAttack
 							if dmgVal <= 0 {
 								dmgVal = 5.0
@@ -645,7 +672,7 @@ func CombatAttack(c *gin.Context) {
 								}
 							}
 							fullDmg := dmgVal * daoMult
-							netDmg := fullDmg - targetEnemy.BaseDefense
+							netDmg := (fullDmg - targetEnemy.BaseDefense) * (1.0 - enemyPathResistance(&player, []string{"strength"}))
 							if netDmg < 1.0 {
 								netDmg = 1.0
 							}

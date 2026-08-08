@@ -35,6 +35,10 @@ type PlayerProfileResponse struct {
 	PathMasteries   map[string]string `json:"path_masteries"`
 	Bio             string            `json:"bio"`
 	AvatarURL       string            `json:"avatar_url"`
+	Race            string            `json:"race"`
+	Gender          string            `json:"gender"`
+	Constitution    string            `json:"constitution"`
+	Statuses        []string          `json:"statuses"`
 }
 
 // getDominantPath determines the player's primary path based on Dao Marks or Path Masteries
@@ -114,7 +118,7 @@ func GetPlayerProfile(c *gin.Context) {
 	var targetDaoMarks models.DaoMarksMap
 
 	query := `
-		SELECT p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitude_percent, p.current_mana, p.max_mana, p.primeval_stones, p.immortal_stones, p.hp, p.base_hp, `+db.GuInventoryAggregate("p.id")+`, p.path_masteries, COALESCE(p.bio, ''), COALESCE(p.avatar_url, ''), p.fake_rank, p.fake_sub_rank, COALESCE(p.fake_vital_gu, ''), p.is_disguised
+		SELECT p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitude_percent, p.current_mana, p.max_mana, p.primeval_stones, p.immortal_stones, p.hp, p.base_hp, `+db.GuInventoryAggregate("p.id")+`, p.path_masteries, COALESCE(p.bio, ''), COALESCE(p.avatar_url, ''), p.fake_rank, p.fake_sub_rank, COALESCE(p.fake_vital_gu, ''), p.is_disguised, COALESCE(p.race, ''), COALESCE(p.gender, ''), COALESCE(p.constitution, ''), p.statuses
 		FROM players p
 		WHERE p.username = $1
 	`
@@ -123,6 +127,7 @@ func GetPlayerProfile(c *gin.Context) {
 		&target.AptitudeType, &target.AptitudePercent, &target.CurrentMana, &target.MaxMana,
 		&target.PrimevalStones, &target.ImmortalStones, &target.HP, &target.BaseHP, &target.GuInventory, &target.PathMasteries,
 		&target.Bio, &target.AvatarURL, &target.FakeRank, &target.FakeSubRank, &target.FakeVitalGu, &target.IsDisguised,
+		&target.Race, &target.Gender, &target.Constitution, &target.Statuses,
 	)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy cổ sư này!"})
@@ -241,6 +246,10 @@ func GetPlayerProfile(c *gin.Context) {
 		resp.DominantPath = getDominantPath(targetDaoMarks, target.PathMasteries)
 		resp.DaoMarks = targetDaoMarks
 		resp.PathMasteries = target.PathMasteries
+		resp.Race = target.Race
+		resp.Gender = target.Gender
+		resp.Constitution = target.Constitution
+		resp.Statuses = target.Statuses
 
 		equipped := []string{}
 		for _, gu := range target.GuInventory {

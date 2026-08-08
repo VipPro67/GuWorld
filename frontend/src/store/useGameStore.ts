@@ -169,6 +169,10 @@ export interface Player {
     boosts: { attack: number; defense: number; hp: number; speed: number };
     fully_grown: { gu_id: string; rank: number; attack: number; defense: number; hp: number; speed: number }[];
   };
+  race: string;
+  gender: string;
+  constitution: string;
+  statuses: string[];
 }
 
 
@@ -800,7 +804,9 @@ interface GameState {
     attackGuId?: string,
     defenseGuId?: string,
     vitalGuChoice?: string,
-    otp?: string
+    otp?: string,
+    race?: string,
+    gender?: string
   ) => Promise<boolean>;
   logout: () => void;
   clearError: () => void;
@@ -1492,7 +1498,9 @@ export const useGameStore = create<GameState>((set, get) => {
     attackGuId,
     defenseGuId,
     vitalGuChoice,
-    otp
+    otp,
+    race?,
+    gender?
   ) => {
     set({ isLoading: true, error: null });
     try {
@@ -1510,6 +1518,8 @@ export const useGameStore = create<GameState>((set, get) => {
           defense_gu_id: defenseGuId,
           vital_gu_choice: vitalGuChoice,
           otp: otp || "",
+          race: race || "human",
+          gender: gender || "male",
         }),
       });
 

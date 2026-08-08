@@ -55,6 +55,45 @@ func DaoMultiplier(dm DaoMarks, paths []string) (float64, bool) {
 	return maxMult, true
 }
 
+// pathBonus returns the maximum additive bonus for any path in paths from a
+// per-path bonus map (e.g. character DaoBonus / PathDamageBonus / PathResistance).
+func pathBonus(bonus map[string]float64, paths []string) float64 {
+	if bonus == nil {
+		return 0
+	}
+	if len(paths) == 0 {
+		paths = []string{"strength"}
+	}
+	maxB := 0.0
+	for _, p := range paths {
+		clean := strings.TrimSuffix(strings.ToLower(p), " path")
+		if b := bonus[clean]; b > maxB {
+			maxB = b
+		}
+	}
+	return maxB
+}
+
+// actorDaoMultiplier returns the dao multiplier for an action's paths including
+// per-path bonuses from the combatant's character effects (race/constitution).
+func actorDaoMultiplier(c *CombatantAuto, paths []string) (float64, bool) {
+	mult, has := DaoMultiplier(c.DaoMarks, paths)
+	if bonus := pathBonus(c.DaoBonus, paths); bonus != 0 {
+		mult += bonus
+		has = true
+	}
+	return mult, has
+}
+
+// resistControl returns true if the combatant's mental resistance causes a
+// control effect to be resisted.
+func resistControl(c *CombatantAuto) bool {
+	if c == nil || c.MentalResistance <= 0 {
+		return false
+	}
+	return rand.Float64() < c.MentalResistance
+}
+
 func cloneCombatState(state *CombatState) *CombatState {
 	if state == nil {
 		return nil
@@ -573,7 +612,7 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 
 				// Dao mark multiplier for this action's path (applies to damage, shield, heal)
-				daoMult, hasDao := DaoMultiplier(actor.DaoMarks, a.Path)
+				daoMult, hasDao := actorDaoMultiplier(actor, a.Path)
 
 				// Buffer shield/heal logs — emit after action name
 				var shieldLog, healLog *CombatLog
@@ -607,7 +646,7 @@ func Simulate(state *CombatState) []CombatLog {
 					if hasDao && daoMult > 1.0 {
 						daoHeal = int(float64(baseHeal) * (daoMult - 1.0))
 					}
-					heal := baseHeal + daoHeal
+					heal := int(float64(baseHeal+daoHeal) * (1.0 + actor.HealingReceived))
 					actor.HP += heal
 					if actor.HP > actor.MaxHP {
 						actor.HP = actor.MaxHP
@@ -820,11 +859,12 @@ func Simulate(state *CombatState) []CombatLog {
 						}
 
 						for h := 0; h < hitCount; h++ {
-							hitDmg := a.Damage * dmgMultiplier * daoMult
+							hitDmg := a.Damage * dmgMultiplier * daoMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path))
 							if h > 0 {
 								hitDmg *= 0.7
 							}
 							netDmg := hitDmg - targetDef
+							netDmg *= (1.0 - pathBonus(target.PathResistance, a.Path))
 							if netDmg < 1 {
 								netDmg = 1
 							}
@@ -865,7 +905,9 @@ func Simulate(state *CombatState) []CombatLog {
 
 						if a.PhantomDmg > 0 {
 							phantomDef := float64(target.BaseDef)
-							phantomNet := math.Max(1, (a.PhantomDmg*dmgMultiplier)-phantomDef)
+							phantomNet := (a.PhantomDmg * dmgMultiplier) - phantomDef
+							phantomNet *= (1.0 - pathBonus(target.PathResistance, a.Path))
+							phantomNet = math.Max(1, phantomNet)
 							phantomDealt := applyDamageToTarget(actor, target, phantomNet, &turnLogs, turn, shieldBypass)
 							totalDamageDealt += int(phantomDealt)
 							turnLogs = append(turnLogs, CombatLog{
@@ -904,7 +946,7 @@ func Simulate(state *CombatState) []CombatLog {
 								Detail:    fmt.Sprintf("%s bị trúng độc (%.0f/lượt trong 3 lượt)!", target.Name, a.PoisonPerTurn),
 							})
 						}
-						if a.StunTier > 0 {
+						if a.StunTier > 0 && !resistControl(target) {
 							dur := TierToDuration(EffectStun, a.StunTier)
 							target.ActiveEffects = append(target.ActiveEffects, Effect{
 								ID: EffectStun, Type: "debuff", Tier: a.StunTier, Value: 1, Duration: dur,
@@ -919,7 +961,7 @@ func Simulate(state *CombatState) []CombatLog {
 						}
 
 						// ── Apply new status effects from action ──
-						if a.SlowTier > 0 {
+						if a.SlowTier > 0 && !resistControl(target) {
 							pct := int(TierToPercent(EffectSlow, a.SlowTier))
 							dur := TierToDuration(EffectSlow, a.SlowTier)
 							target.ActiveEffects = append(target.ActiveEffects, Effect{
@@ -933,7 +975,7 @@ func Simulate(state *CombatState) []CombatLog {
 								Detail:    fmt.Sprintf("%s bị chậm %d%% trong %d lượt!", target.Name, pct, dur),
 							})
 						}
-						if a.SlowDamageTier > 0 {
+						if a.SlowDamageTier > 0 && !resistControl(target) {
 							pct := int(TierToPercent(EffectSlowDamage, a.SlowDamageTier))
 							dur := TierToDuration(EffectSlowDamage, a.SlowDamageTier)
 							target.ActiveEffects = append(target.ActiveEffects, Effect{
@@ -950,7 +992,7 @@ func Simulate(state *CombatState) []CombatLog {
 								Detail:    fmt.Sprintf("%s bị chậm sát thương %d%% và mất %d HP/lượt trong %d lượt!", target.Name, pct, pct, dur),
 							})
 						}
-						if a.WeakTier > 0 {
+						if a.WeakTier > 0 && !resistControl(target) {
 							pct := int(TierToPercent(EffectWeak, a.WeakTier))
 							dur := TierToDuration(EffectWeak, a.WeakTier)
 							target.ActiveEffects = append(target.ActiveEffects, Effect{
@@ -964,7 +1006,7 @@ func Simulate(state *CombatState) []CombatLog {
 								Detail:    fmt.Sprintf("%s bị yếu, giảm %d%% sát thương trong %d lượt!", target.Name, pct, dur),
 							})
 						}
-						if a.FreezeTier > 0 {
+						if a.FreezeTier > 0 && !resistControl(target) {
 							dur := TierToDuration(EffectFreeze, a.FreezeTier)
 							target.ActiveEffects = append(target.ActiveEffects, Effect{
 								ID: EffectFreeze, Type: "debuff", Tier: a.FreezeTier, Value: 1, Duration: dur,
@@ -977,7 +1019,7 @@ func Simulate(state *CombatState) []CombatLog {
 								Detail:    fmt.Sprintf("%s bị đóng băng trong %d lượt!", target.Name, dur),
 							})
 						}
-						if a.SilenceTier > 0 {
+						if a.SilenceTier > 0 && !resistControl(target) {
 							dur := TierToDuration(EffectSilence, a.SilenceTier)
 							target.ActiveEffects = append(target.ActiveEffects, Effect{
 								ID: EffectSilence, Type: "debuff", Tier: a.SilenceTier, Value: 1, Duration: dur,
@@ -1174,16 +1216,7 @@ func Simulate(state *CombatState) []CombatLog {
 
 			// Fallback: basic attack if no valid action
 			if !hasExecutedAny {
-				daoMult := 1.0
-				if actor.DaoMarks != nil {
-					if amt, ok := actor.DaoMarks["strength"]; ok && amt > 0 {
-						if amt <= 10000 {
-							daoMult = 1.0 + float64(amt)/100.0
-						} else {
-							daoMult = 1.0 + 100.0 + float64(amt-10000)/500.0
-						}
-					}
-				}
+				daoMult, _ := actorDaoMultiplier(actor, []string{"strength"})
 				// Apply weak debuff to fallback basic attack
 				fallbackDmgMult := actor.DamageMultiplier
 				fallbackAction := &SimAction{
@@ -1197,6 +1230,7 @@ func Simulate(state *CombatState) []CombatLog {
 				if len(fallbackTargets) > 0 {
 					target := fallbackTargets[0]
 					netDmg := fallbackAction.Damage - float64(target.BaseDef)
+					netDmg *= (1.0 - pathBonus(target.PathResistance, []string{"strength"}))
 					if netDmg < 1 {
 						netDmg = 1
 					}

@@ -58,6 +58,9 @@ type PathMasteriesMap map[string]string
 // BodyModsList represents passive body modifications
 type BodyModsList []string
 
+// StatusList represents the player's active statuses (trạng thái), e.g. "severely_wounded".
+type StatusList []string
+
 // ExploredCellsList represents coordinates visited by the player
 type ExploredCellsList []string
 
@@ -155,6 +158,9 @@ type CombatState struct {
 	MineSlotID          int               `json:"mine_slot_id,omitempty"`
 	EnemyStatusEffects  []StatusEffect    `json:"enemy_status_effects,omitempty"`
 	PlayerStatusEffects []StatusEffect    `json:"player_status_effects,omitempty"`
+	// Defender-side character effects for PVP enemies (race/constitution/status).
+	EnemyPathResistance  map[string]float64 `json:"enemy_path_resistance,omitempty"`
+	EnemyMentalResistance float64           `json:"enemy_mental_resistance,omitempty"`
 	SkillCooldowns      map[string]int    `json:"skill_cooldowns,omitempty"`
 	ItemsUsedCount      int               `json:"items_used_count"`
 	ItemCooldowns       map[string]int    `json:"item_cooldowns,omitempty"`
@@ -203,6 +209,7 @@ type Player struct {
 	CultivationState
 	ResourceState
 	BodyState
+	CharacterState
 	SoulState
 	ThoughtPool
 	DaoState
@@ -462,6 +469,27 @@ func (b BodyModsList) Value() (driver.Value, error) {
 		return "[]", nil
 	}
 	return json.Marshal(b)
+}
+
+// Scan implements the sql.Scanner interface for StatusList
+func (s *StatusList) Scan(value interface{}) error {
+	if value == nil {
+		*s = StatusList{}
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+	}
+	return json.Unmarshal(bytes, s)
+}
+
+// Value implements the driver.Valuer interface for StatusList
+func (s StatusList) Value() (driver.Value, error) {
+	if s == nil {
+		return "[]", nil
+	}
+	return json.Marshal(s)
 }
 
 // Scan implements the sql.Scanner interface for ExploredCellsList

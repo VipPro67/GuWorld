@@ -190,6 +190,14 @@ type CombatantAuto struct {
 
 	DaoMarks DaoMarks
 
+	// Character effects from race/constitution/statuses. Computed by the handler
+	// from gamefx.Get(player) and applied by the engine during battle.
+	DaoBonus         map[string]float64 // additive dao-path multiplier (path affinity)
+	PathDamageBonus  map[string]float64 // additive damage multiplier for a path
+	PathResistance   map[string]float64 // additive damage reduction taken for a path
+	HealingReceived  float64            // multiplier bonus on healing received
+	MentalResistance float64            // chance (0-1) to resist control effects
+
 	// Equipment / Loadout
 	Loadout *CombatLoadout
 

@@ -97,9 +97,46 @@ export const PlayerProfileModal: React.FC = () => {
     dao_marks,
     bio,
     avatar_url,
+    race,
+    gender,
+    constitution,
+    statuses,
   } = inspectedProfile;
 
   const isImmortal = rank >= 6;
+
+  const raceLabels: Record<string, string> = {
+    human: "Nhân Tộc",
+    fur_people: "Người Lông",
+    merman: "Nhân Ngư",
+    feathered: "Vũ Dân",
+    inkman: "Mặc Nhân",
+    rockman: "Thạch Nhân",
+    snowman: "Tuyết Dân",
+    variant_beastman: "Thú Nhân",
+    dragonman: "Long Nhân",
+    giant_sun_descendant: "Cự Dương Huyết Mạch",
+  };
+  const genderLabels: Record<string, string> = {
+    male: "Nam",
+    female: "Nữ",
+  };
+  const constitutionLabels: Record<string, string> = {
+    desolate_ancient_moon_body: "Hoang Cổ Nguyệt Thể",
+    verdant_great_sun_body: "Thanh Liên Đại Nhật Thể",
+    northern_dark_ice_soul_body: "Bắc Minh Băng Phách Thể",
+    north_ming_ice_body: "Bắc Minh Băng Phách Thể",
+    ancient_yin_virtue_body: "Cổ Nguyệt Âm Đức Thể",
+    blazing_glory_lightning_brilliance_body: "Hạo Kiếp Viêm Quang Lôi Quang Thể",
+    pure_dream_reality_seeker_body: "Thuần Mộng Cầu Chân Thể",
+    unrestrained_heavenly_mark_body: "Vô Cực Thiên Ngân Thể",
+    great_strength_true_martial_body: "Đại Lực Chân Vũ Thể",
+    carefree_lotus_heart_body: "Tiêu Dao Liên Tâm Thể",
+    ancient_soul_virtue_body: "Cổ Hồn Âm Đức Thể",
+  };
+  const statusLabels: Record<string, string> = {
+    severely_wounded: "Trọng Thương",
+  };
 
   const getRankName = (rankNum: number, subNum: number, aperture?: ImmortalAperture | null): string => {
     const ranks = ["Sơ giai", "Trung giai", "Cao giai", "Đỉnh phong"];
@@ -295,6 +332,42 @@ export const PlayerProfileModal: React.FC = () => {
               </span>
             </div>
           )}
+
+          {/* Character Identity (Race / Gender / Constitution / Statuses) */}
+          <div className="sm:col-span-2 grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-3.5">
+              <span className="text-[10px] uppercase tracking-widest font-mono text-zinc-500">Chủng tộc</span>
+              <span className="text-sm font-semibold text-zinc-200">
+                {race ? raceLabels[race] || race : "Không rõ"}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1.5 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-3.5">
+              <span className="text-[10px] uppercase tracking-widest font-mono text-zinc-500">Giới tính</span>
+              <span className="text-sm font-semibold text-zinc-200">
+                {gender ? genderLabels[gender] || gender : "Không rõ"}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1.5 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-3.5">
+              <span className="text-[10px] uppercase tracking-widest font-mono text-zinc-500">Thể chất</span>
+              <span className="text-sm font-semibold text-zinc-200">
+                {constitution ? constitutionLabels[constitution] || constitution : "Không có"}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1.5 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-3.5">
+              <span className="text-[10px] uppercase tracking-widest font-mono text-zinc-500">Trạng thái</span>
+              {statuses && statuses.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {statuses.map((s: string) => (
+                    <span key={s} className="text-[10px] px-2 py-0.5 rounded-lg bg-rose-950/40 text-rose-400 border border-rose-900/40 font-mono font-semibold">
+                      {statusLabels[s] || s}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-sm font-semibold text-zinc-200">Bình thường</span>
+              )}
+            </div>
+          </div>
 
           {/* Cultivator Pools (HP & Mana/Essence) */}
           <div className="sm:col-span-2 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-4 flex flex-col gap-4">

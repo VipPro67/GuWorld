@@ -14,6 +14,7 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -222,6 +223,10 @@ func AdminGetPlayerDetail(c *gin.Context) {
 		"aperture_stress":  player.ApertureStress,
 		"avatar_url":       player.AvatarURL,
 		"bio":              player.Bio,
+		"race":             player.Race,
+		"gender":           player.Gender,
+		"constitution":     player.Constitution,
+		"statuses":         player.Statuses,
 		"gu_count":         guCount,
 		"item_count":       itemCount,
 	})
@@ -782,6 +787,10 @@ type AdminUpdatePlayerRequest struct {
 	ApertureStress  *float64 `json:"aperture_stress"`
 	Bio             *string  `json:"bio"`
 	AvatarURL       *string  `json:"avatar_url"`
+	Race            *string  `json:"race"`
+	Gender          *string  `json:"gender"`
+	Constitution    *string  `json:"constitution"`
+	Statuses        *[]string `json:"statuses"`
 }
 
 // AdminUpdatePlayer allows admins to edit a wide range of player attributes in one call.
@@ -954,6 +963,48 @@ func AdminUpdatePlayer(c *gin.Context) {
 	if req.AvatarURL != nil {
 		sets = append(sets, "avatar_url=$"+strconv.Itoa(argIdx))
 		args = append(args, *req.AvatarURL)
+		argIdx++
+	}
+	if req.Race != nil {
+		race := *req.Race
+		if race != "" && !gamefx.ValidRaces()[race] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Chủng tộc không hợp lệ"})
+			return
+		}
+		sets = append(sets, "race=$"+strconv.Itoa(argIdx))
+		args = append(args, race)
+		argIdx++
+	}
+	if req.Gender != nil {
+		gender := *req.Gender
+		if gender != "" && !gamefx.ValidGenders()[gender] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Giới tính không hợp lệ"})
+			return
+		}
+		sets = append(sets, "gender=$"+strconv.Itoa(argIdx))
+		args = append(args, gender)
+		argIdx++
+	}
+	if req.Constitution != nil {
+		constitution := *req.Constitution
+		if constitution != "" && !gamefx.ValidConstitutions()[constitution] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Thể chất không hợp lệ"})
+			return
+		}
+		sets = append(sets, "constitution=$"+strconv.Itoa(argIdx))
+		args = append(args, constitution)
+		argIdx++
+	}
+	if req.Statuses != nil {
+		statuses := *req.Statuses
+		for _, s := range statuses {
+			if s != "" && !gamefx.ValidStatuses()[s] {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Trạng thái không hợp lệ: " + s})
+				return
+			}
+		}
+		sets = append(sets, "statuses=$"+strconv.Itoa(argIdx))
+		args = append(args, models.StatusList(statuses))
 		argIdx++
 	}
 

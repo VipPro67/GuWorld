@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -88,8 +89,9 @@ func BreakWall(c *gin.Context) {
 	}
 
 	// Base success chance and progress calculation
-	manaRatio := req.ManaSpend / math.Max(1.0, player.MaxMana)
+	manaRatio := req.ManaSpend / math.Max(1.0, gamefx.EffectiveMaxMana(&player))
 	progressGain := manaRatio * (0.2 + 0.3*aptMul) / (float64(player.Rank) + float64(player.SubRank)/4.0)
+	progressGain *= (1.0 + gamefx.Get(&player).CultivationEfficiencyBonus)
 
 	if player.ApertureStress >= 80.0 {
 		progressGain *= 0.25
