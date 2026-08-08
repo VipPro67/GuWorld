@@ -196,16 +196,16 @@ export const LobbyView: React.FC = () => {
       borderColor: "border-violet-400/20",
       iconColor: "text-violet-100",
     },
-
     {
-      id: "gacha",
-      label: "Đổ Thạch",
-      icon: Gift,
-      gradient: "from-pink-500 to-rose-600",
-      glow: "group-hover:shadow-[0_0_25px_rgba(236,72,153,0.45)]",
-      borderColor: "border-pink-400/30",
-      iconColor: "text-pink-500",
+      id: "pets",
+      label: "Nô Thú",
+      icon: PawPrint,
+      gradient: "from-purple-500 to-fuchsia-600",
+      glow: "group-hover:shadow-[0_0_25px_rgba(168,85,247,0.45)]",
+      borderColor: "border-purple-400/30",
+      iconColor: "text-purple-500",
     },
+    
     {
       id: "achievements",
       label: "Nhiệm Vụ & Thành Tựu",
@@ -214,15 +214,6 @@ export const LobbyView: React.FC = () => {
       glow: "group-hover:shadow-[0_0_25px_rgba(245,158,11,0.45)]",
       borderColor: "border-amber-400/30",
       iconColor: "text-amber-500",
-    },
-    {
-      id: "feedback",
-      label: "Thỉnh Thiên Đạo",
-      icon: Sparkles,
-      gradient: "from-fuchsia-500 to-pink-600",
-      glow: "group-hover:shadow-[0_0_20px_rgba(217,70,239,0.4)]",
-      borderColor: "border-fuchsia-400/20",
-      iconColor: "text-fuchsia-100",
     },
     {
       id: "combat-history",
@@ -274,6 +265,15 @@ export const LobbyView: React.FC = () => {
       iconColor: "text-rose-500",
     },
     {
+      id: "gacha",
+      label: "Đổ Thạch",
+      icon: Gift,
+      gradient: "from-pink-500 to-rose-600",
+      glow: "group-hover:shadow-[0_0_25px_rgba(236,72,153,0.45)]",
+      borderColor: "border-pink-400/30",
+      iconColor: "text-pink-500",
+    },
+    {
       id: "leaderboard",
       label: "Bảng Xếp Hạng",
       icon: Trophy,
@@ -306,18 +306,6 @@ export const LobbyView: React.FC = () => {
       borderColor: "border-zinc-800",
       iconColor: "text-zinc-600",
     },
-
-    {
-      id: "pets",
-      label: "Nô Thú",
-      //icon: PawPrint,
-      icon: Lock,
-      gradient: "from-purple-500 to-fuchsia-600",
-      glow: "group-hover:shadow-[0_0_20px_rgba(168,85,247,0.4)]",
-      borderColor: "border-purple-400/20",
-      iconColor: "text-purple-100",
-      locked: true, // Locked for dev
-    },
     {
       id: "world-map",
       label: "Ngũ Vực",
@@ -327,6 +315,15 @@ export const LobbyView: React.FC = () => {
       borderColor: "border-teal-400/30",
       iconColor: "text-teal-500",
       locked: true, // Locked for dev
+    },
+    {
+      id: "feedback",
+      label: "Thỉnh Thiên Đạo",
+      icon: Sparkles,
+      gradient: "from-fuchsia-500 to-pink-600",
+      glow: "group-hover:shadow-[0_0_20px_rgba(217,70,239,0.4)]",
+      borderColor: "border-fuchsia-400/20",
+      iconColor: "text-fuchsia-100",
     },
   ];
 
