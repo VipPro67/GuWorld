@@ -240,6 +240,19 @@ func RedeemGiftCode(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật người chơi"})
 		return
 	}
+
+	if player.Rank >= 6 {
+		_, err = tx.Exec(`
+			UPDATE immortal_apertures 
+			SET dao_marks = $1 
+			WHERE player_id = $2`,
+			player.DaoMarks, player.ID,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Dao Marks Tiên Khiếu"})
+			return
+		}
+	}
 	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cổ trùng"})
 		return
@@ -328,10 +341,6 @@ func buildGiftCodeUpdateQuery(player *models.Player) (string, []interface{}) {
 	extraFields := []string{}
 	extraVals := []interface{}{}
 
-	if len(player.DaoMarks) > 0 {
-		extraFields = append(extraFields, "dao_marks")
-		extraVals = append(extraVals, player.DaoMarks)
-	}
 	// materials_inventory no longer stored on players table
 
 	allFields := append(baseFields, extraFields...)

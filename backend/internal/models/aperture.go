@@ -25,6 +25,7 @@ type ImmortalAperture struct {
 	MyriadTribulationCount    int       `json:"myriad_tribulation_count"`
 	ChaosCalamityCount        int       `json:"chaos_calamity_count"`
 	State                    string    `json:"state"` // 'STABLE' | 'TRIBULATION_PENDING' | 'TRIBULATION_ACTIVE' | 'DAMAGED' | 'DESTROYED'
+	DaoMarks                 DaoMarksMap `json:"dao_marks"`
 	CreatedAt                time.Time `json:"created_at"`
 	UpdatedAt                time.Time `json:"updated_at"`
 	Temperature              float64   `json:"temperature,omitempty"`

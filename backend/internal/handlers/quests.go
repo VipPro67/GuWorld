@@ -322,10 +322,6 @@ func buildQuestUpdateQuery(player *models.Player) (string, []interface{}) {
 		extraFields = append(extraFields, "immortal_stones")
 		extraVals = append(extraVals, player.ImmortalStones)
 	}
-	if len(player.DaoMarks) > 0 {
-		extraFields = append(extraFields, "dao_marks")
-		extraVals = append(extraVals, player.DaoMarks)
-	}
 
 	allFields := append(baseFields, extraFields...)
 	allVals := append(baseVals, extraVals...)
@@ -433,6 +429,19 @@ func CompleteQuest(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player"})
 		return
+	}
+
+	if player.Rank >= 6 {
+		_, err = tx.Exec(`
+			UPDATE immortal_apertures 
+			SET dao_marks = $1 
+			WHERE player_id = $2`,
+			player.DaoMarks, player.ID,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update aperture Dao Marks"})
+			return
+		}
 	}
 	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player Gus"})

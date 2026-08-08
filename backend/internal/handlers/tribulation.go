@@ -169,8 +169,10 @@ func AttackTribulationEnemy(c *gin.Context) {
 	// 2. Fetch Player stats
 	var player models.Player
 	err = tx.QueryRow(`
-		SELECT id, username, rank, sub_rank, current_mana, max_mana, hp, base_hp, primeval_stones, `+db.GuInventoryAggregate("players.id")+`, dao_marks, path_masteries, growth_data
-		FROM players WHERE id = $1
+		SELECT p.id, p.username, p.rank, p.sub_rank, p.current_mana, p.max_mana, p.hp, p.base_hp, p.primeval_stones, `+db.GuInventoryAggregate("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.path_masteries, p.growth_data
+		FROM players p
+		LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
+		WHERE p.id = $1
 	`, playerID).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.CurrentMana, &player.MaxMana, &player.HP, &player.BaseHP,
@@ -867,7 +869,7 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 
 func addDaoMarksTx(tx *sql.Tx, playerID string, path string, amount int) error {
 	var daoJSON []byte
-	err := tx.QueryRow(`SELECT COALESCE(dao_marks, '{}') FROM players WHERE id = $1 FOR UPDATE`, playerID).Scan(&daoJSON)
+	err := tx.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1 FOR UPDATE`, playerID).Scan(&daoJSON)
 	if err != nil {
 		return err
 	}
@@ -885,13 +887,13 @@ func addDaoMarksTx(tx *sql.Tx, playerID string, path string, amount int) error {
 		return err
 	}
 
-	_, err = tx.Exec(`UPDATE players SET dao_marks = $1 WHERE id = $2`, daoJSON, playerID)
+	_, err = tx.Exec(`UPDATE immortal_apertures SET dao_marks = $1 WHERE player_id = $2`, daoJSON, playerID)
 	return err
 }
 
 func addMultipleDaoMarksTx(tx *sql.Tx, playerID string, rewards map[string]int) error {
 	var daoJSON []byte
-	err := tx.QueryRow(`SELECT COALESCE(dao_marks, '{}') FROM players WHERE id = $1 FOR UPDATE`, playerID).Scan(&daoJSON)
+	err := tx.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1 FOR UPDATE`, playerID).Scan(&daoJSON)
 	if err != nil {
 		return err
 	}
@@ -911,7 +913,7 @@ func addMultipleDaoMarksTx(tx *sql.Tx, playerID string, rewards map[string]int) 
 		return err
 	}
 
-	_, err = tx.Exec(`UPDATE players SET dao_marks = $1 WHERE id = $2`, daoJSON, playerID)
+	_, err = tx.Exec(`UPDATE immortal_apertures SET dao_marks = $1 WHERE player_id = $2`, daoJSON, playerID)
 	return err
 }
 
@@ -1000,19 +1002,22 @@ func CheckAndTriggerTribulations() error {
 
 	for _, ap := range apertures {
 		// Advance internal year: 60s tick interval
-		subjectiveYearsPassed := 60.0 * ap.TimeRate / 36000.0
+		timeSpeedMultiplier := 1.0
 		realYearsPassed := 60.0 / 36000.0
 
 		// Deduct cultivator lifespan (real time, not scaled by TimeRate)
 		var currentLifespan float64
-		errLifespan := db.DB.QueryRow(`SELECT lifespan FROM players WHERE id = $1`, ap.PlayerID).Scan(&currentLifespan)
+		errLifespan := db.DB.QueryRow(`SELECT lifespan, time_speed_multiplier FROM players WHERE id = $1`, ap.PlayerID).Scan(&currentLifespan, &timeSpeedMultiplier)
 		if errLifespan == nil {
+			if timeSpeedMultiplier <= 0 {
+				timeSpeedMultiplier = 1.0
+			}
 			if currentLifespan <= 0.0 {
 				// Lifespan already depleted, time does not flow and no message spam
 				continue
 			}
 
-			newLifespan := math.Max(0.0, currentLifespan-realYearsPassed)
+			newLifespan := math.Max(0.0, currentLifespan-(realYearsPassed*timeSpeedMultiplier))
 			_, _ = db.DB.Exec(`UPDATE players SET lifespan = $1 WHERE id = $2`, newLifespan, ap.PlayerID)
 
 			if newLifespan <= 0.0 {
@@ -1030,7 +1035,11 @@ func CheckAndTriggerTribulations() error {
 				logger.S.Warnf("Player %s lifespan depleted, aperture %s frozen", ap.PlayerID, ap.ID)
 				continue
 			}
+		} else {
+			timeSpeedMultiplier = 1.0
 		}
+
+		subjectiveYearsPassed := 60.0 * ap.TimeRate * timeSpeedMultiplier / 36000.0
 
 		newYearsPassed := ap.InternalYearsPassed + subjectiveYearsPassed
 

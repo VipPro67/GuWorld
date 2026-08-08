@@ -79,7 +79,6 @@ type CultivationState struct {
 	LastCultivateTime   time.Time  `json:"last_cultivate_time"`
 	TimeSpeedMultiplier float64    `json:"time_speed_multiplier"`
 	NextTribulationTime *time.Time `json:"next_tribulation_time"`
-	TribulationCount    int        `json:"tribulation_count"`
 }
 
 // NewCultivationState extracts cultivation data from a Player.
@@ -97,7 +96,6 @@ func NewCultivationState(p *Player) CultivationState {
 		LastCultivateTime:   p.LastCultivateTime,
 		TimeSpeedMultiplier: p.TimeSpeedMultiplier,
 		NextTribulationTime: p.NextTribulationTime,
-		TribulationCount:    p.TribulationCount,
 	}
 }
 
@@ -115,7 +113,6 @@ func (s CultivationState) Apply(p *Player) {
 	p.LastCultivateTime = s.LastCultivateTime
 	p.TimeSpeedMultiplier = s.TimeSpeedMultiplier
 	p.NextTribulationTime = s.NextTribulationTime
-	p.TribulationCount = s.TribulationCount
 }
 
 // ResourceState groups mana and currency fields.

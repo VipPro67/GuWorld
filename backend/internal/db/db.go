@@ -195,7 +195,6 @@ func InitSchema() error {
 		y INTEGER NOT NULL DEFAULT 50,
 		explored_cells JSONB NOT NULL DEFAULT '["50,50"]',
 		current_region VARCHAR(50) NOT NULL DEFAULT 'Southern_Border',
-		dao_marks JSONB NOT NULL DEFAULT '{"strength": 0}',
 		path_masteries JSONB NOT NULL DEFAULT '{}',
 		active_combat JSONB DEFAULT NULL,
 		last_mana_update TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -272,6 +271,7 @@ func InitSchema() error {
 		myriad_tribulation_count INTEGER NOT NULL DEFAULT 0,
 		chaos_calamity_count INTEGER NOT NULL DEFAULT 0,
 		state VARCHAR(30) NOT NULL DEFAULT 'STABLE',
+		dao_marks JSONB NOT NULL DEFAULT '{"strength": 0}',
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
 		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 	);`)
@@ -1281,6 +1281,14 @@ func InitSchema() error {
 			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(party_id, invitee_id)
 		);`, "create_party_invitations_table"},
+		{`ALTER TABLE players DROP COLUMN IF EXISTS phone_number;`, "drop_phone_number_column"},
+		{`ALTER TABLE players DROP COLUMN IF EXISTS max_lifespan;`, "drop_max_lifespan_column"},
+		{`ALTER TABLE players DROP COLUMN IF EXISTS wisdom;`, "drop_wisdom_column"},
+		{`UPDATE players SET time_speed_multiplier = 1.0;`, "reset_time_speed_multiplier"},
+		{`ALTER TABLE players DROP COLUMN IF EXISTS tribulation_count;`, "drop_tribulation_count_column"},
+		{`ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS dao_marks JSONB NOT NULL DEFAULT '{"strength": 0}';`, "add_dao_marks_to_apertures"},
+		{`UPDATE immortal_apertures ia SET dao_marks = p.dao_marks FROM players p WHERE ia.player_id = p.id AND p.dao_marks IS NOT NULL;`, "migrate_dao_marks_data"},
+		{`ALTER TABLE players DROP COLUMN IF EXISTS dao_marks;`, "drop_dao_marks_from_players"},
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {

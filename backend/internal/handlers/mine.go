@@ -535,8 +535,10 @@ func AttackMineSlot(c *gin.Context) {
 		// 4. Load defender (occupier) details
 		var defender models.Player
 		err = tx.QueryRow(`
-			SELECT id, username, rank, sub_rank, hp, max_mana, path_masteries, `+db.GuInventoryAggregate("players.id")+`, dao_marks, current_mana, base_hp
-			FROM players WHERE id = $1 FOR UPDATE`, occupierUUID).Scan(
+			SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.path_masteries, `+db.GuInventoryAggregate("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.current_mana, p.base_hp
+			FROM players p
+			LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
+			WHERE p.id = $1 FOR UPDATE`, occupierUUID).Scan(
 			&defender.ID, &defender.Username, &defender.Rank, &defender.SubRank,
 			&defender.HP, &defender.MaxMana, &defender.PathMasteries, &defender.GuInventory, &defender.DaoMarks, &defender.CurrentMana, &defender.BaseHP,
 		)

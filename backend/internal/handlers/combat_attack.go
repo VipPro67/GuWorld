@@ -1235,7 +1235,11 @@ func CombatAttack(c *gin.Context) {
 
 		if player.ActiveCombat != nil && player.ActiveCombat.EnemyTemplateID == "monster_heavenly_tribulation" {
 			player.ImmortalStones = player.ImmortalStones * 0.5
-			player.TribulationCount = 0
+			_, _ = tx.Exec(`
+				UPDATE immortal_apertures 
+				SET tribulation_count = 0, earth_calamity_count = 0, heavenly_tribulation_count = 0, grand_tribulation_count = 0, myriad_tribulation_count = 0, chaos_calamity_count = 0 
+				WHERE player_id = $1
+			`, player.ID)
 			nextTrib := time.Now().Add(10 * time.Minute)
 			player.NextTribulationTime = &nextTrib
 

@@ -165,8 +165,10 @@ func ChallengeArena(c *gin.Context) {
 
 	var targetPlayer models.Player
 	err = tx.QueryRow(`
-		SELECT id, username, rank, sub_rank, hp, max_mana, path_masteries, `+db.GuInventoryAggregate("players.id")+`, dao_marks, current_mana, base_hp
-		FROM players WHERE id = $1 FOR UPDATE`, targetUUID).Scan(
+		SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.path_masteries, `+db.GuInventoryAggregate("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.current_mana, p.base_hp
+		FROM players p
+		LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
+		WHERE p.id = $1 FOR UPDATE`, targetUUID).Scan(
 		&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
 		&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
 	)

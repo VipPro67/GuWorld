@@ -393,25 +393,22 @@ func Ascension(c *gin.Context) {
 		// Set first tribulation to 10 days from now (simulated real-time)
 		nextTrib := time.Now().Add(10 * 24 * time.Hour)
 		player.NextTribulationTime = &nextTrib
-		player.TribulationCount = 0
 		player.ImmortalStones = 10.0 // Initial immortal stones
 
 		// Create Tiên Khiếu immediately — grade rolled from Nhân Khí at the moment of ascending
-		ap, apErr := createAperture(tx, player.ID.String(), ascQi, player.CurrentMana)
+		_, apErr := createAperture(tx, player.ID.String(), ascQi, player.CurrentMana)
 		if apErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Thăng tiên thành công nhưng không thể khai mở Tiên Khiếu: " + apErr.Error()})
 			return
 		}
-		// Sync time_speed_multiplier to player table
-		_, _ = tx.Exec(`UPDATE players SET time_speed_multiplier = $1 WHERE id = $2`, ap.TimeRate, player.ID)
 
 		msg = "Thăng tiên thành công! Bạn đã khai Tiên Khiếu."
 		SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Đạo hữu %s đã thăng tiên thành công! Người người ngưỡng mộ", player.Account.Username))
 		updateQuery := `
-			UPDATE players SET rank = $1, sub_rank = $2, human_qi = $3, dao_marks = $4, next_tribulation_time = $5, tribulation_count = $6, immortal_stones = $7
-			WHERE id = $8
+			UPDATE players SET rank = $1, sub_rank = $2, human_qi = $3, dao_marks = $4, next_tribulation_time = $5, immortal_stones = $6
+			WHERE id = $7
 		`
-		_, err = tx.Exec(updateQuery, player.Rank, player.SubRank, player.HumanQi, player.DaoMarks, player.NextTribulationTime, player.TribulationCount, player.ImmortalStones, player.ID)
+		_, err = tx.Exec(updateQuery, player.Rank, player.SubRank, player.HumanQi, player.DaoMarks, player.NextTribulationTime, player.ImmortalStones, player.ID)
 	} else {
 		// Failure penalty: Drop back to Rank 1 SubRank 1, lose Human Qi
 		player.Rank = 1

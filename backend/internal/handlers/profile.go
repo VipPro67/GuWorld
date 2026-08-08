@@ -114,7 +114,7 @@ func GetPlayerProfile(c *gin.Context) {
 	var targetDaoMarks models.DaoMarksMap
 
 	query := `
-		SELECT p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitude_percent, p.current_mana, p.max_mana, p.primeval_stones, p.immortal_stones, p.hp, p.base_hp, `+db.GuInventoryAggregate("p.id")+`, p.path_masteries, p.dao_marks, COALESCE(p.bio, ''), COALESCE(p.avatar_url, ''), p.fake_rank, p.fake_sub_rank, COALESCE(p.fake_vital_gu, ''), p.is_disguised
+		SELECT p.id, p.username, p.rank, p.sub_rank, p.aptitude_type, p.aptitude_percent, p.current_mana, p.max_mana, p.primeval_stones, p.immortal_stones, p.hp, p.base_hp, `+db.GuInventoryAggregate("p.id")+`, p.path_masteries, COALESCE(p.bio, ''), COALESCE(p.avatar_url, ''), p.fake_rank, p.fake_sub_rank, COALESCE(p.fake_vital_gu, ''), p.is_disguised
 		FROM players p
 		WHERE p.username = $1
 	`
@@ -122,7 +122,7 @@ func GetPlayerProfile(c *gin.Context) {
 		&target.ID, &target.Username, &target.Rank, &target.SubRank,
 		&target.AptitudeType, &target.AptitudePercent, &target.CurrentMana, &target.MaxMana,
 		&target.PrimevalStones, &target.ImmortalStones, &target.HP, &target.BaseHP, &target.GuInventory, &target.PathMasteries,
-		&targetDaoMarks, &target.Bio, &target.AvatarURL, &target.FakeRank, &target.FakeSubRank, &target.FakeVitalGu, &target.IsDisguised,
+		&target.Bio, &target.AvatarURL, &target.FakeRank, &target.FakeSubRank, &target.FakeVitalGu, &target.IsDisguised,
 	)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy cổ sư này!"})
@@ -130,6 +130,13 @@ func GetPlayerProfile(c *gin.Context) {
 	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tìm kiếm: " + err.Error()})
 		return
+	}
+
+	if target.Rank >= 6 {
+		_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, target.ID).Scan(&targetDaoMarks)
+	}
+	if targetDaoMarks == nil {
+		targetDaoMarks = models.DaoMarksMap{"strength": 0}
 	}
 
 	// Fetch sect name separately to keep query simpler and safe

@@ -438,14 +438,15 @@ func MovePlayer(c *gin.Context) {
 	var targetPlayer models.Player
 	var hasTargetPlayer bool
 	queryStr := `
-		SELECT id, username, rank, sub_rank, hp, max_mana, current_mana, base_hp, path_masteries, `+db.GuInventoryAggregate("players.id")+`, dao_marks
-		FROM players
-		WHERE current_region = $1 AND x = $2 AND y = $3 AND id != $4
-		  AND (current_region IN ('qing_mao_mountain', 'gu_luan_slope', 'three_kings_inheritance') OR last_mana_update >= NOW() - INTERVAL '15 minutes')
+		SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.current_mana, p.base_hp, p.path_masteries, `+db.GuInventoryAggregate("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb)
+		FROM players p
+		LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
+		WHERE p.current_region = $1 AND p.x = $2 AND p.y = $3 AND p.id != $4
+		  AND (p.current_region IN ('qing_mao_mountain', 'gu_luan_slope', 'three_kings_inheritance') OR p.last_mana_update >= NOW() - INTERVAL '15 minutes')
 	`
 	var errTarget error
 	if player.PartyID != nil {
-		queryStr += ` AND (party_id IS NULL OR party_id != $5)`
+		queryStr += ` AND (p.party_id IS NULL OR p.party_id != $5)`
 		errTarget = tx.QueryRow(queryStr, player.CurrentRegion, player.X, player.Y, player.ID, player.PartyID).Scan(
 			&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
 			&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
@@ -608,9 +609,10 @@ func MovePlayer(c *gin.Context) {
 		case "PVP":
 			var targetPlayer models.Player
 			err := tx.QueryRow(`
-				SELECT id, username, rank, sub_rank, hp, max_mana, path_masteries, `+db.GuInventoryAggregate("players.id")+`, dao_marks
-				FROM players 
-				WHERE id != $1 
+				SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.path_masteries, `+db.GuInventoryAggregate("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb)
+				FROM players p
+				LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
+				WHERE p.id != $1 
 				LIMIT 1`, player.ID,
 			).Scan(
 				&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,

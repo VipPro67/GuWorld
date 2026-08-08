@@ -550,17 +550,17 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                 <>
                   {(c.base_attack ?? 0) > 0 && (
                     <span className="text-rose-500 shrink-0 text-[10px] font-mono" title="Tấn công">
-                      ATK {c.base_attack}
+                      ATK {formatNumber(c.base_attack || 0)}
                     </span>
                   )}
                   {(c.base_defense ?? 0) > 0 && (
                     <span className="text-blue-500 shrink-0 text-[10px] font-mono" title="Phòng thủ">
-                      DEF {c.base_defense}
+                      DEF {formatNumber(c.base_defense || 0)}
                     </span>
                   )}
                   {(c.speed ?? 0) > 0 && (
                     <span className="text-cyan-500 shrink-0 text-[10px] font-mono" title="Tốc độ">
-                      SPD {c.speed}
+                      SPD {formatNumber(c.speed || 0)}
                     </span>
                   )}
                 </>

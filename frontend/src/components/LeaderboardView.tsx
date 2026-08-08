@@ -19,7 +19,7 @@ const getRankName = (rank: number, sub: number): string => {
   ];
   const rName = rankNames[rank - 1] || `${rank} Chuyển`;
   const sName = ranks[sub - 1] || `${sub} Giai`;
-  return rank >= 6 ? rName : `${rName} • ${sName}`;
+  return rank >= 6 ? `${rName} • ${sub} Kiếp` : `${rName} • ${sName}`;
 };
 
 const getInitials = (username: string): string => {
@@ -41,6 +41,7 @@ export const LeaderboardView: React.FC = () => {
     toggleLeaderboardVisibility,
     fetchLeaderboardSettings,
     fetchPlayerProfile,
+    aperture,
   } = useGameStore();
 
   useEffect(() => {
@@ -123,7 +124,18 @@ export const LeaderboardView: React.FC = () => {
           </div>
           {myLeaderboardRank && (
             <div className="text-xs text-zinc-500 font-mono mt-1">
-              Giá trị: <span className="text-amber-400 font-bold">{myLeaderboardRank.value}</span>
+              Giá trị:{" "}
+              <span className="text-amber-400 font-bold">
+                {leaderboardCategory === "rank"
+                  ? (myLeaderboardRank.value >= 60000
+                    ? `${Math.floor(myLeaderboardRank.value / 10000)}.${Math.floor(myLeaderboardRank.value % 10000)}`
+                    : `${Math.floor(myLeaderboardRank.value / 10)}.${Math.floor(myLeaderboardRank.value % 10)}`)
+                  : leaderboardCategory === "primeval_stones" || leaderboardCategory === "immortal_stones"
+                  ? Number(myLeaderboardRank.value).toLocaleString()
+                  : leaderboardCategory === "gu_strongest"
+                  ? `Cấp ${myLeaderboardRank.value}`
+                  : myLeaderboardRank.value}
+              </span>
             </div>
           )}
         </div>
@@ -132,7 +144,7 @@ export const LeaderboardView: React.FC = () => {
           <div className="text-left bg-zinc-950/80 px-4 py-2 border border-zinc-900 rounded-xl">
             <div className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">Tu vi</div>
             <span className="text-sm font-bold text-emerald-400 font-mono">
-              {getRankName(player.rank, player.sub_rank)}
+              {getRankName(player.rank, player.rank >= 6 ? (aperture?.tribulation_count || 0) : player.sub_rank)}
             </span>
           </div>
           <div className="text-left bg-zinc-950/80 px-4 py-2 border border-zinc-900 rounded-xl">

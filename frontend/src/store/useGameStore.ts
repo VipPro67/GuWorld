@@ -117,7 +117,6 @@ export interface Player {
   wall_progress?: number;
   human_qi?: number;
   next_tribulation_time?: string | null;
-  tribulation_count?: number;
   hp: number;
   base_hp: number;
   body_mods: string[];
@@ -234,6 +233,7 @@ export interface ManaSnapshot {
   max_mana: number;
   last_mana_update: string;
   time_speed_multiplier: number;
+  time_rate?: number;
   rank: number;
   sub_rank: number;
   aptitude_type?: string;
@@ -281,7 +281,9 @@ export const estimateManaFromSnapshot = (snapshot: ManaSnapshot | null, nowMs = 
   }
 
   const elapsedSeconds = Math.max(0, (nowMs - lastUpdateMs) / 1000);
-  const multiplier = snapshot.time_speed_multiplier > 0 ? snapshot.time_speed_multiplier : 1;
+  const timeSpeedMultiplier = snapshot.time_speed_multiplier > 0 ? snapshot.time_speed_multiplier : 1;
+  const timeRate = snapshot.time_rate && snapshot.time_rate > 0 ? snapshot.time_rate : 10.0;
+  const multiplier = isImmortal ? timeSpeedMultiplier * timeRate : timeSpeedMultiplier;
   const regenRatePerHour = getManaRegenRatePerHour(snapshot);
   const lifespanModifier = snapshot.lifespan !== undefined && snapshot.lifespan <= 0 ? 0.5 : 1;
   const regeneratedMana = ((elapsedSeconds * multiplier) / 3600) * regenRatePerHour * lifespanModifier;
@@ -327,12 +329,13 @@ const calculateHealingStat = (player: Player, guDictionary: Record<string, GuSpe
   return healing;
 };
 
-const createManaSnapshotFromPlayer = (player: Player, guDictionary: Record<string, GuSpec>): ManaSnapshot => ({
+const createManaSnapshotFromPlayer = (player: Player, guDictionary: Record<string, GuSpec>, timeRate?: number): ManaSnapshot => ({
   player_id: player.id,
   current_mana: player.current_mana,
   max_mana: player.max_mana,
   last_mana_update: player.last_mana_update,
   time_speed_multiplier: player.time_speed_multiplier || 1,
+  time_rate: timeRate ?? 10.0,
   rank: player.rank,
   sub_rank: player.sub_rank,
   aptitude_type: player.aptitude_type,
@@ -1258,7 +1261,7 @@ export const useGameStore = create<GameState>((set, get) => {
       ...extraState,
       player: normalizedPlayer,
       guInventoryLoaded: normalizedPlayer ? (normalizedPlayer.gu_inventory || []).length > 0 : false,
-      manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer, get().guDictionary) : null,
+      manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer, get().guDictionary, get().aperture?.time_rate) : null,
     });
     if (normalizedPlayer) {
       get().subscribeAllBaoHoangMessages();
@@ -1578,7 +1581,7 @@ export const useGameStore = create<GameState>((set, get) => {
   updateManaSnapshot: (player) => {
     const normalizedPlayer = normalizePlayer(player);
     set({
-      manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer, get().guDictionary) : null,
+      manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer, get().guDictionary, get().aperture?.time_rate) : null,
     });
   },
   setPlayerFromServer: (player) => setPlayerFromServer(player),

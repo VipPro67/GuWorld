@@ -146,13 +146,16 @@ func GetLeaderboard(c *gin.Context) {
 	switch category {
 	case "rank":
 		query = `
-			SELECT p.id::text, p.username, COALESCE(p.avatar_url, ''), p.rank, p.sub_rank,
-				(p.rank * 10 + p.sub_rank)::float8 as val,
-				p.rank::text || '.' || p.sub_rank::text as label
+			SELECT p.id::text, p.username, COALESCE(p.avatar_url, ''), p.rank,
+				CASE WHEN p.rank >= 6 THEN COALESCE(ia.tribulation_count, 0) ELSE p.sub_rank END as sub_rank,
+				CASE WHEN p.rank >= 6 THEN (p.rank * 10000 + COALESCE(ia.tribulation_count, 0))::float8 ELSE (p.rank * 10 + p.sub_rank)::float8 END as val,
+				CASE WHEN p.rank >= 6 THEN p.rank::text || '.' || COALESCE(ia.tribulation_count, 0)::text ELSE p.rank::text || '.' || p.sub_rank::text END as label
 			FROM players p
 			JOIN leaderboard_settings ls ON p.id = ls.player_id
+			LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
 			WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
-			ORDER BY p.rank DESC, p.sub_rank DESC
+			ORDER BY p.rank DESC, 
+				CASE WHEN p.rank >= 6 THEN COALESCE(ia.tribulation_count, 0) ELSE p.sub_rank END DESC
 			LIMIT 50`
 	case "primeval_stones":
 		query = `
@@ -253,10 +256,15 @@ func buildRankQuery(category string) string {
 	case "rank":
 		return `
 			SELECT position, val FROM (
-				SELECT p.id, (p.rank * 10 + p.sub_rank)::float8 as val,
-					ROW_NUMBER() OVER (ORDER BY p.rank DESC, p.sub_rank DESC) as position
+				SELECT p.id,
+					CASE WHEN p.rank >= 6 THEN (p.rank * 10000 + COALESCE(ia.tribulation_count, 0))::float8 ELSE (p.rank * 10 + p.sub_rank)::float8 END as val,
+					ROW_NUMBER() OVER (
+						ORDER BY p.rank DESC, 
+						CASE WHEN p.rank >= 6 THEN COALESCE(ia.tribulation_count, 0) ELSE p.sub_rank END DESC
+					) as position
 				FROM players p
 				JOIN leaderboard_settings ls ON p.id = ls.player_id
+				LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
 				WHERE ls.show_on_leaderboard = true AND (p.is_admin IS NULL OR p.is_admin = false)
 			) sub WHERE sub.id = $1`
 	case "primeval_stones":

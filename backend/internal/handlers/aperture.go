@@ -219,9 +219,9 @@ func GetImmortalAperture(c *gin.Context) {
 	// 1. Fetch player
 	var player models.Player
 	err = tx.QueryRow(`
-		SELECT id, rank, aptitude_percent, human_qi, primeval_stones, immortal_stones, dao_marks, current_mana
+		SELECT id, rank, aptitude_percent, human_qi, primeval_stones, immortal_stones, current_mana, time_speed_multiplier
 		FROM players WHERE id = $1
-	`, playerID).Scan(&player.ID, &player.Rank, &player.AptitudePercent, &player.HumanQi, &player.PrimevalStones, &player.ImmortalStones, &player.DaoMarks, &player.CurrentMana)
+	`, playerID).Scan(&player.ID, &player.Rank, &player.AptitudePercent, &player.HumanQi, &player.PrimevalStones, &player.ImmortalStones, &player.CurrentMana, &player.TimeSpeedMultiplier)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Cổ sư không tồn tại"})
 		return
@@ -236,9 +236,9 @@ func GetImmortalAperture(c *gin.Context) {
 	var ap models.ImmortalAperture
 	var createdAt, updatedAt time.Time
 	err = tx.QueryRow(`
-		SELECT id, player_id, grade, time_rate, aperture_hp, max_aperture_hp, area_size, immortal_essence, essence_production_per_year, internal_years_passed, next_tribulation_year, tribulation_count, rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, state, created_at, updated_at
+		SELECT id, player_id, grade, time_rate, aperture_hp, max_aperture_hp, area_size, immortal_essence, essence_production_per_year, internal_years_passed, next_tribulation_year, tribulation_count, rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, state, dao_marks, created_at, updated_at
 		FROM immortal_apertures WHERE player_id = $1
-	`, playerID).Scan(&ap.ID, &ap.PlayerID, &ap.Grade, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP, &ap.AreaSize, &ap.ImmortalEssence, &ap.EssenceProductionPerYear, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.TribulationCount, &ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.State, &createdAt, &updatedAt)
+	`, playerID).Scan(&ap.ID, &ap.PlayerID, &ap.Grade, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP, &ap.AreaSize, &ap.ImmortalEssence, &ap.EssenceProductionPerYear, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.TribulationCount, &ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.State, &ap.DaoMarks, &createdAt, &updatedAt)
 
 	if err == sql.ErrNoRows {
 		// Auto-create aperture (fallback for legacy players) — grade rolled from current Nhân Khí
@@ -249,8 +249,6 @@ func GetImmortalAperture(c *gin.Context) {
 		}
 		createdAt = ap.CreatedAt
 		updatedAt = ap.UpdatedAt
-		// Sync time_speed_multiplier to player table
-		_, _ = tx.Exec(`UPDATE players SET time_speed_multiplier = $1 WHERE id = $2`, ap.TimeRate, playerID)
 	} else if err != nil {
 		logger.S.Errorf("Error fetching aperture: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn Tiên Khiếu"})
@@ -271,7 +269,11 @@ func GetImmortalAperture(c *gin.Context) {
 		now := time.Now()
 		elapsedSec := now.Sub(updatedAt).Seconds()
 		if elapsedSec > 0 && ap.TimeRate > 0 {
-			elapsedInternalYears := elapsedSec * ap.TimeRate / 36000.0
+			tsm := player.TimeSpeedMultiplier
+			if tsm <= 0 {
+				tsm = 1.0
+			}
+			elapsedInternalYears := elapsedSec * ap.TimeRate * tsm / 36000.0
 			ap.InternalYearsPassed += elapsedInternalYears
 			ap.UpdatedAt = now
 			_, _ = tx.Exec(`
@@ -282,7 +284,7 @@ func GetImmortalAperture(c *gin.Context) {
 		}
 	}
 
-	FillApertureEnvironment(&ap, player.DaoMarks)
+	FillApertureEnvironment(&ap, ap.DaoMarks)
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction failure"})
@@ -438,8 +440,10 @@ func GetDaoMarks(c *gin.Context) {
 	}
 
 	var daoJSON []byte
-	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(dao_marks, '{}') FROM players WHERE id = $1`, playerID).Scan(&daoJSON)
-	if err != nil {
+	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&daoJSON)
+	if err == sql.ErrNoRows {
+		daoJSON = []byte("{}")
+	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load Dao Marks"})
 		return
 	}
@@ -860,7 +864,7 @@ func CollectApertureResource(c *gin.Context) {
 
 	// 1. Dao Marks multiplier
 	var nodeDaoJSON []byte
-	_ = tx.QueryRow(`SELECT COALESCE(dao_marks, '{}') FROM players WHERE id = $1`, playerID).Scan(&nodeDaoJSON)
+	_ = tx.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&nodeDaoJSON)
 	nodeDaoMap := make(map[string]int)
 	if len(nodeDaoJSON) > 0 {
 		_ = json.Unmarshal(nodeDaoJSON, &nodeDaoMap)
@@ -971,7 +975,7 @@ func CollectApertureResource(c *gin.Context) {
 	// Calculate dynamic environment parameters from player's Dao Marks
 	var daoJSON []byte
 	var daoMap models.DaoMarksMap
-	_ = tx.QueryRow(`SELECT dao_marks FROM players WHERE id = $1`, playerID).Scan(&daoJSON)
+	_ = tx.QueryRow(`SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&daoJSON)
 	if daoJSON != nil {
 		_ = json.Unmarshal(daoJSON, &daoMap)
 	}
@@ -1362,10 +1366,11 @@ func SetApertureTimeRate(c *gin.Context) {
 	// updated_at is set to NOW() but internal_years_passed is stale.
 	now := time.Now()
 	res, err := tx.Exec(`
-		UPDATE immortal_apertures
-		SET internal_years_passed = internal_years_passed + GREATEST(0, EXTRACT(EPOCH FROM (NOW() - updated_at))) * time_rate / 36000.0,
+		UPDATE immortal_apertures ia
+		SET internal_years_passed = ia.internal_years_passed + GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ia.updated_at))) * ia.time_rate * p.time_speed_multiplier / 36000.0,
 			time_rate = $1, updated_at = $2
-		WHERE player_id = $3
+		FROM players p
+		WHERE ia.player_id = p.id AND ia.player_id = $3
 	`, req.TimeRate, now, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật dòng thời gian"})
@@ -1377,8 +1382,6 @@ func SetApertureTimeRate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa khai mở Tiên Khiếu"})
 		return
 	}
-
-	_, _ = tx.Exec(`UPDATE players SET time_speed_multiplier = $1 WHERE id = $2`, req.TimeRate, playerID)
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi ghi dữ liệu"})
