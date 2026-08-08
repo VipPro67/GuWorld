@@ -921,132 +921,6 @@ func Simulate(state *CombatState) []CombatLog {
 							})
 						}
 
-						// Apply status effects per target
-						if a.BleedPerTurn > 0 {
-							target.ActiveDoT = append(target.ActiveDoT, DoTEffect{
-								Type: "bleed", Value: a.BleedPerTurn, Turns: 3,
-							})
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   target.ID,
-								ActorName: target.Name,
-								Action:    "BLEED_APPLIED",
-								Detail:    fmt.Sprintf("%s bị chảy máu (%.0f/lượt trong 3 lượt)!", target.Name, a.BleedPerTurn),
-							})
-						}
-						if a.PoisonPerTurn > 0 {
-							target.ActiveDoT = append(target.ActiveDoT, DoTEffect{
-								Type: "poison", Value: a.PoisonPerTurn, Turns: 3,
-							})
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   target.ID,
-								ActorName: target.Name,
-								Action:    "POISON_APPLIED",
-								Detail:    fmt.Sprintf("%s bị trúng độc (%.0f/lượt trong 3 lượt)!", target.Name, a.PoisonPerTurn),
-							})
-						}
-						if a.StunTier > 0 && !resistControl(target) {
-							dur := TierToDuration(EffectStun, a.StunTier)
-							target.ActiveEffects = append(target.ActiveEffects, Effect{
-								ID: EffectStun, Type: "debuff", Tier: a.StunTier, Value: 1, Duration: dur,
-							})
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   target.ID,
-								ActorName: target.Name,
-								Action:    "STUN_APPLIED",
-								Detail:    fmt.Sprintf("%s dùng [%s] → %s bị choáng %d lượt!", actor.Name, a.Name, target.Name, dur),
-							})
-						}
-
-						// ── Apply new status effects from action ──
-						if a.SlowTier > 0 && !resistControl(target) {
-							pct := int(TierToPercent(EffectSlow, a.SlowTier))
-							dur := TierToDuration(EffectSlow, a.SlowTier)
-							target.ActiveEffects = append(target.ActiveEffects, Effect{
-								ID: EffectSlow, Type: "debuff", Tier: a.SlowTier, Value: pct, Duration: dur,
-							})
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   target.ID,
-								ActorName: target.Name,
-								Action:    "SLOW_APPLIED",
-								Detail:    fmt.Sprintf("%s bị chậm %d%% trong %d lượt!", target.Name, pct, dur),
-							})
-						}
-						if a.Slow1Tier > 0 {
-							pct := int(TierToPercent(EffectSlow1, a.Slow1Tier))
-							dur := TierToDuration(EffectSlow1, a.Slow1Tier)
-							target.ActiveEffects = append(target.ActiveEffects, Effect{
-								ID: EffectSlow1, Type: "debuff", Tier: a.Slow1Tier, Value: pct, Duration: dur,
-							})
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   target.ID,
-								ActorName: target.Name,
-								Action:    "SLOW1_APPLIED",
-								Detail:    fmt.Sprintf("%s bị chậm %d%% trong %d lượt (không thể kháng)!", target.Name, pct, dur),
-							})
-						}
-						if a.SlowDamageTier > 0 && !resistControl(target) {
-							pct := int(TierToPercent(EffectSlowDamage, a.SlowDamageTier))
-							dur := TierToDuration(EffectSlowDamage, a.SlowDamageTier)
-							target.ActiveEffects = append(target.ActiveEffects, Effect{
-								ID: EffectSlowDamage, Type: "debuff", Tier: a.SlowDamageTier, Value: pct, Duration: dur,
-							})
-							target.ActiveDoT = append(target.ActiveDoT, DoTEffect{
-								Type: EffectSlowDamage, Value: float64(pct), Turns: dur,
-							})
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   target.ID,
-								ActorName: target.Name,
-								Action:    "SLOW_DAMAGE_APPLIED",
-								Detail:    fmt.Sprintf("%s bị chậm sát thương %d%% và mất %d HP/lượt trong %d lượt!", target.Name, pct, pct, dur),
-							})
-						}
-						if a.WeakTier > 0 && !resistControl(target) {
-							pct := int(TierToPercent(EffectWeak, a.WeakTier))
-							dur := TierToDuration(EffectWeak, a.WeakTier)
-							target.ActiveEffects = append(target.ActiveEffects, Effect{
-								ID: EffectWeak, Type: "debuff", Tier: a.WeakTier, Value: pct, Duration: dur,
-							})
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   target.ID,
-								ActorName: target.Name,
-								Action:    "WEAK_APPLIED",
-								Detail:    fmt.Sprintf("%s bị yếu, giảm %d%% sát thương trong %d lượt!", target.Name, pct, dur),
-							})
-						}
-						if a.FreezeTier > 0 && !resistControl(target) {
-							dur := TierToDuration(EffectFreeze, a.FreezeTier)
-							target.ActiveEffects = append(target.ActiveEffects, Effect{
-								ID: EffectFreeze, Type: "debuff", Tier: a.FreezeTier, Value: 1, Duration: dur,
-							})
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   target.ID,
-								ActorName: target.Name,
-								Action:    "FREEZE_APPLIED",
-								Detail:    fmt.Sprintf("%s bị đóng băng trong %d lượt!", target.Name, dur),
-							})
-						}
-						if a.SilenceTier > 0 && !resistControl(target) {
-							dur := TierToDuration(EffectSilence, a.SilenceTier)
-							target.ActiveEffects = append(target.ActiveEffects, Effect{
-								ID: EffectSilence, Type: "debuff", Tier: a.SilenceTier, Value: 1, Duration: dur,
-							})
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   target.ID,
-								ActorName: target.Name,
-								Action:    "SILENCE_APPLIED",
-								Detail:    fmt.Sprintf("%s dùng [%s] → %s bị im lặng %d lượt!", actor.Name, a.Name, target.Name, dur),
-							})
-						}
-
 						// ── Freeze break: if target is frozen and takes damage, 50% chance to break ──
 						if target.IsFrozen && int(totalDmg) > 0 {
 							if rand.Float64() < 0.50 {
@@ -1077,78 +951,7 @@ func Simulate(state *CombatState) []CombatLog {
 						turnLogs = append(turnLogs, *healLog)
 					}
 
-					// ── Apply self-buffs from action ──
-					if a.ThornsTier > 0 {
-						pct := int(TierToPercent(EffectThorns, a.ThornsTier))
-						dur := TierToDuration(EffectThorns, a.ThornsTier)
-						actor.ActiveEffects = append(actor.ActiveEffects, Effect{
-							ID: EffectThorns, Type: "buff", Tier: a.ThornsTier, Value: pct, Duration: dur,
-						})
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "THORNS_BUFF",
-							Detail:    fmt.Sprintf("%s nhận Khiên Gai, phản %d%% sát thương trong %d lượt!", actor.Name, pct, dur),
-						})
-					}
-					if a.RegenTier > 0 {
-						hpPct := TierToPercent(EffectRegen, a.RegenTier)
-						dur := TierToDuration(EffectRegen, a.RegenTier)
-						regenPerTurn := float64(actor.MaxHP) * hpPct / 100.0
-						actor.ActiveDoT = append(actor.ActiveDoT, DoTEffect{
-							Type: "regen", Value: regenPerTurn, Turns: dur,
-						})
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "REGEN_BUFF",
-							Detail:    fmt.Sprintf("%s nhận Hồi Sinh, hồi %.0f HP/lượt trong %d lượt!", actor.Name, regenPerTurn, dur),
-						})
-					}
-					if a.AtkUpTier > 0 {
-						pct := int(TierToPercent(EffectAtkUp, a.AtkUpTier))
-						dur := TierToDuration(EffectAtkUp, a.AtkUpTier)
-						actor.ActiveEffects = append(actor.ActiveEffects, Effect{
-							ID: EffectAtkUp, Type: "buff", Tier: a.AtkUpTier, Value: pct, Duration: dur,
-						})
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "ATK_UP_BUFF",
-							Detail:    fmt.Sprintf("%s nhận +%d%% Công Kích trong %d lượt!", actor.Name, pct, dur),
-						})
-					}
-					if a.DefUpTier > 0 {
-						pct := int(TierToPercent(EffectDefUp, a.DefUpTier))
-						dur := TierToDuration(EffectDefUp, a.DefUpTier)
-						actor.ActiveEffects = append(actor.ActiveEffects, Effect{
-							ID: EffectDefUp, Type: "buff", Tier: a.DefUpTier, Value: pct, Duration: dur,
-						})
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "DEF_UP_BUFF",
-							Detail:    fmt.Sprintf("%s nhận +%d%% Phòng Thủ trong %d lượt!", actor.Name, pct, dur),
-						})
-					}
-					if a.TauntTier > 0 {
-						dur := TierToDuration(EffectTaunt, a.TauntTier)
-						actor.ActiveEffects = append(actor.ActiveEffects, Effect{
-							ID: EffectTaunt, Type: "buff", Tier: a.TauntTier, Value: 1, Duration: dur,
-						})
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "TAUNT_BUFF",
-							Detail:    fmt.Sprintf("%s khiêu khích, buộc kẻ địch tấn công mình trong %d lượt!", actor.Name, dur),
-						})
-					}
-
+					// ── Multi-hit log ──
 					if hitCount > 1 && len(resolved) > 0 {
 						turnLogs = append(turnLogs, CombatLog{
 							Turn:      turn,
@@ -1225,6 +1028,203 @@ func Simulate(state *CombatState) []CombatLog {
 					if healLog != nil {
 						turnLogs = append(turnLogs, *healLog)
 					}
+				}
+
+				// ── Apply status effects + self-buffs (always, no damage required) ──
+				for _, target := range resolved {
+					if a.BleedPerTurn > 0 {
+						target.ActiveDoT = append(target.ActiveDoT, DoTEffect{
+							Type: "bleed", Value: a.BleedPerTurn, Turns: 3,
+						})
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   target.ID,
+							ActorName: target.Name,
+							Action:    "BLEED_APPLIED",
+							Detail:    fmt.Sprintf("%s bị chảy máu (%.0f/lượt trong 3 lượt)!", target.Name, a.BleedPerTurn),
+						})
+					}
+					if a.PoisonPerTurn > 0 {
+						target.ActiveDoT = append(target.ActiveDoT, DoTEffect{
+							Type: "poison", Value: a.PoisonPerTurn, Turns: 3,
+						})
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   target.ID,
+							ActorName: target.Name,
+							Action:    "POISON_APPLIED",
+							Detail:    fmt.Sprintf("%s bị trúng độc (%.0f/lượt trong 3 lượt)!", target.Name, a.PoisonPerTurn),
+						})
+					}
+					if a.StunTier > 0 && !resistControl(target) {
+						dur := TierToDuration(EffectStun, a.StunTier)
+						target.ActiveEffects = append(target.ActiveEffects, Effect{
+							ID: EffectStun, Type: "debuff", Tier: a.StunTier, Value: 1, Duration: dur,
+						})
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   target.ID,
+							ActorName: target.Name,
+							Action:    "STUN_APPLIED",
+							Detail:    fmt.Sprintf("%s dùng [%s] → %s bị choáng %d lượt!", actor.Name, a.Name, target.Name, dur),
+						})
+					}
+					if a.SlowTier > 0 && !resistControl(target) {
+						pct := int(TierToPercent(EffectSlow, a.SlowTier))
+						dur := TierToDuration(EffectSlow, a.SlowTier)
+						target.ActiveEffects = append(target.ActiveEffects, Effect{
+							ID: EffectSlow, Type: "debuff", Tier: a.SlowTier, Value: pct, Duration: dur,
+						})
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   target.ID,
+							ActorName: target.Name,
+							Action:    "SLOW_APPLIED",
+							Detail:    fmt.Sprintf("%s bị chậm %d%% trong %d lượt!", target.Name, pct, dur),
+						})
+					}
+					if a.Slow1Tier > 0 {
+						pct := int(TierToPercent(EffectSlow1, a.Slow1Tier))
+						dur := TierToDuration(EffectSlow1, a.Slow1Tier)
+						target.ActiveEffects = append(target.ActiveEffects, Effect{
+							ID: EffectSlow1, Type: "debuff", Tier: a.Slow1Tier, Value: pct, Duration: dur,
+						})
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   target.ID,
+							ActorName: target.Name,
+							Action:    "SLOW1_APPLIED",
+							Detail:    fmt.Sprintf("%s bị chậm %d%% trong %d lượt (không thể kháng)!", target.Name, pct, dur),
+						})
+					}
+					if a.SlowDamageTier > 0 && !resistControl(target) {
+						pct := int(TierToPercent(EffectSlowDamage, a.SlowDamageTier))
+						dur := TierToDuration(EffectSlowDamage, a.SlowDamageTier)
+						target.ActiveEffects = append(target.ActiveEffects, Effect{
+							ID: EffectSlowDamage, Type: "debuff", Tier: a.SlowDamageTier, Value: pct, Duration: dur,
+						})
+						target.ActiveDoT = append(target.ActiveDoT, DoTEffect{
+							Type: EffectSlowDamage, Value: float64(pct), Turns: dur,
+						})
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   target.ID,
+							ActorName: target.Name,
+							Action:    "SLOW_DAMAGE_APPLIED",
+							Detail:    fmt.Sprintf("%s bị chậm sát thương %d%% và mất %d HP/lượt trong %d lượt!", target.Name, pct, pct, dur),
+						})
+					}
+					if a.WeakTier > 0 && !resistControl(target) {
+						pct := int(TierToPercent(EffectWeak, a.WeakTier))
+						dur := TierToDuration(EffectWeak, a.WeakTier)
+						target.ActiveEffects = append(target.ActiveEffects, Effect{
+							ID: EffectWeak, Type: "debuff", Tier: a.WeakTier, Value: pct, Duration: dur,
+						})
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   target.ID,
+							ActorName: target.Name,
+							Action:    "WEAK_APPLIED",
+							Detail:    fmt.Sprintf("%s bị yếu, giảm %d%% sát thương trong %d lượt!", target.Name, pct, dur),
+						})
+					}
+					if a.FreezeTier > 0 && !resistControl(target) {
+						dur := TierToDuration(EffectFreeze, a.FreezeTier)
+						target.ActiveEffects = append(target.ActiveEffects, Effect{
+							ID: EffectFreeze, Type: "debuff", Tier: a.FreezeTier, Value: 1, Duration: dur,
+						})
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   target.ID,
+							ActorName: target.Name,
+							Action:    "FREEZE_APPLIED",
+							Detail:    fmt.Sprintf("%s bị đóng băng trong %d lượt!", target.Name, dur),
+						})
+					}
+					if a.SilenceTier > 0 && !resistControl(target) {
+						dur := TierToDuration(EffectSilence, a.SilenceTier)
+						target.ActiveEffects = append(target.ActiveEffects, Effect{
+							ID: EffectSilence, Type: "debuff", Tier: a.SilenceTier, Value: 1, Duration: dur,
+						})
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   target.ID,
+							ActorName: target.Name,
+							Action:    "SILENCE_APPLIED",
+							Detail:    fmt.Sprintf("%s dùng [%s] → %s bị im lặng %d lượt!", actor.Name, a.Name, target.Name, dur),
+						})
+					}
+				}
+
+				if a.ThornsTier > 0 {
+					pct := int(TierToPercent(EffectThorns, a.ThornsTier))
+					dur := TierToDuration(EffectThorns, a.ThornsTier)
+					actor.ActiveEffects = append(actor.ActiveEffects, Effect{
+						ID: EffectThorns, Type: "buff", Tier: a.ThornsTier, Value: pct, Duration: dur,
+					})
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "THORNS_BUFF",
+						Detail:    fmt.Sprintf("%s nhận Khiên Gai, phản %d%% sát thương trong %d lượt!", actor.Name, pct, dur),
+					})
+				}
+				if a.RegenTier > 0 {
+					hpPct := TierToPercent(EffectRegen, a.RegenTier)
+					dur := TierToDuration(EffectRegen, a.RegenTier)
+					regenPerTurn := float64(actor.MaxHP) * hpPct / 100.0
+					actor.ActiveDoT = append(actor.ActiveDoT, DoTEffect{
+						Type: "regen", Value: regenPerTurn, Turns: dur,
+					})
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "REGEN_BUFF",
+						Detail:    fmt.Sprintf("%s nhận Hồi Sinh, hồi %.0f HP/lượt trong %d lượt!", actor.Name, regenPerTurn, dur),
+					})
+				}
+				if a.AtkUpTier > 0 {
+					pct := int(TierToPercent(EffectAtkUp, a.AtkUpTier))
+					dur := TierToDuration(EffectAtkUp, a.AtkUpTier)
+					actor.ActiveEffects = append(actor.ActiveEffects, Effect{
+						ID: EffectAtkUp, Type: "buff", Tier: a.AtkUpTier, Value: pct, Duration: dur,
+					})
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "ATK_UP_BUFF",
+						Detail:    fmt.Sprintf("%s nhận +%d%% Công Kích trong %d lượt!", actor.Name, pct, dur),
+					})
+				}
+				if a.DefUpTier > 0 {
+					pct := int(TierToPercent(EffectDefUp, a.DefUpTier))
+					dur := TierToDuration(EffectDefUp, a.DefUpTier)
+					actor.ActiveEffects = append(actor.ActiveEffects, Effect{
+						ID: EffectDefUp, Type: "buff", Tier: a.DefUpTier, Value: pct, Duration: dur,
+					})
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "DEF_UP_BUFF",
+						Detail:    fmt.Sprintf("%s nhận +%d%% Phòng Thủ trong %d lượt!", actor.Name, pct, dur),
+					})
+				}
+				if a.TauntTier > 0 {
+					dur := TierToDuration(EffectTaunt, a.TauntTier)
+					actor.ActiveEffects = append(actor.ActiveEffects, Effect{
+						ID: EffectTaunt, Type: "buff", Tier: a.TauntTier, Value: 1, Duration: dur,
+					})
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "TAUNT_BUFF",
+						Detail:    fmt.Sprintf("%s khiêu khích, buộc kẻ địch tấn công mình trong %d lượt!", actor.Name, dur),
+					})
 				}
 			}
 
