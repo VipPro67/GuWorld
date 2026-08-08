@@ -392,16 +392,16 @@ export default function Home() {
       {/* Changelog Modal */}
       {player && showChangelog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm animate-fade-in" onClick={handleCloseChangelog}>
-          <div className="w-full max-w-lg bg-gradient-to-br from-zinc-950 to-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-lg max-h-[90vh] sm:max-h-[85vh] flex flex-col bg-gradient-to-br from-zinc-950 to-zinc-900 border border-zinc-800 rounded-3xl p-5 sm:p-6 shadow-2xl overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
             <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-xl pointer-events-none" />
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 shrink-0">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-amber-400" />
                 <h3 className="text-base font-serif font-bold text-zinc-100">Cập Nhật Mới!</h3>
               </div>
               <button onClick={handleCloseChangelog} className="text-zinc-500 hover:text-zinc-300 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
-            <div className="space-y-3 text-xs text-zinc-300 leading-relaxed">
+            <div className="flex-1 overflow-y-auto space-y-3 text-xs text-zinc-300 leading-relaxed pr-1 custom-scrollbar">
               <p className="text-zinc-400">Phiên bản <strong className="text-amber-400">v0.8.0</strong> — Tối ưu trải nghiệm & Thăng Tiên:</p>
               <div className="space-y-2">
                 <div className="flex gap-2.5 items-start bg-amber-950/20 border border-amber-500/10 rounded-lg p-3">
@@ -434,7 +434,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-             <label className="flex items-center gap-2 mt-4 mb-1 text-xs text-zinc-400 cursor-pointer select-none">
+             <label className="flex items-center gap-2 mt-4 mb-1 text-xs text-zinc-400 cursor-pointer select-none shrink-0">
               <input
                 type="checkbox"
                 checked={dontShowToday}
@@ -443,7 +443,7 @@ export default function Home() {
               />
               Không hiển thị lại hôm nay
             </label>
-            <div className="flex gap-2.5 mt-2">
+            <div className="flex gap-2.5 mt-2 shrink-0">
               <a
                 href="/wiki"
                 target="_blank"

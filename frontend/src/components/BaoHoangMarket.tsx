@@ -250,7 +250,6 @@ export function BaoHoangMarket({
         await onRefresh();
         setSelectedGuType("");
         setSelectedGus([]);
-        setTab(listingType === "MARKET" ? "market" : "auction");
         setMessage({ type: "success", text: `Đã đăng bán thành công ${selectedGus.length} Cổ trùng!` });
         return;
       }
@@ -274,7 +273,6 @@ export function BaoHoangMarket({
         setSelectedMaterial("");
         setSelectedRecipe("");
         setQuantity(1);
-        setTab(listingType === "MARKET" ? "market" : "auction");
         setMessage({ type: "success", text: "Đăng bán thành công!" });
         return;
       }
