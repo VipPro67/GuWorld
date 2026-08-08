@@ -1304,14 +1304,28 @@ export const useGameStore = create<GameState>((set, get) => {
   };
 
   const setPlayerFromServer = (player: Player | null, extraState: Partial<GameState> = {}) => {
+    const currentPlayer = get().player;
     const normalizedPlayer = normalizePlayer(player);
     if (normalizedPlayer && !normalizedPlayer.materials_inventory) {
-      normalizedPlayer.materials_inventory = get().player?.materials_inventory || {};
+      normalizedPlayer.materials_inventory = currentPlayer?.materials_inventory || {};
+    }
+    // Preserve a richer gu_inventory already in state when the incoming
+    // snapshot is sparse (e.g. equipped-only from /auth/me or challenge).
+    const incomingInv = normalizedPlayer?.gu_inventory || [];
+    const currentInv = currentPlayer?.gu_inventory || [];
+    let guInventory = incomingInv;
+    let guComplete = false;
+    if (currentInv.length > 0 && incomingInv.length > 0 && currentInv.length > incomingInv.length) {
+      guInventory = currentInv;
+      guComplete = true;
+    }
+    if (normalizedPlayer) {
+      normalizedPlayer.gu_inventory = guInventory;
     }
     set({
       ...extraState,
       player: normalizedPlayer,
-      guInventoryLoaded: normalizedPlayer ? (normalizedPlayer.gu_inventory || []).length > 0 : false,
+      guInventoryLoaded: guComplete || (normalizedPlayer ? incomingInv.length > 0 : false),
       manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer, get().guDictionary, get().aperture?.time_rate) : null,
     });
     if (normalizedPlayer) {
@@ -1491,6 +1505,7 @@ export const useGameStore = create<GameState>((set, get) => {
       localStorage.setItem("gu_player_id", data.player.id);
       
       void get().fetchRecipes();
+      void get().fetchGuInventory();
       get().subscribePlayerEvents();
       get().subscribeTradeEvents();
       get().addLog(`Đồng chí ${data.player.username} đã quy vị!`);
@@ -1581,6 +1596,7 @@ export const useGameStore = create<GameState>((set, get) => {
       localStorage.setItem("gu_player_id", data.player.id);
 
       void get().fetchRecipes();
+      void get().fetchGuInventory();
       get().subscribePlayerEvents();
       get().subscribeTradeEvents();
       get().addLog(`Cổ sư ${data.player.username} khai mở Không Khiếu! Tư chất: ${data.player.aptitude_type} (${data.player.aptitude_percent}%)`);
@@ -1994,6 +2010,7 @@ export const useGameStore = create<GameState>((set, get) => {
         localStorage.setItem("gu_player_id", player.id);
       }
       void get().fetchMySectStatus();
+      void get().fetchGuInventory();
       get().subscribePlayerEvents();
       get().subscribeTradeEvents();
       const today = new Date().toISOString().split('T')[0];
@@ -2041,8 +2058,8 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
   fetchGuInventory: async () => {
-    const { token, logout, guInventoryLoaded } = get();
-    if (!token || guInventoryLoaded) return;
+    const { token, logout } = get();
+    if (!token) return;
 
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/inventory/gus`);
@@ -2065,6 +2082,7 @@ export const useGameStore = create<GameState>((set, get) => {
         gu_inventory: data.gu_inventory,
         equipped_gus: data.equipped_gus,
       });
+      set({ guInventoryLoaded: true });
     } catch (err: any) {
       console.error("Gu inventory fetch failed:", err.message);
     }

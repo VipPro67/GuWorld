@@ -76,6 +76,21 @@ func (s *PlayerService) LoadForUpdate(tx *sql.Tx, id uuid.UUID) (models.Player, 
 	return s.Load(tx, id, true)
 }
 
+// LoadForUpdateEquipped is like LoadForUpdate but only loads equipped/vital Gus
+// (used by light mana evaluation paths where full inventory is not needed).
+func (s *PlayerService) LoadForUpdateEquipped(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
+	player, err := s.loadRow(tx, id, true)
+	if err != nil {
+		return player, err
+	}
+	if s.db != nil {
+		if inv, errR := db.LoadPlayerGus(s.db, id.String(), true); errR == nil {
+			player.GuInventory = inv
+		}
+	}
+	return player, nil
+}
+
 // LoadEquipped loads a player with only equipped/vital Gus populated in
 // GuInventory. Used for lightweight read-only status snapshots where the full
 // inventory is not needed (the dedicated inventory endpoint serves full data).
@@ -386,6 +401,48 @@ func (s *PlayerService) ProjectStatus(q QueryRower, id uuid.UUID) (models.Player
 // It loads with FOR UPDATE, projects time-variant fields, and persists changes.
 func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	player, err := s.LoadForUpdate(tx, id)
+	if err != nil {
+		return player, err
+	}
+
+	s.setDefaults(&player)
+
+	timeRate, essenceProd := s.applyApertureProjection(tx, &player)
+	now := time.Now()
+	projectedChanged, stressChanged := applyProjectedStatus(&player, essenceProd, timeRate, now)
+	if projectedChanged {
+		player.LastManaUpdate = now
+	}
+	if stressChanged {
+		player.LastCultivateTime = now
+	}
+
+	_, err = tx.Exec(`
+		UPDATE players
+		SET current_mana = $1, max_mana = $2, last_mana_update = $3,
+		    lifespan = $4, time_speed_multiplier = $5, aperture_stress = $6,
+		    last_cultivate_time = $7, hp = $8, soul_hp = $9, current_thought = $10
+		WHERE id = $11
+	`, player.CurrentMana, player.MaxMana, player.LastManaUpdate,
+		player.Lifespan, player.TimeSpeedMultiplier, player.ApertureStress,
+		player.LastCultivateTime, player.HP, player.SoulHP, player.CurrentThought, player.ID)
+	if err != nil {
+		return player, err
+	}
+
+	if player.Rank >= 6 {
+		_, _ = tx.Exec(`UPDATE immortal_apertures SET immortal_essence = $1 WHERE player_id = $2`, int(player.CurrentMana), player.ID)
+	}
+
+	return player, nil
+}
+
+// EvaluateAndPersistManaEquipped is like EvaluateAndPersistMana but loads only
+// equipped/vital Gus. Used for read-heavy endpoints (auth/me, challenge) where
+// shipping the full 12k+ inventory is unnecessary — the frontend fetches it
+// lazily via the dedicated inventory endpoint.
+func (s *PlayerService) EvaluateAndPersistManaEquipped(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
+	player, err := s.LoadForUpdateEquipped(tx, id)
 	if err != nil {
 		return player, err
 	}

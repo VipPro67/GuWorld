@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
@@ -96,6 +97,9 @@ func SetupRouter() *gin.Engine {
 
 		c.Next()
 	})
+
+	// Gzip compress all JSON/HTML responses (skip SSE stream)
+	r.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{"/api/events"})))
 
 	// Serve uploaded images
 	r.Static("/images", "./storage/images")

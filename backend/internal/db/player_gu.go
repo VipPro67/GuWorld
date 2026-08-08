@@ -207,3 +207,21 @@ func GuInventoryAggregate(playerRef string) string {
 	) ORDER BY pg.created_at, pg.id), '[]'::jsonb)
 	FROM player_gu pg WHERE pg.player_id = ` + playerRef + `)`
 }
+
+// GuInventoryAggregateEquipped is like GuInventoryAggregate but only includes
+// equipped ACTIVE Gus — the subset used for combat stats and PVP snapshots.
+func GuInventoryAggregateEquipped(playerRef string) string {
+	return `(SELECT COALESCE(jsonb_agg(jsonb_build_object(
+		'instance_id', pg.id,
+		'gu_id', pg.gu_id,
+		'rank', pg.gu_rank,
+		'hunger', pg.hunger::int,
+		'status', pg.state,
+		'equipped', pg.equipped,
+		'is_vital', pg.is_vital,
+		'integration_time', pg.integration_time,
+		'equipped_at', pg.equipped_at,
+		'growth_hours', pg.growth_hours
+	) ORDER BY pg.created_at, pg.id), '[]'::jsonb)
+	FROM player_gu pg WHERE pg.player_id = ` + playerRef + ` AND pg.equipped = true AND pg.state = 'ACTIVE')`
+}

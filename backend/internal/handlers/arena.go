@@ -128,7 +128,7 @@ func ChallengeArena(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	player, err := evaluateManaTx(tx, authID)
+	player, err := evaluateManaTxEquipped(tx, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
 		return
@@ -166,10 +166,10 @@ func ChallengeArena(c *gin.Context) {
 
 	var targetPlayer models.Player
 	err = tx.QueryRow(`
-		SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.path_masteries, `+db.GuInventoryAggregate("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.current_mana, p.base_hp
+		SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.path_masteries, `+db.GuInventoryAggregateEquipped("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.current_mana, p.base_hp
 		FROM players p
 		LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
-		WHERE p.id = $1 FOR UPDATE`, targetUUID).Scan(
+		WHERE p.id = $1 FOR UPDATE OF p`, targetUUID).Scan(
 		&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
 		&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
 	)

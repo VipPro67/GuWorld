@@ -908,7 +908,7 @@ func LoginPlayer(c *gin.Context) {
 	var passwordHash string
 
 	query := `
-		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), 		COALESCE(avatar_url, ''), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses, growth_data
+		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregateEquipped("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), 		COALESCE(avatar_url, ''), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses, growth_data
 		FROM players
 		WHERE LOWER(email) = $1
 	`
@@ -1016,7 +1016,7 @@ func GetCurrentPlayer(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	player, err := evaluateManaTx(tx, playerID)
+	player, err := evaluateManaTxEquipped(tx, playerID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Player not found"})
@@ -2101,6 +2101,13 @@ func projectPlayerStatusTx(q playerQueryRower, id uuid.UUID) (models.Player, err
 // evaluateManaTx delegates to the service layer.
 func evaluateManaTx(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	return PlayerSvc.EvaluateAndPersistMana(tx, id)
+}
+
+// evaluateManaTxEquipped is like evaluateManaTx but loads only equipped/vital Gus.
+// The lighter inventory payload is suitable for read endpoints (auth/me, challenge)
+// where the full inventory is either already loaded or fetched lazily by the frontend.
+func evaluateManaTxEquipped(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
+	return PlayerSvc.EvaluateAndPersistManaEquipped(tx, id)
 }
 
 // GrantRace sets a player's race after validating the key. Dùng cho các hoạt động
@@ -4221,7 +4228,7 @@ func GoogleCallback(c *gin.Context) {
 
 	// 1. Try to search by google_id
 	err = tx.QueryRow(`
-		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregate("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses
+		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregateEquipped("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses
 		FROM players
 		WHERE google_id = $1
 	`, googleUser.ID).Scan(
@@ -4246,10 +4253,10 @@ func GoogleCallback(c *gin.Context) {
 		return
 	}
 
-	if !hasPlayer {
+		if !hasPlayer {
 		// 2. Try to search by email (Merge Account!)
 		err = tx.QueryRow(`
-			SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregate("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses
+			SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregateEquipped("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses
 			FROM players
 			WHERE email = $1
 		`, googleUser.Email).Scan(
