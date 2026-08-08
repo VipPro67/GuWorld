@@ -3989,7 +3989,16 @@ func formatChangedFields(sets []string, args []interface{}) string {
 						if viName, found := pathToVietnamese[k]; found {
 							pathName = viName
 						}
-						parts = append(parts, fmt.Sprintf("%s: %v", pathName, v))
+						valFormatted := fmt.Sprintf("%v", v)
+						if f, ok := v.(float64); ok {
+							if f == float64(int64(f)) {
+								valFormatted = fmt.Sprintf("%.0f", f)
+							} else {
+								valFormatted = fmt.Sprintf("%f", f)
+								valFormatted = strings.TrimRight(strings.TrimRight(valFormatted, "0"), ".")
+							}
+						}
+						parts = append(parts, fmt.Sprintf("%s: %s", pathName, valFormatted))
 					}
 					valStr = strings.Join(parts, ", ")
 				}
