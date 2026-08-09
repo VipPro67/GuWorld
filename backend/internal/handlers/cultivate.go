@@ -395,7 +395,6 @@ func Ascension(c *gin.Context) {
 		// Set first tribulation to 10 days from now (simulated real-time)
 		nextTrib := time.Now().Add(10 * 24 * time.Hour)
 		player.NextTribulationTime = &nextTrib
-		player.ImmortalStones = 10.0 // Initial immortal stones
 
 		// Create Tiên Khiếu immediately — grade rolled from Nhân Khí at the moment of ascending
 		_, apErr := createAperture(tx, player.ID.String(), ascQi, player.CurrentMana)
@@ -407,10 +406,10 @@ func Ascension(c *gin.Context) {
 		msg = "Thăng tiên thành công! Bạn đã khai Tiên Khiếu."
 		SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Đạo hữu %s đã thăng tiên thành công! Người người ngưỡng mộ", player.Account.Username))
 		updateQuery := `
-			UPDATE players SET rank = $1, sub_rank = $2, human_qi = $3, next_tribulation_time = $4, immortal_stones = $5
-			WHERE id = $6
+			UPDATE players SET rank = $1, sub_rank = $2, human_qi = $3, next_tribulation_time = $4
+			WHERE id = $5
 		`
-		_, err = tx.Exec(updateQuery, player.Rank, player.SubRank, player.HumanQi, player.NextTribulationTime, player.ImmortalStones, player.ID)
+		_, err = tx.Exec(updateQuery, player.Rank, player.SubRank, player.HumanQi, player.NextTribulationTime, player.ID)
 		if err == nil {
 			_, err = tx.Exec(`UPDATE immortal_apertures SET dao_marks = $1 WHERE player_id = $2`, player.DaoMarks, player.ID)
 		}
