@@ -1302,7 +1302,7 @@ func AdminListSects(c *gin.Context) {
 	}
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT s.id, s.name, s.description, s.region, s.level, s.funds, s.require_approval,
+		SELECT s.id, s.name, s.description, s.region, s.level, s.funds, s.require_approval, s.require_promotion_approval,
 			COALESCE(m.member_count, 0) AS member_count,
 			l.leader_name
 		FROM sects s
@@ -1324,22 +1324,23 @@ func AdminListSects(c *gin.Context) {
 	defer rows.Close()
 
 	type SectInfo struct {
-		ID              string `json:"id"`
-		Name            string `json:"name"`
-		Description     string `json:"description"`
-		Region          string `json:"region"`
-		Level           int    `json:"level"`
-		Funds           int    `json:"funds"`
-		RequireApproval bool   `json:"require_approval"`
-		MemberCount     int    `json:"member_count"`
-		LeaderName      string `json:"leader_name,omitempty"`
+		ID                        string `json:"id"`
+		Name                      string `json:"name"`
+		Description               string `json:"description"`
+		Region                    string `json:"region"`
+		Level                     int    `json:"level"`
+		Funds                     int    `json:"funds"`
+		RequireApproval           bool   `json:"require_approval"`
+		RequirePromotionApproval  bool   `json:"require_promotion_approval"`
+		MemberCount               int    `json:"member_count"`
+		LeaderName                string `json:"leader_name,omitempty"`
 	}
 
 	var sects []SectInfo
 	for rows.Next() {
 		var s SectInfo
 		var leaderName *string
-		if err := rows.Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Level, &s.Funds, &s.RequireApproval, &s.MemberCount, &leaderName); err != nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Level, &s.Funds, &s.RequireApproval, &s.RequirePromotionApproval, &s.MemberCount, &leaderName); err != nil {
 			continue
 		}
 		if leaderName != nil {
@@ -1359,19 +1360,20 @@ func AdminGetSectDetail(c *gin.Context) {
 	sectID := c.Param("id")
 
 	type sectVault struct {
-		ID              string          `json:"id"`
-		Name            string          `json:"name"`
-		Description     string          `json:"description"`
-		Region          string          `json:"region"`
-		Level           int             `json:"level"`
-		Funds           int             `json:"funds"`
-		RequireApproval bool            `json:"require_approval"`
-		VaultGu         json.RawMessage `json:"vault_gu"`
-		VaultMaterials  json.RawMessage `json:"vault_materials"`
-		VaultRecipes    json.RawMessage `json:"vault_recipes"`
+		ID                        string          `json:"id"`
+		Name                      string          `json:"name"`
+		Description               string          `json:"description"`
+		Region                    string          `json:"region"`
+		Level                     int             `json:"level"`
+		Funds                     int             `json:"funds"`
+		RequireApproval           bool            `json:"require_approval"`
+		RequirePromotionApproval  bool            `json:"require_promotion_approval"`
+		VaultGu                   json.RawMessage `json:"vault_gu"`
+		VaultMaterials            json.RawMessage `json:"vault_materials"`
+		VaultRecipes              json.RawMessage `json:"vault_recipes"`
 	}
 	var s sectVault
-	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT id, name, description, region, level, funds, require_approval, vault_gu, vault_materials, vault_recipes FROM sects WHERE id = $1`, sectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Level, &s.Funds, &s.RequireApproval, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes)
+	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT id, name, description, region, level, funds, require_approval, require_promotion_approval, vault_gu, vault_materials, vault_recipes FROM sects WHERE id = $1`, sectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Level, &s.Funds, &s.RequireApproval, &s.RequirePromotionApproval, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy tông môn"})
 		return
@@ -1385,11 +1387,12 @@ func AdminGetSectDetail(c *gin.Context) {
 		ORDER BY
 			CASE sm.member_rank
 				WHEN 'CHUONG_MON' THEN 1
-				WHEN 'TRUONG_LAO' THEN 2
-				WHEN 'CHAN_TRUYEN' THEN 3
-				WHEN 'TINH_ANH' THEN 4
-				WHEN 'NOI_MON' THEN 5
-				ELSE 6
+				WHEN 'HO_PHAP' THEN 2
+				WHEN 'TRUONG_LAO' THEN 3
+				WHEN 'CHAN_TRUYEN' THEN 4
+				WHEN 'TINH_ANH' THEN 5
+				WHEN 'NOI_MON' THEN 6
+				ELSE 7
 			END, sm.contribution_points DESC
 	`, sectID)
 	if err != nil {
@@ -1428,6 +1431,7 @@ type AdminSectUpdateRequest struct {
 	Level           *int    `json:"level"`
 	Funds           *int    `json:"funds"`
 	RequireApproval *bool   `json:"require_approval"`
+	RequirePromotionApproval *bool `json:"require_promotion_approval"`
 }
 
 func AdminUpdateSect(c *gin.Context) {
@@ -1476,6 +1480,11 @@ func AdminUpdateSect(c *gin.Context) {
 	if req.RequireApproval != nil {
 		sets = append(sets, "require_approval=$"+strconv.Itoa(idx))
 		args = append(args, *req.RequireApproval)
+		idx++
+	}
+	if req.RequirePromotionApproval != nil {
+		sets = append(sets, "require_promotion_approval=$"+strconv.Itoa(idx))
+		args = append(args, *req.RequirePromotionApproval)
 		idx++
 	}
 
@@ -1638,7 +1647,7 @@ func AdminAddToSect(c *gin.Context) {
 	if req.MemberRank == "" {
 		req.MemberRank = "NGOAI_MON"
 	}
-	validRanks := map[string]bool{"NGOAI_MON": true, "NOI_MON": true, "TINH_ANH": true, "CHAN_TRUYEN": true, "TRUONG_LAO": true, "CHUONG_MON": true}
+	validRanks := map[string]bool{"NGOAI_MON": true, "NOI_MON": true, "TINH_ANH": true, "CHAN_TRUYEN": true, "TRUONG_LAO": true, "HO_PHAP": true, "CHUONG_MON": true}
 	if !validRanks[req.MemberRank] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Chức vụ không hợp lệ"})
 		return
@@ -1885,7 +1894,7 @@ func AdminListSectMissions(c *gin.Context) {
 
 	sectID := c.Param("id")
 
-	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank FROM sect_missions WHERE sect_id = $1 ORDER BY required_member_rank, title`, sectID)
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank, expires_at FROM sect_missions WHERE sect_id = $1 ORDER BY required_member_rank, title`, sectID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải nhiệm vụ"})
 		return
@@ -1893,21 +1902,22 @@ func AdminListSectMissions(c *gin.Context) {
 	defer rows.Close()
 
 	type Mission struct {
-		ID                 string `json:"id"`
-		SectID             string `json:"sect_id"`
-		Title              string `json:"title"`
-		Description        string `json:"description"`
-		MissionType        string `json:"mission_type"`
-		TargetID           string `json:"target_id"`
-		TargetAmount       int    `json:"target_amount"`
-		RewardContribution int    `json:"reward_contribution"`
-		RequiredMemberRank string `json:"required_member_rank"`
+		ID                 string     `json:"id"`
+		SectID             string     `json:"sect_id"`
+		Title              string     `json:"title"`
+		Description        string     `json:"description"`
+		MissionType        string     `json:"mission_type"`
+		TargetID           string     `json:"target_id"`
+		TargetAmount       int        `json:"target_amount"`
+		RewardContribution int        `json:"reward_contribution"`
+		RequiredMemberRank string     `json:"required_member_rank"`
+		ExpiresAt          *time.Time `json:"expires_at"`
 	}
 
 	var missions []Mission
 	for rows.Next() {
 		var m Mission
-		if err := rows.Scan(&m.ID, &m.SectID, &m.Title, &m.Description, &m.MissionType, &m.TargetID, &m.TargetAmount, &m.RewardContribution, &m.RequiredMemberRank); err == nil {
+		if err := rows.Scan(&m.ID, &m.SectID, &m.Title, &m.Description, &m.MissionType, &m.TargetID, &m.TargetAmount, &m.RewardContribution, &m.RequiredMemberRank, &m.ExpiresAt); err == nil {
 			missions = append(missions, m)
 		}
 	}
@@ -1923,6 +1933,7 @@ type AdminCreateMissionRequest struct {
 	TargetAmount       int    `json:"target_amount"`
 	RewardContribution int    `json:"reward_contribution"`
 	RequiredMemberRank string `json:"required_member_rank"`
+	DurationHours      int    `json:"duration_hours"` // 0 => default 24h, < 0 => no expiry
 }
 
 func AdminCreateSectMission(c *gin.Context) {
@@ -1943,8 +1954,20 @@ func AdminCreateSectMission(c *gin.Context) {
 		req.RequiredMemberRank = "NGOAI_MON"
 	}
 
-	_, err := db.DB.Exec(`INSERT INTO sect_missions (sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		sectID, req.Title, req.Description, req.MissionType, req.TargetID, req.TargetAmount, req.RewardContribution, req.RequiredMemberRank)
+	var expiresAt *time.Time
+	switch {
+	case req.DurationHours > 0:
+		t := time.Now().Add(time.Duration(req.DurationHours) * time.Hour)
+		expiresAt = &t
+	case req.DurationHours < 0:
+		expiresAt = nil
+	default:
+		t := time.Now().Add(24 * time.Hour)
+		expiresAt = &t
+	}
+
+	_, err := db.DB.Exec(`INSERT INTO sect_missions (sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		sectID, req.Title, req.Description, req.MissionType, req.TargetID, req.TargetAmount, req.RewardContribution, req.RequiredMemberRank, expiresAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo nhiệm vụ"})
 		return
@@ -3900,6 +3923,15 @@ func formatChangedFields(sets []string, args []interface{}) string {
 			translated = "Ngân quỹ"
 		case "require_approval":
 			translated = "Yêu cầu phê duyệt"
+			if b, ok := val.(bool); ok {
+				if b {
+					valStr = "Có"
+				} else {
+					valStr = "Không"
+				}
+			}
+		case "require_promotion_approval":
+			translated = "Duyệt lên cấp"
 			if b, ok := val.(bool); ok {
 				if b {
 					valStr = "Có"

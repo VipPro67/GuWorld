@@ -123,6 +123,7 @@ func main() {
 	handlers.StartArenaSettlementWorker(ctx)
 	handlers.StartAuctionSettlementWorker(ctx)
 	worker.StartPoolWatchdog(ctx, db.DB, 60*time.Second)
+	worker.StartSectMissionWorker(ctx, db.DB, 60*time.Second)
 
 	r := server.SetupRouter()
 

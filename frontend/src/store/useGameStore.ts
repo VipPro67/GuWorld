@@ -647,6 +647,7 @@ export interface Sect {
   funds: number;
   level: number;
   require_approval?: boolean;
+  require_promotion_approval?: boolean;
 }
 
 export interface SectJoinRequest {
@@ -664,8 +665,8 @@ export interface SectPromotionRequest {
   id: string;
   sect_id: string;
   player_id: string;
-  current_rank: 'NGOAI_MON' | 'NOI_MON' | 'TINH_ANH' | 'CHAN_TRUYEN' | 'TRUONG_LAO' | 'CHUONG_MON';
-  target_rank: 'NGOAI_MON' | 'NOI_MON' | 'TINH_ANH' | 'CHAN_TRUYEN' | 'TRUONG_LAO' | 'CHUONG_MON';
+  current_rank: 'NGOAI_MON' | 'NOI_MON' | 'TINH_ANH' | 'CHAN_TRUYEN' | 'TRUONG_LAO' | 'HO_PHAP' | 'CHUONG_MON';
+  target_rank: 'NGOAI_MON' | 'NOI_MON' | 'TINH_ANH' | 'CHAN_TRUYEN' | 'TRUONG_LAO' | 'HO_PHAP' | 'CHUONG_MON';
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   created_at: string;
   username?: string;
@@ -677,7 +678,7 @@ export interface SectMember {
   id: string;
   sect_id: string;
   player_id: string;
-  member_rank: 'NGOAI_MON' | 'NOI_MON' | 'TINH_ANH' | 'CHAN_TRUYEN' | 'TRUONG_LAO' | 'CHUONG_MON';
+  member_rank: 'NGOAI_MON' | 'NOI_MON' | 'TINH_ANH' | 'CHAN_TRUYEN' | 'TRUONG_LAO' | 'HO_PHAP' | 'CHUONG_MON';
   contribution_points: number;
   master_id: string | null;
   joined_at: string;
@@ -692,13 +693,14 @@ export interface SectMission {
   target_id: string;
   target_amount: number;
   reward_contribution: number;
-  required_member_rank: 'NGOAI_MON' | 'NOI_MON' | 'TINH_ANH' | 'CHAN_TRUYEN' | 'TRUONG_LAO' | 'CHUONG_MON';
+  required_member_rank: 'NGOAI_MON' | 'NOI_MON' | 'TINH_ANH' | 'CHAN_TRUYEN' | 'TRUONG_LAO' | 'HO_PHAP' | 'CHUONG_MON';
+  expires_at?: string | null;
 }
 
 export interface SectLeaderboardEntry {
   username: string;
   avatar_url?: string;
-  rank: 'NGOAI_MON' | 'NOI_MON' | 'TINH_ANH' | 'CHAN_TRUYEN' | 'TRUONG_LAO' | 'CHUONG_MON';
+  rank: 'NGOAI_MON' | 'NOI_MON' | 'TINH_ANH' | 'CHAN_TRUYEN' | 'TRUONG_LAO' | 'HO_PHAP' | 'CHUONG_MON';
   contribution: number;
 }
 
@@ -722,7 +724,7 @@ export interface SectMemberInfo {
   player_id: string;
   username: string;
   avatar_url?: string;
-  member_rank: 'NGOAI_MON' | 'NOI_MON' | 'TINH_ANH' | 'CHAN_TRUYEN' | 'TRUONG_LAO' | 'CHUONG_MON';
+  member_rank: 'NGOAI_MON' | 'NOI_MON' | 'TINH_ANH' | 'CHAN_TRUYEN' | 'TRUONG_LAO' | 'HO_PHAP' | 'CHUONG_MON';
   contribution_points: number;
   joined_at: string;
   player_rank: number;
@@ -1100,6 +1102,8 @@ interface GameState {
   fetchSectMissions: () => Promise<void>;
   acceptSectMission: (missionId: string) => Promise<boolean>;
   completeSectMission: (missionId: string) => Promise<boolean>;
+  deleteSectMission: (missionId: string) => Promise<boolean>;
+  abandonSectMission: (missionId: string) => Promise<boolean>;
   createSect: (name: string, description: string, region: string) => Promise<boolean>;
   fetchSectMembers: () => Promise<void>;
   setMemberRank: (memberId: string, rank: string) => Promise<boolean>;
@@ -1112,10 +1116,13 @@ interface GameState {
     target_amount: number;
     reward_contribution: number;
     required_member_rank: string;
+    duration_hours?: number;
   }) => Promise<boolean>;
   stockSectVault: (itemType: 'gu' | 'material', itemId: string, quantity: number) => Promise<boolean>;
+  stockSectVaultBulk: (items: { item_type: 'gu' | 'material'; item_id: string; quantity: number }[]) => Promise<boolean>;
   upgradeSect: () => Promise<boolean>;
   toggleSectApproval: (requireApproval: boolean) => Promise<boolean>;
+  toggleSectPromotionApproval: (requirePromotionApproval: boolean) => Promise<boolean>;
   fetchJoinRequests: () => Promise<void>;
   actionJoinRequest: (requestId: string, action: 'approve' | 'reject') => Promise<boolean>;
   fetchPromotionRequests: () => Promise<void>;
@@ -5441,6 +5448,52 @@ export const useGameStore = create<GameState>((set, get) => {
     } finally { set({ actionLoading: false }); }
   },
 
+  deleteSectMission: async (missionId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}`, {
+        method: "DELETE",
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Xóa nhiệm vụ thất bại.");
+      get().addToast(data.message || "Đã xóa nhiệm vụ tông môn!", "success");
+      get().addLog(data.message || `Xóa nhiệm vụ tông môn: ${missionId}`);
+      await get().fetchSectMissions();
+      await get().fetchMySectStatus();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  abandonSectMission: async (missionId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}/abandon`, {
+        method: "DELETE",
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Hủy nhiệm vụ thất bại.");
+      get().addToast(data.message || "Đã hủy nhiệm vụ tông môn!", "success");
+      get().addLog(data.message || `Hủy nhiệm vụ tông môn: ${missionId}`);
+      await get().fetchMySectStatus();
+      await get().fetchSectMissions();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
   createSect: async (name: string, description: string, region: string) => {
     const { token, actionLoading, logout } = get();
     if (!token || actionLoading) return false;
@@ -5544,6 +5597,7 @@ export const useGameStore = create<GameState>((set, get) => {
           target_amount: payload.target_amount,
           reward_contribution: payload.reward_contribution,
           required_member_rank: payload.required_member_rank,
+          duration_hours: payload.duration_hours,
         }),
       });
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
@@ -5579,6 +5633,30 @@ export const useGameStore = create<GameState>((set, get) => {
       if (!response.ok) throw new Error(data.error || "Nhập kho bảo khố thất bại.");
       get().addToast(data.message || "Đã nhập kho bảo khố thành công!", "success");
       get().addLog(`Nhập bảo khố: ${quantity}x ${itemId}`);
+      await get().fetchMySectStatus();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  stockSectVaultBulk: async (items) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/vault/stock/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Nhập kho bảo khố thất bại.");
+      get().addToast(data.message || "Đã nhập kho bảo khố thành công!", "success");
+      get().addLog(`Nhập bảo khố hàng loạt: ${items.length} mặt hàng`);
       await get().fetchMySectStatus();
       return true;
     } catch (err: any) {
@@ -5624,6 +5702,29 @@ export const useGameStore = create<GameState>((set, get) => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cài đặt thất bại.");
       get().addToast(data.message || "Đã cập nhật cài đặt duyệt thành viên!", "success");
+      await get().fetchMySectStatus();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  toggleSectPromotionApproval: async (requirePromotionApproval) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/toggle-promotion-approval`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ require_promotion_approval: requirePromotionApproval }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Cài đặt thất bại.");
+      get().addToast(data.message || "Đã cập nhật cài đặt duyệt lên cấp!", "success");
       await get().fetchMySectStatus();
       return true;
     } catch (err: any) {

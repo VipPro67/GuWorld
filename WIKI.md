@@ -334,10 +334,14 @@ Hệ thống môn phái hiện có:
 - Duyệt đơn gia nhập nếu môn phái bật yêu cầu duyệt.
 - Thành viên, ban bậc, trục xuất.
 - Xin/thẩm định thăng chức.
+- **Cấp bậc:** Ngoại Môn → Nội Môn → Tinh Anh → Chân Truyền → Trưởng Lão → **Hộ Pháp** → Chưởng Môn. Chi phí thăng cấp bằng Điểm cống hiến: 100 / 500 / 2.000 / 10.000 / 30.000.
+- **Duyệt lên cấp:** Trưởng Lão/Chưởng Môn có thể bật tùy chọn "Duyệt Lên Cấp" (mặc định tắt). Khi bật, **mọi** thăng cấp của đệ tử đều tạo yêu cầu chờ duyệt thay vì tự động. Khi tắt, đệ tử tự thăng cấp theo tiêu chuẩn (trừ bậc Chân Truyền/Trưởng Lão/Hộ Pháp vẫn cần duyệt).
 - Đóng góp nguyên thạch/vật liệu/Cổ.
 - Bảo khố môn phái, mua vật phẩm từ kho, stock kho.
-- Nhiệm vụ mặc định và nhiệm vụ custom.
-- Nâng cấp môn phái.
+- Nhiệm vụ mặc định và nhiệm vụ custom:
+  - **Hạn tự xóa:** Nhiệm vụ trên bảng có thời hạn (mặc định 24h, Trưởng Lão/Chưởng Môn tùy chỉnh khi phát hành; `-1` = không hết hạn). Hết hạn nhiệm vụ tự biến mất khỏi bảng, nhiệm vụ của đệ tử đang làm cũng bị hủy theo.
+  - **Hủy nhiệm vụ:** Đệ tử có thể hủy bỏ nhiệm vụ đang thực hiện để nhận nhiệm vụ khác. Trưởng Lão/Chưởng Môn có thể xóa nhiệm vụ đã phát hành khỏi bảng.
+- Nâng cấp môn phái: chi phí `Cấp² × 5.000` Quỹ.
 - Mỏ môn phái: xem, tấn công, nhận thưởng.
 
 ## 14. Mỏ cá nhân

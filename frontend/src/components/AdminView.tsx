@@ -350,6 +350,7 @@ const AUDIT_ACTIONS = [
 function memberRankStyle(rank: string): string {
   switch (rank) {
     case "CHUONG_MON": return "text-amber-400 border-amber-500/30 bg-amber-950/60";
+    case "HO_PHAP": return "text-orange-400 border-orange-500/30 bg-orange-950/60";
     case "TRUONG_LAO": return "text-purple-400 border-purple-500/30 bg-purple-950/60";
     case "CHAN_TRUYEN": return "text-blue-400 border-blue-500/30 bg-blue-950/60";
     case "TINH_ANH": return "text-emerald-400 border-emerald-500/30 bg-emerald-950/60";
@@ -361,6 +362,7 @@ function memberRankStyle(rank: string): string {
 function memberRankLabel(rank: string): string {
   switch (rank) {
     case "CHUONG_MON": return "CHƯỞNG MÔN";
+    case "HO_PHAP": return "HỘ PHÁP";
     case "TRUONG_LAO": return "TRƯỞNG LÃO";
     case "CHAN_TRUYEN": return "CHÂN TRUYỀN";
     case "TINH_ANH": return "TINH ANH";
@@ -571,7 +573,7 @@ export const AdminView: React.FC = () => {
   const [sectMissions, setSectMissions] = useState<any[]>([]);
   const [sectMissionsLoading, setSectMissionsLoading] = useState(false);
   const [showCreateMission, setShowCreateMission] = useState(false);
-  const [newMission, setNewMission] = useState({ title: "", description: "", mission_type: "GATHER", target_id: "", target_amount: 1, reward_contribution: 10, required_member_rank: "NGOAI_MON" });
+  const [newMission, setNewMission] = useState({ title: "", description: "", mission_type: "GATHER", target_id: "", target_amount: 1, reward_contribution: 10, required_member_rank: "NGOAI_MON", duration_hours: 24 });
   const [missionTargetSearch, setMissionTargetSearch] = useState("");
 
   const [showStockVault, setShowStockVault] = useState(false);
@@ -2053,7 +2055,7 @@ export const AdminView: React.FC = () => {
             {sectDetailTab === "missions" && (
               <div className="space-y-3">
                 <div className="flex justify-end">
-                  <button onClick={() => { setNewMission({ title: "", description: "", mission_type: "GATHER", target_id: "", target_amount: 1, reward_contribution: 10, required_member_rank: "NGOAI_MON" }); setShowCreateMission(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 rounded-lg transition-colors cursor-pointer">
+                  <button onClick={() => { setNewMission({ title: "", description: "", mission_type: "GATHER", target_id: "", target_amount: 1, reward_contribution: 10, required_member_rank: "NGOAI_MON", duration_hours: 24 }); setShowCreateMission(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 rounded-lg transition-colors cursor-pointer">
                     <Plus className="w-3.5 h-3.5" /> Tạo nhiệm vụ
                   </button>
                 </div>
@@ -2075,6 +2077,9 @@ export const AdminView: React.FC = () => {
                             <span>Loại: {m.mission_type}</span>
                             <span>Mục tiêu: {m.target_id} x{m.target_amount}</span>
                             <span>Thưởng: {m.reward_contribution} cống hiến</span>
+                            <span className={m.expires_at && new Date(m.expires_at).getTime() < Date.now() ? "text-red-400" : "text-amber-400/80"}>
+                              {m.expires_at ? `Hết hạn: ${new Date(m.expires_at).toLocaleString("vi-VN")}` : "Không hết hạn"}
+                            </span>
                           </div>
                         </div>
                         <button onClick={async () => {
@@ -2162,6 +2167,7 @@ export const AdminView: React.FC = () => {
                   <option value="TINH_ANH">Tinh Anh</option>
                   <option value="CHAN_TRUYEN">Chân Truyền</option>
                   <option value="TRUONG_LAO">Trưởng Lão</option>
+                  <option value="HO_PHAP">Hộ Pháp</option>
                   <option value="CHUONG_MON">Chưởng Môn</option>
                 </select>
               </div>
@@ -2280,6 +2286,7 @@ export const AdminView: React.FC = () => {
                       <option value="TINH_ANH">Tinh Anh</option>
                       <option value="CHAN_TRUYEN">Chân Truyền</option>
                       <option value="TRUONG_LAO">Trưởng Lão</option>
+                      <option value="HO_PHAP">Hộ Pháp</option>
                     </select>
                   </div>
                 </div>
@@ -2299,6 +2306,11 @@ export const AdminView: React.FC = () => {
                     <label className="text-[11px] font-bold text-zinc-500 font-mono">Thưởng cống hiến</label>
                     <input type="number" min={1} value={newMission.reward_contribution} onChange={e => setNewMission(p => ({ ...p, reward_contribution: Math.max(1, parseInt(e.target.value) || 1) }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                   </div>
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Thời hạn (giờ)</label>
+                  <input type="number" min={-1} value={newMission.duration_hours} onChange={e => setNewMission(p => ({ ...p, duration_hours: parseInt(e.target.value) || 0 }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                  <span className="text-[10px] text-zinc-600 font-mono">0 = mặc định 24h · -1 = không hết hạn</span>
                 </div>
               </div>
               <div className="flex gap-3 justify-end">
@@ -3547,6 +3559,7 @@ export const AdminView: React.FC = () => {
                     <th className="px-3 py-2.5 font-semibold text-right">Thành viên</th>
                     <th className="px-3 py-2.5 font-semibold">Chưởng môn</th>
                     <th className="px-3 py-2.5 font-semibold">Phê duyệt</th>
+                    <th className="px-3 py-2.5 font-semibold">Duyệt lên cấp</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3560,6 +3573,7 @@ export const AdminView: React.FC = () => {
                       <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{s.member_count}</td>
                       <td className="px-3 py-2.5 text-zinc-300">{s.leader_name || <span className="text-zinc-600 italic">Trống</span>}</td>
                       <td className="px-3 py-2.5">{s.require_approval ? <span className="text-amber-400 text-[10px]">✓</span> : <span className="text-zinc-600">–</span>}</td>
+                      <td className="px-3 py-2.5">{s.require_promotion_approval ? <span className="text-amber-400 text-[10px]">✓</span> : <span className="text-zinc-600">–</span>}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -744,11 +744,13 @@ func InitSchema() error {
 		target_id VARCHAR(50) NOT NULL,
 		target_amount INTEGER NOT NULL DEFAULT 1,
 		reward_contribution INTEGER NOT NULL DEFAULT 0,
-		required_member_rank VARCHAR(30) NOT NULL DEFAULT 'NGOAI_MON'
+		required_member_rank VARCHAR(30) NOT NULL DEFAULT 'NGOAI_MON',
+		expires_at TIMESTAMP WITHOUT TIME ZONE
 	);`)
 	if err != nil {
 		return fmt.Errorf("failed to create sect_missions table: %w", err)
 	}
+	_, _ = DB.Exec(`ALTER TABLE sect_missions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITHOUT TIME ZONE;`)
 	// Deduplicate and prevent duplicate mission rows
 	_, _ = DB.Exec(`DELETE FROM sect_missions WHERE id NOT IN (SELECT MIN(id) FROM sect_missions GROUP BY sect_id, title);`)
 	_, _ = DB.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_sect_mission_title ON sect_missions (sect_id, title);`)
@@ -762,11 +764,13 @@ func InitSchema() error {
 		current_progress INTEGER NOT NULL DEFAULT 0,
 		status VARCHAR(30) NOT NULL DEFAULT 'IN_PROGRESS',
 		assigned_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
+		expires_at TIMESTAMP WITHOUT TIME ZONE,
 		UNIQUE(player_id, mission_id)
 	);`)
 	if err != nil {
 		return fmt.Errorf("failed to create player_sect_missions table: %w", err)
 	}
+	_, _ = DB.Exec(`ALTER TABLE player_sect_missions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITHOUT TIME ZONE;`)
 
 	// 4.17. Create npcs
 	_, err = DB.Exec(`
@@ -1094,6 +1098,7 @@ func InitSchema() error {
 		{`ALTER TABLE sects ADD COLUMN IF NOT EXISTS funds INTEGER NOT NULL DEFAULT 0;`, "sects.funds"},
 		{`ALTER TABLE sects ADD COLUMN IF NOT EXISTS level INTEGER NOT NULL DEFAULT 1;`, "sects.level"},
 		{`ALTER TABLE sects ADD COLUMN IF NOT EXISTS require_approval BOOLEAN NOT NULL DEFAULT FALSE;`, "sects.require_approval"},
+		{`ALTER TABLE sects ADD COLUMN IF NOT EXISTS require_promotion_approval BOOLEAN NOT NULL DEFAULT FALSE;`, "sects.require_promotion_approval"},
 		{`CREATE TABLE IF NOT EXISTS sect_join_requests (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,

@@ -71,7 +71,7 @@ func ClaimSectMineRewards(c *gin.Context) {
 		return
 	}
 
-	if memberRank != "CHUONG_MON" && memberRank != "TRUONG_LAO" {
+	if !canManageSect(memberRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Trưởng Lão hoặc Chưởng Môn mới có thể nhận thưởng!"})
 		return
 	}

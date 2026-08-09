@@ -18,16 +18,17 @@ import (
 )
 
 type Sect struct {
-	ID             string          `json:"id"`
-	Name           string          `json:"name"`
-	Description    string          `json:"description"`
-	Region         string          `json:"region"`
-	VaultGu        json.RawMessage `json:"vault_gu"`
-	VaultMaterials json.RawMessage `json:"vault_materials"`
-	VaultRecipes   json.RawMessage `json:"vault_recipes"`
-	Funds          int             `json:"funds"`
-	Level          int             `json:"level"`
-	RequireApproval bool           `json:"require_approval"`
+	ID                       string          `json:"id"`
+	Name                     string          `json:"name"`
+	Description              string          `json:"description"`
+	Region                   string          `json:"region"`
+	VaultGu                  json.RawMessage `json:"vault_gu"`
+	VaultMaterials           json.RawMessage `json:"vault_materials"`
+	VaultRecipes             json.RawMessage `json:"vault_recipes"`
+	Funds                    int             `json:"funds"`
+	Level                    int             `json:"level"`
+	RequireApproval          bool            `json:"require_approval"`
+	RequirePromotionApproval bool            `json:"require_promotion_approval"`
 }
 
 type SectJoinRequest struct {
@@ -58,22 +59,23 @@ type SectMember struct {
 	ID                 uuid.UUID `json:"id"`
 	SectID             string    `json:"sect_id"`
 	PlayerID           uuid.UUID `json:"player_id"`
-	MemberRank         string    `json:"member_rank"` // NGOAI_MON, NOI_MON, TINH_ANH, CHAN_TRUYEN, TRUONG_LAO
+	MemberRank         string    `json:"member_rank"` // NGOAI_MON, NOI_MON, TINH_ANH, CHAN_TRUYEN, TRUONG_LAO, HO_PHAP, CHUONG_MON
 	ContributionPoints int       `json:"contribution_points"`
 	MasterID           *string   `json:"master_id"`
 	JoinedAt           time.Time `json:"joined_at"`
 }
 
 type SectMission struct {
-	ID                  uuid.UUID `json:"id"`
-	SectID              string    `json:"sect_id"`
-	Title               string    `json:"title"`
-	Description         string    `json:"description"`
-	MissionType         string    `json:"mission_type"` // GATHER, COMBAT, REFINE, DONATE
-	TargetID            string    `json:"target_id"`
-	TargetAmount        int       `json:"target_amount"`
-	RewardContribution  int       `json:"reward_contribution"`
-	RequiredMemberRank  string    `json:"required_member_rank"`
+	ID                  uuid.UUID  `json:"id"`
+	SectID              string     `json:"sect_id"`
+	Title               string     `json:"title"`
+	Description         string     `json:"description"`
+	MissionType         string     `json:"mission_type"` // GATHER, COMBAT, REFINE, DONATE
+	TargetID            string     `json:"target_id"`
+	TargetAmount        int        `json:"target_amount"`
+	RewardContribution  int        `json:"reward_contribution"`
+	RequiredMemberRank  string     `json:"required_member_rank"`
+	ExpiresAt           *time.Time `json:"expires_at"`
 }
 
 type PlayerSectMission struct {
@@ -83,6 +85,35 @@ type PlayerSectMission struct {
 	CurrentProgress int       `json:"current_progress"`
 	Status          string    `json:"status"` // IN_PROGRESS, COMPLETED, FAILED
 	AssignedAt      time.Time `json:"assigned_at"`
+	ExpiresAt       *time.Time `json:"expires_at"`
+}
+
+// sectRankValue ranks member ranks by seniority (lower = junior).
+// CHUONG_MON is reserved for the founder/transferred leader, never reached by promotion.
+func sectRankValue(rank string) int {
+	switch rank {
+	case "NGOAI_MON":
+		return 1
+	case "NOI_MON":
+		return 2
+	case "TINH_ANH":
+		return 3
+	case "CHAN_TRUYEN":
+		return 4
+	case "TRUONG_LAO":
+		return 5
+	case "HO_PHAP":
+		return 6
+	case "CHUONG_MON":
+		return 7
+	default:
+		return 0
+	}
+}
+
+// canManageSect reports whether the rank may manage sect operations (missions, vault, settings, kicks).
+func canManageSect(rank string) bool {
+	return rank == "CHUONG_MON" || rank == "TRUONG_LAO" || rank == "HO_PHAP"
 }
 
 type SectVaultGuItem struct {
@@ -112,7 +143,7 @@ type VaultBuyRequest struct {
 
 // GetSects lists all available sects
 func GetSects(c *gin.Context) {
-	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, description, region, vault_gu, vault_materials, vault_recipes, funds, level, require_approval FROM sects`)
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, description, region, vault_gu, vault_materials, vault_recipes, funds, level, require_approval, require_promotion_approval FROM sects`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sects: " + err.Error()})
 		return
@@ -122,7 +153,7 @@ func GetSects(c *gin.Context) {
 	var sects []Sect
 	for rows.Next() {
 		var s Sect
-		if err := rows.Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes, &s.Funds, &s.Level, &s.RequireApproval); err == nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval); err == nil {
 			sects = append(sects, s)
 		}
 	}
@@ -338,10 +369,10 @@ func GetMySectStatus(c *gin.Context) {
 
 	var s Sect
 	err = db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT id, name, description, region, vault_gu, vault_materials, vault_recipes, funds, level, require_approval
+		SELECT id, name, description, region, vault_gu, vault_materials, vault_recipes, funds, level, require_approval, require_promotion_approval
 		FROM sects
 		WHERE id = $1
-	`, m.SectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes, &s.Funds, &s.Level, &s.RequireApproval)
+	`, m.SectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes, &s.Funds, &s.Level, &s.RequireApproval, &s.RequirePromotionApproval)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details"})
 		return
@@ -353,12 +384,13 @@ func GetMySectStatus(c *gin.Context) {
 	var activePMId uuid.UUID
 	hasActive := false
 	err = db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT pm.id, sm.id, sm.title, sm.description, sm.mission_type, sm.target_id, sm.target_amount, sm.reward_contribution, pm.current_progress
+		SELECT pm.id, sm.id, sm.title, sm.description, sm.mission_type, sm.target_id, sm.target_amount, sm.reward_contribution, pm.current_progress, pm.expires_at
 		FROM player_sect_missions pm
 		JOIN sect_missions sm ON pm.mission_id = sm.id
 		WHERE pm.player_id = $1 AND pm.status = 'IN_PROGRESS'
+		  AND (pm.expires_at IS NULL OR pm.expires_at > now())
 		LIMIT 1
-	`, playerID).Scan(&activePMId, &activeMission.ID, &activeMission.Title, &activeMission.Description, &activeMission.MissionType, &activeMission.TargetID, &activeMission.TargetAmount, &activeMission.RewardContribution, &activeProgress)
+	`, playerID).Scan(&activePMId, &activeMission.ID, &activeMission.Title, &activeMission.Description, &activeMission.MissionType, &activeMission.TargetID, &activeMission.TargetAmount, &activeMission.RewardContribution, &activeProgress, &activeMission.ExpiresAt)
 	if err == nil {
 		hasActive = true
 	}
@@ -468,8 +500,12 @@ func PromoteSectRank(c *gin.Context) {
 		nextRank = "TRUONG_LAO"
 		reqRank = 5
 		costPoints = 10000
+	case "TRUONG_LAO":
+		nextRank = "HO_PHAP"
+		reqRank = 6
+		costPoints = 30000
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cảnh giới tông môn đã đạt đỉnh phong (Trưởng Lão)!"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cảnh giới tông môn đã đạt đỉnh phong (Hộ Pháp)!"})
 		return
 	}
 
@@ -485,48 +521,62 @@ func PromoteSectRank(c *gin.Context) {
 
 	m.ContributionPoints -= costPoints
 
-	// Manual check for high tier ranks: CHAN_TRUYEN and TRUONG_LAO
-	if nextRank == "CHAN_TRUYEN" || nextRank == "TRUONG_LAO" {
-		var leaderCount int
-		err = tx.QueryRow(`SELECT COUNT(1) FROM sect_members WHERE sect_id = $1 AND member_rank = 'CHUONG_MON'`, m.SectID).Scan(&leaderCount)
-		if err == nil && leaderCount > 0 {
-			// Check for pending request
-			var pendingID string
-			err = tx.QueryRow(`SELECT id FROM sect_promotion_requests WHERE player_id = $1 AND sect_id = $2 AND status = 'PENDING'`, playerID, m.SectID).Scan(&pendingID)
-			if err == nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Yêu cầu thăng cấp lên " + nextRank + " của đạo hữu đang chờ duyệt!"})
-				return
-			}
+	// Whether this promotion must be approved by sect leadership first
+	requiresApproval := false
 
-			// Deduct points from database
-			_, err = tx.Exec(`UPDATE sect_members SET contribution_points = $1 WHERE player_id = $2`, m.ContributionPoints, playerID)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update contribution points: " + err.Error()})
-				return
+	// Option "duyệt lên cấp": khi bật, MỌI thăng cấp đều phải qua duyệt
+	var requirePromotionApproval bool
+	err = tx.QueryRow(`SELECT require_promotion_approval FROM sects WHERE id = $1`, m.SectID).Scan(&requirePromotionApproval)
+	if err == nil && requirePromotionApproval {
+		requiresApproval = true
+	} else {
+		// Manual check for high tier ranks: CHAN_TRUYEN, TRUONG_LAO and HO_PHAP
+		if nextRank == "CHAN_TRUYEN" || nextRank == "TRUONG_LAO" || nextRank == "HO_PHAP" {
+			var leaderCount int
+			err = tx.QueryRow(`SELECT COUNT(1) FROM sect_members WHERE sect_id = $1 AND member_rank = 'CHUONG_MON'`, m.SectID).Scan(&leaderCount)
+			if err == nil && leaderCount > 0 {
+				requiresApproval = true
 			}
+		}
+	}
 
-			// Insert promotion request
-			_, err = tx.Exec(`
-				INSERT INTO sect_promotion_requests (sect_id, player_id, current_rank, target_rank, status)
-				VALUES ($1, $2, $3, $4, 'PENDING')
-				ON CONFLICT (sect_id, player_id) DO UPDATE SET current_rank = $3, target_rank = $4, status = 'PENDING', created_at = now()
-			`, m.SectID, playerID, m.MemberRank, nextRank)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit promotion request: " + err.Error()})
-				return
-			}
-
-			if err := tx.Commit(); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
-				return
-			}
-
-			c.JSON(http.StatusOK, gin.H{
-				"message": "Gửi yêu cầu thăng cấp lên " + nextRank + " thành công, vui lòng chờ duyệt!",
-				"member":  m,
-			})
+	if requiresApproval {
+		// Check for pending request
+		var pendingID string
+		err = tx.QueryRow(`SELECT id FROM sect_promotion_requests WHERE player_id = $1 AND sect_id = $2 AND status = 'PENDING'`, playerID, m.SectID).Scan(&pendingID)
+		if err == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Yêu cầu thăng cấp lên " + nextRank + " của đạo hữu đang chờ duyệt!"})
 			return
 		}
+
+		// Deduct points from database
+		_, err = tx.Exec(`UPDATE sect_members SET contribution_points = $1 WHERE player_id = $2`, m.ContributionPoints, playerID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update contribution points: " + err.Error()})
+			return
+		}
+
+		// Insert promotion request
+		_, err = tx.Exec(`
+			INSERT INTO sect_promotion_requests (sect_id, player_id, current_rank, target_rank, status)
+			VALUES ($1, $2, $3, $4, 'PENDING')
+			ON CONFLICT (sect_id, player_id) DO UPDATE SET current_rank = $3, target_rank = $4, status = 'PENDING', created_at = now()
+		`, m.SectID, playerID, m.MemberRank, nextRank)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit promotion request: " + err.Error()})
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Gửi yêu cầu thăng cấp lên " + nextRank + " thành công, vui lòng chờ duyệt!",
+			"member":  m,
+		})
+		return
 	}
 
 	m.MemberRank = nextRank
@@ -1472,9 +1522,10 @@ func GetSectMissions(c *gin.Context) {
 	}
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT id, sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank
+		SELECT id, sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank, expires_at
 		FROM sect_missions
-		WHERE sect_id = $1
+		WHERE sect_id = $1 AND (expires_at IS NULL OR expires_at > now())
+		ORDER BY required_member_rank, title
 	`, m.SectID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch missions"})
@@ -1485,7 +1536,7 @@ func GetSectMissions(c *gin.Context) {
 	var missions []SectMission
 	for rows.Next() {
 		var sm SectMission
-		if err := rows.Scan(&sm.ID, &sm.SectID, &sm.Title, &sm.Description, &sm.MissionType, &sm.TargetID, &sm.TargetAmount, &sm.RewardContribution, &sm.RequiredMemberRank); err == nil {
+		if err := rows.Scan(&sm.ID, &sm.SectID, &sm.Title, &sm.Description, &sm.MissionType, &sm.TargetID, &sm.TargetAmount, &sm.RewardContribution, &sm.RequiredMemberRank, &sm.ExpiresAt); err == nil {
 			missions = append(missions, sm)
 		}
 	}
@@ -1520,6 +1571,7 @@ func AcceptSectMission(c *gin.Context) {
 	err = tx.QueryRow(`
 		SELECT id FROM player_sect_missions
 		WHERE player_id = $1 AND status = 'IN_PROGRESS'
+		  AND (expires_at IS NULL OR expires_at > now())
 		LIMIT 1
 	`, playerID).Scan(&dummy)
 	if err == nil {
@@ -1530,10 +1582,10 @@ func AcceptSectMission(c *gin.Context) {
 	// Fetch mission details
 	var sm SectMission
 	err = tx.QueryRow(`
-		SELECT id, sect_id, required_member_rank
+		SELECT id, sect_id, required_member_rank, expires_at
 		FROM sect_missions
 		WHERE id = $1
-	`, missionID).Scan(&sm.ID, &sm.SectID, &sm.RequiredMemberRank)
+	`, missionID).Scan(&sm.ID, &sm.SectID, &sm.RequiredMemberRank, &sm.ExpiresAt)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy nhiệm vụ yêu cầu!"})
 		return
@@ -1558,6 +1610,7 @@ func AcceptSectMission(c *gin.Context) {
 		"TINH_ANH":    3,
 		"CHAN_TRUYEN": 4,
 		"TRUONG_LAO":  5,
+		"HO_PHAP":     6,
 	}
 
 	if rankMap[m.MemberRank] < rankMap[sm.RequiredMemberRank] {
@@ -1567,9 +1620,9 @@ func AcceptSectMission(c *gin.Context) {
 
 	// Insert player mission
 	_, err = tx.Exec(`
-		INSERT INTO player_sect_missions (player_id, mission_id, current_progress, status)
-		VALUES ($1, $2, 0, 'IN_PROGRESS')
-	`, playerID, sm.ID)
+		INSERT INTO player_sect_missions (player_id, mission_id, current_progress, status, expires_at)
+		VALUES ($1, $2, 0, 'IN_PROGRESS', $3)
+	`, playerID, sm.ID, sm.ExpiresAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to accept mission: " + err.Error()})
 		return
@@ -1616,6 +1669,7 @@ func CompleteSectMission(c *gin.Context) {
 		SELECT id, current_progress, status
 		FROM player_sect_missions
 		WHERE player_id = $1 AND mission_id = $2 AND status = 'IN_PROGRESS'
+		  AND (expires_at IS NULL OR expires_at > now())
 	`, playerID, missionID).Scan(&psm.ID, &psm.CurrentProgress, &psm.Status)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không có nhiệm vụ này ở trạng thái đang thực hiện!"})
@@ -1774,6 +1828,105 @@ func CompleteSectMission(c *gin.Context) {
 	})
 }
 
+// DeleteSectMission lets a sect leader/elder delete a mission posted on the board.
+// Accepted missions referencing it are removed via ON DELETE CASCADE.
+func DeleteSectMission(c *gin.Context) {
+	missionIDStr := c.Param("missionId")
+	missionID, err := uuid.Parse(missionIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid mission ID format"})
+		return
+	}
+
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var sm SectMission
+	err = db.DB.QueryRowContext(c.Request.Context(), `
+		SELECT id, sect_id, title
+		FROM sect_missions
+		WHERE id = $1
+	`, missionID).Scan(&sm.ID, &sm.SectID, &sm.Title)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy nhiệm vụ yêu cầu!"})
+		return
+	}
+
+	var m SectMember
+	err = db.DB.QueryRowContext(c.Request.Context(), `
+		SELECT sect_id, member_rank
+		FROM sect_members
+		WHERE player_id = $1 AND sect_id = $2
+	`, playerID, sm.SectID).Scan(&m.SectID, &m.MemberRank)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Nhiệm vụ này thuộc về tông môn khác!"})
+		return
+	}
+
+	if !canManageSect(m.MemberRank) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Trưởng Lão hoặc Chưởng Môn mới có quyền xóa nhiệm vụ!"})
+		return
+	}
+
+	_, err = db.DB.ExecContext(c.Request.Context(), `DELETE FROM sect_missions WHERE id = $1`, missionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa nhiệm vụ"})
+		return
+	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.delete_mission", EntityType: "sect_mission",
+		EntityID: missionID.String(),
+		RequestSummary: fmt.Sprintf("Xóa nhiệm vụ %s của tông môn %s", sm.Title, sm.SectID),
+		IPAddress: c.ClientIP(), Success: true,
+	})
+
+	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa nhiệm vụ tông môn!"})
+}
+
+// AbandonSectMission lets a player give up their own in-progress mission.
+func AbandonSectMission(c *gin.Context) {
+	missionIDStr := c.Param("missionId")
+	missionID, err := uuid.Parse(missionIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid mission ID format"})
+		return
+	}
+
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	res, err := db.DB.ExecContext(c.Request.Context(), `
+		DELETE FROM player_sect_missions
+		WHERE player_id = $1 AND mission_id = $2 AND status = 'IN_PROGRESS'
+	`, playerID, missionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hủy nhiệm vụ"})
+		return
+	}
+
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không có nhiệm vụ đang thực hiện này!"})
+		return
+	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.abandon_mission", EntityType: "sect_mission",
+		EntityID: missionID.String(),
+		RequestSummary: "Hủy nhiệm vụ tông môn đang thực hiện",
+		IPAddress: c.ClientIP(), Success: true,
+	})
+
+	c.JSON(http.StatusOK, gin.H{"message": "Đã hủy nhiệm vụ tông môn!"})
+}
+
 type CreateSectRequest struct {
 	Name        string `json:"name" binding:"required,min=3,max=50"`
 	Description string `json:"description" binding:"required,max=500"`
@@ -1792,6 +1945,7 @@ type CreateCustomMissionRequest struct {
 	TargetAmount       int    `json:"target_amount" binding:"required,min=1"`
 	RewardContribution int    `json:"reward_contribution" binding:"required,min=1"`
 	RequiredMemberRank string `json:"required_member_rank" binding:"required"`
+	DurationHours      int    `json:"duration_hours"` // 0 => default 24h, < 0 => no expiry
 }
 
 func slugify(s string) string {
@@ -1933,11 +2087,12 @@ func GetSectMembers(c *gin.Context) {
 		ORDER BY 
 			CASE sm.member_rank
 				WHEN 'CHUONG_MON' THEN 1
-				WHEN 'TRUONG_LAO' THEN 2
-				WHEN 'CHAN_TRUYEN' THEN 3
-				WHEN 'TINH_ANH' THEN 4
-				WHEN 'NOI_MON' THEN 5
-				ELSE 6
+				WHEN 'HO_PHAP' THEN 2
+				WHEN 'TRUONG_LAO' THEN 3
+				WHEN 'CHAN_TRUYEN' THEN 4
+				WHEN 'TINH_ANH' THEN 5
+				WHEN 'NOI_MON' THEN 6
+				ELSE 7
 			END, sm.contribution_points DESC
 	`, sectID)
 	if err != nil {
@@ -1995,6 +2150,7 @@ func SetMemberRank(c *gin.Context) {
 		"TINH_ANH":    true,
 		"CHAN_TRUYEN": true,
 		"TRUONG_LAO":  true,
+		"HO_PHAP":     true,
 		"CHUONG_MON":  true,
 	}
 	if !validRanks[req.Rank] {
@@ -2094,7 +2250,7 @@ func KickMember(c *gin.Context) {
 		return
 	}
 
-	if callerRank != "CHUONG_MON" && callerRank != "TRUONG_LAO" {
+	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu không đủ quyền hạn (cần Trưởng Lão hoặc Chưởng môn)!"})
 		return
 	}
@@ -2117,9 +2273,9 @@ func KickMember(c *gin.Context) {
 		return
 	}
 
-	// Hierarchical check: Elders cannot kick other elders or leaders
-	if callerRank == "TRUONG_LAO" && (targetRank == "CHUONG_MON" || targetRank == "TRUONG_LAO") {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Trưởng lão không thể trục xuất Trưởng lão khác hoặc Chưởng môn!"})
+	// Hierarchical check: cannot kick a member of equal or higher rank
+	if callerRank != "CHUONG_MON" && sectRankValue(callerRank) <= sectRankValue(targetRank) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu không thể trục xuất thành viên ngang hàng hoặc cấp cao hơn!"})
 		return
 	}
 
@@ -2183,16 +2339,28 @@ func CreateCustomMission(c *gin.Context) {
 		return
 	}
 
-	if callerRank != "CHUONG_MON" && callerRank != "TRUONG_LAO" {
+	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Trưởng Lão hoặc Chưởng Môn mới có quyền phân phát nhiệm vụ!"})
 		return
 	}
 
 	// Add mission to sect_missions
+	var expiresAt *time.Time
+	switch {
+	case req.DurationHours > 0:
+		t := time.Now().Add(time.Duration(req.DurationHours) * time.Hour)
+		expiresAt = &t
+	case req.DurationHours < 0:
+		expiresAt = nil // no expiry
+	default:
+		t := time.Now().Add(24 * time.Hour)
+		expiresAt = &t
+	}
+
 	_, err = tx.Exec(`
-		INSERT INTO sect_missions (sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	`, callerSectID, req.Title, req.Description, req.MissionType, req.TargetID, req.TargetAmount, req.RewardContribution, req.RequiredMemberRank)
+		INSERT INTO sect_missions (sect_id, title, description, mission_type, target_id, target_amount, reward_contribution, required_member_rank, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	`, callerSectID, req.Title, req.Description, req.MissionType, req.TargetID, req.TargetAmount, req.RewardContribution, req.RequiredMemberRank, expiresAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create mission record: " + err.Error()})
 		return
@@ -2210,6 +2378,50 @@ type StockVaultRequest struct {
 	ItemType string `json:"item_type" binding:"required"` // gu, material
 	ItemID   string `json:"item_id" binding:"required"`
 	Quantity int    `json:"quantity" binding:"required,min=1"`
+}
+
+// stockItemUnitCost computes the sect-funds unit cost for stocking an item and
+// enforces the rank gates (Gu: rank 1-5 & <= sect level; material: rank <= sect level).
+// Returns (unitCost, httpStatusOK, "") on success; otherwise (0, status, errorMessage).
+func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int, int, string) {
+	itemType = strings.ToLower(itemType)
+	if itemType == "gu" {
+		var guRank, guBasePrice int
+		err := tx.QueryRow(`SELECT COALESCE(rank,1), COALESCE(base_price,0) FROM gu_dictionary WHERE id = $1 ORDER BY rank DESC LIMIT 1`, itemID).Scan(&guRank, &guBasePrice)
+		if err != nil {
+			guRank = 1
+			guBasePrice = 0
+		}
+
+		// Hard cap: cannot stock Gu rank >= 6 (too powerful for sect shop)
+		if guRank >= 6 {
+			return 0, http.StatusForbidden, fmt.Sprintf("Không thể thêm Cổ trùng hạng %d vào bảo khố! Chỉ được nhập Cổ trùng hạng 1–5.", guRank)
+		}
+
+		// Level gate: Gu rank must be <= sect level
+		if guRank > sectLevel {
+			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Cổ trùng hạng %d! (Hiện tại: Cấp %d)", guRank, guRank, sectLevel)
+		}
+
+		return pricing.GuBasePrice(guBasePrice, guRank), http.StatusOK, ""
+	}
+
+	if itemType == "material" {
+		var matRank int
+		err := tx.QueryRow(`SELECT rank FROM item_dictionary WHERE id = $1`, itemID).Scan(&matRank)
+		if err != nil {
+			matRank = 1
+		}
+
+		// Level gate: material rank must be <= sect level
+		if matRank > sectLevel {
+			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Linh tài hạng %d! (Hiện tại: Cấp %d)", matRank, matRank, sectLevel)
+		}
+
+		return matRank * 50, http.StatusOK, ""
+	}
+
+	return 0, http.StatusBadRequest, "Loại vật phẩm không hợp lệ (chỉ hỗ trợ gu hoặc material)"
 }
 
 // StockSectVault allows leaders/elders to buy vault items using sect funds
@@ -2241,7 +2453,7 @@ func StockSectVault(c *gin.Context) {
 		return
 	}
 
-	if callerRank != "CHUONG_MON" && callerRank != "TRUONG_LAO" {
+	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Trưởng Lão hoặc Chưởng Môn mới có quyền mua thêm vật phẩm cho bảo khố!"})
 		return
 	}
@@ -2258,58 +2470,12 @@ func StockSectVault(c *gin.Context) {
 		return
 	}
 
-	unitCost := 0
-	itemType := strings.ToLower(req.ItemType)
-
-	if itemType == "gu" {
-		// Calculate Gu cost: lookup rank and base_price from gu_dictionary
-		var guRank, guBasePrice int
-		err = tx.QueryRow(`SELECT COALESCE(rank,1), COALESCE(base_price,0) FROM gu_dictionary WHERE id = $1 ORDER BY rank DESC LIMIT 1`, req.ItemID).Scan(&guRank, &guBasePrice)
-		if err != nil {
-			guRank = 1
-			guBasePrice = 0
-		}
-
-		// Hard cap: cannot stock Gu rank >= 6 (too powerful for sect shop)
-		if guRank >= 6 {
-			c.JSON(http.StatusForbidden, gin.H{
-				"error": fmt.Sprintf("Không thể thêm Cổ trùng hạng %d vào bảo khố! Chỉ được nhập Cổ trùng hạng 1–5.", guRank),
-			})
-			return
-		}
-
-		// Level gate: Gu rank must be <= sect level
-		if guRank > s.Level {
-			c.JSON(http.StatusForbidden, gin.H{
-				"error": fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Cổ trùng hạng %d! (Hiện tại: Cấp %d)", guRank, guRank, s.Level),
-			})
-			return
-		}
-
-		// Cost scaled by rank using pricing package (base_price from DB or rank table)
-		unitCost = pricing.GuBasePrice(guBasePrice, guRank)
-	} else if itemType == "material" {
-		// Check material rank for level gating
-		var matRank int
-		err = tx.QueryRow(`SELECT rank FROM item_dictionary WHERE id = $1`, req.ItemID).Scan(&matRank)
-		if err != nil {
-			matRank = 1
-		}
-
-		// Level gate: material rank must be <= sect level
-		if matRank > s.Level {
-			c.JSON(http.StatusForbidden, gin.H{
-				"error": fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Linh tài hạng %d! (Hiện tại: Cấp %d)", matRank, matRank, s.Level),
-			})
-			return
-		}
-
-		// Calculate material cost based on rank
-		unitCost = matRank * 50 // 50 funds per rank
-	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại vật phẩm không hợp lệ (chỉ hỗ trợ gu hoặc material)"})
+	unitCost, code, msg := stockItemUnitCost(tx, s.Level, req.ItemType, req.ItemID)
+	if code != http.StatusOK {
+		c.JSON(code, gin.H{"error": msg})
 		return
 	}
+	itemType := strings.ToLower(req.ItemType)
 
 	totalCost := unitCost * req.Quantity
 	if s.Funds < totalCost {
@@ -2384,6 +2550,8 @@ func StockSectVault(c *gin.Context) {
 	rankName := "Chưởng Môn"
 	if callerRank == "TRUONG_LAO" {
 		rankName = "Trưởng Lão"
+	} else if callerRank == "HO_PHAP" {
+		rankName = "Hộ Pháp"
 	}
 	var username string
 	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
@@ -2399,6 +2567,153 @@ func StockSectVault(c *gin.Context) {
 	}
 	if username != "" {
 		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("%s %s đã nhập thêm %d %s vào bảo khố tông môn.", rankName, username, req.Quantity, itemName))
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":   "Nhập thêm vật phẩm vào bảo khố thành công!",
+		"new_funds": s.Funds,
+	})
+}
+
+type StockVaultBulkItem struct {
+	ItemType string `json:"item_type" binding:"required"` // gu, material
+	ItemID   string `json:"item_id" binding:"required"`
+	Quantity int    `json:"quantity" binding:"required,min=1"`
+}
+
+type StockVaultBulkRequest struct {
+	Items []StockVaultBulkItem `json:"items" binding:"required,min=1"`
+}
+
+// StockSectVaultBulk stocks multiple vault items in a single atomic transaction.
+func StockSectVaultBulk(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var req StockVaultBulkRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.Items) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Danh sách vật phẩm rỗng!"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	var sectID, callerRank string
+	err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
+		return
+	}
+
+	if !canManageSect(callerRank) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Trưởng Lão hoặc Chưởng Môn mới có quyền mua thêm vật phẩm cho bảo khố!"})
+		return
+	}
+
+	var s Sect
+	err = tx.QueryRow(`SELECT id, vault_gu, vault_materials, funds, level FROM sects WHERE id = $1`, sectID).Scan(&s.ID, &s.VaultGu, &s.VaultMaterials, &s.Funds, &s.Level)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details: " + err.Error()})
+		return
+	}
+
+	type stockLine struct {
+		itemType string
+		itemID   string
+		quantity int
+		unitCost int
+	}
+	lines := make([]stockLine, 0, len(req.Items))
+	totalCost := 0
+	for _, it := range req.Items {
+		unitCost, code, msg := stockItemUnitCost(tx, s.Level, it.ItemType, it.ItemID)
+		if code != http.StatusOK {
+			c.JSON(code, gin.H{"error": msg})
+			return
+		}
+		lines = append(lines, stockLine{strings.ToLower(it.ItemType), it.ItemID, it.Quantity, unitCost})
+		totalCost += unitCost * it.Quantity
+	}
+
+	if s.Funds < totalCost {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Quỹ tông môn không đủ! Cần %d quỹ tông môn", totalCost)})
+		return
+	}
+	s.Funds -= totalCost
+
+	var vaultGus []SectVaultGuItem
+	if len(s.VaultGu) > 0 {
+		_ = json.Unmarshal(s.VaultGu, &vaultGus)
+	}
+	vaultMats := make(map[string]int)
+	if len(s.VaultMaterials) > 0 {
+		_ = json.Unmarshal(s.VaultMaterials, &vaultMats)
+	}
+
+	for _, line := range lines {
+		if line.itemType == "gu" {
+			// Recalculate cost for this Gu using pricing package
+			var stockGuRank, stockGuBasePrice int
+			_ = tx.QueryRow(`SELECT COALESCE(rank,1), COALESCE(base_price,0) FROM gu_dictionary WHERE id = $1 ORDER BY rank DESC LIMIT 1`, line.itemID).Scan(&stockGuRank, &stockGuBasePrice)
+			if stockGuRank == 0 {
+				stockGuRank = 1
+			}
+			stockGuCost := pricing.VaultCost(pricing.GuBasePrice(stockGuBasePrice, stockGuRank))
+
+			found := false
+			for i := range vaultGus {
+				if vaultGus[i].ID == line.itemID {
+					vaultGus[i].Quantity += line.quantity
+					vaultGus[i].Cost = stockGuCost
+					found = true
+					break
+				}
+			}
+			if !found {
+				vaultGus = append(vaultGus, SectVaultGuItem{ID: line.itemID, Cost: stockGuCost, Quantity: line.quantity})
+			}
+		} else {
+			vaultMats[line.itemID] += line.quantity
+		}
+	}
+
+	newVaultGu, _ := json.Marshal(vaultGus)
+	newVaultMats, _ := json.Marshal(vaultMats)
+	_, err = tx.Exec(`UPDATE sects SET vault_gu = $1, vault_materials = $2, funds = $3 WHERE id = $4`, newVaultGu, newVaultMats, s.Funds, s.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault: " + err.Error()})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+
+	// Trigger System Chat Notification on Sect channel
+	rankName := "Chưởng Môn"
+	if callerRank == "TRUONG_LAO" {
+		rankName = "Trưởng Lão"
+	} else if callerRank == "HO_PHAP" {
+		rankName = "Hộ Pháp"
+	}
+	var username string
+	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
+	if username != "" {
+		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("%s %s đã nhập thêm %d mặt hàng vào bảo khố tông môn.", rankName, username, len(lines)))
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -2430,7 +2745,7 @@ func UpgradeSect(c *gin.Context) {
 		return
 	}
 
-	if callerRank != "CHUONG_MON" && callerRank != "TRUONG_LAO" {
+	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Trưởng Lão hoặc Chưởng Môn mới có quyền tăng cấp tông môn!"})
 		return
 	}
@@ -2443,7 +2758,7 @@ func UpgradeSect(c *gin.Context) {
 		return
 	}
 
-	cost := level * 10000
+	cost := level * level * 5000
 	if funds < cost {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Quỹ tông môn không đủ để nâng cấp!"})
 		return
@@ -2502,7 +2817,7 @@ func ToggleSectApproval(c *gin.Context) {
 		return
 	}
 
-	if callerRank != "CHUONG_MON" && callerRank != "TRUONG_LAO" {
+	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Trưởng Lão hoặc Chưởng Môn mới có quyền thay đổi thiết lập này!"})
 		return
 	}
@@ -2529,6 +2844,65 @@ func ToggleSectApproval(c *gin.Context) {
 	})
 }
 
+type ToggleSectPromotionApprovalRequest struct {
+	RequirePromotionApproval bool `json:"require_promotion_approval"`
+}
+
+// ToggleSectPromotionApproval toggles whether all rank-ups require leadership approval.
+func ToggleSectPromotionApproval(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var req ToggleSectPromotionApprovalRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	var sectID, callerRank string
+	err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
+		return
+	}
+
+	if !canManageSect(callerRank) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Trưởng Lão hoặc Chưởng Môn mới có quyền thay đổi thiết lập này!"})
+		return
+	}
+
+	_, err = tx.Exec(`UPDATE sects SET require_promotion_approval = $1 WHERE id = $2`, req.RequirePromotionApproval, sectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect setting"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		return
+	}
+
+	msg := "Đã bật duyệt lên cấp: mọi thăng cấp đều cần Trưởng Lão/Chưởng Môn duyệt!"
+	if !req.RequirePromotionApproval {
+		msg = "Đã tắt duyệt lên cấp: đệ tử tự thăng cấp theo tiêu chuẩn (trừ Chân Truyền/Trưởng Lão)."
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":                      msg,
+		"require_promotion_approval": req.RequirePromotionApproval,
+	})
+}
+
 // GetJoinRequests fetches pending join requests for the sect
 func GetJoinRequests(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
@@ -2544,7 +2918,7 @@ func GetJoinRequests(c *gin.Context) {
 		return
 	}
 
-	if callerRank != "CHUONG_MON" && callerRank != "TRUONG_LAO" {
+	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Không đủ quyền hạn!"})
 		return
 	}
@@ -2612,7 +2986,7 @@ func ActionJoinRequest(c *gin.Context) {
 		return
 	}
 
-	if callerRank != "CHUONG_MON" && callerRank != "TRUONG_LAO" {
+	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Không đủ quyền hạn để duyệt yêu cầu!"})
 		return
 	}
@@ -2704,7 +3078,7 @@ func GetPromotionRequests(c *gin.Context) {
 		return
 	}
 
-	if callerRank != "CHUONG_MON" && callerRank != "TRUONG_LAO" {
+	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Không đủ quyền hạn!"})
 		return
 	}
@@ -2772,7 +3146,7 @@ func ActionPromotionRequest(c *gin.Context) {
 		return
 	}
 
-	if callerRank != "CHUONG_MON" && callerRank != "TRUONG_LAO" {
+	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Không đủ quyền hạn để duyệt yêu cầu thăng chức!"})
 		return
 	}
@@ -2817,6 +3191,8 @@ func ActionPromotionRequest(c *gin.Context) {
 			costPoints = 2000
 		case "TRUONG_LAO":
 			costPoints = 10000
+		case "HO_PHAP":
+			costPoints = 30000
 		}
 
 		if costPoints > 0 {

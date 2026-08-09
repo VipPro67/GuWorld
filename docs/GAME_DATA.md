@@ -203,6 +203,45 @@ Region định nghĩa map lớn. `map_cells` có thể được generate theo v�
 
 Không có seed CSV cho bảng này. Row được tạo tự động qua `INSERT ON CONFLICT DO NOTHING` khi người chơi truy cập BXH lần đầu.
 
+### Bảng `sects` (Tông môn)
+
+| Cột | Kiểu | Ghi chú |
+| --- | --- | --- |
+| `require_approval` | BOOLEAN | DEFAULT FALSE. Bật = phải duyệt đơn gia nhập. |
+| `require_promotion_approval` | BOOLEAN | DEFAULT FALSE. Bật = **mọi** thăng cấp đều tạo yêu cầu chờ duyệt. |
+
+Các cột được thêm sau khi tạo bảng bằng `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` trong `db.go`.
+
+### Bảng `sect_missions` (Nhiệm vụ tông môn — Bảng nhiệm vụ)
+
+| Cột | Kiểu | Ghi chú |
+| --- | --- | --- |
+| `id` | UUID PK | |
+| `sect_id` | VARCHAR(50) FK | → `sects(id)` ON DELETE CASCADE |
+| `title` | VARCHAR(100) | |
+| `description` | TEXT | |
+| `mission_type` | VARCHAR(30) | `GATHER`, `DONATE`, `COMBAT`, `REFINE` |
+| `target_id` | VARCHAR(50) | ID mục tiêu (linh tài / Cổ) |
+| `target_amount` | INTEGER | Số lượng yêu cầu |
+| `reward_contribution` | INTEGER | Điểm cống hiến thưởng |
+| `required_member_rank` | VARCHAR(30) | Cấp bậc tối thiểu để nhận |
+| `expires_at` | TIMESTAMP NULL | Thời điểm tự hết hạn. `NULL` = không hết hạn (mặc định cho nhiệm vụ seed từ CSV). Khi tạo qua UI: mặc định `now()+24h`, nhập `-1` = vĩnh viễn, nhập `0` = dùng mặc định 24h. Worker (`sect_mission.go`) tự xóa nhiệm vụ hết hạn mỗi phút; hàng `player_sect_missions` liên quan bị xóa theo CASCADE. |
+
+Seed từ `SectMission.csv` (append-only, `ON CONFLICT DO NOTHING`) luôn để `expires_at = NULL`.
+
+### Bảng `player_sect_missions` (Nhiệm vụ cá nhân đang thực hiện)
+
+| Cột | Kiểu | Ghi chú |
+| --- | --- | --- |
+| `id` | UUID PK | |
+| `player_id` | UUID FK | → `players(id)` ON DELETE CASCADE |
+| `mission_id` | UUID FK | → `sect_missions(id)` ON DELETE CASCADE |
+| `current_progress` | INTEGER | |
+| `status` | VARCHAR(30) | `IN_PROGRESS`, `COMPLETED`, `EXPIRED` |
+| `assigned_at` | TIMESTAMP | |
+| `expires_at` | TIMESTAMP NULL | Sao chép từ bảng nhiệm vụ khi nhận. Worker đổi `IN_PROGRESS` → `EXPIRED` khi quá hạn. |
+| UNIQUE | (player_id, mission_id) | Mỗi người chơi chỉ nhận 1 lần mỗi nhiệm vụ |
+
 ## Lưu ý khi thay đổi schema
 
 - `CREATE TABLE IF NOT EXISTS` toàn bộ ở `backend/internal/db/db.go`. Không có migration riêng.

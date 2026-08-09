@@ -24,7 +24,17 @@ import {
   Search,
   X,
   Check,
+  Trash2,
+  Ban,
 } from "lucide-react";
+
+interface StockSelection {
+  item_type: "gu" | "material";
+  item_id: string;
+  name: string;
+  unit_cost: number; // quỹ tông môn / đơn vị
+  quantity: number;
+}
 
 export const SectView: React.FC = () => {
   const {
@@ -49,18 +59,21 @@ export const SectView: React.FC = () => {
     fetchSectMissions,
     acceptSectMission,
     completeSectMission,
+    deleteSectMission,
+    abandonSectMission,
     sectMembers,
     createSect,
     fetchSectMembers,
     setMemberRank,
     kickMember,
     createCustomMission,
-    stockSectVault,
+    stockSectVaultBulk,
     upgradeSect,
     setView,
     sectJoinRequests,
     sectPromotionRequests,
     toggleSectApproval,
+    toggleSectPromotionApproval,
     fetchJoinRequests,
     actionJoinRequest,
     fetchPromotionRequests,
@@ -175,11 +188,21 @@ export const SectView: React.FC = () => {
   const [mTargetAmount, setMTargetAmount] = useState(1);
   const [mRewardContribution, setMRewardContribution] = useState(100);
   const [mRequiredRank, setMRequiredRank] = useState("NGOAI_MON");
+  const [mDuration, setMDuration] = useState(24); // giờ; < 0 => không hết hạn
 
-  // Vault stocking form state
+  // Re-render countdowns for mission expiry periodically
+  const [nowTs, setNowTs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowTs(Date.now()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Vault stocking form state (donation-style multi-select)
   const [stockItemType, setStockItemType] = useState<"gu" | "material">("gu");
-  const [stockItemId, setStockItemId] = useState("");
-  const [stockQuantity, setStockQuantity] = useState(5);
+  const [stockSelections, setStockSelections] = useState<Record<string, StockSelection>>({});
+  const [stockSearch, setStockSearch] = useState("");
+  const [stockRankFilter, setStockRankFilter] = useState("All");
+  const [stockPathFilter, setStockPathFilter] = useState("All");
 
   useEffect(() => {
     fetchSects();
@@ -201,29 +224,13 @@ export const SectView: React.FC = () => {
   useEffect(() => {
     if (activeTab === "manage") {
       fetchSectMembers();
-      const isLeaderOrElder = mySectStatus?.member?.member_rank === "CHUONG_MON" || mySectStatus?.member?.member_rank === "TRUONG_LAO";
+      const isLeaderOrElder = mySectStatus?.member?.member_rank === "CHUONG_MON" || mySectStatus?.member?.member_rank === "TRUONG_LAO" || mySectStatus?.member?.member_rank === "HO_PHAP";
       if (isLeaderOrElder) {
         fetchJoinRequests();
         fetchPromotionRequests();
       }
     }
   }, [activeTab, fetchSectMembers, fetchJoinRequests, fetchPromotionRequests, mySectStatus?.member?.member_rank]);
-
-  useEffect(() => {
-    if (mgmtTab === "stock" && !stockItemId) {
-      if (stockItemType === "gu") {
-        // Sort by rank ascending, exclude rank>=6
-        const sorted = Object.entries(guDictionary || {})
-          .filter(([, spec]) => (spec.rank || 1) < 6)
-          .sort(([, a], [, b]) => (a.rank || 1) - (b.rank || 1));
-        if (sorted.length > 0) setStockItemId(sorted[0][0]);
-      } else {
-        const sorted = Object.entries(itemDictionary || {})
-          .sort(([, a], [, b]) => (a.rank || 1) - (b.rank || 1));
-        if (sorted.length > 0) setStockItemId(sorted[0][0]);
-      }
-    }
-  }, [mgmtTab, stockItemType, guDictionary, itemDictionary, stockItemId]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -251,6 +258,7 @@ export const SectView: React.FC = () => {
       target_amount: mTargetAmount,
       reward_contribution: mRewardContribution,
       required_member_rank: mRequiredRank,
+      duration_hours: mDuration,
     });
     if (ok) {
       setMTitle("");
@@ -258,6 +266,7 @@ export const SectView: React.FC = () => {
       setMTargetId("");
       setMTargetAmount(1);
       setMRewardContribution(100);
+      setMDuration(24);
     }
   };
 
@@ -278,6 +287,7 @@ export const SectView: React.FC = () => {
       case "TINH_ANH": return "Đệ Tử Tinh Anh";
       case "CHAN_TRUYEN": return "Đệ Tử Chân Truyền";
       case "TRUONG_LAO": return "Trưởng Lão";
+      case "HO_PHAP": return "Hộ Pháp";
       case "CHUONG_MON": return "Chưởng Môn";
       default: return rank;
     }
@@ -290,8 +300,22 @@ export const SectView: React.FC = () => {
       case "TINH_ANH": return "text-cyan-400 bg-cyan-950/20 border-cyan-500/20";
       case "CHAN_TRUYEN": return "text-purple-400 bg-purple-950/20 border-purple-500/20";
       case "TRUONG_LAO": return "text-amber-400 bg-amber-950/20 border-amber-500/20";
+      case "HO_PHAP": return "text-orange-400 bg-orange-950/25 border-orange-500/30";
       case "CHUONG_MON": return "text-rose-400 bg-rose-950/25 border-rose-500/30 font-bold";
       default: return "text-zinc-400";
+    }
+  };
+
+  const rankValue = (rank?: string): number => {
+    switch (rank) {
+      case "NGOAI_MON": return 1;
+      case "NOI_MON": return 2;
+      case "TINH_ANH": return 3;
+      case "CHAN_TRUYEN": return 4;
+      case "TRUONG_LAO": return 5;
+      case "HO_PHAP": return 6;
+      case "CHUONG_MON": return 7;
+      default: return 0;
     }
   };
 
@@ -305,6 +329,18 @@ export const SectView: React.FC = () => {
     }
   };
 
+  const formatMissionTime = (expiresAt?: string | null): string | null => {
+    if (!expiresAt) return null;
+    const target = new Date(expiresAt).getTime();
+    if (Number.isNaN(target)) return null;
+    const diff = target - nowTs;
+    if (diff <= 0) return "Đã hết hạn";
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
+
   const getRegionName = (region: string): string => {
     switch (region) {
       case "Central_Continent": return "Trung Châu";
@@ -314,6 +350,20 @@ export const SectView: React.FC = () => {
       case "Eastern_Sea": return "Đông Hải";
       default: return region;
     }
+  };
+
+  // Unit cost (quỹ tông môn) for stocking an item — mirrors backend pkg/pricing
+  const getStockUnitCost = (type: "gu" | "material", id: string): number => {
+    const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 10000, 25000, 60000, 150000];
+    if (type === "gu") {
+      const spec = guDictionary[id];
+      const rank = spec?.rank || 1;
+      const basePrice = (spec?.base_price && spec.base_price > 0) ? spec.base_price : (guRankBasePrice[rank] || guRankBasePrice[1]);
+      return basePrice;
+    }
+    const spec = itemDictionary[id];
+    const rank = spec?.rank || 1;
+    return rank * 50; // backend: 50 quỹ / hạng
   };
 
   // Promotion requirements helper
@@ -327,6 +377,8 @@ export const SectView: React.FC = () => {
         return { next: "CHAN_TRUYEN", reqRank: 4, points: 2000 };
       case "CHAN_TRUYEN":
         return { next: "TRUONG_LAO", reqRank: 5, points: 10000 };
+      case "TRUONG_LAO":
+        return { next: "HO_PHAP", reqRank: 6, points: 30000 };
       default:
         return null;
     }
@@ -848,7 +900,7 @@ export const SectView: React.FC = () => {
           >
             Lãnh Địa
           </button>
-          {member?.member_rank && (member.member_rank === "CHUONG_MON" || member.member_rank === "TRUONG_LAO") && (
+          {member?.member_rank && (member.member_rank === "CHUONG_MON" || member.member_rank === "TRUONG_LAO" || member.member_rank === "HO_PHAP") && (
             <button
               onClick={() => setActiveTab("manage")}
               className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${activeTab === "manage" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
@@ -938,7 +990,7 @@ export const SectView: React.FC = () => {
                 </div>
               ) : (
                 <div className="py-6 bg-zinc-900/10 border border-zinc-900 border-dashed rounded-2xl text-center text-xs text-amber-400 font-serif">
-                  🎉 Đạo hữu đã đạt đến cấp bậc cao nhất của tông môn (Trưởng Lão)!
+                  🎉 Đạo hữu đã đạt đến cấp bậc cao nhất của tông môn (Hộ Pháp)!
                 </div>
               )}
             </div>
@@ -1074,7 +1126,7 @@ export const SectView: React.FC = () => {
 
                       <div className="pt-3 mt-auto border-t border-zinc-900 flex gap-2">
                         {isMine ? (
-                          (mySectStatus.member?.member_rank === "CHUONG_MON" || mySectStatus.member?.member_rank === "TRUONG_LAO") ? (
+                          (mySectStatus.member?.member_rank === "CHUONG_MON" || mySectStatus.member?.member_rank === "TRUONG_LAO" || mySectStatus.member?.member_rank === "HO_PHAP") ? (
                             <button
                               onClick={() => claimSectMineRewards(mine.id)}
                               disabled={actionLoading}
@@ -1139,6 +1191,13 @@ export const SectView: React.FC = () => {
                     <h4 className="text-base font-serif font-bold text-zinc-100">{am.title}</h4>
                     <p className="text-xs text-zinc-400 leading-relaxed max-w-xl">{am.description}</p>
 
+                    {formatMissionTime(am.expires_at) && (
+                      <span className="text-[10px] font-mono text-amber-400/90 flex items-center gap-1">
+                        <Hourglass className="w-3 h-3" />
+                        Hết hạn sau: {formatMissionTime(am.expires_at)}
+                      </span>
+                    )}
+
                     {/* Mission Requirements Display */}
                     <div className="mt-2 text-xs font-mono text-zinc-300">
                       {am.mission_type === "GATHER" && (() => {
@@ -1167,16 +1226,30 @@ export const SectView: React.FC = () => {
                       <span className="text-[10px] text-zinc-500 font-mono block">Thưởng cống hiến</span>
                       <span className="text-sm font-mono font-bold text-yellow-400">+{am.reward_contribution} Pts</span>
                     </div>
-                    <button
-                      onClick={async () => {
-                        await completeSectMission(am.id);
-                      }}
-                      disabled={!isReadyToComplete || actionLoading}
-                      className="w-full sm:w-auto px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50 text-white rounded-xl font-semibold text-xs shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      Nộp Nhiệm Vụ
-                    </button>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <button
+                        onClick={async () => {
+                          if (!(await showConfirm("Đạo hữu có chắc chắn muốn hủy nhiệm vụ đang thực hiện này?"))) return;
+                          await abandonSectMission(am.id);
+                        }}
+                        disabled={actionLoading}
+                        className="flex-1 sm:flex-none px-3 py-2 bg-zinc-900/60 hover:bg-red-950/40 hover:text-red-300 border border-zinc-800 hover:border-red-500/40 text-zinc-400 rounded-xl font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                        title="Hủy nhiệm vụ"
+                      >
+                        <Ban className="w-4 h-4" />
+                        Hủy Nhiệm Vụ
+                      </button>
+                      <button
+                        onClick={async () => {
+                          await completeSectMission(am.id);
+                        }}
+                        disabled={!isReadyToComplete || actionLoading}
+                        className="flex-1 sm:flex-none px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50 text-white rounded-xl font-semibold text-xs shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        Nộp Nhiệm Vụ
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -1211,6 +1284,7 @@ export const SectView: React.FC = () => {
                     "TINH_ANH": 3,
                     "CHAN_TRUYEN": 4,
                     "TRUONG_LAO": 5,
+                    "HO_PHAP": 6,
                   };
                   const currentMemberRankVal = rankMap[member?.member_rank || "NGOAI_MON"] || 1;
                   const reqRankVal = rankMap[mission.required_member_rank] || 1;
@@ -1231,8 +1305,34 @@ export const SectView: React.FC = () => {
                             Yêu cầu: {getRankName(mission.required_member_rank)}
                           </span>
                         </div>
-                        <h4 className="text-sm font-serif font-bold text-zinc-100 mb-1">{mission.title}</h4>
+                        <h4 className="text-sm font-serif font-bold text-zinc-100 mb-1 flex items-start justify-between gap-2">
+                          <span>{mission.title}</span>
+                          {(member?.member_rank === "CHUONG_MON" || member?.member_rank === "TRUONG_LAO" || member?.member_rank === "HO_PHAP") && (
+                            <button
+                              onClick={async () => {
+                                if (!(await showConfirm(`Đạo hữu có chắc chắn muốn xóa nhiệm vụ "${mission.title}"? Đệ tử đang thực hiện nhiệm vụ này sẽ bị hủy bỏ!`))) return;
+                                await deleteSectMission(mission.id);
+                              }}
+                              disabled={actionLoading}
+                              className="shrink-0 p-1.5 rounded-lg border border-zinc-800 text-zinc-500 hover:text-red-400 hover:border-red-500/40 bg-zinc-950/60 transition-colors cursor-pointer"
+                              title="Xóa nhiệm vụ"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </h4>
                         <p className="text-xs text-zinc-500 leading-relaxed">{mission.description}</p>
+                        {formatMissionTime(mission.expires_at) ? (
+                          <span className="mt-2 inline-flex items-center gap-1 text-[9px] font-mono text-amber-400/80">
+                            <Hourglass className="w-3 h-3" />
+                            Hết hạn sau: {formatMissionTime(mission.expires_at)}
+                          </span>
+                        ) : (
+                          <span className="mt-2 inline-flex items-center gap-1 text-[9px] font-mono text-zinc-600">
+                            <Hourglass className="w-3 h-3" />
+                            Không hết hạn
+                          </span>
+                        )}
                       </div>
 
                       <div className="pt-3 border-t border-zinc-950 flex items-center justify-between mt-auto">
@@ -2165,7 +2265,7 @@ export const SectView: React.FC = () => {
               <p className="text-xs text-zinc-500 mt-0.5 font-mono">
                 Chưởng môn hoặc Trưởng lão thiết lập môn quy, phân phong chức vụ và phát hành nhiệm vụ cho đệ tử.
               </p>
-              {(mySectStatus?.member?.member_rank === "CHUONG_MON" || mySectStatus?.member?.member_rank === "TRUONG_LAO") && (
+              {(mySectStatus?.member?.member_rank === "CHUONG_MON" || mySectStatus?.member?.member_rank === "TRUONG_LAO" || mySectStatus?.member?.member_rank === "HO_PHAP") && (
                 <div className="flex items-center gap-2 mt-2 bg-zinc-900/40 border border-zinc-800/80 px-3 py-1.5 rounded-xl w-fit">
                   <span className="text-[11px] text-zinc-300 font-semibold">Duyệt Đệ Tử Khi Gia Nhập:</span>
                   <button
@@ -2179,6 +2279,22 @@ export const SectView: React.FC = () => {
                   >
                     <div
                       className={`bg-white w-3 h-3 rounded-full shadow-md transform transition-transform duration-300 ${mySectStatus?.sect?.require_approval ? "translate-x-4" : "translate-x-0"
+                        }`}
+                    />
+                  </button>
+                  <span className="w-px h-4 bg-zinc-800 mx-1" />
+                  <span className="text-[11px] text-zinc-300 font-semibold" title="Khi bật, mọi thăng cấp đều cần Trưởng Lão/Chưởng Môn duyệt">Duyệt Lên Cấp:</span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await toggleSectPromotionApproval(!mySectStatus?.sect?.require_promotion_approval);
+                    }}
+                    disabled={actionLoading}
+                    className={`w-9 h-5 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-300 ${mySectStatus?.sect?.require_promotion_approval ? "bg-emerald-600" : "bg-zinc-800"
+                      }`}
+                  >
+                    <div
+                      className={`bg-white w-3 h-3 rounded-full shadow-md transform transition-transform duration-300 ${mySectStatus?.sect?.require_promotion_approval ? "translate-x-4" : "translate-x-0"
                         }`}
                     />
                   </button>
@@ -2208,7 +2324,7 @@ export const SectView: React.FC = () => {
               >
                 Nhập Kho & Tăng Cấp
               </button>
-              {(mySectStatus?.member?.member_rank === "CHUONG_MON" || mySectStatus?.member?.member_rank === "TRUONG_LAO") && (
+              {(mySectStatus?.member?.member_rank === "CHUONG_MON" || mySectStatus?.member?.member_rank === "TRUONG_LAO" || mySectStatus?.member?.member_rank === "HO_PHAP") && (
                 <button
                   onClick={() => setMgmtTab("requests")}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer relative ${mgmtTab === "requests" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
@@ -2244,7 +2360,6 @@ export const SectView: React.FC = () => {
                   sectMembers.map((mInfo) => {
                     const isSelf = mInfo.player_id === player.id;
                     const callerIsLeader = member?.member_rank === "CHUONG_MON";
-                    const targetIsElderOrLeader = mInfo.member_rank === "CHUONG_MON" || mInfo.member_rank === "TRUONG_LAO";
 
                     return (
                       <div
@@ -2298,12 +2413,13 @@ export const SectView: React.FC = () => {
                                 <option value="TINH_ANH">Tinh Anh</option>
                                 <option value="CHAN_TRUYEN">Chân Truyền</option>
                                 <option value="TRUONG_LAO">Trưởng Lão</option>
+                                <option value="HO_PHAP">Hộ Pháp</option>
                                 <option value="CHUONG_MON">Nhường Ngôi Chưởng Môn</option>
                               </select>
                             )}
 
                             {/* Expel button */}
-                            {((callerIsLeader) || (member?.member_rank === "TRUONG_LAO" && !targetIsElderOrLeader)) && (
+                            {(callerIsLeader || rankValue(member?.member_rank) > rankValue(mInfo.member_rank)) && (
                               <button
                                 type="button"
                                 onClick={async () => {
@@ -2578,6 +2694,19 @@ export const SectView: React.FC = () => {
                   />
                 </div>
 
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs text-zinc-400 font-serif font-bold">Thời hạn (giờ)</label>
+                  <input
+                    type="number"
+                    required
+                    min={-1}
+                    value={mDuration}
+                    onChange={(e) => setMDuration(parseInt(e.target.value) || 0)}
+                    className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none font-mono"
+                  />
+                  <span className="text-[9px] text-zinc-600 font-mono leading-tight">Nhập 0 để dùng mặc định 24 giờ. Nhập -1 để nhiệm vụ không hết hạn.</span>
+                </div>
+
                 <div className="sm:col-span-2 flex flex-col gap-1.5">
                   <label className="text-xs text-zinc-400 font-serif font-bold">Cấp bậc đệ tử yêu cầu nhận</label>
                   <select
@@ -2590,6 +2719,7 @@ export const SectView: React.FC = () => {
                     <option value="TINH_ANH">Đệ Tử Tinh Anh</option>
                     <option value="CHAN_TRUYEN">Đệ Tử Chân Truyền</option>
                     <option value="TRUONG_LAO">Trưởng Lão</option>
+                    <option value="HO_PHAP">Hộ Pháp</option>
                   </select>
                 </div>
               </div>
@@ -2609,153 +2739,292 @@ export const SectView: React.FC = () => {
           {mgmtTab === "stock" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
               {/* Stock Vault Card */}
-              <div className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4">
-                <h4 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-1.5">
-                  <Plus className="w-4 h-4 text-cyan-400" />
-                  Mua Sắm Vật Phẩm (Nhập Kho Bảo Khố)
-                </h4>
-                <p className="text-xs text-zinc-500">
-                  Dùng quỹ tông môn để mua thêm Cổ trùng hoặc Linh tài đưa vào bảo khố để đệ tử trao đổi.
-                </p>
-
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Loại vật phẩm</label>
-                    <select
-                      value={stockItemType}
-                      onChange={(e) => {
-                        const type = e.target.value as "gu" | "material";
-                        setStockItemType(type);
-                        const sectLvl = sect?.level || 1;
-                        if (type === "gu") {
-                          // sorted by rank, exclude rank>=6
-                          const sorted = Object.entries(guDictionary || {}).sort(([, a], [, b]) => (a.rank || 1) - (b.rank || 1));
-                          const firstAvailable = sorted.find(([, spec]) => (spec.rank || 1) <= sectLvl && (spec.rank || 1) < 6);
-                          setStockItemId(firstAvailable ? firstAvailable[0] : "");
-                        } else {
-                          const sorted = Object.entries(itemDictionary || {}).sort(([, a], [, b]) => (a.rank || 1) - (b.rank || 1));
-                          const firstAvailable = sorted.find(([, spec]) => (spec.rank || 1) <= sectLvl);
-                          setStockItemId(firstAvailable ? firstAvailable[0] : "");
-                        }
-                      }}
-                      className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none cursor-pointer"
-                    >
-                      <option value="gu">Cổ Trùng</option>
-                      <option value="material">Linh Tài</option>
-                    </select>
+              <div className="bg-zinc-950/20 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-5 md:col-span-2">
+                {/* Header & Funds */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-zinc-900 pb-4">
+                  <div>
+                    <h4 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-1.5">
+                      <Plus className="w-4 h-4 text-cyan-400" />
+                      Mua Sắm Vật Phẩm (Nhập Kho Bảo Khố)
+                    </h4>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      Dùng quỹ tông môn để mua thêm Cổ trùng hoặc Linh tài đưa vào bảo khố để đệ tử trao đổi.
+                    </p>
                   </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
-                      Chọn vật phẩm <span className="text-cyan-500 normal-case">(Giới hạn: Hạng ≤ Cấp {sect?.level || 1}, tối đa Hạng 5)</span>
-                    </label>
-                    <select
-                      value={stockItemId}
-                      onChange={(e) => setStockItemId(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none cursor-pointer"
-                    >
-                      {stockItemType === "gu" ? (
-                        // Sort by rank ascending, exclude rank>=6
-                        Object.entries(guDictionary || {})
-                          .filter(([, spec]) => (spec.rank || 1) < 6)
-                          .sort(([, a], [, b]) => (a.rank || 1) - (b.rank || 1))
-                          .map(([id, spec]) => {
-                            const locked = (spec.rank || 1) > (sect?.level || 1);
-                            return (
-                              <option key={id} value={id} disabled={locked}>
-                                {locked ? "🔒 " : ""}{spec.name} (Hạng {spec.rank}){locked ? ` — Cần Cấp ${spec.rank}` : ""}
-                              </option>
-                            );
-                          })
-                      ) : (
-                        Object.entries(itemDictionary || {})
-                          .sort(([, a], [, b]) => (a.rank || 1) - (b.rank || 1))
-                          .map(([id, spec]) => {
-                            const locked = (spec.rank || 1) > (sect?.level || 1);
-                            return (
-                              <option key={id} value={id} disabled={locked}>
-                                {locked ? "🔒 " : ""}{spec.name} (Hạng {spec.rank || 1}){locked ? ` — Cần Cấp ${spec.rank || 1}` : ""}
-                              </option>
-                            );
-                          })
-                      )}
-                    </select>
-                    {stockItemType === "gu" && (
-                      <p className="text-[10px] text-amber-500/80 mt-0.5">⚠ Cổ trùng Hạng 6+ không thể thêm vào bảo khố. Quyên góp từ đệ tử sẽ không bị giới hạn.</p>
-                    )}
+                  <div className="bg-zinc-900/40 px-4 py-3 rounded-xl border border-zinc-800/80 self-start sm:self-auto">
+                    <span className="text-[10px] text-zinc-500 font-mono block">Quỹ tông môn hiện có:</span>
+                    <span className="font-mono font-bold text-cyan-400 text-sm flex items-center gap-1">
+                      <Coins className="w-4 h-4 text-yellow-500" />
+                      {(sect?.funds || 0).toLocaleString()} Quỹ
+                    </span>
                   </div>
+                </div>
 
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Số lượng nhập</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={stockQuantity}
-                      onChange={(e) => setStockQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none font-mono"
-                    />
-                  </div>
+                {/* Type Tabs */}
+                <div className="flex bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/60 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => { setStockItemType("gu"); setStockSearch(""); setStockRankFilter("All"); setStockPathFilter("All"); }}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${stockItemType === "gu" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                      }`}
+                  >
+                    Cổ Trùng
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setStockItemType("material"); setStockSearch(""); setStockRankFilter("All"); setStockPathFilter("All"); }}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${stockItemType === "material" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                      }`}
+                  >
+                    Linh Tài
+                  </button>
+                </div>
 
-                  {(() => {
-                    if (!stockItemId) return null;
-                    const sectLvl = sect?.level || 1;
-                    // Pricing table matching backend pkg/pricing/pricing.go
-                    const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 10000, 25000, 60000, 150000];
-                    const itemRankBasePrice = [0, 5, 15, 30, 60, 120, 250, 500, 1000, 2500];
-                    let unitCost = 0;
-                    let isLocked = false;
-                    if (stockItemType === "gu") {
-                      const spec = guDictionary[stockItemId];
-                      const rank = spec?.rank || 1;
-                      isLocked = rank > sectLvl || rank >= 6;
-                      // Use base price from dict if available, else rank table
-                      const basePrice = (spec as any)?.base_price > 0 ? (spec as any).base_price : (guRankBasePrice[rank] || guRankBasePrice[1]);
-                      unitCost = basePrice; // sect funds cost = base price
-                    } else {
-                      const spec = itemDictionary[stockItemId];
-                      const rank = spec?.rank || 1;
-                      isLocked = rank > sectLvl;
-                      const basePrice = (spec as any)?.base_price > 0 ? (spec as any).base_price : (itemRankBasePrice[rank] || itemRankBasePrice[1]);
-                      unitCost = Math.ceil(basePrice * 0.5); // material cost = 50% of base price
-                    }
-                    const totalCost = unitCost * stockQuantity;
-                    const canAfford = (sect?.funds || 0) >= totalCost;
+                {/* Selector + Summary Panel */}
+                {(() => {
+                  const sectLvl = sect?.level || 1;
+                  const allEntries = stockItemType === "gu"
+                    ? Object.entries(guDictionary || {}).filter(([, spec]) => (spec.rank || 1) < 6)
+                    : Object.entries(itemDictionary || {});
 
-                    return (
-                      <div className="flex flex-col gap-3 mt-2">
-                        <div className="flex justify-between items-center text-xs border-t border-zinc-900/60 pt-3">
-                          <span className="text-zinc-500 font-mono">Đơn giá:</span>
-                          <span className="text-zinc-300 font-mono">{unitCost} Quỹ / chiếc</span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-zinc-500 font-mono">Tổng chi phí:</span>
-                          <span className={`font-mono font-bold ${canAfford && !isLocked ? "text-cyan-400" : "text-red-400"}`}>
-                            {totalCost.toLocaleString()} Quỹ
+                  const availableRanks = Array.from(new Set(allEntries.map(([, spec]) => (spec.rank || 1)))).sort((a, b) => a - b);
+
+                  const availablePaths = Array.from(new Set(allEntries.flatMap(([, spec]): string[] => {
+                    const p = spec.path;
+                    if (Array.isArray(p)) return p;
+                    return p ? [p] : [];
+                  }))).filter(Boolean).sort();
+
+                  const filtered = allEntries.filter(([id, spec]) => {
+                    const name = spec.name || id;
+                    const rank = spec.rank || 1;
+                    const q = stockSearch.trim().toLowerCase();
+                    const matchesSearch = !q || name.toLowerCase().includes(q) || id.toLowerCase().includes(q);
+                    const matchesRank = stockRankFilter === "All" || rank.toString() === stockRankFilter;
+                    const paths = Array.isArray(spec.path) ? spec.path : (spec.path ? [spec.path] : []);
+                    const matchesPath = stockPathFilter === "All" || paths.includes(stockPathFilter);
+                    return matchesSearch && matchesRank && matchesPath;
+                  });
+
+                  const selectedCount = Object.keys(stockSelections).length;
+                  const totalCost = Object.values(stockSelections).reduce((sum, it) => sum + it.unit_cost * it.quantity, 0);
+                  const canAfford = (sect?.funds || 0) >= totalCost;
+
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+                      {/* Left side: Selector List */}
+                      <div className="md:col-span-2 bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4">
+                        <div className="flex justify-between items-center border-b border-zinc-900 pb-3">
+                          <div>
+                            <h4 className="text-sm font-bold text-zinc-200 font-serif">
+                              {stockItemType === "gu" ? "Danh Sách Cổ Trùng" : "Danh Sách Linh Tài"}
+                            </h4>
+                            <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                              {stockItemType === "gu"
+                                ? "Tích chọn Cổ trùng (Hạng 1–5) để nhập vào bảo khố."
+                                : "Tích chọn Linh tài và số lượng cần nhập kho."}
+                            </p>
+                          </div>
+                          <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-2.5 py-1 rounded-lg border border-zinc-800">
+                            Tìm thấy: {filtered.length} loại
                           </span>
                         </div>
 
-                        {isLocked ? (
-                          <div className="w-full py-2.5 bg-zinc-800 text-zinc-500 rounded-xl font-serif font-bold text-xs text-center">
-                            🔒 Tông môn chưa đủ cấp để nhập vật phẩm này
+                        {/* Search & Filters */}
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="text"
+                            value={stockSearch}
+                            onChange={(e) => setStockSearch(e.target.value)}
+                            placeholder={stockItemType === "gu" ? "Tìm kiếm cổ trùng..." : "Tìm kiếm linh tài..."}
+                            className="flex-1 bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-cyan-500/50"
+                          />
+                          <div className="flex gap-2">
+                            <select
+                              value={stockRankFilter}
+                              onChange={(e) => setStockRankFilter(e.target.value)}
+                              className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-300 focus:outline-none focus:border-cyan-500/50 cursor-pointer outline-none"
+                            >
+                              <option value="All">Tất cả Hạng</option>
+                              {availableRanks.map((rank) => (
+                                <option key={rank} value={rank.toString()}>Hạng {rank}</option>
+                              ))}
+                            </select>
+                            <select
+                              value={stockPathFilter}
+                              onChange={(e) => setStockPathFilter(e.target.value)}
+                              className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-300 focus:outline-none focus:border-cyan-500/50 cursor-pointer outline-none"
+                            >
+                              <option value="All">Tất cả Phái</option>
+                              {availablePaths.map((path) => (
+                                <option key={path} value={path}>{translatePath(path)}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Grid layout for items */}
+                        <div className="max-h-[480px] overflow-y-auto pr-1 grid grid-cols-1 sm:grid-cols-2 gap-3 scrollbar-thin">
+                          {filtered.length === 0 ? (
+                            <div className="col-span-full text-center py-12 text-xs text-zinc-600 font-mono">Không tìm thấy vật phẩm phù hợp</div>
+                          ) : (
+                            filtered.map(([id, spec]) => {
+                              const name = spec.name || id;
+                              const rank = spec.rank || 1;
+                              const locked = rank > sectLvl;
+                              const unitCost = getStockUnitCost(stockItemType, id);
+                              const isSelected = !!stockSelections[id];
+                              const sel = stockSelections[id];
+
+                              const toggleSelect = () => {
+                                setStockSelections(prev => {
+                                  const next = { ...prev };
+                                  if (next[id]) {
+                                    delete next[id];
+                                  } else {
+                                    next[id] = { item_type: stockItemType, item_id: id, name, unit_cost: unitCost, quantity: 1 };
+                                  }
+                                  return next;
+                                });
+                              };
+
+                              const updateQty = (val: number) => {
+                                const qty = Math.max(1, Math.floor(val) || 1);
+                                setStockSelections(prev => ({
+                                  ...prev,
+                                  [id]: { ...prev[id], quantity: qty },
+                                }));
+                              };
+
+                              return (
+                                <div
+                                  key={id}
+                                  onClick={locked ? undefined : toggleSelect}
+                                  className={`bg-zinc-950/40 border rounded-xl p-3 flex flex-col justify-between gap-3.5 transition-all ${
+                                    locked ? "opacity-50 cursor-not-allowed" : "cursor-pointer select-none"
+                                  } ${
+                                    isSelected
+                                      ? "border-cyan-600/50 bg-cyan-900/5 shadow-md shadow-cyan-950/10"
+                                      : "border-zinc-900 hover:border-zinc-800"
+                                  }`}
+                                >
+                                  <div className="flex gap-2.5 min-w-0 items-start">
+                                    {/* Checkbox */}
+                                    <div className={`w-4.5 h-4.5 rounded border flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                                      isSelected ? "bg-cyan-600 border-cyan-500 text-white" : "bg-zinc-900 border-zinc-800"
+                                    }`}>
+                                      {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[3px]" />}
+                                    </div>
+
+                                    <div className="min-w-0">
+                                      <h5 className="text-xs font-bold text-zinc-200 truncate">{locked ? "🔒 " : ""}{name}</h5>
+                                      <p className="text-[10px] text-zinc-500 font-mono mt-1">
+                                        Hạng {rank} • Giá nhập: <span className="text-cyan-400 font-semibold">{unitCost} Quỹ</span>
+                                      </p>
+                                      {locked && (
+                                        <p className="text-[10px] text-red-400/80 font-mono mt-0.5">
+                                          {stockItemType === "gu" && rank >= 6 ? "Hạng 6+ không thể nhập" : `Cần Tông Môn Cấp ${rank}`}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Quantity control */}
+                                  {isSelected && !locked && (
+                                    <div className="flex items-center justify-between border-t border-zinc-900/80 pt-2" onClick={e => e.stopPropagation()}>
+                                      <span className="text-[10px] text-zinc-500 font-mono">Nhập kho:</span>
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <button
+                                          type="button"
+                                          onClick={() => updateQty(sel.quantity - 1)}
+                                          className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-all text-[10px]"
+                                        >
+                                          -
+                                        </button>
+                                        <input
+                                          type="number"
+                                          min={1}
+                                          value={sel.quantity}
+                                          onChange={(e) => updateQty(parseInt(e.target.value, 10) || 1)}
+                                          className="w-8 text-center bg-zinc-950 border border-zinc-900 rounded py-0.5 text-[10px] font-mono font-bold text-zinc-200 focus:outline-none"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => updateQty(sel.quantity + 1)}
+                                          className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-all text-[10px]"
+                                        >
+                                          +
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right side: Summary & Submit Action */}
+                      <div className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4 h-fit md:sticky md:top-4">
+                        <h4 className="text-xs font-bold text-zinc-300 font-serif border-b border-zinc-900 pb-2.5">
+                          Tóm Tắt Nhập Kho ({selectedCount} loại)
+                        </h4>
+
+                        {selectedCount === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
+                            <Package className="w-8 h-8 text-zinc-700 stroke-[1.5]" />
+                            <span className="text-[11px] text-zinc-500 font-mono">
+                              Chọn vật phẩm từ danh sách để nhập kho.
+                            </span>
                           </div>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (!canAfford || isLocked) return;
-                              await stockSectVault(stockItemType, stockItemId, stockQuantity);
-                            }}
-                            disabled={!canAfford || actionLoading || isLocked}
-                            className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            Nhập Bảo Khố
-                          </button>
+                          <>
+                            {/* Selected Items Itemized List */}
+                            <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                              {Object.values(stockSelections).map((item) => (
+                                <div key={item.item_id} className="flex justify-between items-center text-[10px] font-mono bg-zinc-950/20 border border-zinc-950 rounded-lg p-2">
+                                  <span className="text-zinc-300 truncate max-w-[120px]">{item.name}</span>
+                                  <span className="text-zinc-500">
+                                    x{item.quantity} → <span className="text-cyan-400/90 font-bold">{item.unit_cost * item.quantity} Quỹ</span>
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="border-t border-zinc-900 pt-3.5 space-y-3.5">
+                              <div className="flex justify-between items-center text-xs font-mono">
+                                <span className="text-zinc-400 font-serif font-bold">Tổng chi phí:</span>
+                                <span className={`font-bold text-sm ${canAfford ? "text-cyan-400" : "text-red-400"}`}>
+                                  {totalCost.toLocaleString()} Quỹ
+                                </span>
+                              </div>
+                              <button
+                                onClick={async () => {
+                                  const payload = Object.values(stockSelections).map(it => ({
+                                    item_type: it.item_type,
+                                    item_id: it.item_id,
+                                    quantity: it.quantity,
+                                  }));
+                                  const ok = await stockSectVaultBulk(payload);
+                                  if (ok) setStockSelections({});
+                                }}
+                                disabled={!canAfford || actionLoading}
+                                className="w-full py-3 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 disabled:opacity-50 text-white rounded-xl font-semibold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                              >
+                                <Package className="w-4 h-4" />
+                                NHẬP KHO HÀNG LOẠT
+                              </button>
+                              {!canAfford && (
+                                <p className="text-[10px] text-red-400 font-mono text-center">Quỹ tông môn không đủ!</p>
+                              )}
+                            </div>
+                          </>
                         )}
                       </div>
-                    );
-                  })()}
-                </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Upgrade Sect Card */}
@@ -2784,7 +3053,7 @@ export const SectView: React.FC = () => {
 
                 {(() => {
                   const currentLvl = sect?.level || 1;
-                  const cost = currentLvl * 10000;
+                  const cost = currentLvl * currentLvl * 5000;
                   const canAfford = (sect?.funds || 0) >= cost;
 
                   return (

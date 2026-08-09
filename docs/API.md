@@ -221,17 +221,21 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | POST | `/sects/donate/gu` |
 | POST | `/sects/donate/bulk` | Quyên góp hàng loạt linh tài và cổ trùng. Body: `{"materials": [{"material_id": "...", "amount": 5}], "gus": [{"gu_instance_id": "..."}]}`. |
 | POST | `/sects/vault/buy` | Đổi vật phẩm từ bảo khố. Body: `{"item_type": "gu|material|recipe", "item_id": "...", "quantity": 5}` (`quantity` mặc định 1; recipe chỉ nhận 1). |
-| GET | `/sects/missions` |
-| POST | `/sects/missions/:missionId/accept` |
-| POST | `/sects/missions/:missionId/complete` |
+| GET | `/sects/missions` | Danh sách nhiệm vụ trên bảng (đã lọc nhiệm vụ hết hạn). Trả về `expires_at` mỗi nhiệm vụ. |
+| POST | `/sects/missions/:missionId/accept` | Nhận nhiệm vụ. Copy `expires_at` sang nhiệm vụ cá nhân. |
+| POST | `/sects/missions/:missionId/complete` | Nộp nhiệm vụ. |
+| DELETE | `/sects/missions/:missionId` | Trưởng Lão/Chưởng Môn xóa nhiệm vụ trên bảng (xóa theo cascade nhiệm vụ đệ tử đang làm). |
+| DELETE | `/sects/missions/:missionId/abandon` | Đệ tử hủy nhiệm vụ đang thực hiện của chính mình. |
 | POST | `/sects/create` |
 | GET | `/sects/me/members` |
 | POST | `/sects/members/:memberId/rank` |
 | POST | `/sects/members/:memberId/kick` |
-| POST | `/sects/missions/create` |
-| POST | `/sects/vault/stock` |
+| POST | `/sects/missions/create` | Trưởng Lão/Chưởng Môn phát hành nhiệm vụ. Body: `{"title","description","mission_type","target_id","target_amount","reward_contribution","required_member_rank","duration_hours"}`. `duration_hours`: 0 (hoặc bỏ trống) = mặc định 24h; `-1` = không hết hạn; `>0` = số giờ có hiệu lực. |
+| POST | `/sects/vault/stock` | Nhập kho 1 loại vật phẩm. Body: `{"item_type": "gu|material", "item_id": "...", "quantity": 5}`. |
+| POST | `/sects/vault/stock/bulk` | Nhập kho hàng loạt (1 giao dịch). Body: `{"items": [{"item_type": "gu|material", "item_id": "...", "quantity": 5}]}`. |
 | POST | `/sects/upgrade` |
-| POST | `/sects/toggle-approval` |
+| POST | `/sects/toggle-approval` | Bật/tắt duyệt thành viên gia nhập. Body: `{"require_approval": true}`. |
+| POST | `/sects/toggle-promotion-approval` | Bật/tắt duyệt lên cấp (mặc định `false`). Khi `true`, mọi thăng cấp đều tạo yêu cầu chờ Trưởng Lão/Chưởng Môn duyệt. Body: `{"require_promotion_approval": true}`. |
 | GET | `/sects/join-requests` |
 | POST | `/sects/join-requests/:requestId/action` |
 | GET | `/sects/promotion-requests` |
