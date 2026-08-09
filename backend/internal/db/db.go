@@ -440,14 +440,14 @@ func InitSchema() error {
 	var mineCount int
 	err = DB.QueryRow("SELECT COUNT(*) FROM mine_slots").Scan(&mineCount)
 	if err == nil && mineCount == 0 {
-		// 31 slots: 1 Siêu Cấp, 3 Truyện Thuyết, 9 Sử Thi, 18 Hiếm
+		// 31 slots: 1 Siêu Cấp, 3 Truyền Thuyết, 9 Sử Thi, 18 Hiếm
 		slotRarities := map[int]string{}
 		for i := 1; i <= 31; i++ {
 			switch {
 			case i == 1:
 				slotRarities[i] = "Siêu Cấp"
 			case i <= 4:
-				slotRarities[i] = "Truyện Thuyết"
+				slotRarities[i] = "Truyền Thuyết"
 			case i <= 13:
 				slotRarities[i] = "Sử Thi"
 			default:
@@ -469,7 +469,7 @@ func InitSchema() error {
 		// Update rarities for existing slots
 		updates := map[int]string{
 			1: "Siêu Cấp",
-			2: "Truyện Thuyết", 3: "Truyện Thuyết", 4: "Truyện Thuyết",
+			2: "Truyền Thuyết", 3: "Truyền Thuyết", 4: "Truyền Thuyết",
 			5: "Sử Thi", 6: "Sử Thi", 7: "Sử Thi", 8: "Sử Thi", 9: "Sử Thi",
 			10: "Sử Thi", 11: "Sử Thi", 12: "Sử Thi", 13: "Sử Thi",
 		}
@@ -484,6 +484,9 @@ func InitSchema() error {
 		}
 		logger.S.Info("Mine slots migrated to 31 layout.")
 	}
+
+	// Fix rarity typo: "Truyện Thuyết" → "Truyền Thuyết"
+	_, _ = DB.Exec(`UPDATE mine_slots SET rarity = 'Truyền Thuyết' WHERE rarity = 'Truyện Thuyết'`)
 
 	// Migrate existing mine_slots to have monster_id and abandoned_at if not exist
 	_, _ = DB.Exec(`ALTER TABLE mine_slots ADD COLUMN IF NOT EXISTS monster_id VARCHAR(50) NULL;`)

@@ -13,7 +13,6 @@ import (
 	"os"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -872,7 +871,6 @@ func CompleteOnboarding(c *gin.Context) {
 	c.JSON(http.StatusOK, player)
 }
 
-
 // LoginRequest represents credentials login payload.
 // Email is the canonical login identifier; Username is accepted only as a
 // backwards-compatible JSON field for older clients that already send an email
@@ -1235,7 +1233,7 @@ func RechargeWithStones(c *gin.Context) {
 // ExploreResponse represents the action of exploring
 type ExploreResponse struct {
 	Player       models.Player `json:"player"`
-	RewardStones float64           `json:"reward_stones"`
+	RewardStones float64       `json:"reward_stones"`
 	Log          string        `json:"log"`
 }
 
@@ -1492,43 +1490,27 @@ type FeedRequest struct {
 	GuInstanceID string `json:"gu_instance_id" binding:"required"`
 }
 
-// FeedGu consumes a matching material and resets a Gu instance's hunger status
-
-func getFoodNutrition(foodID string) int {
-	if strings.HasPrefix(foodID, "GU_LIFESPAN_") {
-		yearsStr := strings.TrimPrefix(foodID, "GU_LIFESPAN_")
-		years, err := strconv.Atoi(yearsStr)
-		if err == nil {
-			return years * 1000
-		}
-	}
+// computeFoodNutrition calculates hunger restoration based on the Gu's rank and the food's rank.
+// If the food rank equals the Gu rank, it restores 100 hunger.
+// If the food rank is lower, it restores proportionally less (rounded down).
+// Food rank higher than Gu rank is treated as equal rank (still 100).
+func computeFoodNutrition(foodID string, guRank int) int {
+	// Determine food rank from registry.
 	if spec, ok := models.GetGuAny(foodID); ok {
-		return spec.Rank * 1000
+		foodRank := spec.Rank
+		if foodRank >= guRank {
+			return 100
+		}
+		return int(float64(foodRank) / float64(guRank) * 100)
 	}
 	if spec, ok := models.ItemRegistry[foodID]; ok {
-		switch spec.Rank {
-		case 1:
-			return 100
-		case 2:
-			return 200
-		case 3:
-			return 500
-		case 4:
-			return 1000
-		case 5:
-			return 2000
-		case 6:
-			return 5000
-		case 7:
-			return 10000
-		case 8:
-			return 50000
-		case 9:
-			return 100000
-		default:
+		foodRank := spec.Rank
+		if foodRank >= guRank {
 			return 100
 		}
+		return int(float64(foodRank) / float64(guRank) * 100)
 	}
+	// Default fallback.
 	return 100
 }
 
@@ -1690,7 +1672,7 @@ func FeedGu(c *gin.Context) {
 		}
 
 		foodConsumed[foodID]++
-		nutrition := getFoodNutrition(foodID)
+		nutrition := computeFoodNutrition(foodID, targetGu.Rank)
 		targetGu.Hunger += nutrition
 		if targetGu.Hunger > specs.MaxHunger {
 			targetGu.Hunger = specs.MaxHunger
@@ -1895,7 +1877,7 @@ func FeedGroup(c *gin.Context) {
 					gu = &player.GuInventory[i] // refetch pointer
 				}
 
-				nutrition := getFoodNutrition(foodID)
+				nutrition := computeFoodNutrition(foodID, gu.Rank)
 				gu.Hunger += nutrition
 				if gu.Hunger > specs.MaxHunger {
 					gu.Hunger = specs.MaxHunger
@@ -2204,8 +2186,8 @@ type PassiveStatSource struct {
 
 // PassiveStatDetail holds the breakdown for one stat key.
 type PassiveStatDetail struct {
-	Key     string             `json:"key"`
-	Total   float64            `json:"total"`
+	Key     string              `json:"key"`
+	Total   float64             `json:"total"`
 	Sources []PassiveStatSource `json:"sources"`
 }
 
@@ -2354,7 +2336,7 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 		details = append(details, PassiveStatDetail{Key: key, Total: total, Sources: srcs})
 	}
 
-	// Dynamic storage bonus 
+	// Dynamic storage bonus
 	// Only calculated if player rank < 6, as higher ranks have infinite storage
 	if player.Rank < 6 {
 		storageBonus := math.Floor(stats["attack"] * 0.5)
@@ -2410,7 +2392,6 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 			}}})
 		}
 	}
-	
 
 	// Derived defensive bonuses from constitution (soul defense, mental resistance)
 	constitutionName := "Thể chất"
@@ -2495,13 +2476,13 @@ type DaoNganPathDetail struct {
 
 // DaoNganResult is the full đạo ngân calculation response.
 type DaoNganResult struct {
-	TotalDaoNgan    float64             `json:"total_dao_ngan"`    // composite đạo ngân score
-	TotalMarks      int                 `json:"total_marks"`       // sum of all dao marks
-	UniquePathCount int                 `json:"unique_path_count"` // number of paths with marks
-	AverageMultiplier float64           `json:"average_multiplier"` // mean multiplier across paths
-	MaxMultiplier   float64             `json:"max_multiplier"`    // highest single-path multiplier
-	MaxPath         string              `json:"max_path"`          // path with highest multiplier
-	Paths           []DaoNganPathDetail `json:"paths"`             // per-path breakdown
+	TotalDaoNgan      float64             `json:"total_dao_ngan"`     // composite đạo ngân score
+	TotalMarks        int                 `json:"total_marks"`        // sum of all dao marks
+	UniquePathCount   int                 `json:"unique_path_count"`  // number of paths with marks
+	AverageMultiplier float64             `json:"average_multiplier"` // mean multiplier across paths
+	MaxMultiplier     float64             `json:"max_multiplier"`     // highest single-path multiplier
+	MaxPath           string              `json:"max_path"`           // path with highest multiplier
+	Paths             []DaoNganPathDetail `json:"paths"`              // per-path breakdown
 }
 
 // CalculateDaoNgan computes the composite "đạo ngân" (dao silver) score
@@ -2749,17 +2730,17 @@ func EquipGu(c *gin.Context) {
 					player.GrowthData.Boosts.Speed += spd
 					player.BaseHP += hp
 				}
-			// Check if fully grown now, add to FullyGrown list
-			if targetGu.GrowthHours >= spec.Effects.Growth.HoursToMax {
-				player.GrowthData.FullyGrown = append(player.GrowthData.FullyGrown, models.FullyGrownInfo{
-					GuID:    targetGu.GuID,
-					Rank:    targetGu.Rank,
-					Attack:  spec.Effects.Growth.MaxAttack,
-					Defense: spec.Effects.Growth.MaxDefense,
-					HP:      spec.Effects.Growth.MaxHP,
-					Speed:   spec.Effects.Growth.MaxSpeed,
-				})
-			}
+				// Check if fully grown now, add to FullyGrown list
+				if targetGu.GrowthHours >= spec.Effects.Growth.HoursToMax {
+					player.GrowthData.FullyGrown = append(player.GrowthData.FullyGrown, models.FullyGrownInfo{
+						GuID:    targetGu.GuID,
+						Rank:    targetGu.Rank,
+						Attack:  spec.Effects.Growth.MaxAttack,
+						Defense: spec.Effects.Growth.MaxDefense,
+						HP:      spec.Effects.Growth.MaxHP,
+						Speed:   spec.Effects.Growth.MaxSpeed,
+					})
+				}
 			}
 		}
 	}
@@ -4253,7 +4234,7 @@ func GoogleCallback(c *gin.Context) {
 		return
 	}
 
-		if !hasPlayer {
+	if !hasPlayer {
 		// 2. Try to search by email (Merge Account!)
 		err = tx.QueryRow(`
 			SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregateEquipped("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, explored_cells, equipped_gus, cleared_cells, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses

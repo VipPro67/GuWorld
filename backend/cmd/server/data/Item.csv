@@ -214,7 +214,7 @@ paper_pulp,Giấy Tương,Food,1,{},"Bột giấy thô, thức ăn cổ trùng T
 wolf_heart_meat,Thịt Tim Sói,Food,5,{},"Tim của sói hoang, thức ăn cho cổ trùng Nô Đạo.",120,
 fresh_blood_relatives,Máu Người Thân,Food,5,{},"Máu từ người thân ruột thịt, cần cho Cốt Nhục Cổ Đoàn Viên cổ.",5000,
 gu_master_blood,Máu Cổ Sư,Food,3,{},"Máu của Cổ Sư, thức ăn một số cổ trùng đặc biệt.",50,
-huyết_khí,Khí Huyết,Material,4,{},"Tinh khí huyết ngưng tụ, nguyên liệu quan trọng trong luyện chế Huyết đạo.",60,
+vital_energy_blood,Khí Huyết,Material,4,{},"Tinh khí huyết ngưng tụ, nguyên liệu quan trọng trong luyện chế Huyết đạo.",60,
 hundred_year_lifespan_gu,Bách Niên Thọ Cổ,Material,5,{},"Thọ Cổ trường tồn trăm năm, nguyên liệu quý cho luyện chế cao cấp.",3000,
 fire_coal,Hỏa Thán,Food,1,{},"Than lửa, thức ăn Hỏa đạo cơ bản.",5,
 deer_god_fruit,Lộc Thần Quả,Food,6,{},"Quả Lộc Thần, thức ăn cho cổ trùng Trí Đạo cấp cao.",50000,

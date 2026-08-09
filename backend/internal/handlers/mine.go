@@ -25,10 +25,11 @@ type MineRates struct {
 }
 
 var MineRarityRates = map[string]MineRates{
-	"Siêu Cấp":     {StonesPerMin: 60.0, QiPerMin: 15.0, ChestChance: 0.04},
-	"Truyền Thuyết": {StonesPerMin: 30.0, QiPerMin: 7.5, ChestChance: 0.02},
-	"Sử Thi":        {StonesPerMin: 25.0, QiPerMin: 6.25, ChestChance: 0.015},
-	"Hiếm":          {StonesPerMin: 22.0, QiPerMin: 5.5, ChestChance: 0.012},
+	"Siêu Cấp":      {StonesPerMin: 60.0, QiPerMin: 15.0, ChestChance: 0.5},
+	"Truyền Thuyết": {StonesPerMin: 30.0, QiPerMin: 7.5, ChestChance: 0.2},
+	"Sử Thi":        {StonesPerMin: 25.0, QiPerMin: 6.25, ChestChance: 0.15},
+	"Hiếm":          {StonesPerMin: 22.0, QiPerMin: 5.5, ChestChance: 0.12},
+	"Thường":        {StonesPerMin: 15.0, QiPerMin: 3.0, ChestChance: 0.08},
 }
 
 type MineSlotResponse struct {
