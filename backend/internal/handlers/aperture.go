@@ -597,7 +597,7 @@ func PlaceApertureNode(c *gin.Context) {
 	var stones int
 	var immortalStones float64
 	err = tx.QueryRow(`
-		SELECT primeval_stones, immortal_stones FROM players WHERE id = $1
+		SELECT FLOOR(primeval_stones)::BIGINT, immortal_stones FROM players WHERE id = $1
 	`, playerID).Scan(&stones, &immortalStones)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})
@@ -1494,7 +1494,7 @@ func RepairApertureNode(c *gin.Context) {
 
 	// Check player stones
 	var stones int
-	err = tx.QueryRow(`SELECT primeval_stones FROM players WHERE id = $1`, playerID).Scan(&stones)
+	err = tx.QueryRow(`SELECT FLOOR(primeval_stones)::BIGINT FROM players WHERE id = $1`, playerID).Scan(&stones)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})
 		return
@@ -1596,7 +1596,7 @@ func UpgradeApertureNode(c *gin.Context) {
 
 	// Check player stones
 	var stones int
-	err = tx.QueryRow(`SELECT primeval_stones FROM players WHERE id = $1`, playerID).Scan(&stones)
+	err = tx.QueryRow(`SELECT FLOOR(primeval_stones)::BIGINT FROM players WHERE id = $1`, playerID).Scan(&stones)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})
 		return

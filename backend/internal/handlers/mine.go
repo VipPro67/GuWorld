@@ -77,7 +77,7 @@ func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int, qi flo
 	var currentQi float64
 
 	err := tx.QueryRow(`
-		SELECT primeval_stones, human_qi
+		SELECT FLOOR(primeval_stones)::BIGINT, human_qi
 		FROM players WHERE id = $1 FOR UPDATE
 	`, playerID).Scan(&currentStones, &currentQi)
 	if err != nil {

@@ -84,7 +84,7 @@ func CheckReferralMilestones(tx *sql.Tx, refereeID uuid.UUID) error {
 	var referrerStones int
 	var referrerGuInvBytes []byte
 	err = tx.QueryRow(`
-		SELECT username, primeval_stones, `+db.GuInventoryAggregate("players.id")+`
+		SELECT username, FLOOR(primeval_stones)::BIGINT, `+db.GuInventoryAggregate("players.id")+`
 		FROM players
 		WHERE id = $1
 		FOR UPDATE
@@ -220,7 +220,7 @@ func SimulateDeposit(c *gin.Context) {
 	// 1. Add stones to the player making the deposit
 	var currentStones int
 	err = tx.QueryRow(`
-		SELECT primeval_stones 
+		SELECT FLOOR(primeval_stones)::BIGINT 
 		FROM players 
 		WHERE id = $1 
 		FOR UPDATE

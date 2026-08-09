@@ -480,7 +480,7 @@ func UpdateFeedbackStatus(c *gin.Context) {
 		var immortalStones float64
 
 		err = tx.QueryRow(`
-			SELECT username, rank, primeval_stones, immortal_stones 
+			SELECT username, rank, FLOOR(primeval_stones)::BIGINT, immortal_stones 
 			FROM players 
 			WHERE id = $1 FOR UPDATE
 		`, authorID).Scan(&authorUsername, &authorRank, &primevalStones, &immortalStones)
