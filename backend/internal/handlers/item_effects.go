@@ -10,6 +10,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
+	"github.com/vippro67/GuWorld/backend/internal/util"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -40,7 +41,7 @@ func healApertureEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec)
 	if val <= 0 {
 		return "", nil
 	}
-	if !isImmortalCultivator(player) {
+	if !util.IsImmortalPlayer(player) {
 		return "", fmt.Errorf("%s chỉ dành cho Cổ Tiên để trị liệu tiên khiếu.", item.Name)
 	}
 	player.ApertureDamage -= val
@@ -132,14 +133,14 @@ func restoreHPEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (s
 }
 
 func mortalOnlyEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
-	if isImmortalCultivator(player) {
+	if util.IsImmortalPlayer(player) {
 		return "", fmt.Errorf("%s chỉ bổ sung Chân Nguyên phàm cấp; Cổ Tiên cần Tiên Nguyên Thạch hoặc Tiên Khiếu ngưng tụ Tiên Nguyên.", item.Name)
 	}
 	return "", nil
 }
 
 func immortalOnlyEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
-	if !isImmortalCultivator(player) {
+	if !util.IsImmortalPlayer(player) {
 		return "", fmt.Errorf("%s chỉ dành cho Cổ Tiên.", item.Name)
 	}
 	return "", nil

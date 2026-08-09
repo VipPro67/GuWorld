@@ -1354,6 +1354,38 @@ func InitSchema() error {
 		{`UPDATE players SET time_speed_multiplier = 1.0;`, "reset_time_speed_multiplier"},
 		{`ALTER TABLE players DROP COLUMN IF EXISTS tribulation_count;`, "drop_tribulation_count_column"},
 	}
+	// One-time data cleanup: force-unequip excess equipped+ACTIVE Gus so no
+	// player exceeds MaxEquippedGus. Keeps vital Gus first, then the most
+	// recently equipped (by equipped_at). Rebuilds players.equipped_gus for the
+	// affected players to match handler semantics (equipped && ACTIVE). The CTE
+	// yields no rows for players already within the limit, so this is idempotent.
+	migrations = append(migrations, struct{ sql, errMsg string }{
+		sql: fmt.Sprintf(`
+WITH ranked AS (
+    SELECT pg.id AS gu_id, pg.player_id,
+           ROW_NUMBER() OVER (
+               PARTITION BY pg.player_id
+               ORDER BY pg.is_vital DESC, pg.equipped_at DESC NULLS LAST, pg.created_at DESC, pg.id DESC
+           ) AS rn
+    FROM player_gu pg
+    WHERE pg.equipped = true AND pg.state = 'ACTIVE'
+),
+unequipped AS (
+    UPDATE player_gu pg
+    SET equipped = false, equipped_at = NULL, updated_at = NOW()
+    FROM ranked r
+    WHERE pg.id = r.gu_id AND r.rn > %d
+    RETURNING pg.player_id
+)
+UPDATE players p
+SET equipped_gus = COALESCE(
+    (SELECT jsonb_agg(sub.id ORDER BY sub.created_at, sub.id)
+     FROM (SELECT id, created_at FROM player_gu
+           WHERE player_id = p.id AND equipped = true AND state = 'ACTIVE') sub),
+    '[]'::jsonb)
+WHERE p.id IN (SELECT DISTINCT player_id FROM unequipped);`, MaxEquippedGus),
+		errMsg: "unequip_excess_equipped_gus",
+	})
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {
 			return fmt.Errorf("failed to run migration %s: %w", m.errMsg, err)

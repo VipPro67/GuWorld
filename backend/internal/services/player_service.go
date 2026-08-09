@@ -12,6 +12,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/util"
 )
 
 // QueryRower is satisfied by *sql.DB and *sql.Tx for read-only queries.
@@ -229,7 +230,7 @@ func (s *PlayerService) applyApertureProjection(q QueryRower, player *models.Pla
 
 // isImmortalCultivator checks if the player is an immortal (Rank >= 6).
 func isImmortalCultivator(player *models.Player) bool {
-	return player.Rank >= 6
+	return util.IsImmortalPlayer(player)
 }
 
 // normalizeEnergyPool adjusts the mana pool for immortal cultivators.

@@ -26,6 +26,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
+	"github.com/vippro67/GuWorld/backend/internal/util"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -1274,7 +1275,7 @@ func Explore(c *gin.Context) {
 
 	// 2. Check energy cost. Mortals spend Chân Nguyên; Immortals spend a smaller Tiên Nguyên travel upkeep.
 	energyCost := 10.0
-	if isImmortalCultivator(&player) {
+	if util.IsImmortalPlayer(&player) {
 		energyCost = 0.5
 	}
 	if player.CurrentMana < energyCost {

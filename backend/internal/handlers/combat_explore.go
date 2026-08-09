@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/util"
 )
 
 type ExploreRequest struct {
@@ -71,7 +72,7 @@ func ExploreNode(c *gin.Context) {
 	}
 
 	exploreEnergyCost := 5.0
-	if isImmortalCultivator(&player) {
+	if util.IsImmortalPlayer(&player) {
 		exploreEnergyCost = 0.25
 	}
 	if player.CurrentMana < exploreEnergyCost {

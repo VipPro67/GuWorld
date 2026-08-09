@@ -8,6 +8,7 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/util"
 )
 
 // Action represents a dynamic combat action compiled from Gu effects
@@ -39,7 +40,7 @@ func ValidateGuUsable(player *models.Player, gu *models.GuInstance, spec *models
 
 	// Rule 1: Level Penalty (Backlash)
 	if player.Rank < spec.Rank {
-		if isImmortalCultivator(player) {
+		if util.IsImmortalPlayer(player) {
 			return fmt.Errorf("Tiên Khiếu không thể điều khiển Cổ trùng cấp cao hơn!")
 		}
 		return fmt.Errorf("Backlash: Cổ trùng Rank %d phản phệ Không Khiếu Rank %d! (Trừ 50 HP)", spec.Rank, player.Rank)

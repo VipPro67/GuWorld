@@ -4,32 +4,27 @@ import (
 	"math"
 	"strings"
 
-	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/util"
 )
 
-const immortalRankThreshold = 6
-
-func isImmortalCultivator(player *models.Player) bool {
-	return player.Rank >= immortalRankThreshold
-}
-
 func energyName(player *models.Player) string {
-	if isImmortalCultivator(player) {
+	if util.IsImmortalPlayer(player) {
 		return "Tiên Nguyên"
 	}
 	return "Chân Nguyên"
 }
 
 func insufficientEnergyMessage(player *models.Player) string {
-	if isImmortalCultivator(player) {
+	if util.IsImmortalPlayer(player) {
 		return "Không đủ Tiên Nguyên. Cổ Tiên cần chờ Tiên Khiếu ngưng tụ hoặc luyện hóa Tiên Nguyên Thạch để bổ sung."
 	}
 	return "Không đủ Chân Nguyên. Vui lòng nghỉ ngơi tĩnh tọa để hồi phục."
 }
 
 func normalizeEnergyPool(player *models.Player) bool {
-	if !isImmortalCultivator(player) {
+	if !util.IsImmortalPlayer(player) {
 		if player.CurrentMana > player.MaxMana {
 			player.CurrentMana = player.MaxMana
 			return true
@@ -48,7 +43,7 @@ func normalizeEnergyPool(player *models.Player) bool {
 
 func energyRegenRatePerHour(player *models.Player) float64 {
 	var rate float64
-	if isImmortalCultivator(player) {
+	if util.IsImmortalPlayer(player) {
 		baseByRank := map[int]float64{
 			6: 0.5,
 			7: 0.8,
@@ -57,7 +52,7 @@ func energyRegenRatePerHour(player *models.Player) float64 {
 		}
 		base := baseByRank[player.Rank]
 		if base == 0 {
-			base = 0.5 + float64(player.Rank-immortalRankThreshold)*0.35
+			base = 0.5 + float64(player.Rank-util.ImmortalRankThreshold)*0.35
 		}
 		subRank := player.SubRank
 		if subRank < 1 {
@@ -91,8 +86,8 @@ func energyRegenRatePerHour(player *models.Player) float64 {
 }
 
 func calculateEnergyCost(player *models.Player, guSpec *models.GuDictionaryItem) float64 {
-	if isImmortalCultivator(player) {
-		if guSpec.Rank < immortalRankThreshold {
+	if util.IsImmortalPlayer(player) {
+		if guSpec.Rank < util.ImmortalRankThreshold {
 			return 0
 		}
 		if player.Rank < guSpec.Rank {
@@ -114,7 +109,7 @@ func calculateEnergyCost(player *models.Player, guSpec *models.GuDictionaryItem)
 	}
 	cost := baseManaPct * player.MaxMana
 
-	if guSpec.Rank < immortalRankThreshold {
+	if guSpec.Rank < util.ImmortalRankThreshold {
 		rankDiff := player.Rank - guSpec.Rank
 		if rankDiff > 0 {
 			cost /= math.Pow(10, float64(rankDiff))
@@ -123,7 +118,7 @@ func calculateEnergyCost(player *models.Player, guSpec *models.GuDictionaryItem)
 		}
 	}
 
-	if !isImmortalCultivator(player) {
+	if util.IsImmortalPlayer(player) {
 		refineTier := getRefineManaTier(player.Rank, player.GuInventory)
 		if refineTier > 0 {
 			cost *= 0.5
@@ -137,7 +132,7 @@ func calculateEnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuD
 	isImmortal := actor.Rank >= 6
 
 	if isImmortal {
-		if guSpec.Rank < immortalRankThreshold {
+		if guSpec.Rank < util.ImmortalRankThreshold {
 			return 0
 		}
 		if actor.Rank < guSpec.Rank {
@@ -159,7 +154,7 @@ func calculateEnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuD
 	}
 	cost := baseManaPct * actor.MaxMana
 
-	if guSpec.Rank < immortalRankThreshold {
+	if guSpec.Rank < util.ImmortalRankThreshold {
 		rankDiff := actor.Rank - guSpec.Rank
 		if rankDiff > 0 {
 			cost /= math.Pow(10, float64(rankDiff))
