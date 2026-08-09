@@ -25,7 +25,7 @@ type Sect struct {
 	VaultGu                  json.RawMessage `json:"vault_gu"`
 	VaultMaterials           json.RawMessage `json:"vault_materials"`
 	VaultRecipes             json.RawMessage `json:"vault_recipes"`
-	Funds                    int             `json:"funds"`
+	Funds                    int64           `json:"funds"`
 	Level                    int             `json:"level"`
 	RequireApproval          bool            `json:"require_approval"`
 	RequirePromotionApproval bool            `json:"require_promotion_approval"`
@@ -2109,12 +2109,16 @@ func GetSectMembers(c *gin.Context) {
 		Contribution int       `json:"contribution_points"`
 		JoinedAt     time.Time `json:"joined_at"`
 		PlayerRank   int       `json:"player_rank"`
+		Power        float64   `json:"power"`
 	}
 
 	var members []MemberInfo
 	for rows.Next() {
 		var mi MemberInfo
 		if err := rows.Scan(&mi.PlayerID, &mi.Username, &mi.AvatarURL, &mi.MemberRank, &mi.Contribution, &mi.JoinedAt, &mi.PlayerRank); err == nil {
+			if p, err := PlayerSvc.LoadEquipped(db.DB, mi.PlayerID); err == nil {
+				mi.Power = computeMemberPower(&p)
+			}
 			members = append(members, mi)
 		}
 	}
@@ -2477,9 +2481,9 @@ func StockSectVault(c *gin.Context) {
 	}
 	itemType := strings.ToLower(req.ItemType)
 
-	totalCost := unitCost * req.Quantity
+	totalCost := int64(unitCost) * int64(req.Quantity)
 	if s.Funds < totalCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Quỹ tông môn không đủ! Cần " + string(rune('0'+totalCost)) + " quỹ tông môn"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Quỹ tông môn không đủ! Cần %d quỹ tông môn", totalCost)})
 		return
 	}
 
@@ -2637,7 +2641,7 @@ func StockSectVaultBulk(c *gin.Context) {
 		unitCost int
 	}
 	lines := make([]stockLine, 0, len(req.Items))
-	totalCost := 0
+	var totalCost int64
 	for _, it := range req.Items {
 		unitCost, code, msg := stockItemUnitCost(tx, s.Level, it.ItemType, it.ItemID)
 		if code != http.StatusOK {
@@ -2645,7 +2649,7 @@ func StockSectVaultBulk(c *gin.Context) {
 			return
 		}
 		lines = append(lines, stockLine{strings.ToLower(it.ItemType), it.ItemID, it.Quantity, unitCost})
-		totalCost += unitCost * it.Quantity
+		totalCost += int64(unitCost) * int64(it.Quantity)
 	}
 
 	if s.Funds < totalCost {
@@ -2751,14 +2755,15 @@ func UpgradeSect(c *gin.Context) {
 	}
 
 	// Fetch level and funds
-	var level, funds int
+	var level int
+	var funds int64
 	err = tx.QueryRow(`SELECT level, funds FROM sects WHERE id = $1`, sectID).Scan(&level, &funds)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details"})
 		return
 	}
 
-	cost := level * level * 5000
+	cost := int64(level) * int64(level) * 5000
 	if funds < cost {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Quỹ tông môn không đủ để nâng cấp!"})
 		return

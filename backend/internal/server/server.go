@@ -541,7 +541,8 @@ func SetupRouter() *gin.Engine {
 			sect.GET("/promotion-requests", handlers.GetPromotionRequests)
 			sect.POST("/promotion-requests/:requestId/action", handlers.ActionPromotionRequest)
 			sect.GET("/mines", handlers.GetSectMines)
-			sect.POST("/mines/claim", handlers.ClaimSectMineRewards)
+			sect.POST("/mines/defend", handlers.DefendSectMine)
+			sect.POST("/mines/undefend", handlers.UndefendSectMine)
 			sect.POST("/mines/attack", handlers.AttackSectMine)
 		}
 

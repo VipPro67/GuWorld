@@ -343,6 +343,12 @@ Hệ thống môn phái hiện có:
   - **Hủy nhiệm vụ:** Đệ tử có thể hủy bỏ nhiệm vụ đang thực hiện để nhận nhiệm vụ khác. Trưởng Lão/Chưởng Môn có thể xóa nhiệm vụ đã phát hành khỏi bảng.
 - Nâng cấp môn phái: chi phí `Cấp² × 5.000` Quỹ.
 - Mỏ môn phái: xem, tấn công, nhận thưởng.
+- **Lãnh địa (mỏ tông môn):**
+  - **Phòng thủ:** Trưởng Lão/Hộ Pháp/Chưởng Môn bố trí đệ tử hoặc thuê thần thú canh giữ (phí `hạng × 500` Quỹ). Mỗi đệ tử chỉ giữ 1 mỏ. Slot theo rarity: Thường 1 · Hiếm 2 · Sử Thi 3 · Truyền Thuyết 3 · Siêu Cấp 4.
+  - **Sinh tài nguyên theo giờ:** mỏ đang chiếm giữ tự sinh **Quỹ** và **Linh tài** vào bảo khố, tỉ lệ theo rarity × cấp TM × số phòng thủ.
+  - **Điểm cống hiến theo giờ:** đệ tử phòng thủ +20 pts/h, các đệ tử khác +2 pts/h, cap 200 pts/ngày (chống AFK).
+  - **Công kích có chiến đấu:** tấn công mỏ đang bị chiếm sẽ so sánh sức mạnh của bạn vs tổng phòng thủ (được củng cố bởi người giữ). Thắng → chiếm + bảo hộ 4h; thua → trận pháp hộ sơn 15 phút và người phòng thủ được thưởng +20 cống hiến.
+  - **Chỉ lãnh đạo phát động tấn công:** Trưởng Lão/Hộ Pháp/Chưởng Môn chọn đệ tử ra trận (Ngoại Môn không tham gia); sức mạnh của người được chọn sẽ được so sánh với phòng thủ, và Nhân Khí khi thắng thuộc về đệ tử ra trận đó.
 
 ## 14. Mỏ cá nhân
 

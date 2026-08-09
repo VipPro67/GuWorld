@@ -227,7 +227,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | DELETE | `/sects/missions/:missionId` | Trưởng Lão/Chưởng Môn xóa nhiệm vụ trên bảng (xóa theo cascade nhiệm vụ đệ tử đang làm). |
 | DELETE | `/sects/missions/:missionId/abandon` | Đệ tử hủy nhiệm vụ đang thực hiện của chính mình. |
 | POST | `/sects/create` |
-| GET | `/sects/me/members` |
+| GET | `/sects/me/members` | Danh sách đệ tử trong tông môn (thêm `power` — sức mạnh phòng thủ/tấn công của mỗi đệ tử). |
 | POST | `/sects/members/:memberId/rank` |
 | POST | `/sects/members/:memberId/kick` |
 | POST | `/sects/missions/create` | Trưởng Lão/Chưởng Môn phát hành nhiệm vụ. Body: `{"title","description","mission_type","target_id","target_amount","reward_contribution","required_member_rank","duration_hours"}`. `duration_hours`: 0 (hoặc bỏ trống) = mặc định 24h; `-1` = không hết hạn; `>0` = số giờ có hiệu lực. |
@@ -240,9 +240,10 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | POST | `/sects/join-requests/:requestId/action` |
 | GET | `/sects/promotion-requests` |
 | POST | `/sects/promotion-requests/:requestId/action` |
-| GET | `/sects/mines` |
-| POST | `/sects/mines/claim` |
-| POST | `/sects/mines/attack` |
+| GET | `/sects/mines` | Danh sách Lãnh địa + phòng thủ (`defenders`), `total_defense_power`, `output_per_hour`. |
+| POST | `/sects/mines/defend` | Bố trí phòng thủ (Trưởng Lão/Hộ Pháp/Chưởng Môn). Body: `{"mine_id": 1, "defender_type": "member|beast", "player_id": "...", "monster_id": "...", "monster_rank": 3}`. `beast` tốn `hạng × 500` Quỹ. |
+| POST | `/sects/mines/undefend` | Rút phòng thủ. Body: `{"defender_id": "uuid"}`. |
+| POST | `/sects/mines/attack` | Công kích Lãnh địa — **chỉ Trưởng Lão/Hộ Pháp/Chưởng Môn**. Body: `{"mine_id": 1, "attacker_id": "uuid (rỗng = người phát động)"}`. So sánh sức mạnh, trả `won`, `attacker_power`, `defense_power`. Nhân Khí thuộc về đệ tử được chọn ra trận. |
 
 ## Feedback
 

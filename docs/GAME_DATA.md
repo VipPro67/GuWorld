@@ -207,6 +207,7 @@ Không có seed CSV cho bảng này. Row được tạo tự động qua `INSERT
 
 | Cột | Kiểu | Ghi chú |
 | --- | --- | --- |
+| `funds` | BIGINT | Quỹ tông môn (đổi từ INTEGER → BIGINT để tránh tràn số khi tích lũy lãnh địa). |
 | `require_approval` | BOOLEAN | DEFAULT FALSE. Bật = phải duyệt đơn gia nhập. |
 | `require_promotion_approval` | BOOLEAN | DEFAULT FALSE. Bật = **mọi** thăng cấp đều tạo yêu cầu chờ duyệt. |
 
@@ -241,6 +242,37 @@ Seed từ `SectMission.csv` (append-only, `ON CONFLICT DO NOTHING`) luôn để 
 | `assigned_at` | TIMESTAMP | |
 | `expires_at` | TIMESTAMP NULL | Sao chép từ bảng nhiệm vụ khi nhận. Worker đổi `IN_PROGRESS` → `EXPIRED` khi quá hạn. |
 | UNIQUE | (player_id, mission_id) | Mỗi người chơi chỉ nhận 1 lần mỗi nhiệm vụ |
+
+### Bảng `sect_mine_defenders` (Phòng thủ Lãnh địa)
+
+| Cột | Kiểu | Ghi chú |
+| --- | --- | --- |
+| `id` | UUID PK | |
+| `mine_id` | INTEGER FK | → `sect_mines(id)` ON DELETE CASCADE |
+| `sect_id` | VARCHAR(50) FK | → `sects(id)` ON DELETE CASCADE |
+| `defender_type` | VARCHAR(20) | `member` (đệ tử) hoặc `beast` (thần thú thuê) |
+| `player_id` | UUID NULL | Đệ tử phòng thủ. UNIQUE (partial) — mỗi đệ tử chỉ giữ 1 mỏ |
+| `name` | VARCHAR(100) | Tên hiển thị (snapshot) |
+| `monster_id` / `monster_rank` / `monster_sub_rank` | VARCHAR(80)/INT | Dữ liệu thần thú |
+| `power` | DOUBLE PRECISION | Điểm phòng thủ (tính lúc gán) |
+| `assigned_at` | TIMESTAMP | |
+
+`power` đệ tử = `(atk + def + hp/20) × (1 + 0.15×(rank−1))`; thần thú = `atk + def + hp/20` (qua `ScaleMonsterStats`).
+
+### Bảng `sect_mines` — cột tích lũy
+
+| Cột | Kiểu | Ghi chú |
+| --- | --- | --- |
+| `pending_funds` | DOUBLE PRECISION | Bộ tích lũy Quỹ (worker cộng theo phút, đổi sang số nguyên khi ≥ 1) |
+| `pending_materials` | DOUBLE PRECISION | Bộ tích lũy Linh tài |
+
+### Bảng `sect_members` — cột cống hiến lãnh địa
+
+| Cột | Kiểu | Ghi chú |
+| --- | --- | --- |
+| `territory_pending` | DOUBLE PRECISION | Bộ tích lũy điểm cống hiến theo giờ |
+| `territory_credited_at` | DATE | Ngày đã cộng (để reset cap) |
+| `territory_credited_today` | INTEGER | Số điểm đã cộng hôm nay (cap 200/ngày) |
 
 ## Lưu ý khi thay đổi schema
 

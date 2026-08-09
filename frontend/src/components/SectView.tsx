@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useGameStore, Sect, SectMission, GuInstance } from "@/store/useGameStore";
+import { useGameStore, Sect, SectMission, GuInstance, SectMine } from "@/store/useGameStore";
 import { translatePath } from "@/lib/translate";
 import {
   Shield,
@@ -44,6 +44,7 @@ export const SectView: React.FC = () => {
     sectMissions,
     guDictionary,
     itemDictionary,
+    monsterDictionary,
     actionLoading,
     fetchSects,
     joinSect,
@@ -82,7 +83,8 @@ export const SectView: React.FC = () => {
     sectMines,
     fetchSectMines,
     attackSectMine,
-    claimSectMineRewards,
+    assignSectMineDefender,
+    removeSectMineDefender,
     addToast,
     showConfirm,
     recipes,
@@ -196,6 +198,17 @@ export const SectView: React.FC = () => {
     const id = setInterval(() => setNowTs(Date.now()), 30000);
     return () => clearInterval(id);
   }, []);
+
+  // Territory defend modal state
+  const [defendMine, setDefendMine] = useState<SectMine | null>(null);
+  const [defendType, setDefendType] = useState<"member" | "beast">("member");
+  const [defendPlayerId, setDefendPlayerId] = useState("");
+  const [defendMonsterId, setDefendMonsterId] = useState("");
+  const [defendMonsterRank, setDefendMonsterRank] = useState(1);
+
+  // Territory attack modal state
+  const [attackMine, setAttackMine] = useState<SectMine | null>(null);
+  const [attackPlayerId, setAttackPlayerId] = useState("");
 
   // Vault stocking form state (donation-style multi-select)
   const [stockItemType, setStockItemType] = useState<"gu" | "material">("gu");
@@ -1087,7 +1100,10 @@ export const SectView: React.FC = () => {
               ) : (
                 sectMines.map((mine) => {
                   const isMine = mine.occupier_sect_id === mySectStatus.sect?.id;
-                  const isShielded = mine.shield_until && new Date(mine.shield_until).getTime() > Date.now();
+                  const isShielded = !!mine.shield_until && new Date(mine.shield_until).getTime() > nowTs;
+                  const canManage = (mySectStatus.member?.member_rank === "CHUONG_MON" || mySectStatus.member?.member_rank === "TRUONG_LAO" || mySectStatus.member?.member_rank === "HO_PHAP");
+                  const defenderSlots = mine.rarity === "Siêu Cấp" ? 4 : (mine.rarity === "Truyền Thuyết" || mine.rarity === "Sử Thi") ? 3 : mine.rarity === "Hiếm" ? 2 : 1;
+                  const defendCount = mine.defenders?.length || 0;
 
                   return (
                     <div key={mine.id} className={`bg-zinc-900/20 border ${isMine ? "border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.1)]" : "border-zinc-900"} rounded-2xl p-4 flex flex-col gap-3 relative overflow-hidden`}>
@@ -1122,31 +1138,79 @@ export const SectView: React.FC = () => {
                             <span>{new Date(mine.shield_until!).toLocaleTimeString()}</span>
                           </div>
                         )}
+                        {mine.total_defense_power > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-zinc-500">Sức Phòng Thủ:</span>
+                            <span className="text-rose-400 font-bold">{Math.round(mine.total_defense_power).toLocaleString()}</span>
+                          </div>
+                        )}
+                        {isMine && mine.output_per_hour && (
+                          <div className="flex justify-between text-emerald-500/90">
+                            <span>Sản lượng/giờ:</span>
+                            <span>{mine.output_per_hour.funds_per_hour.toLocaleString()} Quỹ · +{mine.output_per_hour.contribution_per_hour} Cống hiến</span>
+                          </div>
+                        )}
                       </div>
+
+                      {/* Defenders */}
+                      {(mine.defenders?.length || 0) > 0 && (
+                        <div className="flex flex-col gap-1.5 pt-1">
+                          <div className="text-[9px] text-zinc-500 font-mono uppercase tracking-wider">
+                            Phòng thủ ({defendCount}/{defenderSlots}):
+                          </div>
+                          {mine.defenders!.map((d) => (
+                            <div key={d.id} className="flex items-center justify-between gap-2 bg-zinc-950/40 border border-zinc-900 rounded-lg px-2.5 py-1.5">
+                              <span className={`text-[10px] font-mono truncate ${d.defender_type === "beast" ? "text-orange-400" : "text-zinc-300"}`}>
+                                {d.defender_type === "beast" ? "🦖 " : "🧑‍🎓 "}{d.name}
+                              </span>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="text-[9px] font-mono text-rose-400/80">⚔ {Math.round(d.power).toLocaleString()}</span>
+                                {isMine && canManage && (
+                                  <button
+                                    onClick={async () => {
+                                      if (!(await showConfirm(`Rút phòng thủ "${d.name}" khỏi mỏ?`))) return;
+                                      await removeSectMineDefender(d.id);
+                                    }}
+                                    disabled={actionLoading}
+                                    className="text-zinc-600 hover:text-red-400 transition-colors cursor-pointer"
+                                    title="Rút phòng thủ"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       <div className="pt-3 mt-auto border-t border-zinc-900 flex gap-2">
                         {isMine ? (
-                          (mySectStatus.member?.member_rank === "CHUONG_MON" || mySectStatus.member?.member_rank === "TRUONG_LAO" || mySectStatus.member?.member_rank === "HO_PHAP") ? (
+                          canManage ? (
                             <button
-                              onClick={() => claimSectMineRewards(mine.id)}
-                              disabled={actionLoading}
-                              className="w-full py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                              onClick={() => { setDefendMine(mine); setDefendType("member"); setDefendPlayerId(""); setDefendMonsterId(""); setDefendMonsterRank(1); fetchSectMembers(); }}
+                              disabled={actionLoading || defendCount >= defenderSlots}
+                              className="w-full py-2 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 border border-cyan-500/30 disabled:opacity-50 disabled:border-zinc-800 disabled:bg-zinc-900 disabled:text-zinc-600 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                             >
-                              Thu Hoạch Mỏ
+                              {defendCount >= defenderSlots ? `Đầy Phòng Thủ (${defendCount}/${defenderSlots})` : "Bố Trí Phòng Thủ"}
                             </button>
                           ) : (
                             <div className="w-full py-2 text-center text-emerald-500/70 text-xs font-mono border border-emerald-500/10 rounded-xl bg-emerald-950/10">
                               Đang Khai Thác
                             </div>
                           )
-                        ) : (
+                        ) : canManage ? (
                           <button
-                            onClick={() => attackSectMine(mine.id)}
-                            disabled={actionLoading || isShielded || player.active_combat !== null}
+                            onClick={() => { setAttackMine(mine); setAttackPlayerId(player.id); fetchSectMembers(); }}
+                            disabled={actionLoading || isShielded}
                             className="w-full py-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 disabled:opacity-50 disabled:border-zinc-800 disabled:bg-zinc-900 disabled:text-zinc-600 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                           >
-                            {isShielded ? "Đang Được Bảo Hộ" : player.active_combat ? "Đang Chiến Đấu" : "Công Kích Lãnh Địa"}
+                            {isShielded ? "Đang Được Bảo Hộ" : `Công Kích Lãnh Địa${mine.total_defense_power > 0 ? ` (vs ${Math.round(mine.total_defense_power).toLocaleString()})` : ""}`}
                           </button>
+                        ) : (
+                          <div className="w-full py-2 text-center text-zinc-500/70 text-xs font-mono border border-zinc-800/40 rounded-xl bg-zinc-900/30">
+                            Chỉ Trưởng Lão/Hộ Pháp/Chưởng Môn mới công kích
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1155,6 +1219,158 @@ export const SectView: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* Defend modal */}
+          {defendMine && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
+              <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-zinc-100 font-serif">Bố Trí Phòng Thủ — {defendMine.name}</h3>
+                  <button onClick={() => setDefendMine(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
+                </div>
+
+                <div className="flex bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/60 w-fit">
+                  <button
+                    onClick={() => { setDefendType("member"); fetchSectMembers(); }}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${defendType === "member" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
+                  >
+                    Đệ Tử
+                  </button>
+                  <button
+                    onClick={() => setDefendType("beast")}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${defendType === "beast" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
+                  >
+                    Thần Thú
+                  </button>
+                </div>
+
+                {defendType === "member" ? (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[11px] font-bold text-zinc-500 font-mono">Chọn đệ tử phòng thủ</label>
+                    <select
+                      value={defendPlayerId}
+                      onChange={(e) => setDefendPlayerId(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-cyan-500/50"
+                    >
+                      <option value="">-- Chọn đệ tử --</option>
+                      {sectMembers
+                        .filter((m) => m.player_id !== player.id)
+                        .map((m) => (
+                          <option key={m.player_id} value={m.player_id}>
+                            {m.username} ({getRankName(m.member_rank)})
+                          </option>
+                        ))}
+                    </select>
+                    <p className="text-[10px] text-zinc-600 font-mono">Mỗi đệ tử chỉ phòng thủ được một mỏ. Sức phòng thủ = sức mạnh bộ Cổ + tu vi.</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[11px] font-bold text-zinc-500 font-mono">Chọn thần thú canh giữ</label>
+                    <select
+                      value={defendMonsterId}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        setDefendMonsterId(id);
+                        const spec = monsterDictionary[id];
+                        if (spec) setDefendMonsterRank(spec.rank || 1);
+                      }}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-cyan-500/50"
+                    >
+                      <option value="">-- Chọn thần thú --</option>
+                      {Object.entries(monsterDictionary || {}).map(([id, spec]) => (
+                        <option key={id} value={id}>{spec.name} (Hạng {spec.rank || 1})</option>
+                      ))}
+                    </select>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[11px] font-bold text-zinc-500 font-mono">Hạng thần thú</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={9}
+                        value={defendMonsterRank}
+                        onChange={(e) => setDefendMonsterRank(Math.max(1, Math.min(9, parseInt(e.target.value) || 1)))}
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-cyan-500/50 font-mono"
+                      />
+                      <span className="text-[10px] text-amber-500/80 font-mono">
+                        Phí thuê: {(defendMonsterRank || 1) * 500} Quỹ tông môn · Sức phòng thủ cao hơn khi chọn hạng lớn.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  disabled={actionLoading || (defendType === "member" ? !defendPlayerId : !defendMonsterId)}
+                  onClick={async () => {
+                    const ok = await assignSectMineDefender(
+                      defendMine.id,
+                      defendType,
+                      defendType === "member" ? defendPlayerId : undefined,
+                      defendType === "beast" ? defendMonsterId : undefined,
+                      defendType === "beast" ? defendMonsterRank : undefined
+                    );
+                    if (ok) setDefendMine(null);
+                  }}
+                  className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-all cursor-pointer"
+                >
+                  Xác Nhận Bố Trí
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Attack modal */}
+          {attackMine && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
+              <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-zinc-100 font-serif">Phát Động Công Kích — {attackMine.name}</h3>
+                  <button onClick={() => setAttackMine(null)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Chọn đệ tử ra trận</label>
+                  <select
+                    value={attackPlayerId}
+                    onChange={(e) => setAttackPlayerId(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-rose-500/50"
+                  >
+                    {sectMembers
+                      .filter((m) => m.member_rank !== "NGOAI_MON")
+                      .map((m) => (
+                        <option key={m.player_id} value={m.player_id}>
+                          {m.username} ({getRankName(m.member_rank)}) — ⚔ {Math.round(m.power || 0).toLocaleString()}
+                        </option>
+                      ))}
+                  </select>
+                  <p className="text-[10px] text-zinc-600 font-mono">Đệ tử Ngoại Môn không thể tham gia tranh đoạt. Nhân Khí khi thắng thuộc về người ra trận.</p>
+                </div>
+
+                {attackPlayerId && (
+                  <div className="flex items-center justify-center gap-3 bg-zinc-900/40 border border-zinc-900 rounded-xl px-4 py-3 font-mono text-xs">
+                    <span className="text-zinc-300">
+                      ⚔ <span className="text-rose-400 font-bold">{Math.round(sectMembers.find((m) => m.player_id === attackPlayerId)?.power || 0).toLocaleString()}</span>
+                    </span>
+                    <span className="text-zinc-600">vs</span>
+                    <span className="text-zinc-300">
+                      🛡 <span className="text-blue-400 font-bold">{Math.round(attackMine.total_defense_power || 0).toLocaleString()}</span>
+                    </span>
+                  </div>
+                )}
+
+                <button
+                  disabled={actionLoading || !attackPlayerId || (attackMine.shield_until ? new Date(attackMine.shield_until).getTime() > nowTs : false)}
+                  onClick={async () => {
+                    const ok = await attackSectMine(attackMine.id, attackPlayerId);
+                    if (ok) setAttackMine(null);
+                  }}
+                  className="w-full py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-all cursor-pointer"
+                >
+                  Xác Nhận Công Kích
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -2388,7 +2604,7 @@ export const SectView: React.FC = () => {
                             {isSelf && <span className="text-[9px] text-blue-400 font-mono font-semibold">(Đạo hữu)</span>}
                           </div>
                           <div className="text-[10px] text-zinc-500 font-mono">
-                            Tu vi: Rank {mInfo.player_rank} | Quyên hiến tích lũy: <strong className="text-yellow-500">{mInfo.contribution_points} Pts</strong>
+                            Tu vi: Rank {mInfo.player_rank} | Cống hiến tích lũy: <strong className="text-yellow-500">{mInfo.contribution_points} Pts</strong>
                           </div>
                         </div>
 

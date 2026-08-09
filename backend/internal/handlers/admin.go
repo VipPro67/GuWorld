@@ -1329,7 +1329,7 @@ func AdminListSects(c *gin.Context) {
 		Description               string `json:"description"`
 		Region                    string `json:"region"`
 		Level                     int    `json:"level"`
-		Funds                     int    `json:"funds"`
+		Funds                     int64  `json:"funds"`
 		RequireApproval           bool   `json:"require_approval"`
 		RequirePromotionApproval  bool   `json:"require_promotion_approval"`
 		MemberCount               int    `json:"member_count"`
@@ -1365,7 +1365,7 @@ func AdminGetSectDetail(c *gin.Context) {
 		Description               string          `json:"description"`
 		Region                    string          `json:"region"`
 		Level                     int             `json:"level"`
-		Funds                     int             `json:"funds"`
+		Funds                     int64           `json:"funds"`
 		RequireApproval           bool            `json:"require_approval"`
 		RequirePromotionApproval  bool            `json:"require_promotion_approval"`
 		VaultGu                   json.RawMessage `json:"vault_gu"`
@@ -1429,7 +1429,7 @@ type AdminSectUpdateRequest struct {
 	Description     *string `json:"description"`
 	Region          *string `json:"region"`
 	Level           *int    `json:"level"`
-	Funds           *int    `json:"funds"`
+	Funds           *int64  `json:"funds"`
 	RequireApproval *bool   `json:"require_approval"`
 	RequirePromotionApproval *bool `json:"require_promotion_approval"`
 }

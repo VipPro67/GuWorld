@@ -711,7 +711,7 @@ func InitSchema() error {
 		vault_gu JSONB NOT NULL DEFAULT '[]',
 		vault_materials JSONB NOT NULL DEFAULT '{}',
 		vault_recipes JSONB NOT NULL DEFAULT '[]',
-		funds INTEGER NOT NULL DEFAULT 0,
+		funds BIGINT NOT NULL DEFAULT 0,
 		level INTEGER NOT NULL DEFAULT 1
 	);`)
 	if err != nil {
@@ -1095,7 +1095,8 @@ func InitSchema() error {
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS soul_tier VARCHAR(30) NOT NULL DEFAULT 'NHAN_HON';`, "soul_tier"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS needs_soul_refine BOOLEAN NOT NULL DEFAULT FALSE;`, "needs_soul_refine"},
 		{`ALTER TABLE messages ADD COLUMN IF NOT EXISTS sect_id VARCHAR(50) REFERENCES sects(id) ON DELETE CASCADE;`, "messages.sect_id"},
-		{`ALTER TABLE sects ADD COLUMN IF NOT EXISTS funds INTEGER NOT NULL DEFAULT 0;`, "sects.funds"},
+		{`ALTER TABLE sects ADD COLUMN IF NOT EXISTS funds BIGINT NOT NULL DEFAULT 0;`, "sects.funds"},
+		{`ALTER TABLE sects ALTER COLUMN funds TYPE BIGINT;`, "sects.funds_bigint"},
 		{`ALTER TABLE sects ADD COLUMN IF NOT EXISTS level INTEGER NOT NULL DEFAULT 1;`, "sects.level"},
 		{`ALTER TABLE sects ADD COLUMN IF NOT EXISTS require_approval BOOLEAN NOT NULL DEFAULT FALSE;`, "sects.require_approval"},
 		{`ALTER TABLE sects ADD COLUMN IF NOT EXISTS require_promotion_approval BOOLEAN NOT NULL DEFAULT FALSE;`, "sects.require_promotion_approval"},
@@ -1236,6 +1237,26 @@ func InitSchema() error {
 			('Huyền Vũ Thạch Động', 'Hiếm'),
 			('Bách Thảo Tiên Vực', 'Thường')
 			ON CONFLICT (name) DO NOTHING;`, "seed_sect_mines"},
+		{`CREATE TABLE IF NOT EXISTS sect_mine_defenders (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			mine_id INTEGER NOT NULL REFERENCES sect_mines(id) ON DELETE CASCADE,
+			sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,
+			defender_type VARCHAR(20) NOT NULL DEFAULT 'member', -- member | beast
+			player_id UUID REFERENCES players(id) ON DELETE CASCADE,
+			name VARCHAR(100) NOT NULL DEFAULT '',
+			monster_id VARCHAR(80),
+			monster_rank INTEGER NOT NULL DEFAULT 1,
+			monster_sub_rank INTEGER NOT NULL DEFAULT 1,
+			power DOUBLE PRECISION NOT NULL DEFAULT 0,
+			assigned_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now()
+		);`, "create_sect_mine_defenders_table"},
+		{`CREATE UNIQUE INDEX IF NOT EXISTS uq_sect_mine_defender_player ON sect_mine_defenders (player_id) WHERE defender_type = 'member' AND player_id IS NOT NULL;`, "uq_sect_mine_defender_player"},
+		{`CREATE INDEX IF NOT EXISTS idx_sect_mine_defenders_mine ON sect_mine_defenders (mine_id);`, "idx_sect_mine_defenders_mine"},
+		{`ALTER TABLE sect_mines ADD COLUMN IF NOT EXISTS pending_funds DOUBLE PRECISION NOT NULL DEFAULT 0;`, "sect_mines.pending_funds"},
+		{`ALTER TABLE sect_mines ADD COLUMN IF NOT EXISTS pending_materials DOUBLE PRECISION NOT NULL DEFAULT 0;`, "sect_mines.pending_materials"},
+		{`ALTER TABLE sect_members ADD COLUMN IF NOT EXISTS territory_pending DOUBLE PRECISION NOT NULL DEFAULT 0;`, "sect_members.territory_pending"},
+		{`ALTER TABLE sect_members ADD COLUMN IF NOT EXISTS territory_credited_at DATE;`, "sect_members.territory_credited_at"},
+		{`ALTER TABLE sect_members ADD COLUMN IF NOT EXISTS territory_credited_today INTEGER NOT NULL DEFAULT 0;`, "sect_members.territory_credited_today"},
 		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS usage_count INTEGER NOT NULL DEFAULT 0;`, "usage_count"},
 
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS needs_onboarding BOOLEAN NOT NULL DEFAULT false;`, "needs_onboarding"},
