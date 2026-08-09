@@ -446,7 +446,11 @@ func RefineGu(c *gin.Context) {
 		newInventory = append(newInventory, newGuInstance)
 		player.GuInventory = newInventory
 		if newGuInstance.Rank >= 6 {
-			message := fmt.Sprintf("Đạo hữu %s đã luyện chế thành công Cổ Trùng [%s] R%d!", player.Username, newGuInstance.GuID, newGuInstance.Rank)
+			guName := newGuInstance.GuID
+			if targetSpec, ok := models.GetGuAny(newGuInstance.GuID); ok {
+				guName = targetSpec.Name
+			}
+			message := fmt.Sprintf("Đạo hữu %s đã luyện chế thành công Cổ Trùng [%s] R%d!", player.Username, guName, newGuInstance.Rank)
 			_ = SendSystemMessage("world", sql.NullString{}, message)
 		}
 

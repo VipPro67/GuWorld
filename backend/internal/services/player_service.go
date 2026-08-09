@@ -276,6 +276,8 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 
 	regenRatePerHour += models.ManaRegenTickPerHour(player.GuInventory, player.Rank)
 
+	player.RegenRate += models.ThoughtRegenTickPerHour(player.GuInventory, player.Rank)
+
 	player.ManaRegenRate = regenRatePerHour * (1.0 + gamefx.Get(player).ManaRegenBonus)
 
 	secondsPassed := now.Sub(player.LastManaUpdate).Seconds()

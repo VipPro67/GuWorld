@@ -75,7 +75,7 @@ Dưới đây là các trường thuộc tính được thiết kế sẵn trong
     *   `attack_speed`, `success_rate_bonus` (Tỷ lệ thành công luyện cổ)
     *   `storage_capacity_gu`, `refinement_power`, `control_power`
 *   **Mã hành động đặc biệt bên ngoài chiến đấu (`other`):**
-    *   `INCREASE_APTITUDE` (Thăng thiên tư chất), `RANK_PROGRESS` (Tăng tiểu cảnh giới), `APERTURE_PETRIFICATION` (Hóa đá không khiếu), `GIVE_STONES` (Sinh ra nguyên thạch), `SOUL_BOOST` (Cường hóa hồn phách), `FORCE_RANK_UP` (Cưỡng ép thăng chuyển), `MANA_POLLUTION` (Chân nguyên ô nhiễm), `ADD_LIFESPAN_YEARS` (Tăng thọ mệnh).
+    *   `INCREASE_APTITUDE` (Thăng thiên tư chất), `RANK_PROGRESS` (Tăng tiểu cảnh giới), `APERTURE_PETRIFICATION` (Hóa đá không khiếu), `GIVE_STONES` (Sinh ra nguyên thạch), `SOUL_BOOST` (Cường hóa hồn phách), `FORCE_RANK_UP` (Cưỡng ép thăng chuyển), `MANA_POLLUTION` (Chân nguyên ô nhiễm), `ADD_LIFESPAN_YEARS` (Tăng thọ mệnh), `ADD_SOUL_MAX` (Tăng Linh Hồn tối đa), `RESTORE_MENTAL` (Hồi phục Niệm Lực `current_thought`), `THOUGHT_REGEN_TICK` (Hồi Niệm Lực theo giờ, `event_trigger: ON_TICK`, dùng `params.value` × rank scale giống `MANA_REGEN_TICK`).
 
 ---
 

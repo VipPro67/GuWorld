@@ -3702,9 +3702,9 @@ func UseConsumableGu(c *gin.Context) {
 	}
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET sub_rank = $1, rank = $2, primeval_stones = $3, max_mana = $4, current_mana = $5, equipped_gus = $6, wall_progress = $7, hp = $8, lifespan = $9, aptitude_percent = $10, immortal_stones = $11, aperture_stress = $12, human_qi = $13, max_soul = $14
-		WHERE id = $15`,
-		player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.WallProgress, player.HP, player.Lifespan, player.AptitudePercent, player.ImmortalStones, player.ApertureStress, player.HumanQi, player.MaxSoul, player.ID,
+		SET sub_rank = $1, rank = $2, primeval_stones = $3, max_mana = $4, current_mana = $5, equipped_gus = $6, wall_progress = $7, hp = $8, lifespan = $9, aptitude_percent = $10, immortal_stones = $11, aperture_stress = $12, human_qi = $13, max_soul = $14, current_thought = $15
+		WHERE id = $16`,
+		player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.WallProgress, player.HP, player.Lifespan, player.AptitudePercent, player.ImmortalStones, player.ApertureStress, player.HumanQi, player.MaxSoul, player.CurrentThought, player.ID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using Gu"})
@@ -3832,9 +3832,9 @@ func UseSupportGu(c *gin.Context) {
 	// Save to DB — support Gu stays in inventory, no need to rewrite inventory
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET max_mana = $1, current_mana = $2, aptitude_percent = $3, hp = $4, aperture_stress = $5, human_qi = $6
-		WHERE id = $7`,
-		player.MaxMana, player.CurrentMana, player.AptitudePercent, player.HP, player.ApertureStress, player.HumanQi,
+		SET max_mana = $1, current_mana = $2, aptitude_percent = $3, hp = $4, aperture_stress = $5, human_qi = $6, current_thought = $7
+		WHERE id = $8`,
+		player.MaxMana, player.CurrentMana, player.AptitudePercent, player.HP, player.ApertureStress, player.HumanQi, player.CurrentThought,
 		player.ID,
 	)
 	if err != nil {

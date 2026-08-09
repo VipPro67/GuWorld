@@ -319,7 +319,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       sound: "Âm Thanh", space: "Không Gian", strength: "Lực", sun: "Nhật",
       sword: "Kiếm", theft: "Trộm", theme: "Chủ Đề", time: "Thời Gian",
       transformation: "Biến Hóa", water: "Thủy", wind: "Phong",
-      wisdom: "Trí Tuệ", wood: "Mộc",
+      wisdom: "Trí", wood: "Mộc",
     };
     return labels[path] || path;
   };

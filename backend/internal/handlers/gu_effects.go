@@ -510,6 +510,16 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 			player.CurrentMana = player.MaxMana
 		}
 		return "", nil
+	case "THOUGHT_REGEN_TICK":
+		val, _ := params["value"].(float64)
+		if val <= 0 {
+			val = 1.0
+		}
+		player.CurrentThought += val
+		if player.CurrentThought > player.MaxThought {
+			player.CurrentThought = player.MaxThought
+		}
+		return "", nil
 	case "GENERATE_IMMORTAL_STONES_TICK":
 		val, _ := params["value"].(float64)
 		if val <= 0 {
@@ -527,6 +537,21 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 			player.ApertureStress = 0
 		}
 		return fmt.Sprintf("Giảm %.0f áp lực tinh thần.", val), nil
+	case "RESTORE_MENTAL":
+		val, _ := params["value"].(float64)
+		if val <= 0 {
+			val = player.MaxThought
+		}
+		before := player.CurrentThought
+		player.CurrentThought += val
+		if player.CurrentThought > player.MaxThought {
+			player.CurrentThought = player.MaxThought
+		}
+		if player.CurrentThought < 0 {
+			player.CurrentThought = 0
+		}
+		restored := player.CurrentThought - before
+		return fmt.Sprintf("Hồi phục %.0f Niệm Lực.", restored), nil
 	default:
 		return "", fmt.Errorf("Chưa hỗ trợ action code: %s", actionCode)
 	}

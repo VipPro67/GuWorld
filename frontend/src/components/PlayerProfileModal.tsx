@@ -25,7 +25,7 @@ const pathNameMap: Record<string, string> = {
   human: "Nhân Đạo",
   ice: "Hàn Băng Đạo",
   illusion: "Ảo Giác Đạo",
-  information: "Trí Đạo",
+  information: "Tín Đạo",
   investigation: "Trinh Sát Đạo",
   life: "Sinh Đạo",
   light: "Quang Minh Đạo",
@@ -54,7 +54,7 @@ const pathNameMap: Record<string, string> = {
   transformation: "Biến Hóa Đạo",
   water: "Thủy Đạo",
   wind: "Phong Đạo",
-  wisdom: "Trí Tuệ Đạo",
+  wisdom: "Trí Đạo",
   wood: "Mộc Đạo",
 };
 

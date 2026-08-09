@@ -29,7 +29,7 @@ const pathLabels: Record<string, string> = {
   "Human Path": "Nhân Đạo",
   "Ice Path": "Hàn Băng Đạo",
   "Illusion Path": "Ảo Giác Đạo",
-  "Information Path": "Trí Đạo",
+  "Information Path": "Tín Đạo",
   "Investigation Path": "Trinh Sát Đạo",
   "Life Path": "Sinh Đạo",
   "Light Path": "Quang Minh Đạo",
@@ -56,7 +56,7 @@ const pathLabels: Record<string, string> = {
   "Transformation Path": "Biến Hóa Đạo",
   "Water Path": "Thủy Đạo",
   "Wind Path": "Phong Đạo",
-  "Wisdom Path": "Trí Tuệ Đạo",
+  "Wisdom Path": "Trí Đạo",
   "Wood Path": "Mộc Đạo",
 };
 
