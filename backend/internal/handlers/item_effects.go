@@ -206,8 +206,8 @@ func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec
 	msg := fmt.Sprintf("Mở %s thành công!\n", item.Name)
 	var reward map[string]interface{}
 
-	// ── 50 % → Nguyên Thạch  |  50 % → Vật phẩm (vật liệu / cổ trùng / bí phương)
-	if rand.Float64() < 0.50 {
+	// ── 20 % → Nguyên Thạch  |  80 % → Vật phẩm (vật liệu / bí phương)
+	if rand.Float64() < 0.20 {
 		// ── STONES: 100-500
 		stones := float64(100 + rand.Intn(401))
 		player.PrimevalStones += stones
@@ -218,23 +218,11 @@ func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec
 		}
 	} else {
 		// ── ITEM POOL ──
-		// Roll type: Material 92.5%, Gu 5%, Recipe 2.5%
+		// Roll type: Material 80%, Recipe 20%
 		roll := rand.Float64() * 100.0
 
-		if roll < 5.0 {
-			// ── GU DROP (5%) ──
-			var guMsg string
-			guMsg, reward = rollGuDrop(tx, player, item)
-			if guMsg != "" {
-				msg += guMsg
-			} else {
-				// Fallback to materials if no valid Gu found
-				var matMsg string
-				matMsg, reward = rollMaterialDrop(tx, player, item)
-				msg += matMsg
-			}
-		} else if roll < 7.5 {
-			// ── RECIPE DROP (2.5%) ──
+		if roll < 20.0 {
+			// ── RECIPE DROP (20%) ──
 			var recipeMsg string
 			recipeMsg, reward = rollRecipeDrop(tx, player, item)
 			if recipeMsg != "" {
@@ -245,7 +233,7 @@ func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec
 				msg += matMsg
 			}
 		} else {
-			// ── MATERIAL DROP (92.5%) ──
+			// ── MATERIAL DROP (80%) ──
 			var matMsg string
 			matMsg, reward = rollMaterialDrop(tx, player, item)
 			msg += matMsg
