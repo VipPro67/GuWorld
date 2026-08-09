@@ -152,8 +152,8 @@ func ChallengeArena(c *gin.Context) {
 		if lastChallengeAt.YearDay() != now.YearDay() || lastChallengeAt.Year() != now.Year() {
 			dailyChallenges = 0
 		}
-		if dailyChallenges >= 99 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Hôm nay đạo hữu đã hết lượt khiêu chiến Võ Đài (Tối đa 99 lần/ngày)!"})
+		if dailyChallenges >= 10 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Hôm nay đạo hữu đã hết lượt khiêu chiến Võ Đài (Tối đa 10 lần/ngày)!"})
 			return
 		}
 

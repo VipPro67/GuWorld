@@ -193,7 +193,7 @@ export const WikiView: React.FC = () => {
                 </p>
                 <ul className="list-disc list-inside pl-2 space-y-1">
                   <li><strong>Khai Thác Mỏ (Mining):</strong> Đào khoáng và Nguyên Thạch dã ngoại. Đôi khi bạn sẽ chạm trán <strong>Quái Mỏ</strong> hung hãn bảo vệ quặng, cần tiêu diệt chúng để tiếp tục khai thác. Mỏ được tái lập mỗi ngày lúc 00:00.</li>
-                  <li><strong>Thám Hiểm (Exploration):</strong> Di chuyển qua các ô đất sương mù trên bản đồ để nhận khoáng sản quý, thảo dược và gặp gỡ các kỳ ngộ nhận thưởng. Mỗi ngày có <strong>tối đa 10 lượt thám hiểm</strong> (chỉ 5 lượt nếu đi theo tổ đội).</li>
+                  <li><strong>Thám Hiểm (Exploration):</strong> Di chuyển qua các ô đất sương mù trên bản đồ để nhận khoáng sản quý, thảo dược và gặp gỡ các kỳ ngộ nhận thưởng. Mỗi ngày có <strong>tối đa 20 lượt thám hiểm</strong>.</li>
                 </ul>
                 <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/20 text-amber-300">
                   ⏱️ <strong>Quy luật thời gian:</strong> Áp lực vách khiếu giảm <strong>phân nửa mỗi 2 giờ đời thật</strong>. Chân Nguyên hồi tự động theo tư chất (Giáp 8/giờ, Ất 6/giờ, Bính 4/giờ, Đinh 2/giờ) — đừng để Chân Nguyên bị lãng phí vì thanh đầy.
@@ -254,7 +254,7 @@ export const WikiView: React.FC = () => {
                   • <strong>Đấu Trường:</strong> Khiêu chiến đội hình Cổ sư của người chơi khác để tích lũy <strong>Chiến Công</strong>. Chiến công dùng để đổi các bảo vật và Cổ trùng độc quyền tại Cửa Hàng Đấu Trường.
                 </p>
                 <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/20 text-amber-300">
-                  ⏱️ <strong>Giới hạn hàng ngày:</strong> Mỗi ngày đạo hữu được khiêu chiến Võ Đài tối đa <strong>99 trận</strong>; hạn mức đấu trường được làm mới theo ngày. Dùng hết lượt để tối đa hóa Chiến Công và Nhân Khí tích lũy.
+                  ⏱️ <strong>Giới hạn hàng ngày:</strong> Mỗi ngày đạo hữu được khiêu chiến Võ Đài tối đa <strong>10 trận</strong>; hạn mức đấu trường được làm mới theo ngày. Thắng nhận <strong>50 Xu Đấu Trường</strong>, thua nhận <strong>10 Xu</strong>. Dùng hết lượt để tối đa hóa Chiến Công và Nhân Khí tích lũy.
                 </div>
               </div>
             </div>
@@ -344,7 +344,7 @@ export const WikiView: React.FC = () => {
                     </tr>
                     <tr>
                       <td className="p-3 font-bold text-zinc-200">Mỗi ngày (00:00)</td>
-                      <td className="p-3">Làm mới lượt thám hiểm (10 lượt), khiêu chiến Đấu Trường (99 trận), tái lập mỏ khai thác.</td>
+                      <td className="p-3">Làm mới lượt thám hiểm (20 lượt), khiêu chiến Đấu Trường (10 trận), tái lập mỏ khai thác.</td>
                     </tr>
                     <tr>
                       <td className="p-3 font-bold text-zinc-200">Sau 10 ngày thăng tiên</td>

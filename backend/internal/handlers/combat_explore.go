@@ -231,8 +231,8 @@ func checkAndIncrementExploreLimit(tx *sql.Tx, player *models.Player) error {
 	if err := resetIfNeeded(&player.ExploreCount, &player.LastExploreReset, player.ID); err != nil {
 		return err
 	}
-	if player.ExploreCount >= 10 {
-		return fmt.Errorf("Đạo hữu đã hết lượt khám phá hôm nay (tối đa 10 lượt/ngày).")
+	if player.ExploreCount >= 20 {
+		return fmt.Errorf("Đạo hữu đã hết lượt khám phá hôm nay (tối đa 20 lượt/ngày).")
 	}
 
 	if player.PartyID != nil {
@@ -258,8 +258,8 @@ func checkAndIncrementExploreLimit(tx *sql.Tx, player *models.Player) error {
 								return errUpd
 							}
 						}
-						if tCount >= 5 {
-							return fmt.Errorf("Thành viên trong tổ đội (%s) đã hết lượt khám phá hôm nay (tối đa 5 lượt/ngày).", m.Username)
+						if tCount >= 20 {
+							return fmt.Errorf("Thành viên trong tổ đội (%s) đã hết lượt khám phá hôm nay (tối đa 20 lượt/ngày).", m.Username)
 						}
 					}
 				}

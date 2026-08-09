@@ -398,6 +398,15 @@ func AutoCombatStart(c *gin.Context) {
 
 	if alliesAlive {
 		if isVirtual {
+			if err := InventorySvc.AddItem(tx, player.ID.String(), "arena_coin", "materials", 50); err != nil {
+				logger.S.Errorf("Failed to award arena_coin to %s: %v", player.ID, err)
+			} else {
+				logs = append(logs, simulator.CombatLog{
+					Turn:   simState.Turn,
+					Action: "ARENA_REWARD",
+					Detail: "Chiến thắng Võ Đài! Nhận thưởng 50 Xu Đấu Trường.",
+				})
+			}
 			if player.ActiveCombat != nil && player.ActiveCombat.TargetPlayerID != "" && player.ActiveCombat.TargetPlayerID != "dummy" {
 				targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID)
 				if parseErr == nil {
@@ -702,6 +711,15 @@ func AutoCombatStart(c *gin.Context) {
 		if isVirtual {
 			updateQuery = `UPDATE players SET active_combat = NULL WHERE id = $1`
 			args = append(args, player.ID)
+			if err := InventorySvc.AddItem(tx, player.ID.String(), "arena_coin", "materials", 10); err != nil {
+				logger.S.Errorf("Failed to award arena_coin to %s: %v", player.ID, err)
+			} else {
+				logs = append(logs, simulator.CombatLog{
+					Turn:   simState.Turn,
+					Action: "ARENA_REWARD",
+					Detail: "Thua cuộc tại Võ Đài. Nhận an ủi 10 Xu Đấu Trường.",
+				})
+			}
 			logs = append(logs, simulator.CombatLog{
 				Turn:   simState.Turn,
 				Action: "BATTLE_END",
