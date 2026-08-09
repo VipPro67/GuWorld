@@ -16,7 +16,7 @@ import {
   SlidersHorizontal,
   ArrowLeft
 } from "lucide-react";
-import { type GuDictionaryItem } from "@/lib/gu-dict";
+import { type GuDictionaryItem, reqGuQty, reqGuRank } from "@/lib/gu-dict";
 import { type ItemSpec, type RefiningRecipe } from "@/store/useGameStore";
 import { getPathColor } from "@/lib/utils";
 
@@ -875,9 +875,11 @@ export default function WikiClientView({
                             <p className="text-[10px] text-zinc-600 italic font-mono">Không yêu cầu Cổ khác</p>
                           ) : (
                             <div className="space-y-1">
-                              {Object.entries(recipe.required_gus).map(([guId, qty]) => {
+                              {Object.entries(recipe.required_gus).map(([guId, value]) => {
                                 const reqGu = guMap.get(guId);
                                 const reqName = reqGu ? reqGu.name : guId;
+                                const qty = reqGuQty(value);
+                                const rank = reqGuRank(value);
                                 return (
                                   <div
                                     key={guId}
@@ -886,7 +888,7 @@ export default function WikiClientView({
                                     title="Click để tìm Cổ trùng này"
                                   >
                                     <span className="text-[var(--text-primary)] hover:text-indigo-400 transition-colors truncate">
-                                      {reqName}
+                                      {reqName}{rank > 0 ? ` (Bậc ${rank})` : ""}
                                     </span>
                                     <span className="text-zinc-500 font-bold shrink-0 ml-2">x{qty}</span>
                                   </div>

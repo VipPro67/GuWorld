@@ -87,8 +87,8 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | POST | `/inventory/use-gu` |
 | POST | `/inventory/use-support` |
 | POST | `/inventory/drop` |
-| POST | `/refine` |
-| POST | `/refine/deduce` |
+| POST | `/refine` | Luyện Cổ. Recipe `required_gus` là map `gu_id → {rank, qty}`; Cổ nguyên liệu phải khớp `gu_id` và đúng `rank` (khi `rank != 0`). |
+| POST | `/refine/deduce` | Suy diễn recipe. |
 | POST | `/killer-moves/calculate` |
 | POST | `/killer-moves` |
 | GET | `/killer-moves` |

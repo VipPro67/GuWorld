@@ -221,6 +221,8 @@ Cổ sư có thể:
 
 - Cổ phương lấy từ `backend/Recipe.csv`.
 - Luyện Cổ dùng `/api/refine` với recipe và selected Gu instances.
+- Cổ nguyên liệu trong công thức yêu cầu **đúng bậc** (`required_gus` lưu cả `rank` lẫn `qty`); Cổ khác bậc sẽ không được tính vào công thức.
+- Có thể kéo-thả Cổ bất kỳ vào ô nguyên liệu (kể cả ô "Cổ Trùng Ẩn"). Nếu bộ Cổ không khớp công thức, khi Ép Luyện sẽ **thất bại chắc chắn** — nguyên liệu, tài nguyên vẫn bị tiêu hao và (nếu là Ép Luyện) chịu phản phệ như thất bại thường.
 - Suy diễn recipe dùng `/api/refine/deduce`, cập nhật tiến độ unlock recipe trong player.
 
 ## 7. Sát chiêu

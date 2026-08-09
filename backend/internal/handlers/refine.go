@@ -127,9 +127,9 @@ func GetRecipes(c *gin.Context) {
 	// If empty, initialize with defaults
 	if len(recipeProgresses) == 0 {
 		defaults := []services.RecipeProgress{
-			{PlayerID: playerID.String(), RecipeID: "recipe_moon_raiment", CompletionRate: 100.0, IsUnlocked: true},
-			{PlayerID: playerID.String(), RecipeID: "recipe_white_jade", CompletionRate: 50.0, IsUnlocked: true},
-			{PlayerID: playerID.String(), RecipeID: "recipe_four_flavors_liquor", CompletionRate: 30.0, IsUnlocked: true},
+			{PlayerID: playerID.String(), RecipeID: "recipe_GU_MOON_RAIMENT_2_1", CompletionRate: 100.0, IsUnlocked: true},
+			{PlayerID: playerID.String(), RecipeID: "recipe_GU_WHITE_JADE_2_1", CompletionRate: 100.0, IsUnlocked: true},
+			{PlayerID: playerID.String(), RecipeID: "recipe_GU_FOUR_FLAVORS_LIQUOR_2_1", CompletionRate: 100.0, IsUnlocked: true},
 		}
 		for i := range defaults {
 			RecipeSvc.Upsert(nil, &defaults[i])
@@ -276,15 +276,15 @@ func RefineGu(c *gin.Context) {
 
 	// 6. Validate Selected Gu Instance IDs
 	totalReqGusCount := 0
-	for _, reqQty := range recipe.RequiredGus {
-		totalReqGusCount += reqQty
+	for _, req := range recipe.RequiredGus {
+		totalReqGusCount += req.Qty
 	}
 	if len(req.SelectedGuInstanceIDs) != totalReqGusCount {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Incorrect number of Gu bugs selected for refining"})
 		return
 	}
 
-	// Count Gu types and verify ownership
+	// Count Gu types (matching the required rank) and verify ownership
 	selectedGusCounts := make(map[string]int)
 	seenInstances := make(map[string]bool)
 
@@ -302,7 +302,11 @@ func RefineGu(c *gin.Context) {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot use a DEAD Gu bug for refining"})
 					return
 				}
-				selectedGusCounts[item.GuID]++
+				// Count only instances that satisfy the recipe requirement.
+				// Rank 0 (legacy) means any rank is acceptable.
+				if req, ok := recipe.RequiredGus[item.GuID]; ok && (req.Rank == 0 || req.Rank == item.Rank) {
+					selectedGusCounts[item.GuID]++
+				}
 				found = true
 				break
 			}
@@ -313,11 +317,13 @@ func RefineGu(c *gin.Context) {
 		}
 	}
 
-	// Check if selection matches recipe required Gus exactly
-	for guID, reqQty := range recipe.RequiredGus {
-		if selectedGusCounts[guID] != reqQty {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Incorrect types of Gu bugs selected for this recipe"})
-			return
+	// Check if selection matches recipe required Gus exactly (gu_id + rank).
+	// A wrong combo is allowed (drag-drop experiment) but guarantees the refine fails below.
+	guRequirementsNotMet := false
+	for guID, req := range recipe.RequiredGus {
+		if selectedGusCounts[guID] != req.Qty {
+			guRequirementsNotMet = true
+			break
 		}
 	}
 
@@ -385,6 +391,10 @@ func RefineGu(c *gin.Context) {
 	}
 	if finalSuccessRate > 1.0 {
 		finalSuccessRate = 1.0
+	}
+	if guRequirementsNotMet {
+		// Wrong Gu combo: the attempt proceeds but is guaranteed to fail (materials are consumed).
+		finalSuccessRate = 0.0
 	}
 
 	roll := rand.Float64()
@@ -456,7 +466,9 @@ func RefineGu(c *gin.Context) {
 
 	} else {
 		statusStr = "failed"
-		if !isUniqueImmortalFail {
+		if guRequirementsNotMet {
+			statusMsg = "Cổ nguyên liệu không khớp công thức! Các nguyên liệu đã hóa thành tro bụi."
+		} else if !isUniqueImmortalFail {
 			statusMsg = "Hợp luyện thất bại! Các nguyên liệu thường đã hóa thành tro bụi."
 		}
 

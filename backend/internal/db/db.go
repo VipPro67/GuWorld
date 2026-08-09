@@ -18,6 +18,10 @@ import (
 
 var DB *sql.DB
 
+// baseRankCache memoizes the minimum dictionary rank of each Gu id, used when
+// upgrading legacy recipe required_gus values to the ranked format.
+var baseRankCache = map[string]int{}
+
 // Connect establishes a connection to the PostgreSQL database
 func Connect() error {
 	host := getEnv("DB_HOST", "localhost")
@@ -2056,7 +2060,7 @@ func seedRecipesFromCSV(filename string) error {
 		if id == "" {
 			id = fmt.Sprintf("%s_R%s_V%s", targetGuID, targetRankStr, variantStr)
 		}
-		reqGus := get(row, reqGusIdx)
+		reqGus := normalizeRecipeRequiredGus(get(row, reqGusIdx))
 		reqMats := get(row, reqMatsIdx)
 		if reqMats == "" {
 			reqMats = "{}"
@@ -2111,6 +2115,65 @@ func seedRecipesFromCSV(filename string) error {
 	}
 	logger.S.Infof("Recipes seeded from %s (%d seeded, %d skipped)", filename, seeded, skipped)
 	return nil
+}
+
+// normalizeRecipeRequiredGus converts a required_gus JSON document into the
+// ranked form {"GU_ID": {"rank": N, "qty": Q}}. Legacy numeric quantities
+// ({"GU_ID": Q}) are upgraded to the material Gu's base (minimum) dictionary
+// rank. Already-ranked object values are preserved. Unparseable input yields
+// an empty object.
+func normalizeRecipeRequiredGus(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "{}"
+	}
+	var rawMap map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &rawMap); err != nil {
+		return "{}"
+	}
+	out := make(map[string]map[string]int, len(rawMap))
+	for k, v := range rawMap {
+		trimmed := strings.TrimSpace(string(v))
+		if len(trimmed) > 0 && trimmed[0] == '{' {
+			var item struct {
+				Rank int `json:"rank"`
+				Qty  int `json:"qty"`
+			}
+			if err := json.Unmarshal([]byte(trimmed), &item); err != nil {
+				continue
+			}
+			if item.Qty <= 0 {
+				item.Qty = 1
+			}
+			out[k] = map[string]int{"rank": item.Rank, "qty": item.Qty}
+			continue
+		}
+		qty := 0
+		fmt.Sscanf(trimmed, "%d", &qty)
+		if qty <= 0 {
+			qty = 1
+		}
+		out[k] = map[string]int{"rank": baseGuRank(k), "qty": qty}
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
+}
+
+// baseGuRank returns the minimum dictionary rank for a Gu id, defaulting to 1
+// when the Gu is absent from gu_dictionary.
+func baseGuRank(guID string) int {
+	if r, ok := baseRankCache[guID]; ok {
+		return r
+	}
+	var r int
+	if err := DB.QueryRow(`SELECT MIN(rank) FROM gu_dictionary WHERE id = $1`, guID).Scan(&r); err != nil || r <= 0 {
+		r = 1
+	}
+	baseRankCache[guID] = r
+	return r
 }
 
 // seedShopItemsFromCSV reads ShopItem.csv and upserts caravan shop inventory.

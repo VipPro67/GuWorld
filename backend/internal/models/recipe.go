@@ -1,12 +1,24 @@
 package models
 
 import (
+	"bytes"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 )
 
-type RequiredGusMap map[string]int
+// RequiredGuItem describes one material Gu required by a refining recipe.
+// Rank 0 means "any rank" (used for legacy recipes that predate ranked
+// materials). Qty is the number of such Gu instances required.
+type RequiredGuItem struct {
+	Rank int `json:"rank"`
+	Qty  int `json:"qty"`
+}
+
+// RequiredGusMap maps a material Gu id to its requirement. It accepts both the
+// ranked JSON form {"GU_ID": {"rank": N, "qty": Q}} and the legacy form
+// {"GU_ID": Q} (parsed as {rank: 0, qty: Q}).
+type RequiredGusMap map[string]RequiredGuItem
 type RequiredMaterialsMap map[string]int
 
 type RefiningRecipe struct {
@@ -60,7 +72,41 @@ func (rg *RequiredGusMap) Scan(value interface{}) error {
 	if !ok {
 		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 	}
-	return json.Unmarshal(b, rg)
+	return rg.UnmarshalJSON(b)
+}
+
+// UnmarshalJSON accepts both the ranked object form and the legacy numeric form.
+func (rg *RequiredGusMap) UnmarshalJSON(data []byte) error {
+	raw := map[string]json.RawMessage{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		*rg = RequiredGusMap{}
+		return err
+	}
+	out := RequiredGusMap{}
+	for k, v := range raw {
+		trimmed := bytes.TrimSpace(v)
+		if len(trimmed) > 0 && trimmed[0] == '{' {
+			var item RequiredGuItem
+			if err := json.Unmarshal(trimmed, &item); err != nil {
+				continue
+			}
+			if item.Qty <= 0 {
+				item.Qty = 1
+			}
+			out[k] = item
+			continue
+		}
+		var qty int
+		if err := json.Unmarshal(trimmed, &qty); err != nil {
+			continue
+		}
+		if qty <= 0 {
+			qty = 1
+		}
+		out[k] = RequiredGuItem{Qty: qty}
+	}
+	*rg = out
+	return nil
 }
 
 // Value implements the driver.Valuer interface for RequiredGusMap

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Player, GuSpec, ItemSpec, RefiningRecipe, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
+import { reqGuQty, reqGuRank } from "@/lib/gu-dict";
 import { Flame, Sparkles, AlertCircle, Check, X, RefreshCw, Coins, Zap, Trophy, HelpCircle, ChevronDown, Search } from "lucide-react";
 
 interface RefiningFurnaceProps {
@@ -120,11 +121,13 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   // Flatten the required Gus into an ordered list of slots
   const getRequiredSlots = () => {
     if (!selectedRecipe) return [];
-    const slots: { index: number; guId: string }[] = [];
+    const slots: { index: number; guId: string; rank: number }[] = [];
     let idx = 0;
-    Object.entries(selectedRecipe.required_gus).forEach(([guId, qty]) => {
+    Object.entries(selectedRecipe.required_gus).forEach(([guId, value]) => {
+      const qty = reqGuQty(value);
+      const rank = reqGuRank(value);
       for (let i = 0; i < qty; i++) {
-        slots.push({ index: idx++, guId });
+        slots.push({ index: idx++, guId, rank });
       }
     });
     return slots;
@@ -158,16 +161,14 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     }
   };
 
-  // Handle slotting a Gu by instanceId into a target slot index
+  // Handle slotting a Gu by instanceId into a target slot index.
+  // Any Gu may be placed (drag-drop experiment); the recipe match is validated at refine time.
   const slotGu = (instanceId: string, targetSlotIndex: number) => {
     const guInstance = player.gu_inventory.find((g) => g.instance_id === instanceId);
     if (!guInstance) return;
 
     const targetSlotRequirement = requiredSlots.find((s) => s.index === targetSlotIndex);
     if (!targetSlotRequirement) return;
-
-    // Verify it matches the requirement
-    if (guInstance.gu_id !== targetSlotRequirement.guId) return;
 
     setSlottedGus((prev) => ({
       ...prev,
@@ -177,9 +178,10 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
 
   // Auto-slot Gu by clicking it
   const handleInventoryClick = (gu: GuInstance) => {
-    // Find the first empty slot that requires this Gu type
+    // Find the first empty slot that requires this Gu type (and rank when specified).
+    // Masked slots (Cổ Trùng Ẩn) are excluded — no auto-slot to keep the mystery.
     const emptySlot = requiredSlots.find(
-      (slot) => slot.guId === gu.gu_id && !slottedGus[slot.index]
+      (slot) => slot.guId === gu.gu_id && !slottedGus[slot.index] && (slot.rank === 0 || slot.rank === gu.rank) && !maskedGus.has(slot.guId)
     );
 
     if (emptySlot !== undefined) {
@@ -187,12 +189,16 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     }
   };
 
-  const handleSlotClick = (slot: { index: number; guId: string }) => {
+  const handleSlotClick = (slot: { index: number; guId: string; rank: number }) => {
     const slottedInstanceId = slottedGus[slot.index];
     if (slottedInstanceId) {
       removeGuFromSlot(slot.index);
+    } else if (maskedGus.has(slot.guId)) {
+      addToast("Cổ Trùng Ẩn — hãy kéo thả Cổ trùng vào ô này để luyện thử!", "info");
     } else {
-      const matchingGu = availableInventoryGus.find((g) => g.gu_id === slot.guId);
+      const matchingGu = availableInventoryGus.find(
+        (g) => g.gu_id === slot.guId && (slot.rank === 0 || g.rank === slot.rank)
+      );
       if (matchingGu) {
         slotGu(matchingGu.instance_id, slot.index);
       } else {
@@ -274,7 +280,11 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
               id: `user_${Date.now()}`,
               target_gu_id: response.new_gu.gu_id,
               target_rank: response.new_gu.rank,
-              required_gus: requiredSlots.reduce((acc, slot) => { acc[slot.guId] = (acc[slot.guId] || 0) + 1; return acc; }, {} as Record<string, number>),
+              required_gus: requiredSlots.reduce((acc, slot) => {
+                const prev = acc[slot.guId];
+                acc[slot.guId] = { rank: slot.rank, qty: (prev ? reqGuQty(prev) : 0) + 1 };
+                return acc;
+              }, {} as Record<string, { rank: number; qty: number }>),
               required_materials: selectedRecipe.required_materials,
               success_rate: selectedRecipe.success_rate,
               primeval_stones_cost: selectedRecipe.primeval_stones_cost,
@@ -736,7 +746,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                             <div className="text-[10px] text-zinc-500 font-semibold max-w-[80px] leading-tight">
                               Xếp vào:<br />
                               <span className="text-amber-500/80 font-bold">
-                                {isMaskedSlot ? "Cổ Trùng Ẩn" : `${reqGuSpec.name} (Bậc ${reqGuSpec.rank || 1})`}
+                                {isMaskedSlot ? "Cổ Trùng Ẩn" : `${reqGuSpec.name}${slot.rank > 0 ? ` (Bậc ${slot.rank})` : ""}`}
                               </span>
                             </div>
                           </div>

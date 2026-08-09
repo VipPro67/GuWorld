@@ -1,5 +1,6 @@
 import { ToastContainer } from "@/components/ToastContainer";
 import { create } from "zustand";
+import type { RequiredGus } from "@/lib/gu-dict";
 
 let confirmResolve: ((value: boolean) => void) | null = null;
 
@@ -772,7 +773,7 @@ export interface RefiningRecipe {
   id: string;
   target_gu_id: string;
   target_rank?: number;
-  required_gus: Record<string, number>;
+  required_gus: RequiredGus;
   required_materials: Record<string, number>;
   success_rate: number;
   primeval_stones_cost: number;

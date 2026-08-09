@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useGameStore, guSpecFor } from "@/store/useGameStore";
 import type { GuSpec, ItemSpec } from "@/store/useGameStore";
+import { reqGuQty, reqGuRank } from "@/lib/gu-dict";
+import type { RequiredGuItem } from "@/lib/gu-dict";
 import {
   Shield,
   Search,
@@ -4210,15 +4212,16 @@ export const AdminView: React.FC = () => {
               </div>
               {/* Required Gus as key-value */}
               <div className="border-t border-zinc-800 pt-3">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">Cổ trùng yêu cầu (required_gus): ID → số lượng</label>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">Cổ trùng yêu cầu (required_gus): ID → {`{rank, qty}`} (rank 0 = bất kỳ bậc)</label>
                 {Object.entries(recipeEdit.required_gus || {}).map(([k, v]) => (
                   <div key={k} className="flex gap-2 mb-1.5">
                     <input value={k} onChange={e => { const newG = {...recipeEdit.required_gus}; const val = newG[k]; delete newG[k]; newG[e.target.value] = val; setRecipeEdit({...recipeEdit, required_gus: newG}) }} className="flex-1 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" list="gu-list" />
-                    <input type="number" min={1} value={v as number} onChange={e => setRecipeEdit({...recipeEdit, required_gus: {...recipeEdit.required_gus, [k]: parseInt(e.target.value) || 1}})} className="w-20 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" />
+                    <input type="number" min={0} value={reqGuRank(v as number | RequiredGuItem)} onChange={e => setRecipeEdit({...recipeEdit, required_gus: {...recipeEdit.required_gus, [k]: { rank: parseInt(e.target.value) || 0, qty: reqGuQty(recipeEdit.required_gus[k] as number | RequiredGuItem) }}})} className="w-20 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" title="Bậc yêu cầu (0 = bất kỳ)" />
+                    <input type="number" min={1} value={reqGuQty(v as number | RequiredGuItem)} onChange={e => setRecipeEdit({...recipeEdit, required_gus: {...recipeEdit.required_gus, [k]: { rank: reqGuRank(recipeEdit.required_gus[k] as number | RequiredGuItem), qty: parseInt(e.target.value) || 1 }}})} className="w-20 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200" title="Số lượng" />
                     <button onClick={() => { const newG = {...recipeEdit.required_gus}; delete newG[k]; setRecipeEdit({...recipeEdit, required_gus: newG}) }} className="text-red-400 hover:text-red-300 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
                   </div>
                 ))}
-                <button onClick={() => setRecipeEdit({...recipeEdit, required_gus: {...recipeEdit.required_gus, "": 1}})} className="text-xs text-amber-400 hover:text-amber-300 cursor-pointer mt-1">+ Thêm Gu</button>
+                <button onClick={() => setRecipeEdit({...recipeEdit, required_gus: {...recipeEdit.required_gus, "": { rank: 0, qty: 1 }}})} className="text-xs text-amber-400 hover:text-amber-300 cursor-pointer mt-1">+ Thêm Gu</button>
               </div>
               {/* Required Materials as key-value */}
               <div className="border-t border-zinc-800 pt-3">

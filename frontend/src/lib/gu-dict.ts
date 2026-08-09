@@ -121,12 +121,30 @@ export interface ItemSpec {
   image_url?: string;
 }
 
+export interface RequiredGuItem {
+  rank: number; // 0 = any rank (legacy recipe)
+  qty: number;
+}
+
+// required_gus values are either the legacy quantity number or the ranked form.
+export type RequiredGus = Record<string, number | RequiredGuItem>;
+
+export function reqGuQty(v: number | RequiredGuItem): number {
+  if (typeof v === "number") return v;
+  return v?.qty || 1;
+}
+
+export function reqGuRank(v: number | RequiredGuItem): number {
+  if (typeof v === "number") return 0; // legacy: any rank
+  return v?.rank || 0;
+}
+
 export interface RefiningRecipe {
   id: string;
   target_gu_id: string;
   target_rank?: number;
   variant?: number;
-  required_gus: Record<string, number>;
+  required_gus: RequiredGus;
   required_materials: Record<string, number>;
   success_rate: number;
   primeval_stones_cost: number;
