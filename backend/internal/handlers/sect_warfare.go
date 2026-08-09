@@ -491,7 +491,7 @@ func AttackSectMine(c *gin.Context) {
 
 	// Unoccupied mine → capture directly (preserves legacy behavior).
 	if !occupierSectID.Valid {
-		newShieldUntil := now.Add(4 * time.Hour)
+		newShieldUntil := now.Add(30 * time.Minute)
 		_, err = tx.Exec(`UPDATE sect_mines SET occupier_sect_id = $1, occupied_at = $2, shield_until = $3, last_claimed_at = $2 WHERE id = $4`, sectID, now, newShieldUntil, req.MineID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update mine occupier"})
@@ -527,7 +527,7 @@ func AttackSectMine(c *gin.Context) {
 
 	if attackerEffective >= totalDefense {
 		// Victory → capture
-		newShieldUntil := now.Add(4 * time.Hour)
+		newShieldUntil := now.Add(30 * time.Minute)
 		_, err = tx.Exec(`UPDATE sect_mines SET occupier_sect_id = $1, occupied_at = $2, shield_until = $3, last_claimed_at = $2 WHERE id = $4`, sectID, now, newShieldUntil, req.MineID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update mine occupier"})

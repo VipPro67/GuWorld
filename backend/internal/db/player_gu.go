@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -17,6 +18,16 @@ type Queryer interface {
 type Execer interface {
 	Exec(query string, args ...any) (sql.Result, error)
 }
+
+// QueryExecer is satisfied by both *sql.DB and *sql.Tx for read+write flows.
+type QueryExecer interface {
+	Queryer
+	Execer
+}
+
+// MaxEquippedGus caps how many Gu instances a player may have equipped at once.
+// Mirrors the aperture capacity enforced by the EquipGu handler.
+const MaxEquippedGus = 60
 
 const playerGuColumns = `id, gu_id, gu_rank, hunger, state, equipped, is_vital, integration_time, equipped_at, growth_hours`
 
@@ -70,7 +81,18 @@ func LoadPlayerGus(q Queryer, playerID string, equippedOnly bool) (models.GuInve
 }
 
 // AddPlayerGu inserts a single Gu instance owned by a player, upserting on id conflict.
-func AddPlayerGu(tx Execer, playerID string, gu models.GuInstance) error {
+// When the new instance is equipped, it first counts the player's already-equipped
+// Gus and refuses to equip beyond MaxEquippedGus to avoid over-equipping.
+func AddPlayerGu(tx QueryExecer, playerID string, gu models.GuInstance) error {
+	if gu.Equipped {
+		var equippedCount int
+		if err := tx.QueryRow(`SELECT COUNT(*) FROM player_gu WHERE player_id = $1 AND equipped AND id <> $2`, playerID, gu.InstanceID).Scan(&equippedCount); err != nil {
+			return err
+		}
+		if equippedCount >= MaxEquippedGus {
+			return fmt.Errorf("aperture capacity full: cannot equip more than %d Gu bugs", MaxEquippedGus)
+		}
+	}
 	var equippedAt any
 	if gu.EquippedAt != nil {
 		equippedAt = *gu.EquippedAt
