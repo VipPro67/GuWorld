@@ -2664,8 +2664,8 @@ func EquipGu(c *gin.Context) {
 			responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Gu bug is already equipped"})
 			return
 		}
-		if equippedCount >= 60 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Aperture capacity full! Cannot equip more than 60 Gu bugs."})
+		if equippedCount >= db.MaxEquippedGus {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Aperture capacity full! Cannot equip more than %d Gu bugs.", db.MaxEquippedGus)})
 			return
 		}
 
@@ -3348,6 +3348,20 @@ func SetVitalGu(c *gin.Context) {
 			"message": "Cổ trùng này đã là Bản Mệnh Cổ của đạo hữu rồi.",
 		})
 		return
+	}
+
+	// Vital Gu is always equipped; refuse if equipping it would exceed the aperture capacity
+	if !targetGu.Equipped {
+		equippedCount := 0
+		for _, gu := range player.GuInventory {
+			if gu.Equipped && gu.Status == "ACTIVE" {
+				equippedCount++
+			}
+		}
+		if equippedCount >= db.MaxEquippedGus {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Aperture capacity full! Cannot equip more than %d Gu bugs.", db.MaxEquippedGus)})
+			return
+		}
 	}
 
 	// Check if they already have an existing Vital Gu
