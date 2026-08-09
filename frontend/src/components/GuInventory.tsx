@@ -806,7 +806,8 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                     const hungryBugsCount = instances.filter(
                       inst => inst.status !== "DEAD" && inst.status !== "SEALED" && inst.hunger < spec.max_hunger
                     ).length;
-                    const canFeedGroup = availableFood > 0 && hungryBugsCount > 0 && onFeedGroup;
+                    const canFeedGroup = onFeedGroup && hungryBugsCount > 0 &&
+                      (availableFood > 0 || spec.food_types.includes("primeval_stone") || spec.food_types.includes("immortal_stone"));
                     const isCurrentlyFeedingGroup = feedingGroupGuId === groupKey;
 
                     // Build dynamic styling based on group attributes
@@ -893,13 +894,19 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                     useGameStore.getState().addToast("Không có Cổ trùng nào trong nhóm này đang đói.", "info");
                                     return;
                                   }
-                                  if (availableFood === 0) {
+                                  if (availableFood === 0 && !spec.food_types.includes("primeval_stone") && !spec.food_types.includes("immortal_stone")) {
                                     useGameStore.getState().addToast(`Đạo hữu không có thức ăn phù hợp (${foodName}) để cho ăn!`, "error");
                                     return;
                                   }
                                   handleFeedGroupClick(guId, spec.rank);
                                 }}
-                                title={hungryBugsCount === 0 ? "Không có con nào đói" : `Cho ăn tất cả con đang đói. Cần: ${foodName} (Sở hữu: ${availableFood})`}
+                                title={hungryBugsCount === 0
+                                  ? "Không có con nào đói"
+                                  : spec.food_types.includes("primeval_stone")
+                                    ? `Cho ăn tất cả con đang đói. Cần: Nguyên Thạch (Sở hữu: ${Math.floor(player.primeval_stones || 0)})`
+                                    : spec.food_types.includes("immortal_stone")
+                                      ? `Cho ăn tất cả con đang đói. Cần: Tiên Nguyên Thạch (Sở hữu: ${Math.floor(player.immortal_stones || 0)})`
+                                      : `Cho ăn tất cả con đang đói. Cần: ${foodName} (Sở hữu: ${availableFood})`}
                                 className={`text-[9px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1 transition-all cursor-pointer font-mono ${
                                   canFeedGroup
                                     ? "bg-emerald-600 text-white hover:bg-emerald-500 active:scale-[0.96] shadow-[0_0_8px_rgba(16,185,129,0.2)]"

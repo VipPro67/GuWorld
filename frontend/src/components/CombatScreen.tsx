@@ -228,6 +228,15 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       setSimulationLogs(result.logs);
       setSimulationWinner(result.winner);
       setSimulationCombatants(result.combatants || []);
+
+      // Show mine rewards as toast if present
+      if (Array.isArray(result.logs)) {
+        for (const log of result.logs) {
+          if (log.action === "MINE_LOOT" || log.action === "MINE_OCCUPY") {
+            addToast(log.detail, log.action === "MINE_LOOT" ? "success" : "info");
+          }
+        }
+      }
     }
   };
 

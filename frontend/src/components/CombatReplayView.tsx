@@ -4,7 +4,7 @@ import React, { useReducer, useMemo, useRef, useEffect, useCallback } from "reac
 import {
   Swords, SkipForward, Heart, Shield, Skull,
   Zap, FlaskConical, Sparkles, Flame, Play, Pause,
-  ArrowLeft, ChevronRight, Droplets,
+  ArrowLeft, ChevronRight, Droplets, Coins, Gem,
 } from "lucide-react";
 import { formatNumber } from "@/lib/utils";
 
@@ -263,6 +263,8 @@ const actionIcon = (action: string) => {
     case "DIED": return <Skull className="w-3 h-3" />;
     case "LIFESTEAL": return <FlaskConical className="w-3 h-3" />;
     case "STUNNED": return <Zap className="w-3 h-3" />;
+    case "MINE_LOOT": return <Coins className="w-3 h-3" />;
+    case "MINE_OCCUPY": return <Gem className="w-3 h-3" />;
     default: return <ChevronRight className="w-3 h-3" />;
   }
 };
@@ -278,6 +280,8 @@ const actionColor = (action: string) => {
     case "DIED": return "text-rose-500";
     case "LIFESTEAL": return "text-pink-400";
     case "BATTLE_START": case "BATTLE_END": return "text-amber-400";
+    case "MINE_LOOT": return "text-yellow-400";
+    case "MINE_OCCUPY": return "text-emerald-400";
     default: return "text-zinc-400";
   }
 };
@@ -765,7 +769,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
 
   const actionLogs = useMemo(() =>
     visibleLogs.filter(log =>
-      ["BASIC_ATTACK", "GU_SKILL", "KILLER_MOVE", "DAMAGE", "HEAL", "ITEM_HEAL", "SHIELD_GAIN", "DOT_TICK", "DIED", "LIFESTEAL", "STUNNED", "PHANTOM_ATTACK", "THORNS", "SHIELD_ABSORB", "SHIELD_BREAK", "BLEED_APPLIED", "POISON_APPLIED", "STUN_APPLIED", "MANA_RESTORE", "MANA_COST", "PRE_COMBAT_BARRIER", "MULTI_HIT", "LOOT", "AUTO_ITEM_USAGE", "AUTO_STONE_USAGE"].includes(log.action)
+      ["BASIC_ATTACK", "GU_SKILL", "KILLER_MOVE", "DAMAGE", "HEAL", "ITEM_HEAL", "SHIELD_GAIN", "DOT_TICK", "DIED", "LIFESTEAL", "STUNNED", "PHANTOM_ATTACK", "THORNS", "SHIELD_ABSORB", "SHIELD_BREAK", "BLEED_APPLIED", "POISON_APPLIED", "STUN_APPLIED", "MANA_RESTORE", "MANA_COST", "PRE_COMBAT_BARRIER", "MULTI_HIT", "LOOT", "AUTO_ITEM_USAGE", "AUTO_STONE_USAGE", "MINE_LOOT", "MINE_OCCUPY"].includes(log.action)
     ), [visibleLogs]);
 
   return (
@@ -949,7 +953,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           {visibleLogs.map((log, idx) => {
             const isTurnStart = log.action === "TURN_START";
             const isBattleBoundary = log.action === "BATTLE_START" || log.action === "BATTLE_END";
-            const isAction = ["BASIC_ATTACK", "GU_SKILL", "KILLER_MOVE", "DAMAGE", "HEAL", "ITEM_HEAL", "SHIELD_GAIN", "DOT_TICK", "DIED", "LIFESTEAL", "STUNNED", "PHANTOM_ATTACK", "THORNS", "SHIELD_ABSORB", "SHIELD_BREAK", "BLEED_APPLIED", "POISON_APPLIED", "STUN_APPLIED", "MANA_RESTORE", "MANA_COST", "PRE_COMBAT_BARRIER", "MULTI_HIT", "LOOT", "AUTO_ITEM_USAGE", "AUTO_STONE_USAGE"].includes(log.action);
+            const isAction = ["BASIC_ATTACK", "GU_SKILL", "KILLER_MOVE", "DAMAGE", "HEAL", "ITEM_HEAL", "SHIELD_GAIN", "DOT_TICK", "DIED", "LIFESTEAL", "STUNNED", "PHANTOM_ATTACK", "THORNS", "SHIELD_ABSORB", "SHIELD_BREAK", "BLEED_APPLIED", "POISON_APPLIED", "STUN_APPLIED", "MANA_RESTORE", "MANA_COST", "PRE_COMBAT_BARRIER", "MULTI_HIT", "LOOT", "AUTO_ITEM_USAGE", "AUTO_STONE_USAGE", "MINE_LOOT", "MINE_OCCUPY"].includes(log.action);
 
             if (isTurnStart) {
               return (

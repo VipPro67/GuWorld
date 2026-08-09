@@ -440,6 +440,7 @@ export const AdminView: React.FC = () => {
 
   const [showAddGu, setShowAddGu] = useState(false);
   const [addGuId, setAddGuId] = useState("");
+  const [addGuRank, setAddGuRank] = useState("");
   const [addGuQty, setAddGuQty] = useState(1);
 
   const [showStones, setShowStones] = useState(false);
@@ -1114,12 +1115,12 @@ export const AdminView: React.FC = () => {
               <div className="text-center py-8 text-zinc-500 text-xs italic">Không tìm thấy</div>
             ) : (
               list.slice(0, 100).map((x: any) => (
-                <button key={x.id} onClick={() => {
+                <button key={itemPicker.tab === "gu" ? `${x.id}:${x.rank ?? 0}` : x.id} onClick={() => {
                   const s = itemPicker.source;
                   if (s === "shop") setShopForm(f => ({ ...f, id: x.id }));
                   else if (s === "arena") setArenaShopForm(f => ({ ...f, id: x.id }));
                   else if (s === "add-item") setAddItemId(x.id);
-                  else if (s === "add-gu") setAddGuId(x.id);
+                  else if (s === "add-gu") { setAddGuId(x.id); setAddGuRank(x.rank ? String(x.rank) : ""); }
                   else if (s === "vault") {
                     const t = itemPicker.tab === "gu" ? "gu" : itemPicker.tab === "item" ? "material" : "recipe";
                     setStockVaultType(t);
@@ -1353,7 +1354,7 @@ export const AdminView: React.FC = () => {
                   <button onClick={() => { setPlayerGusPage(1); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-300 transition-colors cursor-pointer">
                     <Search className="w-3.5 h-3.5" /> Tìm
                   </button>
-                  <button onClick={() => { setAddGuId(""); setAddGuQty(1); setShowAddGu(true); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">
+                  <button onClick={() => { setAddGuId(""); setAddGuRank(""); setAddGuQty(1); setShowAddGu(true); ensureShopSearchLoaded(); }} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-zinc-100 transition-colors cursor-pointer">
                     <Plus className="w-3.5 h-3.5" /> Thêm
                   </button>
                 </div>
@@ -1621,7 +1622,16 @@ export const AdminView: React.FC = () => {
         )}
 
         {/* Add Gu Modal */}
-        {showAddGu && (
+        {showAddGu && (() => {
+          const guRanks = addGuId ? shopSearchGus
+            .filter((x: any) => x.id === addGuId)
+            .map((x: any) => x.rank)
+            .filter((r: number) => r > 0)
+            .sort((a: number, b: number) => a - b) : [];
+          const selectedRank = addGuRank ? Number(addGuRank) : 0;
+          const rankRequired = guRanks.length > 1 && !selectedRank;
+          const submitRank = guRanks.length === 1 ? guRanks[0] : selectedRank;
+          return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
             <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4">
               <div className="flex items-center justify-between">
@@ -1631,18 +1641,31 @@ export const AdminView: React.FC = () => {
               <div>
                 <label className="text-[11px] font-bold text-zinc-500 font-mono">Chọn cổ trùng</label>
                 <div className="flex gap-2 mt-1">
-                  <input value={addGuId} onChange={e => setAddGuId(e.target.value)} placeholder="Nhập ID hoặc chọn..." className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                  <input value={addGuId} onChange={e => { setAddGuId(e.target.value); setAddGuRank(""); }} placeholder="Nhập ID hoặc chọn..." className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
                   <button onClick={() => { ensureShopSearchLoaded(); setItemPicker({source: "add-gu", tab: "gu", query: ""}); }} className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-mono cursor-pointer flex items-center gap-1"><Search className="w-3 h-3" />Chọn</button>
                 </div>
               </div>
+              {guRanks.length > 0 && (
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Bậc {guRanks.length > 1 && <span className="text-amber-400">(bắt buộc chọn)</span>}</label>
+                  {guRanks.length === 1 ? (
+                    <div className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-400 mt-1">Bậc {guRanks[0]}</div>
+                  ) : (
+                    <select value={addGuRank} onChange={e => setAddGuRank(e.target.value)} className={`w-full bg-zinc-900 border rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50 ${rankRequired ? "border-red-600/60" : "border-zinc-800"}`}>
+                      <option value="">Chọn bậc...</option>
+                      {guRanks.map(r => <option key={r} value={r}>Bậc {r}</option>)}
+                    </select>
+                  )}
+                </div>
+              )}
               <div>
                 <label className="text-[11px] font-bold text-zinc-500 font-mono">Số lượng</label>
                 <input type="number" min={1} value={addGuQty} onChange={e => setAddGuQty(Math.max(1, parseInt(e.target.value) || 1))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
               </div>
               <div className="flex gap-3 justify-end">
                 <button onClick={() => setShowAddGu(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
-                <button disabled={actionLoading || !addGuId} onClick={async () => {
-                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/gus`, "POST", { gu_id: addGuId, quantity: addGuQty });
+                <button disabled={actionLoading || !addGuId || rankRequired} onClick={async () => {
+                  const ok = await exec(`${BACKEND_URL}/api/admin/players/${selectedId}/gus`, "POST", { gu_id: addGuId, quantity: addGuQty, ...(submitRank ? { rank: submitRank } : {}) });
                   if (ok) setShowAddGu(false);
                 }} className="px-4 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-zinc-100 transition-colors cursor-pointer disabled:opacity-50">
                   {actionLoading ? "Đang xử lý..." : "Thêm"}
@@ -1650,7 +1673,8 @@ export const AdminView: React.FC = () => {
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
         {/* Edit Player Modal */}
         {showEditPlayer && detail && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">

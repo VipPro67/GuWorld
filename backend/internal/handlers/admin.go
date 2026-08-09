@@ -398,6 +398,7 @@ func AdminRemovePlayerItems(c *gin.Context) {
 
 type AdminAddGuRequest struct {
 	GuID     string `json:"gu_id"`
+	Rank     int    `json:"rank"`
 	Quantity int    `json:"quantity"`
 }
 
@@ -414,14 +415,26 @@ func AdminAddPlayerGus(c *gin.Context) {
 	}
 
 	var req AdminAddGuRequest
-	if err := c.ShouldBindJSON(&req); err != nil || req.GuID == "" || req.Quantity <= 0 {
+	if err := c.ShouldBindJSON(&req); err != nil || req.GuID == "" || req.Quantity <= 0 || req.Rank < 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
 
-	if _, exists := models.GetGuAny(req.GuID); !exists {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng không tồn tại"})
-		return
+	var guSpec models.GuDictionaryItem
+	if req.Rank > 0 {
+		var ok bool
+		guSpec, ok = models.GetGu(req.GuID, req.Rank)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cổ trùng %s bậc %d không tồn tại", req.GuID, req.Rank)})
+			return
+		}
+	} else {
+		var ok bool
+		guSpec, ok = models.GetGuAny(req.GuID)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng không tồn tại"})
+			return
+		}
 	}
 
 	tx, err := db.DB.Begin()
@@ -437,7 +450,6 @@ func AdminAddPlayerGus(c *gin.Context) {
 		return
 	}
 
-	guSpec, _ := models.GetGuAny(req.GuID)
 	for i := 0; i < req.Quantity; i++ {
 		player.GuInventory = append(player.GuInventory, models.GuInstance{
 			InstanceID: uuid.New().String(),
@@ -459,15 +471,19 @@ func AdminAddPlayerGus(c *gin.Context) {
 	var username string
 	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
 	guName := req.GuID
-	if spec, ok := models.GetGuAny(req.GuID); ok {
+	if spec, ok := models.GetGu(req.GuID, guSpec.Rank); ok {
 		guName = spec.Name
 	}
-	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã ban tặng Cổ trùng cho đạo hữu %s: %s (SL: %d)", username, guName, req.Quantity))
+	rankDesc := ""
+	if guSpec.Rank > 0 {
+		rankDesc = fmt.Sprintf(" (Bậc %d)", guSpec.Rank)
+	}
+	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã ban tặng Cổ trùng cho đạo hữu %s: %s%s (SL: %d)", username, guName, rankDesc, req.Quantity))
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.add_gus",
 		EntityType: "player", EntityID: playerID.String(),
-		RequestSummary: fmt.Sprintf("gu=%s qty=%d", req.GuID, req.Quantity),
+		RequestSummary: fmt.Sprintf("gu=%s rank=%d qty=%d", req.GuID, guSpec.Rank, req.Quantity),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã thêm cổ trùng thành công", "gu_id": req.GuID, "quantity": req.Quantity})
