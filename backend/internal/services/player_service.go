@@ -298,12 +298,13 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 			poolChanged = true
 		}
 
-		if player.HP > 0 && player.HP < player.BaseHP {
-			hpRegenPerHour := player.BaseHP * 0.05 * (1.0 + gamefx.Get(player).HealingReceivedBonus)
+		effMaxHP := gamefx.EffectiveMaxHP(player)
+		if player.HP > 0 && player.HP < effMaxHP {
+			hpRegenPerHour := effMaxHP * 0.05 * (1.0 + gamefx.Get(player).HealingReceivedBonus)
 			earnedHP := (secondsPassed * player.TimeSpeedMultiplier / 3600.0) * hpRegenPerHour
 			newHP := player.HP + earnedHP
-			if newHP > player.BaseHP {
-				newHP = player.BaseHP
+			if newHP > effMaxHP {
+				newHP = effMaxHP
 			}
 			if newHP != player.HP {
 				player.HP = newHP

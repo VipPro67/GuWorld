@@ -180,7 +180,7 @@ func ChallengeArena(c *gin.Context) {
 
 	targetStats := CalculatePlayerStats(&targetPlayer)
 
-	enemyHP := targetPlayer.BaseHP
+	enemyHP := gamefx.EffectiveMaxHP(&targetPlayer)
 	if enemyHP <= 0 {
 		enemyHP = 100.0
 	}

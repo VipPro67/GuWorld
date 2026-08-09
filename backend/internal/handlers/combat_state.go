@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -32,7 +33,7 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 		playerCombatant.HP = playerCombatant.MaxHP
 	}
 	if base.CombatMode == "virtual" {
-		pHP := player.BaseHP
+		pHP := gamefx.EffectiveMaxHP(player)
 		if pHP <= 0 {
 			pHP = 100.0
 		}
@@ -70,16 +71,16 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 						if errMember == nil && (mPlayer.HP > 0 || base.CombatMode == "virtual") {
 							mStats := CalculatePlayerStats(&mPlayer)
 							mCombatant := models.CombatantFromPlayer(&mPlayer, mStats)
-							mCombatant.MaxHP = 100.0
 							if mCombatant.HP > mCombatant.MaxHP {
 								mCombatant.HP = mCombatant.MaxHP
 							}
 							if base.CombatMode == "virtual" {
-								mHP := mPlayer.BaseHP
+								mHP := gamefx.EffectiveMaxHP(&mPlayer)
 								if mHP <= 0 {
 									mHP = 100.0
 								}
 								mCombatant.HP = mHP
+								mCombatant.MaxHP = mHP
 							}
 							mCombatant.Kind = "Ally"
 							base.Allies = append(base.Allies, mCombatant)

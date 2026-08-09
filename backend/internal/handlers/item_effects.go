@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -124,8 +125,8 @@ func restoreManaEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) 
 func restoreHPEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
 	value := item.Effects["restore_hp"]
 	player.HP += value
-	if player.HP > player.BaseHP {
-		player.HP = player.BaseHP
+	if player.HP > gamefx.EffectiveMaxHP(player) {
+		player.HP = gamefx.EffectiveMaxHP(player)
 	}
 	return fmt.Sprintf("Đạo hữu sử dụng %s, hồi phục %.0f HP!", item.Name, value), nil
 }

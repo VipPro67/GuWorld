@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -240,7 +241,7 @@ func GetPlayerProfile(c *gin.Context) {
 		resp.PrimevalStones = target.PrimevalStones
 		resp.ImmortalStones = target.ImmortalStones
 		resp.HP = target.HP
-		resp.BaseHP = target.BaseHP
+		resp.BaseHP = gamefx.EffectiveMaxHP(&target)
 		resp.ScoutingStatus = "Đột phá trinh sát thành công! Thấu thị toàn bộ tu vi đối phương."
 		resp.StatusType = "success"
 		resp.DominantPath = getDominantPath(targetDaoMarks, target.PathMasteries)

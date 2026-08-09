@@ -207,6 +207,73 @@ func EffectiveMaxMana(p *models.Player) float64 {
 	return p.MaxMana * (1.0 + MaxManaBonus(p))
 }
 
+// PathMasteryMultiplier returns the highest path-mastery multiplier across the
+// given paths. 1.0 means no mastery bonus.
+func PathMasteryMultiplier(pathMasteries map[string]string, paths []string) float64 {
+	masteryMultiplier := 1.0
+	if pathMasteries == nil {
+		return masteryMultiplier
+	}
+	for _, path := range paths {
+		cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
+		mLevel, ok := pathMasteries[cleanPath]
+		if !ok {
+			mLevel, ok = pathMasteries[path]
+		}
+		if !ok {
+			continue
+		}
+		mult := 1.0
+		switch mLevel {
+		case "Ordinary":
+			mult = 1.0
+		case "Master":
+			mult = 1.1
+		case "Grandmaster":
+			mult = 1.25
+		case "Supreme Grandmaster":
+			mult = 1.5
+		}
+		if mult > masteryMultiplier {
+			masteryMultiplier = mult
+		}
+	}
+	return masteryMultiplier
+}
+
+// PassiveHPBonus returns the total flat HP granted by equipped ACTIVE Gus
+// (passive.stat_base_hp), scaled by path mastery and dao marks. Mirrors the
+// "hp" key computed in GetPassiveStats.
+func PassiveHPBonus(p *models.Player) float64 {
+	if p == nil {
+		return 0
+	}
+	total := 0.0
+	for _, gu := range p.GuInventory {
+		if !gu.Equipped || gu.Status != "ACTIVE" {
+			continue
+		}
+		spec, ok := models.GetGuAny(gu.GuID)
+		if !ok || spec.Effects.Passive == nil || spec.Effects.Passive.StatBaseHP <= 0 {
+			continue
+		}
+		mult := PathMasteryMultiplier(p.PathMasteries, spec.Path)
+		daoMult := DaoMultiplierForPaths(p.DaoMarks, spec.Path, nil)
+		total += spec.Effects.Passive.StatBaseHP * mult * daoMult
+	}
+	return total
+}
+
+// EffectiveMaxHP returns the player's max HP including passive HP bonuses
+// from equipped Gus. This is the authoritative max HP for HUD, regen caps and
+// combat.
+func EffectiveMaxHP(p *models.Player) float64 {
+	if p == nil {
+		return 0
+	}
+	return p.BaseHP + PassiveHPBonus(p)
+}
+
 // RaceDisplayName returns the Vietnamese label for a race key.
 func RaceDisplayName(race string) string {
 	switch race {

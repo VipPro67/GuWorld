@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -475,7 +476,7 @@ func MovePlayer(c *gin.Context) {
 		if enemyHP <= 0 {
 			enemyHP = 100.0
 		}
-		enemyMaxHP := targetPlayer.BaseHP
+		enemyMaxHP := gamefx.EffectiveMaxHP(&targetPlayer)
 		if enemyMaxHP <= 0 {
 			enemyMaxHP = 100.0
 		}

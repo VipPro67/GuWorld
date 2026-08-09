@@ -344,8 +344,8 @@ func AttackTribulationEnemy(c *gin.Context) {
 	// 5. Player self-buffs from the Gu: heal, then raise a shield
 	if totalHeal > 0 {
 		player.HP += totalHeal
-		if player.HP > player.BaseHP {
-			player.HP = player.BaseHP
+		if player.HP > gamefx.EffectiveMaxHP(&player) {
+			player.HP = gamefx.EffectiveMaxHP(&player)
 		}
 	}
 	shield := totalShield

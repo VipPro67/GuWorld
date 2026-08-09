@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -554,7 +555,7 @@ func AttackMineSlot(c *gin.Context) {
 		if enemyHP <= 0 {
 			enemyHP = 10.0
 		}
-		enemyMaxHP := defender.BaseHP
+		enemyMaxHP := gamefx.EffectiveMaxHP(&defender)
 		if enemyMaxHP <= 0 {
 			enemyMaxHP = 100.0
 		}

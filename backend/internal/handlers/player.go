@@ -1060,6 +1060,7 @@ func GetPlayerStatus(c *gin.Context) {
 	}
 
 	player.MaterialsInventory = loadMaterialsInventory(playerID.String())
+	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 	c.JSON(http.StatusOK, player)
 }
 
@@ -2002,7 +2003,8 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 
 	stats := CalculatePlayerStats(player)
 	healingStat := stats["healing"]
-	regenHPPerHour := ((player.BaseHP * 0.05) + healingStat) * (1.0 + gamefx.Get(player).HealingReceivedBonus)
+	effMaxHP := player.BaseHP + stats["hp"]
+	regenHPPerHour := ((effMaxHP * 0.05) + healingStat) * (1.0 + gamefx.Get(player).HealingReceivedBonus)
 	player.HPRegenRate = regenHPPerHour
 
 	secondsPassed := now.Sub(player.LastManaUpdate).Seconds()
@@ -2019,11 +2021,11 @@ func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time)
 			poolChanged = true
 		}
 
-		if player.HP > 0 && player.HP < player.BaseHP {
+		if player.HP > 0 && player.HP < effMaxHP {
 			earnedHP := (subjectiveSeconds / 3600.0) * regenHPPerHour
 			newHP := player.HP + earnedHP
-			if newHP > player.BaseHP {
-				newHP = player.BaseHP
+			if newHP > effMaxHP {
+				newHP = effMaxHP
 			}
 			if newHP != player.HP {
 				player.HP = newHP
@@ -2121,6 +2123,7 @@ func loadCompletedQuests(playerID string) models.CompletedQuestsList {
 // responseWithPlayer sends a JSON response with the player object, ensuring MaterialsInventory and CompletedQuests are populated.
 func responseWithPlayer(c *gin.Context, status int, player models.Player, extra ...gin.H) {
 	player.MaxMana = gamefx.EffectiveMaxMana(&player)
+	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 	resp := gin.H{"player": player}
 	for _, e := range extra {
 		for k, v := range e {
@@ -2134,6 +2137,7 @@ func responseWithPlayer(c *gin.Context, status int, player models.Player, extra 
 // avoiding redundant DB queries for MaterialsInventory and CompletedQuests.
 func responseWithPlayerData(c *gin.Context, status int, player models.Player, materials map[string]int, quests models.CompletedQuestsList, extra ...gin.H) {
 	player.MaxMana = gamefx.EffectiveMaxMana(&player)
+	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 	player.MaterialsInventory = materials
 	player.CompletedQuests = quests
 	resp := gin.H{"player": player}

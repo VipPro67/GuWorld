@@ -552,7 +552,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
               <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${c.grid_x === 1 ? 'text-rose-400 bg-rose-950/40' : c.grid_x === 2 ? 'text-amber-400 bg-amber-950/40' : 'text-cyan-400 bg-cyan-950/40'}`}>
                 {gridXLabel(c.grid_x)}
               </span>
-              {enemyInfoRevealed.showHP && (
+              {(!isEnemy || enemyInfoRevealed.showHP) && (
                 <span className="text-zinc-500 shrink-0">
                   {formatNumber(c.max_hp || 0)} HP
                 </span>

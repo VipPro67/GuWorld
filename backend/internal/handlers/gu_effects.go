@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -24,33 +25,7 @@ type Action struct {
 // ── HELPERS ───────────────────────────────────────────────────────────
 
 func getPathMasteryMultiplier(player *models.Player, paths []string) float64 {
-	masteryMultiplier := 1.0
-	if player.PathMasteries != nil {
-		for _, path := range paths {
-			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-			mLevel, ok := player.PathMasteries[cleanPath]
-			if !ok {
-				mLevel, ok = player.PathMasteries[path]
-			}
-			if ok {
-				mult := 1.0
-				switch mLevel {
-				case "Ordinary":
-					mult = 1.0
-				case "Master":
-					mult = 1.1
-				case "Grandmaster":
-					mult = 1.25
-				case "Supreme Grandmaster":
-					mult = 1.5
-				}
-				if mult > masteryMultiplier {
-					masteryMultiplier = mult
-				}
-			}
-		}
-	}
-	return masteryMultiplier
+	return gamefx.PathMasteryMultiplier(player.PathMasteries, paths)
 }
 
 func ValidateGuUsable(player *models.Player, gu *models.GuInstance, spec *models.GuDictionaryItem, actionRequiresEquipped bool) error {
@@ -489,8 +464,8 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 			val = 5.0
 		}
 		player.HP += val
-		if player.HP > player.BaseHP {
-			player.HP = player.BaseHP
+		if player.HP > gamefx.EffectiveMaxHP(player) {
+			player.HP = gamefx.EffectiveMaxHP(player)
 		}
 		return "", nil
 	case "GENERATE_STONES_TICK":
@@ -638,8 +613,8 @@ func tickStatusEffects(player *models.Player, ctx *CombatContext) {
 				ctx.Logs = append(ctx.Logs, fmt.Sprintf("-> Đạo hữu chịu %.1f sát thương từ hiệu ứng %s (còn %d lượt).", se.Value, se.Type, se.Turns-1))
 			case "regen":
 				player.HP += se.Value
-				if player.HP > player.BaseHP {
-					player.HP = player.BaseHP
+				if player.HP > gamefx.EffectiveMaxHP(player) {
+					player.HP = gamefx.EffectiveMaxHP(player)
 				}
 				ctx.Logs = append(ctx.Logs, fmt.Sprintf("-> Đạo hữu hồi %.1f HP từ Hồi Sinh (còn %d lượt).", se.Value, se.Turns-1))
 			}

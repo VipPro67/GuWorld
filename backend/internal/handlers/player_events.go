@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -112,22 +113,27 @@ func writePlayerSnapshotEvent(c *gin.Context, playerID uuid.UUID, eventType stri
 func loadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, error) {
 	var player models.Player
 	err := db.DB.QueryRow(`
-		SELECT id, username, rank, sub_rank, current_mana, max_mana, last_mana_update,
-			time_speed_multiplier, active_combat, aperture_stress, hp, base_hp,
-			primeval_stones, immortal_stones, wall_progress, human_qi,
-			lifespan, x, y, current_region
-		FROM players WHERE id = $1
+		SELECT p.id, p.username, p.rank, p.sub_rank, p.current_mana, p.max_mana, p.last_mana_update,
+			p.time_speed_multiplier, p.active_combat, p.aperture_stress, p.hp, p.base_hp,
+			p.primeval_stones, p.immortal_stones, p.wall_progress, p.human_qi,
+			p.lifespan, p.x, p.y, p.current_region, p.path_masteries,
+			`+db.GuInventoryAggregateEquipped("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb)
+		FROM players p
+		LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
+		WHERE p.id = $1
 	`, playerID).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.CurrentMana, &player.MaxMana, &player.LastManaUpdate,
 		&player.TimeSpeedMultiplier, &player.ActiveCombat, &player.ApertureStress,
 		&player.HP, &player.BaseHP, &player.PrimevalStones, &player.ImmortalStones,
 		&player.WallProgress, &player.HumanQi, &player.Lifespan,
-		&player.X, &player.Y, &player.CurrentRegion,
+		&player.X, &player.Y, &player.CurrentRegion, &player.PathMasteries,
+		&player.GuInventory, &player.DaoMarks,
 	)
 	if err != nil {
 		return PlayerRealtimeSnapshot{}, err
 	}
+	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 
 	return playerRealtimeSnapshot(player), nil
 }
