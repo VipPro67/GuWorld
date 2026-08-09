@@ -982,7 +982,33 @@ func InitSchema() error {
 		// Composite PK (id, rank) migration for gu_dictionary
 		// Must drop FKs first before dropping the PK they reference
 		{`ALTER TABLE refining_recipes ADD COLUMN IF NOT EXISTS target_rank INTEGER NOT NULL DEFAULT 1;`, "add_target_rank"},
-		{`UPDATE refining_recipes rr SET target_rank = gd.rank FROM gu_dictionary gd WHERE gd.id = rr.target_gu_id AND rr.target_rank = 1;`, "backfill_target_rank"},
+		// Deterministic backfill: use the gu's minimum dictionary rank instead of
+		// a FROM-join (which is nondeterministic for multi-rank gus and could
+		// collide with an existing (gu_id, target_rank, variant) row). Rows whose
+		// target (gu_id, rank) already exists are left untouched.
+		{`UPDATE refining_recipes rr
+			SET target_rank = gd.min_rank
+			FROM (SELECT id, MIN(rank) AS min_rank FROM gu_dictionary GROUP BY id) gd
+			WHERE gd.id = rr.target_gu_id
+			  AND rr.target_rank = 1
+			  AND NOT EXISTS (
+				  SELECT 1 FROM refining_recipes r2
+				  WHERE r2.target_gu_id = rr.target_gu_id
+				    AND r2.target_rank = gd.min_rank
+				    AND r2.variant = rr.variant
+			  );`, "backfill_target_rank"},
+		// Drop stale legacy rows left at rank 1 that are exact duplicates of a
+		// canonical (gu_id, min_rank, variant) row, otherwise the FK re-added
+		// below would reject them.
+		{`DELETE FROM refining_recipes rr
+			WHERE rr.target_rank = 1
+			  AND (SELECT MIN(gd.rank) FROM gu_dictionary gd WHERE gd.id = rr.target_gu_id) > 1
+			  AND EXISTS (
+				  SELECT 1 FROM refining_recipes r2
+				  WHERE r2.target_gu_id = rr.target_gu_id
+				    AND r2.target_rank = (SELECT MIN(gd2.rank) FROM gu_dictionary gd2 WHERE gd2.id = rr.target_gu_id)
+				    AND r2.variant = rr.variant
+			  );`, "dedupe_stale_target_rank"},
 		{`ALTER TABLE refining_recipes DROP CONSTRAINT IF EXISTS refining_recipes_target_gu_id_fkey;`, "drop_recipe_fk"},
 		{`ALTER TABLE refining_recipes DROP CONSTRAINT IF EXISTS refining_recipes_target_gu_id_target_rank_fkey;`, "drop_recipe_fk2"},
 		{`ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS gu_rank INTEGER NOT NULL DEFAULT 1;`, "add_player_gu_rank"},
@@ -1294,7 +1320,6 @@ func InitSchema() error {
 		{`ALTER TABLE players DROP COLUMN IF EXISTS wisdom;`, "drop_wisdom_column"},
 		{`UPDATE players SET time_speed_multiplier = 1.0;`, "reset_time_speed_multiplier"},
 		{`ALTER TABLE players DROP COLUMN IF EXISTS tribulation_count;`, "drop_tribulation_count_column"},
-
 	}
 	for _, m := range migrations {
 		if _, err = DB.Exec(m.sql); err != nil {
