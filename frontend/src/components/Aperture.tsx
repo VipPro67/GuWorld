@@ -27,6 +27,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { formatNumber } from "@/lib/utils";
+import { formatConstitutionEffects } from "@/lib/constitution";
 
 function formatStat(val: number): string {
   return Math.abs(val) >= 10000 
@@ -282,6 +283,7 @@ export const Aperture: React.FC<ApertureProps> = ({
   guDictionary,
 }) => {
   const store = useGameStore();
+  const constitutionDictionary = store.constitutionDictionary;
   const manaSnapshot = store.manaSnapshot;
   const passiveStats = store.passiveStats;
   const fetchPassiveStats = store.fetchPassiveStats;
@@ -853,18 +855,21 @@ export const Aperture: React.FC<ApertureProps> = ({
                 };
                 const genderLabels: Record<string, string> = { male: "Nam", female: "Nữ" };
                 const constitutionLabels: Record<string, string> = {
-                  desolate_ancient_moon_body: "Hoang Cổ Nguyệt Thể",
-                  verdant_great_sun_body: "Thanh Liên Đại Nhật Thể",
+                  solar_sun_moon_body: "Thái Nhật Dương Mãng Thể",
+                  ancient_moon_yin_desolate_body: "Cổ Nguyệt Âm Hoang Thể",
                   northern_dark_ice_soul_body: "Bắc Minh Băng Phách Thể",
-                  north_ming_ice_body: "Bắc Minh Băng Phách Thể",
-                  ancient_yin_virtue_body: "Cổ Nguyệt Âm Đức Thể",
-                  blazing_glory_lightning_brilliance_body: "Hạo Kiếp Viêm Quang Lôi Quang Thể",
+                  forest_sea_reincarnation_body: "Sâm Hải Luân Hồi Thể",
+                  myriad_gold_brilliant_flower_body: "Vạn Kim Diệu Hoa Thể",
+                  blazing_glory_lightning_brilliance_body: "Viêm Hoàng Lôi Trạch Thể",
+                  great_strength_true_martial_body: "Đại Lực Chân Võ Thể",
+                  carefree_wisdom_heart_body: "Tiêu Dao Trí Tâm Thể",
+                  great_earth_origin_body: "Hậu Thổ Nguyên Ương Thể",
+                  universe_great_evolution_body: "Vũ Trụ Đại Diễn Thể",
                   pure_dream_reality_seeker_body: "Thuần Mộng Cầu Chân Thể",
-                  unrestrained_heavenly_mark_body: "Vô Cực Thiên Ngân Thể",
-                  great_strength_true_martial_body: "Đại Lực Chân Vũ Thể",
-                  carefree_lotus_heart_body: "Tiêu Dao Liên Tâm Thể",
-                  ancient_soul_virtue_body: "Cổ Hồn Âm Đức Thể",
                 };
+                const constitutionLabel = (key: string): string =>
+                  constitutionDictionary?.[key]?.name || constitutionLabels[key] || key;
+                const constitutionEffects = player.constitution ? constitutionDictionary?.[player.constitution]?.effects : undefined;
                 const statusLabels: Record<string, string> = { severely_wounded: "Trọng Thương" };
                 const cell = (label: string, value: string, accent = false) => (
                   <div className={`p-3 rounded-xl border ${accent ? "bg-zinc-950/40 border-zinc-800" : "bg-zinc-950/40 border-zinc-900"}`}>
@@ -876,7 +881,20 @@ export const Aperture: React.FC<ApertureProps> = ({
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {cell("Chủng Tộc", raceLabels[player.race] || player.race || "Nhân Tộc")}
                     {cell("Giới Tính", genderLabels[player.gender] || player.gender || "Không rõ")}
-                    {cell("Thể Chất", constitutionLabels[player.constitution] || player.constitution || "Không có", true)}
+                    <div className="p-3 rounded-xl border bg-zinc-950/40 border-zinc-800">
+                      <div className="text-[10px] text-zinc-500 font-mono">Thể Chất</div>
+                      <div className="text-base font-bold text-zinc-100 font-mono mt-0.5">{constitutionLabel(player.constitution) || "Không có"}</div>
+                      {constitutionEffects && formatConstitutionEffects(constitutionEffects).length > 0 && (
+                        <ul className="mt-2 space-y-1">
+                          {formatConstitutionEffects(constitutionEffects).map((eff, i) => (
+                            <li key={i} className="text-[10px] leading-snug text-amber-200/70">
+                              <Sparkles className="w-2.5 h-2.5 inline mr-1 text-amber-400/60" />
+                              {eff}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                     <div className="p-3 rounded-xl border bg-zinc-950/40 border-zinc-900">
                       <div className="text-[10px] text-zinc-500 font-mono">Trạng Thái</div>
                       {player.statuses && player.statuses.length > 0 ? (

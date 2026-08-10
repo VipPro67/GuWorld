@@ -27,7 +27,8 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 - **No service layer.** Handlers are fat (combat.go: 2400+ lines, player.go: 95KB). All gameplay logic is in `backend/internal/handlers/`.
 - **No migrations.** Schema is `CREATE TABLE IF NOT EXISTS` in `backend/internal/db/db.go`. Modify SQL there and re-run.
 - **CSV seed is append-only.** New rows inserted once on first run. Updates require CSV edit + restart.
-- **Registries cached in memory** on startup (`models.GuRegistry`, `models.ItemRegistry`). Changing CSV requires app restart.
+- **Registries cached in memory** on startup (`models.GuRegistry`, `models.ItemRegistry`, `gamefx.ConstitutionRegistry`). Changing CSV requires app restart.
+- **Thể chất (constitution) là data-driven.** Danh sách seed từ `data/Constitution.csv` → bảng `constitution_dictionary`, effect resolve từ `gamefx.Effects` (JSON trong cột `effects`). Thêm thể chất mới: sửa CSV + Import bảng "Thể chất" trong Admin. Format effects xem `docs/GAME_DATA.md`.
 - **Workers are goroutine polling loops**, not job queues. Hunger, tribulation, mine monsters. All workers accept `context.Context` for graceful shutdown.
 - **Redis is optional.** Failure logs warning, server continues.
 - **JSONB fields** use `interface{}` with custom `Scan`/`Value`. Watch for type assertion panics. `CombatState.Scan` now returns empty struct (not nil) on null.

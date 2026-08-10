@@ -26,7 +26,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 
 | Method | Path | Ghi chú |
 | --- | --- | --- |
-| GET | `/dictionary` | Public Gu + item + monster dictionary. |
+| GET | `/dictionary` | Public Gu + item + monster + constitution dictionary. Response: `{gu, items, monsters, constitutions}` — `constitutions` là mảng `{key, name, effects}` (effects là JSON theo format trong `docs/GAME_DATA.md`). |
 | GET | `/recipes` | Public refining recipes. Thêm query param ?all=true để lấy toàn bộ danh sách thay vì chỉ những công thức đã mở khóa của người chơi. |
 | POST | `/auth/send-otp` | Send OTP via email to register. |
 | POST | `/auth/register` | Rate limited. Requires valid OTP. Body thêm `race` (`human`/`fur_people`) và `gender` (`male`/`female`), mặc định `human`/`male`. |

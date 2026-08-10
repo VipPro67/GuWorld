@@ -392,7 +392,7 @@ function guLocationLabel(loc: string): string {
 }
 
 export const AdminView: React.FC = () => {
-  const { player, setView, addToast, guDictionary, itemDictionary } = useGameStore();
+  const { player, setView, addToast, guDictionary, itemDictionary, constitutionDictionary } = useGameStore();
   const [activeTab, setActiveTab] = useState<"items" | "gus" | "pets">("items");
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -1772,7 +1772,12 @@ export const AdminView: React.FC = () => {
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-zinc-500 font-mono">Thể chất</label>
-                  <input type="text" value={editPlayerForm.constitution || ""} onChange={e => setEditPlayerForm(f => ({ ...f, constitution: e.target.value }))} placeholder="desolate_ancient_moon_body, northern_dark_ice_soul_body..." className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                  <input type="text" value={editPlayerForm.constitution || ""} onChange={e => setEditPlayerForm(f => ({ ...f, constitution: e.target.value }))} list="constitution-list" placeholder="solar_sun_moon_body, great_strength_true_martial_body..." className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                  <datalist id="constitution-list">
+                    {Object.values(constitutionDictionary || {}).map((c: any) => (
+                      <option key={c.key} value={c.key}>{c.name}</option>
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-zinc-500 font-mono">Trạng thái (cách nhau bằng dấu phẩy)</label>
@@ -2625,6 +2630,7 @@ export const AdminView: React.FC = () => {
                 {[
                   { key: "item", label: "Vật phẩm", icon: Package, csv: "Item.csv" },
                   { key: "gu", label: "Cổ trùng", icon: Bug, csv: "Gu.csv" },
+                  { key: "constitution", label: "Thể chất", icon: Activity, csv: "Constitution.csv" },
                   { key: "recipe", label: "Cổ phương", icon: FlaskConical, csv: "Recipe.csv" },
                   { key: "shop_item", label: "Cửa hàng", icon: ShoppingBag, csv: "ShopItem.csv" },
                   { key: "arena_shop_item", label: "Cửa hàng Đấu trường", icon: Swords, csv: "ArenaShopItem.csv" },

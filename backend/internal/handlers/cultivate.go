@@ -99,7 +99,7 @@ func BreakWall(c *gin.Context) {
 
 	player.WallProgress += progressGain
 	success := player.WallProgress >= 1.0
-	player.ApertureStress += 5.0
+	player.ApertureStress += 5.0 * (1.0 + gamefx.Get(&player).ApertureStressBonus)
 	player.LastCultivateTime = time.Now()
 
 	cracked := false

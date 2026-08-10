@@ -6,13 +6,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
 type DictionaryResponse struct {
-	Gu       interface{} `json:"gu"`
-	Items    interface{} `json:"items"`
-	Monsters interface{} `json:"monsters"`
+	Gu            interface{}              `json:"gu"`
+	Items         interface{}              `json:"items"`
+	Monsters      interface{}              `json:"monsters"`
+	Constitutions []gamefx.ConstitutionDef `json:"constitutions"`
 }
 
 // GetDictionary returns the unified Gu and Item master catalogs, cached in Redis
@@ -33,9 +35,10 @@ func GetDictionary(c *gin.Context) {
 	}
 
 	resp = DictionaryResponse{
-		Gu:       flatGu,
-		Items:    models.ItemRegistry,
-		Monsters: models.MonsterRegistry,
+		Gu:            flatGu,
+		Items:         models.ItemRegistry,
+		Monsters:      models.MonsterRegistry,
+		Constitutions: gamefx.AllConstitutions(),
 	}
 
 	_ = cache.SetJSON(cacheKey, resp, 24*time.Hour)

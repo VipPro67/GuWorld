@@ -14,38 +14,41 @@ import (
 type Effects struct {
 	// StatMods maps a passive stat key ("attack", "defense", "speed", ...) to a
 	// percentage modifier applied on the stat total. E.g. 0.10 => +10%.
-	StatMods map[string]float64
+	StatMods map[string]float64 `json:"stat_mods"`
 	// RefineBonus is an additive success-rate bonus for luyện cổ (refining),
 	// in the 0..1 range.
-	RefineBonus float64
+	RefineBonus float64 `json:"refine"`
 	// DaoNganBonus maps a dao path to an additive multiplier for that path's
 	// đạo ngân contribution in combat. E.g. {"ice": 0.2} => ×1.2 for ice.
-	DaoNganBonus map[string]float64
+	DaoNganBonus map[string]float64 `json:"dao_mark"`
 	// PathDamageBonus maps a dao path to a percentage damage multiplier for
 	// abilities of that path. E.g. {"dream": 0.15} => +15% dream-path damage.
-	PathDamageBonus map[string]float64
+	PathDamageBonus map[string]float64 `json:"path_damage"`
 	// PathResistanceBonus maps a dao path to a percentage reduction of damage
 	// taken from that path. E.g. {"fire": 0.10} => -10% fire damage taken.
-	PathResistanceBonus map[string]float64
+	PathResistanceBonus map[string]float64 `json:"path_resistance"`
 	// LuckBonus is a flat increase of the luck stat.
-	LuckBonus float64
+	LuckBonus float64 `json:"luck"`
 	// MaxManaBonus is a percentage increase of the mana pool capacity.
-	MaxManaBonus float64
+	MaxManaBonus float64 `json:"max_mana"`
 	// ManaRegenBonus is a percentage increase of mana regeneration rate.
-	ManaRegenBonus float64
+	ManaRegenBonus float64 `json:"mana_regen"`
 	// CultivationEfficiencyBonus is a percentage increase of cultivation
 	// gains (phá vách wall progress, ...).
-	CultivationEfficiencyBonus float64
+	CultivationEfficiencyBonus float64 `json:"cultivation_efficiency"`
 	// DaoMarkGainBonus is a percentage increase of Đạo Ngân earned.
-	DaoMarkGainBonus float64
+	DaoMarkGainBonus float64 `json:"dao_mark_gain"`
 	// HealingReceivedBonus is a percentage increase of healing the player
 	// receives (and HP regeneration).
-	HealingReceivedBonus float64
+	HealingReceivedBonus float64 `json:"healing_received"`
 	// MentalResistanceBonus is a percentage increase of resistance to
 	// control/mental effects.
-	MentalResistanceBonus float64
+	MentalResistanceBonus float64 `json:"mental_resistance"`
 	// SoulDefenseBonus is a percentage reduction of soul damage taken.
-	SoulDefenseBonus float64
+	SoulDefenseBonus float64 `json:"soul_defense"`
+	// ApertureStressBonus is an additive multiplier on the aperture stress
+	// (áp lực không khiếu) gained per trùng kích attempt. 1.0 => stress ×2.
+	ApertureStressBonus float64 `json:"aperture_stress_bonus"`
 }
 
 // ValidRaces returns the set of accepted race keys.
@@ -74,19 +77,12 @@ func ValidGenders() map[string]bool {
 
 // ValidConstitutions returns the set of accepted constitution keys.
 func ValidConstitutions() map[string]bool {
-	return map[string]bool{
-		"desolate_ancient_moon_body":              true, // Hoang Cổ Nguyệt Thể
-		"verdant_great_sun_body":                  true, // Thanh Liên Đại Nhật Thể
-		"northern_dark_ice_soul_body":             true, // Bắc Minh Băng Phách Thể
-		"north_ming_ice_body":                     true, // alias cũ của Bắc Minh Băng Phách Thể
-		"ancient_yin_virtue_body":                 true, // Cổ Nguyệt Âm Đức Thể
-		"blazing_glory_lightning_brilliance_body": true, // Hạo Kiếp Viêm Quang Lôi Quang Thể
-		"pure_dream_reality_seeker_body":          true, // Thuần Mộng Cầu Chân Thể
-		"unrestrained_heavenly_mark_body":         true, // Vô Cực Thiên Ngân Thể
-		"great_strength_true_martial_body":        true, // Đại Lực Chân Vũ Thể
-		"carefree_lotus_heart_body":               true, // Tiêu Dao Liên Tâm Thể
-		"ancient_soul_virtue_body":                true, // Cổ Hồn Âm Đức Thể
+	defs := effectiveConstitutions()
+	out := make(map[string]bool, len(defs))
+	for key := range defs {
+		out[key] = true
 	}
+	return out
 }
 
 // ValidStatuses returns the set of accepted status keys.
@@ -150,41 +146,8 @@ func Get(p *models.Player) Effects {
 		}
 	}
 
-	switch p.Constitution {
-	case "desolate_ancient_moon_body": // Hoang Cổ Nguyệt Thể
-		fx.CultivationEfficiencyBonus += 0.20
-		fx.MaxManaBonus += 0.15
-	case "verdant_great_sun_body": // Thanh Liên Đại Nhật Thể
-		fx.DaoNganBonus["fire"] += 0.20
-		fx.StatMods["attack"] += 0.10
-	case "northern_dark_ice_soul_body", "north_ming_ice_body": // Bắc Minh Băng Phách Thể
-		fx.DaoNganBonus["ice"] += 0.20
-		fx.StatMods["defense"] += 0.10
-	case "ancient_yin_virtue_body": // Cổ Nguyệt Âm Đức Thể
-		fx.DaoNganBonus["soul"] += 0.15
-		fx.HealingReceivedBonus += 0.10
-	case "blazing_glory_lightning_brilliance_body": // Hạo Kiếp Viêm Quang Lôi Quang Thể
-		fx.DaoNganBonus["lightning"] += 0.20
-		fx.StatMods["speed"] += 0.10
-	case "pure_dream_reality_seeker_body": // Thuần Mộng Cầu Chân Thể
-		fx.DaoNganBonus["dream"] += 0.25
-		fx.PathDamageBonus["dream"] += 0.15
-	case "unrestrained_heavenly_mark_body": // Vô Cực Thiên Ngân Thể
-		fx.DaoMarkGainBonus += 0.15
-	case "great_strength_true_martial_body": // Đại Lực Chân Vũ Thể
-		fx.DaoNganBonus["strength"] += 0.20
-		fx.StatMods["attack"] += 0.15
-	case "carefree_lotus_heart_body": // Tiêu Dao Liên Tâm Thể
-		fx.DaoNganBonus["wisdom"] += 0.15
-		fx.MentalResistanceBonus += 0.20
-	case "ancient_soul_virtue_body": // Cổ Hồn Âm Đức Thể
-		fx.DaoNganBonus["soul"] += 0.20
-		fx.SoulDefenseBonus += 0.15
-	}
-
-	// Mọi thể chất đều tăng hồi mana
-	if p.Constitution != "" && ValidConstitutions()[p.Constitution] {
-		fx.ManaRegenBonus += 1
+	if def, ok := effectiveConstitutions()[p.Constitution]; ok {
+		addEffects(&fx, def.Effects)
 	}
 
 	return fx
@@ -316,30 +279,10 @@ func GenderDisplayName(gender string) string {
 
 // ConstitutionDisplayName returns the Vietnamese label for a constitution key.
 func ConstitutionDisplayName(constitution string) string {
-	switch constitution {
-	case "desolate_ancient_moon_body":
-		return "Hoang Cổ Nguyệt Thể"
-	case "verdant_great_sun_body":
-		return "Thanh Liên Đại Nhật Thể"
-	case "northern_dark_ice_soul_body", "north_ming_ice_body":
-		return "Bắc Minh Băng Phách Thể"
-	case "ancient_yin_virtue_body":
-		return "Cổ Nguyệt Âm Đức Thể"
-	case "blazing_glory_lightning_brilliance_body":
-		return "Hạo Kiếp Viêm Quang Lôi Quang Thể"
-	case "pure_dream_reality_seeker_body":
-		return "Thuần Mộng Cầu Chân Thể"
-	case "unrestrained_heavenly_mark_body":
-		return "Vô Cực Thiên Ngân Thể"
-	case "great_strength_true_martial_body":
-		return "Đại Lực Chân Vũ Thể"
-	case "carefree_lotus_heart_body":
-		return "Tiêu Dao Liên Tâm Thể"
-	case "ancient_soul_virtue_body":
-		return "Cổ Hồn Âm Đức Thể"
-	default:
-		return constitution
+	if def, ok := effectiveConstitutions()[constitution]; ok {
+		return def.Name
 	}
+	return constitution
 }
 
 // StatusDisplayName returns the Vietnamese label for a status key.

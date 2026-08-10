@@ -35,22 +35,23 @@ Khi đăng ký, đạo hữu chọn **Chủng tộc** (mặc định Nhân Tộc
 | --- | --- |
 | Trọng Thương (`severely_wounded`) | **-20%** tấn công, phòng thủ, tốc độ |
 
-**Thể chất (10 loại — tất cả đều +10% hồi Chân Nguyên):**
+**Thể chất (10 Thập Tuyệt Thể + Thuần Mộng Cầu Chân Thể):**
 
 | Thể chất | Hiệu ứng |
 | --- | --- |
-| Hoang Cổ Nguyệt Thể (`desolate_ancient_moon_body`) | +20% hiệu quả tu luyện, +15% Chân Nguyên tối đa |
-| Thanh Liên Đại Nhật Thể (`verdant_great_sun_body`) | Hỏa Đạo +20% affinity, +10% tấn công |
-| Bắc Minh Băng Phách Thể (`northern_dark_ice_soul_body`) | Hàn Băng Đạo +20% affinity, +10% phòng thủ |
-| Cổ Nguyệt Âm Đức Thể (`ancient_yin_virtue_body`) | Hồn Đạo +15% affinity, +10% hồi phục nhận |
-| Hạo Kiếp Viêm Quang Lôi Quang Thể (`blazing_glory_lightning_brilliance_body`) | Lôi Đạo +20% affinity, +10% tốc độ |
-| Thuần Mộng Cầu Chân Thể (`pure_dream_reality_seeker_body`) | Mộng Đạo +25% affinity, +15% sát thương Mộng Đạo |
-| Vô Cực Thiên Ngân Thể (`unrestrained_heavenly_mark_body`) | +15% Đạo Ngân nhận được |
-| Đại Lực Chân Vũ Thể (`great_strength_true_martial_body`) | Lực Đạo +20% affinity, +15% tấn công |
-| Tiêu Dao Liên Tâm Thể (`carefree_lotus_heart_body`) | Trí Tuệ Đạo +15% affinity, +20% kháng tâm lý |
-| Cổ Hồn Âm Đức Thể (`ancient_soul_virtue_body`) | Hồn Đạo +20% affinity, +15% phòng thủ hồn |
+| Thái Nhật Dương Mãng Thể (`solar_sun_moon_body`) | Quang Đạo đạo ngân ×150%, +20% sát thương Quang Đạo, +50% Chân Nguyên tối đa, +100% hồi mana |
+| Cổ Nguyệt Âm Hoang Thể (`ancient_moon_yin_desolate_body`) | Hắc Ám Đạo đạo ngân ×150%, +50% Chân Nguyên tối đa, +100% hồi mana, +20% kháng hiệu ứng tâm lý |
+| Bắc Minh Băng Phách Thể (`northern_dark_ice_soul_body`) | Hàn Băng Đạo đạo ngân ×150%, giảm 10% sát thương Hàn Băng nhận, +50% Chân Nguyên tối đa, +100% hồi mana |
+| Sâm Hải Luân Hồi Thể (`forest_sea_reincarnation_body`) | Thủy Đạo đạo ngân ×150%, +50% hồi phục nhận, +50% Chân Nguyên tối đa, +100% hồi mana |
+| Vạn Kim Diệu Hoa Thể (`myriad_gold_brilliant_flower_body`) | Kim Đạo đạo ngân ×150%, +30% tấn công, +30% phòng thủ, +50% Chân Nguyên tối đa, +100% hồi mana |
+| Viêm Hoàng Lôi Trạch Thể (`blazing_glory_lightning_brilliance_body`) | Lôi Đạo đạo ngân ×150%, +20% tốc độ, +50% Chân Nguyên tối đa, +100% hồi mana |
+| Đại Lực Chân Võ Thể (`great_strength_true_martial_body`) | Lực Đạo đạo ngân ×150%, +30% tấn công, +30% phòng thủ, +50% Chân Nguyên tối đa, +100% hồi mana |
+| Tiêu Dao Trí Tâm Thể (`carefree_wisdom_heart_body`) | Trí Đạo đạo ngân ×150%, +30% kháng hiệu ứng tâm lý, +50% Chân Nguyên tối đa, +100% hồi mana |
+| Hậu Thổ Nguyên Ương Thể (`great_earth_origin_body`) | Thổ Đạo đạo ngân ×150%, +45% phòng thủ, +45% kháng hiệu ứng tâm lý, +50% Chân Nguyên tối đa, +100% hồi mana |
+| Vũ Trụ Đại Diễn Thể (`universe_great_evolution_body`) | Không Gian Đạo đạo ngân ×150%, +15% tấn công/phòng thủ/tốc độ, +50% Chân Nguyên tối đa, +100% hồi mana |
+| Thuần Mộng Cầu Chân Thể (`pure_dream_reality_seeker_body`) | Mộng Đạo đạo ngân ×140%, +10% sát thương Mộng Đạo, +40% Chân Nguyên tối đa, +100% hồi mana |
 
-Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuses`). Danh sách và con số hiệu ứng được định nghĩa tập trung tại `backend/internal/gamefx/fx.go`.
+Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuses`). Danh sách thể chất được **data-driven** từ bảng `constitution_dictionary` (seed từ `data/Constitution.csv`): admin thêm thể chất mới bằng cách sửa CSV (thêm dòng `key,name,effects`) rồi Import bảng "Thể chất" trong Admin panel tab **Dữ liệu**. Effect format xem `docs/GAME_DATA.md`.
 
 
 ## 2. Tu luyện

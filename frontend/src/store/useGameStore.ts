@@ -377,7 +377,7 @@ const calculateHealingStat = (player: Player, guDictionary: Record<string, GuSpe
   return healing;
 };
 
-const createManaSnapshotFromPlayer = (player: Player, guDictionary: Record<string, GuSpec>, timeRate?: number): ManaSnapshot => ({
+const createManaSnapshotFromPlayer = (player: Player, guDictionary: Record<string, GuSpec>, constitutionDictionary?: Record<string, { key: string; name: string; effects?: Record<string, any> }>, timeRate?: number): ManaSnapshot => ({
   player_id: player.id,
   current_mana: player.current_mana,
   max_mana: player.max_mana,
@@ -393,7 +393,7 @@ const createManaSnapshotFromPlayer = (player: Player, guDictionary: Record<strin
   base_hp: player.base_hp,
   healing_stat: calculateHealingStat(player, guDictionary),
   mana_regen_tick_per_hour: manaRegenTickPerHour(player, guDictionary),
-  mana_regen_mult: player.constitution ? 2 : 1,
+  mana_regen_mult: 1 + (player.constitution ? (constitutionDictionary?.[player.constitution]?.effects?.mana_regen ?? 1) : 0),
 });
 
 export interface ImmortalAperture {
@@ -829,6 +829,7 @@ interface GameState {
   guByRank: Record<string, Record<number, GuSpec>>;
   itemDictionary: Record<string, ItemSpec>;
   monsterDictionary: Record<string, MonsterSpec>;
+  constitutionDictionary: Record<string, { key: string; name: string; effects?: Record<string, any> }>;
   dictionaryLoaded: boolean;
   recipes: RefiningRecipe[];
   recipesLoaded: boolean;
@@ -1351,7 +1352,7 @@ export const useGameStore = create<GameState>((set, get) => {
       ...extraState,
       player: normalizedPlayer,
       guInventoryLoaded: guComplete || (normalizedPlayer ? incomingInv.length > 0 : false),
-      manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer, get().guDictionary, get().aperture?.time_rate) : null,
+      manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer, get().guDictionary, get().constitutionDictionary, get().aperture?.time_rate) : null,
     });
     if (normalizedPlayer) {
       get().subscribeAllBaoHoangMessages();
@@ -1409,6 +1410,7 @@ export const useGameStore = create<GameState>((set, get) => {
   guByRank: {},
   itemDictionary: {},
   monsterDictionary: {},
+  constitutionDictionary: {},
   dictionaryLoaded: false,
   recipes: [],
   recipesLoaded: false,
@@ -1677,7 +1679,7 @@ export const useGameStore = create<GameState>((set, get) => {
   updateManaSnapshot: (player) => {
     const normalizedPlayer = normalizePlayer(player);
     set({
-      manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer, get().guDictionary, get().aperture?.time_rate) : null,
+      manaSnapshot: normalizedPlayer ? createManaSnapshotFromPlayer(normalizedPlayer, get().guDictionary, get().constitutionDictionary, get().aperture?.time_rate) : null,
     });
   },
   setPlayerFromServer: (player) => setPlayerFromServer(player),
@@ -2375,11 +2377,17 @@ export const useGameStore = create<GameState>((set, get) => {
           }
         }
       }
+      const constitutionDict: Record<string, { key: string; name: string; effects?: Record<string, any> }> = {};
+      const constitutionArr = Array.isArray(data.constitutions) ? data.constitutions : [];
+      for (const c of constitutionArr) {
+        constitutionDict[c.key] = c;
+      }
       set({
         guDictionary: guMap,
         guByRank,
         itemDictionary: data.items || {},
         monsterDictionary: data.monsters || {},
+        constitutionDictionary: constitutionDict,
         dictionaryLoaded: true,
       });
     } catch (err: any) {
@@ -4660,7 +4668,7 @@ export const useGameStore = create<GameState>((set, get) => {
       set({ aperture: data });
       const player = get().player;
       if (player) {
-        set({ manaSnapshot: createManaSnapshotFromPlayer(player, get().guDictionary, data.time_rate) });
+        set({ manaSnapshot: createManaSnapshotFromPlayer(player, get().guDictionary, get().constitutionDictionary, data.time_rate) });
       }
     } catch (err) {
       console.error("Failed to fetch aperture:", err);

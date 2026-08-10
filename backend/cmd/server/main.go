@@ -11,6 +11,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -85,6 +86,13 @@ func main() {
 		logger.S.Warnf("Failed to load Item registry: %v (data may need import)", err)
 	} else {
 		logger.S.Info("Item registry loaded successfully")
+	}
+
+	err = gamefx.LoadConstitutionRegistry(db.DB)
+	if err != nil {
+		logger.S.Warnf("Failed to load Constitution registry: %v (data may need import)", err)
+	} else {
+		logger.S.Info("Constitution registry loaded successfully")
 	}
 
 	err = models.LoadMonsterRegistry(db.DB)

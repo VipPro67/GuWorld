@@ -145,6 +145,17 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create gu_dictionary table: %w", err)
 	}
 
+	// 2b. Create constitution_dictionary
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS constitution_dictionary (
+		key VARCHAR(100) PRIMARY KEY,
+		name VARCHAR(200) NOT NULL,
+		effects JSONB NOT NULL DEFAULT '{}'
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create constitution_dictionary table: %w", err)
+	}
+
 	// Drop old refining_recipes table if it contains the legacy id column
 	_, err = DB.Exec(`
 	DO $$
@@ -1667,6 +1678,9 @@ func SeedDictionaries() error {
 		return fmt.Errorf("CSV Gu seed failed: %w", err)
 
 	}
+	if err := seedConstitutionsFromCSV("Constitution.csv"); err != nil {
+		return fmt.Errorf("CSV constitution seed failed: %w", err)
+	}
 	if err := seedRecipesFromCSV("Recipe.csv"); err != nil {
 		return fmt.Errorf("CSV recipe seed failed: %w", err)
 	}
@@ -2063,6 +2077,70 @@ func seedGusFromCSV(filename string) error {
 		}
 	}
 	logger.S.Infof("Gu dictionary seeded from %s (%d unique entries)", filename, len(order))
+	return nil
+}
+
+// seedConstitutionsFromCSV reads Constitution.csv and upserts into
+// constitution_dictionary.
+func seedConstitutionsFromCSV(filename string) error {
+	f, r, header, err := openCSV(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	keyIdx := colIndex(header, "key")
+	nameIdx := colIndex(header, "name")
+	effectsIdx := colIndex(header, "effects")
+	if keyIdx < 0 || nameIdx < 0 {
+		return fmt.Errorf("%s missing required columns (key, name)", filename)
+	}
+
+	seen := make(map[string][]string)
+	order := []string{}
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			continue
+		}
+		if len(row) == 0 {
+			continue
+		}
+		key := strings.TrimSpace(row[keyIdx])
+		if key == "" {
+			continue
+		}
+		if _, exists := seen[key]; !exists {
+			order = append(order, key)
+		}
+		seen[key] = row
+	}
+
+	get := func(row []string, idx int) string {
+		if idx < 0 || idx >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[idx])
+	}
+
+	for _, key := range order {
+		row := seen[key]
+		name := get(row, nameIdx)
+		effects := safeJSONObject(get(row, effectsIdx), "{}", fmt.Sprintf("%s effects", key))
+		_, err := DB.Exec(`
+			INSERT INTO constitution_dictionary (key, name, effects)
+			VALUES ($1, $2, $3::jsonb)
+			ON CONFLICT (key) DO UPDATE
+			SET name=EXCLUDED.name, effects=EXCLUDED.effects
+		`, key, name, effects)
+		if err != nil {
+			return fmt.Errorf("upsert constitution %s: %w", key, err)
+		}
+	}
+	logger.S.Infof("Constitution dictionary seeded from %s (%d entries)", filename, len(order))
 	return nil
 }
 
@@ -3196,6 +3274,11 @@ func ExportToCSV() error {
 			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'{"active":{},"support":{},"passive":{},"house":{}}'), COALESCE(rarity,''), COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
 		},
 		{
+			filename: "Constitution.csv",
+			columns:  []string{"key", "name", "effects"},
+			query:    `SELECT key, name, COALESCE(effects::text,'{}') FROM constitution_dictionary ORDER BY key`,
+		},
+		{
 			filename: "Recipe.csv",
 			columns:  []string{"id", "target_gu_id", "target_rank", "variant", "required_gus", "required_materials", "success_rate", "primeval_stones_cost", "immortal_essence_stones_cost"},
 			query:    `SELECT ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) AS id, target_gu_id, target_rank, variant, COALESCE(required_gus::text,'[]'), COALESCE(required_materials::text,'{}'), COALESCE(success_rate,0), COALESCE(primeval_stones_cost,0), COALESCE(immortal_essence_stones_cost,0) FROM refining_recipes ORDER BY target_gu_id, target_rank, variant`,
@@ -3261,7 +3344,7 @@ func ExportToCSV() error {
 // AvailableTables returns the list of table keys that can be individually imported/exported.
 func AvailableTables() []string {
 	return []string{
-		"item", "gu", "recipe", "shop_item", "arena_shop_item",
+		"item", "gu", "constitution", "recipe", "shop_item", "arena_shop_item",
 		"region", "loot_table", "monster", "monster_spawn",
 		"sect", "sect_mission", "quest",
 	}
@@ -3274,6 +3357,8 @@ func TableImport(table string) error {
 		return seedItemsFromCSV("Item.csv")
 	case "gu":
 		return seedGusFromCSV("Gu.csv")
+	case "constitution":
+		return seedConstitutionsFromCSV("Constitution.csv")
 	case "recipe":
 		return seedRecipesFromCSV("Recipe.csv")
 	case "shop_item":
@@ -3317,6 +3402,11 @@ func TableExport(table string) error {
 			filename: "Gu.csv",
 			columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
 			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'{"active":{},"support":{},"passive":{},"house":{}}'), COALESCE(rarity,''), COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
+		},
+		"constitution": {
+			filename: "Constitution.csv",
+			columns:  []string{"key", "name", "effects"},
+			query:    `SELECT key, name, COALESCE(effects::text,'{}') FROM constitution_dictionary ORDER BY key`,
 		},
 		"recipe": {
 			filename: "Recipe.csv",

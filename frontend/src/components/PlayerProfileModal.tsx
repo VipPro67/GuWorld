@@ -2,6 +2,7 @@
 
 import React, { useEffect } from "react";
 import { useGameStore, ImmortalAperture } from "@/store/useGameStore";
+import { formatConstitutionEffects } from "@/lib/constitution";
 import { X, Eye, EyeOff, Flame, Coins, Sparkles, Crown, Award, Activity, Heart } from "lucide-react";
 
 const pathNameMap: Record<string, string> = {
@@ -65,7 +66,7 @@ const translatePath = (path: string): string => {
 };
 
 export const PlayerProfileModal: React.FC = () => {
-  const { inspectedProfile, inspectedUsernameQuery, clearInspectedProfile, guDictionary, player, initiateTrade, aperture } = useGameStore();
+  const { inspectedProfile, inspectedUsernameQuery, clearInspectedProfile, guDictionary, player, initiateTrade, aperture, constitutionDictionary } = useGameStore();
 
   if (!inspectedProfile) return null;
 
@@ -122,21 +123,24 @@ export const PlayerProfileModal: React.FC = () => {
     female: "Nữ",
   };
   const constitutionLabels: Record<string, string> = {
-    desolate_ancient_moon_body: "Hoang Cổ Nguyệt Thể",
-    verdant_great_sun_body: "Thanh Liên Đại Nhật Thể",
+    solar_sun_moon_body: "Thái Nhật Dương Mãng Thể",
+    ancient_moon_yin_desolate_body: "Cổ Nguyệt Âm Hoang Thể",
     northern_dark_ice_soul_body: "Bắc Minh Băng Phách Thể",
-    north_ming_ice_body: "Bắc Minh Băng Phách Thể",
-    ancient_yin_virtue_body: "Cổ Nguyệt Âm Đức Thể",
-    blazing_glory_lightning_brilliance_body: "Hạo Kiếp Viêm Quang Lôi Quang Thể",
+    forest_sea_reincarnation_body: "Sâm Hải Luân Hồi Thể",
+    myriad_gold_brilliant_flower_body: "Vạn Kim Diệu Hoa Thể",
+    blazing_glory_lightning_brilliance_body: "Viêm Hoàng Lôi Trạch Thể",
+    great_strength_true_martial_body: "Đại Lực Chân Võ Thể",
+    carefree_wisdom_heart_body: "Tiêu Dao Trí Tâm Thể",
+    great_earth_origin_body: "Hậu Thổ Nguyên Ương Thể",
+    universe_great_evolution_body: "Vũ Trụ Đại Diễn Thể",
     pure_dream_reality_seeker_body: "Thuần Mộng Cầu Chân Thể",
-    unrestrained_heavenly_mark_body: "Vô Cực Thiên Ngân Thể",
-    great_strength_true_martial_body: "Đại Lực Chân Vũ Thể",
-    carefree_lotus_heart_body: "Tiêu Dao Liên Tâm Thể",
-    ancient_soul_virtue_body: "Cổ Hồn Âm Đức Thể",
   };
   const statusLabels: Record<string, string> = {
     severely_wounded: "Trọng Thương",
   };
+
+  const constitutionLabel = (key: string): string =>
+    constitutionDictionary?.[key]?.name || constitutionLabels[key] || key;
 
   const getRankName = (rankNum: number, subNum: number, aperture?: ImmortalAperture | null): string => {
     const ranks = ["Sơ giai", "Trung giai", "Cao giai", "Đỉnh phong"];
@@ -350,8 +354,18 @@ export const PlayerProfileModal: React.FC = () => {
             <div className="flex flex-col gap-1.5 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-3.5">
               <span className="text-[10px] uppercase tracking-widest font-mono text-zinc-500">Thể chất</span>
               <span className="text-sm font-semibold text-zinc-200">
-                {constitution ? constitutionLabels[constitution] || constitution : "Không có"}
+                {constitution ? constitutionLabel(constitution) : "Không có"}
               </span>
+              {constitution && formatConstitutionEffects(constitutionDictionary?.[constitution]?.effects).length > 0 && (
+                <ul className="mt-1 space-y-1">
+                  {formatConstitutionEffects(constitutionDictionary?.[constitution]?.effects).map((eff, i) => (
+                    <li key={i} className="text-[10px] leading-snug text-amber-200/70">
+                      <Sparkles className="w-2.5 h-2.5 inline mr-1 text-amber-400/60" />
+                      {eff}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div className="flex flex-col gap-1.5 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-3.5">
               <span className="text-[10px] uppercase tracking-widest font-mono text-zinc-500">Trạng thái</span>

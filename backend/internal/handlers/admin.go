@@ -1324,16 +1324,16 @@ func AdminListSects(c *gin.Context) {
 	defer rows.Close()
 
 	type SectInfo struct {
-		ID                        string `json:"id"`
-		Name                      string `json:"name"`
-		Description               string `json:"description"`
-		Region                    string `json:"region"`
-		Level                     int    `json:"level"`
-		Funds                     int64  `json:"funds"`
-		RequireApproval           bool   `json:"require_approval"`
-		RequirePromotionApproval  bool   `json:"require_promotion_approval"`
-		MemberCount               int    `json:"member_count"`
-		LeaderName                string `json:"leader_name,omitempty"`
+		ID                       string `json:"id"`
+		Name                     string `json:"name"`
+		Description              string `json:"description"`
+		Region                   string `json:"region"`
+		Level                    int    `json:"level"`
+		Funds                    int64  `json:"funds"`
+		RequireApproval          bool   `json:"require_approval"`
+		RequirePromotionApproval bool   `json:"require_promotion_approval"`
+		MemberCount              int    `json:"member_count"`
+		LeaderName               string `json:"leader_name,omitempty"`
 	}
 
 	var sects []SectInfo
@@ -1360,17 +1360,17 @@ func AdminGetSectDetail(c *gin.Context) {
 	sectID := c.Param("id")
 
 	type sectVault struct {
-		ID                        string          `json:"id"`
-		Name                      string          `json:"name"`
-		Description               string          `json:"description"`
-		Region                    string          `json:"region"`
-		Level                     int             `json:"level"`
-		Funds                     int64           `json:"funds"`
-		RequireApproval           bool            `json:"require_approval"`
-		RequirePromotionApproval  bool            `json:"require_promotion_approval"`
-		VaultGu                   json.RawMessage `json:"vault_gu"`
-		VaultMaterials            json.RawMessage `json:"vault_materials"`
-		VaultRecipes              json.RawMessage `json:"vault_recipes"`
+		ID                       string          `json:"id"`
+		Name                     string          `json:"name"`
+		Description              string          `json:"description"`
+		Region                   string          `json:"region"`
+		Level                    int             `json:"level"`
+		Funds                    int64           `json:"funds"`
+		RequireApproval          bool            `json:"require_approval"`
+		RequirePromotionApproval bool            `json:"require_promotion_approval"`
+		VaultGu                  json.RawMessage `json:"vault_gu"`
+		VaultMaterials           json.RawMessage `json:"vault_materials"`
+		VaultRecipes             json.RawMessage `json:"vault_recipes"`
 	}
 	var s sectVault
 	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT id, name, description, region, level, funds, require_approval, require_promotion_approval, vault_gu, vault_materials, vault_recipes FROM sects WHERE id = $1`, sectID).Scan(&s.ID, &s.Name, &s.Description, &s.Region, &s.Level, &s.Funds, &s.RequireApproval, &s.RequirePromotionApproval, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes)
@@ -1425,13 +1425,13 @@ func AdminGetSectDetail(c *gin.Context) {
 }
 
 type AdminSectUpdateRequest struct {
-	Name            *string `json:"name"`
-	Description     *string `json:"description"`
-	Region          *string `json:"region"`
-	Level           *int    `json:"level"`
-	Funds           *int64  `json:"funds"`
-	RequireApproval *bool   `json:"require_approval"`
-	RequirePromotionApproval *bool `json:"require_promotion_approval"`
+	Name                     *string `json:"name"`
+	Description              *string `json:"description"`
+	Region                   *string `json:"region"`
+	Level                    *int    `json:"level"`
+	Funds                    *int64  `json:"funds"`
+	RequireApproval          *bool   `json:"require_approval"`
+	RequirePromotionApproval *bool   `json:"require_promotion_approval"`
 }
 
 func AdminUpdateSect(c *gin.Context) {
@@ -2056,6 +2056,9 @@ func AdminImportData(c *gin.Context) {
 	if err := models.LoadItemRegistry(db.DB); err != nil {
 		logger.S.Warnf("failed to reload Item registry after import: %v", err)
 	}
+	if err := gamefx.LoadConstitutionRegistry(db.DB); err != nil {
+		logger.S.Warnf("failed to reload Constitution registry after import: %v", err)
+	}
 	if err := models.LoadMonsterRegistry(db.DB); err != nil {
 		logger.S.Warnf("failed to reload Monster registry after import: %v", err)
 	}
@@ -2127,6 +2130,11 @@ func AdminImportTable(c *gin.Context) {
 		if err := models.LoadGuRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Gu registry after import: %v", err)
 		}
+	case "constitution":
+		if err := gamefx.LoadConstitutionRegistry(db.DB); err != nil {
+			logger.S.Warnf("failed to reload Constitution registry after import: %v", err)
+		}
+		cache.Delete("game_dictionary_unified")
 	case "monster", "monster_spawn", "region", "loot_table":
 		if err := models.LoadMonsterRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Monster registry after import: %v", err)
@@ -2181,6 +2189,9 @@ func AdminClearCache(c *gin.Context) {
 	}
 	if err := models.LoadItemRegistry(db.DB); err != nil {
 		logger.S.Warnf("failed to reload Item registry: %v", err)
+	}
+	if err := gamefx.LoadConstitutionRegistry(db.DB); err != nil {
+		logger.S.Warnf("failed to reload Constitution registry: %v", err)
 	}
 	if err := models.LoadMonsterRegistry(db.DB); err != nil {
 		logger.S.Warnf("failed to reload Monster registry: %v", err)
