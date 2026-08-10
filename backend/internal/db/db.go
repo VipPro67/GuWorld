@@ -1045,7 +1045,6 @@ func InitSchema() error {
 		{`ALTER TABLE refining_recipes DROP CONSTRAINT IF EXISTS refining_recipes_target_gu_id_fkey;`, "drop_recipe_fk"},
 		{`ALTER TABLE refining_recipes DROP CONSTRAINT IF EXISTS refining_recipes_target_gu_id_target_rank_fkey;`, "drop_recipe_fk2"},
 		{`ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS gu_rank INTEGER NOT NULL DEFAULT 1;`, "add_player_gu_rank"},
-		{`UPDATE player_gu SET gu_rank = rank WHERE gu_rank = 1;`, "backfill_player_gu_rank"},
 		{`ALTER TABLE player_gu DROP CONSTRAINT IF EXISTS player_gu_gu_id_fkey;`, "drop_player_gu_fk"},
 		{`ALTER TABLE player_gu DROP CONSTRAINT IF EXISTS player_gu_gu_id_gu_rank_fkey;`, "drop_player_gu_fk2"},
 		{`ALTER TABLE gu_dictionary DROP CONSTRAINT IF EXISTS gu_dictionary_pkey;`, "drop_gu_dict_pk"},
