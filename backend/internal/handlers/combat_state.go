@@ -168,7 +168,7 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 			base.Allies[idx].GridY = allySlots[idx][1]
 		}
 		if base.Allies[idx].Speed == 0 {
-			base.Allies[idx].Speed = 10.0 + float64(base.Allies[idx].Rank)*2.0 + float64(base.Allies[idx].SubRank)*0.5
+			base.Allies[idx].Speed = 8.0 + float64(base.Allies[idx].Rank)*2.0 + float64(base.Allies[idx].SubRank)*0.5
 		}
 	}
 

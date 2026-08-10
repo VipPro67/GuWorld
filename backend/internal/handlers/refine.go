@@ -430,7 +430,7 @@ func RefineGu(c *gin.Context) {
 				if item.IsVital {
 					hasVitalIngredient = true
 				}
-				if spec, ok := models.GetGuAny(item.GuID); ok {
+				if spec, ok := models.GetGu(item.GuID, item.Rank); ok {
 					if msg, err := HandleGuEvent(&player, spec, item, "ON_REFINE_MATERIAL"); err == nil && msg != "" {
 						refineEventMsg = msg
 					}
@@ -457,7 +457,7 @@ func RefineGu(c *gin.Context) {
 		player.GuInventory = newInventory
 		if newGuInstance.Rank >= 6 {
 			guName := newGuInstance.GuID
-			if targetSpec, ok := models.GetGuAny(newGuInstance.GuID); ok {
+			if targetSpec, ok := models.GetGu(newGuInstance.GuID, newGuInstance.Rank); ok {
 				guName = targetSpec.Name
 			}
 			message := fmt.Sprintf("Đạo hữu %s đã luyện chế thành công Cổ Trùng [%s] R%d!", player.Username, guName, newGuInstance.Rank)
@@ -484,7 +484,7 @@ func RefineGu(c *gin.Context) {
 					newInventory = append(newInventory, item)
 					hasVitalSurvived = true
 				}
-				if spec, ok := models.GetGuAny(item.GuID); ok {
+				if spec, ok := models.GetGu(item.GuID, item.Rank); ok {
 					if msg, err := HandleGuEvent(&player, spec, item, "ON_REFINE_MATERIAL"); err == nil && msg != "" {
 						refineEventMsg = msg
 					}
@@ -555,7 +555,7 @@ func RefineGu(c *gin.Context) {
 	}
 
 	targetName := recipe.TargetGuID
-	if targetSpec, ok := models.GetGuAny(recipe.TargetGuID); ok {
+	if targetSpec, ok := models.GetGu(recipe.TargetGuID, recipe.TargetRank); ok {
 		targetName = targetSpec.Name
 	}
 

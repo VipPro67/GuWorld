@@ -1405,7 +1405,7 @@ func AdminGetSectDetail(c *gin.Context) {
 		PlayerID     uuid.UUID `json:"player_id"`
 		Username     string    `json:"username"`
 		MemberRank   string    `json:"member_rank"`
-		Contribution int       `json:"contribution_points"`
+		Contribution int64     `json:"contribution_points"`
 		JoinedAt     time.Time `json:"joined_at"`
 		PlayerRank   int       `json:"player_rank"`
 	}
@@ -1710,6 +1710,7 @@ func AdminAddToSect(c *gin.Context) {
 type AdminStockVaultRequest struct {
 	ItemType string `json:"item_type"` // gu, material, recipe
 	ItemID   string `json:"item_id"`
+	Rank     int    `json:"rank,omitempty"`
 	Quantity int    `json:"quantity"`
 }
 
@@ -1749,14 +1750,14 @@ func AdminStockSectVault(c *gin.Context) {
 		}
 		found := false
 		for i, item := range guItems {
-			if item.ID == req.ItemID {
+			if item.ID == req.ItemID && (req.Rank == 0 || item.Rank == req.Rank) {
 				guItems[i].Quantity += req.Quantity
 				found = true
 				break
 			}
 		}
 		if !found {
-			guItems = append(guItems, SectVaultGuItem{ID: req.ItemID, Cost: 0, Quantity: req.Quantity})
+			guItems = append(guItems, SectVaultGuItem{ID: req.ItemID, Rank: req.Rank, Cost: 0, Quantity: req.Quantity})
 		}
 		updated, _ := json.Marshal(guItems)
 		_, err = tx.Exec(`UPDATE sects SET vault_gu=$1 WHERE id=$2`, updated, sectID)
@@ -1834,7 +1835,7 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 		json.Unmarshal(vaultGuJSON, &guItems)
 		found := false
 		for i, item := range guItems {
-			if item.ID == req.ItemID {
+			if item.ID == req.ItemID && (req.Rank == 0 || item.Rank == req.Rank) {
 				if item.Quantity < req.Quantity {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ số lượng trong bảo khố"})
 					return
@@ -2059,6 +2060,9 @@ func AdminImportData(c *gin.Context) {
 	if err := gamefx.LoadConstitutionRegistry(db.DB); err != nil {
 		logger.S.Warnf("failed to reload Constitution registry after import: %v", err)
 	}
+	if err := gamefx.LoadRaceRegistry(db.DB); err != nil {
+		logger.S.Warnf("failed to reload Race registry after import: %v", err)
+	}
 	if err := models.LoadMonsterRegistry(db.DB); err != nil {
 		logger.S.Warnf("failed to reload Monster registry after import: %v", err)
 	}
@@ -2135,6 +2139,11 @@ func AdminImportTable(c *gin.Context) {
 			logger.S.Warnf("failed to reload Constitution registry after import: %v", err)
 		}
 		cache.Delete("game_dictionary_unified")
+	case "race":
+		if err := gamefx.LoadRaceRegistry(db.DB); err != nil {
+			logger.S.Warnf("failed to reload Race registry after import: %v", err)
+		}
+		cache.Delete("game_dictionary_unified")
 	case "monster", "monster_spawn", "region", "loot_table":
 		if err := models.LoadMonsterRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Monster registry after import: %v", err)
@@ -2192,6 +2201,9 @@ func AdminClearCache(c *gin.Context) {
 	}
 	if err := gamefx.LoadConstitutionRegistry(db.DB); err != nil {
 		logger.S.Warnf("failed to reload Constitution registry: %v", err)
+	}
+	if err := gamefx.LoadRaceRegistry(db.DB); err != nil {
+		logger.S.Warnf("failed to reload Race registry: %v", err)
 	}
 	if err := models.LoadMonsterRegistry(db.DB); err != nil {
 		logger.S.Warnf("failed to reload Monster registry: %v", err)

@@ -68,6 +68,69 @@ func TestConstitutionDisplayName(t *testing.T) {
 	}
 }
 
+func TestValidRaces(t *testing.T) {
+	keys := ValidRaces()
+	for _, key := range []string{
+		"human",
+		"fur_people",
+		"merman",
+		"feathered",
+		"inkman",
+		"rockman",
+		"snowman",
+		"variant_beastman",
+		"dragonman",
+		"giant_sun_descendant",
+	} {
+		if !keys[key] {
+			t.Errorf("expected valid race key %q", key)
+		}
+	}
+}
+
+func TestGetRaceEffects(t *testing.T) {
+	p := &models.Player{}
+	p.Race = "merman"
+	fx := Get(p)
+	if got := fx.DaoNganBonus["water"]; got != 0.10 {
+		t.Errorf("water dao bonus = %v, want 0.10", got)
+	}
+	if got := fx.PathDamageBonus["water"]; got != 0.05 {
+		t.Errorf("water path damage = %v, want 0.05", got)
+	}
+}
+
+func TestGetRaceEffectsNegative(t *testing.T) {
+	p := &models.Player{}
+	p.Race = "rockman"
+	fx := Get(p)
+	if got := fx.StatMods["defense"]; got != 0.15 {
+		t.Errorf("defense stat mod = %v, want 0.15", got)
+	}
+	if got := fx.StatMods["speed"]; got != -0.10 {
+		t.Errorf("speed stat mod = %v, want -0.10", got)
+	}
+}
+
+func TestGetRaceEffectsNoRace(t *testing.T) {
+	fx := Get(&models.Player{})
+	if len(fx.StatMods) != 0 {
+		t.Errorf("expected no stat mods without race, got %v", fx.StatMods)
+	}
+	if fx.RefineBonus != 0 {
+		t.Errorf("expected no refine bonus without race, got %v", fx.RefineBonus)
+	}
+}
+
+func TestRaceDisplayName(t *testing.T) {
+	if got := RaceDisplayName("giant_sun_descendant"); got != "Cự Dương Huyết Mạch" {
+		t.Errorf("display name = %q, want Cự Dương Huyết Mạch", got)
+	}
+	if got := RaceDisplayName("unknown_key"); got != "unknown_key" {
+		t.Errorf("display name = %q, want raw key", got)
+	}
+}
+
 func TestEffectsJSONRoundTrip(t *testing.T) {
 	want := Effects{
 		StatMods:                   map[string]float64{"attack": 0.10},

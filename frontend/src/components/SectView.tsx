@@ -1628,32 +1628,35 @@ export const SectView: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {sect?.vault_gu && (sect.vault_gu as any[]).length > 0 ? (
                   (() => {
-                    // Deduplicate by id (merge quantities), then sort by rank ascending
+                    // Deduplicate by id + rank (merge quantities), then sort by rank ascending
                     const merged: Record<string, any> = {};
                     for (const vg of sect.vault_gu as any[]) {
-                      if (!merged[vg.id]) {
-                        merged[vg.id] = { ...vg };
+                      const key = `${vg.id}_${vg.rank || 0}`;
+                      if (!merged[key]) {
+                        merged[key] = { ...vg };
                       } else {
-                        merged[vg.id].quantity = (merged[vg.id].quantity || 0) + (vg.quantity || 0);
+                        merged[key].quantity = (merged[key].quantity || 0) + (vg.quantity || 0);
                       }
                     }
                     const sorted = Object.values(merged).sort((a: any, b: any) => {
-                      const rankA = guDictionary[a.id]?.rank || 1;
-                      const rankB = guDictionary[b.id]?.rank || 1;
+                      const rankA = a.rank || guDictionary[a.id]?.rank || 1;
+                      const rankB = b.rank || guDictionary[b.id]?.rank || 1;
                       return rankA - rankB;
                     });
                     return sorted.map((vg: any) => {
                       const spec = guDictionary[vg.id];
                       const outOfStock = vg.quantity !== undefined && vg.quantity <= 0;
-                      const qtyKey = `gu-${vg.id}`;
+                      const uKey = `${vg.id}_${vg.rank || 0}`;
+                      const qtyKey = `gu-${uKey}`;
                       const qty = getBuyQty(qtyKey);
                       const maxQty = vg.quantity !== undefined ? vg.quantity : 1;
                       const totalCost = vg.cost * qty;
                       const unaffordable = (member?.contribution_points || 0) < totalCost;
-                      const ownedCount = player?.gu_inventory?.filter((g: any) => g.gu_id === vg.id && g.status !== "DEAD").length || 0;
+                      const displayRank = vg.rank || spec?.rank || 1;
+                      const ownedCount = player?.gu_inventory?.filter((g: any) => g.gu_id === vg.id && g.rank === displayRank && g.status !== "DEAD").length || 0;
                       return (
                         <div
-                          key={vg.id}
+                          key={uKey}
                           className="bg-zinc-900/20 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300"
                         >
                           <div className="flex flex-col min-w-0">
@@ -1661,7 +1664,7 @@ export const SectView: React.FC = () => {
                               {spec?.name || vg.id}
                             </h4>
                             <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
-                              Phân loại: {spec?.gu_type || "Cổ"} | Hạng: {spec?.rank || 1} | Số lượng: {vg.quantity !== undefined ? `${vg.quantity} con` : "Vô hạn"}
+                              Phân loại: {spec?.gu_type || "Cổ"} | Hạng: {displayRank} | Số lượng: {vg.quantity !== undefined ? `${vg.quantity} con` : "Vô hạn"}
                               {player && (
                                 <>
                                   {" | "}
@@ -1688,7 +1691,7 @@ export const SectView: React.FC = () => {
                             )}
                             <button
                               onClick={async () => {
-                                await buyFromSectVault("gu", vg.id, qty);
+                                await buyFromSectVault("gu", vg.id, qty, vg.rank);
                               }}
                               disabled={unaffordable || outOfStock || actionLoading}
                               className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-950 disabled:border-zinc-900 disabled:text-zinc-600 disabled:opacity-50 text-white font-semibold text-xs rounded-xl shadow-md transition-colors cursor-pointer"

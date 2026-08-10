@@ -2,7 +2,7 @@
 
 import React, { useEffect } from "react";
 import { useGameStore, ImmortalAperture } from "@/store/useGameStore";
-import { formatConstitutionEffects } from "@/lib/constitution";
+import { formatGameEffects } from "@/lib/effects";
 import { X, Eye, EyeOff, Flame, Coins, Sparkles, Crown, Award, Activity, Heart } from "lucide-react";
 
 const pathNameMap: Record<string, string> = {
@@ -66,7 +66,7 @@ const translatePath = (path: string): string => {
 };
 
 export const PlayerProfileModal: React.FC = () => {
-  const { inspectedProfile, inspectedUsernameQuery, clearInspectedProfile, guDictionary, player, initiateTrade, aperture, constitutionDictionary } = useGameStore();
+  const { inspectedProfile, inspectedUsernameQuery, clearInspectedProfile, guDictionary, player, initiateTrade, aperture, constitutionDictionary, raceDictionary } = useGameStore();
 
   if (!inspectedProfile) return null;
 
@@ -141,6 +141,9 @@ export const PlayerProfileModal: React.FC = () => {
 
   const constitutionLabel = (key: string): string =>
     constitutionDictionary?.[key]?.name || constitutionLabels[key] || key;
+
+  const raceLabel = (key: string): string =>
+    raceDictionary?.[key]?.name || raceLabels[key] || key;
 
   const getRankName = (rankNum: number, subNum: number, aperture?: ImmortalAperture | null): string => {
     const ranks = ["Sơ giai", "Trung giai", "Cao giai", "Đỉnh phong"];
@@ -342,8 +345,18 @@ export const PlayerProfileModal: React.FC = () => {
             <div className="flex flex-col gap-1.5 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-3.5">
               <span className="text-[10px] uppercase tracking-widest font-mono text-zinc-500">Chủng tộc</span>
               <span className="text-sm font-semibold text-zinc-200">
-                {race ? raceLabels[race] || race : "Không rõ"}
+                {race ? raceLabel(race) : "Không rõ"}
               </span>
+              {race && formatGameEffects(raceDictionary?.[race]?.effects).length > 0 && (
+                <ul className="mt-1 space-y-1">
+                  {formatGameEffects(raceDictionary?.[race]?.effects).map((eff, i) => (
+                    <li key={i} className="text-[10px] leading-snug text-amber-200/70">
+                      <Sparkles className="w-2.5 h-2.5 inline mr-1 text-amber-400/60" />
+                      {eff}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div className="flex flex-col gap-1.5 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-3.5">
               <span className="text-[10px] uppercase tracking-widest font-mono text-zinc-500">Giới tính</span>
@@ -356,9 +369,9 @@ export const PlayerProfileModal: React.FC = () => {
               <span className="text-sm font-semibold text-zinc-200">
                 {constitution ? constitutionLabel(constitution) : "Không có"}
               </span>
-              {constitution && formatConstitutionEffects(constitutionDictionary?.[constitution]?.effects).length > 0 && (
+              {constitution && formatGameEffects(constitutionDictionary?.[constitution]?.effects).length > 0 && (
                 <ul className="mt-1 space-y-1">
-                  {formatConstitutionEffects(constitutionDictionary?.[constitution]?.effects).map((eff, i) => (
+                  {formatGameEffects(constitutionDictionary?.[constitution]?.effects).map((eff, i) => (
                     <li key={i} className="text-[10px] leading-snug text-amber-200/70">
                       <Sparkles className="w-2.5 h-2.5 inline mr-1 text-amber-400/60" />
                       {eff}

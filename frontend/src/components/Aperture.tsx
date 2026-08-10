@@ -27,7 +27,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { formatNumber } from "@/lib/utils";
-import { formatConstitutionEffects } from "@/lib/constitution";
+import { formatGameEffects } from "@/lib/effects";
 
 function formatStat(val: number): string {
   return Math.abs(val) >= 10000 
@@ -284,6 +284,7 @@ export const Aperture: React.FC<ApertureProps> = ({
 }) => {
   const store = useGameStore();
   const constitutionDictionary = store.constitutionDictionary;
+  const raceDictionary = store.raceDictionary;
   const manaSnapshot = store.manaSnapshot;
   const passiveStats = store.passiveStats;
   const fetchPassiveStats = store.fetchPassiveStats;
@@ -867,6 +868,9 @@ export const Aperture: React.FC<ApertureProps> = ({
                   universe_great_evolution_body: "Vũ Trụ Đại Diễn Thể",
                   pure_dream_reality_seeker_body: "Thuần Mộng Cầu Chân Thể",
                 };
+                const raceLabel = (key: string): string =>
+                  raceDictionary?.[key]?.name || raceLabels[key] || key;
+                const raceEffects = player.race ? raceDictionary?.[player.race]?.effects : undefined;
                 const constitutionLabel = (key: string): string =>
                   constitutionDictionary?.[key]?.name || constitutionLabels[key] || key;
                 const constitutionEffects = player.constitution ? constitutionDictionary?.[player.constitution]?.effects : undefined;
@@ -879,14 +883,27 @@ export const Aperture: React.FC<ApertureProps> = ({
                 );
                 return (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {cell("Chủng Tộc", raceLabels[player.race] || player.race || "Nhân Tộc")}
+                    <div className="p-3 rounded-xl border bg-zinc-950/40 border-zinc-900">
+                      <div className="text-[10px] text-zinc-500 font-mono">Chủng Tộc</div>
+                      <div className="text-base font-bold text-zinc-100 font-mono mt-0.5">{raceLabel(player.race) || "Nhân Tộc"}</div>
+                      {raceEffects && formatGameEffects(raceEffects).length > 0 && (
+                        <ul className="mt-2 space-y-1">
+                          {formatGameEffects(raceEffects).map((eff, i) => (
+                            <li key={i} className="text-[10px] leading-snug text-amber-200/70">
+                              <Sparkles className="w-2.5 h-2.5 inline mr-1 text-amber-400/60" />
+                              {eff}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                     {cell("Giới Tính", genderLabels[player.gender] || player.gender || "Không rõ")}
                     <div className="p-3 rounded-xl border bg-zinc-950/40 border-zinc-800">
                       <div className="text-[10px] text-zinc-500 font-mono">Thể Chất</div>
                       <div className="text-base font-bold text-zinc-100 font-mono mt-0.5">{constitutionLabel(player.constitution) || "Không có"}</div>
-                      {constitutionEffects && formatConstitutionEffects(constitutionEffects).length > 0 && (
+                      {constitutionEffects && formatGameEffects(constitutionEffects).length > 0 && (
                         <ul className="mt-2 space-y-1">
-                          {formatConstitutionEffects(constitutionEffects).map((eff, i) => (
+                          {formatGameEffects(constitutionEffects).map((eff, i) => (
                             <li key={i} className="text-[10px] leading-snug text-amber-200/70">
                               <Sparkles className="w-2.5 h-2.5 inline mr-1 text-amber-400/60" />
                               {eff}

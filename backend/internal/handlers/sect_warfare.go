@@ -567,7 +567,7 @@ func AttackSectMine(c *gin.Context) {
 		}
 		if len(ids) > 0 {
 			for _, pid := range ids {
-				_, _ = tx.Exec(`UPDATE sect_members SET contribution_points = LEAST(2147483647, contribution_points + 20) WHERE player_id = $1`, pid)
+				_, _ = tx.Exec(`UPDATE sect_members SET contribution_points = contribution_points + 20 WHERE player_id = $1`, pid)
 			}
 		}
 	}

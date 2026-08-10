@@ -95,6 +95,13 @@ func main() {
 		logger.S.Info("Constitution registry loaded successfully")
 	}
 
+	err = gamefx.LoadRaceRegistry(db.DB)
+	if err != nil {
+		logger.S.Warnf("Failed to load Race registry: %v (data may need import)", err)
+	} else {
+		logger.S.Info("Race registry loaded successfully")
+	}
+
 	err = models.LoadMonsterRegistry(db.DB)
 	if err != nil {
 		logger.S.Warnf("Failed to load Monster registry: %v (data may need import)", err)

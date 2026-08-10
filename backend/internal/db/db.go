@@ -156,6 +156,17 @@ func InitSchema() error {
 		return fmt.Errorf("failed to create constitution_dictionary table: %w", err)
 	}
 
+	// 2c. Create race_dictionary
+	_, err = DB.Exec(`
+	CREATE TABLE IF NOT EXISTS race_dictionary (
+		key VARCHAR(100) PRIMARY KEY,
+		name VARCHAR(200) NOT NULL,
+		effects JSONB NOT NULL DEFAULT '{}'
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create race_dictionary table: %w", err)
+	}
+
 	// Drop old refining_recipes table if it contains the legacy id column
 	_, err = DB.Exec(`
 	DO $$
@@ -736,7 +747,7 @@ func InitSchema() error {
 		sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,
 		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE UNIQUE,
 		member_rank VARCHAR(30) NOT NULL DEFAULT 'NGOAI_MON',
-		contribution_points INTEGER NOT NULL DEFAULT 0,
+		contribution_points BIGINT NOT NULL DEFAULT 0,
 		master_id VARCHAR(50) DEFAULT NULL,
 		joined_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now()
 	);`)
@@ -1364,6 +1375,7 @@ func InitSchema() error {
 		{`ALTER TABLE players DROP COLUMN IF EXISTS wisdom;`, "drop_wisdom_column"},
 		{`UPDATE players SET time_speed_multiplier = 1.0;`, "reset_time_speed_multiplier"},
 		{`ALTER TABLE players DROP COLUMN IF EXISTS tribulation_count;`, "drop_tribulation_count_column"},
+		{`ALTER TABLE sect_members ALTER COLUMN contribution_points TYPE BIGINT;`, "alter_sect_members_contribution_points_type_bigint"},
 	}
 	// One-time data cleanup: force-unequip excess equipped+ACTIVE Gus so no
 	// player exceeds MaxEquippedGus. Keeps vital Gus first, then the most
@@ -1680,6 +1692,9 @@ func SeedDictionaries() error {
 	}
 	if err := seedConstitutionsFromCSV("Constitution.csv"); err != nil {
 		return fmt.Errorf("CSV constitution seed failed: %w", err)
+	}
+	if err := seedRacesFromCSV("Race.csv"); err != nil {
+		return fmt.Errorf("CSV race seed failed: %w", err)
 	}
 	if err := seedRecipesFromCSV("Recipe.csv"); err != nil {
 		return fmt.Errorf("CSV recipe seed failed: %w", err)
@@ -2141,6 +2156,69 @@ func seedConstitutionsFromCSV(filename string) error {
 		}
 	}
 	logger.S.Infof("Constitution dictionary seeded from %s (%d entries)", filename, len(order))
+	return nil
+}
+
+// seedRacesFromCSV reads Race.csv and upserts into race_dictionary.
+func seedRacesFromCSV(filename string) error {
+	f, r, header, err := openCSV(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	keyIdx := colIndex(header, "key")
+	nameIdx := colIndex(header, "name")
+	effectsIdx := colIndex(header, "effects")
+	if keyIdx < 0 || nameIdx < 0 || effectsIdx < 0 {
+		return fmt.Errorf("%s missing required columns (key, name, effects)", filename)
+	}
+
+	seen := make(map[string][]string)
+	order := []string{}
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			continue
+		}
+		if len(row) == 0 {
+			continue
+		}
+		key := strings.TrimSpace(row[keyIdx])
+		if key == "" {
+			continue
+		}
+		if _, exists := seen[key]; !exists {
+			order = append(order, key)
+		}
+		seen[key] = row
+	}
+
+	get := func(row []string, idx int) string {
+		if idx < 0 || idx >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[idx])
+	}
+
+	for _, key := range order {
+		row := seen[key]
+		name := get(row, nameIdx)
+		effects := safeJSONObject(get(row, effectsIdx), "{}", fmt.Sprintf("%s effects", key))
+		_, err := DB.Exec(`
+			INSERT INTO race_dictionary (key, name, effects)
+			VALUES ($1, $2, $3::jsonb)
+			ON CONFLICT (key) DO UPDATE
+			SET name=EXCLUDED.name, effects=EXCLUDED.effects
+		`, key, name, effects)
+		if err != nil {
+			return fmt.Errorf("upsert race %s: %w", key, err)
+		}
+	}
+	logger.S.Infof("Race dictionary seeded from %s (%d entries)", filename, len(order))
 	return nil
 }
 
@@ -3279,6 +3357,11 @@ func ExportToCSV() error {
 			query:    `SELECT key, name, COALESCE(effects::text,'{}') FROM constitution_dictionary ORDER BY key`,
 		},
 		{
+			filename: "Race.csv",
+			columns:  []string{"key", "name", "effects"},
+			query:    `SELECT key, name, COALESCE(effects::text,'{}') FROM race_dictionary ORDER BY key`,
+		},
+		{
 			filename: "Recipe.csv",
 			columns:  []string{"id", "target_gu_id", "target_rank", "variant", "required_gus", "required_materials", "success_rate", "primeval_stones_cost", "immortal_essence_stones_cost"},
 			query:    `SELECT ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) AS id, target_gu_id, target_rank, variant, COALESCE(required_gus::text,'[]'), COALESCE(required_materials::text,'{}'), COALESCE(success_rate,0), COALESCE(primeval_stones_cost,0), COALESCE(immortal_essence_stones_cost,0) FROM refining_recipes ORDER BY target_gu_id, target_rank, variant`,
@@ -3346,7 +3429,7 @@ func AvailableTables() []string {
 	return []string{
 		"item", "gu", "constitution", "recipe", "shop_item", "arena_shop_item",
 		"region", "loot_table", "monster", "monster_spawn",
-		"sect", "sect_mission", "quest",
+		"sect", "sect_mission", "quest", "race",
 	}
 }
 
@@ -3359,6 +3442,8 @@ func TableImport(table string) error {
 		return seedGusFromCSV("Gu.csv")
 	case "constitution":
 		return seedConstitutionsFromCSV("Constitution.csv")
+	case "race":
+		return seedRacesFromCSV("Race.csv")
 	case "recipe":
 		return seedRecipesFromCSV("Recipe.csv")
 	case "shop_item":
@@ -3407,6 +3492,11 @@ func TableExport(table string) error {
 			filename: "Constitution.csv",
 			columns:  []string{"key", "name", "effects"},
 			query:    `SELECT key, name, COALESCE(effects::text,'{}') FROM constitution_dictionary ORDER BY key`,
+		},
+		"race": {
+			filename: "Race.csv",
+			columns:  []string{"key", "name", "effects"},
+			query:    `SELECT key, name, COALESCE(effects::text,'{}') FROM race_dictionary ORDER BY key`,
 		},
 		"recipe": {
 			filename: "Recipe.csv",

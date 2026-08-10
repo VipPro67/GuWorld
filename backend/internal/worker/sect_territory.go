@@ -231,7 +231,7 @@ func creditTerritoryContributionWorker(tx *sql.Tx, playerID string, ratePerMin, 
 	}
 
 	_, err := tx.Exec(`
-		UPDATE sect_members SET contribution_points = LEAST(2147483647, contribution_points + $1),
+		UPDATE sect_members SET contribution_points = contribution_points + $1,
 		       territory_pending = $2, territory_credited_today = $3
 		WHERE player_id = $4
 	`, credit, pending-float64(credit), creditedToday+credit, playerID)

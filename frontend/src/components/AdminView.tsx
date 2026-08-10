@@ -392,7 +392,7 @@ function guLocationLabel(loc: string): string {
 }
 
 export const AdminView: React.FC = () => {
-  const { player, setView, addToast, guDictionary, itemDictionary, constitutionDictionary } = useGameStore();
+  const { player, setView, addToast, guDictionary, itemDictionary, constitutionDictionary, raceDictionary } = useGameStore();
   const [activeTab, setActiveTab] = useState<"items" | "gus" | "pets">("items");
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -1764,7 +1764,12 @@ export const AdminView: React.FC = () => {
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-zinc-500 font-mono">Chủng tộc</label>
-                  <input type="text" value={editPlayerForm.race || ""} onChange={e => setEditPlayerForm(f => ({ ...f, race: e.target.value }))} placeholder="human, fur_people, merman, feathered..." className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                  <input type="text" value={editPlayerForm.race || ""} onChange={e => setEditPlayerForm(f => ({ ...f, race: e.target.value }))} list="race-list" placeholder="human, fur_people, merman, feathered..." className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                  <datalist id="race-list">
+                    {Object.values(raceDictionary || {}).map((r) => (
+                      <option key={r.key} value={r.key}>{r.name}</option>
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-zinc-500 font-mono">Giới tính</label>
@@ -2631,6 +2636,7 @@ export const AdminView: React.FC = () => {
                   { key: "item", label: "Vật phẩm", icon: Package, csv: "Item.csv" },
                   { key: "gu", label: "Cổ trùng", icon: Bug, csv: "Gu.csv" },
                   { key: "constitution", label: "Thể chất", icon: Activity, csv: "Constitution.csv" },
+                  { key: "race", label: "Chủng tộc", icon: Users, csv: "Race.csv" },
                   { key: "recipe", label: "Cổ phương", icon: FlaskConical, csv: "Recipe.csv" },
                   { key: "shop_item", label: "Cửa hàng", icon: ShoppingBag, csv: "ShopItem.csv" },
                   { key: "arena_shop_item", label: "Cửa hàng Đấu trường", icon: Swords, csv: "ArenaShopItem.csv" },

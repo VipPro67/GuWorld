@@ -1,0 +1,11 @@
+key,name,effects
+human,Nhân Tộc,"{}"
+fur_people,Người Lông,"{""refine"": 0.10}"
+merman,Nhân Ngư,"{""dao_mark"": {""water"": 0.10}, ""path_damage"": {""water"": 0.05}}"
+feathered,Vũ Dân,"{""stat_mods"": {""speed"": 0.10}, ""dao_mark"": {""space"": 0.05}}"
+inkman,Mặc Nhân,"{""dao_mark"": {""wisdom"": 0.08, ""soul"": 0.05}}"
+rockman,Thạch Nhân,"{""stat_mods"": {""defense"": 0.15, ""speed"": -0.10}}"
+snowman,Tuyết Dân,"{""dao_mark"": {""ice"": 0.15}, ""path_resistance"": {""fire"": 0.10}}"
+variant_beastman,Thú Nhân,"{""stat_mods"": {""attack"": 0.08, ""defense"": 0.05}, ""refine"": -0.05}"
+dragonman,Long Nhân,"{""stat_mods"": {""attack"": 0.10, ""defense"": 0.10}, ""refine"": -0.05}"
+giant_sun_descendant,Cự Dương Huyết Mạch,"{""luck"": 5, ""cultivation_efficiency"": 0.05}"

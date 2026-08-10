@@ -206,7 +206,7 @@ func AttackTribulationEnemy(c *gin.Context) {
 	totalManaCost := 0.0
 	var guSpecs []models.GuDictionaryItem
 	for _, fg := range foundGus {
-		spec, ok := models.GetGuAny(fg.GuID)
+		spec, ok := models.GetGu(fg.GuID, fg.Rank)
 		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đặc tính Cổ trùng %s không hợp lệ", fg.GuID)})
 			return

@@ -774,3 +774,38 @@ GU_HEAVENLY_ESSENCE_LOTUS_I,6,1,"{""GU_VITALITY_LEAF"": {""qty"": 1, ""rank"": 1
 GU_HEAVENLY_ESSENCE_LOTUS_I,7,1,"{""GU_HEAVENLY_ESSENCE_LOTUS_I"": {""qty"": 1, ""rank"": 6}}","{""wood_path_material"": 33, ""heaven_qi"": 8, ""soul_qi"": 8, ""star_fragment"": 8, ""azure_jade_bamboo"": 8}",0.243,0.0,400.0
 GU_HEAVENLY_ESSENCE_LOTUS_I,9,1,"{""GU_HEAVENLY_ESSENCE_LOTUS_I"": {""qty"": 1, ""rank"": 8}}","{""wood_path_material"": 52, ""immortal_apertures_shards"": 18, ""heaven_qi"": 18, ""star_fragment"": 18, ""azure_jade_bamboo"": 18}",0.081,0.0,1600.0
 GU_SWORD_DRAGON,9,1,"{""GU_SWORD_DRAGON"": {""qty"": 1, ""rank"": 5}}","{""sword_path_material"": 52, ""sword_qi"": 18, ""immortal_apertures_shards"": 18, ""heaven_qi"": 18, ""star_fragment"": 18}",0.081,0.0,1600.0
+GU_COLD_ARROW,2,1,"{""GU_ICE_MUSCLE"": {""qty"": 1, ""rank"": 3}}","{""cold_ice_grass"": 3, ""beast_meat"": 4, ""iron_ore"": 4, ""ginseng"": 4, ""sword_leaf_grass"": 4}",0.8,40.0,0.0
+GU_NINE_HEAVENS_ICE_PHOENIX,8,1,"{""GU_COLD_ARROW"": {""qty"": 1, ""rank"": 2}}","{""cold_ice_grass"": 42, ""heaven_qi"": 12, ""star_fragment"": 12, ""azure_jade_bamboo"": 12, ""black_oil"": 12}",0.146,0.0,1000.0
+GU_CONDENSE_FROST,1,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 5, ""beast_meat"": 5, ""iron_ore"": 5, ""ginseng"": 5, ""tree_sap"": 5}",0.9,20.0,0.0
+GU_SNOW_BLADE,1,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 5, ""beast_meat"": 5, ""iron_ore"": 5, ""ginseng"": 5, ""tree_sap"": 5}",0.9,20.0,0.0
+GU_PROFOUND_ICE,1,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 5, ""beast_meat"": 5, ""iron_ore"": 5, ""ginseng"": 5, ""tree_sap"": 5}",0.9,20.0,0.0
+GU_ICE_MARROW,1,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 5, ""beast_meat"": 5, ""iron_ore"": 5, ""ginseng"": 5, ""tree_sap"": 5}",0.9,20.0,0.0
+GU_ICE_SHIELD,2,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 3, ""beast_meat"": 4, ""iron_ore"": 4, ""ginseng"": 4, ""sword_leaf_grass"": 4}",0.8,40.0,0.0
+GU_SNOW_WIND,2,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 3, ""beast_meat"": 4, ""iron_ore"": 4, ""ginseng"": 4, ""sword_leaf_grass"": 4}",0.8,40.0,0.0
+GU_COLD_MOON,2,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 3, ""beast_meat"": 4, ""iron_ore"": 4, ""ginseng"": 4, ""sword_leaf_grass"": 4}",0.8,40.0,0.0
+GU_JADE_ICE,2,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 3, ""beast_meat"": 4, ""iron_ore"": 4, ""ginseng"": 4, ""sword_leaf_grass"": 4}",0.8,40.0,0.0
+GU_ICE_DRAGON,3,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 5, ""iron_ore"": 3, ""ginseng"": 3, ""sealing_stone"": 3, ""life_water"": 3}",0.7,80.0,0.0
+GU_ICE_HEART,3,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 5, ""iron_ore"": 3, ""ginseng"": 3, ""sealing_stone"": 3, ""life_water"": 3}",0.7,80.0,0.0
+GU_COLD_PRISON,3,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 5, ""iron_ore"": 3, ""ginseng"": 3, ""sealing_stone"": 3, ""life_water"": 3}",0.7,80.0,0.0
+GU_SNOW_WAVE,3,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 5, ""iron_ore"": 3, ""ginseng"": 3, ""sealing_stone"": 3, ""life_water"": 3}",0.7,80.0,0.0
+GU_WHITE_FROST,3,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 5, ""iron_ore"": 3, ""ginseng"": 3, ""sealing_stone"": 3, ""life_water"": 3}",0.7,80.0,0.0
+GU_ICE_RIVER,4,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 8, ""sealing_stone"": 4, ""jade_stone"": 4, ""earth_qi"": 4}",0.6,150.0,0.0
+GU_PROFOUND_DARKNESS,4,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 8, ""sealing_stone"": 4, ""jade_stone"": 4, ""earth_qi"": 4}",0.6,150.0,0.0
+GU_HEAVEN_FROST,4,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 8, ""sealing_stone"": 4, ""jade_stone"": 4, ""earth_qi"": 4}",0.6,150.0,0.0
+GU_JADE_MARROW,4,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 8, ""sealing_stone"": 4, ""jade_stone"": 4, ""earth_qi"": 4}",0.6,150.0,0.0
+GU_SNOW_MOUNTAIN,5,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 12, ""sealing_stone"": 5, ""jade_stone"": 5, ""black_oil"": 5, ""star_fragment"": 5}",0.5,300.0,0.0
+GU_EXTREME_COLD,5,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 12, ""sealing_stone"": 5, ""jade_stone"": 5, ""black_oil"": 5, ""star_fragment"": 5}",0.5,300.0,0.0
+GU_ICE_SOUL,5,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 12, ""sealing_stone"": 5, ""jade_stone"": 5, ""black_oil"": 5, ""star_fragment"": 5}",0.5,300.0,0.0
+GU_COLD_TIDE,5,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 12, ""sealing_stone"": 5, ""jade_stone"": 5, ""black_oil"": 5, ""star_fragment"": 5}",0.5,300.0,0.0
+GU_PROFOUND_DARKNESS_ICE_SOUL,6,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 24, ""jade_stone"": 6, ""life_water"": 6, ""soul_qi"": 6, ""starlight_firefly"": 6}",0.324,1200.0,200.0
+GU_NINE_NETHER_COLD_MARROW,6,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 24, ""jade_stone"": 6, ""life_water"": 6, ""soul_qi"": 6, ""starlight_firefly"": 6}",0.324,1200.0,200.0
+GU_EXTREME_YIN_CONDENSE_FROST,6,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 24, ""jade_stone"": 6, ""life_water"": 6, ""soul_qi"": 6, ""starlight_firefly"": 6}",0.324,1200.0,200.0
+GU_NORTHERN_DARK_SNOW_SOUL,6,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 24, ""jade_stone"": 6, ""life_water"": 6, ""soul_qi"": 6, ""starlight_firefly"": 6}",0.324,1200.0,200.0
+GU_MYRIAD_YEAR_COLD_HEAVEN,7,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 33, ""heaven_qi"": 8, ""soul_qi"": 8, ""star_fragment"": 8, ""azure_jade_bamboo"": 8}",0.243,0.0,400.0
+GU_EXTREME_YIN_SNOW_SOUL,7,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 33, ""heaven_qi"": 8, ""soul_qi"": 8, ""star_fragment"": 8, ""azure_jade_bamboo"": 8}",0.243,0.0,400.0
+GU_NINE_NETHER_ICE_RIVER,7,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 33, ""heaven_qi"": 8, ""soul_qi"": 8, ""star_fragment"": 8, ""azure_jade_bamboo"": 8}",0.243,0.0,400.0
+GU_PROFOUND_DARKNESS_SNOW_DOMAIN,7,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 33, ""heaven_qi"": 8, ""soul_qi"": 8, ""star_fragment"": 8, ""azure_jade_bamboo"": 8}",0.243,0.0,400.0
+GU_PRIMORDIAL_COLD_ORIGIN,8,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 42, ""heaven_qi"": 12, ""star_fragment"": 12, ""azure_jade_bamboo"": 12, ""black_oil"": 12}",0.146,0.0,1000.0
+GU_ETERNAL_SNOW_ABYSS,8,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 42, ""heaven_qi"": 12, ""star_fragment"": 12, ""azure_jade_bamboo"": 12, ""black_oil"": 12}",0.146,0.0,1000.0
+GU_PRIMAL_CHAOS_ICE_SOUL,9,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 52, ""immortal_apertures_shards"": 18, ""heaven_qi"": 18, ""star_fragment"": 18, ""azure_jade_bamboo"": 18}",0.081,0.0,1600.0
+GU_PRIMORDIAL_COLD_HEAVEN,9,1,"{""GU_COLD_STAR"": {""qty"": 1, ""rank"": 1}}","{""cold_ice_grass"": 52, ""immortal_apertures_shards"": 18, ""heaven_qi"": 18, ""star_fragment"": 18, ""azure_jade_bamboo"": 18}",0.081,0.0,1600.0

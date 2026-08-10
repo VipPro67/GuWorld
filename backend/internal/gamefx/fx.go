@@ -53,18 +53,12 @@ type Effects struct {
 
 // ValidRaces returns the set of accepted race keys.
 func ValidRaces() map[string]bool {
-	return map[string]bool{
-		"human":                true, // Nhân Tộc
-		"fur_people":           true, // Người Lông
-		"merman":               true, // Nhân Ngư
-		"feathered":            true, // Vũ Dân
-		"inkman":               true, // Mặc Nhân
-		"rockman":              true, // Thạch Nhân
-		"snowman":              true, // Tuyết Dân
-		"variant_beastman":     true, // Thú Nhân
-		"dragonman":            true, // Long Nhân
-		"giant_sun_descendant": true, // Cự Dương Huyết Mạch
+	defs := effectiveRaces()
+	out := make(map[string]bool, len(defs))
+	for key := range defs {
+		out[key] = true
 	}
+	return out
 }
 
 // ValidGenders returns the set of accepted gender keys.
@@ -104,37 +98,8 @@ func Get(p *models.Player) Effects {
 		return fx
 	}
 
-	switch p.Race {
-	case "human": // Nhân Tộc
-		// không bonus đặc biệt
-	case "fur_people": // Người Lông
-		fx.RefineBonus += 0.10
-	case "merman": // Nhân Ngư
-		fx.DaoNganBonus["water"] += 0.10
-		fx.PathDamageBonus["water"] += 0.05
-	case "feathered": // Vũ Dân
-		fx.StatMods["speed"] += 0.10
-		fx.DaoNganBonus["space"] += 0.05
-	case "inkman": // Mặc Nhân
-		fx.DaoNganBonus["wisdom"] += 0.08
-		fx.DaoNganBonus["soul"] += 0.05
-	case "rockman": // Thạch Nhân
-		fx.StatMods["defense"] += 0.15
-		fx.StatMods["speed"] += -0.10
-	case "snowman": // Tuyết Dân
-		fx.DaoNganBonus["ice"] += 0.15
-		fx.PathResistanceBonus["fire"] += 0.10
-	case "variant_beastman": // Thú Nhân
-		fx.StatMods["attack"] += 0.08
-		fx.StatMods["defense"] += 0.05
-		fx.RefineBonus += -0.05
-	case "dragonman": // Long Nhân
-		fx.StatMods["attack"] += 0.10
-		fx.StatMods["defense"] += 0.10
-		fx.RefineBonus += -0.05
-	case "giant_sun_descendant": // Cự Dương Huyết Mạch
-		fx.LuckBonus += 5
-		fx.CultivationEfficiencyBonus += 0.05
+	if def, ok := effectiveRaces()[p.Race]; ok {
+		addEffects(&fx, def.Effects)
 	}
 
 	for _, status := range p.Statuses {
@@ -216,7 +181,7 @@ func PassiveHPBonus(p *models.Player) float64 {
 		if !gu.Equipped || gu.Status != "ACTIVE" {
 			continue
 		}
-		spec, ok := models.GetGuAny(gu.GuID)
+		spec, ok := models.GetGu(gu.GuID, gu.Rank)
 		if !ok || spec.Effects.Passive == nil || spec.Effects.Passive.StatBaseHP <= 0 {
 			continue
 		}
@@ -239,30 +204,10 @@ func EffectiveMaxHP(p *models.Player) float64 {
 
 // RaceDisplayName returns the Vietnamese label for a race key.
 func RaceDisplayName(race string) string {
-	switch race {
-	case "human":
-		return "Nhân Tộc"
-	case "fur_people":
-		return "Người Lông"
-	case "merman":
-		return "Nhân Ngư"
-	case "feathered":
-		return "Vũ Dân"
-	case "inkman":
-		return "Mặc Nhân"
-	case "rockman":
-		return "Thạch Nhân"
-	case "snowman":
-		return "Tuyết Dân"
-	case "variant_beastman":
-		return "Thú Nhân"
-	case "dragonman":
-		return "Long Nhân"
-	case "giant_sun_descendant":
-		return "Cự Dương Huyết Mạch"
-	default:
-		return race
+	if def, ok := effectiveRaces()[race]; ok {
+		return def.Name
 	}
+	return race
 }
 
 // GenderDisplayName returns the Vietnamese label for a gender key.

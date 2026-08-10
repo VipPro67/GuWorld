@@ -60,7 +60,7 @@ type SectMember struct {
 	SectID             string    `json:"sect_id"`
 	PlayerID           uuid.UUID `json:"player_id"`
 	MemberRank         string    `json:"member_rank"` // NGOAI_MON, NOI_MON, TINH_ANH, CHAN_TRUYEN, TRUONG_LAO, HO_PHAP, CHUONG_MON
-	ContributionPoints int       `json:"contribution_points"`
+	ContributionPoints int64     `json:"contribution_points"`
 	MasterID           *string   `json:"master_id"`
 	JoinedAt           time.Time `json:"joined_at"`
 }
@@ -118,6 +118,7 @@ func canManageSect(rank string) bool {
 
 type SectVaultGuItem struct {
 	ID       string `json:"id"`
+	Rank     int    `json:"rank,omitempty"`
 	Cost     int    `json:"cost"`
 	Quantity int    `json:"quantity"`
 }
@@ -138,7 +139,8 @@ type DonateGuRequest struct {
 type VaultBuyRequest struct {
 	ItemType string `json:"item_type" binding:"required"` // gu, material, recipe
 	ItemID   string `json:"item_id" binding:"required"`
-	Quantity int    `json:"quantity"`
+	Rank     int    `json:"rank,omitempty"`
+	Quantity int    `json:"quantity" binding:"min=1"`
 }
 
 // GetSects lists all available sects
@@ -481,7 +483,7 @@ func PromoteSectRank(c *gin.Context) {
 
 	var nextRank string
 	var reqRank int
-	var costPoints int
+	var costPoints int64
 
 	switch m.MemberRank {
 	case "NGOAI_MON":
@@ -646,12 +648,7 @@ func DonateStones(c *gin.Context) {
 	}
 
 	player.PrimevalStones -= float64(req.Amount)
-	newContribution := int64(m.ContributionPoints) + int64(req.Amount)
-	if newContribution > 2147483647 {
-		m.ContributionPoints = 2147483647
-	} else {
-		m.ContributionPoints = int(newContribution)
-	}
+	m.ContributionPoints += int64(req.Amount)
 
 	// Increase sect funds
 	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, req.Amount, m.SectID)
@@ -749,12 +746,7 @@ func DonateMaterials(c *gin.Context) {
 	gainedContribution := pointsPerItem * req.Amount
 	InventorySvc.RemoveItem(tx, playerID.String(), req.MaterialID, "materials", req.Amount)
 
-	newContribution := int64(m.ContributionPoints) + int64(gainedContribution)
-	if newContribution > 2147483647 {
-		m.ContributionPoints = 2147483647
-	} else {
-		m.ContributionPoints = int(newContribution)
-	}
+	m.ContributionPoints += int64(gainedContribution)
 	qiGained := AddHumanQi(&player, 5.0)
 
 	// Increase sect funds
@@ -911,7 +903,7 @@ func DonateGu(c *gin.Context) {
 	// Increment quantity if Gu type already exists in vault, otherwise add new entry
 	donatedGuFound := false
 	for i, v := range vaultGus {
-		if v.ID == guInstance.GuID {
+		if v.ID == guInstance.GuID && v.Rank == guInstance.Rank {
 			vaultGus[i].Quantity++
 			donatedGuFound = true
 			break
@@ -920,6 +912,7 @@ func DonateGu(c *gin.Context) {
 	if !donatedGuFound {
 		vaultGus = append(vaultGus, SectVaultGuItem{
 			ID:       guInstance.GuID,
+			Rank:     guInstance.Rank,
 			Cost:     vaultItemCost,
 			Quantity: 1,
 		})
@@ -934,12 +927,7 @@ func DonateGu(c *gin.Context) {
 
 	// Remove Gu
 	player.GuInventory = append(player.GuInventory[:targetIdx], player.GuInventory[targetIdx+1:]...)
-	newContribution := int64(m.ContributionPoints) + int64(gainedContribution)
-	if newContribution > 2147483647 {
-		m.ContributionPoints = 2147483647
-	} else {
-		m.ContributionPoints = int(newContribution)
-	}
+	m.ContributionPoints += int64(gainedContribution)
 	qiGained := AddHumanQi(&player, 5.0)
 
 	// Increase sect funds
@@ -971,7 +959,7 @@ func DonateGu(c *gin.Context) {
 	}
 
 	guName := guInstance.GuID
-	if spec, ok := models.GetGuAny(guInstance.GuID); ok {
+	if spec, ok := models.GetGu(guInstance.GuID, guInstance.Rank); ok {
 		guName = spec.Name
 	}
 
@@ -1141,7 +1129,7 @@ func DonateBulk(c *gin.Context) {
 				// Update Vault Gu count
 				donatedGuFound := false
 				for idx, v := range vaultGus {
-					if v.ID == gi.GuID {
+					if v.ID == gi.GuID && v.Rank == gi.Rank {
 						vaultGus[idx].Quantity++
 						donatedGuFound = true
 						break
@@ -1150,13 +1138,14 @@ func DonateBulk(c *gin.Context) {
 				if !donatedGuFound {
 					vaultGus = append(vaultGus, SectVaultGuItem{
 						ID:       gi.GuID,
+						Rank:     gi.Rank,
 						Cost:     vaultItemCost,
 						Quantity: 1,
 					})
 				}
 
 				guName := gi.GuID
-				if spec, ok := models.GetGuAny(gi.GuID); ok {
+				if spec, ok := models.GetGu(gi.GuID, gi.Rank); ok {
 					guName = spec.Name
 				}
 				auditSummaries = append(auditSummaries, guName)
@@ -1197,12 +1186,7 @@ func DonateBulk(c *gin.Context) {
 	numItems := len(req.Materials) + len(req.Gus)
 	qiGained := AddHumanQi(&player, 5.0*float64(numItems))
 
-	newContribution := int64(m.ContributionPoints) + int64(totalGainedContribution)
-	if newContribution > 2147483647 {
-		m.ContributionPoints = 2147483647
-	} else {
-		m.ContributionPoints = int(newContribution)
-	}
+	m.ContributionPoints += int64(totalGainedContribution)
 
 	// Update Sect funds
 	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, totalGainedContribution, m.SectID)
@@ -1304,7 +1288,7 @@ func BuyFromSectVault(c *gin.Context) {
 		return
 	}
 
-	var cost int
+	var cost int64
 	if strings.ToLower(req.ItemType) == "gu" {
 		var vaultGus []SectVaultGuItem
 		if err := json.Unmarshal(s.VaultGu, &vaultGus); err != nil {
@@ -1314,7 +1298,7 @@ func BuyFromSectVault(c *gin.Context) {
 
 		targetIdx := -1
 		for idx, item := range vaultGus {
-			if item.ID == req.ItemID {
+			if item.ID == req.ItemID && (req.Rank == 0 || item.Rank == req.Rank) {
 				targetIdx = idx
 				break
 			}
@@ -1330,7 +1314,7 @@ func BuyFromSectVault(c *gin.Context) {
 			return
 		}
 
-		cost = vaultGus[targetIdx].Cost * quantity
+		cost = int64(vaultGus[targetIdx].Cost * quantity)
 		if m.ContributionPoints < cost {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Điểm cống hiến!"})
 			return
@@ -1340,11 +1324,15 @@ func BuyFromSectVault(c *gin.Context) {
 		vaultGus[targetIdx].Quantity -= quantity
 
 		guSpec, _ := models.GetGuAny(req.ItemID)
+		actualRank := vaultGus[targetIdx].Rank
+		if actualRank == 0 {
+			actualRank = guSpec.Rank
+		}
 		for i := 0; i < quantity; i++ {
 			newGu := models.GuInstance{
 				InstanceID: uuid.New().String(),
 				GuID:       req.ItemID,
-				Rank:       guSpec.Rank,
+				Rank:       actualRank,
 				Hunger:     100,
 				Status:     "ACTIVE",
 				Equipped:   false,
@@ -1354,10 +1342,6 @@ func BuyFromSectVault(c *gin.Context) {
 
 		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Gu inventory"})
-			return
-		}
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add Gu bug"})
 			return
 		}
 
@@ -1389,7 +1373,7 @@ func BuyFromSectVault(c *gin.Context) {
 		{
 			var matBasePrice, matRank int
 			_ = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, req.ItemID).Scan(&matBasePrice, &matRank)
-			cost = pricing.VaultCost(pricing.ItemBasePrice(matBasePrice, matRank)) * quantity
+			cost = int64(pricing.VaultCost(pricing.ItemBasePrice(matBasePrice, matRank)) * quantity)
 		}
 
 		if m.ContributionPoints < cost {
@@ -1444,7 +1428,7 @@ func BuyFromSectVault(c *gin.Context) {
 			} else {
 				_ = tx.QueryRow(`SELECT COALESCE(gd.rank,1) FROM refining_recipes rr JOIN gu_dictionary gd ON gd.id=rr.target_gu_id AND gd.rank=rr.target_rank WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text)=$1`, req.ItemID).Scan(&targetGuRank)
 			}
-			cost = pricing.RecipeCostByGuRank(targetGuRank)
+			cost = int64(pricing.RecipeCostByGuRank(targetGuRank))
 		}
 		if m.ContributionPoints < cost {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Điểm cống hiến!"})
@@ -1798,12 +1782,7 @@ func CompleteSectMission(c *gin.Context) {
 		return
 	}
 
-	newContribution := int64(m.ContributionPoints) + int64(sm.RewardContribution)
-	if newContribution > 2147483647 {
-		m.ContributionPoints = 2147483647
-	} else {
-		m.ContributionPoints = int(newContribution)
-	}
+	m.ContributionPoints += int64(sm.RewardContribution)
 	_, err = tx.Exec(`UPDATE sect_members SET contribution_points = $1 WHERE player_id = $2`, m.ContributionPoints, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add contribution points"})
@@ -2106,7 +2085,7 @@ func GetSectMembers(c *gin.Context) {
 		Username     string    `json:"username"`
 		AvatarURL    string    `json:"avatar_url"`
 		MemberRank   string    `json:"member_rank"`
-		Contribution int       `json:"contribution_points"`
+		Contribution int64     `json:"contribution_points"`
 		JoinedAt     time.Time `json:"joined_at"`
 		PlayerRank   int       `json:"player_rank"`
 		Power        float64   `json:"power"`
@@ -3201,7 +3180,7 @@ func ActionPromotionRequest(c *gin.Context) {
 		}
 
 		if costPoints > 0 {
-			_, err = tx.Exec(`UPDATE sect_members SET contribution_points = LEAST(2147483647, contribution_points + $1) WHERE player_id = $2`, costPoints, targetPlayerID)
+			_, err = tx.Exec(`UPDATE sect_members SET contribution_points = contribution_points + $1 WHERE player_id = $2`, costPoints, targetPlayerID)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refund contribution points: " + err.Error()})
 				return

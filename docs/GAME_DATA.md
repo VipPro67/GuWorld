@@ -48,14 +48,24 @@ Các cột mô tả nhân dạng và trạng thái của người chơi, giá tr
 
 | Cột | Kiểu | Giá trị | Effect |
 | --- | --- | --- | --- |
-| `race` | VARCHAR(50) | Xem bảng chủng tộc bên dưới. Mặc định `human` lúc đăng ký | Hiệu ứng theo từng chủng tộc |
+| `race` | VARCHAR(50) | Xem bảng chủng tộc bên dưới. Mặc định `human` lúc đăng ký. **Key phải tồn tại trong bảng `race_dictionary`** | Hiệu ứng đọc từ `race_dictionary.effects` (per-row) |
 | `gender` | VARCHAR(20) | `male`, `female` | Chưa có effect (chỉ hiển thị) |
 | `constitution` | VARCHAR(100) | Xem bảng thể chất bên dưới. **Key phải tồn tại trong bảng `constitution_dictionary`** | Hiệu ứng đọc từ `constitution_dictionary.effects` (per-row) |
 | `statuses` | JSONB (`[]string`) | `severely_wounded` (Trọng Thương) | -20% attack/defense/speed |
 
 Chọn lúc đăng ký (`race`, `gender`); `constitution`/`statuses` đổi qua Admin panel (`PUT /api/admin/players/:id`) hoặc event trong game.
 
-**Bảng chủng tộc (race) — định nghĩa tập trung tại `backend/internal/gamefx/fx.go`:**
+**Bảng chủng tộc (race) — data-driven, seed từ `data/Race.csv` vào bảng `race_dictionary`, nạp registry trong memory (`gamefx.RaceRegistry`) khi khởi động:**
+
+Bảng `race_dictionary`:
+
+| Cột | Kiểu | Ghi chú |
+| --- | --- | --- |
+| `key` | VARCHAR(100) PK | Key tiếng Anh, lưu vào `players.race` |
+| `name` | VARCHAR(200) | Tên tiếng Việt hiển thị |
+| `effects` | JSONB | Các effect của chủng tộc (cùng format `effects` như thể chất bên dưới) |
+
+Danh sách hiện tại (10 chủng tộc):
 
 | Key | Tên Việt | Hiệu ứng |
 | --- | --- | --- |
@@ -69,6 +79,8 @@ Chọn lúc đăng ký (`race`, `gender`); `constitution`/`statuses` đổi qua 
 | `variant_beastman` | Thú Nhân | +8% tấn công, +5% phòng thủ, -5% tỉ lệ Luyện Cổ |
 | `dragonman` | Long Nhân | +10% tấn công, +10% phòng thủ, -5% tỉ lệ Luyện Cổ |
 | `giant_sun_descendant` | Cự Dương Huyết Mạch | +5 Vận, +5% hiệu quả tu luyện |
+
+**Thêm chủng tộc mới:** sửa `backend/cmd/server/data/Race.csv` (thêm dòng `key,name,effects`) → Admin panel tab **Dữ liệu** → Import bảng `Chủng tộc`. Nếu database rỗng, Go có `defaultRaces()` trong `backend/internal/gamefx/races.go` làm fallback để không vỡ hành vi cũ. `players.race` luôn là **1 key duy nhất** (default `human`).
 
 **Bảng thể chất (constitution) — data-driven, seed từ `data/Constitution.csv` vào bảng `constitution_dictionary`, nạp registry trong memory (`gamefx.ConstitutionRegistry`) khi khởi động:**
 

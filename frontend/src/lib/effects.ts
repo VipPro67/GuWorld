@@ -1,7 +1,7 @@
-// Helper để format effect của thể chất (constitution) từ dictionary
+// Helper để format effect từ dictionary (thể chất, chủng tộc...)
 // sang mô tả tiếng Việt hiển thị cho người chơi.
 
-const CONSTITUTION_PATH_NAMES: Record<string, string> = {
+const PATH_NAMES: Record<string, string> = {
   blade: "Đao Đạo",
   blood: "Huyết Đạo",
   bone: "Cốt Đạo",
@@ -70,9 +70,9 @@ const pct = (v: number): string => {
   return `${p > 0 ? "+" : ""}${p}%`;
 };
 
-const pathName = (p: string): string => CONSTITUTION_PATH_NAMES[p] || p.charAt(0).toUpperCase() + p.slice(1) + " Đạo";
+const pathName = (p: string): string => PATH_NAMES[p] || p.charAt(0).toUpperCase() + p.slice(1) + " Đạo";
 
-export interface ConstitutionEffects {
+export interface GameEffects {
   stat_mods?: Record<string, number>;
   dao_mark?: Record<string, number>;
   path_damage?: Record<string, number>;
@@ -89,8 +89,15 @@ export interface ConstitutionEffects {
   aperture_stress_bonus?: number;
 }
 
+// Định nghĩa một mục dictionary (thể chất / chủng tộc) trả về từ API.
+export interface EffectDictionaryEntry {
+  key: string;
+  name: string;
+  effects?: GameEffects;
+}
+
 // Trả về mảng các mô tả hiệu ứng bằng tiếng Việt.
-export function formatConstitutionEffects(effects?: ConstitutionEffects): string[] {
+export function formatGameEffects(effects?: GameEffects): string[] {
   if (!effects) return [];
   const out: string[] = [];
 
@@ -130,3 +137,6 @@ export function formatConstitutionEffects(effects?: ConstitutionEffects): string
 
   return out;
 }
+
+// Alias giữ tên cũ cho các file đã import formatConstitutionEffects.
+export const formatConstitutionEffects = formatGameEffects;

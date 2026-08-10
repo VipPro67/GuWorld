@@ -15,6 +15,7 @@ type DictionaryResponse struct {
 	Items         interface{}              `json:"items"`
 	Monsters      interface{}              `json:"monsters"`
 	Constitutions []gamefx.ConstitutionDef `json:"constitutions"`
+	Races         []gamefx.RaceDef         `json:"races"`
 }
 
 // GetDictionary returns the unified Gu and Item master catalogs, cached in Redis
@@ -39,6 +40,7 @@ func GetDictionary(c *gin.Context) {
 		Items:         models.ItemRegistry,
 		Monsters:      models.MonsterRegistry,
 		Constitutions: gamefx.AllConstitutions(),
+		Races:         gamefx.AllRaces(),
 	}
 
 	_ = cache.SetJSON(cacheKey, resp, 24*time.Hour)

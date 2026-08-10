@@ -1,6 +1,7 @@
 import { ToastContainer } from "@/components/ToastContainer";
 import { create } from "zustand";
 import type { RequiredGus } from "@/lib/gu-dict";
+import type { EffectDictionaryEntry } from "@/lib/effects";
 
 let confirmResolve: ((value: boolean) => void) | null = null;
 
@@ -377,7 +378,7 @@ const calculateHealingStat = (player: Player, guDictionary: Record<string, GuSpe
   return healing;
 };
 
-const createManaSnapshotFromPlayer = (player: Player, guDictionary: Record<string, GuSpec>, constitutionDictionary?: Record<string, { key: string; name: string; effects?: Record<string, any> }>, timeRate?: number): ManaSnapshot => ({
+const createManaSnapshotFromPlayer = (player: Player, guDictionary: Record<string, GuSpec>, constitutionDictionary?: Record<string, EffectDictionaryEntry>, timeRate?: number): ManaSnapshot => ({
   player_id: player.id,
   current_mana: player.current_mana,
   max_mana: player.max_mana,
@@ -647,6 +648,7 @@ export interface SectMine {
 
 export interface SectVaultGuItem {
   id: string;
+  rank?: number;
   cost: number;
   quantity: number;
 }
@@ -829,7 +831,8 @@ interface GameState {
   guByRank: Record<string, Record<number, GuSpec>>;
   itemDictionary: Record<string, ItemSpec>;
   monsterDictionary: Record<string, MonsterSpec>;
-  constitutionDictionary: Record<string, { key: string; name: string; effects?: Record<string, any> }>;
+  constitutionDictionary: Record<string, EffectDictionaryEntry>;
+  raceDictionary: Record<string, EffectDictionaryEntry>;
   dictionaryLoaded: boolean;
   recipes: RefiningRecipe[];
   recipesLoaded: boolean;
@@ -1115,7 +1118,7 @@ interface GameState {
     materials: { material_id: string; amount: number }[];
     gus: { gu_instance_id: string }[];
   }) => Promise<boolean>;
-  buyFromSectVault: (itemType: string, itemId: string, quantity?: number) => Promise<boolean>;
+  buyFromSectVault: (itemType: string, itemId: string, quantity?: number, rank?: number) => Promise<boolean>;
   fetchSectMissions: () => Promise<void>;
   acceptSectMission: (missionId: string) => Promise<boolean>;
   completeSectMission: (missionId: string) => Promise<boolean>;
@@ -1411,6 +1414,7 @@ export const useGameStore = create<GameState>((set, get) => {
   itemDictionary: {},
   monsterDictionary: {},
   constitutionDictionary: {},
+  raceDictionary: {},
   dictionaryLoaded: false,
   recipes: [],
   recipesLoaded: false,
@@ -2377,10 +2381,15 @@ export const useGameStore = create<GameState>((set, get) => {
           }
         }
       }
-      const constitutionDict: Record<string, { key: string; name: string; effects?: Record<string, any> }> = {};
+      const constitutionDict: Record<string, EffectDictionaryEntry> = {};
       const constitutionArr = Array.isArray(data.constitutions) ? data.constitutions : [];
       for (const c of constitutionArr) {
         constitutionDict[c.key] = c;
+      }
+      const raceDict: Record<string, EffectDictionaryEntry> = {};
+      const raceArr = Array.isArray(data.races) ? data.races : [];
+      for (const r of raceArr) {
+        raceDict[r.key] = r;
       }
       set({
         guDictionary: guMap,
@@ -2388,6 +2397,7 @@ export const useGameStore = create<GameState>((set, get) => {
         itemDictionary: data.items || {},
         monsterDictionary: data.monsters || {},
         constitutionDictionary: constitutionDict,
+        raceDictionary: raceDict,
         dictionaryLoaded: true,
       });
     } catch (err: any) {
@@ -5421,7 +5431,7 @@ export const useGameStore = create<GameState>((set, get) => {
     } finally { set({ actionLoading: false }); }
   },
 
-  buyFromSectVault: async (itemType: string, itemId: string, quantity = 1) => {
+  buyFromSectVault: async (itemType: string, itemId: string, quantity = 1, rank?: number) => {
     const { token, actionLoading, logout } = get();
     if (!token || actionLoading) return false;
     set({ actionLoading: true, error: null });
@@ -5429,7 +5439,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/sects/vault/buy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ item_type: itemType, item_id: itemId, quantity }),
+        body: JSON.stringify({ item_type: itemType, item_id: itemId, quantity, rank }),
       });
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();

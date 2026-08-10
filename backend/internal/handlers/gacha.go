@@ -72,6 +72,7 @@ type GachaOpenRequest struct {
 type weightedGuEntry struct {
 	id     string
 	weight float64
+	rank   int
 }
 
 type weightedMaterialEntry struct {
@@ -123,7 +124,7 @@ func precomputeGachaPools(excludedImmortal map[string]bool) precomputedPools {
 				if rankSet[spec.Rank] {
 					w := guRarityWeightByRank(spec.Rank)
 					if w > 0 {
-						pool = append(pool, weightedGuEntry{id: id, weight: w})
+						pool = append(pool, weightedGuEntry{id: id, weight: w, rank: spec.Rank})
 						total += w
 					}
 				}
@@ -136,20 +137,20 @@ func precomputeGachaPools(excludedImmortal map[string]bool) precomputedPools {
 	return pc
 }
 
-func (pc *precomputedPools) rollGu(rankKey string) string {
+func (pc *precomputedPools) rollGu(rankKey string) (string, int) {
 	pool := pc.guByRank[rankKey]
 	total := pc.totalByRank[rankKey]
 	if len(pool) == 0 || total <= 0 {
-		return ""
+		return "", 0
 	}
 	r := rand.Float64() * total
 	for _, g := range pool {
 		r -= g.weight
 		if r <= 0 {
-			return g.id
+			return g.id, g.rank
 		}
 	}
-	return pool[0].id
+	return pool[0].id, pool[0].rank
 }
 
 func (pc *precomputedPools) rollMaterial() string {
@@ -275,7 +276,7 @@ func runGachaOpen(c *gin.Context, forced int) {
 			applyGachaRewardInMemory(&player, rewards[i])
 		}
 		if rewards[i].Type == "gu" || rewards[i].Type == "gu_rank" {
-			if spec, ok := models.GetGuAny(rewards[i].ID); ok && spec.Rank >= 6 {
+			if models.HasImmortalRank(rewards[i].ID) {
 				excludedImmortal[rewards[i].ID] = true
 				pc = precomputeGachaPools(excludedImmortal)
 			}
@@ -356,9 +357,9 @@ func runGachaOpen(c *gin.Context, forced int) {
 	// Batch rare Gu system messages into a single message
 	var rareDrops []string
 	for _, r := range rewards {
-		if r.Type == "gu" {
-			if spec, ok := models.GetGuAny(r.ID); ok && spec.Rank >= 6 {
-				rareDrops = append(rareDrops, fmt.Sprintf("%s (R%d)", spec.Name, spec.Rank))
+		if r.Type == "gu" && r.Rank >= 6 {
+			if spec, ok := models.GetGuAny(r.ID); ok {
+				rareDrops = append(rareDrops, fmt.Sprintf("%s (R%d)", spec.Name, r.Rank))
 			}
 		}
 	}
@@ -372,6 +373,7 @@ func runGachaOpen(c *gin.Context, forced int) {
 type GachaResultItem struct {
 	Type   string  `json:"type"`
 	ID     string  `json:"id,omitempty"`
+	Rank   int     `json:"rank,omitempty"`
 	Amount float64 `json:"amount"`
 	Label  string  `json:"label"`
 	IsRare bool    `json:"is_rare"`
@@ -418,7 +420,7 @@ func rollGachaRewardPrecomputed(pool *GachaPool, pc precomputedPools, excludedIm
 		return GachaResultItem{Type: "item", ID: itemID, Amount: 1, Label: fmt.Sprintf("1x %s", itemName), IsRare: isRare}
 
 	case "gu":
-		guID := pc.rollGu("1,2,3")
+		guID, rank := pc.rollGu("1,2,3")
 		if guID == "" {
 			return GachaResultItem{Type: "primeval_stones", Amount: 100, Label: "100 Nguyên Thạch"}
 		}
@@ -426,10 +428,10 @@ func rollGachaRewardPrecomputed(pool *GachaPool, pc precomputedPools, excludedIm
 		if spec, ok := models.GetGuAny(guID); ok {
 			guName = spec.Name
 		}
-		return GachaResultItem{Type: "gu", ID: guID, Amount: 1, Label: fmt.Sprintf("1x %s", guName), IsRare: isRare}
+		return GachaResultItem{Type: "gu", ID: guID, Rank: rank, Amount: 1, Label: fmt.Sprintf("1x %s", guName), IsRare: isRare}
 
 	case "gu_rank":
-		guID := pc.rollGu(chosen.ID)
+		guID, rank := pc.rollGu(chosen.ID)
 		if guID == "" {
 			return GachaResultItem{Type: "primeval_stones", Amount: 100, Label: "100 Nguyên Thạch"}
 		}
@@ -437,7 +439,7 @@ func rollGachaRewardPrecomputed(pool *GachaPool, pc precomputedPools, excludedIm
 		if spec, ok := models.GetGuAny(guID); ok {
 			guName = spec.Name
 		}
-		return GachaResultItem{Type: "gu", ID: guID, Amount: 1, Label: fmt.Sprintf("1x %s", guName), IsRare: isRare}
+		return GachaResultItem{Type: "gu", ID: guID, Rank: rank, Amount: 1, Label: fmt.Sprintf("1x %s", guName), IsRare: isRare}
 
 	case "primeval_stones":
 		return GachaResultItem{Type: "primeval_stones", Amount: amount, Label: fmt.Sprintf("%.0f Nguyên Thạch", amount), IsRare: isRare}
@@ -581,10 +583,14 @@ func applyGachaRewardInMemory(player *models.Player, reward GachaResultItem) {
 		}
 	case "gu":
 		guSpec, _ := models.GetGuAny(reward.ID)
+		rank := reward.Rank
+		if rank == 0 {
+			rank = guSpec.Rank
+		}
 		newGu := models.GuInstance{
 			InstanceID: "gu-" + uuid.New().String(),
 			GuID:       reward.ID,
-			Rank:       guSpec.Rank,
+			Rank:       rank,
 			Hunger:     rand.Intn(21),
 			Status:     "ACTIVE",
 			Equipped:   false,

@@ -1565,7 +1565,7 @@ func FeedGu(c *gin.Context) {
 	}
 
 	// 3. Find static specs in Dictionary
-	specs, found := models.GetGuAny(targetGu.GuID)
+	specs, found := models.GetGu(targetGu.GuID, targetGu.Rank)
 	if !found {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gu definition not found in registry"})
 		return
@@ -1636,7 +1636,7 @@ func FeedGu(c *gin.Context) {
 			foodID = consumedGu.GuID
 
 			// Fire ON_FEED trigger for the consumed Gu
-			if cSpec, cOk := models.GetGuAny(consumedGu.GuID); cOk {
+			if cSpec, cOk := models.GetGu(consumedGu.GuID, consumedGu.Rank); cOk {
 				if msg, err := HandleGuEvent(&player, cSpec, consumedGu, "ON_FEED"); err == nil && msg != "" {
 					feedEventMsg = msg
 				}
@@ -2250,7 +2250,7 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 	// Equipped active Gu passives
 	for _, gu := range player.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" {
-			spec, ok := models.GetGuAny(gu.GuID)
+			spec, ok := models.GetGu(gu.GuID, gu.Rank)
 			if !ok || spec.Effects.Passive == nil {
 				continue
 			}
@@ -2671,7 +2671,7 @@ func EquipGu(c *gin.Context) {
 		}
 
 		// Type restriction: block only Consumable Gu from being equipped
-		specForEquip, specFound := models.GetGuAny(targetGu.GuID)
+		specForEquip, specFound := models.GetGu(targetGu.GuID, targetGu.Rank)
 		if specFound && specForEquip.Type == "Consumable" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể trang bị Cổ trùng loại Consumable."})
 			return
@@ -3648,7 +3648,7 @@ func UseConsumableGu(c *gin.Context) {
 	}
 
 	targetGu := &player.GuInventory[targetIdx]
-	specs, found := models.GetGuAny(targetGu.GuID)
+	specs, found := models.GetGu(targetGu.GuID, targetGu.Rank)
 	if !found {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy thông tin Cổ trùng trong thư viện"})
 		return
@@ -3786,7 +3786,7 @@ func UseSupportGu(c *gin.Context) {
 	}
 
 	targetGu := &player.GuInventory[targetIdx]
-	specs, found := models.GetGuAny(targetGu.GuID)
+	specs, found := models.GetGu(targetGu.GuID, targetGu.Rank)
 	if !found {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy thông tin Cổ trùng trong thư viện"})
 		return

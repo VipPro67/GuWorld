@@ -374,17 +374,33 @@ func GetGuAny(id string) (GuDictionaryItem, bool) {
 		return GuDictionaryItem{}, false
 	}
 	var best GuDictionaryItem
-	max := 0
+	found := false
+	min := 0
 	for r, item := range ranks {
-		if r > max {
-			max = r
+		if !found || r < min {
+			min = r
 			best = item
+			found = true
 		}
 	}
-	if max == 0 {
+	if !found {
 		return GuDictionaryItem{}, false
 	}
 	return best, true
+}
+
+// HasImmortalRank returns true if any rank variant of the given Gu ID is >= 6 (Tiên Cổ).
+func HasImmortalRank(id string) bool {
+	ranks, ok := GuRegistry[id]
+	if !ok {
+		return false
+	}
+	for r := range ranks {
+		if r >= 6 {
+			return true
+		}
+	}
+	return false
 }
 
 func LoadGuRegistry(db *sql.DB) error {

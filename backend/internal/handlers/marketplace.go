@@ -1037,7 +1037,7 @@ func GetItemName(itemType string, itemDataJSON []byte) string {
 	if itemType == "Gu" {
 		var gus []models.GuInstance
 		if err := json.Unmarshal(itemDataJSON, &gus); err == nil && len(gus) > 0 {
-			if spec, ok := models.GetGuAny(gus[0].GuID); ok {
+			if spec, ok := models.GetGu(gus[0].GuID, gus[0].Rank); ok {
 				return spec.Name
 			}
 			return gus[0].GuID
