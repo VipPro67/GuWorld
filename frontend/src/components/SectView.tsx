@@ -661,7 +661,7 @@ export const SectView: React.FC = () => {
                     <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-4">
                       <h5 className="text-xs font-semibold text-zinc-400 mb-2 font-serif">Đặc trưng bảo khố</h5>
                       <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-                        {sect.vault_gu && (sect.vault_gu as any[]).map((g: any) => {
+                        {sect.vault_gu && (sect.vault_gu as any[]).filter((g: any) => g.quantity === undefined || g.quantity > 0).map((g: any) => {
                           const spec = guDictionary[g.id];
                           return (
                             <span key={g.id} className="text-xs bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800 text-zinc-300">
@@ -669,7 +669,7 @@ export const SectView: React.FC = () => {
                             </span>
                           );
                         })}
-                        {sect.vault_materials && Object.keys(sect.vault_materials).map((matId) => {
+                        {sect.vault_materials && Object.entries(sect.vault_materials).filter(([_, qty]: any) => qty > 0).map(([matId]) => {
                           const spec = itemDictionary[matId];
                           return (
                             <span key={matId} className="text-xs bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800 text-zinc-300">
@@ -1668,6 +1668,7 @@ export const SectView: React.FC = () => {
                       const rankB = b.rank || guDictionary[b.id]?.rank || 1;
                       return rankA - rankB;
                     }).filter((vg: any) => {
+                      if (vg.quantity !== undefined && vg.quantity <= 0) return false;
                       if (!vaultSearch) return true;
                       const spec = guDictionary[vg.id];
                       const name = spec?.name || vg.id;
@@ -1743,7 +1744,8 @@ export const SectView: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {sect?.vault_materials && Object.entries(sect.vault_materials).length > 0 ? (
                   Object.entries(sect.vault_materials)
-                  .filter(([matId]) => {
+                  .filter(([matId, qty]: any) => {
+                    if (qty <= 0) return false;
                     if (!vaultSearch) return true;
                     const spec = itemDictionary[matId];
                     const name = spec?.name || matId;

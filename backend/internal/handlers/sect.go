@@ -1564,6 +1564,10 @@ func BuyFromSectVault(c *gin.Context) {
 		if actualRank == 0 {
 			actualRank = guSpec.Rank
 		}
+		
+		if vaultGus[targetIdx].Quantity <= 0 {
+			vaultGus = append(vaultGus[:targetIdx], vaultGus[targetIdx+1:]...)
+		}
 		for i := 0; i < quantity; i++ {
 			newGu := models.GuInstance{
 				InstanceID: uuid.New().String(),

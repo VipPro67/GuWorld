@@ -159,6 +159,7 @@ export interface Player {
   fake_vital_gu?: string;
   is_disguised?: boolean;
   is_admin?: boolean;
+  is_sparse_gu_inventory?: boolean;
   avatar_url?: string;
   combat_settings?: AutoCombatConfig;
   needs_onboarding?: boolean;
@@ -1360,7 +1361,7 @@ export const useGameStore = create<GameState>((set, get) => {
     const currentPlayer = get().player;
     const normalizedPlayer = normalizePlayer(player);
     if (normalizedPlayer && !normalizedPlayer.materials_inventory) {
-      normalizedPlayer.materials_inventory = currentPlayer?.materials_inventory || {};
+      normalizedPlayer.materials_inventory = {};
     }
     // Preserve a richer gu_inventory already in state when the incoming
     // snapshot is sparse (e.g. equipped-only from /auth/me or challenge).
@@ -1368,7 +1369,7 @@ export const useGameStore = create<GameState>((set, get) => {
     const currentInv = currentPlayer?.gu_inventory || [];
     let guInventory = incomingInv;
     let guComplete = false;
-    if (currentInv.length > 0 && incomingInv.length > 0 && currentInv.length > incomingInv.length) {
+    if (normalizedPlayer?.is_sparse_gu_inventory && currentInv.length > 0 && incomingInv.length > 0 && currentInv.length > incomingInv.length) {
       guInventory = currentInv;
       guComplete = true;
     }

@@ -450,6 +450,7 @@ func (s *PlayerService) EvaluateAndPersistManaEquipped(tx *sql.Tx, id uuid.UUID)
 	if err != nil {
 		return player, err
 	}
+	player.IsSparseGuInventory = true
 
 	s.setDefaults(&player)
 

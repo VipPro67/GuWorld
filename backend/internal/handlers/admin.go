@@ -1853,6 +1853,9 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 					return
 				}
 				guItems[i].Quantity -= req.Quantity
+				if guItems[i].Quantity <= 0 {
+					guItems = append(guItems[:i], guItems[i+1:]...)
+				}
 				found = true
 				break
 			}
