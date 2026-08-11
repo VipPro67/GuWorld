@@ -976,8 +976,8 @@ interface GameState {
   dropGu: (instanceId: string) => Promise<boolean>;
   dropGus: (instanceIds: string[]) => Promise<boolean>;
   buyShopItem: (itemId: string, quantity: number) => Promise<boolean>;
-  sellShopItem: (itemId: string, quantity: number, itemType: "Gu" | "Material") => Promise<boolean>;
-  sellShopItemsBulk: (items: { item_id: string; quantity: number; item_type: "Gu" | "Material" }[]) => Promise<boolean>;
+  sellShopItem: (itemId: string, quantity: number, itemType: "Gu" | "Material" | "Recipe") => Promise<boolean>;
+  sellShopItemsBulk: (items: { item_id: string; quantity: number; item_type: "Gu" | "Material" | "Recipe" }[]) => Promise<boolean>;
   marketplaceListings: any[];
   fetchMarketplaceListings: () => Promise<void>;
   createMarketplaceListing: (payload: { itemType: "Gu" | "Material" | "Recipe"; guInstanceId?: string; guInstanceIds?: string[]; itemId?: string; quantity: number; price: number; durationHours: number; currency: "primeval" | "immortal"; listingType: "MARKET" | "AUCTION" | "TRADE"; targetBuyerUsername?: string }) => Promise<boolean>;
