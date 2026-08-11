@@ -173,7 +173,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
       owned: 1, // Recipe is singular
       price: Math.max(1, Math.floor(getGuBasePrice(targetGuID) * sellBackRatio)),
       rank: rank,
-      paths: [],
+      paths: [] as string[],
     };
   });
 
