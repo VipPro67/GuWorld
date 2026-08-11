@@ -388,26 +388,10 @@ func Simulate(state *CombatState) []CombatLog {
 
 			// Check stun
 			isStunned := false
-			stunIdx := -1
-			for idx, eff := range actor.ActiveEffects {
+			for _, eff := range actor.ActiveEffects {
 				if eff.ID == EffectStun && eff.Duration >= 0 { // duration remains at least 0
 					isStunned = true
-					stunIdx = idx
 					break
-				}
-			}
-			if isStunned {
-				// Ngã Ý Cổ 35% chance to cleanse stun
-				if hasGuEquipped(actor, "GU_MY_WILL") && rand.Float64() < 0.35 {
-					actor.ActiveEffects[stunIdx].Duration = 0
-					turnLogs = append(turnLogs, CombatLog{
-						Turn:      turn,
-						ActorId:   actor.ID,
-						ActorName: actor.Name,
-						Action:    "CLEANSE",
-						Detail:    fmt.Sprintf("Ngã Ý Cổ kích hoạt! Giải trừ trạng thái Choáng cho %s đầu lượt!", actor.Name),
-					})
-					isStunned = false
 				}
 			}
 
