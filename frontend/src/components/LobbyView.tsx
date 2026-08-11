@@ -25,7 +25,7 @@ import {
   PawPrint,
 } from "lucide-react";
 import { LogConsole } from "./LogConsole";
-import { formatNumber } from "@/lib/utils";
+import { Num } from "./Num";
 
 interface HubItem {
   id: string;
@@ -504,7 +504,7 @@ export const LobbyView: React.FC = () => {
               <div className="flex items-center gap-1.5 mt-0.5">
                 <Coins className="w-4 h-4 text-yellow-500" />
                 <span className="text-sm font-bold text-yellow-500/90 font-mono">
-                  {formatNumber(player.primeval_stones || 0)}
+                  <Num value={player.primeval_stones || 0} />
                 </span>
               </div>
             </div>
@@ -515,7 +515,7 @@ export const LobbyView: React.FC = () => {
               <div className="flex items-center gap-1.5 mt-0.5">
                 <Sparkles className="w-4 h-4 text-violet-400" />
                 <span className="text-sm font-bold text-purple-400 font-mono">
-                  {formatNumber(player.immortal_stones || 0)}
+                  <Num value={player.immortal_stones || 0} />
                 </span>
               </div>
             </div>

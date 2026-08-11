@@ -4,7 +4,8 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { Player, CombatState, Combatant, GuSpec, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
 import { Sparkles, Play, Swords, Eye, Shield, Zap, ChevronDown, ChevronUp, Wand2, AlertTriangle, PawPrint } from "lucide-react";
 import { CombatReplayView } from "./CombatReplayView";
-import { formatNumber, getPathColor } from "@/lib/utils";
+import { Num } from "./Num";
+import { getPathColor } from "@/lib/utils";
 
 interface CombatScreenProps {
   player: Player;
@@ -554,24 +555,24 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
               </span>
               {(!isEnemy || enemyInfoRevealed.showHP) && (
                 <span className="text-zinc-500 shrink-0">
-                  {formatNumber(c.max_hp || 0)} HP
+                  <Num value={c.max_hp || 0} /> HP
                 </span>
               )}
               {enemyInfoRevealed.showStats && (
                 <>
                   {(c.base_attack ?? 0) > 0 && (
                     <span className="text-rose-500 shrink-0 text-[10px] font-mono" title="Tấn công">
-                      ATK {formatNumber(c.base_attack || 0)}
+                      ATK <Num value={c.base_attack || 0} />
                     </span>
                   )}
                   {(c.base_defense ?? 0) > 0 && (
                     <span className="text-blue-500 shrink-0 text-[10px] font-mono" title="Phòng thủ">
-                      DEF {formatNumber(c.base_defense || 0)}
+                      DEF <Num value={c.base_defense || 0} />
                     </span>
                   )}
                   {(c.speed ?? 0) > 0 && (
                     <span className="text-cyan-500 shrink-0 text-[10px] font-mono" title="Tốc độ">
-                      SPD {formatNumber(c.speed || 0)}
+                      SPD <Num value={c.speed || 0} />
                     </span>
                   )}
                 </>
@@ -838,8 +839,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                       }`}>
                         {move.path}
                       </span>
-                      <span className="text-[10px] text-zinc-500">DMG {formatNumber(Math.round(move.damage_value))}</span>
-                      <span className="text-[10px] text-zinc-500">Mana {formatNumber(Math.round(move.total_mana_cost))}</span>
+                      <span className="text-[10px] text-zinc-500">DMG <Num value={Math.round(move.damage_value)} /></span>
+                      <span className="text-[10px] text-zinc-500">Mana <Num value={Math.round(move.total_mana_cost)} /></span>
                     </div>
                   </div>
                 );

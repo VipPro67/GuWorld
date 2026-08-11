@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { formatNumber } from "@/lib/utils";
 import { formatGameEffects } from "@/lib/effects";
+import { translatePath, translateMastery } from "@/lib/translate";
 
 function formatStat(val: number): string {
   return Math.abs(val) >= 10000 
@@ -1105,14 +1106,14 @@ export const Aperture: React.FC<ApertureProps> = ({
                   Object.entries(player.path_masteries).map(([path, level]) => (
                     <div key={path} className="flex flex-col gap-1.5 bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
                       <div className="flex justify-between items-center">
-                        <span className="text-zinc-300 font-mono text-xs font-bold capitalize">{path} Path</span>
+                        <span className="text-zinc-300 font-mono text-xs font-bold capitalize">{translatePath(path)}</span>
                         <span className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono ${level === "Supreme Grandmaster" ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" :
                           level === "Great Grandmaster" ? "bg-red-950/50 text-red-300 border border-red-800/40" :
                             level === "Grandmaster" ? "bg-amber-950/50 text-amber-300 border border-amber-800/40" :
                               level === "Master" ? "bg-blue-950/50 text-blue-300 border border-blue-800/40" :
                                 "bg-zinc-800/50 text-zinc-400 border border-zinc-700/40"
                           }`}>
-                          {level}
+                          {translateMastery(level)}
                         </span>
                       </div>
                       <div className="text-[10px] text-zinc-500 leading-normal">
@@ -2094,7 +2095,7 @@ function BlessedLandControls() {
           <div className="flex flex-wrap gap-2 justify-center">
             {displayMarks.map((mark: any, idx: number) => (
               <div key={idx} className="px-2.5 py-1 bg-zinc-950/80 border border-zinc-900 rounded-xl text-[10px] font-mono">
-                <span className="text-amber-500 font-bold uppercase">{mark.path}</span>: <span className="text-zinc-200 font-bold">{mark.amount}</span>
+                <span className="text-amber-500 font-bold uppercase">{translatePath(mark.path)}</span>: <span className="text-zinc-200 font-bold">{mark.amount}</span>
               </div>
             ))}
             {displayMarks.length === 0 && (
@@ -2111,13 +2112,13 @@ function BlessedLandControls() {
             {player.path_masteries && Object.keys(player.path_masteries).length > 0 ? (
               Object.entries(player.path_masteries).map(([path, level]) => (
                 <div key={path} className="flex justify-between items-center bg-zinc-950/30 px-2.5 py-1.5 rounded-lg border border-zinc-900/50 text-xs">
-                  <span className="text-zinc-400 font-medium">{path}</span>
+                  <span className="text-zinc-400 font-medium">{translatePath(path)}</span>
                   <span className={`px-2 py-0.5 rounded text-[10px] font-semibold font-mono ${level === "Supreme Grandmaster" ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" :
                     level === "Grandmaster" ? "bg-amber-950/50 text-amber-300 border border-amber-800/40" :
                       level === "Master" ? "bg-blue-950/50 text-blue-300 border border-blue-800/40" :
                         "bg-zinc-800/50 text-zinc-400 border border-zinc-700/40"
                     }`}>
-                    {level}
+                    {translateMastery(level)}
                   </span>
                 </div>
               ))

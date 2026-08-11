@@ -176,9 +176,25 @@ export function translatePath(path: string | undefined): string {
   // Normalize by stripping " Path" suffix if it exists
   const base = path.endsWith(" Path") ? path.slice(0, -5) : path;
   
-  if (PATH_MAP[base]) {
-    return PATH_MAP[base] + " Đạo";
+  // Capitalize first letter to match keys in PATH_MAP
+  const capitalizedBase = base.charAt(0).toUpperCase() + base.slice(1).toLowerCase();
+  
+  if (PATH_MAP[capitalizedBase]) {
+    return PATH_MAP[capitalizedBase] + " Đạo";
   }
   
   return PATH_MAP[path] || path;
+}
+
+export const MASTERY_MAP: Record<string, string> = {
+  Ordinary: "Phổ Thông",
+  Master: "Đại Sư",
+  Grandmaster: "Tông Sư",
+  "Great Grandmaster": "Đại Tông Sư",
+  "Supreme Grandmaster": "Vô Thượng Tông Sư",
+};
+
+export function translateMastery(mastery: string | undefined): string {
+  if (!mastery) return "?";
+  return MASTERY_MAP[mastery] || mastery;
 }

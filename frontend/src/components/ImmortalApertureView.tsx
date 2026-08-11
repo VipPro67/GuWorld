@@ -25,7 +25,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { translatePath } from "@/lib/translate";
-import { formatNumber } from "@/lib/utils";
+import { Num } from "./Num";
 
 const CountdownTimer: React.FC<{ node: ApertureResourceNode; timeRate: number; onComplete?: () => void }> = ({ node, timeRate, onComplete }) => {
   const [timeLeft, setTimeLeft] = useState<string>("");
@@ -849,7 +849,7 @@ export const ImmortalApertureView: React.FC = () => {
         {activeTab === "map" && aperture && (
           <div className="space-y-6">
             {/* Aperture Stability Card */}
-            <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6">
+            <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 relative z-50">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex-1 space-y-2">
                   <div className="flex justify-between text-sm">
@@ -1166,12 +1166,12 @@ export const ImmortalApertureView: React.FC = () => {
                                 </div>
                                 <div className="text-[10px] text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
                                   <span>Tọa độ: ({enemy.x}, {enemy.y})</span>
-                                  <span className="text-rose-400 font-semibold">⚔️ Công: {formatNumber(enemy.attack)}</span>
-                                  <span className="text-emerald-400 font-semibold">🛡️ Thủ: {formatNumber(enemy.defense)}</span>
+                                  <span className="text-rose-400 font-semibold">⚔️ Công: <Num value={enemy.attack} /></span>
+                                  <span className="text-emerald-400 font-semibold">🛡️ Thủ: <Num value={enemy.defense} /></span>
                                 </div>
                               </div>
                               <div className="text-right">
-                                <div className="font-bold text-rose-400">{formatNumber(enemy.hp)} HP</div>
+                                <div className="font-bold text-rose-400"><Num value={enemy.hp} /> HP</div>
                               </div>
                             </div>
                           );

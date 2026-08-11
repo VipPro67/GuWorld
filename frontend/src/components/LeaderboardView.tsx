@@ -3,6 +3,7 @@
 import React, { useEffect } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import { Trophy, Eye, EyeOff, Users, RefreshCw, Coins, Sparkles, Bug, Star } from "lucide-react";
+import { Num } from "./Num";
 
 const CATEGORIES = [
   { id: "rank", label: "Tu Luyện", icon: Trophy, color: "emerald" },
@@ -131,7 +132,7 @@ export const LeaderboardView: React.FC = () => {
                     ? `${Math.floor(myLeaderboardRank.value / 10000)}.${Math.floor(myLeaderboardRank.value % 10000)}`
                     : `${Math.floor(myLeaderboardRank.value / 10)}.${Math.floor(myLeaderboardRank.value % 10)}`)
                   : leaderboardCategory === "primeval_stones" || leaderboardCategory === "immortal_stones"
-                  ? Number(myLeaderboardRank.value).toLocaleString()
+                  ? <Num value={Number(myLeaderboardRank.value)} />
                   : leaderboardCategory === "gu_strongest"
                   ? `Cấp ${myLeaderboardRank.value}`
                   : myLeaderboardRank.value}
@@ -245,9 +246,9 @@ export const LeaderboardView: React.FC = () => {
                 <div className="shrink-0 ml-3 text-right">
                   <div className="text-sm font-bold text-amber-400 font-mono">
                     {leaderboardCategory === "primeval_stones"
-                      ? Number(entry.value).toLocaleString()
+                      ? <Num value={Number(entry.value)} />
                       : leaderboardCategory === "immortal_stones"
-                      ? Number(entry.value).toLocaleString()
+                      ? <Num value={Number(entry.value)} />
                       : leaderboardCategory === "gu_strongest"
                       ? `Cấp ${entry.value}`
                       : entry.value_label}

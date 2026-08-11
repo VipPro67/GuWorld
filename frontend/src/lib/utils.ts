@@ -1,16 +1,29 @@
 export function formatNumber(n: number): string {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000_000) {
-    const v = n / 1_000_000_000;
-    return v % 1 === 0 ? `${v}B` : `${v.toFixed(1)}B`;
-  }
-  if (abs >= 1_000_000) {
-    const v = n / 1_000_000;
-    return v % 1 === 0 ? `${v}M` : `${v.toFixed(1)}M`;
-  }
-  return n.toLocaleString();
-}
+    const units = [
+        { value: 1e33, suffix: "Dc" },
+        { value: 1e30, suffix: "No" },
+        { value: 1e27, suffix: "Oc" },
+        { value: 1e24, suffix: "Sp" },
+        { value: 1e21, suffix: "Sx" },
+        { value: 1e18, suffix: "Qi" },
+        { value: 1e15, suffix: "Qa" },
+        { value: 1e12, suffix: "T" },
+        { value: 1e9, suffix: "B" },
+        { value: 1e6, suffix: "M" },
+        { value: 1e3, suffix: "K" }
+    ];
 
+    const abs = Math.abs(n);
+
+    for (const unit of units) {
+        if (abs >= unit.value) {
+            const v = n / unit.value;
+            return `${Number(v.toFixed(1))}${unit.suffix}`;
+        }
+    }
+
+    return n.toLocaleString();
+}
 const PATH_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   Fire:       { bg: "bg-red-900/40",    text: "text-red-300",     border: "border-red-500/40" },
   Sword:      { bg: "bg-slate-700/40",  text: "text-slate-200",   border: "border-slate-400/40" },
