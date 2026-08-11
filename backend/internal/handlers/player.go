@@ -2270,9 +2270,20 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 		addSrc("speed", "growth", "Trưởng thành Cổ", player.GrowthData.Boosts.Speed, 1, 1)
 	}
 
-	// Equipped active Gu passives
+	// Equipped active Gu passives — each GuID contributes only its highest rank,
+	// applied exactly once (duplicates never stack).
+	guBestRank := map[string]int{}
 	for _, gu := range player.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" {
+			if r, ok := guBestRank[gu.GuID]; !ok || gu.Rank > r {
+				guBestRank[gu.GuID] = gu.Rank
+			}
+		}
+	}
+	guApplied := map[string]bool{}
+	for _, gu := range player.GuInventory {
+		if gu.Equipped && gu.Status == "ACTIVE" && gu.Rank == guBestRank[gu.GuID] && !guApplied[gu.GuID] {
+			guApplied[gu.GuID] = true
 			spec, ok := models.GetGu(gu.GuID, gu.Rank)
 			if !ok || spec.Effects.Passive == nil {
 				continue
