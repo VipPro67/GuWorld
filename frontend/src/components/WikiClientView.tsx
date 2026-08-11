@@ -668,7 +668,7 @@ export default function WikiClientView({
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {filteredGus.map((gu) => (
                   <Link
-                    key={gu.id}
+                    key={gu.id + gu.rank}
                     href={`/wiki/gu/${gu.id}`}
                     className="group flex flex-col p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] hover:border-indigo-500/30 transition-all hover:bg-[var(--bg-elevated)] shadow-sm hover:shadow-md cursor-pointer"
                   >

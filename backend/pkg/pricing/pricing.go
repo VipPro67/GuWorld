@@ -135,3 +135,26 @@ func RecipeCostByGuRank(targetGuRank int) int {
 	}
 	return p
 }
+
+// RecipeDonatePoints returns contribution points awarded when donating a recipe
+// to a sect. It mirrors the material formula: donate value = vault cost /
+// VaultMarkup, ensuring buying from the vault is always more expensive than
+// donating (no contribution-point farming loop).
+func RecipeDonatePoints(targetGuRank int) int {
+	p := int(float64(RecipeCostByGuRank(targetGuRank)) / VaultMarkup)
+	if p < 1 {
+		return 1
+	}
+	return p
+}
+
+// RecipeBasePrice returns the effective base price of a recipe.
+// We set it equal to GuBasePrice(targetRank) so it scales properly when selling.
+func RecipeBasePrice(targetGuRank int) int {
+	return GuBasePriceByRank(targetGuRank)
+}
+
+// RecipeSellPrice returns Primeval Stones refunded when selling a Recipe to the Caravan Shop.
+func RecipeSellPrice(targetGuRank int) int {
+	return SellPrice(RecipeBasePrice(targetGuRank))
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useGameStore, GuInstance } from "@/store/useGameStore";
+import { useGameStore, GuInstance, formatRecipeName } from "@/store/useGameStore";
 import { 
   X, Coins, Sparkles, Lock, Unlock, CheckCircle2, 
   Trash2, Plus, Minus, RefreshCw, User, ShieldAlert 
@@ -17,6 +17,7 @@ export const TradeRoomModal: React.FC = () => {
     confirmTrade, 
     guDictionary, 
     itemDictionary,
+    recipes,
     showConfirm,
   } = useGameStore();
 
@@ -24,7 +25,8 @@ export const TradeRoomModal: React.FC = () => {
   const [immortalInput, setImmortalInput] = useState<number>(0);
   const [selectedMat, setSelectedMat] = useState<string>("");
   const [selectedMatQty, setSelectedMatQty] = useState<number>(1);
-  const [activeTab, setActiveTab] = useState<"stones" | "gus" | "materials">("stones");
+  const [selectedRecipe, setSelectedRecipe] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<"stones" | "gus" | "materials" | "recipes">("stones");
   const [expandedGus, setExpandedGus] = useState<Record<string, boolean>>({});
   const [tradeFilterRank, setTradeFilterRank] = useState<number | "all">("all");
   const toggleGuGroup = (guId: string) => {
@@ -71,6 +73,7 @@ export const TradeRoomModal: React.FC = () => {
       immortal_stones: clampedImmortal,
       gus: myOffer?.gus || [],
       materials: myOffer?.materials || {},
+      recipes: myOffer?.recipes || {},
     };
 
     updateTradeOffer(activeTrade.id, updatedOffer);
@@ -94,6 +97,7 @@ export const TradeRoomModal: React.FC = () => {
       immortal_stones: myOffer?.immortal_stones || 0,
       gus: updatedGus,
       materials: myOffer?.materials || {},
+      recipes: myOffer?.recipes || {},
     };
 
     updateTradeOffer(activeTrade.id, updatedOffer);
@@ -115,6 +119,7 @@ export const TradeRoomModal: React.FC = () => {
       immortal_stones: myOffer?.immortal_stones || 0,
       gus: myOffer?.gus || [],
       materials: currentMats,
+      recipes: myOffer?.recipes || {},
     };
 
     updateTradeOffer(activeTrade.id, updatedOffer);
@@ -133,6 +138,7 @@ export const TradeRoomModal: React.FC = () => {
       immortal_stones: myOffer?.immortal_stones || 0,
       gus: myOffer?.gus || [],
       materials: currentMats,
+      recipes: myOffer?.recipes || {},
     };
 
     updateTradeOffer(activeTrade.id, updatedOffer);
@@ -157,6 +163,49 @@ export const TradeRoomModal: React.FC = () => {
       immortal_stones: myOffer?.immortal_stones || 0,
       gus: myOffer?.gus || [],
       materials: currentMats,
+      recipes: myOffer?.recipes || {},
+    };
+
+    updateTradeOffer(activeTrade.id, updatedOffer);
+  };
+
+  // Recipe helpers
+  const getRecipeName = (recipeId: string) => {
+    return formatRecipeName(recipeId);
+  };
+
+  const addRecipe = () => {
+    if (myLocked || !selectedRecipe) return;
+
+    const currentRecipes = { ...(myOffer?.recipes || {}) };
+    const recipe = recipes.find((r) => r.id === selectedRecipe);
+    if (!recipe) return;
+    currentRecipes[selectedRecipe] = recipe.completion_rate ?? 100;
+
+    const updatedOffer = {
+      primeval_stones: myOffer?.primeval_stones || 0,
+      immortal_stones: myOffer?.immortal_stones || 0,
+      gus: myOffer?.gus || [],
+      materials: myOffer?.materials || {},
+      recipes: currentRecipes,
+    };
+
+    updateTradeOffer(activeTrade.id, updatedOffer);
+    setSelectedRecipe("");
+  };
+
+  const removeRecipe = (recipeId: string) => {
+    if (myLocked) return;
+
+    const currentRecipes = { ...(myOffer?.recipes || {}) };
+    delete currentRecipes[recipeId];
+
+    const updatedOffer = {
+      primeval_stones: myOffer?.primeval_stones || 0,
+      immortal_stones: myOffer?.immortal_stones || 0,
+      gus: myOffer?.gus || [],
+      materials: myOffer?.materials || {},
+      recipes: currentRecipes,
     };
 
     updateTradeOffer(activeTrade.id, updatedOffer);
@@ -363,7 +412,26 @@ export const TradeRoomModal: React.FC = () => {
                 </div>
               )}
 
-              {!(myOffer?.primeval_stones || 0) && !(myOffer?.immortal_stones || 0) && (!myOffer?.gus || myOffer.gus.length === 0) && (!myOffer?.materials || Object.keys(myOffer.materials).length === 0) && (
+              {/* Recipes offered */}
+              {myOffer?.recipes && Object.keys(myOffer.recipes).length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-[9px] text-zinc-500 font-mono">Bí phương:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(myOffer.recipes as Record<string, number>).map(([recipeId, rate]) => (
+                      <span key={recipeId} className="text-xs px-2.5 py-1 rounded-xl bg-violet-950/30 border border-violet-500/30 text-violet-300 flex items-center gap-1.5">
+                        {getRecipeName(recipeId)} ({rate.toFixed(0)}%)
+                        {!myLocked && (
+                          <button onClick={() => removeRecipe(recipeId)} className="hover:text-red-400 cursor-pointer ml-1">
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!(myOffer?.primeval_stones || 0) && !(myOffer?.immortal_stones || 0) && (!myOffer?.gus || myOffer.gus.length === 0) && (!myOffer?.materials || Object.keys(myOffer.materials).length === 0) && (!myOffer?.recipes || Object.keys(myOffer.recipes).length === 0) && (
                 <p className="text-xs text-zinc-600 italic">Chưa chọn vật phẩm nào để giao dịch</p>
               )}
             </div>
@@ -402,6 +470,16 @@ export const TradeRoomModal: React.FC = () => {
                   }`}
                 >
                   Nguyên Liệu
+                </button>
+                <button
+                  onClick={() => setActiveTab("recipes")}
+                  className={`flex-1 py-2.5 border-b-2 font-bold cursor-pointer transition-all ${
+                    activeTab === "recipes"
+                      ? "text-pink-400 border-pink-500/40 bg-pink-950/5"
+                      : "text-zinc-500 border-transparent hover:text-zinc-300"
+                  }`}
+                >
+                  Bí Phương
                 </button>
               </div>
 
@@ -606,6 +684,40 @@ export const TradeRoomModal: React.FC = () => {
                         )}
                       </div>
                     )}
+
+                    {/* Recipes selectors */}
+                    {activeTab === "recipes" && (
+                      <div className="space-y-3">
+                        <div className="flex gap-2">
+                          <select
+                            value={selectedRecipe}
+                            onChange={(e) => setSelectedRecipe(e.target.value)}
+                            className="flex-grow bg-zinc-950 border border-zinc-900 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none font-serif cursor-pointer"
+                          >
+                            <option value="">-- Chọn Bí Phương --</option>
+                            {recipes
+                              .filter((r) => !myOffer?.recipes?.[r.id])
+                              .map((r) => (
+                                <option key={r.id} value={r.id}>
+                                  {getRecipeName(r.id)} ({r.completion_rate ?? 100}%)
+                                </option>
+                              ))}
+                          </select>
+
+                          <button
+                            onClick={addRecipe}
+                            disabled={!selectedRecipe}
+                            className="px-4 bg-pink-600 hover:bg-pink-500 disabled:bg-zinc-900 disabled:text-zinc-600 text-zinc-100 rounded-xl text-xs font-serif font-bold transition-colors cursor-pointer"
+                          >
+                            Thêm
+                          </button>
+                        </div>
+
+                        {recipes.filter((r) => !myOffer?.recipes?.[r.id]).length === 0 && (
+                          <p className="text-xs text-zinc-600 italic text-center py-2">Không có Bí phương nào có thể giao dịch</p>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -692,7 +804,21 @@ export const TradeRoomModal: React.FC = () => {
                 </div>
               )}
 
-              {!(oppOffer?.primeval_stones || 0) && !(oppOffer?.immortal_stones || 0) && (!oppOffer?.gus || oppOffer.gus.length === 0) && (!oppOffer?.materials || Object.keys(oppOffer.materials).length === 0) && (
+              {/* Recipes offered */}
+              {oppOffer?.recipes && Object.keys(oppOffer.recipes).length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-[9px] text-zinc-500 font-mono">Bí phương:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(oppOffer.recipes as Record<string, number>).map(([recipeId, rate]) => (
+                      <span key={recipeId} className="text-xs px-2.5 py-1 rounded-xl bg-violet-950/20 border border-violet-500/20 text-violet-300 select-none">
+                        {getRecipeName(recipeId)} ({rate.toFixed(0)}%)
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!(oppOffer?.primeval_stones || 0) && !(oppOffer?.immortal_stones || 0) && (!oppOffer?.gus || oppOffer.gus.length === 0) && (!oppOffer?.materials || Object.keys(oppOffer.materials).length === 0) && (!oppOffer?.recipes || Object.keys(oppOffer.recipes).length === 0) && (
                 <p className="text-xs text-zinc-650 italic py-6 select-none">Chưa đề xuất vật phẩm nào</p>
               )}
             </div>

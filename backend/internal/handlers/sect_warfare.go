@@ -533,6 +533,10 @@ func AttackSectMine(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update mine occupier"})
 			return
 		}
+
+		// Clear old defenders
+		_, _ = tx.Exec(`DELETE FROM sect_mine_defenders WHERE mine_id = $1`, req.MineID)
+
 		_, _ = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 10, $1) WHERE id = $2", MaxHumanQi, attackerID)
 		if err := tx.Commit(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})

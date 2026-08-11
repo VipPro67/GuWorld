@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/pricing"
 )
@@ -134,6 +136,10 @@ type DonateMaterialsRequest struct {
 
 type DonateGuRequest struct {
 	GuInstanceID string `json:"gu_instance_id" binding:"required"`
+}
+
+type DonateRecipeRequest struct {
+	RecipeID string `json:"recipe_id" binding:"required"`
 }
 
 type VaultBuyRequest struct {
@@ -315,6 +321,9 @@ func LeaveSect(c *gin.Context) {
 
 	// Delete active player missions
 	_, _ = tx.Exec(`DELETE FROM player_sect_missions WHERE player_id = $1`, playerID)
+
+	// Delete pending promotion requests
+	_, _ = tx.Exec(`DELETE FROM sect_promotion_requests WHERE player_id = $1 AND sect_id = $2`, playerID, sectID)
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
@@ -978,10 +987,154 @@ func DonateGu(c *gin.Context) {
 	})
 }
 
-// BulkDonateRequest represents a collection of materials and Gus to donate
+// DonateRecipe converts a player recipe to contribution points and adds it to
+// the sect vault so other members can learn it.
+func DonateRecipe(c *gin.Context) {
+	var req DonateRecipeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
+		return
+	}
+
+	progress, err := RecipeSvc.Get(tx, playerID.String(), req.RecipeID)
+	if err != nil || progress == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bí phương không tồn tại trong túi đồ!"})
+		return
+	}
+
+	var m SectMember
+	err = tx.QueryRow(`
+		SELECT id, sect_id, contribution_points
+		FROM sect_members
+		WHERE player_id = $1
+	`, playerID).Scan(&m.ID, &m.SectID, &m.ContributionPoints)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
+		return
+	}
+
+	// Resolve target Gu rank and compute contribution points scaled by completion rate.
+	var targetGuRank int = 1
+	if _, tr, _, err := ParseRecipeID(req.RecipeID); err == nil {
+		targetGuRank = tr
+	} else {
+		_ = tx.QueryRow(`
+			SELECT COALESCE(gd.rank,1)
+			FROM refining_recipes rr
+			JOIN gu_dictionary gd ON gd.id=rr.target_gu_id AND gd.rank=rr.target_rank
+			WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text)=$1
+		`, req.RecipeID).Scan(&targetGuRank)
+	}
+	basePoints := pricing.RecipeDonatePoints(targetGuRank)
+	gainedContribution := int(float64(basePoints) * progress.CompletionRate / 100.0)
+	if gainedContribution < 1 {
+		gainedContribution = 1
+	}
+
+	if err := RecipeSvc.Delete(tx, playerID.String(), req.RecipeID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa Bí phương khỏi túi đồ"})
+		return
+	}
+
+	m.ContributionPoints += int64(gainedContribution)
+	qiGained := AddHumanQi(&player, 5.0)
+
+	// Increase sect funds
+	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, gainedContribution, m.SectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect funds"})
+		return
+	}
+
+	// Add recipe to sect vault, keeping the higher completion rate.
+	var vaultRecipes []models.SectVaultRecipe
+	_ = tx.QueryRow(`SELECT vault_recipes FROM sects WHERE id = $1`, m.SectID).Scan(&vaultRecipes)
+	if vaultRecipes == nil {
+		vaultRecipes = []models.SectVaultRecipe{}
+	}
+	found := false
+	for i := range vaultRecipes {
+		if vaultRecipes[i].RecipeID == req.RecipeID {
+			if progress.CompletionRate > vaultRecipes[i].CompletionRate {
+				vaultRecipes[i].CompletionRate = progress.CompletionRate
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		vaultRecipes = append(vaultRecipes, models.SectVaultRecipe{
+			RecipeID:       req.RecipeID,
+			CompletionRate: progress.CompletionRate,
+		})
+	}
+	newVaultRecipes, _ := json.Marshal(vaultRecipes)
+	_, err = tx.Exec(`UPDATE sects SET vault_recipes = $1 WHERE id = $2`, newVaultRecipes, m.SectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault recipes"})
+		return
+	}
+
+	_, err = tx.Exec(`UPDATE sect_members SET contribution_points = $1 WHERE player_id = $2`, m.ContributionPoints, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update contribution"})
+		return
+	}
+
+	_, err = tx.Exec(`UPDATE players SET human_qi = $1 WHERE id = $2`, player.HumanQi, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update human qi"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
+		return
+	}
+
+	itemName := req.RecipeID
+	if spec, ok := models.GetGuAny(req.RecipeID); ok {
+		itemName = spec.Name
+	}
+
+	// Trigger System Chat Notification on Sect channel
+	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("Đạo hữu %s đã quyên góp Bí phương %s cho tông môn.", player.Username, itemName))
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "sect.donate_recipe", EntityType: "sect",
+		EntityID: m.SectID, RequestSummary: fmt.Sprintf("%s (%.0f%%) → %d điểm", itemName, progress.CompletionRate, gainedContribution),
+		IPAddress: c.ClientIP(), Success: true,
+	})
+	c.JSON(http.StatusOK, gin.H{
+		"message":             fmt.Sprintf("Quyên góp Bí phương thành công! Nhân Khí +%.0f.", qiGained),
+		"contribution_points": m.ContributionPoints,
+	})
+}
+
+// BulkDonateRequest represents a collection of materials, Gus and recipes to donate
 type BulkDonateRequest struct {
 	Materials []DonateMaterialsRequest `json:"materials"`
 	Gus       []DonateGuRequest        `json:"gus"`
+	Recipes   []DonateRecipeRequest    `json:"recipes"`
 }
 
 // DonateBulk converts multiple player materials and Gu bugs to contribution points in a single transaction
@@ -1177,13 +1330,96 @@ func DonateBulk(c *gin.Context) {
 		}
 	}
 
+	// 3. Process Recipes
+	if len(req.Recipes) > 0 {
+		var vaultRecipes []models.SectVaultRecipe
+		var vaultRecipesRaw json.RawMessage
+		err = tx.QueryRow(`SELECT vault_recipes FROM sects WHERE id = $1`, m.SectID).Scan(&vaultRecipesRaw)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sect vault recipes"})
+			return
+		}
+		if len(vaultRecipesRaw) > 0 {
+			_ = json.Unmarshal(vaultRecipesRaw, &vaultRecipes)
+		}
+		if vaultRecipes == nil {
+			vaultRecipes = []models.SectVaultRecipe{}
+		}
+
+		donatedRecipeIDs := make(map[string]bool)
+		for _, r := range req.Recipes {
+			donatedRecipeIDs[r.RecipeID] = true
+		}
+
+		for _, recipeReq := range req.Recipes {
+			progress, err := RecipeSvc.Get(tx, playerID.String(), recipeReq.RecipeID)
+			if err != nil || progress == nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bí phương không tồn tại trong túi đồ: %s", recipeReq.RecipeID)})
+				return
+			}
+
+			var targetGuRank int = 1
+			if _, tr, _, err := ParseRecipeID(recipeReq.RecipeID); err == nil {
+				targetGuRank = tr
+			} else {
+				_ = tx.QueryRow(`
+					SELECT COALESCE(gd.rank,1)
+					FROM refining_recipes rr
+					JOIN gu_dictionary gd ON gd.id=rr.target_gu_id AND gd.rank=rr.target_rank
+					WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text)=$1
+				`, recipeReq.RecipeID).Scan(&targetGuRank)
+			}
+			basePoints := pricing.RecipeDonatePoints(targetGuRank)
+			gained := int(float64(basePoints) * progress.CompletionRate / 100.0)
+			if gained < 1 {
+				gained = 1
+			}
+			totalGainedContribution += gained
+
+			if err := RecipeSvc.Delete(tx, playerID.String(), recipeReq.RecipeID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Không thể xóa Bí phương %s", recipeReq.RecipeID)})
+				return
+			}
+
+			found := false
+			for i := range vaultRecipes {
+				if vaultRecipes[i].RecipeID == recipeReq.RecipeID {
+					if progress.CompletionRate > vaultRecipes[i].CompletionRate {
+						vaultRecipes[i].CompletionRate = progress.CompletionRate
+					}
+					found = true
+					break
+				}
+			}
+			if !found {
+				vaultRecipes = append(vaultRecipes, models.SectVaultRecipe{
+					RecipeID:       recipeReq.RecipeID,
+					CompletionRate: progress.CompletionRate,
+				})
+			}
+
+			recipeName := recipeReq.RecipeID
+			if spec, ok := models.GetGuAny(recipeReq.RecipeID); ok {
+				recipeName = spec.Name
+			}
+			auditSummaries = append(auditSummaries, fmt.Sprintf("%s (%.0f%%)", recipeName, progress.CompletionRate))
+		}
+
+		newVaultRecipes, _ := json.Marshal(vaultRecipes)
+		_, err = tx.Exec(`UPDATE sects SET vault_recipes = $1 WHERE id = $2`, newVaultRecipes, m.SectID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault recipes"})
+			return
+		}
+	}
+
 	if totalGainedContribution <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm nào được quyên góp."})
 		return
 	}
 
 	// Update Human Qi (5.0 per unique item type/instance donated)
-	numItems := len(req.Materials) + len(req.Gus)
+	numItems := len(req.Materials) + len(req.Gus) + len(req.Recipes)
 	qiGained := AddHumanQi(&player, 5.0*float64(numItems))
 
 	m.ContributionPoints += int64(totalGainedContribution)
@@ -1396,21 +1632,21 @@ func BuyFromSectVault(c *gin.Context) {
 			return
 		}
 	} else if strings.ToLower(req.ItemType) == "recipe" {
-		var vaultRecipes []string
+		var vaultRecipes []models.SectVaultRecipe
 		if err := json.Unmarshal(s.VaultRecipes, &vaultRecipes); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse recipes list"})
 			return
 		}
 
-		hasRecipe := false
-		for _, recipeId := range vaultRecipes {
-			if recipeId == req.ItemID {
-				hasRecipe = true
+		var recipeEntry *models.SectVaultRecipe
+		for i := range vaultRecipes {
+			if vaultRecipes[i].RecipeID == req.ItemID {
+				recipeEntry = &vaultRecipes[i]
 				break
 			}
 		}
 
-		if !hasRecipe {
+		if recipeEntry == nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Công thức này không có sẵn trong Bảo khố!"})
 			return
 		}
@@ -1436,8 +1672,26 @@ func BuyFromSectVault(c *gin.Context) {
 		}
 
 		m.ContributionPoints -= cost
-		// Since recipe unlocking is currently free-form for crafting recipes catalog,
-		// we just deduct the points and tell the player they learned it.
+
+		// Grant the recipe to the buyer, keeping the higher completion rate.
+		grantedRate := recipeEntry.CompletionRate
+		if existing, err := RecipeSvc.Get(tx, player.ID.String(), req.ItemID); err == nil && existing != nil {
+			if existing.CompletionRate > grantedRate {
+				grantedRate = existing.CompletionRate
+			}
+		}
+		if grantedRate > 100.0 {
+			grantedRate = 100.0
+		}
+		if err := RecipeSvc.Upsert(tx, &services.RecipeProgress{
+			PlayerID:       player.ID.String(),
+			RecipeID:       req.ItemID,
+			CompletionRate: grantedRate,
+			IsUnlocked:     true,
+		}); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể học công thức từ bảo khố"})
+			return
+		}
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại vật phẩm trao đổi không hợp lệ!"})
 		return
@@ -1789,20 +2043,13 @@ func CompleteSectMission(c *gin.Context) {
 		return
 	}
 
-	// Increase sect funds
-	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, sm.RewardContribution, m.SectID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect funds"})
-		return
-	}
-
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
 		return
 	}
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message":             "Hoàn thành nhiệm vụ tông môn! Nhận được " + string(rune('0'+sm.RewardContribution)) + " Điểm cống hiến.",
+		"message":             "Hoàn thành nhiệm vụ tông môn! Nhận được " + strconv.Itoa(sm.RewardContribution) + " Điểm cống hiến.",
 		"contribution_points": m.ContributionPoints,
 	})
 }
@@ -1825,10 +2072,10 @@ func DeleteSectMission(c *gin.Context) {
 
 	var sm SectMission
 	err = db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT id, sect_id, title
+		SELECT id, sect_id, title, reward_contribution
 		FROM sect_missions
 		WHERE id = $1
-	`, missionID).Scan(&sm.ID, &sm.SectID, &sm.Title)
+	`, missionID).Scan(&sm.ID, &sm.SectID, &sm.Title, &sm.RewardContribution)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy nhiệm vụ yêu cầu!"})
 		return
@@ -1850,20 +2097,39 @@ func DeleteSectMission(c *gin.Context) {
 		return
 	}
 
-	_, err = db.DB.ExecContext(c.Request.Context(), `DELETE FROM sect_missions WHERE id = $1`, missionID)
+	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`DELETE FROM sect_missions WHERE id = $1`, missionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa nhiệm vụ"})
+		return
+	}
+
+	// Refund sect funds
+	_, err = tx.Exec(`UPDATE sects SET funds = funds + $1 WHERE id = $2`, sm.RewardContribution, sm.SectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn quỹ bang"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
 		return
 	}
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.delete_mission", EntityType: "sect_mission",
 		EntityID: missionID.String(),
-		RequestSummary: fmt.Sprintf("Xóa nhiệm vụ %s của tông môn %s", sm.Title, sm.SectID),
+		RequestSummary: fmt.Sprintf("Xóa nhiệm vụ %s của tông môn %s (Hoàn %d quỹ)", sm.Title, sm.SectID, sm.RewardContribution),
 		IPAddress: c.ClientIP(), Success: true,
 	})
 
-	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa nhiệm vụ tông môn!"})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã thu hồi nhiệm vụ tông môn và hoàn lại " + strconv.Itoa(sm.RewardContribution) + " quỹ bang!"})
 }
 
 // AbandonSectMission lets a player give up their own in-progress mission.
@@ -2275,6 +2541,9 @@ func KickMember(c *gin.Context) {
 	// Delete target player's active missions
 	_, _ = tx.Exec(`DELETE FROM player_sect_missions WHERE player_id = $1`, targetMemberID)
 
+	// Delete pending promotion requests
+	_, _ = tx.Exec(`DELETE FROM sect_promotion_requests WHERE player_id = $1 AND sect_id = $2`, targetMemberID, targetSectID)
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
 		return
@@ -2327,6 +2596,27 @@ func CreateCustomMission(c *gin.Context) {
 		return
 	}
 
+	// Check if sect has enough funds
+	var currentFunds int
+	err = tx.QueryRow(`SELECT funds FROM sects WHERE id = $1`, callerSectID).Scan(&currentFunds)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+
+	missionCost := req.RewardContribution
+	if currentFunds < missionCost {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Quỹ bang không đủ để ban bố nhiệm vụ này! (Cần tối thiểu " + strconv.Itoa(missionCost) + " quỹ bang)"})
+		return
+	}
+
+	// Deduct sect funds
+	_, err = tx.Exec(`UPDATE sects SET funds = funds - $1 WHERE id = $2`, missionCost, callerSectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct sect funds: " + err.Error()})
+		return
+	}
+
 	// Add mission to sect_missions
 	var expiresAt *time.Time
 	switch {
@@ -2358,7 +2648,7 @@ func CreateCustomMission(c *gin.Context) {
 }
 
 type StockVaultRequest struct {
-	ItemType string `json:"item_type" binding:"required"` // gu, material
+	ItemType string `json:"item_type" binding:"required"` // gu, material, recipe
 	ItemID   string `json:"item_id" binding:"required"`
 	Quantity int    `json:"quantity" binding:"required,min=1"`
 }
@@ -2404,7 +2694,27 @@ func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int,
 		return matRank * 50, http.StatusOK, ""
 	}
 
-	return 0, http.StatusBadRequest, "Loại vật phẩm không hợp lệ (chỉ hỗ trợ gu hoặc material)"
+	if itemType == "recipe" {
+		var targetGuRank int = 1
+		if _, tr, _, err := ParseRecipeID(itemID); err == nil {
+			targetGuRank = tr
+		}
+		var exists bool
+		_ = tx.QueryRow(`
+			SELECT EXISTS(SELECT 1 FROM refining_recipes rr
+			JOIN gu_dictionary gd ON gd.id=rr.target_gu_id AND gd.rank=rr.target_rank
+			WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text)=$1)
+		`, itemID).Scan(&exists)
+		if !exists {
+			return 0, http.StatusBadRequest, "Bí phương không tồn tại trong tàng kinh các"
+		}
+		if targetGuRank > sectLevel {
+			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Bí phương hạng %d! (Hiện tại: Cấp %d)", targetGuRank, targetGuRank, sectLevel)
+		}
+		return pricing.RecipeCostByGuRank(targetGuRank), http.StatusOK, ""
+	}
+
+	return 0, http.StatusBadRequest, "Loại vật phẩm không hợp lệ (chỉ hỗ trợ gu, material hoặc recipe)"
 }
 
 // StockSectVault allows leaders/elders to buy vault items using sect funds
@@ -2444,10 +2754,10 @@ func StockSectVault(c *gin.Context) {
 	// Fetch sect details
 	var s Sect
 	err = tx.QueryRow(`
-		SELECT id, vault_gu, vault_materials, funds, level
+		SELECT id, vault_gu, vault_materials, vault_recipes, funds, level
 		FROM sects
 		WHERE id = $1
-	`, sectID).Scan(&s.ID, &s.VaultGu, &s.VaultMaterials, &s.Funds, &s.Level)
+	`, sectID).Scan(&s.ID, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes, &s.Funds, &s.Level)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details: " + err.Error()})
 		return
@@ -2508,6 +2818,38 @@ func StockSectVault(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault: " + err.Error()})
 			return
 		}
+	} else if itemType == "recipe" {
+		var vaultRecipes []models.SectVaultRecipe
+		if len(s.VaultRecipes) > 0 {
+			_ = json.Unmarshal(s.VaultRecipes, &vaultRecipes)
+		}
+		if vaultRecipes == nil {
+			vaultRecipes = []models.SectVaultRecipe{}
+		}
+
+		found := false
+		for i := range vaultRecipes {
+			if vaultRecipes[i].RecipeID == req.ItemID {
+				if vaultRecipes[i].CompletionRate < 100.0 {
+					vaultRecipes[i].CompletionRate = 100.0
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			vaultRecipes = append(vaultRecipes, models.SectVaultRecipe{
+				RecipeID:       req.ItemID,
+				CompletionRate: 100.0,
+			})
+		}
+
+		newVaultRecipes, _ := json.Marshal(vaultRecipes)
+		_, err = tx.Exec(`UPDATE sects SET vault_recipes = $1, funds = $2 WHERE id = $3`, newVaultRecipes, s.Funds, s.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault recipes: " + err.Error()})
+			return
+		}
 	} else {
 		vaultMats := make(map[string]int)
 		if len(s.VaultMaterials) > 0 {
@@ -2547,6 +2889,13 @@ func StockSectVault(c *gin.Context) {
 		if spec, ok := models.ItemRegistry[req.ItemID]; ok {
 			itemName = spec.Name
 		}
+	} else if itemType == "recipe" {
+		if targetGuID, _, _, err := ParseRecipeID(req.ItemID); err == nil {
+			if spec, ok := models.GetGuAny(targetGuID); ok {
+				itemName = spec.Name
+			}
+		}
+		itemName = "Bí phương " + itemName
 	}
 	if username != "" {
 		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("%s %s đã nhập thêm %d %s vào bảo khố tông môn.", rankName, username, req.Quantity, itemName))
@@ -2559,7 +2908,7 @@ func StockSectVault(c *gin.Context) {
 }
 
 type StockVaultBulkItem struct {
-	ItemType string `json:"item_type" binding:"required"` // gu, material
+	ItemType string `json:"item_type" binding:"required"` // gu, material, recipe
 	ItemID   string `json:"item_id" binding:"required"`
 	Quantity int    `json:"quantity" binding:"required,min=1"`
 }
@@ -2607,7 +2956,7 @@ func StockSectVaultBulk(c *gin.Context) {
 	}
 
 	var s Sect
-	err = tx.QueryRow(`SELECT id, vault_gu, vault_materials, funds, level FROM sects WHERE id = $1`, sectID).Scan(&s.ID, &s.VaultGu, &s.VaultMaterials, &s.Funds, &s.Level)
+	err = tx.QueryRow(`SELECT id, vault_gu, vault_materials, vault_recipes, funds, level FROM sects WHERE id = $1`, sectID).Scan(&s.ID, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes, &s.Funds, &s.Level)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details: " + err.Error()})
 		return
@@ -2645,6 +2994,13 @@ func StockSectVaultBulk(c *gin.Context) {
 	if len(s.VaultMaterials) > 0 {
 		_ = json.Unmarshal(s.VaultMaterials, &vaultMats)
 	}
+	var vaultRecipes []models.SectVaultRecipe
+	if len(s.VaultRecipes) > 0 {
+		_ = json.Unmarshal(s.VaultRecipes, &vaultRecipes)
+	}
+	if vaultRecipes == nil {
+		vaultRecipes = []models.SectVaultRecipe{}
+	}
 
 	for _, line := range lines {
 		if line.itemType == "gu" {
@@ -2668,6 +3024,23 @@ func StockSectVaultBulk(c *gin.Context) {
 			if !found {
 				vaultGus = append(vaultGus, SectVaultGuItem{ID: line.itemID, Cost: stockGuCost, Quantity: line.quantity})
 			}
+		} else if line.itemType == "recipe" {
+			found := false
+			for i := range vaultRecipes {
+				if vaultRecipes[i].RecipeID == line.itemID {
+					if vaultRecipes[i].CompletionRate < 100.0 {
+						vaultRecipes[i].CompletionRate = 100.0
+					}
+					found = true
+					break
+				}
+			}
+			if !found {
+				vaultRecipes = append(vaultRecipes, models.SectVaultRecipe{
+					RecipeID:       line.itemID,
+					CompletionRate: 100.0,
+				})
+			}
 		} else {
 			vaultMats[line.itemID] += line.quantity
 		}
@@ -2675,7 +3048,8 @@ func StockSectVaultBulk(c *gin.Context) {
 
 	newVaultGu, _ := json.Marshal(vaultGus)
 	newVaultMats, _ := json.Marshal(vaultMats)
-	_, err = tx.Exec(`UPDATE sects SET vault_gu = $1, vault_materials = $2, funds = $3 WHERE id = $4`, newVaultGu, newVaultMats, s.Funds, s.ID)
+	newVaultRecipes, _ := json.Marshal(vaultRecipes)
+	_, err = tx.Exec(`UPDATE sects SET vault_gu = $1, vault_materials = $2, vault_recipes = $3, funds = $4 WHERE id = $5`, newVaultGu, newVaultMats, newVaultRecipes, s.Funds, s.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault: " + err.Error()})
 		return
@@ -3146,6 +3520,11 @@ func ActionPromotionRequest(c *gin.Context) {
 
 	if reqSectID != sectID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Yêu cầu thăng chức này thuộc tông môn khác!"})
+		return
+	}
+
+	if sectRankValue(callerRank) <= sectRankValue(targetRank) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu không thể duyệt thăng chức lên cấp bậc ngang hoặc cao hơn mình!"})
 		return
 	}
 

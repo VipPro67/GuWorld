@@ -1031,6 +1031,8 @@ func GetCurrentPlayer(c *gin.Context) {
 	}
 
 	player.MaterialsInventory = loadMaterialsInventory(playerID.String())
+	player.CompletedQuests = loadCompletedQuests(playerID.String())
+	player.UnlockedRecipes = loadUnlockedRecipes(playerID.String())
 	c.JSON(http.StatusOK, player)
 }
 
@@ -2125,6 +2127,7 @@ func loadCompletedQuests(playerID string) models.CompletedQuestsList {
 func responseWithPlayer(c *gin.Context, status int, player models.Player, extra ...gin.H) {
 	player.MaxMana = gamefx.EffectiveMaxMana(&player)
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
+	player.UnlockedRecipes = loadUnlockedRecipes(player.ID.String())
 	resp := gin.H{"player": player}
 	for _, e := range extra {
 		for k, v := range e {
@@ -2141,6 +2144,7 @@ func responseWithPlayerData(c *gin.Context, status int, player models.Player, ma
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 	player.MaterialsInventory = materials
 	player.CompletedQuests = quests
+	player.UnlockedRecipes = loadUnlockedRecipes(player.ID.String())
 	resp := gin.H{"player": player}
 	for _, e := range extra {
 		for k, v := range e {
@@ -2148,6 +2152,25 @@ func responseWithPlayerData(c *gin.Context, status int, player models.Player, ma
 		}
 	}
 	c.JSON(status, resp)
+}
+
+// loadUnlockedRecipes returns the player's unlocked recipe progress for UI.
+func loadUnlockedRecipes(playerID string) models.UnlockedRecipesList {
+	if RecipeSvc == nil {
+		return models.UnlockedRecipesList{}
+	}
+	progress, err := RecipeSvc.ListByPlayer(playerID)
+	if err != nil {
+		return models.UnlockedRecipesList{}
+	}
+	out := make(models.UnlockedRecipesList, 0, len(progress))
+	for _, p := range progress {
+		out = append(out, models.UnlockedRecipe{
+			RecipeID:       p.RecipeID,
+			CompletionRate: p.CompletionRate,
+		})
+	}
+	return out
 }
 
 // loadMaterialsInventory fetches the player's materials inventory as a flat id->quantity map.

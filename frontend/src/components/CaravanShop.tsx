@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Player, useGameStore } from "@/store/useGameStore";
+import { GuInstance, Player, GuSpec, ItemSpec, useGameStore, formatRecipeName } from "@/store/useGameStore";
 import { ShoppingBag, Coins, Sparkles, AlertCircle, ShoppingCart, ArrowLeftRight, Trash2, Search, Check } from "lucide-react";
 import { translatePath } from "@/lib/translate";
 
@@ -19,8 +19,8 @@ interface CaravanShopProps {
   player: Player;
   actionLoading: boolean;
   onBuy: (itemId: string, quantity: number) => Promise<boolean>;
-  onSell?: (itemId: string, quantity: number, itemType: "Gu" | "Material") => Promise<boolean>;
-  onSellBulk: (items: { item_id: string; quantity: number; item_type: "Gu" | "Material" }[]) => Promise<boolean>;
+  onSell?: (itemId: string, quantity: number, itemType: "Gu" | "Material" | "Recipe") => Promise<boolean>;
+  onSellBulk: (items: { item_id: string; quantity: number; item_type: "Gu" | "Material" | "Recipe" }[]) => Promise<boolean>;
 }
 
 export const CaravanShop: React.FC<CaravanShopProps> = ({
@@ -34,7 +34,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
   const [fetchingList, setFetchingList] = useState(false);
   const [mode, setMode] = useState<"buy" | "sell">("buy");
   const [shopTab, setShopTab] = useState<"Gu" | "Material" | "Consumable">("Gu");
-  const [sellTab, setSellTab] = useState<"All" | "Gu" | "Material">("All");
+  const [sellTab, setSellTab] = useState<"All" | "Gu" | "Material" | "Recipe">("All");
   const [sellSearch, setSellSearch] = useState("");
   const [sellRankFilter, setSellRankFilter] = useState<string>("All");
   const [sellPathFilter, setSellPathFilter] = useState<string>("All");
@@ -49,7 +49,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
   const [selectedSellItems, setSelectedSellItems] = useState<Record<string, {
     id: string;
     name: string;
-    type: "Gu" | "Material";
+    type: "Gu" | "Material" | "Recipe";
     owned: number;
     price: number;
     quantityToSell: number;
@@ -161,6 +161,22 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
     };
   });
 
+  const sellableRecipes = (player.unlocked_recipes || []).map((recipe) => {
+    const targetGuID = recipe.recipe_id.replace("recipe_", "").replace(/_\d+_\d+$/, "").toUpperCase();
+    const rank = guDictionary[targetGuID]?.rank || 1;
+    // For shop selling, recipes get 10% of their base price (same as Gu)
+    return {
+      id: recipe.recipe_id,
+      name: formatRecipeName(recipe.recipe_id),
+      description: `Bí phương luyện chế Cổ trùng. Độ hoàn thiện: ${recipe.completion_rate}%`,
+      type: "Recipe" as const,
+      owned: 1, // Recipe is singular
+      price: Math.max(1, Math.floor(getGuBasePrice(targetGuID) * sellBackRatio)),
+      rank: rank,
+      paths: [],
+    };
+  });
+
   const handleOpenBuyModal = (item: ShopItem) => {
     setSelectedBuyItem(item);
     setBuyQuantity(1);
@@ -203,10 +219,10 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
     return normalizeText(item.name).includes(q) || normalizeText(item.id).includes(q);
   };
 
-  const sellableAll = [...sellableGus, ...sellableMaterials];
+  const sellableAll = [...sellableGus, ...sellableMaterials, ...sellableRecipes];
 
   // Base list for current active sell tab (before filters)
-  const currentTabBaseList = sellTab === "All" ? sellableAll : (sellTab === "Gu" ? sellableGus : sellableMaterials);
+  const currentTabBaseList = sellTab === "All" ? sellableAll : (sellTab === "Gu" ? sellableGus : (sellTab === "Material" ? sellableMaterials : sellableRecipes));
 
   // Dynamic filter lists
   const availableRanks = Array.from(
@@ -231,14 +247,21 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
     return matchesSearch && matchesRank && matchesPath;
   });
 
-  const filteredSellAll = [...filteredSellGus, ...filteredSellMaterials];
+  const filteredSellRecipes = sellableRecipes.filter((item) => {
+    const matchesSearch = matchSellItem(item, sellSearch);
+    const matchesRank = sellRankFilter === "All" || item.rank.toString() === sellRankFilter;
+    const matchesPath = sellPathFilter === "All" || item.paths.includes(sellPathFilter);
+    return matchesSearch && matchesRank && matchesPath;
+  });
 
-  const activeSellList = sellTab === "All" ? filteredSellAll : (sellTab === "Gu" ? filteredSellGus : filteredSellMaterials);
+  const filteredSellAll = [...filteredSellGus, ...filteredSellMaterials, ...filteredSellRecipes];
+
+  const activeSellList = sellTab === "All" ? filteredSellAll : (sellTab === "Gu" ? filteredSellGus : (sellTab === "Material" ? filteredSellMaterials : filteredSellRecipes));
 
   const toggleSelectItem = (item: {
     id: string;
     name: string;
-    type: "Gu" | "Material";
+    type: "Gu" | "Material" | "Recipe";
     owned: number;
     price: number;
     rank: number;
@@ -284,7 +307,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
   };
 
   const handleQuickSelectByRank = (rankNum: number) => {
-    const list = sellTab === "All" ? sellableAll : (sellTab === "Gu" ? sellableGus : sellableMaterials);
+    const list = sellTab === "All" ? sellableAll : (sellTab === "Gu" ? sellableGus : (sellTab === "Material" ? sellableMaterials : sellableRecipes));
     const itemsToSelect = list.filter(item => item.rank === rankNum);
     setSelectedSellItems((prev) => {
       const next = { ...prev };
@@ -314,11 +337,17 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
   };
 
   const handleSelectAllCurrent = () => {
-    const list = sellTab === "All" ? sellableAll : (sellTab === "Gu" ? sellableGus : sellableMaterials);
+    const list = sellTab === "All" ? sellableAll : (sellTab === "Gu" ? sellableGus : (sellTab === "Material" ? sellableMaterials : sellableRecipes));
+    const filtered = list.filter((item) => {
+        const matchesSearch = matchSellItem(item, sellSearch);
+        const matchesRank = sellRankFilter === "All" || item.rank.toString() === sellRankFilter;
+        const matchesPath = sellPathFilter === "All" || item.paths.includes(sellPathFilter);
+        return matchesSearch && matchesRank && matchesPath;
+    });
     setSelectedSellItems((prev) => {
       const next = { ...prev };
       let addedCount = Object.keys(prev).length;
-      for (const item of list) {
+      for (const item of filtered) {
         const key = `${item.type}-${item.id}`;
         if (!next[key]) {
           if (addedCount >= 50) {
@@ -459,7 +488,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
         </div>
       ) : (
         <div className="flex gap-2 bg-zinc-950/85 p-1.5 rounded-xl border border-zinc-900">
-          {(["All", "Gu", "Material"] as const).map((tab) => (
+          {(["All", "Gu", "Material", "Recipe"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setSellTab(tab)}
@@ -469,7 +498,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                   : "text-zinc-500 hover:text-zinc-300"
               }`}
             >
-              {tab === "All" ? "Tất Cả" : tab === "Gu" ? "Cổ Trùng Bản Thân" : "Nguyên Liệu & Tiêu Hao"}
+              {tab === "All" ? "Tất Cả" : tab === "Gu" ? "Cổ Trùng" : tab === "Material" ? "Vật Phẩm" : "Bí Phương"}
             </button>
           ))}
         </div>

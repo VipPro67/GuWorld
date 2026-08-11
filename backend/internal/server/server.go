@@ -365,11 +365,11 @@ func SetupRouter() *gin.Engine {
 		combat.Use(middleware.AuthRequired())
 		combat.Use(middleware.RateLimitByPlayer(30, time.Minute))
 		{
-		combat.POST("/start", handlers.AutoCombatStart)
-		combat.POST("/attack", handlers.CombatAttack)
-		combat.POST("/cast-killer-move", handlers.CastKillerMove)
-		combat.POST("/capture", handlers.CaptureMonster)
-		combat.GET("/history", handlers.ListCombatHistory)
+			combat.POST("/start", handlers.AutoCombatStart)
+			combat.POST("/attack", handlers.CombatAttack)
+			combat.POST("/cast-killer-move", handlers.CastKillerMove)
+			combat.POST("/capture", handlers.CaptureMonster)
+			combat.GET("/history", handlers.ListCombatHistory)
 			combat.GET("/history/:id", handlers.GetCombatHistory)
 		}
 
@@ -508,7 +508,7 @@ func SetupRouter() *gin.Engine {
 		// Sect — group: 40/min, per player: 25/min
 		sect := api.Group("/sects")
 		sect.Use(middleware.AuthRequired())
-		sect.Use(middleware.RateLimitByPlayer(25, time.Minute))
+		sect.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			sect.GET("", handlers.GetSects)
 			sect.POST("/:id/join", handlers.JoinSect)
@@ -519,6 +519,7 @@ func SetupRouter() *gin.Engine {
 			sect.POST("/donate/stones", handlers.DonateStones)
 			sect.POST("/donate/materials", handlers.DonateMaterials)
 			sect.POST("/donate/gu", handlers.DonateGu)
+			sect.POST("/donate/recipe", handlers.DonateRecipe)
 			sect.POST("/donate/bulk", handlers.DonateBulk)
 			sect.POST("/vault/buy", handlers.BuyFromSectVault)
 			sect.GET("/missions", handlers.GetSectMissions)

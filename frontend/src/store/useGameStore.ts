@@ -653,6 +653,11 @@ export interface SectVaultGuItem {
   quantity: number;
 }
 
+export interface SectVaultRecipe {
+  recipe_id: string;
+  completion_rate: number;
+}
+
 export interface Sect {
   id: string;
   name: string;
@@ -660,7 +665,7 @@ export interface Sect {
   region: string;
   vault_gu: SectVaultGuItem[];
   vault_materials: Record<string, number>;
-  vault_recipes: string[];
+  vault_recipes: SectVaultRecipe[];
   funds: number;
   level: number;
   require_approval?: boolean;
@@ -985,7 +990,7 @@ interface GameState {
   acceptTrade: (tradeId: string) => Promise<boolean>;
   declineTrade: (tradeId: string) => Promise<boolean>;
   cancelTrade: (tradeId: string) => Promise<boolean>;
-  updateTradeOffer: (tradeId: string, offer: { primeval_stones: number; immortal_stones: number; gus: string[]; materials: Record<string, number> }) => Promise<boolean>;
+  updateTradeOffer: (tradeId: string, offer: { primeval_stones: number; immortal_stones: number; gus: string[]; materials: Record<string, number>; recipes: Record<string, number> }) => Promise<boolean>;
   lockTrade: (tradeId: string) => Promise<boolean>;
   confirmTrade: (tradeId: string) => Promise<boolean>;
 
@@ -1114,9 +1119,11 @@ interface GameState {
   donateSectStones: (amount: number) => Promise<boolean>;
   donateSectMaterials: (materialId: string, amount: number) => Promise<boolean>;
   donateSectGu: (guInstanceId: string) => Promise<boolean>;
+  donateSectRecipe: (recipeId: string) => Promise<boolean>;
   donateSectBulk: (payload: {
     materials: { material_id: string; amount: number }[];
     gus: { gu_instance_id: string }[];
+    recipes: { recipe_id: string }[];
   }) => Promise<boolean>;
   buyFromSectVault: (itemType: string, itemId: string, quantity?: number, rank?: number) => Promise<boolean>;
   fetchSectMissions: () => Promise<void>;
@@ -1138,8 +1145,8 @@ interface GameState {
     required_member_rank: string;
     duration_hours?: number;
   }) => Promise<boolean>;
-  stockSectVault: (itemType: 'gu' | 'material', itemId: string, quantity: number) => Promise<boolean>;
-  stockSectVaultBulk: (items: { item_type: 'gu' | 'material'; item_id: string; quantity: number }[]) => Promise<boolean>;
+  stockSectVault: (itemType: 'gu' | 'material' | 'recipe', itemId: string, quantity: number) => Promise<boolean>;
+  stockSectVaultBulk: (items: { item_type: 'gu' | 'material' | 'recipe'; item_id: string; quantity: number }[]) => Promise<boolean>;
   upgradeSect: () => Promise<boolean>;
   toggleSectApproval: (requireApproval: boolean) => Promise<boolean>;
   toggleSectPromotionApproval: (requirePromotionApproval: boolean) => Promise<boolean>;
@@ -1313,6 +1320,23 @@ export function guSpecFor(guId?: string, rank?: number): GuSpec | undefined {
     if (maxRank && byRank[maxRank]) return byRank[maxRank];
   }
   return state.guDictionary[guId];
+}
+
+export function formatRecipeName(recipeId: string): string {
+  const targetGuID = recipeId.replace("recipe_", "").replace(/_\d+_\d+$/, "").toUpperCase();
+  const match = recipeId.match(/_(\d+)_(\d+)$/);
+  const state = useGameStore.getState();
+  const name = state.guDictionary[targetGuID]?.name || recipeId;
+  
+  if (match) {
+    const rank = match[1];
+    const variant = match[2];
+    if (variant === "0" || variant === "1") {
+      return `Bí phương: ${name} (Bậc ${rank})`;
+    }
+    return `Bí phương: ${name} (Bậc ${rank}, Phân nhánh ${variant})`;
+  }
+  return `Bí phương: ${name}`;
 }
 
 export const useGameStore = create<GameState>((set, get) => {
@@ -5403,9 +5427,35 @@ export const useGameStore = create<GameState>((set, get) => {
     } finally { set({ actionLoading: false }); }
   },
 
+  donateSectRecipe: async (recipeId: string) => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/donate/recipe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipe_id: recipeId }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
+      get().addToast(data.message || "Quyên góp Bí phương thành công!", "success");
+      get().addLog(data.message || `Quyên góp Bí phương.`);
+      await get().fetchMySectStatus();
+      await get().initializeSession();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
   donateSectBulk: async (payload: {
     materials: { material_id: string; amount: number }[];
     gus: { gu_instance_id: string }[];
+    recipes: { recipe_id: string }[];
   }) => {
     const { token, actionLoading, logout } = get();
     if (!token || actionLoading) return false;
@@ -5676,6 +5726,7 @@ export const useGameStore = create<GameState>((set, get) => {
       get().addToast(data.message || "Đã phát hành nhiệm vụ môn phái!", "success");
       get().addLog(data.message || `Phát hành nhiệm vụ: ${payload.title}`);
       await get().fetchSectMissions();
+      await get().fetchMySectStatus();
       return true;
     } catch (err: any) {
       set({ error: err.message });

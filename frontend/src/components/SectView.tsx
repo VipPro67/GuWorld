@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useGameStore, Sect, SectMission, GuInstance, SectMine } from "@/store/useGameStore";
+import { useGameStore, Sect, SectMission, GuInstance, SectMine, formatRecipeName } from "@/store/useGameStore";
 import { translatePath } from "@/lib/translate";
 import {
   Shield,
@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 
 interface StockSelection {
-  item_type: "gu" | "material";
+  item_type: "gu" | "material" | "recipe";
   item_id: string;
   name: string;
   unit_cost: number; // quỹ tông môn / đơn vị
@@ -56,6 +56,7 @@ export const SectView: React.FC = () => {
     donateSectMaterials,
     donateSectGu,
     donateSectBulk,
+    donateSectRecipe,
     buyFromSectVault,
     fetchSectMissions,
     acceptSectMission,
@@ -107,6 +108,7 @@ export const SectView: React.FC = () => {
 
   // Vault state
   const [vaultTab, setVaultTab] = useState<"gu" | "material" | "recipe">("gu");
+  const [vaultSearch, setVaultSearch] = useState("");
   const [buyQtys, setBuyQtys] = useState<Record<string, number>>({});
 
   const getBuyQty = (key: string): number => buyQtys[key] || 1;
@@ -143,7 +145,7 @@ export const SectView: React.FC = () => {
   );
 
   // Donation state
-  const [donateType, setDonateType] = useState<"stones" | "materials" | "gu">("stones");
+  const [donateType, setDonateType] = useState<"stones" | "materials" | "gu" | "recipes">("stones");
   const [donateStones, setDonateStones] = useState<number>(100);
   const [selectedMatId, setSelectedMatId] = useState<string>("");
   const [donateMatAmount, setDonateMatAmount] = useState<number>(1);
@@ -169,6 +171,12 @@ export const SectView: React.FC = () => {
     amountToDonate: number;
     instances: GuInstance[];
   }>>({});
+  const [selectedDonateRecipes, setSelectedDonateRecipes] = useState<Record<string, {
+    recipe_id: string;
+    name: string;
+    completion_rate: number;
+    value: number;
+  }>>({});
 
   useEffect(() => {
     setDonateSearch("");
@@ -176,6 +184,7 @@ export const SectView: React.FC = () => {
     setDonatePathFilter("All");
     setSelectedDonateMaterials({});
     setSelectedDonateGus({});
+    setSelectedDonateRecipes({});
   }, [donateType, activeTab]);
 
   // Sect management sub-tab
@@ -211,7 +220,7 @@ export const SectView: React.FC = () => {
   const [attackPlayerId, setAttackPlayerId] = useState("");
 
   // Vault stocking form state (donation-style multi-select)
-  const [stockItemType, setStockItemType] = useState<"gu" | "material">("gu");
+  const [stockItemType, setStockItemType] = useState<"gu" | "material" | "recipe">("gu");
   const [stockSelections, setStockSelections] = useState<Record<string, StockSelection>>({});
   const [stockSearch, setStockSearch] = useState("");
   const [stockRankFilter, setStockRankFilter] = useState("All");
@@ -366,13 +375,19 @@ export const SectView: React.FC = () => {
   };
 
   // Unit cost (quỹ tông môn) for stocking an item — mirrors backend pkg/pricing
-  const getStockUnitCost = (type: "gu" | "material", id: string): number => {
+  const getStockUnitCost = (type: "gu" | "material" | "recipe", id: string): number => {
     const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 10000, 25000, 60000, 150000];
     if (type === "gu") {
       const spec = guDictionary[id];
       const rank = spec?.rank || 1;
       const basePrice = (spec?.base_price && spec.base_price > 0) ? spec.base_price : (guRankBasePrice[rank] || guRankBasePrice[1]);
       return basePrice;
+    }
+    if (type === "recipe") {
+      const info = recipes.find((r) => r.id === id);
+      const targetGuSpec = info ? guDictionary[info.target_gu_id] : null;
+      const rank = targetGuSpec?.rank || 1;
+      return getRecipeCost(rank);
     }
     const spec = itemDictionary[id];
     const rank = spec?.rank || 1;
@@ -1622,6 +1637,16 @@ export const SectView: React.FC = () => {
             </div>
           </div>
 
+          <div className="flex flex-col sm:flex-row gap-2 mb-4">
+            <input
+              type="text"
+              value={vaultSearch}
+              onChange={(e) => setVaultSearch(e.target.value)}
+              placeholder="Tìm kiếm vật phẩm..."
+              className="flex-1 bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-blue-500/50"
+            />
+          </div>
+
           {/* Vault Inventory Render */}
           <div>
             {vaultTab === "gu" && (
@@ -1642,6 +1667,11 @@ export const SectView: React.FC = () => {
                       const rankA = a.rank || guDictionary[a.id]?.rank || 1;
                       const rankB = b.rank || guDictionary[b.id]?.rank || 1;
                       return rankA - rankB;
+                    }).filter((vg: any) => {
+                      if (!vaultSearch) return true;
+                      const spec = guDictionary[vg.id];
+                      const name = spec?.name || vg.id;
+                      return name.toLowerCase().includes(vaultSearch.toLowerCase());
                     });
                     return sorted.map((vg: any) => {
                       const spec = guDictionary[vg.id];
@@ -1712,7 +1742,14 @@ export const SectView: React.FC = () => {
             {vaultTab === "material" && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {sect?.vault_materials && Object.entries(sect.vault_materials).length > 0 ? (
-                  Object.entries(sect.vault_materials).map(([matId, qty]) => {
+                  Object.entries(sect.vault_materials)
+                  .filter(([matId]) => {
+                    if (!vaultSearch) return true;
+                    const spec = itemDictionary[matId];
+                    const name = spec?.name || matId;
+                    return name.toLowerCase().includes(vaultSearch.toLowerCase());
+                  })
+                  .map(([matId, qty]) => {
                     const spec = itemDictionary[matId];
                     const cost = getVaultCost(getItemBasePrice(matId));
                     const qtyKey = `material-${matId}`;
@@ -1778,10 +1815,18 @@ export const SectView: React.FC = () => {
 
             {vaultTab === "recipe" && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {sect?.vault_recipes && (sect.vault_recipes as string[]).length > 0 ? (
-                  (sect.vault_recipes as string[]).map((recipeId) => {
+                {sect?.vault_recipes && sect.vault_recipes.length > 0 ? (
+                  sect.vault_recipes
+                  .filter((vaultRecipe) => {
+                    if (!vaultSearch) return true;
+                    const name = formatRecipeName(vaultRecipe.recipe_id);
+                    return name.toLowerCase().includes(vaultSearch.toLowerCase());
+                  })
+                  .map((vaultRecipe) => {
+                    const recipeId = vaultRecipe.recipe_id;
                     const recipeInfo = recipes?.find(r => r.id === recipeId);
                     const targetGuSpec = recipeInfo ? guDictionary[recipeInfo.target_gu_id] : null;
+                    const targetGuName = targetGuSpec?.name || recipeId.replace("recipe_", "").toUpperCase();
                     const cost = getRecipeCost(targetGuSpec?.rank || 1);
                     const unaffordable = (member?.contribution_points || 0) < cost;
 
@@ -1794,9 +1839,10 @@ export const SectView: React.FC = () => {
                       >
                         <div className="flex flex-col min-w-0">
                           <h4 className="text-sm font-serif font-bold text-zinc-100">
-                            Bí Phương: {recipeId.replace("recipe_", "").toUpperCase()}
+                            {formatRecipeName(recipeId)}
                           </h4>
                           <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                            Độ hoàn thiện: {vaultRecipe.completion_rate.toFixed(0)}%{" | "}
                             Bao gồm: Nguyên liệu & Tỷ lệ luyện chế thành công môn phái đúc rút.
                             {player && (
                               <>
@@ -1873,6 +1919,13 @@ export const SectView: React.FC = () => {
                   }`}
               >
                 Cổ Trùng
+              </button>
+              <button
+                onClick={() => setDonateType("recipes")}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${donateType === "recipes" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+              >
+                Bí Phương
               </button>
             </div>
           </div>
@@ -2171,7 +2224,7 @@ export const SectView: React.FC = () => {
                               material_id: item.material_id,
                               amount: item.amountToDonate
                             }));
-                            const ok = await donateSectBulk({ materials: materialsPayload, gus: [] });
+                            const ok = await donateSectBulk({ materials: materialsPayload, gus: [], recipes: [] });
                             if (ok) setSelectedDonateMaterials({});
                           }}
                           disabled={actionLoading}
@@ -2189,6 +2242,159 @@ export const SectView: React.FC = () => {
           })()}
 
           {/* Donate Gu Panel */}
+          {donateType === "recipes" && (() => {
+            const availableRecipes = (player?.unlocked_recipes || [])
+              .map((ur) => {
+                const info = recipes.find((r) => r.id === ur.recipe_id);
+                const name = formatRecipeName(ur.recipe_id);
+                const rank = info?.target_rank || 1;
+                const value = getRecipeCost(rank);
+                return {
+                  recipe_id: ur.recipe_id,
+                  name,
+                  completion_rate: ur.completion_rate,
+                  value,
+                };
+              })
+              .filter((r) => {
+                const matchesSearch = !donateSearch || r.name.toLowerCase().includes(donateSearch.toLowerCase()) || r.recipe_id.toLowerCase().includes(donateSearch.toLowerCase());
+                const matchesRank = donateRankFilter === "All" || r.value.toString() === donateRankFilter;
+                return matchesSearch && matchesRank;
+              });
+
+            const selectedCount = Object.keys(selectedDonateRecipes).length;
+            const totalGainedPoints = Object.values(selectedDonateRecipes).reduce(
+              (sum, item) => sum + item.value,
+              0
+            );
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+                {/* Left side: Selector List */}
+                <div className="md:col-span-2 bg-zinc-950/20 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4">
+                  <div className="flex justify-between items-center border-b border-zinc-900 pb-3">
+                    <div>
+                      <h4 className="text-sm font-bold text-zinc-200 font-serif">Danh Sách Bí Phương</h4>
+                      <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Tích chọn Bí phương muốn hiến tế cho tông môn.</p>
+                    </div>
+                    <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-2.5 py-1 rounded-lg border border-zinc-800">
+                      Có thể quyên hiến: {availableRecipes.length} bản
+                    </span>
+                  </div>
+
+                  {/* Search */}
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={donateSearch}
+                      onChange={(e) => setDonateSearch(e.target.value)}
+                      placeholder="Tìm kiếm bí phương..."
+                      className="flex-1 bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-blue-500/50"
+                    />
+                  </div>
+
+                  {/* Recipe List */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-96 overflow-y-auto pr-1 scrollbar-thin">
+                    {availableRecipes.length === 0 ? (
+                      <p className="text-xs text-zinc-600 italic text-center py-4 col-span-full">Không có Bí phương nào có thể quyên hiến</p>
+                    ) : (
+                      availableRecipes.map((r) => {
+                        const isSelected = !!selectedDonateRecipes[r.recipe_id];
+                        return (
+                          <button
+                            key={r.recipe_id}
+                            onClick={() => {
+                              setSelectedDonateRecipes((prev) => {
+                                const next = { ...prev };
+                                if (isSelected) {
+                                  delete next[r.recipe_id];
+                                } else {
+                                  next[r.recipe_id] = r;
+                                }
+                                return next;
+                              });
+                            }}
+                            className={`text-left p-3 rounded-xl border text-xs font-mono flex justify-between items-center transition-all cursor-pointer ${
+                              isSelected
+                                ? "bg-pink-950/20 border-pink-500/40 text-pink-300 shadow-md shadow-pink-950/15"
+                                : "bg-zinc-950 border-zinc-900 hover:border-zinc-850 text-zinc-300"
+                            }`}
+                          >
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-bold truncate">{r.name}</span>
+                              <span className="text-[10px] text-zinc-500">{r.recipe_id.replace("recipe_", "").toUpperCase()}</span>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <span className="text-[10px] block text-zinc-500">{r.completion_rate.toFixed(0)}%</span>
+                              <span className="text-[10px] text-yellow-500 font-bold">+{r.value} Pts</span>
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Right side: Summary & Submit Action */}
+                <div className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4 h-fit md:sticky md:top-4">
+                  <h4 className="text-xs font-bold text-zinc-350 font-serif border-b border-zinc-900 pb-2.5">
+                    Tóm Tắt Quyên Góp ({selectedCount} bản)
+                  </h4>
+
+                  {selectedCount === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
+                      <BookOpen className="w-8 h-8 text-zinc-700 stroke-[1.5]" />
+                      <span className="text-[11px] text-zinc-500 font-mono">
+                        Chọn Bí phương để hiến tế tông môn.
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                        {Object.values(selectedDonateRecipes).map((item) => (
+                          <div key={item.recipe_id} className="flex justify-between items-center text-[10px] font-mono bg-zinc-950/20 border border-zinc-950 rounded-lg p-2">
+                            <span className="text-zinc-300 truncate max-w-[120px]">{item.name}</span>
+                            <span className="text-zinc-500">
+                              {item.completion_rate.toFixed(0)}% → <span className="text-yellow-500/90 font-bold">+{item.value} Pts</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="border-t border-zinc-900 pt-3.5 space-y-3.5">
+                        <div className="flex justify-between items-center text-xs font-mono">
+                          <span className="text-zinc-400 font-serif font-bold">Tổng cống hiến:</span>
+                          <span className="text-yellow-500 font-bold text-sm">+{totalGainedPoints} Pts</span>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            const recipePayload = Object.values(selectedDonateRecipes).map((r) => ({
+                              recipe_id: r.recipe_id,
+                            }));
+                            if (recipePayload.length === 0) return;
+                            
+                            const ok = await donateSectBulk({
+                              materials: [],
+                              gus: [],
+                              recipes: recipePayload,
+                            });
+                            
+                            if (ok) setSelectedDonateRecipes({});
+                          }}
+                          disabled={actionLoading}
+                          className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-semibold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          <Gift className="w-4 h-4" />
+                          HIẾN TẾ BÍ PHƯƠNG
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {donateType === "gu" && (() => {
             // Group by gu_id and rank
             const groupedGusMap: Record<string, {
@@ -2454,7 +2660,7 @@ export const SectView: React.FC = () => {
                                 gu_instance_id: gi.instance_id
                               }));
                             });
-                            const ok = await donateSectBulk({ materials: [], gus: gusPayload });
+                            const ok = await donateSectBulk({ materials: [], gus: gusPayload, recipes: [] });
                             if (ok) setSelectedDonateGus({});
                           }}
                           disabled={actionLoading}
@@ -2997,13 +3203,37 @@ export const SectView: React.FC = () => {
                   >
                     Linh Tài
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => { setStockItemType("recipe"); setStockSearch(""); setStockRankFilter("All"); setStockPathFilter("All"); }}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${stockItemType === "recipe" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                      }`}
+                  >
+                    Bí Phương
+                  </button>
                 </div>
 
                 {/* Selector + Summary Panel */}
                 {(() => {
                   const sectLvl = sect?.level || 1;
+                  const recipeEntries: [string, { name: string; rank: number; path?: string[] | string }][] = recipes
+                    ? (recipes.map((r) => {
+                        const targetGuSpec = guDictionary[r.target_gu_id];
+                        return [
+                          r.id,
+                          {
+                            name: targetGuSpec?.name || r.id.replace("recipe_", "").toUpperCase(),
+                            rank: targetGuSpec?.rank || 1,
+                            path: targetGuSpec?.path,
+                          },
+                        ] as [string, { name: string; rank: number; path?: string[] | string }];
+                      }))
+                    : [];
+
                   const allEntries = stockItemType === "gu"
                     ? Object.entries(guDictionary || {}).filter(([, spec]) => (spec.rank || 1) < 6)
+                    : stockItemType === "recipe"
+                    ? recipeEntries.filter(([, spec]) => (spec.rank || 1) < 6)
                     : Object.entries(itemDictionary || {});
 
                   const availableRanks = Array.from(new Set(allEntries.map(([, spec]) => (spec.rank || 1)))).sort((a, b) => a - b);
@@ -3036,11 +3266,13 @@ export const SectView: React.FC = () => {
                         <div className="flex justify-between items-center border-b border-zinc-900 pb-3">
                           <div>
                             <h4 className="text-sm font-bold text-zinc-200 font-serif">
-                              {stockItemType === "gu" ? "Danh Sách Cổ Trùng" : "Danh Sách Linh Tài"}
+                              {stockItemType === "gu" ? "Danh Sách Cổ Trùng" : stockItemType === "recipe" ? "Danh Sách Bí Phương" : "Danh Sách Linh Tài"}
                             </h4>
                             <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
                               {stockItemType === "gu"
                                 ? "Tích chọn Cổ trùng (Hạng 1–5) để nhập vào bảo khố."
+                                : stockItemType === "recipe"
+                                ? "Tích chọn Bí phương (Hạng 1–5) để nhập vào bảo khố."
                                 : "Tích chọn Linh tài và số lượng cần nhập kho."}
                             </p>
                           </div>
@@ -3055,7 +3287,7 @@ export const SectView: React.FC = () => {
                             type="text"
                             value={stockSearch}
                             onChange={(e) => setStockSearch(e.target.value)}
-                            placeholder={stockItemType === "gu" ? "Tìm kiếm cổ trùng..." : "Tìm kiếm linh tài..."}
+                            placeholder={stockItemType === "gu" ? "Tìm kiếm cổ trùng..." : stockItemType === "recipe" ? "Tìm kiếm bí phương..." : "Tìm kiếm linh tài..."}
                             className="flex-1 bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-cyan-500/50"
                           />
                           <div className="flex gap-2">
@@ -3142,7 +3374,7 @@ export const SectView: React.FC = () => {
                                       </p>
                                       {locked && (
                                         <p className="text-[10px] text-red-400/80 font-mono mt-0.5">
-                                          {stockItemType === "gu" && rank >= 6 ? "Hạng 6+ không thể nhập" : `Cần Tông Môn Cấp ${rank}`}
+                                          {(stockItemType === "gu" || stockItemType === "recipe") && rank >= 6 ? "Hạng 6+ không thể nhập" : `Cần Tông Môn Cấp ${rank}`}
                                         </p>
                                       )}
                                     </div>

@@ -11,18 +11,46 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 type TradeOffer struct {
-	PrimevalStones float64        `json:"primeval_stones"`
-	ImmortalStones float64        `json:"immortal_stones"`
-	Gus            []string       `json:"gus"`       // slice of Gu instance IDs
-	Materials      map[string]int `json:"materials"` // map of itemID -> quantity
+	PrimevalStones float64             `json:"primeval_stones"`
+	ImmortalStones float64             `json:"immortal_stones"`
+	Gus            []string            `json:"gus"`       // slice of Gu instance IDs
+	Materials      map[string]int      `json:"materials"` // map of itemID -> quantity
+	Recipes        map[string]float64  `json:"recipes"`   // map of recipeID -> completion_rate
 }
 
 type InitiateTradeRequest struct {
 	ReceiverUsername string `json:"receiver_username" binding:"required"`
+}
+
+// transferRecipe moves a recipe from one player to another in a trade.
+// The receiver keeps the higher completion rate, capped at 100%.
+func transferRecipe(tx *sql.Tx, fromPlayerID, toPlayerID, recipeID string, incomingRate float64) error {
+	if _, err := RecipeSvc.Get(tx, fromPlayerID, recipeID); err != nil {
+		return fmt.Errorf("bên gửi không sở hữu Bí phương %s", recipeID)
+	}
+	if err := RecipeSvc.Delete(tx, fromPlayerID, recipeID); err != nil {
+		return fmt.Errorf("không thể xóa Bí phương %s từ bên gửi", recipeID)
+	}
+	var finalRate float64 = incomingRate
+	if existing, err := RecipeSvc.Get(tx, toPlayerID, recipeID); err == nil && existing != nil {
+		if existing.CompletionRate > finalRate {
+			finalRate = existing.CompletionRate
+		}
+	}
+	if finalRate > 100.0 {
+		finalRate = 100.0
+	}
+	return RecipeSvc.Upsert(tx, &services.RecipeProgress{
+		PlayerID:       toPlayerID,
+		RecipeID:       recipeID,
+		CompletionRate: finalRate,
+		IsUnlocked:     true,
+	})
 }
 
 func InitiateTrade(c *gin.Context) {
@@ -383,6 +411,19 @@ func UpdateTradeOffer(c *gin.Context) {
 		}
 	}
 
+	// Validate Recipes
+	for recipeID, rate := range offer.Recipes {
+		if rate < 0 || rate > 100 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Tỷ lệ hoàn thiện Bí phương không hợp lệ: %s", recipeID)})
+			return
+		}
+		existing, err := RecipeSvc.Get(tx, player.ID.String(), recipeID)
+		if err != nil || existing == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bạn không sở hữu Bí phương: %s", recipeID)})
+			return
+		}
+	}
+
 	// Serialize offer
 	offerJSON, err := json.Marshal(offer)
 	if err != nil {
@@ -626,12 +667,20 @@ func ConfirmTrade(c *gin.Context) {
 		for matID, qty := range senderOffer.Materials {
 			avail, _ := InventorySvc.GetQuantity(tx, sender.ID.String(), matID, "materials")
 			if avail < qty {
-				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Người gửi thiếu vật phẩm: %s", matID)})
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bên gửi thiếu vật phẩm: %s", matID)})
 				return
 			}
 			InventorySvc.RemoveItem(tx, sender.ID.String(), matID, "materials", qty)
 			// Add to receiver
 			InventorySvc.AddItem(tx, receiver.ID.String(), matID, "materials", qty)
+		}
+
+		// Deduct sender recipes
+		for recipeID, rate := range senderOffer.Recipes {
+			if err := transferRecipe(tx, sender.ID.String(), receiver.ID.String(), recipeID, rate); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể chuyển Bí phương: %v", err)})
+				return
+			}
 		}
 
 		// 2. Verify and deduct receiver assets
@@ -673,12 +722,20 @@ func ConfirmTrade(c *gin.Context) {
 		for matID, qty := range receiverOffer.Materials {
 			avail, _ := InventorySvc.GetQuantity(tx, receiver.ID.String(), matID, "materials")
 			if avail < qty {
-				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Người nhận thiếu vật phẩm: %s", matID)})
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bên nhận thiếu vật phẩm: %s", matID)})
 				return
 			}
 			InventorySvc.RemoveItem(tx, receiver.ID.String(), matID, "materials", qty)
 			// Add to sender
 			InventorySvc.AddItem(tx, sender.ID.String(), matID, "materials", qty)
+		}
+
+		// Deduct receiver recipes
+		for recipeID, rate := range receiverOffer.Recipes {
+			if err := transferRecipe(tx, receiver.ID.String(), sender.ID.String(), recipeID, rate); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể chuyển Bí phương: %v", err)})
+				return
+			}
 		}
 
 		// 3. Add swap items to balances

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { GuInstance, Player, GuSpec, ItemSpec, useGameStore } from "@/store/useGameStore";
+import { Num } from "./Num";
+import { GuInstance, Player, GuSpec, ItemSpec, useGameStore, formatRecipeName } from "@/store/useGameStore";
 import {
   AlertCircle,
   ShoppingCart,
@@ -148,10 +149,7 @@ export function BaoHoangMarket({
     if (listing.item_type === "Recipe") {
       const rData = typeof listing.item_data === "object" && !Array.isArray(listing.item_data) ? listing.item_data : null;
       if (rData) {
-        const targetGuName = guDictionary[rData.recipe_id.replace("recipe_", "GU_").toUpperCase()]?.name || 
-                           guDictionary[rData.recipe_id.replace("recipe_", "GU")]?.name ||
-                           rData.recipe_id.replace("recipe_", "").replace(/_/g, " ");
-        return `Bí phương: ${targetGuName} (${rData.completion_rate}%)`;
+        return `${formatRecipeName(rData.recipe_id)} (${rData.completion_rate}%)`;
       }
       return `Bí phương: ${String(listing.item_data)}`;
     }
@@ -172,10 +170,7 @@ export function BaoHoangMarket({
   };
 
   const getRecipeDisplayName = (recipeId: string): string => {
-    const targetGuID = recipeId.replace("recipe_", "GU_").toUpperCase();
-    const targetGuIDAlt = recipeId.replace("recipe_", "GU").toUpperCase();
-    const name = guDictionary[targetGuID]?.name || guDictionary[targetGuIDAlt]?.name || recipeId;
-    return `Bí phương: ${name}`;
+    return formatRecipeName(recipeId);
   };
 
   // Duration-based fees calculation
@@ -412,8 +407,8 @@ export function BaoHoangMarket({
         } else if (l.item_type === "Recipe") {
           const rData = typeof l.item_data === "object" && !Array.isArray(l.item_data) ? l.item_data : null;
           const recipeId = rData ? rData.recipe_id : String(l.item_data);
-          const targetGuId = recipeId.replace("recipe_", "GU_").toUpperCase();
-          const targetGuIdAlt = recipeId.replace("recipe_", "GU").toUpperCase();
+          const targetGuId = recipeId.replace("recipe_", "").replace(/_\d+_\d+$/, "").toUpperCase();
+          const targetGuIdAlt = targetGuId.replace("GU", "GU_");
           rank = guDictionary[targetGuId]?.rank || guDictionary[targetGuIdAlt]?.rank || 0;
         }
         if (rank !== filterRank) return false;
@@ -878,9 +873,8 @@ export function BaoHoangMarket({
                       {(() => {
                         const recipes = player.unlocked_recipes || [];
                         const filteredRecipes = recipes.filter((ur) => {
-                          const targetGuID = ur.recipe_id.replace("recipe_", "GU_").toUpperCase();
-                          const targetGuIDAlt = ur.recipe_id.replace("recipe_", "GU").toUpperCase();
-                          const rank = guDictionary[targetGuID]?.rank || guDictionary[targetGuIDAlt]?.rank || 0;
+                          const targetGuID = ur.recipe_id.replace("recipe_", "").replace(/_\d+_\d+$/, "").toUpperCase();
+                          const rank = guDictionary[targetGuID]?.rank || 0;
                           if (sellFilterRank !== "all" && rank !== sellFilterRank) return false;
 
                           const name = getRecipeDisplayName(ur.recipe_id);
@@ -1176,7 +1170,7 @@ export function BaoHoangMarket({
                   </span>
                 </div>
                 <div className="text-[11px] text-amber-400 font-bold">
-                  Tổng thu thầu: {itemType === "Material" ? quantity * price : itemType === "Gu" ? selectedGus.length * price : price} {currency === "primeval" ? "Nguyên Thạch" : "Tiên Nguyên"}
+                  Tổng thu thầu: <Num value={itemType === "Material" ? quantity * price : itemType === "Gu" ? selectedGus.length * price : price} /> {currency === "primeval" ? "Nguyên Thạch" : "Tiên Nguyên"}
                 </div>
               </div>
             </div>
@@ -1297,7 +1291,7 @@ export function BaoHoangMarket({
                       <div>
                         Đơn giá:{" "}
                         <span className={`${listing.currency === "primeval" ? "text-amber-400" : "text-purple-400"} font-bold font-mono`}>
-                          {unitPrice} {listing.currency === "primeval" ? "Nguyên Thạch" : "Tiên Nguyên"}
+                          <Num value={unitPrice} /> {listing.currency === "primeval" ? "Nguyên Thạch" : "Tiên Nguyên"}
                         </span>
                       </div>
                     </div>
@@ -1306,7 +1300,7 @@ export function BaoHoangMarket({
                         {listing.listing_type === "MARKET" ? "Tổng tiền mua:" : listing.listing_type === "TRADE" ? "Giao dịch riêng:" : "Giá thầu hiện tại:"}
                       </div>
                       <div className={`${listing.currency === "primeval" ? "text-amber-400" : "text-purple-400"} font-bold text-xs font-mono`}>
-                        {listing.listing_type === "MARKET" || listing.listing_type === "TRADE" ? totalPrice : listing.current_price} {listing.currency === "primeval" ? "Nguyên Thạch" : "Tiên Nguyên"}
+                        <Num value={listing.listing_type === "MARKET" || listing.listing_type === "TRADE" ? totalPrice : listing.current_price} /> {listing.currency === "primeval" ? "Nguyên Thạch" : "Tiên Nguyên"}
                       </div>
                     </div>
                   </div>
@@ -1453,7 +1447,7 @@ export function BaoHoangMarket({
               <div className="flex justify-between items-center">
                 <span className="text-zinc-400">Đơn giá</span>
                 <div className="flex items-center gap-1.5 font-mono font-bold text-zinc-200">
-                  <span>{activePurchaseListing.current_price}</span>
+                  <span><Num value={activePurchaseListing.current_price} /></span>
                   {activePurchaseListing.currency === "primeval" ? (
                     <Coins className="w-4 h-4 text-amber-500" />
                   ) : (
@@ -1466,7 +1460,7 @@ export function BaoHoangMarket({
               <div className="flex justify-between items-center">
                 <span className="text-zinc-400">Tổng phí</span>
                 <div className="flex items-center gap-1.5 font-mono font-bold text-zinc-200 text-sm">
-                  <span>{(purchaseQuantity * activePurchaseListing.current_price)}</span>
+                  <span><Num value={purchaseQuantity * activePurchaseListing.current_price} /></span>
                   {activePurchaseListing.currency === "primeval" ? (
                     <Coins className="w-4.5 h-4.5 text-amber-500" />
                   ) : (
@@ -1552,7 +1546,7 @@ export function BaoHoangMarket({
               <div className="flex justify-between items-center">
                 <span className="text-zinc-400">Giá hiện tại</span>
                 <div className="flex items-center gap-1.5 font-mono font-bold text-zinc-200">
-                  <span>{activeBidListing.current_price}</span>
+                  <span><Num value={activeBidListing.current_price} /></span>
                   {activeBidListing.currency === "primeval" ? (
                     <Coins className="w-4 h-4 text-amber-500" />
                   ) : (

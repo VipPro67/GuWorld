@@ -224,6 +224,7 @@ type Player struct {
 	GrowthData         GrowthData         `json:"growth_data"`
 	MaterialsInventory map[string]int     `json:"materials_inventory,omitempty"`
 	CompletedQuests    CompletedQuestsList `json:"completed_quests,omitempty"`
+	UnlockedRecipes    UnlockedRecipesList `json:"unlocked_recipes,omitempty"`
 
 	// UI Transient fields
 	ManaRegenRate float64 `json:"mana_regen_rate"`

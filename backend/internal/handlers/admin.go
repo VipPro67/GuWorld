@@ -1773,12 +1773,24 @@ func AdminStockSectVault(c *gin.Context) {
 		_, err = tx.Exec(`UPDATE sects SET vault_materials=$1 WHERE id=$2`, updated, sectID)
 
 	case "recipe":
-		var recipes []string
+		var recipes []models.SectVaultRecipe
 		json.Unmarshal(vaultRecipesJSON, &recipes)
 		if recipes == nil {
-			recipes = []string{}
+			recipes = []models.SectVaultRecipe{}
 		}
-		recipes = append(recipes, req.ItemID)
+		found := false
+		for i := range recipes {
+			if recipes[i].RecipeID == req.ItemID {
+				if recipes[i].CompletionRate < 100.0 {
+					recipes[i].CompletionRate = 100.0
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			recipes = append(recipes, models.SectVaultRecipe{RecipeID: req.ItemID, CompletionRate: 100.0})
+		}
 		updated, _ := json.Marshal(recipes)
 		_, err = tx.Exec(`UPDATE sects SET vault_recipes=$1 WHERE id=$2`, updated, sectID)
 
@@ -1865,6 +1877,25 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 		}
 		updated, _ := json.Marshal(mats)
 		_, err = tx.Exec(`UPDATE sects SET vault_materials=$1 WHERE id=$2`, updated, sectID)
+
+	case "recipe":
+		var recipes []models.SectVaultRecipe
+		json.Unmarshal(vaultRecipesJSON, &recipes)
+		removed := 0
+		newRecipes := make([]models.SectVaultRecipe, 0, len(recipes))
+		for _, r := range recipes {
+			if r.RecipeID == req.ItemID && removed < req.Quantity {
+				removed++
+				continue
+			}
+			newRecipes = append(newRecipes, r)
+		}
+		if removed == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Bí phương trong bảo khố"})
+			return
+		}
+		updated, _ := json.Marshal(newRecipes)
+		_, err = tx.Exec(`UPDATE sects SET vault_recipes=$1 WHERE id=$2`, updated, sectID)
 
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại vật phẩm không hợp lệ"})
@@ -2863,9 +2894,6 @@ func guValidate(req *AdminGuInput) (bool, string) {
 	if !validTypes[req.GuType] {
 		return false, "gu_type không hợp lệ"
 	}
-	if req.HungerRate < 1 {
-		return false, "hunger_rate phải >= 1"
-	}
 	return true, ""
 }
 
@@ -2924,6 +2952,12 @@ func AdminUpdateGuItem(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
+	}
+
+	oldRankStr := c.Query("old_rank")
+	oldRank, _ := strconv.Atoi(oldRankStr)
+	if oldRank == 0 {
+		oldRank = req.Rank
 	}
 	// Use existing ID from URL if not in body
 	if req.ID == "" {
@@ -3028,8 +3062,8 @@ func AdminUpdateGuItem(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu"})
 			return
 		}
-		args = append(args, guID)
-		_, err := db.DB.Exec(`UPDATE gu_dictionary SET `+strings.Join(sets, ", ")+` WHERE id=$`+strconv.Itoa(idx), args...)
+		args = append(args, guID, oldRank)
+		_, err := db.DB.Exec(`UPDATE gu_dictionary SET `+strings.Join(sets, ", ")+` WHERE id=$`+strconv.Itoa(idx)+` AND rank=$`+strconv.Itoa(idx+1), args...)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
 			return
@@ -3048,10 +3082,10 @@ func AdminUpdateGuItem(c *gin.Context) {
 		if len(req.Effects) == 0 {
 			req.Effects = json.RawMessage(`{"active":{},"passive":{},"house":{}}`)
 		}
-		_, err := db.DB.Exec(`UPDATE gu_dictionary SET name=$1,rank=$2,path=$3,gu_type=$4,base_mana_cost=$5,effects=$6,food_types=$7,hunger_rate=$8,max_hunger=$9,description=$10,target_type=$11,rarity=$12,is_immortal=$13,primary_role=$14,combat_roles=$15,combat_tags=$16,support_tags=$17,base_price=$18,image_url=$19 WHERE id=$20`,
+		_, err := db.DB.Exec(`UPDATE gu_dictionary SET name=$1,rank=$2,path=$3,gu_type=$4,base_mana_cost=$5,effects=$6,food_types=$7,hunger_rate=$8,max_hunger=$9,description=$10,target_type=$11,rarity=$12,is_immortal=$13,primary_role=$14,combat_roles=$15,combat_tags=$16,support_tags=$17,base_price=$18,image_url=$19 WHERE id=$20 AND rank=$21`,
 			req.Name, req.Rank, marshalArray(req.Path), req.GuType, req.BaseManaCost, req.Effects, marshalArray(req.FoodTypes),
 			req.HungerRate, req.MaxHunger, req.Description, req.TargetType, req.Rarity, req.IsImmortal, req.PrimaryRole,
-			marshalArray(req.CombatRoles), marshalArray(req.CombatTags), marshalArray(req.SupportTags), req.BasePrice, req.ImageURL, guID)
+			marshalArray(req.CombatRoles), marshalArray(req.CombatTags), marshalArray(req.SupportTags), req.BasePrice, req.ImageURL, guID, oldRank)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
 			return

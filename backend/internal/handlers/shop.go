@@ -542,8 +542,30 @@ func SellShopItemsBulk(c *gin.Context) {
 				name = item.ItemID
 			}
 			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%.0f)", name, item.Quantity, gain))
+		} else if item.ItemType == "Recipe" {
+			recipeToSell, err := RecipeSvc.Get(tx, player.ID.String(), item.ItemID)
+			if err != nil || recipeToSell == nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không tìm thấy Bí phương %s trong túi đồ", item.ItemID)})
+				return
+			}
+			// Remove recipe from seller's unlocked list
+			RecipeSvc.Delete(tx, player.ID.String(), item.ItemID)
+			item.Quantity = 1 // Recipes are always singular
+
+			var targetRank int
+			_ = db.DB.QueryRow(`SELECT target_rank FROM refining_recipes WHERE ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) = $1`, item.ItemID).Scan(&targetRank)
+			if targetRank <= 0 {
+				targetRank = 1
+			}
+
+			unitSellPrice := pricing.RecipeSellPrice(targetRank)
+			gain := float64(unitSellPrice * item.Quantity)
+			totalGain += gain
+
+			name := fmt.Sprintf("Bí phương (%s)", item.ItemID)
+			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%.0f)", name, item.Quantity, gain))
 		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "item_type phải là Gu hoặc Material"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "item_type không hợp lệ (phải là Gu, Material, hoặc Recipe)"})
 			return
 		}
 	}

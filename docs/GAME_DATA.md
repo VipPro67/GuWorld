@@ -254,6 +254,7 @@ Không có seed CSV cho bảng này. Row được tạo tự động qua `INSERT
 | `funds` | BIGINT | Quỹ tông môn (đổi từ INTEGER → BIGINT để tránh tràn số khi tích lũy lãnh địa). |
 | `require_approval` | BOOLEAN | DEFAULT FALSE. Bật = phải duyệt đơn gia nhập. |
 | `require_promotion_approval` | BOOLEAN | DEFAULT FALSE. Bật = **mọi** thăng cấp đều tạo yêu cầu chờ duyệt. |
+| `vault_recipes` | JSONB | Danh sách Bí phương trong bảo khố. Định dạng `[{"recipe_id": "recipe_...", "completion_rate": 100}]`. Seed từ `Sect.csv`. |
 
 Các cột được thêm sau khi tạo bảng bằng `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` trong `db.go`.
 

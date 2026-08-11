@@ -535,6 +535,7 @@ export const AdminView: React.FC = () => {
   const [recipes, setRecipes] = useState<any[]>([]);
   const [recipesLoading, setRecipesLoading] = useState(false);
   const [recipeEdit, setRecipeEdit] = useState<any | null>(null);
+  const [recipeSearch, setRecipeSearch] = useState("");
   const [monsters, setMonsters] = useState<any[]>([]);
   const [monstersLoading, setMonstersLoading] = useState(false);
   const [monsterEdit, setMonsterEdit] = useState<any | null>(null);
@@ -2052,8 +2053,10 @@ export const AdminView: React.FC = () => {
                   <h4 className="text-xs font-bold text-zinc-400 font-mono uppercase tracking-wider mb-2">Công thức trong bảo khố</h4>
                   {selectedSect.vault_recipes && Array.isArray(selectedSect.vault_recipes) && selectedSect.vault_recipes.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
-                      {selectedSect.vault_recipes.map((recipeId: string, i: number) => (
-                        <span key={i} className="px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-mono">{recipeId}</span>
+                      {selectedSect.vault_recipes.map((vr: any, i: number) => (
+                        <span key={i} className="px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-mono">
+                          {vr.recipe_id} ({Number(vr.completion_rate || 0).toFixed(0)}%)
+                        </span>
                       ))}
                     </div>
                   ) : <p className="text-xs text-zinc-600 italic py-4 text-center">Trống</p>}
@@ -2736,7 +2739,7 @@ export const AdminView: React.FC = () => {
                           <td className="px-3 py-2.5 text-zinc-400">{translateGuType(g.gu_type)}</td>
                           <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{g.base_price?.toLocaleString() || 0}</td>
                           <td className="px-3 py-2.5 text-right">
-                            <button onClick={() => setGuEdit({ ...g, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects })} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
+                            <button onClick={() => setGuEdit({ ...g, _old_rank: g.rank, effects: typeof g.effects === "string" ? JSON.parse(g.effects) : g.effects })} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
                             <button onClick={async () => { if (!confirm(`Xóa ${g.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/gu-dictionary/${g.id}`, "DELETE"); if (ok) fetchGus(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
                           </td>
                         </tr>
@@ -2813,11 +2816,15 @@ export const AdminView: React.FC = () => {
                 <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2"><FlaskConical className="w-4 h-4 text-emerald-400" />Danh Sách Cổ Phương</h3>
                 <button onClick={() => setRecipeEdit({ id: "", target_gu_id: "", target_gu_name: "", required_gus: {}, required_materials: {}, success_rate: 0.5, primeval_stones_cost: 0, immortal_essence_stones_cost: 0, _isNew: true })} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer"><Plus className="w-3.5 h-3.5" />Thêm</button>
               </div>
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                <input value={recipeSearch} onChange={e => setRecipeSearch(e.target.value)} placeholder="Tìm kiếm theo ID hoặc tên..." className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 placeholder-zinc-500" />
+              </div>
               {recipesLoading ? <div className="flex justify-center py-8"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div> : recipes.length === 0 ? <div className="text-center py-8 text-zinc-500 text-xs">Không có cổ phương nào.</div> : (
                 <div className="overflow-x-auto rounded-xl border border-zinc-800/80 max-h-[500px] overflow-y-auto">
                   <table className="w-full text-left text-xs">
                     <thead><tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px] sticky top-0"><th className="px-3 py-2.5 font-semibold">ID</th><th className="px-3 py-2.5 font-semibold">Cổ trùng đích</th><th className="px-3 py-2.5 font-semibold text-right">Tỉ lệ</th><th className="px-3 py-2.5 font-semibold text-right">Nguyên Thạch</th><th className="px-3 py-2.5"></th></tr></thead>
-                    <tbody>{recipes.map((r: any) => (
+                    <tbody>{recipes.filter(r => r.id.toLowerCase().includes(recipeSearch.toLowerCase()) || (r.target_gu_name || r.target_gu_id || "").toLowerCase().includes(recipeSearch.toLowerCase())).map((r: any) => (
                       <tr key={r.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                         <td className="px-3 py-2.5 text-zinc-500 font-mono">{r.id}</td>
                         <td className="px-3 py-2.5 font-semibold text-zinc-200">{r.target_gu_name || r.target_gu_id}</td>
@@ -4154,7 +4161,7 @@ export const AdminView: React.FC = () => {
                   });
                   body.effects = cleaned;
                 }
-                const url = isNew ? `${BACKEND_URL}/api/admin/gu-dictionary` : `${BACKEND_URL}/api/admin/gu-dictionary/${guEdit.id}`;
+                const url = isNew ? `${BACKEND_URL}/api/admin/gu-dictionary` : `${BACKEND_URL}/api/admin/gu-dictionary/${guEdit.id}?old_rank=${guEdit._old_rank || body.rank}`;
                 const method = isNew ? "POST" : "PUT";
                 const ok = await exec(url, method, body);
                 if (ok) { setGuEdit(null); fetchGus(); }

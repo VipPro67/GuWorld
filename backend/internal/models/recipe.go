@@ -41,6 +41,13 @@ type UnlockedRecipe struct {
 
 type UnlockedRecipesList []UnlockedRecipe
 
+// SectVaultRecipe represents a recipe stored in a sect vault, carrying its
+// completion rate so donated/purchased recipes retain their progress value.
+type SectVaultRecipe struct {
+	RecipeID       string  `json:"recipe_id"`
+	CompletionRate float64 `json:"completion_rate"`
+}
+
 // Scan implements the sql.Scanner interface for UnlockedRecipesList
 func (ur *UnlockedRecipesList) Scan(value interface{}) error {
 	if value == nil {
