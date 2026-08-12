@@ -515,7 +515,7 @@ export const AdminView: React.FC = () => {
   const [newGiftMaxUses, setNewGiftMaxUses] = useState(100);
   const [newGiftPerPlayer, setNewGiftPerPlayer] = useState(1);
   const [newGiftExpiry, setNewGiftExpiry] = useState(30);
-  const [newGiftRewards, setNewGiftRewards] = useState<{type: string; id: string; amount: number; label: string}[]>([
+  const [newGiftRewards, setNewGiftRewards] = useState<{type: string; id: string; amount: number; label: string; rank?: number}[]>([
     { type: "primeval_stones", id: "", amount: 1000, label: "1.000 Nguyên Thạch" },
   ]);
 
@@ -3493,6 +3493,9 @@ export const AdminView: React.FC = () => {
                         <span className="text-[10px] font-mono text-zinc-400 min-w-[80px] truncate" title={r.id || "Chưa chọn"}>{r.id || "—"}</span>
                         <button onClick={() => { setGiftPickerIdx(i); ensureShopSearchLoaded(); setItemPicker({source: "gift", tab: r.type === "gu" ? "gu" : r.type === "recipe" ? "recipe" : "item", query: ""}); }} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[10px] font-mono cursor-pointer flex items-center gap-1"><Search className="w-3 h-3" />Chọn</button>
                       </div>
+                    )}
+                    {r.type === "gu" && (
+                      <input type="number" min={0} max={9} placeholder="Rank (mặc định=0)" value={r.rank || ""} onChange={e => { const upd = [...newGiftRewards]; upd[i].rank = Number(e.target.value) || 0; setNewGiftRewards(upd); }} className="w-32 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] text-zinc-200 focus:outline-none" />
                     )}
                     <input type="number" min={1} value={r.amount} onChange={e => { const upd = [...newGiftRewards]; upd[i].amount = Number(e.target.value); setNewGiftRewards(upd); }} className="w-16 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] text-zinc-200 focus:outline-none" />
                     <input value={r.label} onChange={e => { const upd = [...newGiftRewards]; upd[i].label = e.target.value; setNewGiftRewards(upd); }} placeholder="Nhãn" className="w-24 px-2 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] text-zinc-200 focus:outline-none" />

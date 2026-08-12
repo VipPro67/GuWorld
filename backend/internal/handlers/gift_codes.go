@@ -23,6 +23,7 @@ type GiftCodeReward struct {
 	ID     string  `json:"id,omitempty"`
 	Amount float64 `json:"amount"`
 	Label  string  `json:"label"`
+	Rank   int     `json:"rank,omitempty"`
 }
 
 type GiftCode struct {
@@ -227,7 +228,8 @@ func RedeemGiftCode(c *gin.Context) {
 		return
 	}
 
-	if err := applyGiftCodeRewardsTx(tx, &player, gc.Rewards); err != nil {
+	newGus, err := applyGiftCodeRewardsTx(tx, &player, gc.Rewards)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi áp dụng phần thưởng: " + err.Error()})
 		return
 	}
@@ -253,7 +255,7 @@ func RedeemGiftCode(c *gin.Context) {
 			return
 		}
 	}
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	if err := db.AddPlayerGusBulk(tx, player.ID.String(), newGus); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cổ trùng"})
 		return
 	}
@@ -284,7 +286,8 @@ func RedeemGiftCode(c *gin.Context) {
 	})
 }
 
-func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCodeReward) error {
+func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCodeReward) ([]models.GuInstance, error) {
+	var newGus []models.GuInstance
 	for _, r := range rewards {
 		switch r.Type {
 		case "human_qi":
@@ -305,16 +308,21 @@ func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCod
 			InventorySvc.AddItem(tx, player.ID.String(), r.ID, "materials", int(r.Amount))
 		case "gu":
 			guSpec, _ := models.GetGuAny(r.ID)
+			rank := r.Rank
+			if rank <= 0 {
+				rank = guSpec.Rank
+			}
 			for i := 0; i < int(r.Amount); i++ {
 				newGu := models.GuInstance{
 					InstanceID: "gu-" + uuid.New().String(),
 					GuID:       r.ID,
-					Rank:       guSpec.Rank,
+					Rank:       rank,
 					Hunger:     100,
 					Status:     "ACTIVE",
 					Equipped:   false,
 				}
 				player.GuInventory = append(player.GuInventory, newGu)
+				newGus = append(newGus, newGu)
 			}
 		case "lifespan":
 			player.Lifespan += r.Amount
@@ -332,7 +340,7 @@ func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCod
 			})
 		}
 	}
-	return nil
+	return newGus, nil
 }
 
 func buildGiftCodeUpdateQuery(player *models.Player) (string, []interface{}) {
