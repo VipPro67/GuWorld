@@ -1944,7 +1944,7 @@ export const useGameStore = create<GameState>((set, get) => {
         // Reload referrals to update status
         await get().fetchReferrals();
         // Also refresh player stats (like primeval stones)
-        await get().fetchPlayer();
+        await get().fetchPlayerProfile(get().player?.id || "");
         return { success: true, message: data.message };
       }
       return { success: false, message: data.error };

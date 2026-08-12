@@ -1915,7 +1915,7 @@ function WallControls() {
         <div className="flex items-center justify-between mb-2">
           <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5 font-mono">
             <Coins className="w-3.5 h-3.5 text-cyan-400" />
-            Nạp Nguyên Thạch
+            Luyện Hóa Nguyên Thạch
           </span>
           <span className="text-[10px] text-cyan-400 font-mono font-bold">
             Khả dụng: {player.primeval_stones.toLocaleString()}
@@ -1950,7 +1950,7 @@ function WallControls() {
                 if (res) store.addToast(res.message, "success");
               }}
             >
-              Nạp Chân Nguyên
+              Luyện Hóa
             </button>
           </div>
         </div>
@@ -2071,7 +2071,7 @@ function BlessedLandControls() {
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5 font-mono">
               <Sparkles className="w-4 h-4 text-violet-400" />
-              Nạp Tiên Nguyên Thạch
+              Luyện Hóa Tiên Nguyên Thạch
             </span>
             <span className="text-[10px] text-cyan-400 font-mono font-bold">
               Khả dụng: {player.immortal_stones.toLocaleString()} Tiên Nguyên Thạch
@@ -2106,7 +2106,7 @@ function BlessedLandControls() {
                   if (res) store.addToast(res.message, "success");
                 }}
               >
-                Luyện hóa Tiên Nguyên
+                Luyện hóa
               </button>
             </div>
           </div>

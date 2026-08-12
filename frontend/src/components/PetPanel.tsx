@@ -54,14 +54,31 @@ export const PetPanel: React.FC<PetPanelProps> = ({
 
   const maxSlots = Math.min(1 + player.rank, 8);
 
+  const hungerValue = (item: ItemSpec): number => {
+    const effects = item.effects as Record<string, number> | undefined;
+    if (effects?.hunger && effects.hunger > 0) return effects.hunger;
+    return Math.max(item.rank ?? 1, 1) * 10;
+  };
+
   const foodItems = Object.entries(itemDictionary).filter(([, item]) => {
-    const effects = item.effects as Record<string, number>;
-    return effects?.hunger && effects.hunger > 0;
+    return item.item_type === "Food";
   });
 
   const handleFeed = async (petId: string, itemId: string) => {
     await feedPet(petId, itemId);
     setFeedTarget(null);
+  };
+
+  const handleAutoFeed = async (petId: string) => {
+    const ownedFoods = foodItems
+      .map(([itemId, item]) => ({ itemId, item }))
+      .filter(({ itemId }) => (player.materials_inventory?.[itemId] || 0) > 0)
+      .sort((a, b) => (a.item.rank ?? 1) - (b.item.rank ?? 1));
+    if (ownedFoods.length === 0) {
+      addToast("Đạo hữu không có thức ăn để cho nô thú ăn.", "error");
+      return;
+    }
+    await handleFeed(petId, ownedFoods[0].itemId);
   };
 
   const handleFormationSave = async () => {
@@ -272,7 +289,15 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                     )
                   ) : (
                     <>
-                      <button onClick={() => setFeedTarget(feedTarget === pet.id ? null : pet.id)} className="text-[10px] px-2 py-1 rounded bg-emerald-800 text-emerald-300 hover:bg-emerald-700">
+                      <button  onClick={() => setFeedTarget(feedTarget === pet.id ? null : pet.id)} className="hidden text-[10px] px-2 py-1 rounded bg-emerald-800 text-emerald-300 hover:bg-emerald-700">
+                        Cho Ăn
+                      </button>
+                      <button
+                        onClick={() => handleAutoFeed(pet.id)}
+                        disabled={actionLoading || pet.hunger >= pet.max_hunger}
+                        title={pet.hunger >= pet.max_hunger ? "Nô thú đã no" : "Tự chọn thức ăn rank thấp nhất"}
+                        className="text-[10px] px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-40"
+                      >
                         Cho Ăn
                       </button>
                       <button onClick={() => setPetSleep(pet.id, pet.state !== "SLEEPING")} className="text-[10px] px-2 py-1 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700">
@@ -292,7 +317,6 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                   <div className="text-[10px] text-zinc-500 mb-1">Chọn thức ăn:</div>
                   <div className="flex flex-wrap gap-1">
                     {foodItems.map(([itemId, item]) => {
-                      const hungerVal = (item.effects as Record<string, number>)?.hunger || 0;
                       const owned = player.materials_inventory?.[itemId] || 0;
                       return (
                         <button
@@ -301,7 +325,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                           disabled={owned <= 0 || actionLoading}
                           className="text-[10px] px-2 py-1 rounded bg-zinc-800 border border-zinc-700 text-zinc-300 hover:border-emerald-600 disabled:opacity-30"
                         >
-                          {item.name} +{hungerVal} ({owned})
+                          {item.name} +{hungerValue(item)} ({owned})
                         </button>
                       );
                     })}

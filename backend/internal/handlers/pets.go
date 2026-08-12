@@ -83,27 +83,36 @@ func FeedPet(c *gin.Context) {
 		return
 	}
 
-	// Check item exists in inventory
-	qty, err := InventorySvc.GetQuantity(tx, authID.String(), req.ItemID, "consumables")
-	if err != nil || qty <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm này trong túi đồ."})
-		return
-	}
-
-	// Get item hunger value
+	// Get item spec and validate it is food
 	item, ok := models.ItemRegistry[req.ItemID]
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không hợp lệ."})
 		return
 	}
+	if item.Type != "Food" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chỉ có thể cho nô thú ăn vật phẩm loại thức ăn (Food)."})
+		return
+	}
 
+	// Check item exists in inventory (any bucket)
+	qty, itemCategory, err := InventorySvc.GetQuantityInAnyCategory(tx, authID.String(), req.ItemID, "consumables", "materials")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra túi đồ."})
+		return
+	}
+	if qty <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm này trong túi đồ."})
+		return
+	}
+
+	// Get item hunger value (data-driven; fallback to rank*10)
 	hungerValue := item.Effects["hunger"]
 	if hungerValue <= 0 {
-		hungerValue = 30.0 // default
+		hungerValue = float64(item.Rank * 10)
 	}
 
 	// Consume item
-	if err := InventorySvc.RemoveItem(tx, authID.String(), req.ItemID, "consumables", 1); err != nil {
+	if err := InventorySvc.RemoveItem(tx, authID.String(), req.ItemID, itemCategory, 1); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tiêu hao vật phẩm."})
 		return
 	}

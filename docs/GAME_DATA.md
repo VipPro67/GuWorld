@@ -355,3 +355,11 @@ Indexes: `idx_player_pets_player_id`, `idx_player_pets_player_id_template`.
 | `is_capturable` | BOOLEAN | DEFAULT FALSE. Có thể bắt làm sủng vật không |
 | `capture_chance` | DOUBLE PRECISION | Tỷ lệ bắt cơ bản (0.0-1.0). rank 1 = 0.25, rank 5 = 0.10 |
 | `pet_hunger_per_hour` | DOUBLE PRECISION | Tốc độ đói mỗi giờ. Mặc định 2 |
+
+### Cho sủng vật ăn (thức ăn loại Food)
+
+- Sủng vật được cho ăn qua `/api/pets/feed` (handler `FeedPet`).
+- Chỉ chấp nhận item loại **`Food`** (từ `item_dictionary.item_type`).
+- Độ no cộng thêm lấy từ `item_dictionary.effects.hunger` (data-driven).
+- **Quy ước dữ liệu:** mọi item loại `Food` có `hunger = rank × 10` (rank 1 = +10 ... rank 9 = +90), cập nhật qua `backend/cmd/server/data/Item.csv` → Import bảng "Vật phẩm". Backend fallback cùng công thức `rank × 10` nếu effects chưa có `hunger`.
+- Item được tiêu hao từ bucket `consumables` hoặc `materials` trong `player_inventory_items`.
