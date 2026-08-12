@@ -102,7 +102,7 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 		effectiveDefense += actor.BaseDefense * powerScale * masteryMultiplier * daoMultiplier
 	}
 
-	cost := calculateEnergyCostForCombatant(actor, guSpec)
+	cost := gamefx.EnergyCostForCombatant(actor, guSpec)
 
 	return effectiveDamage, effectiveDefense, cost, nil
 }

@@ -2711,6 +2711,12 @@ func EquipGu(c *gin.Context) {
 			return
 		}
 
+		// Rank restriction: cannot equip a Gu of higher rank than the player
+		if specFound && specForEquip.Rank > player.Rank {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể trang bị Cổ trùng Rank %d cao hơn tu vi %s của đạo hữu!", specForEquip.Rank, getRankName(player.Rank))})
+			return
+		}
+
 		targetGu.Equipped = true
 	} else {
 		targetGu.Equipped = false
@@ -3698,7 +3704,7 @@ func UseConsumableGu(c *gin.Context) {
 		return
 	}
 
-	cost := calculateEnergyCost(&player, &specs)
+	cost := gamefx.EnergyCost(&player, &specs)
 	player.CurrentMana -= cost
 
 	var logs []string
@@ -3836,7 +3842,7 @@ func UseSupportGu(c *gin.Context) {
 		return
 	}
 
-	cost := calculateEnergyCost(&player, &specs)
+	cost := gamefx.EnergyCost(&player, &specs)
 	player.CurrentMana -= cost
 
 	var logs []string

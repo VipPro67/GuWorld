@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"math"
 	"strings"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -77,118 +76,12 @@ func energyRegenRatePerHour(player *models.Player) float64 {
 		}
 	}
 
-	refineTier := getRefineManaTier(player.Rank, player.GuInventory)
+	refineTier := gamefx.RefineManaTier(player.Rank, player.GuInventory)
 	if refineTier > 0 {
 		rate *= 0.4 + refineTier*0.1
 	}
 
 	return rate * (1.0 + gamefx.Get(player).ManaRegenBonus)
-}
-
-func calculateEnergyCost(player *models.Player, guSpec *models.GuDictionaryItem) float64 {
-	if util.IsImmortalPlayer(player) {
-		if guSpec.Rank < util.ImmortalRankThreshold {
-			return 0
-		}
-		if player.Rank < guSpec.Rank {
-			return 999999999
-		}
-		baseCost := 1.0
-		if guSpec.BaseManaCost > 0 {
-			baseCost = guSpec.BaseManaCost
-		}
-		if player.Rank > guSpec.Rank {
-			return baseCost / math.Pow(100, float64(player.Rank-guSpec.Rank))
-		}
-		return baseCost
-	}
-
-	baseManaPct := 0.10
-	if guSpec.BaseManaCost > 0.0 {
-		baseManaPct = guSpec.BaseManaCost / 100.0
-	}
-	cost := baseManaPct * player.MaxMana
-
-	if guSpec.Rank < util.ImmortalRankThreshold {
-		rankDiff := player.Rank - guSpec.Rank
-		if rankDiff > 0 {
-			cost /= math.Pow(10, float64(rankDiff))
-		} else if rankDiff < 0 {
-			cost *= math.Pow(10, float64(-rankDiff))
-		}
-	}
-
-	if util.IsImmortalPlayer(player) {
-		refineTier := getRefineManaTier(player.Rank, player.GuInventory)
-		if refineTier > 0 {
-			cost *= 0.5
-		}
-	}
-
-	return cost
-}
-
-func calculateEnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuDictionaryItem) float64 {
-	isImmortal := actor.Rank >= 6
-
-	if isImmortal {
-		if guSpec.Rank < util.ImmortalRankThreshold {
-			return 0
-		}
-		if actor.Rank < guSpec.Rank {
-			return 999999999
-		}
-		baseCost := 1.0
-		if guSpec.BaseManaCost > 0 {
-			baseCost = guSpec.BaseManaCost
-		}
-		if actor.Rank > guSpec.Rank {
-			return baseCost / math.Pow(100, float64(actor.Rank-guSpec.Rank))
-		}
-		return baseCost
-	}
-
-	baseManaPct := 0.10
-	if guSpec.BaseManaCost > 0.0 {
-		baseManaPct = guSpec.BaseManaCost / 100.0
-	}
-	cost := baseManaPct * actor.MaxMana
-
-	if guSpec.Rank < util.ImmortalRankThreshold {
-		rankDiff := actor.Rank - guSpec.Rank
-		if rankDiff > 0 {
-			cost /= math.Pow(10, float64(rankDiff))
-		} else if rankDiff < 0 {
-			cost *= math.Pow(10, float64(-rankDiff))
-		}
-	}
-
-	if !isImmortal {
-		refineTier := getRefineManaTier(actor.Rank, actor.GuInventory)
-		if refineTier > 0 {
-			cost *= 0.5
-		}
-	}
-
-	return cost
-}
-
-
-func getRefineManaTier(rank int, inventory []models.GuInstance) float64 {
-	var maxTier float64
-	for _, gu := range inventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			spec, ok := models.GetGu(gu.GuID, gu.Rank)
-			if ok && spec.Effects.Passive != nil && spec.Effects.Passive.RefineManaTier > 0 {
-				if spec.Rank == rank {
-					if spec.Effects.Passive.RefineManaTier > maxTier {
-						maxTier = spec.Effects.Passive.RefineManaTier
-					}
-				}
-			}
-		}
-	}
-	return maxTier
 }
 
 func isPathInGu(paths []string, path string) bool {

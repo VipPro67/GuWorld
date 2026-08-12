@@ -930,10 +930,6 @@ func AutoCombatStart(c *gin.Context) {
 // ── helpers ────────────────────────────────────────────────────────────
 
 func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem, actionType string) (simulator.SimAction, error) {
-	if actor.Rank >= 6 && actor.Rank < spec.Rank {
-		return simulator.SimAction{}, fmt.Errorf("Tiên Khiếu không thể điều khiển Cổ trùng cấp cao hơn")
-	}
-
 	dmg, def, cost, err := CalculateGuEffectForCombatant(actor, spec, false)
 	if err != nil {
 		return simulator.SimAction{
@@ -1406,7 +1402,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		HealPotency:     healPotency,
 		PrimevalStones:  simStones,
 		ImmortalStones:  simImmortalStones,
-		RefineManaTier:  getRefineManaTier(player.Rank, player.GuInventory),
+		RefineManaTier:  gamefx.RefineManaTier(player.Rank, player.GuInventory),
 	}
 
 	if isInitiator && reqLoadout != nil {

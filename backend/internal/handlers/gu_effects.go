@@ -8,7 +8,6 @@ import (
 
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
-	"github.com/vippro67/GuWorld/backend/internal/util"
 )
 
 // Action represents a dynamic combat action compiled from Gu effects
@@ -38,16 +37,8 @@ func ValidateGuUsable(player *models.Player, gu *models.GuInstance, spec *models
 		return fmt.Errorf("Cổ trùng chưa được trang bị: %s", spec.Name)
 	}
 
-	// Rule 1: Level Penalty (Backlash)
-	if player.Rank < spec.Rank {
-		if util.IsImmortalPlayer(player) {
-			return fmt.Errorf("Tiên Khiếu không thể điều khiển Cổ trùng cấp cao hơn!")
-		}
-		return fmt.Errorf("Backlash: Cổ trùng Rank %d phản phệ Không Khiếu Rank %d! (Trừ 50 HP)", spec.Rank, player.Rank)
-	}
-
 	// Rule 3: Energy cost
-	cost := calculateEnergyCost(player, spec)
+	cost := gamefx.EnergyCost(player, spec)
 	if player.CurrentMana < cost {
 		return fmt.Errorf("%s", insufficientEnergyMessage(player))
 	}

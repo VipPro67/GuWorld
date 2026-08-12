@@ -581,7 +581,7 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 		costMultiplier := 1.0 + float64(conflictingMarks)/20000.0
 		totalMana *= costMultiplier
 	}
-	refineTier := getRefineManaTier(player.Rank, player.GuInventory)
+	refineTier := gamefx.RefineManaTier(player.Rank, player.GuInventory)
 	if refineTier > 0 {
 		totalMana *= 0.5
 	}
@@ -682,9 +682,6 @@ func findUsableOwnedGu(player *models.Player, instanceID string, tx *sql.Tx) (ow
 		spec, ok := models.GetGu(inst.GuID, inst.Rank)
 		if !ok {
 			return ownedGu{}, fmt.Errorf("không tìm thấy định nghĩa Cổ trùng %s", inst.GuID)
-		}
-		if player.Rank < spec.Rank {
-			return ownedGu{}, fmt.Errorf("Rank người chơi không đủ để điều khiển %s", spec.Name)
 		}
 		return ownedGu{Instance: inst, Spec: spec}, nil
 	}

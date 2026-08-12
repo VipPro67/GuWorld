@@ -58,6 +58,21 @@ Cột `path_masteries` (JSONB) lưu **điểm tích lũy** dạng `map[string]in
 
 **Cảnh giới là điều kiện thăng tiên rank:** để đột phá lên Rank 7/8/9 khi vượt Kiếp Nạn, người chơi cần ≥ 1 lưu phái đạt Tông Sư (500)/Đại Tông Sư (2.500)/Vô Thượng (10.000). Kiểm tra trong `tribulation.go` `handleSuccess`.
 
+### Tiêu hao Chân Nguyên / Tiên Nguyên khi dùng Cổ
+
+Công thức tính tiêu hao nằm ở `gamefx/energy.go` (`EnergyCost` / `EnergyCostForCombatant`):
+
+- **Phàm nhân (Rank 1–5):** chi phí = `(BaseManaCost/100) × MaxMana` (mặc định 10% MaxMana). Cổ rank thấp hơn giảm chi phí ÷10/rank; **Cổ rank cao hơn bị nhân hệ số lũy tiến**.
+- **Cổ Tiên (Rank ≥ 6):** chi phí = `BaseManaCost` (mặc định 1). Cổ dưới Rank 6 miễn phí; Cổ rank cao hơn nhân hệ số lũy tiến; Cổ rank thấp hơn chia 100^chênh lệch.
+
+**Hệ số rank cao hơn** (`HigherRankManaMultiplier(guRank, userRank)`, theo chênh lệch rank Cổ − rank người dùng):
+
+- **Cổ phàm (rank 1–5):** theo bảng `{1, 2, 5, 25, 125}` cho gap `{0,1,2,3,4}` — ví dụ rank 1 dùng Cổ rank 5 (gap 4) tốn **125×** Chân Nguyên.
+- **Cổ Tiên (rank ≥ 6):** mỗi bậc chênh lệch nhân ×100 (`100^gap`) — rank 6 dùng Cổ rank 7 tốn ×100, rank 6 dùng rank 8 tốn ×10.000.
+
+- `refine_mana_tier` (passive Cổ cùng rank đang trang bị) giảm 50% chi phí.
+- **Trang bị:** không thể **trang bị** Cổ có rank cao hơn rank người chơi (`EquipGu` trong `player.go`) — nhưng vẫn có thể **sử dụng** Cổ rank cao hơn qua các đường dùng không yêu cầu trang bị (kèm hệ số mana lũy tiến + backlash HP trong chiến đấu).
+
 ### Nhân vật — bảng `players` (race / gender / constitution / statuses)
 
 Các cột mô tả nhân dạng và trạng thái của người chơi, giá trị lưu bằng **key tiếng Anh**, effect được resolve tập trung trong `backend/internal/gamefx/fx.go`:
