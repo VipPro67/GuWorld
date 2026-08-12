@@ -219,9 +219,9 @@ export default function WikiClientView({
     return initialGus.filter((gu) => {
       // Search check
       if (cleanSearch) {
-        const nameClean = removeAccents(gu.name.toLowerCase());
-        const idClean = removeAccents(gu.id.toLowerCase());
-        const descClean = removeAccents(gu.description.toLowerCase());
+        const nameClean = removeAccents((gu.name || "").toLowerCase());
+        const idClean = removeAccents((gu.id || "").toLowerCase());
+        const descClean = removeAccents((gu.description || "").toLowerCase());
         const matchText = nameClean.includes(cleanSearch) || idClean.includes(cleanSearch) || descClean.includes(cleanSearch);
         if (!matchText) return false;
       }
@@ -235,15 +235,15 @@ export default function WikiClientView({
       if (guType !== "all" && gu.gu_type !== guType) return false;
 
       return true;
-    }).sort((a, b) => a.name.localeCompare(b.name));
+    }).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
   }, [initialGus, cleanSearch, guRank, guPath, guRarity, guType]);
 
   const filteredItems = useMemo(() => {
     return initialItems.filter((item) => {
       // Search check
       if (cleanSearch) {
-        const nameClean = removeAccents(item.name.toLowerCase());
-        const idClean = removeAccents(item.id.toLowerCase());
+        const nameClean = removeAccents((item.name || "").toLowerCase());
+        const idClean = removeAccents((item.id || "").toLowerCase());
         const descClean = removeAccents((item.description || "").toLowerCase());
         const matchText = nameClean.includes(cleanSearch) || idClean.includes(cleanSearch) || descClean.includes(cleanSearch);
         if (!matchText) return false;
@@ -264,8 +264,8 @@ export default function WikiClientView({
 
       // Search check
       if (cleanSearch) {
-        const nameClean = removeAccents(targetName.toLowerCase());
-        const idClean = removeAccents(recipe.target_gu_id.toLowerCase());
+        const nameClean = removeAccents((targetName || "").toLowerCase());
+        const idClean = removeAccents((recipe.target_gu_id || "").toLowerCase());
         const matchText = nameClean.includes(cleanSearch) || idClean.includes(cleanSearch);
         if (!matchText) return false;
       }
