@@ -557,17 +557,29 @@ func ResolveTribulation(c *gin.Context) {
 		yearsAtRank := ap.InternalYearsPassed - ap.RankStartYear
 		canBreak, newRank := models.CheckImmortalBreakthrough(playerRank, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount, yearsAtRank)
 		if canBreak {
-			_, _ = tx.Exec(`UPDATE players SET rank = $1 WHERE id = $2`, newRank, playerID)
-			ap.RankStartYear = ap.InternalYearsPassed
-			didBreakthrough = true
-			breakthroughMsg = fmt.Sprintf(" Đột phá! Đạo hữu đã tiến vào %s!", getRankName(newRank))
+			// Rank-up requirement: player must own at least one path (lưu phái)
+			// at the required Cảnh Giới — Rank 7 = Tông Sư, Rank 8 = Đại Tông Sư,
+			// Rank 9 = Vô Thượng Đại Tông Sư.
+			var pathMasteries models.PathMasteriesMap
+			_ = tx.QueryRow(`SELECT COALESCE(path_masteries, '{}'::jsonb) FROM players WHERE id = $1`, playerID).Scan(&pathMasteries)
+			reqLevel := gamefx.PathMasteryLevelRequiredForRank(newRank)
+			if !gamefx.HasPathMasteryAtLeast(pathMasteries, reqLevel) {
+				blockedMsg := fmt.Sprintf(" Chưa đủ điều kiện đột phá lên %s: cần ít nhất 1 lưu phái đạt %s (%d điểm).", getRankName(newRank), gamefx.PathMasteryLevelName(reqLevel), gamefx.PathMasteryPointsForLevel(reqLevel))
+				_, _ = tx.Exec(`INSERT INTO messages (sender_id, receiver_id, content, channel) VALUES ($1, $1, $2, 'system')`, playerID, "Đột phá bị chặn: "+blockedMsg)
+				breakthroughMsg = blockedMsg
+			} else {
+				_, _ = tx.Exec(`UPDATE players SET rank = $1 WHERE id = $2`, newRank, playerID)
+				ap.RankStartYear = ap.InternalYearsPassed
+				didBreakthrough = true
+				breakthroughMsg = fmt.Sprintf(" Đột phá! Đạo hữu đã tiến vào %s!", getRankName(newRank))
 
-			// Recalculate next tribulation year based on the new rank!
-			nextYear, _ = models.GetNextTribulationInfo(newRank, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
-			if nextYear < 10 {
-				nextYear = 10
+				// Recalculate next tribulation year based on the new rank!
+				nextYear, _ = models.GetNextTribulationInfo(newRank, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
+				if nextYear < 10 {
+					nextYear = 10
+				}
+				ap.NextTribulationYear = nextYear
 			}
-			ap.NextTribulationYear = nextYear
 		}
 	}
 

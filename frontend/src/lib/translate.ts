@@ -198,3 +198,33 @@ export function translateMastery(mastery: string | undefined): string {
   if (!mastery) return "?";
   return MASTERY_MAP[mastery] || mastery;
 }
+
+// Path mastery milestones (mirror backend gamefx.PathMasteryLevel).
+export const PATH_MASTERY_MILESTONES = [100, 500, 2500, 10000];
+
+// masteryLevelForPoints maps accumulated path mastery points to the attained
+// realm level (0-4). Mirrors gamefx.PathMasteryLevel.
+export function masteryLevelForPoints(points: number): number {
+  if (points >= PATH_MASTERY_MILESTONES[3]) return 4;
+  if (points >= PATH_MASTERY_MILESTONES[2]) return 3;
+  if (points >= PATH_MASTERY_MILESTONES[1]) return 2;
+  if (points >= PATH_MASTERY_MILESTONES[0]) return 1;
+  return 0;
+}
+
+export const MASTERY_LEVEL_KEYS = ["Ordinary", "Master", "Grandmaster", "Great Grandmaster", "Supreme Grandmaster"];
+
+// masteryKeyForPoints returns the English level key for path mastery points.
+export function masteryKeyForPoints(points: number): string {
+  return MASTERY_LEVEL_KEYS[masteryLevelForPoints(points)];
+}
+
+// masteryLevelRequiredForRank returns the minimum path-mastery level required
+// to advance to a rank (Rank 7 = Tông Sư, Rank 8 = Đại Tông Sư, Rank 9 = Vô
+// Thượng Đại Tông Sư). Returns 0 when no requirement. Mirrors gamefx.
+export function masteryLevelRequiredForRank(rank: number): number {
+  if (rank === 7) return 2;
+  if (rank === 8) return 3;
+  if (rank === 9) return 4;
+  return 0;
+}

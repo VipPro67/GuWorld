@@ -22,6 +22,12 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
+// Points of Cảnh Giới Lưu Phái earned by a successful Luyện Cổ (refine).
+const (
+	refinePathMasteryGain        = 2
+	refinePathMasteryGainImmortal = 10
+)
+
 // ParseRecipeID parses recipe_GU_ID_RANK_VARIANT into components.
 // E.g., recipe_GU_BIG_BELLY_TOAD_1_1 -> target_gu_id = "GU_BIG_BELLY_TOAD", target_rank = 1, variant = 1
 func ParseRecipeID(recipeID string) (string, int, int, error) {
@@ -215,6 +221,7 @@ func RefineGu(c *gin.Context) {
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock player status"})
 		}
+		return
 	}
 
 	// 2b. Verify player has unlocked the recipe
@@ -354,18 +361,16 @@ func RefineGu(c *gin.Context) {
 	if player.PathMasteries != nil {
 		for _, path := range paths {
 			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-			if mLevel, ok := player.PathMasteries[cleanPath]; ok {
+			if points, ok := player.PathMasteries[cleanPath]; ok {
 				bonus := 0.0
-				switch mLevel {
-				case "Ordinary":
-					bonus = 0.0
-				case "Master":
+				switch gamefx.PathMasteryLevel(points) {
+				case 1:
 					bonus = 0.05
-				case "Grandmaster":
+				case 2:
 					bonus = 0.10
-				case "Great Grandmaster":
+				case 3:
 					bonus = 0.15
-				case "Supreme Grandmaster":
+				case 4:
 					bonus = 0.20
 				}
 				if bonus > attainmentBonus {
@@ -455,6 +460,23 @@ func RefineGu(c *gin.Context) {
 
 		newInventory = append(newInventory, newGuInstance)
 		player.GuInventory = newInventory
+
+		// Luyện Cổ thành công tăng Cảnh Giới Lưu Phái cho path của Cổ đích
+		// (+10 điểm cho Cổ Tiên rank >= 6, +2 điểm cho Cổ thường).
+		pathGain := refinePathMasteryGain
+		if newGuInstance.Rank >= 6 {
+			pathGain = refinePathMasteryGainImmortal
+		}
+		if len(paths) > 0 {
+			if player.PathMasteries == nil {
+				player.PathMasteries = make(models.PathMasteriesMap)
+			}
+			cleanPath := strings.TrimSuffix(strings.ToLower(paths[0]), " path")
+			player.PathMasteries[cleanPath] += pathGain
+			newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
+			statusMsg += fmt.Sprintf(" Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái %s (Cảnh giới: %s).", pathGain, strings.Title(cleanPath), gamefx.PathMasteryLevelName(newLevel))
+		}
+
 		if newGuInstance.Rank >= 6 {
 			guName := newGuInstance.GuID
 			if targetSpec, ok := models.GetGu(newGuInstance.GuID, newGuInstance.Rank); ok {
@@ -540,10 +562,10 @@ func RefineGu(c *gin.Context) {
 	}
 	updateQuery := `
 		UPDATE players
-		SET primeval_stones = $1, immortal_stones = $2, equipped_gus = $3, hp = $4, max_mana = $5, current_mana = $6, human_qi = $7
-		WHERE id = $8
+		SET primeval_stones = $1, immortal_stones = $2, equipped_gus = $3, hp = $4, max_mana = $5, current_mana = $6, human_qi = $7, path_masteries = $8
+		WHERE id = $9
 	`
-	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ImmortalStones, player.EquippedGus, player.HP, player.MaxMana, player.CurrentMana, player.HumanQi, player.ID)
+	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ImmortalStones, player.EquippedGus, player.HP, player.MaxMana, player.CurrentMana, player.HumanQi, player.PathMasteries, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save refining results"})
 		return

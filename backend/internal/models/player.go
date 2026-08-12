@@ -52,8 +52,10 @@ func (p *Player) InventoryForCategory(category string) *MaterialsInventory {
 // DaoMarksMap maps Dao mark types to their counts.
 type DaoMarksMap map[string]int
 
-// PathMasteriesMap maps cultivation path names to their mastery levels.
-type PathMasteriesMap map[string]string
+// PathMasteriesMap maps cultivation path names to their accumulated mastery
+// points (cảnh giới lưu phái). The attained realm is derived from point
+// milestones via gamefx.PathMasteryLevel (stored like Dao Marks).
+type PathMasteriesMap map[string]int
 
 // BodyModsList represents passive body modifications
 type BodyModsList []string
@@ -150,7 +152,7 @@ type CombatState struct {
 	EnemySubRank        int               `json:"enemy_sub_rank,omitempty"`
 	EnemyGuInventory    GuInventory       `json:"enemy_gu_inventory,omitempty"`
 	EnemyDaoMarks       map[string]int    `json:"enemy_dao_marks,omitempty"`
-	EnemyPathMasteries  map[string]string `json:"enemy_path_masteries,omitempty"`
+	EnemyPathMasteries  map[string]int    `json:"enemy_path_masteries,omitempty"`
 	AIProfile           string            `json:"ai_profile,omitempty"`
 	LootTableID         string            `json:"loot_table_id,omitempty"`
 	ChargePoints        int               `json:"charge_points"`

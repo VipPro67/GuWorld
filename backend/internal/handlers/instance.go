@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -542,53 +543,17 @@ func ActionInstance(c *gin.Context) {
 			// Add stones
 			player.PrimevalStones += rewards.PrimevalStones
 
-			// Add path attainment (True Meaning / Chân Ý)
+			// Add path attainment (True Meaning / Chân Ý) as Cảnh Giới Lưu Phái points
 			if rewards.Attainment != nil && rewards.Attainment.Path != "" {
 				if player.PathMasteries == nil {
 					player.PathMasteries = make(models.PathMasteriesMap)
 				}
 				// Clean and normalize path name to lowercase
 				cleanPath := strings.TrimSuffix(strings.ToLower(rewards.Attainment.Path), " path")
-				
-				currentLevelName := player.PathMasteries[cleanPath]
-				currentLevel := 0
-				switch currentLevelName {
-				case "Ordinary":
-					currentLevel = 0
-				case "Master":
-					currentLevel = 1
-				case "Grandmaster":
-					currentLevel = 2
-				case "Great Grandmaster":
-					currentLevel = 3
-				case "Supreme Grandmaster":
-					currentLevel = 4
-				}
 
-				// direct leap level based on Chân Ý amount
-				leap := 1
-				if rewards.Attainment.Amount >= 50 {
-					leap = 2
-				}
-				newLevel := currentLevel + leap
-				if newLevel > 4 {
-					newLevel = 4
-				}
-
-				levelName := "Ordinary"
-				switch newLevel {
-				case 1:
-					levelName = "Master"
-				case 2:
-					levelName = "Grandmaster"
-				case 3:
-					levelName = "Great Grandmaster"
-				case 4:
-					levelName = "Supreme Grandmaster"
-				}
-
-				player.PathMasteries[cleanPath] = levelName
-				logResult = "Chúc mừng đạo hữu xuất sắc vượt ải thành công, nhận được Chân Ý thăng tiến \"" + rewards.Attainment.Path + "\" lên cảnh giới " + levelName + "!"
+				player.PathMasteries[cleanPath] += rewards.Attainment.Amount
+				newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
+				logResult = "Chúc mừng đạo hữu xuất sắc vượt ải thành công, nhận được " + fmt.Sprintf("%d", rewards.Attainment.Amount) + " điểm Chân Ý lưu phái \"" + rewards.Attainment.Path + "\" (Cảnh giới: " + gamefx.PathMasteryLevelName(newLevel) + ")!"
 			} else {
 				logResult = "Chúc mừng đạo hữu đã chinh phục thành công phó bản này!"
 			}

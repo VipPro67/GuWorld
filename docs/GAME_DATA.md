@@ -42,6 +42,22 @@ Tạo ngay tại thời điểm người chơi thăng tiên lên Rank 6. `grade`
 
 Đạo Ngân chỉ lưu trong cột JSONB `players.dao_marks` (ví dụ `{"strength": 100, "fire": 2500}`). Bảng quan hệ `dao_marks` đã bị xóa — không còn mirror. Path được normalize dạng lowercase (không có hậu tố `" path"`) khi lưu.
 
+### Cảnh Giới Lưu Phái — cột `players.path_masteries`
+
+Cột `path_masteries` (JSONB) lưu **điểm tích lũy** dạng `map[string]int`, giống cột `dao_marks` của `immortal_apertures` — ví dụ `{"fire": 1250, "water": 340}`. Cảnh giới (cấp độ 0-4) được suy ra từ mốc điểm qua `gamefx.PathMasteryLevel(points)`:
+
+| Level | Tên | Hệ số | Mốc điểm |
+|-------|-----|-------|----------|
+| 0 | Ordinary (Phàm Thai) | ×1.0 | < 100 |
+| 1 | Master (Đại Sư) | ×1.1 | ≥ 100 |
+| 2 | Grandmaster (Tông Sư) | ×1.25 | ≥ 500 |
+| 3 | Great Grandmaster (Đại Tông Sư) | ×1.4 | ≥ 2.500 |
+| 4 | Supreme Grandmaster (Vô Thượng Đại Tông Sư) | ×1.5 | ≥ 10.000 |
+
+Điểm nhận từ: sát chiêu thành công (+2/path hạch tâm), luyện cổ thành công (+2, +10 nếu Cổ Tiên rank ≥ 6), thưởng Chân Ý phó bản (cộng thẳng `amount`). Dữ liệu cũ lưu tên cấp được migration tự động đổi sang mốc điểm khi khởi động.
+
+**Cảnh giới là điều kiện thăng tiên rank:** để đột phá lên Rank 7/8/9 khi vượt Kiếp Nạn, người chơi cần ≥ 1 lưu phái đạt Tông Sư (500)/Đại Tông Sư (2.500)/Vô Thượng (10.000). Kiểm tra trong `tribulation.go` `handleSuccess`.
+
 ### Nhân vật — bảng `players` (race / gender / constitution / statuses)
 
 Các cột mô tả nhân dạng và trạng thái của người chơi, giá trị lưu bằng **key tiếng Anh**, effect được resolve tập trung trong `backend/internal/gamefx/fx.go`:

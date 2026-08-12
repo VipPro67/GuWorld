@@ -32,8 +32,8 @@ type PlayerProfileResponse struct {
 	ScoutingStatus  string            `json:"scouting_status"`
 	StatusType      string            `json:"status_type"` // "success", "partial", "failure"
 	DominantPath    string            `json:"dominant_path"`
-	DaoMarks        map[string]int    `json:"dao_marks"`
-	PathMasteries   map[string]string `json:"path_masteries"`
+	DaoMarks        map[string]int `json:"dao_marks"`
+	PathMasteries   map[string]int `json:"path_masteries"`
 	Bio             string            `json:"bio"`
 	AvatarURL       string            `json:"avatar_url"`
 	Race            string            `json:"race"`
@@ -43,7 +43,7 @@ type PlayerProfileResponse struct {
 }
 
 // getDominantPath determines the player's primary path based on Dao Marks or Path Masteries
-func getDominantPath(daoMarks map[string]int, pathMasteries map[string]string) string {
+func getDominantPath(daoMarks map[string]int, pathMasteries map[string]int) string {
 	maxMarks := 0
 	dominant := ""
 	for path, marks := range daoMarks {
@@ -56,16 +56,9 @@ func getDominantPath(daoMarks map[string]int, pathMasteries map[string]string) s
 		return strings.Title(dominant)
 	}
 
-	masteryWeight := map[string]int{
-		"Supreme Grandmaster": 5,
-		"Great Grandmaster":   4,
-		"Grandmaster":         3,
-		"Master":              2,
-		"Ordinary":            1,
-	}
 	maxWeight := 0
-	for path, lvl := range pathMasteries {
-		w := masteryWeight[lvl]
+	for path, points := range pathMasteries {
+		w := gamefx.PathMasteryLevel(points)
 		if w > maxWeight {
 			maxWeight = w
 			dominant = path
@@ -169,17 +162,17 @@ func GetPlayerProfile(c *gin.Context) {
 			}
 		}
 	}
-	for path, level := range viewerPathMasteries {
+	for path, points := range viewerPathMasteries {
 		cleanPath := strings.ToLower(path)
 		if strings.Contains(cleanPath, "wisdom") || strings.Contains(cleanPath, "information") {
-			switch level {
-			case "Master":
+			switch gamefx.PathMasteryLevel(points) {
+			case 1:
 				scoutingLevel += 1.0
-			case "Grandmaster":
+			case 2:
 				scoutingLevel += 2.0
-			case "Great Grandmaster":
+			case 3:
 				scoutingLevel += 3.0
-			case "Supreme Grandmaster":
+			case 4:
 				scoutingLevel += 5.0
 			}
 		}
@@ -201,17 +194,17 @@ func GetPlayerProfile(c *gin.Context) {
 			}
 		}
 	}
-	for path, level := range target.PathMasteries {
+	for path, points := range target.PathMasteries {
 		cleanPath := strings.ToLower(path)
 		if strings.Contains(cleanPath, "wisdom") || strings.Contains(cleanPath, "dark") {
-			switch level {
-			case "Master":
+			switch gamefx.PathMasteryLevel(points) {
+			case 1:
 				disguiseLevel += 1.0
-			case "Grandmaster":
+			case 2:
 				disguiseLevel += 2.0
-			case "Great Grandmaster":
+			case 3:
 				disguiseLevel += 3.0
-			case "Supreme Grandmaster":
+			case 4:
 				disguiseLevel += 5.0
 			}
 		}
@@ -279,7 +272,7 @@ func GetPlayerProfile(c *gin.Context) {
 		resp.StatusType = "partial"
 		resp.DominantPath = getDominantPath(targetDaoMarks, target.PathMasteries)
 		resp.DaoMarks = map[string]int{}
-		resp.PathMasteries = map[string]string{}
+		resp.PathMasteries = map[string]int{}
 
 		equipped := []string{}
 		for _, gu := range target.GuInventory {
@@ -308,7 +301,7 @@ func GetPlayerProfile(c *gin.Context) {
 		// Scouting Failure
 		resp.StatusType = "failure"
 		resp.DaoMarks = map[string]int{}
-		resp.PathMasteries = map[string]string{}
+		resp.PathMasteries = map[string]int{}
 
 		if target.IsDisguised {
 			// Return B's configured fake profile settings
@@ -360,7 +353,7 @@ func GetPlayerProfile(c *gin.Context) {
 				// resp.ScoutingStatus = "Thất bại trinh sát! Đối phương ngụy trang hoàn hảo hoặc tu vi/trí đạo vượt trội."
 				resp.DominantPath = "Trí Đạo"
 				resp.DaoMarks = map[string]int{"wisdom": 50}
-				resp.PathMasteries = map[string]string{"wisdom": "Master"}
+				resp.PathMasteries = map[string]int{"wisdom": gamefx.PathMasteryMasterPoints}
 			} else {
 				// Scramble username, randomize rank
 				scrambled := target.Username

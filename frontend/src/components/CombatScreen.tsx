@@ -6,6 +6,7 @@ import { Sparkles, Play, Swords, Eye, Shield, Zap, ChevronDown, ChevronUp, Wand2
 import { CombatReplayView } from "./CombatReplayView";
 import { Num } from "./Num";
 import { getPathColor } from "@/lib/utils";
+import { masteryKeyForPoints, masteryLevelForPoints } from "@/lib/translate";
 
 interface CombatScreenProps {
   player: Player;
@@ -306,8 +307,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       .map(p => ({
         path: p,
         daoMarks: dm[p] || 0,
-        mastery: pm[p] || "Ordinary",
-        masteryLevel: ["Ordinary", "Master", "Grandmaster", "Great Grandmaster", "Supreme Grandmaster"].indexOf(pm[p] || "Ordinary"),
+        mastery: masteryKeyForPoints(pm[p] || 0),
+        masteryLevel: masteryLevelForPoints(pm[p] || 0),
       }))
       .sort((a, b) => b.daoMarks - a.daoMarks || b.masteryLevel - a.masteryLevel);
   }, [player.dao_marks, player.path_masteries]);
@@ -374,8 +375,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           const daoVal = player.dao_marks?.[cleanP] || player.dao_marks?.[p] || 0;
           if (daoVal > maxDaoMark) maxDaoMark = daoVal;
 
-          const levelStr = player.path_masteries?.[cleanP] || player.path_masteries?.[p] || "Ordinary";
-          const levelIdx = ["Ordinary", "Master", "Grandmaster", "Great Grandmaster", "Supreme Grandmaster"].indexOf(levelStr);
+          const levelIdx = masteryLevelForPoints(player.path_masteries?.[cleanP] || player.path_masteries?.[p] || 0);
           if (levelIdx > maxMastery) maxMastery = levelIdx;
         });
       }

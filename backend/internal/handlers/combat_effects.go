@@ -10,31 +10,7 @@ import (
 )
 
 func getActorPathMasteryMultiplier(actor *models.Combatant, paths []string) float64 {
-	masteryMultiplier := 1.0
-	if actor.PathMasteries != nil {
-		for _, path := range paths {
-			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-			if mLevel, ok := actor.PathMasteries[cleanPath]; ok {
-				mult := 1.0
-				switch mLevel {
-				case "Ordinary":
-					mult = 1.0
-				case "Master":
-					mult = 1.1
-				case "Grandmaster":
-					mult = 1.25
-				case "Great Grandmaster":
-					mult = 1.4
-				case "Supreme Grandmaster":
-					mult = 1.5
-				}
-				if mult > masteryMultiplier {
-					masteryMultiplier = mult
-				}
-			}
-		}
-	}
-	return masteryMultiplier
+	return gamefx.PathMasteryMultiplier(actor.PathMasteries, paths)
 }
 
 func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDictionaryItem, applyDao bool, bonuses ...map[string]float64) (effectiveDamage float64, effectiveDefense float64, manaCost float64, err error) {
@@ -51,20 +27,8 @@ func CalculateGuEffectForCombatant(actor *models.Combatant, guSpec *models.GuDic
 	if actor.PathMasteries != nil {
 		for _, path := range guSpec.Path {
 			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-			if mLevel, ok := actor.PathMasteries[cleanPath]; ok {
-				lvl := 0
-				switch mLevel {
-				case "Ordinary":
-					lvl = 0
-				case "Master":
-					lvl = 1
-				case "Grandmaster":
-					lvl = 2
-				case "Great Grandmaster":
-					lvl = 3
-				case "Supreme Grandmaster":
-					lvl = 4
-				}
+			if points, ok := actor.PathMasteries[cleanPath]; ok {
+				lvl := gamefx.PathMasteryLevel(points)
 				if lvl > attainmentLevel {
 					attainmentLevel = lvl
 				}

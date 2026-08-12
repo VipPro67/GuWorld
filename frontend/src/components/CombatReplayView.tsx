@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { formatNumber } from "@/lib/utils";
 import { Num } from "./Num";
+import { translateMastery, masteryKeyForPoints } from "@/lib/translate";
 
 export interface CombatLogEntry {
   turn: number;
@@ -40,7 +41,7 @@ interface CombatantReplayInfo {
   rank?: number;
   sub_rank?: number;
   dao_marks?: Record<string, number>;
-  path_masteries?: Record<string, string>;
+  path_masteries?: Record<string, number>;
   avatar_url?: string;
 }
 
@@ -70,7 +71,7 @@ interface CombatantState {
   rank: number;
   subRank: number;
   daoMarks?: Record<string, number>;
-  pathMasteries?: Record<string, string>;
+  pathMasteries?: Record<string, number>;
   avatarUrl?: string;
 }
 
@@ -697,9 +698,9 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
               <div className="border-t border-zinc-800 pt-2 mt-2">
                 <span className="text-zinc-500 text-[10px]">Đường Tu:</span>
                 <div className="flex flex-wrap gap-1 mt-1">
-                  {Object.entries(c.pathMasteries).map(([k, v]) => (
+                  {Object.entries(c.pathMasteries).map(([k, points]) => (
                     <span key={k} className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950/30 text-cyan-400 border border-cyan-800/40 font-mono">
-                      {k}: {v}
+                      {k}: {translateMastery(masteryKeyForPoints(points as number))}
                     </span>
                   ))}
                 </div>

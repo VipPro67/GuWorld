@@ -290,7 +290,7 @@ export const wikiPages: WikiPage[] = [
             <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] space-y-2 text-xs">
               <h4 className="font-bold text-indigo-300">Cảnh Giới Lưu Phái (Attainment / Chân Ý)</h4>
               <p className="text-[var(--text-muted)] leading-relaxed">
-                Độ hiểu biết về quy luật thế giới. Chia làm 5 cảnh giới: <strong>Phàm Thai (Ordinary)</strong> ➔ <strong>Đại Sư (Master)</strong> ➔ <strong>Tông Sư (Grandmaster)</strong> ➔ <strong>Đại Tông Sư (Great Grandmaster)</strong> ➔ <strong>Vô Thượng Đại Tông Sư (Supreme Grandmaster)</strong>. Cảnh giới càng cao, sát chiêu lưu phái đó càng uy lực và tỉ lệ luyện Cổ thành công càng lớn.
+                Độ hiểu biết về quy luật thế giới. Chia làm 5 cảnh giới: <strong>Phàm Thai (Ordinary)</strong> ➔ <strong>Đại Sư (Master)</strong> ➔ <strong>Tông Sư (Grandmaster)</strong> ➔ <strong>Đại Tông Sư (Great Grandmaster)</strong> ➔ <strong>Vô Thượng Đại Tông Sư (Supreme Grandmaster)</strong>. Điểm tích lũy theo từng lưu phái từ sát chiêu thành công, luyện Cổ và vượt ải phó bản; cảnh giới suy ra theo mốc điểm (Đại Sư=100, Tông Sư=500, Đại Tông Sư=2.500, Vô Thượng=10.000). **Để đột phá lên Rank 7/8/9 khi vượt Kiếp Nạn, cần ít nhất 1 lưu phái đạt Tông Sư/Đại Tông Sư/Vô Thượng tương ứng.** Cảnh giới càng cao, sát chiêu lưu phái đó càng uy lực và tỉ lệ luyện Cổ thành công càng lớn.
               </p>
             </div>
 

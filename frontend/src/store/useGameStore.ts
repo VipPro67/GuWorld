@@ -32,7 +32,7 @@ export interface Combatant {
   base_defense: number;
   gu_inventory?: GuInstance[];
   dao_marks?: Record<string, number>;
-  path_masteries?: Record<string, string>;
+  path_masteries?: Record<string, number>;
   ai_profile?: string;
   loot_table_id?: string;
   grid_x?: number;
@@ -124,7 +124,7 @@ export interface Player {
   body_mods: string[];
   current_region: string;
   dao_marks: Record<string, number>;
-  path_masteries: Record<string, string>;
+  path_masteries: Record<string, number>;
   x: number;
   y: number;
   explored_cells: string[];

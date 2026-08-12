@@ -45,8 +45,8 @@ type CombatantInfo struct {
 	KindDetail    string            `json:"kind_detail,omitempty"`
 	Rank          int               `json:"rank,omitempty"`
 	SubRank       int               `json:"sub_rank,omitempty"`
-	DaoMarks      map[string]int    `json:"dao_marks,omitempty"`
-	PathMasteries map[string]string `json:"path_masteries,omitempty"`
+	DaoMarks      map[string]int `json:"dao_marks,omitempty"`
+	PathMasteries map[string]int `json:"path_masteries,omitempty"`
 }
 
 // AutoCombatStart initializes and fully simulates a combat, returning the deterministic log.

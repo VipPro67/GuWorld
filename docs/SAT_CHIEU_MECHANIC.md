@@ -260,6 +260,12 @@ DaoBonus = 1 + Player.DaoMarks[CorePath] / 100
 
 Không giới hạn trên của DaoMarks (nhưng diminishing returns có thể được áp dụng sau này).
 
+### 8.1 Cảnh Giới Lưu Phái (Path Masteries)
+
+Bên cạnh Đạo Ấn, sát chiêu thành công cũng tăng `players.path_masteries` (+2 điểm cho path hạch tâm, `killerMovePathMasteryGain`). `path_masteries` lưu dạng JSONB điểm (`map[string]int`), cảnh giới được suy ra từ mốc điểm (Đại Sư=100, Tông Sư=500, Đại Tông Sư=2.500, Vô Thượng=10.000) qua `gamefx.PathMasteryLevel`.
+
+Cảnh giới càng cao thì sát chiêu lưu phái đó càng ổn định (tỉ lệ thành công +2%/cấp) và giảm mana (≥ Tông Sư). **Cảnh giới cũng là điều kiện thăng tiên rank:** Rank 7/8/9 yêu cầu ≥ 1 lưu phái đạt Tông Sư/Đại Tông Sư/Vô Thượng (kiểm tra trong `tribulation.go` khi đột phá).
+
 
 ## 9. Hướng Dẫn Implement
 

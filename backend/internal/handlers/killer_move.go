@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -30,6 +31,7 @@ const (
 	killerMoveBacklashManaFactor      = 0.5
 	killerMoveMasteryBonus            = 15.0
 	killerMoveMaxSupport              = 8
+	killerMovePathMasteryGain         = 2
 )
 
 type CalculateKillerMoveRequest struct {
@@ -362,11 +364,21 @@ func CastKillerMove(c *gin.Context) {
 		}
 
 		applyKillerMoveToCombat(player.ActiveCombat, player.ID.String(), req.TargetID, preview.DamageValue, preview.DefenseValue, preview.Effects, preview.CompoundEffects, &logs)
+
+		// Sát chiêu thành công tăng Cảnh Giới Lưu Phái (+2 điểm path hạch tâm).
+		corePath := normalizePath(preview.Path)
+		if player.PathMasteries == nil {
+			player.PathMasteries = make(models.PathMasteriesMap)
+		}
+		player.PathMasteries[corePath] += killerMovePathMasteryGain
+		newLevel := gamefx.PathMasteryLevel(player.PathMasteries[corePath])
+		logs = append(logs, fmt.Sprintf("Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái %s (Cảnh giới: %s).", killerMovePathMasteryGain, strings.Title(corePath), gamefx.PathMasteryLevelName(newLevel)))
+
 		player.ActiveCombat.SkillCooldowns[req.KillerMoveID] = preview.Cooldown
 	}
 
 	combatJSON, _ := json.Marshal(player.ActiveCombat)
-	_, err = tx.Exec(`UPDATE players SET current_mana = $1, hp = $2, active_combat = $3 WHERE id = $4`, player.CurrentMana, player.HP, combatJSON, player.ID)
+	_, err = tx.Exec(`UPDATE players SET current_mana = $1, hp = $2, active_combat = $3, path_masteries = $4 WHERE id = $5`, player.CurrentMana, player.HP, combatJSON, player.PathMasteries, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trạng thái chiến đấu"})
 		return
@@ -1036,18 +1048,8 @@ func attainmentLevel(player *models.Player, paths []string) int {
 	maxLvl := 0
 	for _, path := range paths {
 		clean := normalizePath(path)
-		level := player.PathMasteries[clean]
-		lvl := 0
-		switch strings.ToLower(level) {
-		case "master", "đại sư", "dai su":
-			lvl = 1
-		case "grandmaster", "tông sư", "tong su":
-			lvl = 2
-		case "great grandmaster", "đại tông sư", "dai tong su":
-			lvl = 3
-		case "supreme grandmaster", "vô thượng đại tông sư", "vo thuong dai tong su":
-			lvl = 4
-		}
+		points := player.PathMasteries[clean]
+		lvl := gamefx.PathMasteryLevel(points)
 		if lvl > maxLvl {
 			maxLvl = lvl
 		}

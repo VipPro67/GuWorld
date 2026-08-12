@@ -1375,6 +1375,39 @@ func InitSchema() error {
 		{`UPDATE players SET time_speed_multiplier = 1.0;`, "reset_time_speed_multiplier"},
 		{`ALTER TABLE players DROP COLUMN IF EXISTS tribulation_count;`, "drop_tribulation_count_column"},
 		{`ALTER TABLE sect_members ALTER COLUMN contribution_points TYPE BIGINT;`, "alter_sect_members_contribution_points_type_bigint"},
+		{`
+DO $$
+DECLARE
+    r RECORD;
+    key TEXT;
+    val TEXT;
+    new_masteries JSONB := '{}';
+    pts INT;
+BEGIN
+    FOR r IN
+        SELECT id, path_masteries FROM players
+        WHERE path_masteries IS NOT NULL AND jsonb_typeof(path_masteries) = 'object'
+    LOOP
+        new_masteries := '{}';
+        FOR key, val IN SELECT * FROM jsonb_each_text(r.path_masteries)
+        LOOP
+            pts := NULL;
+            IF val = 'Ordinary' THEN pts := 0;
+            ELSIF val = 'Master' THEN pts := 100;
+            ELSIF val = 'Grandmaster' THEN pts := 500;
+            ELSIF val = 'Great Grandmaster' THEN pts := 2500;
+            ELSIF val = 'Supreme Grandmaster' THEN pts := 10000;
+            ELSIF val ~ '^[0-9]+$' THEN pts := val::int;
+            END IF;
+            IF pts IS NOT NULL THEN
+                new_masteries := jsonb_set(new_masteries, ARRAY[key], to_jsonb(pts));
+            END IF;
+        END LOOP;
+        IF new_masteries <> r.path_masteries THEN
+            UPDATE players SET path_masteries = new_masteries WHERE id = r.id;
+        END IF;
+    END LOOP;
+END $$;`, "migrate_path_masteries_to_points"},
 	}
 	// One-time data cleanup: force-unequip excess equipped+ACTIVE Gus so no
 	// player exceeds MaxEquippedGus. Keeps vital Gus first, then the most

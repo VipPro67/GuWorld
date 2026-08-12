@@ -18,8 +18,8 @@ type MonsterTemplate struct {
 	BaseDefense      float64            `json:"base_defense"`
 	GuInventory      GuInventory        `json:"gu_inventory"`
 	ItemInventory    MaterialsInventory `json:"item_inventory"`
-	DaoMarks         map[string]int     `json:"dao_marks"`
-	PathMasteries    map[string]string  `json:"path_masteries"`
+	DaoMarks         map[string]int    `json:"dao_marks"`
+	PathMasteries    map[string]int    `json:"path_masteries"`
 	AIProfile        string             `json:"ai_profile"`
 	LootTableID      string             `json:"loot_table_id"`
 	Description      string             `json:"description"`
@@ -71,7 +71,7 @@ type Combatant struct {
 	BaseDefense   float64           `json:"base_defense"`
 	GuInventory   GuInventory       `json:"gu_inventory"`
 	DaoMarks      map[string]int    `json:"dao_marks"`
-	PathMasteries map[string]string `json:"path_masteries"`
+	PathMasteries map[string]int    `json:"path_masteries"`
 	AIProfile     string            `json:"ai_profile"`
 	LootTableID   string            `json:"loot_table_id"`
 	StatusEffects []StatusEffect    `json:"status_effects"`

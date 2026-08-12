@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { formatNumber } from "@/lib/utils";
 import { formatGameEffects } from "@/lib/effects";
-import { translatePath, translateMastery } from "@/lib/translate";
+import { translatePath, translateMastery, masteryKeyForPoints } from "@/lib/translate";
 
 function formatStat(val: number): string {
   return Math.abs(val) >= 10000 
@@ -1103,28 +1103,32 @@ export const Aperture: React.FC<ApertureProps> = ({
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 {player.path_masteries && Object.keys(player.path_masteries).length > 0 ? (
-                  Object.entries(player.path_masteries).map(([path, level]) => (
-                    <div key={path} className="flex flex-col gap-1.5 bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
-                      <div className="flex justify-between items-center">
-                        <span className="text-zinc-300 font-mono text-xs font-bold capitalize">{translatePath(path)}</span>
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono ${level === "Supreme Grandmaster" ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" :
-                          level === "Great Grandmaster" ? "bg-red-950/50 text-red-300 border border-red-800/40" :
-                            level === "Grandmaster" ? "bg-amber-950/50 text-amber-300 border border-amber-800/40" :
-                              level === "Master" ? "bg-blue-950/50 text-blue-300 border border-blue-800/40" :
-                                "bg-zinc-800/50 text-zinc-400 border border-zinc-700/40"
-                          }`}>
-                          {translateMastery(level)}
-                        </span>
+                  Object.entries(player.path_masteries).map(([path, points]) => {
+                    const level = masteryKeyForPoints(points as number);
+                    return (
+                      <div key={path} className="flex flex-col gap-1.5 bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
+                        <div className="flex justify-between items-center">
+                          <span className="text-zinc-300 font-mono text-xs font-bold capitalize">{translatePath(path)}</span>
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold font-mono ${level === "Supreme Grandmaster" ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" :
+                            level === "Great Grandmaster" ? "bg-red-950/50 text-red-300 border border-red-800/40" :
+                              level === "Grandmaster" ? "bg-amber-950/50 text-amber-300 border border-amber-800/40" :
+                                level === "Master" ? "bg-blue-950/50 text-blue-300 border border-blue-800/40" :
+                                  "bg-zinc-800/50 text-zinc-400 border border-zinc-700/40"
+                            }`}>
+                            {translateMastery(level)}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-zinc-500 leading-normal">
+                          <span className="text-zinc-400 font-mono">{points} điểm</span>
+                          {level === "Master" && " — Trực giác chiến đấu hệ, nhận +10% hiệu quả kỹ năng."}
+                          {level === "Grandmaster" && " — Bỏ qua hình phạt giảm 30% sức mạnh khi sử dụng Cổ trùng hệ này."}
+                          {level === "Great Grandmaster" && " — Cộng hưởng Thiên Địa Đạo Ngân, +50% hiệu ứng tại map cùng hệ."}
+                          {level === "Supreme Grandmaster" && " — Cảnh giới Vô Thượng tối cao, kiểm soát tuyệt đối đại đạo."}
+                          {level === "Ordinary" && " — Đạt hiểu biết phổ thông cơ bản về đạo pháp."}
+                        </div>
                       </div>
-                      <div className="text-[10px] text-zinc-500 leading-normal">
-                        {level === "Master" && "Trực giác chiến đấu hệ, nhận +10% hiệu quả kỹ năng."}
-                        {level === "Grandmaster" && "Bỏ qua hình phạt giảm 30% sức mạnh khi sử dụng Cổ trùng hệ này."}
-                        {level === "Great Grandmaster" && "Cộng hưởng Thiên Địa Đạo Ngân, +50% hiệu ứng tại map cùng hệ."}
-                        {level === "Supreme Grandmaster" && "Cảnh giới Vô Thượng tối cao, kiểm soát tuyệt đối đại đạo."}
-                        {level === "Ordinary" && "Đạt hiểu biết phổ thông cơ bản về đạo pháp."}
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="col-span-2 text-center text-xs text-zinc-650 italic py-4">Chưa ngộ chân ý bất kỳ lưu phái nào. Hãy thám hiểm Mộng Cảnh!</div>
                 )}
@@ -2133,18 +2137,22 @@ function BlessedLandControls() {
           </span>
           <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
             {player.path_masteries && Object.keys(player.path_masteries).length > 0 ? (
-              Object.entries(player.path_masteries).map(([path, level]) => (
-                <div key={path} className="flex justify-between items-center bg-zinc-950/30 px-2.5 py-1.5 rounded-lg border border-zinc-900/50 text-xs">
-                  <span className="text-zinc-400 font-medium">{translatePath(path)}</span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-semibold font-mono ${level === "Supreme Grandmaster" ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" :
-                    level === "Grandmaster" ? "bg-amber-950/50 text-amber-300 border border-amber-800/40" :
-                      level === "Master" ? "bg-blue-950/50 text-blue-300 border border-blue-800/40" :
-                        "bg-zinc-800/50 text-zinc-400 border border-zinc-700/40"
-                    }`}>
-                    {translateMastery(level)}
-                  </span>
-                </div>
-              ))
+              Object.entries(player.path_masteries).map(([path, points]) => {
+                const level = masteryKeyForPoints(points as number);
+                return (
+                  <div key={path} className="flex justify-between items-center bg-zinc-950/30 px-2.5 py-1.5 rounded-lg border border-zinc-900/50 text-xs">
+                    <span className="text-zinc-400 font-medium">{translatePath(path)}</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold font-mono ${level === "Supreme Grandmaster" ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" :
+                      level === "Great Grandmaster" ? "bg-red-950/50 text-red-300 border border-red-800/40" :
+                        level === "Grandmaster" ? "bg-amber-950/50 text-amber-300 border border-amber-800/40" :
+                          level === "Master" ? "bg-blue-950/50 text-blue-300 border border-blue-800/40" :
+                            "bg-zinc-800/50 text-zinc-400 border border-zinc-700/40"
+                      }`}>
+                      {translateMastery(level)}
+                    </span>
+                  </div>
+                );
+              })
             ) : (
               <div className="text-[10px] text-zinc-655 italic">Chưa có lĩnh ngộ lưu phái đặc thù.</div>
             )}

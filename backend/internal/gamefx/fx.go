@@ -135,40 +135,6 @@ func EffectiveMaxMana(p *models.Player) float64 {
 	return p.MaxMana * (1.0 + MaxManaBonus(p))
 }
 
-// PathMasteryMultiplier returns the highest path-mastery multiplier across the
-// given paths. 1.0 means no mastery bonus.
-func PathMasteryMultiplier(pathMasteries map[string]string, paths []string) float64 {
-	masteryMultiplier := 1.0
-	if pathMasteries == nil {
-		return masteryMultiplier
-	}
-	for _, path := range paths {
-		cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-		mLevel, ok := pathMasteries[cleanPath]
-		if !ok {
-			mLevel, ok = pathMasteries[path]
-		}
-		if !ok {
-			continue
-		}
-		mult := 1.0
-		switch mLevel {
-		case "Ordinary":
-			mult = 1.0
-		case "Master":
-			mult = 1.1
-		case "Grandmaster":
-			mult = 1.25
-		case "Supreme Grandmaster":
-			mult = 1.5
-		}
-		if mult > masteryMultiplier {
-			masteryMultiplier = mult
-		}
-	}
-	return masteryMultiplier
-}
-
 // PassiveHPBonus returns the total flat HP granted by equipped ACTIVE Gus
 // (passive.stat_base_hp), scaled by path mastery and dao marks. Mirrors the
 // "hp" key computed in GetPassiveStats.

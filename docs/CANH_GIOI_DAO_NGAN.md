@@ -90,21 +90,47 @@ Các nguồn ghi khác (item effect, phi thăng, sát chiêu, gift code, quest) 
 
 ### 2.1 Định Nghĩa
 
-Cảnh giới lưu phái là cấp độ lĩnh ngộ Chân Ý (True Meaning) của một đường. Mỗi đường có 5 cấp:
+Cảnh giới lưu phái là cấp độ lĩnh ngộ Chân Ý (True Meaning) của một đường. Mỗi đường có 5 cấp. **`players.path_masteries` lưu dạng JSONB `map[string]int` (path → điểm tích lũy), giống cột `dao_marks` của `immortal_apertures`.** Cảnh giới được suy ra từ **mốc điểm**:
 
-| Level | Key | Hệ Số (Multiplier) |
-|-------|-----|-------------------|
-| 0 | `"Ordinary"` — Phàm Thai | ×1.0 |
-| 1 | `"Master"` / "Đại Sư" | ×1.1 |
-| 2 | `"Grandmaster"` / "Tông Sư" | ×1.25 |
-| 3 | `"Great Grandmaster"` / "Đại Tông Sư" | ×1.4 |
-| 4 | `"Supreme Grandmaster"` / "Vô Thượng Đại Tông Sư" | ×1.5 |
+| Level | Key | Hệ Số (Multiplier) | Mốc Điểm |
+|-------|-----|-------------------|----------|
+| 0 | `"Ordinary"` — Phàm Thai | ×1.0 | < 100 |
+| 1 | `"Master"` / "Đại Sư" | ×1.1 | ≥ 100 |
+| 2 | `"Grandmaster"` / "Tông Sư" | ×1.25 | ≥ 500 |
+| 3 | `"Great Grandmaster"` / "Đại Tông Sư" | ×1.4 | ≥ 2.500 |
+| 4 | `"Supreme Grandmaster"` / "Vô Thượng Đại Tông Sư" | ×1.5 | ≥ 10.000 |
 
-- **Struct:** `PathMasteriesMap map[string]string` (`player.go:33-34`)
-- **Player field:** `PathMasteries PathMasteriesMap` (`player.go:169`)
-- **DB column:** `players.path_masteries JSONB DEFAULT '{}'` (`db.go:157`)
+- **Struct:** `PathMasteriesMap map[string]int` (`player.go:56`)
+- **Player field:** `PathMasteries PathMasteriesMap` (`player.go`)
+- **DB column:** `players.path_masteries JSONB DEFAULT '{}'` (`db.go`)
+- **Hàm tính cảnh giới:** `gamefx.PathMasteryLevel(points)` (`gamefx/path_mastery.go`) — cảnh giới là hàm thuần theo mốc điểm, không bị chặn bởi rank.
 
-### 2.2 Công Thức Ảnh Hưởng
+**Cảnh giới là ĐIỀU KIỆN để thăng tiên rank** (ngược với ràng buộc cũ): để đột phá lên Rank 7/8/9 khi vượt Kiếp Nạn, người chơi phải có **ít nhất 1 lưu phái** đạt cảnh giới tương ứng:
+
+| Rank đích | Cảnh giới yêu cầu | Điểm tối thiểu |
+|-----------|-------------------|----------------|
+| Rank 7 | Tông Sư (Grandmaster, level 2) | 500 |
+| Rank 8 | Đại Tông Sư (Great Grandmaster, level 3) | 2.500 |
+| Rank 9 | Vô Thượng Đại Tông Sư (Supreme Grandmaster, level 4) | 10.000 |
+
+Kiểm tra tại `tribulation.go` (`handleSuccess`) qua `gamefx.PathMasteryLevelRequiredForRank` + `gamefx.HasPathMasteryAtLeast`. Nếu chưa đủ, đột phá bị chặn (chỉ thông báo, không tăng rank, không trừ kiếp).
+
+Ví dụ JSON:
+```json
+{ "fire": 1250, "water": 340 }
+```
+
+> Dữ liệu cũ lưu tên cấp (vd `{"fire": "Grandmaster"}`) được migration tự động đổi sang mốc điểm khi khởi động (`migrate_path_masteries_to_points`).
+
+### 2.2 Cách Nhận Điểm
+
+| Nguồn | Handler | Điểm |
+|-------|---------|------|
+| **Sát Chiêu thành công** | `killer_move.go` CastKillerMove | +2 điểm cho path hạch tâm |
+| **Luyện Cổ thành công** | `refine.go` | +2 điểm cho path Cổ đích; **+10 điểm nếu Cổ Tiên (rank ≥ 6)** |
+| **Chân Ý từ phó bản** | `instance.go` | cộng thẳng `amount` điểm vào path |
+
+### 2.3 Công Thức Ảnh Hưởng
 
 #### a) Trong Combat (Gu Effect — `combat_effects.go:12-31`)
 
@@ -146,12 +172,12 @@ Trong đó `Attainment` = level (0-4).
 
 ### 2.3 Cách Thăng Cấp
 
+Cảnh giới không còn nhảy trực tiếp — điểm tích lũy từ nhiều nguồn (sát chiêu, luyện cổ, phó bản) và cảnh giới được suy ra theo mốc điểm + rank.
+
 **Phó Bản (Instance) — `instance.go:540-586`:**
 - Rewards chứa `attainment.path` và `attainment.amount`
-- Nếu `amount >= 50`: nhảy 2 cấp
-- Nếu `amount < 50`: nhảy 1 cấp
-- Tối đa: Supreme Grandmaster (level 4)
-- Log: "Chúc mừng đạo hữu xuất sắc vượt ải thành công, nhận được Chân Ý thăng tiến..."
+- Cộng thẳng `amount` điểm vào `player.PathMasteries[path]` (bỏ cơ chế nhảy 1-2 cấp cũ)
+- Log: "nhận được X điểm Chân Ý lưu phái ..."
 
 **Dữ liệu seed — `db.go:1840-1968`:**
 - `dungeon_flower_wine`: `{"attainment": {"path": "Moon Path", "amount": 10}}`
@@ -256,7 +282,8 @@ KillerMoveBuilder.tsx
 
 | File | Dòng | Nội Dung |
 |------|------|----------|
-| `backend/internal/models/player.go` | 30-34, 141-204, 362-381 | DaoMarksMap, PathMasteriesMap, Player struct, scanners |
+| `backend/internal/models/player.go` | 30-34, 141-204, 362-381 | DaoMarksMap, PathMasteriesMap (map[string]int), Player struct, scanners |
+| `backend/internal/gamefx/path_mastery.go` | — | Mốc điểm, rank gating, PathMasteryLevel/Multiplier |
 | `backend/internal/models/aperture.go` | 7-52, 88-99 | DaoMark, ImmortalAperture, ResourceNode |
 | `backend/internal/db/db.go` | 156-157 | `players.dao_marks` JSONB (schema); bảng `dao_marks` đã xóa |
 | `backend/internal/handlers/killer_move.go` | 20-33, 413-554, 936-953 | Constants, V2 formula, attainmentLevel(), calculatePathConflict() |
@@ -265,7 +292,8 @@ KillerMoveBuilder.tsx
 | `backend/internal/handlers/aperture.go` | 345-379 | GetDaoMarks API (đọc JSONB) |
 | `backend/internal/handlers/item_effects.go` | 109-131 | dao_mark_gain, soul_boost effects |
 | `backend/internal/handlers/gu_effects.go` | 80-97 | getPathMasteryMultiplier |
-| `backend/internal/handlers/instance.go` | 540-586 | Attainment reward từ phó bản |
+| `backend/internal/handlers/instance.go` | 540-586 | Attainment reward từ phó bản (cộng điểm) |
+| `backend/internal/handlers/refine.go` | 353-378 | Luyện cổ: attainment bonus + cộng điểm path |
 | `backend/internal/handlers/profile.go` | 25-54, 155-254 | getDominantPath, scouting |
 | `backend/internal/handlers/energy.go` | 29-50 | Immortal aperture capacity |
 | `backend/internal/server/server.go` | 180-200, 288-317 | Route registration |

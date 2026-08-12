@@ -51,7 +51,7 @@ func LoadMonsterTemplate(tx *sql.Tx, id string) (models.MonsterTemplate, error) 
 	if len(pathMasteriesRaw) > 0 {
 		_ = json.Unmarshal(pathMasteriesRaw, &mon.PathMasteries)
 	} else {
-		mon.PathMasteries = make(map[string]string)
+		mon.PathMasteries = make(map[string]int)
 	}
 
 	return mon, nil
