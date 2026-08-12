@@ -953,6 +953,7 @@ interface GameState {
     total_ref: number;
   } | null;
   fetchReferrals: () => Promise<void>;
+  claimReferralReward: (refereeId: string, milestone: number) => Promise<{success: boolean; message?: string}>;
   passiveStats: { stats: Record<string, number>; details: { key: string; total: number; sources: { source: string; name: string; value: number; mult: number; dao: number; final: number }[] }[] } | null;
   fetchPassiveStats: () => Promise<void>;
   simulateDeposit: (stones: number) => Promise<boolean>;
@@ -1925,6 +1926,32 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     } catch (err) {
       console.error("Failed to fetch referrals", err);
+    }
+  },
+
+  claimReferralReward: async (refereeId: string, milestone: number) => {
+    set({ actionLoading: true });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/referrals/claim`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ referee_id: refereeId, milestone }),
+      });
+      const data = await response.json();
+      set({ actionLoading: false });
+      if (response.ok) {
+        get().addLog(`[Hệ thống] ${data.message}`);
+        // Reload referrals to update status
+        await get().fetchReferrals();
+        // Also refresh player stats (like primeval stones)
+        await get().fetchPlayer();
+        return { success: true, message: data.message };
+      }
+      return { success: false, message: data.error };
+    } catch (err: any) {
+      console.error("Failed to claim referral reward", err);
+      set({ actionLoading: false });
+      return { success: false, message: "Lỗi kết nối máy chủ." };
     }
   },
 

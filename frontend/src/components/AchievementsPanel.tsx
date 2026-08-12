@@ -237,13 +237,12 @@ function MainQuestsPanel() {
         Nhiệm Vụ Chính Tuyến
       </div>
       <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
-        {quests.filter((q: any) => !completed.includes(q.id)).length === 0 ? (
+        {quests.length === 0 ? (
           <div className="text-zinc-500 text-xs italic py-6 bg-zinc-950/20 rounded-2xl border border-zinc-900/30 text-center">
-            🎉 Đạo hữu đã hoàn thành toàn bộ nhiệm vụ chính tuyến!
+            Chưa có nhiệm vụ nào.
           </div>
         ) : (
           quests
-            .filter((q: any) => !completed.includes(q.id))
             .map((q: any) => {
               const isDone = completed.includes(q.id);
               const canClaim = !isDone && checkQuest(q.id, player, store.guDictionary || {});

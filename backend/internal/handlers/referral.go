@@ -13,73 +13,82 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
-	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
-// CheckReferralMilestones evaluates and awards rewards to the referrer if the referee is verified
-func CheckReferralMilestones(tx *sql.Tx, refereeID uuid.UUID) error {
+// ClaimReferralRequest represents the body of a claim request
+type ClaimReferralRequest struct {
+	RefereeID string `json:"referee_id" binding:"required"`
+	Milestone int    `json:"milestone" binding:"required"`
+}
+
+// ClaimReferralReward handles the manual claiming of referral milestone rewards
+func ClaimReferralReward(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var req ClaimReferralRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	refereeUUID, err := uuid.Parse(req.RefereeID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid referee ID"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
 	// 1. Check if a referral relationship exists
 	var refID uuid.UUID
-	var referrerID uuid.UUID
 	var hasDeposited bool
 	var depositAmountStones int
-	var milestone1Rewarded bool
-	var milestone2Rewarded bool
-	var milestone3Rewarded bool
+	var milestone1Rewarded, milestone2Rewarded, milestone3Rewarded bool
 
-	err := tx.QueryRow(`
-		SELECT id, referrer_id, has_deposited, deposit_amount_stones, milestone1_rewarded, milestone2_rewarded, milestone3_rewarded
-		FROM referrals
-		WHERE referee_id = $1
-	`, refereeID).Scan(&refID, &referrerID, &hasDeposited, &depositAmountStones, &milestone1Rewarded, &milestone2Rewarded, &milestone3Rewarded)
-
-	if err != nil {
-		if err == sql.ErrNoRows {
-			// No referrer, do nothing
-			return nil
-		}
-		return fmt.Errorf("failed to fetch referral record: %w", err)
-	}
-
-	// 2. Fetch referee details (Rank and Completed Quests)
-	var refereeRank int
-	var completedQuestsBytes []byte
 	err = tx.QueryRow(`
-		SELECT rank, completed_quests
-		FROM players
-		WHERE id = $1
-	`, refereeID).Scan(&refereeRank, &completedQuestsBytes)
+		SELECT id, has_deposited, deposit_amount_stones, milestone1_rewarded, milestone2_rewarded, milestone3_rewarded
+		FROM referrals
+		WHERE referee_id = $1 AND referrer_id = $2
+	`, refereeUUID, playerID).Scan(&refID, &hasDeposited, &depositAmountStones, &milestone1Rewarded, &milestone2Rewarded, &milestone3Rewarded)
 	if err != nil {
-		return fmt.Errorf("failed to fetch referee stats: %w", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Referral relationship not found or not your referee"})
+		return
 	}
 
-	var completedQuests []string
-	if len(completedQuestsBytes) > 0 {
-		_ = json.Unmarshal(completedQuestsBytes, &completedQuests)
+	// 2. Fetch referee rank and verify verification
+	var refereeRank int
+	err = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, refereeUUID).Scan(&refereeRank)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch referee stats"})
+		return
 	}
 
-	// 3. Determine if the referee is verified (anti-cheat verification)
-	// Referee is verified if:
-	// - reached Rank 2
-	// - OR completed both novice quests: "quest_1_awaken" and "quest_2_vital_gu"
-	hasQuest1 := false
-	hasQuest2 := false
-	for _, q := range completedQuests {
-		if q == "quest_1_awaken" {
-			hasQuest1 = true
-		}
-		if q == "quest_2_vital_gu" {
-			hasQuest2 = true
-		}
+	var completedCount int
+	err = tx.QueryRow(`
+		SELECT COUNT(*)
+		FROM player_quest_progress
+		WHERE player_id = $1 AND status = 'COMPLETED' AND quest_id IN ('quest_1_awaken', 'quest_2_vital_gu')
+	`, refereeUUID).Scan(&completedCount)
+	if err != nil && err != sql.ErrNoRows {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check referee quests"})
+		return
 	}
-	verified := refereeRank >= 2 || (hasQuest1 && hasQuest2)
-
+	verified := refereeRank >= 2 || completedCount >= 2
 	if !verified {
-		// Not verified yet, delay rewards
-		return nil
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đệ tử này chưa hoàn thành nhiệm vụ tân thủ nên chưa được xác thực."})
+		return
 	}
 
-	// 4. Fetch referrer details for updates (with FOR UPDATE locks to prevent race conditions)
+	// 3. Process the milestone
 	var referrerUsername string
 	var referrerStones int
 	var referrerGuInvBytes []byte
@@ -88,9 +97,10 @@ func CheckReferralMilestones(tx *sql.Tx, refereeID uuid.UUID) error {
 		FROM players
 		WHERE id = $1
 		FOR UPDATE
-	`, referrerID).Scan(&referrerUsername, &referrerStones, &referrerGuInvBytes)
+	`, playerID).Scan(&referrerUsername, &referrerStones, &referrerGuInvBytes)
 	if err != nil {
-		return fmt.Errorf("failed to fetch referrer details: %w", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch referrer details"})
+		return
 	}
 
 	var referrerGuInv models.GuInventory
@@ -98,33 +108,34 @@ func CheckReferralMilestones(tx *sql.Tx, refereeID uuid.UUID) error {
 		_ = json.Unmarshal(referrerGuInvBytes, &referrerGuInv)
 	}
 
-	rewardsAwarded := false
-	var notifications []string
-
-	// Milestone 1: Referee reaches Rank 2 -> Referrer gets 500 Primeval Stones
-	if refereeRank >= 2 && !milestone1Rewarded {
+	message := ""
+	switch req.Milestone {
+	case 1:
+		if milestone1Rewarded {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đã nhận mốc này rồi."})
+			return
+		}
+		if refereeRank < 2 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Đệ tử chưa đạt Nhị Chuyển."})
+			return
+		}
 		referrerStones += 500
 		milestone1Rewarded = true
-		rewardsAwarded = true
-		notifications = append(notifications, "Đệ tử của bạn đã đột phá Nhất Chuyển lên Nhị Chuyển! Nhận ngay 500 Nguyên Thạch.")
-	}
-
-	// Milestone 2: Referee reaches Rank 3 -> Referrer gets a random Gu bug
-	if refereeRank >= 3 && !milestone2Rewarded {
-		// Fetch a random Rank 1 Gu bug ID from the dictionary
+		message = "Nhận thành công 500 Nguyên Thạch!"
+	case 2:
+		if milestone2Rewarded {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đã nhận mốc này rồi."})
+			return
+		}
+		if refereeRank < 3 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Đệ tử chưa đạt Tam Chuyển."})
+			return
+		}
 		var randomGuID string
-		err = tx.QueryRow(`
-			SELECT id 
-			FROM gu_dictionary 
-			WHERE rank = 1 
-			ORDER BY RANDOM() 
-			LIMIT 1
-		`).Scan(&randomGuID)
+		err = tx.QueryRow(`SELECT id FROM gu_dictionary WHERE rank = 1 ORDER BY RANDOM() LIMIT 1`).Scan(&randomGuID)
 		if err != nil {
-			logger.S.Warnf("failed to roll random Gu bug from dictionary: %v. Defaulting to Moonlight Gu.", err)
 			randomGuID = "GU_MOONLIGHT"
 		}
-
 		guSpec, _ := models.GetGuAny(randomGuID)
 		newGu := models.GuInstance{
 			InstanceID: uuid.New().String(),
@@ -137,55 +148,63 @@ func CheckReferralMilestones(tx *sql.Tx, refereeID uuid.UUID) error {
 		}
 		referrerGuInv = append(referrerGuInv, newGu)
 		milestone2Rewarded = true
-		rewardsAwarded = true
-		notifications = append(notifications, fmt.Sprintf("Đệ tử của bạn đã đột phá lên Tam Chuyển! Nhận ngay một Cổ trùng ngẫu nhiên: %s.", randomGuID))
-	}
-
-	// Milestone 3: Referee has deposited -> Referrer gets 10% of the deposit amount in Primeval Stones
-	if hasDeposited && !milestone3Rewarded {
+		message = fmt.Sprintf("Nhận thành công 1 %s!", guSpec.Name)
+	case 3:
+		if milestone3Rewarded {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đã nhận mốc này rồi."})
+			return
+		}
+		if !hasDeposited {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Đệ tử chưa nạp tiền."})
+			return
+		}
 		commission := int(float64(depositAmountStones) * 0.10)
-		if commission > 0 {
-			referrerStones += commission
-			milestone3Rewarded = true
-			rewardsAwarded = true
-			notifications = append(notifications, fmt.Sprintf("Đệ tử của bạn đã nạp tiền lần đầu! Nhận ngay 10%% hoa hồng trị giá %d Nguyên Thạch.", commission))
+		if commission <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Hoa hồng không hợp lệ (số tiền nạp quá nhỏ)."})
+			return
 		}
+		referrerStones += commission
+		milestone3Rewarded = true
+		message = fmt.Sprintf("Nhận thành công %d Nguyên Thạch tiền hoa hồng!", commission)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Mốc nhận thưởng không hợp lệ."})
+		return
 	}
 
-	if rewardsAwarded {
-		// Save referrer updates
-		if err := db.SavePlayerGus(tx, referrerID.String(), referrerGuInv); err != nil {
-			return fmt.Errorf("failed to save referrer Gu inventory: %w", err)
-		}
-		_, err = tx.Exec(`
-			UPDATE players 
-			SET primeval_stones = $1 
-			WHERE id = $2
-		`, referrerStones, referrerID)
-		if err != nil {
-			return fmt.Errorf("failed to update referrer rewards: %w", err)
-		}
-
-		// Save referral milestone flags
-		_, err = tx.Exec(`
-			UPDATE referrals 
-			SET milestone1_rewarded = $1, milestone2_rewarded = $2, milestone3_rewarded = $3 
-			WHERE id = $4
-		`, milestone1Rewarded, milestone2Rewarded, milestone3Rewarded, refID)
-		if err != nil {
-			return fmt.Errorf("failed to update referral milestone flags: %w", err)
-		}
-
-		// Send system notification messages to the referrer
-		for _, msg := range notifications {
-			_, _ = tx.Exec(`
-				INSERT INTO messages (sender_id, receiver_id, content, is_read, channel)
-				VALUES ('00000000-0000-0000-0000-000000000000', $1, $2, false, 'private')
-			`, referrerID, msg)
-		}
+	// Save updates
+	if err := db.SavePlayerGus(tx, playerID.String(), referrerGuInv); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Gu inventory"})
+		return
+	}
+	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1 WHERE id = $2`, referrerStones, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update resources"})
+		return
+	}
+	_, err = tx.Exec(`
+		UPDATE referrals 
+		SET milestone1_rewarded = $1, milestone2_rewarded = $2, milestone3_rewarded = $3 
+		WHERE id = $4
+	`, milestone1Rewarded, milestone2Rewarded, milestone3Rewarded, refID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update milestone flags"})
+		return
 	}
 
-	return nil
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		return
+	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "referral.claim", EntityType: "referral",
+		RequestSummary: fmt.Sprintf("nhận thưởng sư đồ mốc %d từ %s", req.Milestone, refereeUUID.String()),
+		IPAddress: c.ClientIP(), Success: true,
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": message,
+	})
 }
 
 // SimulateDepositRequest represents the body of simulated deposit request
@@ -271,12 +290,7 @@ func SimulateDeposit(c *gin.Context) {
 		return
 	}
 
-	// 3. Trigger check milestones (will only award to referrer if referee is verified)
-	err = CheckReferralMilestones(tx, playerID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to evaluate referral milestones: " + err.Error()})
-		return
-	}
+	// 3. (Old logic for checking milestones was removed since it's now manually claimed)
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit deposit transaction"})
@@ -319,7 +333,12 @@ func GetReferralStats(c *gin.Context) {
 	// Fetch referrals stats
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT r.id, p.username, p.rank, r.is_suspicious, r.has_deposited, 
-		       r.milestone1_rewarded, r.milestone2_rewarded, r.milestone3_rewarded, r.created_at
+		       r.milestone1_rewarded, r.milestone2_rewarded, r.milestone3_rewarded, r.created_at,
+		       (
+		           SELECT COUNT(*) >= 2 
+		           FROM player_quest_progress pqp 
+		           WHERE pqp.player_id = p.id AND pqp.status = 'COMPLETED' AND pqp.quest_id IN ('quest_1_awaken', 'quest_2_vital_gu')
+		       ) as completed_quests
 		FROM referrals r
 		JOIN players p ON r.referee_id = p.id
 		WHERE r.referrer_id = $1
@@ -340,20 +359,24 @@ func GetReferralStats(c *gin.Context) {
 		Milestone1Rewarded bool      `json:"milestone1_rewarded"`
 		Milestone2Rewarded bool      `json:"milestone2_rewarded"`
 		Milestone3Rewarded bool      `json:"milestone3_rewarded"`
+		IsVerified         bool      `json:"is_verified"`
 		CreatedAt          time.Time `json:"created_at"`
 	}
 
 	referees := []RefereeInfo{}
 	for rows.Next() {
 		var r RefereeInfo
+		var completedQuests bool
 		err := rows.Scan(
 			&r.ID, &r.Username, &r.Rank, &r.IsSuspicious, &r.HasDeposited,
-			&r.Milestone1Rewarded, &r.Milestone2Rewarded, &r.Milestone3Rewarded, &r.CreatedAt,
+			&r.Milestone1Rewarded, &r.Milestone2Rewarded, &r.Milestone3Rewarded, &r.CreatedAt, &completedQuests,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse referee details"})
 			return
 		}
+		
+		r.IsVerified = r.Rank >= 2 || completedQuests
 		referees = append(referees, r)
 	}
 

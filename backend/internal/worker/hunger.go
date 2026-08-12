@@ -4,8 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -28,24 +31,27 @@ func StartHungerWorker(ctx context.Context, db *sql.DB, interval time.Duration) 
 	}()
 }
 
-// processHungerDecay depletes Gu hunger for every player. The heavy lifting is
-// done with set-based SQL over the normalized player_gu table (single pass,
-// no per-player transactions). Only the rare ON_TICK effects (Thien Nguyen Bao
-// Lien series, GU_CREATION_ORIGIN) are handled in Go, and only for the small
-// subset of players that actually own an equipped ACTIVE Gu with such effects.
+// processHungerDecay depletes Gu hunger for every player. Work is done per
+// player in small transactions rather than one giant set-based batch: a single
+// UPDATE over the whole player_gu table exceeds the statement_timeout configured
+// in db.Connect and deadlocks against concurrent gameplay writes on large data
+// sets. Only the rare ON_TICK effects (Thien Nguyen Bao Lien series,
+// GU_CREATION_ORIGIN) are handled in Go, and only for the small subset of
+// players that actually own an equipped ACTIVE Gu with such effects.
 func processHungerDecay(db *sql.DB) {
 	// 1. Find players who own an equipped ACTIVE Gu carrying ON_TICK effects.
 	subset := findOnTickPlayers(db)
 
-	// 2. Apply ON_TICK effects (HP / stones / immortal stones) BEFORE the SQL
-	//    decay pass so a Gu that starves this tick still produces its ON_TICK.
+	// 2. Apply ON_TICK effects (HP / stones / immortal stones) BEFORE the decay
+	//    pass so a Gu that starves this tick still produces its ON_TICK.
 	for _, pID := range subset {
 		if err := applyOnTickEffects(db, pID); err != nil {
 			logger.S.Errorf("Hunger Worker Error applying ON_TICK for player %s: %v", pID, err)
 		}
 	}
 
-	// 3. Set-based decay + starvation + HP backlash + audit log + equipped_gus.
+	// 3. Per-player decay + starvation (sleep/death) + HP backlash + audit logs
+	//    + equipped_gus cleanup.
 	if err := runHungerDecayBatch(db); err != nil {
 		logger.S.Errorf("Hunger Worker Error running decay batch: %v", err)
 	}
@@ -184,127 +190,225 @@ func applyOnTickEffects(db *sql.DB, playerID string) error {
 	return tx.Commit()
 }
 
-// runHungerDecayBatch applies hunger decay, starvation (sleep/death),
-// vital HP backlash, death audit logs and equipped_gus cleanup in a single
-// set-based transaction across all players.
+// runHungerDecayBatch applies hunger decay for every player that owns a Gu in a
+// decayable state. Each player is processed in its own small transaction so lock
+// hold times stay short (no deadlock with concurrent gameplay) and each statement
+// stays well under the statement_timeout configured in db.Connect.
 func runHungerDecayBatch(db *sql.DB) error {
+	playerIDs, err := findDecayPlayers(db)
+	if err != nil {
+		return err
+	}
+
+	logger.S.Infof("Hunger Worker: processing hunger decay for %d players", len(playerIDs))
+
+	for _, pID := range playerIDs {
+		if err := processPlayerHungerDecay(db, pID); err != nil {
+			// One player failing must not abort the rest of the batch.
+			logger.S.Errorf("Hunger Worker Error updating player %s: %v", pID, err)
+		}
+	}
+	return nil
+}
+
+// findDecayPlayers returns the ids of all players owning at least one Gu in a
+// decayable state (ACTIVE / SLEEPING / SEALED).
+func findDecayPlayers(db *sql.DB) ([]string, error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	// The DISTINCT scan over the full player_gu table can exceed the default
+	// 15s statement timeout; relax it for this transaction only.
+	if _, err := tx.Exec(`SET LOCAL statement_timeout = '600000'`); err != nil {
+		return nil, err
+	}
+
+	rows, err := tx.Query(`SELECT DISTINCT player_id::text FROM player_gu WHERE state IN ('ACTIVE','SLEEPING','SEALED')`)
+	if err != nil {
+		return nil, err
+	}
+
+	var playerIDs []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		playerIDs = append(playerIDs, id)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	return playerIDs, tx.Commit()
+}
+
+// processPlayerHungerDecay applies decay + starvation for one player, retrying a
+// few times when the small per-player transaction hits a deadlock or lock
+// timeout against concurrent gameplay.
+func processPlayerHungerDecay(db *sql.DB, playerID string) error {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		lastErr = processPlayerHungerDecayOnce(db, playerID)
+		if lastErr == nil {
+			return nil
+		}
+		if !isDeadlockOrLockTimeout(lastErr) {
+			return lastErr
+		}
+		logger.S.Warnf("Hunger Worker: deadlock/lock timeout on player %s (attempt %d/3): %v", playerID, attempt+1, lastErr)
+		time.Sleep(time.Duration(attempt+1) * time.Second)
+	}
+	return fmt.Errorf("hunger decay failed for player %s after 3 attempts: %w", playerID, lastErr)
+}
+
+// processPlayerHungerDecayOnce decays hunger for one player's Gus, transitions
+// starved Gus to DEAD, applies the vital HP backlash, writes audit logs, rebuilds
+// equipped_gus and deletes the dead instances. All steps share one transaction so
+// the outcome is atomic per player.
+func processPlayerHungerDecayOnce(db *sql.DB, playerID string) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	// Materialize the per-Gu decay result into a temp table so subsequent
-	// statements (state update, backlash, audit, cleanup) all agree on the
-	// exact same random rolls and computed values.
-	_, err = tx.Exec(`
-		CREATE TEMP TABLE _hunger_tick ON COMMIT DROP AS
+	// Relax the default 15s statement / 10s lock timeout for this transaction;
+	// a player with a very large inventory legitimately needs more time.
+	if _, err := tx.Exec(`SET LOCAL statement_timeout = '600000'`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`SET LOCAL lock_timeout = '60000'`); err != nil {
+		return err
+	}
+
+	// Apply decay + capture every Gu that starved this tick in one pass.
+	rows, err := tx.Query(`
 		WITH decayed AS (
-			SELECT
-				pg.id AS gu_instance_id,
-				pg.player_id,
-				pg.gu_id,
-				pg.gu_rank,
-				pg.is_vital,
-				pg.equipped,
-				pg.state,
-				CASE
-					WHEN pg.state = 'ACTIVE' THEN pg.hunger - gd.hunger_rate
-					WHEN pg.state = 'SLEEPING' THEN pg.hunger - 0.25 * gd.hunger_rate
-					WHEN pg.state = 'SEALED' THEN pg.hunger - 0.1 * gd.hunger_rate
-					ELSE pg.hunger
-				END AS new_hunger,
+			SELECT pg.id AS gu_instance_id, pg.gu_id, pg.is_vital, pg.equipped,
+				CASE WHEN pg.state='ACTIVE' THEN pg.hunger - gd.hunger_rate
+				     WHEN pg.state='SLEEPING' THEN pg.hunger - 0.25 * gd.hunger_rate
+				     WHEN pg.state='SEALED' THEN pg.hunger - 0.1 * gd.hunger_rate
+				     ELSE pg.hunger END AS new_hunger,
 				gd.name AS gu_name
 			FROM player_gu pg
 			JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank
-			WHERE pg.state IN ('ACTIVE', 'SLEEPING', 'SEALED')
+			WHERE pg.player_id = $1 AND pg.state IN ('ACTIVE','SLEEPING','SEALED')
+		),
+		upd AS (
+			UPDATE player_gu pg
+			SET hunger = GREATEST(d.new_hunger, 0),
+			    state = CASE WHEN d.new_hunger <= 0 THEN 'DEAD' ELSE pg.state END,
+			    updated_at = NOW()
+			FROM decayed d
+			WHERE pg.id = d.gu_instance_id
+			RETURNING pg.id, pg.gu_id, pg.state, pg.is_vital, pg.equipped, d.gu_name
 		)
-		SELECT
-			d.gu_instance_id,
-			d.player_id,
-			d.gu_id,
-			d.gu_rank,
-			d.is_vital,
-			d.equipped,
-			d.gu_name,
-			GREATEST(d.new_hunger, 0) AS new_hunger,
-			CASE
-				WHEN d.new_hunger <= 0 THEN 'DEAD'
-				ELSE d.state
-			END AS new_state
-		FROM decayed d`)
+		SELECT id, gu_id, state, is_vital, equipped, gu_name FROM upd`, playerID)
 	if err != nil {
 		return err
 	}
 
-	// Apply decay + state transitions.
-	_, err = tx.Exec(`
-		UPDATE player_gu pg
-		SET hunger = t.new_hunger,
-		    state = t.new_state,
-		    updated_at = NOW()
-		FROM _hunger_tick t
-		WHERE pg.id = t.gu_instance_id`)
-	if err != nil {
+	type starvedGu struct {
+		id, guID, state, guName string
+		isVital, equipped       bool
+	}
+	var dead []starvedGu
+	var deadIDs []string
+	vitalDeaths := 0
+	equippedDeath := false
+
+	for rows.Next() {
+		var s starvedGu
+		if err := rows.Scan(&s.id, &s.guID, &s.state, &s.isVital, &s.equipped, &s.guName); err != nil {
+			rows.Close()
+			return err
+		}
+		if s.state == "DEAD" {
+			dead = append(dead, s)
+			deadIDs = append(deadIDs, s.id)
+			if s.isVital {
+				vitalDeaths++
+			}
+			if s.equipped {
+				equippedDeath = true
+			}
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
 		return err
+	}
+
+	if len(dead) == 0 {
+		return tx.Commit()
 	}
 
 	// Vital Gu death → 80 HP backlash per death; drop active_combat on collapse.
-	_, err = tx.Exec(`
-		UPDATE players p
-		SET hp = GREATEST(p.hp - 80.0 * COALESCE(v.cnt, 0), 0),
-		    active_combat = CASE WHEN p.hp - 80.0 * COALESCE(v.cnt, 0) <= 0 THEN NULL ELSE p.active_combat END
-		FROM (
-			SELECT player_id, COUNT(*) AS cnt
-			FROM _hunger_tick
-			WHERE is_vital AND new_state = 'DEAD'
-			GROUP BY player_id
-		) v
-		WHERE p.id = v.player_id`)
-	if err != nil {
-		return err
+	if vitalDeaths > 0 {
+		backlash := 80.0 * float64(vitalDeaths)
+		if _, err := tx.Exec(`
+			UPDATE players p
+			SET hp = GREATEST(p.hp - $1, 0),
+			    active_combat = CASE WHEN p.hp - $1 <= 0 THEN NULL ELSE p.active_combat END
+			WHERE p.id = $2`, backlash, playerID); err != nil {
+			return err
+		}
 	}
 
 	// Audit log for every Gu that starved this tick (vital vs regular death).
-	_, err = tx.Exec(`
-		INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
-		SELECT
-			t.player_id,
-			CASE WHEN t.is_vital THEN 'gu.starve_vital_death' ELSE 'gu.starve_death' END,
-			'gu_instance',
-			t.gu_id,
-			CASE WHEN t.is_vital THEN t.gu_name || ' | bản mệnh Cổ chết đói' ELSE t.gu_name || ' | Cổ chết đói' END,
-			'{}'::jsonb,
-			'',
-			false,
-			'Chết đói',
-			NOW()
-		FROM _hunger_tick t
-		WHERE t.new_state = 'DEAD'`)
-	if err != nil {
-		return err
+	for _, s := range dead {
+		action := "gu.starve_death"
+		summary := s.guName + " | Cổ chết đói"
+		if s.isVital {
+			action = "gu.starve_vital_death"
+			summary = s.guName + " | bản mệnh Cổ chết đói"
+		}
+		if _, err := tx.Exec(`
+			INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
+			VALUES ($1, $2, 'gu_instance', $3, $4, '{}'::jsonb, '', false, 'Chết đói', NOW())`,
+			playerID, action, s.guID, summary); err != nil {
+			return err
+		}
 	}
 
-	// Rebuild equipped_gus for players whose Gu just died or went dormant:
-	// only ACTIVE equipped Gus stay in the equipped_gus array.
-	_, err = tx.Exec(`
-		UPDATE players p
-		SET equipped_gus = COALESCE(
-			(SELECT jsonb_agg(pg.id ORDER BY pg.id)
-			 FROM player_gu pg
-			 WHERE pg.player_id = p.id AND pg.equipped AND pg.state = 'ACTIVE'),
-			'[]'::jsonb)
-		FROM _hunger_tick t
-		WHERE p.id = t.player_id AND t.new_state IN ('DEAD', 'SLEEPING', 'SEALED')`)
-	if err != nil {
-		return err
+	// Rebuild equipped_gus when an equipped Gu died: only ACTIVE equipped Gus
+	// stay in the equipped_gus array.
+	if equippedDeath {
+		if _, err := tx.Exec(`
+			UPDATE players p
+			SET equipped_gus = COALESCE(
+				(SELECT jsonb_agg(pg.id ORDER BY pg.id)
+				 FROM player_gu pg
+				 WHERE pg.player_id = p.id AND pg.equipped AND pg.state = 'ACTIVE'),
+				'[]'::jsonb)
+			WHERE p.id = $1`, playerID); err != nil {
+			return err
+		}
 	}
 
 	// Remove starved (now DEAD) Gu instances.
-	_, err = tx.Exec(`DELETE FROM player_gu pg USING _hunger_tick t WHERE pg.id = t.gu_instance_id AND t.new_state = 'DEAD'`)
-	if err != nil {
+	if _, err := tx.Exec(`DELETE FROM player_gu WHERE id = ANY($1::text[])`, pq.Array(deadIDs)); err != nil {
 		return err
 	}
 
 	return tx.Commit()
+}
+
+// isDeadlockOrLockTimeout reports whether err is a Postgres deadlock (40P01) or
+// lock-not-available (55P03) error, i.e. a transient condition worth retrying.
+func isDeadlockOrLockTimeout(err error) bool {
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) {
+		switch pqErr.Code {
+		case "40P01", "55P03":
+			return true
+		}
+	}
+	return false
 }

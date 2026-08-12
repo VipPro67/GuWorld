@@ -1291,15 +1291,38 @@ export const Aperture: React.FC<ApertureProps> = ({
                           </td>
                           <td className="py-3 text-right space-y-1">
                             <div className="flex flex-col gap-1 items-end">
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${referee.milestone1_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
-                                Mốc 1 (Cấp 2): {referee.milestone1_rewarded ? "Đã nhận 500 NT" : "Chưa đạt"}
-                              </span>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${referee.milestone2_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
-                                Mốc 2 (Cấp 3): {referee.milestone2_rewarded ? "Đã nhận Cổ trùng" : "Chưa đạt"}
-                              </span>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${referee.milestone3_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : referee.has_deposited ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
-                                Mốc 3 (Nạp thẻ): {referee.milestone3_rewarded ? "Đã nhận (10%)" : referee.has_deposited ? "Chờ verified..." : "Chưa nạp"}
-                              </span>
+                              <div className={`flex items-center justify-between w-48 text-[10px] px-2 py-1 rounded ${referee.milestone1_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
+                                <span>Mốc 1 (Cấp 2):</span>
+                                {referee.milestone1_rewarded ? (
+                                  <span>Đã nhận 500 NT</span>
+                                ) : (referee.is_verified && referee.rank >= 2) ? (
+                                  <button onClick={() => store.claimReferralReward(referee.id, 1)} disabled={store.actionLoading} className="bg-emerald-600/80 hover:bg-emerald-500 text-white px-2 py-0.5 rounded cursor-pointer disabled:opacity-50 transition-colors">Nhận 500 NT</button>
+                                ) : (
+                                  <span>Chưa đạt</span>
+                                )}
+                              </div>
+                              <div className={`flex items-center justify-between w-48 text-[10px] px-2 py-1 rounded ${referee.milestone2_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
+                                <span>Mốc 2 (Cấp 3):</span>
+                                {referee.milestone2_rewarded ? (
+                                  <span>Đã nhận Cổ trùng</span>
+                                ) : (referee.is_verified && referee.rank >= 3) ? (
+                                  <button onClick={() => store.claimReferralReward(referee.id, 2)} disabled={store.actionLoading} className="bg-emerald-600/80 hover:bg-emerald-500 text-white px-2 py-0.5 rounded cursor-pointer disabled:opacity-50 transition-colors">Nhận Cổ trùng</button>
+                                ) : (
+                                  <span>Chưa đạt</span>
+                                )}
+                              </div>
+                              <div className={`flex items-center justify-between w-48 text-[10px] px-2 py-1 rounded ${referee.milestone3_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : referee.has_deposited ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
+                                <span>Mốc 3 (Nạp thẻ):</span>
+                                {referee.milestone3_rewarded ? (
+                                  <span>Đã nhận (10%)</span>
+                                ) : (referee.is_verified && referee.has_deposited) ? (
+                                  <button onClick={() => store.claimReferralReward(referee.id, 3)} disabled={store.actionLoading} className="bg-yellow-600/80 hover:bg-yellow-500 text-white px-2 py-0.5 rounded cursor-pointer disabled:opacity-50 transition-colors">Nhận (10%)</button>
+                                ) : referee.has_deposited ? (
+                                  <span>Chờ verified...</span>
+                                ) : (
+                                  <span>Chưa nạp</span>
+                                )}
+                              </div>
                             </div>
                           </td>
                         </tr>

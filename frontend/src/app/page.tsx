@@ -368,7 +368,7 @@ export default function Home() {
       {/* Footer Details */}
       <footer className="max-w-7xl w-full mx-auto text-center mt-8 pt-4 border-t border-zinc-950 flex flex-col items-center gap-2">
         <span className="px-2 py-0.5 text-[9px] sm:text-xs font-semibold font-mono tracking-wide rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 uppercase">
-          Đang ở Bản Beta sẽ reset dữ liệu khi ra mắt chính thức
+          Đang ở Bản Beta Sẽ Tắt Để Reset vào 9h 15/08/2026 và mở lại 19h 15/08/2026. Xin lỗi vì sự bất tiện này, hãy theo dõi Discord để cập nhật thông tin mới nhất.
         </span>
         <div className="flex items-center gap-3">
           <a href="https://www.facebook.com/profile.php?id=61587628762458" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-all">

@@ -448,11 +448,7 @@ func CompleteQuest(c *gin.Context) {
 		return
 	}
 
-	err = CheckReferralMilestones(tx, player.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check referral milestones: " + err.Error()})
-		return
-	}
+	// Removed automatic referral milestone check
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})

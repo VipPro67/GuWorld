@@ -231,6 +231,7 @@ func SetupRouter() *gin.Engine {
 			player.GET("/profile/:username", handlers.GetPlayerProfile)
 			player.PUT("/profile/settings", handlers.UpdateProfileSettings)
 			player.GET("/referrals", handlers.GetReferralStats)
+			player.POST("/referrals/claim", handlers.ClaimReferralReward)
 			player.POST("/simulate-deposit", handlers.SimulateDeposit)
 			player.POST("/avatar", handlers.UploadAvatar)
 			player.POST("/tick-regen", handlers.TickRegen)
