@@ -170,10 +170,17 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     const targetSlotRequirement = requiredSlots.find((s) => s.index === targetSlotIndex);
     if (!targetSlotRequirement) return;
 
-    setSlottedGus((prev) => ({
-      ...prev,
-      [targetSlotIndex]: instanceId,
-    }));
+    setSlottedGus((prev) => {
+      const copy = { ...prev };
+      // Remove from old slot if it was already slotted
+      for (const [key, val] of Object.entries(copy)) {
+        if (val === instanceId) {
+          delete copy[Number(key)];
+        }
+      }
+      copy[targetSlotIndex] = instanceId;
+      return copy;
+    });
   };
 
   // Auto-slot Gu by clicking it
@@ -328,7 +335,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
 
   // Drag and Drop helpers
   const handleDragStart = (e: React.DragEvent, instanceId: string) => {
-    e.dataTransfer.setData("instanceId", instanceId);
+    e.dataTransfer.setData("text/plain", instanceId);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -337,8 +344,10 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
 
   const handleDrop = (e: React.DragEvent, targetSlotIndex: number) => {
     e.preventDefault();
-    const instanceId = e.dataTransfer.getData("instanceId");
-    slotGu(instanceId, targetSlotIndex);
+    const instanceId = e.dataTransfer.getData("text/plain");
+    if (instanceId) {
+      slotGu(instanceId, targetSlotIndex);
+    }
   };
 
   // Helper for material styling & colors
@@ -491,6 +500,11 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                             return (
                               <div
                                 key={gu.instance_id}
+                                draggable
+                                onDragStart={(e) => {
+                                  e.stopPropagation();
+                                  handleDragStart(e, gu.instance_id);
+                                }}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleInventoryClick(gu);
