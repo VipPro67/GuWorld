@@ -42,13 +42,16 @@ export const TrainingRoom: React.FC<TrainingRoomProps> = ({ onClose }) => {
 
   // Create a mock CombatState for the dummy so CombatScreen doesn't throw errors
   const mockDummyState: CombatState = {
-    id: "practice_dummy",
-    status: "ACTIVE",
-    enemy_template_id: "",
+    enemy_name: "Hình Nhân Gỗ",
+    enemy_hp: dummyConfig.dummyHP,
     enemy_max_hp: dummyConfig.dummyHP,
-    boss_phase: 0,
-    current_turn: 0,
-    logs: [],
+    enemy_damage: dummyConfig.dummyAtk,
+    enemy_defense: dummyConfig.dummyDef,
+    charge_points: 0,
+    enemy_type: "Enemy",
+    enemy_rank: 1,
+    enemy_sub_rank: 1,
+    combat_mode: "practice",
     enemies: [
       {
         id: "practice_dummy",
@@ -56,8 +59,10 @@ export const TrainingRoom: React.FC<TrainingRoomProps> = ({ onClose }) => {
         kind: "Enemy",
         rank: 1,
         sub_rank: 1,
-        max_hp: dummyConfig.dummyHP,
         hp: dummyConfig.dummyHP,
+        max_hp: dummyConfig.dummyHP,
+        current_mana: 0,
+        max_mana: 0,
         base_attack: dummyConfig.dummyAtk,
         base_defense: dummyConfig.dummyDef,
         speed: dummyConfig.dummySpeed,
@@ -72,8 +77,10 @@ export const TrainingRoom: React.FC<TrainingRoomProps> = ({ onClose }) => {
         kind: "Player",
         rank: store.player.rank,
         sub_rank: store.player.sub_rank,
-        max_hp: 0,
-        hp: 0,
+        hp: store.player.base_hp,
+        max_hp: store.player.base_hp,
+        current_mana: store.player.current_mana,
+        max_mana: store.player.max_mana,
         base_attack: 0,
         base_defense: 0,
         speed: 0,
@@ -92,7 +99,7 @@ export const TrainingRoom: React.FC<TrainingRoomProps> = ({ onClose }) => {
           enemy={mockDummyState}
           guDictionary={store.guDictionary}
           actionLoading={store.actionLoading}
-          onRetreat={onClose}
+          onRetreat={async () => { onClose(); }}
           isPracticeMode={true}
           practiceDummyConfig={dummyConfig}
           onPracticeDummyConfigChange={handleConfigChange}
