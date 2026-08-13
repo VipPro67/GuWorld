@@ -65,6 +65,17 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 - Nhất Chuyển đến Ngũ Chuyển là phàm nhân; Lục Chuyển trở lên là Cổ Tiên.
 - Lục Chuyển trở lên **không có sub_rank**. Thay vào đó hiển thị tên `Lục Chuyển/Bát Chuyển/Cửu Chuyển Cổ Tiên/Cổ Tôn` kèm số lần vượt qua từng loại kiếp nạn (Địa Tai, Thiên Kiếp, Hạo Kiếp, Vạn Kiếp, Hỗn Độn Đại Nạn).
 
+### Cảnh Giới Lưu Phái (Path Masteries)
+
+- Trong quá trình tu hành, Cổ sư có thể tích luỹ điểm **Chân Ý** của các lưu phái (ví dụ: Kiếm Đạo, Hỏa Đạo, Trí Đạo...) để thăng tiến cảnh giới lưu phái.
+- **Cách nhận điểm Chân Ý:**
+  - **Sử dụng Cổ tiêu hao/Sát chiêu trong chiến đấu:** (Bao gồm cả đánh tay và đánh tự động/Simulator như khai thác mỏ, tàn tích). Mỗi lần thi triển thành công tốn Chân Nguyên: Cổ phàm +1 điểm, Tiên Cổ +10 điểm hệ tương ứng. (Lưu ý: Đánh Đấu Trường Ảo không được cộng điểm).
+  - *(Tương lai)* Sẽ có thêm cơ chế Dung luyện Cổ, Khám phá tàn tích đặc thù hoặc đọc truyền thừa.
+- **Các mốc cảnh giới:** Sơ Học (< 100) -> Đại Sư (100) -> Tông Sư (500) -> Đại Tông Sư (2500) -> Vô Thượng Tông Sư (10000).
+- **Tác dụng:**
+  - Là **điều kiện bắt buộc để đột phá tu vi Cổ Tiên** (VD: Đột phá Thất Chuyển cần ít nhất 1 lưu phái đạt Tông Sư; Bát Chuyển cần Đại Tông Sư).
+  - Khi không đủ điều kiện, vượt kiếp thành công vẫn được tính số lần tai kiếp nhưng **không được thăng Chuyển**.
+
 ### Phàm nhân: phá vách
 
 - Cổ sư tiêu hao Chân Nguyên để tăng `wall_progress`.
