@@ -711,7 +711,23 @@ func InitSchema() error {
 	}
 	_, _ = DB.Exec(`ALTER TABLE map_cells ADD COLUMN IF NOT EXISTS last_cleared_at TIMESTAMPTZ;`)
 	_, _ = DB.Exec(`ALTER TABLE map_cells ADD COLUMN IF NOT EXISTS cleared_by UUID;`)
-	_, _ = DB.Exec(`ALTER TABLE map_cells DROP CONSTRAINT IF EXISTS map_cells_region_id_x_y_key;`)
+	_, _ = DB.Exec(`
+	DO $$
+	BEGIN
+		-- Legacy map_cells used UNIQUE(region_id, x, y); migrate to a global UNIQUE(x, y).
+		IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'map_cells_region_id_x_y_key') THEN
+			ALTER TABLE map_cells DROP CONSTRAINT map_cells_region_id_x_y_key;
+		END IF;
+		-- Remove any duplicates sharing (x, y), keeping the oldest row.
+		DELETE FROM map_cells a USING map_cells b
+			WHERE a.id > b.id AND a.x = b.x AND a.y = b.y;
+		IF NOT EXISTS (
+			SELECT 1 FROM pg_constraint
+			WHERE conname = 'map_cells_x_y_key' AND conrelid = 'map_cells'::regclass
+		) THEN
+			ALTER TABLE map_cells ADD CONSTRAINT map_cells_x_y_key UNIQUE (x, y);
+		END IF;
+	END $$;`)
 
 	// 4.11. Create instance_templates
 	_, err = DB.Exec(`
@@ -2739,6 +2755,10 @@ func seedRegionsFromCSV(filename string) error {
 		if v := get(row, poolIdx); v != "" {
 			poolWeights = v
 		}
+		var parentID interface{}
+		if p := get(row, parentIdx); p != "" {
+			parentID = p
+		}
 		_, err = DB.Exec(`
 			INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, parent_id, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights, updated_at)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,NOW())
@@ -2748,7 +2768,7 @@ func seedRegionsFromCSV(filename string) error {
 			min_x=EXCLUDED.min_x, min_y=EXCLUDED.min_y, max_x=EXCLUDED.max_x, max_y=EXCLUDED.max_y,
 			entry_x=EXCLUDED.entry_x, entry_y=EXCLUDED.entry_y, pool_weights=EXCLUDED.pool_weights, updated_at=NOW()
 		`, id, get(row, nameIdx), get(row, descIdx), width, height, minRank, maxRank, active,
-			get(row, parentIdx), zoneType, minX, minY, maxX, maxY, entryX, entryY, poolWeights)
+			parentID, zoneType, minX, minY, maxX, maxY, entryX, entryY, poolWeights)
 		if err != nil {
 			return fmt.Errorf("upsert region %s: %w", id, err)
 		}
