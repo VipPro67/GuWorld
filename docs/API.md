@@ -108,7 +108,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | GET | `/explore/regions` | Danh sách zone (id, name, geometry `min_x..max_y`, `entry_x/y`, `parent_id`, `zone_type`). |
 | GET | `/explore/world` | Cấu hình thế giới: `width`, `height`, `large_zone_size`, `sub_zone_size`, `hub_region_id`, `hub_x/y`. |
 | GET | `/explore/objects` | Các ô persistent (map_cells): village/trạm nghỉ, boss, linh tài — cho bản đồ lớn. Trả `{region_id,x,y,cell_type,content_id,rank,respawn_seconds,cleared}`. |
-| GET | `/explore/cells` | Các ô non-empty (Monster/Boss/Resource/WildGu) quanh player (`?x=&y=&r=`, mặc định quanh player, r cap 300) để bản đồ lớn vẽ marker quái/tài nguyên. Trả `[{x,y,cell_type,content,rank,sub_rank}]`. |
+| GET | `/explore/cells` | Các ô non-empty (Monster/Boss/Resource/WildGu) quanh player (`?x=&y=&r=`, mặc định quanh player, r cap 300) để bản đồ lớn vẽ marker quái/tài nguyên. Nội dung **ổn định theo ô** (không re-randomize theo thời gian), khớp đúng nội dung khi di chuyển. Trả `[{x,y,cell_type,content,rank,sub_rank}]`. |
 | POST | `/explore/move` | Di chuyển tới toạ độ trong thế giới (bounds = `world_width`/`world_height`). |
 | POST | `/explore/move-path` | Di chuyển tự do theo đường thẳng từ ô hiện tại tới toạ độ đích, trigger cell action trên từng ô đi qua (gom loot; **chỉ chạm trán quái khi bước vào ô thật sự có quái/boss**, không có phục kích ngẫu nhiên trên ô trống). Trả `{player, logs, log, combat_triggered, reached, stats}`; nếu `reached=false` và không combat, client chain tiếp request từ vị trí mới cho tới khi tới đích. |
 

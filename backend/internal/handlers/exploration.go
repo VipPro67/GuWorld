@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -23,12 +24,14 @@ import (
 const clearedCellCooldown = 15 * time.Minute
 
 func GetCellSeed(x, y int, zoneKey string) int64 {
-	respawnWindow := time.Now().Unix() / 180
+	// Deterministic per (zone, x, y): monster / resource content stays stable
+	// on the map and matches what players actually encounter. Cell respawn is
+	// handled separately via per-player cleared_cells cooldown, so a static
+	// seed does not lock content forever for an individual player.
 	h := sha256.New()
 	h.Write([]byte(zoneKey))
 	binary.Write(h, binary.BigEndian, int64(x))
 	binary.Write(h, binary.BigEndian, int64(y))
-	binary.Write(h, binary.BigEndian, respawnWindow)
 	return int64(binary.BigEndian.Uint64(h.Sum(nil)[:8]))
 }
 
@@ -37,11 +40,19 @@ func GetCellSeed(x, y int, zoneKey string) int64 {
 var defaultResourcePool = []string{"moon_orchid_petal", "green_bamboo_wine", "jade_stone", "boar_meat"}
 var defaultWildGuPool = []string{"GU_LITTLE_LIGHT", "GU_JADE_SKIN", "GU_BRONZE_RELIC", "GU_FIRE_ARMOR"}
 
-// pickWeightedType rolls a cell content type using zone weights.
+// pickWeightedType rolls a cell content type using zone weights. Weights come
+// from a map, so iterate keys in sorted order to keep the pick deterministic
+// (Go map iteration order is random and would shuffle cells every call).
 func pickWeightedType(weights map[string]int, rng *rand.Rand) string {
+	keys := make([]string, 0, len(weights))
+	for k := range weights {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	total := 0
-	for _, w := range weights {
-		if w > 0 {
+	for _, k := range keys {
+		if w := weights[k]; w > 0 {
 			total += w
 		}
 	}
@@ -49,13 +60,14 @@ func pickWeightedType(weights map[string]int, rng *rand.Rand) string {
 		return "Empty"
 	}
 	roll := rng.Intn(total)
-	for t, w := range weights {
+	for _, k := range keys {
+		w := weights[k]
 		if w <= 0 {
 			continue
 		}
 		roll -= w
 		if roll < 0 {
-			return t
+			return k
 		}
 	}
 	return "Empty"
@@ -63,7 +75,9 @@ func pickWeightedType(weights map[string]int, rng *rand.Rand) string {
 
 // GenerateCell procedurally generates a low-tier cell (monster / resource /
 // wild Gu / empty) from the containing zone's in-memory pools. No database
-// access — content is deterministic per (zone, x, y) within a respawn window.
+// access — content is deterministic per (zone, x, y) and stays stable so the
+// map matches gameplay. Cleared cells are suppressed per player via the
+// cleared_cells cooldown, which acts as the respawn mechanism.
 func GenerateCell(x, y int) models.Cell {
 	if !inWorld(x, y) {
 		return models.Cell{X: x, Y: y, Type: "Empty", Content: "Biên Giới Cổ Giới (World Edge)"}
@@ -131,6 +145,8 @@ func randomNormalMonsterID(rng *rand.Rand) string {
 	if len(ids) == 0 {
 		return "monster_wild_boar"
 	}
+	// Sort so the pick is stable across calls (map iteration order is random).
+	sort.Strings(ids)
 	return ids[rng.Intn(len(ids))]
 }
 
@@ -482,9 +498,14 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 		case "Monster", "Boss":
 			combatTriggered = true
 
-			mon, err := db.LoadMonsterTemplate(tx, cell.Content)
-			if err != nil {
-				return "", false, err
+			mon, ok := models.MonsterRegistry[cell.Content]
+			if !ok {
+				// Fall back to the DB (registry may not have loaded this id).
+				var err error
+				mon, err = db.LoadMonsterTemplate(tx, cell.Content)
+				if err != nil {
+					return "", false, err
+				}
 			}
 
 			rank := 1
@@ -592,8 +613,11 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				if (adj.Type == "Monster" || adj.Type == "Boss") && rand.Intn(100) < 5 { // 5% chance
 					combatTriggered = true
 
-					mon, err := db.LoadMonsterTemplate(tx, adj.Content)
-					if err == nil {
+					mon, ok := models.MonsterRegistry[adj.Content]
+					if !ok {
+						mon, _ = db.LoadMonsterTemplate(tx, adj.Content)
+					}
+					if mon.ID != "" {
 						rank := 1
 						if adj.Rank > 0 {
 							rank = adj.Rank

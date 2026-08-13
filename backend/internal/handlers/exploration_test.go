@@ -1,6 +1,10 @@
 package handlers
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/vippro67/GuWorld/backend/internal/models"
+)
 
 func TestLineCellsHorizontal(t *testing.T) {
 	cells := lineCells(5, 5, 8, 5)
@@ -62,5 +66,37 @@ func TestLineCellsEndsAtTarget(t *testing.T) {
 			t.Fatalf("non-adjacent step %v from %d,%d", c, prevX, prevY)
 		}
 		prevX, prevY = c[0], c[1]
+	}
+}
+
+// TestGenerateCellStableAcrossCalls verifies cell content is deterministic and
+// does not re-randomize between calls (no time-window shuffle, no map-order
+// dependence). Regression for "monsters keep resetting" on the world map.
+func TestGenerateCellStableAcrossCalls(t *testing.T) {
+	zoneReg.mu.Lock()
+	zoneReg.zones = []models.Region{
+		{ID: "dai_vuc_test", ZoneType: ZoneTypeLarge, MinX: 0, MinY: 0, MaxX: 9999, MaxY: 9999,
+			PoolWeights: models.ZonePools{
+				CellWeights: map[string]int{"Monster": 25, "Resource": 15, "WildGu": 5, "Empty": 55},
+				Resources:   []string{"moon_orchid_petal", "green_bamboo_wine", "jade_stone"},
+				WildGus:     []string{"GU_LITTLE_LIGHT", "GU_JADE_SKIN"},
+			}},
+	}
+	zoneReg.spawnPools = map[string][]models.MonsterSpawn{
+		"dai_vuc_test": {
+			{RegionID: "dai_vuc_test", MonsterID: "monster_wild_boar", Chance: 1.0, SpawnMode: "Random", MinRank: 1, MaxRank: 3, IsActive: true},
+		},
+	}
+	zoneReg.mu.Unlock()
+
+	// Compare many cells across repeated resolutions — content must be identical.
+	for i := 0; i < 200; i++ {
+		x := 100 + i%50
+		y := 200 + i%50
+		c1 := ResolveCell(x, y)
+		c2 := ResolveCell(x, y)
+		if c1.Type != c2.Type || c1.Content != c2.Content {
+			t.Fatalf("cell (%d,%d) not stable: %+v vs %+v", x, y, c1, c2)
+		}
 	}
 }
