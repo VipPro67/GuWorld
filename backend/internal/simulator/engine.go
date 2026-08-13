@@ -138,6 +138,14 @@ func cloneCombatant(c *CombatantAuto) *CombatantAuto {
 			clone.DaoMarks[k] = v
 		}
 	}
+	if c.CustomState != nil {
+		clone.CustomState = make(map[string]int)
+		for k, v := range c.CustomState {
+			clone.CustomState[k] = v
+		}
+	} else {
+		clone.CustomState = make(map[string]int)
+	}
 	return &clone
 }
 
@@ -302,6 +310,14 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 
 // Simulate runs the deterministic auto-battle using pre-computed actions.
 func Simulate(state *CombatState) []CombatLog {
+	for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
+		for _, c := range combatants {
+			if c.CustomState == nil {
+				c.CustomState = make(map[string]int)
+			}
+		}
+	}
+
 	var logs []CombatLog
 	cicadaUsed := false
 	initialState := cloneCombatState(state)
@@ -343,6 +359,55 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 				turnLogs = append(turnLogs, tickStatusEffects(c, turn)...)
 				ComputeEffectMultipliers(c)
+				
+				// Thơ Cổ (GU_POEM_IMMORTAL) - Start of turn logic
+				if hasGuEquipped(c, "GU_POEM_IMMORTAL") {
+					c.CustomState["thi_y"] += 1
+					c.ActiveEffects = append(c.ActiveEffects, Effect{
+						ID:       "thi_ho",
+						Type:     "damage_reduction",
+						Value:    40, // 40% reduction
+						Duration: 2,  // 2 so it lasts until the end of the turn
+					})
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   c.ID,
+						ActorName: c.Name,
+						Action:    "BUFF",
+						Detail:    fmt.Sprintf("[Thơ Cổ] Tích tụ 1 tầng Thi Ý (hiện có %d tầng), tạo Thi Hộ giảm 40%% sát thương nhận vào trong lượt!", c.CustomState["thi_y"]),
+					})
+					
+					if c.CustomState["thi_y"] >= 10 {
+						// Immediately destroy all enemies' shields if reaching 10 at start of turn
+						c.CustomState["thi_y"] = 0
+						var enemyTargets []*CombatantAuto
+						isAlly := false
+						for _, a := range state.Allies {
+							if a.ID == c.ID {
+								isAlly = true
+								break
+							}
+						}
+						if isAlly {
+							enemyTargets = state.Enemies
+						} else {
+							enemyTargets = state.Allies
+						}
+						
+						for _, e := range enemyTargets {
+							if e.VirtualShield > 0 {
+								e.VirtualShield = 0
+							}
+						}
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   c.ID,
+							ActorName: c.Name,
+							Action:    "SHIELD_BREAK",
+							Detail:    fmt.Sprintf("[Thơ Cổ] Thi Ý viên mãn (10 tầng)! Phá vỡ hoàn toàn khiên ảo của toàn bộ kẻ địch và reset Thi Ý!"),
+						})
+					}
+				}
 			}
 		}
 
@@ -1503,7 +1568,91 @@ func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]C
 		return damage
 	}
 
+	// Thơ Cổ: "thi_ho" damage reduction (40%)
+	for _, eff := range target.ActiveEffects {
+		if eff.ID == "thi_ho" && eff.Duration >= 0 {
+			reducedDmg := damage * 0.40
+			damage -= reducedDmg
+			*logs = append(*logs, CombatLog{
+				Turn:      turn,
+				ActorId:   target.ID,
+				ActorName: target.Name,
+				Action:    "DEFEND",
+				Detail:    fmt.Sprintf("[Thơ Cổ] Thi Hộ cản lại 40%% sát thương (giảm %.0f sát thương)!", reducedDmg),
+			})
+			break
+		}
+	}
+
+	hpDamageDealt := 0.0
+
 	if target.VirtualShield > 0 {
+		// Thơ Cổ: Ghi nhận khiên và xuyên khiên
+		if hasGuEquipped(actor, "GU_POEM_IMMORTAL") {
+			stacks := actor.CustomState["thi_y"]
+			
+			// Xuyên khiên (chỉ 1 lần mỗi lượt)
+			if stacks >= 3 && !shieldBypass && actor.CustomState["thi_y_pierce_turn"] != turn {
+				actor.CustomState["thi_y_pierce_turn"] = turn
+				
+				usableMultiples := stacks / 3
+				ignorePct := float64(usableMultiples) * 0.30
+				if ignorePct > 1.0 {
+					ignorePct = 1.0
+				}
+				
+				shieldIgnored := float64(target.VirtualShield) * ignorePct
+				if shieldIgnored > damage {
+					shieldIgnored = damage
+				}
+				
+				if shieldIgnored > 0 {
+					target.HP -= int(shieldIgnored)
+					if target.HP < 0 {
+						target.HP = 0
+					}
+					damage -= shieldIgnored
+					hpDamageDealt += shieldIgnored
+					*logs = append(*logs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "SHIELD_PIERCE",
+						Detail:    fmt.Sprintf("[Thơ Cổ] Với uy năng từ %d tầng Thi Ý, đòn đánh xuyên thẳng qua %.0f%% khiên (gây %.0f sát thương thẳng vào HP)!", stacks, ignorePct*100, shieldIgnored),
+					})
+				}
+			}
+			
+			// Thu thập thông tin khi chạm khiên (chỉ 1 lần mỗi lượt)
+			if actor.CustomState["thi_y_shield_turn"] != turn {
+				actor.CustomState["thi_y_shield_turn"] = turn
+				actor.CustomState["thi_y"] += 1
+				*logs = append(*logs, CombatLog{
+					Turn:      turn,
+					ActorId:   actor.ID,
+					ActorName: actor.Name,
+					Action:    "BUFF",
+					Detail:    fmt.Sprintf("[Thơ Cổ] Chạm trán khiên, thu thập tin tức! Nhận thêm 1 tầng Thi Ý (hiện có %d tầng)!", actor.CustomState["thi_y"]),
+				})
+				
+				if actor.CustomState["thi_y"] >= 10 {
+					actor.CustomState["thi_y"] = 0
+					target.VirtualShield = 0
+					*logs = append(*logs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "SHIELD_BREAK",
+						Detail:    fmt.Sprintf("[Thơ Cổ] Thi Ý viên mãn (10 tầng)! Nhìn thấu vạn vật, phá nát toàn bộ khiên ảo của %s!", target.Name),
+					})
+				}
+			}
+		}
+
+		if damage <= 0 {
+			return hpDamageDealt
+		}
+
 		if float64(target.VirtualShield) >= damage {
 			target.VirtualShield -= int(damage)
 			*logs = append(*logs, CombatLog{
@@ -1514,26 +1663,27 @@ func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]C
 				Damage:    int(damage),
 				Detail:    fmt.Sprintf("%s tấn công %s gây %.0f sát thương (còn %d khiên, %d HP)", actor.Name, target.Name, damage, target.VirtualShield, target.HP),
 			})
-			return 0
+			return hpDamageDealt // Trả về hpDamageDealt để caller không log double damage
 		}
 
-		absorbed := target.VirtualShield
-		damage -= float64(absorbed)
+		absorbed := float64(target.VirtualShield)
+		damage -= absorbed
 		target.VirtualShield = 0
 		target.HP -= int(damage)
 		if target.HP < 0 {
 			target.HP = 0
 		}
-		totalDmg := float64(absorbed) + damage
+		hpDamageDealt += damage
+		totalDmg := absorbed + damage
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,
 			ActorId:   actor.ID,
 			ActorName: actor.Name,
 			Action:    "SHIELD_BREAK",
 			Damage:    int(totalDmg),
-			Detail:    fmt.Sprintf("%s tấn công %s gây %.0f sát thương (vỡ khiên, còn %d HP)", actor.Name, target.Name, totalDmg, target.HP),
+			Detail:    fmt.Sprintf("%s tấn công %s gây %.0f sát thương (phá vỡ %.0f khiên, còn %d HP)", actor.Name, target.Name, totalDmg, absorbed, target.HP),
 		})
-		return totalDmg
+		return hpDamageDealt // Chỉ trả về lượng sát thương trừ vào HP để caller log
 	}
 
 	// Direct HP damage (no shield)
@@ -1541,7 +1691,7 @@ func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]C
 	if target.HP < 0 {
 		target.HP = 0
 	}
-	return damage
+	return hpDamageDealt + damage
 }
 
 // checkActionCondition returns true if the action's use condition is met.

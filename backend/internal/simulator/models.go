@@ -244,6 +244,9 @@ type CombatantAuto struct {
 	// Tracking
 	ItemsUsedInBattle int
 
+	// Custom state for special Gu effects (e.g. GU_POEM_IMMORTAL stacks)
+	CustomState map[string]int
+
 	// Internal action index for round-robin
 	nextActionIdx int
 

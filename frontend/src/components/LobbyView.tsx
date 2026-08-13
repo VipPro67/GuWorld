@@ -205,7 +205,15 @@ export const LobbyView: React.FC = () => {
       borderColor: "border-purple-400/30",
       iconColor: "text-purple-500",
     },
-    
+    {
+      id: "practice-room",
+      label: "Phòng Tập",
+      icon: Swords,
+      gradient: "from-blue-500 to-indigo-600",
+      glow: "group-hover:shadow-[0_0_25px_rgba(99,102,241,0.45)]",
+      borderColor: "border-blue-400/30",
+      iconColor: "text-blue-500",
+    },
     {
       id: "achievements",
       label: "Nhiệm Vụ & Thành Tựu",
@@ -309,17 +317,12 @@ export const LobbyView: React.FC = () => {
     {
       id: "world-map",
       label: "Ngũ Vực",
-      // icon: Compass,
-      // gradient: "from-teal-500 to-emerald-600",
-      // glow: "group-hover:shadow-[0_0_25px_rgba(20,184,166,0.45)]",
-      // borderColor: "border-teal-400/30",
-      // iconColor: "text-teal-500",
-      locked: true,
-      icon: Lock,
-      gradient: "from-zinc-800 to-zinc-950",
-      glow: "",
-      borderColor: "border-zinc-800",
-      iconColor: "text-zinc-600",
+      icon: Compass,
+      gradient: "from-teal-500 to-emerald-600",
+      glow: "group-hover:shadow-[0_0_25px_rgba(20,184,166,0.45)]",
+      borderColor: "border-teal-400/30",
+      iconColor: "text-teal-500",
+      locked: true, // Locked for dev
     },
     {
       id: "feedback",

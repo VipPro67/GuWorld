@@ -367,6 +367,7 @@ func SetupRouter() *gin.Engine {
 		combat.Use(middleware.RateLimitByPlayer(30, time.Minute))
 		{
 			combat.POST("/start", handlers.AutoCombatStart)
+			combat.POST("/practice", handlers.PracticeCombatStart)
 			combat.POST("/attack", handlers.CombatAttack)
 			combat.POST("/cast-killer-move", handlers.CastKillerMove)
 			combat.POST("/capture", handlers.CaptureMonster)
@@ -450,7 +451,10 @@ func SetupRouter() *gin.Engine {
 		api.GET("/explore/grid", middleware.AuthRequired(), handlers.GetGrid)
 		api.GET("/explore/regions", middleware.AuthRequired(), handlers.GetRegions)
 		api.GET("/explore/world", middleware.AuthRequired(), handlers.GetWorld)
+		api.GET("/explore/objects", middleware.AuthRequired(), middleware.RateLimitByPlayer(30, time.Minute), handlers.GetExploreObjects)
+		api.GET("/explore/cells", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetNearbyCells)
 		api.POST("/explore/move", middleware.AuthRequired(), middleware.RateLimitByPlayer(25, time.Minute), handlers.MovePlayer)
+		api.POST("/explore/move-path", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.MovePlayerPath)
 
 		// Shop — group: 30/min, per player: 10/min
 		api.GET("/shop/packages", middleware.AuthRequired(), handlers.GetPremiumShopPackages)

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -341,6 +342,303 @@ func HasExplorationInventorySpace(player *models.Player, incomingCount int) bool
 	return (currentSize + incomingCount) <= maxSlots
 }
 
+// resolveCellArrival places the player at (x, y), derives the region / subzone
+// and resolves the cell content the player stepped onto (resource pickup, wild
+// Gu capture, monster / boss combat or player-initiated PVP), including the
+// small adjacency ambush chance (skipped when allowAmbush is false — used by
+// free path movement so the player only fights when stepping onto an actual
+// monster cell, not randomly on empty cells). It mutates player in-place and
+// returns the log message plus whether a fight was started. attackTargetID is
+// only used to explicitly attack another player standing on the destination.
+func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTargetID string, allowAmbush bool) (string, bool, error) {
+	player.X = x
+	player.Y = y
+	player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
+	recordVisitedSubZone(player, SubZoneKey(player.X, player.Y))
+
+	coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
+	isCleared := isCellClearedRecently(player, player.X, player.Y, clearedCellCooldown)
+	cell := ResolveCell(player.X, player.Y)
+	logMsg := fmt.Sprintf("Di chuyển thành công đến (%d, %d).", player.X, player.Y)
+	combatTriggered := false
+	pvpTriggered := false
+
+	// Player-initiated PVP: another active player stands on the destination.
+	if attackTargetID != "" {
+		var targetPlayer models.Player
+		queryStr := `
+			SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.current_mana, p.base_hp, p.path_masteries, ` + db.GuInventoryAggregate("p.id") + `, COALESCE(ia.dao_marks, '{}'::jsonb)
+			FROM players p
+			LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
+			WHERE p.x = $1 AND p.y = $2 AND p.id != $3
+			  AND p.last_mana_update >= NOW() - INTERVAL '15 minutes'
+		`
+		var errTarget error
+		if player.PartyID != nil {
+			queryStr += ` AND (p.party_id IS NULL OR p.party_id != $4)`
+			errTarget = tx.QueryRow(queryStr, player.X, player.Y, player.ID, player.PartyID).Scan(
+				&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
+				&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
+				&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks,
+			)
+		} else {
+			errTarget = tx.QueryRow(queryStr, player.X, player.Y, player.ID).Scan(
+				&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
+				&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
+				&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks,
+			)
+		}
+		if errTarget == nil && attackTargetID == targetPlayer.ID.String() {
+			combatTriggered = true
+			pvpTriggered = true
+			targetStats := CalculatePlayerStats(&targetPlayer)
+
+			enemyHP := targetPlayer.HP
+			if enemyHP <= 0 {
+				enemyHP = targetPlayer.BaseHP
+			}
+			if enemyHP <= 0 {
+				enemyHP = 100.0
+			}
+			enemyMaxHP := gamefx.EffectiveMaxHP(&targetPlayer)
+			if enemyMaxHP <= 0 {
+				enemyMaxHP = 100.0
+			}
+
+			pvpCombat := models.CombatState{
+				EnemyTemplateID:    targetPlayer.ID.String(),
+				EnemyName:          targetPlayer.Username,
+				EnemyAvatarURL:     targetPlayer.AvatarURL,
+				EnemyType:          "PVP",
+				CombatMode:         "real",
+				EnemyHP:            enemyHP,
+				EnemyMaxHP:         enemyMaxHP,
+				EnemyMana:          targetPlayer.CurrentMana,
+				EnemyMaxMana:       targetPlayer.MaxMana,
+				EnemyDamage:        targetStats["attack"],
+				EnemyDefense:       targetStats["defense"],
+				EnemySpeed:         targetStats["speed"],
+				EnemyRank:          targetPlayer.Rank,
+				EnemySubRank:       targetPlayer.SubRank,
+				EnemyGuInventory:   targetPlayer.GuInventory,
+				EnemyDaoMarks:      targetPlayer.DaoMarks,
+				EnemyPathMasteries: targetPlayer.PathMasteries,
+				TargetPlayerID:     targetPlayer.ID.String(),
+			}
+			player.ActiveCombat = &pvpCombat
+			logMsg = fmt.Sprintf("Ngươi chủ động tuyên chiến và tấn công Cổ Sư %s tại tọa độ (%d, %d)!", targetPlayer.Username, player.X, player.Y)
+		}
+	}
+
+	if isCleared {
+		logMsg = fmt.Sprintf("Di chuyển thành công đến (%d, %d). Vùng đất trống trải hoang tàn.", player.X, player.Y)
+	} else if !pvpTriggered {
+		switch cell.Type {
+		case "Resource":
+			if HasExplorationInventorySpace(player, 1) {
+				if player.TempLoot.MaterialsInventory == nil {
+					player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
+				}
+				player.TempLoot.MaterialsInventory[cell.Content]++
+				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Đạo hữu tìm thấy nguyên liệu hoang dã: 1x %s (được giữ tạm thời trong bản đồ)!", player.X, player.Y, cell.Content)
+
+				MarkPersistentCellCleared(tx, player.ID, player.X, player.Y)
+
+				if player.ClearedCells == nil {
+					player.ClearedCells = make(models.ClearedCellsMap)
+				}
+				player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
+			} else {
+				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Phát hiện 1x %s, nhưng Bách Bảo Nang đã đầy!", player.X, player.Y, cell.Content)
+			}
+		case "WildGu":
+			if HasExplorationInventorySpace(player, 1) {
+				var guSpec models.GuDictionaryItem
+				var ok bool
+				if cell.Rank > 0 {
+					guSpec, ok = models.GetGu(cell.Content, cell.Rank)
+				}
+				if !ok {
+					guSpec, _ = models.GetGuAny(cell.Content)
+				}
+				newGu := models.GuInstance{
+					InstanceID: uuid.New().String(),
+					GuID:       cell.Content,
+					Rank:       guSpec.Rank,
+					Hunger:     100,
+					Status:     "ACTIVE",
+					Equipped:   false,
+				}
+				player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, newGu)
+				logMsg = fmt.Sprintf("Cơ duyên! Đạo hữu bắt gặp và thu phục thành công Cổ trùng hoang dã: %s (được giữ tạm thời trong bản đồ)!", cell.Content)
+
+				if player.ClearedCells == nil {
+					player.ClearedCells = make(models.ClearedCellsMap)
+				}
+				player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
+			} else {
+				logMsg = fmt.Sprintf("Đạo hữu phát hiện thấy Cổ trùng hoang dã %s, tiếc là Bách Bảo Nang đã đầy nên để nó trốn thoát!", cell.Content)
+			}
+		case "Monster", "Boss":
+			combatTriggered = true
+
+			mon, err := db.LoadMonsterTemplate(tx, cell.Content)
+			if err != nil {
+				return "", false, err
+			}
+
+			rank := 1
+			if cell.Rank > 0 {
+				rank = cell.Rank
+			}
+			subRank := 1
+			if cell.SubRank > 0 {
+				subRank = cell.SubRank
+			}
+
+			combatState := models.BuildCombatStateFromMonster(mon, rank, subRank)
+			player.ActiveCombat = &combatState
+			logMsg = fmt.Sprintf("Nguy hiểm! Đạo hữu chạm trán %s tại tọa độ (%d, %d)!", mon.Name, player.X, player.Y)
+
+			hasHeavenSecret := false
+			for _, gu := range player.GuInventory {
+				if gu.GuID == "GU_HEAVEN_SECRET" && gu.Equipped && gu.Status == "ACTIVE" {
+					hasHeavenSecret = true
+					break
+				}
+			}
+			if hasHeavenSecret && mon.LootTableID != "" {
+				lt, errLt := db.LoadLootTable(tx, mon.LootTableID)
+				if errLt == nil {
+					chanceMul := lootChanceMultiplier(rank)
+					qtyMul := lootQuantityMultiplier(rank)
+					extraLootMsg := fmt.Sprintf(" [Thiên Cơ hiển lộ (Rank %d x%.1f) - Tỉ lệ rơi đồ: ", rank, qtyMul)
+					first := true
+					for _, entry := range lt.Entries {
+						if !first {
+							extraLootMsg += ", "
+						}
+						scaledChance := math.Min(entry.Chance*chanceMul, 1.0)
+						scaledMin := int(math.Round(float64(entry.MinQty) * qtyMul))
+						scaledMax := int(math.Round(float64(entry.MaxQty) * qtyMul))
+						if itemID := entry.ItemID; itemID != "" {
+							extraLootMsg += fmt.Sprintf("%s x%d-%d (%.1f%%)", itemID, scaledMin, scaledMax, scaledChance*100)
+						} else if entry.GuID != "" {
+							extraLootMsg += fmt.Sprintf("%s (%.1f%%)", entry.GuID, scaledChance*100)
+						}
+						first = false
+					}
+					extraLootMsg += "]"
+					logMsg += extraLootMsg
+				}
+			}
+		case "PVP":
+			var targetPlayer models.Player
+			err := tx.QueryRow(`
+				SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.path_masteries, `+db.GuInventoryAggregate("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb)
+				FROM players p
+				LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
+				WHERE p.id != $1 
+				LIMIT 1`, player.ID,
+			).Scan(
+				&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
+				&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks,
+			)
+
+			combatTriggered = true
+			if err != nil {
+				player.ActiveCombat = &models.CombatState{
+					EnemyName:      "Cổ Sư Lang Thang (Wandering Cultivator)",
+					EnemyHP:        100.0,
+					EnemyMaxHP:     100.0,
+					EnemyDamage:    15.0,
+					EnemyDefense:   5.0,
+					TargetPlayerID: "dummy",
+				}
+				logMsg = "Đột ngột một Cổ Sư Lang Thang xuất hiện khiêu chiến đạo hữu!"
+			} else {
+				targetStats := CalculatePlayerStats(&targetPlayer)
+				player.ActiveCombat = &models.CombatState{
+					EnemyName:      targetPlayer.Username,
+					EnemyType:      "PVP",
+					CombatMode:     "real",
+					EnemyHP:        100.0,
+					EnemyMaxHP:     100.0,
+					EnemyDamage:    targetStats["attack"],
+					EnemyDefense:   targetStats["defense"],
+					TargetPlayerID: targetPlayer.ID.String(),
+				}
+				logMsg = fmt.Sprintf("Đạo hữu bắt gặp một Cổ Sư khác đang du ngoạn: %s! Lập tức giao đấu!", targetPlayer.Username)
+			}
+		}
+	}
+
+	if !combatTriggered && allowAmbush {
+		for ax := -1; ax <= 1 && !combatTriggered; ax++ {
+			for ay := -1; ay <= 1 && !combatTriggered; ay++ {
+				if ax == 0 && ay == 0 {
+					continue
+				}
+				adjX := player.X + ax
+				adjY := player.Y + ay
+
+				// check if already cleared
+				if isCellClearedRecently(player, adjX, adjY, clearedCellCooldown) {
+					continue
+				}
+
+				adj := ResolveCell(adjX, adjY)
+
+				if (adj.Type == "Monster" || adj.Type == "Boss") && rand.Intn(100) < 5 { // 5% chance
+					combatTriggered = true
+
+					mon, err := db.LoadMonsterTemplate(tx, adj.Content)
+					if err == nil {
+						rank := 1
+						if adj.Rank > 0 {
+							rank = adj.Rank
+						}
+						subRank := 1
+						if adj.SubRank > 0 {
+							subRank = adj.SubRank
+						}
+						combatState := models.BuildCombatStateFromMonster(mon, rank, subRank)
+						player.ActiveCombat = &combatState
+						logMsg = fmt.Sprintf("Phục kích! Quái thú %s lân cận (%d, %d) chủ động lao ra tấn công đạo hữu!", mon.Name, adjX, adjY)
+					}
+					// Mark the original monster cell as cleared
+					if player.ClearedCells == nil {
+						player.ClearedCells = make(models.ClearedCellsMap)
+					}
+					coordKeyAdj := fmt.Sprintf("%d,%d", adjX, adjY)
+					player.ClearedCells[coordKeyAdj] = time.Now().Format(time.RFC3339)
+				}
+			}
+		}
+	}
+
+	if player.ActiveCombat != nil {
+		player.ActiveCombat = StartCombat(tx, player.ActiveCombat, player)
+	}
+
+	// Fire ON_EXPLORE_MOVE on equipped Gus
+	var exploreEventMsg string
+	for _, gu := range player.GuInventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
+				if msg, err := HandleGuEvent(player, spec, gu, "ON_EXPLORE_MOVE"); err == nil && msg != "" {
+					exploreEventMsg = msg
+				}
+			}
+		}
+	}
+	if exploreEventMsg != "" {
+		logMsg += " " + exploreEventMsg
+	}
+
+	return logMsg, combatTriggered, nil
+}
+
 // MoveRequest specifies target position
 type MoveRequest struct {
 	X              int    `json:"x"`
@@ -422,297 +720,10 @@ func MovePlayer(c *gin.Context) {
 	}
 
 	// Movement no longer consumes mana
-	player.X = req.X
-	player.Y = req.Y
-	player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
-	recordVisitedSubZone(&player, SubZoneKey(player.X, player.Y))
-
-	// Check if cell is cleared recently (15 minutes cooldown)
-	coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
-	isCleared := isCellClearedRecently(&player, player.X, player.Y, clearedCellCooldown)
-
-	// Trigger cell action
-	cell := ResolveCell(player.X, player.Y)
-	logMsg := fmt.Sprintf("Di chuyển thành công đến (%d, %d).", player.X, player.Y)
-	combatTriggered := false
-	pvpTriggered := false
-
-	// Check if there is another active player (not in same party) at req.X, req.Y
-	var targetPlayer models.Player
-	var hasTargetPlayer bool
-	queryStr := `
-		SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.current_mana, p.base_hp, p.path_masteries, `+db.GuInventoryAggregate("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb)
-		FROM players p
-		LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
-		WHERE p.x = $1 AND p.y = $2 AND p.id != $3
-		  AND p.last_mana_update >= NOW() - INTERVAL '15 minutes'
-	`
-	var errTarget error
-	if player.PartyID != nil {
-		queryStr += ` AND (p.party_id IS NULL OR p.party_id != $4)`
-		errTarget = tx.QueryRow(queryStr, player.X, player.Y, player.ID, player.PartyID).Scan(
-			&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
-			&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
-			&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks,
-		)
-	} else {
-		errTarget = tx.QueryRow(queryStr, player.X, player.Y, player.ID).Scan(
-			&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
-			&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
-			&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks,
-		)
-	}
-	if errTarget == nil {
-		hasTargetPlayer = true
-	}
-
-	if hasTargetPlayer && req.AttackTargetID == targetPlayer.ID.String() {
-		combatTriggered = true
-		pvpTriggered = true
-		targetStats := CalculatePlayerStats(&targetPlayer)
-
-		enemyHP := targetPlayer.HP
-		if enemyHP <= 0 {
-			enemyHP = targetPlayer.BaseHP
-		}
-		if enemyHP <= 0 {
-			enemyHP = 100.0
-		}
-		enemyMaxHP := gamefx.EffectiveMaxHP(&targetPlayer)
-		if enemyMaxHP <= 0 {
-			enemyMaxHP = 100.0
-		}
-
-		pvpCombat := models.CombatState{
-			EnemyTemplateID:    targetPlayer.ID.String(),
-			EnemyName:          targetPlayer.Username,
-			EnemyAvatarURL:     targetPlayer.AvatarURL,
-			EnemyType:          "PVP",
-			CombatMode:         "real",
-			EnemyHP:            enemyHP,
-			EnemyMaxHP:         enemyMaxHP,
-			EnemyMana:          targetPlayer.CurrentMana,
-			EnemyMaxMana:       targetPlayer.MaxMana,
-			EnemyDamage:        targetStats["attack"],
-			EnemyDefense:       targetStats["defense"],
-			EnemySpeed:         targetStats["speed"],
-			EnemyRank:          targetPlayer.Rank,
-			EnemySubRank:       targetPlayer.SubRank,
-			EnemyGuInventory:   targetPlayer.GuInventory,
-			EnemyDaoMarks:      targetPlayer.DaoMarks,
-			EnemyPathMasteries: targetPlayer.PathMasteries,
-			TargetPlayerID:     targetPlayer.ID.String(),
-		}
-		player.ActiveCombat = &pvpCombat
-		logMsg = fmt.Sprintf("Ngươi chủ động tuyên chiến và tấn công Cổ Sư %s tại tọa độ (%d, %d)!", targetPlayer.Username, player.X, player.Y)
-	}
-
-	if isCleared {
-		logMsg = fmt.Sprintf("Di chuyển thành công đến (%d, %d). Vùng đất trống trải hoang tàn.", player.X, player.Y)
-	} else if !pvpTriggered {
-		switch cell.Type {
-		case "Resource":
-			if HasExplorationInventorySpace(&player, 1) {
-				if player.TempLoot.MaterialsInventory == nil {
-					player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
-				}
-				player.TempLoot.MaterialsInventory[cell.Content]++
-				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Đạo hữu tìm thấy nguyên liệu hoang dã: 1x %s (được giữ tạm thời trong bản đồ)!", player.X, player.Y, cell.Content)
-
-				MarkPersistentCellCleared(tx, player.ID, player.X, player.Y)
-
-				if player.ClearedCells == nil {
-					player.ClearedCells = make(models.ClearedCellsMap)
-				}
-				player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
-			} else {
-				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Phát hiện 1x %s, nhưng Bách Bảo Nang đã đầy!", player.X, player.Y, cell.Content)
-			}
-		case "WildGu":
-			if HasExplorationInventorySpace(&player, 1) {
-				var guSpec models.GuDictionaryItem
-				var ok bool
-				if cell.Rank > 0 {
-					guSpec, ok = models.GetGu(cell.Content, cell.Rank)
-				}
-				if !ok {
-					guSpec, _ = models.GetGuAny(cell.Content)
-				}
-				newGu := models.GuInstance{
-					InstanceID: uuid.New().String(),
-					GuID:       cell.Content,
-					Rank:       guSpec.Rank,
-					Hunger:     100,
-					Status:     "ACTIVE",
-					Equipped:   false,
-				}
-				player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, newGu)
-				logMsg = fmt.Sprintf("Cơ duyên! Đạo hữu bắt gặp và thu phục thành công Cổ trùng hoang dã: %s (được giữ tạm thời trong bản đồ)!", cell.Content)
-
-				if player.ClearedCells == nil {
-					player.ClearedCells = make(models.ClearedCellsMap)
-				}
-				player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
-			} else {
-				logMsg = fmt.Sprintf("Đạo hữu phát hiện thấy Cổ trùng hoang dã %s, tiếc là Bách Bảo Nang đã đầy nên để nó trốn thoát!", cell.Content)
-			}
-		case "Monster", "Boss":
-			combatTriggered = true
-
-			mon, err := db.LoadMonsterTemplate(tx, cell.Content)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"})
-				return
-			}
-
-			rank := 1
-			if cell.Rank > 0 {
-				rank = cell.Rank
-			}
-			subRank := 1
-			if cell.SubRank > 0 {
-				subRank = cell.SubRank
-			}
-
-			combatState := models.BuildCombatStateFromMonster(mon, rank, subRank)
-			player.ActiveCombat = &combatState
-			logMsg = fmt.Sprintf("Nguy hiểm! Đạo hữu chạm trán %s tại tọa độ (%d, %d)!", mon.Name, player.X, player.Y)
-
-			hasHeavenSecret := false
-			for _, gu := range player.GuInventory {
-				if gu.GuID == "GU_HEAVEN_SECRET" && gu.Equipped && gu.Status == "ACTIVE" {
-					hasHeavenSecret = true
-					break
-				}
-			}
-			if hasHeavenSecret && mon.LootTableID != "" {
-				lt, errLt := db.LoadLootTable(tx, mon.LootTableID)
-				if errLt == nil {
-					chanceMul := lootChanceMultiplier(rank)
-					qtyMul := lootQuantityMultiplier(rank)
-					extraLootMsg := fmt.Sprintf(" [Thiên Cơ hiển lộ (Rank %d x%.1f) - Tỉ lệ rơi đồ: ", rank, qtyMul)
-					first := true
-					for _, entry := range lt.Entries {
-						if !first {
-							extraLootMsg += ", "
-						}
-						scaledChance := math.Min(entry.Chance*chanceMul, 1.0)
-						scaledMin := int(math.Round(float64(entry.MinQty) * qtyMul))
-						scaledMax := int(math.Round(float64(entry.MaxQty) * qtyMul))
-						if itemID := entry.ItemID; itemID != "" {
-							extraLootMsg += fmt.Sprintf("%s x%d-%d (%.1f%%)", itemID, scaledMin, scaledMax, scaledChance*100)
-						} else if entry.GuID != "" {
-							extraLootMsg += fmt.Sprintf("%s (%.1f%%)", entry.GuID, scaledChance*100)
-						}
-						first = false
-					}
-					extraLootMsg += "]"
-					logMsg += extraLootMsg
-				}
-			}
-
-		case "PVP":
-			var targetPlayer models.Player
-			err := tx.QueryRow(`
-				SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.path_masteries, `+db.GuInventoryAggregate("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb)
-				FROM players p
-				LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
-				WHERE p.id != $1 
-				LIMIT 1`, player.ID,
-			).Scan(
-				&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
-				&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks,
-			)
-
-			combatTriggered = true
-			if err != nil {
-				player.ActiveCombat = &models.CombatState{
-					EnemyName:      "Cổ Sư Lang Thang (Wandering Cultivator)",
-					EnemyHP:        100.0,
-					EnemyMaxHP:     100.0,
-					EnemyDamage:    15.0,
-					EnemyDefense:   5.0,
-					TargetPlayerID: "dummy",
-				}
-				logMsg = "Đột ngột một Cổ Sư Lang Thang xuất hiện khiêu chiến đạo hữu!"
-			} else {
-				targetStats := CalculatePlayerStats(&targetPlayer)
-				player.ActiveCombat = &models.CombatState{
-					EnemyName:      targetPlayer.Username,
-					EnemyType:      "PVP",
-					CombatMode:     "real",
-					EnemyHP:        100.0,
-					EnemyMaxHP:     100.0,
-					EnemyDamage:    targetStats["attack"],
-					EnemyDefense:   targetStats["defense"],
-					TargetPlayerID: targetPlayer.ID.String(),
-				}
-				logMsg = fmt.Sprintf("Đạo hữu bắt gặp một Cổ Sư khác đang du ngoạn: %s! Lập tức giao đấu!", targetPlayer.Username)
-			}
-		}
-	}
-
-	if !combatTriggered {
-		for ax := -1; ax <= 1 && !combatTriggered; ax++ {
-			for ay := -1; ay <= 1 && !combatTriggered; ay++ {
-				if ax == 0 && ay == 0 {
-					continue
-				}
-				adjX := player.X + ax
-				adjY := player.Y + ay
-
-				// check if already cleared
-				if isCellClearedRecently(&player, adjX, adjY, clearedCellCooldown) {
-					continue
-				}
-
-				adj := ResolveCell(adjX, adjY)
-
-				if (adj.Type == "Monster" || adj.Type == "Boss") && rand.Intn(100) < 5 { // 5% chance
-					combatTriggered = true
-
-					mon, err := db.LoadMonsterTemplate(tx, adj.Content)
-					if err == nil {
-						rank := 1
-						if adj.Rank > 0 {
-							rank = adj.Rank
-						}
-						subRank := 1
-						if adj.SubRank > 0 {
-							subRank = adj.SubRank
-						}
-						combatState := models.BuildCombatStateFromMonster(mon, rank, subRank)
-						player.ActiveCombat = &combatState
-						logMsg = fmt.Sprintf("Phục kích! Quái thú %s lân cận (%d, %d) chủ động lao ra tấn công đạo hữu!", mon.Name, adjX, adjY)
-					}
-					// Mark the original monster cell as cleared
-					if player.ClearedCells == nil {
-						player.ClearedCells = make(models.ClearedCellsMap)
-					}
-					coordKeyAdj := fmt.Sprintf("%d,%d", adjX, adjY)
-					player.ClearedCells[coordKeyAdj] = time.Now().Format(time.RFC3339)
-				}
-			}
-		}
-	}
-
-	if player.ActiveCombat != nil {
-		player.ActiveCombat = StartCombat(tx, player.ActiveCombat, &player)
-	}
-
-	// Fire ON_EXPLORE_MOVE on equipped Gus
-	var exploreEventMsg string
-	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
-				if msg, err := HandleGuEvent(&player, spec, gu, "ON_EXPLORE_MOVE"); err == nil && msg != "" {
-					exploreEventMsg = msg
-				}
-			}
-		}
-	}
-	if exploreEventMsg != "" {
-		logMsg += " " + exploreEventMsg
+	logMsg, combatTriggered, errArrival := resolveCellArrival(tx, &player, req.X, req.Y, req.AttackTargetID, true)
+	if errArrival != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"})
+		return
 	}
 
 	qiGained := AddHumanQi(&player, 1.0)
@@ -748,6 +759,270 @@ func MovePlayer(c *gin.Context) {
 	})
 }
 
+// lineCells returns the cells on a straight line from (x0,y0) to (x1,y1)
+// using Bresenham's algorithm, including the target cell and excluding the
+// starting cell.
+func lineCells(x0, y0, x1, y1 int) [][2]int {
+	dx := x1 - x0
+	dy := y1 - y0
+	sx := 1
+	if dx < 0 {
+		sx = -1
+	}
+	sy := 1
+	if dy < 0 {
+		sy = -1
+	}
+	adx := dx
+	if adx < 0 {
+		adx = -adx
+	}
+	ady := dy
+	if ady < 0 {
+		ady = -ady
+	}
+	err := adx - ady
+	x, y := x0, y0
+	var cells [][2]int
+	for {
+		if x == x1 && y == y1 {
+			break
+		}
+		e2 := 2 * err
+		if e2 > -ady {
+			err -= ady
+			x += sx
+		}
+		if e2 < adx {
+			err += adx
+			y += sy
+		}
+		cells = append(cells, [2]int{x, y})
+	}
+	return cells
+}
+
+// MovePlayerPath moves the player along a straight path from its current cell
+// to the requested cell, triggering the normal cell action on every traversed
+// cell. Movement is still bounded by the player's movement stat (base +
+// passive movement). The walk stops early if a fight is triggered on the way.
+func MovePlayerPath(c *gin.Context) {
+	var req MoveRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.X < 0 || req.X >= WorldWidth || req.Y < 0 || req.Y >= WorldHeight {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ vượt ra ngoài ranh giới bản đồ."})
+		return
+	}
+
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
+		return
+	}
+
+	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errLeader.Error()})
+		return
+	}
+
+	cleanupExpiredClearedCells(&player, clearedCellCooldown)
+
+	if player.ActiveCombat != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đang trong trạng thái chiến đấu! Hãy kết thúc trận chiến trước."})
+		return
+	}
+
+	stats := CalculatePlayerStats(&player)
+	movementRange := int(stats["movement"])
+	if movementRange < 1 {
+		movementRange = 1
+	}
+
+	// Calculate Chebyshev distance
+	dx := math.Abs(float64(req.X - player.X))
+	dy := math.Abs(float64(req.Y - player.Y))
+	dist := int(math.Max(dx, dy))
+
+	if dist == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đang ở vị trí này rồi."})
+		return
+	}
+
+	// Free movement: the player may click anywhere in the world. The path is
+	// walked cell by cell (each traversed cell triggers its action), stopping
+	// early on the first combat. maxPathCells bounds the work of a single
+	// request so the client chains requests for very long journeys.
+	const maxPathCells = 1000
+	path := lineCells(player.X, player.Y, req.X, req.Y)
+	if len(path) > maxPathCells {
+		path = path[:maxPathCells]
+	}
+	reached := len(path) < maxPathCells
+	var logs []string
+	combatTriggered := false
+	for _, step := range path {
+		logMsg, triggered, errArrival := resolveCellArrival(tx, &player, step[0], step[1], "", false)
+		if errArrival != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"})
+			return
+		}
+		logs = append(logs, logMsg)
+		if triggered {
+			combatTriggered = true
+			reached = false
+			break
+		}
+	}
+
+	qiGained := AddHumanQi(&player, 1.0)
+
+	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
+		return
+	}
+	_, err = tx.Exec(`
+		UPDATE players
+		SET current_mana = $1, x = $2, y = $3, current_region = $4, cleared_cells = $5, active_combat = $6, temp_loot = $7, last_mana_update = $8, primeval_stones = $9, hp = $10, max_mana = $11, human_qi = $12, visited_subzones = $13
+		WHERE id = $14
+	`, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, player.ActiveCombat, player.TempLoot, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		return
+	}
+
+	newStats := CalculatePlayerStats(&player)
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
+		"log":              strings.Join(logs, "\n") + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
+		"logs":             logs,
+		"combat_triggered": combatTriggered,
+		"reached":          reached,
+		"stats":            newStats,
+	})
+}
+
+// WorldObjectView is a lightweight view of a persistent shared cell for the
+// large world map (villages / tram nghi, bosses, high-tier resources).
+type WorldObjectView struct {
+	RegionID       string `json:"region_id"`
+	X              int    `json:"x"`
+	Y              int    `json:"y"`
+	CellType       string `json:"cell_type"`
+	ContentID      string `json:"content_id"`
+	Rank           int    `json:"rank,omitempty"`
+	RespawnSeconds int    `json:"respawn_seconds"`
+	Cleared        bool   `json:"cleared"`
+}
+
+// GetExploreObjects returns the persistent map cells (map_cells) so the large
+// world map can render villages, bosses and high-tier resource points.
+func GetExploreObjects(c *gin.Context) {
+	ensureZonesLoaded()
+
+	zoneReg.mu.RLock()
+	defer zoneReg.mu.RUnlock()
+
+	out := make([]WorldObjectView, 0, len(zoneReg.persistent))
+	for key, pc := range zoneReg.persistent {
+		out = append(out, WorldObjectView{
+			RegionID:       pc.RegionID,
+			X:              pc.X,
+			Y:              pc.Y,
+			CellType:       pc.Type,
+			ContentID:      pc.Content,
+			Rank:           pc.Rank,
+			RespawnSeconds: pc.RespawnSeconds,
+			Cleared:        pc.cleared,
+		})
+		_ = key
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+// NearbyCell is a resolved non-empty cell (monster / boss / resource / wild Gu)
+// near the player, for the large world map markers.
+type NearbyCell struct {
+	X       int    `json:"x"`
+	Y       int    `json:"y"`
+	Type    string `json:"cell_type"`
+	Content string `json:"content"`
+	Rank    int    `json:"rank,omitempty"`
+	SubRank int    `json:"sub_rank,omitempty"`
+}
+
+// GetNearbyCells resolves the cells around the player (or an explicit
+// ?x=&y=&r= box) and returns the non-empty ones so the big map can draw
+// monster / boss / resource markers. Content is deterministic per zone cell,
+// matching the grid gameplay (ResolveCell).
+func GetNearbyCells(c *gin.Context) {
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var x, y, r int
+	fmt.Sscanf(c.Query("x"), "%d", &x)
+	fmt.Sscanf(c.Query("y"), "%d", &y)
+	fmt.Sscanf(c.Query("r"), "%d", &r)
+
+	if r <= 0 {
+		r = 300
+	}
+	if r > 300 {
+		r = 300
+	}
+
+	if x == 0 && y == 0 {
+		player, err := loadPlayerForStatus(db.DB, authID, false)
+		if err == nil {
+			x, y = player.X, player.Y
+		}
+	}
+
+	// Resolve the full box of cells around the center and keep the non-empty
+	// ones. Box is at most (2r+1)^2 cells; with r capped at 300 this stays a
+	// bounded, symmetric area around the player so the canvas markers align.
+	out := []NearbyCell{}
+	for dy := -r; dy <= r; dy++ {
+		for dx := -r; dx <= r; dx++ {
+			cx := x + dx
+			cy := y + dy
+			if cx < 0 || cx >= WorldWidth || cy < 0 || cy >= WorldHeight {
+				continue
+			}
+			cell := ResolveCell(cx, cy)
+			if cell.Type == "Empty" {
+				continue
+			}
+			out = append(out, NearbyCell{X: cell.X, Y: cell.Y, Type: cell.Type, Content: cell.Content, Rank: cell.Rank, SubRank: cell.SubRank})
+		}
+	}
+
+	c.JSON(http.StatusOK, out)
+}
+
 // GetRegions fetches all active regions (zones) from the database
 func GetRegions(c *gin.Context) {
 	query := `
@@ -781,12 +1056,12 @@ func GetRegions(c *gin.Context) {
 // GetWorld returns the shared world geometry for the frontend overview.
 func GetWorld(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"width":          WorldWidth,
-		"height":         WorldHeight,
+		"width":           WorldWidth,
+		"height":          WorldHeight,
 		"large_zone_size": LargeZoneSize,
-		"sub_zone_size":  SubZoneSize,
-		"hub_region_id":  HubRegionID,
-		"hub_x":          HubEntryPoint.X,
-		"hub_y":          HubEntryPoint.Y,
+		"sub_zone_size":   SubZoneSize,
+		"hub_region_id":   HubRegionID,
+		"hub_x":           HubEntryPoint.X,
+		"hub_y":           HubEntryPoint.Y,
 	})
 }

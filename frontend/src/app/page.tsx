@@ -9,6 +9,7 @@ import { LogConsole } from "@/components/LogConsole";
 import { GuInventory } from "@/components/GuInventory";
 import { RefiningFurnace } from "@/components/RefiningFurnace";
 import { ExplorationMap } from "@/components/ExplorationMap";
+import { WorldPage } from "@/components/WorldPage";
 import { CombatScreen } from "@/components/CombatScreen";
 import { CaravanShop } from "@/components/CaravanShop";
 import { PremiumStoreView } from "@/components/PremiumStoreView";
@@ -36,6 +37,7 @@ import { AuditLogsView } from "@/components/AuditLogsView";
 import { AdminView } from "@/components/AdminView";
 import { LeaderboardView } from "@/components/LeaderboardView";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { TrainingRoom } from "@/components/TrainingRoom";
 export default function Home() {
   const {
     player,
@@ -220,6 +222,10 @@ export default function Home() {
           <div className="w-full">
             <LobbyView />
           </div>
+        ) : currentView === "practice-room" ? (
+          <div className="w-full">
+            <TrainingRoom onClose={() => setView("dashboard")} />
+          </div>
         ) : currentView === "character" ? (
           <div className="w-full">
               <Aperture
@@ -258,12 +264,7 @@ export default function Home() {
           </div>
         ) : currentView === "world-map" ? (
           <div className="w-full">
-            <ExplorationMap
-              player={player}
-              actionLoading={actionLoading}
-              onExplore={exploreNode}
-              onBack={() => setView("dashboard")}
-            />
+            <WorldPage />
           </div>
         ) : currentView === "refine" ? (
           <div className="w-full">

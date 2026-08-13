@@ -13,6 +13,9 @@ interface CombatScreenProps {
   enemy: CombatState;
   guDictionary: Record<string, GuSpec>;
   actionLoading: boolean;
+  isPracticeMode?: boolean;
+  practiceDummyConfig?: any;
+  onPracticeDummyConfigChange?: (config: any) => void;
   onAttack?: () => Promise<unknown>;
   onRetreat?: () => Promise<void>;
 }
@@ -132,6 +135,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   enemy,
   guDictionary,
   actionLoading,
+  isPracticeMode,
+  practiceDummyConfig,
+  onPracticeDummyConfigChange,
   onRetreat,
 }) => {
   const [selectedGuIds, setSelectedGuIds] = useState<string[]>([]);
@@ -149,6 +155,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const [showRecommendation, setShowRecommendation] = useState(true);
 
   const executeAutoCombat = useGameStore((state) => state.executeAutoCombat);
+  const executePracticeCombat = useGameStore((state) => state.executePracticeCombat);
   const fetchPlayerStatus = useGameStore((state) => state.fetchPlayerStatus);
   const fetchMineSlots = useGameStore((state) => state.fetchMineSlots);
   const killerMoves = useGameStore((state) => state.killerMoves);
@@ -225,7 +232,13 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       ManaThreshold: manaThreshold,
     };
 
-    const result = await executeAutoCombat(loadout);
+    let result;
+    if (isPracticeMode) {
+      result = await executePracticeCombat(loadout, practiceDummyConfig);
+    } else {
+      result = await executeAutoCombat(loadout);
+    }
+    
     if (result && result.logs) {
       setSimulationLogs(result.logs);
       setSimulationWinner(result.winner);
@@ -293,6 +306,12 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   }, [selectedGuIds, eligibleGus, guDictionary]);
 
   const handleExitSimulation = async () => {
+    if (isPracticeMode) {
+      setSimulationLogs([]);
+      setSimulationCombatants([]);
+      setSimulationWinner(null);
+      return;
+    }
     await fetchPlayerStatus(player.id);
     fetchMineSlots();
   };
@@ -600,6 +619,77 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   };
 
   const renderEnemyIntel = () => {
+    if (isPracticeMode && practiceDummyConfig && onPracticeDummyConfigChange) {
+      const { dummyHP, dummyShield, dummyAtk, dummyDef, dummySpeed } = practiceDummyConfig;
+      const updateConfig = (key: string, val: number) => {
+        onPracticeDummyConfigChange({ ...practiceDummyConfig, [key]: val });
+      };
+
+      return (
+        <div className="flex flex-col gap-4">
+          <div className="bg-zinc-900/60 border border-rose-800 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Swords className="w-4 h-4 text-rose-400" />
+              <h3 className="text-sm font-bold text-zinc-300">Cấu Hình Hình Nhân Gỗ</h3>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">Máu (HP)</label>
+                <input 
+                  type="number" 
+                  value={dummyHP} 
+                  onChange={e => updateConfig('dummyHP', parseInt(e.target.value) || 0)}
+                  className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded px-2 py-1.5 text-zinc-200 text-sm focus:outline-none focus:border-rose-500 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">Khiên Ảo</label>
+                <input 
+                  type="number" 
+                  value={dummyShield} 
+                  onChange={e => updateConfig('dummyShield', parseInt(e.target.value) || 0)}
+                  className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded px-2 py-1.5 text-zinc-200 text-sm focus:outline-none focus:border-rose-500 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">Công Kích</label>
+                <input 
+                  type="number" 
+                  value={dummyAtk} 
+                  onChange={e => updateConfig('dummyAtk', parseInt(e.target.value) || 0)}
+                  className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded px-2 py-1.5 text-zinc-200 text-sm focus:outline-none focus:border-rose-500 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">Phòng Thủ</label>
+                <input 
+                  type="number" 
+                  value={dummyDef} 
+                  onChange={e => updateConfig('dummyDef', parseInt(e.target.value) || 0)}
+                  className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded px-2 py-1.5 text-zinc-200 text-sm focus:outline-none focus:border-rose-500 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">Tốc Độ</label>
+                <input 
+                  type="number" 
+                  value={dummySpeed} 
+                  onChange={e => updateConfig('dummySpeed', parseInt(e.target.value) || 1)}
+                  className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded px-2 py-1.5 text-zinc-200 text-sm focus:outline-none focus:border-rose-500 transition-colors"
+                />
+              </div>
+            </div>
+          </div>
+          {renderCombatantList(
+            "Mục Tiêu",
+            enemy.enemies || [],
+            <Eye className="w-4 h-4 text-rose-400" />,
+            true
+          )}
+        </div>
+      );
+    }
+
     const allEnemies = enemy.enemies && enemy.enemies.length > 0 ? enemy.enemies : [];
     return renderCombatantList(
       "Thông Tin Địch",
@@ -913,6 +1003,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             <Play className="w-6 h-6" />
           </button>
           {(() => {
+            if (isPracticeMode) return null;
             const monsterSpec = monsterDictionary[enemy.enemy_template_id || ""];
             const isCapturable = monsterSpec?.is_capturable;
             if (!isCapturable) return null;
