@@ -468,6 +468,16 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     setSelectedKillerMoveIds(matchingKMs.slice(0, 3).map(km => km.id));
   }, [eligibleGus, guDictionary, bestPath, player.dao_marks, player.path_masteries, killerMoves]);
 
+  const hasAutoRecommended = useRef(false);
+  useEffect(() => {
+    if (eligibleGus.length > 0 && !hasAutoRecommended.current) {
+      setTimeout(() => {
+        recommendLoadout();
+      }, 0);
+      hasAutoRecommended.current = true;
+    }
+  }, [eligibleGus.length, recommendLoadout]);
+
   // Sorting for Gu list
   // Only show killer moves whose component Gus are all ACTIVE
   const validKillerMoves = useMemo(() => {
@@ -900,8 +910,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             disabled={actionLoading || selectedGuIds.length === 0}
             className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            <Play className="w-5 h-5" />
-            BẮT ĐẦU
+            <Play className="w-6 h-6" />
           </button>
           {(() => {
             const monsterSpec = monsterDictionary[enemy.enemy_template_id || ""];
@@ -916,10 +925,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                   }
                 }}
                 disabled={actionLoading}
-                className="px-6 bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 text-white font-bold py-4 rounded-xl transition-all shadow-[0_0_15px_rgba(168,85,247,0.3)] disabled:opacity-50 flex items-center gap-2"
+                className="px-6 bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 text-white font-bold py-4 rounded-xl transition-all shadow-[0_0_15px_rgba(168,85,247,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                <PawPrint className="w-5 h-5" />
-                BẮT
+                <PawPrint className="w-6 h-6" />
               </button>
             );
           })()}
