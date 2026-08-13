@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -187,6 +188,21 @@ func LoadZoneRegistry(db *sql.DB) error {
 	return nil
 }
 
+// ensureZonesLoaded lazily (re)loads the zone registry if it is empty. This
+// covers backends that started before CSV data was imported through the Admin
+// panel, so exploration does not hard-fail with a stale empty registry.
+func ensureZonesLoaded() {
+	zoneReg.mu.RLock()
+	loaded := len(zoneReg.zones) > 0
+	zoneReg.mu.RUnlock()
+	if loaded {
+		return
+	}
+	if err := LoadZoneRegistry(db.DB); err != nil {
+		logger.S.Warnf("lazy zone registry load failed: %v", err)
+	}
+}
+
 // zoneContains reports whether a point falls inside the zone rect (inclusive).
 func zoneContains(z *models.Region, x, y int) bool {
 	return x >= z.MinX && x <= z.MaxX && y >= z.MinY && y <= z.MaxY
@@ -199,6 +215,7 @@ func zoneArea(z *models.Region) int {
 // FindZoneAt returns the innermost active zone containing the point. The hub
 // (safe lobby) takes precedence over any overlapping zone.
 func FindZoneAt(x, y int) *models.Region {
+	ensureZonesLoaded()
 	zoneReg.mu.RLock()
 	defer zoneReg.mu.RUnlock()
 	var best *models.Region
@@ -232,6 +249,7 @@ func FindZoneAt(x, y int) *models.Region {
 
 // FindLargeZoneAt returns the DAI_VUC zone containing the point.
 func FindLargeZoneAt(x, y int) *models.Region {
+	ensureZonesLoaded()
 	zoneReg.mu.RLock()
 	defer zoneReg.mu.RUnlock()
 	for i := range zoneReg.zones {
@@ -245,6 +263,7 @@ func FindLargeZoneAt(x, y int) *models.Region {
 
 // ZoneByID returns the zone with the given id, or nil.
 func ZoneByID(id string) *models.Region {
+	ensureZonesLoaded()
 	zoneReg.mu.RLock()
 	defer zoneReg.mu.RUnlock()
 	return zoneReg.byID[id]

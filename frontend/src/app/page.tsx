@@ -256,6 +256,15 @@ export default function Home() {
               onBack={() => setView("dashboard")}
             />
           </div>
+        ) : currentView === "world-map" ? (
+          <div className="w-full">
+            <ExplorationMap
+              player={player}
+              actionLoading={actionLoading}
+              onExplore={exploreNode}
+              onBack={() => setView("dashboard")}
+            />
+          </div>
         ) : currentView === "refine" ? (
           <div className="w-full">
             <RefiningFurnace

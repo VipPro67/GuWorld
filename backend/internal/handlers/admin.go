@@ -2178,7 +2178,14 @@ func AdminImportTable(c *gin.Context) {
 			logger.S.Warnf("failed to reload Race registry after import: %v", err)
 		}
 		cache.Delete("game_dictionary_unified")
-	case "monster", "monster_spawn", "region", "loot_table":
+	case "monster", "loot_table":
+		if err := models.LoadMonsterRegistry(db.DB); err != nil {
+			logger.S.Warnf("failed to reload Monster registry after import: %v", err)
+		}
+	case "region", "map_cell", "monster_spawn":
+		if err := LoadZoneRegistry(db.DB); err != nil {
+			logger.S.Warnf("failed to reload Zone registry after import: %v", err)
+		}
 		if err := models.LoadMonsterRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Monster registry after import: %v", err)
 		}

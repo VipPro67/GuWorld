@@ -314,7 +314,6 @@ export const LobbyView: React.FC = () => {
       glow: "group-hover:shadow-[0_0_25px_rgba(20,184,166,0.45)]",
       borderColor: "border-teal-400/30",
       iconColor: "text-teal-500",
-      locked: true, // Locked for dev
     },
     {
       id: "feedback",
