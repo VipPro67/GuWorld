@@ -3728,6 +3728,21 @@ func UseConsumableGu(c *gin.Context) {
 
 	qiGained := AddHumanQi(&player, 3.0)
 
+	// Cổ trùng tiêu hao: cộng Path Mastery (Chân Ý)
+	if player.PathMasteries == nil {
+		player.PathMasteries = make(models.PathMasteriesMap)
+	}
+	if len(specs.Path) > 0 {
+		cleanPath := strings.TrimSuffix(strings.ToLower(specs.Path[0]), " path")
+		pathGain := 1
+		if targetGu.Rank >= 6 {
+			pathGain = 10
+		}
+		player.PathMasteries[cleanPath] += pathGain
+		newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
+		logMsg += fmt.Sprintf(" Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái %s (Cảnh giới: %s).", pathGain, strings.Title(cleanPath), gamefx.PathMasteryLevelName(newLevel))
+	}
+
 	// Delete from inventory
 	RemoveGuFromInventory(&player, targetGu.InstanceID)
 
@@ -3738,9 +3753,9 @@ func UseConsumableGu(c *gin.Context) {
 	}
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET sub_rank = $1, rank = $2, primeval_stones = $3, max_mana = $4, current_mana = $5, equipped_gus = $6, wall_progress = $7, hp = $8, lifespan = $9, aptitude_percent = $10, immortal_stones = $11, aperture_stress = $12, human_qi = $13, max_soul = $14, current_thought = $15
-		WHERE id = $16`,
-		player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.WallProgress, player.HP, player.Lifespan, player.AptitudePercent, player.ImmortalStones, player.ApertureStress, player.HumanQi, player.MaxSoul, player.CurrentThought, player.ID,
+		SET sub_rank = $1, rank = $2, primeval_stones = $3, max_mana = $4, current_mana = $5, equipped_gus = $6, wall_progress = $7, hp = $8, lifespan = $9, aptitude_percent = $10, immortal_stones = $11, aperture_stress = $12, human_qi = $13, max_soul = $14, current_thought = $15, path_masteries = $16
+		WHERE id = $17`,
+		player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.WallProgress, player.HP, player.Lifespan, player.AptitudePercent, player.ImmortalStones, player.ApertureStress, player.HumanQi, player.MaxSoul, player.CurrentThought, player.PathMasteries, player.ID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using Gu"})

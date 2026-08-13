@@ -29,22 +29,22 @@ type AutoCombatStartRequest struct {
 
 // CombatantInfo returned to frontend for visual replay
 type CombatantInfo struct {
-	ID            string            `json:"id"`
-	Name          string            `json:"name"`
-	Kind          string            `json:"kind"`
-	MaxHP         int               `json:"max_hp"`
-	HP            int               `json:"hp"`
-	MaxMana       int               `json:"max_mana"`
-	Mana          int               `json:"mana"`
-	GridX         int               `json:"grid_x"`
-	GridY         int               `json:"grid_y"`
-	Shield        int               `json:"shield"`
-	Damage        float64           `json:"damage,omitempty"`
-	Defense       float64           `json:"defense,omitempty"`
-	Speed         float64           `json:"speed,omitempty"`
-	KindDetail    string            `json:"kind_detail,omitempty"`
-	Rank          int               `json:"rank,omitempty"`
-	SubRank       int               `json:"sub_rank,omitempty"`
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	Kind          string         `json:"kind"`
+	MaxHP         int            `json:"max_hp"`
+	HP            int            `json:"hp"`
+	MaxMana       int            `json:"max_mana"`
+	Mana          int            `json:"mana"`
+	GridX         int            `json:"grid_x"`
+	GridY         int            `json:"grid_y"`
+	Shield        int            `json:"shield"`
+	Damage        float64        `json:"damage,omitempty"`
+	Defense       float64        `json:"defense,omitempty"`
+	Speed         float64        `json:"speed,omitempty"`
+	KindDetail    string         `json:"kind_detail,omitempty"`
+	Rank          int            `json:"rank,omitempty"`
+	SubRank       int            `json:"sub_rank,omitempty"`
 	DaoMarks      map[string]int `json:"dao_marks,omitempty"`
 	PathMasteries map[string]int `json:"path_masteries,omitempty"`
 }
@@ -177,18 +177,18 @@ func AutoCombatStart(c *gin.Context) {
 		}
 
 		simEnemy := &simulator.CombatantAuto{
-			ID:      enemy.ID,
-			Name:    enemy.Name,
-			Kind:    "Enemy",
-			GridX:   enemy.GridX,
-			GridY:   enemy.GridY,
-			MaxHP:   int(enemy.MaxHP),
-			HP:      eHP,
-			MaxMana: int(enemy.MaxMana),
-			Mana:    enemyMana,
-			BaseDmg: int(enemy.BaseAttack),
-			BaseDef: int(enemy.BaseDefense),
-			Speed:   enemy.Speed,
+			ID:            enemy.ID,
+			Name:          enemy.Name,
+			Kind:          "Enemy",
+			GridX:         enemy.GridX,
+			GridY:         enemy.GridY,
+			MaxHP:         int(enemy.MaxHP),
+			HP:            eHP,
+			MaxMana:       int(enemy.MaxMana),
+			Mana:          enemyMana,
+			BaseDmg:       int(enemy.BaseAttack),
+			BaseDef:       int(enemy.BaseDefense),
+			Speed:         enemy.Speed,
 			VirtualShield: enemyShield,
 			DaoMarks: func() simulator.DaoMarks {
 				dm := make(simulator.DaoMarks)
@@ -705,8 +705,8 @@ func AutoCombatStart(c *gin.Context) {
 
 			tempLootJSON, _ := json.Marshal(player.TempLoot)
 
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, primeval_stones = $4, aptitude_percent = $5, lifespan = $6 WHERE id = $7`
-			args = append(args, finalPlayerHP, finalMana, tempLootJSON, player.PrimevalStones, player.AptitudePercent, player.Lifespan, player.ID)
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, primeval_stones = $4, aptitude_percent = $5, lifespan = $6, path_masteries = $7 WHERE id = $8`
+			args = append(args, finalPlayerHP, finalMana, tempLootJSON, player.PrimevalStones, player.AptitudePercent, player.Lifespan, player.PathMasteries, player.ID)
 		}
 	} else {
 		if isVirtual {
@@ -750,8 +750,8 @@ func AutoCombatStart(c *gin.Context) {
 			})
 
 			tempLootJSON, _ := json.Marshal(player.TempLoot)
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, current_region = $4, x = $5, y = $6, aptitude_percent = $7, lifespan = $8, primeval_stones = $9 WHERE id = $10`
-			args = append(args, player.HP, finalMana, tempLootJSON, player.CurrentRegion, player.X, player.Y, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.ID)
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, current_region = $4, x = $5, y = $6, aptitude_percent = $7, lifespan = $8, primeval_stones = $9, path_masteries = $10 WHERE id = $11`
+			args = append(args, player.HP, finalMana, tempLootJSON, player.CurrentRegion, player.X, player.Y, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.PathMasteries, player.ID)
 		}
 	}
 
@@ -820,9 +820,9 @@ func AutoCombatStart(c *gin.Context) {
 
 			_, errUpd := tx.Exec(`
 				UPDATE players
-				SET hp = $1, current_mana = $2, primeval_stones = $3, immortal_stones = $4, active_combat = NULL
-				WHERE id = $5
-			`, allyHP, simAlly.Mana, simAlly.PrimevalStones, simAlly.ImmortalStones, allyUUID)
+				SET hp = $1, current_mana = $2, primeval_stones = $3, immortal_stones = $4, active_combat = NULL, path_masteries = $5
+				WHERE id = $6
+			`, allyHP, simAlly.Mana, simAlly.PrimevalStones, simAlly.ImmortalStones, simAlly.PathMasteries, allyUUID)
 			if errUpd != nil {
 				logger.S.Errorf("Failed to update ally %s outcome: %v", simAlly.Name, errUpd)
 			}
@@ -941,6 +941,7 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		ActionType: actionType,
 		Name:       spec.Name,
 		Path:       spec.Path,
+		Rank:       spec.Rank,
 		Damage:     dmg,
 		Defense:    def,
 		ManaCost:   cost,
@@ -1370,27 +1371,31 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		simImmortalStones = 999999
 	}
 
+	if player.PathMasteries == nil {
+		player.PathMasteries = make(models.PathMasteriesMap)
+	}
+
 	simCombatant := &simulator.CombatantAuto{
-		ID:            player.ID.String(),
-		Name:          player.Username,
-		Kind:          "Player",
-		GridX:         2,
-		GridY:         3,
-		MaxHP:         simMaxHP,
-		HP:            simHP,
-		MaxMana:       int(player.MaxMana),
-		Mana:          simMana,
-		BaseDmg:       int(playerStats["attack"]),
-		BaseDef:       int(playerStats["defense"]),
-		Speed:         playerStats["speed"],
-		VirtualShield: virtualShield,
-		DaoMarks:      playerDaoMarks,
-		DaoBonus:        charFX.DaoNganBonus,
-		PathDamageBonus: charFX.PathDamageBonus,
-		PathResistance:  charFX.PathResistanceBonus,
-		HealingReceived: charFX.HealingReceivedBonus,
+		ID:               player.ID.String(),
+		Name:             player.Username,
+		Kind:             "Player",
+		GridX:            2,
+		GridY:            3,
+		MaxHP:            simMaxHP,
+		HP:               simHP,
+		MaxMana:          int(player.MaxMana),
+		Mana:             simMana,
+		BaseDmg:          int(playerStats["attack"]),
+		BaseDef:          int(playerStats["defense"]),
+		Speed:            playerStats["speed"],
+		DaoMarks:         simulator.DaoMarks(player.DaoMarks),
+		PathMasteries:    player.PathMasteries,
+		DaoBonus:         charFX.DaoNganBonus,
+		PathDamageBonus:  charFX.PathDamageBonus,
+		PathResistance:   charFX.PathResistanceBonus,
+		HealingReceived:  charFX.HealingReceivedBonus,
 		MentalResistance: charFX.MentalResistanceBonus,
-		Actions:       allActions,
+		Actions:          allActions,
 
 		AutoHealHP:      autoHealHP,
 		HealThreshold:   healThreshold,

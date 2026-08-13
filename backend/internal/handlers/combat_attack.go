@@ -498,6 +498,22 @@ func CombatAttack(c *gin.Context) {
 
 					for _, spec := range selectedSpecs {
 						dmgBase, defBase, _, _ := CalculateGuEffectForCombatant(refCaster, &spec, false, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)
+
+						if !isVirtual {
+							if player.PathMasteries == nil {
+								player.PathMasteries = make(models.PathMasteriesMap)
+							}
+							if len(spec.Path) > 0 {
+								cleanPath := strings.TrimSuffix(strings.ToLower(spec.Path[0]), " path")
+								pathGain := 1
+								if spec.Rank >= 6 {
+									pathGain = 10
+								}
+								player.PathMasteries[cleanPath] += pathGain
+								newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
+								logs = append(logs, fmt.Sprintf("-> Ngộ Đạo tăng tiến (%s)! +%d điểm Chân Ý %s (Cảnh giới: %s).", spec.Name, pathGain, strings.Title(cleanPath), gamefx.PathMasteryLevelName(newLevel)))
+							}
+						}
 						dmg, def, cost, errGu := CalculateGuEffectForCombatant(refCaster, &spec, true, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)
 						if errGu == nil && refCaster.CurrentMana >= cost {
 							refCaster.CurrentMana -= cost
@@ -1307,11 +1323,11 @@ func CombatAttack(c *gin.Context) {
 	updateQuery := `
 		UPDATE players
 		SET hp = $1, current_mana = $2, primeval_stones = $3, cleared_cells = $4, active_combat = $5,
-		    temp_loot = $6, current_region = $7, x = $8, y = $9, human_qi = $10
-		WHERE id = $11
+		    temp_loot = $6, current_region = $7, x = $8, y = $9, human_qi = $10, path_masteries = $11
+		WHERE id = $12
 	`
 	_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.PrimevalStones, player.ClearedCells, player.ActiveCombat,
-		player.TempLoot, player.CurrentRegion, player.X, player.Y, player.HumanQi, player.ID)
+		player.TempLoot, player.CurrentRegion, player.X, player.Y, player.HumanQi, player.PathMasteries, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update combat results"})
 		return

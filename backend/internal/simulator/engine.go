@@ -586,6 +586,38 @@ func Simulate(state *CombatState) []CombatLog {
 					})
 				}
 
+				if a.ActionType == "GU_SKILL" && actor.Kind == "Player" && len(a.Path) > 0 && !state.VirtualMode {
+					cleanPath := strings.TrimSuffix(strings.ToLower(a.Path[0]), " path")
+					pathGain := 1
+					if a.Rank >= 6 {
+						pathGain = 10
+					}
+					if actor.PathMasteries == nil {
+						actor.PathMasteries = make(map[string]int)
+					}
+					actor.PathMasteries[cleanPath] += pathGain
+					
+					pts := actor.PathMasteries[cleanPath]
+					lvlName := "Sơ Học"
+					if pts >= 10000 {
+						lvlName = "Vô Thượng Tông Sư"
+					} else if pts >= 2500 {
+						lvlName = "Đại Tông Sư"
+					} else if pts >= 500 {
+						lvlName = "Tông Sư"
+					} else if pts >= 100 {
+						lvlName = "Đại Sư"
+					}
+					
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "PATH_MASTERY_GAIN",
+						Detail:    fmt.Sprintf("-> Ngộ Đạo tăng tiến (%s)! +%d điểm Chân Ý %s (Cảnh giới: %s).", a.Name, pathGain, strings.Title(cleanPath), lvlName),
+					})
+				}
+
 				// Backlash damage from using Gu rank > actor rank
 				if a.BacklashDamage > 0 {
 					backlash := int(a.BacklashDamage)

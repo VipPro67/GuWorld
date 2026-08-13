@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { formatNumber } from "@/lib/utils";
 import { formatGameEffects } from "@/lib/effects";
-import { translatePath, translateMastery, masteryKeyForPoints } from "@/lib/translate";
+import { translatePath, translateMastery, masteryKeyForPoints, masteryLevelForPoints, PATH_MASTERY_MILESTONES } from "@/lib/translate";
 
 function formatStat(val: number): string {
   return Math.abs(val) >= 10000 
@@ -2138,18 +2138,41 @@ function BlessedLandControls() {
           <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
             {player.path_masteries && Object.keys(player.path_masteries).length > 0 ? (
               Object.entries(player.path_masteries).map(([path, points]) => {
-                const level = masteryKeyForPoints(points as number);
+                const pts = points as number;
+                const level = masteryKeyForPoints(pts);
+                const levelIdx = masteryLevelForPoints(pts);
+                let currentMin = 0;
+                let nextMax = PATH_MASTERY_MILESTONES[0];
+                if (levelIdx < PATH_MASTERY_MILESTONES.length) {
+                  nextMax = PATH_MASTERY_MILESTONES[levelIdx];
+                  if (levelIdx > 0) currentMin = PATH_MASTERY_MILESTONES[levelIdx - 1];
+                } else {
+                  currentMin = PATH_MASTERY_MILESTONES[PATH_MASTERY_MILESTONES.length - 1];
+                  nextMax = currentMin;
+                }
+                const progress = nextMax > currentMin ? Math.min(100, Math.max(0, ((pts - currentMin) / (nextMax - currentMin)) * 100)) : 100;
+
                 return (
-                  <div key={path} className="flex justify-between items-center bg-zinc-950/30 px-2.5 py-1.5 rounded-lg border border-zinc-900/50 text-xs">
-                    <span className="text-zinc-400 font-medium">{translatePath(path)}</span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold font-mono ${level === "Supreme Grandmaster" ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" :
-                      level === "Great Grandmaster" ? "bg-red-950/50 text-red-300 border border-red-800/40" :
-                        level === "Grandmaster" ? "bg-amber-950/50 text-amber-300 border border-amber-800/40" :
-                          level === "Master" ? "bg-blue-950/50 text-blue-300 border border-blue-800/40" :
-                            "bg-zinc-800/50 text-zinc-400 border border-zinc-700/40"
-                      }`}>
-                      {translateMastery(level)}
-                    </span>
+                  <div key={path} className="flex flex-col gap-1.5 bg-zinc-950/30 px-2.5 py-1.5 rounded-lg border border-zinc-900/50 text-xs">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-zinc-400 font-medium">{translatePath(path)}</span>
+                        <span className="text-[10px] font-mono text-zinc-500">({pts})</span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold font-mono ${level === "Supreme Grandmaster" ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" :
+                        level === "Great Grandmaster" ? "bg-red-950/50 text-red-300 border border-red-800/40" :
+                          level === "Grandmaster" ? "bg-amber-950/50 text-amber-300 border border-amber-800/40" :
+                            level === "Master" ? "bg-blue-950/50 text-blue-300 border border-blue-800/40" :
+                              "bg-zinc-800/50 text-zinc-400 border border-zinc-700/40"
+                        }`}>
+                        {translateMastery(level)}
+                      </span>
+                    </div>
+                    {nextMax > currentMin && (
+                      <div className="w-full h-1 bg-zinc-900 rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-500 transition-all duration-300" style={{ width: `${progress}%` }} />
+                      </div>
+                    )}
                   </div>
                 );
               })

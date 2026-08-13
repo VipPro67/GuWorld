@@ -112,6 +112,7 @@ type SimAction struct {
 	Name         string  // display name
 	SourceID     string  // GuID or KillerMoveID for tactic matching
 	Path         []string // dao paths used to compute the dao mark bonus in the engine
+	Rank         int     // rank of the Gu/Skill
 	Damage       float64 // raw damage before defense mitigation (excludes dao bonus; engine applies it)
 	DamageMult   float64 // damage multiplier (applied on top of Damage)
 	Defense      float64 // shield value granted to self (excludes dao bonus)
@@ -192,7 +193,8 @@ type CombatantAuto struct {
 	// Pre-combat Auto-Barrier
 	VirtualShield int
 
-	DaoMarks DaoMarks
+	DaoMarks      DaoMarks
+	PathMasteries map[string]int // path -> mastery points
 
 	// Character effects from race/constitution/statuses. Computed by the handler
 	// from gamefx.Get(player) and applied by the engine during battle.
