@@ -222,20 +222,18 @@ func Retreat(c *gin.Context) {
 		}
 	}
 
-	player.X = 50
-	player.Y = 50
-	player.ExploredCells = models.ExploredCellsList{"50,50"}
-	player.CurrentRegion = "Southern_Border"
+	player.CurrentRegion = HubRegionID
+	player.X, player.Y = hubEntryPoint()
 
 	qiGained := AddHumanQi(&player, 2.0)
 
 	updateQuery := `
 		UPDATE players
-		SET hp = $1, current_mana = $2, active_combat = $3, x = $4, y = $5, explored_cells = $6, primeval_stones = $7,
-		    temp_loot = $8, current_region = $9, human_qi = $10
-		WHERE id = $11
+		SET hp = $1, current_mana = $2, active_combat = $3, x = $4, y = $5, primeval_stones = $6,
+		    temp_loot = $7, current_region = $8, human_qi = $9
+		WHERE id = $10
 	`
-	_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.ActiveCombat, player.X, player.Y, player.ExploredCells, player.PrimevalStones,
+	_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.ActiveCombat, player.X, player.Y, player.PrimevalStones,
 		player.TempLoot, player.CurrentRegion, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player status after retreat"})

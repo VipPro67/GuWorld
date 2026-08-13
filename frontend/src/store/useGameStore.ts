@@ -127,9 +127,9 @@ export interface Player {
   path_masteries: Record<string, number>;
   x: number;
   y: number;
-  explored_cells: string[];
   equipped_gus: string[];
   cleared_cells: Record<string, string>;
+  visited_subzones?: string[];
   active_combat: CombatState | null;
   last_mana_update: string;
   created_at: string;
@@ -823,6 +823,24 @@ export interface Region {
   min_rank: number;
   max_rank: number;
   is_active: boolean;
+  parent_id?: string;
+  zone_type?: string; // "HUB" | "DAI_VUC" | "NGU_VUC"
+  min_x?: number;
+  min_y?: number;
+  max_x?: number;
+  max_y?: number;
+  entry_x?: number;
+  entry_y?: number;
+}
+
+export interface WorldConfig {
+  width: number;
+  height: number;
+  large_zone_size: number;
+  sub_zone_size: number;
+  hub_region_id: string;
+  hub_x: number;
+  hub_y: number;
 }
 
 interface GameState {
@@ -844,7 +862,9 @@ interface GameState {
   recipesLoaded: boolean;
   regions: Region[];
   regionsLoaded: boolean;
+  world: WorldConfig | null;
   fetchRegions: () => Promise<void>;
+  fetchWorld: () => Promise<WorldConfig | null>;
   killerMoves: KillerMove[];
   killerMovesLoaded: boolean;
   fetchKillerMoves: () => Promise<void>;
@@ -974,7 +994,7 @@ interface GameState {
   useItem: (itemId: string) => Promise<void>;
   useItems: (itemIds: string[]) => Promise<boolean>;
   movePlayer: (x: number, y: number, attackTargetId?: string) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
-  fetchGrid: () => Promise<{ x: number; y: number; vision_radius: number; cells: any[]; explored_cells: string[]; stats: any; players_on_map?: any[] } | null>;
+  fetchGrid: () => Promise<{ x: number; y: number; vision_radius: number; cells: any[]; stats: any; players_on_map?: any[]; world_width?: number; world_height?: number } | null>;
   dropGu: (instanceId: string) => Promise<boolean>;
   dropGus: (instanceIds: string[]) => Promise<boolean>;
   buyShopItem: (itemId: string, quantity: number) => Promise<boolean>;
@@ -1452,6 +1472,7 @@ export const useGameStore = create<GameState>((set, get) => {
   selectedFrame: '',
   regions: [],
   regionsLoaded: false,
+  world: null,
   killerMoves: [],
   killerMovesLoaded: false,
   combatSettings: null,
@@ -2509,6 +2530,21 @@ export const useGameStore = create<GameState>((set, get) => {
     } catch (err: any) {
       console.error("Regions sync error:", err.message);
       set({ regionsLoaded: true });
+    }
+  },
+
+  fetchWorld: async () => {
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/explore/world`);
+      if (!response.ok) {
+        throw new Error("Failed to load world config");
+      }
+      const data = await response.json();
+      set({ world: data || null });
+      return data || null;
+    } catch (err: any) {
+      console.error("World config sync error:", err.message);
+      return null;
     }
   },
 

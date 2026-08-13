@@ -2,12 +2,12 @@ package handlers
 
 import (
 	"crypto/sha256"
-	"database/sql"
 	"encoding/binary"
 	"fmt"
 	"math"
 	"math/rand"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -21,109 +21,132 @@ import (
 
 const clearedCellCooldown = 15 * time.Minute
 
-func GetCellSeed(x, y int, region string) int64 {
+func GetCellSeed(x, y int, zoneKey string) int64 {
 	respawnWindow := time.Now().Unix() / 180
 	h := sha256.New()
-	h.Write([]byte(region))
+	h.Write([]byte(zoneKey))
 	binary.Write(h, binary.BigEndian, int64(x))
 	binary.Write(h, binary.BigEndian, int64(y))
 	binary.Write(h, binary.BigEndian, respawnWindow)
 	return int64(binary.BigEndian.Uint64(h.Sum(nil)[:8]))
 }
 
-// GenerateCell procedurally generates the cell content based on region, x, y coordinates
-func GenerateCell(x, y int, region string) models.Cell {
-	if x == 50 && y == 50 {
-		return models.Cell{X: x, Y: y, Type: "Empty", Content: "Thanh Bản Thôn (Safe Village)"}
-	}
+// defaultResourcePool / defaultWildGuPool are fallback content pools used by
+// zones that do not define pool_weights in Region.csv.
+var defaultResourcePool = []string{"moon_orchid_petal", "green_bamboo_wine", "jade_stone", "boar_meat"}
+var defaultWildGuPool = []string{"GU_LITTLE_LIGHT", "GU_JADE_SKIN", "GU_BRONZE_RELIC", "GU_FIRE_ARMOR"}
 
-	if x < 0 || x >= 100 || y < 0 || y >= 100 {
+// pickWeightedType rolls a cell content type using zone weights.
+func pickWeightedType(weights map[string]int, rng *rand.Rand) string {
+	total := 0
+	for _, w := range weights {
+		if w > 0 {
+			total += w
+		}
+	}
+	if total <= 0 {
+		return "Empty"
+	}
+	roll := rng.Intn(total)
+	for t, w := range weights {
+		if w <= 0 {
+			continue
+		}
+		roll -= w
+		if roll < 0 {
+			return t
+		}
+	}
+	return "Empty"
+}
+
+// GenerateCell procedurally generates a low-tier cell (monster / resource /
+// wild Gu / empty) from the containing zone's in-memory pools. No database
+// access — content is deterministic per (zone, x, y) within a respawn window.
+func GenerateCell(x, y int) models.Cell {
+	if !inWorld(x, y) {
 		return models.Cell{X: x, Y: y, Type: "Empty", Content: "Biên Giới Cổ Giới (World Edge)"}
 	}
 
-	seed := GetCellSeed(x, y, region)
-	rng := rand.New(rand.NewSource(seed))
-	roll := rng.Intn(100)
-
-	// 80% chance empty/PVP, 20% Monster
-	if roll < 80 {
+	zone := FindZoneAt(x, y)
+	if zone == nil || zone.ZoneType == ZoneTypeHub {
 		return models.Cell{X: x, Y: y, Type: "Empty", Content: ""}
-	} else {
-		return models.Cell{X: x, Y: y, Type: "Monster", Content: ""}
 	}
-}
+	zoneID := zone.ID
+	seed := GetCellSeed(x, y, zoneID)
+	rng := rand.New(rand.NewSource(seed))
 
-func ResolveCell(tx *sql.Tx, region string, x int, y int) (models.Cell, error) {
-	special, ok, err := db.FindSpecialCell(tx, region, x, y)
-	if err == nil && ok {
-		return special, nil
-	}
-
-	spawn, ok, err := db.FindFixedSpawn(tx, region, x, y)
-	if err == nil && ok {
-		seed := GetCellSeed(x, y, region)
-		rng := rand.New(rand.NewSource(seed))
-		t := "Monster"
-		if spawn.IsBossSpawn {
-			t = "Boss"
-		}
-
-		rank := spawn.MinRank
-		if spawn.MaxRank > spawn.MinRank {
-			rank += rng.Intn(spawn.MaxRank - spawn.MinRank + 1)
-		}
-		subRank := rng.Intn(5) + 1
-
-		return models.Cell{X: x, Y: y, Type: t, Content: spawn.MonsterID, Rank: rank, SubRank: subRank}, nil
+	weights := zone.PoolWeights.CellWeights
+	if len(weights) == 0 {
+		weights = map[string]int{"Monster": 20, "Resource": 10, "WildGu": 3, "Empty": 67}
 	}
 
-	cell := GenerateCell(x, y, region)
-
-	if cell.Type == "Monster" || cell.Type == "Boss" {
-		seed := GetCellSeed(x, y, region)
-		rng := rand.New(rand.NewSource(seed))
-		
-		monsterID, minRank, maxRank, err := db.PickDeterministicMonsterFromRegion(tx, region, seed)
-		if err == nil && monsterID != "" {
-			cell.Content = monsterID
-			rank := minRank
-			if maxRank > minRank {
-				rank += rng.Intn(maxRank - minRank + 1)
-			}
-			cell.Rank = rank
-			cell.SubRank = rng.Intn(5) + 1
+	switch pickWeightedType(weights, rng) {
+	case "Monster":
+		monsterID := ""
+		if spawn, ok := pickMonsterFromPool(zoneID, rng, false); ok {
+			monsterID = spawn.MonsterID
 		} else {
-			cell.Rank = 1
-			cell.SubRank = rng.Intn(5) + 1
+			monsterID = randomNormalMonsterID(rng)
 		}
+		rank := zone.MinRank
+		if zone.MaxRank > zone.MinRank {
+			rank += rng.Intn(zone.MaxRank - zone.MinRank + 1)
+		}
+		if rank < 1 {
+			rank = 1
+		}
+		return models.Cell{X: x, Y: y, Type: "Monster", Content: monsterID, Rank: rank, SubRank: rng.Intn(5) + 1}
+	case "Resource":
+		pool := zone.PoolWeights.Resources
+		if len(pool) == 0 {
+			pool = defaultResourcePool
+		}
+		return models.Cell{X: x, Y: y, Type: "Resource", Content: pool[rng.Intn(len(pool))]}
+	case "WildGu":
+		pool := zone.PoolWeights.WildGus
+		if len(pool) == 0 {
+			pool = defaultWildGuPool
+		}
+		guID := pool[rng.Intn(len(pool))]
+		rank := zone.MinRank
+		if rank < 1 {
+			rank = 1
+		}
+		return models.Cell{X: x, Y: y, Type: "WildGu", Content: guID, Rank: rank}
+	default:
+		return models.Cell{X: x, Y: y, Type: "Empty", Content: ""}
 	}
-
-	return cell, nil
 }
 
-// addExploredCells formats and appends visible coordinates to explored_cells JSONB list
-func addExploredCells(player *models.Player, radius int) {
-	exploredMap := make(map[string]bool)
-	for _, cell := range player.ExploredCells {
-		exploredMap[cell] = true
-	}
-
-	for dx := -radius; dx <= radius; dx++ {
-		for dy := -radius; dy <= radius; dy++ {
-			cx := player.X + dx
-			cy := player.Y + dy
-			if cx >= 0 && cx < 100 && cy >= 0 && cy < 100 {
-				coord := fmt.Sprintf("%d,%d", cx, cy)
-				exploredMap[coord] = true
-			}
+// randomNormalMonsterID picks a Normal-type monster from the in-memory registry.
+func randomNormalMonsterID(rng *rand.Rand) string {
+	var ids []string
+	for id, mon := range models.MonsterRegistry {
+		if strings.EqualFold(mon.Type, "Normal") {
+			ids = append(ids, id)
 		}
 	}
-
-	newSlice := []string{}
-	for k := range exploredMap {
-		newSlice = append(newSlice, k)
+	if len(ids) == 0 {
+		return "monster_wild_boar"
 	}
-	player.ExploredCells = newSlice
+	return ids[rng.Intn(len(ids))]
+}
+
+// ResolveCell resolves a world cell. Shared persistent cells (bosses, high
+// resources, safe points) come from the in-memory map_cells index; everything
+// else is generated procedurally. No database access in the hot path.
+func ResolveCell(x, y int) models.Cell {
+	if pc, found, cleared := PersistentCellAt(x, y); found {
+		if cleared {
+			return models.Cell{X: x, Y: y, Type: "Empty", Content: ""}
+		}
+		cell := pc.Cell
+		cell.X = x
+		cell.Y = y
+		return cell
+	}
+	return GenerateCell(x, y)
 }
 
 func isCellClearedRecently(player *models.Player, x, y int, cooldown time.Duration) bool {
@@ -211,11 +234,8 @@ func GetGrid(c *gin.Context) {
 		for dy := -visualVisionRadius; dy <= visualVisionRadius; dy++ {
 			cx := player.X + dx
 			cy := player.Y + dy
-			if cx >= 0 && cx < 100 && cy >= 0 && cy < 100 {
-				cell, err := ResolveCell(tx, player.CurrentRegion, cx, cy)
-				if err != nil {
-					cell = GenerateCell(cx, cy, player.CurrentRegion)
-				}
+			if cx >= 0 && cx < WorldWidth && cy >= 0 && cy < WorldHeight {
+				cell := ResolveCell(cx, cy)
 				if isCellClearedRecently(&player, cx, cy, clearedCellCooldown) {
 					cell = models.Cell{X: cx, Y: cy, Type: "Empty", Content: ""}
 				}
@@ -235,12 +255,11 @@ func GetGrid(c *gin.Context) {
 	rows, errQuery := tx.Query(`
 		SELECT id, username, avatar_url, x, y 
 		FROM players 
-		WHERE current_region = $1 
-		  AND id != $2 
-		  AND (current_region IN ('qing_mao_mountain', 'gu_luan_slope', 'three_kings_inheritance') OR last_mana_update >= NOW() - INTERVAL '15 minutes')
-		  AND x >= $3 AND x <= $4
-		  AND y >= $5 AND y <= $6
-	`, player.CurrentRegion, player.ID, player.X-visualVisionRadius, player.X+visualVisionRadius, player.Y-visualVisionRadius, player.Y+visualVisionRadius)
+		WHERE id != $1
+		  AND last_mana_update >= NOW() - INTERVAL '15 minutes'
+		  AND x >= $2 AND x <= $3
+		  AND y >= $4 AND y <= $5
+	`, player.ID, player.X-visualVisionRadius, player.X+visualVisionRadius, player.Y-visualVisionRadius, player.Y+visualVisionRadius)
 	if errQuery == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -287,9 +306,10 @@ func GetGrid(c *gin.Context) {
 		"y":              player.Y,
 		"vision_radius":  visualVisionRadius,
 		"cells":          cells,
-		"explored_cells": player.ExploredCells,
 		"stats":          stats,
 		"players_on_map": nearbyPlayers,
+		"world_width":    WorldWidth,
+		"world_height":   WorldHeight,
 	})
 }
 
@@ -328,7 +348,7 @@ type MoveRequest struct {
 	AttackTargetID string `json:"attack_target_id,omitempty"`
 }
 
-// MovePlayer moves the player on the 100x100 grid and triggers cell actions
+// MovePlayer moves the player on the shared world grid and triggers cell actions
 func MovePlayer(c *gin.Context) {
 	var req MoveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -336,7 +356,7 @@ func MovePlayer(c *gin.Context) {
 		return
 	}
 
-	if req.X < 0 || req.X >= 100 || req.Y < 0 || req.Y >= 100 {
+	if req.X < 0 || req.X >= WorldWidth || req.Y < 0 || req.Y >= WorldHeight {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ vượt ra ngoài ranh giới bản đồ."})
 		return
 	}
@@ -404,33 +424,15 @@ func MovePlayer(c *gin.Context) {
 	// Movement no longer consumes mana
 	player.X = req.X
 	player.Y = req.Y
+	player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
+	recordVisitedSubZone(&player, SubZoneKey(player.X, player.Y))
 
-	// Add cells to explored list
-	visionRadius := int(stats["investigation"])
-	if visionRadius < 1 {
-		visionRadius = 1
-	}
-	hasHeavenSecret := false
-	for _, gu := range player.GuInventory {
-		if gu.GuID == "GU_HEAVEN_SECRET" && gu.Equipped && gu.Status == "ACTIVE" {
-			hasHeavenSecret = true
-			break
-		}
-	}
-	if hasHeavenSecret {
-		visionRadius *= 2
-	}
-	addExploredCells(&player, visionRadius)
-
-	// Check if cell is cleared recently (2 minutes cooldown)
+	// Check if cell is cleared recently (15 minutes cooldown)
 	coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
 	isCleared := isCellClearedRecently(&player, player.X, player.Y, clearedCellCooldown)
 
 	// Trigger cell action
-	cell, err := ResolveCell(tx, player.CurrentRegion, player.X, player.Y)
-	if err != nil {
-		cell = GenerateCell(player.X, player.Y, player.CurrentRegion)
-	}
+	cell := ResolveCell(player.X, player.Y)
 	logMsg := fmt.Sprintf("Di chuyển thành công đến (%d, %d).", player.X, player.Y)
 	combatTriggered := false
 	pvpTriggered := false
@@ -442,19 +444,19 @@ func MovePlayer(c *gin.Context) {
 		SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.current_mana, p.base_hp, p.path_masteries, `+db.GuInventoryAggregate("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb)
 		FROM players p
 		LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
-		WHERE p.current_region = $1 AND p.x = $2 AND p.y = $3 AND p.id != $4
-		  AND (p.current_region IN ('qing_mao_mountain', 'gu_luan_slope', 'three_kings_inheritance') OR p.last_mana_update >= NOW() - INTERVAL '15 minutes')
+		WHERE p.x = $1 AND p.y = $2 AND p.id != $3
+		  AND p.last_mana_update >= NOW() - INTERVAL '15 minutes'
 	`
 	var errTarget error
 	if player.PartyID != nil {
-		queryStr += ` AND (p.party_id IS NULL OR p.party_id != $5)`
-		errTarget = tx.QueryRow(queryStr, player.CurrentRegion, player.X, player.Y, player.ID, player.PartyID).Scan(
+		queryStr += ` AND (p.party_id IS NULL OR p.party_id != $4)`
+		errTarget = tx.QueryRow(queryStr, player.X, player.Y, player.ID, player.PartyID).Scan(
 			&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
 			&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
 			&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks,
 		)
 	} else {
-		errTarget = tx.QueryRow(queryStr, player.CurrentRegion, player.X, player.Y, player.ID).Scan(
+		errTarget = tx.QueryRow(queryStr, player.X, player.Y, player.ID).Scan(
 			&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
 			&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
 			&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks,
@@ -516,6 +518,8 @@ func MovePlayer(c *gin.Context) {
 				}
 				player.TempLoot.MaterialsInventory[cell.Content]++
 				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Đạo hữu tìm thấy nguyên liệu hoang dã: 1x %s (được giữ tạm thời trong bản đồ)!", player.X, player.Y, cell.Content)
+
+				MarkPersistentCellCleared(tx, player.ID, player.X, player.Y)
 
 				if player.ClearedCells == nil {
 					player.ClearedCells = make(models.ClearedCellsMap)
@@ -662,10 +666,7 @@ func MovePlayer(c *gin.Context) {
 					continue
 				}
 
-				adj, err := ResolveCell(tx, player.CurrentRegion, adjX, adjY)
-				if err != nil {
-					adj = GenerateCell(adjX, adjY, player.CurrentRegion)
-				}
+				adj := ResolveCell(adjX, adjY)
 
 				if (adj.Type == "Monster" || adj.Type == "Boss") && rand.Intn(100) < 5 { // 5% chance
 					combatTriggered = true
@@ -719,14 +720,14 @@ func MovePlayer(c *gin.Context) {
 	// Update DB
 	updateQuery := `
 		UPDATE players
-		SET current_mana = $1, x = $2, y = $3, explored_cells = $4, cleared_cells = $5, active_combat = $6, temp_loot = $7, last_mana_update = $8, primeval_stones = $9, hp = $10, max_mana = $11, human_qi = $12
-		WHERE id = $13
+		SET current_mana = $1, x = $2, y = $3, current_region = $4, cleared_cells = $5, active_combat = $6, temp_loot = $7, last_mana_update = $8, primeval_stones = $9, hp = $10, max_mana = $11, human_qi = $12, visited_subzones = $13
+		WHERE id = $14
 	`
 	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return
 	}
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.ExploredCells, player.ClearedCells, player.ActiveCombat, player.TempLoot, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.ID)
+	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, player.ActiveCombat, player.TempLoot, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return
@@ -747,13 +748,15 @@ func MovePlayer(c *gin.Context) {
 	})
 }
 
-// GetRegions fetches all active regions from the database
+// GetRegions fetches all active regions (zones) from the database
 func GetRegions(c *gin.Context) {
 	query := `
-		SELECT id, name, description, width, height, min_rank, max_rank, is_active, created_at, updated_at
+		SELECT id, name, description, width, height, min_rank, max_rank, is_active, created_at, updated_at,
+		       COALESCE(parent_id,''), COALESCE(zone_type,'NGU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0),
+		       COALESCE(max_x,0), COALESCE(max_y,0), COALESCE(entry_x,0), COALESCE(entry_y,0)
 		FROM regions
 		WHERE is_active = TRUE
-		ORDER BY min_rank ASC
+		ORDER BY min_rank ASC, name ASC
 	`
 	rows, err := db.DB.QueryContext(c.Request.Context(), query)
 	if err != nil {
@@ -765,11 +768,25 @@ func GetRegions(c *gin.Context) {
 	var regions []models.Region
 	for rows.Next() {
 		var r models.Region
-		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.Width, &r.Height, &r.MinRank, &r.MaxRank, &r.IsActive, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.Width, &r.Height, &r.MinRank, &r.MaxRank, &r.IsActive, &r.CreatedAt, &r.UpdatedAt,
+			&r.ParentID, &r.ZoneType, &r.MinX, &r.MinY, &r.MaxX, &r.MaxY, &r.EntryX, &r.EntryY); err != nil {
 			continue
 		}
 		regions = append(regions, r)
 	}
 
 	c.JSON(http.StatusOK, regions)
+}
+
+// GetWorld returns the shared world geometry for the frontend overview.
+func GetWorld(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"width":          WorldWidth,
+		"height":         WorldHeight,
+		"large_zone_size": LargeZoneSize,
+		"sub_zone_size":  SubZoneSize,
+		"hub_region_id":  HubRegionID,
+		"hub_x":          HubEntryPoint.X,
+		"hub_y":          HubEntryPoint.Y,
+	})
 }

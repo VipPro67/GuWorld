@@ -63,8 +63,9 @@ type BodyModsList []string
 // StatusList represents the player's active statuses (trạng thái), e.g. "severely_wounded".
 type StatusList []string
 
-// ExploredCellsList represents coordinates visited by the player
-type ExploredCellsList []string
+// VisitedSubZonesList tracks the small-zone keys the player has visited in the
+// shared world map (bounded set, used for exploration achievements).
+type VisitedSubZonesList []string
 
 type StatusEffect struct {
 	Type  string  `json:"type"`
@@ -512,25 +513,25 @@ func (s StatusList) Value() (driver.Value, error) {
 	return json.Marshal(s)
 }
 
-// Scan implements the sql.Scanner interface for ExploredCellsList
-func (e *ExploredCellsList) Scan(value interface{}) error {
+// Scan implements the sql.Scanner interface for VisitedSubZonesList
+func (v *VisitedSubZonesList) Scan(value interface{}) error {
 	if value == nil {
-		*e = ExploredCellsList{}
+		*v = VisitedSubZonesList{}
 		return nil
 	}
 	bytes, ok := value.([]byte)
 	if !ok {
 		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 	}
-	return json.Unmarshal(bytes, e)
+	return json.Unmarshal(bytes, v)
 }
 
-// Value implements the driver.Valuer interface for ExploredCellsList
-func (e ExploredCellsList) Value() (driver.Value, error) {
-	if e == nil {
-		return "[\"50,50\"]", nil
+// Value implements the driver.Valuer interface for VisitedSubZonesList
+func (v VisitedSubZonesList) Value() (driver.Value, error) {
+	if v == nil {
+		return "[]", nil
 	}
-	return json.Marshal(e)
+	return json.Marshal(v)
 }
 
 type CompletedQuestsList []string

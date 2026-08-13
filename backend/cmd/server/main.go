@@ -109,6 +109,13 @@ func main() {
 		logger.S.Info("Monster registry loaded successfully")
 	}
 
+	err = handlers.LoadZoneRegistry(db.DB)
+	if err != nil {
+		logger.S.Warnf("Failed to load Zone registry: %v (data may need import)", err)
+	} else {
+		logger.S.Info("Zone registry loaded successfully")
+	}
+
 	err = handlers.LoadQuestRegistry()
 	if err != nil {
 		logger.S.Warnf("Failed to load Quest registry: %v (data may need import)", err)

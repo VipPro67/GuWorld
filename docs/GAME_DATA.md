@@ -11,8 +11,9 @@ Nguồn dữ liệu chính nằm trong các file CSV ở `backend/`. Khi backend
 | `backend/Recipe.csv` | 31 | Công thức luyện Cổ: target, Cổ/nguyên liệu yêu cầu, success rate, cost. |
 | `backend/Monster.csv` | 13 | Monster templates: chỉ số, Gu inventory, loot table, AI profile, bắt sủng vật. |
 | `backend/LootTable.csv` | 8 | Bảng loot cho combat/monster. |
-| `backend/MonsterSpawn.csv` | 1 | Rule spawn monster theo region/toạ độ/rank. |
-| `backend/Region.csv` | 3 | Vùng map: kích thước, mô tả, rank range. |
+| `backend/MonsterSpawn.csv` | 48 | Pool spawn monster theo zone/toạ độ/rank (Roaming/Random). |
+| `backend/Region.csv` | 14 | Zone lồng nhau (1 HUB + 6 Đại Vực 3×2 + 7 địa danh): geometry, rank range, pool_weights. |
+| `backend/MapCell.csv` | 29 | Ô persistent dùng chung: boss, tài nguyên cao, điểm an toàn. |
 | `backend/ShopItem.csv` | 15 | Shop NPC/caravan items. |
 | `backend/PremiumShopPackage.csv` | 4 | Gói premium shop mua bằng ví. |
 | `backend/TopupPackage.csv` | 5 | Gói nạp tiền. |
@@ -258,9 +259,39 @@ Recipe yêu cầu Cổ instance và/hoặc material. Một số recipe cần suy
 
 Monster template chứa chỉ số, Gu inventory, item inventory, dao marks, path masteries, AI profile và loot table. Combat handler dùng dữ liệu này để khởi tạo trận, chọn hành động và roll loot.
 
-### Region/map
+### Region / Bản đồ thế giới (World Map)
 
-Region định nghĩa map lớn. `map_cells` có thể được generate theo vùng/toạ độ và lưu lại khi người chơi khám phá.
+Từ phiên bản map 3×2, thế giới là **một bản đồ liên tục duy nhất** 30.000 × 20.000 ô, chia làm **6 Đại Vực (DAI_VUC)** mỗi cái 10.000 × 10.000 (lưới 3 cột × 2 hàng). Mỗi Đại Vực được chia số học thành **tiểu vực** 1.000 × 1.000 (600 tiểu vực toàn thế giới). Các địa danh có tên (NGU_VUC — giữ nguyên 7 Lưu Vực cũ) nằm lồng/chồng bên trong Đại Vực; `Southern_Border` là **HUB** (trấn an toàn, không sinh quái).
+
+**Bảng `regions`** — các cột mới:
+
+| Cột | Kiểu | Ghi chú |
+| --- | --- | --- |
+| `parent_id` | VARCHAR | zone cha (NGU_VUC trỏ tới DAI_VUC của nó). |
+| `zone_type` | VARCHAR | `HUB` / `DAI_VUC` / `NGU_VUC`. |
+| `min_x, min_y, max_x, max_y` | INT | hình chữ nhật toàn cầu (inclusive) của zone. |
+| `entry_x, entry_y` | INT | tọa độ cổng truyền tống khi du hành tới zone. |
+| `pool_weights` | JSONB | pool sinh nội dung procedural của zone (xem dưới). |
+
+**`pool_weights`** JSONB — ví dụ:
+```json
+{
+  "cell_type_weights": { "Monster": 22, "Resource": 14, "WildGu": 5, "Empty": 59 },
+  "resources": ["moon_orchid_petal", "jade_stone"],
+  "wild_gus": ["GU_LITTLE_LIGHT", "GU_JADE_SKIN"]
+}
+```
+`cell_type_weights` quyết định tỉ lệ các loại ô; `resources` / `wild_gus` là pool tài nguyên và Cổ cấp thấp. Không khai báo → dùng pool mặc định.
+
+**Bảng `map_cells`** — các ô **dùng chung toàn thế giới** (chỉ lưu boss + tài nguyên cấp cao + điểm an toàn). `UNIQUE(x, y)` toàn cầu. Cột mới: `last_cleared_at TIMESTAMPTZ`, `cleared_by UUID`. Khi giết boss / hái tài nguyên cao, `last_cleared_at` được set; ô sẽ trống cho tới khi hết `respawn_seconds`.
+
+**Bảng `monster_spawns`** — giờ là **pool theo zone** (không còn ý nghĩa toạ độ cho loại Roaming/Random). `region_id` trỏ tới Đại Vực hoặc địa danh. Pool được cache trong bộ nhớ lúc start.
+
+**Phân lớp sinh nội dung**:
+- Quái nhỏ / tài nguyên thấp / Cổ cấp thấp → sinh **procedural** bằng hash seed theo `(zone, x, y, window 180s)`, không đụng DB.
+- Boss / tài nguyên cấp cao / làng → ô **persistent** trong `map_cells`, nạp vào index bộ nhớ lúc start, có respawn dùng chung.
+
+Import/Export qua Admin tab "Dữ liệu": bảng `region` (Region.csv), `map_cell` (MapCell.csv), `monster_spawn` (MonsterSpawn.csv). Sau khi import **restart backend** để nạp ZoneRegistry.
 
 ## Quy ước cập nhật dữ liệu
 

@@ -272,13 +272,13 @@ func (s DaoState) Apply(p *Player) {
 
 // WorldState groups world position and exploration fields.
 type WorldState struct {
-	X                int              `json:"x"`
-	Y                int              `json:"y"`
-	CurrentRegion    string           `json:"current_region"`
-	ExploredCells    ExploredCellsList `json:"explored_cells"`
-	ClearedCells     ClearedCellsMap  `json:"cleared_cells"`
-	ExploreCount     int              `json:"explore_count"`
-	LastExploreReset time.Time        `json:"last_explore_reset"`
+	X                int                  `json:"x"`
+	Y                int                  `json:"y"`
+	CurrentRegion    string               `json:"current_region"`
+	ClearedCells     ClearedCellsMap      `json:"cleared_cells"`
+	VisitedSubZones  VisitedSubZonesList  `json:"visited_subzones"`
+	ExploreCount     int                  `json:"explore_count"`
+	LastExploreReset time.Time            `json:"last_explore_reset"`
 }
 
 // NewWorldState extracts world data from a Player.
@@ -287,8 +287,8 @@ func NewWorldState(p *Player) WorldState {
 		X:                p.X,
 		Y:                p.Y,
 		CurrentRegion:    p.CurrentRegion,
-		ExploredCells:    p.ExploredCells,
 		ClearedCells:     p.ClearedCells,
+		VisitedSubZones:  p.VisitedSubZones,
 		ExploreCount:     p.ExploreCount,
 		LastExploreReset: p.LastExploreReset,
 	}
@@ -299,8 +299,8 @@ func (s WorldState) Apply(p *Player) {
 	p.X = s.X
 	p.Y = s.Y
 	p.CurrentRegion = s.CurrentRegion
-	p.ExploredCells = s.ExploredCells
 	p.ClearedCells = s.ClearedCells
+	p.VisitedSubZones = s.VisitedSubZones
 	p.ExploreCount = s.ExploreCount
 	p.LastExploreReset = s.LastExploreReset
 }

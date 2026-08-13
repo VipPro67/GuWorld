@@ -637,6 +637,7 @@ func AutoCombatStart(c *gin.Context) {
 					}
 				}
 			}
+			markBossCleared(tx, &player)
 
 			for _, lMsg := range lootDetailLogs {
 				logs = append(logs, simulator.CombatLog{
@@ -727,10 +728,8 @@ func AutoCombatStart(c *gin.Context) {
 			})
 		} else {
 			player.HP = 1.0
-			player.CurrentRegion = "Southern_Border"
-			player.X = 50
-			player.Y = 50
-			player.ExploredCells = models.ExploredCellsList{"50,50"}
+			player.CurrentRegion = HubRegionID
+			player.X, player.Y = hubEntryPoint()
 			player.TempLoot = models.TempLoot{
 				GuInventory:        models.GuInventory{},
 				MaterialsInventory: models.MaterialsInventory{},
@@ -751,9 +750,8 @@ func AutoCombatStart(c *gin.Context) {
 			})
 
 			tempLootJSON, _ := json.Marshal(player.TempLoot)
-			exploredJSON, _ := json.Marshal(player.ExploredCells)
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, current_region = $4, x = $5, y = $6, explored_cells = $7, aptitude_percent = $8, lifespan = $9, primeval_stones = $10 WHERE id = $11`
-			args = append(args, player.HP, finalMana, tempLootJSON, player.CurrentRegion, player.X, player.Y, exploredJSON, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.ID)
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, current_region = $4, x = $5, y = $6, aptitude_percent = $7, lifespan = $8, primeval_stones = $9 WHERE id = $10`
+			args = append(args, player.HP, finalMana, tempLootJSON, player.CurrentRegion, player.X, player.Y, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.ID)
 		}
 	}
 

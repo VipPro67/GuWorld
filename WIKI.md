@@ -254,9 +254,11 @@ Cổ sư có thể:
 
 ## 8. Khám phá bản đồ
 
-- Bản đồ theo region, x/y, explored cells và cleared cells.
-- Cổ sư xem lưới địa đồ, di chuyển, thám hiểm node và rút lui khỏi combat/node.
-- Vùng seed hiện tại nằm trong `backend/Region.csv`.
+- **Một bản đồ thế giới liên tục** 30.000 × 20.000 ô, chia làm **6 Đại Vực (Lục Đại Vực)** theo lưới 3×2, mỗi Đại Vực 10.000 × 10.000. Trung tâm là **Trấn Thanh Bản** (vùng an toàn, nơi Cổ Sư khởi đầu và hồi phục).
+- Mỗi Đại Vực chia thành **tiểu vực** 1.000 × 1.000. Trong Đại Vực có các **địa danh có tên** (Thanh Mao Sơn, Tam Vương Truyền Thừa, Sa Mạc Thanh Quỷ...) với độ khó cố định theo vùng.
+- Cổ sư xem lưới địa đồ xung quanh, di chuyển theo Thân pháp, chạm trán quái, thu thập tài nguyên/Cổ hoang dã; du hành giữa các Đại Vực qua màn hình bản đồ thế giới.
+- **Quái nhỏ, tài nguyên thấp, Cổ cấp thấp** được sinh procedural theo vùng (không lưu DB). **Boss và tài nguyên cấp cao** là điểm dùng chung toàn thế giới trong `map_cells`, có thời gian hồi sinh sau khi bị đánh bại/hái.
+- Nội dung mỗi vùng phụ thuộc `backend/Region.csv` (geometry + pool), `backend/MonsterSpawn.csv` (pool quái) và `backend/MapCell.csv` (boss/tài nguyên cao/điểm an toàn).
 
 ## 9. Chiến đấu
 

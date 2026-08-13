@@ -102,10 +102,12 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | --- | --- | --- |
 | POST | `/combat/attack` | |
 | POST | `/combat/capture` | Bắt quái vật làm sủng vật. |
-| POST | `/explore` | |
+| POST | `/explore` | Du hành tới zone: body `{"player_id","node_id"}` (node_id = id Đại Vực / địa danh / `Southern_Border`). |
 | POST | `/explore/retreat/:id` | |
-| GET | `/explore/grid` | |
-| POST | `/explore/move` | |
+| GET | `/explore/grid` | Viewport 5×5 quanh player; trả thêm `world_width`, `world_height`. Bỏ `explored_cells`. |
+| GET | `/explore/regions` | Danh sách zone (id, name, geometry `min_x..max_y`, `entry_x/y`, `parent_id`, `zone_type`). |
+| GET | `/explore/world` | Cấu hình thế giới: `width`, `height`, `large_zone_size`, `sub_zone_size`, `hub_region_id`, `hub_x/y`. |
+| POST | `/explore/move` | Di chuyển tới toạ độ trong thế giới (bounds = `world_width`/`world_height`). |
 
 ## Sủng vật (Pets)
 

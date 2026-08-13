@@ -2647,6 +2647,7 @@ export const AdminView: React.FC = () => {
                   { key: "loot_table", label: "Bảng loot", icon: Gift, csv: "LootTable.csv" },
                   { key: "monster", label: "Quái vật", icon: PawPrint, csv: "Monster.csv" },
                   { key: "monster_spawn", label: "Spawn quái", icon: MapPin, csv: "MonsterSpawn.csv" },
+                  { key: "map_cell", label: "Bản đồ (boss/tài nguyên cao)", icon: Globe, csv: "MapCell.csv" },
                   { key: "sect", label: "Tông môn", icon: Building2, csv: "Sect.csv" },
                   { key: "sect_mission", label: "Nhiệm vụ tông môn", icon: ListTodo, csv: "SectMission.csv" },
                   { key: "quest", label: "Nhiệm vụ", icon: BookOpen, csv: "Quest.csv" },

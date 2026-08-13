@@ -449,6 +449,7 @@ func SetupRouter() *gin.Engine {
 		api.POST("/explore/flee/:id", middleware.AuthRequired(), middleware.RateLimitByPlayer(25, time.Minute), handlers.Flee)
 		api.GET("/explore/grid", middleware.AuthRequired(), handlers.GetGrid)
 		api.GET("/explore/regions", middleware.AuthRequired(), handlers.GetRegions)
+		api.GET("/explore/world", middleware.AuthRequired(), handlers.GetWorld)
 		api.POST("/explore/move", middleware.AuthRequired(), middleware.RateLimitByPlayer(25, time.Minute), handlers.MovePlayer)
 
 		// Shop — group: 30/min, per player: 10/min

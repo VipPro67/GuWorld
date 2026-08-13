@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useGameStore, Player } from "@/store/useGameStore";
-import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, Gem, Flower2, HelpCircle, Wine, Crown, Package } from "lucide-react";
+import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, Gem, Flower2, HelpCircle, Wine, Crown, Package, Home } from "lucide-react";
 import { translateItemType, translatePath } from "@/lib/translate";
 import { LogConsole } from "./LogConsole";
 
@@ -50,9 +50,10 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     y: number;
     vision_radius: number;
     cells: any[];
-    explored_cells: string[];
     stats: any;
     players_on_map?: any[];
+    world_width?: number;
+    world_height?: number;
   } | null>(null);
 
   const { fetchGrid, movePlayer, party, partyInvitations, createParty, fetchPartyStatus, fetchPartyInvitations, invitePlayer, respondPartyInvitation, leaveParty, retreat, fetchPlayerProfile, showConfirm } = useGameStore();
@@ -234,7 +235,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
           <div className="flex items-center gap-2">
             <Compass className="w-5 h-5 text-amber-500 animate-spin" />
             <h3 className="text-lg font-bold text-zinc-100 font-serif">
-              Chọn Lưu Vực Du Ngoạn
+              Bản Đồ Thế Giới - Lục Đại Vực
             </h3>
           </div>
           <div className="flex items-center gap-4">
@@ -262,62 +263,91 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
             )}
           </div>
         </div>
-        {/* Grid Nodes */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {regions.map((node, index) => {
-            const isCurrentExploring = activeNode === node.id;
-            return (
-              <div
-                key={node.id}
-                className={`border rounded-2xl p-4 flex flex-col justify-between h-56 transition-all bg-gradient-to-b ${getBgGlow(index)} to-zinc-950 relative overflow-hidden group ${
-                  getColorClass(index)
-                } ${!!player.active_combat ? "opacity-40 cursor-not-allowed" : ""}`}
-              >
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between">
-                    <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">
-                      Rank {node.min_rank} - {node.max_rank}
-                    </span>
-                    <MapPin className="w-3.5 h-3.5 opacity-60 group-hover:scale-110 transition-transform" />
-                  </div>
-
-                  <h4 className="text-base font-bold text-zinc-100 font-serif group-hover:text-amber-400 transition-colors">
-                    {node.name}
-                  </h4>
-
-                  <div className="text-[10px] text-zinc-400 font-serif leading-relaxed line-clamp-3">
-                    {node.description}
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-zinc-900/60">
-                  <button
-                    type="button"
-                    disabled={actionLoading || !!player.active_combat}
-                    onClick={() => handleNodeClick(node.id)}
-                    className={`w-full py-2 px-3 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                      !player.active_combat
-                        ? "bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-200 active:scale-[0.98]"
-                        : "bg-zinc-950 text-zinc-600 border border-zinc-900/80 cursor-not-allowed"
-                    }`}
-                  >
-                    {isCurrentExploring ? (
-                      <>
-                        <Compass className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                        <span>Đang di hành...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Footprints className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Cất Bước Khám Phá</span>
-                      </>
-                    )}
-                  </button>
-                </div>
+        {/* World Overview: 3x2 large zones (Đại Vực) */}
+        {(() => {
+          const largeZones = regions
+            .filter((r) => r.zone_type === "DAI_VUC")
+            .sort((a, b) => (a.min_y || 0) - (b.min_y || 0) || (a.min_x || 0) - (b.min_x || 0));
+          const namedZones = regions.filter((r) => r.zone_type === "NGU_VUC");
+          return (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {largeZones.map((node, index) => {
+                  const isCurrentExploring = activeNode === node.id;
+                  const children = namedZones.filter((n) => n.parent_id === node.id);
+                  return (
+                    <div
+                      key={node.id}
+                      className={`border rounded-2xl p-4 flex flex-col justify-between h-60 transition-all bg-gradient-to-b ${getBgGlow(index)} to-zinc-950 relative overflow-hidden group ${
+                        getColorClass(index)
+                      } ${!!player.active_combat ? "opacity-40 cursor-not-allowed" : ""}`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between">
+                          <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">
+                            Rank {node.min_rank} - {node.max_rank}
+                          </span>
+                          <MapPin className="w-3.5 h-3.5 opacity-60 group-hover:scale-110 transition-transform" />
+                        </div>
+                        <h4 className="text-base font-bold text-zinc-100 font-serif group-hover:text-amber-400 transition-colors">
+                          {node.name}
+                        </h4>
+                        <div className="text-[10px] text-zinc-400 font-serif leading-relaxed line-clamp-3">
+                          {node.description}
+                        </div>
+                        {children.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-1">
+                            {children.map((c) => (
+                              <span key={c.id} className="text-[8px] font-mono text-zinc-500 bg-zinc-900/60 border border-zinc-800 px-1.5 py-0.5 rounded">
+                                {c.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-4 pt-3 border-t border-zinc-900/60">
+                        <button
+                          type="button"
+                          disabled={actionLoading || !!player.active_combat}
+                          onClick={() => handleNodeClick(node.id)}
+                          className={`w-full py-2 px-3 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            !player.active_combat
+                              ? "bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-200 active:scale-[0.98]"
+                              : "bg-zinc-950 text-zinc-600 border border-zinc-900/80 cursor-not-allowed"
+                          }`}
+                        >
+                          {isCurrentExploring ? (
+                            <>
+                              <Compass className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                              <span>Đang di hành...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Footprints className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>Cất Bước Khám Phá</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
+
+              {isExploringActiveRegion && (
+                <button
+                  type="button"
+                  disabled={actionLoading || !!player.active_combat}
+                  onClick={() => handleNodeClick("Southern_Border")}
+                  className="w-full py-2.5 px-3 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-emerald-950/40 text-emerald-400 border border-emerald-900/60 hover:bg-emerald-950/60 hover:border-emerald-700"
+                >
+                  <Home className="w-3.5 h-3.5" />
+                  Trở Về Trấn Thanh Bản (An Toàn)
+                </button>
+              )}
+            </div>
+          );
+        })()}
 
         {/* last log display */}
         {lastLog && (
@@ -354,13 +384,15 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     };
   }
 
+  const worldW = gridData?.world_width || 30000;
+  const worldH = gridData?.world_height || 20000;
   const gridCells: GridCellItem[] = [];
   if (gridData) {
     for (let dy = -visionRadius; dy <= visionRadius; dy++) {
       for (let dx = -visionRadius; dx <= visionRadius; dx++) {
         const cx = player.x + dx;
         const cy = player.y + dy;
-        const outOfBounds = cx < 0 || cx >= 100 || cy < 0 || cy >= 100;
+        const outOfBounds = cx < 0 || cx >= worldW || cy < 0 || cy >= worldH;
         
         const existingCell = gridData.cells.find((c: { x: number; y: number; cell_type: string; content: string }) => c.x === cx && c.y === cy);
         gridCells.push({

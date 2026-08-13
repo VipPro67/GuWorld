@@ -219,8 +219,8 @@ func InitSchema() error {
 		body_mods JSONB NOT NULL DEFAULT '[]',
 		x INTEGER NOT NULL DEFAULT 50,
 		y INTEGER NOT NULL DEFAULT 50,
-		explored_cells JSONB NOT NULL DEFAULT '["50,50"]',
 		current_region VARCHAR(50) NOT NULL DEFAULT 'Southern_Border',
+		visited_subzones JSONB NOT NULL DEFAULT '[]',
 		path_masteries JSONB NOT NULL DEFAULT '{}',
 		active_combat JSONB DEFAULT NULL,
 		last_mana_update TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -573,11 +573,29 @@ func InitSchema() error {
 		max_rank INT NOT NULL DEFAULT 5,
 		is_active BOOLEAN NOT NULL DEFAULT TRUE,
 		created_at TIMESTAMP DEFAULT NOW(),
-		updated_at TIMESTAMP DEFAULT NOW()
+		updated_at TIMESTAMP DEFAULT NOW(),
+		parent_id VARCHAR(50) REFERENCES regions(id) ON DELETE CASCADE,
+		zone_type VARCHAR(20) NOT NULL DEFAULT 'NGU_VUC',
+		min_x INT NOT NULL DEFAULT 0,
+		min_y INT NOT NULL DEFAULT 0,
+		max_x INT NOT NULL DEFAULT 0,
+		max_y INT NOT NULL DEFAULT 0,
+		entry_x INT NOT NULL DEFAULT 0,
+		entry_y INT NOT NULL DEFAULT 0,
+		pool_weights JSONB NOT NULL DEFAULT '{}'
 	);`)
 	if err != nil {
 		return fmt.Errorf("failed to create regions table: %w", err)
 	}
+	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS parent_id VARCHAR(50) REFERENCES regions(id) ON DELETE CASCADE;`)
+	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS zone_type VARCHAR(20) NOT NULL DEFAULT 'NGU_VUC';`)
+	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS min_x INT NOT NULL DEFAULT 0;`)
+	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS min_y INT NOT NULL DEFAULT 0;`)
+	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS max_x INT NOT NULL DEFAULT 0;`)
+	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS max_y INT NOT NULL DEFAULT 0;`)
+	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS entry_x INT NOT NULL DEFAULT 0;`)
+	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS entry_y INT NOT NULL DEFAULT 0;`)
+	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS pool_weights JSONB NOT NULL DEFAULT '{}';`)
 
 	// 4.6. Create loot_tables
 	_, err = DB.Exec(`
@@ -683,12 +701,17 @@ func InitSchema() error {
 		content_id VARCHAR(50),
 		metadata JSONB NOT NULL DEFAULT '{}',
 		respawn_seconds INT NOT NULL DEFAULT 300,
+		last_cleared_at TIMESTAMPTZ,
+		cleared_by UUID,
 		is_active BOOLEAN NOT NULL DEFAULT TRUE,
-		UNIQUE(region_id, x, y)
+		UNIQUE(x, y)
 	);`)
 	if err != nil {
 		return fmt.Errorf("failed to create map_cells table: %w", err)
 	}
+	_, _ = DB.Exec(`ALTER TABLE map_cells ADD COLUMN IF NOT EXISTS last_cleared_at TIMESTAMPTZ;`)
+	_, _ = DB.Exec(`ALTER TABLE map_cells ADD COLUMN IF NOT EXISTS cleared_by UUID;`)
+	_, _ = DB.Exec(`ALTER TABLE map_cells DROP CONSTRAINT IF EXISTS map_cells_region_id_x_y_key;`)
 
 	// 4.11. Create instance_templates
 	_, err = DB.Exec(`
@@ -985,7 +1008,8 @@ func InitSchema() error {
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS body_mods JSONB NOT NULL DEFAULT '[]';`, "body_mods"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS x INTEGER NOT NULL DEFAULT 50;`, "x"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS y INTEGER NOT NULL DEFAULT 50;`, "y"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS explored_cells JSONB NOT NULL DEFAULT '["50,50"]';`, "explored_cells"},
+		{`ALTER TABLE players DROP COLUMN IF EXISTS explored_cells;`, "explored_cells_drop"},
+		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS visited_subzones JSONB NOT NULL DEFAULT '[]';`, "visited_subzones"},
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS current_region VARCHAR(50) NOT NULL DEFAULT 'Southern_Border';`, "current_region"},
 
 		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS active_combat JSONB DEFAULT NULL;`, "active_combat"},
@@ -1701,6 +1725,8 @@ WHERE p.id IN (SELECT DISTINCT player_id FROM unequipped);`, MaxEquippedGus),
 		{"idx_audit_logs_created", "audit_logs", "created_at"},
 		{"idx_messages_receiver_channel_created", "messages", "receiver_id, channel, created_at DESC"},
 		{"idx_auction_status_endtime_buyer", "auction", "status, end_time, target_buyer_id"},
+		{"idx_players_region_xy", "players", "current_region, x, y"},
+		{"idx_map_cells_xy", "map_cells", "x, y"},
 	}
 	for _, idx := range indexes {
 		_, err := DB.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s (%s)", idx.name, idx.table, idx.column))
@@ -2663,6 +2689,8 @@ func seedRegionsFromCSV(filename string) error {
 	col := func(name string) int { return colIndex(header, name) }
 	idIdx, nameIdx := col("id"), col("name")
 	descIdx, widthIdx, heightIdx, minRankIdx, maxRankIdx, activeIdx := col("description"), col("width"), col("height"), col("min_rank"), col("max_rank"), col("is_active")
+	parentIdx, typeIdx := col("parent_id"), col("zone_type")
+	minXIdx, minYIdx, maxXIdx, maxYIdx, entryXIdx, entryYIdx, poolIdx := col("min_x"), col("min_y"), col("max_x"), col("max_y"), col("entry_x"), col("entry_y"), col("pool_weights")
 	if idIdx < 0 || nameIdx < 0 {
 		return fmt.Errorf("Region.csv missing required columns (id, name)")
 	}
@@ -2671,6 +2699,14 @@ func seedRegionsFromCSV(filename string) error {
 			return ""
 		}
 		return strings.TrimSpace(row[idx])
+	}
+	parseInt := func(row []string, idx int, def int) int {
+		if v := get(row, idx); v != "" {
+			var n int
+			fmt.Sscanf(v, "%d", &n)
+			return n
+		}
+		return def
 	}
 	seeded := 0
 	for {
@@ -2685,31 +2721,34 @@ func seedRegionsFromCSV(filename string) error {
 		if id == "" {
 			continue
 		}
-		width, height, minRank, maxRank := 100, 100, 1, 5
-		if v := get(row, widthIdx); v != "" {
-			fmt.Sscanf(v, "%d", &width)
-		}
-		if v := get(row, heightIdx); v != "" {
-			fmt.Sscanf(v, "%d", &height)
-		}
-		if v := get(row, minRankIdx); v != "" {
-			fmt.Sscanf(v, "%d", &minRank)
-		}
-		if v := get(row, maxRankIdx); v != "" {
-			fmt.Sscanf(v, "%d", &maxRank)
-		}
+		width, height := parseInt(row, widthIdx, 100), parseInt(row, heightIdx, 100)
+		minRank, maxRank := parseInt(row, minRankIdx, 1), parseInt(row, maxRankIdx, 5)
 		active := true
 		av := strings.ToLower(get(row, activeIdx))
 		if av == "false" || av == "0" || av == "no" {
 			active = false
 		}
+		zoneType := get(row, typeIdx)
+		if zoneType == "" {
+			zoneType = "NGU_VUC"
+		}
+		minX, minY := parseInt(row, minXIdx, 0), parseInt(row, minYIdx, 0)
+		maxX, maxY := parseInt(row, maxXIdx, width-1), parseInt(row, maxYIdx, height-1)
+		entryX, entryY := parseInt(row, entryXIdx, (minX+maxX)/2), parseInt(row, entryYIdx, (minY+maxY)/2)
+		poolWeights := "{}"
+		if v := get(row, poolIdx); v != "" {
+			poolWeights = v
+		}
 		_, err = DB.Exec(`
-			INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, updated_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+			INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, parent_id, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,NOW())
 			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description,
 			width=EXCLUDED.width, height=EXCLUDED.height, min_rank=EXCLUDED.min_rank, max_rank=EXCLUDED.max_rank,
-			is_active=EXCLUDED.is_active, updated_at=NOW()
-		`, id, get(row, nameIdx), get(row, descIdx), width, height, minRank, maxRank, active)
+			is_active=EXCLUDED.is_active, parent_id=EXCLUDED.parent_id, zone_type=EXCLUDED.zone_type,
+			min_x=EXCLUDED.min_x, min_y=EXCLUDED.min_y, max_x=EXCLUDED.max_x, max_y=EXCLUDED.max_y,
+			entry_x=EXCLUDED.entry_x, entry_y=EXCLUDED.entry_y, pool_weights=EXCLUDED.pool_weights, updated_at=NOW()
+		`, id, get(row, nameIdx), get(row, descIdx), width, height, minRank, maxRank, active,
+			get(row, parentIdx), zoneType, minX, minY, maxX, maxY, entryX, entryY, poolWeights)
 		if err != nil {
 			return fmt.Errorf("upsert region %s: %w", id, err)
 		}
@@ -2922,6 +2961,74 @@ func seedMonsterSpawnsFromCSV(filename string) error {
 		seeded++
 	}
 	logger.S.Infof("Monster spawns seeded from %s (%d read)", filename, seeded)
+	return nil
+}
+
+// seedMapCellsFromCSV reads MapCell.csv and upserts persistent shared cells
+// (bosses, high-tier resources, safe points) into map_cells.
+func seedMapCellsFromCSV(filename string) error {
+	f, r, header, err := openCSV(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	col := func(name string) int { return colIndex(header, name) }
+	regionIdx, xIdx, yIdx := col("region_id"), col("x"), col("y")
+	typeIdx, contentIdx, metaIdx, respawnIdx, activeIdx := col("cell_type"), col("content_id"), col("metadata"), col("respawn_seconds"), col("is_active")
+	if regionIdx < 0 || xIdx < 0 || yIdx < 0 || typeIdx < 0 {
+		return fmt.Errorf("MapCell.csv missing required columns (region_id, x, y, cell_type)")
+	}
+	get := func(row []string, idx int) string {
+		if idx < 0 || idx >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[idx])
+	}
+	parseInt := func(row []string, idx int, def int) int {
+		if v := get(row, idx); v != "" {
+			var n int
+			fmt.Sscanf(v, "%d", &n)
+			return n
+		}
+		return def
+	}
+	seeded := 0
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil || len(row) == 0 {
+			continue
+		}
+		x, y := parseInt(row, xIdx, -1), parseInt(row, yIdx, -1)
+		cellType := get(row, typeIdx)
+		if cellType == "" || x < 0 || y < 0 {
+			continue
+		}
+		meta := get(row, metaIdx)
+		if meta == "" {
+			meta = "{}"
+		}
+		respawn := parseInt(row, respawnIdx, 300)
+		active := true
+		av := strings.ToLower(get(row, activeIdx))
+		if av == "false" || av == "0" || av == "no" {
+			active = false
+		}
+		_, err = DB.Exec(`
+			INSERT INTO map_cells (region_id, x, y, cell_type, content_id, metadata, respawn_seconds, is_active)
+			VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8)
+			ON CONFLICT (x, y) DO UPDATE SET region_id=EXCLUDED.region_id, cell_type=EXCLUDED.cell_type,
+			content_id=EXCLUDED.content_id, metadata=EXCLUDED.metadata, respawn_seconds=EXCLUDED.respawn_seconds,
+			is_active=EXCLUDED.is_active
+		`, get(row, regionIdx), x, y, cellType, get(row, contentIdx), meta, respawn, active)
+		if err != nil {
+			return fmt.Errorf("upsert map cell %d,%d: %w", x, y, err)
+		}
+		seeded++
+	}
+	logger.S.Infof("Map cells seeded from %s (%d seeded)", filename, seeded)
 	return nil
 }
 
@@ -3410,8 +3517,8 @@ func ExportToCSV() error {
 		},
 		{
 			filename: "Region.csv",
-			columns:  []string{"id", "name", "description", "width", "height", "min_rank", "max_rank", "is_active"},
-			query:    `SELECT id, name, COALESCE(description,''), COALESCE(width,100), COALESCE(height,100), COALESCE(min_rank,1), COALESCE(max_rank,5), COALESCE(is_active,true) FROM regions ORDER BY id`,
+			columns:  []string{"id", "name", "description", "width", "height", "min_rank", "max_rank", "is_active", "parent_id", "zone_type", "min_x", "min_y", "max_x", "max_y", "entry_x", "entry_y", "pool_weights"},
+			query:    `SELECT id, name, COALESCE(description,''), COALESCE(width,100), COALESCE(height,100), COALESCE(min_rank,1), COALESCE(max_rank,5), COALESCE(is_active,true), COALESCE(parent_id,''), COALESCE(zone_type,'NGU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0), COALESCE(max_x,0), COALESCE(max_y,0), COALESCE(entry_x,0), COALESCE(entry_y,0), COALESCE(pool_weights::text,'{}') FROM regions ORDER BY id`,
 		},
 		{
 			filename: "LootTable.csv",
@@ -3427,6 +3534,11 @@ func ExportToCSV() error {
 			filename: "MonsterSpawn.csv",
 			columns:  []string{"region_id", "monster_id", "x", "y", "spawn_mode", "chance", "respawn_seconds", "min_rank", "max_rank", "is_boss_spawn", "is_active"},
 			query:    `SELECT region_id, monster_id, x, y, COALESCE(spawn_mode,'Random'), COALESCE(chance,1.0), COALESCE(respawn_seconds,300), COALESCE(min_rank,1), COALESCE(max_rank,9), COALESCE(is_boss_spawn,false), COALESCE(is_active,true) FROM monster_spawns ORDER BY region_id, monster_id`,
+		},
+		{
+			filename: "MapCell.csv",
+			columns:  []string{"region_id", "x", "y", "cell_type", "content_id", "metadata", "respawn_seconds", "is_active"},
+			query:    `SELECT region_id, x, y, cell_type, COALESCE(content_id,''), COALESCE(metadata::text,'{}'), COALESCE(respawn_seconds,300), COALESCE(is_active,true) FROM map_cells ORDER BY x, y`,
 		},
 		{
 			filename: "Sect.csv",
@@ -3460,7 +3572,7 @@ func ExportToCSV() error {
 func AvailableTables() []string {
 	return []string{
 		"item", "gu", "constitution", "recipe", "shop_item", "arena_shop_item",
-		"region", "loot_table", "monster", "monster_spawn",
+		"region", "loot_table", "monster", "monster_spawn", "map_cell",
 		"sect", "sect_mission", "quest", "race",
 	}
 }
@@ -3490,6 +3602,8 @@ func TableImport(table string) error {
 		return seedMonsterTemplatesFromCSV("Monster.csv")
 	case "monster_spawn":
 		return seedMonsterSpawnsFromCSV("MonsterSpawn.csv")
+	case "map_cell":
+		return seedMapCellsFromCSV("MapCell.csv")
 	case "sect":
 		return seedSectsFromCSV("Sect.csv")
 	case "sect_mission":
@@ -3547,8 +3661,8 @@ func TableExport(table string) error {
 		},
 		"region": {
 			filename: "Region.csv",
-			columns:  []string{"id", "name", "description", "width", "height", "min_rank", "max_rank", "is_active"},
-			query:    `SELECT id, name, COALESCE(description,''), COALESCE(width,100), COALESCE(height,100), COALESCE(min_rank,1), COALESCE(max_rank,5), COALESCE(is_active,true) FROM regions ORDER BY id`,
+			columns:  []string{"id", "name", "description", "width", "height", "min_rank", "max_rank", "is_active", "parent_id", "zone_type", "min_x", "min_y", "max_x", "max_y", "entry_x", "entry_y", "pool_weights"},
+			query:    `SELECT id, name, COALESCE(description,''), COALESCE(width,100), COALESCE(height,100), COALESCE(min_rank,1), COALESCE(max_rank,5), COALESCE(is_active,true), COALESCE(parent_id,''), COALESCE(zone_type,'NGU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0), COALESCE(max_x,0), COALESCE(max_y,0), COALESCE(entry_x,0), COALESCE(entry_y,0), COALESCE(pool_weights::text,'{}') FROM regions ORDER BY id`,
 		},
 		"loot_table": {
 			filename: "LootTable.csv",
@@ -3564,6 +3678,11 @@ func TableExport(table string) error {
 			filename: "MonsterSpawn.csv",
 			columns:  []string{"region_id", "monster_id", "x", "y", "spawn_mode", "chance", "respawn_seconds", "min_rank", "max_rank", "is_boss_spawn", "is_active"},
 			query:    `SELECT region_id, monster_id, x, y, COALESCE(spawn_mode,'Random'), COALESCE(chance,1.0), COALESCE(respawn_seconds,300), COALESCE(min_rank,1), COALESCE(max_rank,9), COALESCE(is_boss_spawn,false), COALESCE(is_active,true) FROM monster_spawns ORDER BY region_id, monster_id`,
+		},
+		"map_cell": {
+			filename: "MapCell.csv",
+			columns:  []string{"region_id", "x", "y", "cell_type", "content_id", "metadata", "respawn_seconds", "is_active"},
+			query:    `SELECT region_id, x, y, cell_type, COALESCE(content_id,''), COALESCE(metadata::text,'{}'), COALESCE(respawn_seconds,300), COALESCE(is_active,true) FROM map_cells ORDER BY x, y`,
 		},
 		"sect": {
 			filename: "Sect.csv",

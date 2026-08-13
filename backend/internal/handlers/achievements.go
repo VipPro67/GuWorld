@@ -46,9 +46,9 @@ var achievementRegistry = []AchievementDef{
 	{ID: "gu_25", Name: "Cổ Đạo Chuyên Gia", Description: "Thu thập 25 loại Cổ trùng khác nhau", Icon: "🦋", RewardType: "primeval_stones", RewardVal: 800, RewardLabel: "800 Nguyên Thạch"},
 	{ID: "gu_50", Name: "Vạn Cổ Chi Chủ", Description: "Thu thập 50 loại Cổ trùng khác nhau", Icon: "🐉", HasFrame: true, RewardType: "primeval_stones", RewardVal: 2000, RewardLabel: "2.000 Nguyên Thạch"},
 
-	{ID: "explorer_100", Name: "Lữ Hành Giả", Description: "Khám phá 100 ô địa đồ", Icon: "🗺️", RewardType: "primeval_stones", RewardVal: 1000, RewardLabel: "1.000 Nguyên Thạch"},
-	{ID: "explorer_500", Name: "Chu Du Ngũ Vực", Description: "Khám phá 500 ô địa đồ", Icon: "🗺️", RewardType: "primeval_stones", RewardVal: 5000, RewardLabel: "5.000 Nguyên Thạch"},
-	{ID: "explorer_1000", Name: "Dấu Chân Thiên Hạ", Description: "Khám phá 1.000 ô địa đồ", Icon: "🌍", HasFrame: true, RewardType: "immortal_stones", RewardVal: 30, RewardLabel: "30 Tiên Nguyên Thạch"},
+	{ID: "explorer_100", Name: "Lữ Hành Giả", Description: "Khám phá 100 vùng đất nhỏ", Icon: "🗺️", RewardType: "primeval_stones", RewardVal: 1000, RewardLabel: "1.000 Nguyên Thạch"},
+	{ID: "explorer_500", Name: "Chu Du Ngũ Vực", Description: "Khám phá 500 vùng đất nhỏ", Icon: "🗺️", RewardType: "primeval_stones", RewardVal: 5000, RewardLabel: "5.000 Nguyên Thạch"},
+	{ID: "explorer_1000", Name: "Dấu Chân Thiên Hạ", Description: "Chinh phục toàn bộ 600 vùng đất nhỏ", Icon: "🌍", HasFrame: true, RewardType: "immortal_stones", RewardVal: 30, RewardLabel: "30 Tiên Nguyên Thạch"},
 
 	{ID: "millionaire", Name: "Phú Giáp Thiên Hạ", Description: "Tích lũy 1.000.000 Nguyên Thạch", Icon: "🪙", HasFrame: true, RewardType: "immortal_stones", RewardVal: 1000, RewardLabel: "1.000 Tiên Nguyên Thạch"},
 
@@ -247,11 +247,11 @@ func checkAchievementCondition(ach *AchievementDef, player *models.Player) bool 
 	case "gu_50":
 		return countDistinctGu(player) >= 50
 	case "explorer_100":
-		return len(player.ExploredCells) >= 100
+		return len(player.VisitedSubZones) >= 100
 	case "explorer_500":
-		return len(player.ExploredCells) >= 500
+		return len(player.VisitedSubZones) >= 500
 	case "explorer_1000":
-		return len(player.ExploredCells) >= 1000
+		return len(player.VisitedSubZones) >= 600
 	case "millionaire":
 		return player.PrimevalStones >= 1000000
 	case "human_qi_1000":

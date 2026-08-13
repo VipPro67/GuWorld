@@ -1137,6 +1137,7 @@ func CombatAttack(c *gin.Context) {
 						lootLogs := ApplyLoot(tx, &player, loot)
 						ctx.Logs = append(ctx.Logs, lootLogs...)
 					}
+					markBossCleared(tx, &player)
 		} else {
 				logger.S.Errorf("Failed to load loot table %s: %v", player.ActiveCombat.LootTableID, err)
 			}
@@ -1260,10 +1261,8 @@ func CombatAttack(c *gin.Context) {
 			PrimevalStones:     0,
 		}
 
-		player.CurrentRegion = "Southern_Border"
-		player.X = 50
-		player.Y = 50
-		player.ExploredCells = models.ExploredCellsList{"50,50"}
+		player.CurrentRegion = HubRegionID
+		player.X, player.Y = hubEntryPoint()
 
 		if player.ActiveCombat != nil && player.ActiveCombat.EnemyTemplateID == "monster_heavenly_tribulation" {
 			player.ImmortalStones = player.ImmortalStones * 0.5
@@ -1308,11 +1307,11 @@ func CombatAttack(c *gin.Context) {
 	updateQuery := `
 		UPDATE players
 		SET hp = $1, current_mana = $2, primeval_stones = $3, cleared_cells = $4, active_combat = $5,
-		    temp_loot = $6, current_region = $7, x = $8, y = $9, explored_cells = $10, human_qi = $11
-		WHERE id = $12
+		    temp_loot = $6, current_region = $7, x = $8, y = $9, human_qi = $10
+		WHERE id = $11
 	`
 	_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.PrimevalStones, player.ClearedCells, player.ActiveCombat,
-		player.TempLoot, player.CurrentRegion, player.X, player.Y, player.ExploredCells, player.HumanQi, player.ID)
+		player.TempLoot, player.CurrentRegion, player.X, player.Y, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update combat results"})
 		return

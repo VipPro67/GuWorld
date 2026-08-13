@@ -82,13 +82,8 @@ func ExploreNode(c *gin.Context) {
 	player.CurrentMana -= exploreEnergyCost
 
 	nodeName := "Khu Vực Bí Ẩn"
-	switch req.NodeID {
-	case "qing_mao_mountain":
-		nodeName = "Thanh Mao Sơn (Southern Border)"
-	case "gu_luan_slope":
-		nodeName = "Cổ Loạn Sườn (Southern Border)"
-	case "three_kings_inheritance":
-		nodeName = "Tam Vương Truyền Thừa (Southern Border)"
+	if zone := ZoneByID(req.NodeID); zone != nil {
+		nodeName = zone.Name
 	}
 
 	roll := rand.Intn(100)
@@ -172,32 +167,26 @@ func ExploreNode(c *gin.Context) {
 		logMsg = fmt.Sprintf("Đạo hữu cẩn thận thăm dò địa khu %s nhưng cảnh vật hoang tàn, không tìm thấy thứ gì có giá trị.", nodeName)
 	}
 
-	if player.CurrentRegion != req.NodeID {
-		player.ExploredCells = models.ExploredCellsList{"50,50"}
+	zone := ZoneByID(req.NodeID)
+	if zone == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Khu vực du ngoạn không tồn tại."})
+		return
 	}
-	player.CurrentRegion = req.NodeID
-	player.X = 50
-	player.Y = 50
-
-	exploreRadius := 1
-	for _, gu := range player.GuInventory {
-		if gu.GuID == "GU_HEAVEN_SECRET" && gu.Equipped && gu.Status == "ACTIVE" {
-			exploreRadius = 2
-			break
-		}
-	}
-	addExploredCells(&player, exploreRadius)
+	player.CurrentRegion = zone.ID
+	player.X = zone.EntryX
+	player.Y = zone.EntryY
+	recordVisitedSubZone(&player, SubZoneKey(player.X, player.Y))
 
 	qiGained := AddHumanQi(&player, 3.0)
 
 	updateQuery := `
 		UPDATE players
-		SET current_mana = $1, primeval_stones = $2, active_combat = $3, current_region = $4, x = $5, y = $6, explored_cells = $7,
-		    temp_loot = $8, explore_count = $9, last_explore_reset = $10, human_qi = $11
+		SET current_mana = $1, primeval_stones = $2, active_combat = $3, current_region = $4, x = $5, y = $6,
+		    temp_loot = $7, explore_count = $8, last_explore_reset = $9, human_qi = $10, visited_subzones = $11
 		WHERE id = $12
 	`
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.ActiveCombat, player.CurrentRegion, player.X, player.Y, player.ExploredCells,
-		player.TempLoot, player.ExploreCount, player.LastExploreReset, player.HumanQi, player.ID)
+	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.ActiveCombat, player.CurrentRegion, player.X, player.Y,
+		player.TempLoot, player.ExploreCount, player.LastExploreReset, player.HumanQi, player.VisitedSubZones, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save exploration progress"})
 		return
