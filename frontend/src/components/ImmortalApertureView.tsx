@@ -1258,11 +1258,11 @@ export const ImmortalApertureView: React.FC = () => {
 
                     <button
                       onClick={handleAttack}
-                      disabled={actionLoading || !selectedEnemy || selectedGus.length === 0}
+                      disabled={actionLoading || !selectedEnemy}
                       className="w-full py-3 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 disabled:from-slate-850 disabled:to-slate-900 disabled:text-slate-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg"
                     >
                       <Sword className="w-4 h-4" />
-                      {actionLoading ? "Đang tiến hành công kích..." : `Phát Động Công Kích (${selectedGus.length} Cổ)`}
+                      {actionLoading ? "Đang tiến hành công kích..." : (selectedGus.length > 0 ? `Phát Động Công Kích (${selectedGus.length} Cổ)` : "Phát Động Đánh Thường (Lực Đạo)")}
                     </button>
                   </div>
 

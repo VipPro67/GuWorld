@@ -698,11 +698,28 @@ func CombatAttack(c *gin.Context) {
 								netDmg = 1.0
 							}
 							dmgLog := applyDamageWithLogs(refCaster.Name, targetEnemy.Name, targetEnemy, netDmg)
+							
+							if player.PathMasteries == nil {
+								player.PathMasteries = make(models.PathMasteriesMap)
+							}
+							player.PathMasteries["strength"] += 1
+							pts := player.PathMasteries["strength"]
+							lvlName := "Sơ Học"
+							if pts >= 10000 {
+								lvlName = "Vô Thượng Tông Sư"
+							} else if pts >= 2500 {
+								lvlName = "Đại Tông Sư"
+							} else if pts >= 500 {
+								lvlName = "Tông Sư"
+							} else if pts >= 100 {
+								lvlName = "Đại Sư"
+							}
+
 							if daoMult > 1.0 {
 								dmgDao := fullDmg - dmgVal
-								logs = append(logs, fmt.Sprintf("-> %s đánh thường (Basic Attack) [Gốc: %.1f, Đạo Ngân: +%.1f]!", refCaster.Name, dmgVal, dmgDao), dmgLog)
+								logs = append(logs, fmt.Sprintf("-> %s đánh thường (Basic Attack) [Gốc: %.1f, Đạo Ngân: +%.1f]! Ngộ Đạo: +1 Chân Ý Lực (%s)", refCaster.Name, dmgVal, dmgDao, lvlName), dmgLog)
 							} else {
-								logs = append(logs, fmt.Sprintf("-> %s đánh thường (Basic Attack)!", refCaster.Name), dmgLog)
+								logs = append(logs, fmt.Sprintf("-> %s đánh thường (Basic Attack)! Ngộ Đạo: +1 Chân Ý Lực (%s)", refCaster.Name, lvlName), dmgLog)
 							}
 						}
 					}

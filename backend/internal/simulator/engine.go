@@ -586,12 +586,17 @@ func Simulate(state *CombatState) []CombatLog {
 					})
 				}
 
-				if a.ActionType == "GU_SKILL" && actor.Kind == "Player" && len(a.Path) > 0 && !state.VirtualMode {
-					cleanPath := strings.TrimSuffix(strings.ToLower(a.Path[0]), " path")
+				if (a.ActionType == "GU_SKILL" || a.ActionType == "BASIC_ATTACK") && actor.Kind == "Player" && !state.VirtualMode {
+					cleanPath := "strength"
 					pathGain := 1
-					if a.Rank >= 6 {
-						pathGain = 10
+					
+					if a.ActionType == "GU_SKILL" && len(a.Path) > 0 {
+						cleanPath = strings.TrimSuffix(strings.ToLower(a.Path[0]), " path")
+						if a.Rank >= 6 {
+							pathGain = 10
+						}
 					}
+					
 					if actor.PathMasteries == nil {
 						actor.PathMasteries = make(map[string]int)
 					}

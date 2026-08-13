@@ -131,10 +131,7 @@ func AttackTribulationEnemy(c *gin.Context) {
 		guIDs = []string{req.GuID}
 	}
 
-	if len(guIDs) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu cần chọn ít nhất một Cổ trùng để công kích"})
-		return
-	}
+	// It is now allowed to attack with 0 Gu (Basic Attack only)
 
 	tx, err := db.DB.Begin()
 	if err != nil {
@@ -271,6 +268,14 @@ func AttackTribulationEnemy(c *gin.Context) {
 		guNames = append(guNames, fmt.Sprintf("Đánh thường (gây %.0f sát thương)", dmgVal))
 	}
 
+	if player.PathMasteries == nil {
+		player.PathMasteries = make(models.PathMasteriesMap)
+	}
+	// Basic Attack gives Strength Path Mastery
+	player.PathMasteries["strength"] += 1
+	var pathGainLogs []string
+	pathGainLogs = append(pathGainLogs, "+1 Lực")
+
 	// Apply selected active Gu effects
 	for _, spec := range guSpecs {
 		dmgBase, defBase, _, errGuBase := CalculateGuEffectForCombatant(&actor, &spec, false, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)
@@ -293,6 +298,16 @@ func AttackTribulationEnemy(c *gin.Context) {
 				def = shieldVal
 				defBase = shieldVal
 			}
+		}
+
+		if len(spec.Path) > 0 {
+			cleanPath := strings.TrimSuffix(strings.ToLower(spec.Path[0]), " path")
+			gain := 1
+			if spec.Rank >= 6 {
+				gain = 10
+			}
+			player.PathMasteries[cleanPath] += gain
+			pathGainLogs = append(pathGainLogs, fmt.Sprintf("+%d %s", gain, strings.Title(cleanPath)))
 		}
 
 		activeEffects := models.GetFlatGuEffects(spec)
@@ -403,9 +418,9 @@ func AttackTribulationEnemy(c *gin.Context) {
 	player.CurrentMana -= totalManaCost
 	_, err = tx.Exec(`
 		UPDATE players
-		SET current_mana = $1, hp = $2
-		WHERE id = $3
-	`, player.CurrentMana, player.HP, playerID)
+		SET current_mana = $1, hp = $2, path_masteries = $3
+		WHERE id = $4
+	`, player.CurrentMana, player.HP, player.PathMasteries, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu trạng thái Cổ sư"})
 		return
@@ -443,6 +458,9 @@ func AttackTribulationEnemy(c *gin.Context) {
 	}
 	if len(extras) > 0 {
 		playerActionMsg += ", " + strings.Join(extras, " và ")
+	}
+	if len(pathGainLogs) > 0 {
+		playerActionMsg += fmt.Sprintf(". Ngộ Đạo: %s", strings.Join(pathGainLogs, ", "))
 	}
 	playerActionMsg += "."
 
