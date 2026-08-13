@@ -465,6 +465,7 @@ func BuyPremiumPackage(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khóa người chơi"})
 		return
 	}
+	before := append(models.GuInventory(nil), player.GuInventory...)
 	if pkg.Requirements != nil {
 		if player.Rank < pkg.Requirements.MinRank || (player.Rank == pkg.Requirements.MinRank && pkg.Requirements.MinSubRank > 0 && player.SubRank < pkg.Requirements.MinSubRank) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Chưa đạt yêu cầu tu vi để mua gói"})
@@ -535,7 +536,7 @@ func BuyPremiumPackage(c *gin.Context) {
 		}
 	}
 
-	if err := db.SavePlayerGus(tx, playerID.String(), player.GuInventory); err != nil {
+	if err := db.SyncPlayerGus(tx, playerID.String(), before, player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật phần thưởng"})
 		return
 	}

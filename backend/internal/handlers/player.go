@@ -663,7 +663,7 @@ func RegisterPlayer(c *gin.Context) {
 	}
 
 	// Persist starter Gus in the player_gu table (the players.gu_inventory column is gone).
-	if err := db.SavePlayerGus(tx, player.ID.String(), starterGu); err != nil {
+	if err := db.AddPlayerGusBulk(tx, player.ID.String(), starterGu); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to seed starter Gus: " + err.Error()})
 		return
 	}
@@ -849,7 +849,7 @@ func CompleteOnboarding(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save onboarding: " + err.Error()})
 		return
 	}
-	if err := db.SavePlayerGus(tx, playerID.String(), newGu); err != nil {
+	if err := db.AddPlayerGusBulk(tx, playerID.String(), newGu); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save starter Gus: " + err.Error()})
 		return
 	}
@@ -1270,6 +1270,7 @@ func Explore(c *gin.Context) {
 		}
 		return
 	}
+	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	// 2. Check energy cost. Mortals spend Chân Nguyên; Immortals spend a smaller Tiên Nguyên travel upkeep.
 	energyCost := 10.0
@@ -1435,7 +1436,7 @@ func Explore(c *gin.Context) {
 		SET current_mana = $1, primeval_stones = $2, last_mana_update = $3, human_qi = $4
 		WHERE id = $5
 	`
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update explore progress: " + err.Error()})
 		return
 	}
@@ -1779,6 +1780,7 @@ func FeedGroup(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
 		return
 	}
+	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	// 2. Find static specs in Dictionary (match both ID and rank when rank provided)
 	specs, found := models.GetGuAny(req.GuID)
@@ -1901,7 +1903,7 @@ func FeedGroup(c *gin.Context) {
 	}
 
 	// 4. Update database
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
 		return
 	}
@@ -3433,6 +3435,17 @@ func SetVitalGu(c *gin.Context) {
 		}
 	}
 
+	// Persist with two targeted statements: clear the old vital flag on every
+	// other Gu, then mark the target, instead of rewriting the whole inventory.
+	if _, err := tx.Exec(`UPDATE player_gu SET is_vital = false, updated_at = NOW() WHERE player_id = $1 AND id <> $2`, player.ID, player.GuInventory[targetIndex].InstanceID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player vital Gu status"})
+		return
+	}
+	if _, err := tx.Exec(`UPDATE player_gu SET is_vital = true, status = 'ACTIVE', equipped = true, updated_at = NOW() WHERE id = $1`, player.GuInventory[targetIndex].InstanceID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player vital Gu status"})
+		return
+	}
+
 	// Recalculate equipped_gus
 	player.EquippedGus = []string{}
 	for _, gu := range player.GuInventory {
@@ -3441,10 +3454,6 @@ func SetVitalGu(c *gin.Context) {
 		}
 	}
 
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player vital Gu status"})
-		return
-	}
 	_, err = tx.Exec(`
 		UPDATE players 
 		SET hp = $1, equipped_gus = $2, active_combat = $3
@@ -3516,6 +3525,7 @@ func DropGu(c *gin.Context) {
 		return
 	}
 
+	droppedInstanceID := player.GuInventory[idx].InstanceID
 	newInv := models.GuInventory{}
 	for i, gu := range player.GuInventory {
 		if i != idx {
@@ -3529,7 +3539,7 @@ func DropGu(c *gin.Context) {
 			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 		}
 	}
-	if err := db.RemovePlayerGu(tx, player.GuInventory[idx].InstanceID); err != nil {
+	if err := db.RemovePlayerGu(tx, droppedInstanceID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gu"})
 		return
 	}
@@ -3617,7 +3627,7 @@ func DropGus(c *gin.Context) {
 			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 		}
 	}
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	if err := db.RemovePlayerGus(tx, req.GuInstanceIDs); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gus"})
 		return
 	}
@@ -4470,7 +4480,7 @@ func GoogleCallback(c *gin.Context) {
 		}
 
 		// Persist starter Gus in the player_gu table (the gu_inventory column is gone).
-		if err := db.SavePlayerGus(tx, player.ID.String(), starterGu); err != nil {
+		if err := db.AddPlayerGusBulk(tx, player.ID.String(), starterGu); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to seed starter Gus: " + err.Error()})
 			return
 		}

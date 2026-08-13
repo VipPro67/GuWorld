@@ -223,6 +223,7 @@ func RefineGu(c *gin.Context) {
 		}
 		return
 	}
+	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	// 2b. Verify player has unlocked the recipe
 	var unlockedRate float64 = 0.0
@@ -555,8 +556,8 @@ func RefineGu(c *gin.Context) {
 	qiGained := AddHumanQi(&player, 10.0)
 
 	// 9. Update player status in database
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
-		logger.S.Error("DEBUG SavePlayerGus failed:", err)
+	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
+		logger.S.Error("DEBUG SyncPlayerGus failed:", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu túi đồ: " + err.Error()})
 		return
 	}

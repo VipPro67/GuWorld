@@ -75,6 +75,7 @@ func AutoCombatStart(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
 		return
 	}
+	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": errLeader.Error()})
@@ -585,7 +586,7 @@ func AutoCombatStart(c *gin.Context) {
 										targetGuInv = models.GuInventory{}
 									}
 									targetGuInv = append(targetGuInv, newGu)
-									_ = db.SavePlayerGus(tx, winnerID.String(), targetGuInv)
+									_ = db.AddPlayerGu(tx, winnerID.String(), newGu)
 								}
 								lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, gID))
 							}
@@ -863,7 +864,7 @@ func AutoCombatStart(c *gin.Context) {
 	}
 
 	if alliesAlive && !isVirtual {
-		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat outcome"})
 			return
 		}

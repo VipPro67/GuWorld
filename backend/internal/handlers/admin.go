@@ -449,6 +449,7 @@ func AdminAddPlayerGus(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
 		return
 	}
+	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	for i := 0; i < req.Quantity; i++ {
 		player.GuInventory = append(player.GuInventory, models.GuInstance{
@@ -461,7 +462,7 @@ func AdminAddPlayerGus(c *gin.Context) {
 		})
 	}
 
-	if err := db.SavePlayerGus(tx, playerID.String(), player.GuInventory); err != nil {
+	if err := db.SyncPlayerGus(tx, playerID.String(), before, player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật cổ trùng"})
 		return
 	}
@@ -522,21 +523,19 @@ func AdminRemovePlayerGu(c *gin.Context) {
 
 	found := false
 	var removedGuID string
-	newInv := models.GuInventory{}
 	for _, gu := range player.GuInventory {
 		if gu.InstanceID == instanceID {
 			found = true
 			removedGuID = gu.GuID
-			continue
+			break
 		}
-		newInv = append(newInv, gu)
 	}
 	if !found {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy cổ trùng này"})
 		return
 	}
 
-	if err := db.SavePlayerGus(tx, playerID.String(), newInv); err != nil {
+	if err := db.RemovePlayerGu(tx, instanceID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật cổ trùng"})
 		return
 	}

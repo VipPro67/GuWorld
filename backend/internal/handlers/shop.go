@@ -182,6 +182,7 @@ func BuyShopItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock player Aperture"})
 		return
 	}
+	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	// 4. Validate Funds
 	totalCost := float64(selectedItem.Price * req.Quantity)
@@ -255,7 +256,7 @@ func BuyShopItem(c *gin.Context) {
 	// 6. Save player state
 	qiGained := AddHumanQi(&player, 5.0)
 	if selectedItem.Type == "Gu" {
-		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu Cổ trùng mới vào CSDL"})
 			return
 		}
@@ -324,6 +325,7 @@ func SellShopItem(c *gin.Context) {
 	}
 
 	totalGain := 0.0
+	var removedIDs []string
 	if req.ItemType == "Material" || req.ItemType == "Consumable" {
 		cat := "materials"
 		if req.ItemType == "Consumable" {
@@ -351,6 +353,7 @@ func SellShopItem(c *gin.Context) {
 		for _, gu := range player.GuInventory {
 			if gu.GuID == req.ItemID && !gu.IsVital && removed < req.Quantity {
 				removed++
+				removedIDs = append(removedIDs, gu.InstanceID)
 				continue
 			}
 			newInv = append(newInv, gu)
@@ -384,7 +387,7 @@ func SellShopItem(c *gin.Context) {
 	}
 	qiGained := AddHumanQi(&player, 5.0)
 	if req.ItemType == "Gu" {
-		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		if err := db.RemovePlayerGus(tx, removedIDs); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Gu inventory changes"})
 			return
 		}
@@ -473,6 +476,7 @@ func SellShopItemsBulk(c *gin.Context) {
 
 	totalGain := 0.0
 	guSold := false
+	var removedIDs []string
 	var auditSummaries []string
 
 	for _, item := range req.Items {
@@ -512,6 +516,7 @@ func SellShopItemsBulk(c *gin.Context) {
 			for _, gu := range player.GuInventory {
 				if gu.GuID == item.ItemID && !gu.IsVital && !gu.Equipped && gu.Status != "DEAD" && removed < item.Quantity {
 					removed++
+					removedIDs = append(removedIDs, gu.InstanceID)
 					continue
 				}
 				newInv = append(newInv, gu)
@@ -582,7 +587,7 @@ func SellShopItemsBulk(c *gin.Context) {
 	qiGained := AddHumanQi(&player, float64(len(req.Items))*5.0)
 
 	if guSold {
-		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		if err := db.RemovePlayerGus(tx, removedIDs); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Gu inventory changes"})
 			return
 		}

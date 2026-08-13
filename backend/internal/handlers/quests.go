@@ -274,6 +274,7 @@ func buildRewardLabel(rewards []QuestReward) string {
 }
 
 func applyQuestRewardsTx(tx *sql.Tx, player *models.Player, rewards []QuestReward) error {
+	itemRewards := make(map[string]int)
 	for _, r := range rewards {
 		switch r.Type {
 		case "human_qi":
@@ -291,7 +292,7 @@ func applyQuestRewardsTx(tx *sql.Tx, player *models.Player, rewards []QuestRewar
 			}
 			player.DaoMarks[r.ID] += int(r.Amount)
 		case "item":
-			InventorySvc.AddItem(tx, player.ID.String(), r.ID, "materials", int(r.Amount))
+			itemRewards[r.ID] += int(r.Amount)
 		case "gu":
 			guSpec, _ := models.GetGuAny(r.ID)
 			newGu := models.GuInstance{
@@ -303,6 +304,11 @@ func applyQuestRewardsTx(tx *sql.Tx, player *models.Player, rewards []QuestRewar
 				Equipped:   false,
 			}
 			player.GuInventory = append(player.GuInventory, newGu)
+		}
+	}
+	if len(itemRewards) > 0 {
+		if err := InventorySvc.BulkAddItems(tx, player.ID.String(), "materials", itemRewards); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -401,6 +407,7 @@ func CompleteQuest(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
 		return
 	}
+	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	if !quest.Check(&player) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Chưa đạt yêu cầu: " + quest.ReqDesc})
@@ -443,7 +450,7 @@ func CompleteQuest(c *gin.Context) {
 			return
 		}
 	}
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player Gus"})
 		return
 	}

@@ -946,7 +946,7 @@ func DonateGu(c *gin.Context) {
 		return
 	}
 
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	if err := db.RemovePlayerGu(tx, guInstance.InstanceID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update gu inventory"})
 		return
 	}
@@ -1160,7 +1160,7 @@ func DonateBulk(c *gin.Context) {
 
 	player, err := evaluateManaTx(tx, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
 		return
 	}
 
@@ -1249,8 +1249,10 @@ func DonateBulk(c *gin.Context) {
 
 		// Keep track of instance IDs we want to remove
 		gusToRemove := make(map[string]bool)
+		removedIDs := make([]string, 0, len(req.Gus))
 		for _, guReq := range req.Gus {
 			gusToRemove[guReq.GuInstanceID] = true
+			removedIDs = append(removedIDs, guReq.GuInstanceID)
 		}
 
 		// Process each target Gu instance
@@ -1316,7 +1318,7 @@ func DonateBulk(c *gin.Context) {
 		player.GuInventory = newGuInventory
 
 		// Save player Gu inventory
-		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		if err := db.RemovePlayerGus(tx, removedIDs); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update gu inventory"})
 			return
 		}
@@ -1501,6 +1503,7 @@ func BuyFromSectVault(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
 		return
 	}
+	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	var m SectMember
 	err = tx.QueryRow(`
@@ -1580,7 +1583,7 @@ func BuyFromSectVault(c *gin.Context) {
 			player.GuInventory = append(player.GuInventory, newGu)
 		}
 
-		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Gu inventory"})
 			return
 		}
@@ -1977,8 +1980,9 @@ func CompleteSectMission(c *gin.Context) {
 
 		// Remove Gu from player
 		donatedGuID := player.GuInventory[targetIdx].GuID
+		donatedInstanceID := player.GuInventory[targetIdx].InstanceID
 		player.GuInventory = append(player.GuInventory[:targetIdx], player.GuInventory[targetIdx+1:]...)
-		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		if err := db.RemovePlayerGu(tx, donatedInstanceID); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update gu inventory"})
 			return
 		}

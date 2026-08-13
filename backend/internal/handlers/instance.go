@@ -324,6 +324,7 @@ func ActionInstance(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player status: " + err.Error()})
 		return
 	}
+	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	// 4. Parse map data stages
 	var stages []InstanceStage
@@ -459,7 +460,7 @@ func ActionInstance(c *gin.Context) {
 			return
 		}
 
-		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player: " + err.Error()})
 			return
 		}
@@ -499,7 +500,7 @@ func ActionInstance(c *gin.Context) {
 			return
 		}
 
-		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player: " + err.Error()})
 			return
 		}
@@ -535,9 +536,7 @@ func ActionInstance(c *gin.Context) {
 		if err := json.Unmarshal(template.Rewards, &rewards); err == nil {
 			// Add materials
 			if rewards.Materials != nil {
-				for k, v := range rewards.Materials {
-					InventorySvc.AddItem(tx, player.ID.String(), k, "materials", v)
-				}
+				InventorySvc.BulkAddItems(tx, player.ID.String(), "materials", rewards.Materials)
 			}
 
 			// Add stones
@@ -569,7 +568,7 @@ func ActionInstance(c *gin.Context) {
 			return
 		}
 
-		if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player rewards: " + err.Error()})
 			return
 		}
@@ -607,7 +606,7 @@ func ActionInstance(c *gin.Context) {
 		return
 	}
 
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player: " + err.Error()})
 		return
 	}

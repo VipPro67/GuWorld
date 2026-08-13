@@ -40,6 +40,7 @@ func Retreat(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock player Aperture"})
 		return
 	}
+	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	logMsg := "Đạo hữu trở về an toàn từ hành trình."
 
@@ -119,9 +120,7 @@ func Retreat(c *gin.Context) {
 			}
 
 			player.PrimevalStones += shares[player.ID].PrimevalStones
-			for itemID, qty := range shares[player.ID].MaterialsInventory {
-				InventorySvc.AddItem(tx, player.ID.String(), itemID, "materials", qty)
-			}
+			InventorySvc.BulkAddItems(tx, player.ID.String(), "materials", shares[player.ID].MaterialsInventory)
 			player.GuInventory = append(player.GuInventory, shares[player.ID].GuInventory...)
 
 			for mID, share := range shares {
@@ -134,22 +133,14 @@ func Retreat(c *gin.Context) {
 					FROM players WHERE id = $1 FOR UPDATE`, mID,
 				).Scan(&targetStones)
 				if errLoad == nil {
-					targetGu, errLoadGu := db.LoadPlayerGus(tx, mID.String(), false)
-					if errLoadGu != nil {
-						continue
-					}
-
 					targetStones += share.PrimevalStones
-					for itemID, qty := range share.MaterialsInventory {
-						InventorySvc.AddItem(tx, mID.String(), itemID, "materials", qty)
-					}
-					targetGu = append(targetGu, share.GuInventory...)
+					InventorySvc.BulkAddItems(tx, mID.String(), "materials", share.MaterialsInventory)
 
 					_, _ = tx.Exec(`
 						UPDATE players 
 						SET primeval_stones = $1
 						WHERE id = $2`, targetStones, mID)
-					_ = db.SavePlayerGus(tx, mID.String(), targetGu)
+					_ = db.AddPlayerGusBulk(tx, mID.String(), share.GuInventory)
 				}
 			}
 
@@ -240,7 +231,7 @@ func Retreat(c *gin.Context) {
 		return
 	}
 
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player Gus after retreat"})
 		return
 	}

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 // InventoryItem represents a single item entry in a player's inventory.
@@ -204,5 +206,45 @@ func (s *InventoryService) BulkAddItems(tx *sql.Tx, playerID, category string, i
 	} else {
 		_, err = s.db.Exec(query, valueArgs...)
 	}
+	return err
+}
+
+// BulkRemoveItems decrements multiple items in a single query using unnest.
+// items maps itemID → total quantity to remove. Rows that would drop to zero
+// are deleted. It requires tx to guarantee the read-modify-write is atomic.
+func (s *InventoryService) BulkRemoveItems(tx *sql.Tx, playerID, category string, items map[string]int) error {
+	if len(items) == 0 {
+		return nil
+	}
+
+	ids := make([]string, 0, len(items))
+	qtys := make([]int, 0, len(items))
+	for id, qty := range items {
+		if qty <= 0 {
+			continue
+		}
+		ids = append(ids, id)
+		qtys = append(qtys, qty)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	// Decrement each row; rows with quantity <= 0 afterwards are deleted.
+	_, err := tx.Exec(`
+		WITH dec AS (
+			UPDATE player_inventory_items AS p
+			SET quantity = p.quantity - u.qty,
+			    updated_at = NOW()
+			FROM (
+				SELECT unnest($1::text[]) AS item_id, unnest($2::int[]) AS qty
+			) AS u(item_id, qty)
+			WHERE p.player_id = $3 AND p.item_id = u.item_id AND p.category = $4
+			RETURNING p.item_id
+		)
+		DELETE FROM player_inventory_items AS p
+		USING dec
+		WHERE p.player_id = $3 AND p.item_id = dec.item_id AND p.category = $4 AND p.quantity <= 0
+	`, pq.Array(ids), pq.Array(qtys), playerID, category)
 	return err
 }

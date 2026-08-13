@@ -670,9 +670,15 @@ func ConfirmTrade(c *gin.Context) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bên gửi thiếu vật phẩm: %s", matID)})
 				return
 			}
-			InventorySvc.RemoveItem(tx, sender.ID.String(), matID, "materials", qty)
-			// Add to receiver
-			InventorySvc.AddItem(tx, receiver.ID.String(), matID, "materials", qty)
+		}
+		if err := InventorySvc.BulkRemoveItems(tx, sender.ID.String(), "materials", senderOffer.Materials); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể trừ vật phẩm của người gửi"})
+			return
+		}
+		// Add to receiver
+		if err := InventorySvc.BulkAddItems(tx, receiver.ID.String(), "materials", senderOffer.Materials); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thêm vật phẩm cho người nhận"})
+			return
 		}
 
 		// Deduct sender recipes
@@ -725,9 +731,15 @@ func ConfirmTrade(c *gin.Context) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bên nhận thiếu vật phẩm: %s", matID)})
 				return
 			}
-			InventorySvc.RemoveItem(tx, receiver.ID.String(), matID, "materials", qty)
-			// Add to sender
-			InventorySvc.AddItem(tx, sender.ID.String(), matID, "materials", qty)
+		}
+		if err := InventorySvc.BulkRemoveItems(tx, receiver.ID.String(), "materials", receiverOffer.Materials); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể trừ vật phẩm của người nhận"})
+			return
+		}
+		// Add to sender
+		if err := InventorySvc.BulkAddItems(tx, sender.ID.String(), "materials", receiverOffer.Materials); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thêm vật phẩm cho người gửi"})
+			return
 		}
 
 		// Deduct receiver recipes
@@ -747,18 +759,28 @@ func ConfirmTrade(c *gin.Context) {
 		AddHumanQi(&sender, 10.0)
 		AddHumanQi(&receiver, 10.0)
 
-		// Delete player_gu records for both players first to prevent unique constraint conflicts during swap
-		if _, err := tx.Exec(`DELETE FROM player_gu WHERE player_id = $1 OR player_id = $2`, sender.ID, receiver.ID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể dọn dẹp Cổ trùng cũ để giao dịch"})
-			return
+		// Move the offered Gu instances to their new owners. Offered Gus can never
+		// be equipped or vital (validated above), so ownership is the only change;
+		// this avoids rewriting both players' entire Gu inventories.
+		for _, instID := range senderOffer.Gus {
+			if _, err := tx.Exec(`UPDATE player_gu SET player_id = $1, updated_at = NOW() WHERE id = $2`, receiver.ID, instID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển Cổ trùng trong giao dịch"})
+				return
+			}
+		}
+		for _, instID := range receiverOffer.Gus {
+			if _, err := tx.Exec(`UPDATE player_gu SET player_id = $1, updated_at = NOW() WHERE id = $2`, sender.ID, instID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển Cổ trùng trong giao dịch"})
+				return
+			}
 		}
 
-		// Update both players in database
-		if err := updatePlayerInventory(tx, sender); err != nil {
+		// Update both players' balances in the database
+		if _, err := tx.Exec(`UPDATE players SET equipped_gus=$1, primeval_stones=$2, immortal_stones=$3, human_qi=$4 WHERE id=$5`, sender.EquippedGus, sender.PrimevalStones, sender.ImmortalStones, sender.HumanQi, sender.ID); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ người gửi"})
 			return
 		}
-		if err := updatePlayerInventory(tx, receiver); err != nil {
+		if _, err := tx.Exec(`UPDATE players SET equipped_gus=$1, primeval_stones=$2, immortal_stones=$3, human_qi=$4 WHERE id=$5`, receiver.EquippedGus, receiver.PrimevalStones, receiver.ImmortalStones, receiver.HumanQi, receiver.ID); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ người nhận"})
 			return
 		}

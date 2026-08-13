@@ -242,6 +242,7 @@ func runGachaOpen(c *gin.Context, forced int) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
 		return
 	}
+	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	// 10% discount when opening 10 or more times in one go
 	totalCost := pool.CostAmount * float64(quantity)
@@ -300,7 +301,7 @@ func runGachaOpen(c *gin.Context, forced int) {
 		fmt.Println("Error updating player:", err)
 		return
 	}
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật cổ trùng"})
 		fmt.Println("Error saving player Gu inventory:", err)
 		return

@@ -82,6 +82,7 @@ func CombatAttack(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
 		return
 	}
+	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": errLeader.Error()})
@@ -1161,7 +1162,7 @@ func CombatAttack(c *gin.Context) {
 										targetGuInv = models.GuInventory{}
 									}
 									targetGuInv = append(targetGuInv, newGu)
-									_ = db.SavePlayerGus(tx, winnerID.String(), targetGuInv)
+									_ = db.AddPlayerGu(tx, winnerID.String(), newGu)
 								}
 								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, gID))
 							}
@@ -1333,7 +1334,7 @@ func CombatAttack(c *gin.Context) {
 		}
 	}
 
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update combat results"})
 		return
 	}

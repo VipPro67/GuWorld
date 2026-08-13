@@ -701,6 +701,7 @@ func MovePlayer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
 		return
 	}
+	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": errLeader.Error()})
@@ -758,7 +759,7 @@ func MovePlayer(c *gin.Context) {
 		SET current_mana = $1, x = $2, y = $3, current_region = $4, cleared_cells = $5, active_combat = $6, temp_loot = $7, last_mana_update = $8, primeval_stones = $9, hp = $10, max_mana = $11, human_qi = $12, visited_subzones = $13
 		WHERE id = $14
 	`
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return
 	}
@@ -860,6 +861,7 @@ func MovePlayerPath(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
 		return
 	}
+	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": errLeader.Error()})
@@ -917,7 +919,7 @@ func MovePlayerPath(c *gin.Context) {
 
 	qiGained := AddHumanQi(&player, 1.0)
 
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return
 	}

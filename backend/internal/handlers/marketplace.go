@@ -200,6 +200,7 @@ func CreateListing(c *gin.Context) {
 	player.PrimevalStones -= upfrontFee
 
 	var itemDataJSON []byte
+	var guIDsToSell []string
 	if req.ItemType == "Recipe" {
 		recipeToSell, err := RecipeSvc.Get(tx, player.ID.String(), req.ItemID)
 		if err != nil {
@@ -217,7 +218,6 @@ func CreateListing(c *gin.Context) {
 			return
 		}
 	} else if req.ItemType == "Gu" {
-		var guIDsToSell []string
 		if len(req.GuInstanceIDs) > 0 {
 			guIDsToSell = req.GuInstanceIDs
 		} else if req.GuInstanceID != "" {
@@ -269,6 +269,12 @@ func CreateListing(c *gin.Context) {
 		}
 
 		player.GuInventory = newInventory
+		player.EquippedGus = []string{}
+		for _, gu := range player.GuInventory {
+			if gu.Equipped && gu.Status == "ACTIVE" {
+				player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
+			}
+		}
 		req.Quantity = len(guIDsToSell)
 
 		itemDataJSON, err = json.Marshal(gusToSell)
@@ -314,9 +320,11 @@ func CreateListing(c *gin.Context) {
 		return
 	}
 	AddHumanQi(&player, 5.0)
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ"})
-		return
+	if req.ItemType == "Gu" {
+		if err := db.RemovePlayerGus(tx, guIDsToSell); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ"})
+			return
+		}
 	}
 	_, err = tx.Exec(`UPDATE players SET equipped_gus=$1, primeval_stones=$2, human_qi=$3 WHERE id=$4`, player.EquippedGus, player.PrimevalStones, player.HumanQi, player.ID)
 	if err != nil {
@@ -585,6 +593,7 @@ func BuyListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load buyer details"})
 		return
 	}
+	buyerBefore := append(models.GuInventory(nil), buyer.GuInventory...)
 
 	var sellerID uuid.UUID
 	var itemType, currency, status, listingType string
@@ -662,6 +671,7 @@ func BuyListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load seller details"})
 		return
 	}
+	sellerBefore := append(models.GuInventory(nil), seller.GuInventory...)
 
 	if listingType == "TRADE" {
 		sellerConnectingHeaven := false
@@ -717,13 +727,13 @@ func BuyListing(c *gin.Context) {
 	AddHumanQi(&buyer, 5.0)
 	AddHumanQi(&seller, 5.0)
 
-	if err := updatePlayerInventory(tx, buyer); err != nil {
+	if err := updatePlayerInventory(tx, buyer, buyerBefore); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật kho đồ người mua"})
 		fmt.Println("Error updating buyer inventory:", err)
 		return
 	}
 
-	if err := updatePlayerInventory(tx, seller); err != nil {
+	if err := updatePlayerInventory(tx, seller, sellerBefore); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật tài sản người bán"})
 		return
 	}
@@ -826,6 +836,7 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 	if err != nil {
 		return err
 	}
+	sellerBefore := append(models.GuInventory(nil), seller.GuInventory...)
 
 	if highestBidderID.Valid {
 		buyerID, err := uuid.Parse(highestBidderID.String)
@@ -837,6 +848,7 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 		if err != nil {
 			return err
 		}
+		buyerBefore := append(models.GuInventory(nil), buyer.GuInventory...)
 
 		// Time-based commission fee
 		commission := currentPrice * getCommissionPct(listingType, durationHours)
@@ -852,10 +864,10 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 			return err
 		}
 
-		if err := updatePlayerInventory(tx, buyer); err != nil {
+		if err := updatePlayerInventory(tx, buyer, buyerBefore); err != nil {
 			return err
 		}
-		if err := updatePlayerInventory(tx, seller); err != nil {
+		if err := updatePlayerInventory(tx, seller, sellerBefore); err != nil {
 			return err
 		}
 
@@ -866,7 +878,7 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 		if err := addAuctionItemToPlayer(tx, &seller, itemType, itemData, qty); err != nil {
 			return err
 		}
-		if err := updatePlayerInventory(tx, seller); err != nil {
+		if err := updatePlayerInventory(tx, seller, sellerBefore); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(`UPDATE auction SET status='CANCELLED' WHERE id=$1`, auctionID); err != nil {
@@ -947,8 +959,8 @@ func addAuctionItemToPlayer(tx *sql.Tx, player *models.Player, itemType, itemDat
 	return nil
 }
 
-func updatePlayerInventory(tx *sql.Tx, player models.Player) error {
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+func updatePlayerInventory(tx *sql.Tx, player models.Player, before models.GuInventory) error {
+	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		return err
 	}
 	_, err := tx.Exec(`UPDATE players SET equipped_gus=$1, primeval_stones=$2, immortal_stones=$3, human_qi=$4 WHERE id=$5`, player.EquippedGus, player.PrimevalStones, player.ImmortalStones, player.HumanQi, player.ID)
@@ -1002,11 +1014,12 @@ func CancelListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
 		return
 	}
+	playerBefore := append(models.GuInventory(nil), player.GuInventory...)
 	if err := addAuctionItemToPlayer(tx, &player, itemType, itemData, qty); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn trả vật phẩm"})
 		return
 	}
-	if err := updatePlayerInventory(tx, player); err != nil {
+	if err := updatePlayerInventory(tx, player, playerBefore); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật túi đồ"})
 		return
 	}

@@ -124,6 +124,167 @@ func RemovePlayerGu(tx Execer, instanceID string) error {
 	return err
 }
 
+// RemovePlayerGus deletes multiple Gu instances by their instance ids in a single query.
+func RemovePlayerGus(tx Execer, instanceIDs []string) error {
+	if len(instanceIDs) == 0 {
+		return nil
+	}
+	_, err := tx.Exec(`DELETE FROM player_gu WHERE id = ANY($1::text[])`, pq.Array(instanceIDs))
+	return err
+}
+
+// UpdatePlayerGusBulk updates the mutable fields of multiple Gu instances in a
+// single query, keyed by instance id.
+func UpdatePlayerGusBulk(tx Execer, gus models.GuInventory) error {
+	if len(gus) == 0 {
+		return nil
+	}
+
+	n := len(gus)
+	ids := make([]string, n)
+	guIDs := make([]string, n)
+	ranks := make([]int, n)
+	hunger := make([]int, n)
+	states := make([]string, n)
+	equipped := make([]bool, n)
+	vital := make([]bool, n)
+	intTimes := make([]float64, n)
+	growths := make([]float64, n)
+	equippedAts := make([]string, n)
+
+	for i, gu := range gus {
+		ids[i] = gu.InstanceID
+		guIDs[i] = gu.GuID
+		ranks[i] = gu.Rank
+		hunger[i] = gu.Hunger
+		states[i] = gu.Status
+		equipped[i] = gu.Equipped
+		vital[i] = gu.IsVital
+		intTimes[i] = gu.IntegrationTime
+		growths[i] = gu.GrowthHours
+		if gu.EquippedAt != nil {
+			equippedAts[i] = gu.EquippedAt.Format("2006-01-02T15:04:05Z")
+		}
+	}
+
+	query := `UPDATE player_gu AS pg SET
+		gu_id = u.gu_id,
+		gu_rank = u.gu_rank,
+		rank = u.rank,
+		hunger = u.hunger,
+		state = u.state,
+		equipped = u.equipped,
+		is_vital = u.is_vital,
+		integration_time = u.integration_time,
+		equipped_at = u.equipped_at,
+		growth_hours = u.growth_hours,
+		updated_at = NOW()
+	FROM (
+		SELECT unnest($1::text[]) AS id,
+		       unnest($2::text[]) AS gu_id,
+		       unnest($3::int[]) AS gu_rank,
+		       unnest($4::int[]) AS rank,
+		       unnest($5::int[]) AS hunger,
+		       unnest($6::text[]) AS state,
+		       unnest($7::bool[]) AS equipped,
+		       unnest($8::bool[]) AS is_vital,
+		       unnest($9::float8[]) AS integration_time,
+		       NULLIF(unnest($10::text[]), '')::timestamptz AS equipped_at,
+		       unnest($11::float8[]) AS growth_hours
+	) AS u(id, gu_id, gu_rank, rank, hunger, state, equipped, is_vital, integration_time, equipped_at, growth_hours)
+	WHERE pg.id = u.id`
+
+	_, err := tx.Exec(query,
+		pq.Array(ids), pq.Array(guIDs), pq.Array(ranks), pq.Array(ranks), pq.Array(hunger), pq.Array(states),
+		pq.Array(equipped), pq.Array(vital), pq.Array(intTimes), pq.Array(equippedAts), pq.Array(growths))
+	return err
+}
+
+// SyncPlayerGus persists the difference between two snapshots of a player's Gu
+// inventory. before must be a complete snapshot of the player's player_gu rows
+// (e.g. the inventory loaded at the start of a request) and after the desired
+// post-state. Only changed rows are written: removed instances are deleted, new
+// instances inserted, and instances whose mutable fields changed are updated.
+// When the change set covers a large fraction of the inventory it falls back to
+// SavePlayerGus (delete + bulk insert), which is cheaper than many row writes.
+func SyncPlayerGus(tx *sql.Tx, playerID string, before models.GuInventory, after models.GuInventory) error {
+	beforeIndex := make(map[string]models.GuInstance, len(before))
+	for _, gu := range before {
+		beforeIndex[gu.InstanceID] = gu
+	}
+	afterSet := make(map[string]struct{}, len(after))
+	for _, gu := range after {
+		afterSet[gu.InstanceID] = struct{}{}
+	}
+
+	var removed []string
+	for id := range beforeIndex {
+		if _, ok := afterSet[id]; !ok {
+			removed = append(removed, id)
+		}
+	}
+	var added models.GuInventory
+	var updated models.GuInventory
+	for _, gu := range after {
+		prev, ok := beforeIndex[gu.InstanceID]
+		if !ok {
+			// Drop instances whose (gu_id, gu_rank) no longer exist in the
+			// dictionary, matching SavePlayerGus, to avoid FK violations.
+			if _, valid := models.GetGu(gu.GuID, gu.Rank); valid {
+				added = append(added, gu)
+			}
+			continue
+		}
+		if !sameGuInstance(prev, gu) {
+			updated = append(updated, gu)
+		}
+	}
+
+	changed := len(removed) + len(added) + len(updated)
+	if changed == 0 {
+		return nil
+	}
+	maxTotal := len(before)
+	if len(after) > maxTotal {
+		maxTotal = len(after)
+	}
+	if maxTotal > 0 && changed*4 > maxTotal {
+		return SavePlayerGus(tx, playerID, after)
+	}
+
+	if len(removed) > 0 {
+		if err := RemovePlayerGus(tx, removed); err != nil {
+			return err
+		}
+	}
+	if len(updated) > 0 {
+		if err := UpdatePlayerGusBulk(tx, updated); err != nil {
+			return err
+		}
+	}
+	if len(added) > 0 {
+		if err := AddPlayerGusBulk(tx, playerID, added); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func sameGuInstance(a, b models.GuInstance) bool {
+	if a.GuID != b.GuID || a.Rank != b.Rank || a.Hunger != b.Hunger ||
+		a.Status != b.Status || a.Equipped != b.Equipped || a.IsVital != b.IsVital ||
+		a.IntegrationTime != b.IntegrationTime || a.GrowthHours != b.GrowthHours {
+		return false
+	}
+	if a.EquippedAt == nil && b.EquippedAt == nil {
+		return true
+	}
+	if a.EquippedAt == nil || b.EquippedAt == nil {
+		return false
+	}
+	return a.EquippedAt.Equal(*b.EquippedAt)
+}
+
 // UpdatePlayerGu updates an existing Gu instance row, keyed by instance id.
 func UpdatePlayerGu(tx Execer, gu models.GuInstance) error {
 	var equippedAt any

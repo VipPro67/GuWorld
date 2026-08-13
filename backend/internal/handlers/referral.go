@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -91,21 +90,15 @@ func ClaimReferralReward(c *gin.Context) {
 	// 3. Process the milestone
 	var referrerUsername string
 	var referrerStones int
-	var referrerGuInvBytes []byte
 	err = tx.QueryRow(`
-		SELECT username, FLOOR(primeval_stones)::BIGINT, `+db.GuInventoryAggregate("players.id")+`
+		SELECT username, FLOOR(primeval_stones)::BIGINT
 		FROM players
 		WHERE id = $1
 		FOR UPDATE
-	`, playerID).Scan(&referrerUsername, &referrerStones, &referrerGuInvBytes)
+	`, playerID).Scan(&referrerUsername, &referrerStones)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch referrer details"})
 		return
-	}
-
-	var referrerGuInv models.GuInventory
-	if len(referrerGuInvBytes) > 0 {
-		_ = json.Unmarshal(referrerGuInvBytes, &referrerGuInv)
 	}
 
 	message := ""
@@ -146,9 +139,13 @@ func ClaimReferralReward(c *gin.Context) {
 			Equipped:   false,
 			IsVital:    false,
 		}
-		referrerGuInv = append(referrerGuInv, newGu)
 		milestone2Rewarded = true
 		message = fmt.Sprintf("Nhận thành công 1 %s!", guSpec.Name)
+		// Save the granted Gu immediately instead of rewriting the whole inventory
+		if err := db.AddPlayerGu(tx, playerID.String(), newGu); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Gu inventory"})
+			return
+		}
 	case 3:
 		if milestone3Rewarded {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đã nhận mốc này rồi."})
@@ -172,10 +169,6 @@ func ClaimReferralReward(c *gin.Context) {
 	}
 
 	// Save updates
-	if err := db.SavePlayerGus(tx, playerID.String(), referrerGuInv); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Gu inventory"})
-		return
-	}
 	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1 WHERE id = $2`, referrerStones, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update resources"})

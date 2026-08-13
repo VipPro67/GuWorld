@@ -441,8 +441,8 @@ func rollGuDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string
 	}
 	player.GuInventory = append(player.GuInventory, newInstance)
 
-	// Save player Gu inventory changes immediately
-	if err := db.SavePlayerGus(tx, player.ID.String(), player.GuInventory); err != nil {
+	// Save the newly dropped Gu immediately
+	if err := db.AddPlayerGu(tx, player.ID.String(), newInstance); err != nil {
 		logger.S.Errorf("rollGuDrop: failed to save player Gu inventory: %v", err)
 		return "", nil
 	}

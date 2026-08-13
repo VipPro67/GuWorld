@@ -116,6 +116,7 @@ func ApplyLoot(tx *sql.Tx, player *models.Player, loot RolledLoot) []string {
 			player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
 		}
 	}
+	materialsToAdd := make(map[string]int)
 
 	for itemID, qty := range loot.Items {
 		if itemID == "primeval_stone" {
@@ -141,13 +142,17 @@ func ApplyLoot(tx *sql.Tx, player *models.Player, loot RolledLoot) []string {
 				name = "Rượu Thanh Trúc"
 			}
 			if !isExplore {
-				InventorySvc.AddItem(tx, player.ID.String(), itemID, "materials", qty)
+				materialsToAdd[itemID] += qty
 				logs = append(logs, fmt.Sprintf("Thu hoạch chiến lợi phẩm thú dữ: %dx %s.", qty, name))
 			} else {
 				player.TempLoot.MaterialsInventory[itemID] += qty
 				logs = append(logs, fmt.Sprintf("Thu hoạch chiến lợi phẩm thú dữ: %dx %s (giữ tạm thời).", qty, name))
 			}
 		}
+	}
+
+	if len(materialsToAdd) > 0 {
+		InventorySvc.BulkAddItems(tx, player.ID.String(), "materials", materialsToAdd)
 	}
 
 	for _, guID := range loot.Gus {
@@ -177,9 +182,7 @@ func ApplyLoot(tx *sql.Tx, player *models.Player, loot RolledLoot) []string {
 }
 
 func TransferTempLootToInventory(tx *sql.Tx, player *models.Player) {
-	for itemID, qty := range player.TempLoot.MaterialsInventory {
-		InventorySvc.AddItem(tx, player.ID.String(), itemID, "materials", qty)
-	}
+	InventorySvc.BulkAddItems(tx, player.ID.String(), "materials", player.TempLoot.MaterialsInventory)
 	player.PrimevalStones += player.TempLoot.PrimevalStones
 	player.GuInventory = append(player.GuInventory, player.TempLoot.GuInventory...)
 }
