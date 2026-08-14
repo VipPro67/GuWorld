@@ -147,3 +147,13 @@ func PathMasteryPointsForLevel(level int) int {
 	}
 	return 0
 }
+
+// PathMasteryBattleGainLimit returns the maximum number of Chân Ý points a
+// player can accumulate from a single battle based on their cultivation rank
+// (rank * 10). Once the limit is reached, further combat gains are suppressed.
+func PathMasteryBattleGainLimit(rank int) int {
+	if rank < 1 {
+		rank = 1
+	}
+	return rank * 10
+}

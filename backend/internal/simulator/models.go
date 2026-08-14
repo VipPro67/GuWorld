@@ -196,6 +196,12 @@ type CombatantAuto struct {
 	DaoMarks      DaoMarks
 	PathMasteries map[string]int // path -> mastery points
 
+	// Per-battle Chân Ý (path mastery) gain cap and the amount already earned.
+	// Set by the handler to PathMasteryBattleGainLimit(player rank); the engine
+	// stops awarding points once PathMasteryGained reaches PathMasteryGainLimit.
+	PathMasteryGainLimit int
+	PathMasteryGained    int
+
 	// Character effects from race/constitution/statuses. Computed by the handler
 	// from gamefx.Get(player) and applied by the engine during battle.
 	DaoBonus         map[string]float64 // additive dao-path multiplier (path affinity)

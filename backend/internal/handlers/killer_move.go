@@ -367,12 +367,10 @@ func CastKillerMove(c *gin.Context) {
 
 		// Sát chiêu thành công tăng Cảnh Giới Lưu Phái (+2 điểm path hạch tâm).
 		corePath := normalizePath(preview.Path)
-		if player.PathMasteries == nil {
-			player.PathMasteries = make(models.PathMasteriesMap)
+		if gained := applyPathMasteryGain(&player, corePath, killerMovePathMasteryGain); gained > 0 {
+			newLevel := gamefx.PathMasteryLevel(player.PathMasteries[corePath])
+			logs = append(logs, fmt.Sprintf("Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái %s (Cảnh giới: %s).", gained, strings.Title(corePath), gamefx.PathMasteryLevelName(newLevel)))
 		}
-		player.PathMasteries[corePath] += killerMovePathMasteryGain
-		newLevel := gamefx.PathMasteryLevel(player.PathMasteries[corePath])
-		logs = append(logs, fmt.Sprintf("Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái %s (Cảnh giới: %s).", killerMovePathMasteryGain, strings.Title(corePath), gamefx.PathMasteryLevelName(newLevel)))
 
 		player.ActiveCombat.SkillCooldowns[req.KillerMoveID] = preview.Cooldown
 	}

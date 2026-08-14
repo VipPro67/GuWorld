@@ -37,6 +37,11 @@ func ValidateGuUsable(player *models.Player, gu *models.GuInstance, spec *models
 		return fmt.Errorf("Cổ trùng chưa được trang bị: %s", spec.Name)
 	}
 
+	// Mortal users cannot use immortal Gu that cost mana.
+	if !gamefx.CanUseGuWithMana(player.Rank, spec) {
+		return fmt.Errorf("Tu vi %s chưa đủ để sử dụng Tiên Cổ %s (Rank %d) có hao phí!", getRankName(player.Rank), spec.Name, spec.Rank)
+	}
+
 	// Rule 3: Energy cost
 	cost := gamefx.EnergyCost(player, spec)
 	if player.CurrentMana < cost {

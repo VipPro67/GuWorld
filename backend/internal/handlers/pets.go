@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"net/http"
 	"math"
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -73,11 +73,11 @@ func FeedPet(c *gin.Context) {
 
 	// Load pet
 	var petID, nickname, state string
-	var hunger, maxHunger float64
+	var hunger, maxHunger, count float64
 	err = tx.QueryRow(`
-		SELECT id, nickname, hunger, max_hunger, state
+		SELECT id, nickname, hunger, max_hunger, state, count
 		FROM player_pets WHERE id = $1 AND player_id = $2 FOR UPDATE
-	`, req.PetID, authID).Scan(&petID, &nickname, &hunger, &maxHunger, &state)
+	`, req.PetID, authID).Scan(&petID, &nickname, &hunger, &maxHunger, &state, &count)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Pet không tồn tại."})
 		return
@@ -117,6 +117,8 @@ func FeedPet(c *gin.Context) {
 		return
 	}
 
+	hungerValue /= count
+
 	// Feed
 	newHunger := hunger + hungerValue
 	if newHunger > maxHunger {
@@ -134,12 +136,13 @@ func FeedPet(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"pet_id": petID,
-		"nickname": nickname,
-		"hunger": newHunger,
+		"pet_id":     petID,
+		"nickname":   nickname,
+		"hunger":     newHunger,
 		"max_hunger": maxHunger,
-		"restored": hungerValue,
-		"item_used": req.ItemID,
+		"count":      count,
+		"restored":   hungerValue,
+		"item_used":  req.ItemID,
 	})
 }
 

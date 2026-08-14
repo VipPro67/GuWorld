@@ -445,15 +445,15 @@ func SetupRouter() *gin.Engine {
 		}
 
 		// Explore — per player: 25/min
-		api.POST("/explore", middleware.AuthRequired(), middleware.RateLimitByPlayer(25, time.Minute), handlers.ExploreNode)
-		api.POST("/explore/retreat/:id", middleware.AuthRequired(), middleware.RateLimitByPlayer(25, time.Minute), handlers.Retreat)
-		api.POST("/explore/flee/:id", middleware.AuthRequired(), middleware.RateLimitByPlayer(25, time.Minute), handlers.Flee)
+		api.POST("/explore", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.ExploreNode)
+		api.POST("/explore/retreat/:id", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.Retreat)
+		api.POST("/explore/flee/:id", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.Flee)
 		api.GET("/explore/grid", middleware.AuthRequired(), handlers.GetGrid)
 		api.GET("/explore/regions", middleware.AuthRequired(), handlers.GetRegions)
 		api.GET("/explore/world", middleware.AuthRequired(), handlers.GetWorld)
 		api.GET("/explore/objects", middleware.AuthRequired(), middleware.RateLimitByPlayer(30, time.Minute), handlers.GetExploreObjects)
 		api.GET("/explore/cells", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetNearbyCells)
-		api.POST("/explore/move", middleware.AuthRequired(), middleware.RateLimitByPlayer(25, time.Minute), handlers.MovePlayer)
+		api.POST("/explore/move", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.MovePlayer)
 		api.POST("/explore/move-path", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.MovePlayerPath)
 
 		// Shop — group: 30/min, per player: 10/min

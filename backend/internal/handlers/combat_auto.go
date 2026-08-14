@@ -706,8 +706,14 @@ func AutoCombatStart(c *gin.Context) {
 
 			tempLootJSON, _ := json.Marshal(player.TempLoot)
 
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, primeval_stones = $4, aptitude_percent = $5, lifespan = $6, path_masteries = $7 WHERE id = $8`
-			args = append(args, finalPlayerHP, finalMana, tempLootJSON, player.PrimevalStones, player.AptitudePercent, player.Lifespan, player.PathMasteries, player.ID)
+			if player.ClearedCells == nil {
+				player.ClearedCells = make(models.ClearedCellsMap)
+			}
+			coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
+			player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
+
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, primeval_stones = $4, aptitude_percent = $5, lifespan = $6, path_masteries = $7, cleared_cells = $8 WHERE id = $9`
+			args = append(args, finalPlayerHP, finalMana, tempLootJSON, player.PrimevalStones, player.AptitudePercent, player.Lifespan, player.PathMasteries, player.ClearedCells, player.ID)
 		}
 	} else {
 		if isVirtual {
@@ -929,6 +935,11 @@ func AutoCombatStart(c *gin.Context) {
 // ── helpers ────────────────────────────────────────────────────────────
 
 func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem, actionType string) (simulator.SimAction, error) {
+	// Mortal users cannot use immortal Gu that cost mana (skip the action).
+	if !gamefx.CanUseGuWithMana(actor.Rank, spec) {
+		return simulator.SimAction{}, fmt.Errorf("Tu vi %s chưa đủ để sử dụng Tiên Cổ %s (Rank %d) có hao phí!", getRankName(actor.Rank), spec.Name, spec.Rank)
+	}
+
 	dmg, def, cost, err := CalculateGuEffectForCombatant(actor, spec, false)
 	if err != nil {
 		return simulator.SimAction{
@@ -1391,6 +1402,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		Speed:            playerStats["speed"],
 		DaoMarks:         simulator.DaoMarks(player.DaoMarks),
 		PathMasteries:    player.PathMasteries,
+		PathMasteryGainLimit: gamefx.PathMasteryBattleGainLimit(player.Rank),
 		DaoBonus:         charFX.DaoNganBonus,
 		PathDamageBonus:  charFX.PathDamageBonus,
 		PathResistance:   charFX.PathResistanceBonus,

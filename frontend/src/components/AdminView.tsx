@@ -976,15 +976,6 @@ export const AdminView: React.FC = () => {
 
   useEffect(() => { fetchPlayers(); }, [fetchPlayers]);
 
-  // Debounce player search input
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearch(searchText);
-      setPage(1);
-    }, 450);
-    return () => clearTimeout(timer);
-  }, [searchText]);
-
   const fetchDetail = useCallback(async (id: string) => {
     setDetailLoading(true);
     setDetail(null);

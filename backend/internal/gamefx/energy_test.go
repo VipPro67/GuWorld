@@ -1,6 +1,7 @@
 package gamefx
 
 import (
+	"math"
 	"testing"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -57,26 +58,52 @@ func TestEnergyCostMortal(t *testing.T) {
 }
 
 func TestHigherRankManaMultiplier(t *testing.T) {
-	// Mortal Gu: gap 0..4 -> 1,2,5,25,125
 	cases := []struct {
 		guRank, userRank int
 		want             float64
 	}{
-		{5, 5, 1},  // same rank
-		{2, 1, 2},  // gap 1 -> x2
-		{3, 1, 5},  // gap 2 -> x5
-		{4, 1, 25}, // gap 3 -> x25
-		{5, 1, 125}, // rank1 sài rank5 => 125
-		{5, 4, 2},  // gap 1 -> x2
-		{3, 5, 1},  // gu lower than user -> x1
-		{7, 6, 100},    // immortal gap 1 -> x100
-		{8, 6, 10000},  // immortal gap 2 -> x100^2
-		{9, 7, 10000},  // immortal gap 2 -> x100^2
-		{6, 5, 100},    // mortal user using rank-6 immortal Gu -> x100
+		{5, 5, 1},
+		{2, 1, 2},
+		{3, 1, 5},
+		{4, 1, 25},
+		{5, 1, 125},
+		{5, 4, 125 / 25},
+		{3, 5, 1},
+
+		{6, 6, 1},
+		{7, 6, 100},
+		{8, 6, 10000},
+		{9, 7, 10000},
+		{9, 8, 100},
+
+		{6, 5, math.Inf(1)},
+		{7, 5, math.Inf(1)},
+		{9, 1, math.Inf(1)},
 	}
+
 	for _, c := range cases {
-		if got := HigherRankManaMultiplier(c.guRank, c.userRank); got != c.want {
-			t.Errorf("HigherRankManaMultiplier(%d, %d) = %v, want %v", c.guRank, c.userRank, got, c.want)
+		got := HigherRankManaMultiplier(c.guRank, c.userRank)
+
+		if math.IsInf(c.want, 1) {
+			if !math.IsInf(got, 1) {
+				t.Errorf(
+					"HigherRankManaMultiplier(%d, %d) = %v, want +Inf",
+					c.guRank,
+					c.userRank,
+					got,
+				)
+			}
+			continue
+		}
+
+		if got != c.want {
+			t.Errorf(
+				"HigherRankManaMultiplier(%d, %d) = %v, want %v",
+				c.guRank,
+				c.userRank,
+				got,
+				c.want,
+			)
 		}
 	}
 }

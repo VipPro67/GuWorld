@@ -75,6 +75,27 @@ func InitSchema() error {
 		logger.S.Warnf("failed to create unaccent extension: %v", err)
 	}
 
+	_, err = DB.Exec(`CREATE EXTENSION IF NOT EXISTS "pg_trgm";`)
+	if err != nil {
+		logger.S.Warnf("failed to create pg_trgm extension: %v", err)
+	}
+
+	// Immutable wrapper around unaccent so it can be used in index expressions.
+	// unaccent() itself is STABLE and cannot be indexed directly.
+	_, err = DB.Exec(`
+	CREATE OR REPLACE FUNCTION public.immutable_unaccent(text)
+	RETURNS text
+	LANGUAGE sql
+	IMMUTABLE
+	PARALLEL SAFE
+	STRICT
+	AS $func$
+		SELECT public.unaccent('public.unaccent', $1)
+	$func$;`)
+	if err != nil {
+		logger.S.Warnf("failed to create immutable_unaccent function: %v", err)
+	}
+
 	// 1. Create item_dictionary
 	_, err = DB.Exec(`
 	CREATE TABLE IF NOT EXISTS item_dictionary (
@@ -1752,6 +1773,12 @@ WHERE p.id IN (SELECT DISTINCT player_id FROM unequipped);`, MaxEquippedGus),
 		if err != nil {
 			logger.S.Warnf("failed to create index %s: %v", idx.name, err)
 		}
+	}
+
+	// Trigram GIN index to accelerate infix unaccent(username) ILIKE searches.
+	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_players_username_trgm ON players USING gin (public.immutable_unaccent(username) gin_trgm_ops)`)
+	if err != nil {
+		logger.S.Warnf("failed to create username trigram index: %v", err)
 	}
 
 	logger.S.Info("Database schema initialized successfully (seed skipped, use admin panel to import data)")

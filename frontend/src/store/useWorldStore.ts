@@ -55,10 +55,12 @@ interface WorldStoreState {
   nearbyCells: NearbyCell[];
   exploredSubZones: Set<string>;
   movementRange: number;
+  investigationRange: number;
   selectedObject: WorldObject | null;
   isMoving: boolean;
   loading: boolean;
   error: string | null;
+  worldLogs: { id: string; text: string; timestamp: number }[];
   cameraCenterRequest: number;
   liveX: number;
   liveY: number;
@@ -70,11 +72,13 @@ interface WorldStoreState {
   movePath: (x: number, y: number) => Promise<{ player: Player; log: string; combat_triggered: boolean; reached: boolean } | null>;
   setExploredSubZones: (keys: string[]) => void;
   setMovementRange: (r: number) => void;
+  setInvestigationRange: (r: number) => void;
   setMoving: (v: boolean) => void;
   selectObject: (obj: WorldObject | null) => void;
   requestCenterCamera: () => void;
   setLivePosition: (x: number, y: number) => void;
   setCamera: (scale: number, x: number, y: number) => void;
+  addWorldLog: (text: string) => void;
 }
 
 export const useWorldStore = create<WorldStoreState>((set) => ({
@@ -82,10 +86,12 @@ export const useWorldStore = create<WorldStoreState>((set) => ({
   nearbyCells: [],
   exploredSubZones: new Set<string>(),
   movementRange: 1,
+  investigationRange: 10,
   selectedObject: null,
   isMoving: false,
   loading: false,
   error: null,
+  worldLogs: [],
   cameraCenterRequest: 0,
   liveX: 0,
   liveY: 0,
@@ -94,6 +100,10 @@ export const useWorldStore = create<WorldStoreState>((set) => ({
   cameraY: 0,
 
   requestCenterCamera: () => set((s) => ({ cameraCenterRequest: s.cameraCenterRequest + 1 })),
+  addWorldLog: (text: string) =>
+    set((s) => ({
+      worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text, timestamp: Date.now() }].slice(-50),
+    })),
 
   fetchObjects: async () => {
     set({ loading: true, error: null });
@@ -124,13 +134,22 @@ export const useWorldStore = create<WorldStoreState>((set) => ({
         } catch {
           /* ignore */
         }
-        set({ isMoving: false, error: msg });
+        set((s) => ({
+          isMoving: false,
+          error: msg,
+          worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
+        }));
         return null;
       }
       const data = JSON.parse(body);
       return data;
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err), isMoving: false });
+      const msg = err instanceof Error ? err.message : String(err);
+      set((s) => ({
+        error: msg,
+        isMoving: false,
+        worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
+      }));
       return null;
     } finally {
       set({ isMoving: false });
@@ -139,6 +158,7 @@ export const useWorldStore = create<WorldStoreState>((set) => ({
 
   setExploredSubZones: (keys) => set({ exploredSubZones: new Set<string>(keys) }),
   setMovementRange: (r) => set({ movementRange: r > 0 ? r : 1 }),
+  setInvestigationRange: (r) => set({ investigationRange: r > 10 ? r : 10 }),
   setMoving: (v) => set({ isMoving: v }),
   selectObject: (obj) => set({ selectedObject: obj }),
   setLivePosition: (x, y) => set({ liveX: x, liveY: y }),

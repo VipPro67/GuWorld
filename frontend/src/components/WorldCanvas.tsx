@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
-import { Application, Container, Graphics, Text, FederatedPointerEvent } from "pixi.js";
+import { Application, Container, Graphics, Text, FederatedPointerEvent, Texture, TilingSprite, Sprite, Assets } from "pixi.js";
 import { useWorldStore, type WorldObject } from "@/store/useWorldStore";
 import { useGameStore, type Player, type GuSpec } from "@/store/useGameStore";
 
@@ -39,6 +39,7 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
   const playerRef = useRef<Graphics>(new Graphics());
   const rangeRef = useRef<Graphics>(new Graphics());
 
+  const playerAvatarRef = useRef<Sprite | null>(null);
   const fogDirtyRef = useRef(true);
   const scaleRef = useRef<number>(0.05);
   const modeRef = useRef(mode);
@@ -57,9 +58,11 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
   const nearbyCells = useWorldStore((s) => s.nearbyCells);
   const fetchNearbyCells = useWorldStore((s) => s.fetchNearbyCells);
   const setLivePosition = useWorldStore((s) => s.setLivePosition);
+  const monsterDictionary = useGameStore((s) => s.monsterDictionary);
   const setCamera = useWorldStore((s) => s.setCamera);
   const exploredSubZones = useWorldStore((s) => s.exploredSubZones);
   const movePath = useWorldStore((s) => s.movePath);
+  const addWorldLog = useWorldStore((s) => s.addWorldLog);
   const setMoving = useWorldStore((s) => s.setMoving);
   const selectObject = useWorldStore((s) => s.selectObject);
   const cameraCenterRequest = useWorldStore((s) => s.cameraCenterRequest);
@@ -129,7 +132,7 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
     (targetX: number, targetY: number) => {
       const startX = playerRef.current.position.x;
       const startY = playerRef.current.position.y;
-      const dist = Math.hypot(targetX - startX, targetY - startY);
+      const dist = Math.hypot(targetX + 0.5 - startX, targetY + 0.5 - startY);
       if (dist < 1) {
         if (isMovingRef.current) {
           isMovingRef.current = false;
@@ -153,23 +156,22 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
             isMovingRef.current = false;
             setMoving(false);
             playerRef.current.position.set(origin.x, origin.y);
-            if (appRef.current && modeRef.current === "select") {
-              centerOnPlayer(appRef.current, origin.x, origin.y);
-            }
             return;
           }
           const np = res.player;
           if (np) {
-            setPlayerFromServer(np);
-            setExploredSubZones(np.visited_subzones || []);
-            const animDist = Math.hypot(np.x - playerRef.current.position.x, np.y - playerRef.current.position.y);
+            const animDist = Math.hypot(np.x + 0.5 - playerRef.current.position.x, np.y + 0.5 - playerRef.current.position.y);
             const duration = Math.max(0.25, animDist / movementSpeed);
-            animateMove(np.x, np.y, duration, () => {
+            animateMove(np.x + 0.5, np.y + 0.5, duration, () => {
+              setPlayerFromServer(np);
+              setExploredSubZones(np.visited_subzones || []);
+              if (res.log) addWorldLog(res.log);
               if (!res.reached && !res.combat_triggered) {
                 walk(tx, ty);
               } else {
                 isMovingRef.current = false;
                 setMoving(false);
+                selectObject(null);
               }
             });
           } else {
@@ -181,7 +183,7 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
 
       walk(targetX, targetY);
     },
-    [movementSpeed, animateMove, movePath, setMoving, setPlayerFromServer, setExploredSubZones, centerOnPlayer],
+    [movementSpeed, animateMove, movePath, setMoving, setPlayerFromServer, setExploredSubZones],
   );
 
   const handleBackgroundClick = useCallback(
@@ -193,26 +195,62 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       let worldY = (pos.y - stage.position.y) / scale;
       worldX = Math.max(0, Math.min(WORLD_W - 1, worldX));
       worldY = Math.max(0, Math.min(WORLD_H - 1, worldY));
-      const tx = Math.round(worldX);
-      const ty = Math.round(worldY);
+      const tx = Math.floor(worldX);
+      const ty = Math.floor(worldY);
 
-      if (tx === (gamePlayer?.x ?? 0) && ty === (gamePlayer?.y ?? 0)) {
+      const s = useWorldStore.getState();
+      const nearby = s.nearbyCells.find((c) => c.x === tx && c.y === ty);
+      const persistent = s.objects.find((c) => c.x === tx && c.y === ty);
+
+      if (nearby || persistent) {
+        if (s.selectedObject && s.selectedObject.x === tx && s.selectedObject.y === ty) {
+          // Already selected, proceed to move
+          moveTargetRef.current = { x: tx, y: ty };
+          performMove(tx, ty);
+        } else if (nearby) {
+          s.selectObject({
+            region_id: gamePlayer?.current_region || "",
+            x: tx,
+            y: ty,
+            cell_type: nearby.cell_type,
+            content_id: nearby.content,
+            rank: nearby.rank,
+          });
+        } else if (persistent) {
+          s.selectObject(persistent);
+        }
         return;
       }
+
+      s.selectObject(null);
       moveTargetRef.current = { x: tx, y: ty };
       performMove(tx, ty);
     },
     [performMove, gamePlayer],
   );
 
+  useEffect(() => {
+    const handleCustomMove = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && detail.x !== undefined && detail.y !== undefined) {
+        moveTargetRef.current = { x: detail.x, y: detail.y };
+        performMove(detail.x, detail.y);
+      }
+    };
+    window.addEventListener("gu_world_move", handleCustomMove);
+    return () => window.removeEventListener("gu_world_move", handleCustomMove);
+  }, [performMove]);
+
   const handleObjectClick = useCallback(
     (obj: WorldObject) => {
-      selectObject(obj);
-      if (obj.x === (gamePlayer?.x ?? 0) && obj.y === (gamePlayer?.y ?? 0)) {
-        return;
+      const s = useWorldStore.getState();
+      if (s.selectedObject && s.selectedObject.x === obj.x && s.selectedObject.y === obj.y) {
+        if (obj.x === (gamePlayer?.x ?? 0) && obj.y === (gamePlayer?.y ?? 0)) return;
+        moveTargetRef.current = { x: obj.x, y: obj.y };
+        performMove(obj.x, obj.y);
+      } else {
+        selectObject(obj);
       }
-      moveTargetRef.current = { x: obj.x, y: obj.y };
-      performMove(obj.x, obj.y);
     },
     [performMove, selectObject, gamePlayer],
   );
@@ -234,8 +272,8 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       const g = new Graphics();
       const color = colorFor(i);
       g.rect(rx, ry, rw, rh);
-      g.fill({ color, alpha: 0.25 });
-      g.stroke({ color, width: 3, alpha: 0.7 });
+      g.fill({ color, alpha: 0.05 });
+      g.stroke({ color, width: 3, alpha: 0.8 });
       container.addChild(g);
 
       const label = new Text({
@@ -292,17 +330,31 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
         const g = new Graphics();
         const size = isBoss ? 12 : 8;
         if (isBoss) {
+          // Boss: Star/Diamond shape with glowing aura
+          g.circle(0, 0, size + 2);
+          g.fill({ color: 0xef4444, alpha: 0.3 }); // Aura
           g.poly([0, -size, size, 0, 0, size, -size, 0]);
           g.fill({ color: 0xef4444 });
-          g.stroke({ color: 0x991b1b, width: 1.5 });
+          g.stroke({ color: 0x7f1d1d, width: 2 });
+          g.circle(0, 0, size / 3);
+          g.fill({ color: 0xfca5a5 }); // Inner highlight
         } else if (isResource) {
-          g.circle(0, 0, size / 2);
-          g.fill({ color: 0x34d399 });
-          g.stroke({ color: 0x059669, width: 1.5 });
+          // Resource / Tree: Layered green circles
+          g.circle(0, 2, size * 0.8);
+          g.fill({ color: 0x064e3b, alpha: 0.5 }); // Drop shadow
+          g.circle(0, 0, size * 0.8);
+          g.fill({ color: 0x065f46 }); // Dark base
+          g.circle(0, -2, size * 0.6);
+          g.fill({ color: 0x10b981 }); // Lighter top
+          g.circle(-2, -4, size * 0.3);
+          g.fill({ color: 0x34d399 }); // Highlight
         } else {
-          g.rect(-size / 2, -size / 2, size, size);
-          g.fill({ color: 0xfbbf24 });
-          g.stroke({ color: 0xd97706, width: 1.5 });
+          // Empty / Location: Small shrine or stone marker
+          g.rect(-size / 1.5, -size / 2, size * 1.33, size);
+          g.fill({ color: 0x52525b }); // Stone base
+          g.poly([0, -size, size / 1.5 + 2, -size / 2, -size / 1.5 - 2, -size / 2]);
+          g.fill({ color: 0x0ea5e9 }); // Blue roof
+          g.stroke({ color: 0x0284c7, width: 1 });
         }
         g.eventMode = "static";
         g.cursor = "pointer";
@@ -320,7 +372,7 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
         label.anchor.set(0.5, 1);
         label.y = -size - 4;
         g.addChild(label);
-        g.position.set(o.x, o.y);
+        g.position.set(o.x + 0.5, o.y + 0.5);
       }
     },
     [handleObjectClick],
@@ -343,19 +395,29 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       let mM = 0, mR = 0, mW = 0;
       for (const c of cells) {
         if (c.cell_type === "Monster" && mM < monsterCount) {
-          batchMonster.circle(c.x, c.y, 3.5);
+          // Draw a small red "creature" shape within 1x1 cell
+          batchMonster.poly([c.x + 0.5, c.y + 0.1, c.x + 0.9, c.y + 0.8, c.x + 0.1, c.y + 0.8]);
           mM++;
         } else if (c.cell_type === "Resource" && mR < resourceCount) {
-          batchResource.circle(c.x, c.y, 3);
+          // Draw small trees for resources within 1x1 cell
+          batchResource.circle(c.x + 0.5, c.y + 0.6, 0.3); // base
+          batchResource.circle(c.x + 0.5, c.y + 0.4, 0.2); // top
           mR++;
         } else if (c.cell_type === "WildGu" && mW < wildCount) {
-          batchWild.circle(c.x, c.y, 3.5);
+          // Draw a small diamond for Wild Gu
+          batchWild.poly([c.x + 0.5, c.y + 0.1, c.x + 0.8, c.y + 0.5, c.x + 0.5, c.y + 0.9, c.x + 0.2, c.y + 0.5]);
           mW++;
         }
       }
       batchMonster.fill({ color: 0xf87171, alpha: 0.9 });
-      batchResource.fill({ color: 0x34d399, alpha: 0.9 });
+      batchMonster.stroke({ color: 0x991b1b, width: 0.05 });
+      
+      // We will re-fill the resource specifically with green
+      batchResource.fill({ color: 0x10b981, alpha: 0.9 });
+      batchResource.stroke({ color: 0x065f46, width: 0.05 });
+      
       batchWild.fill({ color: 0xfbbf24, alpha: 0.9 });
+      batchWild.stroke({ color: 0xb45309, width: 0.05 });
       container.addChild(batchMonster);
       container.addChild(batchResource);
       container.addChild(batchWild);
@@ -367,21 +429,21 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
         if (bossCount >= 40) break;
         bossCount++;
         const g = new Graphics();
-        g.poly([0, -7, 7, 0, 0, 7, -7, 0]);
+        g.poly([0, -0.6, 0.6, 0, 0, 0.6, -0.6, 0]);
         g.fill({ color: 0xef4444 });
-        g.stroke({ color: 0x7f1d1d, width: 1.5 });
+        g.stroke({ color: 0x7f1d1d, width: 0.1 });
         const label = new Text({
-          text: c.content,
-          style: { fontSize: 10, fill: 0xfecaca, fontFamily: "serif", stroke: { color: 0x000000, width: 2 } },
+          text: monsterDictionary[c.content]?.name || c.content,
+          style: { fontSize: 2, fill: 0xfecaca, fontFamily: "serif", stroke: { color: 0x000000, width: 0.5 } },
         });
         label.anchor.set(0.5, 1);
-        label.y = -10;
+        label.y = -0.8;
         g.addChild(label);
-        g.position.set(c.x, c.y);
+        g.position.set(c.x + 0.5, c.y + 0.5);
         container.addChild(g);
       }
     },
-    [],
+    [monsterDictionary],
   );
 
   const drawFog = useCallback(() => {
@@ -422,20 +484,65 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
   const drawPlayer = useCallback(() => {
     const g = playerRef.current;
     g.clear();
-    g.circle(0, 0, 6);
-    g.fill({ color: 0x3b82f6 });
-    g.stroke({ color: 0xffffff, width: 1.5 });
-    g.circle(0, 0, 3);
-    g.fill({ color: 0x93c5fd });
-  }, []);
+    // Shadow
+    g.circle(0, 0.2, 0.4);
+    g.fill({ color: 0x000000, alpha: 0.4 });
+    // Aura
+    g.circle(0, 0, 0.5);
+    g.fill({ color: 0x60a5fa, alpha: 0.3 });
+
+    if (gamePlayer?.avatar_url) {
+      if (!playerAvatarRef.current) {
+        const sprite = new Sprite();
+        sprite.anchor.set(0.5);
+        sprite.width = 0.8;
+        sprite.height = 0.8;
+        
+        Assets.load(gamePlayer.avatar_url).then((texture) => {
+          if (playerAvatarRef.current) playerAvatarRef.current.texture = texture;
+        }).catch(console.error);
+
+        const mask = new Graphics();
+        mask.circle(0, 0, 0.4);
+        mask.fill({ color: 0xffffff });
+        sprite.mask = mask;
+
+        g.addChild(mask);
+        g.addChild(sprite);
+        playerAvatarRef.current = sprite;
+      }
+      // Avatar border
+      g.circle(0, 0, 0.4);
+      g.stroke({ color: 0xffffff, width: 0.05 });
+    } else {
+      // Character base
+      g.circle(0, 0, 0.3);
+      g.fill({ color: 0x3b82f6 });
+      g.stroke({ color: 0xffffff, width: 0.1 });
+      // Center point
+      g.circle(0, 0, 0.1);
+      g.fill({ color: 0xffffff });
+    }
+  }, [gamePlayer?.avatar_url]);
 
   const drawRange = useCallback(() => {
     const g = rangeRef.current;
     g.clear();
     if (!gamePlayer) return;
+
+    // Investigation range glow
+    const invR = useWorldStore.getState().investigationRange; // It is fine to use getState here as investigationRange is tracked elsewhere
+    for (let i = 0; i < 4; i++) {
+      g.circle(gamePlayer.x + 0.5, gamePlayer.y + 0.5, invR * (1 - i * 0.2));
+      g.fill({ color: 0xffffff, alpha: 0.02 });
+    }
+    g.circle(gamePlayer.x + 0.5, gamePlayer.y + 0.5, invR);
+    g.stroke({ color: 0xffffff, width: 0.5, alpha: 0.1 });
+
+    // Movement range box
     const r = movementRange;
     g.rect(gamePlayer.x - r, gamePlayer.y - r, r * 2 + 1, r * 2 + 1);
-    g.stroke({ color: 0x34d399, width: 1, alpha: 0.4 });
+    g.stroke({ color: 0x34d399, width: 0.1, alpha: 0.8 });
   }, [gamePlayer, movementRange]);
 
   const clickHandlerRef = useRef(handleBackgroundClick);
@@ -462,7 +569,7 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       // (never smaller). Zoom-in is allowed much further for detail viewing.
       const app = appRef.current;
       const minScale = app ? Math.min(app.screen.width / WORLD_W, app.screen.height / WORLD_H) : 0.005;
-      newScale = Math.max(minScale, Math.min(8, newScale));
+      newScale = Math.max(minScale, Math.min(40, newScale));
       scaleRef.current = newScale;
 
       if (appRef.current && stageRef.current) {
@@ -502,6 +609,20 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       stageRef.current = new Container();
       app.stage.addChild(stageRef.current);
 
+      const bgGraphics = new Graphics();
+      const tileSize = 1;
+      bgGraphics.rect(0, 0, tileSize, tileSize);
+      bgGraphics.fill({ color: 0x1a4226 });
+      bgGraphics.stroke({ color: 0x14361e, width: 0.02, alignment: 0 }); // alignment 0 draws stroke completely inside
+      
+      const bgTexture = app.renderer.generateTexture(bgGraphics);
+      const bgSprite = new TilingSprite({
+        texture: bgTexture,
+        width: WORLD_W,
+        height: WORLD_H
+      });
+      stageRef.current.addChild(bgSprite);
+
       stageRef.current.addChild(regionsContainerRef.current);
       stageRef.current.addChild(objectsContainerRef.current);
       stageRef.current.addChild(monstersContainerRef.current);
@@ -512,14 +633,12 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       drawPlayer();
       drawRegions(regions);
       drawObjects(objects);
-      drawMonsters(nearbyCells);
+      const cleared = gamePlayer?.cleared_cells || {};
+      drawMonsters(nearbyCells.filter((c) => !cleared[`${c.x},${c.y}`]));
       drawFog();
       drawRange();
 
       app.ticker.add(() => {
-        // Keep the player marker a constant screen size regardless of zoom.
-        const s = scaleRef.current;
-        playerRef.current.scale.set(1 / s);
         if (fogDirtyRef.current) {
           fogDirtyRef.current = false;
           drawFog();
@@ -537,17 +656,17 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       if (savedScale > 0) {
         scaleRef.current = savedScale;
       } else {
-        scaleRef.current = fitScale;
+        scaleRef.current = 40; // Max zoom on initial load
       }
       stageRef.current.scale.set(scaleRef.current);
 
       if (gamePlayer) {
-        playerRef.current.position.set(gamePlayer.x, gamePlayer.y);
+        playerRef.current.position.set(gamePlayer.x + 0.5, gamePlayer.y + 0.5);
         if (savedScale > 0) {
           stageRef.current.position.set(saved.cameraX, saved.cameraY);
           fogDirtyRef.current = true;
         } else {
-          centerOnPlayer(app, gamePlayer.x, gamePlayer.y);
+          centerOnPlayer(app, gamePlayer.x + 0.5, gamePlayer.y + 0.5);
         }
       }
 
@@ -612,8 +731,8 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
   }, []);
 
   useEffect(() => {
-    if (!appReady || !appRef.current || !gamePlayer) return;
-    playerRef.current.position.set(gamePlayer.x, gamePlayer.y);
+    if (!appReady || !appRef.current || !gamePlayer || isMovingRef.current) return;
+    playerRef.current.position.set(gamePlayer.x + 0.5, gamePlayer.y + 0.5);
   }, [appReady, gamePlayer]);
 
   useEffect(() => {
@@ -623,26 +742,32 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;
-    drawMonsters(nearbyCells);
-  }, [appReady, nearbyCells, drawMonsters]);
+    const cleared = gamePlayer?.cleared_cells || {};
+    const filteredCells = nearbyCells.filter(c => !cleared[`${c.x},${c.y}`]);
+    drawMonsters(filteredCells);
+  }, [appReady, nearbyCells, gamePlayer?.cleared_cells, drawMonsters]);
 
   // Poll nearby cells (monsters / resources) around the player while the map
   // is open so markers stay fresh as the player moves.
+  const investigationRange = useWorldStore((s) => s.investigationRange);
   useEffect(() => {
     if (!appReady || !gamePlayer) return;
     const poll = () => {
-      fetchNearbyCells(gamePlayer.x, gamePlayer.y, 100);
+      fetchNearbyCells(gamePlayer.x, gamePlayer.y, investigationRange);
     };
     poll();
     const id = setInterval(poll, 8000);
     return () => clearInterval(id);
-  }, [appReady, gamePlayer?.x, gamePlayer?.y, fetchNearbyCells]);
+  }, [appReady, gamePlayer?.x, gamePlayer?.y, investigationRange, fetchNearbyCells]);
 
   // Keep the live X/Y position in sync with the game player when idle.
   useEffect(() => {
-    if (!gamePlayer) return;
-    setLivePosition(gamePlayer.x, gamePlayer.y);
-  }, [gamePlayer?.x, gamePlayer?.y, setLivePosition]);
+    if (!appReady || !gamePlayer || isMovingRef.current) return;
+    playerRef.current.position.set(gamePlayer.x + 0.5, gamePlayer.y + 0.5);
+    if (modeRef.current === "select" && appRef.current) {
+      centerOnPlayer(appRef.current, gamePlayer.x + 0.5, gamePlayer.y + 0.5);
+    }
+  }, [appReady, gamePlayer?.x, gamePlayer?.y, centerOnPlayer]);
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;
@@ -661,7 +786,9 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
 
   useEffect(() => {
     if (!appReady || !appRef.current || !gamePlayer || cameraCenterRequest === 0) return;
-    centerOnPlayer(appRef.current, gamePlayer.x, gamePlayer.y);
+    scaleRef.current = 40;
+    stageRef.current.scale.set(40);
+    centerOnPlayer(appRef.current, gamePlayer.x + 0.5, gamePlayer.y + 0.5);
   }, [appReady, cameraCenterRequest, gamePlayer, centerOnPlayer]);
 
   return <div ref={canvasRef} className="w-full h-full overflow-hidden select-none" />;

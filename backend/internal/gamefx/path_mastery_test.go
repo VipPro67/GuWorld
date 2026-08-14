@@ -111,3 +111,14 @@ func TestPathMasteryPointsForLevel(t *testing.T) {
 		}
 	}
 }
+
+func TestPathMasteryBattleGainLimit(t *testing.T) {
+	cases := []struct{ rank, want int }{
+		{0, 10}, {1, 10}, {2, 20}, {5, 50}, {7, 70}, {9, 90},
+	}
+	for _, c := range cases {
+		if got := PathMasteryBattleGainLimit(c.rank); got != c.want {
+			t.Errorf("PathMasteryBattleGainLimit(%d) = %d, want %d", c.rank, got, c.want)
+		}
+	}
+}

@@ -15,7 +15,7 @@ func EnergyCost(player *models.Player, guSpec *models.GuDictionaryItem) float64 
 		if guSpec.Rank < util.ImmortalRankThreshold {
 			return 0
 		}
-		baseCost := 1.0
+		baseCost := 0.0
 		if guSpec.BaseManaCost > 0 {
 			baseCost = guSpec.BaseManaCost
 		}
@@ -59,7 +59,7 @@ func EnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuDictionary
 		if guSpec.Rank < util.ImmortalRankThreshold {
 			return 0
 		}
-		baseCost := 1.0
+		baseCost := 0.0
 		if guSpec.BaseManaCost > 0 {
 			baseCost = guSpec.BaseManaCost
 		}
@@ -94,28 +94,34 @@ func EnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuDictionary
 	return cost
 }
 
-// HigherRankManaMultiplier returns the mana cost multiplier applied when using
-// a Gu whose rank exceeds the user's rank. The rule differs by the Gu's tier:
-//
-//   - Mortal Gu (rank 1-5): per rank gap multiplier table {1, 2, 5, 25, 100}
-//     for gaps {0,1,2,3,4}. E.g. a rank-1 user casting a rank-5 Gu (gap 4)
-//     pays 125x the base mana.
-//   - Immortal Gu (rank >= 6): each rank gap multiplies by 100
-//     (100^gap).
 func HigherRankManaMultiplier(guRank, userRank int) float64 {
-	diff := guRank - userRank
-	if diff <= 0 {
-		return 1
+	if guRank <= userRank {
+		return 1.0
 	}
-	if guRank >= util.ImmortalRankThreshold {
-		return math.Pow(100, float64(diff))
+
+	if userRank < util.ImmortalRankThreshold && guRank >= util.ImmortalRankThreshold {
+		return math.Inf(1)
 	}
-	// Mortal Gu ranks are 1-5, so diff cannot exceed 4 from a mortal user.
-	mortalMultipliers := []float64{0, 2, 5, 25, 100}
-	if diff >= len(mortalMultipliers) {
-		return mortalMultipliers[len(mortalMultipliers)-1]
+
+	if userRank < util.ImmortalRankThreshold {
+		values := []float64{1, 2, 5, 25, 125}
+		return values[guRank-1] / values[userRank-1]
 	}
-	return mortalMultipliers[diff]
+
+	values := []float64{1, 100, 10000, 1000000, 100000000}
+	return values[guRank-6] / values[userRank-6]
+}
+
+// CanUseGuWithMana reports whether a user of the given rank may spend mana to
+// activate the given Gu. Mortal users (rank below the immortal threshold) are
+// blocked from using immortal Gu (rank >= threshold) that cost mana. The cost
+// multiplier returns +Inf for such combinations; callers should reject the use
+// entirely instead of leaking +Inf into mana pools.
+func CanUseGuWithMana(userRank int, guSpec *models.GuDictionaryItem) bool {
+	if userRank < util.ImmortalRankThreshold && guSpec.Rank >= util.ImmortalRankThreshold && guSpec.BaseManaCost > 0 {
+		return false
+	}
+	return true
 }
 
 // RefineManaTier returns the highest refinement mana tier among equipped ACTIVE

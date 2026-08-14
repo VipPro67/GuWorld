@@ -42,7 +42,7 @@ func adminPlayerSearchClause(searchBy, search string) (string, []interface{}) {
 	case "id":
 		return `players.id::text ILIKE $1`, []interface{}{like}
 	case "username":
-		return `unaccent(username) ILIKE unaccent($1)`, []interface{}{like}
+		return `public.immutable_unaccent(username) ILIKE public.immutable_unaccent($1)`, []interface{}{like}
 	case "email":
 		return `unaccent(COALESCE(email, '')) ILIKE unaccent($1)`, []interface{}{like}
 	case "item":
@@ -58,26 +58,25 @@ func adminPlayerSearchClause(searchBy, search string) (string, []interface{}) {
 		}
 		return `EXISTS (SELECT 1 FROM player_gu pg WHERE pg.player_id = players.id AND pg.gu_id ILIKE $1)`, []interface{}{like}
 	default: // all
-		clauses := []string{`unaccent(username) ILIKE unaccent($1)`, `unaccent(COALESCE(email, '')) ILIKE unaccent($1)`}
+		// Prefer username/email matching. For item/gu ownership only use the
+		// in-memory registry to resolve exact IDs — an ILIKE fallback here
+		// forces a full scan of player_inventory_items / player_gu per search.
+		clauses := []string{`public.immutable_unaccent(username) ILIKE public.immutable_unaccent($1)`, `unaccent(COALESCE(email, '')) ILIKE unaccent($1)`}
 		args := []interface{}{like}
 		argIdx := 2
 
 		itemIDs := models.ItemIDsByName(search)
 		if len(itemIDs) > 0 {
-			clauses = append(clauses, fmt.Sprintf(`EXISTS (SELECT 1 FROM player_inventory_items i WHERE i.player_id = players.id AND (i.item_id ILIKE $1 OR i.item_id = ANY($%d)))`, argIdx))
+			clauses = append(clauses, fmt.Sprintf(`EXISTS (SELECT 1 FROM player_inventory_items i WHERE i.player_id = players.id AND i.item_id = ANY($%d))`, argIdx))
 			args = append(args, itemIDs)
 			argIdx++
-		} else {
-			clauses = append(clauses, `EXISTS (SELECT 1 FROM player_inventory_items i WHERE i.player_id = players.id AND i.item_id ILIKE $1)`)
 		}
 
 		guIDs := models.GuIDsByName(search)
 		if len(guIDs) > 0 {
-			clauses = append(clauses, fmt.Sprintf(`EXISTS (SELECT 1 FROM player_gu pg WHERE pg.player_id = players.id AND (pg.gu_id ILIKE $1 OR pg.gu_id = ANY($%d)))`, argIdx))
+			clauses = append(clauses, fmt.Sprintf(`EXISTS (SELECT 1 FROM player_gu pg WHERE pg.player_id = players.id AND pg.gu_id = ANY($%d))`, argIdx))
 			args = append(args, guIDs)
 			argIdx++
-		} else {
-			clauses = append(clauses, `EXISTS (SELECT 1 FROM player_gu pg WHERE pg.player_id = players.id AND pg.gu_id ILIKE $1)`)
 		}
 
 		return "(" + strings.Join(clauses, " OR ") + ")", args

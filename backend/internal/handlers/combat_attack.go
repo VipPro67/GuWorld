@@ -12,8 +12,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
-	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -55,6 +55,35 @@ func enemyResistsControl(player *models.Player) bool {
 		return false
 	}
 	return rand.Float64() < player.ActiveCombat.EnemyMentalResistance
+}
+
+// applyPathMasteryGain adds Chân Ý points to a path while respecting the
+// per-battle cap (gamefx.PathMasteryBattleGainLimit(rank) * battle). The amount
+// earned in the current battle is tracked on the active combat state; once the
+// cap is reached further gains are suppressed. Returns the points actually
+// granted (may be less than gain, or 0 when capped).
+func applyPathMasteryGain(player *models.Player, path string, gain int) int {
+	if player.PathMasteries == nil {
+		player.PathMasteries = make(models.PathMasteriesMap)
+	}
+	if gain <= 0 {
+		return 0
+	}
+	if player.ActiveCombat == nil {
+		player.PathMasteries[path] += gain
+		return gain
+	}
+	capLimit := gamefx.PathMasteryBattleGainLimit(player.Rank)
+	remaining := capLimit - player.ActiveCombat.PathMasteryGained
+	if remaining <= 0 {
+		return 0
+	}
+	if gain > remaining {
+		gain = remaining
+	}
+	player.ActiveCombat.PathMasteryGained += gain
+	player.PathMasteries[path] += gain
+	return gain
 }
 
 func CombatAttack(c *gin.Context) {
@@ -501,18 +530,17 @@ func CombatAttack(c *gin.Context) {
 						dmgBase, defBase, _, _ := CalculateGuEffectForCombatant(refCaster, &spec, false, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)
 
 						if !isVirtual {
-							if player.PathMasteries == nil {
-								player.PathMasteries = make(models.PathMasteriesMap)
-							}
 							if len(spec.Path) > 0 {
 								cleanPath := strings.TrimSuffix(strings.ToLower(spec.Path[0]), " path")
 								pathGain := 1
 								if spec.Rank >= 6 {
 									pathGain = 10
 								}
-								player.PathMasteries[cleanPath] += pathGain
-								newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
-								logs = append(logs, fmt.Sprintf("-> Ngộ Đạo tăng tiến (%s)! +%d điểm Chân Ý %s (Cảnh giới: %s).", spec.Name, pathGain, strings.Title(cleanPath), gamefx.PathMasteryLevelName(newLevel)))
+								gained := applyPathMasteryGain(&player, cleanPath, pathGain)
+								if gained > 0 {
+									newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
+									logs = append(logs, fmt.Sprintf("-> Ngộ Đạo tăng tiến (%s)! +%d điểm Chân Ý %s (Cảnh giới: %s).", spec.Name, gained, strings.Title(cleanPath), gamefx.PathMasteryLevelName(newLevel)))
+								}
 							}
 						}
 						dmg, def, cost, errGu := CalculateGuEffectForCombatant(refCaster, &spec, true, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)
@@ -542,9 +570,13 @@ func CombatAttack(c *gin.Context) {
 							isDefense := spec.Type == "Defense"
 							isAttack := spec.Type == "Attack" || spec.Type == "Active"
 							if spec.Effects.Active != nil {
-								isHealing = spec.Effects.Active.HealFlat > 0 || spec.ID == "GU_NINE_LEAF_VITALITY_GRASS"
-								if spec.Effects.Active.ShieldFlat > 0 { isDefense = true }
-								if spec.Effects.Active.DamageFlat > 0 || spec.Effects.Active.DamageMult > 0 { isAttack = true }
+								isHealing = spec.Effects.Active.HealFlat > 0
+								if spec.Effects.Active.ShieldFlat > 0 {
+									isDefense = true
+								}
+								if spec.Effects.Active.DamageFlat > 0 || spec.Effects.Active.DamageMult > 0 {
+									isAttack = true
+								}
 							}
 
 							if isHealing {
@@ -588,7 +620,7 @@ func CombatAttack(c *gin.Context) {
 								}
 							} else if isAttack {
 								hasBypass := spec.Effects.Active != nil && spec.Effects.Active.CurveAttack
-								targetType := spec.Effects.Active.TargetSelector;
+								targetType := spec.Effects.Active.TargetSelector
 								targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, targetType, prefX, prefY, hasBypass)
 								if len(targetsIdx) > 0 {
 									dmgDao := dmg - dmgBase
@@ -597,81 +629,81 @@ func CombatAttack(c *gin.Context) {
 									} else {
 										logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s!", refCaster.Name, spec.Name))
 									}
-							for _, eIdx := range targetsIdx {
-								tEnemy := &player.ActiveCombat.Enemies[eIdx]
-								netDmg := dmg - tEnemy.BaseDefense
-								netDmg *= (1.0 - enemyPathResistance(&player, spec.Path))
-								if netDmg < 1.0 {
-									netDmg = 1.0
-								}
-								dmgLog := applyDamageWithLogs(refCaster.Name, tEnemy.Name, tEnemy, netDmg)
-									logs = append(logs, dmgLog)
+									for _, eIdx := range targetsIdx {
+										tEnemy := &player.ActiveCombat.Enemies[eIdx]
+										netDmg := dmg - tEnemy.BaseDefense
+										netDmg *= (1.0 - enemyPathResistance(&player, spec.Path))
+										if netDmg < 1.0 {
+											netDmg = 1.0
+										}
+										dmgLog := applyDamageWithLogs(refCaster.Name, tEnemy.Name, tEnemy, netDmg)
+										logs = append(logs, dmgLog)
 
-									// Apply status effects from Gu to target
-									if spec.Effects.Active != nil {
-										active := spec.Effects.Active
-										resisted := enemyResistsControl(&player)
-										switch active.ApplyStatus {
-										case "SILENCE":
-											if !resisted {
+										// Apply status effects from Gu to target
+										if spec.Effects.Active != nil {
+											active := spec.Effects.Active
+											resisted := enemyResistsControl(&player)
+											switch active.ApplyStatus {
+											case "SILENCE":
+												if !resisted {
+													tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+														Type: "silence", Value: 1, Turns: active.StatusDurationTicks,
+													})
+													logs = append(logs, fmt.Sprintf("%s bị Im lặng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
+												}
+											case "STUN":
+												if !resisted {
+													tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+														Type: "stun", Value: 1, Turns: active.StatusDurationTicks,
+													})
+													logs = append(logs, fmt.Sprintf("%s bị Choáng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
+												}
+											case "FREEZE":
+												if !resisted {
+													tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+														Type: "freeze", Value: 1, Turns: active.StatusDurationTicks,
+													})
+													logs = append(logs, fmt.Sprintf("%s bị Đóng băng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
+												}
+											case "SLOW":
+												if !resisted {
+													tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+														Type: "slow", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
+													})
+													logs = append(logs, fmt.Sprintf("%s bị Chậm %d%% %d lượt!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
+												}
+											case "SLOW1":
 												tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-													Type: "silence", Value: 1, Turns: active.StatusDurationTicks,
+													Type: "slow1", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
 												})
-												logs = append(logs, fmt.Sprintf("%s bị Im lặng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
-											}
-										case "STUN":
-											if !resisted {
+												logs = append(logs, fmt.Sprintf("%s bị Chậm %d%% %d lượt (không thể kháng)!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
+											case "SLOW_DAMAGE":
+												if !resisted {
+													tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+														Type: "slow_damage", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
+													})
+													logs = append(logs, fmt.Sprintf("%s bị Chậm sát thương %d%% và mất %d HP/lượt trong %d lượt!", tEnemy.Name, int(active.StatusTickDamage), int(active.StatusTickDamage), active.StatusDurationTicks))
+												}
+											case "WEAK":
+												if !resisted {
+													tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+														Type: "weak", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
+													})
+													logs = append(logs, fmt.Sprintf("%s bị Yếu %d%% %d lượt!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
+												}
+											case "BLEED":
 												tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-													Type: "stun", Value: 1, Turns: active.StatusDurationTicks,
+													Type: "bleed", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
 												})
-												logs = append(logs, fmt.Sprintf("%s bị Choáng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
-											}
-										case "FREEZE":
-											if !resisted {
+												logs = append(logs, fmt.Sprintf("%s bị Chảy máu (%.0f/lượt %d lượt)!", tEnemy.Name, active.StatusTickDamage, active.StatusDurationTicks))
+											case "POISON":
 												tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-													Type: "freeze", Value: 1, Turns: active.StatusDurationTicks,
+													Type: "poison", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
 												})
-												logs = append(logs, fmt.Sprintf("%s bị Đóng băng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
+												logs = append(logs, fmt.Sprintf("%s bị Độc (%.0f/lượt %d lượt)!", tEnemy.Name, active.StatusTickDamage, active.StatusDurationTicks))
 											}
-										case "SLOW":
-											if !resisted {
-												tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-													Type: "slow", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
-												})
-												logs = append(logs, fmt.Sprintf("%s bị Chậm %d%% %d lượt!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
-											}
-										case "SLOW1":
-											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-												Type: "slow1", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
-											})
-											logs = append(logs, fmt.Sprintf("%s bị Chậm %d%% %d lượt (không thể kháng)!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
-										case "SLOW_DAMAGE":
-											if !resisted {
-												tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-													Type: "slow_damage", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
-												})
-												logs = append(logs, fmt.Sprintf("%s bị Chậm sát thương %d%% và mất %d HP/lượt trong %d lượt!", tEnemy.Name, int(active.StatusTickDamage), int(active.StatusTickDamage), active.StatusDurationTicks))
-											}
-										case "WEAK":
-											if !resisted {
-												tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-													Type: "weak", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
-												})
-												logs = append(logs, fmt.Sprintf("%s bị Yếu %d%% %d lượt!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
-											}
-										case "BLEED":
-											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-												Type: "bleed", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
-											})
-											logs = append(logs, fmt.Sprintf("%s bị Chảy máu (%.0f/lượt %d lượt)!", tEnemy.Name, active.StatusTickDamage, active.StatusDurationTicks))
-										case "POISON":
-											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-												Type: "poison", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
-											})
-											logs = append(logs, fmt.Sprintf("%s bị Độc (%.0f/lượt %d lượt)!", tEnemy.Name, active.StatusTickDamage, active.StatusDurationTicks))
 										}
 									}
-								}
 								}
 							} else {
 								logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s (Hỗ trợ)!", refCaster.Name, spec.Name))
@@ -699,28 +731,29 @@ func CombatAttack(c *gin.Context) {
 								netDmg = 1.0
 							}
 							dmgLog := applyDamageWithLogs(refCaster.Name, targetEnemy.Name, targetEnemy, netDmg)
-							
-							if player.PathMasteries == nil {
-								player.PathMasteries = make(models.PathMasteriesMap)
-							}
-							player.PathMasteries["strength"] += 1
-							pts := player.PathMasteries["strength"]
-							lvlName := "Sơ Học"
-							if pts >= 10000 {
-								lvlName = "Vô Thượng Tông Sư"
-							} else if pts >= 2500 {
-								lvlName = "Đại Tông Sư"
-							} else if pts >= 500 {
-								lvlName = "Tông Sư"
-							} else if pts >= 100 {
-								lvlName = "Đại Sư"
+
+							strengthGain := applyPathMasteryGain(&player, "strength", 1)
+							strengthNote := ""
+							if strengthGain > 0 {
+								pts := player.PathMasteries["strength"]
+								lvlName := "Sơ Học"
+								if pts >= 10000 {
+									lvlName = "Vô Thượng Tông Sư"
+								} else if pts >= 2500 {
+									lvlName = "Đại Tông Sư"
+								} else if pts >= 500 {
+									lvlName = "Tông Sư"
+								} else if pts >= 100 {
+									lvlName = "Đại Sư"
+								}
+								strengthNote = fmt.Sprintf(" Ngộ Đạo: +1 Chân Ý Lực (%s)", lvlName)
 							}
 
 							if daoMult > 1.0 {
 								dmgDao := fullDmg - dmgVal
-								logs = append(logs, fmt.Sprintf("-> %s đánh thường (Basic Attack) [Gốc: %.1f, Đạo Ngân: +%.1f]! Ngộ Đạo: +1 Chân Ý Lực (%s)", refCaster.Name, dmgVal, dmgDao, lvlName), dmgLog)
+								logs = append(logs, fmt.Sprintf("-> %s đánh thường (Basic Attack) [Gốc: %.1f, Đạo Ngân: +%.1f]!%s", refCaster.Name, dmgVal, dmgDao, strengthNote), dmgLog)
 							} else {
-								logs = append(logs, fmt.Sprintf("-> %s đánh thường (Basic Attack)! Ngộ Đạo: +1 Chân Ý Lực (%s)", refCaster.Name, lvlName), dmgLog)
+								logs = append(logs, fmt.Sprintf("-> %s đánh thường (Basic Attack)!%s", refCaster.Name, strengthNote), dmgLog)
 							}
 						}
 					}
@@ -1024,7 +1057,7 @@ func CombatAttack(c *gin.Context) {
 						ctx.Logs = append(ctx.Logs, fmt.Sprintf("Thu hoạch toàn bộ chiến lợi phẩm tạm thời của bại binh! Hút được %.0f Nguyên Thạch, %d Cổ trùng, và các nguyên liệu khác từ đối phương.", targetLoot.PrimevalStones, len(targetLoot.GuInventory)))
 					}
 
-					}
+				}
 			}
 			player.PrimevalStones += stolenStones
 			ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chiến thắng PVP vang dội! Đạo hữu cướp đoạt %.0f Nguyên Thạch từ đối phương!", stolenStones))
@@ -1172,9 +1205,9 @@ func CombatAttack(c *gin.Context) {
 						ctx.Logs = append(ctx.Logs, lootLogs...)
 					}
 					markBossCleared(tx, &player)
-		} else {
-				logger.S.Errorf("Failed to load loot table %s: %v", player.ActiveCombat.LootTableID, err)
-			}
+				} else {
+					logger.S.Errorf("Failed to load loot table %s: %v", player.ActiveCombat.LootTableID, err)
+				}
 			} else {
 				ctx.Logs = append(ctx.Logs, "Chiến đấu thắng lợi vang dội!")
 			}

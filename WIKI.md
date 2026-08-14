@@ -70,6 +70,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 - Trong quá trình tu hành, Cổ sư có thể tích luỹ điểm **Chân Ý** của các lưu phái (ví dụ: Kiếm Đạo, Hỏa Đạo, Trí Đạo...) để thăng tiến cảnh giới lưu phái.
 - **Cách nhận điểm Chân Ý:**
   - **Sử dụng Cổ tiêu hao/Sát chiêu trong chiến đấu:** (Bao gồm cả đánh tay và đánh tự động/Simulator như khai thác mỏ, tàn tích). Mỗi lần thi triển thành công tốn Chân Nguyên: Cổ phàm +1 điểm, Tiên Cổ +10 điểm hệ tương ứng. (Lưu ý: Đánh Đấu Trường Ảo không được cộng điểm).
+  - **Giới hạn mỗi trận:** điểm Chân Ý nhận từ chiến đấu bị chặn ở **Rank × 10 điểm/trận** (đánh tay, đánh tự động và sát chiêu đều tính chung). Đạt giới hạn thì không ngộ đạo thêm cho tới khi trận chiến kết thúc. Thưởng phó bản và luyện Cổ không tính vào giới hạn này.
   - *(Tương lai)* Sẽ có thêm cơ chế Dung luyện Cổ, Khám phá tàn tích đặc thù hoặc đọc truyền thừa.
 - **Các mốc cảnh giới:** Sơ Học (< 100) -> Đại Sư (100) -> Tông Sư (500) -> Đại Tông Sư (2500) -> Vô Thượng Tông Sư (10000).
 - **Tác dụng:**

@@ -93,7 +93,21 @@ func GenerateCell(x, y int) models.Cell {
 
 	weights := zone.PoolWeights.CellWeights
 	if len(weights) == 0 {
-		weights = map[string]int{"Monster": 20, "Resource": 10, "WildGu": 3, "Empty": 67}
+		weights = map[string]int{"Monster": 8, "Resource": 4, "WildGu": 1, "Empty": 87}
+	} else {
+		// Override to forcibly reduce density if DB has high values
+		newW := make(map[string]int)
+		for k, v := range weights {
+			if k == "Empty" {
+				newW[k] = v * 4
+			} else {
+				newW[k] = v / 2
+			}
+		}
+		if newW["Empty"] == 0 {
+			newW["Empty"] = 100
+		}
+		weights = newW
 	}
 
 	switch pickWeightedType(weights, rng) {
@@ -451,12 +465,16 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 	} else if !pvpTriggered {
 		switch cell.Type {
 		case "Resource":
+			itemName := cell.Content
+			if item, ok := models.ItemRegistry[cell.Content]; ok {
+				itemName = item.Name
+			}
 			if HasExplorationInventorySpace(player, 1) {
 				if player.TempLoot.MaterialsInventory == nil {
 					player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
 				}
 				player.TempLoot.MaterialsInventory[cell.Content]++
-				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Đạo hữu tìm thấy nguyên liệu hoang dã: 1x %s (được giữ tạm thời trong bản đồ)!", player.X, player.Y, cell.Content)
+				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Đạo hữu tìm thấy nguyên liệu hoang dã: 1x %s (được giữ tạm thời trong bản đồ)!", player.X, player.Y, itemName)
 
 				MarkPersistentCellCleared(tx, player.ID, player.X, player.Y)
 
@@ -465,18 +483,22 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				}
 				player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
 			} else {
-				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Phát hiện 1x %s, nhưng Bách Bảo Nang đã đầy!", player.X, player.Y, cell.Content)
+				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Phát hiện 1x %s, nhưng Bách Bảo Nang đã đầy!", player.X, player.Y, itemName)
 			}
 		case "WildGu":
+			var guSpec models.GuDictionaryItem
+			var ok bool
+			if cell.Rank > 0 {
+				guSpec, ok = models.GetGu(cell.Content, cell.Rank)
+			}
+			if !ok {
+				guSpec, _ = models.GetGuAny(cell.Content)
+			}
+			guName := cell.Content
+			if guSpec.Name != "" {
+				guName = guSpec.Name
+			}
 			if HasExplorationInventorySpace(player, 1) {
-				var guSpec models.GuDictionaryItem
-				var ok bool
-				if cell.Rank > 0 {
-					guSpec, ok = models.GetGu(cell.Content, cell.Rank)
-				}
-				if !ok {
-					guSpec, _ = models.GetGuAny(cell.Content)
-				}
 				newGu := models.GuInstance{
 					InstanceID: uuid.New().String(),
 					GuID:       cell.Content,
@@ -486,14 +508,14 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 					Equipped:   false,
 				}
 				player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, newGu)
-				logMsg = fmt.Sprintf("Cơ duyên! Đạo hữu bắt gặp và thu phục thành công Cổ trùng hoang dã: %s (được giữ tạm thời trong bản đồ)!", cell.Content)
+				logMsg = fmt.Sprintf("Cơ duyên! Đạo hữu bắt gặp và thu phục thành công Cổ trùng hoang dã: %s (được giữ tạm thời trong bản đồ)!", guName)
 
 				if player.ClearedCells == nil {
 					player.ClearedCells = make(models.ClearedCellsMap)
 				}
 				player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
 			} else {
-				logMsg = fmt.Sprintf("Đạo hữu phát hiện thấy Cổ trùng hoang dã %s, tiếc là Bách Bảo Nang đã đầy nên để nó trốn thoát!", cell.Content)
+				logMsg = fmt.Sprintf("Đạo hữu phát hiện thấy Cổ trùng hoang dã %s, tiếc là Bách Bảo Nang đã đầy nên để nó trốn thoát!", guName)
 			}
 		case "Monster", "Boss":
 			combatTriggered = true

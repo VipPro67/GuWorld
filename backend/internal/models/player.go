@@ -167,6 +167,9 @@ type CombatState struct {
 	SkillCooldowns      map[string]int    `json:"skill_cooldowns,omitempty"`
 	ItemsUsedCount      int               `json:"items_used_count"`
 	ItemCooldowns       map[string]int    `json:"item_cooldowns,omitempty"`
+	// PathMasteryGained tracks Chân Ý points already earned in this battle, so
+	// combat gains can be capped at PathMasteryBattleGainLimit(rank) per battle.
+	PathMasteryGained   int               `json:"path_mastery_gained,omitempty"`
 	Allies              []Combatant       `json:"allies,omitempty"`
 	PetIDs              []string          `json:"pet_ids,omitempty"`
 	Enemies             []Combatant       `json:"enemies,omitempty"`

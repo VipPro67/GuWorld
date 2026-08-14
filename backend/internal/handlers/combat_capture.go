@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -168,9 +169,16 @@ func CaptureMonster(c *gin.Context) {
 		enemySubRank := player.ActiveCombat.EnemySubRank
 		enemyName := player.ActiveCombat.EnemyName
 		enemyType := player.ActiveCombat.EnemyType
+
+		if player.ClearedCells == nil {
+			player.ClearedCells = make(models.ClearedCellsMap)
+		}
+		coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
+		player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
+
 		player.ActiveCombat = nil
 
-		_, errUpd := tx.Exec(`UPDATE players SET active_combat = NULL WHERE id = $1`, player.ID)
+		_, errUpd := tx.Exec(`UPDATE players SET active_combat = NULL, cleared_cells = $1 WHERE id = $2`, player.ClearedCells, player.ID)
 		if errUpd != nil {
 			logger.S.Errorf("CaptureMonster: failed to clear combat: %v", errUpd)
 		}
