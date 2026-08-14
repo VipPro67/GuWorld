@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect } from "react";
-import { useGameStore } from "@/store/useGameStore";
+import { useGameStore, InstanceListItem } from "@/store/useGameStore";
 import {
   Compass,
   ArrowLeft,
@@ -11,14 +11,32 @@ import {
   Activity,
   Heart,
   Scroll,
-  BookOpen
+  BookOpen,
+  Hourglass
 } from "lucide-react";
+
+const TYPE_LABELS: Record<string, { label: string; dream: boolean }> = {
+  DREAM_REALM: { label: "Mộng Cảnh", dream: true },
+  SECRET_REALM: { label: "Bí Cảnh", dream: false },
+  INHERITANCE_DEMONIC: { label: "Truyền Thừa Ma Đạo", dream: false },
+  INHERITANCE_RIGHTEOUS: { label: "Truyền Thừa Chính Đạo", dream: false },
+};
+
+const formatCooldown = (seconds: number): string => {
+  if (seconds <= 0) return "";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `Còn ${h}h ${m}m`;
+  return `Còn ${m}m`;
+};
 
 export const DungeonView: React.FC = () => {
   const {
     player,
     activeInstanceSession,
     activeInstanceTemplate,
+    availableInstances,
+    fetchInstances,
     fetchActiveInstance,
     enterInstance,
     actionInstance,
@@ -28,38 +46,12 @@ export const DungeonView: React.FC = () => {
 
   useEffect(() => {
     fetchActiveInstance();
-  }, [fetchActiveInstance]);
+    fetchInstances();
+  }, [fetchActiveInstance, fetchInstances]);
 
   if (!player) return null;
 
-  // Static list of templates matching db seeds
-  const dungeons = [
-    {
-      id: "dungeon_flower_wine",
-      name: "Truyền Thừa Hoa Tửu Hành Giả",
-      type: "INHERITANCE_DEMONIC",
-      required_rank: 1,
-      entry_item: "NONE",
-      description: "Di tích động đá ẩn mật của Hoa Tửu Hành Giả lưu lại từ trăm năm trước, ẩn chứa cơ duyên Moonlight Gu và nguy cơ tử vong.",
-      rewards: {
-        materials: { guts_gu: 2, green_bamboo_wine: 1 },
-        primeval_stones: 100,
-        attainment: { path: "Moon Path", amount: 10 }
-      }
-    },
-    {
-      id: "dream_realm_star_constellation",
-      name: "Mộng Cảnh Tinh Túc Tiên Tôn",
-      type: "DREAM_REALM",
-      required_rank: 5,
-      entry_item: "NONE",
-      description: "Thám hiểm thời niên thiếu đầy thử thách của Tinh Túc Tiên Tôn khi nghiên cứu tinh đồ giữa bầu trời tinh thần đại đạo.",
-      rewards: {
-        attainment: { path: "Dream Path", amount: 50 },
-        materials: { guts_gu: 5 }
-      }
-    }
-  ];
+  const dungeons: InstanceListItem[] = availableInstances;
 
   // Helper to parse requirements for UI rendering
   const renderReqs = (requirements: Record<string, any>) => {
@@ -82,6 +74,8 @@ export const DungeonView: React.FC = () => {
     : null;
 
   const isDreamRealm = activeInstanceTemplate?.type === "DREAM_REALM";
+  const activeType = activeInstanceTemplate?.type ? TYPE_LABELS[activeInstanceTemplate.type] : null;
+  const activeTag = activeType ? activeType.label : "Phó Bản";
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-4 flex flex-col gap-6">
@@ -123,7 +117,7 @@ export const DungeonView: React.FC = () => {
               <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
                 isDreamRealm ? "bg-purple-900/50 text-purple-300 border border-purple-800/40" : "bg-red-900/50 text-red-300 border border-red-800/40"
               }`}>
-                {isDreamRealm ? "Mộng Cảnh Sinh Tồn" : "Truyền Thừa Ma Đạo"}
+                {activeTag}
               </span>
               <h2 className="text-xl font-serif font-bold text-zinc-100 mt-1">{activeInstanceTemplate.name}</h2>
             </div>
@@ -181,10 +175,18 @@ export const DungeonView: React.FC = () => {
         </div>
       ) : (
         /* INSTANCE TEMPLATES LIST VIEW */
+        dungeons.length === 0 ? (
+          <div className="text-center text-sm text-zinc-500 font-mono py-16">
+            Đang tải phó bản...
+          </div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {dungeons.map((dg) => {
             const isQualified = player.rank >= dg.required_rank;
             const isDream = dg.type === "DREAM_REALM";
+            const typeLabel = TYPE_LABELS[dg.type]?.label ?? dg.type;
+            const inCooldown = (dg.cooldown_remaining ?? 0) > 0;
+            const cdText = formatCooldown(dg.cooldown_remaining ?? 0);
 
             return (
               <div
@@ -201,7 +203,7 @@ export const DungeonView: React.FC = () => {
                     <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-semibold shrink-0 ${
                       isDream ? "bg-purple-950/50 text-purple-300 border border-purple-800/40" : "bg-red-950/50 text-red-300 border border-red-800/40"
                     }`}>
-                      {isDream ? "Mộng Cảnh" : "Truyền Thừa Ma Đạo"}
+                      {typeLabel}
                     </span>
                   </div>
 
@@ -217,6 +219,12 @@ export const DungeonView: React.FC = () => {
                     <span className="bg-zinc-900 text-zinc-400 border border-zinc-800 px-2 py-0.5 rounded-lg">
                       Vật phẩm: {dg.entry_item === 'NONE' ? 'Tự do' : dg.entry_item}
                     </span>
+                    {inCooldown && (
+                      <span className="inline-flex items-center gap-1 bg-zinc-900 text-amber-300 border border-amber-800/40 px-2 py-0.5 rounded-lg">
+                        <Hourglass className="w-3 h-3" />
+                        {cdText}
+                      </span>
+                    )}
                   </div>
 
                   {/* Rewards summary */}
@@ -229,10 +237,16 @@ export const DungeonView: React.FC = () => {
                           Chân Ý {dg.rewards.attainment.path} (+{dg.rewards.attainment.amount})
                         </span>
                       )}
+                      {dg.rewards.dao_marks && Object.entries(dg.rewards.dao_marks).map(([k, v]) => (
+                        <span key={k} className="inline-flex items-center gap-1 bg-amber-950/30 text-amber-300 border border-amber-900/40 px-2 py-0.5 rounded text-[10px]">
+                          <Flame className="w-3 h-3" />
+                          {String(v)} Đạo Ngân {k}
+                        </span>
+                      ))}
                       {dg.rewards.materials && Object.entries(dg.rewards.materials).map(([k, v]) => (
                         <span key={k} className="inline-flex items-center gap-1 bg-indigo-950/30 text-indigo-300 border border-indigo-900/40 px-2 py-0.5 rounded text-[10px]">
                           <Sparkles className="w-3 h-3" />
-                          {v}x {k === 'guts_gu' ? 'Can Đảm Cổ' : k}
+                          {String(v)}x {k === 'guts_gu' ? 'Can Đảm Cổ' : k}
                         </span>
                       ))}
                       {dg.rewards.primeval_stones && (
@@ -245,7 +259,7 @@ export const DungeonView: React.FC = () => {
                   </div>
                 </div>
 
-                {isQualified ? (
+                {isQualified && !inCooldown ? (
                   <button
                     onClick={() => enterInstance(dg.id)}
                     disabled={actionLoading}
@@ -260,13 +274,14 @@ export const DungeonView: React.FC = () => {
                   </button>
                 ) : (
                   <div className="w-full text-center py-2.5 rounded-xl bg-zinc-900/40 border border-zinc-900 text-zinc-650 text-xs font-mono">
-                    Khóa
+                    {inCooldown ? `Hồi chiêu: ${cdText}` : "Khóa"}
                   </div>
                 )}
               </div>
             );
           })}
         </div>
+        )
       )}
     </div>
   );

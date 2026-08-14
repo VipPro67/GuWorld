@@ -734,16 +734,19 @@ func InitSchema() error {
 	CREATE TABLE IF NOT EXISTS instance_templates (
 		id VARCHAR(50) PRIMARY KEY,
 		name VARCHAR(100) NOT NULL,
-		type VARCHAR(50) NOT NULL, -- "INHERITANCE_RIGHTEOUS", "INHERITANCE_DEMONIC", "DREAM_REALM"
+		type VARCHAR(50) NOT NULL, -- "INHERITANCE_RIGHTEOUS", "INHERITANCE_DEMONIC", "DREAM_REALM", "SECRET_REALM"
 		required_rank INTEGER NOT NULL,
 		entry_item VARCHAR(50) NOT NULL, -- Item ID needed to enter or "NONE"
 		description TEXT NOT NULL,
 		rewards JSONB NOT NULL DEFAULT '{}', -- e.g., {"attainment": {"path": "Sword", "amount": 1}}
-		map_data JSONB NOT NULL DEFAULT '[]' -- Sequence of stages / rooms
+		map_data JSONB NOT NULL DEFAULT '[]', -- Sequence of stages / rooms
+		cooldown_hours INTEGER NOT NULL DEFAULT 24
 	);`)
 	if err != nil {
 		return fmt.Errorf("failed to create instance_templates table: %w", err)
 	}
+
+	_, _ = DB.Exec(`ALTER TABLE instance_templates ADD COLUMN IF NOT EXISTS cooldown_hours INTEGER NOT NULL DEFAULT 24;`)
 
 	// 4.12. Create player_instance_sessions
 	_, err = DB.Exec(`
@@ -3052,25 +3055,157 @@ func seedMapCellsFromCSV(filename string) error {
 	return nil
 }
 
+// dreamRealmPaths lists the 49 lưu phái (path) canonical keys with their
+// Vietnamese display names. Keys must match the lowercase path keys used in
+// players.path_masteries and Gu.csv (see docs/CANH_GIOI_DAO_NGAN.md).
+var dreamRealmPaths = []struct {
+	Key string // lowercase path key, e.g. "fire"
+	VN  string // Vietnamese display name, e.g. "Hỏa Đạo"
+}{
+	{"blade", "Đao Đạo"}, {"blood", "Huyết Đạo"}, {"bone", "Cốt Đạo"},
+	{"cloud", "Vân Đạo"}, {"concealment", "Ẩn Nặc Đạo"}, {"creation", "Tạo Hóa Đạo"},
+	{"dark", "Hắc Ám Đạo"}, {"death", "Tử Vong Đạo"}, {"destruction", "Hủy Diệt Đạo"},
+	{"dream", "Mộng Đạo"}, {"earth", "Thổ Đạo"}, {"enchantment", "Phù Chú Đạo"},
+	{"enslavement", "Nô Dịch Đạo"}, {"fire", "Hỏa Đạo"}, {"food", "Thực Đạo"},
+	{"formation", "Trận Pháp Đạo"}, {"heaven", "Thiên Đạo"}, {"human", "Nhân Đạo"},
+	{"ice", "Hàn Băng Đạo"}, {"illusion", "Ảo Giác Đạo"}, {"information", "Tín Đạo"},
+	{"investigation", "Trinh Sát Đạo"}, {"life", "Sinh Đạo"}, {"light", "Quang Minh Đạo"},
+	{"lightning", "Lôi Đạo"}, {"luck", "Khí Vận Đạo"}, {"metal", "Kim Đạo"},
+	{"moon", "Nguyệt Đạo"}, {"movement", "Di Động Đạo"}, {"poison", "Độc Đạo"},
+	{"qi", "Khí Đạo"}, {"refinement", "Tinh Luyện Đạo"}, {"rule", "Quy Tắc Đạo"},
+	{"shadow", "Ảnh Đạo"}, {"smoke", "Yên Vụ Đạo"}, {"soul", "Hồn Đạo"},
+	{"sound", "Âm Thanh Đạo"}, {"space", "Không Gian Đạo"}, {"strength", "Lực Đạo"},
+	{"sun", "Nhật Đạo"}, {"sword", "Kiếm Đạo"}, {"theft", "Trộm Đạo"},
+	{"theme", "Chủ Đề Đạo"}, {"time", "Thời Gian Đạo"}, {"transformation", "Biến Hóa Đạo"},
+	{"water", "Thủy Đạo"}, {"wind", "Phong Đạo"}, {"wisdom", "Trí Đạo"},
+	{"wood", "Mộc Đạo"},
+}
+
+// pathMaterialIDs lists the path keys that have a dedicated *_path_material
+// item in Item.csv. Paths missing from this set fall back to guts_gu.
+var pathMaterialIDs = map[string]bool{
+	"blade": true, "blood": true, "bone": true, "cloud": true, "dark": true,
+	"dream": true, "earth": true, "enslavement": true, "fire": true,
+	"food": true, "formation": true, "human": true, "ice": true,
+	"information": true, "lightning": true, "light": true, "luck": true,
+	"moon": true, "poison": true, "qi": true, "refinement": true,
+	"rule": true, "soul": true, "space": true, "strength": true,
+	"sword": true, "time": true, "transformation": true, "water": true,
+	"wind": true, "wisdom": true, "wood": true,
+}
+
+// pathMaterialID returns the reward material id for a path key, falling back
+// to guts_gu when the path has no dedicated *_path_material item.
+func pathMaterialID(pathKey string) string {
+	if pathKey == "dream" {
+		return "dream_material"
+	}
+	if pathMaterialIDs[pathKey] {
+		return pathKey + "_path_material"
+	}
+	return "guts_gu"
+}
+
+// buildDreamRealmMapData builds a generic DREAM_REALM stage tree themed to a
+// given lưu phái. Content is template-generated for now; dynamic per-path
+// storytelling can replace it later.
+func buildDreamRealmMapData(pathKey, pathVN string) string {
+	mat := pathMaterialID(pathKey)
+	return fmt.Sprintf(`[
+		{
+			"stage_index": 0,
+			"description": "Đạo hữu chìm vào giấc mộng huyền ảo của %s. Hồn phách lơ lửng giữa vô vàn tinh quang đại đạo, mỗi bước lĩnh ngộ đều tiêu hao Hồn Lực. Trước mặt có hai con đường:",
+			"options": [
+				{"text": "Tĩnh tâm nhập định, cảm nhận đại đạo (Tiêu hao 15 Soul HP)", "next_stage": 1, "requirements": {}},
+				{"text": "Mạnh dạn lao sâu vào ảo cảnh thử thách (Tiêu hao 25 Soul HP)", "next_stage": 2, "requirements": {}}
+			]
+		},
+		{
+			"stage_index": 1,
+			"description": "Một khối linh khí %s ngưng tụ thành cự thú chặn đường. Cần hồn phách kiên cường hoặc tài liệu tương ứng để hóa giải.",
+			"options": [
+				{"text": "Dùng lực hồn phách trấn áp (Yêu cầu Soul HP >= 40)", "next_stage": 3, "requirements": {"min_soul_hp": 40}},
+				{"text": "Tế lễ tài liệu để cự thú rút lui (Mất 1 %s)", "next_stage": 3, "requirements": {"material_id": "%s", "amount": 1}}
+			]
+		},
+		{
+			"stage_index": 2,
+			"description": "Ảo cảnh đảo lộn, hồn phách bị phản phệ dữ dội. Đạo hữu phải quyết định nhanh:",
+			"options": [
+				{"text": "Ổn định tâm thần, chịu đựng phản phệ (Mất 20 Soul HP)", "next_stage": 3, "requirements": {}},
+				{"text": "Rút lui khỏi mộng cảnh ngay lập tức (Thất bại)", "next_stage": -2, "requirements": {}}
+			]
+		},
+		{
+			"stage_index": 3,
+			"description": "Cuối cùng đạo hữu chạm tới hạch tâm đại đạo của %s. Tinh quang Chân Ý dâng trào, chỉ cần hấp thụ là hoàn thành truyền thừa:",
+			"options": [
+				{"text": "Nhập định hấp thụ Chân Ý và rời Mộng Cảnh", "next_stage": -1, "requirements": {}}
+			]
+		}
+	]`, pathVN, pathVN, mat, mat, pathVN)
+}
+
+// buildSecretRealmMapData builds a generic SECRET_REALM stage tree themed to a
+// given lưu phái. Unlike dream realms it drains normal HP instead of Soul HP.
+func buildSecretRealmMapData(pathKey, pathVN string) string {
+	mat := pathMaterialID(pathKey)
+	return fmt.Sprintf(`[
+		{
+			"stage_index": 0,
+			"description": "Đạo hữu lần theo cổ địa đồ tìm vào bí cảnh của %s. Không khí âm u nặng nề, vô số cấm chế cổ xưa đang ẩn nấp trong bóng tối:",
+			"options": [
+				{"text": "Cẩn thận men theo vách đá tìm lối đi an toàn (Mất 20 HP)", "next_stage": 1, "requirements": {}},
+				{"text": "Liều mình xông thẳng qua vùng cấm chế (Mất 40 HP)", "next_stage": 2, "requirements": {}}
+			]
+		},
+		{
+			"stage_index": 1,
+			"description": "Một trận đồ cổ của %s phát sáng chặn ngang đường đi. Cần sức mạnh cơ thể hoặc tài liệu quý để phá trận:",
+			"options": [
+				{"text": "Dùng sức mạnh đập vỡ trận nhãn (Mất 25 HP)", "next_stage": 3, "requirements": {}},
+				{"text": "Hiến tế tài liệu để trận đồ tự tan (Mất 1 %s)", "next_stage": 3, "requirements": {"material_id": "%s", "amount": 1}}
+			]
+		},
+		{
+			"stage_index": 2,
+			"description": "Thủ hộ linh chấn nộ phá ải mà lao tới! Chiến đấu ác liệt đến kiệt sức:",
+			"options": [
+				{"text": "Liều mình chống trả đến cùng (Mất 35 HP)", "next_stage": 3, "requirements": {}},
+				{"text": "Rút lui khỏi bí cảnh ngay lập tức (Thất bại)", "next_stage": -2, "requirements": {}}
+			]
+		},
+		{
+			"stage_index": 3,
+			"description": "Cổ điện cuối cùng hiện ra, cơ duyên của %s nằm trong bảo rương cổ xưa giữa đại điện:",
+			"options": [
+				{"text": "Mở bảo rương nhận cơ duyên và rời bí cảnh", "next_stage": -1, "requirements": {}}
+			]
+		}
+	]`, pathVN, pathVN, mat, mat, pathVN)
+}
+
 func SeedInstanceTemplates() error {
 	templates := []struct {
-		ID          string
-		Name        string
-		Type        string
-		ReqRank     int
-		EntryItem   string
-		Description string
-		Rewards     string
-		MapData     string
+		ID            string
+		Name          string
+		Type          string
+		ReqRank       int
+		EntryItem     string
+		Description   string
+		Rewards       string
+		MapData       string
+		CooldownHours int
 	}{
 		{
-			ID:          "dungeon_flower_wine",
-			Name:        "Truyền Thừa Hoa Tửu Hành Giả",
-			Type:        "INHERITANCE_DEMONIC",
-			ReqRank:     1,
-			EntryItem:   "NONE",
-			Description: "Di tích động đá ẩn mật của Hoa Tửu Hành Giả lưu lại từ trăm năm trước, ẩn chứa cơ duyên Moonlight Gu và nguy cơ tử vong.",
-			Rewards:     `{"materials": {"guts_gu": 2, "green_bamboo_wine": 1}, "primeval_stones": 100, "attainment": {"path": "Moon Path", "amount": 10}}`,
+			ID:            "dungeon_flower_wine",
+			Name:          "Truyền Thừa Hoa Tửu Hành Giả",
+			Type:          "INHERITANCE_DEMONIC",
+			ReqRank:       1,
+			EntryItem:     "NONE",
+			Description:   "Di tích động đá ẩn mật của Hoa Tửu Hành Giả lưu lại từ trăm năm trước, ẩn chứa cơ duyên Moonlight Gu và nguy cơ tử vong.",
+			Rewards:       `{"materials": {"guts_gu": 2, "green_bamboo_wine": 1}, "primeval_stones": 100, "attainment": {"path": "Moon Path", "amount": 10}}`,
+			CooldownHours: 24,
 			MapData: `[
 				{
 					"stage_index": 0,
@@ -3121,13 +3256,14 @@ func SeedInstanceTemplates() error {
 			]`,
 		},
 		{
-			ID:          "dream_realm_star_constellation",
-			Name:        "Mộng Cảnh Tinh Túc Tiên Tôn",
-			Type:        "DREAM_REALM",
-			ReqRank:     5,
-			EntryItem:   "NONE",
-			Description: "Thám hiểm thời niên thiếu đầy thử thách của Tinh Túc Tiên Tôn khi nghiên cứu trận đồ giữa bầu trời tinh thần đại đạo.",
-			Rewards:     `{"attainment": {"path": "Dream Path", "amount": 50}, "materials": {"guts_gu": 5}}`,
+			ID:            "dream_realm_star_constellation",
+			Name:          "Mộng Cảnh Tinh Túc Tiên Tôn",
+			Type:          "DREAM_REALM",
+			ReqRank:       5,
+			EntryItem:     "NONE",
+			Description:   "Thám hiểm thời niên thiếu đầy thử thách của Tinh Túc Tiên Tôn khi nghiên cứu trận đồ giữa bầu trời tinh thần đại đạo.",
+			Rewards:       `{"attainment": {"path": "Dream Path", "amount": 50}, "materials": {"guts_gu": 5}}`,
+			CooldownHours: 24,
 			MapData: `[
 				{
 					"stage_index": 0,
@@ -3171,15 +3307,86 @@ func SeedInstanceTemplates() error {
 		},
 	}
 
+	// Generate one dream realm per lưu phái (path). Completing one awards
+	// Chân Ý (attainment) points for that exact path, raising cảnh giới lưu phái.
+	for _, p := range dreamRealmPaths {
+		key := p.Key
+		templates = append(templates, struct {
+			ID            string
+			Name          string
+			Type          string
+			ReqRank       int
+			EntryItem     string
+			Description   string
+			Rewards       string
+			MapData       string
+			CooldownHours int
+		}{
+			ID:            "dream_realm_" + key,
+			Name:          "Mộng Cảnh " + p.VN,
+			Type:          "DREAM_REALM",
+			ReqRank:       3,
+			EntryItem:     "dream_material",
+			Description:   "Chìm vào giấc mộng của " + p.VN + " để lĩnh ngộ Chân Ý đại đạo. Hoàn thành giúp nâng cao cảnh giới lưu phái " + p.VN + ".",
+			Rewards:       fmt.Sprintf(`{"attainment": {"path": "%s Path", "amount": 50}, "materials": {"%s": 5}, "primeval_stones": 100}`, strings.Title(key), pathMaterialID(key)),
+			MapData:       buildDreamRealmMapData(key, p.VN),
+			CooldownHours: 24,
+		})
+	}
+
+	// Bí cảnh (SECRET_REALM): combat-style instances rewarding Đạo Ngân.
+	secretRealms := []struct {
+		Key     string
+		VN      string
+		ID      string
+		Name    string
+		Desc    string
+		Rewards string
+	}{
+		{"sword", "Kiếm Đạo", "secret_realm_sword_mountain", "Bí Cảnh Kiếm Sơn",
+			"Vết tích tàn dư của đại trận Kiếm Tông cổ đại, nơi vô số kiếm ấn ngủ vùi chờ người hữu duyên.",
+			`{"dao_marks": {"sword": 500}, "primeval_stones": 200, "materials": {"sword_path_material": 10}}`},
+		{"fire", "Hỏa Đạo", "secret_realm_fire_cave", "Bí Cảnh Hỏa Huyệt",
+			"Động dung nham nóng bỏng từng là lò luyện của Hỏa Tổ, linh hỏa muôn đời không tắt.",
+			`{"dao_marks": {"fire": 500}, "primeval_stones": 200, "materials": {"fire_path_material": 10}}`},
+		{"water", "Thủy Đạo", "secret_realm_water_palace", "Bí Cảnh Thủy Cung",
+			"Long cung chìm sâu dưới đáy biển, chứa đựng thủy tinh đại đạo của Thủy Thần cổ xưa.",
+			`{"dao_marks": {"water": 500}, "primeval_stones": 200, "materials": {"water_path_material": 10}}`},
+	}
+
+	for _, s := range secretRealms {
+		templates = append(templates, struct {
+			ID            string
+			Name          string
+			Type          string
+			ReqRank       int
+			EntryItem     string
+			Description   string
+			Rewards       string
+			MapData       string
+			CooldownHours int
+		}{
+			ID:            s.ID,
+			Name:          s.Name,
+			Type:          "SECRET_REALM",
+			ReqRank:       4,
+			EntryItem:     pathMaterialID(s.Key),
+			Description:   s.Desc,
+			Rewards:       s.Rewards,
+			MapData:       buildSecretRealmMapData(s.Key, s.VN),
+			CooldownHours: 48,
+		})
+	}
+
 	for _, t := range templates {
 		_, err := DB.Exec(`
-			INSERT INTO instance_templates (id, name, type, required_rank, entry_item, description, rewards, map_data)
-			VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb)
+			INSERT INTO instance_templates (id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours)
+			VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9)
 			ON CONFLICT (id) DO UPDATE SET
 				name=EXCLUDED.name, type=EXCLUDED.type, required_rank=EXCLUDED.required_rank,
 				entry_item=EXCLUDED.entry_item, description=EXCLUDED.description,
-				rewards=EXCLUDED.rewards, map_data=EXCLUDED.map_data
-		`, t.ID, t.Name, t.Type, t.ReqRank, t.EntryItem, t.Description, t.Rewards, t.MapData)
+				rewards=EXCLUDED.rewards, map_data=EXCLUDED.map_data, cooldown_hours=EXCLUDED.cooldown_hours
+		`, t.ID, t.Name, t.Type, t.ReqRank, t.EntryItem, t.Description, t.Rewards, t.MapData, t.CooldownHours)
 		if err != nil {
 			return fmt.Errorf("failed to seed instance %s: %w", t.ID, err)
 		}

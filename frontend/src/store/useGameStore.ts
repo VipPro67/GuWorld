@@ -610,6 +610,20 @@ export interface InstanceTemplate {
   description: string;
   rewards: Record<string, any>;
   map_data: InstanceStage[];
+  cooldown_hours?: number;
+  cooldown_remaining?: number;
+}
+
+export interface InstanceListItem {
+  id: string;
+  name: string;
+  type: string;
+  required_rank: number;
+  entry_item: string;
+  description: string;
+  rewards: Record<string, any>;
+  cooldown_hours: number;
+  cooldown_remaining: number;
 }
 
 export interface PlayerInstanceSession {
@@ -1121,6 +1135,8 @@ interface GameState {
   // Instance actions
   activeInstanceSession: PlayerInstanceSession | null;
   activeInstanceTemplate: InstanceTemplate | null;
+  availableInstances: InstanceListItem[];
+  fetchInstances: () => Promise<void>;
   fetchActiveInstance: () => Promise<void>;
   enterInstance: (instanceId: string) => Promise<boolean>;
   actionInstance: (optionIndex: number) => Promise<boolean>;
@@ -1511,6 +1527,7 @@ export const useGameStore = create<GameState>((set, get) => {
   activeTribulation: null,
   activeInstanceSession: null,
   activeInstanceTemplate: null,
+  availableInstances: [],
   sects: [],
   mySectStatus: null,
   sectMissions: [],
@@ -5247,6 +5264,21 @@ export const useGameStore = create<GameState>((set, get) => {
     } finally { set({ actionLoading: false }); }
   },
 
+  fetchInstances: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/instance/list`);
+      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.ok) {
+        const data = await response.json();
+        set({ availableInstances: data.instances || [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch instances:", err);
+    }
+  },
+
   fetchActiveInstance: async () => {
     const { token, logout } = get();
     if (!token) return;
@@ -5293,6 +5325,7 @@ export const useGameStore = create<GameState>((set, get) => {
       get().addToast(data.message || "Tiến vào phó bản thành công!", "success");
       get().addLog(data.message || `Tiến vào phó bản: ${instanceId}`);
       await get().initializeSession();
+      await get().fetchInstances();
       return true;
     } catch (err: any) {
       set({ error: err.message });
@@ -5328,6 +5361,9 @@ export const useGameStore = create<GameState>((set, get) => {
       get().addToast(data.message || "Thực hiện hành động thành công!", "success");
       get().addLog(data.message || "Đã hành động trong phó bản.");
       await get().initializeSession();
+      if (data.session?.status !== "ACTIVE") {
+        await get().fetchInstances();
+      }
       return true;
     } catch (err: any) {
       set({ error: err.message });

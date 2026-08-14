@@ -179,9 +179,11 @@ Cảnh giới không còn nhảy trực tiếp — điểm tích lũy từ nhi�
 - Cộng thẳng `amount` điểm vào `player.PathMasteries[path]` (bỏ cơ chế nhảy 1-2 cấp cũ)
 - Log: "nhận được X điểm Chân Ý lưu phái ..."
 
-**Dữ liệu seed — `db.go:1840-1968`:**
+**Dữ liệu seed — `db.go` `SeedInstanceTemplates`:**
 - `dungeon_flower_wine`: `{"attainment": {"path": "Moon Path", "amount": 10}}`
 - `dream_realm_star_constellation`: `{"attainment": {"path": "Dream Path", "amount": 50}}`
+- **49 mộng cảnh tự sinh** `dream_realm_<path>` — 1 cho mỗi lưu phái (danh sách `dreamRealmPaths` trong `db.go`), thưởng `{"attainment": {"path": "<Path> Path", "amount": 50}}` + tài liệu path + 100 Nguyên Thạch, vào bằng `dream_material`, cooldown 24h.
+- **Bí cảnh** `SECRET_REALM` (`secret_realm_sword_mountain`, `secret_realm_fire_cave`, `secret_realm_water_palace`) — thưởng **Đạo Ngân** qua `rewards.dao_marks` (xử lý tại `instance.go` completion), cooldown 48h.
 
 ---
 

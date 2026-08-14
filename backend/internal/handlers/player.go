@@ -3441,7 +3441,7 @@ func SetVitalGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player vital Gu status"})
 		return
 	}
-	if _, err := tx.Exec(`UPDATE player_gu SET is_vital = true, status = 'ACTIVE', equipped = true, updated_at = NOW() WHERE id = $1`, player.GuInventory[targetIndex].InstanceID); err != nil {
+	if _, err := tx.Exec(`UPDATE player_gu SET is_vital = true, state = 'ACTIVE', equipped = true, updated_at = NOW() WHERE id = $1`, player.GuInventory[targetIndex].InstanceID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player vital Gu status"})
 		return
 	}

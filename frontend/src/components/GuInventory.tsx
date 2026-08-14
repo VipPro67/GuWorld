@@ -1158,7 +1158,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                     {/* Status Management */}
                                     {onUpdateStatus && !gu.is_vital && !isDead && (
                                       <>
-                                        {status === "ACTIVE" && (
+                                        {/* {status === "ACTIVE" && (
                                           <>
                                             <button
                                               type="button"
@@ -1197,7 +1197,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                               {statusUpdatingId === gu.instance_id ? "..." : "🔒 Phong Ấn"}
                                             </button>
                                           </>
-                                        )}
+                                        )} */}
                                         {status === "SEALED" && (
                                           <button
                                             type="button"

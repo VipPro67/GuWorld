@@ -18,14 +18,15 @@ import (
 )
 
 type InstanceTemplate struct {
-	ID           string          `json:"id"`
-	Name         string          `json:"name"`
-	Type         string          `json:"type"` // "INHERITANCE_RIGHTEOUS", "INHERITANCE_DEMONIC", "DREAM_REALM"
-	RequiredRank int             `json:"required_rank"`
-	EntryItem    string          `json:"entry_item"`
-	Description  string          `json:"description"`
-	Rewards      json.RawMessage `json:"rewards"`
-	MapData      json.RawMessage `json:"map_data"`
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	Type          string          `json:"type"` // "INHERITANCE_RIGHTEOUS", "INHERITANCE_DEMONIC", "DREAM_REALM", "SECRET_REALM"
+	RequiredRank  int             `json:"required_rank"`
+	EntryItem     string          `json:"entry_item"`
+	Description   string          `json:"description"`
+	Rewards       json.RawMessage `json:"rewards"`
+	MapData       json.RawMessage `json:"map_data"`
+	CooldownHours int             `json:"cooldown_hours"`
 }
 
 type PlayerInstanceSession struct {
@@ -54,6 +55,7 @@ type InstanceReward struct {
 	Materials      map[string]int            `json:"materials"`
 	PrimevalStones float64                   `json:"primeval_stones"`
 	Attainment     *InstanceRewardAttainment `json:"attainment"`
+	DaoMarks       map[string]int            `json:"dao_marks"`
 }
 
 type InstanceOption struct {
@@ -122,13 +124,14 @@ func GetActiveInstance(c *gin.Context) {
 
 	var template InstanceTemplate
 	tplQuery := `
-		SELECT id, name, type, required_rank, entry_item, description, rewards, map_data
+		SELECT id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours
 		FROM instance_templates
 		WHERE id = $1
 	`
 	err = db.DB.QueryRowContext(c.Request.Context(), tplQuery, session.InstanceID).Scan(
 		&template.ID, &template.Name, &template.Type, &template.RequiredRank,
 		&template.EntryItem, &template.Description, &template.Rewards, &template.MapData,
+		&template.CooldownHours,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch instance template: " + err.Error()})
@@ -140,6 +143,84 @@ func GetActiveInstance(c *gin.Context) {
 		"session":  session,
 		"template": template,
 	})
+}
+
+// InstanceListItem is a template summary for the list endpoint, enriched with
+// per-player availability info (cooldown remaining).
+type InstanceListItem struct {
+	ID                string          `json:"id"`
+	Name              string          `json:"name"`
+	Type              string          `json:"type"`
+	RequiredRank      int             `json:"required_rank"`
+	EntryItem         string          `json:"entry_item"`
+	Description       string          `json:"description"`
+	Rewards           json.RawMessage `json:"rewards"`
+	CooldownHours     int             `json:"cooldown_hours"`
+	CooldownRemaining int             `json:"cooldown_remaining"` // seconds until re-entry allowed; 0 = ready
+}
+
+// ListInstances returns all instance templates the player can view, with
+// per-instance cooldown remaining for this player.
+func ListInstances(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	rows, err := db.DB.QueryContext(c.Request.Context(), `
+		SELECT id, name, type, required_rank, entry_item, description, rewards, cooldown_hours
+		FROM instance_templates
+		ORDER BY required_rank ASC, id ASC
+	`)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch instance templates: " + err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	items := []InstanceListItem{}
+	for rows.Next() {
+		var it InstanceListItem
+		if err := rows.Scan(&it.ID, &it.Name, &it.Type, &it.RequiredRank, &it.EntryItem, &it.Description, &it.Rewards, &it.CooldownHours); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan instance template: " + err.Error()})
+			return
+		}
+		items = append(items, it)
+	}
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to iterate instance templates: " + err.Error()})
+		return
+	}
+
+	// Enrich with cooldown remaining per instance for this player (computed in
+	// SQL to avoid timezone drift on TIMESTAMP WITHOUT TIME ZONE columns).
+	cdMap := map[string]int64{}
+	cdRows, err := db.DB.QueryContext(c.Request.Context(), `
+		SELECT instance_id,
+		       GREATEST(0, EXTRACT(EPOCH FROM (it.cooldown_hours::interval - (NOW() - s.created_at))))::int
+		FROM player_instance_sessions s
+		JOIN instance_templates it ON it.id = s.instance_id
+		WHERE s.player_id = $1
+		ORDER BY s.instance_id, s.created_at DESC
+	`, playerID)
+	if err == nil {
+		defer cdRows.Close()
+		for cdRows.Next() {
+			var instID string
+			var remain int64
+			if err := cdRows.Scan(&instID, &remain); err != nil {
+				continue
+			}
+			cdMap[instID] = remain
+		}
+	}
+
+	for i := range items {
+		items[i].CooldownRemaining = int(cdMap[items[i].ID])
+	}
+
+	c.JSON(http.StatusOK, gin.H{"instances": items})
 }
 
 // EnterInstance initializes a new instance session
@@ -178,12 +259,13 @@ func EnterInstance(c *gin.Context) {
 	// 2. Fetch the instance template
 	var template InstanceTemplate
 	err = tx.QueryRow(`
-		SELECT id, name, type, required_rank, entry_item, description, rewards, map_data
+		SELECT id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours
 		FROM instance_templates
 		WHERE id = $1
 	`, req.InstanceID).Scan(
 		&template.ID, &template.Name, &template.Type, &template.RequiredRank,
 		&template.EntryItem, &template.Description, &template.Rewards, &template.MapData,
+		&template.CooldownHours,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -192,6 +274,27 @@ func EnterInstance(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
 		}
 		return
+	}
+
+	// 2b. Enforce cooldown from the most recent session for this instance.
+	if template.CooldownHours > 0 {
+		var remainingSeconds int
+		err = tx.QueryRow(`
+			SELECT GREATEST(0, EXTRACT(EPOCH FROM (($1::interval) - (NOW() - created_at))))::int
+			FROM player_instance_sessions
+			WHERE player_id = $2 AND instance_id = $3
+			ORDER BY created_at DESC LIMIT 1
+		`, fmt.Sprintf("%d hours", template.CooldownHours), playerID, req.InstanceID).Scan(&remainingSeconds)
+		if err == nil && remainingSeconds > 0 {
+			hours := remainingSeconds / 3600
+			minutes := (remainingSeconds % 3600) / 60
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đạo hữu cần đợi %d giờ %d phút nữa mới có thể vào lại phó bản này!", hours, minutes)})
+			return
+		}
+		if err != nil && err != sql.ErrNoRows {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+			return
+		}
 	}
 
 	// 3. Load player stats
@@ -255,9 +358,9 @@ func EnterInstance(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":  "Tiến vào phó bản \"" + template.Name + "\" thành công! Nhân Khí +2.",
-		"session":  session,
-		"template": template,
+		"message":         "Tiến vào phó bản \"" + template.Name + "\" thành công! Nhân Khí +2.",
+		"session":         session,
+		"template":        template,
 		"human_qi_gained": 2.0,
 	})
 }
@@ -306,12 +409,13 @@ func ActionInstance(c *gin.Context) {
 	// 2. Fetch the template
 	var template InstanceTemplate
 	err = tx.QueryRow(`
-		SELECT id, name, type, required_rank, entry_item, description, rewards, map_data
+		SELECT id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours
 		FROM instance_templates
 		WHERE id = $1
 	`, session.InstanceID).Scan(
 		&template.ID, &template.Name, &template.Type, &template.RequiredRank,
 		&template.EntryItem, &template.Description, &template.Rewards, &template.MapData,
+		&template.CooldownHours,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch instance template: " + err.Error()})
@@ -553,6 +657,17 @@ func ActionInstance(c *gin.Context) {
 				player.PathMasteries[cleanPath] += rewards.Attainment.Amount
 				newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
 				logResult = "Chúc mừng đạo hữu xuất sắc vượt ải thành công, nhận được " + fmt.Sprintf("%d", rewards.Attainment.Amount) + " điểm Chân Ý lưu phái \"" + rewards.Attainment.Path + "\" (Cảnh giới: " + gamefx.PathMasteryLevelName(newLevel) + ")!"
+			} else if len(rewards.DaoMarks) > 0 {
+				// Bí cảnh: award Đạo Ngân (Dao Marks) directly.
+				if _, err := addMultipleDaoMarksTx(tx, player.ID.String(), rewards.DaoMarks); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Đạo Ngân từ bí cảnh: " + err.Error()})
+					return
+				}
+				daoTexts := make([]string, 0, len(rewards.DaoMarks))
+				for path, amt := range rewards.DaoMarks {
+					daoTexts = append(daoTexts, fmt.Sprintf("%d Đạo Ngân %s", amt, path))
+				}
+				logResult = "Chúc mừng đạo hữu chinh phục bí cảnh thành công, nhận được " + strings.Join(daoTexts, ", ") + "!"
 			} else {
 				logResult = "Chúc mừng đạo hữu đã chinh phục thành công phó bản này!"
 			}

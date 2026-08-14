@@ -507,6 +507,7 @@ func SetupRouter() *gin.Engine {
 		instance.Use(middleware.RateLimitByPlayer(20, time.Minute))
 		{
 			instance.GET("/active", handlers.GetActiveInstance)
+			instance.GET("/list", handlers.ListInstances)
 			instance.POST("/enter", handlers.EnterInstance)
 			instance.POST("/action", handlers.ActionInstance)
 		}

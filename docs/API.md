@@ -200,6 +200,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | POST | `/soul/refine` |
 | POST | `/soul/calm` |
 | GET | `/instance/active` |
+| GET | `/instance/list` | Danh sách phó bản + `cooldown_remaining` (giây) của player |
 | POST | `/instance/enter` |
 | POST | `/instance/action` |
 
