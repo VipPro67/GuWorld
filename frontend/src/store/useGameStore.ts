@@ -2492,7 +2492,7 @@ export const useGameStore = create<GameState>((set, get) => {
         dictionaryLoaded: true,
       });
     } catch (err: any) {
-      console.error("Dictionary sync error:", err.message);
+      console.error("Dictionary fetch failed:", err.message);
       set({ dictionaryLoaded: true }); // Don't block the app on dictionary failure
     }
   },
