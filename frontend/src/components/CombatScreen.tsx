@@ -1027,7 +1027,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             const hasCaptureBonus = selectedGuIds.some(id => {
               const gu = eligibleGus.find(g => g.instance_id === id);
               const spec = gu ? guSpecFor(gu.gu_id, gu.rank) : null;
-              return !!(spec && spec.effects && spec.effects.active && spec.effects.active.some((e: { key: string; }) => e.key === "capture_bonus"));
+              return !!(spec?.effects?.active?.capture_bonus);
             });
             const isCapturable = monsterSpec?.is_capturable && hasCaptureBonus;
             if (!isCapturable) return null;
