@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -283,17 +284,43 @@ func Flee(c *gin.Context) {
 		return
 	}
 
-	logMsg := fmt.Sprintf("Đạo hữu đã bỏ chạy khỏi %s.", player.ActiveCombat.EnemyName)
+	enemyName := player.ActiveCombat.EnemyName
+	var logMsg string
+
+	isExploration := player.CurrentRegion != HubRegionID && player.ActiveCombat.CombatMode == "real"
+
+	if isExploration {
+		maxHP := gamefx.EffectiveMaxHP(&player)
+		damage := maxHP * 0.20 // Lose 20% Max HP
+		player.HP -= damage
+
+		if player.HP <= 0 {
+			player.HP = 1.0
+			player.CurrentRegion = HubRegionID
+			player.X, player.Y = hubEntryPoint()
+			player.TempLoot = models.TempLoot{
+				GuInventory:        models.GuInventory{},
+				MaterialsInventory: models.MaterialsInventory{},
+				PrimevalStones:     0,
+			}
+			logMsg = fmt.Sprintf("Đạo hữu cố gắng bỏ chạy khỏi %s nhưng bị thương nặng ngất xỉu. Tỉnh dậy đã thấy ở an toàn nhưng mất sạch tài nguyên thu thập.", enemyName)
+		} else {
+			logMsg = fmt.Sprintf("Đạo hữu đã bỏ chạy khỏi %s. Chịu thương tổn %.0f HP.", enemyName, damage)
+		}
+	} else {
+		logMsg = fmt.Sprintf("Đạo hữu đã bỏ chạy khỏi %s.", enemyName)
+	}
+
 	player.ActiveCombat = nil
 
 	qiGained := AddHumanQi(&player, 1.0)
 
 	updateQuery := `
 		UPDATE players
-		SET active_combat = $1, human_qi = $2
-		WHERE id = $3
+		SET active_combat = $1, human_qi = $2, hp = $3, current_region = $4, x = $5, y = $6, temp_loot = $7
+		WHERE id = $8
 	`
-	_, err = tx.Exec(updateQuery, player.ActiveCombat, player.HumanQi, player.ID)
+	_, err = tx.Exec(updateQuery, player.ActiveCombat, player.HumanQi, player.HP, player.CurrentRegion, player.X, player.Y, player.TempLoot, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player status after fleeing"})
 		return
