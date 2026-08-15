@@ -2661,7 +2661,11 @@ func EquipGu(c *gin.Context) {
 	} else {
 		// Unequip — flush pending growth time
 		if hasGrowth && targetGu.EquippedAt != nil {
-			elapsed := time.Since(*targetGu.EquippedAt).Hours()
+			tsm := player.TimeSpeedMultiplier
+			if tsm <= 0 {
+				tsm = 1.0
+			}
+			elapsed := time.Since(*targetGu.EquippedAt).Hours() * tsm
 			if elapsed > 0 {
 				atk, def, hp, spd := ApplyGrowthProgress(targetGu, &spec, elapsed)
 				if atk != 0 || def != 0 || hp != 0 || spd != 0 {
@@ -2739,7 +2743,11 @@ func UnequipAllGu(c *gin.Context) {
 			spec, specOk := models.GetGu(gu.GuID, gu.Rank)
 			hasGrowth := specOk && spec.Effects.Growth != nil && spec.Effects.Growth.HoursToMax > 0
 			if hasGrowth && gu.EquippedAt != nil {
-				elapsed := time.Since(*gu.EquippedAt).Hours()
+				tsm := player.TimeSpeedMultiplier
+				if tsm <= 0 {
+					tsm = 1.0
+				}
+				elapsed := time.Since(*gu.EquippedAt).Hours() * tsm
 				if elapsed > 0 {
 					atk, def, hp, spd := ApplyGrowthProgress(gu, &spec, elapsed)
 					if atk != 0 || def != 0 || hp != 0 || spd != 0 {

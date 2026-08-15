@@ -303,7 +303,7 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 		}
 
 		if player.HP > 0 && player.HP < effMaxHP {
-			earnedHP := (subjectiveSeconds / 3600.0) * player.HPRegenRate
+			earnedHP := (secondsPassed * player.TimeSpeedMultiplier / 3600.0) * player.HPRegenRate
 			newHP := player.HP + earnedHP
 			if newHP > effMaxHP {
 				newHP = effMaxHP

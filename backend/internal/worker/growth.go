@@ -81,12 +81,16 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 	var guInvRaw []byte
 	var growthDataRaw []byte
 	var baseHP float64
+	var timeSpeedMultiplier float64
 
 	err = tx.QueryRow(`
-		SELECT `+pkgdb.GuInventoryAggregate("players.id")+`, growth_data, base_hp
+		SELECT `+pkgdb.GuInventoryAggregate("players.id")+`, growth_data, base_hp, time_speed_multiplier
 		FROM players
 		WHERE id = $1
-		FOR UPDATE`, playerID).Scan(&guInvRaw, &growthDataRaw, &baseHP)
+		FOR UPDATE`, playerID).Scan(&guInvRaw, &growthDataRaw, &baseHP, &timeSpeedMultiplier)
+	if timeSpeedMultiplier <= 0 {
+		timeSpeedMultiplier = 1.0
+	}
 	if err != nil {
 		return err
 	}
@@ -196,7 +200,7 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 			}
 		}
 
-		elapsed := now.Sub(*gu.EquippedAt).Hours()
+		elapsed := now.Sub(*gu.EquippedAt).Hours() * timeSpeedMultiplier
 		if elapsed <= 0 {
 			continue
 		}

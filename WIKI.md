@@ -116,7 +116,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 - Sinh lực hồi liên tục theo thời gian thực, được cộng dồn cả khi offline (tính từ `last_mana_update`, áp dụng khi đạo hữu tương tác).
 - **Tốc độ hồi:** `HP/giờ = (HP tối đa hiệu dụng × 5% + hp_regen từ effect) × (1 + healing_received)`, cap tại HP tối đa hiệu dụng (`base_hp` + `stat_base_hp` thụ động từ Cổ).
 - `hp_regen` (số phẳng HP/giờ) và `healing_received` (% nhân) đến từ thể chất/chủng tộc/trạng thái qua hệ thống effects (xem `docs/GAME_DATA.md`).
-- Tốc độ hồi nhân thêm `TimeSpeedMultiplier` (và `time_rate` Tiên khiếu với Cổ Tiên, giống hồi Chân Nguyên).
+- Tốc độ hồi nhân thêm `TimeSpeedMultiplier` (KHÔNG nhân `time_rate` Tiên khiếu — khác với hồi Chân Nguyên).
 
 ### Nhân Khí (Human Qi)
 
@@ -194,13 +194,25 @@ Ngoài các mỏ tài nguyên, đạo hữu có thể xây dựng **công trình
 - **Ảnh hưởng đến:**
   - Tốc độ thu hoạch tài nguyên (cây, quặng, linh thú)
   - Tăng trưởng dân cư dị nhân
-  - Tốc độ hồi Tiên Nguyên
+  - Tốc độ hồi Tiên Nguyên (Chân Nguyên của Cổ Tiên)
   - Tích lũy năm nội bộ → Kiếp nạn đến nhanh hơn
   - Đói Cổ trùng (Cổ đói nhanh hơn khi time rate cao)
 - **Không ảnh hưởng đến:**
   - Thọ nguyên (luôn tính theo thời gian thực)
   - Cooldown/sự kiện bên ngoài Tiên Khiếu
   - Thời gian ở Ngũ Vực
+
+### Gia tốc thời gian cá nhân (Time Speed Multiplier)
+
+- `time_speed_multiplier` nhân tốc độ dòng thời gian cho mọi Cổ sư (mặc định 1.0; Cổ Tiên có Tiên Khiếu dùng mặc định 10.0).
+- **Ảnh hưởng đến (chỉ nhân `time_speed_multiplier`, không nhân `time_rate`):**
+  - Tốc độ hồi Sinh lực (HP)
+  - Tiêu hao Thọ nguyên (trôi nhanh hơn)
+  - Tốc độ hồi Tinh hồn
+  - Tốc độ hồi Ý niệm
+- **Nhân cả `time_speed_multiplier` × `time_rate` (Cổ Tiên):**
+  - Tốc độ hồi Chân Nguyên (Tiên Nguyên)
+  - Tích lũy năm nội bộ / sản xuất tiên khí
 
 ### Đạo ngân
 
@@ -230,6 +242,7 @@ Cổ sư có thể:
 **Hiệu ứng Trưởng thành (Growth):** Một số Cổ (Lực đạo/Thổ đạo như Hùng Lực, Hắc Thỉ, Ngọc Bì, Thiết Cốt, Tự Lực...) có hiệu ứng `growth` — khi trang bị ở trạng thái ACTIVE, chỉ số thưởng (Công/Thủ/Máu/Tốc) tăng dần theo thời gian tới mức tối đa (`hours_to_max` giờ). Quy tắc:
 
 - **Chỉ tăng 1 lần cho mỗi loại (GU ID + Chuyển):** dù sở hữu nhiều bản cùng loại, tiến độ và chỉ số chỉ tính 1 lần; không cộng dồn theo số bản sở hữu.
+- **Tốc độ trưởng thành nhân `time_speed_multiplier`:** thời gian trưởng thành được rút ngắn theo tốc độ thời gian cá nhân (vd Cổ Tiên tsm 10 → trưởng thành nhanh gấp 10). Không nhân `time_rate` Tiên Khiếu.
 - **Tiến độ vĩnh viễn:** tiến độ tích lũy được lưu theo từng instance; gỡ Cổ ra khỏi Không Khiếu vẫn giữ nguyên tiến độ và hiển thị lại ở tab **Trưởng thành** (Không Khiếu). Khi đạt mức tối đa, loại Cổ đó được ghi nhận vĩnh viễn trong danh sách trưởng thành.
 - Trang bị lại tiếp tục từ tiến độ đã tích lũy, kể cả khi đổi sang bản khác cùng loại.
 
