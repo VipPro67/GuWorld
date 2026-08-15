@@ -145,7 +145,7 @@ export default function Home() {
   const inCombat = player && player.active_combat;
 
   
-  const IS_MAINTENANCE = process.env.MAINTENANCE_MODE === "true";
+  const IS_MAINTENANCE = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
 
   if (IS_MAINTENANCE) {
     return (
