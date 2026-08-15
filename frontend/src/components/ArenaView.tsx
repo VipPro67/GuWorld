@@ -36,7 +36,7 @@ export const ArenaView: React.FC = () => {
   const playerRank = player.arena_rank || 999;
   
   return (
-    <div className="glass-panel-gold rounded-3xl p-6 w-full max-w-4xl mx-auto space-y-6 text-left relative overflow-hidden group">
+    <div className="glass-panel-gold rounded-3xl p-6 w-full mx-auto space-y-6 text-left relative overflow-hidden group">
       {/* Decorative background grid pattern */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(217,119,6,0.01)_1px,transparent_1px),linear-gradient(to_bottom,rgba(217,119,6,0.01)_1px,transparent_1px)] bg-[size:16px_28px] pointer-events-none" />
 

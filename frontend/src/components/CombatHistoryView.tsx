@@ -43,7 +43,7 @@ export const CombatHistoryView: React.FC = () => {
     const combatants = selectedEntry.combatants || [];
 
     return (
-      <div className="w-full max-w-5xl mx-auto px-4 py-4">
+      <div className="w-full mx-auto px-4 py-4">
         <CombatReplayView
           logs={replayLogs}
           combatants={combatants}
@@ -56,7 +56,7 @@ export const CombatHistoryView: React.FC = () => {
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-4">
+    <div className="w-full mx-auto px-4 py-4">
       <button
         onClick={() => setView("dashboard")}
         className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 mb-4 transition-colors"

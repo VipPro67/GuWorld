@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1625,6 +1626,17 @@ func pathMaterialID(pathKey string) string {
 	return "guts_gu"
 }
 
+// pathVN returns the Vietnamese display name for a path key, falling back to
+// the key itself for unknown paths.
+func pathVN(pathKey string) string {
+	for _, p := range dreamRealmPaths {
+		if p.Key == pathKey {
+			return p.VN
+		}
+	}
+	return pathKey
+}
+
 // buildDreamRealmMapData builds a generic DREAM_REALM stage tree themed to a
 // given lưu phái. Content is template-generated for now; dynamic per-path
 // storytelling can replace it later.
@@ -1704,6 +1716,78 @@ func buildSecretRealmMapData(pathKey, pathVN string) string {
 	]`, pathVN, pathVN, mat, mat, pathVN)
 }
 
+// seedDreamRealmsFromCSV seeds DREAM_REALM instance templates from
+// DreamRealm.csv. Each row maps 1:1 to an instance_templates record. When
+// map_data is empty it is generated from the path key; rewards fall back to
+// {} when empty. Path-specific rows are id "dream_realm_<path>".
+func seedDreamRealmsFromCSV(filename string) error {
+	f, r, header, err := openCSV(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	col := func(name string) int { return colIndex(header, name) }
+	idIdx, nameIdx := col("id"), col("name")
+	pathIdx, typeIdx := col("path"), col("type")
+	rankIdx, entryIdx := col("required_rank"), col("entry_item")
+	descIdx, rewardsIdx, mapIdx, cdIdx := col("description"), col("rewards"), col("map_data"), col("cooldown_hours")
+	if idIdx < 0 || nameIdx < 0 {
+		return fmt.Errorf("%s missing required columns (id, name)", filename)
+	}
+	get := func(row []string, idx int) string {
+		if idx < 0 || idx >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[idx])
+	}
+	seeded := 0
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil || len(row) == 0 {
+			continue
+		}
+		id := get(row, idIdx)
+		if id == "" {
+			continue
+		}
+		pathKey := get(row, pathIdx)
+		mapData := get(row, mapIdx)
+		if mapData == "" {
+			mapData = buildDreamRealmMapData(pathKey, pathVN(pathKey))
+		}
+		rewards := safeJSONObject(get(row, rewardsIdx), "{}", filename+":"+id+":rewards")
+		rank := 3
+		if v, err := strconv.Atoi(get(row, rankIdx)); err == nil && v > 0 {
+			rank = v
+		}
+		cd := 24
+		if v, err := strconv.Atoi(get(row, cdIdx)); err == nil && v > 0 {
+			cd = v
+		}
+		rtype := get(row, typeIdx)
+		if rtype == "" {
+			rtype = "DREAM_REALM"
+		}
+		_, err = DB.Exec(`
+			INSERT INTO instance_templates (id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours)
+			VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9)
+			ON CONFLICT (id) DO UPDATE SET
+				name=EXCLUDED.name, type=EXCLUDED.type, required_rank=EXCLUDED.required_rank,
+				entry_item=EXCLUDED.entry_item, description=EXCLUDED.description,
+				rewards=EXCLUDED.rewards, map_data=EXCLUDED.map_data, cooldown_hours=EXCLUDED.cooldown_hours
+		`, id, get(row, nameIdx), rtype, rank, get(row, entryIdx), get(row, descIdx), rewards, mapData, cd)
+		if err != nil {
+			return fmt.Errorf("failed to seed dream realm %s: %w", id, err)
+		}
+		seeded++
+	}
+	logger.S.Infof("Dream realms seeded from %s (%d seeded)", filename, seeded)
+	return nil
+}
+
 func SeedInstanceTemplates() error {
 	templates := []struct {
 		ID            string
@@ -1774,83 +1858,13 @@ func SeedInstanceTemplates() error {
 				}
 			]`,
 		},
-		{
-			ID:            "dream_realm_star_constellation",
-			Name:          "Mộng Cảnh Tinh Túc Tiên Tôn",
-			Type:          "DREAM_REALM",
-			ReqRank:       5,
-			EntryItem:     "NONE",
-			Description:   "Thám hiểm thời niên thiếu đầy thử thách của Tinh Túc Tiên Tôn khi nghiên cứu trận đồ giữa bầu trời tinh thần đại đạo.",
-			Rewards:       `{"attainment": {"path": "Dream Path", "amount": 50}, "materials": {"guts_gu": 5}}`,
-			CooldownHours: 24,
-			MapData: `[
-				{
-					"stage_index": 0,
-					"description": "Đạo hữu nhập vai vào tiểu đồng tử nghiên cứu tinh thần đại đạo. Mỗi hành động ở đây sẽ trừ 20 Soul HP. Phía trước tinh đồ bùng nổ, hãy chọn hướng nghiên cứu:",
-					"options": [
-						{"text": "Tìm hiểu Bắc Cực Tinh (Tiêu hao 20 Soul HP)", "next_stage": 1, "requirements": {}},
-						{"text": "Bày bố trận nhãn Tinh đồ cơ bản (Tiêu hao 20 Soul HP)", "next_stage": 2, "requirements": {}}
-					]
-				},
-				{
-					"stage_index": 1,
-					"description": "Nghiên cứu quá tải khiến Tinh linh phản phệ mạnh mẽ. Đạo hữu cần năng lượng linh hồn kiên cường hoặc Cổ Giải Mộng để hóa giải hiểm cảnh.",
-					"options": [
-						{"text": "Sử dụng lực lượng hồn phách trấn áp (Yêu cầu Soul HP >= 80)", "next_stage": 3, "requirements": {"min_soul_hp": 80}},
-						{"text": "Sử dụng Cổ Giải Mộng (Dream Gu) skip qua ải hiểm nguy", "next_stage": 4, "requirements": {"gu_id": "GU_DREAM", "amount": 1}}
-					]
-				},
-				{
-					"stage_index": 2,
-					"description": "Một đầu Hoang Thú ngưng tụ từ Tinh Thần Lực lao đến! Hãy chọn cách ứng biến nhanh:",
-					"options": [
-						{"text": "Sử dụng Trận Pháp Cổ của mộng cảnh phòng ngự (Mất 20 Soul HP)", "next_stage": 3, "requirements": {}},
-						{"text": "Tấn công vật lý trực diện (Thất bại, tổn thất 50 Soul HP)", "next_stage": 1, "requirements": {}}
-					]
-				},
-				{
-					"stage_index": 3,
-					"description": "Trải qua gian nan tinh đồ mở rộng, hình bóng Tinh Túc Tiên Tôn xuất hiện chỉ tay về vòm trời tinh quang truyền thừa Chân Ý.",
-					"options": [
-						{"text": "Nhập định hấp thu Tinh Thần Chân Ý (Tiêu hao 20 Soul HP)", "next_stage": 4, "requirements": {}}
-					]
-				},
-				{
-					"stage_index": 4,
-					"description": "Tinh quang hòa tan linh hồn đạo hữu, nâng tầm cảnh giới thấu hiểu đại đạo tinh thần. Đạo hữu hoàn thành thám hiểm mộng cảnh!",
-					"options": [
-						{"text": "Hấp thụ Chân Ý và rời Mộng Cảnh", "next_stage": -1, "requirements": {}}
-					]
-				}
-			]`,
-		},
 	}
 
-	// Generate one dream realm per lưu phái (path). Completing one awards
-	// Chân Ý (attainment) points for that exact path, raising cảnh giới lưu phái.
-	for _, p := range dreamRealmPaths {
-		key := p.Key
-		templates = append(templates, struct {
-			ID            string
-			Name          string
-			Type          string
-			ReqRank       int
-			EntryItem     string
-			Description   string
-			Rewards       string
-			MapData       string
-			CooldownHours int
-		}{
-			ID:            "dream_realm_" + key,
-			Name:          "Mộng Cảnh " + p.VN,
-			Type:          "DREAM_REALM",
-			ReqRank:       3,
-			EntryItem:     "dream_material",
-			Description:   "Chìm vào giấc mộng của " + p.VN + " để lĩnh ngộ Chân Ý đại đạo. Hoàn thành giúp nâng cao cảnh giới lưu phái " + p.VN + ".",
-			Rewards:       fmt.Sprintf(`{"attainment": {"path": "%s Path", "amount": 50}, "materials": {"%s": 5}, "primeval_stones": 100}`, strings.Title(key), pathMaterialID(key)),
-			MapData:       buildDreamRealmMapData(key, p.VN),
-			CooldownHours: 24,
-		})
+	// Dream realms (Mộng Cảnh) are data-driven from DreamRealm.csv. Each row
+	// maps 1:1 to an instance_templates record; empty map_data is generated
+	// from the path key. See docs/GAME_DATA.md.
+	if err := seedDreamRealmsFromCSV("DreamRealm.csv"); err != nil {
+		return err
 	}
 
 	// Bí cảnh (SECRET_REALM): combat-style instances rewarding Đạo Ngân.
@@ -2301,6 +2315,11 @@ func ExportToCSV() error {
 			columns:  []string{"id", "title", "desc", "req_desc", "message", "rewards"},
 			query:    `SELECT id, title, description, req_desc, message, COALESCE(rewards::text,'[]') FROM quests ORDER BY id`,
 		},
+		{
+			filename: "DreamRealm.csv",
+			columns:  []string{"id", "name", "path", "type", "required_rank", "entry_item", "description", "rewards", "map_data", "cooldown_hours"},
+			query:    `SELECT id, name, CASE WHEN id LIKE 'dream_realm_%' THEN substring(id from 13) ELSE '' END, type, required_rank, entry_item, COALESCE(description,''), COALESCE(rewards::text,'{}'), COALESCE(map_data::text,'[]'), cooldown_hours FROM instance_templates WHERE type='DREAM_REALM' ORDER BY id`,
+		},
 	}
 
 	for _, e := range exports {
@@ -2319,7 +2338,7 @@ func AvailableTables() []string {
 	return []string{
 		"item", "gu", "constitution", "recipe", "shop_item", "arena_shop_item",
 		"region", "loot_table", "monster", "monster_spawn", "map_cell",
-		"sect", "sect_mission", "quest", "race",
+		"sect", "sect_mission", "quest", "race", "dream_realm",
 	}
 }
 
@@ -2356,6 +2375,8 @@ func TableImport(table string) error {
 		return seedSectMissionsFromCSV("SectMission.csv")
 	case "quest":
 		return seedQuestsFromCSV()
+	case "dream_realm":
+		return seedDreamRealmsFromCSV("DreamRealm.csv")
 	default:
 		return fmt.Errorf("unknown table: %s", table)
 	}
@@ -2444,6 +2465,11 @@ func TableExport(table string) error {
 			filename: "Quest.csv",
 			columns:  []string{"id", "title", "desc", "req_desc", "message", "rewards"},
 			query:    `SELECT id, title, description, req_desc, message, COALESCE(rewards::text,'[]') FROM quests ORDER BY id`,
+		},
+		"dream_realm": {
+			filename: "DreamRealm.csv",
+			columns:  []string{"id", "name", "path", "type", "required_rank", "entry_item", "description", "rewards", "map_data", "cooldown_hours"},
+			query:    `SELECT id, name, CASE WHEN id LIKE 'dream_realm_%' THEN substring(id from 13) ELSE '' END, type, required_rank, entry_item, COALESCE(description,''), COALESCE(rewards::text,'{}'), COALESCE(map_data::text,'[]'), cooldown_hours FROM instance_templates WHERE type='DREAM_REALM' ORDER BY id`,
 		},
 	}
 

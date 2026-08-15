@@ -1071,7 +1071,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   );
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
+    <div className="w-full mx-auto">
       {simulationLogs.length === 0 ? renderLoadoutPhase() : renderReplayPhase()}
     </div>
   );

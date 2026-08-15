@@ -2814,6 +2814,98 @@ func EquipGu(c *gin.Context) {
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": statusMsg})
 }
 
+// UnequipAllGu unequips all equipped Gu except the Vital Gu.
+func UnequipAllGu(c *gin.Context) {
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
+		return
+	}
+
+	unequippedCount := 0
+	for i := range player.GuInventory {
+		gu := &player.GuInventory[i]
+		if gu.Equipped && !gu.IsVital {
+			gu.Equipped = false
+			unequippedCount++
+
+			// Unequip — flush pending growth time
+			spec, specOk := models.GetGu(gu.GuID, gu.Rank)
+			hasGrowth := specOk && spec.Effects.Growth != nil && spec.Effects.Growth.HoursToMax > 0
+			if hasGrowth && gu.EquippedAt != nil {
+				elapsed := time.Since(*gu.EquippedAt).Hours()
+				if elapsed > 0 {
+					atk, def, hp, spd := ApplyGrowthProgress(gu, &spec, elapsed)
+					if atk != 0 || def != 0 || hp != 0 || spd != 0 {
+						player.GrowthData.Boosts.Attack += atk
+						player.GrowthData.Boosts.Defense += def
+						player.GrowthData.Boosts.HP += hp
+						player.GrowthData.Boosts.Speed += spd
+						player.BaseHP += hp
+					}
+					// Check if fully grown now, add to FullyGrown list
+					if gu.GrowthHours >= spec.Effects.Growth.HoursToMax {
+						player.GrowthData.FullyGrown = append(player.GrowthData.FullyGrown, models.FullyGrownInfo{
+							GuID:    gu.GuID,
+							Rank:    gu.Rank,
+							Attack:  spec.Effects.Growth.MaxAttack,
+							Defense: spec.Effects.Growth.MaxDefense,
+							HP:      spec.Effects.Growth.MaxHP,
+							Speed:   spec.Effects.Growth.MaxSpeed,
+						})
+					}
+				}
+			}
+
+			if err := db.UpdatePlayerGu(tx, *gu); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update Gu state"})
+				return
+			}
+		}
+	}
+
+	if unequippedCount == 0 {
+		responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Không có Cổ trùng nào có thể tháo."})
+		return
+	}
+
+	player.EquippedGus = []string{}
+	for _, gu := range player.GuInventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
+		}
+	}
+
+	_, err = tx.Exec("UPDATE players SET equipped_gus = $1, base_hp = $2, growth_data = $3 WHERE id = $4",
+		player.EquippedGus, player.BaseHP, player.GrowthData, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+
+	auditlog.Logf(db.DB, &authID, "gu.unequip_all", "count=%d", unequippedCount)
+
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Đã tháo thành công %d Cổ trùng!", unequippedCount)})
+}
+
 // UpdateGuStatusRequest defines body to change status of owned Gu instance
 type UpdateGuStatusRequest struct {
 	InstanceID string `json:"instance_id" binding:"required"`

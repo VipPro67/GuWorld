@@ -226,15 +226,15 @@ func GetBreakthroughChance(rank int, aptitude string) float64 {
 
 	switch aptitude {
 	case "A", "Giáp":
-		baseChance = 0.98
+		baseChance = 0.9
 	case "B", "Ất":
-		baseChance = 0.92
+		baseChance = 0.8
 	case "C", "Bính":
-		baseChance = 0.85
+		baseChance = 0.7
 	case "D", "Đinh":
-		baseChance = 0.70
+		baseChance = 0.6
 	default:
-		baseChance = 0.60
+		baseChance = 0.5
 	}
 
 	// Rank càng cao càng khó

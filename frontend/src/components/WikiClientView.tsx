@@ -305,7 +305,7 @@ export default function WikiClientView({
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="w-full mx-auto px-4 py-8">
         
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">

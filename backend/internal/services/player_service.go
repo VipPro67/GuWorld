@@ -377,7 +377,7 @@ func energyRegenRatePerHour(player *models.Player) float64 {
 		rate = 0.5
 	} else {
 		aptitudeMap := map[string]float64{
-			"Giáp": 8.0, "Ất": 6.0, "Bính": 4.0, "Đinh": 2.0,
+			"Giáp": 10.0, "Ất": 8.0, "Bính": 6.0, "Đinh": 4.0,
 		}
 		rate = aptitudeMap[player.AptitudeType]
 		if rate == 0 {

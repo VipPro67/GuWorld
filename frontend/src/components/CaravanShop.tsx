@@ -406,7 +406,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
 
   return (
     <>
-    <div className="glass-panel-gold rounded-3xl p-6 w-full max-w-4xl mx-auto space-y-6 animate-fade-in">
+    <div className="glass-panel-gold rounded-3xl p-6 w-full mx-auto space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-zinc-800 pb-4 gap-4">
         <div className="flex items-center gap-2">

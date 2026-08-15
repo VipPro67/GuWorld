@@ -116,7 +116,7 @@ export const MineView: React.FC = () => {
   );
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-1 sm:px-4 py-2">
+    <div className="w-full mx-auto px-1 sm:px-4 py-2">
       {/* SVG gradients definition */}
       <svg className="absolute w-0 h-0" width="0" height="0">
         <defs>

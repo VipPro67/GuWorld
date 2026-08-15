@@ -779,7 +779,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
     ), [visibleLogs]);
 
   return (
-    <div className="w-full max-w-5xl mx-auto flex flex-col gap-4">
+    <div className="w-full mx-auto flex flex-col gap-4">
       {/* Header */}
       <div className="bg-black/60 border border-zinc-800 rounded-xl p-4 flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">

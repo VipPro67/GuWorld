@@ -1002,6 +1002,7 @@ interface GameState {
   fetchCombatSettings: () => Promise<void>;
   saveCombatSettings: (settings: AutoCombatConfig) => Promise<boolean>;
   equipGu: (instanceId: string, equip: boolean) => Promise<void>;
+  unequipAllGu: () => Promise<void>;
   updateGuStatus: (instanceId: string, status: string) => Promise<void>;
   setVitalGu: (instanceId: string) => Promise<void>;
   useGu: (instanceId: string) => Promise<void>;
@@ -3874,6 +3875,43 @@ export const useGameStore = create<GameState>((set, get) => {
     } catch (err: any) {
       set({ error: err.message });
       get().addLog(`Thao tác trang bị thất bại: ${err.message}`);
+      get().addToast(err.message, "error");
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  unequipAllGu: async () => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/unequip-all`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Tháo cổ trùng thất bại.");
+      }
+
+      setPlayerFromServer(data.player);
+      if (data.message) {
+        get().addLog(data.message);
+        get().addToast(data.message, "success");
+      }
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Tháo cổ trùng thất bại: ${err.message}`);
       get().addToast(err.message, "error");
     } finally {
       set({ actionLoading: false });

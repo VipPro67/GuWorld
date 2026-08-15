@@ -799,31 +799,15 @@ export const Aperture: React.FC<ApertureProps> = ({
                 <Activity className="w-3.5 h-3.5 text-cyan-400" />
                 Cổ Trùng Đang Trang Bị ({equippedGus.length})
               </div>
-              {equippedGus.length > 0 ? (
-                <div className="flex flex-wrap gap-2 justify-center">
-                  {equippedGus.map((g) => {
-                    const spec = guDictionary[g.gu_id];
-                    return (
-                      <div
-                        key={g.instance_id}
-                        className="flex items-center gap-2 px-2.5 py-1 rounded-xl border text-xs font-semibold backdrop-blur-sm transition-all hover:scale-105"
-                        style={{ borderColor: c.ring + "2d", background: c.to + "33" }}
-                        title={spec?.description ?? g.gu_id}
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                          style={{ background: c.waveSolid, boxShadow: `0 0 4px ${c.glow}` }}
-                        />
-                        <span className="text-zinc-250">
-                          {spec ? spec.name : g.gu_id.slice(0, 8)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-[10px] text-zinc-500 text-center italic py-1">Chưa trang bị Cổ trùng</div>
-              )}
+              <div className="flex justify-center mt-2">
+                <button
+                  onClick={() => useGameStore.getState().unequipAllGu()}
+                  disabled={equippedGus.filter(g => !g.is_vital).length === 0}
+                  className="px-4 py-1.5 rounded-xl border text-[11px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-red-950/30 text-red-400 border-red-500/30 hover:bg-red-900/40"
+                >
+                  Tháo Tất Cả Cổ Trùng
+                </button>
+              </div>
             </div>
 
             {/* Cultivation / Blessed Land Controls */}

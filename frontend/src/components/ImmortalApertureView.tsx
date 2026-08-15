@@ -518,7 +518,7 @@ export const ImmortalApertureView: React.FC = () => {
   const foodSurplus = totalFoodProd >= foodNeeded;
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-6">
+    <div className="w-full mx-auto space-y-6">
       {/* Header Panel */}
       <div className="relative overflow-hidden bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-2xl p-6 shadow-xl">
         <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl -z-10" />

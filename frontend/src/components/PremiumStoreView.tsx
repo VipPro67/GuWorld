@@ -175,7 +175,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6 shadow-2xl backdrop-blur-md">
+    <div className="mx-auto w-full space-y-6 rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6 shadow-2xl backdrop-blur-md">
       {/* Header & Wallet */}
       <div className="flex flex-col gap-4 border-b border-zinc-850 pb-4 md:flex-row md:items-center md:justify-between">
         <div>

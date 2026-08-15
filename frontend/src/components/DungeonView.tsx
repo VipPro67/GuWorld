@@ -78,7 +78,7 @@ export const DungeonView: React.FC = () => {
   const activeTag = activeType ? activeType.label : "Phó Bản";
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-4 flex flex-col gap-6">
+    <div className="w-full mx-auto px-4 py-4 flex flex-col gap-6">
       {/* Header bar */}
       <div className="flex items-center justify-between bg-zinc-950/60 border border-zinc-900 rounded-2xl p-4 shadow-lg backdrop-blur-md">
         <div className="flex items-center gap-3">

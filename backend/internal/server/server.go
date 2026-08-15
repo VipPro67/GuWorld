@@ -319,6 +319,7 @@ func SetupRouter() *gin.Engine {
 			inventory.POST("/feed", handlers.FeedGu)
 			inventory.POST("/feed-group", handlers.FeedGroup)
 			inventory.POST("/equip", handlers.EquipGu)
+			inventory.POST("/unequip-all", handlers.UnequipAllGu)
 			inventory.POST("/status", handlers.UpdateGuStatus)
 			inventory.POST("/set-vital", handlers.SetVitalGu)
 			inventory.POST("/use-gu", handlers.UseConsumableGu)

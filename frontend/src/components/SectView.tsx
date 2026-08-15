@@ -474,7 +474,7 @@ export const SectView: React.FC = () => {
   // 1. STATE: NOT IN SECT
   if (!mySectStatus?.in_sect) {
     return (
-      <div className="w-full max-w-4xl mx-auto px-2 py-4 flex flex-col gap-6 animate-fade-in">
+      <div className="w-full mx-auto px-2 py-4 flex flex-col gap-6 animate-fade-in">
         {/* Welcome Header */}
         <div className="text-center py-6 bg-zinc-950/60 border border-zinc-900 rounded-3xl p-6 shadow-xl backdrop-blur-md relative overflow-hidden">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -z-10" />
@@ -837,7 +837,7 @@ export const SectView: React.FC = () => {
 
   // 2. STATE: MEMBER PANEL
   return (
-    <div className="w-full max-w-4xl mx-auto px-2 py-4 flex flex-col gap-6 animate-fade-in">
+    <div className="w-full mx-auto px-2 py-4 flex flex-col gap-6 animate-fade-in">
       {/* Sect Banner HUD */}
       <div className="bg-zinc-950/60 border border-zinc-900 rounded-3xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-5 shadow-xl backdrop-blur-md relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl -z-10" />

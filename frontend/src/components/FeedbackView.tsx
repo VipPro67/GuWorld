@@ -161,7 +161,7 @@ export const FeedbackView: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto flex flex-col gap-6 py-2 px-1">
+    <div className="w-full mx-auto flex flex-col gap-6 py-2 px-1">
       {/* 1. Header & Overview banner */}
       <div className="bg-zinc-950/80 border border-zinc-900 rounded-3xl p-6 relative overflow-hidden backdrop-blur-md">
         <div className="absolute top-0 right-0 w-64 h-64 bg-fuchsia-500/5 rounded-full blur-3xl pointer-events-none" />

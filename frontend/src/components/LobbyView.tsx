@@ -206,6 +206,16 @@ export const LobbyView: React.FC = () => {
       iconColor: "text-purple-500",
     },
     {
+      id: "sect",
+      label: "Tông Môn",
+      icon: Crown,
+      gradient: "from-blue-600 to-indigo-700",
+      glow: "group-hover:shadow-[0_0_25px_rgba(37,99,235,0.45)]",
+      borderColor: "border-blue-400/30",
+      iconColor: "text-blue-400",
+      locked: false,
+    },
+    {
       id: "practice-room",
       label: "Phòng Tập",
       icon: Swords,
@@ -282,16 +292,7 @@ export const LobbyView: React.FC = () => {
       borderColor: "border-amber-400/30",
       iconColor: "text-amber-500",
     },
-    {
-      id: "sect",
-      label: "Tông Môn",
-      icon: Crown,
-      gradient: "from-blue-600 to-indigo-700",
-      glow: "group-hover:shadow-[0_0_25px_rgba(37,99,235,0.45)]",
-      borderColor: "border-blue-400/30",
-      iconColor: "text-blue-400",
-      locked: false,
-    }, {
+     {
       id: "kill-moves",
       label: "Sát Chiêu",
       // icon: Sword,
@@ -389,7 +390,7 @@ export const LobbyView: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-2 sm:px-4 py-2 sm:py-4 flex flex-col gap-4 sm:gap-8">
+    <div className="w-full mx-auto px-2 sm:px-4 py-2 sm:py-4 flex flex-col gap-4 sm:gap-8">
       {/* 1. CHARACTER & RESOURCE HUD */}
       {player && (
         <div className="bg-zinc-950/60 border border-zinc-900 rounded-2xl sm:rounded-3xl p-3 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-6 shadow-xl backdrop-blur-md">
@@ -566,9 +567,9 @@ export const LobbyView: React.FC = () => {
                 className="flex flex-col items-center p-2 rounded-2xl transition-all duration-300 hover:bg-zinc-900/20 cursor-pointer group select-none"
               >
                 <div
-                  className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center bg-gradient-to-br ${item.gradient} border ${item.borderColor} transition-all duration-300 group-hover:scale-110 shadow-lg active:scale-95 relative ${item.glow}`}
+                  className={`w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center bg-gradient-to-br ${item.gradient} border ${item.borderColor} transition-all duration-300 group-hover:scale-110 shadow-lg active:scale-95 relative ${item.glow}`}
                 >
-                  <Icon className={`w-5 h-5 sm:w-6 sm:h-6 ${item.iconColor} drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]`} />
+                  <Icon className={`w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 ${item.iconColor} drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]`} />
                 </div>
                 <span className="font-serif text-[10px] sm:text-[11px] font-semibold text-zinc-400 mt-2 tracking-wide text-center group-hover:text-zinc-100 transition-colors">
                   {item.label}
@@ -592,8 +593,8 @@ export const LobbyView: React.FC = () => {
               onClick={() => setView("admin")}
               className="flex flex-col items-center p-2 rounded-2xl transition-all duration-300 hover:bg-zinc-900/20 cursor-pointer group select-none"
             >
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center bg-gradient-to-br from-amber-500 to-orange-600 border border-amber-400/20 transition-all duration-300 group-hover:scale-110 shadow-lg active:scale-95 group-hover:shadow-[0_0_20px_rgba(245,158,11,0.4)]">
-                <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-amber-100 drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]" />
+              <div className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center bg-gradient-to-br from-amber-500 to-orange-600 border border-amber-400/20 transition-all duration-300 group-hover:scale-110 shadow-lg active:scale-95 group-hover:shadow-[0_0_20px_rgba(245,158,11,0.4)]">
+                <Shield className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 text-amber-100 drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]" />
               </div>
               <span className="font-serif text-[10px] sm:text-[11px] font-semibold text-zinc-400 mt-2 tracking-wide text-center group-hover:text-zinc-100 transition-colors">
                 Dashboard
@@ -627,7 +628,7 @@ export const LobbyView: React.FC = () => {
                   }`}
               >
                 <div
-                  className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center ${item.locked
+                  className={`w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center ${item.locked
                       ? "bg-zinc-950 border border-zinc-900"
                       : "bg-zinc-950 border border-zinc-900 hover:border-zinc-800 transition-all duration-300 group-hover:scale-110 shadow-md active:scale-95"
                     } relative ${item.glow}`}
@@ -635,7 +636,7 @@ export const LobbyView: React.FC = () => {
                   {!item.locked && (
                     <div className={`absolute inset-1 rounded-full border border-dashed border-zinc-800 opacity-60`} />
                   )}
-                  <Icon className={`w-5 h-5 sm:w-6 sm:h-6 ${item.iconColor}`} />
+                  <Icon className={`w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 ${item.iconColor}`} />
                   {item.locked && (
                     <div className="absolute -bottom-1 -right-1 bg-zinc-900 border border-zinc-800 p-1 rounded-full">
                       <Lock className="w-2.5 h-2.5 text-zinc-500" />

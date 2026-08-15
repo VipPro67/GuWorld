@@ -92,7 +92,7 @@ export const TrainingRoom: React.FC<TrainingRoomProps> = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 backdrop-blur-sm overflow-y-auto">
-      <div className="relative w-full max-w-4xl py-10 px-4">
+      <div className="relative w-full py-10 px-4">
         {/* We reuse CombatScreen with isPracticeMode enabled */}
         <CombatScreen 
           player={store.player}

@@ -116,7 +116,7 @@ export const AuditLogsView: React.FC = () => {
   };
 
   return (
-    <div className="max-w-6xl w-full mx-auto bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 sm:p-6 backdrop-blur-md space-y-6">
+    <div className="w-full mx-auto bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 sm:p-6 backdrop-blur-md space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-4 gap-4">
         <div>
