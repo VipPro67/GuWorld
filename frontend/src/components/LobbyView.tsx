@@ -213,6 +213,14 @@ export const LobbyView: React.FC = () => {
       glow: "group-hover:shadow-[0_0_25px_rgba(99,102,241,0.45)]",
       borderColor: "border-blue-400/30",
       iconColor: "text-blue-500",
+    },{
+      id: "arena",
+      label: "Võ Đài",
+      icon: Swords,
+      gradient: "from-rose-500 to-red-600",
+      glow: "group-hover:shadow-[0_0_25px_rgba(239,68,68,0.45)]",
+      borderColor: "border-rose-400/30",
+      iconColor: "text-rose-500",
     },
     {
       id: "achievements",
@@ -223,24 +231,7 @@ export const LobbyView: React.FC = () => {
       borderColor: "border-amber-400/30",
       iconColor: "text-amber-500",
     },
-    {
-      id: "combat-history",
-      label: "Lịch Sử Chiến Đấu",
-      icon: History,
-      gradient: "from-rose-500 to-red-600",
-      glow: "group-hover:shadow-[0_0_20px_rgba(239,68,68,0.4)]",
-      borderColor: "border-rose-400/20",
-      iconColor: "text-rose-100",
-    },
-    {
-      id: "audit-logs",
-      label: "Ký Sự Tu Hành",
-      icon: History,
-      gradient: "from-blue-500 to-indigo-600",
-      glow: "group-hover:shadow-[0_0_20px_rgba(59,130,246,0.4)]",
-      borderColor: "border-blue-400/20",
-      iconColor: "text-blue-100",
-    },
+    
   ];
 
   const activityItems: HubItem[] = [
@@ -262,15 +253,6 @@ export const LobbyView: React.FC = () => {
       glow: "group-hover:shadow-[0_0_25px_rgba(234,179,8,0.45)]",
       borderColor: "border-yellow-400/30",
       iconColor: "text-yellow-500",
-    },
-    {
-      id: "arena",
-      label: "Võ Đài",
-      icon: Swords,
-      gradient: "from-rose-500 to-red-600",
-      glow: "group-hover:shadow-[0_0_25px_rgba(239,68,68,0.45)]",
-      borderColor: "border-rose-400/30",
-      iconColor: "text-rose-500",
     },
     {
       id: "dungeon",
@@ -342,6 +324,24 @@ export const LobbyView: React.FC = () => {
       glow: "group-hover:shadow-[0_0_20px_rgba(217,70,239,0.4)]",
       borderColor: "border-fuchsia-400/20",
       iconColor: "text-fuchsia-100",
+    },
+    {
+      id: "combat-history",
+      label: "Lịch Sử Chiến Đấu",
+      icon: History,
+      gradient: "from-rose-500 to-red-600",
+      glow: "group-hover:shadow-[0_0_20px_rgba(239,68,68,0.4)]",
+      borderColor: "border-rose-400/20",
+      iconColor: "text-rose-100",
+    },
+    {
+      id: "audit-logs",
+      label: "Ký Sự Tu Hành",
+      icon: History,
+      gradient: "from-blue-500 to-indigo-600",
+      glow: "group-hover:shadow-[0_0_20px_rgba(59,130,246,0.4)]",
+      borderColor: "border-blue-400/20",
+      iconColor: "text-blue-100",
     },
   ];
 
@@ -556,7 +556,7 @@ export const LobbyView: React.FC = () => {
           </span>
         </div>
 
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 sm:gap-6 justify-center">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 sm:gap-4 justify-center">
           {managementItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -566,11 +566,11 @@ export const LobbyView: React.FC = () => {
                 className="flex flex-col items-center p-2 rounded-2xl transition-all duration-300 hover:bg-zinc-900/20 cursor-pointer group select-none"
               >
                 <div
-                  className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center bg-gradient-to-br ${item.gradient} border ${item.borderColor} transition-all duration-300 group-hover:scale-110 shadow-lg active:scale-95 relative ${item.glow}`}
+                  className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center bg-gradient-to-br ${item.gradient} border ${item.borderColor} transition-all duration-300 group-hover:scale-110 shadow-lg active:scale-95 relative ${item.glow}`}
                 >
-                  <Icon className={`w-7 h-7 sm:w-9 sm:h-9 ${item.iconColor} drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]`} />
+                  <Icon className={`w-5 h-5 sm:w-6 sm:h-6 ${item.iconColor} drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]`} />
                 </div>
-                <span className="font-serif text-[11px] sm:text-xs font-semibold text-zinc-400 mt-3 tracking-wide text-center group-hover:text-zinc-100 transition-colors">
+                <span className="font-serif text-[10px] sm:text-[11px] font-semibold text-zinc-400 mt-2 tracking-wide text-center group-hover:text-zinc-100 transition-colors">
                   {item.label}
                 </span>
               </div>
@@ -587,15 +587,15 @@ export const LobbyView: React.FC = () => {
               Quản trị
             </h2>
           </div>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-6 justify-center">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-4 justify-center">
             <div
               onClick={() => setView("admin")}
               className="flex flex-col items-center p-2 rounded-2xl transition-all duration-300 hover:bg-zinc-900/20 cursor-pointer group select-none"
             >
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center bg-gradient-to-br from-amber-500 to-orange-600 border border-amber-400/20 transition-all duration-300 group-hover:scale-110 shadow-lg active:scale-95 group-hover:shadow-[0_0_20px_rgba(245,158,11,0.4)]">
-                <Shield className="w-7 h-7 sm:w-9 sm:h-9 text-amber-100 drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]" />
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center bg-gradient-to-br from-amber-500 to-orange-600 border border-amber-400/20 transition-all duration-300 group-hover:scale-110 shadow-lg active:scale-95 group-hover:shadow-[0_0_20px_rgba(245,158,11,0.4)]">
+                <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-amber-100 drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]" />
               </div>
-              <span className="font-serif text-[11px] sm:text-xs font-semibold text-zinc-400 mt-3 tracking-wide text-center group-hover:text-zinc-100 transition-colors">
+              <span className="font-serif text-[10px] sm:text-[11px] font-semibold text-zinc-400 mt-2 tracking-wide text-center group-hover:text-zinc-100 transition-colors">
                 Dashboard
               </span>
             </div>
@@ -614,7 +614,7 @@ export const LobbyView: React.FC = () => {
           </span>
         </div>
 
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-6 justify-center">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-4 justify-center">
           {activityItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -627,7 +627,7 @@ export const LobbyView: React.FC = () => {
                   }`}
               >
                 <div
-                  className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center ${item.locked
+                  className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center ${item.locked
                       ? "bg-zinc-950 border border-zinc-900"
                       : "bg-zinc-950 border border-zinc-900 hover:border-zinc-800 transition-all duration-300 group-hover:scale-110 shadow-md active:scale-95"
                     } relative ${item.glow}`}
@@ -635,14 +635,14 @@ export const LobbyView: React.FC = () => {
                   {!item.locked && (
                     <div className={`absolute inset-1 rounded-full border border-dashed border-zinc-800 opacity-60`} />
                   )}
-                  <Icon className={`w-7 h-7 sm:w-9 sm:h-9 ${item.iconColor}`} />
+                  <Icon className={`w-5 h-5 sm:w-6 sm:h-6 ${item.iconColor}`} />
                   {item.locked && (
                     <div className="absolute -bottom-1 -right-1 bg-zinc-900 border border-zinc-800 p-1 rounded-full">
-                      <Lock className="w-3 h-3 text-zinc-500" />
+                      <Lock className="w-2.5 h-2.5 text-zinc-500" />
                     </div>
                   )}
                 </div>
-                <span className={`font-serif text-[11px] sm:text-xs font-semibold mt-3 tracking-wide text-center transition-colors ${item.locked
+                <span className={`font-serif text-[10px] sm:text-[11px] font-semibold mt-2 tracking-wide text-center transition-colors ${item.locked
                     ? "text-zinc-600"
                     : "text-zinc-400 group-hover:text-zinc-100"
                   }`}>

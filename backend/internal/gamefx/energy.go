@@ -28,7 +28,7 @@ func EnergyCost(player *models.Player, guSpec *models.GuDictionaryItem) float64 
 		return baseCost
 	}
 
-	baseManaPct := 0.10
+	baseManaPct := 0.0
 	if guSpec.BaseManaCost > 0.0 {
 		baseManaPct = guSpec.BaseManaCost / 100.0
 	}
@@ -72,7 +72,7 @@ func EnergyCostForCombatant(actor *models.Combatant, guSpec *models.GuDictionary
 		return baseCost
 	}
 
-	baseManaPct := 0.10
+	baseManaPct := 0.0
 	if guSpec.BaseManaCost > 0.0 {
 		baseManaPct = guSpec.BaseManaCost / 100.0
 	}

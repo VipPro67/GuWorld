@@ -89,8 +89,8 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
 
   const sellBackRatio = 0.10;
 
-  const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 10000, 25000, 60000, 150000];
-  const itemRankBasePrice = [0, 5, 15, 30, 60, 120, 250, 500, 1000, 2500];
+  const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 100000, 250000, 600000, 1500000];
+  const itemRankBasePrice = [0, 1, 3, 6, 13, 25, 500, 1250, 3000, 7500];
 
   const getGuBasePrice = (guId: string): number => {
     const spec = guDictionary[guId];

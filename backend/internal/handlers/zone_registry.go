@@ -22,7 +22,7 @@ type persistentCellKey struct{ X, Y int }
 // safe point (village / portal). Only these cells touch the database; all
 // low-tier content is generated procedurally.
 type persistentCell struct {
-	RegionID       string
+	RegionID string
 	models.Cell
 	RespawnSeconds int
 	LastCleared    time.Time
@@ -44,10 +44,30 @@ var zoneReg = &zoneRegistry{}
 
 // zoneType constants.
 const (
-	ZoneTypeHub   = "HUB"
-	ZoneTypeLarge = "DAI_VUC"
-	ZoneTypeNamed = "NGU_VUC"
+	ZoneTypeHub     = "HUB"
+	ZoneTypeSafe    = "SAFE_ZONE"
+	ZoneTypeBoss    = "BOSS_ZONE"
+	ZoneTypeSecret  = "SECRET_REALM"
+	ZoneTypeDungeon = "DUNGEON"
+	ZoneTypePvp     = "PVP_ZONE"
+	ZoneTypeLarge   = "NGU_VUC"
+	ZoneTypeNamed   = "KHU_VUC"
 )
+
+// zoneTypePriority ranks zone types from highest (most specific) to lowest.
+// When a point falls inside overlapping zones, the zone with the highest
+// priority wins; ties are broken by smallest area (innermost). Unknown zone
+// types are treated as KHU_VUC priority.
+var zoneTypePriority = map[string]int{
+	ZoneTypeHub:     100,
+	ZoneTypeSafe:    90,
+	ZoneTypeBoss:    80,
+	ZoneTypeSecret:  70,
+	ZoneTypeDungeon: 60,
+	ZoneTypePvp:     50,
+	ZoneTypeNamed:   40,
+	ZoneTypeLarge:   10,
+}
 
 // LoadZoneRegistry loads regions (zones), persistent map cells and monster
 // spawn pools into memory. Called once at startup.
@@ -61,7 +81,7 @@ func LoadZoneRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
 		SELECT id, name, COALESCE(description,''), COALESCE(width,100), COALESCE(height,100),
 		       COALESCE(min_rank,1), COALESCE(max_rank,5), is_active,
-		       COALESCE(parent_id,''), COALESCE(zone_type,'NGU_VUC'),
+		       COALESCE(parent_id,''), COALESCE(zone_type,'KHU_VUC'),
 		       COALESCE(min_x,0), COALESCE(min_y,0), COALESCE(max_x,0), COALESCE(max_y,0),
 		       COALESCE(entry_x,0), COALESCE(entry_y,0), COALESCE(pool_weights::text,'{}')
 		FROM regions
@@ -212,42 +232,41 @@ func zoneArea(z *models.Region) int {
 	return (z.MaxX - z.MinX + 1) * (z.MaxY - z.MinY + 1)
 }
 
-// FindZoneAt returns the innermost active zone containing the point. The hub
-// (safe lobby) takes precedence over any overlapping zone.
+// FindZoneAt returns the active zone containing the point with the highest
+// priority, breaking ties by smallest area (innermost). The hub (safe lobby)
+// has the highest priority, so it naturally wins over any overlapping zone.
 func FindZoneAt(x, y int) *models.Region {
 	ensureZonesLoaded()
 	zoneReg.mu.RLock()
 	defer zoneReg.mu.RUnlock()
 	var best *models.Region
+	bestPriority := -1
 	bestArea := 0
 	for i := range zoneReg.zones {
 		z := &zoneReg.zones[i]
 		if !zoneContains(z, x, y) {
 			continue
 		}
-		if z.ZoneType == ZoneTypeHub {
-			return z
-		}
-		if z.ZoneType == ZoneTypeNamed {
-			if best == nil || zoneArea(z) < bestArea {
-				best = z
-				bestArea = zoneArea(z)
-			}
+		prio := zonePriorityOf(z.ZoneType)
+		if best == nil || prio > bestPriority || (prio == bestPriority && zoneArea(z) < bestArea) {
+			best = z
+			bestPriority = prio
+			bestArea = zoneArea(z)
 		}
 	}
-	if best != nil {
-		return best
-	}
-	for i := range zoneReg.zones {
-		z := &zoneReg.zones[i]
-		if z.ZoneType == ZoneTypeLarge && zoneContains(z, x, y) {
-			return z
-		}
-	}
-	return nil
+	return best
 }
 
-// FindLargeZoneAt returns the DAI_VUC zone containing the point.
+// zonePriorityOf returns the resolution priority of a zone type. Unknown zone
+// types fall back to the KHU_VUC (named) priority.
+func zonePriorityOf(zoneType string) int {
+	if prio, ok := zoneTypePriority[zoneType]; ok {
+		return prio
+	}
+	return zoneTypePriority[ZoneTypeNamed]
+}
+
+// FindLargeZoneAt returns the NGU_VUC zone containing the point.
 func FindLargeZoneAt(x, y int) *models.Region {
 	ensureZonesLoaded()
 	zoneReg.mu.RLock()

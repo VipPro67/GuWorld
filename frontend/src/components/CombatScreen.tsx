@@ -625,58 +625,77 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         onPracticeDummyConfigChange({ ...practiceDummyConfig, [key]: val });
       };
 
+      const applyPreset = (hp: number, shield: number, atk: number, def: number, speed: number) => {
+        onPracticeDummyConfigChange({ dummyHP: hp, dummyShield: shield, dummyAtk: atk, dummyDef: def, dummySpeed: speed });
+      };
+
       return (
         <div className="flex flex-col gap-4">
-          <div className="bg-zinc-900/60 border border-rose-800 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Swords className="w-4 h-4 text-rose-400" />
-              <h3 className="text-sm font-bold text-zinc-300">Cấu Hình Hình Nhân Gỗ</h3>
+          <div className="bg-gradient-to-b from-zinc-900/80 to-zinc-950/80 border border-rose-800/50 rounded-2xl overflow-hidden shadow-[0_0_20px_rgba(225,29,72,0.1)]">
+            <div className="bg-rose-950/30 border-b border-rose-900/30 px-5 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Swords className="w-5 h-5 text-rose-400" />
+                <h3 className="text-base font-bold text-zinc-200">Cấu Hình Hình Nhân Gỗ</h3>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => applyPreset(100000, 0, 1000, 500, 1000)} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[10px] transition-colors border border-zinc-700">Cơ Bản</button>
+                <button onClick={() => applyPreset(10000000, 1000000, 50000, 20000, 5000)} className="px-2 py-1 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 rounded text-[10px] transition-colors border border-rose-800/50">Cao Thủ</button>
+                <button onClick={() => applyPreset(1000000000, 50000000, 2000000, 1000000, 20000)} className="px-2 py-1 bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 rounded text-[10px] transition-colors border border-purple-800/50">Đại Năng</button>
+              </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">Máu (HP)</label>
-                <input 
-                  type="number" 
-                  value={dummyHP} 
-                  onChange={e => updateConfig('dummyHP', parseInt(e.target.value) || 0)}
-                  className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded px-2 py-1.5 text-zinc-200 text-sm focus:outline-none focus:border-rose-500 transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">Khiên Ảo</label>
-                <input 
-                  type="number" 
-                  value={dummyShield} 
-                  onChange={e => updateConfig('dummyShield', parseInt(e.target.value) || 0)}
-                  className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded px-2 py-1.5 text-zinc-200 text-sm focus:outline-none focus:border-rose-500 transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">Công Kích</label>
-                <input 
-                  type="number" 
-                  value={dummyAtk} 
-                  onChange={e => updateConfig('dummyAtk', parseInt(e.target.value) || 0)}
-                  className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded px-2 py-1.5 text-zinc-200 text-sm focus:outline-none focus:border-rose-500 transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">Phòng Thủ</label>
-                <input 
-                  type="number" 
-                  value={dummyDef} 
-                  onChange={e => updateConfig('dummyDef', parseInt(e.target.value) || 0)}
-                  className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded px-2 py-1.5 text-zinc-200 text-sm focus:outline-none focus:border-rose-500 transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">Tốc Độ</label>
-                <input 
-                  type="number" 
-                  value={dummySpeed} 
-                  onChange={e => updateConfig('dummySpeed', parseInt(e.target.value) || 1)}
-                  className="w-full bg-zinc-950/50 border border-zinc-700/50 rounded px-2 py-1.5 text-zinc-200 text-sm focus:outline-none focus:border-rose-500 transition-colors"
-                />
+            
+            <div className="p-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-all focus-within:border-rose-500/50 focus-within:bg-zinc-900/80 group">
+                    <label className="text-xs font-bold text-rose-400/80 group-focus-within:text-rose-400 w-24">Máu (HP)</label>
+                    <input 
+                      type="number" 
+                      value={dummyHP} 
+                      onChange={e => updateConfig('dummyHP', parseInt(e.target.value) || 0)}
+                      className="w-full bg-transparent text-right text-zinc-200 text-sm font-mono focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-all focus-within:border-blue-500/50 focus-within:bg-zinc-900/80 group">
+                    <label className="text-xs font-bold text-blue-400/80 group-focus-within:text-blue-400 w-24">Khiên Ảo</label>
+                    <input 
+                      type="number" 
+                      value={dummyShield} 
+                      onChange={e => updateConfig('dummyShield', parseInt(e.target.value) || 0)}
+                      className="w-full bg-transparent text-right text-zinc-200 text-sm font-mono focus:outline-none"
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-all focus-within:border-amber-500/50 focus-within:bg-zinc-900/80 group">
+                    <label className="text-xs font-bold text-amber-400/80 group-focus-within:text-amber-400 w-24">Công Kích</label>
+                    <input 
+                      type="number" 
+                      value={dummyAtk} 
+                      onChange={e => updateConfig('dummyAtk', parseInt(e.target.value) || 0)}
+                      className="w-full bg-transparent text-right text-zinc-200 text-sm font-mono focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-all focus-within:border-emerald-500/50 focus-within:bg-zinc-900/80 group">
+                    <label className="text-xs font-bold text-emerald-400/80 group-focus-within:text-emerald-400 w-24">Phòng Thủ</label>
+                    <input 
+                      type="number" 
+                      value={dummyDef} 
+                      onChange={e => updateConfig('dummyDef', parseInt(e.target.value) || 0)}
+                      className="w-full bg-transparent text-right text-zinc-200 text-sm font-mono focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-all focus-within:border-cyan-500/50 focus-within:bg-zinc-900/80 group">
+                    <label className="text-xs font-bold text-cyan-400/80 group-focus-within:text-cyan-400 w-24">Tốc Độ</label>
+                    <input 
+                      type="number" 
+                      value={dummySpeed} 
+                      onChange={e => updateConfig('dummySpeed', parseInt(e.target.value) || 1)}
+                      className="w-full bg-transparent text-right text-zinc-200 text-sm font-mono focus:outline-none"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1005,7 +1024,12 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           {(() => {
             if (isPracticeMode) return null;
             const monsterSpec = monsterDictionary[enemy.enemy_template_id || ""];
-            const isCapturable = monsterSpec?.is_capturable;
+            const hasCaptureBonus = selectedGuIds.some(id => {
+              const gu = eligibleGus.find(g => g.instance_id === id);
+              const spec = gu ? guSpecFor(gu.gu_id, gu.rank) : null;
+              return !!(spec && spec.effects && spec.effects.active && spec.effects.active.some((e: { key: string; }) => e.key === "capture_bonus"));
+            });
+            const isCapturable = monsterSpec?.is_capturable && hasCaptureBonus;
             if (!isCapturable) return null;
             return (
               <button

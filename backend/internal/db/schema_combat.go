@@ -1,0 +1,51 @@
+package db
+
+// Combat history and arena ranking schema.
+
+func schemaCombat() error {
+	if err := execSchema("combat_history", `
+	CREATE TABLE IF NOT EXISTS combat_history (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		winner VARCHAR(20) NOT NULL DEFAULT 'Phe Địch',
+		logs JSONB NOT NULL DEFAULT '[]',
+		summary JSONB NOT NULL DEFAULT '{}',
+		enemy_name VARCHAR(100) NOT NULL DEFAULT '',
+		enemy_type VARCHAR(50) NOT NULL DEFAULT '',
+		region VARCHAR(50) NOT NULL DEFAULT '',
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		combatants JSONB NOT NULL DEFAULT '[]'
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("combat_history_player_idx", `
+	CREATE INDEX IF NOT EXISTS idx_combat_history_player ON combat_history (player_id);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("combat_sessions", `
+	CREATE TABLE IF NOT EXISTS combat_sessions (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		state JSONB NOT NULL DEFAULT '{}',
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		UNIQUE (player_id)
+	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("arena_rankings", `
+	CREATE TABLE IF NOT EXISTS arena_rankings (
+		player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+		rank INTEGER UNIQUE NOT NULL,
+		points INTEGER DEFAULT 1000,
+		daily_challenges INTEGER NOT NULL DEFAULT 0,
+		last_challenge_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	);`); err != nil {
+		return err
+	}
+
+	return nil
+}

@@ -59,30 +59,28 @@ func Connect() error {
 	return nil
 }
 
-// InitSchema creates the necessary tables and seeds initial master data if missing
+// InitSchema creates all tables, indexes and foreign keys (defined per domain
+// in schema_*.go), then seeds static runtime data: the reserved system players,
+// default race/constitution dictionaries, the hub region, world mine slots and
+// sect mines. Gameplay dictionaries (Item, Gu, Recipe, ...) are NOT auto-seeded
+// here — import them via the Admin panel "Dữ liệu" tab.
 func InitSchema() error {
 	if DB == nil {
 		return fmt.Errorf("database connection is nil")
 	}
 
-	_, err := DB.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`)
-	if err != nil {
+	if _, err := DB.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`); err != nil {
 		logger.S.Warnf("failed to create uuid-ossp extension: %v", err)
 	}
-
-	_, err = DB.Exec(`CREATE EXTENSION IF NOT EXISTS "unaccent";`)
-	if err != nil {
+	if _, err := DB.Exec(`CREATE EXTENSION IF NOT EXISTS "unaccent";`); err != nil {
 		logger.S.Warnf("failed to create unaccent extension: %v", err)
 	}
-
-	_, err = DB.Exec(`CREATE EXTENSION IF NOT EXISTS "pg_trgm";`)
-	if err != nil {
+	if _, err := DB.Exec(`CREATE EXTENSION IF NOT EXISTS "pg_trgm";`); err != nil {
 		logger.S.Warnf("failed to create pg_trgm extension: %v", err)
 	}
-
 	// Immutable wrapper around unaccent so it can be used in index expressions.
 	// unaccent() itself is STABLE and cannot be indexed directly.
-	_, err = DB.Exec(`
+	if _, err := DB.Exec(`
 	CREATE OR REPLACE FUNCTION public.immutable_unaccent(text)
 	RETURNS text
 	LANGUAGE sql
@@ -91,1697 +89,185 @@ func InitSchema() error {
 	STRICT
 	AS $func$
 		SELECT public.unaccent('public.unaccent', $1)
-	$func$;`)
-	if err != nil {
+	$func$;`); err != nil {
 		logger.S.Warnf("failed to create immutable_unaccent function: %v", err)
 	}
 
-	// 1. Create item_dictionary
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS item_dictionary (
-		id VARCHAR(50) PRIMARY KEY,
-		name VARCHAR(100) NOT NULL,
-		item_type VARCHAR(50) NOT NULL,
-		rank INTEGER DEFAULT 1,
-		effects JSONB NOT NULL DEFAULT '{}',
-		description TEXT
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create item_dictionary table: %w", err)
-	}
-
-	// 1.1. Create caravan_shop_items
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS caravan_shop_items (
-		id VARCHAR(50) PRIMARY KEY,
-		price INTEGER NOT NULL,
-		stock INTEGER NOT NULL DEFAULT -1,
-		is_default BOOLEAN NOT NULL DEFAULT TRUE,
-		sort_order INTEGER NOT NULL DEFAULT 0,
-		updated_at TIMESTAMP DEFAULT NOW()
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create caravan_shop_items table: %w", err)
-	}
-
-	// 1.2. Create arena_shop_items
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS arena_shop_items (
-		id VARCHAR(50) PRIMARY KEY,
-		price INTEGER NOT NULL,
-		qty INTEGER NOT NULL DEFAULT 1,
-		stock INTEGER NOT NULL DEFAULT -1,
-		is_default BOOLEAN NOT NULL DEFAULT TRUE,
-		sort_order INTEGER NOT NULL DEFAULT 0,
-		updated_at TIMESTAMP DEFAULT NOW()
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create arena_shop_items table: %w", err)
-	}
-
-	// 2. Create gu_dictionary
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS gu_dictionary (
-		id VARCHAR(50) NOT NULL,
-		rank INTEGER NOT NULL,
-		name VARCHAR(100) NOT NULL,
-		path JSONB NOT NULL DEFAULT '[]'::jsonb,
-		gu_type VARCHAR(50) NOT NULL,
-		base_mana_cost DOUBLE PRECISION NOT NULL DEFAULT 0,
-		effects JSONB NOT NULL DEFAULT '{"active":{},"support":{},"passive":{},"house":{}}',
-		hunger_rate INTEGER NOT NULL,
-		food_types JSONB NOT NULL DEFAULT '[]',
-		max_hunger INTEGER DEFAULT 100,
-		description TEXT,
-		target_type VARCHAR(50) NOT NULL DEFAULT 'SINGLE',
-		rarity VARCHAR(50),
-		is_immortal BOOLEAN DEFAULT false,
-		primary_role VARCHAR(80),
-		combat_roles JSONB DEFAULT '[]',
-		combat_tags JSONB DEFAULT '[]',
-		support_tags JSONB DEFAULT '[]',
-		PRIMARY KEY (id, rank)
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create gu_dictionary table: %w", err)
-	}
-
-	// 2b. Create constitution_dictionary
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS constitution_dictionary (
-		key VARCHAR(100) PRIMARY KEY,
-		name VARCHAR(200) NOT NULL,
-		effects JSONB NOT NULL DEFAULT '{}'
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create constitution_dictionary table: %w", err)
-	}
-
-	// 2c. Create race_dictionary
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS race_dictionary (
-		key VARCHAR(100) PRIMARY KEY,
-		name VARCHAR(200) NOT NULL,
-		effects JSONB NOT NULL DEFAULT '{}'
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create race_dictionary table: %w", err)
-	}
-
-	// Drop old refining_recipes table if it contains the legacy id column
-	_, err = DB.Exec(`
-	DO $$
-	BEGIN
-		IF EXISTS (
-			SELECT 1 FROM information_schema.columns 
-			WHERE table_name = 'refining_recipes' AND column_name = 'id'
-		) THEN
-			DROP TABLE IF EXISTS refining_recipes CASCADE;
-		END IF;
-	END $$;`)
-	if err != nil {
-		return fmt.Errorf("failed to check/drop legacy refining_recipes table: %w", err)
-	}
-
-	// 3. Create refining_recipes
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS refining_recipes (
-		target_gu_id VARCHAR(50) NOT NULL,
-		target_rank INTEGER NOT NULL,
-		variant INTEGER NOT NULL DEFAULT 1,
-		required_gus JSONB NOT NULL,
-		required_materials JSONB NOT NULL,
-		success_rate DOUBLE PRECISION NOT NULL,
-		primeval_stones_cost DOUBLE PRECISION DEFAULT 0,
-		immortal_essence_stones_cost DOUBLE PRECISION DEFAULT 0,
-		PRIMARY KEY (target_gu_id, target_rank, variant),
-		FOREIGN KEY (target_gu_id, target_rank) REFERENCES gu_dictionary(id, rank) ON UPDATE CASCADE ON DELETE RESTRICT
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create refining_recipes table: %w", err)
-	}
-
-	// 4. Create players table
-	query := `
-	CREATE TABLE IF NOT EXISTS players (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		username VARCHAR(50) UNIQUE NOT NULL,
-		password_hash VARCHAR(255) NOT NULL DEFAULT '',
-		rank INTEGER DEFAULT 1,
-		sub_rank INTEGER DEFAULT 1,
-		aptitude_type VARCHAR(10) NOT NULL,
-		aptitude_percent INTEGER NOT NULL,
-		current_mana DOUBLE PRECISION NOT NULL,
-		max_mana DOUBLE PRECISION NOT NULL,
-		primeval_stones DOUBLE PRECISION DEFAULT 0,
-		immortal_stones DOUBLE PRECISION DEFAULT 0,
-		hp DOUBLE PRECISION NOT NULL DEFAULT 100,
-		base_hp DOUBLE PRECISION NOT NULL DEFAULT 100,
-		body_mods JSONB NOT NULL DEFAULT '[]',
-		x INTEGER NOT NULL DEFAULT 50,
-		y INTEGER NOT NULL DEFAULT 50,
-		current_region VARCHAR(50) NOT NULL DEFAULT 'Southern_Border',
-		visited_subzones JSONB NOT NULL DEFAULT '[]',
-		path_masteries JSONB NOT NULL DEFAULT '{}',
-		active_combat JSONB DEFAULT NULL,
-		last_mana_update TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-		aperture_stress DOUBLE PRECISION NOT NULL DEFAULT 0.0,
-		last_cultivate_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-		email VARCHAR(255) UNIQUE NOT NULL DEFAULT '',
-		google_id VARCHAR(255) UNIQUE NULL,
-		ref_code VARCHAR(50) UNIQUE NOT NULL DEFAULT '',
-		earned_achievements JSONB NOT NULL DEFAULT '[]',
-		selected_title VARCHAR(100) NOT NULL DEFAULT '',
-		selected_frame VARCHAR(50) NOT NULL DEFAULT '',
-		growth_data JSONB NOT NULL DEFAULT '{"boosts":{"attack":0,"defense":0,"hp":0,"speed":0},"fully_grown":[]}',
-		race VARCHAR(50) NOT NULL DEFAULT '',
-		gender VARCHAR(20) NOT NULL DEFAULT '',
-		constitution VARCHAR(100) NOT NULL DEFAULT '',
-		statuses JSONB NOT NULL DEFAULT '[]'
-	);
-	`
-	_, err = DB.Exec(query)
-	if err != nil {
-		return fmt.Errorf("failed to create players table: %w", err)
-	}
-
-	// Seed system player for global/world/sect chat channels
-	_, _ = DB.Exec(`
-		INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, hp, base_hp, current_region, x, y, email, ref_code, is_admin)
-		VALUES ('00000000-0000-0000-0000-000000000000', 'Bảo Hoàng Thiên', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'Southern_Border', 50, 50, 'system@guworld.local', 'REF-SYSTEM', true)
-		ON CONFLICT (id) DO NOTHING;
-	`)
-
-	// Seed system NPC player "Hệ thống" for automated notifications
-	_, _ = DB.Exec(`
-		INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, hp, base_hp, current_region, x, y, email, ref_code, is_admin)
-		VALUES ('11111111-1111-1111-1111-111111111111', 'Hệ thống', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'Southern_Border', 50, 50, 'system_npc@guworld.local', 'REF-SYSTEM-NPC', true)
-		ON CONFLICT (id) DO NOTHING;
-	`)
-
-	// Create referrals table
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS referrals (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		referrer_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		referee_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE UNIQUE,
-		referee_ip VARCHAR(50) NOT NULL DEFAULT '',
-		referee_device TEXT NOT NULL DEFAULT '',
-		is_suspicious BOOLEAN NOT NULL DEFAULT false,
-		has_deposited BOOLEAN NOT NULL DEFAULT false,
-		deposit_amount_stones INTEGER NOT NULL DEFAULT 0,
-		milestone1_rewarded BOOLEAN NOT NULL DEFAULT false,
-		milestone2_rewarded BOOLEAN NOT NULL DEFAULT false,
-		milestone3_rewarded BOOLEAN NOT NULL DEFAULT false,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create referrals table: %w", err)
-	}
-
-	// 5. Create immortal_apertures table
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS immortal_apertures (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		player_id UUID NOT NULL UNIQUE REFERENCES players(id) ON DELETE CASCADE,
-		grade VARCHAR(20) NOT NULL,
-		time_rate DOUBLE PRECISION NOT NULL DEFAULT 10,
-		aperture_hp BIGINT NOT NULL DEFAULT 10000,
-		max_aperture_hp BIGINT NOT NULL DEFAULT 10000,
-		area_size BIGINT NOT NULL DEFAULT 3000000,
-		immortal_essence BIGINT NOT NULL DEFAULT 0,
-		essence_production_per_year INTEGER NOT NULL DEFAULT 10,
-		internal_years_passed DOUBLE PRECISION NOT NULL DEFAULT 0,
-		next_tribulation_year DOUBLE PRECISION NOT NULL DEFAULT 10,
-		tribulation_count INTEGER NOT NULL DEFAULT 0,
-		rank_start_year DOUBLE PRECISION NOT NULL DEFAULT 0,
-		earth_calamity_count INTEGER NOT NULL DEFAULT 0,
-		heavenly_tribulation_count INTEGER NOT NULL DEFAULT 0,
-		grand_tribulation_count INTEGER NOT NULL DEFAULT 0,
-		myriad_tribulation_count INTEGER NOT NULL DEFAULT 0,
-		chaos_calamity_count INTEGER NOT NULL DEFAULT 0,
-		state VARCHAR(30) NOT NULL DEFAULT 'STABLE',
-		dao_marks JSONB NOT NULL DEFAULT '{"strength": 0}',
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create immortal_apertures table: %w", err)
-	}
-
-	// Migration: add new columns if missing (safe for existing DBs)
-	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ALTER COLUMN created_at TYPE TIMESTAMP WITH TIME ZONE;`)
-	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ALTER COLUMN updated_at TYPE TIMESTAMP WITH TIME ZONE;`)
-	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS rank_start_year DOUBLE PRECISION NOT NULL DEFAULT 0;`)
-	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS earth_calamity_count INTEGER NOT NULL DEFAULT 0;`)
-	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS heavenly_tribulation_count INTEGER NOT NULL DEFAULT 0;`)
-	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS grand_tribulation_count INTEGER NOT NULL DEFAULT 0;`)
-	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS myriad_tribulation_count INTEGER NOT NULL DEFAULT 0;`)
-	_, _ = DB.Exec(`ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS chaos_calamity_count INTEGER NOT NULL DEFAULT 0;`)
-
-	// 7. Create aperture_resource_nodes table
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS aperture_resource_nodes (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
-		node_type VARCHAR(50) NOT NULL,
-		name VARCHAR(100) NOT NULL,
-		path VARCHAR(50),
-		level INTEGER NOT NULL DEFAULT 1,
-		hp INTEGER NOT NULL DEFAULT 1000,
-		max_hp INTEGER NOT NULL DEFAULT 1000,
-		x INTEGER NOT NULL,
-		y INTEGER NOT NULL,
-		production_type VARCHAR(50),
-		production_amount INTEGER NOT NULL DEFAULT 0,
-		production_interval_hours INTEGER NOT NULL DEFAULT 24,
-		last_collected_at TIMESTAMP WITH TIME ZONE,
-		is_destroyed BOOLEAN NOT NULL DEFAULT false,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create aperture_resource_nodes table: %w", err)
-	}
-
-	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ALTER COLUMN last_collected_at TYPE TIMESTAMP WITH TIME ZONE;`)
-	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ALTER COLUMN created_at TYPE TIMESTAMP WITH TIME ZONE;`)
-	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ALTER COLUMN updated_at TYPE TIMESTAMP WITH TIME ZONE;`)
-
-	// 7b. Defense columns for aperture_resource_nodes
-	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS node_category VARCHAR(20) NOT NULL DEFAULT 'RESOURCE';`)
-	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS defense_power INTEGER NOT NULL DEFAULT 0;`)
-	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS attack_range INTEGER NOT NULL DEFAULT 0;`)
-	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS hp_bonus INTEGER NOT NULL DEFAULT 0;`)
-	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS damage_reduction INTEGER NOT NULL DEFAULT 0;`)
-	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS blocks_movement BOOLEAN NOT NULL DEFAULT false;`)
-	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS required_gu_id VARCHAR(50);`)
-	_, _ = DB.Exec(`ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS required_gu_rank INTEGER DEFAULT 0;`)
-	_, _ = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_aperture_nodes_category ON aperture_resource_nodes(aperture_id, node_category);`)
-
-	// 8. Create tribulation_events table
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS tribulation_events (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
-		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		tribulation_type VARCHAR(30) NOT NULL,
-		path VARCHAR(50) NOT NULL,
-		difficulty INTEGER NOT NULL DEFAULT 1,
-		status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
-		aperture_hp_before BIGINT NOT NULL,
-		aperture_hp_after BIGINT,
-		reward_dao_marks BIGINT NOT NULL DEFAULT 0,
-		started_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-		ended_at TIMESTAMP WITH TIME ZONE
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create tribulation_events table: %w", err)
-	}
-
-	_, _ = DB.Exec(`ALTER TABLE tribulation_events ALTER COLUMN started_at TYPE TIMESTAMP WITH TIME ZONE;`)
-	_, _ = DB.Exec(`ALTER TABLE tribulation_events ALTER COLUMN ended_at TYPE TIMESTAMP WITH TIME ZONE;`)
-
-	// 9. Create tribulation_enemies table
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS tribulation_enemies (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		event_id UUID NOT NULL REFERENCES tribulation_events(id) ON DELETE CASCADE,
-		name VARCHAR(100) NOT NULL,
-		enemy_type VARCHAR(50) NOT NULL,
-		path VARCHAR(50) NOT NULL,
-		hp BIGINT NOT NULL,
-		max_hp BIGINT NOT NULL,
-		attack BIGINT NOT NULL,
-		defense BIGINT NOT NULL,
-		target_node_id UUID REFERENCES aperture_resource_nodes(id) ON DELETE SET NULL,
-		x INTEGER NOT NULL,
-		y INTEGER NOT NULL,
-		is_boss BOOLEAN NOT NULL DEFAULT false,
-		is_dead BOOLEAN NOT NULL DEFAULT false,
-		created_at TIMESTAMP DEFAULT now(),
-		updated_at TIMESTAMP DEFAULT now()
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create tribulation_enemies table: %w", err)
-	}
-
-	// dao_marks (relational mirror) removed: dao marks live in immortal_apertures.dao_marks JSONB
-	_, err = DB.Exec(`DROP TABLE IF EXISTS dao_marks;`)
-	if err != nil {
-		return fmt.Errorf("failed to drop legacy dao_marks table: %w", err)
-	}
-
-	query = `
-	CREATE TABLE IF NOT EXISTS auction (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		seller_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		item_type VARCHAR(20) NOT NULL,
-		item_data JSONB NOT NULL,
-		quantity INTEGER NOT NULL,
-		currency VARCHAR(20) NOT NULL,
-		start_price DOUBLE PRECISION NOT NULL,
-		current_price DOUBLE PRECISION NOT NULL,
-		highest_bidder_id UUID REFERENCES players(id) ON DELETE SET NULL,
-		end_time TIMESTAMP WITH TIME ZONE NOT NULL,
-		status VARCHAR(20) NOT NULL DEFAULT 'active',
-		listing_type VARCHAR(20) NOT NULL DEFAULT 'AUCTION',
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-		duration_hours INTEGER NOT NULL DEFAULT 24
-	);
-	`
-	_, err = DB.Exec(query)
-	if err != nil {
-		return fmt.Errorf("failed to create auction table: %w", err)
-	}
-
-	// Create parties table
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS parties (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		leader_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		members JSONB NOT NULL DEFAULT '[]',
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-	);`)
-	// Create mine_slots table
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS mine_slots (
-		id INTEGER PRIMARY KEY,
-		rarity VARCHAR(50) NOT NULL,
-		occupier_id UUID REFERENCES players(id) ON DELETE SET NULL,
-		monster_id VARCHAR(50) NULL,
-		occupied_at TIMESTAMPTZ NULL,
-		last_claimed_at TIMESTAMPTZ NULL,
-		abandoned_at TIMESTAMPTZ DEFAULT NOW()
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create mine_slots table: %w", err)
-	}
-
-	// Seed mine slots if empty
-	var mineCount int
-	err = DB.QueryRow("SELECT COUNT(*) FROM mine_slots").Scan(&mineCount)
-	if err == nil && mineCount == 0 {
-		// 31 slots: 1 Siêu Cấp, 3 Truyền Thuyết, 9 Sử Thi, 18 Hiếm
-		slotRarities := map[int]string{}
-		for i := 1; i <= 31; i++ {
-			switch {
-			case i == 1:
-				slotRarities[i] = "Siêu Cấp"
-			case i <= 4:
-				slotRarities[i] = "Truyền Thuyết"
-			case i <= 13:
-				slotRarities[i] = "Sử Thi"
-			default:
-				slotRarities[i] = "Hiếm"
-			}
-		}
-		for i := 1; i <= 31; i++ {
-			_, err = DB.Exec("INSERT INTO mine_slots (id, rarity, abandoned_at) VALUES ($1, $2, NOW()) ON CONFLICT (id) DO NOTHING", i, slotRarities[i])
-			if err != nil {
-				logger.S.Errorf("Failed to seed mine %d: %v", i, err)
-			}
-		}
-		logger.S.Info("Seeded 31 initial world mine slots.")
-	}
-
-	// Migration: upgrade existing 20-slot DB to 31-slot layout
-	if mineCount > 0 && mineCount <= 20 {
-		logger.S.Info("Migrating mine slots from 20 to 31 layout...")
-		// Update rarities for existing slots
-		updates := map[int]string{
-			1: "Siêu Cấp",
-			2: "Truyền Thuyết", 3: "Truyền Thuyết", 4: "Truyền Thuyết",
-			5: "Sử Thi", 6: "Sử Thi", 7: "Sử Thi", 8: "Sử Thi", 9: "Sử Thi",
-			10: "Sử Thi", 11: "Sử Thi", 12: "Sử Thi", 13: "Sử Thi",
-		}
-		for id, rarity := range updates {
-			_, _ = DB.Exec("UPDATE mine_slots SET rarity = $1 WHERE id = $2", rarity, id)
-		}
-		// Remove old CommonModule slots (id 14-20 if they were Thường)
-		_, _ = DB.Exec("DELETE FROM mine_slots WHERE id > 20")
-		// Insert new slots 21-31 (all Hiếm)
-		for i := 21; i <= 31; i++ {
-			_, _ = DB.Exec("INSERT INTO mine_slots (id, rarity, abandoned_at) VALUES ($1, 'Hiếm', NOW()) ON CONFLICT (id) DO NOTHING", i)
-		}
-		logger.S.Info("Mine slots migrated to 31 layout.")
-	}
-
-	// Fix rarity typo: "Truyện Thuyết" → "Truyền Thuyết"
-	_, _ = DB.Exec(`UPDATE mine_slots SET rarity = 'Truyền Thuyết' WHERE rarity = 'Truyện Thuyết'`)
-
-	// Migrate existing mine_slots to have monster_id and abandoned_at if not exist
-	_, _ = DB.Exec(`ALTER TABLE mine_slots ADD COLUMN IF NOT EXISTS monster_id VARCHAR(50) NULL;`)
-	_, _ = DB.Exec(`ALTER TABLE mine_slots ADD COLUMN IF NOT EXISTS abandoned_at TIMESTAMPTZ DEFAULT NOW();`)
-	_, _ = DB.Exec(`ALTER TABLE mine_slots ADD COLUMN IF NOT EXISTS monster_rank INT NOT NULL DEFAULT 1;`)
-	_, _ = DB.Exec(`ALTER TABLE mine_slots ADD COLUMN IF NOT EXISTS monster_sub_rank INT NOT NULL DEFAULT 1;`)
-
-	// Create messages table
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS messages (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		sender_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		receiver_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		content TEXT NOT NULL,
-		is_read BOOLEAN NOT NULL DEFAULT FALSE,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create messages table: %w", err)
-	}
-
-	// Create arena_rankings table
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS arena_rankings (
-		player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
-		rank INTEGER UNIQUE NOT NULL,
-		points INTEGER DEFAULT 1000,
-		daily_challenges INTEGER NOT NULL DEFAULT 0,
-		last_challenge_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create arena_rankings table: %w", err)
-	}
-
-	// Create leaderboard_settings table
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS leaderboard_settings (
-		player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
-		show_on_leaderboard BOOLEAN NOT NULL DEFAULT TRUE
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create leaderboard_settings table: %w", err)
-	}
-
-	// Ensure all existing players have a leaderboard_settings row
-	_, _ = DB.Exec(`
-		INSERT INTO leaderboard_settings (player_id, show_on_leaderboard)
-		SELECT id, TRUE FROM players
-		ON CONFLICT (player_id) DO NOTHING
-	`)
-
-	// 4.5. Create regions
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS regions (
-		id VARCHAR(50) PRIMARY KEY,
-		name VARCHAR(100) NOT NULL,
-		description TEXT,
-		width INT NOT NULL DEFAULT 100,
-		height INT NOT NULL DEFAULT 100,
-		min_rank INT NOT NULL DEFAULT 1,
-		max_rank INT NOT NULL DEFAULT 5,
-		is_active BOOLEAN NOT NULL DEFAULT TRUE,
-		created_at TIMESTAMP DEFAULT NOW(),
-		updated_at TIMESTAMP DEFAULT NOW(),
-		parent_id VARCHAR(50) REFERENCES regions(id) ON DELETE CASCADE,
-		zone_type VARCHAR(20) NOT NULL DEFAULT 'NGU_VUC',
-		min_x INT NOT NULL DEFAULT 0,
-		min_y INT NOT NULL DEFAULT 0,
-		max_x INT NOT NULL DEFAULT 0,
-		max_y INT NOT NULL DEFAULT 0,
-		entry_x INT NOT NULL DEFAULT 0,
-		entry_y INT NOT NULL DEFAULT 0,
-		pool_weights JSONB NOT NULL DEFAULT '{}'
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create regions table: %w", err)
-	}
-	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS parent_id VARCHAR(50) REFERENCES regions(id) ON DELETE CASCADE;`)
-	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS zone_type VARCHAR(20) NOT NULL DEFAULT 'NGU_VUC';`)
-	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS min_x INT NOT NULL DEFAULT 0;`)
-	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS min_y INT NOT NULL DEFAULT 0;`)
-	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS max_x INT NOT NULL DEFAULT 0;`)
-	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS max_y INT NOT NULL DEFAULT 0;`)
-	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS entry_x INT NOT NULL DEFAULT 0;`)
-	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS entry_y INT NOT NULL DEFAULT 0;`)
-	_, _ = DB.Exec(`ALTER TABLE regions ADD COLUMN IF NOT EXISTS pool_weights JSONB NOT NULL DEFAULT '{}';`)
-
-	// 4.6. Create loot_tables
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS loot_tables (
-		id VARCHAR(50) PRIMARY KEY,
-		name VARCHAR(100) NOT NULL,
-		entries JSONB NOT NULL DEFAULT '[]',
-		created_at TIMESTAMP DEFAULT NOW(),
-		updated_at TIMESTAMP DEFAULT NOW()
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create loot_tables table: %w", err)
-	}
-
-	// 4.7. Create monster_templates
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS monster_templates (
-		id VARCHAR(50) PRIMARY KEY,
-		name VARCHAR(100) NOT NULL,
-		type VARCHAR(50) NOT NULL,
-		max_hp DOUBLE PRECISION NOT NULL,
-		base_attack DOUBLE PRECISION NOT NULL,
-		base_defense DOUBLE PRECISION NOT NULL,
-		gu_inventory JSONB NOT NULL DEFAULT '[]',
-		item_inventory JSONB NOT NULL DEFAULT '{}',
-		dao_marks JSONB NOT NULL DEFAULT '{}',
-		path_masteries JSONB NOT NULL DEFAULT '{}',
-		ai_profile VARCHAR(50) NOT NULL DEFAULT 'beast_basic',
-		loot_table_id VARCHAR(50),
-		description TEXT,
-		is_active BOOLEAN NOT NULL DEFAULT TRUE,
-		created_at TIMESTAMP DEFAULT NOW(),
-		updated_at TIMESTAMP DEFAULT NOW()
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create monster_templates table: %w", err)
-	}
-
-	// Drop old columns if they exist
-	_, _ = DB.Exec(`
-		ALTER TABLE monster_templates 
-		DROP COLUMN IF EXISTS rank, 
-		DROP COLUMN IF EXISTS sub_rank, 
-		DROP COLUMN IF EXISTS path, 
-		DROP COLUMN IF EXISTS max_mana, 
-		DROP COLUMN IF EXISTS current_mana;
-	`)
-
-	// Monster capture columns
-	_, err = DB.Exec(`
-		ALTER TABLE monster_templates ADD COLUMN IF NOT EXISTS is_capturable BOOLEAN NOT NULL DEFAULT false;
-		ALTER TABLE monster_templates ADD COLUMN IF NOT EXISTS capture_chance DOUBLE PRECISION NOT NULL DEFAULT 0.20;
-		ALTER TABLE monster_templates ADD COLUMN IF NOT EXISTS pet_hunger_per_hour DOUBLE PRECISION NOT NULL DEFAULT 2.0;
-	`)
-	if err != nil {
-		logger.S.Warnf("failed to add monster_templates capture columns: %v", err)
-	}
-
-	// 4.8. Create monster_spawns
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS monster_spawns (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		region_id VARCHAR(50) NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
-		monster_id VARCHAR(50) NOT NULL REFERENCES monster_templates(id) ON DELETE CASCADE,
-		x INT,
-		y INT,
-		spawn_mode VARCHAR(50) NOT NULL DEFAULT 'Random',
-		chance DOUBLE PRECISION NOT NULL DEFAULT 1.0,
-		respawn_seconds INT NOT NULL DEFAULT 300,
-		min_rank INT NOT NULL DEFAULT 1,
-		max_rank INT NOT NULL DEFAULT 9,
-		is_boss_spawn BOOLEAN NOT NULL DEFAULT FALSE,
-		is_active BOOLEAN NOT NULL DEFAULT TRUE,
-		created_at TIMESTAMP DEFAULT NOW(),
-		updated_at TIMESTAMP DEFAULT NOW()
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create monster_spawns table: %w", err)
-	}
-
-	// 4.9. Create quests table (seeded from CSV)
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS quests (
-		id TEXT PRIMARY KEY,
-		title TEXT NOT NULL DEFAULT '',
-		description TEXT NOT NULL DEFAULT '',
-		req_desc TEXT NOT NULL DEFAULT '',
-		message TEXT NOT NULL DEFAULT '',
-		rewards JSONB NOT NULL DEFAULT '[]'
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create quests table: %w", err)
-	}
-
-	// 4.10. Create map_cells (fka 4.9)
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS map_cells (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		region_id VARCHAR(50) NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
-		x INT NOT NULL,
-		y INT NOT NULL,
-		cell_type VARCHAR(50) NOT NULL,
-		content_id VARCHAR(50),
-		metadata JSONB NOT NULL DEFAULT '{}',
-		respawn_seconds INT NOT NULL DEFAULT 300,
-		last_cleared_at TIMESTAMPTZ,
-		cleared_by UUID,
-		is_active BOOLEAN NOT NULL DEFAULT TRUE,
-		UNIQUE(x, y)
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create map_cells table: %w", err)
-	}
-	_, _ = DB.Exec(`ALTER TABLE map_cells ADD COLUMN IF NOT EXISTS last_cleared_at TIMESTAMPTZ;`)
-	_, _ = DB.Exec(`ALTER TABLE map_cells ADD COLUMN IF NOT EXISTS cleared_by UUID;`)
-	_, _ = DB.Exec(`
-	DO $$
-	BEGIN
-		-- Legacy map_cells used UNIQUE(region_id, x, y); migrate to a global UNIQUE(x, y).
-		IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'map_cells_region_id_x_y_key') THEN
-			ALTER TABLE map_cells DROP CONSTRAINT map_cells_region_id_x_y_key;
-		END IF;
-		-- Remove any duplicates sharing (x, y), keeping the oldest row.
-		DELETE FROM map_cells a USING map_cells b
-			WHERE a.id > b.id AND a.x = b.x AND a.y = b.y;
-		IF NOT EXISTS (
-			SELECT 1 FROM pg_constraint
-			WHERE conname = 'map_cells_x_y_key' AND conrelid = 'map_cells'::regclass
-		) THEN
-			ALTER TABLE map_cells ADD CONSTRAINT map_cells_x_y_key UNIQUE (x, y);
-		END IF;
-	END $$;`)
-
-	// 4.11. Create instance_templates
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS instance_templates (
-		id VARCHAR(50) PRIMARY KEY,
-		name VARCHAR(100) NOT NULL,
-		type VARCHAR(50) NOT NULL, -- "INHERITANCE_RIGHTEOUS", "INHERITANCE_DEMONIC", "DREAM_REALM", "SECRET_REALM"
-		required_rank INTEGER NOT NULL,
-		entry_item VARCHAR(50) NOT NULL, -- Item ID needed to enter or "NONE"
-		description TEXT NOT NULL,
-		rewards JSONB NOT NULL DEFAULT '{}', -- e.g., {"attainment": {"path": "Sword", "amount": 1}}
-		map_data JSONB NOT NULL DEFAULT '[]', -- Sequence of stages / rooms
-		cooldown_hours INTEGER NOT NULL DEFAULT 24
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create instance_templates table: %w", err)
-	}
-
-	_, _ = DB.Exec(`ALTER TABLE instance_templates ADD COLUMN IF NOT EXISTS cooldown_hours INTEGER NOT NULL DEFAULT 24;`)
-
-	// 4.12. Create player_instance_sessions
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS player_instance_sessions (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		instance_id VARCHAR(50) NOT NULL REFERENCES instance_templates(id) ON DELETE CASCADE,
-		current_stage INTEGER NOT NULL DEFAULT 0,
-		status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE', -- "ACTIVE", "COMPLETED", "FAILED"
-		temp_inventory JSONB NOT NULL DEFAULT '[]', -- Lock player's own items for Dream Realms
-		created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now()
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create player_instance_sessions table: %w", err)
-	}
-
-	_, _ = DB.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS player_active_session_idx ON player_instance_sessions(player_id) WHERE status = 'ACTIVE';`)
-
-	// 4.13. Create sects
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS sects (
-		id VARCHAR(50) PRIMARY KEY,
-		name VARCHAR(100) NOT NULL,
-		description TEXT NOT NULL,
-		region VARCHAR(50) NOT NULL,
-		vault_gu JSONB NOT NULL DEFAULT '[]',
-		vault_materials JSONB NOT NULL DEFAULT '{}',
-		vault_recipes JSONB NOT NULL DEFAULT '[]',
-		funds BIGINT NOT NULL DEFAULT 0,
-		level INTEGER NOT NULL DEFAULT 1
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create sects table: %w", err)
-	}
-
-	// 4.14. Create sect_members
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS sect_members (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,
-		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE UNIQUE,
-		member_rank VARCHAR(30) NOT NULL DEFAULT 'NGOAI_MON',
-		contribution_points BIGINT NOT NULL DEFAULT 0,
-		master_id VARCHAR(50) DEFAULT NULL,
-		joined_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now()
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create sect_members table: %w", err)
-	}
-
-	// 4.15. Create sect_missions
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS sect_missions (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,
-		title VARCHAR(100) NOT NULL,
-		description TEXT NOT NULL,
-		mission_type VARCHAR(30) NOT NULL,
-		target_id VARCHAR(50) NOT NULL,
-		target_amount INTEGER NOT NULL DEFAULT 1,
-		reward_contribution INTEGER NOT NULL DEFAULT 0,
-		required_member_rank VARCHAR(30) NOT NULL DEFAULT 'NGOAI_MON',
-		expires_at TIMESTAMP WITHOUT TIME ZONE
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create sect_missions table: %w", err)
-	}
-	_, _ = DB.Exec(`ALTER TABLE sect_missions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITHOUT TIME ZONE;`)
-	// Deduplicate and prevent duplicate mission rows
-	_, _ = DB.Exec(`DELETE FROM sect_missions WHERE id NOT IN (SELECT MIN(id) FROM sect_missions GROUP BY sect_id, title);`)
-	_, _ = DB.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_sect_mission_title ON sect_missions (sect_id, title);`)
-
-	// 4.16. Create player_sect_missions
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS player_sect_missions (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		mission_id UUID NOT NULL REFERENCES sect_missions(id) ON DELETE CASCADE,
-		current_progress INTEGER NOT NULL DEFAULT 0,
-		status VARCHAR(30) NOT NULL DEFAULT 'IN_PROGRESS',
-		assigned_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
-		expires_at TIMESTAMP WITHOUT TIME ZONE,
-		UNIQUE(player_id, mission_id)
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create player_sect_missions table: %w", err)
-	}
-	_, _ = DB.Exec(`ALTER TABLE player_sect_missions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITHOUT TIME ZONE;`)
-
-	// 4.17. Create npcs
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS npcs (
-		id VARCHAR(50) PRIMARY KEY,
-		name VARCHAR(100) NOT NULL,
-		sect_id VARCHAR(50) REFERENCES sects(id) ON DELETE SET NULL,
-		role VARCHAR(50) DEFAULT 'DISCIPLE',
-		aptitude_percent INTEGER DEFAULT 50,
-		created_at TIMESTAMP DEFAULT now()
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create npcs table: %w", err)
-	}
-
-	// Premium wallet, top-up, and shop accounting tables
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS wallets (
-		user_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
-		primeval_stone BIGINT NOT NULL DEFAULT 0,
-		immortal_essence_stone BIGINT NOT NULL DEFAULT 0,
-		immortal_jade BIGINT NOT NULL DEFAULT 0,
-		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create wallets table: %w", err)
-	}
-
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS topup_orders (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		user_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		order_code BIGINT NOT NULL UNIQUE,
-		amount_vnd BIGINT NOT NULL CHECK (amount_vnd > 0),
-		jade_amount BIGINT NOT NULL CHECK (jade_amount > 0),
-		status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'PAID', 'EXPIRED', 'FAILED', 'CANCELLED')),
-		provider VARCHAR(20) NOT NULL DEFAULT 'PAYOS',
-		checkout_url TEXT,
-		qr_code TEXT,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-		paid_at TIMESTAMP WITH TIME ZONE NULL
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create topup_orders table: %w", err)
-	}
-
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS wallet_transactions (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		user_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		type VARCHAR(30) NOT NULL CHECK (type IN ('TOPUP', 'SPEND', 'REFUND', 'ADMIN_ADJUST', 'PACKAGE_REWARD')),
-		currency VARCHAR(40) NOT NULL CHECK (currency IN ('PRIMEVAL_STONE', 'IMMORTAL_ESSENCE_STONE', 'IMMORTAL_JADE')),
-		amount BIGINT NOT NULL,
-		balance_before BIGINT NOT NULL,
-		balance_after BIGINT NOT NULL,
-		ref_order_code BIGINT NULL,
-		ref_package_id VARCHAR(80) NULL,
-		note TEXT,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create wallet_transactions table: %w", err)
-	}
-
-	_, err = DB.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS wallet_transactions_topup_order_unique ON wallet_transactions (ref_order_code) WHERE type = 'TOPUP' AND ref_order_code IS NOT NULL;`)
-	if err != nil {
-		return fmt.Errorf("failed to create wallet topup transaction unique index: %w", err)
-	}
-
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS shop_package_purchases (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		user_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		package_id VARCHAR(80) NOT NULL,
-		price_jade BIGINT NOT NULL,
-		rewards_snapshot JSONB NOT NULL DEFAULT '{}',
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create shop_package_purchases table: %w", err)
-	}
-
-	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS shop_package_purchases_user_package_created_idx ON shop_package_purchases (user_id, package_id, created_at);`)
-	if err != nil {
-		return fmt.Errorf("failed to create shop package purchases index: %w", err)
-	}
-
-	_, err = DB.Exec(`
-		INSERT INTO wallets (user_id, primeval_stone, immortal_essence_stone, immortal_jade)
-		SELECT id, COALESCE(primeval_stones, 0)::BIGINT, FLOOR(COALESCE(immortal_stones, 0))::BIGINT, 0
-		FROM players
-		ON CONFLICT (user_id) DO NOTHING;
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to backfill wallets: %w", err)
-	}
-
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS killer_moves (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		name VARCHAR(80) NOT NULL,
-		path VARCHAR(50) NOT NULL DEFAULT '',
-		move_type VARCHAR(30) NOT NULL DEFAULT 'UTILITY',
-		rank_required INTEGER NOT NULL DEFAULT 1,
-		core_player_gu_id VARCHAR(80) NOT NULL,
-		total_mana_cost DOUBLE PRECISION NOT NULL DEFAULT 0,
-		success_rate DOUBLE PRECISION NOT NULL DEFAULT 0,
-		damage_value DOUBLE PRECISION NOT NULL DEFAULT 0,
-		defense_value DOUBLE PRECISION NOT NULL DEFAULT 0,
-		cooldown INTEGER NOT NULL DEFAULT 0,
-		channel_time INTEGER NOT NULL DEFAULT 1,
-		effects JSONB NOT NULL DEFAULT '{}',
-		is_mastered BOOLEAN NOT NULL DEFAULT FALSE,
-		is_reliable BOOLEAN NOT NULL DEFAULT FALSE,
-		is_instant_cast BOOLEAN NOT NULL DEFAULT FALSE,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create killer_moves table: %w", err)
-	}
-
-	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS killer_moves_player_path_idx ON killer_moves (player_id, path);`)
-	if err != nil {
-		return fmt.Errorf("failed to create killer_moves index: %w", err)
-	}
-
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS killer_move_slots (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		killer_move_id UUID NOT NULL REFERENCES killer_moves(id) ON DELETE CASCADE,
-		player_gu_id VARCHAR(80) NOT NULL,
-		slot_type VARCHAR(20) NOT NULL CHECK (slot_type IN ('CORE','SUPPORT')),
-		slot_index INTEGER NOT NULL DEFAULT 0,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE (killer_move_id, slot_index)
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create killer_move_slots table: %w", err)
-	}
-
-	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS killer_move_slots_move_idx ON killer_move_slots (killer_move_id);`)
-	if err != nil {
-		return fmt.Errorf("failed to create killer_move_slots index: %w", err)
-	}
-
-	_, err = DB.Exec(`
-	CREATE TABLE IF NOT EXISTS player_gu (
-		id VARCHAR(80) PRIMARY KEY,
-		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		gu_id VARCHAR(50) NOT NULL,
-		gu_rank INTEGER NOT NULL DEFAULT 1,
-		rank INTEGER NOT NULL DEFAULT 1,
-		FOREIGN KEY (gu_id, gu_rank) REFERENCES gu_dictionary(id, rank) ON UPDATE CASCADE ON DELETE RESTRICT,
-		level INTEGER NOT NULL DEFAULT 1,
-		hunger DOUBLE PRECISION NOT NULL DEFAULT 100,
-		state VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
-		location VARCHAR(30) NOT NULL DEFAULT 'INVENTORY',
-		is_locked BOOLEAN NOT NULL DEFAULT false,
-		equipped BOOLEAN NOT NULL DEFAULT false,
-		is_vital BOOLEAN NOT NULL DEFAULT false,
-		integration_time DOUBLE PRECISION NOT NULL DEFAULT 0,
-		equipped_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
-		growth_hours DOUBLE PRECISION NOT NULL DEFAULT 0,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-	);`)
-	if err != nil {
-		return fmt.Errorf("failed to create player_gu table: %w", err)
-	}
-
-	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS player_gu_player_idx ON player_gu (player_id);`)
-	if err != nil {
-		return fmt.Errorf("failed to create player_gu index: %w", err)
-	}
-
-	// player_gu_player_equipped_idx / player_gu_player_gu_idx are created after
-	// the migration loop below, because the equipped column is added by a
-	// migration on databases that predate this schema.
-
-	// Backwards-compatible column migrations
-	migrations := []struct{ sql, errMsg string }{
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) NOT NULL DEFAULT '';`, "password_hash"},
-		{`ALTER TABLE players ALTER COLUMN primeval_stones TYPE DOUBLE PRECISION;`, "primeval_stones_type"},
-		{`ALTER TABLE refining_recipes ALTER COLUMN primeval_stones_cost TYPE DOUBLE PRECISION;`, "primeval_stones_cost_type"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS materials_inventory JSONB NOT NULL DEFAULT '{}';`, "materials_inventory"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS hp DOUBLE PRECISION NOT NULL DEFAULT 100;`, "hp"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS base_hp DOUBLE PRECISION NOT NULL DEFAULT 100;`, "base_hp"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS body_mods JSONB NOT NULL DEFAULT '[]';`, "body_mods"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS x INTEGER NOT NULL DEFAULT 50;`, "x"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS y INTEGER NOT NULL DEFAULT 50;`, "y"},
-		{`ALTER TABLE players DROP COLUMN IF EXISTS explored_cells;`, "explored_cells_drop"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS visited_subzones JSONB NOT NULL DEFAULT '[]';`, "visited_subzones"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS current_region VARCHAR(50) NOT NULL DEFAULT 'Southern_Border';`, "current_region"},
-
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS active_combat JSONB DEFAULT NULL;`, "active_combat"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS path_masteries JSONB NOT NULL DEFAULT '{}';`, "path_masteries"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS equipped_gus JSONB NOT NULL DEFAULT '[]';`, "equipped_gus"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS cleared_cells JSONB NOT NULL DEFAULT '{}';`, "cleared_cells"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS immortal_stones DOUBLE PRECISION NOT NULL DEFAULT 0;`, "immortal_stones"},
-		{`ALTER TABLE refining_recipes ADD COLUMN IF NOT EXISTS immortal_essence_stones_cost DOUBLE PRECISION NOT NULL DEFAULT 0;`, "immortal_essence_stones_cost"},
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS path JSONB NOT NULL DEFAULT '[]'::jsonb;`, "path"},
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS base_mana_cost DOUBLE PRECISION NOT NULL DEFAULT 0;`, "base_mana_cost"},
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{"active":{},"support":{},"passive":{},"house":{}}';`, "effects"},
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS food_types JSONB NOT NULL DEFAULT '[]';`, "food_types"},
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS rarity VARCHAR(50);`, "gu_dictionary.rarity"},
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS is_immortal BOOLEAN DEFAULT false;`, "gu_dictionary.is_immortal"},
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS primary_role VARCHAR(80);`, "gu_dictionary.primary_role"},
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS combat_roles JSONB DEFAULT '[]';`, "gu_dictionary.combat_roles"},
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS combat_tags JSONB DEFAULT '[]';`, "gu_dictionary.combat_tags"},
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS support_tags JSONB DEFAULT '[]';`, "gu_dictionary.support_tags"}, // Cultivation system columns
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS aptitude_grade INTEGER DEFAULT 4;`, "aptitude_grade"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS wall_progress DOUBLE PRECISION NOT NULL DEFAULT 0.0;`, "wall_progress"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS human_qi DOUBLE PRECISION NOT NULL DEFAULT 0.0;`, "human_qi"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS next_tribulation_time TIMESTAMPTZ NULL;`, "next_tribulation_time"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS tribulation_count INTEGER NOT NULL DEFAULT 0;`, "tribulation_count"},
-		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS rank INTEGER DEFAULT 1;`, "item_dictionary.rank"},
-		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS effects JSONB NOT NULL DEFAULT '{}';`, "item_dictionary.effects"},
-
-		// Composite PK (id, rank) migration for gu_dictionary
-		// Must drop FKs first before dropping the PK they reference
-		{`ALTER TABLE refining_recipes ADD COLUMN IF NOT EXISTS target_rank INTEGER NOT NULL DEFAULT 1;`, "add_target_rank"},
-		// Deterministic backfill: use the gu's minimum dictionary rank instead of
-		// a FROM-join (which is nondeterministic for multi-rank gus and could
-		// collide with an existing (gu_id, target_rank, variant) row). Rows whose
-		// target (gu_id, rank) already exists are left untouched.
-		{`UPDATE refining_recipes rr
-			SET target_rank = gd.min_rank
-			FROM (SELECT id, MIN(rank) AS min_rank FROM gu_dictionary GROUP BY id) gd
-			WHERE gd.id = rr.target_gu_id
-			  AND rr.target_rank = 1
-			  AND NOT EXISTS (
-				  SELECT 1 FROM refining_recipes r2
-				  WHERE r2.target_gu_id = rr.target_gu_id
-				    AND r2.target_rank = gd.min_rank
-				    AND r2.variant = rr.variant
-			  );`, "backfill_target_rank"},
-		// Drop stale legacy rows left at rank 1 that are exact duplicates of a
-		// canonical (gu_id, min_rank, variant) row, otherwise the FK re-added
-		// below would reject them.
-		{`DELETE FROM refining_recipes rr
-			WHERE rr.target_rank = 1
-			  AND (SELECT MIN(gd.rank) FROM gu_dictionary gd WHERE gd.id = rr.target_gu_id) > 1
-			  AND EXISTS (
-				  SELECT 1 FROM refining_recipes r2
-				  WHERE r2.target_gu_id = rr.target_gu_id
-				    AND r2.target_rank = (SELECT MIN(gd2.rank) FROM gu_dictionary gd2 WHERE gd2.id = rr.target_gu_id)
-				    AND r2.variant = rr.variant
-			  );`, "dedupe_stale_target_rank"},
-		{`ALTER TABLE refining_recipes DROP CONSTRAINT IF EXISTS refining_recipes_target_gu_id_fkey;`, "drop_recipe_fk"},
-		{`ALTER TABLE refining_recipes DROP CONSTRAINT IF EXISTS refining_recipes_target_gu_id_target_rank_fkey;`, "drop_recipe_fk2"},
-		{`ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS gu_rank INTEGER NOT NULL DEFAULT 1;`, "add_player_gu_rank"},
-		{`ALTER TABLE player_gu DROP CONSTRAINT IF EXISTS player_gu_gu_id_fkey;`, "drop_player_gu_fk"},
-		{`ALTER TABLE player_gu DROP CONSTRAINT IF EXISTS player_gu_gu_id_gu_rank_fkey;`, "drop_player_gu_fk2"},
-		{`ALTER TABLE gu_dictionary DROP CONSTRAINT IF EXISTS gu_dictionary_pkey;`, "drop_gu_dict_pk"},
-		{`ALTER TABLE gu_dictionary ADD PRIMARY KEY (id, rank);`, "add_gu_dict_pk"},
-		{`ALTER TABLE refining_recipes ADD FOREIGN KEY (target_gu_id, target_rank) REFERENCES gu_dictionary(id, rank) ON UPDATE CASCADE ON DELETE RESTRICT;`, "add_recipe_fk"},
-		{`ALTER TABLE player_gu ADD FOREIGN KEY (gu_id, gu_rank) REFERENCES gu_dictionary(id, rank) ON UPDATE CASCADE ON DELETE RESTRICT;`, "add_player_gu_fk"},
-		{`ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS equipped BOOLEAN NOT NULL DEFAULT false;`, "player_gu.equipped"},
-		{`ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS is_vital BOOLEAN NOT NULL DEFAULT false;`, "player_gu.is_vital"},
-		{`ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS integration_time DOUBLE PRECISION NOT NULL DEFAULT 0;`, "player_gu.integration_time"},
-		{`ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS equipped_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;`, "player_gu.equipped_at"},
-		{`ALTER TABLE player_gu ADD COLUMN IF NOT EXISTS growth_hours DOUBLE PRECISION NOT NULL DEFAULT 0;`, "player_gu.growth_hours"},
-		{`DO $$
-			BEGIN
-				IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'players' AND column_name = 'gu_inventory') THEN
-					-- Normalize each inventory entry to a dictionary-valid (gu_id, rank):
-					--   A) rank 0 -> the dictionary's minimum rank for that gu_id (starter Gus were stored with rank 0)
-					--   B) if the (gu_id, rank) pair still has no match, fall back to the dictionary's minimum rank
-					--      so the FK constraint holds (rows are preserved instead of dropped).
-					INSERT INTO player_gu (id, player_id, gu_id, gu_rank, rank, level, hunger, state, location, is_locked, equipped, is_vital, integration_time, equipped_at, growth_hours)
-					WITH normalized AS (
-						SELECT
-							elem->>'instance_id' AS instance_id,
-							p.id AS player_id,
-							elem->>'gu_id' AS gu_id,
-							CASE
-								WHEN (elem->>'rank')::int = 0 THEN COALESCE((SELECT MIN(gd.rank) FROM gu_dictionary gd WHERE gd.id = elem->>'gu_id'), 1)
-								ELSE COALESCE((elem->>'rank')::int, 1)
-							END AS gu_rank,
-							COALESCE((elem->>'hunger')::int, 100) AS hunger,
-							COALESCE(NULLIF(elem->>'status', ''), 'ACTIVE') AS state,
-							COALESCE((elem->>'equipped')::boolean, false) AS equipped,
-							COALESCE((elem->>'is_vital')::boolean, false) AS is_vital,
-							COALESCE((elem->>'integration_time')::double precision, 0) AS integration_time,
-							NULLIF(elem->>'equipped_at', '')::timestamptz AS equipped_at,
-							COALESCE((elem->>'growth_hours')::double precision, 0) AS growth_hours
-						FROM players p
-						CROSS JOIN LATERAL jsonb_array_elements(COALESCE(p.gu_inventory, '[]'::jsonb)) AS elem
-						WHERE elem->>'instance_id' IS NOT NULL
-						  AND elem->>'gu_id' IS NOT NULL
-					)
-					SELECT n.instance_id, n.player_id, n.gu_id, n.gu_rank, n.gu_rank, 1, n.hunger, n.state, 'INVENTORY', false, n.equipped, n.is_vital, n.integration_time, n.equipped_at, n.growth_hours
-					FROM normalized n
-					WHERE NOT EXISTS (SELECT 1 FROM player_gu pg WHERE pg.id = n.instance_id)
-					  AND EXISTS (SELECT 1 FROM gu_dictionary gd WHERE gd.id = n.gu_id AND gd.rank = n.gu_rank);
-				END IF;
-			END $$;`, "migrate_player_gu_from_inventory"},
-		{`ALTER TABLE players DROP COLUMN IF EXISTS gu_inventory;`, "drop_player_gu_inventory"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS temp_loot JSONB NOT NULL DEFAULT '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}';`, "temp_loot"},
-		{`UPDATE players SET temp_loot = COALESCE(temp_loot, '{}'::jsonb) WHERE temp_loot IS NULL;`, "fix_null_temp_loot"},
-		{`UPDATE players SET temp_loot = jsonb_set(temp_loot, '{gu_inventory}', COALESCE((SELECT jsonb_agg(CASE WHEN elem->>'rank' IS NULL OR elem->>'rank' = '' THEN elem || jsonb_build_object('rank', COALESCE((SELECT gd.rank FROM gu_dictionary gd WHERE gd.id = elem->>'gu_id' LIMIT 1), 1)) ELSE elem END) FROM jsonb_array_elements(COALESCE(temp_loot->'gu_inventory', '[]'::jsonb)) AS elem), '[]'::jsonb), false) WHERE temp_loot IS NOT NULL AND temp_loot::text != '{}' AND temp_loot::text != 'null';`, "backfill_temp_loot_rank"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS lifespan DOUBLE PRECISION NOT NULL DEFAULT 100.0;`, "lifespan"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS time_speed_multiplier DOUBLE PRECISION NOT NULL DEFAULT 1.0;`, "time_speed_multiplier"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS party_id UUID NULL;`, "party_id"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS arena_rank INTEGER NULL;`, "arena_rank"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS phone_number VARCHAR(50) NULL;`, "phone_number"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS email VARCHAR(100) NULL;`, "email"},
-		{`CREATE UNIQUE INDEX IF NOT EXISTS players_email_idx ON players (email) WHERE email IS NOT NULL AND email != '';`, "players_email_idx"},
-		{`CREATE UNIQUE INDEX IF NOT EXISTS players_phone_number_idx ON players (phone_number) WHERE phone_number IS NOT NULL AND phone_number != '';`, "players_phone_number_idx"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS explore_count INTEGER NOT NULL DEFAULT 0;`, "explore_count"},
-		{`ALTER TABLE arena_rankings ADD COLUMN IF NOT EXISTS daily_challenges INTEGER NOT NULL DEFAULT 0;`, "arena_rankings.daily_challenges"},
-		{`ALTER TABLE arena_rankings ADD COLUMN IF NOT EXISTS last_challenge_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;`, "arena_rankings.last_challenge_at"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS last_explore_reset TIMESTAMP NOT NULL DEFAULT NOW();`, "last_explore_reset"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS aperture_stress DOUBLE PRECISION NOT NULL DEFAULT 0.0;`, "aperture_stress"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS last_cultivate_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;`, "last_cultivate_time"},
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS target_type VARCHAR(50) NOT NULL DEFAULT 'SINGLE';`, "target_type"},
-		{`ALTER TABLE messages ADD COLUMN IF NOT EXISTS channel VARCHAR(50) NOT NULL DEFAULT 'private';`, "messages.channel"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS soul_hp INTEGER NOT NULL DEFAULT 10;`, "soul_hp"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS max_soul INTEGER NOT NULL DEFAULT 10;`, "max_soul"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS soul_tier VARCHAR(30) NOT NULL DEFAULT 'NHAN_HON';`, "soul_tier"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS needs_soul_refine BOOLEAN NOT NULL DEFAULT FALSE;`, "needs_soul_refine"},
-		{`ALTER TABLE messages ADD COLUMN IF NOT EXISTS sect_id VARCHAR(50) REFERENCES sects(id) ON DELETE CASCADE;`, "messages.sect_id"},
-		{`ALTER TABLE sects ADD COLUMN IF NOT EXISTS funds BIGINT NOT NULL DEFAULT 0;`, "sects.funds"},
-		{`ALTER TABLE sects ALTER COLUMN funds TYPE BIGINT;`, "sects.funds_bigint"},
-		{`ALTER TABLE sects ADD COLUMN IF NOT EXISTS level INTEGER NOT NULL DEFAULT 1;`, "sects.level"},
-		{`ALTER TABLE sects ADD COLUMN IF NOT EXISTS require_approval BOOLEAN NOT NULL DEFAULT FALSE;`, "sects.require_approval"},
-		{`ALTER TABLE sects ADD COLUMN IF NOT EXISTS require_promotion_approval BOOLEAN NOT NULL DEFAULT FALSE;`, "sects.require_promotion_approval"},
-		{`CREATE TABLE IF NOT EXISTS sect_join_requests (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,
-			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
-			created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
-			UNIQUE(sect_id, player_id)
-		);`, "sect_join_requests"},
-		{`CREATE TABLE IF NOT EXISTS sect_promotion_requests (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,
-			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			current_rank VARCHAR(30) NOT NULL,
-			target_rank VARCHAR(30) NOT NULL,
-			status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
-			created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
-			UNIQUE(sect_id, player_id)
-		);`, "sect_promotion_requests"},
-		{`CREATE TABLE IF NOT EXISTS aperture_variant_humans (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
-			race VARCHAR(50) NOT NULL,
-			population INTEGER NOT NULL DEFAULT 0,
-			happiness DOUBLE PRECISION NOT NULL DEFAULT 70.0,
-			oppression DOUBLE PRECISION NOT NULL DEFAULT 0.0,
-			rebellion_rate DOUBLE PRECISION NOT NULL DEFAULT 0.0,
-			labor_intensity VARCHAR(20) NOT NULL DEFAULT 'NORMAL',
-			created_at TIMESTAMP DEFAULT now(),
-			updated_at TIMESTAMP DEFAULT now(),
-			UNIQUE(aperture_id, race)
-		);`, "aperture_variant_humans"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT 'Hãy viết gì đó về bản thân...';`, "bio"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS fake_rank INTEGER DEFAULT 1;`, "fake_rank"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS fake_sub_rank INTEGER DEFAULT 1;`, "fake_sub_rank"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS fake_vital_gu VARCHAR(50) DEFAULT '';`, "fake_vital_gu"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS is_disguised BOOLEAN DEFAULT true;`, "is_disguised"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;`, "is_admin"},
-		{`CREATE TABLE IF NOT EXISTS feedback (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			user_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			title VARCHAR(255) NOT NULL,
-			description TEXT NOT NULL,
-			category VARCHAR(50) NOT NULL,
-			status VARCHAR(50) NOT NULL DEFAULT 'pending',
-			total_votes INTEGER NOT NULL DEFAULT 0,
-			developer_response TEXT DEFAULT NULL,
-			rewarded BOOLEAN NOT NULL DEFAULT false,
-			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		);`, "feedback_table"},
-		{`CREATE TABLE IF NOT EXISTS feedback_votes (
-			feedback_id UUID NOT NULL REFERENCES feedback(id) ON DELETE CASCADE,
-			user_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			vote_type INTEGER NOT NULL,
-			PRIMARY KEY (feedback_id, user_id)
-		);`, "feedback_votes_table"},
-		{`CREATE TABLE IF NOT EXISTS feedback_comments (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			feedback_id UUID NOT NULL REFERENCES feedback(id) ON DELETE CASCADE,
-			user_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			content TEXT NOT NULL,
-			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		);`, "feedback_comments_table"},
-		{`UPDATE players SET email = 'system@guworld.local' WHERE id = '00000000-0000-0000-0000-000000000000' AND (email IS NULL OR email = '');`, "set_system_player_email"},
-		{`DROP INDEX IF EXISTS players_phone_number_idx;`, "drop_phone_number_idx"},
-		{`DROP INDEX IF EXISTS players_email_idx;`, "drop_email_idx"},
-		{`ALTER TABLE players ALTER COLUMN email SET DATA TYPE VARCHAR(255);`, "alter_email_type"},
-		{`UPDATE players SET email = 'placeholder_' || id || '@guworld.local' WHERE email IS NULL OR email = '';`, "fill_empty_emails"},
-		{`ALTER TABLE players ALTER COLUMN email SET NOT NULL;`, "make_email_not_null"},
-		{`ALTER TABLE players DROP CONSTRAINT IF EXISTS players_email_unique;`, "drop_email_unique_constraint"},
-		{`ALTER TABLE players ADD CONSTRAINT players_email_unique UNIQUE (email);`, "make_email_unique"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) NULL;`, "add_google_id"},
-		{`CREATE UNIQUE INDEX IF NOT EXISTS players_google_id_idx ON players (google_id) WHERE google_id IS NOT NULL AND google_id != '';`, "create_google_id_idx"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS ref_code VARCHAR(50) NULL;`, "add_ref_code_column"},
-		{`UPDATE players SET ref_code = 'REF-SYSTEM' WHERE id = '00000000-0000-0000-0000-000000000000' AND (ref_code IS NULL OR ref_code = '');`, "set_system_ref_code"},
-		{`UPDATE players SET ref_code = 'REF-' || UPPER(SUBSTRING(id::text, 1, 8)) WHERE ref_code IS NULL OR ref_code = '';`, "fill_empty_ref_codes"},
-		{`ALTER TABLE players ALTER COLUMN ref_code SET NOT NULL;`, "make_ref_code_not_null"},
-		{`ALTER TABLE players DROP CONSTRAINT IF EXISTS players_ref_code_unique;`, "drop_ref_code_unique_constraint"},
-		{`ALTER TABLE players ADD CONSTRAINT players_ref_code_unique UNIQUE (ref_code);`, "make_ref_code_unique"},
-		{`DO $$
-		BEGIN
-			IF EXISTS (
-				SELECT 1 
-				FROM information_schema.columns 
-				WHERE table_name='referrals' AND column_name='referred_id'
-			) THEN
-				DROP TABLE referrals;
-			END IF;
-		END $$;`, "conditionally_drop_old_referrals_table"},
-		{`CREATE TABLE IF NOT EXISTS referrals (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			referrer_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			referee_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE UNIQUE,
-			referee_ip VARCHAR(50) NOT NULL DEFAULT '',
-			referee_device TEXT NOT NULL DEFAULT '',
-			is_suspicious BOOLEAN NOT NULL DEFAULT false,
-			has_deposited BOOLEAN NOT NULL DEFAULT false,
-			deposit_amount_stones INTEGER NOT NULL DEFAULT 0,
-			milestone1_rewarded BOOLEAN NOT NULL DEFAULT false,
-			milestone2_rewarded BOOLEAN NOT NULL DEFAULT false,
-			milestone3_rewarded BOOLEAN NOT NULL DEFAULT false,
-			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		);`, "create_referrals_table"},
-		{`ALTER TABLE auction ADD COLUMN IF NOT EXISTS listing_type VARCHAR(20) NOT NULL DEFAULT 'AUCTION';`, "add_listing_type_to_auction"},
-		{`ALTER TABLE auction ADD COLUMN IF NOT EXISTS target_buyer_id UUID DEFAULT NULL;`, "add_target_buyer_id_to_auction"},
-		{`CREATE TABLE IF NOT EXISTS trades (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			sender_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			receiver_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			sender_offer JSONB NOT NULL DEFAULT '{"primeval_stones":0,"immortal_stones":0,"gus":[],"materials":{}}',
-			receiver_offer JSONB NOT NULL DEFAULT '{"primeval_stones":0,"immortal_stones":0,"gus":[],"materials":{}}',
-			sender_locked BOOLEAN NOT NULL DEFAULT false,
-			receiver_locked BOOLEAN NOT NULL DEFAULT false,
-			sender_confirmed BOOLEAN NOT NULL DEFAULT false,
-			receiver_confirmed BOOLEAN NOT NULL DEFAULT false,
-			status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
-			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		);`, "create_trades_table"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT '';`, "avatar_url"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS combat_settings JSONB NOT NULL DEFAULT '{}';`, "combat_settings"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS growth_data JSONB NOT NULL DEFAULT '{"boosts":{"attack":0,"defense":0,"hp":0,"speed":0},"fully_grown":[]}';`, "growth_data"},
-		{`CREATE TABLE IF NOT EXISTS sect_mines (
-			id SERIAL PRIMARY KEY,
-			name VARCHAR(100) NOT NULL UNIQUE,
-			rarity VARCHAR(50) NOT NULL,
-			occupier_sect_id VARCHAR(50) REFERENCES sects(id) ON DELETE SET NULL,
-			occupied_at TIMESTAMP WITH TIME ZONE,
-			shield_until TIMESTAMP WITH TIME ZONE,
-			last_claimed_at TIMESTAMP WITH TIME ZONE
-		);`, "create_sect_mines_table"},
-		{`INSERT INTO sect_mines (name, rarity) VALUES 
-			('Thái Cổ Tinh Mạch', 'Truyền Thuyết'),
-			('Cửu U Huyết Mạch', 'Sử Thi'),
-			('Thiên Cương Linh Khí Mạch', 'Hiếm'),
-			('Huyền Vũ Thạch Động', 'Hiếm'),
-			('Bách Thảo Tiên Vực', 'Thường')
-			ON CONFLICT (name) DO NOTHING;`, "seed_sect_mines"},
-		{`CREATE TABLE IF NOT EXISTS sect_mine_defenders (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			mine_id INTEGER NOT NULL REFERENCES sect_mines(id) ON DELETE CASCADE,
-			sect_id VARCHAR(50) NOT NULL REFERENCES sects(id) ON DELETE CASCADE,
-			defender_type VARCHAR(20) NOT NULL DEFAULT 'member', -- member | beast
-			player_id UUID REFERENCES players(id) ON DELETE CASCADE,
-			name VARCHAR(100) NOT NULL DEFAULT '',
-			monster_id VARCHAR(80),
-			monster_rank INTEGER NOT NULL DEFAULT 1,
-			monster_sub_rank INTEGER NOT NULL DEFAULT 1,
-			power DOUBLE PRECISION NOT NULL DEFAULT 0,
-			assigned_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now()
-		);`, "create_sect_mine_defenders_table"},
-		{`CREATE UNIQUE INDEX IF NOT EXISTS uq_sect_mine_defender_player ON sect_mine_defenders (player_id) WHERE defender_type = 'member' AND player_id IS NOT NULL;`, "uq_sect_mine_defender_player"},
-		{`CREATE INDEX IF NOT EXISTS idx_sect_mine_defenders_mine ON sect_mine_defenders (mine_id);`, "idx_sect_mine_defenders_mine"},
-		{`ALTER TABLE sect_mines ADD COLUMN IF NOT EXISTS pending_funds DOUBLE PRECISION NOT NULL DEFAULT 0;`, "sect_mines.pending_funds"},
-		{`ALTER TABLE sect_mines ADD COLUMN IF NOT EXISTS pending_materials DOUBLE PRECISION NOT NULL DEFAULT 0;`, "sect_mines.pending_materials"},
-		{`ALTER TABLE sect_members ADD COLUMN IF NOT EXISTS territory_pending DOUBLE PRECISION NOT NULL DEFAULT 0;`, "sect_members.territory_pending"},
-		{`ALTER TABLE sect_members ADD COLUMN IF NOT EXISTS territory_credited_at DATE;`, "sect_members.territory_credited_at"},
-		{`ALTER TABLE sect_members ADD COLUMN IF NOT EXISTS territory_credited_today INTEGER NOT NULL DEFAULT 0;`, "sect_members.territory_credited_today"},
-		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS usage_count INTEGER NOT NULL DEFAULT 0;`, "usage_count"},
-
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS needs_onboarding BOOLEAN NOT NULL DEFAULT false;`, "needs_onboarding"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS race VARCHAR(50) NOT NULL DEFAULT '';`, "race"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS gender VARCHAR(20) NOT NULL DEFAULT '';`, "gender"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS constitution VARCHAR(100) NOT NULL DEFAULT '';`, "constitution"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS statuses JSONB NOT NULL DEFAULT '[]';`, "statuses"},
-		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS success_rate DOUBLE PRECISION NOT NULL DEFAULT 0;`, "add_success_rate"},
-		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS channel_time INTEGER NOT NULL DEFAULT 1;`, "add_channel_time"},
-		{`ALTER TABLE killer_moves ADD COLUMN IF NOT EXISTS is_reliable BOOLEAN NOT NULL DEFAULT FALSE;`, "add_is_reliable"},
-		{`CREATE TABLE IF NOT EXISTS combat_history (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			winner VARCHAR(20) NOT NULL DEFAULT 'Phe Địch',
-			logs JSONB NOT NULL DEFAULT '[]',
-			summary JSONB NOT NULL DEFAULT '{}',
-			enemy_name VARCHAR(100) NOT NULL DEFAULT '',
-			enemy_type VARCHAR(50) NOT NULL DEFAULT '',
-			region VARCHAR(50) NOT NULL DEFAULT '',
-			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		);`, "create_combat_history_table"},
-		{`ALTER TABLE combat_history ADD COLUMN IF NOT EXISTS combatants JSONB NOT NULL DEFAULT '[]';`, "add_combatants_to_history"},
-		{`CREATE TABLE IF NOT EXISTS audit_logs (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			player_id UUID REFERENCES players(id) ON DELETE SET NULL,
-			action TEXT NOT NULL,
-			entity_type TEXT,
-			entity_id TEXT,
-			request_summary TEXT,
-			metadata JSONB DEFAULT '{}',
-			ip_address TEXT,
-			success BOOLEAN NOT NULL DEFAULT false,
-			error_message TEXT,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		);`, "create_audit_logs_table"},
-		// Unified pricing: base_price column as single source of truth for all pricing calculations
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS base_price INTEGER NOT NULL DEFAULT 0;`, "gu_dictionary.base_price"},
-		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS base_price INTEGER NOT NULL DEFAULT 0;`, "item_dictionary.base_price"},
-		{`ALTER TABLE gu_dictionary ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT '';`, "gu_dictionary.image_url"},
-		{`ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS image_url TEXT NOT NULL DEFAULT '';`, "item_dictionary.image_url"},
-		{`CREATE TABLE IF NOT EXISTS email_otps (
-			email VARCHAR(255) PRIMARY KEY,
-			otp VARCHAR(10) NOT NULL,
-			expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-			created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-		);`, "create_email_otps_table"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP WITH TIME ZONE DEFAULT NULL;`, "last_activity"},
-		{`CREATE TABLE IF NOT EXISTS gift_codes (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			code VARCHAR(50) NOT NULL UNIQUE,
-			rewards JSONB NOT NULL DEFAULT '[]',
-			max_uses INTEGER NOT NULL DEFAULT 1,
-			used_count INTEGER NOT NULL DEFAULT 0,
-			max_per_player INTEGER NOT NULL DEFAULT 1,
-			expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (NOW() + INTERVAL '30 days'),
-			is_active BOOLEAN NOT NULL DEFAULT true,
-			created_by UUID REFERENCES players(id) ON DELETE SET NULL,
-			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		);`, "create_gift_codes_table"},
-		{`CREATE TABLE IF NOT EXISTS gift_code_redemptions (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			gift_code_id UUID NOT NULL REFERENCES gift_codes(id) ON DELETE CASCADE,
-			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			redeemed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		);`, "create_gift_code_redemptions_table"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS current_thought DOUBLE PRECISION NOT NULL DEFAULT 100.0;`, "current_thought"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS max_thought DOUBLE PRECISION NOT NULL DEFAULT 100.0;`, "max_thought"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS thought_regen_rate DOUBLE PRECISION NOT NULL DEFAULT 1.0;`, "thought_regen_rate"},
-		{`ALTER TABLE players ADD COLUMN IF NOT EXISTS immortal_state JSONB NOT NULL DEFAULT '{}';`, "immortal_state"},
-		{`ALTER TABLE auction ADD COLUMN IF NOT EXISTS duration_hours INTEGER NOT NULL DEFAULT 24;`, "duration_hours"},
-		{`ALTER TABLE immortal_apertures ALTER COLUMN immortal_essence TYPE BIGINT;`, "alter_immortal_essence_type"},
-		{`ALTER TABLE gift_code_redemptions DROP CONSTRAINT IF EXISTS gift_code_redemptions_gift_code_id_player_id_key;`, "drop_gift_code_redemptions_unique_constraint"},
-		{`CREATE INDEX IF NOT EXISTS gift_code_redemptions_gift_code_id_player_id_idx ON gift_code_redemptions(gift_code_id, player_id);`, "create_gift_code_redemptions_index"},
-		{`ALTER TABLE tribulation_enemies ALTER COLUMN hp TYPE BIGINT;`, "alter_tribulation_enemies_hp_type"},
-		{`ALTER TABLE tribulation_enemies ALTER COLUMN max_hp TYPE BIGINT;`, "alter_tribulation_enemies_max_hp_type"},
-		{`ALTER TABLE tribulation_enemies ALTER COLUMN attack TYPE BIGINT;`, "alter_tribulation_enemies_attack_type"},
-		{`ALTER TABLE tribulation_enemies ALTER COLUMN defense TYPE BIGINT;`, "alter_tribulation_enemies_defense_type"},
-		{`ALTER TABLE tribulation_events ALTER COLUMN aperture_hp_before TYPE BIGINT;`, "alter_tribulation_events_aperture_hp_before_type"},
-		{`ALTER TABLE tribulation_events ALTER COLUMN aperture_hp_after TYPE BIGINT;`, "alter_tribulation_events_aperture_hp_after_type"},
-		{`ALTER TABLE tribulation_events ALTER COLUMN reward_dao_marks TYPE BIGINT;`, "alter_tribulation_events_reward_dao_marks_type"},
-		{`ALTER TABLE immortal_apertures ALTER COLUMN aperture_hp TYPE BIGINT;`, "alter_immortal_apertures_aperture_hp_type"},
-		{`ALTER TABLE immortal_apertures ALTER COLUMN max_aperture_hp TYPE BIGINT;`, "alter_immortal_apertures_max_aperture_hp_type"},
-		{`CREATE TABLE IF NOT EXISTS party_invitations (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			party_id UUID NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
-			inviter_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			invitee_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
-			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-			UNIQUE(party_id, invitee_id)
-		);`, "create_party_invitations_table"},
-		{`ALTER TABLE players DROP COLUMN IF EXISTS phone_number;`, "drop_phone_number_column"},
-		{`ALTER TABLE players DROP COLUMN IF EXISTS max_lifespan;`, "drop_max_lifespan_column"},
-		{`ALTER TABLE players DROP COLUMN IF EXISTS wisdom;`, "drop_wisdom_column"},
-		{`UPDATE players SET time_speed_multiplier = 1.0;`, "reset_time_speed_multiplier"},
-		{`ALTER TABLE players DROP COLUMN IF EXISTS tribulation_count;`, "drop_tribulation_count_column"},
-		{`ALTER TABLE sect_members ALTER COLUMN contribution_points TYPE BIGINT;`, "alter_sect_members_contribution_points_type_bigint"},
-		{`
-DO $$
-DECLARE
-    r RECORD;
-    key TEXT;
-    val TEXT;
-    new_masteries JSONB := '{}';
-    pts INT;
-BEGIN
-    FOR r IN
-        SELECT id, path_masteries FROM players
-        WHERE path_masteries IS NOT NULL AND jsonb_typeof(path_masteries) = 'object'
-    LOOP
-        new_masteries := '{}';
-        FOR key, val IN SELECT * FROM jsonb_each_text(r.path_masteries)
-        LOOP
-            pts := NULL;
-            IF val = 'Ordinary' THEN pts := 0;
-            ELSIF val = 'Master' THEN pts := 100;
-            ELSIF val = 'Grandmaster' THEN pts := 500;
-            ELSIF val = 'Great Grandmaster' THEN pts := 2500;
-            ELSIF val = 'Supreme Grandmaster' THEN pts := 10000;
-            ELSIF val ~ '^[0-9]+$' THEN pts := val::int;
-            END IF;
-            IF pts IS NOT NULL THEN
-                new_masteries := jsonb_set(new_masteries, ARRAY[key], to_jsonb(pts));
-            END IF;
-        END LOOP;
-        IF new_masteries <> r.path_masteries THEN
-            UPDATE players SET path_masteries = new_masteries WHERE id = r.id;
-        END IF;
-    END LOOP;
-END $$;`, "migrate_path_masteries_to_points"},
-	}
-	// One-time data cleanup: force-unequip excess equipped+ACTIVE Gus so no
-	// player exceeds MaxEquippedGus. Keeps vital Gus first, then the most
-	// recently equipped (by equipped_at). Rebuilds players.equipped_gus for the
-	// affected players to match handler semantics (equipped && ACTIVE). The CTE
-	// yields no rows for players already within the limit, so this is idempotent.
-	migrations = append(migrations, struct{ sql, errMsg string }{
-		sql: fmt.Sprintf(`
-WITH ranked AS (
-    SELECT pg.id AS gu_id, pg.player_id,
-           ROW_NUMBER() OVER (
-               PARTITION BY pg.player_id
-               ORDER BY pg.is_vital DESC, pg.equipped_at DESC NULLS LAST, pg.created_at DESC, pg.id DESC
-           ) AS rn
-    FROM player_gu pg
-    WHERE pg.equipped = true AND pg.state = 'ACTIVE'
-),
-unequipped AS (
-    UPDATE player_gu pg
-    SET equipped = false, equipped_at = NULL, updated_at = NOW()
-    FROM ranked r
-    WHERE pg.id = r.gu_id AND r.rn > %d
-    RETURNING pg.player_id
-)
-UPDATE players p
-SET equipped_gus = COALESCE(
-    (SELECT jsonb_agg(sub.id ORDER BY sub.created_at, sub.id)
-     FROM (SELECT id, created_at FROM player_gu
-           WHERE player_id = p.id AND equipped = true AND state = 'ACTIVE') sub),
-    '[]'::jsonb)
-WHERE p.id IN (SELECT DISTINCT player_id FROM unequipped);`, MaxEquippedGus),
-		errMsg: "unequip_excess_equipped_gus",
-	})
-	for _, m := range migrations {
-		if _, err = DB.Exec(m.sql); err != nil {
-			return fmt.Errorf("failed to run migration %s: %w", m.errMsg, err)
-		}
-	}
-
-	// player_gu secondary indexes — created here so they work on databases whose
-	// player_gu table predates the equipped/gu_rank columns (added by migration).
-	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS player_gu_player_equipped_idx ON player_gu (player_id, equipped);`)
-	if err != nil {
-		return fmt.Errorf("failed to create player_gu equipped index: %w", err)
-	}
-	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS player_gu_player_gu_idx ON player_gu (player_id, gu_id);`)
-	if err != nil {
-		return fmt.Errorf("failed to create player_gu gu_id index: %w", err)
-	}
-
-	// Phase 1 tables: player_recipe_progress
-	_, err = DB.Exec(`
-		CREATE TABLE IF NOT EXISTS player_recipe_progress (
-			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			recipe_id VARCHAR(50) NOT NULL,
-			completion_rate FLOAT NOT NULL DEFAULT 0,
-			is_unlocked BOOLEAN NOT NULL DEFAULT false,
-			deduce_count INT NOT NULL DEFAULT 0,
-			last_deduce_at TIMESTAMPTZ,
-			favorite BOOLEAN NOT NULL DEFAULT false,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			PRIMARY KEY (player_id, recipe_id)
-		);`)
-	if err != nil {
-		return fmt.Errorf("failed to create player_recipe_progress table: %w", err)
-	}
-
-	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_recipe_progress_player ON player_recipe_progress(player_id);`)
-	if err != nil {
-		logger.S.Warnf("failed to create idx_recipe_progress_player: %v", err)
-	}
-
-	// Phase 1 tables: player_map_progress
-	_, err = DB.Exec(`
-		CREATE TABLE IF NOT EXISTS player_map_progress (
-			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			region_id VARCHAR(50) NOT NULL DEFAULT '',
-			cell_x INT NOT NULL,
-			cell_y INT NOT NULL,
-			explored BOOLEAN NOT NULL DEFAULT false,
-			cleared BOOLEAN NOT NULL DEFAULT false,
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			PRIMARY KEY (player_id, region_id, cell_x, cell_y)
-		);`)
-	if err != nil {
-		return fmt.Errorf("failed to create player_map_progress table: %w", err)
-	}
-
-	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_map_progress_player ON player_map_progress(player_id);`)
-	if err != nil {
-		logger.S.Warnf("failed to create idx_map_progress_player: %v", err)
-	}
-
-	// Phase 1 tables: combat_sessions
-	_, err = DB.Exec(`
-		CREATE TABLE IF NOT EXISTS combat_sessions (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			state JSONB NOT NULL DEFAULT '{}',
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			UNIQUE(player_id)
-		);`)
-	if err != nil {
-		return fmt.Errorf("failed to create combat_sessions table: %w", err)
-	}
-
-	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_combat_sessions_player ON combat_sessions(player_id);`)
-	if err != nil {
-		logger.S.Warnf("failed to create idx_combat_sessions_player: %v", err)
-	}
-
-	// Phase 3 tables: player_dao_path
-	_, err = DB.Exec(`
-		CREATE TABLE IF NOT EXISTS player_dao_path (
-			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			path VARCHAR(50) NOT NULL,
-			mastery VARCHAR(50) NOT NULL DEFAULT 'Ordinary',
-			dao_marks INT NOT NULL DEFAULT 0,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			PRIMARY KEY (player_id, path)
-		);`)
-	if err != nil {
-		return fmt.Errorf("failed to create player_dao_path table: %w", err)
-	}
-
-	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_player_dao_path_player ON player_dao_path(player_id);`)
-	if err != nil {
-		logger.S.Warnf("failed to create idx_player_dao_path_player: %v", err)
-	}
-
-	// Phase 6 tables: player_inventory_items
-	_, err = DB.Exec(`
-		CREATE TABLE IF NOT EXISTS player_inventory_items (
-			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			item_id VARCHAR(50) NOT NULL,
-			category VARCHAR(30) NOT NULL DEFAULT 'materials',
-			quantity INT NOT NULL DEFAULT 0,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			PRIMARY KEY (player_id, item_id, category)
-		);`)
-	if err != nil {
-		return fmt.Errorf("failed to create player_inventory_items table: %w", err)
-	}
-	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_inventory_player ON player_inventory_items(player_id);`)
-	if err != nil {
-		logger.S.Warnf("failed to create idx_inventory_player: %v", err)
-	}
-
-	// Player pets table
-	_, err = DB.Exec(`
-		CREATE TABLE IF NOT EXISTS player_pets (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			monster_template_id VARCHAR(50) NOT NULL REFERENCES monster_templates(id),
-			nickname VARCHAR(60) NOT NULL DEFAULT '',
-			rank INT NOT NULL DEFAULT 1,
-			sub_rank INT NOT NULL DEFAULT 1,
-			hp DOUBLE PRECISION NOT NULL,
-			max_hp DOUBLE PRECISION NOT NULL,
-			base_attack DOUBLE PRECISION NOT NULL,
-			base_defense DOUBLE PRECISION NOT NULL,
-			speed DOUBLE PRECISION NOT NULL DEFAULT 10,
-			count INT NOT NULL DEFAULT 1,
-			hunger DOUBLE PRECISION NOT NULL DEFAULT 100,
-			max_hunger DOUBLE PRECISION NOT NULL DEFAULT 100,
-			pet_hunger_per_hour DOUBLE PRECISION NOT NULL DEFAULT 2.0,
-			state VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
-			formation_slot INT NOT NULL DEFAULT 0,
-			captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		);`)
-	if err != nil {
-		logger.S.Warnf("failed to create player_pets table: %v", err)
-	}
-	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS player_pets_player_idx ON player_pets (player_id);`)
-	if err != nil {
-		logger.S.Warnf("failed to create player_pets index: %v", err)
-	}
-	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS player_pets_formation_idx ON player_pets (player_id, formation_slot);`)
-	if err != nil {
-		logger.S.Warnf("failed to create player_pets formation index: %v", err)
-	}
-	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS player_pets_monster_idx ON player_pets (player_id, monster_template_id);`)
-	if err != nil {
-		logger.S.Warnf("failed to create player_pets monster index: %v", err)
-	}
-
-	// Phase 6 tables: player_quest_progress
-	_, err = DB.Exec(`
-		CREATE TABLE IF NOT EXISTS player_quest_progress (
-			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			quest_id VARCHAR(50) NOT NULL,
-			status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
-			progress_data JSONB NOT NULL DEFAULT '{}',
-			completed_at TIMESTAMPTZ,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			PRIMARY KEY (player_id, quest_id)
-		);`)
-	if err != nil {
-		return fmt.Errorf("failed to create player_quest_progress table: %w", err)
-	}
-	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_quest_progress_player ON player_quest_progress(player_id);`)
-	if err != nil {
-		logger.S.Warnf("failed to create idx_quest_progress_player: %v", err)
-	}
-
-	// Phase 6 tables: player_achievements
-	_, err = DB.Exec(`
-		CREATE TABLE IF NOT EXISTS player_achievements (
-			player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-			achievement_id VARCHAR(50) NOT NULL,
-			selected_title VARCHAR(100) NOT NULL DEFAULT '',
-			selected_frame VARCHAR(50) NOT NULL DEFAULT '',
-			unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			PRIMARY KEY (player_id, achievement_id)
-		);`)
-	if err != nil {
-		return fmt.Errorf("failed to create player_achievements table: %w", err)
-	}
-	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_achievements_player ON player_achievements(player_id);`)
-	if err != nil {
-		logger.S.Warnf("failed to create idx_achievements_player: %v", err)
-	}
-
-	// Set is_admin = true only if no admin exists yet (first deploy)
-	var adminCount int
-	_ = DB.QueryRow(`SELECT COUNT(*) FROM players WHERE is_admin = true`).Scan(&adminCount)
-	if adminCount == 0 {
-		_, err = DB.Exec(`UPDATE players SET is_admin = true WHERE username IN ('admin', 'Bảo Hoàng Thiên')`)
-		if err != nil {
-			logger.S.Warnf("failed to update is_admin status: %v", err)
-		}
-	}
-
-	// Drop obsolete columns
-	_, _ = DB.Exec(`ALTER TABLE gu_dictionary DROP COLUMN IF EXISTS base_power;`)
-	_, _ = DB.Exec(`ALTER TABLE gu_dictionary DROP COLUMN IF EXISTS base_damage;`)
-	_, _ = DB.Exec(`ALTER TABLE gu_dictionary DROP COLUMN IF EXISTS base_defense;`)
-	_, _ = DB.Exec(`ALTER TABLE gu_dictionary DROP COLUMN IF EXISTS origin_region;`)
-
-	// Migrations for path column in gu_dictionary (varchar to jsonb)
-	var dataType string
-	_ = DB.QueryRow(`
-		SELECT data_type FROM information_schema.columns 
-		WHERE table_name = 'gu_dictionary' AND column_name = 'path'
-	`).Scan(&dataType)
-	if dataType == "character varying" {
-		logger.S.Info("Migrating gu_dictionary.path from VARCHAR to JSONB...")
-		_, _ = DB.Exec(`ALTER TABLE gu_dictionary ALTER COLUMN path TYPE JSONB USING jsonb_build_array(path);`)
-		_, _ = DB.Exec(`ALTER TABLE gu_dictionary ALTER COLUMN path SET DEFAULT '[]'::jsonb;`)
-	}
-
-	// 4b. Create indexes for frequently queried foreign key columns
-	indexes := []struct {
-		name   string
-		table  string
-		column string
+	// Tables are declared per domain in schema_*.go, in foreign-key dependency
+	// order. All CREATE statements are idempotent (IF NOT EXISTS).
+	steps := []struct {
+		name string
+		fn   func() error
 	}{
-		{"idx_players_username", "players", "username"},
-		{"idx_combat_history_player", "combat_history", "player_id"},
-		{"idx_messages_sender", "messages", "sender_id"},
-		{"idx_messages_receiver", "messages", "receiver_id"},
-		{"idx_messages_sect", "messages", "sect_id"},
-		{"idx_topup_orders_user", "topup_orders", "user_id"},
-		{"idx_topup_orders_status", "topup_orders", "status"},
-		{"idx_wallet_transactions_user", "wallet_transactions", "user_id"},
-		{"idx_player_gu_gu_id", "player_gu", "gu_id"},
-		{"idx_auction_seller", "auction", "seller_id"},
-		{"idx_auction_bidder", "auction", "highest_bidder_id"},
-		{"idx_auction_status", "auction", "status"},
-		{"idx_trades_sender", "trades", "sender_id"},
-		{"idx_trades_receiver", "trades", "receiver_id"},
-		{"idx_trades_status", "trades", "status"},
-		{"idx_monster_spawns_region", "monster_spawns", "region_id"},
-		{"idx_monster_spawns_monster", "monster_spawns", "monster_id"},
-		{"idx_sect_members_sect", "sect_members", "sect_id"},
-		{"idx_sect_missions_sect", "sect_missions", "sect_id"},
-		{"idx_referrals_referrer", "referrals", "referrer_id"},
-		{"idx_parties_leader", "parties", "leader_id"},
-		{"idx_mine_slots_occupier", "mine_slots", "occupier_id"},
-		{"idx_feedback_user", "feedback", "user_id"},
-		{"idx_feedback_status", "feedback", "status"},
-		{"idx_feedback_comments_feedback", "feedback_comments", "feedback_id"},
-		{"idx_audit_logs_player", "audit_logs", "player_id"},
-		{"idx_audit_logs_action", "audit_logs", "action"},
-		{"idx_audit_logs_created", "audit_logs", "created_at"},
-		{"idx_messages_receiver_channel_created", "messages", "receiver_id, channel, created_at DESC"},
-		{"idx_auction_status_endtime_buyer", "auction", "status, end_time, target_buyer_id"},
-		{"idx_players_region_xy", "players", "current_region, x, y"},
-		{"idx_map_cells_xy", "map_cells", "x, y"},
+		{"dictionaries", schemaDictionaries},
+		{"world", schemaWorld},
+		{"parties", schemaParties},
+		{"players", schemaPlayers},
+		{"player_extras", schemaPlayerExtras},
+		{"sects", schemaSects},
+		{"player_items", schemaPlayerItems},
+		{"aperture", schemaAperture},
+		{"combat", schemaCombat},
+		{"trade", schemaTrade},
+		{"social", schemaSocial},
+		{"payment", schemaPayment},
 	}
-	for _, idx := range indexes {
-		_, err := DB.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s (%s)", idx.name, idx.table, idx.column))
-		if err != nil {
-			logger.S.Warnf("failed to create index %s: %v", idx.name, err)
+	for _, s := range steps {
+		if err := s.fn(); err != nil {
+			return fmt.Errorf("schema step %q: %w", s.name, err)
 		}
 	}
 
-	// Trigram GIN index to accelerate infix unaccent(username) ILIKE searches.
-	_, err = DB.Exec(`CREATE INDEX IF NOT EXISTS idx_players_username_trgm ON players USING gin (public.immutable_unaccent(username) gin_trgm_ops)`)
-	if err != nil {
-		logger.S.Warnf("failed to create username trigram index: %v", err)
+	// Static runtime seeds (independent of CSV imports).
+	if err := seedDefaultRaceConstitutionRows(); err != nil {
+		return fmt.Errorf("seed default race/constitution rows: %w", err)
+	}
+	if err := seedHubRegion(); err != nil {
+		return fmt.Errorf("seed hub region: %w", err)
+	}
+	if err := seedSystemPlayers(); err != nil {
+		return fmt.Errorf("seed system players: %w", err)
+	}
+	if err := seedMineSlots(); err != nil {
+		return fmt.Errorf("seed mine slots: %w", err)
+	}
+	if err := seedSectMines(); err != nil {
+		return fmt.Errorf("seed sect mines: %w", err)
+	}
+	if err := backfillWallets(); err != nil {
+		return fmt.Errorf("backfill wallets: %w", err)
+	}
+	if err := backfillLeaderboardSettings(); err != nil {
+		return fmt.Errorf("backfill leaderboard settings: %w", err)
+	}
+	if err := ensureAdmin(); err != nil {
+		return fmt.Errorf("ensure admin: %w", err)
 	}
 
 	logger.S.Info("Database schema initialized successfully (seed skipped, use admin panel to import data)")
+	return nil
+}
+
+// execSchema runs a single DDL statement, wrapping errors with the schema name.
+func execSchema(name, sql string) error {
+	if _, err := DB.Exec(sql); err != nil {
+		return fmt.Errorf("failed to create %s: %w", name, err)
+	}
+	return nil
+}
+
+// seedHubRegion seeds the default spawn region so the players.current_region FK
+// (default 'Southern_Border') is satisfied on a fresh database before the admin
+// imports Region.csv. The CSV import overwrites/extends this row.
+func seedHubRegion() error {
+	if _, err := DB.Exec(`
+	INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights, updated_at)
+	VALUES ('Southern_Border', 'Thanh Bản Thôn', 'Trấn an toàn khởi nguyên của Cổ Sư. Nơi giao nhau của Lục Đại Vực.', 2001, 2001, 1, 9, true, 'HUB', 14000, 9000, 16000, 11000, 15000, 10000, '{"cell_type_weights":{"Empty":100}}', NOW())
+	ON CONFLICT (id) DO NOTHING;`); err != nil {
+		return err
+	}
+	return nil
+}
+
+// seedSystemPlayers seeds the two reserved system accounts used by the
+// global/world/sect chat channels and automated notifications.
+func seedSystemPlayers() error {
+	if _, err := DB.Exec(`
+	INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, hp, base_hp, current_region, x, y, email, ref_code, is_admin)
+	VALUES ('00000000-0000-0000-0000-000000000000', 'Bảo Hoàng Thiên', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'Southern_Border', 50, 50, 'system@guworld.local', 'REF-SYSTEM', true)
+	ON CONFLICT (id) DO NOTHING;`); err != nil {
+		return err
+	}
+	if _, err := DB.Exec(`
+	INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, hp, base_hp, current_region, x, y, email, ref_code, is_admin)
+	VALUES ('11111111-1111-1111-1111-111111111111', 'Hệ thống', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'Southern_Border', 50, 50, 'system_npc@guworld.local', 'REF-SYSTEM-NPC', true)
+	ON CONFLICT (id) DO NOTHING;`); err != nil {
+		return err
+	}
+	return nil
+}
+
+// seedMineSlots seeds the 31 world mine slots (1 Siêu Cấp, 3 Truyền Thuyết,
+// 9 Sử Thi, 18 Hiếm) when the table is empty.
+func seedMineSlots() error {
+	var count int
+	if err := DB.QueryRow(`SELECT COUNT(*) FROM mine_slots`).Scan(&count); err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	slotRarities := map[int]string{}
+	for i := 1; i <= 31; i++ {
+		switch {
+		case i == 1:
+			slotRarities[i] = "Siêu Cấp"
+		case i <= 4:
+			slotRarities[i] = "Truyền Thuyết"
+		case i <= 13:
+			slotRarities[i] = "Sử Thi"
+		default:
+			slotRarities[i] = "Hiếm"
+		}
+	}
+	for i := 1; i <= 31; i++ {
+		if _, err := DB.Exec("INSERT INTO mine_slots (id, rarity, abandoned_at) VALUES ($1, $2, NOW()) ON CONFLICT (id) DO NOTHING", i, slotRarities[i]); err != nil {
+			logger.S.Errorf("Failed to seed mine %d: %v", i, err)
+		}
+	}
+	logger.S.Info("Seeded 31 initial world mine slots.")
+	return nil
+}
+
+// seedSectMines seeds the 5 fixed sect mines.
+func seedSectMines() error {
+	if _, err := DB.Exec(`
+	INSERT INTO sect_mines (name, rarity) VALUES
+	('Thái Cổ Tinh Mạch', 'Truyền Thuyết'),
+	('Cửu U Huyết Mạch', 'Sử Thi'),
+	('Thiên Cương Linh Khí Mạch', 'Hiếm'),
+	('Huyền Vũ Thạch Động', 'Hiếm'),
+	('Bách Thảo Tiên Vực', 'Thường')
+	ON CONFLICT (name) DO NOTHING;`); err != nil {
+		return err
+	}
+	return nil
+}
+
+// backfillWallets mirrors each player's stone balances into the wallet table.
+func backfillWallets() error {
+	if _, err := DB.Exec(`
+	INSERT INTO wallets (user_id, primeval_stone, immortal_essence_stone, immortal_jade)
+	SELECT id, COALESCE(primeval_stones, 0)::BIGINT, FLOOR(COALESCE(immortal_stones, 0))::BIGINT, 0
+	FROM players
+	ON CONFLICT (user_id) DO NOTHING;`); err != nil {
+		return err
+	}
+	return nil
+}
+
+// backfillLeaderboardSettings ensures every player has a leaderboard row.
+func backfillLeaderboardSettings() error {
+	if _, err := DB.Exec(`
+	INSERT INTO leaderboard_settings (player_id, show_on_leaderboard)
+	SELECT id, TRUE FROM players
+	ON CONFLICT (player_id) DO NOTHING;`); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ensureAdmin promotes the reserved admin accounts when no admin exists yet.
+func ensureAdmin() error {
+	var adminCount int
+	if err := DB.QueryRow(`SELECT COUNT(*) FROM players WHERE is_admin = true`).Scan(&adminCount); err != nil {
+		return nil
+	}
+	if adminCount == 0 {
+		if _, err := DB.Exec(`UPDATE players SET is_admin = true WHERE username IN ('admin', 'Bảo Hoàng Thiên')`); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -2776,7 +1262,7 @@ func seedRegionsFromCSV(filename string) error {
 		}
 		zoneType := get(row, typeIdx)
 		if zoneType == "" {
-			zoneType = "NGU_VUC"
+			zoneType = "KHU_VUC"
 		}
 		minX, minY := parseInt(row, minXIdx, 0), parseInt(row, minYIdx, 0)
 		maxX, maxY := parseInt(row, maxXIdx, width-1), parseInt(row, maxYIdx, height-1)
@@ -2913,6 +1399,12 @@ func seedMonsterTemplatesFromCSV(filename string) error {
 		if v := get(row, hungerRateIdx); v != "" {
 			fmt.Sscanf(v, "%f", &petHungerRate)
 		}
+		// loot_table_id FKs loot_tables(id); normalize '' to NULL so monsters
+		// exported with an empty loot table (COALESCE('')) can be re-imported.
+		var lootTableID interface{}
+		if v := strings.TrimSpace(get(row, lootIdx)); v != "" {
+			lootTableID = v
+		}
 		_, err = DB.Exec(`
 			INSERT INTO monster_templates (id, name, type, max_hp, base_attack, base_defense, gu_inventory, item_inventory, dao_marks, path_masteries, ai_profile, loot_table_id, description, is_active, is_capturable, capture_chance, pet_hunger_per_hour, updated_at)
 			VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12,$13,$14,$15,$16,$17,NOW())
@@ -2921,7 +1413,7 @@ func seedMonsterTemplatesFromCSV(filename string) error {
 			gu_inventory=EXCLUDED.gu_inventory, item_inventory=EXCLUDED.item_inventory, dao_marks=EXCLUDED.dao_marks, path_masteries=EXCLUDED.path_masteries,
 			ai_profile=EXCLUDED.ai_profile, loot_table_id=EXCLUDED.loot_table_id, description=EXCLUDED.description, is_active=EXCLUDED.is_active,
 			is_capturable=EXCLUDED.is_capturable, capture_chance=EXCLUDED.capture_chance, pet_hunger_per_hour=EXCLUDED.pet_hunger_per_hour, updated_at=NOW()
-		`, id, get(row, nameIdx), get(row, typeIdx), maxHP, attack, defense, guInv, itemInv, daoMarks, masteries, ai, get(row, lootIdx), get(row, descIdx), active, capturable, captureChance, petHungerRate)
+		`, id, get(row, nameIdx), get(row, typeIdx), maxHP, attack, defense, guInv, itemInv, daoMarks, masteries, ai, lootTableID, get(row, descIdx), active, capturable, captureChance, petHungerRate)
 		if err != nil {
 			return fmt.Errorf("upsert monster %s: %w", id, err)
 		}
@@ -3772,7 +2264,7 @@ func ExportToCSV() error {
 		{
 			filename: "Region.csv",
 			columns:  []string{"id", "name", "description", "width", "height", "min_rank", "max_rank", "is_active", "parent_id", "zone_type", "min_x", "min_y", "max_x", "max_y", "entry_x", "entry_y", "pool_weights"},
-			query:    `SELECT id, name, COALESCE(description,''), COALESCE(width,100), COALESCE(height,100), COALESCE(min_rank,1), COALESCE(max_rank,5), COALESCE(is_active,true), COALESCE(parent_id,''), COALESCE(zone_type,'NGU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0), COALESCE(max_x,0), COALESCE(max_y,0), COALESCE(entry_x,0), COALESCE(entry_y,0), COALESCE(pool_weights::text,'{}') FROM regions ORDER BY id`,
+			query:    `SELECT id, name, COALESCE(description,''), COALESCE(width,100), COALESCE(height,100), COALESCE(min_rank,1), COALESCE(max_rank,5), COALESCE(is_active,true), COALESCE(parent_id,''), COALESCE(zone_type,'KHU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0), COALESCE(max_x,0), COALESCE(max_y,0), COALESCE(entry_x,0), COALESCE(entry_y,0), COALESCE(pool_weights::text,'{}') FROM regions ORDER BY id`,
 		},
 		{
 			filename: "LootTable.csv",
@@ -3916,7 +2408,7 @@ func TableExport(table string) error {
 		"region": {
 			filename: "Region.csv",
 			columns:  []string{"id", "name", "description", "width", "height", "min_rank", "max_rank", "is_active", "parent_id", "zone_type", "min_x", "min_y", "max_x", "max_y", "entry_x", "entry_y", "pool_weights"},
-			query:    `SELECT id, name, COALESCE(description,''), COALESCE(width,100), COALESCE(height,100), COALESCE(min_rank,1), COALESCE(max_rank,5), COALESCE(is_active,true), COALESCE(parent_id,''), COALESCE(zone_type,'NGU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0), COALESCE(max_x,0), COALESCE(max_y,0), COALESCE(entry_x,0), COALESCE(entry_y,0), COALESCE(pool_weights::text,'{}') FROM regions ORDER BY id`,
+			query:    `SELECT id, name, COALESCE(description,''), COALESCE(width,100), COALESCE(height,100), COALESCE(min_rank,1), COALESCE(max_rank,5), COALESCE(is_active,true), COALESCE(parent_id,''), COALESCE(zone_type,'KHU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0), COALESCE(max_x,0), COALESCE(max_y,0), COALESCE(entry_x,0), COALESCE(entry_y,0), COALESCE(pool_weights::text,'{}') FROM regions ORDER BY id`,
 		},
 		"loot_table": {
 			filename: "LootTable.csv",

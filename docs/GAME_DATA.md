@@ -6,15 +6,16 @@ Nguồn dữ liệu chính nằm trong các file CSV ở `backend/`. Khi backend
 
 | File | Số dòng dữ liệu | Nội dung |
 | --- | ---: | --- |
-| `backend/Gu.csv` | 242 | Dictionary Cổ: rank, path, type, mana cost, effects, hunger, food, targeting, rarity, role/tags. Chuẩn scale sức mạnh theo rank xem `docs/GuRankScaling.md`. |
-| `backend/Item.csv` | 136 | Vật phẩm, nguyên liệu, tiền tệ, consumable, effects/tags/description. |
+| `backend/Gu.csv` | 594 | Dictionary Cổ: rank, path, type, mana cost, effects, hunger, food, targeting, rarity, role/tags. Chuẩn scale sức mạnh theo rank xem `docs/GuRankScaling.md`. |
+| `backend/Item.csv` | 229 | Vật phẩm, nguyên liệu, tiền tệ, consumable, effects/tags/description. |
 | `backend/Recipe.csv` | 31 | Công thức luyện Cổ: target, Cổ/nguyên liệu yêu cầu, success rate, cost. |
-| `backend/Monster.csv` | 13 | Monster templates: chỉ số, Gu inventory, loot table, AI profile, bắt sủng vật. |
-| `backend/LootTable.csv` | 8 | Bảng loot cho combat/monster. |
+| `backend/Monster.csv` | 30 | Monster templates: chỉ số, Gu inventory, loot table, AI profile, bắt sủng vật. |
+| `backend/LootTable.csv` | 25 | Bảng loot cho combat/monster (thức ăn cổ rank<6 được thêm vào loot quái Normal/Elite theo dải rank). |
 | `backend/MonsterSpawn.csv` | 48 | Pool spawn monster theo zone/toạ độ/rank (Roaming/Random). |
-| `backend/Region.csv` | 14 | Zone lồng nhau (1 HUB + 6 Đại Vực 3×2 + 7 địa danh): geometry, rank range, pool_weights. |
+| `backend/Region.csv` | 31 | Zone lồng nhau (1 HUB + 6 Đại Vực 3×2 + 7 địa danh): geometry, rank range, pool_weights. `resources` của mỗi vùng bao gồm thức ăn cổ rank<6 khớp dải rank vùng. |
 | `backend/MapCell.csv` | 29 | Ô persistent dùng chung: boss, tài nguyên cao, điểm an toàn. |
-| `backend/ShopItem.csv` | 15 | Shop NPC/caravan items. |
+| `backend/ShopItem.csv` | 61 | Shop NPC/caravan items. |
+| `backend/ArenaShopItem.csv` | 26 | Shop đấu trường (tiền ARENA_COIN). |
 | `backend/PremiumShopPackage.csv` | 4 | Gói premium shop mua bằng ví. |
 | `backend/TopupPackage.csv` | 5 | Gói nạp tiền. |
 
@@ -248,13 +249,15 @@ Các trường quan trọng trong dictionary:
 - `id`, `name`, `rank`, `path` (mảng JSON các Đạo học — 49 path có thể có, xem danh sách ở `docs/CANH_GIOI_DAO_NGAN.md`), `gu_type`.
 - `base_mana_cost`.
 - `effects` JSON: active/passive/combat/support tuỳ Cổ.
-- `hunger_rate`, `food_types`, `max_hunger`.
+- `hunger_rate`, `food_types`, `max_hunger`. **Quy ước `hunger_rate`:** cổ có `food_types` không rỗng → `6` nếu `effects.passive` không rỗng, ngược lại `3`; cổ không có thức ăn → `0` (không đói). `max_hunger` mặc định `rank × 100`.
 - `target_type`: `SINGLE`, `ROW`, `COLUMN`, `ALL`, v.v.
 - `rarity`, `is_immortal`, `primary_role`, `combat_roles`, `combat_tags`, `support_tags`.
+- `base_price`: **đồng đều theo rank** — 200, 500, 1.200, 2.500, 5.000, 100.000, 250.000, 600.000, 1.500.000 cho rank 1–9 (nhảy mạnh ở Tiên Cổ rank ≥ 6). Fallback trong `pkg/pricing/pricing.go`.
+- **Phân phối thức ăn:** mọi item trong `food_types` của cổ rank <6 (72 item) được thêm vào (1) loot của quái **Normal/Elite** theo dải rank spawn, (2) `pool_weights.resources` của vùng non-HUB theo dải rank vùng, (3) `vault_materials` khởi đầu của 4 tông (qty 100, khớp dải rank vùng tông). Boss/Tribulation không rơi thêm thức ăn.
 
 ### Item
 
-Item dùng cho consumable, material, currency và shop. Effects hỗ trợ hồi mana/HP, soul, đạo ngân, xóa trạng thái xấu, điều kiện mortal/immortal hoặc các tác động đặc thù khác.
+Item dùng cho consumable, material, currency và shop. Effects hỗ trợ hồi mana/HP, soul, đạo ngân, xóa trạng thái xấu, điều kiện mortal/immortal hoặc các tác động đặc thù khác. **Quy ước `base_price`:** đồng đều theo rank — 1, 3, 6, 13, 25, 500, 1.250, 3.000, 7.500 cho rank 1–9 (rank 1 = 1, scale tỉ lệ như Cổ); item rank 0 quy về rank 1.
 
 ### Recipe
 
@@ -271,14 +274,14 @@ Monster template chứa chỉ số, Gu inventory, item inventory, dao marks, pat
 
 ### Region / Bản đồ thế giới (World Map)
 
-Từ phiên bản map 3×2, thế giới là **một bản đồ liên tục duy nhất** 30.000 × 20.000 ô, chia làm **6 Đại Vực (DAI_VUC)** mỗi cái 10.000 × 10.000 (lưới 3 cột × 2 hàng). Mỗi Đại Vực được chia số học thành **tiểu vực** 1.000 × 1.000 (600 tiểu vực toàn thế giới). Các địa danh có tên (NGU_VUC — giữ nguyên 7 Lưu Vực cũ) nằm lồng/chồng bên trong Đại Vực; `Southern_Border` là **HUB** (trấn an toàn, không sinh quái).
+Từ phiên bản map 3×2, thế giới là **một bản đồ liên tục duy nhất** 30.000 × 20.000 ô, chia làm **6 Đại Vực (NGU_VUC)** mỗi cái 10.000 × 10.000 (lưới 3 cột × 2 hàng). Mỗi Đại Vực được chia số học thành **tiểu vực** 1.000 × 1.000 (600 tiểu vực toàn thế giới). Các địa danh có tên (KHU_VUC — giữ nguyên 7 Lưu Vực cũ) nằm lồng/chồng bên trong Đại Vực; `Southern_Border` là **HUB** (trấn an toàn, không sinh quái).
 
 **Bảng `regions`** — các cột mới:
 
 | Cột | Kiểu | Ghi chú |
 | --- | --- | --- |
-| `parent_id` | VARCHAR | zone cha (NGU_VUC trỏ tới DAI_VUC của nó). |
-| `zone_type` | VARCHAR | `HUB` / `DAI_VUC` / `NGU_VUC`. |
+| `parent_id` | VARCHAR | zone cha (KHU_VUC trỏ tới NGU_VUC của nó). |
+| `zone_type` | VARCHAR | `HUB` / `SAFE_ZONE` / `BOSS_ZONE` / `SECRET_REALM` / `DUNGEON` / `PVP_ZONE` / `NGU_VUC` / `KHU_VUC`. |
 | `min_x, min_y, max_x, max_y` | INT | hình chữ nhật toàn cầu (inclusive) của zone. |
 | `entry_x, entry_y` | INT | tọa độ cổng truyền tống khi du hành tới zone. |
 | `pool_weights` | JSONB | pool sinh nội dung procedural của zone (xem dưới). |
@@ -292,6 +295,14 @@ Từ phiên bản map 3×2, thế giới là **một bản đồ liên tục duy
 }
 ```
 `cell_type_weights` quyết định tỉ lệ các loại ô; `resources` / `wild_gus` là pool tài nguyên và Cổ cấp thấp. Không khai báo → dùng pool mặc định.
+
+**Thứ tự ưu tiên zone_type** — khi một điểm nằm trong nhiều zone chồng lấn, `FindZoneAt` chọn zone có priority cao nhất (bằng → diện tích nhỏ nhất = innermost):
+
+```
+HUB > SAFE_ZONE > BOSS_ZONE > SECRET_REALM > DUNGEON > PVP_ZONE > KHU_VUC > NGU_VUC
+```
+
+Zone type không nhận diện fallback về priority của `KHU_VUC`. `FindLargeZoneAt` luôn trả `NGU_VUC` chứa điểm.
 
 **Bảng `map_cells`** — các ô **dùng chung toàn thế giới** (chỉ lưu boss + tài nguyên cấp cao + điểm an toàn). `UNIQUE(x, y)` toàn cầu. Cột mới: `last_cleared_at TIMESTAMPTZ`, `cleared_by UUID`. Khi giết boss / hái tài nguyên cao, `last_cleared_at` được set; ô sẽ trống cho tới khi hết `respawn_seconds`.
 
@@ -393,9 +404,9 @@ Seed từ `SectMission.csv` (append-only, `ON CONFLICT DO NOTHING`) luôn để 
 
 ## Lưu ý khi thay đổi schema
 
-- `CREATE TABLE IF NOT EXISTS` toàn bộ ở `backend/internal/db/db.go`. Không có migration riêng.
-- `ALTER TABLE ADD COLUMN IF NOT EXISTS` dùng cho các cột mới thêm vào sau.
-- Thêm cột mới vào schema + thêm ALTER TABLE, restart server để áp dụng.
+- Schema được tách theo domain ở `backend/internal/db/schema_*.go`, mỗi bảng là `CREATE TABLE IF NOT EXISTS` với toàn bộ cột inline. `InitSchema()` trong `db.go` gọi các schema function theo thứ tự FK. Không có migration riêng, không dùng `ALTER TABLE ADD COLUMN`.
+- Thêm/sửa bảng: sửa file `schema_*.go` tương ứng → xóa DB (hoặc `DROP TABLE` thủ công) → restart server.
+- FK cho các cột `players.race` / `players.constitution` / `players.current_region`: các dòng sentinel (`''`) và vùng `Southern_Border` được pre-seed trong `InitSchema` nên đăng ký vẫn hoạt động trước khi import CSV. Các bảng dictionary (`race_dictionary`, `constitution_dictionary`) tự seed default dataset khi DB rỗng; CSV import (Admin tab "Dữ liệu") vẫn là nguồn chính thức.
 
 ### Bảng `player_pets` (Sủng vật)
 

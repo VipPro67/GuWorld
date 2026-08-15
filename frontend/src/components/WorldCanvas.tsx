@@ -259,8 +259,8 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
     const container = regionsContainerRef.current;
     container.removeChildren();
 
-    const largeZones = regs.filter((r) => r.zone_type === "DAI_VUC");
-    const namedZones = regs.filter((r) => r.zone_type === "NGU_VUC");
+    const largeZones = regs.filter((r) => r.zone_type === "NGU_VUC");
+    const namedZones = regs.filter((r) => r.zone_type === "KHU_VUC");
     const hub = regs.filter((r) => r.zone_type === "HUB");
 
     const baseColors = [0x2d5f3f, 0x3f5f2d, 0x5f4f2d, 0x4f2d5f, 0x2d3f5f, 0x5f2d3f];
@@ -469,7 +469,7 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
 
     for (let gy = gy0; gy <= gy1; gy++) {
       for (let gx = gx0; gx <= gx1; gx++) {
-        const large = regions.find((r) => r.zone_type === "DAI_VUC" && gx * SUBZONE_SIZE >= (r.min_x ?? 0) && gx * SUBZONE_SIZE <= (r.max_x ?? -1) && gy * SUBZONE_SIZE >= (r.min_y ?? 0) && gy * SUBZONE_SIZE <= (r.max_y ?? -1));
+        const large = regions.find((r) => r.zone_type === "NGU_VUC" && gx * SUBZONE_SIZE >= (r.min_x ?? 0) && gx * SUBZONE_SIZE <= (r.max_x ?? -1) && gy * SUBZONE_SIZE >= (r.min_y ?? 0) && gy * SUBZONE_SIZE <= (r.max_y ?? -1));
         if (!large) continue;
         const col = Math.floor((gx * SUBZONE_SIZE - (large.min_x ?? 0)) / SUBZONE_SIZE);
         const row = Math.floor((gy * SUBZONE_SIZE - (large.min_y ?? 0)) / SUBZONE_SIZE);

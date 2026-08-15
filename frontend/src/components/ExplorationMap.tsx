@@ -44,6 +44,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
 }) => {
   const [lastLog, setLastLog] = useState<string | null>(null);
   const [activeNode, setActiveNode] = useState<string | null>(null);
+  const lastMoveTimeRef = useRef(0);
   const [showRegionsList, setShowRegionsList] = useState(false);
   const [gridData, setGridData] = useState<{
     x: number;
@@ -175,6 +176,9 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
   const handleGridCellClick = async (cx: number, cy: number) => {
     if (actionLoading || player.active_combat || isPartyMemberNotLeader) return;
 
+    const now = Date.now();
+    if (now - lastMoveTimeRef.current < 1000) return;
+
     // Check distance range
     const dx = Math.abs(cx - player.x);
     const dy = Math.abs(cy - player.y);
@@ -184,6 +188,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
 
     if (dist > movementLimit) return; // Too far
 
+    lastMoveTimeRef.current = now;
     setLastLog(null);
     const res = await movePlayer(cx, cy);
     if (res) {
@@ -266,9 +271,9 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
         {/* World Overview: 3x2 large zones (Đại Vực) */}
         {(() => {
           const largeZones = regions
-            .filter((r) => r.zone_type === "DAI_VUC")
+            .filter((r) => r.zone_type === "KHU_VUC")
             .sort((a, b) => (a.min_y || 0) - (b.min_y || 0) || (a.min_x || 0) - (b.min_x || 0));
-          const namedZones = regions.filter((r) => r.zone_type === "NGU_VUC");
+          const namedZones = regions.filter((r) => r.zone_type === "KHU_VUC");
           return (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

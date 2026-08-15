@@ -838,7 +838,7 @@ export interface Region {
   max_rank: number;
   is_active: boolean;
   parent_id?: string;
-  zone_type?: string; // "HUB" | "DAI_VUC" | "NGU_VUC"
+  zone_type?: string; // "HUB" | "NGU_VUC" | "KHU_VUC"
   min_x?: number;
   min_y?: number;
   max_x?: number;

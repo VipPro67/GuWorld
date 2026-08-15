@@ -11,8 +11,8 @@ type ZonePools struct {
 }
 
 // Region represents a zone in the shared continuous world map. Regions are
-// hierarchical: HUB (safe lobby), DAI_VUC (one of the 3x2 large zones,
-// 10000x10000 each) and NGU_VUC (named areas that live inside a DAI_VUC).
+// hierarchical: HUB (safe lobby), NGU_VUC (one of the 3x2 large zones,
+// 10000x10000 each) and KHU_VUC (named areas that live inside a NGU_VUC).
 // Coordinates are global world coordinates.
 type Region struct {
 	ID          string    `json:"id"`
@@ -27,7 +27,7 @@ type Region struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 
 	ParentID    string    `json:"parent_id,omitempty"`
-	ZoneType    string    `json:"zone_type"` // "HUB" | "DAI_VUC" | "NGU_VUC"
+	ZoneType    string    `json:"zone_type"` // "HUB" | "SAFE_ZONE" | "BOSS_ZONE" | "SECRET_REALM" | "DUNGEON" | "PVP_ZONE" | "NGU_VUC" | "KHU_VUC"
 	MinX        int       `json:"min_x"`
 	MinY        int       `json:"min_y"`
 	MaxX        int       `json:"max_x"`

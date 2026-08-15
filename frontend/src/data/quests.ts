@@ -61,9 +61,9 @@ export function checkQuest(
         return spec && spec.rank >= 6;
       });
     case "quest_13_gather_lan_flower":
-      return (materialsInventory["nguyet_lan_hoa"] || 0) >= 50;
+      return (materialsInventory["moon_orchid_petal"] || 0) >= 50;
     case "quest_14_immortal_material":
-      return (materialsInventory["tu_kim_than_bi"] || 0) >= 1;
+      return (materialsInventory["immortal_blood"] || 0) >= 1;
     default:
       return false;
   }

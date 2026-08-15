@@ -53,7 +53,9 @@ func effectiveRaces() map[string]RaceDef {
 // LoadRaceRegistry queries the database and populates the in-memory cache.
 // When the table is empty the built-in defaults are used.
 func LoadRaceRegistry(db *sql.DB) error {
-	rows, err := db.Query(`SELECT key, name, COALESCE(effects::text,'{}') FROM race_dictionary ORDER BY key`)
+	// Empty-key sentinel rows exist only to keep the players.race FK satisfiable
+	// for the '' value; they must never surface in the registry.
+	rows, err := db.Query(`SELECT key, name, COALESCE(effects::text,'{}') FROM race_dictionary WHERE key <> '' ORDER BY key`)
 	if err != nil {
 		return err
 	}

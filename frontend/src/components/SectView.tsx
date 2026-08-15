@@ -376,7 +376,7 @@ export const SectView: React.FC = () => {
 
   // Unit cost (quỹ tông môn) for stocking an item — mirrors backend pkg/pricing
   const getStockUnitCost = (type: "gu" | "material" | "recipe", id: string): number => {
-    const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 10000, 25000, 60000, 150000];
+    const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 100000, 250000, 600000, 1500000];
     if (type === "gu") {
       const spec = guDictionary[id];
       const rank = spec?.rank || 1;
@@ -422,8 +422,8 @@ export const SectView: React.FC = () => {
   const playerDonatableGus = (player.gu_inventory || []).filter(g => !g.is_vital && !g.equipped && g.status !== "DEAD");
 
   // Pricing helpers matching backend/pkg/pricing
-  const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 10000, 25000, 60000, 150000];
-  const itemRankBasePrice = [0, 5, 15, 30, 60, 120, 250, 500, 1000, 2500];
+  const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 100000, 250000, 600000, 1500000];
+  const itemRankBasePrice = [0, 1, 3, 6, 13, 25, 500, 1250, 3000, 7500];
 
   const getItemBasePrice = (matId: string): number => {
     const spec = itemDictionary[matId];
@@ -752,12 +752,12 @@ export const SectView: React.FC = () => {
           <p className="text-xs text-zinc-400 leading-relaxed">
             Trở thành thủy tổ của một phái, tự định quy chế, thu nhận đệ tử, tự thiết lập bảng nhiệm vụ và thống trị giang sơn!
             <br />
-            <strong className="text-yellow-500 font-mono">Yêu cầu: Tu vi Ngũ Chuyển trở lên & Chi phí lập phái: 50,000 Nguyên Thạch.</strong>
+            <strong className="text-yellow-500 font-mono">Yêu cầu: Tu vi Tam Chuyển trở lên & Chi phí lập phái: 50,000 Nguyên Thạch.</strong>
           </p>
 
-          {player.rank < 5 ? (
+          {player.rank < 3 ? (
             <div className="p-3 bg-red-950/15 border border-red-500/20 rounded-xl text-xs text-red-400 font-mono">
-              ⚠️ Đạo hữu chưa đủ tu vi! Cần đạt Ngũ Chuyển để khai sơn lập tổ (Tu vi hiện tại: Cấp {player.rank}).
+              ⚠️ Đạo hữu chưa đủ tu vi! Cần đạt Tam Chuyển để khai sơn lập tổ (Tu vi hiện tại: Cấp {player.rank}).
             </div>
           ) : player.primeval_stones < 50000 ? (
             <div className="p-3 bg-red-950/15 border border-red-500/20 rounded-xl text-xs text-red-400 font-mono">

@@ -144,7 +144,8 @@ export default function Home() {
   // Force combat view if player is actively in combat
   const inCombat = player && player.active_combat;
 
-  const IS_MAINTENANCE = true;
+  
+  const IS_MAINTENANCE = process.env.MAINTENANCE_MODE === "true";
 
   if (IS_MAINTENANCE) {
     return (

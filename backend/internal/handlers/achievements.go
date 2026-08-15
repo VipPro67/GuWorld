@@ -56,7 +56,7 @@ var achievementRegistry = []AchievementDef{
 	{ID: "human_qi_10000", Name: "Nhân Khí Thông Thiên", Description: "Đạt 10.000 Nhân Khí", Icon: "🌪️", HasFrame: true, RewardType: "immortal_stones", RewardVal: 30, RewardLabel: "30 Tiên Nguyên Thạch"},
 	{ID: "human_qi_100000", Name: "Nhân Khí Vạn Vật", Description: "Đạt 100.000 Nhân Khí", Icon: "🌪️", HasFrame: true, RewardType: "immortal_stones", RewardVal: 300, RewardLabel: "300 Tiên Nguyên Thạch"},
 
-	{ID: "soul_awaken", Name: "Hồn Phách Hiển Hiện", Description: "Hồn phách thức tỉnh (SoulHP > 0)", Icon: "👻", RewardType: "primeval_stones", RewardVal: 500, RewardLabel: "500 Nguyên Thạch"},
+	{ID: "soul_awaken", Name: "Hồn Phách Hiển Hiện", Description: "Hồn phách thức tỉnh (SoulHP > 100)", Icon: "👻", RewardType: "primeval_stones", RewardVal: 500, RewardLabel: "500 Nguyên Thạch"},
 }
 
 type PlayerAchievementData struct {
@@ -251,7 +251,7 @@ func checkAchievementCondition(ach *AchievementDef, player *models.Player) bool 
 	case "explorer_500":
 		return len(player.VisitedSubZones) >= 500
 	case "explorer_1000":
-		return len(player.VisitedSubZones) >= 600
+		return len(player.VisitedSubZones) >= 1000
 	case "millionaire":
 		return player.PrimevalStones >= 1000000
 	case "human_qi_1000":
@@ -259,7 +259,7 @@ func checkAchievementCondition(ach *AchievementDef, player *models.Player) bool 
 	case "human_qi_10000":
 		return player.HumanQi >= 10000
 	case "soul_awaken":
-		return player.SoulHP > 0
+		return player.SoulHP > 100
 	case "wall_crack_50":
 		return player.WallProgress >= 0.5
 	case "wall_crack_100":

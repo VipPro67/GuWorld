@@ -2,11 +2,12 @@
 // All sell/donate/vault prices are derived from a single base_price stored in DB.
 //
 // Price flow:
-//   base_price (DB or rank-based fallback)
-//     × SellBackRatio  → sell price at Caravan shop
-//     × DonateRatio    → contribution points when donating to sect
-//     × VaultMarkup    → cost in contribution points to buy from sect vault
-//                        (always > donate so vault-farming is impossible)
+//
+//	base_price (DB or rank-based fallback)
+//	  × SellBackRatio  → sell price at Caravan shop
+//	  × DonateRatio    → contribution points when donating to sect
+//	  × VaultMarkup    → cost in contribution points to buy from sect vault
+//	                     (always > donate so vault-farming is impossible)
 package pricing
 
 // ---- Ratios ----------------------------------------------------------------
@@ -20,7 +21,7 @@ const (
 
 	// VaultMarkup: multiplier applied on top of DonateRatio for vault buy cost.
 	// Must be > 1 to prevent donation->buy farming loop.
-	// Net vault cost = base_price × DonateRatio × VaultMarkup 
+	// Net vault cost = base_price × DonateRatio × VaultMarkup
 	VaultMarkup = 1.50
 
 	// RecipeRankDivisor: recipe vault cost = GuBasePrice(targetRank) / RecipeRankDivisor
@@ -38,24 +39,25 @@ var guRankBasePrice = [10]int{
 	1200,    // Rank 3 - Tam Chuyen
 	2500,    // Rank 4 - Tu Chuyen
 	5000,    // Rank 5 - Ngu Chuyen
-	10000,   // Rank 6 - Luc Chuyen
-	25000,   // Rank 7 - That Chuyen
-	60000,   // Rank 8 - Bat Chuyen
-	150000,  // Rank 9 - Cuu Chuyen
+	100000,  // Rank 6 - Luc Chuyen (Tien Co)
+	250000,  // Rank 7 - That Chuyen
+	600000,  // Rank 8 - Bat Chuyen
+	1500000, // Rank 9 - Cuu Chuyen
 }
 
 // itemRankBasePrice maps Item rank (1-9) to base price in Primeval Stones.
+// Rank 1 = 1, scales proportionally to the Gu curve (Gu / 200).
 var itemRankBasePrice = [10]int{
 	0,    // unused
-	5,    // Rank 1
-	15,   // Rank 2
-	30,   // Rank 3
-	60,   // Rank 4
-	120,  // Rank 5
-	250,  // Rank 6
-	500,  // Rank 7
-	1000, // Rank 8
-	2500, // Rank 9
+	1,    // Rank 1
+	3,    // Rank 2
+	6,    // Rank 3
+	13,   // Rank 4
+	25,   // Rank 5
+	500,  // Rank 6
+	1250, // Rank 7
+	3000, // Rank 8
+	7500, // Rank 9
 }
 
 // ---- Base price helpers ----------------------------------------------------

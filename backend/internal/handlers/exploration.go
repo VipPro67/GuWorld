@@ -1075,7 +1075,7 @@ func GetNearbyCells(c *gin.Context) {
 func GetRegions(c *gin.Context) {
 	query := `
 		SELECT id, name, description, width, height, min_rank, max_rank, is_active, created_at, updated_at,
-		       COALESCE(parent_id,''), COALESCE(zone_type,'NGU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0),
+		       COALESCE(parent_id,''), COALESCE(zone_type,'KHU_VUC'), COALESCE(min_x,0), COALESCE(min_y,0),
 		       COALESCE(max_x,0), COALESCE(max_y,0), COALESCE(entry_x,0), COALESCE(entry_y,0)
 		FROM regions
 		WHERE is_active = TRUE

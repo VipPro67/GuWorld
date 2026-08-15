@@ -25,7 +25,8 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 ## Backend Conventions (agent would likely miss)
 
 - **No service layer.** Handlers are fat (combat.go: 2400+ lines, player.go: 95KB). All gameplay logic is in `backend/internal/handlers/`.
-- **No migrations.** Schema is `CREATE TABLE IF NOT EXISTS` in `backend/internal/db/db.go`. Modify SQL there and re-run.
+- **No migrations.** Schema is split per domain in `backend/internal/db/schema_*.go` (each table a `CREATE TABLE IF NOT EXISTS` with all columns inline, plus indexes and FK). `InitSchema()` in `backend/internal/db/db.go` calls them in FK order and seeds static runtime data (system players, hub region `Southern_Border`, default race/constitution rows + `''` sentinel keys, 31 mine slots, 5 sect mines, wallet/leaderboard backfills). Modify SQL in `schema_*.go` and re-create the DB.
+- **DB reset note:** `players.race`, `players.constitution`, `players.current_region` have FKs. `InitSchema` pre-seeds the `''` race/constitution keys and the `Southern_Border` region so registration works before CSV import; race/constitution registry loaders filter out `''` keys.
 - CSV data is managed through the Admin panel.
 - CSV files are not automatically seeded on startup.
 - Changing CSV files requires importing the relevant dataset through the Admin panel.
@@ -59,7 +60,8 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 
 - `backend/cmd/server/main.go` — entrypoint, startup orchestration
 - `backend/internal/server/server.go` — all `/api/*` routes registered here
-- `backend/internal/db/db.go` — schema SQL + CSV seed logic
+- `backend/internal/db/db.go` — `Connect` + `InitSchema` orchestrator + CSV seed/export logic
+- `backend/internal/db/schema_*.go` — per-domain table DDL (columns, indexes, FK)
 - `backend/internal/handlers/*.go` — all feature logic (no service layer)
 - `backend/internal/simulator/engine.go` — deterministic auto-battle loop, combat log format
 - `frontend/src/store/useGameStore.ts` — Zustand + API client + SSE
@@ -75,7 +77,7 @@ No CI/CD. No typecheck script. Test files are `*_test.go` in `backend/internal/h
 * Reuse existing helpers, registries, models, and database patterns.
 * Do not modify unrelated files.
 * Do not rewrite large files unnecessarily.
-* Before changing database schema, inspect the existing schema in `backend/internal/db/db.go`.
+* Before changing database schema, inspect the existing schema in `backend/internal/db/schema_*.go`.
 * Before changing gameplay values, inspect the corresponding CSV/data source and `docs/GAME_DATA.md`.
 
 ### Delegation
@@ -142,7 +144,7 @@ For non-trivial changes:
 ### Database Safety
 
 * Never assume a table or column exists.
-* Inspect `backend/internal/db/db.go` before writing SQL against project tables.
+* Inspect `backend/internal/db/schema_*.go` before writing SQL against project tables.
 * Preserve existing constraints and indexes.
 * Avoid destructive schema changes unless explicitly requested.
 * For data migrations, consider existing production rows and duplicate-key constraints.

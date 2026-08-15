@@ -506,7 +506,9 @@ func RegisterPlayer(c *gin.Context) {
 	passwordHash := string(hashedBytes)
 
 	// 2. Gacha rolling for aptitude
-	roll := rand.Intn(100)
+	// For test so increase Giáp, Ất rate
+	//roll := rand.Intn(101)
+	roll := rand.Intn(31) // 0-30 for testing
 	var aptitudeType string
 	var aptitudePercent int
 
@@ -543,13 +545,14 @@ func RegisterPlayer(c *gin.Context) {
 	isAttackVital := false
 	isDefenseVital := false
 
-	if req.VitalGuChoice == "ATTACK" {
+	switch req.VitalGuChoice {
+	case "ATTACK":
 		isAttackVital = true
-	} else if req.VitalGuChoice == "DEFENSE" {
+	case "DEFENSE":
 		isDefenseVital = true
-	} else if req.VitalGuChoice == "NONE" {
+	case "NONE":
 		// both false
-	} else {
+	default:
 		// fallback to SetVitalNow
 		if req.SetVitalNow {
 			isAttackVital = true // default to attack
@@ -2125,6 +2128,8 @@ func loadCompletedQuests(playerID string) models.CompletedQuestsList {
 func responseWithPlayer(c *gin.Context, status int, player models.Player, extra ...gin.H) {
 	player.MaxMana = gamefx.EffectiveMaxMana(&player)
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
+	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
+	player.CompletedQuests = loadCompletedQuests(player.ID.String())
 	player.UnlockedRecipes = loadUnlockedRecipes(player.ID.String())
 	resp := gin.H{"player": player}
 	for _, e := range extra {

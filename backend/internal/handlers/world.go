@@ -3,7 +3,7 @@ package handlers
 // World layout constants for the shared continuous world map.
 //
 // The world is a single grid of WorldWidth x WorldHeight cells, subdivided
-// into a 3x2 grid of large zones (DAI_VUC), each LargeZoneSize x LargeZoneSize.
+// into a 3x2 grid of large zones (NGU_VUC), each LargeZoneSize x LargeZoneSize.
 // Each large zone is further divided arithmetically into small zones
 // (tiểu vực) of SubZoneSize x SubZoneSize, which drive deterministic content
 // generation and nearby-query batching.

@@ -1,0 +1,171 @@
+package db
+
+// Schema definitions for the master-data dictionaries. All columns are declared
+// inline in CREATE TABLE (no ALTER migrations), so a fresh database gets the
+// full schema. Statements stay idempotent (IF NOT EXISTS) so InitSchema can be
+// re-run safely.
+
+func schemaDictionaries() error {
+	if err := execSchema("item_dictionary", `
+	CREATE TABLE IF NOT EXISTS item_dictionary (
+		id VARCHAR(50) PRIMARY KEY,
+		name VARCHAR(100) NOT NULL,
+		item_type VARCHAR(50) NOT NULL,
+		rank INTEGER DEFAULT 1,
+		effects JSONB NOT NULL DEFAULT '{}',
+		description TEXT,
+		base_price INTEGER NOT NULL DEFAULT 0,
+		image_url TEXT NOT NULL DEFAULT ''
+	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("gu_dictionary", `
+	CREATE TABLE IF NOT EXISTS gu_dictionary (
+		id VARCHAR(50) NOT NULL,
+		rank INTEGER NOT NULL,
+		name VARCHAR(100) NOT NULL,
+		path JSONB NOT NULL DEFAULT '[]'::jsonb,
+		gu_type VARCHAR(50) NOT NULL,
+		base_mana_cost DOUBLE PRECISION NOT NULL DEFAULT 0,
+		effects JSONB NOT NULL DEFAULT '{"active":{},"support":{},"passive":{},"house":{}}',
+		hunger_rate INTEGER NOT NULL,
+		food_types JSONB NOT NULL DEFAULT '[]',
+		max_hunger INTEGER DEFAULT 100,
+		description TEXT,
+		target_type VARCHAR(50) NOT NULL DEFAULT 'SINGLE',
+		rarity VARCHAR(50),
+		is_immortal BOOLEAN DEFAULT false,
+		primary_role VARCHAR(80),
+		combat_roles JSONB DEFAULT '[]',
+		combat_tags JSONB DEFAULT '[]',
+		support_tags JSONB DEFAULT '[]',
+		base_price INTEGER NOT NULL DEFAULT 0,
+		image_url TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (id, rank)
+	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("constitution_dictionary", `
+	CREATE TABLE IF NOT EXISTS constitution_dictionary (
+		key VARCHAR(100) PRIMARY KEY,
+		name VARCHAR(200) NOT NULL,
+		effects JSONB NOT NULL DEFAULT '{}'
+	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("race_dictionary", `
+	CREATE TABLE IF NOT EXISTS race_dictionary (
+		key VARCHAR(100) PRIMARY KEY,
+		name VARCHAR(200) NOT NULL,
+		effects JSONB NOT NULL DEFAULT '{}'
+	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("loot_tables", `
+	CREATE TABLE IF NOT EXISTS loot_tables (
+		id VARCHAR(50) PRIMARY KEY,
+		name VARCHAR(100) NOT NULL,
+		entries JSONB NOT NULL DEFAULT '[]',
+		created_at TIMESTAMP DEFAULT NOW(),
+		updated_at TIMESTAMP DEFAULT NOW()
+	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("refining_recipes", `
+	CREATE TABLE IF NOT EXISTS refining_recipes (
+		target_gu_id VARCHAR(50) NOT NULL,
+		target_rank INTEGER NOT NULL,
+		variant INTEGER NOT NULL DEFAULT 1,
+		required_gus JSONB NOT NULL,
+		required_materials JSONB NOT NULL,
+		success_rate DOUBLE PRECISION NOT NULL,
+		primeval_stones_cost DOUBLE PRECISION DEFAULT 0,
+		immortal_essence_stones_cost DOUBLE PRECISION DEFAULT 0,
+		PRIMARY KEY (target_gu_id, target_rank, variant),
+		FOREIGN KEY (target_gu_id, target_rank) REFERENCES gu_dictionary(id, rank) ON UPDATE CASCADE ON DELETE RESTRICT
+	);`); err != nil {
+		return err
+	}
+
+	// Shop ids are polymorphic (an item id, a gu id or a recipe key) so they
+	// deliberately have no FK to item_dictionary.
+	if err := execSchema("caravan_shop_items", `
+	CREATE TABLE IF NOT EXISTS caravan_shop_items (
+		id VARCHAR(50) PRIMARY KEY,
+		price INTEGER NOT NULL,
+		stock INTEGER NOT NULL DEFAULT -1,
+		is_default BOOLEAN NOT NULL DEFAULT TRUE,
+		sort_order INTEGER NOT NULL DEFAULT 0,
+		updated_at TIMESTAMP DEFAULT NOW()
+	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("arena_shop_items", `
+	CREATE TABLE IF NOT EXISTS arena_shop_items (
+		id VARCHAR(50) PRIMARY KEY,
+		price INTEGER NOT NULL,
+		qty INTEGER NOT NULL DEFAULT 1,
+		stock INTEGER NOT NULL DEFAULT -1,
+		is_default BOOLEAN NOT NULL DEFAULT TRUE,
+		sort_order INTEGER NOT NULL DEFAULT 0,
+		updated_at TIMESTAMP DEFAULT NOW()
+	);`); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// seedDefaultRaceConstitutionRows pre-seeds the built-in race/constitution
+// dictionaries plus an empty-key sentinel row. The empty keys keep the
+// players.race / players.constitution foreign keys satisfied for the ” value
+// written by GrantRace/admin paths; the default datasets mirror
+// gamefx.defaultRaces/defaultConstitutions so the pre-import registry behaves
+// exactly like the gamefx fallback (CSV imports remain authoritative).
+func seedDefaultRaceConstitutionRows() error {
+	races := []struct{ key, name, effects string }{
+		{"", "(Không)", "{}"},
+		{"human", "Nhân Tộc", "{}"},
+		{"fur_people", "Người Lông", `{"refine":0.10}`},
+		{"merman", "Nhân Ngư", `{"dao_mark":{"water":0.10},"path_damage":{"water":0.05}}`},
+		{"feathered", "Vũ Dân", `{"stat_mods":{"speed":0.10},"dao_mark":{"space":0.05}}`},
+		{"inkman", "Mặc Nhân", `{"dao_mark":{"wisdom":0.08,"soul":0.05}}`},
+		{"rockman", "Thạch Nhân", `{"stat_mods":{"defense":0.15,"speed":-0.10}}`},
+		{"snowman", "Tuyết Dân", `{"dao_mark":{"ice":0.15},"path_resistance":{"fire":0.10}}`},
+		{"variant_beastman", "Thú Nhân", `{"stat_mods":{"attack":0.08,"defense":0.05},"refine":-0.05}`},
+		{"dragonman", "Long Nhân", `{"stat_mods":{"attack":0.10,"defense":0.10},"refine":-0.05}`},
+		{"giant_sun_descendant", "Cự Dương Huyết Mạch", `{"luck":5,"cultivation_efficiency":0.05}`},
+	}
+	for _, r := range races {
+		if _, err := DB.Exec(`INSERT INTO race_dictionary (key, name, effects) VALUES ($1,$2,$3::jsonb) ON CONFLICT (key) DO NOTHING`, r.key, r.name, r.effects); err != nil {
+			return err
+		}
+	}
+
+	constitutions := []struct{ key, name, effects string }{
+		{"", "(Không)", "{}"},
+		{"solar_sun_moon_body", "Thái Nhật Dương Mãng Thể", `{"dao_mark":{"light":0.50},"path_damage":{"light":0.20},"max_mana":0.50,"mana_regen":1}`},
+		{"ancient_moon_yin_desolate_body", "Cổ Nguyệt Âm Hoang Thể", `{"dao_mark":{"dark":0.50},"max_mana":0.50,"mana_regen":1,"mental_resistance":0.20}`},
+		{"northern_dark_ice_soul_body", "Bắc Minh Băng Phách Thể", `{"dao_mark":{"ice":0.50},"path_resistance":{"ice":0.10},"max_mana":0.50,"mana_regen":1}`},
+		{"forest_sea_reincarnation_body", "Sâm Hải Luân Hồi Thể", `{"dao_mark":{"water":0.50},"healing_received":0.50,"max_mana":0.50,"mana_regen":1}`},
+		{"myriad_gold_brilliant_flower_body", "Vạn Kim Diệu Hoa Thể", `{"dao_mark":{"metal":0.50},"stat_mods":{"attack":0.30,"defense":0.30},"max_mana":0.50,"mana_regen":1}`},
+		{"blazing_glory_lightning_brilliance_body", "Viêm Hoàng Lôi Trạch Thể", `{"dao_mark":{"lightning":0.50},"stat_mods":{"speed":0.20},"max_mana":0.50,"mana_regen":1}`},
+		{"great_strength_true_martial_body", "Đại Lực Chân Võ Thể", `{"dao_mark":{"strength":0.50},"stat_mods":{"attack":0.30,"defense":0.30},"max_mana":0.50,"mana_regen":1}`},
+		{"carefree_wisdom_heart_body", "Tiêu Dao Trí Tâm Thể", `{"dao_mark":{"wisdom":0.50},"mental_resistance":0.30,"max_mana":0.50,"mana_regen":1}`},
+		{"great_earth_origin_body", "Hậu Thổ Nguyên Ương Thể", `{"dao_mark":{"earth":0.50},"stat_mods":{"defense":0.45},"mental_resistance":0.45,"max_mana":0.50,"mana_regen":1}`},
+		{"universe_great_evolution_body", "Vũ Trụ Đại Diễn Thể", `{"dao_mark":{"space":0.50},"stat_mods":{"attack":0.15,"defense":0.15,"speed":0.15},"max_mana":0.50,"mana_regen":1}`},
+		{"pure_dream_reality_seeker_body", "Thuần Mộng Cầu Chân Thể", `{"dao_mark":{"dream":0.40},"path_damage":{"dream":0.10},"max_mana":0.40,"mana_regen":1}`},
+	}
+	for _, c := range constitutions {
+		if _, err := DB.Exec(`INSERT INTO constitution_dictionary (key, name, effects) VALUES ($1,$2,$3::jsonb) ON CONFLICT (key) DO NOTHING`, c.key, c.name, c.effects); err != nil {
+			return err
+		}
+	}
+	return nil
+}

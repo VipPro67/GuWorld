@@ -187,10 +187,8 @@ GU_BREAK_SPACE,5,1,"{""GU_BREAK_SPACE"": {""qty"": 1, ""rank"": 5}}","{""star_fr
 GU_CAPTURE_HEART,5,1,"{""GU_WHITE_BOAR"": {""qty"": 1, ""rank"": 1}}","{""star_thoughts"": 4, ""memory_fragments"": 4, ""rule_path_material"": 5, ""wisdom_path_material"": 12, ""heart_knowledge_grass"": 7}",0.5,300.0,0.0,
 GU_CHANGE_FORM,5,1,"{""GU_CHANGE_FORM"": {""qty"": 1, ""rank"": 5}}","{""beast_meat"": 8, ""beast_blood"": 7, ""beast_bones"": 8, ""fish_scales"": 8, ""transformation_path_material"": 12}",0.5,300.0,0.0,
 GU_CHIVALROUS_HERO,5,1,"{""GU_MAN_AS_BEFORE"": {""qty"": 1, ""rank"": 6}}","{""meat"": 8, ""gu_master_blood"": 5, ""human_path_material"": 12, ""fresh_blood_relatives"": 4, ""enslavement_path_material"": 5}",0.5,300.0,0.0,
-GU_CONNECTING_HEAVEN,5,1,"{""GU_HEAVEN_SECRET"": {""qty"": 1, ""rank"": 7}}","{""heaven_qi"": 5, ""paper_pulp"": 8, ""dark_ink_seaweed"": 5, ""memory_fragments"": 5, ""information_path_material"": 12}",0.5,300.0,0.0,
 GU_BLOOD_STONE,2,1,"{""GU_BLOOD_FLESH_PILL"": {""qty"": 1, ""rank"": 1}}",{},0.648,60.0,0.0,
 GU_BLOOD_STOP,2,1,"{""GU_BLOOD_CROWN"": {""qty"": 1, ""rank"": 1}, ""GU_BLOOD_FLESH_PILL"": {""qty"": 1, ""rank"": 1}}","{""beast_blood"": 2, ""blood_path_material"": 3}",0.72,60.0,0.0,
-GU_DIVINE_SENSE,5,1,"{""GU_WISDOM_GU"": {""qty"": 1, ""rank"": 9}}","{""soul_qi"": 6, ""star_thoughts"": 5, ""memory_fragments"": 4, ""wisdom_path_material"": 12, ""heart_knowledge_grass"": 8}",0.5,300.0,0.0,
 GU_DIVINE_WOOD,5,1,"{""GU_GREEN_LEAF"": {""qty"": 1, ""rank"": 1}}","{""nectar"": 8, ""ginseng"": 7, ""tree_sap"": 7, ""jade_celery_soil"": 5, ""wood_path_material"": 12}",0.5,300.0,0.0,
 GU_DREAM_PILLOW,5,1,"{""GU_DREAM_WINGS"": {""qty"": 1, ""rank"": 6}}","{""nectar"": 7, ""soul_qi"": 6, ""sealing_stone"": 7, ""dream_material"": 12, ""memory_fragments"": 4}",0.5,300.0,0.0,
 GU_ENSLAVEMENT,5,1,"{""GU_ENSLAVEMENT"": {""qty"": 1, ""rank"": 5}}","{""wolf_heart_meat"": 4, ""flying_bear_meat"": 5, ""spirit_deer_meat"": 5, ""six_headed_snake_blood"": 5, ""enslavement_path_material"": 12}",0.5,300.0,0.0,
@@ -835,3 +833,5 @@ GU_GONG_SOUND,6,1,"{""GU_ALERT_BELL"": {""qty"": 1, ""rank"": 1}}","{""jade_ston
 GU_HEAVENLY_THUNDER_ROAR,7,1,"{""GU_ALERT_BELL"": {""qty"": 1, ""rank"": 1}}","{""heaven_qi"": 8, ""sound_stone"": 8, ""musical_beast"": 8, ""sound_crystal"": 8, ""sound_path_material"": 14}",0.3,0.0,200.0,
 GU_VOICE_OF_ALL_SPIRITS,7,1,"{""GU_ALERT_BELL"": {""qty"": 1, ""rank"": 1}}","{""heaven_qi"": 8, ""sound_stone"": 8, ""musical_beast"": 8, ""sound_crystal"": 8, ""sound_path_material"": 14}",0.3,0.0,200.0,
 GU_HEAVENLY_GONG_IMMORTAL,7,1,"{""GU_ALERT_BELL"": {""qty"": 1, ""rank"": 1}}","{""heaven_qi"": 8, ""sound_stone"": 8, ""musical_beast"": 8, ""sound_crystal"": 8, ""sound_path_material"": 14}",0.3,0.0,200.0,
+GU_CONNECTING_HEAVEN,5,1,"{""GU_SIGNAL"": {""qty"": 1, ""rank"": 1}}","{""sealing_stone"": 5, ""jade_stone"": 5, ""black_oil"": 5, ""star_fragment"": 5}",0.5,200.0,0.0
+GU_DIVINE_SENSE,5,1,"{""GU_LITTLE_CARE"": {""qty"": 1, ""rank"": 3}}","{""soul_qi"": 5, ""sealing_stone"": 5, ""jade_stone"": 5, ""black_oil"": 5}",0.5,200.0,0.0

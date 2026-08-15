@@ -3637,11 +3637,17 @@ func AdminCreateMonster(c *gin.Context) {
 	if req.IsCapturable != nil {
 		isCapturable = *req.IsCapturable
 	}
+	// loot_table_id FK references loot_tables(id); normalize '' to NULL so
+	// monsters without a loot table remain insertable.
+	var lootTableID interface{}
+	if strings.TrimSpace(req.LootTableID) != "" {
+		lootTableID = req.LootTableID
+	}
 
 	_, err := db.DB.Exec(`INSERT INTO monster_templates(id,name,type,max_hp,base_attack,base_defense,gu_inventory,item_inventory,dao_marks,path_masteries,ai_profile,loot_table_id,description,is_active,is_capturable,capture_chance,pet_hunger_per_hour) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
 		req.ID, req.Name, req.Type, req.MaxHP, req.BaseAttack, req.BaseDefense,
 		req.GuInventory, req.ItemInventory, req.DaoMarks, req.PathMasteries,
-		req.AIProfile, req.LootTableID, req.Description, isActive, isCapturable,
+		req.AIProfile, lootTableID, req.Description, isActive, isCapturable,
 		req.CaptureChance, req.PetHungerPerHour)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo: " + err.Error()})

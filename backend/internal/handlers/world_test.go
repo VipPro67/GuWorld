@@ -72,6 +72,11 @@ func TestFindZoneAtPrecedence(t *testing.T) {
 		{ID: "dai_vuc_test", ZoneType: ZoneTypeLarge, MinX: 0, MinY: 0, MaxX: 9999, MaxY: 9999},
 		{ID: "ngu_vuc_nested", ZoneType: ZoneTypeNamed, ParentID: "dai_vuc_test", MinX: 1000, MinY: 1000, MaxX: 2000, MaxY: 2000},
 		{ID: "hub_test", ZoneType: ZoneTypeHub, MinX: 15000, MinY: 9000, MaxX: 16000, MaxY: 11000},
+		{ID: "safe_test", ZoneType: ZoneTypeSafe, MinX: 3000, MinY: 3000, MaxX: 4000, MaxY: 4000},
+		{ID: "boss_test", ZoneType: ZoneTypeBoss, MinX: 5000, MinY: 5000, MaxX: 6000, MaxY: 6000},
+		{ID: "secret_test", ZoneType: ZoneTypeSecret, MinX: 7000, MinY: 7000, MaxX: 8000, MaxY: 8000},
+		{ID: "dungeon_test", ZoneType: ZoneTypeDungeon, MinX: 3000, MinY: 7000, MaxX: 4000, MaxY: 8000},
+		{ID: "pvp_test", ZoneType: ZoneTypePvp, MinX: 7000, MinY: 3000, MaxX: 8000, MaxY: 4000},
 	}
 	zoneReg.mu.Unlock()
 
@@ -79,7 +84,7 @@ func TestFindZoneAtPrecedence(t *testing.T) {
 	if z == nil || z.ID != "ngu_vuc_nested" {
 		t.Fatalf("expected innermost named zone, got %+v", z)
 	}
-	z = FindZoneAt(5000, 5000)
+	z = FindZoneAt(2500, 2500)
 	if z == nil || z.ID != "dai_vuc_test" {
 		t.Fatalf("expected large zone fallback, got %+v", z)
 	}
@@ -87,8 +92,76 @@ func TestFindZoneAtPrecedence(t *testing.T) {
 	if z == nil || z.ID != "hub_test" {
 		t.Fatalf("expected hub precedence, got %+v", z)
 	}
+	// New zone types beat the underlying NGU_VUC fallback.
+	z = FindZoneAt(3500, 3500)
+	if z == nil || z.ID != "safe_test" {
+		t.Fatalf("expected SAFE_ZONE precedence, got %+v", z)
+	}
+	z = FindZoneAt(5500, 5500)
+	if z == nil || z.ID != "boss_test" {
+		t.Fatalf("expected BOSS_ZONE precedence, got %+v", z)
+	}
+	z = FindZoneAt(7500, 7500)
+	if z == nil || z.ID != "secret_test" {
+		t.Fatalf("expected SECRET_REALM precedence, got %+v", z)
+	}
+	z = FindZoneAt(3500, 7500)
+	if z == nil || z.ID != "dungeon_test" {
+		t.Fatalf("expected DUNGEON precedence, got %+v", z)
+	}
+	z = FindZoneAt(7500, 3500)
+	if z == nil || z.ID != "pvp_test" {
+		t.Fatalf("expected PVP_ZONE precedence, got %+v", z)
+	}
 	if DeriveRegionAt(999999, 999999) != HubRegionID {
 		t.Fatalf("out-of-zone coords should fall back to hub")
+	}
+}
+
+func TestFindZoneAtPriorityOrder(t *testing.T) {
+	zoneReg.mu.Lock()
+	zoneReg.zones = []models.Region{
+		{ID: "dai_vuc_test", ZoneType: ZoneTypeLarge, MinX: 0, MinY: 0, MaxX: 9999, MaxY: 9999},
+		{ID: "pvp_test", ZoneType: ZoneTypePvp, MinX: 1000, MinY: 1000, MaxX: 3000, MaxY: 3000},
+		{ID: "dungeon_test", ZoneType: ZoneTypeDungeon, MinX: 1500, MinY: 1500, MaxX: 2500, MaxY: 2500},
+		{ID: "secret_test", ZoneType: ZoneTypeSecret, MinX: 1700, MinY: 1700, MaxX: 2300, MaxY: 2300},
+	}
+	zoneReg.mu.Unlock()
+
+	// SECRET_REALM > DUNGEON > PVP_ZONE > NGU_VUC at the innermost point.
+	z := FindZoneAt(2000, 2000)
+	if z == nil || z.ID != "secret_test" {
+		t.Fatalf("expected SECRET_REALM to win over DUNGEON/PVP/DAI, got %+v", z)
+	}
+	// DUNGEON > PVP_ZONE > NGU_VUC where SECRET_REALM does not cover.
+	z = FindZoneAt(1600, 1600)
+	if z == nil || z.ID != "dungeon_test" {
+		t.Fatalf("expected DUNGEON to win over PVP/DAI, got %+v", z)
+	}
+	// PVP_ZONE > NGU_VUC outside DUNGEON/SECRET.
+	z = FindZoneAt(1100, 1100)
+	if z == nil || z.ID != "pvp_test" {
+		t.Fatalf("expected PVP_ZONE to win over NGU_VUC, got %+v", z)
+	}
+}
+
+func TestFindZoneAtSamePriorityAreaTieBreak(t *testing.T) {
+	zoneReg.mu.Lock()
+	zoneReg.zones = []models.Region{
+		{ID: "large_ngu", ZoneType: ZoneTypeNamed, MinX: 0, MinY: 0, MaxX: 5000, MaxY: 5000},
+		{ID: "small_ngu", ZoneType: ZoneTypeNamed, MinX: 1000, MinY: 1000, MaxX: 2000, MaxY: 2000},
+	}
+	zoneReg.mu.Unlock()
+
+	// Same priority → smallest area (innermost) wins.
+	z := FindZoneAt(1500, 1500)
+	if z == nil || z.ID != "small_ngu" {
+		t.Fatalf("expected smaller-area zone to win, got %+v", z)
+	}
+	// Outside the inner zone, the larger one still matches.
+	z = FindZoneAt(3000, 3000)
+	if z == nil || z.ID != "large_ngu" {
+		t.Fatalf("expected large zone outside inner, got %+v", z)
 	}
 }
 

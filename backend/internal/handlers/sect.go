@@ -34,14 +34,14 @@ type Sect struct {
 }
 
 type SectJoinRequest struct {
-	ID        uuid.UUID `json:"id"`
-	SectID    string    `json:"sect_id"`
-	PlayerID  uuid.UUID `json:"player_id"`
-	Status    string    `json:"status"` // PENDING, APPROVED, REJECTED
-	CreatedAt time.Time `json:"created_at"`
-	Username   string `json:"username,omitempty"`
-	AvatarURL  string `json:"avatar_url,omitempty"`
-	PlayerRank int    `json:"player_rank,omitempty"`
+	ID         uuid.UUID `json:"id"`
+	SectID     string    `json:"sect_id"`
+	PlayerID   uuid.UUID `json:"player_id"`
+	Status     string    `json:"status"` // PENDING, APPROVED, REJECTED
+	CreatedAt  time.Time `json:"created_at"`
+	Username   string    `json:"username,omitempty"`
+	AvatarURL  string    `json:"avatar_url,omitempty"`
+	PlayerRank int       `json:"player_rank,omitempty"`
 }
 
 type SectPromotionRequest struct {
@@ -52,9 +52,9 @@ type SectPromotionRequest struct {
 	TargetRank  string    `json:"target_rank"`
 	Status      string    `json:"status"` // PENDING, APPROVED, REJECTED
 	CreatedAt   time.Time `json:"created_at"`
-	Username   string `json:"username,omitempty"`
-	AvatarURL  string `json:"avatar_url,omitempty"`
-	PlayerRank int    `json:"player_rank,omitempty"`
+	Username    string    `json:"username,omitempty"`
+	AvatarURL   string    `json:"avatar_url,omitempty"`
+	PlayerRank  int       `json:"player_rank,omitempty"`
 }
 
 type SectMember struct {
@@ -68,25 +68,25 @@ type SectMember struct {
 }
 
 type SectMission struct {
-	ID                  uuid.UUID  `json:"id"`
-	SectID              string     `json:"sect_id"`
-	Title               string     `json:"title"`
-	Description         string     `json:"description"`
-	MissionType         string     `json:"mission_type"` // GATHER, COMBAT, REFINE, DONATE
-	TargetID            string     `json:"target_id"`
-	TargetAmount        int        `json:"target_amount"`
-	RewardContribution  int        `json:"reward_contribution"`
-	RequiredMemberRank  string     `json:"required_member_rank"`
-	ExpiresAt           *time.Time `json:"expires_at"`
+	ID                 uuid.UUID  `json:"id"`
+	SectID             string     `json:"sect_id"`
+	Title              string     `json:"title"`
+	Description        string     `json:"description"`
+	MissionType        string     `json:"mission_type"` // GATHER, COMBAT, REFINE, DONATE
+	TargetID           string     `json:"target_id"`
+	TargetAmount       int        `json:"target_amount"`
+	RewardContribution int        `json:"reward_contribution"`
+	RequiredMemberRank string     `json:"required_member_rank"`
+	ExpiresAt          *time.Time `json:"expires_at"`
 }
 
 type PlayerSectMission struct {
-	ID              uuid.UUID `json:"id"`
-	PlayerID        uuid.UUID `json:"player_id"`
-	MissionID       uuid.UUID `json:"mission_id"`
-	CurrentProgress int       `json:"current_progress"`
-	Status          string    `json:"status"` // IN_PROGRESS, COMPLETED, FAILED
-	AssignedAt      time.Time `json:"assigned_at"`
+	ID              uuid.UUID  `json:"id"`
+	PlayerID        uuid.UUID  `json:"player_id"`
+	MissionID       uuid.UUID  `json:"mission_id"`
+	CurrentProgress int        `json:"current_progress"`
+	Status          string     `json:"status"` // IN_PROGRESS, COMPLETED, FAILED
+	AssignedAt      time.Time  `json:"assigned_at"`
 	ExpiresAt       *time.Time `json:"expires_at"`
 }
 
@@ -361,7 +361,7 @@ func GetMySectStatus(c *gin.Context) {
 				WHERE r.player_id = $1 AND r.status = 'PENDING'
 				LIMIT 1
 			`, playerID).Scan(&pendingSectID, &pendingSectName)
-			
+
 			hasPendingJoin := false
 			if err == nil {
 				hasPendingJoin = true
@@ -415,7 +415,7 @@ func GetMySectStatus(c *gin.Context) {
 		ORDER BY sm.contribution_points DESC
 		LIMIT 10
 	`, m.SectID)
-	
+
 	type LeaderboardEntry struct {
 		Username     string `json:"username"`
 		AvatarURL    string `json:"avatar_url"`
@@ -772,12 +772,12 @@ func DonateMaterials(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sect vault"})
 		return
 	}
-	
+
 	vaultMats := make(map[string]int)
 	if len(vaultMaterialsRaw) > 0 {
 		_ = json.Unmarshal(vaultMaterialsRaw, &vaultMats)
 	}
-	
+
 	vaultMats[req.MaterialID] += req.Amount
 	newVaultMats, _ := json.Marshal(vaultMats)
 	_, err = tx.Exec(`UPDATE sects SET vault_materials = $1 WHERE id = $2`, newVaultMats, m.SectID)
@@ -1567,7 +1567,7 @@ func BuyFromSectVault(c *gin.Context) {
 		if actualRank == 0 {
 			actualRank = guSpec.Rank
 		}
-		
+
 		if vaultGus[targetIdx].Quantity <= 0 {
 			vaultGus = append(vaultGus[:targetIdx], vaultGus[targetIdx+1:]...)
 		}
@@ -1737,9 +1737,9 @@ func BuyFromSectVault(c *gin.Context) {
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.buy_vault", EntityType: "sect",
-		EntityID: m.SectID,
+		EntityID:       m.SectID,
 		RequestSummary: fmt.Sprintf("%s | %s x%d | giá %d điểm cống hiến", req.ItemType, itemName, quantity, cost),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Đổi thành công %d %s! Nhân Khí +%.0f.", quantity, itemName, qiGained),
@@ -2132,9 +2132,9 @@ func DeleteSectMission(c *gin.Context) {
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.delete_mission", EntityType: "sect_mission",
-		EntityID: missionID.String(),
+		EntityID:       missionID.String(),
 		RequestSummary: fmt.Sprintf("Xóa nhiệm vụ %s của tông môn %s (Hoàn %d quỹ)", sm.Title, sm.SectID, sm.RewardContribution),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã thu hồi nhiệm vụ tông môn và hoàn lại " + strconv.Itoa(sm.RewardContribution) + " quỹ bang!"})
@@ -2172,9 +2172,9 @@ func AbandonSectMission(c *gin.Context) {
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.abandon_mission", EntityType: "sect_mission",
-		EntityID: missionID.String(),
+		EntityID:       missionID.String(),
 		RequestSummary: "Hủy nhiệm vụ tông môn đang thực hiện",
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã hủy nhiệm vụ tông môn!"})
@@ -2242,15 +2242,15 @@ func CreateSect(c *gin.Context) {
 		return
 	}
 
-	// Requirements: Rank >= 5 and 50,000 Primeval Stones
-	if player.Rank < 5 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Khai tông lập phái yêu cầu tu vi ít nhất Ngũ Chuyển (Rank 5)!"})
+	// Requirements: Rank >= 3 and 30,000 Primeval Stones
+	if player.Rank < 3 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Khai tông lập phái yêu cầu tu vi ít nhất Tam Chuyển (Rank 3)!"})
 		return
 	}
 
-	cost := 50000.0
+	cost := 30000.0
 	if player.PrimevalStones < cost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không có đủ 50,000 Nguyên Thạch làm chi phí lập phái!"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không có đủ 30,000 Nguyên Thạch làm chi phí lập phái!"})
 		return
 	}
 
@@ -3264,7 +3264,7 @@ func ToggleSectPromotionApproval(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":                      msg,
+		"message":                    msg,
 		"require_promotion_approval": req.RequirePromotionApproval,
 	})
 }

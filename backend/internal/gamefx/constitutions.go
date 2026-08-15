@@ -54,7 +54,9 @@ func effectiveConstitutions() map[string]ConstitutionDef {
 // LoadConstitutionRegistry queries the database and populates the in-memory
 // cache. When the table is empty the built-in defaults are used.
 func LoadConstitutionRegistry(db *sql.DB) error {
-	rows, err := db.Query(`SELECT key, name, COALESCE(effects::text,'{}') FROM constitution_dictionary ORDER BY key`)
+	// Empty-key sentinel rows exist only to keep the players.constitution FK
+	// satisfiable for the '' value; they must never surface in the registry.
+	rows, err := db.Query(`SELECT key, name, COALESCE(effects::text,'{}') FROM constitution_dictionary WHERE key <> '' ORDER BY key`)
 	if err != nil {
 		return err
 	}
