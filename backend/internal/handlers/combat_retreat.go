@@ -287,7 +287,7 @@ func Flee(c *gin.Context) {
 	enemyName := player.ActiveCombat.EnemyName
 	var logMsg string
 
-	isExploration := player.CurrentRegion != HubRegionID && player.ActiveCombat.CombatMode == "real"
+	isExploration := player.CurrentRegion != HubRegionID && player.ActiveCombat.CombatMode != "virtual"
 
 	if isExploration {
 		maxHP := gamefx.EffectiveMaxHP(&player)

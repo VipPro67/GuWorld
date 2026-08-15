@@ -734,6 +734,11 @@ func MovePlayer(c *gin.Context) {
 
 	cleanupExpiredClearedCells(&player, clearedCellCooldown)
 
+	if player.HP <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang trong trạng thái trọng thương, không thể tiếp tục di chuyển!"})
+		return
+	}
+
 	if player.ActiveCombat != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đang trong trạng thái chiến đấu! Hãy kết thúc trận chiến trước."})
 		return
