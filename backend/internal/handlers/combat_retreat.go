@@ -287,7 +287,7 @@ func Flee(c *gin.Context) {
 	enemyName := player.ActiveCombat.EnemyName
 	var logMsg string
 
-	isExploration := player.CurrentRegion != HubRegionID && player.ActiveCombat.CombatMode != "virtual"
+	isExploration := player.ActiveCombat.CombatMode != "virtual" && player.ActiveCombat.EnemyTemplateID != "monster_heavenly_tribulation"
 
 	if isExploration {
 		maxHP := gamefx.EffectiveMaxHP(&player)
@@ -298,6 +298,16 @@ func Flee(c *gin.Context) {
 			player.HP = 1.0
 			player.CurrentRegion = HubRegionID
 			player.X, player.Y = hubEntryPoint()
+
+			// Add an explicit audit log before clearing temp_loot
+			auditlog.Log(db.DB, auditlog.Entry{
+				PlayerID:       &authID,
+				Action:         "combat.flee_death",
+				RequestSummary: fmt.Sprintf("Lost temp_loot: stones=%.0f gus=%d mats=%d", player.TempLoot.PrimevalStones, len(player.TempLoot.GuInventory), len(player.TempLoot.MaterialsInventory)),
+				IPAddress:      c.ClientIP(),
+				Success:        true,
+			})
+
 			player.TempLoot = models.TempLoot{
 				GuInventory:        models.GuInventory{},
 				MaterialsInventory: models.MaterialsInventory{},

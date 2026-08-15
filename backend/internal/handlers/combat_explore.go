@@ -59,6 +59,11 @@ func ExploreNode(c *gin.Context) {
 		return
 	}
 
+	if player.HP <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang trong trạng thái trọng thương, không thể khám phá!"})
+		return
+	}
+
 	if player.ActiveCombat != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang trong chiến đấu! Hãy dứt điểm kẻ địch trước."})
 		return

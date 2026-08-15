@@ -563,11 +563,11 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                             )}
                           </div>
                         )}
-                        {!isPlayerCell && otherPlayersOnCell.length === 0 && !isOutOfBounds && getCellIcon(cellData.cell_type, cellData.content)}
+                        {!isOutOfBounds && getCellIcon(cellData.cell_type, cellData.content)}
                       </div>
 
                       {/* Tiny text label */}
-                      {hasEntity && !isPlayerCell && otherPlayersOnCell.length === 0 && !isOutOfBounds && (
+                      {hasEntity && !isOutOfBounds && (
                         <span className="text-[7px] font-mono text-zinc-400 absolute bottom-1 px-1 truncate max-w-full text-center">
                           {getEntityName(cellData.cell_type, cellData.content)}
                         </span>
