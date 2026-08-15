@@ -376,7 +376,7 @@ export const SectView: React.FC = () => {
 
   // Unit cost (quỹ tông môn) for stocking an item — mirrors backend pkg/pricing
   const getStockUnitCost = (type: "gu" | "material" | "recipe", id: string): number => {
-    const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 100000, 250000, 600000, 1500000];
+    const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 200, 500, 1200, 2500];
     if (type === "gu") {
       const spec = guDictionary[id];
       const rank = spec?.rank || 1;
@@ -422,8 +422,8 @@ export const SectView: React.FC = () => {
   const playerDonatableGus = (player.gu_inventory || []).filter(g => !g.is_vital && !g.equipped && g.status !== "DEAD");
 
   // Pricing helpers matching backend/pkg/pricing
-  const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 100000, 250000, 600000, 1500000];
-  const itemRankBasePrice = [0, 1, 3, 6, 13, 25, 500, 1250, 3000, 7500];
+  const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 200, 500, 1200, 2500];
+  const itemRankBasePrice = [0, 1, 3, 6, 13, 25, 10, 25, 60, 150];
 
   const getItemBasePrice = (matId: string): number => {
     const spec = itemDictionary[matId];

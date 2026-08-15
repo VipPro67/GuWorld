@@ -186,6 +186,8 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | POST | `/trade/lock/:id` |
 | POST | `/trade/confirm/:id` |
 
+**Loại tiền theo rank (Thương Đội):** `/shop/list` trả thêm `rank` và `currency` cho mỗi món hàng; `/shop/buy` trừ và `/shop/sell` / `/shop/sell-bulk` trả theo loại tiền tương ứng rank của món (item/Gu/bí phương): **rank < 6 → Nguyên Thạch (`primeval_stones`), rank ≥ 6 → Tiên Nguyên Thạch (`immortal_stones`)**. Quy tắc tập trung ở `pkg/pricing.StoneTierByRank`.
+
 ## Chat/mail, soul and instances
 
 | Method | Path |

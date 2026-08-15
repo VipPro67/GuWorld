@@ -45,6 +45,11 @@ func Retreat(c *gin.Context) {
 
 	logMsg := "Đạo hữu trở về an toàn từ hành trình."
 
+	hadCombat := player.ActiveCombat != nil
+	originalStones := player.TempLoot.PrimevalStones
+	originalGus := len(player.TempLoot.GuInventory)
+	originalMats := len(player.TempLoot.MaterialsInventory)
+
 	if player.ActiveCombat != nil {
 		logMsg = fmt.Sprintf("Đạo hữu rút lui khỏi %s.", player.ActiveCombat.EnemyName)
 
@@ -244,7 +249,7 @@ func Retreat(c *gin.Context) {
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "combat.retreat",
-		RequestSummary: fmt.Sprintf("hadCombat=%v stones=%.0f gus=%d mats=%d", player.ActiveCombat != nil, player.TempLoot.PrimevalStones, len(player.TempLoot.GuInventory), len(player.TempLoot.MaterialsInventory)),
+		RequestSummary: fmt.Sprintf("hadCombat=%v stones=%.0f gus=%d mats=%d", hadCombat, originalStones, originalGus, originalMats),
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	responseWithPlayer(c, http.StatusOK, player, gin.H{

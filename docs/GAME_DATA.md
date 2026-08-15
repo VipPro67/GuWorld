@@ -448,3 +448,25 @@ Indexes: `idx_player_pets_player_id`, `idx_player_pets_player_id_template`.
 - Độ no cộng thêm lấy từ `item_dictionary.effects.hunger` (data-driven).
 - **Quy ước dữ liệu:** mọi item loại `Food` có `hunger = rank × 10` (rank 1 = +10 ... rank 9 = +90), cập nhật qua `backend/cmd/server/data/Item.csv` → Import bảng "Vật phẩm". Backend fallback cùng công thức `rank × 10` nếu effects chưa có `hunger`.
 - Item được tiêu hao từ bucket `consumables` hoặc `materials` trong `player_inventory_items`.
+
+### Giá tiền theo rank (Thương Đội)
+
+Bảng `caravan_shop_items` chỉ lưu `price` (số lượng, không lưu loại tiền). Loại tiền được suy ra từ **rank** của món hàng qua `pkg/pricing.StoneTierByRank`:
+
+- **rank < 6** → Nguyên Thạch (`primeval_stones`)
+- **rank ≥ 6** → Tiên Nguyên Thạch (`immortal_stones`)
+
+Áp dụng cho cả **item** (`item_dictionary.rank`), **cổ trùng** (`gu_dictionary.rank`, lấy variant rank thấp nhất như `models.GetGuAny`) và **bí phương / công thức** (`refining_recipes.target_rank`):
+
+- `/api/shop/list` trả thêm `rank` + `currency` mỗi món.
+- `/api/shop/buy` trừ đúng balance theo `currency`.
+- `/api/shop/sell` và `/api/shop/sell-bulk` trả về đúng loại tiền theo rank món bán (bí phương dùng `target_rank`).
+
+**`base_price` rank ≥ 6 là Tiên Nguyên Thạch** — bảng giá mặc định (fallback trong `pkg/pricing/pricing.go`, dùng khi CSV không ghi `base_price`):
+
+| Rank | 6 | 7 | 8 | 9 |
+| --- | ---: | ---: | ---: | ---: |
+| Cổ trùng | 200 | 500 | 1.200 | 2.500 |
+| Vật phẩm | 10 | 25 | 60 | 150 |
+
+Ví dụ bán-lại cho Thương Đội (10% `base_price`): Cổ rank 9 = 250 Tiên Nguyên Thạch; item rank 6 = 1 Tiên Nguyên Thạch.

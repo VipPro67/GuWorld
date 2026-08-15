@@ -28,36 +28,54 @@ const (
 	RecipeRankDivisor = 10
 )
 
-// ---- Base price tables -----------------------------------------------------
+// ---- Currency tiers --------------------------------------------------------
 
-// guRankBasePrice maps Gu rank (1-9) to base price in Primeval Stones.
-// Index 0 unused; index i = rank i.
-var guRankBasePrice = [10]int{
-	0,       // unused
-	200,     // Rank 1 - Nhat Chuyen
-	500,     // Rank 2 - Nhi Chuyen
-	1200,    // Rank 3 - Tam Chuyen
-	2500,    // Rank 4 - Tu Chuyen
-	5000,    // Rank 5 - Ngu Chuyen
-	100000,  // Rank 6 - Luc Chuyen (Tien Co)
-	250000,  // Rank 7 - That Chuyen
-	600000,  // Rank 8 - Bat Chuyen
-	1500000, // Rank 9 - Cuu Chuyen
+// StoneTierByRank returns the currency tier used to price an entity (item, Gu,
+// recipe) of the given rank:
+//
+//	rank < 6 → "primeval" (Nguyên Thạch)
+//	rank >= 6 → "immortal" (Tiên Nguyên Thạch)
+func StoneTierByRank(rank int) string {
+	if rank >= 6 {
+		return "immortal"
+	}
+	return "primeval"
 }
 
-// itemRankBasePrice maps Item rank (1-9) to base price in Primeval Stones.
+// ---- Base price tables -----------------------------------------------------
+
+// guRankBasePrice maps Gu rank (1-9) to base price.
+// Ranks 1-5 are in Primeval Stones (Nguyên Thạch); ranks 6-9 are Tiên Cổ and
+// are in Immortal Stones (Tiên Nguyên Thạch) - see StoneTierByRank.
+// Index 0 unused; index i = rank i.
+var guRankBasePrice = [10]int{
+	0,    // unused
+	200,  // Rank 1 - Nhat Chuyen
+	500,  // Rank 2 - Nhi Chuyen
+	1200, // Rank 3 - Tam Chuyen
+	2500, // Rank 4 - Tu Chuyen
+	5000, // Rank 5 - Ngu Chuyen
+	200,  // Rank 6 - Luc Chuyen (Tien Co, Immortal Stones)
+	500,  // Rank 7 - That Chuyen
+	1200, // Rank 8 - Bat Chuyen
+	2500, // Rank 9 - Cuu Chuyen
+}
+
+// itemRankBasePrice maps Item rank (1-9) to base price.
+// Ranks 1-5 are in Primeval Stones (Nguyên Thạch); ranks 6-9 are in Immortal
+// Stones (Tiên Nguyên Thạch) - see StoneTierByRank.
 // Rank 1 = 1, scales proportionally to the Gu curve (Gu / 200).
 var itemRankBasePrice = [10]int{
-	0,    // unused
-	1,    // Rank 1
-	3,    // Rank 2
-	6,    // Rank 3
-	13,   // Rank 4
-	25,   // Rank 5
-	500,  // Rank 6
-	1250, // Rank 7
-	3000, // Rank 8
-	7500, // Rank 9
+	0,   // unused
+	1,   // Rank 1
+	3,   // Rank 2
+	6,   // Rank 3
+	13,  // Rank 4
+	25,  // Rank 5
+	10,  // Rank 6
+	25,  // Rank 7
+	60,  // Rank 8
+	150, // Rank 9
 }
 
 // ---- Base price helpers ----------------------------------------------------

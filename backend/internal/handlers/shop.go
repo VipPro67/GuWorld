@@ -24,9 +24,29 @@ type ShopItem struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	Type        string `json:"type"` // "Gu", "Material", or "Consumable"
+	Type        string `json:"type"` // "Gu", "Material", "Recipe" or "Consumable"
 	Price       int    `json:"price"`
-	Stock       int    `json:"stock"` // -1 for unlimited
+	Rank        int    `json:"rank"`
+	Currency    string `json:"currency"` // "primeval" (rank < 6) | "immortal" (rank >= 6)
+	Stock       int    `json:"stock"`    // -1 for unlimited
+}
+
+// shopCatalogRankExpr resolves a single rank for a polymorphic shop item:
+// items use item_dictionary.rank, Gus use their lowest-rank variant
+// (consistent with models.GetGuAny), recipes use refining_recipes.target_rank.
+const shopCatalogRankExpr = `COALESCE(i.rank, g.rank, r.target_rank, 1)`
+
+// shopCatalogGuJoin constrains the Gu join to the lowest-rank variant so
+// multi-rank Gus never produce duplicate catalog rows.
+const shopCatalogGuJoin = `AND g.rank = (SELECT MIN(g2.rank) FROM gu_dictionary g2 WHERE g2.id = g.id)`
+
+// currencyLabel returns the Vietnamese name for the stone currency tier of an
+// entity with the given rank.
+func currencyLabel(rank int) string {
+	if pricing.StoneTierByRank(rank) == "immortal" {
+		return "Tiên Nguyên Thạch"
+	}
+	return "Nguyên Thạch"
 }
 
 func loadCaravanShopCatalog() ([]ShopItem, error) {
@@ -35,10 +55,10 @@ func loadCaravanShopCatalog() ([]ShopItem, error) {
 		       COALESCE(i.name, g.name, 'Công thức ' || rg.name, c.id) AS name, 
 		       COALESCE(i.description, g.description, '') AS description,
 		       CASE WHEN r.target_gu_id IS NOT NULL THEN 'Recipe' ELSE COALESCE(i.item_type, 'Gu') END AS type, 
-		       c.price, c.stock, c.is_default
+		       c.price, ` + shopCatalogRankExpr + ` AS rank, c.stock, c.is_default
 		FROM caravan_shop_items c
 		LEFT JOIN item_dictionary i ON c.id = i.id
-		LEFT JOIN gu_dictionary g ON c.id = g.id
+		LEFT JOIN gu_dictionary g ON c.id = g.id ` + shopCatalogGuJoin + `
 		LEFT JOIN refining_recipes r ON c.id = ('recipe_' || r.target_gu_id || '_' || r.target_rank::text || '_' || r.variant::text)
 		LEFT JOIN gu_dictionary rg ON r.target_gu_id = rg.id
 		ORDER BY c.sort_order ASC, c.id ASC
@@ -52,9 +72,10 @@ func loadCaravanShopCatalog() ([]ShopItem, error) {
 	for rows.Next() {
 		var item ShopItem
 		var isDefault bool
-		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.Type, &item.Price, &item.Stock, &isDefault); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.Type, &item.Price, &item.Rank, &item.Stock, &isDefault); err != nil {
 			return nil, err
 		}
+		item.Currency = pricing.StoneTierByRank(item.Rank)
 
 		if isDefault {
 			items = append(items, item)
@@ -75,17 +96,18 @@ func findCaravanShopItem(itemID string) (*ShopItem, error) {
 		       COALESCE(i.name, g.name, 'Công thức ' || rg.name, c.id) AS name, 
 		       COALESCE(i.description, g.description, '') AS description,
 		       CASE WHEN r.target_gu_id IS NOT NULL THEN 'Recipe' ELSE COALESCE(i.item_type, 'Gu') END AS type, 
-		       c.price, c.stock
+		       c.price, ` + shopCatalogRankExpr + ` AS rank, c.stock
 		FROM caravan_shop_items c
 		LEFT JOIN item_dictionary i ON c.id = i.id
-		LEFT JOIN gu_dictionary g ON c.id = g.id
+		LEFT JOIN gu_dictionary g ON c.id = g.id ` + shopCatalogGuJoin + `
 		LEFT JOIN refining_recipes r ON c.id = ('recipe_' || r.target_gu_id || '_' || r.target_rank::text || '_' || r.variant::text)
 		LEFT JOIN gu_dictionary rg ON r.target_gu_id = rg.id
 		WHERE c.id = $1
-	`, itemID).Scan(&item.ID, &item.Name, &item.Description, &item.Type, &item.Price, &item.Stock)
+	`, itemID).Scan(&item.ID, &item.Name, &item.Description, &item.Type, &item.Price, &item.Rank, &item.Stock)
 	if err != nil {
 		return nil, err
 	}
+	item.Currency = pricing.StoneTierByRank(item.Rank)
 	return &item, nil
 }
 
@@ -185,9 +207,20 @@ func BuyShopItem(c *gin.Context) {
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	// 4. Validate Funds
+	currency := selectedItem.Currency
+	if currency != "immortal" {
+		currency = "primeval"
+	}
 	totalCost := float64(selectedItem.Price * req.Quantity)
-	if player.PrimevalStones < totalCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để giao dịch."})
+	currencyName := "Nguyên Thạch"
+	if currency == "immortal" {
+		currencyName = "Tiên Nguyên Thạch"
+		if player.ImmortalStones < totalCost {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ " + currencyName + " để giao dịch."})
+			return
+		}
+	} else if player.PrimevalStones < totalCost {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ " + currencyName + " để giao dịch."})
 		return
 	}
 
@@ -208,7 +241,11 @@ func BuyShopItem(c *gin.Context) {
 	}
 
 	// Deduct currency
-	player.PrimevalStones -= totalCost
+	if currency == "immortal" {
+		player.ImmortalStones -= totalCost
+	} else {
+		player.PrimevalStones -= totalCost
+	}
 
 	// 5. Add items to player inventory
 	switch selectedItem.Type {
@@ -263,10 +300,10 @@ func BuyShopItem(c *gin.Context) {
 	}
 	updateQuery := `
 		UPDATE players
-		SET primeval_stones = $1, human_qi = $2
-		WHERE id = $3
+		SET primeval_stones = $1, immortal_stones = $2, human_qi = $3
+		WHERE id = $4
 	`
-	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.HumanQi, player.ID)
+	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ImmortalStones, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state"})
 		return
@@ -281,7 +318,7 @@ func BuyShopItem(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "shop.buy", EntityType: "shop_item",
 		EntityID:       selectedItem.ID,
-		RequestSummary: fmt.Sprintf("%s x%d | %.0f Nguyên Thạch", selectedItem.Name, req.Quantity, totalCost),
+		RequestSummary: fmt.Sprintf("%s x%d | %.0f %s", selectedItem.Name, req.Quantity, totalCost, currencyName),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
@@ -325,6 +362,7 @@ func SellShopItem(c *gin.Context) {
 	}
 
 	totalGain := 0.0
+	sellRank := 1
 	var removedIDs []string
 	if req.ItemType == "Material" || req.ItemType == "Consumable" {
 		cat := "materials"
@@ -341,9 +379,11 @@ func SellShopItem(c *gin.Context) {
 		var unitSellPrice int
 		if shopItem, err := findCaravanShopItem(req.ItemID); err == nil {
 			unitSellPrice = pricing.SellPrice(shopItem.Price)
+			sellRank = shopItem.Rank
 		} else {
 			var dbBasePrice, rank int
 			_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, req.ItemID).Scan(&dbBasePrice, &rank)
+			sellRank = rank
 			unitSellPrice = pricing.SellPrice(pricing.ItemBasePrice(dbBasePrice, rank))
 		}
 		totalGain = float64(unitSellPrice * req.Quantity)
@@ -367,9 +407,11 @@ func SellShopItem(c *gin.Context) {
 		var unitSellPrice int
 		if shopItem, err := findCaravanShopItem(req.ItemID); err == nil {
 			unitSellPrice = pricing.SellPrice(shopItem.Price)
+			sellRank = shopItem.Rank
 		} else {
 			var dbBasePrice, rank int
-			_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1`, req.ItemID).Scan(&dbBasePrice, &rank)
+			_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1 ORDER BY rank ASC LIMIT 1`, req.ItemID).Scan(&dbBasePrice, &rank)
+			sellRank = rank
 			unitSellPrice = pricing.SellPrice(pricing.GuBasePrice(dbBasePrice, rank))
 		}
 		totalGain = float64(unitSellPrice * req.Quantity)
@@ -378,7 +420,12 @@ func SellShopItem(c *gin.Context) {
 		return
 	}
 
-	player.PrimevalStones += totalGain
+	// Pay out in the currency tier matching the item's rank
+	if pricing.StoneTierByRank(sellRank) == "immortal" {
+		player.ImmortalStones += totalGain
+	} else {
+		player.PrimevalStones += totalGain
+	}
 	player.EquippedGus = []string{}
 	for _, gu := range player.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" {
@@ -392,8 +439,12 @@ func SellShopItem(c *gin.Context) {
 			return
 		}
 	}
-	_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, equipped_gus=$2, human_qi=$3 WHERE id=$4`,
-		player.PrimevalStones, player.EquippedGus, player.HumanQi, player.ID)
+	sellCurrencyName := "Nguyên Thạch"
+	if pricing.StoneTierByRank(sellRank) == "immortal" {
+		sellCurrencyName = "Tiên Nguyên Thạch"
+	}
+	_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, immortal_stones=$2, equipped_gus=$3, human_qi=$4 WHERE id=$5`,
+		player.PrimevalStones, player.ImmortalStones, player.EquippedGus, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save sell transaction"})
 		return
@@ -418,11 +469,11 @@ func SellShopItem(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "shop.sell", EntityType: "shop_item",
 		EntityID:       req.ItemID,
-		RequestSummary: fmt.Sprintf("%s x%d | nhận %.0f Nguyên Thạch", itemName, req.Quantity, totalGain),
+		RequestSummary: fmt.Sprintf("%s x%d | nhận %.0f %s", itemName, req.Quantity, totalGain, sellCurrencyName),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công, nhận Nguyên Thạch! Nhân Khí +%.0f.", qiGained)})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công, nhận %s! Nhân Khí +%.0f.", sellCurrencyName, qiGained)})
 }
 
 type SellShopItemInfo struct {
@@ -474,10 +525,19 @@ func SellShopItemsBulk(c *gin.Context) {
 		return
 	}
 
-	totalGain := 0.0
+	totalGainPrimeval := 0.0
+	totalGainImmortal := 0.0
 	guSold := false
 	var removedIDs []string
 	var auditSummaries []string
+
+	addGain := func(sellRank int, gain float64) {
+		if pricing.StoneTierByRank(sellRank) == "immortal" {
+			totalGainImmortal += gain
+		} else {
+			totalGainPrimeval += gain
+		}
+	}
 
 	for _, item := range req.Items {
 		if item.ItemType == "Material" || item.ItemType == "Consumable" {
@@ -493,22 +553,25 @@ func SellShopItemsBulk(c *gin.Context) {
 			InventorySvc.RemoveItem(tx, player.ID.String(), item.ItemID, cat, item.Quantity)
 
 			var unitSellPrice int
+			sellRank := 1
 			if shopItem, err := findCaravanShopItem(item.ItemID); err == nil {
 				unitSellPrice = pricing.SellPrice(shopItem.Price)
+				sellRank = shopItem.Rank
 			} else {
 				var dbBasePrice, rank int
 				_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, item.ItemID).Scan(&dbBasePrice, &rank)
+				sellRank = rank
 				unitSellPrice = pricing.SellPrice(pricing.ItemBasePrice(dbBasePrice, rank))
 			}
 			gain := float64(unitSellPrice * item.Quantity)
-			totalGain += gain
+			addGain(sellRank, gain)
 
 			var name string
 			_ = db.DB.QueryRow(`SELECT name FROM item_dictionary WHERE id = $1`, item.ItemID).Scan(&name)
 			if name == "" {
 				name = item.ItemID
 			}
-			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%.0f)", name, item.Quantity, gain))
+			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%.0f %s)", name, item.Quantity, gain, currencyLabel(sellRank)))
 
 		} else if item.ItemType == "Gu" {
 			removed := 0
@@ -529,15 +592,18 @@ func SellShopItemsBulk(c *gin.Context) {
 			guSold = true
 
 			var unitSellPrice int
+			sellRank := 1
 			if shopItem, err := findCaravanShopItem(item.ItemID); err == nil {
 				unitSellPrice = pricing.SellPrice(shopItem.Price)
+				sellRank = shopItem.Rank
 			} else {
 				var dbBasePrice, rank int
-				_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1`, item.ItemID).Scan(&dbBasePrice, &rank)
+				_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1 ORDER BY rank ASC LIMIT 1`, item.ItemID).Scan(&dbBasePrice, &rank)
+				sellRank = rank
 				unitSellPrice = pricing.SellPrice(pricing.GuBasePrice(dbBasePrice, rank))
 			}
 			gain := float64(unitSellPrice * item.Quantity)
-			totalGain += gain
+			addGain(sellRank, gain)
 
 			var name string
 			if spec, ok := models.GetGuAny(item.ItemID); ok {
@@ -546,7 +612,7 @@ func SellShopItemsBulk(c *gin.Context) {
 			if name == "" {
 				name = item.ItemID
 			}
-			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%.0f)", name, item.Quantity, gain))
+			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%.0f %s)", name, item.Quantity, gain, currencyLabel(sellRank)))
 		} else if item.ItemType == "Recipe" {
 			recipeToSell, err := RecipeSvc.Get(tx, player.ID.String(), item.ItemID)
 			if err != nil || recipeToSell == nil {
@@ -565,17 +631,18 @@ func SellShopItemsBulk(c *gin.Context) {
 
 			unitSellPrice := pricing.RecipeSellPrice(targetRank)
 			gain := float64(unitSellPrice * item.Quantity)
-			totalGain += gain
+			addGain(targetRank, gain)
 
 			name := fmt.Sprintf("Bí phương (%s)", item.ItemID)
-			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%.0f)", name, item.Quantity, gain))
+			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%.0f %s)", name, item.Quantity, gain, currencyLabel(targetRank)))
 		} else {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "item_type không hợp lệ (phải là Gu, Material, hoặc Recipe)"})
 			return
 		}
 	}
 
-	player.PrimevalStones += totalGain
+	player.PrimevalStones += totalGainPrimeval
+	player.ImmortalStones += totalGainImmortal
 
 	player.EquippedGus = []string{}
 	for _, gu := range player.GuInventory {
@@ -593,8 +660,8 @@ func SellShopItemsBulk(c *gin.Context) {
 		}
 	}
 
-	_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, equipped_gus=$2, human_qi=$3 WHERE id=$4`,
-		player.PrimevalStones, player.EquippedGus, player.HumanQi, player.ID)
+	_, err = tx.Exec(`UPDATE players SET primeval_stones=$1, immortal_stones=$2, equipped_gus=$3, human_qi=$4 WHERE id=$5`,
+		player.PrimevalStones, player.ImmortalStones, player.EquippedGus, player.HumanQi, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save sell transaction"})
 		return
@@ -609,13 +676,22 @@ func SellShopItemsBulk(c *gin.Context) {
 		summaryStr = summaryStr[:247] + "..."
 	}
 
+	gainSummary := fmt.Sprintf("+%.0f Nguyên Thạch", totalGainPrimeval)
+	if totalGainImmortal > 0 {
+		if totalGainPrimeval > 0 {
+			gainSummary = fmt.Sprintf("+%.0f Nguyên Thạch và +%.0f Tiên Nguyên Thạch", totalGainPrimeval, totalGainImmortal)
+		} else {
+			gainSummary = fmt.Sprintf("+%.0f Tiên Nguyên Thạch", totalGainImmortal)
+		}
+	}
+
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "shop.sell_bulk", EntityType: "shop_item",
 		EntityID:       "bulk",
-		RequestSummary: fmt.Sprintf("Bán nhiều: %s | nhận %.0f Nguyên Thạch", summaryStr, totalGain),
+		RequestSummary: fmt.Sprintf("Bán nhiều: %s | nhận %s", summaryStr, gainSummary),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
-	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công %d loại vật phẩm, nhận +%.0f Nguyên Thạch! Nhân Khí +%.0f.", len(req.Items), totalGain, qiGained)})
+	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công %d loại vật phẩm, nhận %s! Nhân Khí +%.0f.", len(req.Items), gainSummary, qiGained)})
 }

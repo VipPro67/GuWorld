@@ -13,11 +13,13 @@ Bảng gốc do người chơi/thiết kế cung cấp (tương ứng 9 rank):
 | Sức mạnh quái `P` | `P(rank)` | 1 | 2 | 5 | 20 | 100 | 1.000 | 10.000 | 100.000 | 10.000.000 |
 | Chi phí năng lượng `E` (Phàm) | `E = P` | 1 | 2 | 5 | 20 | 100 | — | — | — | — |
 | Chi phí năng lượng `E` (Tiên) | `100^(rank-5)` | — | — | — | — | — | 10 | 10 | 10 | 10|
-| Giá base | theo bảng | 200 | 500 | 1.200 | 2.500 | 5.000 | 100000 | 250000 | 600000 | 1500000 |
+| Giá base | theo bảng | 200 | 500 | 1.200 | 2.500 | 5.000 | 200\* | 500\* | 1.200\* | 2.500\* |
 
 Ngưỡng Tiên cổ: `immortalRankThreshold = 6` (rank ≥ 6 phải là Tiên Cổ, `is_immortal = true`).
 
-**Giá Item theo rank** — bắt đầu rank 1 = 1, scale tỉ lệ như Cổ (≈ Gu/200): `1, 3, 6, 13, 25, 500, 1.250, 3.000, 7.500` cho rank 1–9 (item rank 0 quy về rank 1 = 1). Fallback trong `pkg/pricing/pricing.go` và mảng cứng frontend (`CaravanShop.tsx`, `SectView.tsx`) phải khớp 2 bảng trên.
+\* **Rank 6–9 tính bằng Tiên Nguyên Thạch (immortal stones)** — xem `pkg/pricing.StoneTierByRank`; rank 1–5 tính bằng Nguyên Thạch (primeval stones). Đồng bộ ở `pkg/pricing/pricing.go`, `Gu.csv`/`Item.csv` (`base_price`) và mảng cứng frontend (`CaravanShop.tsx`, `SectView.tsx`).
+
+**Giá Item theo rank** — bắt đầu rank 1 = 1, scale tỉ lệ như Cổ (≈ Gu/200): `1, 3, 6, 13, 25, 10, 25, 60, 150` cho rank 1–9 (item rank 0 quy về rank 1 = 1; **rank 6–9 tính bằng Tiên Nguyên Thạch**). Fallback trong `pkg/pricing/pricing.go` và mảng cứng frontend (`CaravanShop.tsx`, `SectView.tsx`) phải khớp 2 bảng trên.
 
 **hunger_rate theo passive** — cổ **có thức ăn** (`food_types` không rỗng): `hunger_rate = 6` nếu `effects.passive` không rỗng, ngược lại `3`. Cổ **không thức ăn**: `hunger_rate = 0` (không đói).
 
@@ -45,10 +47,10 @@ Mỗi thuộc tính hiệu ứng có một anchor, các cổ trùng theo vai tr�
 | 3 | 5 | 125 | 100 | 75 | 5 | 25 | 50 | 5 | 5 | 1.200 |
 | 4 | 20 | 500 | 400 | 300 | 20 | 100 | 200 | 20 | 20 | 2.500 |
 | 5 | 100 | 2.500 | 2.000 | 1.500 | 100 | 500 | 1.000 | 100 | 100 | 5.000 |
-| 6 | 1.000 | 25.000 | 20.000 | 15.000 | 1.000 | 5.000 | 10.000 | 1.000 | 100 | 100.000 |
-| 7 | 10.000 | 250.000 | 200.000 | 150.000 | 10.000 | 50.000 | 100.000 | 10.000 | 10.000 | 250.000 |
-| 8 | 100.000 | 2.500.000 | 2.000.000 | 1.500.000 | 100.000 | 500.000 | 1.000.000 | 100.000 | 1.000.000 | 600.000 |
-| 9 | 10.000.000 | 250.000.000 | 200.000.000 | 150.000.000 | 10.000.000 | 50.000.000 | 100.000.000 | 10.000.000 | 100.000.000 | 1.500.000 |
+| 6 | 1.000 | 25.000 | 20.000 | 15.000 | 1.000 | 5.000 | 10.000 | 1.000 | 100 | 200\* |
+| 7 | 10.000 | 250.000 | 200.000 | 150.000 | 10.000 | 50.000 | 100.000 | 10.000 | 10.000 | 500\* |
+| 8 | 100.000 | 2.500.000 | 2.000.000 | 1.500.000 | 100.000 | 500.000 | 1.000.000 | 100.000 | 1.000.000 | 1.200\* |
+| 9 | 10.000.000 | 250.000.000 | 200.000.000 | 150.000.000 | 10.000.000 | 50.000.000 | 100.000.000 | 10.000.000 | 100.000.000 | 2.500\* |
 
 > Ví dụ đối chiếu thực tế: `GU_DIAMOND_THOUGHT` (R6) `damage_flat=25.000`, `GU_FLYING_SWORD` (R7) `damage_flat=250.000`, `GU_BLOOD_DEITY` (R9) `damage_flat=250.000.000` — khớp chuẩn `25×P`. `GU_MYRIAD_SELF` (R7) `damage_flat` dùng `passive.stat_base_attack=10.000` vì phân thân nhân theo `BaseAttack` (`summon_phantom` → `PhantomDamageScale`).
 

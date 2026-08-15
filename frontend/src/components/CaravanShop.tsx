@@ -12,8 +12,17 @@ interface ShopItem {
   description: string;
   type: string;
   price: number;
+  rank?: number;
+  currency?: string; // "primeval" (rank < 6) | "immortal" (rank >= 6)
   stock: number;
 }
+
+type StoneTier = "primeval" | "immortal";
+
+const stoneTier = (rank: number): StoneTier => (rank >= 6 ? "immortal" : "primeval");
+
+const currencyLabel = (tier: StoneTier): string =>
+  tier === "immortal" ? "Tiên Nguyên Thạch" : "Nguyên Thạch";
 
 interface CaravanShopProps {
   player: Player;
@@ -89,8 +98,13 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
 
   const sellBackRatio = 0.10;
 
-  const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 100000, 250000, 600000, 1500000];
-  const itemRankBasePrice = [0, 1, 3, 6, 13, 25, 500, 1250, 3000, 7500];
+  const getBalance = (tier: StoneTier): number =>
+    tier === "immortal" ? (player.immortal_stones || 0) : player.primeval_stones;
+
+  const buyTier: StoneTier = selectedBuyItem?.currency === "immortal" ? "immortal" : "primeval";
+
+  const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 200, 500, 1200, 2500];
+  const itemRankBasePrice = [0, 1, 3, 6, 13, 25, 10, 25, 60, 150];
 
   const getGuBasePrice = (guId: string): number => {
     const spec = guDictionary[guId];
@@ -128,6 +142,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
     .filter(([, qty]) => qty > 0)
     .map(([itemId, qty]) => {
       const spec = itemDictionary[itemId];
+      const rank = spec?.rank || 1;
       return {
         id: itemId,
         name: spec?.name || itemId,
@@ -135,7 +150,8 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
         type: "Material" as const,
         owned: qty,
         price: getItemSellPrice(itemId, "Material"),
-        rank: spec?.rank || 1,
+        rank,
+        currency: stoneTier(rank),
         paths: spec?.path ? [spec.path] : [],
       };
     });
@@ -149,6 +165,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
       }, {} as Record<string, number>)
   ).map(([guId, count]) => {
     const spec = guDictionary[guId];
+    const rank = spec?.rank || 1;
     return {
       id: guId,
       name: spec?.name || guId,
@@ -156,7 +173,8 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
       type: "Gu" as const,
       owned: count,
       price: getItemSellPrice(guId, "Gu"),
-      rank: spec?.rank || 1,
+      rank,
+      currency: stoneTier(rank),
       paths: spec?.path || [],
     };
   });
@@ -173,6 +191,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
       owned: 1, // Recipe is singular
       price: Math.max(1, Math.floor(getGuBasePrice(targetGuID) * sellBackRatio)),
       rank: rank,
+      currency: stoneTier(rank),
       paths: [] as string[],
     };
   });
@@ -195,8 +214,9 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
     }
 
     const totalCost = selectedBuyItem.price * buyQuantity;
-    if (player.primeval_stones < totalCost) {
-      setErrorMessage("Không đủ Nguyên Thạch để thực hiện giao dịch này.");
+    const balance = buyTier === "immortal" ? (player.immortal_stones || 0) : player.primeval_stones;
+    if (balance < totalCost) {
+      setErrorMessage(`Không đủ ${currencyLabel(buyTier)} để thực hiện giao dịch này.`);
       return;
     }
 
@@ -371,7 +391,20 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
     });
   };
 
-  const totalBulkGain = Object.values(selectedSellItems).reduce((sum, item) => sum + (item.price * item.quantityToSell), 0);
+  const bulkGainByCurrency = Object.values(selectedSellItems).reduce<{ primeval: number; immortal: number }>(
+    (acc, item) => {
+      const tier = stoneTier(item.rank);
+      acc[tier] += item.price * item.quantityToSell;
+      return acc;
+    },
+    { primeval: 0, immortal: 0 }
+  );
+
+  const bulkGainSummary = bulkGainByCurrency.immortal > 0
+    ? (bulkGainByCurrency.primeval > 0
+        ? `+${bulkGainByCurrency.primeval.toLocaleString()} Nguyên Thạch và +${bulkGainByCurrency.immortal.toLocaleString()} Tiên Nguyên Thạch`
+        : `+${bulkGainByCurrency.immortal.toLocaleString()} Tiên Nguyên Thạch`)
+    : `+${bulkGainByCurrency.primeval.toLocaleString()} Nguyên Thạch`;
 
   const handleConfirmBulkSell = async () => {
     const items = Object.values(selectedSellItems).map(item => ({
@@ -388,7 +421,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
     if (success) {
       setSuccessMessage(`Đã thanh lý thành công ${items.length} loại vật phẩm!`);
       if (addToast) {
-        addToast(`Đã thanh lý thành công ${items.length} loại vật phẩm! Nhận về +${totalBulkGain.toLocaleString()} Nguyên Thạch.`, "success");
+        addToast(`Đã thanh lý thành công ${items.length} loại vật phẩm! Nhận về ${bulkGainSummary}.`, "success");
       }
       setSelectedSellItems({});
       setShowReviewDrawer(false);
@@ -639,6 +672,9 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                   <div className="flex items-center gap-3">
                     <span className="text-emerald-400 font-bold flex items-center gap-0.5">
                       +{selectedItem.price * selectedItem.quantityToSell}
+                      <span className="text-[9px] text-zinc-500 font-normal">
+                        {stoneTier(selectedItem.rank) === "immortal" ? "TNT" : "NT"}
+                      </span>
                     </span>
                     <button
                       type="button"
@@ -671,9 +707,19 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
             <div className="flex items-center gap-3">
               <div className="text-right">
                 <span className="text-[10px] text-zinc-500 font-mono block">Tổng thu hồi</span>
-                <span className="text-emerald-450 font-bold flex items-center justify-end gap-1 text-sm font-mono">
-                  <Coins className="w-4 h-4 text-emerald-500" />
-                  +{totalBulkGain.toLocaleString()}
+                <span className="text-emerald-450 font-bold flex flex-col items-end gap-1 text-sm font-mono">
+                  {bulkGainByCurrency.primeval > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Coins className="w-4 h-4 text-emerald-500" />
+                      +{bulkGainByCurrency.primeval.toLocaleString()} NT
+                    </span>
+                  )}
+                  {bulkGainByCurrency.immortal > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Sparkles className="w-4 h-4 text-violet-400" />
+                      +{bulkGainByCurrency.immortal.toLocaleString()} TNT
+                    </span>
+                  )}
                 </span>
               </div>
 
@@ -705,7 +751,10 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredBuyItems.map((item) => {
-              const canAfford = player.primeval_stones >= item.price;
+              const itemTier: StoneTier = item.currency === "immortal" ? "immortal" : "primeval";
+              const canAfford = itemTier === "immortal"
+                ? (player.immortal_stones || 0) >= item.price
+                : player.primeval_stones >= item.price;
               const ownedQty = item.type === "Gu"
                 ? (player.gu_inventory?.filter((g) => g.gu_id === item.id && g.status !== "DEAD").length || 0)
                 : (player.materials_inventory?.[item.id] || 0);
@@ -720,9 +769,12 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                       <span className="text-[9px] font-mono border border-zinc-800 px-2 py-0.5 rounded text-zinc-500 uppercase tracking-wider">
                         {item.type === "Gu" ? "Cổ Trùng" : item.type === "Material" ? "Nguyên Liệu" : "Tiêu Hao"}
                       </span>
-                      <span className="text-xs font-mono font-bold text-amber-400 flex items-center gap-1">
-                        <Coins className="w-3.5 h-3.5 text-amber-500" />
+                      <span className={`text-xs font-mono font-bold flex items-center gap-1 ${itemTier === "immortal" ? "text-violet-400" : "text-amber-400"}`}>
+                        {itemTier === "immortal"
+                          ? <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+                          : <Coins className="w-3.5 h-3.5 text-amber-500" />}
                         {item.price}
+                        <span className="text-[9px] text-zinc-500 font-normal">{itemTier === "immortal" ? "Tiên Nguyên Thạch" : ""}</span>
                       </span>
                     </div>
                     <h4 className="text-base font-bold text-zinc-200 font-serif group-hover:text-amber-400 transition-colors">
@@ -796,8 +848,10 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                         Sở hữu: {item.owned}x
                       </span>
                       <span className="text-xs font-mono font-bold text-emerald-400 flex items-center gap-1">
-                        <Coins className="w-3.5 h-3.5 text-emerald-500" />
-                        +{item.price} <span className="text-[10px] text-zinc-500 font-normal">/ cái</span>
+                        {item.currency === "immortal"
+                          ? <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+                          : <Coins className="w-3.5 h-3.5 text-emerald-500" />}
+                        +{item.price} <span className="text-[10px] text-zinc-500 font-normal">/ cái {item.currency === "immortal" ? "TNT" : "NT"}</span>
                       </span>
                     </div>
 
@@ -832,8 +886,8 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                   <div className="border-t border-zinc-900/60 pt-3 flex items-center justify-between">
                     <span className="text-[10px] text-zinc-650 font-mono">
                       {isSelected
-                        ? `Trị giá chọn: ${item.price * selectedItem.quantityToSell} Nguyên Thạch`
-                        : `Tổng trị giá: ${item.price * item.owned} Nguyên Thạch`}
+                        ? `Trị giá chọn: ${item.price * selectedItem.quantityToSell} ${currencyLabel(stoneTier(item.rank))}`
+                        : `Tổng trị giá: ${item.price * item.owned} ${currencyLabel(stoneTier(item.rank))}`}
                     </span>
 
                     {/* Quantity controls or select button */}
@@ -906,8 +960,11 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
             <div className="bg-zinc-900/40 border border-zinc-850 rounded-xl p-3 space-y-1.5 text-xs font-mono">
               <div className="flex justify-between">
                 <span className="text-zinc-400">Đơn giá:</span>
-                <span className="text-amber-400 font-bold flex items-center gap-1">
-                  <Coins className="w-3.5 h-3.5" /> {selectedBuyItem.price} Nguyên Thạch
+                <span className={`font-bold flex items-center gap-1 ${buyTier === "immortal" ? "text-violet-400" : "text-amber-400"}`}>
+                  {buyTier === "immortal"
+                    ? <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+                    : <Coins className="w-3.5 h-3.5 text-amber-500" />}
+                  {selectedBuyItem.price} {currencyLabel(buyTier)}
                 </span>
               </div>
               <div className="flex justify-between border-t border-zinc-800/40 pt-1.5">
@@ -926,7 +983,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                 <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500 uppercase">
                   <span>Số lượng cần mua:</span>
                   <span>
-                    {selectedBuyItem.price > 0 && `(Có thể mua: ${Math.floor(player.primeval_stones / selectedBuyItem.price).toLocaleString()})`}
+                    {selectedBuyItem.price > 0 && `(Có thể mua: ${Math.floor(getBalance(buyTier) / selectedBuyItem.price).toLocaleString()})`}
                   </span>
                 </div>
                 <div className="flex items-center justify-between border border-zinc-850 rounded-xl bg-zinc-900/20 overflow-hidden px-1">
@@ -990,7 +1047,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      const affordable = selectedBuyItem.price > 0 ? Math.floor(player.primeval_stones / selectedBuyItem.price) : 999;
+                      const affordable = selectedBuyItem.price > 0 ? Math.floor(getBalance(buyTier) / selectedBuyItem.price) : 999;
                       const max = selectedBuyItem.stock > 0 ? Math.min(affordable, selectedBuyItem.stock) : affordable;
                       setBuyQuantity(Math.max(1, max));
                     }}
@@ -1009,9 +1066,11 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
             {/* Total Cost Display */}
             <div className="flex justify-between items-center pt-2 font-mono border-t border-dashed border-zinc-900 text-xs">
               <span className="text-zinc-400">Tổng thanh toán:</span>
-              <span className="text-amber-400 font-bold flex items-center gap-1 text-sm">
-                <Coins className="w-4 h-4 text-amber-500" />
-                {(selectedBuyItem.price * (buyQuantity || 0)).toLocaleString()} Nguyên Thạch
+              <span className={`font-bold flex items-center gap-1 text-sm ${buyTier === "immortal" ? "text-violet-400" : "text-amber-400"}`}>
+                {buyTier === "immortal"
+                  ? <Sparkles className="w-4 h-4 text-violet-400" />
+                  : <Coins className="w-4 h-4 text-amber-500" />}
+                {(selectedBuyItem.price * (buyQuantity || 0)).toLocaleString()} {currencyLabel(buyTier)}
               </span>
             </div>
 
