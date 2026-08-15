@@ -632,7 +632,13 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 
 				adj := ResolveCell(adjX, adjY)
 
-				if (adj.Type == "Monster" || adj.Type == "Boss") && rand.Intn(100) < 5 { // 5% chance
+				rank := 1
+				if adj.Rank > 0 {
+					rank = adj.Rank
+				}
+				ambushChance := 50 + (rank * 2) // Base 50% + 2% per rank (min 50%)
+
+				if (adj.Type == "Monster" || adj.Type == "Boss") && rand.Intn(100) < ambushChance {
 					combatTriggered = true
 
 					mon, ok := models.MonsterRegistry[adj.Content]
@@ -640,10 +646,6 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 						mon, _ = db.LoadMonsterTemplate(tx, adj.Content)
 					}
 					if mon.ID != "" {
-						rank := 1
-						if adj.Rank > 0 {
-							rank = adj.Rank
-						}
 						subRank := 1
 						if adj.SubRank > 0 {
 							subRank = adj.SubRank

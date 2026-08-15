@@ -4556,6 +4556,7 @@ func GoogleCallback(c *gin.Context) {
 			RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, needs_onboarding, race, gender, constitution, statuses
 		`
 
+		var activeCombatBytes []byte
 		hx, hy := hubEntryPoint()
 		err = tx.QueryRow(queryInsert, username, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, googleUser.Email, googleUser.ID, refCode, equippedGus, hx, hy).Scan(
 			&player.ID, &player.Username, &player.Rank, &player.SubRank,
@@ -4564,7 +4565,7 @@ func GoogleCallback(c *gin.Context) {
 			&player.WallProgress, &player.HumanQi, &player.NextTribulationTime,
 			&player.HP, &player.BaseHP, &player.BodyMods, &player.X, &player.Y,
 			&player.EquippedGus, &player.ClearedCells, &player.VisitedSubZones,
-			&player.CurrentRegion, &player.PathMasteries, &player.ActiveCombat,
+			&player.CurrentRegion, &player.PathMasteries, &activeCombatBytes,
 			&player.LastManaUpdate, &player.CreatedAt,
 			&player.Lifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
 			&player.Email, &player.GoogleID, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
@@ -4574,6 +4575,13 @@ func GoogleCallback(c *gin.Context) {
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create new player record: " + err.Error()})
 			return
+		}
+
+		if len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
+			var cs models.CombatState
+			if json.Unmarshal(activeCombatBytes, &cs) == nil {
+				player.ActiveCombat = &cs
+			}
 		}
 
 		// Persist starter Gus in the player_gu table (the gu_inventory column is gone).
