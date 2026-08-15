@@ -36,27 +36,26 @@ func GetFeedbacks(c *gin.Context) {
 	// Optional auth
 	authID, exists := middleware.GetPlayerID(c)
 	if !exists {
-		tokenStr, err := c.Cookie("gu_auth_token")
-		if err == nil && tokenStr != "" {
+		// Prefer the Authorization header (current token from localStorage);
+		// fall back to the cookie for clients that only send cookies.
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" {
+			parts := strings.Split(authHeader, " ")
+			if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
+				claims, err := auth.ValidateToken(parts[1])
+				if err == nil {
+					if parsedID, err := uuid.Parse(claims.PlayerID); err == nil {
+						authID = parsedID
+						exists = true
+					}
+				}
+			}
+		} else if tokenStr, err := c.Cookie("gu_auth_token"); err == nil && tokenStr != "" {
 			claims, err := auth.ValidateToken(tokenStr)
 			if err == nil {
 				if parsedID, err := uuid.Parse(claims.PlayerID); err == nil {
 					authID = parsedID
 					exists = true
-				}
-			}
-		} else {
-			authHeader := c.GetHeader("Authorization")
-			if authHeader != "" {
-				parts := strings.Split(authHeader, " ")
-				if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
-					claims, err := auth.ValidateToken(parts[1])
-					if err == nil {
-						if parsedID, err := uuid.Parse(claims.PlayerID); err == nil {
-							authID = parsedID
-							exists = true
-						}
-					}
 				}
 			}
 		}

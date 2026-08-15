@@ -61,28 +61,32 @@ func csrfProtection(c *gin.Context) {
 // AuthRequired is a Gin middleware that enforces authentication
 func AuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		usedCookie := true
-		tokenStr, err := c.Cookie("gu_auth_token")
-		if err != nil || tokenStr == "" {
-			usedCookie = false
+		usedCookie := false
+		tokenStr := ""
+		var err error
+		// Prefer the Authorization header: the frontend always sends the
+		// current token from localStorage there, while duplicate/stale cookies
+		// (e.g. after a DB reset) could otherwise shadow it via c.Cookie().
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" {
+			parts := strings.Split(authHeader, " ")
+			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header format must be: Bearer <token>"})
+				c.Abort()
+				return
+			}
+			tokenStr = parts[1]
+		} else {
 			// Try query param (for EventSource which cannot send headers)
 			tokenStr = c.Query("token")
 			if tokenStr == "" {
-				authHeader := c.GetHeader("Authorization")
-				if authHeader == "" {
+				tokenStr, err = c.Cookie("gu_auth_token")
+				if err != nil || tokenStr == "" {
 					c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication cookie or Authorization header required"})
 					c.Abort()
 					return
 				}
-
-				parts := strings.Split(authHeader, " ")
-				if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-					c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header format must be: Bearer <token>"})
-					c.Abort()
-					return
-				}
-
-				tokenStr = parts[1]
+				usedCookie = true
 			}
 		}
 		claims, err := auth.ValidateToken(tokenStr)
