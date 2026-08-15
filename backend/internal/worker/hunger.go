@@ -85,11 +85,12 @@ func findOnTickPlayers(db *sql.DB) []string {
 	return playerIDs
 }
 
-// applyOnTickEffects handles the rare ON_TICK effects (HOT_TICK,
-// GENERATE_STONES_TICK, GENERATE_IMMORTAL_STONES_TICK) for a single player's
-// equipped ACTIVE Gus. It only updates player counters (hp / stones), never
-// hunger or Gu state. MANA_REGEN_TICK is handled separately as an hourly rate
-// (see models.ManaRegenTickPerHour), so it is not applied here.
+// applyOnTickEffects handles the rare ON_TICK effects (GENERATE_STONES_TICK,
+// GENERATE_IMMORTAL_STONES_TICK) for a single player's equipped ACTIVE Gus. It
+// only updates player counters (stones), never hunger or Gu state.
+// MANA_REGEN_TICK is handled separately as an hourly rate (see
+// models.ManaRegenTickPerHour), so it is not applied here. HP regeneration is
+// handled by the lazy projected-status service, so HOT_TICK no longer heals.
 func applyOnTickEffects(db *sql.DB, playerID string) error {
 	tx, err := db.Begin()
 	if err != nil {
@@ -99,17 +100,15 @@ func applyOnTickEffects(db *sql.DB, playerID string) error {
 
 	var immortalStones float64
 	var primevalStones float64
-	var hp, baseHP float64
 	err = tx.QueryRow(`
-		SELECT primeval_stones, immortal_stones, hp, base_hp
+		SELECT primeval_stones, immortal_stones
 		FROM players WHERE id = $1`, playerID).Scan(
-		&primevalStones, &immortalStones, &hp, &baseHP)
+		&primevalStones, &immortalStones)
 	if err != nil {
 		return err
 	}
 
 	tickStones := 0.0
-	tickHP := 0.0
 	tickImmortalStones := 0.0
 
 	rows, err := tx.Query(`
@@ -143,12 +142,6 @@ func applyOnTickEffects(db *sql.DB, playerID string) error {
 				json.Unmarshal(mech.Params, &params)
 			}
 			switch mech.ActionCode {
-			case "HOT_TICK":
-				val, _ := params["value"].(float64)
-				if val <= 0 {
-					val = 5.0
-				}
-				tickHP += val
 			case "GENERATE_STONES_TICK":
 				val, _ := params["value"].(float64)
 				if val <= 0 {
@@ -165,12 +158,6 @@ func applyOnTickEffects(db *sql.DB, playerID string) error {
 		}
 	}
 
-	if tickHP > 0 {
-		hp += tickHP
-		if hp > baseHP {
-			hp = baseHP
-		}
-	}
 	if tickStones > 0 {
 		primevalStones += tickStones
 	}
@@ -178,12 +165,12 @@ func applyOnTickEffects(db *sql.DB, playerID string) error {
 		immortalStones += tickImmortalStones
 	}
 
-	if tickHP == 0 && tickStones == 0 && tickImmortalStones == 0 {
+	if tickStones == 0 && tickImmortalStones == 0 {
 		return tx.Rollback()
 	}
 
-	_, err = tx.Exec(`UPDATE players SET hp = $1, primeval_stones = $2, immortal_stones = $3 WHERE id = $4`,
-		hp, primevalStones, immortalStones, playerID)
+	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2 WHERE id = $3`,
+		primevalStones, immortalStones, playerID)
 	if err != nil {
 		return err
 	}

@@ -32,7 +32,6 @@ var ApplyItemEffects = map[string]ItemEffectHandler{
 	"lifespan_boost":         lifespanBoostEffect,
 	"open_mine_chest":        openMineChestEffect,
 	"heal_aperture":          healApertureEffect,
-	"regen_hp_out_of_combat": regenHPOutOfCombatEffect,
 	"increase_human_qi":      increaseHumanQi,
 }
 
@@ -84,17 +83,6 @@ func healApertureEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec)
 	}
 
 	return fmt.Sprintf("Đạo hữu sử dụng %s, khôi phục %.0f sinh lực Tiên Khiếu!", item.Name, val), nil
-}
-
-func regenHPOutOfCombatEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
-	val := item.Effects["regen_hp_out_of_combat"]
-	if val <= 0 {
-		return "", nil
-	}
-
-	// We'll just return success here and the main `UseItem` will handle Redis TTL or we can handle it here
-	// But `cache` package might cause circular dependency if imported? No, `handlers` imports `cache` in `marketplace.go`.
-	return fmt.Sprintf("Đạo hữu sử dụng %s, kích hoạt trạng thái Hồi Phục Sinh Lực trong 10 phút!", item.Name), nil
 }
 
 func increaseHumanQi(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {

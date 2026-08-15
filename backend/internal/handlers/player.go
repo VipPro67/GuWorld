@@ -20,7 +20,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
-	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -1977,110 +1976,6 @@ func setDefaultPlayerStatusFields(player *models.Player) {
 	}
 }
 
-// applyProjectedStatus computes mana regen, HP regen, lifespan decay, and stress decay.
-func applyProjectedStatus(player *models.Player, essenceProd int, now time.Time) (bool, bool) {
-	poolChanged := normalizeEnergyPool(player)
-	stressChanged := false
-
-	var regenRatePerHour float64
-	if player.Rank >= 6 {
-		subRank := player.SubRank
-		if subRank < 1 {
-			subRank = 1
-		}
-		if subRank > 4 {
-			subRank = 4
-		}
-		subRankFactor := 1.0 + float64(subRank-1)*0.15
-		regenRatePerHour = (float64(essenceProd) / 120.0) * subRankFactor
-	} else {
-		regenRatePerHour = energyRegenRatePerHour(player)
-	}
-
-	if player.Lifespan <= 0 {
-		regenRatePerHour = regenRatePerHour * 0.5
-	}
-
-	regenRatePerHour += models.ManaRegenTickPerHour(player.GuInventory, player.Rank)
-
-	player.ManaRegenRate = regenRatePerHour * (1.0 + gamefx.Get(player).ManaRegenBonus)
-
-	stats := CalculatePlayerStats(player)
-	healingStat := stats["healing"]
-	effMaxHP := player.BaseHP + stats["hp"]
-	regenHPPerHour := ((effMaxHP * 0.05) + healingStat) * (1.0 + gamefx.Get(player).HealingReceivedBonus)
-	player.HPRegenRate = regenHPPerHour
-
-	secondsPassed := now.Sub(player.LastManaUpdate).Seconds()
-	if secondsPassed > 0 {
-		subjectiveSeconds := secondsPassed * player.TimeSpeedMultiplier
-		earnedMana := (subjectiveSeconds / 3600.0) * regenRatePerHour * (1.0 + gamefx.Get(player).ManaRegenBonus)
-		effMaxMana := gamefx.EffectiveMaxMana(player)
-		newMana := player.CurrentMana + earnedMana
-		if newMana > effMaxMana {
-			newMana = effMaxMana
-		}
-		if newMana != player.CurrentMana {
-			player.CurrentMana = newMana
-			poolChanged = true
-		}
-
-		if player.HP > 0 && player.HP < effMaxHP {
-			earnedHP := (subjectiveSeconds / 3600.0) * regenHPPerHour
-			newHP := player.HP + earnedHP
-			if newHP > effMaxHP {
-				newHP = effMaxHP
-			}
-			if newHP != player.HP {
-				player.HP = newHP
-				poolChanged = true
-			}
-		}
-
-		yearsPassed := secondsPassed / 36000.0
-		player.Lifespan -= yearsPassed
-		if player.Lifespan < 0 {
-			player.Lifespan = 0
-		}
-		poolChanged = true
-	}
-
-	if player.ApertureStress > 0 && !player.LastCultivateTime.IsZero() {
-		elapsedHours := now.Sub(player.LastCultivateTime).Hours()
-		if elapsedHours > 0 {
-			decay := elapsedHours * 10.0
-			newStress := player.ApertureStress - decay
-			if newStress < 0 {
-				newStress = 0
-			}
-			if newStress != player.ApertureStress {
-				player.ApertureStress = newStress
-				poolChanged = true
-				stressChanged = true
-			}
-		}
-	}
-
-	return poolChanged, stressChanged
-}
-
-func applyImmortalApertureProjection(q playerQueryRower, player *models.Player) (int, bool) {
-	essenceProd := 10
-	if player.Rank < 6 {
-		return essenceProd, false
-	}
-
-	var timeRate float64
-	if err := q.QueryRow(`SELECT time_rate, essence_production_per_year FROM immortal_apertures WHERE player_id = $1`, player.ID).Scan(&timeRate, &essenceProd); err == nil && timeRate > 0 {
-		if player.TimeSpeedMultiplier != timeRate {
-			player.TimeSpeedMultiplier = timeRate
-			return essenceProd, true
-		}
-	}
-
-	return essenceProd, false
-}
-
 // projectPlayerStatusTx delegates to the service layer.
 func projectPlayerStatusTx(q playerQueryRower, id uuid.UUID) (models.Player, error) {
 	return PlayerSvc.ProjectStatus(q, id)
@@ -2257,7 +2152,6 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 	addSrc("attack", "base", "Cơ bản (Cấp bậc)", baseAttack, 1, 1)
 	addSrc("defense", "base", "Cơ bản (Cấp bậc)", baseDefense, 1, 1)
 	addSrc("speed", "base", "Cơ bản (Cấp bậc)", baseSpeed, 1, 1)
-	addSrc("healing", "base", "Cơ bản", 0, 1, 1)
 	addSrc("movement", "base", "Cơ bản", 1.0, 1, 1)
 	addSrc("investigation", "base", "Cơ bản", 1.0, 1, 1)
 	addSrc("storage", "base", "Cơ bản", 100.0, 1, 1)
@@ -2350,7 +2244,7 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 				addSrc("evasion", srcID, spec.Name, passive.Evasion, 1, 1)
 			}
 			if passive.CleansingPower > 0 {
-				addSrc("healing", srcID, spec.Name, passive.CleansingPower*15.0, 1, 1)
+				addSrc("cleansing_power", srcID, spec.Name, passive.CleansingPower, 1, 1)
 			}
 			if passive.Luck > 0 {
 				addSrc("luck", srcID, spec.Name, passive.Luck, 1, 1)
@@ -2363,7 +2257,6 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 		"attack":        0.0,
 		"defense":       0.0,
 		"speed":         0.0,
-		"healing":       0.0,
 		"movement":      0.0,
 		"investigation": 0.0,
 		"storage":       0.0,
@@ -3139,12 +3032,6 @@ func UseItem(c *gin.Context) {
 			if msg != "" {
 				messages = append(messages, msg)
 			}
-
-			// If it's a regen item, set Redis cache
-			if effectKey == "regen_hp_out_of_combat" {
-				redisKey := fmt.Sprintf("regen_buff:%s", player.ID.String())
-				cache.SetJSON(redisKey, item.ID, 10*time.Minute)
-			}
 		}
 	}
 
@@ -3241,7 +3128,6 @@ func UseItems(c *gin.Context) {
 	}
 
 	messages := []string{}
-	regenBuffs := make(map[string]string) // playerID -> itemID
 
 	for _, itemID := range req.ItemIDs {
 		item, ok := models.ItemRegistry[itemID]
@@ -3284,11 +3170,6 @@ func UseItems(c *gin.Context) {
 				}
 				if msg != "" {
 					itemMsg = append(itemMsg, msg)
-				}
-
-				// If it's a regen item, set Redis cache later
-				if effectKey == "regen_hp_out_of_combat" {
-					regenBuffs[player.ID.String()] = item.ID
 				}
 			}
 		}
@@ -3336,12 +3217,6 @@ func UseItems(c *gin.Context) {
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
-	}
-
-	// Apply redis regen buffs
-	for pID, itemID := range regenBuffs {
-		redisKey := fmt.Sprintf("regen_buff:%s", pID)
-		cache.SetJSON(redisKey, itemID, 10*time.Minute)
 	}
 
 	// Group/consolidate stats change and messages
@@ -4656,74 +4531,6 @@ func GoogleCallback(c *gin.Context) {
 	}
 
 	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
-}
-
-// TickRegen checks Redis for active regeneration buffs and heals the player
-func TickRegen(c *gin.Context) {
-	authID, exists := middleware.GetPlayerID(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-
-	redisKey := fmt.Sprintf("regen_buff:%s", authID.String())
-	var itemID string
-	err := cache.GetJSON(redisKey, &itemID)
-	if err != nil {
-		// Key not found or expired
-		c.JSON(http.StatusOK, gin.H{"regen_active": false})
-		return
-	}
-
-	itemSpec, ok := models.ItemRegistry[itemID]
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid item in regen buff"})
-		return
-	}
-
-	healVal := itemSpec.Effects["regen_hp_out_of_combat"]
-	// Divide by 10 since it's meant for a 10-minute duration with 1 tick per minute
-	tickHeal := healVal / 10.0
-	if tickHeal < 1.0 {
-		tickHeal = 1.0
-	}
-
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	}
-	defer tx.Rollback()
-
-	player, err := evaluateManaTx(tx, authID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
-		return
-	}
-
-	if player.HP >= player.BaseHP {
-		c.JSON(http.StatusOK, gin.H{"regen_active": true, "message": "HP đã đầy."})
-		return
-	}
-
-	player.HP += tickHeal
-	if player.HP > player.BaseHP {
-		player.HP = player.BaseHP
-	}
-
-	_, err = tx.Exec("UPDATE players SET hp = $1 WHERE id = $2", player.HP, player.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save HP"})
-		return
-	}
-
-	tx.Commit()
-	c.JSON(http.StatusOK, gin.H{
-		"regen_active": true,
-		"healed":       tickHeal,
-		"current_hp":   player.HP,
-		"max_hp":       player.BaseHP,
-	})
 }
 
 func aggregateChestSpecialMessages(specialMessages []string) []string {

@@ -436,7 +436,7 @@ export const Aperture: React.FC<ApertureProps> = ({
   // Calculate real-world hourly regen rates using TimeSpeedMultiplier
   const timeSpeedMultiplier = player.time_speed_multiplier || 1;
   const effectiveMultiplier = isImmortal ? timeSpeedMultiplier * (aperture?.time_rate ?? 10) : timeSpeedMultiplier;
-  const hpRegenRealHourly = (player.hp_regen_rate || 0) * timeSpeedMultiplier;
+  const hpRegenRealHourly = (player.hp_regen_rate || 0) * effectiveMultiplier;
   const manaRegenRealHourly = (player.mana_regen_rate || Number(regenRate)) * effectiveMultiplier;
 
   // Helper to format time remaining

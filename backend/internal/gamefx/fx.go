@@ -41,6 +41,9 @@ type Effects struct {
 	// HealingReceivedBonus is a percentage increase of healing the player
 	// receives (and HP regeneration).
 	HealingReceivedBonus float64 `json:"healing_received"`
+	// HPRegenBonus is a flat HP-per-hour bonus added to passive out-of-combat
+	// HP regeneration (before the HealingReceivedBonus multiplier).
+	HPRegenBonus float64 `json:"hp_regen"`
 	// MentalResistanceBonus is a percentage increase of resistance to
 	// control/mental effects.
 	MentalResistanceBonus float64 `json:"mental_resistance"`

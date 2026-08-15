@@ -281,6 +281,9 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 
 	player.ManaRegenRate = regenRatePerHour * (1.0 + gamefx.Get(player).ManaRegenBonus)
 
+	effMaxHP := gamefx.EffectiveMaxHP(player)
+	player.HPRegenRate = (effMaxHP*0.05 + gamefx.Get(player).HPRegenBonus) * (1.0 + gamefx.Get(player).HealingReceivedBonus)
+
 	secondsPassed := now.Sub(player.LastManaUpdate).Seconds()
 	if secondsPassed > 0 {
 		effectiveMultiplier := player.TimeSpeedMultiplier
@@ -299,10 +302,8 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 			poolChanged = true
 		}
 
-		effMaxHP := gamefx.EffectiveMaxHP(player)
 		if player.HP > 0 && player.HP < effMaxHP {
-			hpRegenPerHour := effMaxHP * 0.05 * (1.0 + gamefx.Get(player).HealingReceivedBonus)
-			earnedHP := (secondsPassed * player.TimeSpeedMultiplier / 3600.0) * hpRegenPerHour
+			earnedHP := (subjectiveSeconds / 3600.0) * player.HPRegenRate
 			newHP := player.HP + earnedHP
 			if newHP > effMaxHP {
 				newHP = effMaxHP

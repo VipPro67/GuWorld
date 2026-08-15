@@ -62,7 +62,6 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | GET | `/player/referrals` |
 | POST | `/player/simulate-deposit` | Admin only. |
 | POST | `/player/avatar` |
-| POST | `/player/tick-regen` |
 | POST | `/player/sacrifice` |
 
 ## Cultivation and quests

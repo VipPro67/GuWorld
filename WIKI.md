@@ -111,6 +111,13 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 - UI `Aperture` hiển thị Chân Nguyên, Sinh lực, Chuyển, tư chất, Cổ trang bị, nhiệm vụ và tu luyện.
 - Chân Nguyên/Sinh lực được frontend ước tính theo thời gian từ snapshot server.
 
+#### Hồi máu thụ động ngoài combat
+
+- Sinh lực hồi liên tục theo thời gian thực, được cộng dồn cả khi offline (tính từ `last_mana_update`, áp dụng khi đạo hữu tương tác).
+- **Tốc độ hồi:** `HP/giờ = (HP tối đa hiệu dụng × 5% + hp_regen từ effect) × (1 + healing_received)`, cap tại HP tối đa hiệu dụng (`base_hp` + `stat_base_hp` thụ động từ Cổ).
+- `hp_regen` (số phẳng HP/giờ) và `healing_received` (% nhân) đến từ thể chất/chủng tộc/trạng thái qua hệ thống effects (xem `docs/GAME_DATA.md`).
+- Tốc độ hồi nhân thêm `TimeSpeedMultiplier` (và `time_rate` Tiên khiếu với Cổ Tiên, giống hồi Chân Nguyên).
+
 ### Nhân Khí (Human Qi)
 
 - Nhân Khí là tài nguyên phản ánh hoạt động tích cực của đạo hữu trong giới tu tiên, giới hạn tối đa **100.000**.

@@ -150,7 +150,8 @@ Format `effects` (JSON object, toàn bộ field đều optional):
 | `dao_mark_gain` | % Đạo Ngân nhận được |
 | `luck` | Vận (số phẳng) |
 | `refine` | % tỉ lệ Luyện Cổ thành công |
-| `healing_received` | % healing nhận |
+| `healing_received` | % healing nhận (và % hồi máu thụ động) |
+| `hp_regen` | HP/giờ cộng thẳng vào hồi máu thụ động ngoài combat (số phẳng, VD `50` = +50 HP/giờ) |
 | `mental_resistance` | % kháng hiệu ứng tâm lý |
 | `soul_defense` | % phòng thủ hồn |
 | `aperture_stress_bonus` | hệ số cộng thêm áp lực Không Khiếu mỗi lần trùng kích (VD `1` = tăng ×2) |

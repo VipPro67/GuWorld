@@ -119,7 +119,6 @@ sword_leaf_grass,Cỏ Kiếm Diệp,Material,2,{},Cỏ có hình dạng kiếm d
 ITEM_IMMORTAL_RECOVERY_PILL,Tiên Nguyên Hồi Sinh Đan,Consumable,6,"{""restore_hp"": 1000.0, ""heal_aperture"": 10000.0}",Tiên đan chữa thương cấp bậc Cổ Tiên.,500,
 ITEM_LIFE_SAVING_PILL,Cứu Mệnh Đan,Consumable,4,"{""restore_hp"": 500.0}",Đan dược cứu nguy khi trọng thương.,13,
 ITEM_MEDICINAL_PASTE,Kim Sang Dược,Consumable,1,"{""restore_hp"": 50.0}",Thuốc mỡ trị thương ngoài chiến đấu.,1,
-ITEM_VITALITY_DEW,Sinh Cơ Linh Lộ,Consumable,3,"{""regen_hp_out_of_combat"": 300.0}",Dược dịch hồi phục liên tục theo thời gian.,6,
 arena_coin,Xu Đấu Trường,Currency,9,{},Tiền tệ dùng trong Shop Đấu Trường.,7500,
 arrow_bamboo_water,Nước rừng trúc tiễn,Food,1,"{""hunger"": 10}",Thức ăn của cổ Tinh Tiêu .,1,
 azure_jade_bamboo,Ngọc Trúc Bích Không,Material,5,{},Trúc lấy ở Thanh Thiên dùng làm vật liệu luyện Định Tiên Du.,25,

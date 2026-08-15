@@ -107,7 +107,7 @@ export const LobbyView: React.FC = () => {
   const timeSpeedMultiplier = player?.time_speed_multiplier || 1;
   const isImmortal = player ? player.rank >= 6 : false;
   const effectiveManaMultiplier = isImmortal ? timeSpeedMultiplier * (aperture?.time_rate ?? 10) : timeSpeedMultiplier;
-  const hpRegenRealHourly = (player?.hp_regen_rate || 0) * timeSpeedMultiplier;
+  const hpRegenRealHourly = (player?.hp_regen_rate || 0) * effectiveManaMultiplier;
   const manaRegenRealHourly = (player?.mana_regen_rate || 0) * effectiveManaMultiplier;
   const thoughtRegenRealHourly = (player?.thought_regen_rate || 0) * timeSpeedMultiplier;
   const soulRegenRealHourly = (player?.max_soul || 0) * 0.10 * timeSpeedMultiplier;

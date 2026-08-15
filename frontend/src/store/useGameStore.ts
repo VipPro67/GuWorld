@@ -249,7 +249,7 @@ export interface ManaSnapshot {
   captured_at: number;
   hp: number;
   base_hp: number;
-  healing_stat: number;
+  hp_regen_rate: number;
   mana_regen_tick_per_hour?: number;
   mana_regen_mult?: number;
 }
@@ -356,27 +356,14 @@ export const estimateHPFromSnapshot = (snapshot: ManaSnapshot | null, nowMs = Da
   }
 
   const elapsedSeconds = Math.max(0, (nowMs - lastUpdateMs) / 1000);
-  const multiplier = snapshot.time_speed_multiplier > 0 ? snapshot.time_speed_multiplier : 1;
-  const regenHPPerHour = (snapshot.base_hp * 0.05) + (snapshot.healing_stat || 0);
+  const timeSpeedMultiplier = snapshot.time_speed_multiplier > 0 ? snapshot.time_speed_multiplier : 1;
+  const isImmortal = snapshot.rank >= 6;
+  const timeRate = snapshot.time_rate && snapshot.time_rate > 0 ? snapshot.time_rate : 10.0;
+  const multiplier = isImmortal ? timeSpeedMultiplier * timeRate : timeSpeedMultiplier;
+  const regenHPPerHour = snapshot.hp_regen_rate || 0;
   const regeneratedHP = ((elapsedSeconds * multiplier) / 3600) * regenHPPerHour;
 
   return Math.min(snapshot.base_hp, Math.max(0, snapshot.hp + regeneratedHP));
-};
-
-const calculateHealingStat = (player: Player, guDictionary: Record<string, GuSpec>): number => {
-  let healing = 0;
-  if (!player.gu_inventory) return healing;
-
-  player.gu_inventory.forEach((gu) => {
-    if (gu.equipped && gu.status === "ACTIVE") {
-      const spec = guDictionary[gu.gu_id];
-      if (spec && spec.effects) {
-        if (spec.effects.active?.refine_mana_tier) healing += spec.effects.active?.refine_mana_tier * 10;
-        if (spec.effects.active?.cleansing_power) healing += spec.effects.active?.cleansing_power * 15;
-      }
-    }
-  });
-  return healing;
 };
 
 const createManaSnapshotFromPlayer = (player: Player, guDictionary: Record<string, GuSpec>, constitutionDictionary?: Record<string, EffectDictionaryEntry>, timeRate?: number): ManaSnapshot => ({
@@ -393,7 +380,7 @@ const createManaSnapshotFromPlayer = (player: Player, guDictionary: Record<strin
   captured_at: Date.now(),
   hp: player.hp,
   base_hp: player.base_hp,
-  healing_stat: calculateHealingStat(player, guDictionary),
+  hp_regen_rate: player.hp_regen_rate || 0,
   mana_regen_tick_per_hour: manaRegenTickPerHour(player, guDictionary),
   mana_regen_mult: 1 + (player.constitution ? (constitutionDictionary?.[player.constitution]?.effects?.mana_regen ?? 1) : 0),
 });

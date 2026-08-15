@@ -157,6 +157,22 @@ func TestEffectsJSONRoundTrip(t *testing.T) {
 	if got.ApertureStressBonus != 1.0 {
 		t.Errorf("aperture stress round trip = %v, want 1.0", got.ApertureStressBonus)
 	}
+	if got.HPRegenBonus != 0.0 {
+		t.Errorf("hp regen bonus = %v, want 0.0", got.HPRegenBonus)
+	}
+}
+
+func TestEffectsJSONHPRegen(t *testing.T) {
+	var got Effects
+	if err := json.Unmarshal([]byte(`{"hp_regen": 50, "healing_received": 0.5}`), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got.HPRegenBonus != 50 {
+		t.Errorf("hp_regen = %v, want 50", got.HPRegenBonus)
+	}
+	if got.HealingReceivedBonus != 0.5 {
+		t.Errorf("healing_received = %v, want 0.5", got.HealingReceivedBonus)
+	}
 }
 
 func TestEffectsJSONDaoMark(t *testing.T) {

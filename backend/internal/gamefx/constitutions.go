@@ -132,6 +132,7 @@ func addEffects(dst *Effects, src Effects) {
 	dst.CultivationEfficiencyBonus += src.CultivationEfficiencyBonus
 	dst.DaoMarkGainBonus += src.DaoMarkGainBonus
 	dst.HealingReceivedBonus += src.HealingReceivedBonus
+	dst.HPRegenBonus += src.HPRegenBonus
 	dst.MentalResistanceBonus += src.MentalResistanceBonus
 	dst.SoulDefenseBonus += src.SoulDefenseBonus
 	dst.ApertureStressBonus += src.ApertureStressBonus
