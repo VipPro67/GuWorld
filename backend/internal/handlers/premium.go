@@ -512,7 +512,7 @@ func BuyPremiumPackage(c *gin.Context) {
 		case CurrencyPrimevalStone:
 			before := int64(player.PrimevalStones)
 			player.PrimevalStones += float64(reward.Amount)
-			wallet.PrimevalStone = int64(player.PrimevalStones)
+			wallet.PrimevalStone = player.PrimevalStones
 			if err = insertWalletTx(tx, playerID, "PACKAGE_REWARD", CurrencyPrimevalStone, reward.Amount, before, int64(player.PrimevalStones), nil, &pkg.ID, "Thưởng gói tu luyện"); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch thưởng Nguyên Thạch"})
 				return
@@ -520,7 +520,7 @@ func BuyPremiumPackage(c *gin.Context) {
 		case CurrencyImmortalEssenceStone:
 			before := int64(player.ImmortalStones)
 			player.ImmortalStones += float64(reward.Amount)
-			wallet.ImmortalEssenceStone = int64(player.ImmortalStones)
+			wallet.ImmortalEssenceStone = player.ImmortalStones
 			if err = insertWalletTx(tx, playerID, "PACKAGE_REWARD", CurrencyImmortalEssenceStone, reward.Amount, before, int64(player.ImmortalStones), nil, &pkg.ID, "Thưởng gói tu luyện"); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch thưởng Tiên Nguyên Thạch"})
 				return
@@ -660,8 +660,8 @@ func ExchangeStones(c *gin.Context) {
 		player.PrimevalStones -= float64(req.Amount)
 		player.ImmortalStones += float64(immortalGain)
 	}
-	wallet.PrimevalStone = int64(player.PrimevalStones)
-	wallet.ImmortalEssenceStone = int64(player.ImmortalStones)
+	wallet.PrimevalStone = player.PrimevalStones
+	wallet.ImmortalEssenceStone = player.ImmortalStones
 
 	if _, err = tx.Exec(`UPDATE players SET primeval_stones=$1, immortal_stones=$2 WHERE id=$3`, player.PrimevalStones, player.ImmortalStones, playerID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật đá"})
@@ -678,9 +678,9 @@ func ExchangeStones(c *gin.Context) {
 		return primevalBefore
 	}(), func() int64 {
 		if req.Currency == CurrencyImmortalEssenceStone {
-			return wallet.ImmortalEssenceStone
+			return int64(wallet.ImmortalEssenceStone)
 		}
-		return wallet.PrimevalStone
+		return int64(wallet.PrimevalStone)
 	}(), nil, nil, "Đổi sang loại đá khác"); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch trừ đá"})
 		return
@@ -702,9 +702,9 @@ func ExchangeStones(c *gin.Context) {
 		return immortalBefore
 	}(), func() int64 {
 		if req.Currency == CurrencyImmortalEssenceStone {
-			return wallet.PrimevalStone
+			return int64(wallet.PrimevalStone)
 		}
-		return wallet.ImmortalEssenceStone
+		return int64(wallet.ImmortalEssenceStone)
 	}(), nil, nil, "Nhận từ đổi đá"); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch nhận đá"})
 		return
