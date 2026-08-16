@@ -35,9 +35,9 @@ const (
 )
 
 type WalletDTO struct {
-	PrimevalStone        int64 `json:"primevalStone"`
-	ImmortalEssenceStone int64 `json:"immortalEssenceStone"`
-	ImmortalJade         int64 `json:"immortalJade"`
+	PrimevalStone        float64 `json:"primevalStone"`
+	ImmortalEssenceStone float64 `json:"immortalEssenceStone"`
+	ImmortalJade         int64   `json:"immortalJade"`
 }
 
 type TopupPackage struct {
@@ -737,7 +737,7 @@ func ensureWallet(database *sql.DB, playerID uuid.UUID) (WalletDTO, error) {
 	// Stone balances are authoritative in players. If the player row is missing
 	// (e.g. the account is not present in this DB), fall back to the wallets
 	// mirror so the display never breaks.
-	err := database.QueryRow(`SELECT COALESCE(primeval_stones,0)::BIGINT, FLOOR(COALESCE(immortal_stones,0))::BIGINT FROM players WHERE id=$1`, playerID).Scan(&w.PrimevalStone, &w.ImmortalEssenceStone)
+	err := database.QueryRow(`SELECT COALESCE(primeval_stones,0), COALESCE(immortal_stones,0) FROM players WHERE id=$1`, playerID).Scan(&w.PrimevalStone, &w.ImmortalEssenceStone)
 	switch {
 	case err == nil:
 	case err == sql.ErrNoRows:
@@ -767,8 +767,8 @@ func ensureWalletTx(tx *sql.Tx, playerID uuid.UUID) (WalletDTO, error) {
 
 	if err := tx.QueryRow(`
 		SELECT
-			COALESCE(primeval_stones, 0)::BIGINT,
-			FLOOR(COALESCE(immortal_stones, 0))::BIGINT
+			COALESCE(primeval_stones, 0),
+			COALESCE(immortal_stones, 0)
 		FROM players
 		WHERE id = $1
 	`, playerID).Scan(
