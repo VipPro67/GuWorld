@@ -18,20 +18,20 @@
 
 :root {
   /* Light mode semantic color tokens */
-  --bg-primary: #f8fafc; /* page background */
-  --bg-surface: #ffffff; /* cards, panels */
-  --bg-elevated: #f1f5f9; /* elevated surfaces */
+  --bg-primary: #e5e7eb; /* slightly less bright page background */
+  --bg-surface: #f5f5f5; /* softer surface background */
+  --bg-elevated: #e2e8f0; /* less bright elevated surfaces */
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #94a3b8;
   --border-default: #e2e8f0;
   --border-hover: #cbd5e1;
-  --brand-primary: #059669;
+  --brand-primary: #2f9e80; /* softer brand accent */
   --brand-dim: rgba(5, 150, 105, 0.08);
-  --success: #059669;
-  --warning: #d97706;
-  --error: #dc2626;
-  --info: #0284c7;
+  --success: #2f9e80; /* softer success color */
+  --warning: #c08c00; /* muted warning hue */
+  --error: #b91c1c; /* less aggressive error color */
+  --info: #0e73b8; /* softer info color */
   --surface: var(--bg-surface);
   /* Rank text colors (keep for reference) */
   --rank-1-text: #047857;
@@ -87,7 +87,7 @@
 }
 
 html {
-  font-size: 18px; /* Increase overall font size */
+  font-size: 20px; /* Slightly larger base font size for better readability */
 }
 
 @media (max-width: 640px) {
