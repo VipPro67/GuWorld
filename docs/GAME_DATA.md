@@ -86,7 +86,7 @@ Công thức tính tiêu hao nằm ở `gamefx/energy.go` (`EnergyCost` / `Energ
 - **Cổ Tiên (rank ≥ 6):** mỗi bậc chênh lệch nhân ×100 (`100^gap`) — rank 6 dùng Cổ rank 7 tốn ×100, rank 6 dùng rank 8 tốn ×10.000.
 
 - `refine_mana_tier` (passive Cổ cùng rank đang trang bị) giảm 50% chi phí.
-- **Trang bị:** không thể **trang bị** Cổ có rank cao hơn rank người chơi (`EquipGu` trong `player.go`) — nhưng vẫn có thể **sử dụng** Cổ rank cao hơn qua các đường dùng không yêu cầu trang bị (kèm hệ số mana lũy tiến + backlash HP trong chiến đấu).
+- **Trang bị:** không thể **trang bị** Cổ có rank cao hơn rank người chơi (`EquipGu` trong `player.go`) — nhưng vẫn có thể **sử dụng** Cổ rank cao hơn qua các đường dùng không yêu cầu trang bị (kèm hệ số mana lũy tiến + backlash HP trong chiến đấu). Mỗi lần equip/unequip, server **tự động tháo** các Cổ không hợp lệ trong list đang trang bị (rank > rank người chơi, loại Consumable, hoặc không có spec) và ghi audit `gu.unequip_invalid`; Cổ Bản Mệnh không bao giờ bị tự tháo.
 
 ### Nhân vật — bảng `players` (race / gender / constitution / statuses)
 

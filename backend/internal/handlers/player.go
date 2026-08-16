@@ -2557,6 +2557,66 @@ func GetDaoNganHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+// flushGrowthOnUnequip converts the pending equipped-time of a Gu with a growth
+// effect into permanent boosts when the Gu is unequipped (manually or by the
+// equipped-list cleanup in EquipGu). No-op when the Gu has no growth effect.
+func flushGrowthOnUnequip(player *models.Player, gu *models.GuInstance, spec *models.GuDictionaryItem) {
+	if spec.Effects.Growth == nil || spec.Effects.Growth.HoursToMax <= 0 || gu.EquippedAt == nil {
+		return
+	}
+	tsm := player.TimeSpeedMultiplier
+	if tsm <= 0 {
+		tsm = 1.0
+	}
+	elapsed := time.Since(*gu.EquippedAt).Hours() * tsm
+	if elapsed <= 0 {
+		return
+	}
+	atk, def, hp, spd := ApplyGrowthProgress(gu, spec, elapsed)
+	if atk != 0 || def != 0 || hp != 0 || spd != 0 {
+		player.GrowthData.Boosts.Attack += atk
+		player.GrowthData.Boosts.Defense += def
+		player.GrowthData.Boosts.HP += hp
+		player.GrowthData.Boosts.Speed += spd
+		player.BaseHP += hp
+	}
+	if gu.GrowthHours >= spec.Effects.Growth.HoursToMax {
+		player.GrowthData.FullyGrown = append(player.GrowthData.FullyGrown, models.FullyGrownInfo{
+			GuID:    gu.GuID,
+			Rank:    gu.Rank,
+			Attack:  spec.Effects.Growth.MaxAttack,
+			Defense: spec.Effects.Growth.MaxDefense,
+			HP:      spec.Effects.Growth.MaxHP,
+			Speed:   spec.Effects.Growth.MaxSpeed,
+		})
+	}
+}
+
+// cleanupInvalidEquipped unequips every non-vital ACTIVE equipped Gu that is no
+// longer valid to wear: unknown spec, Consumable type, or a rank above the
+// player's rank (e.g. left over from a cultivation rank drop). Returns the
+// removed instances so callers can persist and audit the cleanup.
+func cleanupInvalidEquipped(player *models.Player) []models.GuInstance {
+	cleaned := []models.GuInstance{}
+	for i := range player.GuInventory {
+		gu := &player.GuInventory[i]
+		if !gu.Equipped || gu.Status != "ACTIVE" || gu.IsVital {
+			continue
+		}
+		spec, ok := models.GetGu(gu.GuID, gu.Rank)
+		if ok && spec.Type != "Consumable" && spec.Rank <= player.Rank {
+			continue
+		}
+		gu.Equipped = false
+		if ok {
+			flushGrowthOnUnequip(player, gu, &spec)
+		}
+		gu.EquippedAt = nil
+		cleaned = append(cleaned, *gu)
+	}
+	return cleaned
+}
+
 // EquipGu toggles whether a Gu instance is equipped
 func EquipGu(c *gin.Context) {
 	var req EquipGuRequest
@@ -2585,13 +2645,9 @@ func EquipGu(c *gin.Context) {
 	}
 
 	targetIdx := -1
-	equippedCount := 0
 	for i, gu := range player.GuInventory {
 		if gu.InstanceID == req.InstanceID {
 			targetIdx = i
-		}
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			equippedCount++
 		}
 	}
 
@@ -2612,38 +2668,16 @@ func EquipGu(c *gin.Context) {
 		return
 	}
 
-	if req.Equip {
-		if targetGu.Equipped {
-			responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Gu bug is already equipped"})
-			return
-		}
-		if equippedCount >= db.MaxEquippedGus {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Aperture capacity full! Cannot equip more than %d Gu bugs.", db.MaxEquippedGus)})
-			return
-		}
+	// Re-validate the whole equipped list on every equip/unequip. Any non-vital
+	// Gu that is no longer valid to wear (rank above the player's rank after a
+	// cultivation drop, Consumable type, or unknown spec) is auto-unequipped.
+	cleaned := cleanupInvalidEquipped(&player)
 
-		// Type restriction: block only Consumable Gu from being equipped
-		specForEquip, specFound := models.GetGu(targetGu.GuID, targetGu.Rank)
-		if specFound && specForEquip.Type == "Consumable" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể trang bị Cổ trùng loại Consumable."})
-			return
-		}
-
-		// Rank restriction: cannot equip a Gu of higher rank than the player
-		if specFound && specForEquip.Rank > player.Rank {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể trang bị Cổ trùng Rank %d cao hơn tu vi %s của đạo hữu!", specForEquip.Rank, getRankName(player.Rank))})
-			return
-		}
-
-		targetGu.Equipped = true
-	} else {
-		targetGu.Equipped = false
-	}
-
-	player.EquippedGus = []string{}
-	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
+	targetCleaned := false
+	for _, gu := range cleaned {
+		if gu.InstanceID == req.InstanceID {
+			targetCleaned = true
+			break
 		}
 	}
 
@@ -2653,10 +2687,8 @@ func EquipGu(c *gin.Context) {
 		guName = spec.Name
 	}
 
-	// ── Growth (Growth Effect) ───────────────────────────────────────────
-	hasGrowth := specOk && spec.Effects.Growth != nil && spec.Effects.Growth.HoursToMax > 0
 	isFullyGrown := false
-	if hasGrowth {
+	if specOk && spec.Effects.Growth != nil && spec.Effects.Growth.HoursToMax > 0 {
 		for _, fg := range player.GrowthData.FullyGrown {
 			if fg.GuID == targetGu.GuID && fg.Rank == targetGu.Rank {
 				isFullyGrown = true
@@ -2669,52 +2701,76 @@ func EquipGu(c *gin.Context) {
 	statusMsg := fmt.Sprintf("Tháo %s thành công!", guName)
 	if req.Equip {
 		action = "gu.equip"
-		statusMsg = fmt.Sprintf("Trang bị %s thành công!", guName)
-		if specOk {
-			if msg, err := HandleGuEvent(&player, spec, *targetGu, "ON_EQUIP"); err == nil && msg != "" {
-				statusMsg += " " + msg
+		if targetCleaned {
+			// The requested Gu is no longer valid to wear — keep it auto-unequipped.
+			statusMsg = fmt.Sprintf("%s không hợp lệ với tu vi hiện tại, đã tự động tháo khỏi trang bị.", guName)
+		} else if targetGu.Equipped {
+			// Already equipped and still valid — keep the message but still
+			// persist the list cleanup below.
+			statusMsg = "Gu bug is already equipped"
+		} else {
+			equippedCount := 0
+			for _, gu := range player.GuInventory {
+				if gu.Equipped && gu.Status == "ACTIVE" {
+					equippedCount++
+				}
 			}
-		}
-		// Set EquippedAt if this Gu has growth effect and isn't fully grown yet
-		if hasGrowth && !isFullyGrown {
-			now := time.Now()
-			targetGu.EquippedAt = &now
+			if equippedCount >= db.MaxEquippedGus {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Aperture capacity full! Cannot equip more than %d Gu bugs.", db.MaxEquippedGus)})
+				return
+			}
+
+			// Type restriction: block only Consumable Gu from being equipped
+			if specOk && spec.Type == "Consumable" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể trang bị Cổ trùng loại Consumable."})
+				return
+			}
+
+			// Rank restriction: cannot equip a Gu of higher rank than the player
+			if specOk && spec.Rank > player.Rank {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không thể trang bị Cổ trùng Rank %d cao hơn tu vi %s của đạo hữu!", spec.Rank, getRankName(player.Rank))})
+				return
+			}
+
+			targetGu.Equipped = true
+			statusMsg = fmt.Sprintf("Trang bị %s thành công!", guName)
+			if specOk {
+				if msg, err := HandleGuEvent(&player, spec, *targetGu, "ON_EQUIP"); err == nil && msg != "" {
+					statusMsg += " " + msg
+				}
+			}
+			// Set EquippedAt if this Gu has growth effect and isn't fully grown yet
+			if specOk && spec.Effects.Growth != nil && spec.Effects.Growth.HoursToMax > 0 && !isFullyGrown {
+				now := time.Now()
+				targetGu.EquippedAt = &now
+			}
 		}
 	} else {
-		// Unequip — flush pending growth time
-		if hasGrowth && targetGu.EquippedAt != nil {
-			tsm := player.TimeSpeedMultiplier
-			if tsm <= 0 {
-				tsm = 1.0
-			}
-			elapsed := time.Since(*targetGu.EquippedAt).Hours() * tsm
-			if elapsed > 0 {
-				atk, def, hp, spd := ApplyGrowthProgress(targetGu, &spec, elapsed)
-				if atk != 0 || def != 0 || hp != 0 || spd != 0 {
-					player.GrowthData.Boosts.Attack += atk
-					player.GrowthData.Boosts.Defense += def
-					player.GrowthData.Boosts.HP += hp
-					player.GrowthData.Boosts.Speed += spd
-					player.BaseHP += hp
-				}
-				// Check if fully grown now, add to FullyGrown list
-				if targetGu.GrowthHours >= spec.Effects.Growth.HoursToMax {
-					player.GrowthData.FullyGrown = append(player.GrowthData.FullyGrown, models.FullyGrownInfo{
-						GuID:    targetGu.GuID,
-						Rank:    targetGu.Rank,
-						Attack:  spec.Effects.Growth.MaxAttack,
-						Defense: spec.Effects.Growth.MaxDefense,
-						HP:      spec.Effects.Growth.MaxHP,
-						Speed:   spec.Effects.Growth.MaxSpeed,
-					})
-				}
-			}
+		targetGu.Equipped = false
+		if specOk {
+			// Unequip — flush pending growth time
+			flushGrowthOnUnequip(&player, targetGu, &spec)
 		}
+	}
+
+	RebuildEquippedGus(&player)
+
+	if len(cleaned) > 0 {
+		statusMsg += fmt.Sprintf(" Đã tự động tháo %d Cổ trùng không hợp lệ.", len(cleaned))
 	}
 
 	if err := db.UpdatePlayerGu(tx, *targetGu); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state"})
 		return
+	}
+	for _, gu := range cleaned {
+		if gu.InstanceID == req.InstanceID {
+			continue // already persisted as the target above
+		}
+		if err := db.UpdatePlayerGu(tx, gu); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state"})
+			return
+		}
 	}
 	_, err = tx.Exec("UPDATE players SET equipped_gus = $1, primeval_stones = $2, immortal_stones = $3, hp = $4, max_mana = $5, current_mana = $6, lifespan = $7, rank = $8, sub_rank = $9, aptitude_percent = $10, base_hp = $11, growth_data = $12 WHERE id = $13",
 		player.EquippedGus, player.PrimevalStones, player.ImmortalStones, player.HP, player.MaxMana, player.CurrentMana, player.Lifespan, player.Rank, player.SubRank, player.AptitudePercent, player.BaseHP, player.GrowthData, player.ID)
@@ -2729,6 +2785,13 @@ func EquipGu(c *gin.Context) {
 	}
 
 	auditlog.Logf(db.DB, &authID, action, "gu=%s instance=%s", guName, req.InstanceID)
+	if len(cleaned) > 0 {
+		cleanedIDs := make([]string, 0, len(cleaned))
+		for _, gu := range cleaned {
+			cleanedIDs = append(cleanedIDs, gu.InstanceID)
+		}
+		auditlog.Logf(db.DB, &authID, "gu.unequip_invalid", "count=%d instances=%s", len(cleaned), strings.Join(cleanedIDs, ","))
+	}
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": statusMsg})
 }
