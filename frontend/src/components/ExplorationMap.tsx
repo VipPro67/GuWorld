@@ -91,7 +91,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     }
   }, [regionsLoaded, fetchRegions]);
 
-  const isExploringActiveRegion = player.current_region !== "Southern_Border" && player.current_region !== "Lobby";
+  const isExploringActiveRegion = player.current_region !== "Southern_Border" && player.current_region !== "Lobby" && regions.find((r) => r.id === player.current_region)?.zone_type !== "HUB";
   const isPartyMemberNotLeader = party !== null && party.leader_id !== player.id;
 
   const loadGrid = async () => {

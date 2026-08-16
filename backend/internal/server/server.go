@@ -114,11 +114,11 @@ func SetupRouter() *gin.Engine {
 		api.GET("/dictionary", middleware.RateLimitByIP(40, time.Minute), handlers.GetDictionary)
 		api.GET("/recipes", middleware.RateLimitByIP(40, time.Minute), handlers.GetRecipes)
 
-		// Auth Endpoints — per-route: 9/min per IP
+		// Auth Endpoints
 		authGroup := api.Group("/auth")
 		{
-			authGroup.POST("/send-otp", middleware.RateLimitByIP(9, time.Minute), handlers.SendOTP)
-			authGroup.POST("/register", middleware.RateLimitByIP(9, time.Minute), handlers.RegisterPlayer)
+			authGroup.POST("/send-otp", middleware.RateLimitByIP(1, time.Minute), handlers.SendOTP)
+			authGroup.POST("/register", middleware.RateLimitByIP(1, time.Minute), handlers.RegisterPlayer)
 			authGroup.POST("/login", middleware.RateLimitByIP(9, time.Minute), handlers.LoginPlayer)
 			authGroup.POST("/logout", handlers.LogoutPlayer)
 			authGroup.GET("/me", middleware.AuthRequired(), handlers.GetCurrentPlayer)
@@ -453,6 +453,7 @@ func SetupRouter() *gin.Engine {
 		api.GET("/explore/world", middleware.AuthRequired(), handlers.GetWorld)
 		api.GET("/explore/objects", middleware.AuthRequired(), middleware.RateLimitByPlayer(30, time.Minute), handlers.GetExploreObjects)
 		api.GET("/explore/cells", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetNearbyCells)
+		api.GET("/explore/players", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetNearbyPlayers)
 		api.POST("/explore/move", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.MovePlayer)
 		api.POST("/explore/move-path", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.MovePlayerPath)
 

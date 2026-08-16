@@ -276,7 +276,7 @@ Monster template chứa chỉ số, Gu inventory, item inventory, dao marks, pat
 
 ### Region / Bản đồ thế giới (World Map)
 
-Từ phiên bản map 3×2, thế giới là **một bản đồ liên tục duy nhất** 30.000 × 20.000 ô, chia làm **6 Đại Vực (NGU_VUC)** mỗi cái 10.000 × 10.000 (lưới 3 cột × 2 hàng). Mỗi Đại Vực được chia số học thành **tiểu vực** 1.000 × 1.000 (600 tiểu vực toàn thế giới). Các địa danh có tên (KHU_VUC — giữ nguyên 7 Lưu Vực cũ) nằm lồng/chồng bên trong Đại Vực; `Southern_Border` là **HUB** (trấn an toàn, không sinh quái).
+Từ phiên bản map 3×2, thế giới là **một bản đồ liên tục duy nhất** 30.000 × 20.000 ô, chia làm **6 Đại Vực (NGU_VUC)** mỗi cái 10.000 × 10.000 (lưới 3 cột × 2 hàng). Mỗi Đại Vực được chia số học thành **tiểu vực** 1.000 × 1.000 (600 tiểu vực toàn thế giới). Các địa danh có tên (KHU_VUC — giữ nguyên 7 Lưu Vực cũ) nằm lồng/chồng bên trong Đại Vực. Ngoài `Southern_Border` (HUB mặc định), mỗi Đại Vực còn có **HUB khởi đầu riêng** (`hub_thuong_gia_thanh`, `hub_trung_chau`, `hub_bac_nguyen`, `hub_tay_mac`, `hub_dong_hai`). Khi hoàn tất onboarding (`complete-onboarding`), người chơi được đặt vào HUB tương ứng với vị trí đăng ký (xem `startingRegionHubs` trong `player.go`), không sinh quái trong HUB.
 
 **Bảng `regions`** — các cột mới:
 
@@ -408,7 +408,7 @@ Seed từ `SectMission.csv` (append-only, `ON CONFLICT DO NOTHING`) luôn để 
 
 - Schema được tách theo domain ở `backend/internal/db/schema_*.go`, mỗi bảng là `CREATE TABLE IF NOT EXISTS` với toàn bộ cột inline. `InitSchema()` trong `db.go` gọi các schema function theo thứ tự FK. Không có migration riêng, không dùng `ALTER TABLE ADD COLUMN`.
 - Thêm/sửa bảng: sửa file `schema_*.go` tương ứng → xóa DB (hoặc `DROP TABLE` thủ công) → restart server.
-- FK cho các cột `players.race` / `players.constitution` / `players.current_region`: các dòng sentinel (`''`) và vùng `Southern_Border` được pre-seed trong `InitSchema` nên đăng ký vẫn hoạt động trước khi import CSV. Các bảng dictionary (`race_dictionary`, `constitution_dictionary`) tự seed default dataset khi DB rỗng; CSV import (Admin tab "Dữ liệu") vẫn là nguồn chính thức.
+- FK cho các cột `players.race` / `players.constitution` / `players.current_region`: các dòng sentinel (`''`) và vùng `Southern_Border` được pre-seed trong `InitSchema` nên đăng ký vẫn hoạt động trước khi import CSV. Các HUB khởi đầu theo Đại Vực (`hub_*`) nằm trong `Region.csv` và được import qua Admin tab "Dữ liệu"; nếu chưa import, `complete-onboarding` fallback về `Southern_Border`. Các bảng dictionary (`race_dictionary`, `constitution_dictionary`) tự seed default dataset khi DB rỗng; CSV import (Admin tab "Dữ liệu") vẫn là nguồn chính thức.
 
 ### Bảng `player_pets` (Sủng vật)
 

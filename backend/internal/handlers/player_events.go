@@ -112,6 +112,7 @@ func writePlayerSnapshotEvent(c *gin.Context, playerID uuid.UUID, eventType stri
 
 func loadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, error) {
 	var player models.Player
+	var activeCombatBytes []byte
 	err := db.DB.QueryRow(`
 		SELECT p.id, p.username, p.rank, p.sub_rank, p.current_mana, p.max_mana, p.last_mana_update,
 			p.time_speed_multiplier, p.active_combat, p.aperture_stress, p.hp, p.base_hp,
@@ -124,7 +125,7 @@ func loadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, err
 	`, playerID).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.CurrentMana, &player.MaxMana, &player.LastManaUpdate,
-		&player.TimeSpeedMultiplier, &player.ActiveCombat, &player.ApertureStress,
+		&player.TimeSpeedMultiplier, &activeCombatBytes, &player.ApertureStress,
 		&player.HP, &player.BaseHP, &player.PrimevalStones, &player.ImmortalStones,
 		&player.WallProgress, &player.HumanQi, &player.Lifespan,
 		&player.X, &player.Y, &player.CurrentRegion, &player.PathMasteries,
@@ -132,6 +133,13 @@ func loadPlayerRealtimeSnapshot(playerID uuid.UUID) (PlayerRealtimeSnapshot, err
 	)
 	if err != nil {
 		return PlayerRealtimeSnapshot{}, err
+	}
+
+	if len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
+		var cs models.CombatState
+		if err := json.Unmarshal(activeCombatBytes, &cs); err == nil {
+			player.ActiveCombat = &cs
+		}
 	}
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 

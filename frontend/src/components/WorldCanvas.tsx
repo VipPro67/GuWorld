@@ -35,6 +35,7 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
   const regionsContainerRef = useRef<Container>(new Container());
   const objectsContainerRef = useRef<Container>(new Container());
   const monstersContainerRef = useRef<Container>(new Container());
+  const playersContainerRef = useRef<Container>(new Container());
   const fogRef = useRef<Graphics>(new Graphics());
   const playerRef = useRef<Graphics>(new Graphics());
   const rangeRef = useRef<Graphics>(new Graphics());
@@ -56,7 +57,9 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
   const movementRange = useWorldStore((s) => s.movementRange);
   const objects = useWorldStore((s) => s.objects);
   const nearbyCells = useWorldStore((s) => s.nearbyCells);
+  const nearbyPlayers = useWorldStore((s) => s.nearbyPlayers);
   const fetchNearbyCells = useWorldStore((s) => s.fetchNearbyCells);
+  const fetchNearbyPlayers = useWorldStore((s) => s.fetchNearbyPlayers);
   const setLivePosition = useWorldStore((s) => s.setLivePosition);
   const monsterDictionary = useGameStore((s) => s.monsterDictionary);
   const setCamera = useWorldStore((s) => s.setCamera);
@@ -378,6 +381,52 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
     [handleObjectClick],
   );
 
+  const drawPlayers = useCallback(
+    (players: typeof nearbyPlayers) => {
+      const container = playersContainerRef.current;
+      container.removeChildren();
+      
+      const pCount = Math.min(players.length, 500);
+      for (let i = 0; i < pCount; i++) {
+        const p = players[i];
+        const g = new Graphics();
+        
+        // Player marker: Purple diamond with border
+        g.poly([0, -0.6, 0.6, 0, 0, 0.6, -0.6, 0]);
+        g.fill({ color: 0x9333ea }); // Purple
+        g.stroke({ color: 0x6b21a8, width: 0.1 });
+        
+        g.eventMode = "static";
+        g.cursor = "pointer";
+        g.on("pointerdown", (event) => {
+          event.stopPropagation();
+          handleObjectClick({
+            id: p.id,
+            region_id: "",
+            x: p.x,
+            y: p.y,
+            cell_type: "Player",
+            content_id: p.username,
+            rank: undefined,
+          });
+        });
+        
+        container.addChild(g);
+
+        const label = new Text({
+          text: p.username,
+          style: { fontSize: 3, fill: 0xd8b4fe, fontFamily: "serif", stroke: { color: 0x000000, width: 1 } },
+        });
+        label.anchor.set(0.5, 1);
+        label.y = -0.8;
+        g.addChild(label);
+        
+        g.position.set(p.x + 0.5, p.y + 0.5);
+      }
+    },
+    [handleObjectClick]
+  );
+
   const drawMonsters = useCallback(
     (cells: typeof nearbyCells) => {
       const container = monstersContainerRef.current;
@@ -626,6 +675,7 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       stageRef.current.addChild(regionsContainerRef.current);
       stageRef.current.addChild(objectsContainerRef.current);
       stageRef.current.addChild(monstersContainerRef.current);
+      stageRef.current.addChild(playersContainerRef.current);
       stageRef.current.addChild(rangeRef.current);
       stageRef.current.addChild(fogRef.current);
       stageRef.current.addChild(playerRef.current);
@@ -635,6 +685,7 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       drawObjects(objects);
       const cleared = gamePlayer?.cleared_cells || {};
       drawMonsters(nearbyCells.filter((c) => !cleared[`${c.x},${c.y}`]));
+      drawPlayers(nearbyPlayers);
       drawFog();
       drawRange();
 
@@ -754,11 +805,12 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
     if (!appReady || !gamePlayer) return;
     const poll = () => {
       fetchNearbyCells(gamePlayer.x, gamePlayer.y, investigationRange);
+      fetchNearbyPlayers(gamePlayer.x, gamePlayer.y, investigationRange);
     };
     poll();
     const id = setInterval(poll, 8000);
     return () => clearInterval(id);
-  }, [appReady, gamePlayer?.x, gamePlayer?.y, investigationRange, fetchNearbyCells]);
+  }, [appReady, gamePlayer?.x, gamePlayer?.y, investigationRange, fetchNearbyCells, fetchNearbyPlayers]);
 
   // Keep the live X/Y position in sync with the game player when idle.
   useEffect(() => {

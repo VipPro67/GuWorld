@@ -4,6 +4,7 @@ import { create } from "zustand";
 import type { Player } from "@/store/useGameStore";
 
 export interface WorldObject {
+  id?: string;
   region_id: string;
   x: number;
   y: number;
@@ -21,6 +22,14 @@ export interface NearbyCell {
   content: string;
   rank?: number;
   sub_rank?: number;
+}
+
+export interface NearbyPlayer {
+  id: string;
+  username: string;
+  avatar_url: string;
+  x: number;
+  y: number;
 }
 
 export interface WorldPlayer {
@@ -53,6 +62,7 @@ const authHeaders = (method?: string): Record<string, string> => {
 interface WorldStoreState {
   objects: WorldObject[];
   nearbyCells: NearbyCell[];
+  nearbyPlayers: NearbyPlayer[];
   exploredSubZones: Set<string>;
   movementRange: number;
   investigationRange: number;
@@ -69,6 +79,7 @@ interface WorldStoreState {
   cameraY: number;
   fetchObjects: () => Promise<void>;
   fetchNearbyCells: (x: number, y: number, r: number) => Promise<void>;
+  fetchNearbyPlayers: (x: number, y: number, r: number) => Promise<void>;
   movePath: (x: number, y: number) => Promise<{ player: Player; log: string; combat_triggered: boolean; reached: boolean } | null>;
   setExploredSubZones: (keys: string[]) => void;
   setMovementRange: (r: number) => void;
@@ -84,6 +95,7 @@ interface WorldStoreState {
 export const useWorldStore = create<WorldStoreState>((set) => ({
   objects: [],
   nearbyCells: [],
+  nearbyPlayers: [],
   exploredSubZones: new Set<string>(),
   movementRange: 1,
   investigationRange: 10,
@@ -173,6 +185,18 @@ export const useWorldStore = create<WorldStoreState>((set) => ({
       set({ nearbyCells: Array.isArray(data) ? data : [] });
     } catch (err) {
       console.error("fetchNearbyCells error:", err instanceof Error ? err.message : err);
+    }
+  },
+
+  fetchNearbyPlayers: async (x, y, r) => {
+    try {
+      const url = `${BACKEND_URL}/api/explore/players?x=${Math.round(x)}&y=${Math.round(y)}&r=${Math.round(r)}`;
+      const res = await fetch(url, { headers: authHeaders("GET") });
+      if (!res.ok) throw new Error("Không thể tải người chơi trên bản đồ");
+      const data = await res.json();
+      set({ nearbyPlayers: Array.isArray(data) ? data : [] });
+    } catch (err) {
+      console.error("fetchNearbyPlayers error:", err instanceof Error ? err.message : err);
     }
   },
 }));

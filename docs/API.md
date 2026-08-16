@@ -53,6 +53,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | GET | `/player/stats` |
 | GET | `/player/passive-stats` | Detailed passive stats breakdown with per-source attribution. |
 | POST | `/player/explore/:id` |
+| POST | `/player/complete-onboarding` | Hoàn tất thiết lập ban đầu. Body: `{"starting_region","attack_gu_id","defense_gu_id","vital_gu_choice"}`. `starting_region` gồm `Southern_Border`/`Central_Continent`/`Northern_Plains`/`Western_Desert`/`Eastern_Sea`; người chơi được đặt vào HUB tương ứng của Đại Vực đã chọn. |
 | POST | `/player/use-item` |
 | POST | `/player/use-items` |
 | POST | `/player/recharge` |

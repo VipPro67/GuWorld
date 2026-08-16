@@ -675,10 +675,6 @@ func RegisterPlayer(c *gin.Context) {
 	InventorySvc.AddItem(tx, player.ID.String(), "moon_orchid_petal", "materials", 5)
 	InventorySvc.AddItem(tx, player.ID.String(), "green_bamboo_wine", "materials", 2)
 	InventorySvc.AddItem(tx, player.ID.String(), "jade_stone", "materials", 1)
-	// Seed starter recipes
-	RecipeSvc.Upsert(tx, &services.RecipeProgress{PlayerID: player.ID.String(), RecipeID: "recipe_moon_raiment", CompletionRate: 100, IsUnlocked: true})
-	RecipeSvc.Upsert(tx, &services.RecipeProgress{PlayerID: player.ID.String(), RecipeID: "recipe_white_jade", CompletionRate: 50, IsUnlocked: true})
-	RecipeSvc.Upsert(tx, &services.RecipeProgress{PlayerID: player.ID.String(), RecipeID: "recipe_four_flavors_liquor", CompletionRate: 30, IsUnlocked: true})
 
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
@@ -757,11 +753,35 @@ func CompleteOnboarding(c *gin.Context) {
 	}
 
 	validRegions := map[string]bool{
-		"Southern_Border": true,
+		"Southern_Border":   true,
+		"Central_Continent": true,
+		"Northern_Plains":   true,
+		"Western_Desert":    true,
+		"Eastern_Sea":       true,
 	}
 	if !validRegions[req.StartingRegion] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Starting region không hợp lệ"})
 		return
+	}
+
+	// Mỗi vị trí đăng ký tương ứng với một HUB (trấn an toàn) riêng. Người chơi
+	// mới được đặt vào HUB của Đại Vực mình chọn thay vì tất cả cùng một trấn.
+	startingRegionHubs := map[string]string{
+		"Southern_Border":   "hub_thuong_gia_thanh",
+		"Central_Continent": "hub_trung_chau",
+		"Northern_Plains":   "hub_bac_nguyen",
+		"Western_Desert":    "hub_tay_mac",
+		"Eastern_Sea":       "hub_dong_hai",
+	}
+	startingHubID := startingRegionHubs[req.StartingRegion]
+	if startingHubID == "" {
+		startingHubID = HubRegionID
+	}
+	spawnX, spawnY := hubEntryPoint()
+	if hub := ZoneByID(startingHubID); hub != nil && hub.EntryX != 0 && hub.EntryY != 0 {
+		spawnX, spawnY = hub.EntryX, hub.EntryY
+	} else {
+		startingHubID = HubRegionID
 	}
 
 	if req.AttackGuID == "" {
@@ -844,9 +864,9 @@ func CompleteOnboarding(c *gin.Context) {
 
 	_, err = tx.Exec(`
 		UPDATE players
-		SET needs_onboarding = false, current_region = $1, equipped_gus = $2, primeval_stones = $3, immortal_stones = $4
-		WHERE id = $5
-	`, req.StartingRegion, equippedGus, player.PrimevalStones, player.ImmortalStones, playerID)
+		SET needs_onboarding = false, current_region = $1, x = $2, y = $3, equipped_gus = $4, primeval_stones = $5, immortal_stones = $6
+		WHERE id = $7
+	`, startingHubID, spawnX, spawnY, equippedGus, player.PrimevalStones, player.ImmortalStones, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save onboarding: " + err.Error()})
 		return
@@ -862,7 +882,9 @@ func CompleteOnboarding(c *gin.Context) {
 	}
 
 	player.NeedsOnboarding = false
-	player.CurrentRegion = req.StartingRegion
+	player.CurrentRegion = startingHubID
+	player.X = spawnX
+	player.Y = spawnY
 	player.GuInventory = newGu
 	player.EquippedGus = equippedGus
 	player.MaterialsInventory = loadMaterialsInventory(playerID.String())

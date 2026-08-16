@@ -899,6 +899,11 @@ func MovePlayerPath(c *gin.Context) {
 
 	cleanupExpiredClearedCells(&player, clearedCellCooldown)
 
+	if player.HP <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang trong trạng thái trọng thương, không thể tiếp tục di chuyển!"})
+		return
+	}
+
 	if player.ActiveCombat != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đang trong trạng thái chiến đấu! Hãy kết thúc trận chiến trước."})
 		return
@@ -933,7 +938,7 @@ func MovePlayerPath(c *gin.Context) {
 	var logs []string
 	combatTriggered := false
 	for _, step := range path {
-		logMsg, triggered, errArrival := resolveCellArrival(tx, &player, step[0], step[1], "", false)
+		logMsg, triggered, errArrival := resolveCellArrival(tx, &player, step[0], step[1], "", true)
 		if errArrival != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"})
 			return
@@ -1076,6 +1081,67 @@ func GetNearbyCells(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, out)
+}
+
+// GetNearbyPlayers returns a list of other active players within a given radius
+func GetNearbyPlayers(c *gin.Context) {
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var x, y, r int
+	fmt.Sscanf(c.Query("x"), "%d", &x)
+	fmt.Sscanf(c.Query("y"), "%d", &y)
+	fmt.Sscanf(c.Query("r"), "%d", &r)
+
+	if r <= 0 {
+		r = 300
+	}
+	if r > 300 {
+		r = 300
+	}
+
+	if x == 0 && y == 0 {
+		player, err := loadPlayerForStatus(db.DB, authID, false)
+		if err == nil {
+			x, y = player.X, player.Y
+		}
+	}
+
+	type NearbyPlayer struct {
+		ID        string `json:"id"`
+		Username  string `json:"username"`
+		AvatarURL string `json:"avatar_url"`
+		X         int    `json:"x"`
+		Y         int    `json:"y"`
+	}
+
+	nearbyPlayers := []NearbyPlayer{}
+	rows, errQuery := db.DB.QueryContext(c.Request.Context(), `
+		SELECT id, username, avatar_url, x, y 
+		FROM players 
+		WHERE id != $1
+		  AND last_mana_update >= NOW() - INTERVAL '15 minutes'
+		  AND hp > 0
+		  AND x >= $2 AND x <= $3
+		  AND y >= $4 AND y <= $5
+	`, authID, x-r, x+r, y-r, y+r)
+
+	if errQuery == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var np NearbyPlayer
+			if errScan := rows.Scan(&np.ID, &np.Username, &np.AvatarURL, &np.X, &np.Y); errScan == nil {
+				nearbyPlayers = append(nearbyPlayers, np)
+			}
+		}
+	} else {
+		logger.S.Error("Failed to fetch nearby players:", errQuery)
+	}
+
+	c.JSON(http.StatusOK, nearbyPlayers)
 }
 
 // GetRegions fetches all active regions (zones) from the database
