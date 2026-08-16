@@ -149,7 +149,7 @@ export default function Home() {
 
   if (IS_MAINTENANCE) {
     return (
-      <div className="min-h-screen flex flex-col py-2 sm:py-8 px-2 sm:px-6 lg:px-8 relative bg-zinc-950">
+      <div className="min-h-screen flex flex-col py-2 sm:py-8 px-2 sm:px-6 lg:px-8 relative bg-primary">
         <header className="w-full max-w-[1600px] px-4 sm:px-8 mx-auto flex justify-between items-center pb-4 border-b border-zinc-900/50 mb-4">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -207,7 +207,7 @@ export default function Home() {
         {player && !inCombat && currentView !== "dashboard" && (
             <button
               onClick={() => setView("dashboard")}
-              className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-xs text-zinc-300 hover:text-white font-serif transition-colors border border-zinc-800 cursor-pointer flex items-center gap-1"
+              className="px-3 py-1.5 rounded-xl bg-surface hover:bg-surface text-primary hover:text-white border-default serif transition-colors border border-zinc-800 cursor-pointer flex items-center gap-1"
             >
               <span>⬅</span>
               <span>Trở về Sảnh</span>
@@ -424,7 +424,7 @@ export default function Home() {
       </main>
 
       {/* Footer Details */}
-      <footer className="w-full max-w-[1600px] px-4 sm:px-8 mx-auto text-center mt-8 pt-4 border-t border-zinc-950 flex flex-col items-center gap-2">
+      <footer className="w-full max-w-[1600px] px-4 sm:px-8 mx-auto text-center mt-8 pt-4 border-t border-primary flex flex-col items-center gap-2">
         <span className="px-2 py-0.5 text-[9px] sm:text-xs font-semibold font-mono tracking-wide rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 uppercase">
           Đang ở Bản Test 
         </span>
@@ -449,8 +449,8 @@ export default function Home() {
 
       {/* Changelog Modal */}
       {player && showChangelog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm animate-fade-in" onClick={handleCloseChangelog}>
-          <div className="w-full max-w-lg max-h-[90vh] sm:max-h-[85vh] flex flex-col bg-gradient-to-br from-zinc-950 to-zinc-900 border border-zinc-800 rounded-3xl p-5 sm:p-6 shadow-2xl overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-primary/80 backdrop-blur-sm animate-fade-in" onClick={handleCloseChangelog}>
+          <div className="w-full max-w-lg max-h-[90vh] sm:max-h-[85vh] flex flex-col bg-gradient-to-br from-primary to-primary border-default border border-zinc-800 rounded-3xl p-5 sm:p-6 shadow-2xl overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
             <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-xl pointer-events-none" />
             <div className="flex items-center justify-between mb-4 shrink-0">
               <div className="flex items-center gap-2">
@@ -523,7 +523,7 @@ export default function Home() {
 
       {/* Direct Trade Overlays */}
       {activeTrade && activeTrade.status === "PENDING" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-primary/80 backdrop-blur-sm animate-fade-in">
           <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-3xl p-6 shadow-2xl relative overflow-hidden text-center flex flex-col gap-5 animate-scale-up">
             <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-xl pointer-events-none" />
             
