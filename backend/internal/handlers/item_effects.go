@@ -467,6 +467,7 @@ func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) (strin
 	type recipeInfo struct {
 		id         string
 		targetGuID string
+		weight     float64
 	}
 	var allRecipes []recipeInfo
 	for rows.Next() {
@@ -476,6 +477,7 @@ func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) (strin
 			allRecipes = append(allRecipes, recipeInfo{
 				id:         fmt.Sprintf("recipe_%s_%d_%d", targetGuID, targetRank, variant),
 				targetGuID: targetGuID,
+				weight:     rankDropMultiplier(targetRank),
 			})
 		}
 	}
@@ -486,8 +488,10 @@ func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) (strin
 	// Build map of already-unlocked recipes
 	recipes, _ := RecipeSvc.ListByPlayer(player.ID.String())
 	unlockedMap := make(map[string]float64)
+	deduceMap := make(map[string]int)
 	for _, r := range recipes {
 		unlockedMap[r.RecipeID] = r.CompletionRate
+		deduceMap[r.RecipeID] = r.DeduceCount
 	}
 
 	// Filter to candidates: not yet unlocked, or unlocked but < 100%
@@ -501,7 +505,23 @@ func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) (strin
 		return "", nil // All recipes at 100%
 	}
 
-	chosen := candidates[rand.Intn(len(candidates))]
+	var totalWeight float64
+	for _, c := range candidates {
+		totalWeight += c.weight
+	}
+	if totalWeight <= 0 {
+		return "", nil
+	}
+
+	r := rand.Float64() * totalWeight
+	chosen := candidates[len(candidates)-1]
+	for _, c := range candidates {
+		r -= c.weight
+		if r <= 0 {
+			chosen = c
+			break
+		}
+	}
 	completionRate := float64(rand.Intn(81)) // 0-80%
 
 	// Find target Gu name for display
@@ -510,22 +530,40 @@ func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) (strin
 		targetGuName = spec.Name
 	}
 
+	// Duplicate handling: keep the higher completion rate
+	existingRate, isDup := unlockedMap[chosen.id]
+	effectiveRate := completionRate
+	deduceCount := deduceMap[chosen.id]
+	msg := fmt.Sprintf("- Lĩnh ngộ bí phương: [%s] (Độ hoàn thiện: %.0f%%)\n", targetGuName, completionRate)
+
+	if isDup {
+		if completionRate > existingRate {
+			effectiveRate = completionRate
+			msg = fmt.Sprintf("- Lĩnh ngộ bí phương: [%s] (Độ hoàn thiện: %.0f%% → %.0f%%)\n", targetGuName, existingRate, completionRate)
+		} else {
+			effectiveRate = existingRate
+			msg = fmt.Sprintf("- Mở trùng bí phương: [%s] (Giữ mức hoàn thiện cao hơn: %.0f%%)\n", targetGuName, existingRate)
+		}
+	}
+
 	// Add or update recipe
 	if err := RecipeSvc.Upsert(tx, &services.RecipeProgress{
 		PlayerID:       player.ID.String(),
 		RecipeID:       chosen.id,
-		CompletionRate: completionRate,
+		CompletionRate: effectiveRate,
 		IsUnlocked:     true,
+		DeduceCount:    deduceCount,
 	}); err != nil {
 		logger.S.Errorf("rollRecipeDrop: failed to upsert recipe progress: %v", err)
 		return "", nil
 	}
 
-	return fmt.Sprintf("- Lĩnh ngộ bí phương: [%s] (Độ hoàn thiện: %.0f%%)\n", targetGuName, completionRate), map[string]interface{}{
+	return msg, map[string]interface{}{
 		"type":            "recipe",
 		"id":              chosen.id,
 		"target_gu_id":    chosen.targetGuID,
 		"name":            targetGuName,
-		"completion_rate": completionRate,
+		"completion_rate": effectiveRate,
+		"duplicate":       isDup,
 	}
 }
