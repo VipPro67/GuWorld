@@ -25,6 +25,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 const (
@@ -242,6 +243,7 @@ func GetWallet(c *gin.Context) {
 	}
 	wallet, err := ensureWallet(db.DB, playerID)
 	if err != nil {
+		logger.S.Errorf("GetWallet failed for player %s: %v", playerID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải ví"})
 		return
 	}
@@ -291,7 +293,7 @@ func CreateTopupOrder(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	if _, err = tx.Exec(`INSERT INTO wallets (user_id, primeval_stone, immortal_essence_stone) SELECT id, COALESCE(primeval_stones,0)::BIGINT, FLOOR(COALESCE(immortal_stones,0))::BIGINT FROM players WHERE id=$1 ON CONFLICT (user_id) DO UPDATE SET primeval_stone = EXCLUDED.primeval_stone, immortal_essence_stone = EXCLUDED.immortal_essence_stone, updated_at = CURRENT_TIMESTAMP`, playerID); err != nil {
+	if _, err = tx.Exec(`INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, playerID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khởi tạo ví"})
 		return
 	}
@@ -731,21 +733,41 @@ func ExchangeStones(c *gin.Context) {
 }
 
 func ensureWallet(database *sql.DB, playerID uuid.UUID) (WalletDTO, error) {
-	if _, err := database.Exec(`INSERT INTO wallets (user_id, primeval_stone, immortal_essence_stone) SELECT id, COALESCE(primeval_stones,0)::BIGINT, FLOOR(COALESCE(immortal_stones,0))::BIGINT FROM players WHERE id=$1 ON CONFLICT (user_id) DO UPDATE SET primeval_stone = EXCLUDED.primeval_stone, immortal_essence_stone = EXCLUDED.immortal_essence_stone, updated_at = CURRENT_TIMESTAMP`, playerID); err != nil {
+	var w WalletDTO
+	// Stone balances are authoritative in players; the wallets mirror can drift or
+	// be missing. Read them straight from players to avoid stale wallet displays.
+	if err := database.QueryRow(`SELECT COALESCE(primeval_stones,0)::BIGINT, FLOOR(COALESCE(immortal_stones,0))::BIGINT FROM players WHERE id=$1`, playerID).Scan(&w.PrimevalStone, &w.ImmortalEssenceStone); err != nil {
 		return WalletDTO{}, err
 	}
-	var w WalletDTO
-	err := database.QueryRow(`SELECT primeval_stone, immortal_essence_stone, immortal_jade FROM wallets WHERE user_id=$1`, playerID).Scan(&w.PrimevalStone, &w.ImmortalEssenceStone, &w.ImmortalJade)
-	return w, err
+	err := database.QueryRow(`SELECT immortal_jade FROM wallets WHERE user_id=$1`, playerID).Scan(&w.ImmortalJade)
+	if err == sql.ErrNoRows {
+		if _, ierr := database.Exec(`INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, playerID); ierr != nil {
+			return WalletDTO{}, ierr
+		}
+		w.ImmortalJade = 0
+	} else if err != nil {
+		return WalletDTO{}, err
+	}
+	return w, nil
 }
 
 func ensureWalletTx(tx *sql.Tx, playerID uuid.UUID) (WalletDTO, error) {
-	if _, err := tx.Exec(`INSERT INTO wallets (user_id, primeval_stone, immortal_essence_stone) SELECT id, COALESCE(primeval_stones,0)::BIGINT, FLOOR(COALESCE(immortal_stones,0))::BIGINT FROM players WHERE id=$1 ON CONFLICT (user_id) DO UPDATE SET primeval_stone = EXCLUDED.primeval_stone, immortal_essence_stone = EXCLUDED.immortal_essence_stone, updated_at = CURRENT_TIMESTAMP`, playerID); err != nil {
+	var w WalletDTO
+	// The players row is already locked by the caller (evaluateManaTx) so this is
+	// transaction-safe and always returns the current stone balances.
+	if err := tx.QueryRow(`SELECT COALESCE(primeval_stones,0)::BIGINT, FLOOR(COALESCE(immortal_stones,0))::BIGINT FROM players WHERE id=$1`, playerID).Scan(&w.PrimevalStone, &w.ImmortalEssenceStone); err != nil {
 		return WalletDTO{}, err
 	}
-	var w WalletDTO
-	err := tx.QueryRow(`SELECT primeval_stone, immortal_essence_stone, immortal_jade FROM wallets WHERE user_id=$1 FOR UPDATE`, playerID).Scan(&w.PrimevalStone, &w.ImmortalEssenceStone, &w.ImmortalJade)
-	return w, err
+	err := tx.QueryRow(`SELECT immortal_jade FROM wallets WHERE user_id=$1 FOR UPDATE`, playerID).Scan(&w.ImmortalJade)
+	if err == sql.ErrNoRows {
+		if _, ierr := tx.Exec(`INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, playerID); ierr != nil {
+			return WalletDTO{}, ierr
+		}
+		w.ImmortalJade = 0
+	} else if err != nil {
+		return WalletDTO{}, err
+	}
+	return w, nil
 }
 
 func createPayOSPaymentLink(orderCode int64, pkg TopupPackage, description, returnURL, cancelURL string) (string, string, error) {
