@@ -694,6 +694,23 @@ type MoveRequest struct {
 	AttackTargetID string `json:"attack_target_id,omitempty"`
 }
 
+// hpTooLowForExplore reports whether a player with HP ≤ 20% max HP is trying
+// to move into the wild. Movement is still allowed towards the safe hub so a
+// wounded player can always regroup and heal.
+func hpTooLowForExplore(player *models.Player, destX, destY int) bool {
+	if player == nil || player.HP <= 0 {
+		return true
+	}
+	maxHP := gamefx.EffectiveMaxHP(player)
+	if maxHP <= 0 {
+		maxHP = 1.0
+	}
+	if player.HP > 0.20*maxHP {
+		return false
+	}
+	return DeriveRegionAt(destX, destY) != HubRegionID
+}
+
 // MovePlayer moves the player on the shared world grid and triggers cell actions
 func MovePlayer(c *gin.Context) {
 	var req MoveRequest
@@ -736,6 +753,11 @@ func MovePlayer(c *gin.Context) {
 
 	if player.HP <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang trong trạng thái trọng thương, không thể tiếp tục di chuyển!"})
+		return
+	}
+
+	if hpTooLowForExplore(&player, req.X, req.Y) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Máu của Đạo hữu quá thấp (< 20%), chưa sẵn sàng ra ngoài khám phá. Hãy về Trấn (HUB) hồi phục trước khi tiếp tục hành trình."})
 		return
 	}
 
@@ -910,6 +932,11 @@ func MovePlayerPath(c *gin.Context) {
 
 	if player.HP <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang trong trạng thái trọng thương, không thể tiếp tục di chuyển!"})
+		return
+	}
+
+	if hpTooLowForExplore(&player, req.X, req.Y) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Máu của Đạo hữu quá thấp (< 20%), chưa sẵn sàng ra ngoài khám phá. Hãy về Trấn (HUB) hồi phục trước khi tiếp tục hành trình."})
 		return
 	}
 
