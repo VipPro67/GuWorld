@@ -41,46 +41,46 @@ const typeColor = (t?: string) => {
 };
 
 const EFFECT_STYLE: Record<string, string> = {
-  damage:     "bg-red-900/50 text-red-300 border-red-500/30",
-  shield:     "bg-blue-900/50 text-blue-300 border-blue-500/30",
-  STUN:       "bg-yellow-900/50 text-yellow-300 border-yellow-500/30",
-  BLEED:      "bg-rose-900/50 text-rose-300 border-rose-500/30",
-  POISON:     "bg-lime-900/50 text-lime-300 border-lime-500/30",
-  SLOW:       "bg-sky-900/50 text-sky-300 border-sky-500/30",
-  SLOW1:      "bg-sky-900/50 text-sky-200 border-sky-400/30",
-  WEAK:       "bg-orange-900/50 text-orange-300 border-orange-500/30",
-  FREEZE:     "bg-cyan-900/50 text-cyan-300 border-cyan-500/30",
-  SILENCE:    "bg-zinc-700/50 text-zinc-300 border-zinc-500/30",
-  THORNS:     "bg-emerald-900/50 text-emerald-300 border-emerald-500/30",
-  REGEN:      "bg-green-900/50 text-green-300 border-green-500/30",
-  ATK_UP:     "bg-amber-900/50 text-amber-300 border-amber-500/30",
-  DEF_UP:     "bg-teal-900/50 text-teal-300 border-teal-500/30",
-  TAUNT:      "bg-indigo-900/50 text-indigo-300 border-indigo-500/30",
-  lifesteal:  "bg-rose-900/50 text-rose-300 border-rose-500/30",
-  heal:       "bg-green-900/50 text-green-300 border-green-500/30",
-  mana:       "bg-purple-900/50 text-purple-300 border-purple-500/30",
-  capture:    "bg-pink-900/50 text-pink-300 border-pink-500/30",
+  damage: "bg-red-900/50 text-red-300 border-red-500/30",
+  shield: "bg-blue-900/50 text-blue-300 border-blue-500/30",
+  STUN: "bg-yellow-900/50 text-yellow-300 border-yellow-500/30",
+  BLEED: "bg-rose-900/50 text-rose-300 border-rose-500/30",
+  POISON: "bg-lime-900/50 text-lime-300 border-lime-500/30",
+  SLOW: "bg-sky-900/50 text-sky-300 border-sky-500/30",
+  SLOW1: "bg-sky-900/50 text-sky-200 border-sky-400/30",
+  WEAK: "bg-orange-900/50 text-orange-300 border-orange-500/30",
+  FREEZE: "bg-cyan-900/50 text-cyan-300 border-cyan-500/30",
+  SILENCE: "bg-zinc-700/50 text-zinc-300 border-zinc-500/30",
+  THORNS: "bg-emerald-900/50 text-emerald-300 border-emerald-500/30",
+  REGEN: "bg-green-900/50 text-green-300 border-green-500/30",
+  ATK_UP: "bg-amber-900/50 text-amber-300 border-amber-500/30",
+  DEF_UP: "bg-teal-900/50 text-teal-300 border-teal-500/30",
+  TAUNT: "bg-indigo-900/50 text-indigo-300 border-indigo-500/30",
+  lifesteal: "bg-rose-900/50 text-rose-300 border-rose-500/30",
+  heal: "bg-green-900/50 text-green-300 border-green-500/30",
+  mana: "bg-purple-900/50 text-purple-300 border-purple-500/30",
+  capture: "bg-pink-900/50 text-pink-300 border-pink-500/30",
 };
 
 const EFFECT_LABEL: Record<string, string> = {
   damage: "Sát thương",
   shield: "Khiên",
-  STUN:   "Choáng",
-  BLEED:  "Chảy máu",
+  STUN: "Choáng",
+  BLEED: "Chảy máu",
   POISON: "Độc",
-  SLOW:   "Chậm",
-  SLOW1:  "Chậm 100%",
-  WEAK:   "Yếu",
+  SLOW: "Chậm",
+  SLOW1: "Chậm 100%",
+  WEAK: "Yếu",
   FREEZE: "Đóng băng",
   SILENCE: "Im lặng",
   THORNS: "Gai",
-  REGEN:  "Hồi máu",
+  REGEN: "Hồi máu",
   ATK_UP: "Tăng Công",
   DEF_UP: "Tăng Thủ",
-  TAUNT:  "Khiêu khích",
+  TAUNT: "Khiêu khích",
   lifesteal: "Hút HP",
-  heal:   "Chữa lành",
-  mana:   "Hồi Nguyên",
+  heal: "Chữa lành",
+  mana: "Hồi Nguyên",
   capture: "Bắt",
 };
 
@@ -238,7 +238,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     } else {
       result = await executeAutoCombat(loadout);
     }
-    
+
     if (result && result.logs) {
       setSimulationLogs(result.logs);
       setSimulationWinner(result.winner);
@@ -366,126 +366,441 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   }, [selectedGuIds, eligibleGus, guDictionary]);
 
   const recommendLoadout = useCallback(() => {
-    const gus = eligibleGus;
-    if (gus.length === 0) return;
-
-    const effectivePath = bestPath || "strength";
     const playerRank = player.rank || 1;
+    const effectivePath = bestPath || "strength";
 
-    // Categorize Gu by role
-    const attackRoles = new Set(["ATTACK_CORE", "FIGHTER"]);
-    const attackKeys = new Set(["damage", "add_base_attack", "damage_multiplier", "damage_multiplier_on_hit", "blood_drain", "bleed", "life_steal", "lifesteal"]);
-    const supportRoles = new Set(["HEAL_CORE", "CONTROL_CORE", "BUFF_CORE", "SUMMON_CORE", "MOVEMENT_CORE", "TRANSFORMATION_CORE"]);
-    const supportKeys = new Set(["heal", "regen_hp", "stun", "freeze", "slow", "paralyze", "charm", "bind", "burn", "poison", "summon_phantom", "summon_flying_bear_phantom", "summon_clones", "movement", "flight", "attack_speed"]);
-    const defenseRoles = new Set(["DEFENSE_CORE", "HEAL_CORE", "CONTROL_CORE"]);
-    const shieldKeys = new Set(["defense", "add_base_defense", "virtual_shield", "orbit_shield", "team_shield", "shield_flat"]);
+    const combatRoles = new Set([
+      "ATTACK_CORE",
+      "FIGHTER",
+      "DEFENSE_CORE",
+      "HEAL_CORE",
+      "CONTROL_CORE",
+      "BUFF_CORE",
+      "SUMMON_CORE",
+      "MOVEMENT_CORE",
+      "TRANSFORMATION_CORE",
+      "PASSIVE_BODY",
+      "SOUL_HEAL",
+      "CLEANSE_WILL",
+    ]);
 
-    // Score each Gu for recommendation
+    const nonCombatRoles = new Set([
+      "UTILITY_SUPPORT",
+      "STORAGE",
+      "REFINEMENT_CORE",
+      "INVESTIGATION_CORE",
+      "SUPPORT_DEDUCTION",
+      "MANA_REFINE",
+      "ECONOMY_BOOST",
+      "APTITUDE_UPGRADE",
+      "CONSUMABLE",
+    ]);
+
+    const combatTags = new Set([
+      "damage",
+      "defense",
+      "heal",
+      "control",
+      "stun",
+      "freeze",
+      "slow",
+      "paralyze",
+      "charm",
+      "bind",
+      "burn",
+      "poison",
+      "bleed",
+      "life-steal",
+      "lifesteal",
+      "summon",
+      "movement",
+      "flight",
+      "attack-speed",
+      "add-base-attack",
+      "add-base-defense",
+      "virtual-shield",
+      "orbit-shield",
+      "team-shield",
+      "shield-flat",
+      "transformation",
+      "soul-refinement",
+    ]);
+
+    const utilityOnlyTags = new Set([
+      "utility_support",
+      "generate-primeval-stones",
+      "refine-mana-tier",
+      "fire-refinement",
+      "formation-core",
+      "storage",
+      "investigation",
+      "rank-progress",
+      "refinement",
+      "economy",
+      "crafting",
+      "utility_boost",
+    ]);
+
+    const parseArray = (value: any): string[] => {
+      if (!value) return [];
+
+      if (Array.isArray(value)) {
+        return value.map(String);
+      }
+
+      if (typeof value !== "string") return [];
+
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed.map(String) : [];
+      } catch {
+        return value
+          .split(",")
+          .map((v: string) => v.trim())
+          .filter(Boolean);
+      }
+    };
+
+    const normalize = (value: any) =>
+      String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_")
+        .replace(/-/g, "_");
+
+    const isCombatGu = (gu: GuInstance): boolean => {
+      const spec = guSpecFor(gu.gu_id, gu.rank);
+      if (!spec) return false;
+
+      const primaryRole = normalize(spec.primary_role);
+      const roles = parseArray(spec.combat_roles).map(normalize);
+      const tags = [
+        ...parseArray(spec.combat_tags),
+        ...parseArray(spec.support_tags),
+      ].map(normalize);
+
+      if (nonCombatRoles.has(primaryRole.toUpperCase())) {
+        return false;
+      }
+
+      if (
+        roles.some(role =>
+          [...nonCombatRoles].some(
+            nonCombatRole => normalize(nonCombatRole) === role
+          )
+        )
+      ) {
+        const hasCombatRole = roles.some(role =>
+          [...combatRoles].some(combatRole => normalize(combatRole) === role)
+        );
+
+        if (!hasCombatRole) {
+          return false;
+        }
+      }
+
+      const hasCombatRole =
+        combatRoles.has(primaryRole.toUpperCase()) ||
+        roles.some(role =>
+          [...combatRoles].some(
+            combatRole => normalize(combatRole) === role
+          )
+        );
+
+      const hasCombatTag = tags.some(tag =>
+        [...combatTags].some(combatTag => normalize(combatTag) === tag)
+      );
+
+      const hasOnlyUtilityTags =
+        tags.length > 0 &&
+        tags.every(tag =>
+          [...utilityOnlyTags].some(
+            utilityTag => normalize(utilityTag) === tag
+          )
+        );
+
+      if (hasOnlyUtilityTags && !hasCombatRole) {
+        return false;
+      }
+
+      return hasCombatRole || hasCombatTag;
+    };
+
+    const gus = eligibleGus.filter(isCombatGu);
+
+    if (gus.length === 0) {
+      setSelectedGuIds([]);
+      setSelectedKillerMoveIds([]);
+      return;
+    }
+
+    const attackRoles = new Set([
+      "ATTACK_CORE",
+      "FIGHTER",
+    ]);
+
+    const shieldKeys = new Set([
+      "defense",
+      "add_base_defense",
+      "virtual_shield",
+      "orbit_shield",
+      "team_shield",
+      "shield_flat",
+    ]);
+
+    const defenseRoles = new Set([
+      "DEFENSE_CORE",
+      "HEAL_CORE",
+      "CONTROL_CORE",
+    ]);
+
     const scored = gus.map(gu => {
       const spec = guSpecFor(gu.gu_id, gu.rank);
-      if (!spec) return { gu, score: 0, pathMatch: false, isDefense: false };
-      const pathMatch = spec.path && spec.path.some(p => p.toLowerCase().includes(effectivePath.toLowerCase()));
+
+      if (!spec) {
+        return {
+          gu,
+          score: 0,
+          pathMatch: false,
+          isDefense: false,
+          isAttack: false,
+        };
+      }
+
+      const paths = parseArray(spec.path);
+
+      const pathMatch = paths.some(path =>
+        normalize(path).includes(normalize(effectivePath))
+      );
 
       let maxDaoMark = 0;
       let maxMastery = 0;
-      if (spec.path) {
-        spec.path.forEach(p => {
-          const cleanP = p.trim().toLowerCase().replace(" path", "");
-          const daoVal = player.dao_marks?.[cleanP] || player.dao_marks?.[p] || 0;
-          if (daoVal > maxDaoMark) maxDaoMark = daoVal;
 
-          const levelIdx = masteryLevelForPoints(player.path_masteries?.[cleanP] || player.path_masteries?.[p] || 0);
-          if (levelIdx > maxMastery) maxMastery = levelIdx;
-        });
+      for (const path of paths) {
+        const cleanPath = normalize(path).replace("_path", "");
+
+        const daoValue =
+          player.dao_marks?.[cleanPath] ||
+          player.dao_marks?.[path] ||
+          0;
+
+        if (daoValue > maxDaoMark) {
+          maxDaoMark = daoValue;
+        }
+
+        const masteryPoints =
+          player.path_masteries?.[cleanPath] ||
+          player.path_masteries?.[path] ||
+          0;
+
+        const masteryLevel = masteryLevelForPoints(masteryPoints);
+
+        if (masteryLevel > maxMastery) {
+          maxMastery = masteryLevel;
+        }
       }
 
-      // Detect if this is a defense Gu
-      const isDefense = defenseRoles.has(spec.primary_role) ||
-        spec.combat_roles?.some(r => defenseRoles.has(r)) ||
+      const primaryRole = String(spec.primary_role || "").toUpperCase();
+
+      const roles = parseArray(spec.combat_roles).map(role =>
+        String(role).toUpperCase()
+      );
+
+      const isAttack =
+        attackRoles.has(primaryRole) ||
+        roles.some(role => attackRoles.has(role));
+
+      const isDefense =
+        defenseRoles.has(primaryRole) ||
+        roles.some(role => defenseRoles.has(role)) ||
         (() => {
-          for (const section of ["active", "passive", "support"] as const) {
-            const effects = spec.effects?.[section];
+          for (const section of [
+            "active",
+            "passive",
+            "support",
+          ] as const) {
+            const effects = spec.effects?.[section as keyof typeof spec.effects];
+
             if (!effects) continue;
+
             for (const key of Object.keys(effects)) {
-              if (shieldKeys.has(key) && (effects[key] || 0) > 0) return true;
+              if (
+                shieldKeys.has(key) &&
+                Number(effects[key as keyof typeof effects]) > 0
+              ) {
+                return true;
+              }
             }
           }
+
           return false;
         })();
 
-      // Scoring: prefer Gu with rank ≤ player, path match, Dao Marks, mastery
       let score = 0;
-      if (spec.rank <= playerRank) {
-        score += 1000; // Strongly prefer rank ≤ player
-      } else {
-        score += Math.max(0, 300 - (spec.rank - playerRank) * 100); // Higher rank still has some value
-      }
-      score += spec.rank * 50; // Base rank value
-      if (pathMatch) score += 800; // Path match is very important
-      if (maxDaoMark > 0) score += Math.min(500, maxDaoMark / 100); // Dao Mark synergy
-      score += maxMastery * 150; // Mastery bonus
-      if (isDefense) score += 200; // Defense bias for balance
 
-      return { gu, score, pathMatch, isDefense };
+      if (spec.rank <= playerRank) {
+        score += 1000;
+      } else {
+        score += Math.max(
+          0,
+          300 - (spec.rank - playerRank) * 100
+        );
+      }
+
+      score += spec.rank * 50;
+
+      if (pathMatch) {
+        score += 800;
+      }
+
+      if (maxDaoMark > 0) {
+        score += Math.min(500, maxDaoMark / 100);
+      }
+
+      score += maxMastery * 150;
+
+      if (isDefense) {
+        score += 200;
+      }
+
+      if (isAttack) {
+        score += 100;
+      }
+
+      return {
+        gu,
+        score,
+        pathMatch,
+        isDefense,
+        isAttack,
+      };
     });
 
     scored.sort((a, b) => b.score - a.score);
 
-    // Pick best Gu first (highest score)
     const best = scored[0];
-    if (!best) return;
-    const picked = [best.gu.instance_id];
 
-    // Prioritize at least 1 defense Gu if not already picked
-    const hasDefense = best.isDefense;
-    if (!hasDefense) {
-      const bestDefense = scored.find(s => s.isDefense && s.gu.instance_id !== best.gu.instance_id);
-      if (bestDefense) picked.push(bestDefense.gu.instance_id);
+    if (!best) {
+      setSelectedGuIds([]);
+      setSelectedKillerMoveIds([]);
+      return;
     }
 
-    // Fill remaining slots with highest scored, preferring same path
-    const pathPriority = guSpecFor(best.gu.gu_id, best.gu.rank)?.path || [];
+    const picked = [best.gu.instance_id];
+
+    if (!best.isDefense) {
+      const bestDefense = scored.find(
+        item =>
+          item.isDefense &&
+          item.gu.instance_id !== best.gu.instance_id
+      );
+
+      if (bestDefense) {
+        picked.push(bestDefense.gu.instance_id);
+      }
+    }
+
+    const pathPriority =
+      parseArray(
+        guSpecFor(best.gu.gu_id, best.gu.rank)?.path
+      );
+
     const remaining = scored
-      .filter(s => !picked.includes(s.gu.instance_id))
+      .filter(item => !picked.includes(item.gu.instance_id))
       .sort((a, b) => {
-        const aSpec = guSpecFor(a.gu.gu_id, a.gu.rank);
-        const bSpec = guSpecFor(b.gu.gu_id, b.gu.rank);
-        const aPathMatch = aSpec?.path && pathPriority.some(p => aSpec.path.includes(p)) ? 1 : 0;
-        const bPathMatch = bSpec?.path && pathPriority.some(p => bSpec.path.includes(p)) ? 1 : 0;
-        return (bPathMatch * 1000 + b.score) - (aPathMatch * 1000 + a.score);
+        const aSpec = guSpecFor(
+          a.gu.gu_id,
+          a.gu.rank
+        );
+
+        const bSpec = guSpecFor(
+          b.gu.gu_id,
+          b.gu.rank
+        );
+
+        const aPaths = parseArray(aSpec?.path);
+        const bPaths = parseArray(bSpec?.path);
+
+        const aPathMatch = aPaths.some(path =>
+          pathPriority.some(
+            priority =>
+              normalize(priority) === normalize(path)
+          )
+        )
+          ? 1
+          : 0;
+
+        const bPathMatch = bPaths.some(path =>
+          pathPriority.some(
+            priority =>
+              normalize(priority) === normalize(path)
+          )
+        )
+          ? 1
+          : 0;
+
+        return (
+          bPathMatch * 1000 +
+          b.score -
+          (aPathMatch * 1000 + a.score)
+        );
       });
 
-    // Fill up to 7 total
-    for (const s of remaining) {
+    for (const item of remaining) {
       if (picked.length >= 7) break;
-      picked.push(s.gu.instance_id);
+
+      picked.push(item.gu.instance_id);
     }
 
     setSelectedGuIds(picked);
 
-    // Pick killer moves matching the core path (only valid ones)
-    const validKMs = (() => {
-      const activeGuIds = new Set(
-        (player.gu_inventory || [])
-          .filter(gu => gu.status === "ACTIVE")
-          .map(gu => gu.instance_id)
-      );
-      return killerMoves.filter(move => {
-        if (!activeGuIds.has(move.core_player_gu_id)) return false;
-        if (move.slots) {
-          for (const slot of move.slots) {
-            if (!activeGuIds.has(slot.player_gu_id)) return false;
+    const activeGuIds = new Set(
+      (player.gu_inventory || [])
+        .filter(gu => gu.status === "ACTIVE")
+        .map(gu => gu.instance_id)
+    );
+
+    const validKMs = killerMoves.filter(move => {
+      if (!activeGuIds.has(move.core_player_gu_id)) {
+        return false;
+      }
+
+      if (move.slots) {
+        for (const slot of move.slots) {
+          if (!activeGuIds.has(slot.player_gu_id)) {
+            return false;
           }
         }
-        return true;
-      });
-    })();
-    const matchingKMs = validKMs.filter(km => {
-      if (pathPriority.length === 0) return true;
-      return pathPriority.includes(km.path);
+      }
+
+      return true;
     });
-    setSelectedKillerMoveIds(matchingKMs.slice(0, 3).map(km => km.id));
-  }, [eligibleGus, guDictionary, bestPath, player.dao_marks, player.path_masteries, killerMoves]);
+
+    const matchingKMs = validKMs.filter(km => {
+      if (pathPriority.length === 0) {
+        return true;
+      }
+
+      return pathPriority.some(
+        path => normalize(path) === normalize(km.path)
+      );
+    });
+
+    setSelectedKillerMoveIds(
+      matchingKMs
+        .slice(0, 3)
+        .map(km => km.id)
+    );
+  }, [
+    eligibleGus,
+    guDictionary,
+    bestPath,
+    player.rank,
+    player.dao_marks,
+    player.path_masteries,
+    player.gu_inventory,
+    killerMoves,
+  ]);
 
   const hasAutoRecommended = useRef(false);
   useEffect(() => {
@@ -643,54 +958,54 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                 <button onClick={() => applyPreset(1000000000, 50000000, 2000000, 1000000, 20000)} className="px-2 py-1 bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 rounded text-[10px] transition-colors border border-purple-800/50">Đại Năng</button>
               </div>
             </div>
-            
+
             <div className="p-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-all focus-within:border-rose-500/50 focus-within:bg-zinc-900/80 group">
                     <label className="text-xs font-bold text-rose-400/80 group-focus-within:text-rose-400 w-24">Máu (HP)</label>
-                    <input 
-                      type="number" 
-                      value={dummyHP} 
+                    <input
+                      type="number"
+                      value={dummyHP}
                       onChange={e => updateConfig('dummyHP', parseInt(e.target.value) || 0)}
                       className="w-full bg-transparent text-right text-zinc-200 text-sm font-mono focus:outline-none"
                     />
                   </div>
                   <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-all focus-within:border-blue-500/50 focus-within:bg-zinc-900/80 group">
                     <label className="text-xs font-bold text-blue-400/80 group-focus-within:text-blue-400 w-24">Khiên Ảo</label>
-                    <input 
-                      type="number" 
-                      value={dummyShield} 
+                    <input
+                      type="number"
+                      value={dummyShield}
                       onChange={e => updateConfig('dummyShield', parseInt(e.target.value) || 0)}
                       className="w-full bg-transparent text-right text-zinc-200 text-sm font-mono focus:outline-none"
                     />
                   </div>
                 </div>
-                
+
                 <div className="space-y-3">
                   <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-all focus-within:border-amber-500/50 focus-within:bg-zinc-900/80 group">
                     <label className="text-xs font-bold text-amber-400/80 group-focus-within:text-amber-400 w-24">Công Kích</label>
-                    <input 
-                      type="number" 
-                      value={dummyAtk} 
+                    <input
+                      type="number"
+                      value={dummyAtk}
                       onChange={e => updateConfig('dummyAtk', parseInt(e.target.value) || 0)}
                       className="w-full bg-transparent text-right text-zinc-200 text-sm font-mono focus:outline-none"
                     />
                   </div>
                   <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-all focus-within:border-emerald-500/50 focus-within:bg-zinc-900/80 group">
                     <label className="text-xs font-bold text-emerald-400/80 group-focus-within:text-emerald-400 w-24">Phòng Thủ</label>
-                    <input 
-                      type="number" 
-                      value={dummyDef} 
+                    <input
+                      type="number"
+                      value={dummyDef}
                       onChange={e => updateConfig('dummyDef', parseInt(e.target.value) || 0)}
                       className="w-full bg-transparent text-right text-zinc-200 text-sm font-mono focus:outline-none"
                     />
                   </div>
                   <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-all focus-within:border-cyan-500/50 focus-within:bg-zinc-900/80 group">
                     <label className="text-xs font-bold text-cyan-400/80 group-focus-within:text-cyan-400 w-24">Tốc Độ</label>
-                    <input 
-                      type="number" 
-                      value={dummySpeed} 
+                    <input
+                      type="number"
+                      value={dummySpeed}
                       onChange={e => updateConfig('dummySpeed', parseInt(e.target.value) || 1)}
                       className="w-full bg-transparent text-right text-zinc-200 text-sm font-mono focus:outline-none"
                     />
@@ -752,9 +1067,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
               <span className="text-zinc-500">Đường lĩnh ngộ mạnh nhất:</span>
               <div className="flex flex-wrap gap-1.5 mt-1.5">
                 {playerBestPaths.slice(0, 5).map(p => (
-                  <span key={p.path} className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${
-                    p.path === bestPath ? 'bg-emerald-900/40 text-emerald-300 border-emerald-700' : 'bg-zinc-800 text-zinc-400 border-zinc-700'
-                  }`}>
+                  <span key={p.path} className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${p.path === bestPath ? 'bg-emerald-900/40 text-emerald-300 border-emerald-700' : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                    }`}>
                     {pathLabel(p.path)} · {p.daoMarks.toLocaleString()} Đạo
                   </span>
                 ))}
@@ -862,12 +1176,11 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                   <div
                     key={gu.instance_id}
                     onClick={() => toggleGu(gu.instance_id)}
-                    className={`p-3 rounded-xl border cursor-pointer transition-all relative ${
-                      isSelected ? 'border-emerald-500 bg-emerald-950/30 ring-1 ring-emerald-500/30' :
-                      isHigherRank ? 'border-rose-800/40 bg-rose-950/10' :
-                      pathMatch ? 'border-emerald-800/40 bg-emerald-950/10' :
-                      'border-zinc-800 bg-zinc-900/50 hover:border-zinc-600'
-                    }`}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all relative ${isSelected ? 'border-emerald-500 bg-emerald-950/30 ring-1 ring-emerald-500/30' :
+                        isHigherRank ? 'border-rose-800/40 bg-rose-950/10' :
+                          pathMatch ? 'border-emerald-800/40 bg-emerald-950/10' :
+                            'border-zinc-800 bg-zinc-900/50 hover:border-zinc-600'
+                      }`}
                   >
                     <div className="font-bold text-sm text-zinc-200 truncate">{spec?.name || gu.gu_id}</div>
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
@@ -875,9 +1188,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                         Bậc {guRank}
                       </span>
                       {spec?.path && spec.path.map(p => (
-                        <span key={p} className={`text-[9px] px-1.5 py-0.5 rounded-full ${
-                          p.toLowerCase().includes(bestPath.toLowerCase()) ? 'bg-emerald-900/40 text-emerald-300' : 'bg-zinc-800 text-zinc-500'
-                        }`}>
+                        <span key={p} className={`text-[9px] px-1.5 py-0.5 rounded-full ${p.toLowerCase().includes(bestPath.toLowerCase()) ? 'bg-emerald-900/40 text-emerald-300' : 'bg-zinc-800 text-zinc-500'
+                          }`}>
                           {pathLabel(p)}
                         </span>
                       ))}
@@ -940,11 +1252,10 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                   <div
                     key={move.id}
                     onClick={() => toggleKillerMove(move.id)}
-                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                      isSelected ? 'border-purple-500 bg-purple-950/30 ring-1 ring-purple-500/30' :
-                      pathMatch ? 'border-zinc-700 bg-zinc-900/60' :
-                      'border-zinc-800 bg-zinc-900/50 hover:border-zinc-600'
-                    }`}
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'border-purple-500 bg-purple-950/30 ring-1 ring-purple-500/30' :
+                        pathMatch ? 'border-zinc-700 bg-zinc-900/60' :
+                          'border-zinc-800 bg-zinc-900/50 hover:border-zinc-600'
+                      }`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="font-bold text-sm text-zinc-200">{move.name}</div>
@@ -953,9 +1264,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full border ${
-                        pathMatch ? `${getPathColor(move.path).bg} ${getPathColor(move.path).text} ${getPathColor(move.path).border}` : 'bg-zinc-800 text-zinc-500'
-                      }`}>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full border ${pathMatch ? `${getPathColor(move.path).bg} ${getPathColor(move.path).text} ${getPathColor(move.path).border}` : 'bg-zinc-800 text-zinc-500'
+                        }`}>
                         {move.path}
                       </span>
                       <span className="text-[10px] text-zinc-500">DMG <Num value={Math.round(move.damage_value)} /></span>

@@ -361,10 +361,10 @@ func SetupRouter() *gin.Engine {
 			killerMoves.DELETE("/:id", handlers.DeleteKillerMove)
 		}
 
-		// Combat — group: 60/min, per player: 30/min
+		// Combat — group: 60/min, per player: 60/min
 		combat := api.Group("/combat")
 		combat.Use(middleware.AuthRequired())
-		combat.Use(middleware.RateLimitByPlayer(30, time.Minute))
+		combat.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			combat.POST("/start", handlers.AutoCombatStart)
 			combat.POST("/practice", handlers.PracticeCombatStart)

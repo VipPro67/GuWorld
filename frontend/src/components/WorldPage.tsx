@@ -87,14 +87,20 @@ export function WorldPage() {
         <WorldCanvas mode={mapMode} />
       </div>
 
-      <div className="absolute top-20 sm:top-16 left-4 flex flex-col gap-2 pointer-events-none">
+      <div className="absolute top-2 left-2 flex flex-col gap-2 pointer-events-none z-10">
         {gamePlayer && (
           <div className="px-3 py-1.5 flex flex-col items-center bg-zinc-900/85 backdrop-blur-sm rounded-xl border border-zinc-800/40 text-xs text-zinc-300 font-serif shadow-lg pointer-events-auto">
+            <div className="w-32 h-2 bg-zinc-800 rounded-full overflow-hidden mt-1">
+              <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${(gamePlayer.hp / gamePlayer.base_hp) * 100}%` }}></div>
+            </div>
+            <div className="font-bold mb-1">
+              {Math.round(gamePlayer.hp)}/{Math.round(gamePlayer.base_hp)} HP
+            </div>
             <div className="text-emerald-400 font-bold text-center">
               {currentZone?.name || gamePlayer.current_region || "Ngoài bản đồ"}
             </div>
             <div className="text-[10px] text-zinc-400 font-mono mt-0.5">
-              X:{Math.round(liveX)} Y:{Math.round(liveY)}
+              X:{Math.round(liveX || gamePlayer.x)} Y:{Math.round(liveY || gamePlayer.y)}
             </div>
           </div>
         )}

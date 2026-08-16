@@ -273,6 +273,13 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       }
 
       s.selectObject(null);
+
+      // Ignore clicks outside the investigation (scout) range
+      const px = gamePlayer?.x ?? 0;
+      const py = gamePlayer?.y ?? 0;
+      const dist = Math.hypot(tx - px, ty - py);
+      if (dist > s.investigationRange) return;
+
       moveTargetRef.current = { x: tx, y: ty };
       performMove(tx, ty);
     },
