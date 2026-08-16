@@ -244,7 +244,7 @@ func GetWallet(c *gin.Context) {
 	wallet, err := ensureWallet(db.DB, playerID)
 	if err != nil {
 		logger.S.Errorf("GetWallet failed for player %s: %v", playerID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải ví"})
+		c.JSON(http.StatusOK, WalletDTO{})
 		return
 	}
 	c.JSON(http.StatusOK, wallet)
@@ -734,19 +734,31 @@ func ExchangeStones(c *gin.Context) {
 
 func ensureWallet(database *sql.DB, playerID uuid.UUID) (WalletDTO, error) {
 	var w WalletDTO
-	// Stone balances are authoritative in players; the wallets mirror can drift or
-	// be missing. Read them straight from players to avoid stale wallet displays.
-	if err := database.QueryRow(`SELECT COALESCE(primeval_stones,0)::BIGINT, FLOOR(COALESCE(immortal_stones,0))::BIGINT FROM players WHERE id=$1`, playerID).Scan(&w.PrimevalStone, &w.ImmortalEssenceStone); err != nil {
+	// Stone balances are authoritative in players. If the player row is missing
+	// (e.g. the account is not present in this DB), fall back to the wallets
+	// mirror so the display never breaks.
+	err := database.QueryRow(`SELECT COALESCE(primeval_stones,0)::BIGINT, FLOOR(COALESCE(immortal_stones,0))::BIGINT FROM players WHERE id=$1`, playerID).Scan(&w.PrimevalStone, &w.ImmortalEssenceStone)
+	switch {
+	case err == nil:
+	case err == sql.ErrNoRows:
+		if err2 := database.QueryRow(`SELECT COALESCE(primeval_stone,0), COALESCE(immortal_essence_stone,0) FROM wallets WHERE user_id=$1`, playerID).Scan(&w.PrimevalStone, &w.ImmortalEssenceStone); err2 != nil && err2 != sql.ErrNoRows {
+			return WalletDTO{}, err2
+		}
+	default:
 		return WalletDTO{}, err
 	}
-	err := database.QueryRow(`SELECT immortal_jade FROM wallets WHERE user_id=$1`, playerID).Scan(&w.ImmortalJade)
-	if err == sql.ErrNoRows {
+	// Jade only lives in wallets.
+	err = database.QueryRow(`SELECT immortal_jade FROM wallets WHERE user_id=$1`, playerID).Scan(&w.ImmortalJade)
+	switch {
+	case err == nil:
+	case err == sql.ErrNoRows:
 		if _, ierr := database.Exec(`INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, playerID); ierr != nil {
-			return WalletDTO{}, ierr
+			logger.S.Warnf("ensureWallet backfill %s: %v", playerID, ierr)
 		}
 		w.ImmortalJade = 0
-	} else if err != nil {
-		return WalletDTO{}, err
+	default:
+		logger.S.Warnf("ensureWallet jade read %s: %v", playerID, err)
+		w.ImmortalJade = 0
 	}
 	return w, nil
 }
