@@ -737,28 +737,22 @@ func ensureWallet(database *sql.DB, playerID uuid.UUID) (WalletDTO, error) {
 	// Stone balances are authoritative in players. If the player row is missing
 	// (e.g. the account is not present in this DB), fall back to the wallets
 	// mirror so the display never breaks.
-	err := database.QueryRow(`SELECT COALESCE(primeval_stones,0), COALESCE(immortal_stones,0) FROM players WHERE id=$1`, playerID).Scan(&w.PrimevalStone, &w.ImmortalEssenceStone)
-	switch {
-	case err == nil:
-	case err == sql.ErrNoRows:
-		if err2 := database.QueryRow(`SELECT COALESCE(primeval_stone,0), COALESCE(immortal_essence_stone,0) FROM wallets WHERE user_id=$1`, playerID).Scan(&w.PrimevalStone, &w.ImmortalEssenceStone); err2 != nil && err2 != sql.ErrNoRows {
-			return WalletDTO{}, err2
-		}
-	default:
+	err := database.QueryRow(`SELECT COALESCE(primeval_stones,0)::DOUBLE PRECISION, COALESCE(immortal_stones,0)::DOUBLE PRECISION FROM players WHERE id=$1`, playerID).Scan(&w.PrimevalStone, &w.ImmortalEssenceStone)
+	if err != nil && err != sql.ErrNoRows {
 		return WalletDTO{}, err
 	}
 	// Jade only lives in wallets.
 	err = database.QueryRow(`SELECT immortal_jade FROM wallets WHERE user_id=$1`, playerID).Scan(&w.ImmortalJade)
-	switch {
-	case err == nil:
-	case err == sql.ErrNoRows:
-		if _, ierr := database.Exec(`INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, playerID); ierr != nil {
-			logger.S.Warnf("ensureWallet backfill %s: %v", playerID, ierr)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			if _, ierr := database.Exec(`INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, playerID); ierr != nil {
+				logger.S.Warnf("ensureWallet backfill %s: %v", playerID, ierr)
+			}
+			w.ImmortalJade = 0
+		} else {
+			logger.S.Warnf("ensureWallet jade read %s: %v", playerID, err)
+			w.ImmortalJade = 0
 		}
-		w.ImmortalJade = 0
-	default:
-		logger.S.Warnf("ensureWallet jade read %s: %v", playerID, err)
-		w.ImmortalJade = 0
 	}
 	return w, nil
 }
@@ -767,8 +761,8 @@ func ensureWalletTx(tx *sql.Tx, playerID uuid.UUID) (WalletDTO, error) {
 
 	if err := tx.QueryRow(`
 		SELECT
-			COALESCE(primeval_stones, 0),
-			COALESCE(immortal_stones, 0)
+			COALESCE(primeval_stones, 0)::DOUBLE PRECISION,
+			COALESCE(immortal_stones, 0)::DOUBLE PRECISION
 		FROM players
 		WHERE id = $1
 	`, playerID).Scan(

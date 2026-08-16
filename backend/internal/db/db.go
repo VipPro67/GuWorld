@@ -238,8 +238,8 @@ func seedSectMines() error {
 // backfillWallets mirrors each player's stone balances into the wallet table.
 func backfillWallets() error {
 	if _, err := DB.Exec(`
-	INSERT INTO wallets (user_id, primeval_stone, immortal_essence_stone, immortal_jade)
-	SELECT id, COALESCE(primeval_stones, 0)::BIGINT, FLOOR(COALESCE(immortal_stones, 0))::BIGINT, 0
+	INSERT INTO wallets (user_id, immortal_jade)
+	SELECT id, 0
 	FROM players
 	ON CONFLICT (user_id) DO NOTHING;`); err != nil {
 		return err

@@ -147,8 +147,6 @@ func schemaPlayerExtras() error {
 	if err := execSchema("wallets", `
 	CREATE TABLE IF NOT EXISTS wallets (
 		user_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
-		primeval_stone BIGINT NOT NULL DEFAULT 0,
-		immortal_essence_stone BIGINT NOT NULL DEFAULT 0,
 		immortal_jade BIGINT NOT NULL DEFAULT 0,
 		updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);`); err != nil {
