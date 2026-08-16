@@ -1,9 +1,40 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Gem, ShoppingBag, QrCode, RefreshCw, ShieldCheck, Gift, Lock } from "lucide-react";
+import { Gem, ShoppingBag, QrCode, RefreshCw, ShieldCheck, Gift, Lock, ArrowLeftRight, Coins, Sparkles, Maximize2 } from "lucide-react";
 import { PremiumWallet, WalletBalance } from "./PremiumWallet";
+import { useGameStore } from "@/store/useGameStore";
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
+  return match ? decodeURIComponent(match[2]) : null;
+}
+
+function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  const csrfToken = getCookie("gu_csrf_token");
+  const headers: Record<string, string> = {};
+  if (init.headers) {
+    if (Array.isArray(init.headers)) {
+      for (const [k, v] of init.headers) headers[k] = v;
+    } else if (init.headers instanceof Headers) {
+      init.headers.forEach((v, k) => { headers[k] = v; });
+    } else {
+      Object.assign(headers, init.headers);
+    }
+  }
+  if (csrfToken && init.method && init.method !== "GET" && init.method !== "HEAD") {
+    headers["X-CSRF-Token"] = csrfToken;
+  }
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("gu_auth_token");
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+  return fetch(input, { ...init, headers, credentials: "include" });
+}
 
 interface TopupPackage {
   id: string;
@@ -42,7 +73,7 @@ interface ShopPackage {
 }
 
 interface PremiumStoreViewProps {
-  defaultTab?: "topup" | "packages";
+  defaultTab?: "topup" | "packages" | "exchange";
   successMode?: boolean;
 }
 
@@ -50,7 +81,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
   defaultTab = "packages",
   successMode = false,
 }) => {
-  const [activeTab, setActiveTab] = useState<"topup" | "packages">(defaultTab);
+  const [activeTab, setActiveTab] = useState<"topup" | "packages" | "exchange">(defaultTab);
   const [wallet, setWallet] = useState<WalletBalance | null>(null);
 
   // Topup State
@@ -64,6 +95,14 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
   const [shopMessage, setShopMessage] = useState<string | null>(null);
   const [buyingPackage, setBuyingPackage] = useState<string | null>(null);
 
+  // Exchange State
+  const [exchangeMessage, setExchangeMessage] = useState<string | null>(null);
+  const [exchangeError, setExchangeError] = useState(false);
+  const [immortalToPrimevalAmount, setImmortalToPrimevalAmount] = useState("");
+  const [primevalToImmortalAmount, setPrimevalToImmortalAmount] = useState("");
+  const [exchanging, setExchanging] = useState<string | null>(null);
+  const [walletRefreshKey, setWalletRefreshKey] = useState(0);
+
 
 
   const orderCodeFromUrl = useMemo(
@@ -73,7 +112,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
 
   // Fetch Topup Packages
   useEffect(() => {
-    fetch(`${BACKEND_URL}/api/topup/packages`, { credentials: "include" })
+    authFetch(`${BACKEND_URL}/api/topup/packages`, { credentials: "include" })
       .then((res) => res.json())
       .then(setTopupPackages)
       .catch(() => setTopupMessage("Không tải được danh sách gói nạp."));
@@ -81,7 +120,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
 
   // Fetch Shop Packages
   const fetchShopPackages = useCallback(async () => {
-    const response = await fetch(`${BACKEND_URL}/api/shop/packages`, { credentials: "include" });
+    const response = await authFetch(`${BACKEND_URL}/api/shop/packages`, { credentials: "include" });
     if (response.ok) setShopPackages(await response.json());
   }, []);
 
@@ -96,7 +135,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
   const refreshOrder = useCallback(
     async (code = order?.orderCode || orderCodeFromUrl) => {
       if (!code) return;
-      const response = await fetch(`${BACKEND_URL}/api/topup/orders/${code}`, { credentials: "include" });
+      const response = await authFetch(`${BACKEND_URL}/api/topup/orders/${code}`, { credentials: "include" });
       if (response.ok) {
         setOrder(await response.json());
         setTopupMessage(null);
@@ -121,7 +160,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
     setLoadingPackage(packageId);
     setTopupMessage(null);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/topup/orders`, {
+      const response = await authFetch(`${BACKEND_URL}/api/topup/orders`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -143,7 +182,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
     setBuyingPackage(packageId);
     setShopMessage(null);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/shop/buy-package`, {
+      const response = await authFetch(`${BACKEND_URL}/api/shop/buy-package`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -158,6 +197,47 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
       setShopMessage(err instanceof Error ? err.message : "Mua gói thất bại");
     } finally {
       setBuyingPackage(null);
+    }
+  };
+
+  // Exchange Tiên Nguyên Thạch ↔ Nguyên Thạch
+  const exchangeStones = async (currency: "PRIMEVAL_STONE" | "IMMORTAL_ESSENCE_STONE", amount: number) => {
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
+      setExchangeError(true);
+      setExchangeMessage("Số lượng không hợp lệ");
+      return;
+    }
+    const sourceLabel = currency === "IMMORTAL_ESSENCE_STONE" ? "Tiên Nguyên Thạch" : "Nguyên Thạch";
+    const targetLabel = currency === "IMMORTAL_ESSENCE_STONE" ? "Nguyên Thạch" : "Tiên Nguyên Thạch";
+    const gain = currency === "IMMORTAL_ESSENCE_STONE" ? amount * 100 : Math.floor(amount / 100000);
+    const confirmed = await useGameStore.getState().showConfirm(
+      `Đạo hữu xác nhận đổi ${amount.toLocaleString()} ${sourceLabel} thành ${gain.toLocaleString()} ${targetLabel}?`,
+      { confirmText: "Xác nhận đổi", cancelText: "Hủy bỏ" }
+    );
+    if (!confirmed) return;
+    setExchanging(currency);
+    setExchangeMessage(null);
+    setExchangeError(false);
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/shop/exchange`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currency, amount }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Đổi đá thất bại");
+      setWallet(data.wallet);
+      setWalletRefreshKey((k) => k + 1);
+      setExchangeMessage(`Đổi thành công ${amount.toLocaleString()} ${sourceLabel} → ${gain.toLocaleString()} ${targetLabel}.`);
+      setExchangeError(false);
+      setImmortalToPrimevalAmount("");
+      setPrimevalToImmortalAmount("");
+    } catch (err) {
+      setExchangeError(true);
+      setExchangeMessage(err instanceof Error ? err.message : "Đổi đá thất bại");
+    } finally {
+      setExchanging(null);
     }
   };
 
@@ -183,10 +263,10 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
             🏛️ Cát Bảo Các
           </h2>
           <p className="mt-1 text-xs text-zinc-400 font-mono">
-            Tiên nhân bảo các — Nạp Tiên Ngọc qua VietQR và đổi các gói phúc lợi trợ lực tu hành.
+            Tiên nhân bảo các — Nạp Tiên Ngọc và đổi các gói phúc lợi trợ lực tu hành.
           </p>
         </div>
-        <PremiumWallet compact onLoaded={setWallet} />
+        <PremiumWallet compact onLoaded={setWallet} refreshKey={walletRefreshKey} />
       </div>
 
       {/* Tabs Switcher */}
@@ -218,6 +298,20 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
         >
           <Gem className="h-4 w-4" />
           Nạp Tiên Ngọc
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab("exchange");
+            setExchangeMessage(null);
+          }}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+            activeTab === "exchange"
+              ? "bg-amber-950/80 border border-amber-500/30 text-amber-200"
+              : "text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          <ArrowLeftRight className="h-4 w-4" />
+          Đổi Đá
         </button>
       </div>
 
@@ -338,12 +432,12 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
               </div>
               {order.checkoutUrl && (
                 <a className="text-emerald-300 underline font-bold" href={order.checkoutUrl} target="_blank" rel="noreferrer">
-                  Mở cổng thanh toán payOS VietQR
+                  Mở cổng thanh toán
                 </a>
               )}
               {order.qrCode && (
                 <div className="flex items-center gap-2 text-zinc-400">
-                  <QrCode className="h-4 w-4" /> QR payload đã sẵn sàng trên trang checkout payOS.
+                  <QrCode className="h-4 w-4" /> QR payload đã sẵn sàng trên trang checkout.
                 </div>
               )}
             </div>
@@ -382,6 +476,207 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
           )}
         </div>
       )}
+
+      {/* Tab 3: Đổi Đá */}
+      {activeTab === "exchange" && (
+        <div className="space-y-6">
+          {exchangeMessage && (
+            <div
+              className={`rounded-2xl border p-3 text-sm font-mono ${
+                exchangeError
+                  ? "border-red-700/40 bg-red-950/30 text-red-200"
+                  : "border-emerald-700/40 bg-emerald-950/30 text-emerald-200"
+              }`}
+            >
+              {exchangeMessage}
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4 text-xs font-mono text-zinc-300 space-y-2">
+            <div className="font-bold text-zinc-100 text-sm">Tỷ giá hối đoái</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex items-center gap-1 text-violet-300">
+                <Sparkles className="h-3.5 w-3.5" /> 1 Tiên Nguyên Thạch
+              </span>
+              <ArrowLeftRight className="h-3.5 w-3.5 text-zinc-500" />
+              <span className="flex items-center gap-1 text-amber-300">
+                <Coins className="h-3.5 w-3.5" /> 100 Nguyên Thạch
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex items-center gap-1 text-amber-300">
+                <Coins className="h-3.5 w-3.5" /> 100.000 Nguyên Thạch
+              </span>
+              <ArrowLeftRight className="h-3.5 w-3.5 text-zinc-500" />
+              <span className="flex items-center gap-1 text-violet-300">
+                <Sparkles className="h-3.5 w-3.5" /> 1 Tiên Nguyên Thạch
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <ExchangePanel
+              title="Đổi Tiên Nguyên Thạch → Nguyên Thạch"
+              subtitle="1 Tiên Nguyên Thạch = 100 Nguyên Thạch"
+              sourceLabel="Tiên Nguyên Thạch"
+              targetLabel="Nguyên Thạch"
+              sourceIcon={<Sparkles className="h-3.5 w-3.5 text-violet-300" />}
+              targetIcon={<Coins className="h-3.5 w-3.5 text-amber-300" />}
+              sourceBalance={wallet?.immortalEssenceStone ?? 0}
+              amount={immortalToPrimevalAmount}
+              onAmountChange={setImmortalToPrimevalAmount}
+              onMax={() => setImmortalToPrimevalAmount(String(wallet?.immortalEssenceStone ?? 0))}
+              preview={() => {
+                const n = Number(immortalToPrimevalAmount);
+                return Number.isInteger(n) && n > 0 ? `+${(n * 100).toLocaleString()} Nguyên Thạch` : "—";
+              }}
+              canExchange={(() => {
+                const n = Number(immortalToPrimevalAmount);
+                return Number.isInteger(n) && n > 0 && n <= (wallet?.immortalEssenceStone ?? 0);
+              })()}
+              blockReason={Number(immortalToPrimevalAmount) > (wallet?.immortalEssenceStone ?? 0) ? "Không đủ Tiên Nguyên Thạch" : undefined}
+              isExchanging={exchanging === "IMMORTAL_ESSENCE_STONE"}
+              onExchange={() => exchangeStones("IMMORTAL_ESSENCE_STONE", Number(immortalToPrimevalAmount))}
+              buttonClass="bg-violet-650 hover:bg-violet-650"
+            />
+
+            <ExchangePanel
+              title="Đổi Nguyên Thạch → Tiên Nguyên Thạch"
+              subtitle="100.000 Nguyên Thạch = 1 Tiên Nguyên Thạch"
+              sourceLabel="Nguyên Thạch"
+              targetLabel="Tiên Nguyên Thạch"
+              sourceIcon={<Coins className="h-3.5 w-3.5 text-amber-300" />}
+              targetIcon={<Sparkles className="h-3.5 w-3.5 text-violet-300" />}
+              sourceBalance={wallet?.primevalStone ?? 0}
+              amount={primevalToImmortalAmount}
+              onAmountChange={setPrimevalToImmortalAmount}
+              onMax={() =>
+                setPrimevalToImmortalAmount(String(Math.floor((wallet?.primevalStone ?? 0) / 100000) * 100000))
+              }
+              preview={() => {
+                const n = Number(primevalToImmortalAmount);
+                return Number.isInteger(n) && n > 0 && n % 100000 === 0
+                  ? `+${(n / 100000).toLocaleString()} Tiên Nguyên Thạch`
+                  : "—";
+              }}
+              canExchange={(() => {
+                const n = Number(primevalToImmortalAmount);
+                return Number.isInteger(n) && n > 0 && n <= (wallet?.primevalStone ?? 0) && n % 100000 === 0;
+              })()}
+              blockReason={
+                Number(primevalToImmortalAmount) > (wallet?.primevalStone ?? 0)
+                  ? "Không đủ Nguyên Thạch"
+                  : Number(primevalToImmortalAmount) % 100000 !== 0
+                  ? "Phải là bội số của 100.000"
+                  : undefined
+              }
+              isExchanging={exchanging === "PRIMEVAL_STONE"}
+              onExchange={() => exchangeStones("PRIMEVAL_STONE", Number(primevalToImmortalAmount))}
+              buttonClass="bg-amber-600 hover:bg-amber-500"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+interface ExchangePanelProps {
+  title: string;
+  subtitle: string;
+  sourceLabel: string;
+  targetLabel: string;
+  sourceIcon: React.ReactNode;
+  targetIcon: React.ReactNode;
+  sourceBalance: number;
+  amount: string;
+  onAmountChange: (value: string) => void;
+  onMax: () => void;
+  preview: () => string;
+  canExchange: boolean;
+  blockReason?: string;
+  isExchanging: boolean;
+  onExchange: () => void;
+  buttonClass: string;
+}
+
+const ExchangePanel: React.FC<ExchangePanelProps> = ({
+  title,
+  subtitle,
+  sourceLabel,
+  targetLabel,
+  sourceIcon,
+  targetIcon,
+  sourceBalance,
+  amount,
+  onAmountChange,
+  onMax,
+  preview,
+  canExchange,
+  blockReason,
+  isExchanging,
+  onExchange,
+  buttonClass,
+}) => (
+  <div className="rounded-2xl border border-zinc-900 bg-zinc-950/60 p-5 hover:border-amber-600/30 transition-all text-left flex flex-col justify-between">
+    <div>
+      <h3 className="font-serif text-lg font-bold text-zinc-100">{title}</h3>
+      <p className="mt-1 text-xs text-zinc-500 font-mono">{subtitle}</p>
+
+      <div className="mt-4 space-y-3 rounded-xl bg-zinc-900/50 p-3">
+        <div>
+          <div className="mb-1 flex items-center justify-between text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+            <span className="flex items-center gap-1.5">
+              {sourceIcon} {sourceLabel}
+            </span>
+            <span>
+              Sở hữu: <b className="text-zinc-300">{sourceBalance.toLocaleString()}</b>
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={amount}
+              onChange={(e) => onAmountChange(e.target.value)}
+              placeholder="0"
+              className="w-full rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-sm font-mono text-zinc-100 outline-none focus:border-amber-500/40"
+            />
+            <button
+              onClick={onMax}
+              disabled={sourceBalance <= 0}
+              className="flex shrink-0 items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-mono font-bold text-amber-300 hover:bg-zinc-800 disabled:opacity-50 cursor-pointer"
+            >
+              <Maximize2 className="h-3.5 w-3.5" /> MAX
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-center text-zinc-600">
+          <ArrowLeftRight className="h-4 w-4" />
+        </div>
+
+        <div>
+          <div className="mb-1 flex items-center justify-between text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+            <span className="flex items-center gap-1.5">
+              {targetIcon} {targetLabel}
+            </span>
+            <span>Nhận</span>
+          </div>
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-sm font-mono text-emerald-300">
+            {preview()}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button
+      disabled={!canExchange || isExchanging}
+      onClick={onExchange}
+      className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl ${buttonClass} px-4 py-2 text-xs font-mono font-bold text-white disabled:bg-zinc-900 disabled:text-zinc-600 transition-colors`}
+    >
+      {isExchanging ? "Đang đổi..." : !canExchange ? blockReason || "Nhập số lượng" : "Xác nhận đổi"}
+    </button>
+  </div>
+);

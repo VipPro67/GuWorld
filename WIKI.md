@@ -366,6 +366,7 @@ Sủng vật là quái vật đã bắt, hỗ trợ chiến đấu:
 - Ví có nguyên thạch, tiên nguyên thạch, tiên ngọc.
 - Đơn nạp dùng package và PayOS webhook nếu cấu hình.
 - Cửa hàng gói quý mua bằng ví.
+- **Đổi đá** (tab "Đổi Đá" trong Cát Bảo Các): đổi Tiên Nguyên Thạch ↔ Nguyên Thạch theo tỷ giá cố định — 1 Tiên Nguyên Thạch = 100 Nguyên Thạch, 100.000 Nguyên Thạch = 1 Tiên Nguyên Thạch.
 
 ## 13. Môn phái
 

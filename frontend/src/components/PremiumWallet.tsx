@@ -14,9 +14,10 @@ export interface WalletBalance {
 interface PremiumWalletProps {
   compact?: boolean;
   onLoaded?: (wallet: WalletBalance) => void;
+  refreshKey?: number;
 }
 
-export const PremiumWallet: React.FC<PremiumWalletProps> = ({ compact = false, onLoaded }) => {
+export const PremiumWallet: React.FC<PremiumWalletProps> = ({ compact = false, onLoaded, refreshKey = 0 }) => {
   const [wallet, setWallet] = useState<WalletBalance | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -37,7 +38,7 @@ export const PremiumWallet: React.FC<PremiumWalletProps> = ({ compact = false, o
   useEffect(() => {
     const timer = window.setTimeout(() => { void fetchWallet(); }, 0);
     return () => window.clearTimeout(timer);
-  }, [fetchWallet]);
+  }, [fetchWallet, refreshKey]);
 
   if (!wallet) {
     return (

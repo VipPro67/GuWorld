@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -48,6 +49,7 @@ type TopupPackage struct {
 func handlerCSVPath(filename string) string {
 	candidates := []string{
 		filepath.Join("data", filename),
+		filepath.Join("cmd/server/data", filename),
 		filename,
 		filepath.Join("backend", filename),
 		filepath.Join("..", filename),
@@ -289,7 +291,7 @@ func CreateTopupOrder(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	if _, err = tx.Exec(`INSERT INTO wallets (user_id, primeval_stone, immortal_essence_stone) SELECT id, COALESCE(primeval_stones,0)::BIGINT, FLOOR(COALESCE(immortal_stones,0))::BIGINT FROM players WHERE id=$1 ON CONFLICT (user_id) DO NOTHING`, playerID); err != nil {
+	if _, err = tx.Exec(`INSERT INTO wallets (user_id, primeval_stone, immortal_essence_stone) SELECT id, COALESCE(primeval_stones,0)::BIGINT, FLOOR(COALESCE(immortal_stones,0))::BIGINT FROM players WHERE id=$1 ON CONFLICT (user_id) DO UPDATE SET primeval_stone = EXCLUDED.primeval_stone, immortal_essence_stone = EXCLUDED.immortal_essence_stone, updated_at = CURRENT_TIMESTAMP`, playerID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khởi tạo ví"})
 		return
 	}
@@ -305,7 +307,7 @@ func CreateTopupOrder(c *gin.Context) {
 	checkoutURL, qrCode, payErr := createPayOSPaymentLink(orderCode, pkg, description, returnURL, cancelURL)
 	if payErr != nil {
 		_, _ = db.DB.Exec(`UPDATE topup_orders SET status='FAILED' WHERE order_code=$1 AND status='PENDING'`, orderCode)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Không thể tạo link thanh toán payOS", "details": payErr.Error()})
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Không thể tạo link thanh toán", "details": payErr.Error()})
 		return
 	}
 	_, err = db.DB.Exec(`UPDATE topup_orders SET checkout_url=$1, qr_code=$2 WHERE order_code=$3`, checkoutURL, qrCode, orderCode)
@@ -316,9 +318,9 @@ func CreateTopupOrder(c *gin.Context) {
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "topup.create_order", EntityType: "topup_order",
-		EntityID: strconv.FormatInt(orderCode, 10),
+		EntityID:       strconv.FormatInt(orderCode, 10),
 		RequestSummary: fmt.Sprintf("Gói %s | %d VND | %d Tiên Ngọc", req.PackageID, pkg.AmountVND, pkg.Jade),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"orderCode": orderCode, "amountVnd": pkg.AmountVND, "jadeAmount": pkg.Jade, "checkoutUrl": checkoutURL, "qrCode": qrCode, "status": "PENDING"})
 }
@@ -393,18 +395,18 @@ func PayOSWebhook(c *gin.Context) {
 	if err = applyPaidTopup(orderCode, amount); err != nil {
 		auditlog.Log(db.DB, auditlog.Entry{
 			Action: "topup.webhook_failed", EntityType: "topup_order",
-			EntityID: fmt.Sprint(orderCode),
+			EntityID:       fmt.Sprint(orderCode),
 			RequestSummary: fmt.Sprintf("orderCode=%d amount=%d err=%s", orderCode, amount, err.Error()),
-			IPAddress: c.ClientIP(), Success: false, ErrorMessage: err.Error(),
+			IPAddress:      c.ClientIP(), Success: false, ErrorMessage: err.Error(),
 		})
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	auditlog.Log(db.DB, auditlog.Entry{
 		Action: "topup.webhook_applied", EntityType: "topup_order",
-		EntityID: fmt.Sprint(orderCode),
+		EntityID:       fmt.Sprint(orderCode),
 		RequestSummary: fmt.Sprintf("orderCode=%d amount=%d", orderCode, amount),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
@@ -563,16 +565,173 @@ func BuyPremiumPackage(c *gin.Context) {
 	}
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "shop.buy_package", EntityType: "premium_package",
-		EntityID: pkg.ID,
+		EntityID:       pkg.ID,
 		RequestSummary: fmt.Sprintf("Gói %s | giá %d Tiên Ngọc | %d phần thưởng", pkg.ID, pkg.PriceJade, len(pkg.Rewards)),
-		Metadata: map[string]interface{}{"price_jade": pkg.PriceJade, "jade_before": jadeBefore, "jade_after": wallet.ImmortalJade},
-		IPAddress: c.ClientIP(), Success: true,
+		Metadata:       map[string]interface{}{"price_jade": pkg.PriceJade, "jade_before": jadeBefore, "jade_after": wallet.ImmortalJade},
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Mua gói thành công. Nhân Khí +10.", "wallet": wallet, "rewards": pkg.Rewards})
 }
 
+const (
+	// Exchange rates between Nguyên Thạch (primeval) and Tiên Nguyên Thạch (immortal).
+	ExchangeImmortalToPrimevalRate = 100    // 1 Tiên Nguyên Thạch = 100 Nguyên Thạch
+	ExchangePrimevalToImmortalCost = 100000 // 100000 Nguyên Thạch = 1 Tiên Nguyên Thạch
+)
+
+type exchangeStonesRequest struct {
+	// Currency is the stone the player spends: PRIMEVAL_STONE or IMMORTAL_ESSENCE_STONE.
+	Currency string `json:"currency" binding:"required"`
+	Amount   int64  `json:"amount" binding:"required,gt=0"`
+}
+
+func ExchangeStones(c *gin.Context) {
+	playerID, ok := middleware.GetPlayerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	var req exchangeStonesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// immortalGain / primevalGain track the amounts added in each direction.
+	var immortalGain, primevalGain int64
+	switch req.Currency {
+	case CurrencyImmortalEssenceStone:
+		if req.Amount > math.MaxInt64/ExchangeImmortalToPrimevalRate {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Số lượng quá lớn"})
+			return
+		}
+		primevalGain = req.Amount * ExchangeImmortalToPrimevalRate
+	case CurrencyPrimevalStone:
+		if req.Amount%ExchangePrimevalToImmortalCost != 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Số Nguyên Thạch phải là bội số của 100.000"})
+			return
+		}
+		immortalGain = req.Amount / ExchangePrimevalToImmortalCost
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Loại tiền tệ không hợp lệ"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khóa người chơi"})
+		return
+	}
+	// Keep BIGINT wallet/ledger in sync with the float8 players columns: drop any
+	// fractional remainder before mutating so both tables always agree.
+	player.PrimevalStones = math.Round(player.PrimevalStones)
+	player.ImmortalStones = math.Round(player.ImmortalStones)
+
+	wallet, err := ensureWalletTx(tx, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải ví"})
+		return
+	}
+
+	primevalBefore := int64(player.PrimevalStones)
+	immortalBefore := int64(player.ImmortalStones)
+	switch req.Currency {
+	case CurrencyImmortalEssenceStone:
+		if player.ImmortalStones < float64(req.Amount) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Tiên Nguyên Thạch"})
+			return
+		}
+		player.ImmortalStones -= float64(req.Amount)
+		player.PrimevalStones += float64(primevalGain)
+	default:
+		if player.PrimevalStones < float64(req.Amount) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch"})
+			return
+		}
+		player.PrimevalStones -= float64(req.Amount)
+		player.ImmortalStones += float64(immortalGain)
+	}
+	wallet.PrimevalStone = int64(player.PrimevalStones)
+	wallet.ImmortalEssenceStone = int64(player.ImmortalStones)
+
+	if _, err = tx.Exec(`UPDATE players SET primeval_stones=$1, immortal_stones=$2 WHERE id=$3`, player.PrimevalStones, player.ImmortalStones, playerID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật đá"})
+		return
+	}
+	if _, err = tx.Exec(`UPDATE wallets SET primeval_stone=$1, immortal_essence_stone=$2, updated_at=CURRENT_TIMESTAMP WHERE user_id=$3`, wallet.PrimevalStone, wallet.ImmortalEssenceStone, playerID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật ví"})
+		return
+	}
+	if err = insertWalletTx(tx, playerID, "EXCHANGE", req.Currency, -req.Amount, func() int64 {
+		if req.Currency == CurrencyImmortalEssenceStone {
+			return immortalBefore
+		}
+		return primevalBefore
+	}(), func() int64 {
+		if req.Currency == CurrencyImmortalEssenceStone {
+			return wallet.ImmortalEssenceStone
+		}
+		return wallet.PrimevalStone
+	}(), nil, nil, "Đổi sang loại đá khác"); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch trừ đá"})
+		return
+	}
+	if err = insertWalletTx(tx, playerID, "EXCHANGE", func() string {
+		if req.Currency == CurrencyImmortalEssenceStone {
+			return CurrencyPrimevalStone
+		}
+		return CurrencyImmortalEssenceStone
+	}(), func() int64 {
+		if req.Currency == CurrencyImmortalEssenceStone {
+			return primevalGain
+		}
+		return immortalGain
+	}(), func() int64 {
+		if req.Currency == CurrencyImmortalEssenceStone {
+			return primevalBefore
+		}
+		return immortalBefore
+	}(), func() int64 {
+		if req.Currency == CurrencyImmortalEssenceStone {
+			return wallet.PrimevalStone
+		}
+		return wallet.ImmortalEssenceStone
+	}(), nil, nil, "Nhận từ đổi đá"); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch nhận đá"})
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "wallet.exchange", EntityType: "currency",
+		RequestSummary: fmt.Sprintf("%s %d -> %s %d", req.Currency, req.Amount, func() string {
+			if req.Currency == CurrencyImmortalEssenceStone {
+				return fmt.Sprintf("%s %d", CurrencyPrimevalStone, primevalGain)
+			}
+			return fmt.Sprintf("%s %d", CurrencyImmortalEssenceStone, immortalGain)
+		}(), func() int64 {
+			if req.Currency == CurrencyImmortalEssenceStone {
+				return primevalGain
+			}
+			return immortalGain
+		}()),
+		IPAddress: c.ClientIP(), Success: true,
+	})
+	c.JSON(http.StatusOK, gin.H{"message": "Đổi đá thành công", "wallet": wallet})
+}
+
 func ensureWallet(database *sql.DB, playerID uuid.UUID) (WalletDTO, error) {
-	if _, err := database.Exec(`INSERT INTO wallets (user_id, primeval_stone, immortal_essence_stone) SELECT id, COALESCE(primeval_stones,0)::BIGINT, FLOOR(COALESCE(immortal_stones,0))::BIGINT FROM players WHERE id=$1 ON CONFLICT (user_id) DO NOTHING`, playerID); err != nil {
+	if _, err := database.Exec(`INSERT INTO wallets (user_id, primeval_stone, immortal_essence_stone) SELECT id, COALESCE(primeval_stones,0)::BIGINT, FLOOR(COALESCE(immortal_stones,0))::BIGINT FROM players WHERE id=$1 ON CONFLICT (user_id) DO UPDATE SET primeval_stone = EXCLUDED.primeval_stone, immortal_essence_stone = EXCLUDED.immortal_essence_stone, updated_at = CURRENT_TIMESTAMP`, playerID); err != nil {
 		return WalletDTO{}, err
 	}
 	var w WalletDTO
@@ -581,7 +740,7 @@ func ensureWallet(database *sql.DB, playerID uuid.UUID) (WalletDTO, error) {
 }
 
 func ensureWalletTx(tx *sql.Tx, playerID uuid.UUID) (WalletDTO, error) {
-	if _, err := tx.Exec(`INSERT INTO wallets (user_id, primeval_stone, immortal_essence_stone) SELECT id, COALESCE(primeval_stones,0)::BIGINT, FLOOR(COALESCE(immortal_stones,0))::BIGINT FROM players WHERE id=$1 ON CONFLICT (user_id) DO NOTHING`, playerID); err != nil {
+	if _, err := tx.Exec(`INSERT INTO wallets (user_id, primeval_stone, immortal_essence_stone) SELECT id, COALESCE(primeval_stones,0)::BIGINT, FLOOR(COALESCE(immortal_stones,0))::BIGINT FROM players WHERE id=$1 ON CONFLICT (user_id) DO UPDATE SET primeval_stone = EXCLUDED.primeval_stone, immortal_essence_stone = EXCLUDED.immortal_essence_stone, updated_at = CURRENT_TIMESTAMP`, playerID); err != nil {
 		return WalletDTO{}, err
 	}
 	var w WalletDTO

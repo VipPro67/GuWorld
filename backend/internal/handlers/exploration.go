@@ -1120,11 +1120,10 @@ func GetNearbyPlayers(c *gin.Context) {
 
 	nearbyPlayers := []NearbyPlayer{}
 	rows, errQuery := db.DB.QueryContext(c.Request.Context(), `
-		SELECT id, username, avatar_url, x, y 
+		SELECT id, username, COALESCE(avatar_url, ''), x, y 
 		FROM players 
 		WHERE id != $1
 		  AND last_mana_update >= NOW() - INTERVAL '15 minutes'
-		  AND hp > 0
 		  AND x >= $2 AND x <= $3
 		  AND y >= $4 AND y <= $5
 	`, authID, x-r, x+r, y-r, y+r)

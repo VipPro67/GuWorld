@@ -32,7 +32,7 @@ func schemaPayment() error {
 	CREATE TABLE IF NOT EXISTS wallet_transactions (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		user_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-		type VARCHAR(30) NOT NULL CHECK (type IN ('TOPUP','SPEND','REFUND','ADMIN_ADJUST','PACKAGE_REWARD')),
+		type VARCHAR(30) NOT NULL CHECK (type IN ('TOPUP','SPEND','REFUND','ADMIN_ADJUST','PACKAGE_REWARD','EXCHANGE')),
 		currency VARCHAR(40) NOT NULL CHECK (currency IN ('PRIMEVAL_STONE','IMMORTAL_ESSENCE_STONE','IMMORTAL_JADE')),
 		amount BIGINT NOT NULL,
 		balance_before BIGINT NOT NULL,
@@ -46,6 +46,15 @@ func schemaPayment() error {
 	}
 	if err := execSchema("wallet_transactions_user_idx", `
 	CREATE INDEX IF NOT EXISTS idx_wallet_transactions_user ON wallet_transactions (user_id);`); err != nil {
+		return err
+	}
+	// Self-heal the type CHECK on existing databases (CREATE TABLE IF NOT EXISTS
+	// does not update the constraint of an already-created table).
+	if err := execSchema("wallet_transactions_type_check", `
+	ALTER TABLE wallet_transactions
+		DROP CONSTRAINT IF EXISTS wallet_transactions_type_check,
+		ADD CONSTRAINT wallet_transactions_type_check
+		CHECK (type IN ('TOPUP','SPEND','REFUND','ADMIN_ADJUST','PACKAGE_REWARD','EXCHANGE'));`); err != nil {
 		return err
 	}
 	if err := execSchema("wallet_transactions_topup_order_unique", `

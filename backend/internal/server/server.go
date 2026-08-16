@@ -465,6 +465,7 @@ func SetupRouter() *gin.Engine {
 		shop.Use(middleware.RateLimitByPlayer(15, time.Minute))
 		{
 			shop.POST("/buy-package", handlers.BuyPremiumPackage)
+			shop.POST("/exchange", handlers.ExchangeStones)
 			shop.POST("/buy", handlers.BuyShopItem)
 			shop.POST("/sell", handlers.SellShopItem)
 			shop.POST("/sell-bulk", handlers.SellShopItemsBulk)

@@ -19,6 +19,8 @@ Nguồn dữ liệu chính nằm trong các file CSV ở `backend/`. Khi backend
 | `backend/PremiumShopPackage.csv` | 4 | Gói premium shop mua bằng ví. |
 | `backend/TopupPackage.csv` | 5 | Gói nạp tiền. |
 
+`PremiumShopPackage.csv` và `TopupPackage.csv` nằm ở `backend/cmd/server/data/` và được **đọc trực tiếp từ CSV mỗi lần request** (không seed qua Admin; sửa CSV là đổi gói). Loader `handlerCSVPath` tìm theo thứ tự `data/` → `cmd/server/data/` → legacy paths.
+
 ## Registry runtime
 
 - `models.LoadGuRegistry(db.DB)` load `gu_dictionary` vào `models.GuRegistry` khi server start.
@@ -470,3 +472,12 @@ Bảng `caravan_shop_items` chỉ lưu `price` (số lượng, không lưu loạ
 | Vật phẩm | 10 | 25 | 60 | 150 |
 
 Ví dụ bán-lại cho Thương Đội (10% `base_price`): Cổ rank 9 = 250 Tiên Nguyên Thạch; item rank 6 = 1 Tiên Nguyên Thạch.
+
+### Đổi đá (exchange)
+
+Đổi giữa hai loại đá qua `POST /api/shop/exchange` (xem `ExchangeStones` trong `handlers/premium.go`, tỷ giá hằng số trong file):
+
+- **1 Tiên Nguyên Thạch = 100 Nguyên Thạch** — đổi chiều `IMMORTAL_ESSENCE_STONE` → `PRIMEVAL_STONE` (`amount * 100`).
+- **100.000 Nguyên Thạch = 1 Tiên Nguyên Thạch** — đổi chiều `PRIMEVAL_STONE` → `IMMORTAL_ESSENCE_STONE` (`amount` phải là bội số của 100.000, nhận `amount / 100000`).
+
+Giao dịch đồng bộ cả `players.primeval_stones/immortal_stones` lẫn `wallets.primeval_stone/immortal_essence_stone`, ghi 2 dòng sổ cái `wallet_transactions` với `type = 'EXCHANGE'` (thêm vào CHECK constraint của bảng `wallet_transactions`; `InitSchema` tự `ALTER TABLE ... DROP/ADD CONSTRAINT` để áp dụng lên DB cũ).

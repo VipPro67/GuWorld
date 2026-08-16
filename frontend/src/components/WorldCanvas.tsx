@@ -84,8 +84,10 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
   useEffect(() => {
     if (gamePlayer?.visited_subzones) {
       setExploredSubZones(gamePlayer.visited_subzones);
+    } else if (gamePlayer) {
+      setExploredSubZones([]);
     }
-  }, [gamePlayer?.visited_subzones, setExploredSubZones]);
+  }, [gamePlayer?.visited_subzones, setExploredSubZones, gamePlayer]);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -204,12 +206,23 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       const s = useWorldStore.getState();
       const nearby = s.nearbyCells.find((c) => c.x === tx && c.y === ty);
       const persistent = s.objects.find((c) => c.x === tx && c.y === ty);
+      const nearbyPl = s.nearbyPlayers.find((p) => p.x === tx && p.y === ty);
 
-      if (nearby || persistent) {
+      if (nearby || persistent || nearbyPl) {
         if (s.selectedObject && s.selectedObject.x === tx && s.selectedObject.y === ty) {
           // Already selected, proceed to move
           moveTargetRef.current = { x: tx, y: ty };
           performMove(tx, ty);
+        } else if (nearbyPl) {
+          s.selectObject({
+            id: nearbyPl.id,
+            region_id: "",
+            x: tx,
+            y: ty,
+            cell_type: "Player",
+            content_id: nearbyPl.username,
+            rank: undefined,
+          });
         } else if (nearby) {
           s.selectObject({
             region_id: gamePlayer?.current_region || "",
@@ -278,14 +291,6 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       g.fill({ color, alpha: 0.05 });
       g.stroke({ color, width: 3, alpha: 0.8 });
       container.addChild(g);
-
-      const label = new Text({
-        text: z.name,
-        style: { fontSize: 26, fill: 0xffffff, fontFamily: "serif", stroke: { color: 0x000000, width: 4 } },
-      });
-      label.anchor.set(0.5, 0.5);
-      label.position.set((z.min_x + z.max_x) / 2, (z.min_y + z.max_y) / 2);
-      container.addChild(label);
     });
 
     namedZones.forEach((z) => {
@@ -295,14 +300,6 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       g.fill({ color: 0xffffff, alpha: 0.04 });
       g.stroke({ color: 0xffffff, width: 1, alpha: 0.2 });
       container.addChild(g);
-
-      const label = new Text({
-        text: z.name,
-        style: { fontSize: 13, fill: 0xd4d4d8, fontFamily: "serif", stroke: { color: 0x000000, width: 3 } },
-      });
-      label.anchor.set(0.5, 0.5);
-      label.position.set((z.min_x + z.max_x) / 2, (z.min_y + z.max_y) / 2);
-      container.addChild(label);
     });
 
     hub.forEach((z) => {
@@ -312,14 +309,6 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       g.fill({ color: 0xfbbf24, alpha: 0.18 });
       g.stroke({ color: 0xfbbf24, width: 3, alpha: 0.9 });
       container.addChild(g);
-
-      const label = new Text({
-        text: z.name,
-        style: { fontSize: 22, fill: 0xfde68a, fontFamily: "serif", stroke: { color: 0x000000, width: 4 } },
-      });
-      label.anchor.set(0.5, 0.5);
-      label.position.set((z.min_x + z.max_x) / 2, (z.min_y + z.max_y) / 2);
-      container.addChild(label);
     });
   }, []);
 
@@ -389,16 +378,11 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       const pCount = Math.min(players.length, 500);
       for (let i = 0; i < pCount; i++) {
         const p = players[i];
-        const g = new Graphics();
         
-        // Player marker: Purple diamond with border
-        g.poly([0, -0.6, 0.6, 0, 0, 0.6, -0.6, 0]);
-        g.fill({ color: 0x9333ea }); // Purple
-        g.stroke({ color: 0x6b21a8, width: 0.1 });
-        
-        g.eventMode = "static";
-        g.cursor = "pointer";
-        g.on("pointerdown", (event) => {
+        const charContainer = new Container();
+        charContainer.eventMode = "static";
+        charContainer.cursor = "pointer";
+        charContainer.on("pointerdown", (event) => {
           event.stopPropagation();
           handleObjectClick({
             id: p.id,
@@ -410,18 +394,35 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
             rank: undefined,
           });
         });
-        
-        container.addChild(g);
 
-        const label = new Text({
-          text: p.username,
-          style: { fontSize: 3, fill: 0xd8b4fe, fontFamily: "serif", stroke: { color: 0x000000, width: 1 } },
-        });
-        label.anchor.set(0.5, 1);
-        label.y = -0.8;
-        g.addChild(label);
+        if (p.avatar_url) {
+          const sprite = new Sprite();
+          sprite.anchor.set(0.5);
+          sprite.width = 0.8;
+          sprite.height = 0.8;
+          
+          Assets.load(p.avatar_url)
+            .then((texture) => {
+              sprite.texture = texture;
+            })
+            .catch(() => {
+              const fallbackG = new Graphics();
+              fallbackG.poly([0, -0.6, 0.6, 0, 0, 0.6, -0.6, 0]);
+              fallbackG.fill({ color: 0x9333ea });
+              fallbackG.stroke({ color: 0x6b21a8, width: 0.1 });
+              charContainer.addChild(fallbackG);
+            });
+          charContainer.addChild(sprite);
+        } else {
+          const g = new Graphics();
+          g.poly([0, -0.6, 0.6, 0, 0, 0.6, -0.6, 0]);
+          g.fill({ color: 0x9333ea });
+          g.stroke({ color: 0x6b21a8, width: 0.1 });
+          charContainer.addChild(g);
+        }
         
-        g.position.set(p.x + 0.5, p.y + 0.5);
+        charContainer.position.set(p.x + 0.5, p.y + 0.5);
+        container.addChild(charContainer);
       }
     },
     [handleObjectClick]
@@ -516,6 +517,9 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
     const gy0 = Math.max(0, Math.floor(top / SUBZONE_SIZE));
     const gy1 = Math.min(WORLD_H / SUBZONE_SIZE - 1, Math.floor(bottom / SUBZONE_SIZE));
 
+    const playerRegion = regions.find((r) => r.zone_type === "NGU_VUC" && gamePlayer.x >= (r.min_x ?? 0) && gamePlayer.x <= (r.max_x ?? -1) && gamePlayer.y >= (r.min_y ?? 0) && gamePlayer.y <= (r.max_y ?? -1));
+    const playerKey = playerRegion ? `${playerRegion.id}:${Math.floor((gamePlayer.x - (playerRegion.min_x ?? 0)) / SUBZONE_SIZE)}:${Math.floor((gamePlayer.y - (playerRegion.min_y ?? 0)) / SUBZONE_SIZE)}` : "";
+
     for (let gy = gy0; gy <= gy1; gy++) {
       for (let gx = gx0; gx <= gx1; gx++) {
         const large = regions.find((r) => r.zone_type === "NGU_VUC" && gx * SUBZONE_SIZE >= (r.min_x ?? 0) && gx * SUBZONE_SIZE <= (r.max_x ?? -1) && gy * SUBZONE_SIZE >= (r.min_y ?? 0) && gy * SUBZONE_SIZE <= (r.max_y ?? -1));
@@ -523,7 +527,10 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
         const col = Math.floor((gx * SUBZONE_SIZE - (large.min_x ?? 0)) / SUBZONE_SIZE);
         const row = Math.floor((gy * SUBZONE_SIZE - (large.min_y ?? 0)) / SUBZONE_SIZE);
         const key = `${large.id}:${col}:${row}`;
-        if (explored.has(key)) continue;
+        
+        // Always reveal the subzone the player is currently standing in, even if not explicitly recorded yet
+        if (explored.has(key) || key === playerKey) continue;
+        
         g.rect(gx * SUBZONE_SIZE, gy * SUBZONE_SIZE, SUBZONE_SIZE, SUBZONE_SIZE);
       }
     }
@@ -797,6 +804,11 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
     const filteredCells = nearbyCells.filter(c => !cleared[`${c.x},${c.y}`]);
     drawMonsters(filteredCells);
   }, [appReady, nearbyCells, gamePlayer?.cleared_cells, drawMonsters]);
+
+  useEffect(() => {
+    if (!appReady || !appRef.current) return;
+    drawPlayers(nearbyPlayers);
+  }, [appReady, nearbyPlayers, drawPlayers]);
 
   // Poll nearby cells (monsters / resources) around the player while the map
   // is open so markers stay fresh as the player moves.

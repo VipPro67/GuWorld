@@ -54,3 +54,4 @@ monster_heaven_tribulation_boss,Thiên Kiếp Thần Ma,Tribulation_Boss,1800,18
 monster_grand_calamity_boss,Hạo Kiếp Thần Ma,Tribulation_Boss,3000,300,70,[],{},{},{},boss_balanced,loot_boss_wolf_king,Hạo kiếp chấn động vạn vật thử thách sinh tử của Bát Chuyển Cổ Tiên.,true,false,0.0,5.0
 monster_myriad_tribulation_boss,Vạn Kiếp Thần Ma,Tribulation_Boss,5000,450,100,[],{},{},{},boss_balanced,loot_boss_wolf_king,Vạn kiếp giáng lâm chỉ có Tôn Giả Cửu Chuyển mới đủ sức đối kháng.,true,false,0.0,6.0
 monster_chaos_calamity_boss,Hỗn Độn Thần Ma,Tribulation_Boss,8000,650,150,[],{},{},{},boss_balanced,loot_boss_wolf_king,Hỗn Độn Chi Giới xâm lấn sức mạnh hủy diệt toàn bộ thiên địa thế giới.,true,false,0.0,8.0
+monster_spirit_guardian,Thủ Vệ Sơn Thần,Elite,350,34,24,[],{},{},{},beast_basic,loot_jade_golem,Thủ vệ sơn lâm tụ linh khí thiên địa trấn thủ các vùng đất linh mạch.,true,true,0.08,3.0

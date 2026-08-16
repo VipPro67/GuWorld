@@ -169,6 +169,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | GET | `/shop/packages` |
 | GET | `/shop/list` |
 | POST | `/shop/buy-package` |
+| POST | `/shop/exchange` | Đổi đá giữa Nguyên Thạch và Tiên Nguyên Thạch. Body: `{"currency": "PRIMEVAL_STONE" | "IMMORTAL_ESSENCE_STONE", "amount": <int64>}`. Tỷ giá: 1 Tiên Nguyên Thạch = 100 Nguyên Thạch; 100.000 Nguyên Thạch = 1 Tiên Nguyên Thạch (amount bằng `IMMORTAL_ESSENCE_STONE` trả `amount*100` Nguyên Thạch; bằng `PRIMEVAL_STONE` phải là bội số của 100.000 và trả `amount/100000` Tiên Nguyên Thạch). Trả `{"message": "...", "wallet": {...}}`. |
 | POST | `/shop/buy` |
 | POST | `/shop/sell` |
 | GET | `/shop/bao-hoang/listings` |
