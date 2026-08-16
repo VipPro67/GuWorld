@@ -750,26 +750,41 @@ func ensureWallet(database *sql.DB, playerID uuid.UUID) (WalletDTO, error) {
 	}
 	return w, nil
 }
-
 func ensureWalletTx(tx *sql.Tx, playerID uuid.UUID) (WalletDTO, error) {
 	var w WalletDTO
-	// The players row is already locked by the caller (evaluateManaTx) so this is
-	// transaction-safe and always returns the current stone balances.
-	if err := tx.QueryRow(`SELECT COALESCE(primeval_stones,0)::BIGINT, FLOOR(COALESCE(immortal_stones,0))::BIGINT FROM players WHERE id=$1`, playerID).Scan(&w.PrimevalStone, &w.ImmortalEssenceStone); err != nil {
+
+	if err := tx.QueryRow(`
+		SELECT
+			COALESCE(primeval_stones, 0)::BIGINT,
+			FLOOR(COALESCE(immortal_stones, 0))::BIGINT
+		FROM players
+		WHERE id = $1
+	`, playerID).Scan(
+		&w.PrimevalStone,
+		&w.ImmortalEssenceStone,
+	); err != nil {
 		return WalletDTO{}, err
 	}
-	err := tx.QueryRow(`SELECT immortal_jade FROM wallets WHERE user_id=$1 FOR UPDATE`, playerID).Scan(&w.ImmortalJade)
-	if err == sql.ErrNoRows {
-		if _, ierr := tx.Exec(`INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, playerID); ierr != nil {
-			return WalletDTO{}, ierr
-		}
-		w.ImmortalJade = 0
-	} else if err != nil {
+
+	if _, err := tx.Exec(`
+		INSERT INTO wallets (user_id)
+		VALUES ($1)
+		ON CONFLICT (user_id) DO NOTHING
+	`, playerID); err != nil {
 		return WalletDTO{}, err
 	}
+
+	if err := tx.QueryRow(`
+		SELECT immortal_jade
+		FROM wallets
+		WHERE user_id = $1
+		FOR UPDATE
+	`, playerID).Scan(&w.ImmortalJade); err != nil {
+		return WalletDTO{}, err
+	}
+
 	return w, nil
 }
-
 func createPayOSPaymentLink(orderCode int64, pkg TopupPackage, description, returnURL, cancelURL string) (string, string, error) {
 	clientID := os.Getenv("PAYOS_CLIENT_ID")
 	apiKey := os.Getenv("PAYOS_API_KEY")
