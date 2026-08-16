@@ -181,17 +181,16 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
 
   const sellableRecipes = (player.unlocked_recipes || []).map((recipe) => {
     const targetGuID = recipe.recipe_id.replace("recipe_", "").replace(/_\d+_\d+$/, "").toUpperCase();
-    const rank = guDictionary[targetGuID]?.rank || 1;
-    // For shop selling, recipes get 10% of their base price (same as Gu)
+    const targetGuRank = Number(recipe.recipe_id.match(/_(\d+)_\d+$/)?.[1]);
     return {
       id: recipe.recipe_id,
       name: formatRecipeName(recipe.recipe_id),
       description: `Bí phương luyện chế Cổ trùng. Độ hoàn thiện: ${recipe.completion_rate}%`,
       type: "Recipe" as const,
-      owned: 1, // Recipe is singular
+      owned: 1,
       price: Math.max(1, Math.floor(getGuBasePrice(targetGuID) * sellBackRatio)),
-      rank: rank,
-      currency: stoneTier(rank),
+      rank: targetGuRank,
+      currency: stoneTier(targetGuRank),
       paths: [] as string[],
     };
   });
