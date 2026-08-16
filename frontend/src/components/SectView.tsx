@@ -3166,8 +3166,8 @@ export const SectView: React.FC = () => {
           {mgmtTab === "stock" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
               {/* Stock Vault Card */}
-              <div className="bg-zinc-950/20 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-5 md:col-span-2">
-                {/* Header & Funds */}
+              
+              {/* <div className="bg-zinc-950/20 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-5 md:col-span-2">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-zinc-900 pb-4">
                   <div>
                     <h4 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-1.5">
@@ -3187,7 +3187,6 @@ export const SectView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Type Tabs */}
                 <div className="flex bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/60 self-start sm:self-auto">
                   <button
                     type="button"
@@ -3215,7 +3214,6 @@ export const SectView: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Selector + Summary Panel */}
                 {(() => {
                   const sectLvl = sect?.level || 1;
                   const recipeEntries: [string, { name: string; rank: number; path?: string[] | string }][] = recipes
@@ -3263,7 +3261,6 @@ export const SectView: React.FC = () => {
 
                   return (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-                      {/* Left side: Selector List */}
                       <div className="md:col-span-2 bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4">
                         <div className="flex justify-between items-center border-b border-zinc-900 pb-3">
                           <div>
@@ -3283,7 +3280,6 @@ export const SectView: React.FC = () => {
                           </span>
                         </div>
 
-                        {/* Search & Filters */}
                         <div className="flex flex-col sm:flex-row gap-2">
                           <input
                             type="text"
@@ -3316,7 +3312,6 @@ export const SectView: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Grid layout for items */}
                         <div className="max-h-[480px] overflow-y-auto pr-1 grid grid-cols-1 sm:grid-cols-2 gap-3 scrollbar-thin">
                           {filtered.length === 0 ? (
                             <div className="col-span-full text-center py-12 text-xs text-zinc-600 font-mono">Không tìm thấy vật phẩm phù hợp</div>
@@ -3362,7 +3357,6 @@ export const SectView: React.FC = () => {
                                   }`}
                                 >
                                   <div className="flex gap-2.5 min-w-0 items-start">
-                                    {/* Checkbox */}
                                     <div className={`w-4.5 h-4.5 rounded border flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
                                       isSelected ? "bg-cyan-600 border-cyan-500 text-white" : "bg-zinc-900 border-zinc-800"
                                     }`}>
@@ -3382,7 +3376,6 @@ export const SectView: React.FC = () => {
                                     </div>
                                   </div>
 
-                                  {/* Quantity control */}
                                   {isSelected && !locked && (
                                     <div className="flex items-center justify-between border-t border-zinc-900/80 pt-2" onClick={e => e.stopPropagation()}>
                                       <span className="text-[10px] text-zinc-500 font-mono">Nhập kho:</span>
@@ -3418,7 +3411,6 @@ export const SectView: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Right side: Summary & Submit Action */}
                       <div className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4 h-fit md:sticky md:top-4">
                         <h4 className="text-xs font-bold text-zinc-300 font-serif border-b border-zinc-900 pb-2.5">
                           Tóm Tắt Nhập Kho ({selectedCount} loại)
@@ -3433,7 +3425,6 @@ export const SectView: React.FC = () => {
                           </div>
                         ) : (
                           <>
-                            {/* Selected Items Itemized List */}
                             <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
                               {Object.values(stockSelections).map((item) => (
                                 <div key={item.item_id} className="flex justify-between items-center text-[10px] font-mono bg-zinc-950/20 border border-zinc-950 rounded-lg p-2">
@@ -3478,7 +3469,7 @@ export const SectView: React.FC = () => {
                     </div>
                   );
                 })()}
-              </div>
+              </div> */}
 
               {/* Upgrade Sect Card */}
               <div className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col justify-between gap-4">
