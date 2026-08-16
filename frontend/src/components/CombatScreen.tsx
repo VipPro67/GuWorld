@@ -159,15 +159,15 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const fetchPlayerStatus = useGameStore((state) => state.fetchPlayerStatus);
   const fetchMineSlots = useGameStore((state) => state.fetchMineSlots);
   const killerMoves = useGameStore((state) => state.killerMoves);
-  const fetchKillerMoves = useGameStore((state) => state.fetchKillerMoves);
+  //const fetchKillerMoves = useGameStore((state) => state.fetchKillerMoves);
   const combatSettings = useGameStore((state) => state.combatSettings);
   const fetchCombatSettings = useGameStore((state) => state.fetchCombatSettings);
   const addToast = useGameStore((state) => state.addToast);
   const monsterDictionary = useGameStore((state) => state.monsterDictionary);
 
-  useEffect(() => {
-    void fetchKillerMoves();
-  }, [fetchKillerMoves]);
+  // useEffect(() => {
+  //   void fetchKillerMoves();
+  // }, [fetchKillerMoves]);
 
   // Pre-populate auto settings from persistent combat config
   const combatSettingsFetched = useRef(false);
@@ -1024,19 +1024,44 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           {(() => {
             if (isPracticeMode) return null;
             const monsterSpec = monsterDictionary[enemy.enemy_template_id || ""];
-            const hasCaptureBonus = selectedGuIds.some(id => {
-              const gu = eligibleGus.find(g => g.instance_id === id);
-              const spec = gu ? guSpecFor(gu.gu_id, gu.rank) : null;
-              return !!(spec?.effects?.active?.capture_bonus);
-            });
+            const captureCandidates = selectedGuIds
+              .map(id => {
+                const gu = eligibleGus.find(g => g.instance_id === id);
+                if (!gu) return null;
+                const spec = guSpecFor(gu.gu_id, gu.rank);
+                return spec?.effects?.active?.capture_bonus ? { gu, spec } : null;
+              })
+              .filter((x): x is { gu: GuInstance; spec: GuSpec } => x !== null);
+            const hasCaptureBonus = captureCandidates.length > 0;
+            const bestCaptureRank = captureCandidates.reduce((max, c) => Math.max(max, c.spec.rank || 0), 0);
+            const monsterRank = enemy.enemy_rank ?? 0;
             const isCapturable = monsterSpec?.is_capturable && hasCaptureBonus;
             if (!isCapturable) return null;
+            const rankInsufficient = bestCaptureRank < monsterRank;
+            if (rankInsufficient) {
+              return (
+                <div className="flex flex-col gap-1">
+                  <button
+                    disabled
+                    className="px-6 bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white font-bold py-4 rounded-xl opacity-40 flex items-center justify-center gap-2 cursor-not-allowed"
+                  >
+                    <PawPrint className="w-6 h-6" />
+                  </button>
+                  <div className="flex items-center gap-1.5 text-[11px] text-amber-400">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>Cổ bắt rank {bestCaptureRank} không đủ bắt quái rank {monsterRank}. Cần rank {monsterRank} trở lên.</span>
+                  </div>
+                </div>
+              );
+            }
             return (
               <button
                 onClick={async () => {
                   const result = await useGameStore.getState().captureMonster();
                   if (result?.captured) {
                     handleExitSimulation();
+                  } else if (result) {
+                    handleStartSimulation();
                   }
                 }}
                 disabled={actionLoading}

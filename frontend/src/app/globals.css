@@ -17,33 +17,23 @@
 }
 
 :root {
-  /* LIGHT MODE (reversing zinc colors) */
-  --th-zinc-950: #f8fafc;
-  --th-zinc-900: #f1f5f9;
-  --th-zinc-800: #e2e8f0;
-  --th-zinc-700: #cbd5e1;
-  --th-zinc-600: #94a3b8;
-  --th-zinc-500: #64748b;
-  --th-zinc-400: #475569;
-  --th-zinc-300: #334155;
-  --th-zinc-200: #1e293b;
-  --th-zinc-100: #0f172a;
-  --th-zinc-50: #020617;
-  
-  --bg-primary: #f8fafc;
-  --bg-secondary: #ffffff;
-  --bg-card: #ffffff;
-  --bg-elevated: #f1f5f9;
+  /* Light mode semantic color tokens */
+  --bg-primary: #f8fafc; /* page background */
+  --bg-surface: #ffffff; /* cards, panels */
+  --bg-elevated: #f1f5f9; /* elevated surfaces */
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #94a3b8;
-  --border: #e2e8f0;
+  --border-default: #e2e8f0;
   --border-hover: #cbd5e1;
-  --brand: #059669;
+  --brand-primary: #059669;
   --brand-dim: rgba(5, 150, 105, 0.08);
-  --surface: #ffffff;
-
-  /* Rank Text Colors - Light Mode (darker, high contrast) */
+  --success: #059669;
+  --warning: #d97706;
+  --error: #dc2626;
+  --info: #0284c7;
+  --surface: var(--bg-surface);
+  /* Rank text colors (keep for reference) */
   --rank-1-text: #047857;
   --rank-2-text: #b91c1c;
   --rank-3-text: #1d4ed8;
@@ -53,8 +43,7 @@
   --rank-7-text: #be185d;
   --rank-8-text: #44403c;
   --rank-9-text: #854d0e;
-
-  /* Rarity Text Colors - Light Mode (darker, high contrast) */
+  /* Rarity text colors (keep) */
   --rarity-uncommon: #059669;
   --rarity-rare: #0284c7;
   --rarity-epic: #7c3aed;
@@ -63,33 +52,23 @@
 }
 
 :root.dark {
-  /* DARK MODE (original zinc colors) */
-  --th-zinc-950: #09090b;
-  --th-zinc-900: #18181b;
-  --th-zinc-800: #27272a;
-  --th-zinc-700: #3f3f46;
-  --th-zinc-600: #52525b;
-  --th-zinc-500: #71717a;
-  --th-zinc-400: #a1a1aa;
-  --th-zinc-300: #d4d4d8;
-  --th-zinc-200: #e4e4e7;
-  --th-zinc-100: #f4f4f5;
-  --th-zinc-50: #fafafa;
-  
+  /* Dark mode semantic color tokens */
   --bg-primary: #050505;
-  --bg-secondary: #090e0c;
-  --bg-card: #0f1412;
+  --bg-surface: #0a0f0d;
   --bg-elevated: #1a1f1d;
   --text-primary: #e2e8f0;
   --text-secondary: #a1a1aa;
   --text-muted: #52525b;
-  --border: #181c1a;
+  --border-default: #181c1a;
   --border-hover: #272b29;
-  --brand: #10b981;
+  --brand-primary: #10b981;
   --brand-dim: rgba(16, 185, 129, 0.1);
-  --surface: #0a0f0d;
-
-  /* Rank Text Colors - Dark Mode (bright, glowing) */
+  --success: #34d399;
+  --warning: #fbbf24;
+  --error: #f43f5e;
+  --info: #38bdf8;
+  --surface: var(--bg-surface);
+  /* Rank text colors (keep) */
   --rank-1-text: #6ee7b7;
   --rank-2-text: #fca5a5;
   --rank-3-text: #93c5fd;
@@ -99,8 +78,7 @@
   --rank-7-text: #f9a8d4;
   --rank-8-text: #e7e5e4;
   --rank-9-text: #fef08a;
-
-  /* Rarity Text Colors - Dark Mode (bright, glowing) */
+  /* Rarity text colors */
   --rarity-uncommon: #34d399;
   --rarity-rare: #38bdf8;
   --rarity-epic: #c084fc;

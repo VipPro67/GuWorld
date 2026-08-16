@@ -177,10 +177,14 @@ func AutoCombatStart(c *gin.Context) {
 			}
 		}
 
+		enemyKind := "Enemy"
+		if enemy.Kind == "Pet" {
+			enemyKind = "Pet"
+		}
 		simEnemy := &simulator.CombatantAuto{
 			ID:            enemy.ID,
 			Name:          enemy.Name,
-			Kind:          "Enemy",
+			Kind:          enemyKind,
 			GridX:         enemy.GridX,
 			GridY:         enemy.GridY,
 			MaxHP:         int(enemy.MaxHP),
@@ -865,6 +869,34 @@ func AutoCombatStart(c *gin.Context) {
 				// Pet survived — update HP
 				_, _ = tx.Exec(`UPDATE player_pets SET hp = $1, updated_at = NOW() WHERE id = $2 AND player_id = $3`,
 					float64(simAlly.HP), simAlly.ID, player.ID)
+			}
+		}
+
+		// Persist challenged/defender pet damage & death (mine / real PVP)
+		defenderID := ""
+		if player.ActiveCombat != nil {
+			defenderID = player.ActiveCombat.TargetPlayerID
+		}
+		if defenderID != "" && defenderID != "dummy" {
+			for _, simEnemy := range simState.Enemies {
+				if simEnemy.Kind != "Pet" {
+					continue
+				}
+				if simEnemy.HP <= 0 {
+					_, _ = tx.Exec(`DELETE FROM player_pets WHERE id = $1 AND player_id = $2`, simEnemy.ID, defenderID)
+					_, _ = tx.Exec(`
+						INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
+						VALUES ($1, 'pet.died_in_combat', 'player_pet', $2, $3, '{}', '', false, 'Pet chết trong chiến đấu', NOW())
+					`, defenderID, simEnemy.ID, fmt.Sprintf("%s chết khi phòng thủ trước %s", simEnemy.Name, player.ActiveCombat.EnemyName))
+					logs = append(logs, simulator.CombatLog{
+						Turn:   simState.Turn,
+						Action: "PET_DEATH",
+						Detail: fmt.Sprintf("%s đã chết trong chiến đấu!", simEnemy.Name),
+					})
+				} else {
+					_, _ = tx.Exec(`UPDATE player_pets SET hp = $1, updated_at = NOW() WHERE id = $2 AND player_id = $3`,
+						float64(simEnemy.HP), simEnemy.ID, defenderID)
+				}
 			}
 		}
 	}

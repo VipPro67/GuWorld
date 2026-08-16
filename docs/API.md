@@ -109,8 +109,9 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | GET | `/explore/world` | Cấu hình thế giới: `width`, `height`, `large_zone_size`, `sub_zone_size`, `hub_region_id`, `hub_x/y`. |
 | GET | `/explore/objects` | Các ô persistent (map_cells): village/trạm nghỉ, boss, linh tài — cho bản đồ lớn. Trả `{region_id,x,y,cell_type,content_id,rank,respawn_seconds,cleared}`. |
 | GET | `/explore/cells` | Các ô non-empty (Monster/Boss/Resource/WildGu) quanh player (`?x=&y=&r=`, mặc định quanh player, r cap 300) để bản đồ lớn vẽ marker quái/tài nguyên. Nội dung **ổn định theo ô** (không re-randomize theo thời gian), khớp đúng nội dung khi di chuyển. Trả `[{x,y,cell_type,content,rank,sub_rank}]`. |
+| GET | `/explore/cells/rect` | Các ô non-empty trong hình chữ nhật `?min_x=&min_y=&max_x=&max_y=` (mỗi cạnh ≤ 900) — dùng để prefetch đúng vùng nhìn / dải phía trước hướng đi; client gộp vào cache ổn định thay vì thay thế. Trả cùng định dạng `[{x,y,cell_type,content,rank,sub_rank}]`. |
 | POST | `/explore/move` | Di chuyển tới toạ độ trong thế giới (bounds = `world_width`/`world_height`). |
-| POST | `/explore/move-path` | Di chuyển tự do theo đường thẳng từ ô hiện tại tới toạ độ đích, trigger cell action trên từng ô đi qua (gom loot; **chỉ chạm trán quái khi bước vào ô thật sự có quái/boss**, không có phục kích ngẫu nhiên trên ô trống). Trả `{player, logs, log, combat_triggered, reached, stats}`; nếu `reached=false` và không combat, client chain tiếp request từ vị trí mới cho tới khi tới đích. |
+| POST | `/explore/move-path` | Di chuyển tự do theo đường thẳng từ ô hiện tại tới toạ độ đích, trigger cell action trên từng ô đi qua (gom loot; **chỉ chạm trán quái khi bước vào ô thật sự có quái/boss**, không có phục kích ngẫu nhiên trên ô trống). Mỗi request tiến **tối đa 150 ô** để commit vị trí mịn (người chơi khác thấy chuyển động gần real-time, đổi hướng/dừng sớm hơn); trả `{player, logs, log, combat_triggered, reached, stats}`; nếu `reached=false` và không combat, client chain tiếp request từ vị trí mới cho tới khi tới đích. |
 
 ## Sủng vật (Pets)
 
@@ -286,3 +287,19 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | DELETE | `/admin/players/:id/pets/:pet_id` | Xóa vĩnh viễn sủng vật. |
 | PUT | `/admin/players/:id/stones` | Đổi đá (stones) của người chơi. |
 | GET | `/admin/audit-logs` | Audit log (bao gồm `admin.update_player`). |
+
+## SSE realtime — `GET /events` (Auth)
+
+Stream hợp nhất (`StreamUnifiedEvents`) cho authenticated player. Các event-type:
+
+| Event | Mô tả |
+| --- | --- |
+| `mana.snapshot` | Snapshot player ban đầu khi kết nối. |
+| `player.updated` | Cập nhật player realtime (mana, hp, vị trí, …). |
+| `player.heartbeat` | Heartbeat ~60s. |
+| `combat.started` / `combat.ended` | Trạng thái chiến đấu. |
+| `trade.updated` | Trạng thái giao dịch. |
+| `chat.messages.world` / `chat.messages.general` / `chat.messages.sect` | Chat channel. |
+| `world.player.pos` | **Vị trí người chơi trên bản đồ lớn**: broadcast sau mỗi commit di chuyển (`/explore/move`, `/explore/move-path`). Payload `{id, username, avatar_url, x, y, ts}`. Client lọc theo viewport và nội suy marker để hiển thị chuyển động mượt (không teleport). Broadcast qua hub `world_events.go`; frontend phát `CustomEvent("gu_world_pos")` → `useWorldStore.upsertPlayerPosition`. |
+
+Kèm theo: `GET /player/events` (stream player snapshot + heartbeat riêng), `GET /trade/events`, `GET /chat/bao-hoang/events`.

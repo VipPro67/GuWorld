@@ -952,6 +952,30 @@ func CombatAttack(c *gin.Context) {
 				}
 			}
 		}
+
+		// Persist challenged/defender pet damage & death (mine / real PVP)
+		defenderID := ""
+		if player.ActiveCombat != nil {
+			defenderID = player.ActiveCombat.TargetPlayerID
+		}
+		if defenderID != "" && defenderID != "dummy" {
+			for _, enemy := range player.ActiveCombat.Enemies {
+				if enemy.Kind != "Pet" {
+					continue
+				}
+				if enemy.HP <= 0 {
+					_, _ = tx.Exec(`DELETE FROM player_pets WHERE id = $1 AND player_id = $2`, enemy.ID, defenderID)
+					_, _ = tx.Exec(`
+						INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
+						VALUES ($1, 'pet.died_in_combat', 'player_pet', $2, $3, '{}', '', false, 'Pet chết trong chiến đấu', NOW())
+					`, defenderID, enemy.ID, fmt.Sprintf("%s chết khi phòng thủ trước %s", enemy.Name, player.ActiveCombat.EnemyName))
+					turnLogs = append(turnLogs, fmt.Sprintf("%s đã chết trong chiến đấu!", enemy.Name))
+				} else {
+					_, _ = tx.Exec(`UPDATE player_pets SET hp = $1, updated_at = NOW() WHERE id = $2 AND player_id = $3`,
+						enemy.HP, enemy.ID, defenderID)
+				}
+			}
+		}
 	}
 
 	victory := true

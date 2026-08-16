@@ -226,7 +226,11 @@ func StreamUnifiedEvents(c *gin.Context) {
 	err := db.DB.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID)
 	hasSect := err == nil && sectID != ""
 
-	// 3. Subscribe to Chat Channels
+	// 3. Subscribe to World Position broadcasts
+	worldPosCh := subscribeWorldPos()
+	defer unsubscribeWorldPos(worldPosCh)
+
+	// 4. Subscribe to Chat Channels
 	worldCh := subscribeChat(chatChannelKey("world", sql.NullString{}))
 	defer unsubscribeChat(chatChannelKey("world", sql.NullString{}), worldCh)
 
@@ -315,6 +319,12 @@ func StreamUnifiedEvents(c *gin.Context) {
 
 		case payload := <-worldCh:
 			if err := writeSSE(c, "chat.messages.world", payload); err != nil {
+				return
+			}
+			flusher.Flush()
+
+		case payload := <-worldPosCh:
+			if err := writeSSE(c, "world.player.pos", payload); err != nil {
 				return
 			}
 			flusher.Flush()

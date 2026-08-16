@@ -1,19 +1,84 @@
 package handlers
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
+
+// isTimeoutOrBusy reports whether an error is a context deadline/cancel, a
+// Postgres lock timeout (55P03), a canceled statement (57014) or a deadlock
+// (40P01) — all of which the client should retry rather than treat as fatal.
+func isTimeoutOrBusy(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return true
+	}
+	var pgErr *pq.Error
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "55P03", "57014", "40P01":
+			return true
+		}
+	}
+	return false
+}
+
+// beginCombatTx opens a bounded transaction whose lock waits cannot hang
+// indefinitely: the context caps the whole request and SET LOCAL lock_timeout
+// aborts any row-lock wait after 5 seconds. The shared busy message is used by
+// combat mutation handlers so clients surface a retriable error.
+// On failure it responds itself and returns (nil, nil).
+func beginCombatTx(c *gin.Context) (*sql.Tx, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	tx, err := db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		cancel()
+		if isTimeoutOrBusy(err) {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Hệ thống đang bận — quá nhiều thao tác cùng lúc, đạo hữu thử lại chút nữa nhé."})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		}
+		return nil, nil
+	}
+	if _, errSet := tx.Exec("SET LOCAL lock_timeout = '5000'"); errSet != nil {
+		logger.S.Warnf("beginCombatTx: failed to SET LOCAL lock_timeout: %v", errSet)
+	}
+	return tx, cancel
+}
+
+// respondCombatTxErr maps transaction errors to a friendly client response.
+func respondCombatTxErr(c *gin.Context, err error, fallback string) {
+	if err == nil {
+		return
+	}
+	if isTimeoutOrBusy(err) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Hệ thống đang bận — quá nhiều thao tác cùng lúc, đạo hữu thử lại chút nữa nhé."})
+		return
+	}
+	msg := fallback
+	if msg == "" {
+		msg = "Giao dịch thất bại, vui lòng thử lại."
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": msg})
+}
 
 func Retreat(c *gin.Context) {
 	playerIDStr := c.Param("id")
@@ -29,16 +94,16 @@ func Retreat(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+	tx, cancel := beginCombatTx(c)
+	if tx == nil {
 		return
 	}
+	defer cancel()
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock player Aperture"})
+		respondCombatTxErr(c, err, "Failed to lock player Aperture")
 		return
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
@@ -233,17 +298,17 @@ func Retreat(c *gin.Context) {
 	_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.ActiveCombat, player.X, player.Y, player.PrimevalStones,
 		player.TempLoot, player.CurrentRegion, player.HumanQi, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player status after retreat"})
+		respondCombatTxErr(c, err, "Failed to save player status after retreat")
 		return
 	}
 
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save player Gus after retreat"})
+		respondCombatTxErr(c, err, "Failed to save player Gus after retreat")
 		return
 	}
 
 	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		respondCombatTxErr(c, err, "Transaction commit failed")
 		return
 	}
 
@@ -271,16 +336,16 @@ func Flee(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+	tx, cancel := beginCombatTx(c)
+	if tx == nil {
 		return
 	}
+	defer cancel()
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to lock player Aperture"})
+		respondCombatTxErr(c, err, "Failed to lock player Aperture")
 		return
 	}
 
@@ -337,12 +402,12 @@ func Flee(c *gin.Context) {
 	`
 	_, err = tx.Exec(updateQuery, player.ActiveCombat, player.HumanQi, player.HP, player.CurrentRegion, player.X, player.Y, player.TempLoot, player.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player status after fleeing"})
+		respondCombatTxErr(c, err, "Failed to update player status after fleeing")
 		return
 	}
 
 	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		respondCombatTxErr(c, err, "Transaction commit failed")
 		return
 	}
 

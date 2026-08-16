@@ -62,6 +62,9 @@ const authHeaders = (method?: string): Record<string, string> => {
 interface WorldStoreState {
   objects: WorldObject[];
   nearbyCells: NearbyCell[];
+  cellCache: Record<string, NearbyCell>;
+  nearbyWindow: { x: number; y: number; r: number } | null;
+  playerPositions: Record<string, NearbyPlayer & { ts: number }>;
   nearbyPlayers: NearbyPlayer[];
   exploredSubZones: Set<string>;
   movementRange: number;
@@ -79,7 +82,10 @@ interface WorldStoreState {
   cameraY: number;
   fetchObjects: () => Promise<void>;
   fetchNearbyCells: (x: number, y: number, r: number) => Promise<void>;
+  fetchCellsRect: (minX: number, minY: number, maxX: number, maxY: number) => Promise<void>;
   fetchNearbyPlayers: (x: number, y: number, r: number) => Promise<void>;
+  upsertPlayerPosition: (p: NearbyPlayer) => void;
+  pruneStalePlayers: () => void;
   movePath: (x: number, y: number) => Promise<{ player: Player; log: string; combat_triggered: boolean; reached: boolean } | null>;
   setExploredSubZones: (keys: string[]) => void;
   setMovementRange: (r: number) => void;
@@ -95,6 +101,9 @@ interface WorldStoreState {
 export const useWorldStore = create<WorldStoreState>((set) => ({
   objects: [],
   nearbyCells: [],
+  cellCache: {},
+  nearbyWindow: null,
+  playerPositions: {},
   nearbyPlayers: [],
   exploredSubZones: new Set<string>(),
   movementRange: 1,
@@ -176,16 +185,55 @@ export const useWorldStore = create<WorldStoreState>((set) => ({
   setLivePosition: (x, y) => set({ liveX: x, liveY: y }),
   setCamera: (scale, x, y) => set({ cameraScale: scale, cameraX: x, cameraY: y }),
 
-  fetchNearbyCells: async (x, y, r) => {
+  fetchCellsRect: async (minX, minY, maxX, maxY) => {
     try {
-      const url = `${BACKEND_URL}/api/explore/cells?x=${Math.round(x)}&y=${Math.round(y)}&r=${Math.round(r)}`;
+      const url = `${BACKEND_URL}/api/explore/cells/rect?min_x=${Math.round(minX)}&min_y=${Math.round(minY)}&max_x=${Math.round(maxX)}&max_y=${Math.round(maxY)}`;
       const res = await fetch(url, { headers: authHeaders("GET") });
-      if (!res.ok) throw new Error("Không thể tải quái vật trên bản đồ");
+      if (!res.ok) throw new Error("Không thể tải dữ liệu bản đồ");
       const data = await res.json();
-      set({ nearbyCells: Array.isArray(data) ? data : [] });
+      const cells: NearbyCell[] = Array.isArray(data) ? data : [];
+      set((s) => {
+        const cache = { ...s.cellCache };
+        for (const c of cells) {
+          cache[`${c.x},${c.y}`] = c;
+        }
+        // Bound memory: keep cells near the player window, drop the far ones.
+        const keys = Object.keys(cache);
+        if (keys.length > 150000) {
+          const w = s.nearbyWindow;
+          if (w) {
+            const keep = Math.max(w.r, 300) * 3;
+            for (const key of keys) {
+              const [cx, cy] = key.split(",").map(Number);
+              if (Math.abs(cx - w.x) > keep || Math.abs(cy - w.y) > keep) {
+                delete cache[key];
+              }
+            }
+          }
+        }
+        // Derive the visible window from whatever chunks have been loaded so
+        // far; markers appear progressively as prefetch tiles resolve.
+        let nearbyCells = s.nearbyCells;
+        const w = s.nearbyWindow;
+        if (w) {
+          nearbyCells = [];
+          for (const key of Object.keys(cache)) {
+            const [cx, cy] = key.split(",").map(Number);
+            if (cx >= w.x - w.r && cx <= w.x + w.r && cy >= w.y - w.r && cy <= w.y + w.r) {
+              nearbyCells.push(cache[key]);
+            }
+          }
+        }
+        return { cellCache: cache, nearbyCells };
+      });
     } catch (err) {
-      console.error("fetchNearbyCells error:", err instanceof Error ? err.message : err);
+      console.error("fetchCellsRect error:", err instanceof Error ? err.message : err);
     }
+  },
+
+  fetchNearbyCells: async (x, y, r) => {
+    set({ nearbyWindow: { x, y, r } });
+    await useWorldStore.getState().fetchCellsRect(x - r, y - r, x + r, y + r);
   },
 
   fetchNearbyPlayers: async (x, y, r) => {
@@ -194,9 +242,72 @@ export const useWorldStore = create<WorldStoreState>((set) => ({
       const res = await fetch(url, { headers: authHeaders("GET") });
       if (!res.ok) throw new Error("Không thể tải người chơi trên bản đồ");
       const data = await res.json();
-      set({ nearbyPlayers: Array.isArray(data) ? data : [] });
+      const players: NearbyPlayer[] = Array.isArray(data) ? data : [];
+      set((s) => {
+        const positions = { ...s.playerPositions };
+        const now = Date.now();
+        for (const p of players) {
+          const prev = positions[p.id];
+          if (!prev || prev.ts <= now) {
+            positions[p.id] = { ...p, ts: now };
+          } else {
+            // Keep the freshest data but refresh presence so stale pruning keeps them.
+            positions[p.id] = { ...p, ts: prev.ts };
+          }
+        }
+        const w = s.nearbyWindow;
+        let nearbyPlayers = s.nearbyPlayers;
+        if (w) {
+          nearbyPlayers = Object.keys(positions)
+            .map((id) => positions[id])
+            .filter((p2) => p2.x >= w.x - w.r && p2.x <= w.x + w.r && p2.y >= w.y - w.r && p2.y <= w.y + w.r);
+        } else {
+          nearbyPlayers = players;
+        }
+        return { playerPositions: positions, nearbyPlayers };
+      });
     } catch (err) {
       console.error("fetchNearbyPlayers error:", err instanceof Error ? err.message : err);
     }
+  },
+
+  upsertPlayerPosition: (p) => {
+    set((s) => {
+      const now = Date.now();
+      const prev = s.playerPositions[p.id];
+      if (prev && prev.ts > now) return {};
+      const updated = { ...s.playerPositions, [p.id]: { ...p, ts: now } };
+      const w = s.nearbyWindow;
+      if (w) {
+        const inWindow = (pp: NearbyPlayer) => pp.x >= w.x - w.r && pp.x <= w.x + w.r && pp.y >= w.y - w.r && pp.y <= w.y + w.r;
+        let nearby: NearbyPlayer[];
+        if (s.nearbyPlayers.some((p2) => p2.id === p.id)) {
+          nearby = s.nearbyPlayers.map((p2) => (p2.id === p.id ? { ...p2, ...p } : p2));
+        } else if (inWindow(p)) {
+          nearby = [...s.nearbyPlayers, p];
+        } else {
+          nearby = s.nearbyPlayers;
+        }
+        return { playerPositions: updated, nearbyPlayers: nearby };
+      }
+      return { playerPositions: updated };
+    });
+  },
+
+  pruneStalePlayers: () => {
+    set((s) => {
+      const cutoff = Date.now() - 60_000;
+      let changed = false;
+      const updated: Record<string, NearbyPlayer & { ts: number }> = {};
+      for (const id of Object.keys(s.playerPositions)) {
+        if (s.playerPositions[id].ts >= cutoff) {
+          updated[id] = s.playerPositions[id];
+        } else {
+          changed = true;
+        }
+      }
+      if (!changed) return {};
+      return { playerPositions: updated, nearbyPlayers: s.nearbyPlayers.filter((p) => !!updated[p.id]) };
+    });
   },
 }));

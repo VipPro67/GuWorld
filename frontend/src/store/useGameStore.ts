@@ -1241,7 +1241,7 @@ const getAbortSignal = (key: string, timeoutMs = 30000): AbortSignal => {
   return controller.signal;
 };
 
-const authFetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
+const authFetch = (input: RequestInfo | URL, init: RequestInit & { timeoutMs?: number } = {}) => {
   const csrfToken = getCookie("gu_csrf_token");
   const headers: Record<string, string> = {};
   if (init.headers) {
@@ -1263,9 +1263,9 @@ const authFetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
       headers["Authorization"] = `Bearer ${token}`;
     }
   }
-  // Add abort signal with 30s timeout, keyed by URL string
+  // Add abort signal with timeout, keyed by URL string (default 30s)
   const key = typeof input === "string" ? input : input.toString();
-  const signal = getAbortSignal(key);
+  const signal = getAbortSignal(key, init.timeoutMs ?? 30000);
   return fetch(input, {
     ...init,
     headers,
@@ -1790,6 +1790,17 @@ export const useGameStore = create<GameState>((set, get) => {
         set({ activeTrade: payload.trade ?? null });
       } catch (err) {
         console.error("Failed to process trade event", err);
+      }
+    });
+
+    source.addEventListener("world.player.pos", (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent<string>).data);
+        if (payload && payload.id) {
+          window.dispatchEvent(new CustomEvent("gu_world_pos", { detail: payload }));
+        }
+      } catch (err) {
+        console.error("Failed to process world position event", err);
       }
     });
 
@@ -3297,6 +3308,7 @@ export const useGameStore = create<GameState>((set, get) => {
     try {
       const response = await authFetch(`${BACKEND_URL}/api/explore/retreat/${player.id}`, {
         method: "POST",
+        timeoutMs: 10000,
       });
 
       if (response.status === 401 || response.status === 403) {
@@ -3321,13 +3333,27 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
   fleeCombat: async () => {
-    const { player, token, actionLoading, logout } = get();
+    const { player, token, actionLoading, logout, showConfirm } = get();
     if (!player || !token || actionLoading) return;
+
+    // HP quá thấp (< 20% max): bỏ chạy trừ 20% Max HP — gần như chắc chắn ngất
+    // xỉu, mất toàn bộ tài nguyên thu thập. Cảnh báo và chặn lại cho đạo hữu cân nhắc.
+    const maxHP = player.base_hp || player.hp || 1;
+    if (player.hp <= 0.2 * maxHP) {
+      set({ actionLoading: true });
+      const proceed = await showConfirm(
+        "HP của đạo hữu đang rất thấp. Bỏ chạy khỏi chiến đấu sẽ khiến đạo hữu chịu thêm 20% sát thương theo HP tối đa — gần như chắc chắn sẽ ngất xỉu, làm rơi mất toàn bộ Nguyên Thạch, Cổ trùng và tài nguyên thu thập. Vẫn muốn bỏ chạy?",
+        { confirmText: "Vẫn bỏ chạy", cancelText: "Hủy" },
+      );
+      set({ actionLoading: false });
+      if (!proceed) return;
+    }
 
     set({ actionLoading: true, error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/explore/flee/${player.id}`, {
         method: "POST",
+        timeoutMs: 10000,
       });
 
       if (response.status === 401 || response.status === 403) {

@@ -47,6 +47,10 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
   const moveTargetRef = useRef<{ x: number; y: number } | null>(null);
   const animIdRef = useRef<number>(0);
   const isMovingRef = useRef(false);
+  const walkVersionRef = useRef(0);
+  const playerMarkersRef = useRef<Map<string, { container: Container; fromX: number; fromY: number; toX: number; toY: number; t0: number; active: boolean }>>(new Map());
+  const performMoveRef = useRef<(x: number, y: number) => void>(() => {});
+  const loadedTilesRef = useRef<Set<string>>(new Set());
 
   const regions = useGameStore((s) => s.regions);
   const regionsLoaded = useGameStore((s) => s.regionsLoaded);
@@ -60,6 +64,9 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
   const nearbyPlayers = useWorldStore((s) => s.nearbyPlayers);
   const fetchNearbyCells = useWorldStore((s) => s.fetchNearbyCells);
   const fetchNearbyPlayers = useWorldStore((s) => s.fetchNearbyPlayers);
+  const fetchCellsRect = useWorldStore((s) => s.fetchCellsRect);
+  const upsertPlayerPosition = useWorldStore((s) => s.upsertPlayerPosition);
+  const pruneStalePlayers = useWorldStore((s) => s.pruneStalePlayers);
   const setLivePosition = useWorldStore((s) => s.setLivePosition);
   const monsterDictionary = useGameStore((s) => s.monsterDictionary);
   const setCamera = useWorldStore((s) => s.setCamera);
@@ -138,24 +145,38 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       const startX = playerRef.current.position.x;
       const startY = playerRef.current.position.y;
       const dist = Math.hypot(targetX + 0.5 - startX, targetY + 0.5 - startY);
+
+      // Clicking the cell the character is already on acts as "stop": cancel
+      // any in-flight move (including a pending server segment) and settle.
       if (dist < 1) {
         if (isMovingRef.current) {
+          walkVersionRef.current += 1;
+          cancelAnimationFrame(animIdRef.current);
           isMovingRef.current = false;
           setMoving(false);
         }
         return;
       }
-      if (isMovingRef.current) return;
 
+      // Retargeting: always accept the new destination. Bumping the version
+      // invalidates any in-flight walk chain so it stops issuing segments to
+      // the old target. A fresh chain then walks from the last server-confirmed
+      // position toward the new goal.
+      moveTargetRef.current = { x: targetX, y: targetY };
+      walkVersionRef.current += 1;
+      const myVersion = walkVersionRef.current;
       cancelAnimationFrame(animIdRef.current);
-      isMovingRef.current = true;
-      setMoving(true);
+      if (!isMovingRef.current) {
+        isMovingRef.current = true;
+        setMoving(true);
+      }
+      // Last server-confirmed position (used to reset the marker on failure).
       const origin = { x: startX, y: startY };
 
-      // Walk in segments: each move-path call advances up to maxPathCells.
-      // If reached is false, keep walking from the updated position.
       const walk = (tx: number, ty: number) => {
+        if (walkVersionRef.current !== myVersion) return;
         movePath(tx, ty).then((res) => {
+          if (walkVersionRef.current !== myVersion) return;
           if (!res) {
             cancelAnimationFrame(animIdRef.current);
             isMovingRef.current = false;
@@ -168,11 +189,20 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
             const animDist = Math.hypot(np.x + 0.5 - playerRef.current.position.x, np.y + 0.5 - playerRef.current.position.y);
             const duration = Math.max(0.25, animDist / movementSpeed);
             animateMove(np.x + 0.5, np.y + 0.5, duration, () => {
+              if (walkVersionRef.current !== myVersion) return;
               setPlayerFromServer(np);
               setExploredSubZones(np.visited_subzones || []);
               if (res.log) addWorldLog(res.log);
               if (!res.reached && !res.combat_triggered) {
-                walk(tx, ty);
+                const desired = moveTargetRef.current;
+                if (desired && (desired.x !== tx || desired.y !== ty)) {
+                  // The goal changed while this segment was in flight: begin a
+                  // fresh chain toward the new destination.
+                  isMovingRef.current = false;
+                  performMoveRef.current(desired.x, desired.y);
+                } else {
+                  walk(tx, ty);
+                }
               } else {
                 isMovingRef.current = false;
                 setMoving(false);
@@ -188,8 +218,12 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
 
       walk(targetX, targetY);
     },
-    [movementSpeed, animateMove, movePath, setMoving, setPlayerFromServer, setExploredSubZones],
+    [movementSpeed, animateMove, movePath, setMoving, setPlayerFromServer, setExploredSubZones, addWorldLog, selectObject],
   );
+
+  useEffect(() => {
+    performMoveRef.current = performMove;
+  }, [performMove]);
 
   const handleBackgroundClick = useCallback(
     (app: Application, event: FederatedPointerEvent) => {
@@ -373,56 +407,83 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
   const drawPlayers = useCallback(
     (players: typeof nearbyPlayers) => {
       const container = playersContainerRef.current;
-      container.removeChildren();
-      
-      const pCount = Math.min(players.length, 500);
-      for (let i = 0; i < pCount; i++) {
-        const p = players[i];
-        
-        const charContainer = new Container();
-        charContainer.eventMode = "static";
-        charContainer.cursor = "pointer";
-        charContainer.on("pointerdown", (event) => {
-          event.stopPropagation();
-          handleObjectClick({
-            id: p.id,
-            region_id: "",
-            x: p.x,
-            y: p.y,
-            cell_type: "Player",
-            content_id: p.username,
-            rank: undefined,
-          });
-        });
-
-        if (p.avatar_url) {
-          const sprite = new Sprite();
-          sprite.anchor.set(0.5);
-          sprite.width = 0.8;
-          sprite.height = 0.8;
-          
-          Assets.load(p.avatar_url)
-            .then((texture) => {
-              sprite.texture = texture;
-            })
-            .catch(() => {
-              const fallbackG = new Graphics();
-              fallbackG.poly([0, -0.6, 0.6, 0, 0, 0.6, -0.6, 0]);
-              fallbackG.fill({ color: 0x9333ea });
-              fallbackG.stroke({ color: 0x6b21a8, width: 0.1 });
-              charContainer.addChild(fallbackG);
+      const markers = playerMarkersRef.current;
+      const now = performance.now();
+      const alive = new Set<string>();
+      for (const p of players) {
+        if (markers.size >= 300) break;
+        alive.add(p.id);
+        const nx = p.x + 0.5;
+        const ny = p.y + 0.5;
+        const existing = markers.get(p.id);
+        if (!existing) {
+          // Fresh marker: drop it at the reported position (no tween needed).
+          const charContainer = new Container();
+          charContainer.eventMode = "static";
+          charContainer.cursor = "pointer";
+          charContainer.on("pointerdown", (event) => {
+            event.stopPropagation();
+            handleObjectClick({
+              id: p.id,
+              region_id: "",
+              x: p.x,
+              y: p.y,
+              cell_type: "Player",
+              content_id: p.username,
+              rank: undefined,
             });
-          charContainer.addChild(sprite);
+          });
+
+          if (p.avatar_url) {
+            const sprite = new Sprite();
+            sprite.anchor.set(0.5);
+            sprite.width = 0.8;
+            sprite.height = 0.8;
+            Assets.load(p.avatar_url)
+              .then((texture) => {
+                sprite.texture = texture;
+              })
+              .catch(() => {
+                const fallbackG = new Graphics();
+                fallbackG.poly([0, -0.6, 0.6, 0, 0, 0.6, -0.6, 0]);
+                fallbackG.fill({ color: 0x9333ea });
+                fallbackG.stroke({ color: 0x6b21a8, width: 0.1 });
+                charContainer.addChild(fallbackG);
+              });
+            charContainer.addChild(sprite);
+          } else {
+            const g = new Graphics();
+            g.poly([0, -0.6, 0.6, 0, 0, 0.6, -0.6, 0]);
+            g.fill({ color: 0x9333ea });
+            g.stroke({ color: 0x6b21a8, width: 0.1 });
+            charContainer.addChild(g);
+          }
+
+          charContainer.position.set(nx, ny);
+          container.addChild(charContainer);
+          markers.set(p.id, { container: charContainer, fromX: nx, fromY: ny, toX: nx, toY: ny, t0: now, active: false });
         } else {
-          const g = new Graphics();
-          g.poly([0, -0.6, 0.6, 0, 0, 0.6, -0.6, 0]);
-          g.fill({ color: 0x9333ea });
-          g.stroke({ color: 0x6b21a8, width: 0.1 });
-          charContainer.addChild(g);
+          // Known marker: if the server-reported position differs, glide from
+          // the current (possibly interpolated) spot to the new spot.
+          if (existing.toX !== nx || existing.toY !== ny) {
+            existing.fromX = existing.container.position.x;
+            existing.fromY = existing.container.position.y;
+            existing.toX = nx;
+            existing.toY = ny;
+            existing.t0 = now;
+            existing.active = true;
+            // Point this marker array no longer needs re-render; ticker tweens it.
+          }
         }
-        
-        charContainer.position.set(p.x + 0.5, p.y + 0.5);
-        container.addChild(charContainer);
+      }
+
+      // Remove markers for players that left the reported set.
+      for (const id of Array.from(markers.keys())) {
+        if (!alive.has(id)) {
+          const leaving = markers.get(id);
+          if (leaving) container.removeChild(leaving.container);
+          markers.delete(id);
+        }
       }
     },
     [handleObjectClick]
@@ -500,42 +561,9 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
     const app = appRef.current;
     const g = fogRef.current;
     g.clear();
-    if (!app || !gamePlayer) return;
-
-    const stage = stageRef.current;
-    const scale = scaleRef.current;
-    const explored = exploredSubZones;
-
-    const left = Math.max(0, (0 - stage.position.x) / scale);
-    const top = Math.max(0, (0 - stage.position.y) / scale);
-    const right = Math.min(WORLD_W, (app.screen.width - stage.position.x) / scale);
-    const bottom = Math.min(WORLD_H, (app.screen.height - stage.position.y) / scale);
-    if (right <= left || bottom <= top) return;
-
-    const gx0 = Math.max(0, Math.floor(left / SUBZONE_SIZE));
-    const gx1 = Math.min(WORLD_W / SUBZONE_SIZE - 1, Math.floor(right / SUBZONE_SIZE));
-    const gy0 = Math.max(0, Math.floor(top / SUBZONE_SIZE));
-    const gy1 = Math.min(WORLD_H / SUBZONE_SIZE - 1, Math.floor(bottom / SUBZONE_SIZE));
-
-    const playerRegion = regions.find((r) => r.zone_type === "NGU_VUC" && gamePlayer.x >= (r.min_x ?? 0) && gamePlayer.x <= (r.max_x ?? -1) && gamePlayer.y >= (r.min_y ?? 0) && gamePlayer.y <= (r.max_y ?? -1));
-    const playerKey = playerRegion ? `${playerRegion.id}:${Math.floor((gamePlayer.x - (playerRegion.min_x ?? 0)) / SUBZONE_SIZE)}:${Math.floor((gamePlayer.y - (playerRegion.min_y ?? 0)) / SUBZONE_SIZE)}` : "";
-
-    for (let gy = gy0; gy <= gy1; gy++) {
-      for (let gx = gx0; gx <= gx1; gx++) {
-        const large = regions.find((r) => r.zone_type === "NGU_VUC" && gx * SUBZONE_SIZE >= (r.min_x ?? 0) && gx * SUBZONE_SIZE <= (r.max_x ?? -1) && gy * SUBZONE_SIZE >= (r.min_y ?? 0) && gy * SUBZONE_SIZE <= (r.max_y ?? -1));
-        if (!large) continue;
-        const col = Math.floor((gx * SUBZONE_SIZE - (large.min_x ?? 0)) / SUBZONE_SIZE);
-        const row = Math.floor((gy * SUBZONE_SIZE - (large.min_y ?? 0)) / SUBZONE_SIZE);
-        const key = `${large.id}:${col}:${row}`;
-        
-        // Always reveal the subzone the player is currently standing in, even if not explicitly recorded yet
-        if (explored.has(key) || key === playerKey) continue;
-        
-        g.rect(gx * SUBZONE_SIZE, gy * SUBZONE_SIZE, SUBZONE_SIZE, SUBZONE_SIZE);
-      }
-    }
-    g.fill({ color: 0x000000, alpha: 0.72 });
-  }, [gamePlayer, exploredSubZones, regions]);
+    // Fog disabled per user request
+    return;
+  }, []);
 
   const drawPlayer = useCallback(() => {
     const g = playerRef.current;
@@ -680,11 +708,11 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       stageRef.current.addChild(bgSprite);
 
       stageRef.current.addChild(regionsContainerRef.current);
+      stageRef.current.addChild(fogRef.current);
       stageRef.current.addChild(objectsContainerRef.current);
       stageRef.current.addChild(monstersContainerRef.current);
       stageRef.current.addChild(playersContainerRef.current);
       stageRef.current.addChild(rangeRef.current);
-      stageRef.current.addChild(fogRef.current);
       stageRef.current.addChild(playerRef.current);
 
       drawPlayer();
@@ -700,6 +728,20 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
         if (fogDirtyRef.current) {
           fogDirtyRef.current = false;
           drawFog();
+        }
+
+        // Interpolate remote player markers between server-reported positions
+        // so movement reads smooth instead of teleporting.
+        const markers = playerMarkersRef.current;
+        for (const m of markers.values()) {
+          if (!m.active) continue;
+          const t = Math.min((performance.now() - m.t0) / 2000, 1);
+          const eased = 1 - Math.pow(1 - t, 3);
+          m.container.position.set(m.fromX + (m.toX - m.fromX) * eased, m.fromY + (m.toY - m.fromY) * eased);
+          if (t >= 1) {
+            m.container.position.set(m.toX, m.toY);
+            m.active = false;
+          }
         }
       });
 
@@ -811,18 +853,86 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
   }, [appReady, nearbyPlayers, drawPlayers]);
 
   // Poll nearby cells (monsters / resources) around the player while the map
-  // is open so markers stay fresh as the player moves.
+  // is open so markers stay fresh as the player moves. A separate, faster poll
+  // keeps remote players fresh, and a background prefetch warms cells ahead of
+  // the movement so markers appear progressively instead of popping in.
   const investigationRange = useWorldStore((s) => s.investigationRange);
   useEffect(() => {
     if (!appReady || !gamePlayer) return;
-    const poll = () => {
+    const pollCells = () => {
       fetchNearbyCells(gamePlayer.x, gamePlayer.y, investigationRange);
-      fetchNearbyPlayers(gamePlayer.x, gamePlayer.y, investigationRange);
     };
-    poll();
-    const id = setInterval(poll, 8000);
-    return () => clearInterval(id);
-  }, [appReady, gamePlayer?.x, gamePlayer?.y, investigationRange, fetchNearbyCells, fetchNearbyPlayers]);
+    const pollPlayers = () => {
+      fetchNearbyPlayers(gamePlayer.x, gamePlayer.y, investigationRange);
+      pruneStalePlayers();
+    };
+    const prefetch = () => {
+      const store = useWorldStore.getState();
+      const px = store.liveX;
+      const py = store.liveY;
+      const tile = Math.max(150, investigationRange);
+      const want = new Set<string>();
+      const addTile = (wx: number, wy: number) => {
+        const tx = Math.floor(wx / tile);
+        const ty = Math.floor(wy / tile);
+        if (tx >= 0 && ty >= 0) want.add(`${tx},${ty}`);
+      };
+      addTile(px, py);
+      // Band ahead of the current walking direction.
+      const goal = moveTargetRef.current;
+      const gx = goal ? goal.x + 0.5 : px;
+      const gy = goal ? goal.y + 0.5 : py;
+      const dist = Math.hypot(gx - px, gy - py);
+      if (dist > tile * 0.5) {
+        const ux = (gx - px) / dist;
+        const uy = (gy - py) / dist;
+        for (let k = 1; k <= 3; k++) addTile(px + ux * k * tile, py + uy * k * tile);
+      }
+      // Drop the "loaded" watermark for tiles far away so returning players
+      // re-fetch (their cells may have been pruned from the client cache).
+      const pt = Math.floor(px / tile);
+      const qy = Math.floor(py / tile);
+      for (const key of Array.from(loadedTilesRef.current)) {
+        const [tx, ty] = key.split(",").map(Number);
+        if (Math.abs(tx - pt) > 7 || Math.abs(ty - qy) > 7) loadedTilesRef.current.delete(key);
+      }
+      let scheduled = 0;
+      for (const key of want) {
+        if (loadedTilesRef.current.has(key)) continue;
+        if (scheduled >= 2) break;
+        scheduled++;
+        loadedTilesRef.current.add(key);
+        const [tx, ty] = key.split(",").map(Number);
+        fetchCellsRect(tx * tile, ty * tile, Math.min(WORLD_W - 1, (tx + 1) * tile - 1), Math.min(WORLD_H - 1, (ty + 1) * tile - 1));
+      }
+    };
+    const onWorldPos = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (
+        detail &&
+        detail.id &&
+        detail.x !== undefined &&
+        detail.y !== undefined &&
+        detail.id !== useGameStore.getState().player?.id
+      ) {
+        upsertPlayerPosition(detail);
+      }
+    };
+
+    pollCells();
+    pollPlayers();
+    prefetch();
+    window.addEventListener("gu_world_pos", onWorldPos);
+    const cellsId = setInterval(pollCells, 8000);
+    const playersId = setInterval(pollPlayers, 2000);
+    const prefetchId = setInterval(prefetch, 3000);
+    return () => {
+      window.removeEventListener("gu_world_pos", onWorldPos);
+      clearInterval(cellsId);
+      clearInterval(playersId);
+      clearInterval(prefetchId);
+    };
+  }, [appReady, gamePlayer?.x, gamePlayer?.y, investigationRange, fetchNearbyCells, fetchNearbyPlayers, fetchCellsRect, upsertPlayerPosition, pruneStalePlayers]);
 
   // Keep the live X/Y position in sync with the game player when idle.
   useEffect(() => {

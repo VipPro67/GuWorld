@@ -803,6 +803,15 @@ func MovePlayer(c *gin.Context) {
 		return
 	}
 
+	broadcastWorldPos(WorldPosEvent{
+		ID:        player.ID.String(),
+		Username:  player.Username,
+		AvatarURL: player.AvatarURL,
+		X:         player.X,
+		Y:         player.Y,
+		TS:        time.Now().UnixMilli(),
+	})
+
 	// Calculate fresh stats
 	newStats := CalculatePlayerStats(&player)
 
@@ -928,8 +937,10 @@ func MovePlayerPath(c *gin.Context) {
 	// Free movement: the player may click anywhere in the world. The path is
 	// walked cell by cell (each traversed cell triggers its action), stopping
 	// early on the first combat. maxPathCells bounds the work of a single
-	// request so the client chains requests for very long journeys.
-	const maxPathCells = 1000
+	// request so the client chains requests for very long journeys. A smaller
+	// chunk keeps server-side position commits fine-grained so other clients
+	// see near-real-time movement and walking can be redirected sooner.
+	const maxPathCells = 150
 	path := lineCells(player.X, player.Y, req.X, req.Y)
 	if len(path) > maxPathCells {
 		path = path[:maxPathCells]
@@ -971,6 +982,15 @@ func MovePlayerPath(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
 	}
+
+	broadcastWorldPos(WorldPosEvent{
+		ID:        player.ID.String(),
+		Username:  player.Username,
+		AvatarURL: player.AvatarURL,
+		X:         player.X,
+		Y:         player.Y,
+		TS:        time.Now().UnixMilli(),
+	})
 
 	newStats := CalculatePlayerStats(&player)
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
@@ -1073,6 +1093,61 @@ func GetNearbyCells(c *gin.Context) {
 				continue
 			}
 			cell := ResolveCell(cx, cy)
+			if cell.Type == "Empty" {
+				continue
+			}
+			out = append(out, NearbyCell{X: cell.X, Y: cell.Y, Type: cell.Type, Content: cell.Content, Rank: cell.Rank, SubRank: cell.SubRank})
+		}
+	}
+
+	c.JSON(http.StatusOK, out)
+}
+
+// GetCellsRect resolves the non-empty cells inside an explicit rectangle
+// (min_x/min_y/max_x/max_y). Used by the world map to prefetch the exact
+// visible area or a band ahead of the player. Bounded to prevent abuse.
+func GetCellsRect(c *gin.Context) {
+	if _, exists := middleware.GetPlayerID(c); !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var minX, minY, maxX, maxY int
+	fmt.Sscanf(c.Query("min_x"), "%d", &minX)
+	fmt.Sscanf(c.Query("min_y"), "%d", &minY)
+	fmt.Sscanf(c.Query("max_x"), "%d", &maxX)
+	fmt.Sscanf(c.Query("max_y"), "%d", &maxY)
+
+	if minX < 0 {
+		minX = 0
+	}
+	if minY < 0 {
+		minY = 0
+	}
+	if maxX >= WorldWidth {
+		maxX = WorldWidth - 1
+	}
+	if maxY >= WorldHeight {
+		maxY = WorldHeight - 1
+	}
+	if maxX < minX || maxY < minY {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Rectangle tọa độ không hợp lệ."})
+		return
+	}
+
+	// Bound the resolved area so a single request stays cheap.
+	const maxSide = 900
+	if maxX-minX+1 > maxSide {
+		maxX = minX + maxSide - 1
+	}
+	if maxY-minY+1 > maxSide {
+		maxY = minY + maxSide - 1
+	}
+
+	out := []NearbyCell{}
+	for y := minY; y <= maxY; y++ {
+		for x := minX; x <= maxX; x++ {
+			cell := ResolveCell(x, y)
 			if cell.Type == "Empty" {
 				continue
 			}

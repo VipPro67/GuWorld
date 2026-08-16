@@ -132,13 +132,6 @@ export function WorldPage() {
           </button>
         </div>
       </div>
-
-
-
-      <div className="absolute bottom-20 left-1/2 -translate-x-1/2 px-4 py-2 bg-zinc-900/80 rounded-xl border border-zinc-800 text-xs text-zinc-500 font-serif pointer-events-none">
-        Click vào vị trí trên bản đồ để di chuyển tự do (đi qua từng ô, sẵn sàng chạm trán quái) • Scroll để zoom
-      </div>
-
       {selectedObject && (
         <div className="absolute bottom-28 left-1/2 -translate-x-1/2 pointer-events-auto animate-fade-in z-20">
           <div className={`relative w-72 px-4 py-4 rounded-2xl border ${cfg.borderColor} ${cfg.bgColor} backdrop-blur-md shadow-2xl`}>

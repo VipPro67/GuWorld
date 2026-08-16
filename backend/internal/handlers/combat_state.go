@@ -92,41 +92,16 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 	}
 
 	// Load formation pets into Allies
-	petRows, errPet := tx.Query(`
-		SELECT id, nickname, rank, sub_rank, hp, max_hp, base_attack, base_defense, speed, count
-		FROM player_pets
-		WHERE player_id = $1 AND formation_slot > 0 AND state = 'ACTIVE' AND hunger > 0
-		ORDER BY formation_slot ASC
-	`, player.ID)
-	if errPet == nil {
-		defer petRows.Close()
-		for petRows.Next() {
-			var petID, nickname string
-			var petRank, petSubRank, petCount int
-			var petHP, petMaxHP, petAtk, petDef, petSpeed float64
-			if errScan := petRows.Scan(&petID, &nickname, &petRank, &petSubRank, &petHP, &petMaxHP, &petAtk, &petDef, &petSpeed, &petCount); errScan != nil {
-				continue
-			}
-			displayName := nickname
-			if petCount > 1 {
-				displayName = fmt.Sprintf("Bầy %s (%d)", nickname, petCount)
-			}
-			petCombatant := models.Combatant{
-				ID:            petID,
-				Name:          displayName,
-				Kind:          "Pet",
-				Rank:          petRank,
-				SubRank:       petSubRank,
-				HP:            petHP,
-				MaxHP:         petMaxHP,
-				BaseAttack:    petAtk,
-				BaseDefense:   petDef,
-				Speed:         petSpeed,
-				StatusEffects: []models.StatusEffect{},
-			}
-			base.Allies = append(base.Allies, petCombatant)
-			base.PetIDs = append(base.PetIDs, petID)
+	base.Allies = append(base.Allies, loadFormationPetCombatants(tx, player.ID.String(), base.CombatMode == "virtual")...)
+	for _, pet := range base.Allies {
+		if pet.Kind == "Pet" {
+			base.PetIDs = append(base.PetIDs, pet.ID)
 		}
+	}
+
+	// Load challenged/defender formation pets into Enemies (PVP: mine, arena, map)
+	if base.TargetPlayerID != "" && base.TargetPlayerID != "dummy" {
+		base.Enemies = append(base.Enemies, loadFormationPetCombatants(tx, base.TargetPlayerID, base.CombatMode == "virtual")...)
 	}
 
 	if base.TargetPlayerID == "" && base.MineSlotID == 0 && base.EnemyTemplateID != "monster_heavenly_tribulation" && base.EnemyHP < 1000 {
@@ -194,6 +169,52 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 	}
 
 	return base
+}
+
+// loadFormationPetCombatants loads a player's formation pets as Combatants.
+// virtual restores pets to full HP, mirroring arena's virtual-mode convention.
+func loadFormationPetCombatants(tx *sql.Tx, playerID string, virtual bool) []models.Combatant {
+	petRows, errPet := tx.Query(`
+		SELECT id, nickname, rank, sub_rank, hp, max_hp, base_attack, base_defense, speed, count
+		FROM player_pets
+		WHERE player_id = $1 AND formation_slot > 0 AND state = 'ACTIVE' AND hunger > 0
+		ORDER BY formation_slot ASC
+	`, playerID)
+	if errPet != nil {
+		return nil
+	}
+	defer petRows.Close()
+
+	var pets []models.Combatant
+	for petRows.Next() {
+		var petID, nickname string
+		var petRank, petSubRank, petCount int
+		var petHP, petMaxHP, petAtk, petDef, petSpeed float64
+		if errScan := petRows.Scan(&petID, &nickname, &petRank, &petSubRank, &petHP, &petMaxHP, &petAtk, &petDef, &petSpeed, &petCount); errScan != nil {
+			continue
+		}
+		if virtual {
+			petHP = petMaxHP
+		}
+		displayName := nickname
+		if petCount > 1 {
+			displayName = fmt.Sprintf("Bầy %s (%d)", nickname, petCount)
+		}
+		pets = append(pets, models.Combatant{
+			ID:            petID,
+			Name:          displayName,
+			Kind:          "Pet",
+			Rank:          petRank,
+			SubRank:       petSubRank,
+			HP:            petHP,
+			MaxHP:         petMaxHP,
+			BaseAttack:    petAtk,
+			BaseDefense:   petDef,
+			Speed:         petSpeed,
+			StatusEffects: []models.StatusEffect{},
+		})
+	}
+	return pets
 }
 
 func StartCombat(tx *sql.Tx, base *models.CombatState, player *models.Player) *models.CombatState {

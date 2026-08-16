@@ -10,7 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -41,16 +40,16 @@ func CaptureMonster(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+	tx, cancel := beginCombatTx(c)
+	if tx == nil {
 		return
 	}
+	defer cancel()
 	defer tx.Rollback()
 
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		respondCombatTxErr(c, err, "Failed to load player")
 		return
 	}
 
@@ -181,6 +180,8 @@ func CaptureMonster(c *gin.Context) {
 		_, errUpd := tx.Exec(`UPDATE players SET active_combat = NULL, cleared_cells = $1 WHERE id = $2`, player.ClearedCells, player.ID)
 		if errUpd != nil {
 			logger.S.Errorf("CaptureMonster: failed to clear combat: %v", errUpd)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trạng thái chiến đấu."})
+			return
 		}
 
 		// Audit log
@@ -190,7 +191,7 @@ func CaptureMonster(c *gin.Context) {
 		`, player.ID, monTemplate.ID, fmt.Sprintf("Bắt thành công %s", enemyName), fmt.Sprintf(`{"rank":%d,"sub_rank":%d}`, enemyRank, enemySubRank))
 
 		if errTx := tx.Commit(); errTx != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+			respondCombatTxErr(c, errTx, "Transaction commit failed")
 			return
 		}
 
@@ -207,16 +208,25 @@ func CaptureMonster(c *gin.Context) {
 	}
 
 	// Bắt thất bại — combat vẫn tiếp diễn
-	_, _ = tx.Exec(`
-		INSERT INTO combat_history (player_id, enemy_name, enemy_type, enemy_rank, enemy_sub_rank, result, turns, log, created_at)
-		VALUES ($1, $2, $3, $4, $5, 'CAPTURE_FAILED', 0, $6, NOW())
+	captureLog := fmt.Sprintf("Cố gắng bắt %s thất bại! Tỷ lệ: %.1f%%", player.ActiveCombat.EnemyName, chance*100)
+	_, errHist := tx.Exec(`
+		INSERT INTO combat_history (player_id, winner, logs, summary, enemy_name, enemy_type, region)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`,
-		player.ID, player.ActiveCombat.EnemyName, player.ActiveCombat.EnemyType,
-		player.ActiveCombat.EnemyRank, player.ActiveCombat.EnemySubRank,
-		fmt.Sprintf("Cố gắng bắt %s thất bại! Tỷ lệ: %.1f%%", player.ActiveCombat.EnemyName, chance*100))
+		player.ID, "CAPTURE_FAILED",
+		fmt.Sprintf(`["%s"]`, captureLog),
+		fmt.Sprintf(`{"capture_chance":%.4f,"roll":%.4f}`, chance, roll),
+		player.ActiveCombat.EnemyName, player.ActiveCombat.EnemyType,
+		player.CurrentRegion,
+	)
+	if errHist != nil {
+		logger.S.Errorf("CaptureMonster: failed to insert combat_history: %v", errHist)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu lịch sử chiến đấu."})
+		return
+	}
 
 	if errTx := tx.Commit(); errTx != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		respondCombatTxErr(c, errTx, "Transaction commit failed")
 		return
 	}
 
