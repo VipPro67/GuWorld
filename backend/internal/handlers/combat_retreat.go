@@ -47,7 +47,7 @@ func isTimeoutOrBusy(err error) bool {
 // combat mutation handlers so clients surface a retriable error.
 // On failure it responds itself and returns (nil, nil).
 func beginCombatTx(c *gin.Context) (*sql.Tx, context.CancelFunc) {
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	tx, err := db.DB.BeginTx(ctx, nil)
 	if err != nil {
 		cancel()
@@ -343,7 +343,10 @@ func Flee(c *gin.Context) {
 	defer cancel()
 	defer tx.Rollback()
 
-	player, err := evaluateManaTx(tx, authID)
+	// Flee only needs equipped stats (EffectiveMaxHP) plus HP/mana/temp_loot —
+	// never the full inventory — so use the light loader: no goroutine fetch
+	// of the full ~12k Gu inventory while the row is locked.
+	player, err := evaluateManaTxEquipped(tx, authID)
 	if err != nil {
 		respondCombatTxErr(c, err, "Failed to lock player Aperture")
 		return
@@ -356,6 +359,7 @@ func Flee(c *gin.Context) {
 
 	enemyName := player.ActiveCombat.EnemyName
 	var logMsg string
+	var defeatAudit *auditlog.Entry
 
 	isExploration := player.ActiveCombat.CombatMode != "virtual" && player.ActiveCombat.EnemyTemplateID != "monster_heavenly_tribulation"
 
@@ -369,14 +373,16 @@ func Flee(c *gin.Context) {
 			player.CurrentRegion = HubRegionID
 			player.X, player.Y = hubEntryPoint()
 
-			// Add an explicit audit log before clearing temp_loot
-			auditlog.Log(db.DB, auditlog.Entry{
+			// Snapshot the loss before clearing; the audit insert runs AFTER
+			// commit so the transaction stays short (no second pool connection
+			// held while the row is locked).
+			defeatAudit = &auditlog.Entry{
 				PlayerID:       &authID,
 				Action:         "combat.flee_death",
 				RequestSummary: fmt.Sprintf("Lost temp_loot: stones=%.0f gus=%d mats=%d", player.TempLoot.PrimevalStones, len(player.TempLoot.GuInventory), len(player.TempLoot.MaterialsInventory)),
 				IPAddress:      c.ClientIP(),
 				Success:        true,
-			})
+			}
 
 			player.TempLoot = models.TempLoot{
 				GuInventory:        models.GuInventory{},
@@ -411,6 +417,10 @@ func Flee(c *gin.Context) {
 		return
 	}
 
+	// Best-effort audit logs AFTER commit — never inside the transaction.
+	if defeatAudit != nil {
+		auditlog.Log(db.DB, *defeatAudit)
+	}
 	auditlog.Logf(db.DB, &authID, "combat.flee", "enemy=%s", logMsg)
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"log":    logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
