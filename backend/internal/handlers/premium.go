@@ -552,7 +552,7 @@ func BuyPremiumPackage(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật Nhân Khí"})
 		return
 	}
-	if _, err = tx.Exec(`UPDATE wallets SET primeval_stone=$1, immortal_essence_stone=$2, immortal_jade=$3, updated_at=CURRENT_TIMESTAMP WHERE user_id=$4`, wallet.PrimevalStone, wallet.ImmortalEssenceStone, wallet.ImmortalJade, playerID); err != nil {
+	if _, err = tx.Exec(`UPDATE wallets SET immortal_jade=$1, updated_at=CURRENT_TIMESTAMP WHERE user_id=$2`, wallet.ImmortalJade, playerID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật ví"})
 		return
 	}
@@ -667,10 +667,8 @@ func ExchangeStones(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật đá"})
 		return
 	}
-	if _, err = tx.Exec(`UPDATE wallets SET primeval_stone=$1, immortal_essence_stone=$2, updated_at=CURRENT_TIMESTAMP WHERE user_id=$3`, wallet.PrimevalStone, wallet.ImmortalEssenceStone, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật ví"})
-		return
-	}
+	// Stones are authoritative in the players table, no need to update wallets
+
 	if err = insertWalletTx(tx, playerID, "EXCHANGE", req.Currency, -req.Amount, func() int64 {
 		if req.Currency == CurrencyImmortalEssenceStone {
 			return immortalBefore

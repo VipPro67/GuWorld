@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/auth"
+	"github.com/vippro67/GuWorld/backend/internal/db"
 )
 
 func csrfProtection(c *gin.Context) {
@@ -99,6 +100,17 @@ func AuthRequired() gin.HandlerFunc {
 		playerID, err := uuid.Parse(claims.PlayerID)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid player identity in token"})
+			c.Abort()
+			return
+		}
+
+		// Verify player actually exists in the database
+		var exists bool
+		err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE id=$1)", playerID).Scan(&exists)
+		if err != nil || !exists {
+			// If usedCookie is true, we should ideally clear it, but the client handling 401 will often clear it anyway or redirect to login.
+			// Let's just return 401. The frontend interceptor will call logout().
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Tài khoản không tồn tại hoặc đã bị xóa."})
 			c.Abort()
 			return
 		}
