@@ -73,7 +73,7 @@ const randomPoolMarkup = 1.5
 func randomPoolStock(rank int) int {
 	switch {
 	case rank >= 6:
-		return 1
+		return 0
 	case rank == 5:
 		return 2
 	case rank == 4:
