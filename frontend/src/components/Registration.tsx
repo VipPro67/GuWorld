@@ -130,20 +130,20 @@ export const Registration: React.FC<RegistrationProps> = ({
   return (
     <div className="glass-panel-gold rounded-3xl p-8 w-full max-w-md relative overflow-hidden group shadow-[0_0_50px_rgba(234,179,8,0.15)]">
       {referralCode && (
-        <div className="mb-4 text-[10px] font-mono text-center text-amber-400 bg-amber-950/40 border border-amber-500/30 p-2 rounded-xl animate-pulse">
+        <div className="mb-4 text-[10px] font-mono text-center text-amber-700 dark:text-amber-400 bg-[var(--bg-elevated)] border border-amber-500 p-2 rounded-xl animate-pulse">
           ⚡ LIÊN KẾT SƯ ĐỒ ĐÃ KÍCH HOẠT: <span className="font-bold underline text-yellow-300">{referralCode}</span>
         </div>
       )}
       {/* Decorative floating aura */}
-      <div className="absolute -left-12 -bottom-12 w-28 h-28 rounded-full bg-emerald-500/10 blur-2xl pointer-events-none" />
-      <div className="absolute -right-12 -top-12 w-28 h-28 rounded-full bg-amber-500/10 blur-2xl pointer-events-none" />
+      <div className="absolute -left-12 -bottom-12 w-28 h-28 rounded-full bg-[var(--bg-elevated)] pointer-events-none" />
+      <div className="absolute -right-12 -top-12 w-28 h-28 rounded-full bg-[var(--bg-elevated)] pointer-events-none" />
 
       {/* Header */}
       <div className="text-center mb-6">
-        <div className="inline-flex p-3 rounded-2xl bg-amber-950/40 border border-amber-500/20 text-amber-400 mb-4 animate-pulse">
+        <div className="inline-flex p-3 rounded-2xl bg-[var(--bg-elevated)] border border-amber-500 text-amber-500 mb-4 animate-pulse">
           <Compass className="w-6 h-6" />
         </div>
-        <h2 className="text-3xl font-bold text-zinc-100 font-serif tracking-wide">
+        <h2 className="text-3xl font-bold text-[var(--text-primary)] font-serif tracking-wide">
           CỔ GIỚI
         </h2>
         <h3 className="text-xs uppercase tracking-widest font-mono mt-1 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]">
@@ -152,14 +152,14 @@ export const Registration: React.FC<RegistrationProps> = ({
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-zinc-900 mb-6 bg-zinc-950/60 p-1.5 rounded-2xl border border-zinc-900/60">
+      <div className="flex border-b border-zinc-900 mb-6 bg-[var(--bg-surface)] p-1.5 rounded-2xl border border-[var(--border-default)]">
         <button
           type="button"
           onClick={() => handleTabChange(true)}
           className={`flex-1 py-2.5 text-xs font-mono uppercase tracking-wider rounded-xl transition-all font-semibold cursor-pointer ${
             isLoginTab
               ? "bg-amber-500 text-zinc-950 shadow-md font-bold"
-              : "text-zinc-500 hover:text-zinc-300"
+              : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
           }`}
         >
           Đăng Nhập
@@ -170,7 +170,7 @@ export const Registration: React.FC<RegistrationProps> = ({
           className={`flex-1 py-2.5 text-xs font-mono uppercase tracking-wider rounded-xl transition-all font-semibold cursor-pointer ${
             !isLoginTab
               ? "bg-amber-500 text-zinc-950 shadow-md font-bold"
-              : "text-zinc-500 hover:text-zinc-300"
+              : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
           }`}
         >
           Đăng Ký
@@ -178,7 +178,7 @@ export const Registration: React.FC<RegistrationProps> = ({
       </div>
 
       {/* Text Description */}
-      <p className="text-xs text-zinc-400 leading-relaxed text-center mb-6 font-serif h-12 flex items-center justify-center">
+      <p className="text-xs text-[var(--text-secondary)] leading-relaxed text-center mb-6 font-serif h-12 flex items-center justify-center">
         {isLoginTab
           ? "Đã có Tiên cốt Không Khiếu? Nhập Email cùng Mật mã để tiếp tục nghịch thiên hành trình."
           : '"Con người là vạn vật chi linh, Cổ là thiên địa chi tinh." Khai mở Đạo hiệu để gacha Tư chất (Giáp, Ất, Bính, Đinh).'}
@@ -207,7 +207,7 @@ export const Registration: React.FC<RegistrationProps> = ({
                   setEmail(e.target.value);
                 }}
                 placeholder="example@gmail.com"
-                className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-sm text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-amber-500/50 focus:shadow-[0_0_15px_rgba(234,179,8,0.1)] transition-all font-mono"
+                className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl py-3 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-all font-mono"
                 maxLength={255}
                 required
               />
@@ -236,7 +236,7 @@ export const Registration: React.FC<RegistrationProps> = ({
                   setUsername(e.target.value);
                 }}
                 placeholder="Nhập đạo hiệu..."
-                className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-sm text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-amber-500/50 focus:shadow-[0_0_15px_rgba(234,179,8,0.1)] transition-all font-serif"
+                className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl py-3 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-all font-serif"
                 maxLength={50}
                 required
               />
@@ -266,7 +266,7 @@ export const Registration: React.FC<RegistrationProps> = ({
                     setEmail(e.target.value);
                   }}
                   placeholder="example@gmail.com"
-                  className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-sm text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-amber-500/50 focus:shadow-[0_0_15px_rgba(234,179,8,0.1)] transition-all font-mono"
+                  className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl py-3 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-all font-mono"
                   required
                 />
               </div>
@@ -274,7 +274,7 @@ export const Registration: React.FC<RegistrationProps> = ({
                 type="button"
                 disabled={isLoading || otpCooldown > 0 || email.trim().length === 0}
                 onClick={handleSendOTP}
-                className="px-4 py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-900 disabled:text-zinc-600 border border-amber-500/30 rounded-xl text-xs font-serif text-amber-100 transition-colors shrink-0 cursor-pointer min-w-[80px]"
+                className="px-4 py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-[var(--bg-elevated)] disabled:text-zinc-600 border border-amber-500 rounded-xl text-xs font-serif text-amber-100 transition-colors shrink-0 cursor-pointer min-w-[80px]"
               >
                 {otpCooldown > 0 ? `${otpCooldown}s` : "Gửi Mã"}
               </button>
@@ -303,7 +303,7 @@ export const Registration: React.FC<RegistrationProps> = ({
                   setOtp(e.target.value);
                 }}
                 placeholder="Nhập mã OTP 6 chữ số..."
-                className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-sm text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-amber-500/50 focus:shadow-[0_0_15px_rgba(234,179,8,0.1)] transition-all font-mono tracking-[0.2em] text-center"
+                className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl py-3 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-all font-mono tracking-[0.2em] text-center"
                 maxLength={6}
                 required
               />
@@ -328,8 +328,8 @@ export const Registration: React.FC<RegistrationProps> = ({
                   }}
                   className={`py-2.5 rounded-xl border font-serif text-xs font-bold transition-all cursor-pointer ${
                     gender === g.id
-                      ? "bg-amber-950/40 border-amber-500/50 text-amber-300"
-                      : "bg-zinc-950/80 border-zinc-800 text-zinc-400 hover:border-zinc-700"
+                      ? "bg-amber-600 border-amber-500 text-white"
+                      : "bg-[var(--bg-elevated)] border-[var(--border-default)] text-[var(--text-secondary)] hover:border-[var(--border-hover)]"
                   }`}
                 >
                   {g.name}
@@ -340,7 +340,7 @@ export const Registration: React.FC<RegistrationProps> = ({
         )}
 
         {otpSuccessMessage && (
-          <div className="text-[11px] text-emerald-400 font-serif bg-emerald-950/30 border border-emerald-500/20 p-2 rounded-xl text-center">
+          <div className="text-[11px] text-emerald-700 dark:text-emerald-400 font-serif bg-[var(--bg-elevated)] border border-emerald-500 p-2 rounded-xl text-center">
             {otpSuccessMessage}
           </div>
         )}
@@ -365,7 +365,7 @@ export const Registration: React.FC<RegistrationProps> = ({
                 setPassword(e.target.value);
               }}
               placeholder="••••••••"
-              className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-3 pl-10 pr-10 text-sm text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-amber-500/50 focus:shadow-[0_0_15px_rgba(234,179,8,0.1)] transition-all font-mono"
+              className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl py-3 pl-10 pr-10 text-sm text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-all font-mono"
               minLength={6}
               maxLength={50}
               required
@@ -382,7 +382,7 @@ export const Registration: React.FC<RegistrationProps> = ({
 
         {/* Error Display */}
         {error && (
-          <div className="flex items-start gap-2 text-rose-400 bg-rose-950/20 border border-rose-900/40 p-3 rounded-xl text-xs mt-2">
+          <div className="flex items-start gap-2 text-rose-700 dark:text-rose-400 bg-[var(--bg-elevated)] border border-rose-500 p-3 rounded-xl text-xs mt-2">
             <ShieldAlert className="w-4.5 h-4.5 shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
@@ -431,7 +431,7 @@ export const Registration: React.FC<RegistrationProps> = ({
         <button
           type="button"
           onClick={handleGoogleLogin}
-          className="w-full py-3.5 px-4 rounded-xl border border-zinc-850 hover:border-zinc-750 bg-zinc-950/60 text-zinc-300 text-xs font-semibold tracking-wider font-mono hover:text-white transition-all flex items-center justify-center gap-2.5 hover:shadow-[0_0_15px_rgba(234,179,8,0.08)] active:scale-[0.98] cursor-pointer"
+          className="w-full py-3.5 px-4 rounded-xl border border-[var(--border-default)] hover:border-[var(--border-hover)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] text-xs font-semibold tracking-wider font-mono hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-2.5 active:scale-[0.98] cursor-pointer"
         >
           <svg className="w-4.5 h-4.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>

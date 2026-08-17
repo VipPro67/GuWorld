@@ -149,14 +149,14 @@ export default function Home() {
 
   if (IS_MAINTENANCE) {
     return (
-      <div className="min-h-screen flex flex-col py-2 sm:py-8 px-2 sm:px-6 lg:px-8 relative bg-primary">
-        <header className="w-full max-w-[1600px] px-4 sm:px-8 mx-auto flex justify-between items-center pb-4 border-b border-zinc-900/50 mb-4">
+      <div className="min-h-screen flex flex-col py-2 sm:py-8 px-2 sm:px-6 lg:px-8 relative bg-[var(--bg-primary)]">
+        <header className="w-full max-w-[1600px] px-4 sm:px-8 mx-auto flex justify-between items-center pb-4 border-b border-[var(--border-default)] mb-4">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-500/20 flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-[var(--brand-dim)] border border-[var(--brand-primary)] flex items-center justify-center shrink-0">
                 <Sparkles className="w-4 h-4 text-emerald-400" />
               </div>
-              <h1 className="text-lg sm:text-xl font-bold font-serif tracking-wider text-zinc-100 bg-gradient-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">
+              <h1 className="text-lg sm:text-xl font-bold font-serif tracking-wider text-[var(--text-primary)]">
                 Cổ Giới
               </h1>
             </div>
@@ -193,21 +193,21 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col py-2 sm:py-8 px-2 sm:px-6 lg:px-8 relative">
       {/* Top Header Navigation */}
-      <header className="w-full max-w-[1600px] px-4 sm:px-8 mx-auto flex justify-between items-center pb-4 border-b border-zinc-900/50 mb-4">
+      <header className="w-full max-w-[1600px] px-4 sm:px-8 mx-auto flex justify-between items-center pb-4 border-b border-[var(--border-default)] mb-4">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-500/20 flex items-center justify-center shrink-0">
-              <Sparkles className="w-4 h-4 text-emerald-400" />
-            </div>
-            <h1 className="text-lg sm:text-xl font-bold font-serif tracking-wider text-zinc-100 bg-gradient-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">
-              Cổ Giới
-            </h1>
+              <div className="w-8 h-8 rounded-lg bg-[var(--brand-dim)] border border-[var(--brand-primary)] flex items-center justify-center shrink-0">
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+              </div>
+              <h1 className="text-lg sm:text-xl font-bold font-serif tracking-wider text-[var(--text-primary)]">
+                Cổ Giới
+              </h1>
           </div>
         </div>
         {player && !inCombat && currentView !== "dashboard" && (
             <button
               onClick={() => setView("dashboard")}
-              className="px-3 py-1.5 rounded-xl bg-surface hover:bg-surface text-primary hover:text-white border-default serif transition-colors border border-zinc-800 cursor-pointer flex items-center gap-1"
+              className="px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-default)] serif transition-colors cursor-pointer flex items-center gap-1"
             >
               <span>⬅</span>
               <span>Trở về Sảnh</span>
@@ -220,7 +220,7 @@ export default function Home() {
               href="/wiki"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3 py-1.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 text-xs text-emerald-400 hover:text-emerald-300 font-serif transition-colors border border-emerald-800/40 inline-flex items-center gap-1"
+              className="px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-serif transition-colors border border-[var(--border-default)] inline-flex items-center gap-1"
             >
               <HelpCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               <span>Wiki Game</span>
@@ -230,7 +230,7 @@ export default function Home() {
           {player && !inCombat && (
             <button
               onClick={handleLogout}
-              className="px-3 py-1.5 rounded-xl bg-red-900/40 hover:bg-red-900/60 text-xs text-red-400 hover:text-red-300 font-serif transition-colors border border-red-800/40 cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-serif transition-colors border border-[var(--border-default)] cursor-pointer"
             >
               Đăng Xuất
             </button>
@@ -449,50 +449,50 @@ export default function Home() {
 
       {/* Changelog Modal */}
       {player && showChangelog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-primary/80 backdrop-blur-sm animate-fade-in" onClick={handleCloseChangelog}>
-          <div className="w-full max-w-lg max-h-[90vh] sm:max-h-[85vh] flex flex-col bg-gradient-to-br from-primary to-primary border-default border border-zinc-800 rounded-3xl p-5 sm:p-6 shadow-2xl overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--bg-primary)] animate-fade-in" onClick={handleCloseChangelog}>
+          <div className="w-full max-w-lg max-h-[90vh] sm:max-h-[85vh] flex flex-col bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-3xl p-5 sm:p-6 shadow-2xl overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
             <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-xl pointer-events-none" />
             <div className="flex items-center justify-between mb-4 shrink-0">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-amber-400" />
-                <h3 className="text-base font-serif font-bold text-zinc-100">Cập Nhật Mới!</h3>
+                <h3 className="text-base font-serif font-bold text-[var(--text-primary)]">Cập Nhật Mới!</h3>
               </div>
               <button onClick={handleCloseChangelog} className="text-zinc-500 hover:text-zinc-300 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
-            <div className="flex-1 overflow-y-auto space-y-3 text-xs text-zinc-300 leading-relaxed pr-1 custom-scrollbar">
-              <p className="text-zinc-400">Phiên bản <strong className="text-amber-400">v0.8.0</strong> — Tối ưu trải nghiệm & Thăng Tiên:</p>
+            <div className="flex-1 overflow-y-auto space-y-3 text-xs text-[var(--text-secondary)] leading-relaxed pr-1 custom-scrollbar">
+              <p className="text-[var(--text-secondary)]">Phiên bản <strong className="text-amber-600 dark:text-amber-400">v0.8.0</strong> — Tối ưu trải nghiệm & Thăng Tiên:</p>
               <div className="space-y-2">
                 <div className="flex gap-2.5 items-start bg-amber-950/20 border border-amber-500/10 rounded-lg p-3">
                   <span className="text-lg shrink-0 mt-0.5">🚀</span>
                   <div>
                     <span className="font-bold text-amber-300">Tối ưu lưu trữ</span>
-                    <p className="text-zinc-400 mt-0.5">Kho Cổ trùng giờ lưu trữ gọn gàng hơn: mở kho, trang bị, cho ăn nhanh mượt hơn dù sở hữu nhiều Cổ.</p>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Kho Cổ trùng giờ lưu trữ gọn gàng hơn: mở kho, trang bị, cho ăn nhanh mượt hơn dù sở hữu nhiều Cổ.</p>
                   </div>
                 </div>
                 <div className="flex gap-2.5 items-start bg-emerald-950/20 border border-emerald-500/10 rounded-lg p-3">
                   <span className="text-lg shrink-0 mt-0.5">🍽️</span>
                   <div>
                     <span className="font-bold text-emerald-300">Cho ăn Cổ trùng ổn định</span>
-                    <p className="text-zinc-400 mt-0.5">Chăm sóc Cổ trùng mượt mà hơn: độ no giảm đều theo thời gian, tránh tình trạng lag khi toàn máy chủ xử lý cùng lúc.</p>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Chăm sóc Cổ trùng mượt mà hơn: độ no giảm đều theo thời gian, tránh tình trạng lag khi toàn máy chủ xử lý cùng lúc.</p>
                   </div>
                 </div>
                 <div className="flex gap-2.5 items-start bg-amber-950/20 border border-amber-500/10 rounded-lg p-3">
                   <span className="text-lg shrink-0 mt-0.5">☯️</span>
                   <div>
                     <span className="font-bold text-amber-300">Đạo Ngân vận hành tốt hơn</span>
-                    <p className="text-zinc-400 mt-0.5">Đạo Ngân hiển thị và hoạt động chính xác, áp dụng hiệu ứng cho cả đồng đội lẫn địch trong chiến đấu tự động.</p>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Đạo Ngân hiển thị và hoạt động chính xác, áp dụng hiệu ứng cho cả đồng đội lẫn địch trong chiến đấu tự động.</p>
                   </div>
                 </div>
                 <div className="flex gap-2.5 items-start bg-fuchsia-950/20 border border-fuchsia-500/10 rounded-lg p-3">
                   <span className="text-lg shrink-0 mt-0.5">🐉</span>
                   <div>
                     <span className="font-bold text-fuchsia-300">Thăng Tiên theo Nhân Khí</span>
-                    <p className="text-zinc-400 mt-0.5">Tỉ lệ thành công Thăng Tiên tỉ lệ thuận với Nhân Khí (tối đa 100.000 → chắc chắn thành công). Thành công lên Lục Chuyển Cổ Tiên và khai mở Tiên Khiếu — cấp bậc Tiên Khiếu được định đoạt bởi Nhân Khí lúc thăng tiên.</p>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Tỉ lệ thành công Thăng Tiên tỉ lệ thuận với Nhân Khí (tối đa 100.000 → chắc chắn thành công). Thành công lên Lục Chuyển Cổ Tiên và khai mở Tiên Khiếu — cấp bậc Tiên Khiếu được định đoạt bởi Nhân Khí lúc thăng tiên.</p>
                   </div>
                 </div>
               </div>
             </div>
-             <label className="flex items-center gap-2 mt-4 mb-1 text-xs text-zinc-400 cursor-pointer select-none shrink-0">
+             <label className="flex items-center gap-2 mt-4 mb-1 text-xs text-[var(--text-secondary)] cursor-pointer select-none shrink-0">
               <input
                 type="checkbox"
                 checked={dontShowToday}
@@ -523,8 +523,8 @@ export default function Home() {
 
       {/* Direct Trade Overlays */}
       {activeTrade && activeTrade.status === "PENDING" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-primary/80 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-3xl p-6 shadow-2xl relative overflow-hidden text-center flex flex-col gap-5 animate-scale-up">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--bg-primary)] animate-fade-in">
+          <div className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-3xl p-6 shadow-2xl relative overflow-hidden text-center flex flex-col gap-5 animate-scale-up">
             <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-xl pointer-events-none" />
             
             <div className="w-12 h-12 rounded-full bg-emerald-950/50 border border-emerald-500/20 flex items-center justify-center mx-auto">
@@ -532,10 +532,10 @@ export default function Home() {
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-lg font-serif font-bold text-zinc-100">
+              <h3 className="text-lg font-serif font-bold text-[var(--text-primary)]">
                 {player?.username === activeTrade.receiver_username ? "Yêu Cầu Giao Dịch" : "Đang Kết Nối"}
               </h3>
-              <p className="text-xs text-zinc-400 font-serif leading-relaxed">
+              <p className="text-xs text-[var(--text-secondary)] font-serif leading-relaxed">
                 {player?.username === activeTrade.receiver_username ? (
                   <>
                     Cổ sư <span className="text-emerald-400 font-bold">{activeTrade.sender_username}</span> đang phát tín hiệu Thông Thiên Cổ muốn giao dịch trực tiếp với đạo hữu.

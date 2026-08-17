@@ -19,10 +19,10 @@ export const LogConsole: React.FC<LogConsoleProps> = ({ logs }) => {
   }, [logs]);
 
   return (
-    <div className="glass-panel rounded-2xl sm:rounded-3xl p-3 sm:p-6 w-full flex flex-col h-[220px] sm:h-[280px]">
-      <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-2 mb-3 sm:pb-3 sm:mb-4">
-        <Terminal className="w-4 h-4 text-emerald-400" />
-        <span className="text-xs font-mono uppercase tracking-widest text-zinc-400 font-semibold">
+    <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-2xl sm:rounded-3xl p-3 sm:p-6 w-full flex flex-col h-[220px] sm:h-[280px] shadow-xl">
+      <div className="flex items-center gap-2 border-b border-[var(--border-default)] pb-2 mb-3 sm:pb-3 sm:mb-4">
+        <Terminal className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+        <span className="text-xs font-mono uppercase tracking-widest text-[var(--text-secondary)] font-semibold">
           Ký Sự Tu Hành
         </span>
       </div>
@@ -43,14 +43,14 @@ export const LogConsole: React.FC<LogConsoleProps> = ({ logs }) => {
               className={`p-2 rounded-lg transition-colors border leading-relaxed ${
                 isNewest
                   ? isError
-                    ? "bg-rose-950/20 border-rose-900/30 text-rose-300 font-semibold"
-                    : "bg-emerald-950/20 border-emerald-900/30 text-emerald-300 font-semibold shadow-[0_0_10px_rgba(16,185,129,0.05)]"
+                    ? "bg-rose-100 dark:bg-rose-950 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-300 font-semibold"
+                    : "bg-emerald-100 dark:bg-emerald-950 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-semibold"
                   : isError
-                  ? "border-transparent text-rose-400/80"
-                  : "border-transparent text-zinc-400"
+                  ? "border-transparent text-rose-700 dark:text-rose-400"
+                  : "border-transparent text-[var(--text-secondary)]"
               }`}
             >
-              <span className="text-zinc-600 mr-2 select-none">&gt;&gt;</span>
+              <span className="text-[var(--text-muted)] mr-2 select-none">&gt;&gt;</span>
               {log}
             </div>
           );

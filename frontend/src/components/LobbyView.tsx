@@ -393,10 +393,10 @@ export const LobbyView: React.FC = () => {
     <div className="w-full mx-auto px-2 sm:px-4 py-2 sm:py-4 flex flex-col gap-4 sm:gap-8">
       {/* 1. CHARACTER & RESOURCE HUD */}
       {player && (
-        <div className="bg-zinc-950/60 border border-zinc-900 rounded-2xl sm:rounded-3xl p-3 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-6 shadow-xl backdrop-blur-md">
+        <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-2xl sm:rounded-3xl p-3 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-6 shadow-xl">
           {/* Left Block: Avatar & Name & Tu vi (Reduced width & wrapped text) */}
           <div className="flex items-center gap-3 sm:gap-4 w-full md:w-48 shrink-0">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold border-2 border-zinc-900 shrink-0 overflow-hidden">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold border border-[var(--border-default)] shrink-0 overflow-hidden">
               {player.avatar_url ? (
                 <img src={player.avatar_url} alt={player.username} className="w-full h-full object-cover" />
               ) : (
@@ -630,11 +630,11 @@ export const LobbyView: React.FC = () => {
                 <div
                   className={`w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center ${item.locked
                       ? "bg-zinc-950 border border-zinc-900"
-                      : "bg-zinc-950 border border-zinc-900 hover:border-zinc-800 transition-all duration-300 group-hover:scale-110 shadow-md active:scale-95"
+                      : `bg-gradient-to-br ${item.gradient} border ${item.borderColor} hover:border-zinc-400 dark:hover:border-zinc-800 transition-all duration-300 group-hover:scale-110 shadow-md active:scale-95`
                     } relative ${item.glow}`}
                 >
                   {!item.locked && (
-                    <div className={`absolute inset-1 rounded-full border border-dashed border-zinc-800 opacity-60`} />
+                    <div className="absolute inset-1 rounded-full border border-dashed border-white/40 dark:border-zinc-800/80" />
                   )}
                   <Icon className={`w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 ${item.iconColor}`} />
                   {item.locked && (
@@ -645,7 +645,7 @@ export const LobbyView: React.FC = () => {
                 </div>
                 <span className={`font-serif text-[10px] sm:text-[11px] font-semibold mt-2 tracking-wide text-center transition-colors ${item.locked
                     ? "text-zinc-600"
-                    : "text-zinc-400 group-hover:text-zinc-100"
+                    : "text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]"
                   }`}>
                   {item.label}
                 </span>

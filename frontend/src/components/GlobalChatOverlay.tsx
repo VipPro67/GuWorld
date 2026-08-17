@@ -164,10 +164,10 @@ export const GlobalChatOverlay: React.FC = () => {
 
       {/* Chat Overlay Panel */}
       {chatOpen && (
-        <div className={`absolute bottom-0 right-0 ${widthClasses} ${heightClasses} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] flex flex-col bg-white/95 dark:bg-zinc-950/95 border border-zinc-200 dark:border-zinc-900 rounded-3xl p-2 sm:p-4 gap-3 sm:gap-4 shadow-2xl backdrop-blur-lg animate-in fade-in slide-in-from-bottom-5 duration-200`}>
+        <div className={`absolute bottom-0 right-0 ${widthClasses} ${heightClasses} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)] flex flex-col bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-3xl p-2 sm:p-4 gap-3 sm:gap-4 shadow-2xl animate-in fade-in slide-in-from-bottom-5 duration-200`}>
           {/* Channel Tabs */}
           <div className="flex items-center justify-between">
-            <div className="flex gap-1.5 border-b border-zinc-150 dark:border-zinc-900 pb-2">
+            <div className="flex gap-1.5 border-b border-[var(--border-default)] pb-2">
               {[
                 { id: "world", label: "Thế Giới" },
                 { id: "general", label: "Bảo Hoàng" },
@@ -199,8 +199,8 @@ export const GlobalChatOverlay: React.FC = () => {
                     }}
                     className={`px-2.5 py-1.5 rounded-xl font-serif text-[10px] sm:text-[11px] font-semibold transition-all border cursor-pointer flex items-center gap-1 ${
                       activeChannel === ch.id
-                        ? "bg-zinc-150 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 border-zinc-300/60 dark:border-zinc-800"
-                        : "bg-transparent text-zinc-400 dark:text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-300"
+                        ? "bg-[var(--bg-elevated)] text-[var(--text-primary)] border-[var(--border-default)]"
+                        : "bg-[var(--bg-surface)] text-[var(--text-muted)] border-[var(--border-default)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]"
                     }`}
                   >
                     <span>{label}</span>
@@ -217,7 +217,7 @@ export const GlobalChatOverlay: React.FC = () => {
                 type="button"
                 onClick={toggleWidth}
                 title="Thay đổi chiều rộng"
-                className="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200 transition-all cursor-pointer flex items-center justify-center"
+                className="p-1 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all cursor-pointer flex items-center justify-center"
               >
                 <ArrowLeftRight className="w-3.5 h-3.5" />
               </button>
@@ -225,14 +225,14 @@ export const GlobalChatOverlay: React.FC = () => {
                 type="button"
                 onClick={toggleHeight}
                 title="Thay đổi chiều cao"
-                className="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200 transition-all cursor-pointer flex items-center justify-center"
+                className="p-1 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all cursor-pointer flex items-center justify-center"
               >
                 <ArrowUpDown className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
                 onClick={() => setChatOpen(false)}
-                className="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900 text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200 transition-all cursor-pointer"
+                className="p-1 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
               >
                 <X className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
@@ -242,7 +242,7 @@ export const GlobalChatOverlay: React.FC = () => {
           {/* Message View Area */}
           <div
             ref={chatContainerRef}
-            className="bg-zinc-50/50 dark:bg-zinc-950/80 border border-zinc-150 dark:border-zinc-900/60 rounded-2xl p-2 flex-grow overflow-y-auto flex flex-col gap-1 font-mono text-[10px] sm:text-[11px] md:text-xs"
+            className="bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-2xl p-2 flex-grow overflow-y-auto flex flex-col gap-1 font-mono text-[10px] sm:text-[11px] md:text-xs"
           >
             {baoHoangMessages.length === 0 ? (
               <div className="text-zinc-400 dark:text-zinc-650 text-center py-16">
@@ -260,8 +260,8 @@ export const GlobalChatOverlay: React.FC = () => {
                     : "text-emerald-600 dark:text-emerald-400";
                 // Card container styles
                 const cardClass = isSystem
-                  ? "w-full bg-amber-500/10 dark:bg-amber-950/15 border border-amber-300/30 dark:border-amber-500/10 rounded-lg p-1.5 sm:p-2"
-                  : "w-full bg-zinc-100/70 dark:bg-zinc-900/30 border border-zinc-200/50 dark:border-zinc-800/40 rounded-lg p-1.5 sm:p-2 group";
+                  ? "w-full bg-amber-100 dark:bg-amber-950 border border-amber-300 dark:border-amber-700 rounded-lg p-1.5 sm:p-2"
+                  : "w-full bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg p-1.5 sm:p-2 group";
 
                 const nameColorClass = isSystem
                   ? "text-amber-700 dark:text-amber-400 font-bold"
@@ -311,7 +311,7 @@ export const GlobalChatOverlay: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleReply(msg.sender_username)}
-                        className="opacity-0 group-hover:opacity-100 sm:opacity-50 hover:sm:opacity-100 p-1 rounded hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-all cursor-pointer self-start shrink-0 ml-1"
+                        className="opacity-0 group-hover:opacity-100 sm:opacity-50 hover:sm:opacity-100 p-1 rounded hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all cursor-pointer self-start shrink-0 ml-1"
                         title="Phản hồi (Nhắc tên)"
                       >
                         <CornerUpLeft className="w-3.5 h-3.5" />
@@ -338,12 +338,12 @@ export const GlobalChatOverlay: React.FC = () => {
                   : "Nội bộ Bang Hội..."
               }
               maxLength={500}
-              className="flex-grow bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 focus:border-zinc-300 dark:focus:border-zinc-800 rounded-xl px-3 py-2 text-xs md:text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none transition-all font-mono"
+              className="flex-grow bg-[var(--bg-surface)] border border-[var(--border-default)] focus:border-[var(--border-hover)] rounded-xl px-3 py-2 text-xs md:text-sm text-[var(--text-primary)] placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none transition-all font-mono"
             />
             <button
               type="submit"
               disabled={actionLoading || !chatInput.trim()}
-              className="bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 disabled:bg-zinc-50 dark:disabled:bg-zinc-950 disabled:border-zinc-100 dark:disabled:border-zinc-900 disabled:text-zinc-400 dark:disabled:text-zinc-750 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white px-3.5 py-2 md:px-5 md:py-2.5 rounded-xl transition-all flex items-center justify-center shrink-0 cursor-pointer active:scale-95"
+              className="bg-[var(--bg-elevated)] border border-[var(--border-default)] hover:bg-[var(--bg-surface)] hover:border-[var(--border-hover)] disabled:bg-[var(--bg-elevated)] disabled:text-zinc-400 text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-3.5 py-2 md:px-5 md:py-2.5 rounded-xl transition-all flex items-center justify-center shrink-0 cursor-pointer active:scale-95"
             >
               {actionLoading ? (
                 <Loader2 className="w-3.5 h-3.5 md:w-4 md:h-4 animate-spin text-zinc-400 dark:text-zinc-500" />

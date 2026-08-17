@@ -238,21 +238,21 @@ export const PlayerProfileModal: React.FC = () => {
   return (
     <div
       onClick={clearInspectedProfile}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm transition-opacity animate-fade-in cursor-pointer"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--bg-primary)] transition-opacity animate-fade-in cursor-pointer"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-sm sm:max-w-lg bg-zinc-950 border rounded-2xl sm:rounded-3xl p-4 sm:p-6 relative overflow-y-auto max-h-[90vh] bg-gradient-to-br ${themeClass} ${glowClass} border shadow-2xl flex flex-col gap-4 sm:gap-6 animate-scale-up cursor-default`}
+        className={`w-full max-w-sm sm:max-w-lg bg-[var(--bg-surface)] text-[var(--text-primary)] border border-[var(--border-default)] rounded-2xl sm:rounded-3xl p-4 sm:p-6 relative overflow-y-auto max-h-[90vh] ${glowClass} shadow-2xl flex flex-col gap-4 sm:gap-6 animate-scale-up cursor-default`}
       >
         {/* Status Indicator Banner with Close Button */}
-        <div className={`flex items-center justify-between gap-2.5 px-4 py-3 rounded-2xl border ${statusBadge} backdrop-blur-md relative`}>
+        <div className={`flex items-center justify-between gap-2.5 px-4 py-3 rounded-2xl border ${statusBadge} relative`}>
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="shrink-0 animate-pulse">{statusIcon}</div>
             <p className="text-xs font-mono font-medium leading-relaxed">{scouting_status}</p>
           </div>
           <button
             onClick={clearInspectedProfile}
-            className="p-1.5 rounded-lg bg-zinc-900/60 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors border border-zinc-900/60 cursor-pointer shrink-0 z-10"
+            className="p-1.5 rounded-lg bg-[var(--bg-elevated)] hover:bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors border border-[var(--border-default)] cursor-pointer shrink-0 z-10"
             title="Đóng"
           >
             <X className="w-3.5 h-3.5" />
@@ -277,14 +277,14 @@ export const PlayerProfileModal: React.FC = () => {
           </div>
 
           <div className="flex flex-col min-w-0 text-left">
-            <h3 className="text-lg font-serif font-bold text-zinc-100 truncate flex items-center gap-1.5">
+            <h3 className="text-lg font-serif font-bold text-[var(--text-primary)] truncate flex items-center gap-1.5">
               {username}
               {status_type === "failure" && username === "Ẩn Danh Cổ Sư" && (
                 <Crown className="w-4 h-4 text-amber-500 animate-bounce" />
               )}
             </h3>
             <div className="flex flex-wrap items-center gap-2 mt-0.5">
-              <span className="text-xs text-zinc-500 font-mono font-semibold">
+              <span className="text-xs text-[var(--text-muted)] font-mono font-semibold">
                 {getRankName(rank, sub_rank, aperture)}
               </span>
               {/* For Cổ Sư, show dominant path in header if it is known */}
@@ -299,9 +299,9 @@ export const PlayerProfileModal: React.FC = () => {
 
         {/* Bio / Quote Section */}
         {bio && (
-          <div className={`px-4 py-3 bg-zinc-900/10 border-l-2 ${
+          <div className={`px-4 py-3 bg-[var(--bg-elevated)] border-l-2 ${
             isImmortal ? "border-purple-500/40" : "border-emerald-500/40"
-          } text-zinc-400 italic text-xs rounded-r-xl font-mono leading-relaxed bg-zinc-950/20 text-left`}>
+          } text-[var(--text-secondary)] italic text-xs rounded-r-xl font-mono leading-relaxed text-left`}>
             "{bio}"
           </div>
         )}
@@ -309,32 +309,32 @@ export const PlayerProfileModal: React.FC = () => {
         {/* Main Profile Info Section */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
           {/* Sect Card */}
-          <div className="flex flex-col gap-3.5 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-4">
-            <div className="flex items-center gap-2 text-zinc-500">
+          <div className="flex flex-col gap-3.5 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-2xl p-4">
+            <div className="flex items-center gap-2 text-[var(--text-muted)]">
               <Crown className="w-4 h-4" />
               <span className="text-[10px] uppercase tracking-widest font-mono">Tông Môn</span>
             </div>
-            <span className="text-sm font-semibold text-zinc-200 truncate">{sect_name}</span>
+            <span className="text-sm font-semibold text-[var(--text-primary)] truncate">{sect_name}</span>
           </div>
 
           {/* Aptitude Card (For Cổ Sư) OR Dominant Path Card (For Cổ Tiên) */}
           {isImmortal ? (
-            <div className="flex flex-col gap-3.5 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-4">
-              <div className="flex items-center gap-2 text-zinc-500">
+            <div className="flex flex-col gap-3.5 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-2xl p-4">
+              <div className="flex items-center gap-2 text-[var(--text-muted)]">
                 <Sparkles className="w-4 h-4 text-purple-400" />
                 <span className="text-[10px] uppercase tracking-widest font-mono">Lưu Phái Chủ Đạo</span>
               </div>
-              <span className="text-sm font-bold text-zinc-200">
+              <span className="text-sm font-bold text-[var(--text-primary)]">
                 {dominant_path ? translatePath(dominant_path) : "Chưa rõ"}
               </span>
             </div>
           ) : (
-            <div className="flex flex-col gap-3.5 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-4">
-              <div className="flex items-center gap-2 text-zinc-500">
+            <div className="flex flex-col gap-3.5 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-2xl p-4">
+              <div className="flex items-center gap-2 text-[var(--text-muted)]">
                 <Award className="w-4 h-4" />
                 <span className="text-[10px] uppercase tracking-widest font-mono">Tư chất</span>
               </div>
-              <span className="text-sm font-bold text-zinc-200">
+              <span className="text-sm font-bold text-[var(--text-primary)]">
                 {aptitude_type === "???" ? "???" : `Tư chất ${aptitude_type} (${aptitude_percent}%)`}
               </span>
             </div>
@@ -342,9 +342,9 @@ export const PlayerProfileModal: React.FC = () => {
 
           {/* Character Identity (Race / Gender / Constitution / Statuses) */}
           <div className="sm:col-span-2 grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-3.5">
-              <span className="text-[10px] uppercase tracking-widest font-mono text-zinc-500">Chủng tộc</span>
-              <span className="text-sm font-semibold text-zinc-200">
+            <div className="flex flex-col gap-1.5 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-2xl p-3.5">
+              <span className="text-[10px] uppercase tracking-widest font-mono text-[var(--text-muted)]">Chủng tộc</span>
+              <span className="text-sm font-semibold text-[var(--text-primary)]">
                 {race ? raceLabel(race) : "Không rõ"}
               </span>
               {race && formatGameEffects(raceDictionary?.[race]?.effects).length > 0 && (
@@ -358,15 +358,15 @@ export const PlayerProfileModal: React.FC = () => {
                 </ul>
               )}
             </div>
-            <div className="flex flex-col gap-1.5 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-3.5">
-              <span className="text-[10px] uppercase tracking-widest font-mono text-zinc-500">Giới tính</span>
-              <span className="text-sm font-semibold text-zinc-200">
+            <div className="flex flex-col gap-1.5 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-2xl p-3.5">
+              <span className="text-[10px] uppercase tracking-widest font-mono text-[var(--text-muted)]">Giới tính</span>
+              <span className="text-sm font-semibold text-[var(--text-primary)]">
                 {gender ? genderLabels[gender] || gender : "Không rõ"}
               </span>
             </div>
-            <div className="flex flex-col gap-1.5 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-3.5">
-              <span className="text-[10px] uppercase tracking-widest font-mono text-zinc-500">Thể chất</span>
-              <span className="text-sm font-semibold text-zinc-200">
+            <div className="flex flex-col gap-1.5 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-2xl p-3.5">
+              <span className="text-[10px] uppercase tracking-widest font-mono text-[var(--text-muted)]">Thể chất</span>
+              <span className="text-sm font-semibold text-[var(--text-primary)]">
                 {constitution ? constitutionLabel(constitution) : "Không có"}
               </span>
               {constitution && formatGameEffects(constitutionDictionary?.[constitution]?.effects).length > 0 && (
@@ -380,8 +380,8 @@ export const PlayerProfileModal: React.FC = () => {
                 </ul>
               )}
             </div>
-            <div className="flex flex-col gap-1.5 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-3.5">
-              <span className="text-[10px] uppercase tracking-widest font-mono text-zinc-500">Trạng thái</span>
+            <div className="flex flex-col gap-1.5 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-2xl p-3.5">
+              <span className="text-[10px] uppercase tracking-widest font-mono text-[var(--text-muted)]">Trạng thái</span>
               {statuses && statuses.length > 0 ? (
                 <div className="flex flex-wrap gap-1">
                   {statuses.map((s: string) => (
@@ -391,16 +391,16 @@ export const PlayerProfileModal: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <span className="text-sm font-semibold text-zinc-200">Bình thường</span>
+                <span className="text-sm font-semibold text-[var(--text-primary)]">Bình thường</span>
               )}
             </div>
           </div>
 
           {/* Cultivator Pools (HP & Mana/Essence) */}
-          <div className="sm:col-span-2 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-4 flex flex-col gap-4">
+          <div className="sm:col-span-2 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-2xl p-4 flex flex-col gap-4">
             {/* HP */}
             <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
+              <div className="flex items-center justify-between text-[10px] font-mono text-[var(--text-secondary)]">
                 <span className="flex items-center gap-1">
                   <Heart className="w-3.5 h-3.5 text-rose-500" /> Sinh Mệnh
                 </span>
@@ -419,7 +419,7 @@ export const PlayerProfileModal: React.FC = () => {
             {/* mana (Chân Nguyên for Cổ Sư, Tiên Nguyên for Cổ Tiên) */}
             {isImmortal ? (
               <div className="flex items-center justify-between border-t border-zinc-900/60 pt-3">
-                <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-mono uppercase tracking-wider">
+                <div className="flex items-center gap-2 text-[var(--text-secondary)] text-[10px] font-mono uppercase tracking-wider">
                   <Flame className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
                   <span>Tiên Nguyên</span>
                 </div>
@@ -429,7 +429,7 @@ export const PlayerProfileModal: React.FC = () => {
               </div>
             ) : (
               <div className="flex flex-col gap-1.5 border-t border-zinc-900/60 pt-3">
-                <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
+                <div className="flex items-center justify-between text-[10px] font-mono text-[var(--text-secondary)]">
                   <span className="flex items-center gap-1">
                     <Activity className="w-3.5 h-3.5 text-cyan-500" /> Chân Nguyên
                   </span>
@@ -449,12 +449,12 @@ export const PlayerProfileModal: React.FC = () => {
 
           {/* Main Currency (Nguyên Thạch / Tiên Nguyên Thạch) */}
           {isImmortal ? (
-            <div className="sm:col-span-2 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-4 flex items-center justify-between">
+            <div className="sm:col-span-2 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-2xl p-4 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-purple-550/10 flex items-center justify-center shrink-0">
                   <Coins className="w-4 h-4 text-purple-400" />
                 </div>
-                <span className="text-xs text-zinc-400 font-mono uppercase tracking-wider">Tiên Nguyên Thạch sở hữu</span>
+                <span className="text-xs text-[var(--text-secondary)] font-mono uppercase tracking-wider">Tiên Nguyên Thạch sở hữu</span>
               </div>
               <span className="font-mono font-bold text-purple-400 text-sm">
                 {status_type === "failure" || status_type === "partial" ? (
@@ -465,12 +465,12 @@ export const PlayerProfileModal: React.FC = () => {
               </span>
             </div>
           ) : (
-            <div className="sm:col-span-2 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-4 flex items-center justify-between">
+            <div className="sm:col-span-2 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-2xl p-4 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center shrink-0">
                   <Coins className="w-4 h-4 text-yellow-500" />
                 </div>
-                <span className="text-xs text-zinc-400 font-mono uppercase tracking-wider">Nguyên Thạch sở hữu</span>
+                <span className="text-xs text-[var(--text-secondary)] font-mono uppercase tracking-wider">Nguyên Thạch sở hữu</span>
               </div>
               <span className="font-mono font-bold text-yellow-500 text-sm">
                 {status_type === "failure" || status_type === "partial" ? "???" : `${primeval_stones.toLocaleString()} Đá`}
@@ -480,8 +480,8 @@ export const PlayerProfileModal: React.FC = () => {
 
           {/* Dao Marks (For Cổ Tiên) */}
           {isImmortal && (
-            <div className="sm:col-span-2 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-4 space-y-3">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono block">Đạo Ngân tích lũy</span>
+            <div className="sm:col-span-2 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-2xl p-4 space-y-3">
+              <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest font-mono block">Đạo Ngân tích lũy</span>
               <div className="flex flex-wrap gap-2 animate-fade-in">
                 {status_type === "failure" || status_type === "partial" ? (
                   <span className="text-xs px-3 py-1.5 rounded-xl border border-dashed border-zinc-800 text-zinc-650 bg-zinc-950/20 font-mono">
@@ -508,8 +508,8 @@ export const PlayerProfileModal: React.FC = () => {
           )}
 
           {/* Equipped Gu Bugs */}
-          <div className="sm:col-span-2 bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-4 space-y-3">
-            <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono block">Cổ trùng trang bị</span>
+          <div className="sm:col-span-2 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-2xl p-4 space-y-3">
+            <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest font-mono block">Cổ trùng trang bị</span>
             <div className="flex flex-wrap gap-2">
               {equipped_gus && equipped_gus.length > 0 ? (
                 equipped_gus.map((guId: string, index: number) => {
@@ -551,7 +551,7 @@ export const PlayerProfileModal: React.FC = () => {
                   }
                   clearInspectedProfile();
                 }}
-                className="w-full py-3 rounded-2xl font-serif font-bold text-sm bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-zinc-100 shadow-lg shadow-emerald-950/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer border border-emerald-500/20"
+                className="w-full py-3 rounded-2xl font-serif font-bold text-sm bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-[var(--text-primary)] shadow-lg shadow-emerald-950/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer border border-emerald-500/20"
               >
                 <Sparkles className="w-4 h-4" /> Bắt Đầu Giao Dịch
               </button>
