@@ -809,7 +809,7 @@ func Simulate(state *CombatState) []CombatLog {
 					})
 				}
 
-				if a.SourceID == "GU_GUTS_GU" {
+				if a.SourceID == "GU_GUTS" {
 					actor.HP = actor.MaxHP
 					turnLogs = append(turnLogs, CombatLog{
 						Turn:      turn,

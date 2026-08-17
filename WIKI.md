@@ -429,7 +429,7 @@ Hệ thống tích hợp 18 Cổ trùng đặc biệt mang lại các hiệu ứ
 1. **Xuân Thu Thiền (GU_SPRING_AUTUMN_CICADA)**: Khi chết, có 15% cơ hội hồi sinh nghịch chuyển thời không quay về Lượt 1.
 2. **Định Tiên Du (GU_FIXED_IMMORTAL_TRAVEL)**: Né tránh hoàn toàn đòn đánh đầu tiên ở Lượt 1.
 3. **Ngự Lang Vương Cổ (GU_WOLF_ENSLAVEMENT_CORE)**: Triệu hồi Địa Lang Vương lên tiền tuyến gánh chịu sát thương cho Cổ sư.
-4. **Cổ Gan Dạ (GU_GUTS_GU)**: Hồi 100% Sinh lực tâm linh lập tức nhưng tiêu tốn lượt hành động của lượt hiện tại.
+4. **Cổ Gan Dạ (GU_GUTS)**: Hồi 100% Sinh lực tâm linh lập tức nhưng tiêu tốn lượt hành động của lượt hiện tại.
 5. **Kiếm Long Biến Cổ (GU_SWORD_DRAGON_TRANSFORM)**: Chuyển hóa toàn bộ Sinh lực thành Giáp Ảo (giữ lại 1 Sinh lực) và tăng 50% sát thương cận chiến trong 3 lượt.
 6. **Cổ Phá Không (GU_BREAK_SPACE)**: Tấn công xuyên thẳng qua Chân Nguyên Giáp hộ thể và bỏ qua 30 phòng ngự vật lý.
 7. **Ngã Ý Cổ (GU_MY_WILL)**: Đề kháng khống chế tinh thần, 35% giải trừ trạng thái Choáng vào đầu mỗi lượt.

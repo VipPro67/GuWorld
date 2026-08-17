@@ -227,7 +227,6 @@ GU_FISH_SCALE,1,1,"{""GU_BEAST_SKIN"": {""qty"": 1, ""rank"": 1}}","{""beast_mea
 GU_FLESH_EAR,1,1,"{""GU_BEAST_SKIN"": {""qty"": 1, ""rank"": 1}}","{""beast_meat"": 5}",0.81,20.0,0.0,
 GU_FORMATION_HEART,1,1,"{""GU_FORMATION_HEART"": {""qty"": 1, ""rank"": 1}}","{""formation_path_material"": 5}",0.81,20.0,0.0,
 GU_GREEN_WIND_WHEEL,1,1,"{""GU_WIND_SLASH"": {""qty"": 1, ""rank"": 6}}","{""wind_path_material"": 5}",0.81,20.0,0.0,
-GU_GUTS_GU,1,1,"{""GU_WHITE_BOAR"": {""qty"": 1, ""rank"": 1}}","{""soul_path_material"": 5, ""white_lotus_giant_silkworm"": 3}",0.9,20.0,0.0,
 GU_GREEN_LEAF,1,1,"{""GU_GREEN_LEAF"": {""qty"": 1, ""rank"": 1}}","{""wood_path_material"": 5}",0.81,20.0,0.0,
 GU_GREEN_VINE,1,1,"{""GU_GREEN_LEAF"": {""qty"": 1, ""rank"": 1}}","{""wood_path_material"": 5}",0.81,20.0,0.0,
 GU_JADE_WIND_WHEEL,2,1,"{""GU_METAL_EDGE"": {""qty"": 1, ""rank"": 6}}","{""iron_ore"": 5, ""featherman_feather"": 3, ""wind_path_material"": 3}",0.8,40.0,0.0,
@@ -835,3 +834,4 @@ GU_HEAVENLY_GONG_IMMORTAL,7,1,"{""GU_ALERT_BELL"": {""qty"": 1, ""rank"": 1}}","
 GU_CONNECTING_HEAVEN,5,1,"{""GU_SIGNAL"": {""qty"": 1, ""rank"": 1}}","{""sealing_stone"": 5, ""jade_stone"": 5, ""black_oil"": 5, ""star_fragment"": 5}",0.5,200.0,0.0
 GU_DIVINE_SENSE,5,1,"{""GU_LITTLE_CARE"": {""qty"": 1, ""rank"": 3}}","{""soul_qi"": 5, ""sealing_stone"": 5, ""jade_stone"": 5, ""black_oil"": 5}",0.5,200.0,0.0
 GU_HEAVEN_SECRET,6,1,"{""GU_DIVINE_SENSE"": {""qty"": 1, ""rank"": 5}}","{""heaven_qi"": 24, ""heaven_essence_cloud"": 6, ""jade_stone"": 6, ""life_water"": 6, ""soul_qi"": 6}",0.4,600.0,100.0
+GU_PHOENIX_ROC_PHANTOM_DREAM_ARMAMENTS,7,1,"{""GU_DREAM_PILLOW"": {""qty"": 5, ""rank"": 5}, ""GU_GUTS"": {""qty"": 3, ""rank"": 3}, ""GU_DREAM_WINGS"": {""qty"": 1, ""rank"": 6}, ""GU_DIVINE_SENSE"": {""qty"": 3, ""rank"": 5}, ""GU_EAGLE_WINGS"": {""qty"": 2, ""rank"": 3}}","{""golden_crow_meteor"": 16, ""dream_realm_core"": 1, ""dream_material"": 48, ""memory_fragments"": 10, ""soul_qi"": 16, ""star_thoughts"": 10}",0.3,0.0,200.0,

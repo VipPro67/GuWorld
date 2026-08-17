@@ -56,7 +56,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
   const mergeLimit = Math.max(1, Math.floor((player.max_soul || 0) / 10));
   const formationSoulCost = formationPets.reduce((sum, p) => sum + (p.count || 1), 0);
   const mergeTotalCount = mergeTarget ? (pets.find((p) => p.id === mergeTarget)?.count || 1) + mergeSources.length : 0;
-  const mergeOverLimit = mergeMode && mergeTarget && mergeSources.length > 0 && mergeTotalCount > mergeLimit;
+  const mergeOverLimit = !!(mergeMode && mergeTarget && mergeSources.length > 0 && mergeTotalCount > mergeLimit);
 
   const hungerValue = (item: ItemSpec): number => {
     const effects = item.effects as Record<string, number> | undefined;

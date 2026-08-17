@@ -460,6 +460,23 @@ export default function Home() {
               <button onClick={handleCloseChangelog} className="text-zinc-500 hover:text-zinc-300 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
             <div className="flex-1 overflow-y-auto space-y-3 text-xs text-[var(--text-secondary)] leading-relaxed pr-1 custom-scrollbar">
+              <p className="text-[var(--text-secondary)]">Phiên bản <strong className="text-amber-600 dark:text-amber-400">v0.8.1</strong> — Sủng vật & Hồn Phách:</p>
+              <div className="space-y-2">
+                <div className="flex gap-2.5 items-start bg-purple-950/20 border border-purple-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">🐾</span>
+                  <div>
+                    <span className="font-bold text-purple-300">Gộp bầy giới hạn theo Hồn Phách</span>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Bầy sủng vật tối đa <strong>max_soul/10</strong> cá thể. Hiệu ứng cộng dồn khi gộp đã giảm — chỉ số tăng theo <strong>N^0.65</strong> (sub-linear), không còn bị lũy tiến quá mạnh khi gộp nhiều lần.</p>
+                  </div>
+                </div>
+                <div className="flex gap-2.5 items-start bg-indigo-950/20 border border-indigo-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">👻</span>
+                  <div>
+                    <span className="font-bold text-indigo-300">Hồn Phách tiêu hao khi ra trận</span>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Mỗi lần ra trận thật, mỗi cá thể sủng vật tiêu tốn <strong>1 soul_hp</strong>. Hồn Phách không đủ thì sủng vật đó bị bỏ qua, không xuất trận. Võ Đài (đấu ảo) miễn phí Hồn Phách.</p>
+                  </div>
+                </div>
+              </div>
               <p className="text-[var(--text-secondary)]">Phiên bản <strong className="text-amber-600 dark:text-amber-400">v0.8.0</strong> — Tối ưu trải nghiệm & Thăng Tiên:</p>
               <div className="space-y-2">
                 <div className="flex gap-2.5 items-start bg-amber-950/20 border border-amber-500/10 rounded-lg p-3">
