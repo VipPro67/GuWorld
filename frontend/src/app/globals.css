@@ -119,7 +119,7 @@ html {
 
 @media (max-width: 640px) {
   html {
-    font-size: 19px; /* Make text bigger on mobile as well */
+    font-size: 15px; /* Reduced base font size on mobile to make layout fit better */
   }
 }
 
