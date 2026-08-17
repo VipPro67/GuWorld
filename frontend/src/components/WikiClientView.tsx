@@ -187,6 +187,24 @@ export default function WikiClientView({
   const [regionZoneType, setRegionZoneType] = useState<string>("all");
   const [regionRank, setRegionRank] = useState<string>("all");
 
+  // Expand state for long lists in region and monster cards
+  const [expandedRegions, setExpandedRegions] = useState<Record<string, boolean>>({});
+  const [expandedMonsters, setExpandedMonsters] = useState<Record<string, boolean>>({});
+
+  const toggleRegionExpand = (regionId: string) => {
+    setExpandedRegions(prev => ({
+      ...prev,
+      [regionId]: !prev[regionId]
+    }));
+  };
+
+  const toggleMonsterExpand = (monsterId: string) => {
+    setExpandedMonsters(prev => ({
+      ...prev,
+      [monsterId]: !prev[monsterId]
+    }));
+  };
+
   // Dynamic filter lists
   const allPaths = useMemo(() => {
     const paths = new Set<string>();
@@ -1246,7 +1264,7 @@ export default function WikiClientView({
           <div>
             {filteredMonsters.length === 0 ? (
               <div className="text-center py-20 bg-zinc-900/10 rounded-2xl border border-[var(--border)] border-dashed">
-                <ShieldAlert className="w-8 h-8 mx-auto text-[var(--text-muted)] mb-2" />
+      wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww          <ShieldAlert className="w-8 h-8 mx-auto text-[var(--text-muted)] mb-2" />
                 <p className="text-[var(--text-muted)] font-mono text-xs">Không tìm thấy quái vật nào trùng khớp với bộ lọc</p>
               </div>
             ) : (
@@ -1335,7 +1353,7 @@ export default function WikiClientView({
                             <p className="text-[10px] text-zinc-600 italic font-mono">Không có vật phẩm rơi</p>
                           ) : (
                             <div className="space-y-1.5">
-                              {lootTable.entries.slice(0, 5).map((e, idx) => {
+                              {(expandedMonsters[monster.id] ? lootTable.entries : lootTable.entries.slice(0, 5)).map((e, idx) => {
                                 const targetName = e.item_id 
                                   ? (itemMap.get(e.item_id)?.name || e.item_id)
                                   : e.gu_id 
@@ -1352,9 +1370,12 @@ export default function WikiClientView({
                                 );
                               })}
                               {lootTable.entries.length > 5 && (
-                                <p className="text-[9px] text-zinc-500 italic text-center mt-1">
-                                  + {lootTable.entries.length - 5} mục khác
-                                </p>
+                                <button
+                                  onClick={() => toggleMonsterExpand(monster.id)}
+                                  className="text-[9px] text-amber-500 hover:text-amber-400 italic text-center mt-1 cursor-pointer w-full hover:bg-amber-500/10 rounded py-0.5 transition-colors"
+                                >
+                                  {expandedMonsters[monster.id] ? "Thu gọn ▴" : `+ ${lootTable.entries.length - 5} mục khác ▾`}
+                                </button>
                               )}
                             </div>
                           )}
@@ -1428,7 +1449,7 @@ export default function WikiClientView({
                             <p className="text-[10px] text-zinc-600 italic font-mono">Khu vực an toàn</p>
                           ) : (
                             <div className="flex flex-col gap-1.5">
-                              {monstersInRegion.slice(0, 5).map((mId) => {
+                              {(expandedRegions[region.id] ? monstersInRegion : monstersInRegion.slice(0, 5)).map((mId) => {
                                 const monster = monsterMap.get(mId);
                                 return (
                                   <button
@@ -1442,9 +1463,12 @@ export default function WikiClientView({
                                 );
                               })}
                               {monstersInRegion.length > 5 && (
-                                <p className="text-[9px] text-zinc-500 italic text-center mt-1">
-                                  + {monstersInRegion.length - 5} quái khác
-                                </p>
+                                <button 
+                                  onClick={() => toggleRegionExpand(region.id)}
+                                  className="text-[9px] text-emerald-500 hover:text-emerald-400 italic text-center mt-1 cursor-pointer w-full hover:bg-emerald-500/10 rounded py-0.5 transition-colors"
+                                >
+                                  {expandedRegions[region.id] ? "Thu gọn ▴" : `+ ${monstersInRegion.length - 5} quái khác ▾`}
+                                </button>
                               )}
                             </div>
                           )}
@@ -1460,7 +1484,7 @@ export default function WikiClientView({
                             <p className="text-[10px] text-zinc-600 italic font-mono">Vùng đất cằn cỗi</p>
                           ) : (
                             <div className="flex flex-wrap gap-1">
-                              {wildGus.slice(0, 4).map((gId) => {
+                              {(expandedRegions[region.id] ? wildGus : wildGus.slice(0, 4)).map((gId) => {
                                 const gu = guMap.get(gId);
                                 return (
                                   <span key={`gu-${gId}`} className="px-1.5 py-0.5 rounded bg-indigo-950/30 text-indigo-400 border border-indigo-500/20 text-[9px] font-mono truncate max-w-full">
@@ -1468,7 +1492,7 @@ export default function WikiClientView({
                                   </span>
                                 );
                               })}
-                              {resources.slice(0, 4).map((rId) => {
+                              {(expandedRegions[region.id] ? resources : resources.slice(0, 4)).map((rId) => {
                                 const item = itemMap.get(rId);
                                 return (
                                   <span key={`res-${rId}`} className="px-1.5 py-0.5 rounded bg-sky-950/30 text-sky-400 border border-sky-500/20 text-[9px] font-mono truncate max-w-full">
@@ -1476,10 +1500,13 @@ export default function WikiClientView({
                                   </span>
                                 );
                               })}
-                              {(wildGus.length + resources.length > 8) && (
-                                <span className="px-1.5 py-0.5 rounded bg-zinc-900/50 text-zinc-500 text-[9px] font-mono">
-                                  +{wildGus.length + resources.length - 8}
-                                </span>
+                              {(wildGus.length + resources.length > 8) && !expandedRegions[region.id] && (
+                                <button 
+                                  onClick={() => toggleRegionExpand(region.id)}
+                                  className="px-1.5 py-0.5 rounded bg-emerald-950/30 text-emerald-400 border border-emerald-500/20 text-[9px] font-mono hover:bg-emerald-900/50 transition-colors cursor-pointer"
+                                >
+                                  +{wildGus.length + resources.length - 8} hiển thị tất cả
+                                </button>
                               )}
                             </div>
                           )}
