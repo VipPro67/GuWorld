@@ -17,7 +17,7 @@ import {
   ArrowLeft,
   MapPin,
   Skull,
-  Map
+  Map as MapIcon
 } from "lucide-react";
 import { type GuDictionaryItem, type MonsterTemplate, type LootTable, type WikiRegion, type WikiMonsterSpawn, reqGuQty, reqGuRank } from "@/lib/gu-dict";
 import { type ItemSpec, type RefiningRecipe } from "@/store/useGameStore";
@@ -589,7 +589,7 @@ export default function WikiClientView({
                 : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-zinc-800/10"
             }`}
           >
-            <Map className="w-4 h-4" />
+            <MapIcon className="w-4 h-4" />
             Khu Vực
           </button>
         </div>
