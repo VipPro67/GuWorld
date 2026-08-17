@@ -26,7 +26,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 
 | Method | Path | Ghi chú |
 | --- | --- | --- |
-| GET | `/dictionary` | Public Gu + item + monster + constitution + race dictionary. Response: `{gu, items, monsters, constitutions, races}` — `constitutions` và `races` là mảng `{key, name, effects}` (effects là JSON theo format trong `docs/GAME_DATA.md`). |
+| GET | `/dictionary` | Public Gu + item + monster + constitution + race + loot + region + spawn dictionary. Response: `{gu, items, monsters, constitutions, races, loot_tables, regions, monster_spawns}` — `constitutions` và `races` là mảng `{key, name, effects}` (effects là JSON theo format trong `docs/GAME_DATA.md`). `loot_tables` là mảng `{id, name, entries}` (entries chứa item_id/gu_id + chance + min/max qty). `regions` là mảng `WikiRegion {id, name, description, min_rank, max_rank, parent_id, zone_type, pool_weights}` (pool_weights chứa resources[] và wild_gus[]). `monster_spawns` là mảng `{region_id, monster_id, chance, min_rank, max_rank, is_boss_spawn}`. |
 | GET | `/recipes` | Public refining recipes. Thêm query param ?all=true để lấy toàn bộ danh sách thay vì chỉ những công thức đã mở khóa của người chơi. |
 | POST | `/auth/send-otp` | Send OTP via email to register. |
 | POST | `/auth/register` | Rate limited. Requires valid OTP. Body thêm `race` (`human`/`fur_people`) và `gender` (`male`/`female`), mặc định `human`/`male`. |

@@ -2162,10 +2162,12 @@ func AdminImportTable(c *gin.Context) {
 		if err := models.LoadItemRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Item registry after import: %v", err)
 		}
+		cache.Delete("game_dictionary_unified")
 	case "gu":
 		if err := models.LoadGuRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Gu registry after import: %v", err)
 		}
+		cache.Delete("game_dictionary_unified")
 	case "constitution":
 		if err := gamefx.LoadConstitutionRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Constitution registry after import: %v", err)
@@ -2180,6 +2182,7 @@ func AdminImportTable(c *gin.Context) {
 		if err := models.LoadMonsterRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Monster registry after import: %v", err)
 		}
+		cache.Delete("game_dictionary_unified")
 	case "region", "map_cell", "monster_spawn":
 		if err := LoadZoneRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Zone registry after import: %v", err)
@@ -2187,6 +2190,7 @@ func AdminImportTable(c *gin.Context) {
 		if err := models.LoadMonsterRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Monster registry after import: %v", err)
 		}
+		cache.Delete("game_dictionary_unified")
 	case "quest":
 		if err := LoadQuestRegistry(); err != nil {
 			logger.S.Warnf("failed to reload Quest registry after import: %v", err)
@@ -3844,6 +3848,7 @@ func AdminCreateLootTable(c *gin.Context) {
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_loot_table", "id=%s name=%s", req.ID, req.Name)
+	cache.Delete("game_dictionary_unified")
 	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo bảng loot"})
 }
 
@@ -3883,6 +3888,7 @@ func AdminUpdateLootTable(c *gin.Context) {
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_loot_table", "id=%s", tableID)
+	cache.Delete("game_dictionary_unified")
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật bảng loot"})
 }
 
@@ -3898,6 +3904,7 @@ func AdminDeleteLootTable(c *gin.Context) {
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.delete_loot_table", "id=%s", tableID)
+	cache.Delete("game_dictionary_unified")
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa bảng loot"})
 }
 
