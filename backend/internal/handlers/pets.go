@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"math"
 	"net/http"
 	"strconv"
@@ -322,6 +323,15 @@ func MergePets(c *gin.Context) {
 		return
 	}
 
+	// Load player's max_soul to compute pack merge limit
+	var maxSoul int
+	err = tx.QueryRow(`SELECT max_soul FROM players WHERE id = $1`, authID).Scan(&maxSoul)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc Hồn Phách."})
+		return
+	}
+	mergeLimit := mergePackLimit(maxSoul)
+
 	// Validate all sources: same template, same player, formation_slot=0
 	validSources := 0
 	for _, srcID := range req.SourceIDs {
@@ -348,12 +358,19 @@ func MergePets(c *gin.Context) {
 		return
 	}
 
-	// Merge: increase count, recompute stats
+	// Merge: increase count, recompute stats sub-linearly from base (no compound)
 	newCount := targetCount + validSources
-	packScale := mathPow(float64(newCount), 0.65)
-	newMaxHP := mathRound(targetMaxHP * packScale)
-	newAtk := mathRound(targetAtk * packScale)
-	newDef := mathRound(targetDef * packScale)
+	if newCount > mergeLimit {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":       fmt.Sprintf("Bầy tối đa %d cá thể (giới hạn = max_soul/%d). Đạo hữu cần tăng Hồn Phách để gộp thêm.", mergeLimit, mergeSoulDivisor),
+			"merge_limit": mergeLimit,
+		})
+		return
+	}
+
+	newMaxHP := packScaledStat(rebaseStat(targetMaxHP, targetCount), newCount)
+	newAtk := packScaledStat(rebaseStat(targetAtk, targetCount), newCount)
+	newDef := packScaledStat(rebaseStat(targetDef, targetCount), newCount)
 
 	_, err = tx.Exec(`
 		UPDATE player_pets
@@ -393,13 +410,45 @@ func MergePets(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"target_id": targetID,
-		"nickname":  displayName,
-		"count":     newCount,
-		"max_hp":    newMaxHP,
-		"attack":    newAtk,
-		"defense":   newDef,
+		"target_id":   targetID,
+		"nickname":    displayName,
+		"count":       newCount,
+		"max_hp":      newMaxHP,
+		"attack":      newAtk,
+		"defense":     newDef,
+		"merge_limit": mergeLimit,
 	})
+}
+
+const (
+	// mergeSoulDivisor divides max_soul to derive the per-pack merge limit.
+	mergeSoulDivisor = 10
+	// packScaleExponent controls sub-linear stat scaling of a merged pack.
+	packScaleExponent = 0.65
+)
+
+// mergePackLimit returns the max individuals allowed in a single pack,
+// proportional to the player's max_soul (min 1).
+func mergePackLimit(maxSoul int) int {
+	limit := maxSoul / mergeSoulDivisor
+	if limit < 1 {
+		return 1
+	}
+	return limit
+}
+
+// rebaseStat converts a stored (possibly already scaled) stat back to the
+// base single-individual value using the current pack count.
+func rebaseStat(current float64, currentCount int) float64 {
+	if currentCount <= 1 {
+		return current
+	}
+	return current / mathPow(float64(currentCount), packScaleExponent)
+}
+
+// packScaledStat scales a base single-individual stat for a pack of `count`.
+func packScaledStat(base float64, count int) float64 {
+	return mathRound(base * mathPow(float64(count), packScaleExponent))
 }
 
 func mathPow(x, y float64) float64 {

@@ -327,9 +327,10 @@ Sủng vật là quái vật đã bắt, hỗ trợ chiến đấu:
 
 - **Đội hình:** Tối đa 4 sủng vật trong đội hình (tăng theo Chuyển, Nhất Chuyển = 2 slot, Ngũ Chuyển = 4 slot).
 - **Chiến đấu:** Sủng vật tự động tấn công quái địch mỗi lượt bằng BASIC_ATTACK (ATK × 1.0).
+- **Phí Hồn Phách:** mỗi lần ra trận thật, một bầy sủng vật tiêu tốn `soul_hp` = số cá thể trong bầy; nếu Hồn Phách không đủ thì sủng vật đó bị bỏ qua, không xuất trận. Võ Đài (ảo) không tốn Hồn Phách.
 - **Độ no:** Giảm theo `pet_hunger_per_hour` (mặc định 2/giờ). Sủng vật đang ngủ giảm 50%. Khi về 0 → **chết vĩnh viễn** (xóa khỏi DB).
 - **Cho ăn:** Dùng vật phẩm có effect `hunger` (Thịt Lợn Rừng +40, Rượu Thanh Trúc +30, Ngọc Thạch +25, Nguyệt Lan +20).
-- **Gộp:** Cùng `monster_template_id` có thể gộp thành 1 gói. Chỉ số × `N^0.65`, độ no × `1 + 0.3*(N-1)`.
+- **Gộp:** Cùng `monster_template_id` có thể gộp thành 1 bầy. Chỉ số × `N^0.65` (theo base, không cộng dồn lũy tiến). Bầy tối đa `max_soul/10` cá thể — cần tăng Hồn Phách để gộp thêm.
 - **Chết:** Sinh lực = 0 trong combat hoặc hết độ no → xóa vĩnh viễn. Không thể hồi sinh.
 
 ## 10. Phó bản

@@ -173,6 +173,10 @@ type CombatState struct {
 	Allies              []Combatant       `json:"allies,omitempty"`
 	PetIDs              []string          `json:"pet_ids,omitempty"`
 	Enemies             []Combatant       `json:"enemies,omitempty"`
+	// PetSoulCharged marks that pet deployment soul cost was already paid for
+	// this combat, preventing a double charge when InitializeCombatState is
+	// re-invoked (e.g. combat_attack.go when Allies is empty).
+	PetSoulCharged bool `json:"pet_soul_charged,omitempty"`
 }
 
 // ImmortalState groups immortal expansion data.

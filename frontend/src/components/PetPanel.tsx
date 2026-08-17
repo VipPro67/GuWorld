@@ -53,6 +53,10 @@ export const PetPanel: React.FC<PetPanelProps> = ({
   const storagePets = pets.filter((p) => p.formation_slot === 0);
 
   const maxSlots = Math.min(1 + player.rank, 8);
+  const mergeLimit = Math.max(1, Math.floor((player.max_soul || 0) / 10));
+  const formationSoulCost = formationPets.reduce((sum, p) => sum + (p.count || 1), 0);
+  const mergeTotalCount = mergeTarget ? (pets.find((p) => p.id === mergeTarget)?.count || 1) + mergeSources.length : 0;
+  const mergeOverLimit = mergeMode && mergeTarget && mergeSources.length > 0 && mergeTotalCount > mergeLimit;
 
   const hungerValue = (item: ItemSpec): number => {
     const effects = item.effects as Record<string, number> | undefined;
@@ -134,6 +138,10 @@ export const PetPanel: React.FC<PetPanelProps> = ({
           >
             {editingFormation ? "Hủy" : "Sửa"}
           </button>
+        </div>
+
+        <div className="text-[10px] text-zinc-500 mb-3">
+          Phí Hồn Phách khi ra trận: <span className="text-purple-400 font-bold">{formationSoulCost}</span> / {player.soul_hp ?? 0} soul (mỗi cá thể = 1 soul; Võ Đài miễn phí).
         </div>
 
         {editingFormation ? (
@@ -218,10 +226,18 @@ export const PetPanel: React.FC<PetPanelProps> = ({
           <Merge className="w-3 h-3 inline mr-1" />
           Gộp Bầy
         </button>
+        {mergeMode && (
+          <span className="text-[10px] text-zinc-500 self-center">
+            Bầy tối đa <span className="text-purple-400 font-bold">{mergeLimit}</span> cá thể (max_soul/10 = {player.max_soul ?? 0}/10)
+          </span>
+        )}
         {mergeMode && mergeTarget && mergeSources.length > 0 && (
-          <button onClick={handleMerge} disabled={actionLoading} className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600 text-white font-bold disabled:opacity-50">
+          <button onClick={handleMerge} disabled={actionLoading || mergeOverLimit} className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600 text-white font-bold disabled:opacity-50">
             Xác Nhận Gộp ({mergeSources.length} pet)
           </button>
+        )}
+        {mergeOverLimit && (
+          <span className="text-[10px] text-red-400 self-center">Vượt giới hạn bầy ({mergeTotalCount}/{mergeLimit})!</span>
         )}
       </div>
 

@@ -91,8 +91,15 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 		}
 	}
 
-	// Load formation pets into Allies
-	base.Allies = append(base.Allies, loadFormationPetCombatants(tx, player.ID.String(), base.CombatMode == "virtual")...)
+	// Load formation pets into Allies (soul cost applies on real combat, once per combat)
+	chargeAttacker := base.CombatMode != "virtual" && !base.PetSoulCharged
+	attackerPets, attackerSoul, attackerSoulLoaded := loadFormationPetCombatants(tx, player.ID.String(), base.CombatMode == "virtual", chargeAttacker)
+	base.Allies = append(base.Allies, attackerPets...)
+	if chargeAttacker && attackerSoulLoaded {
+		player.SoulHP = attackerSoul
+		_, _ = tx.Exec("UPDATE players SET soul_hp = $1 WHERE id = $2", attackerSoul, player.ID)
+		base.PetSoulCharged = true
+	}
 	for _, pet := range base.Allies {
 		if pet.Kind == "Pet" {
 			base.PetIDs = append(base.PetIDs, pet.ID)
@@ -101,7 +108,11 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 
 	// Load challenged/defender formation pets into Enemies (PVP: mine, arena, map)
 	if base.TargetPlayerID != "" && base.TargetPlayerID != "dummy" {
-		base.Enemies = append(base.Enemies, loadFormationPetCombatants(tx, base.TargetPlayerID, base.CombatMode == "virtual")...)
+		defenderPets, defenderSoul, defenderSoulLoaded := loadFormationPetCombatants(tx, base.TargetPlayerID, base.CombatMode == "virtual", base.CombatMode != "virtual")
+		base.Enemies = append(base.Enemies, defenderPets...)
+		if defenderSoulLoaded {
+			_, _ = tx.Exec("UPDATE players SET soul_hp = $1 WHERE id = $2", defenderSoul, base.TargetPlayerID)
+		}
 	}
 
 	if base.TargetPlayerID == "" && base.MineSlotID == 0 && base.EnemyTemplateID != "monster_heavenly_tribulation" && base.EnemyHP < 1000 {
@@ -173,7 +184,21 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 
 // loadFormationPetCombatants loads a player's formation pets as Combatants.
 // virtual restores pets to full HP, mirroring arena's virtual-mode convention.
-func loadFormationPetCombatants(tx *sql.Tx, playerID string, virtual bool) []models.Combatant {
+// When charge is true, each loaded pet costs soul_hp equal to its count
+// (individuals); pets that cannot be afforded are skipped. It returns the
+// loaded pets, the remaining soul_hp after deduction, and whether the soul
+// value was successfully read (and thus should be persisted by the caller).
+func loadFormationPetCombatants(tx *sql.Tx, playerID string, virtual bool, charge bool) ([]models.Combatant, int, bool) {
+	remainingSoul := -1
+	soulLoaded := false
+	if charge {
+		var soulHP int
+		if errSoul := tx.QueryRow(`SELECT soul_hp FROM players WHERE id = $1`, playerID).Scan(&soulHP); errSoul == nil {
+			remainingSoul = soulHP
+			soulLoaded = true
+		}
+	}
+
 	petRows, errPet := tx.Query(`
 		SELECT id, nickname, rank, sub_rank, hp, max_hp, base_attack, base_defense, speed, count
 		FROM player_pets
@@ -181,7 +206,7 @@ func loadFormationPetCombatants(tx *sql.Tx, playerID string, virtual bool) []mod
 		ORDER BY formation_slot ASC
 	`, playerID)
 	if errPet != nil {
-		return nil
+		return nil, remainingSoul, soulLoaded
 	}
 	defer petRows.Close()
 
@@ -192,6 +217,13 @@ func loadFormationPetCombatants(tx *sql.Tx, playerID string, virtual bool) []mod
 		var petHP, petMaxHP, petAtk, petDef, petSpeed float64
 		if errScan := petRows.Scan(&petID, &nickname, &petRank, &petSubRank, &petHP, &petMaxHP, &petAtk, &petDef, &petSpeed, &petCount); errScan != nil {
 			continue
+		}
+		if charge {
+			if remainingSoul < petCount {
+				// Insufficient soul to field this pack — skip loading it.
+				continue
+			}
+			remainingSoul -= petCount
 		}
 		if virtual {
 			petHP = petMaxHP
@@ -214,7 +246,7 @@ func loadFormationPetCombatants(tx *sql.Tx, playerID string, virtual bool) []mod
 			StatusEffects: []models.StatusEffect{},
 		})
 	}
-	return pets
+	return pets, remainingSoul, soulLoaded
 }
 
 func StartCombat(tx *sql.Tx, base *models.CombatState, player *models.Player) *models.CombatState {

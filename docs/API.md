@@ -122,7 +122,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | POST | `/pets/formation` | Đặt vị trí trong đội hình. Body: `{"pet_id": "...", "slot": 1}`. Slot 0 = storage. |
 | POST | `/pets/sleep` | Chuyển sủng vật active ↔ sleeping. Body: `{"pet_id": "..."}`. |
 | POST | `/pets/release` | Thả sủng vật. Body: `{"pet_id": "..."}`. |
-| POST | `/pets/merge` | Gộp sủng vật cùng loại. Body: `{"source_ids": ["..."], "target_id": "..."}`. |
+| POST | `/pets/merge` | Gộp sủng vật cùng loại. Body: `{"source_ids": ["..."], "target_id": "..."}`. Giới hạn bầy = `max_soul/10` (chặn toàn bộ khi vượt, trả `merge_limit`). Chỉ số scale sub-linear `base×N^0.65`. |
 
 ## Party, arena, mine
 
