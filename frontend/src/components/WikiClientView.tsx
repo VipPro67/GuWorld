@@ -14,19 +14,26 @@ import {
   Coins, 
   ChevronRight, 
   SlidersHorizontal,
-  ArrowLeft
+  ArrowLeft,
+  MapPin,
+  Skull,
+  Map
 } from "lucide-react";
-import { type GuDictionaryItem, reqGuQty, reqGuRank } from "@/lib/gu-dict";
+import { type GuDictionaryItem, type MonsterTemplate, type LootTable, type WikiRegion, type WikiMonsterSpawn, reqGuQty, reqGuRank } from "@/lib/gu-dict";
 import { type ItemSpec, type RefiningRecipe } from "@/store/useGameStore";
 import { getPathColor } from "@/lib/utils";
 
 // Types
-type TabType = "guides" | "gus" | "items" | "recipes";
+type TabType = "guides" | "gus" | "items" | "recipes" | "monsters" | "regions";
 
 interface Props {
   initialGus: GuDictionaryItem[];
   initialItems: ItemSpec[];
   initialRecipes: RefiningRecipe[];
+  initialMonsters: MonsterTemplate[];
+  initialLootTables: LootTable[];
+  initialRegions: WikiRegion[];
+  initialMonsterSpawns: WikiMonsterSpawn[];
   guideSections: any[];
   roadmap: any;
   subByParent: Record<string, any[]>;
@@ -142,6 +149,10 @@ export default function WikiClientView({
   initialGus,
   initialItems,
   initialRecipes,
+  initialMonsters,
+  initialLootTables,
+  initialRegions,
+  initialMonsterSpawns,
   guideSections,
   roadmap,
   subByParent,
@@ -168,6 +179,14 @@ export default function WikiClientView({
   const [recipeRank, setRecipeRank] = useState<string>("all");
   const [recipeSort, setRecipeSort] = useState<string>("none");
 
+  // Monster Filters State
+  const [monsterType, setMonsterType] = useState<string>("all");
+  const [monsterRank, setMonsterRank] = useState<string>("all");
+
+  // Region Filters State
+  const [regionZoneType, setRegionZoneType] = useState<string>("all");
+  const [regionRank, setRegionRank] = useState<string>("all");
+
   // Dynamic filter lists
   const allPaths = useMemo(() => {
     const paths = new Set<string>();
@@ -191,6 +210,18 @@ export default function WikiClientView({
     return Array.from(types).sort();
   }, [initialItems]);
 
+  const allMonsterTypes = useMemo(() => {
+    const types = new Set<string>();
+    initialMonsters.forEach((m) => { if (m.type) types.add(m.type); });
+    return Array.from(types).sort();
+  }, [initialMonsters]);
+
+  const allZoneTypes = useMemo(() => {
+    const types = new Set<string>();
+    initialRegions.forEach((r) => { if (r.zone_type) types.add(r.zone_type); });
+    return Array.from(types).sort();
+  }, [initialRegions]);
+
   // Clean and filter helper
   const cleanSearch = useMemo(() => removeAccents(searchQuery.toLowerCase().trim()), [searchQuery]);
 
@@ -207,6 +238,101 @@ export default function WikiClientView({
     initialItems.forEach((i) => map.set(i.id, i));
     return map;
   }, [initialItems]);
+
+  // Monster map
+  const monsterMap = useMemo(() => {
+    const map = new Map<string, MonsterTemplate>();
+    initialMonsters.forEach((m) => map.set(m.id, m));
+    return map;
+  }, [initialMonsters]);
+
+  // Region map
+  const regionMap = useMemo(() => {
+    const map = new Map<string, WikiRegion>();
+    initialRegions.forEach((r) => map.set(r.id, r));
+    return map;
+  }, [initialRegions]);
+
+  // Loot table map
+  const lootTableMap = useMemo(() => {
+    const map = new Map<string, LootTable>();
+    initialLootTables.forEach((lt) => map.set(lt.id, lt));
+    return map;
+  }, [initialLootTables]);
+
+  // Source lookup: item -> { regions, monsters }
+  const itemSourceMap = useMemo(() => {
+    const map = new Map<string, { regions: string[]; monsters: string[] }>();
+    // From region pool_weights.resources
+    initialRegions.forEach((r) => {
+      (r.pool_weights?.resources || []).forEach((itemId) => {
+        if (!map.has(itemId)) map.set(itemId, { regions: [], monsters: [] });
+        map.get(itemId)!.regions.push(r.id);
+      });
+    });
+    // From loot table entries
+    initialMonsters.forEach((m) => {
+      if (!m.loot_table_id) return;
+      const lt = lootTableMap.get(m.loot_table_id);
+      if (!lt) return;
+      lt.entries.forEach((e) => {
+        if (e.item_id) {
+          if (!map.has(e.item_id)) map.set(e.item_id, { regions: [], monsters: [] });
+          const src = map.get(e.item_id)!;
+          if (!src.monsters.includes(m.id)) src.monsters.push(m.id);
+        }
+      });
+    });
+    return map;
+  }, [initialRegions, initialMonsters, lootTableMap]);
+
+  // Source lookup: gu -> { wildRegions, dropMonsters }
+  const guSourceMap = useMemo(() => {
+    const map = new Map<string, { wildRegions: string[]; dropMonsters: string[] }>();
+    // From region pool_weights.wild_gus
+    initialRegions.forEach((r) => {
+      (r.pool_weights?.wild_gus || []).forEach((guId) => {
+        if (!map.has(guId)) map.set(guId, { wildRegions: [], dropMonsters: [] });
+        map.get(guId)!.wildRegions.push(r.id);
+      });
+    });
+    // From loot table entries
+    initialMonsters.forEach((m) => {
+      if (!m.loot_table_id) return;
+      const lt = lootTableMap.get(m.loot_table_id);
+      if (!lt) return;
+      lt.entries.forEach((e) => {
+        if (e.gu_id) {
+          if (!map.has(e.gu_id)) map.set(e.gu_id, { wildRegions: [], dropMonsters: [] });
+          const src = map.get(e.gu_id)!;
+          if (!src.dropMonsters.includes(m.id)) src.dropMonsters.push(m.id);
+        }
+      });
+    });
+    return map;
+  }, [initialRegions, initialMonsters, lootTableMap]);
+
+  // Monster -> regions map
+  const monsterRegionMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    initialMonsterSpawns.forEach((s) => {
+      if (!map.has(s.monster_id)) map.set(s.monster_id, []);
+      const arr = map.get(s.monster_id)!;
+      if (!arr.includes(s.region_id)) arr.push(s.region_id);
+    });
+    return map;
+  }, [initialMonsterSpawns]);
+
+  // Region -> monsters map
+  const regionMonsterMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    initialMonsterSpawns.forEach((s) => {
+      if (!map.has(s.region_id)) map.set(s.region_id, []);
+      const arr = map.get(s.region_id)!;
+      if (!arr.includes(s.monster_id)) arr.push(s.monster_id);
+    });
+    return map;
+  }, [initialMonsterSpawns]);
 
   // Reset filters when changing tabs
   const handleTabChange = (tab: TabType) => {
@@ -292,6 +418,31 @@ export default function WikiClientView({
     return list;
   }, [initialRecipes, cleanSearch, recipeRank, recipeSort, guMap]);
 
+  const filteredMonsters = useMemo(() => {
+    return initialMonsters.filter((monster) => {
+      if (cleanSearch) {
+        const nameClean = removeAccents((monster.name || "").toLowerCase());
+        const idClean = removeAccents((monster.id || "").toLowerCase());
+        const typeClean = removeAccents((monster.type || "").toLowerCase());
+        if (!nameClean.includes(cleanSearch) && !idClean.includes(cleanSearch) && !typeClean.includes(cleanSearch)) return false;
+      }
+      if (monsterType !== "all" && monster.type !== monsterType) return false;
+      return true; // We don't have rank in MonsterTemplate for this simple filter currently, unless we add it
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [initialMonsters, cleanSearch, monsterType]);
+
+  const filteredRegions = useMemo(() => {
+    return initialRegions.filter((region) => {
+      if (cleanSearch) {
+        const nameClean = removeAccents((region.name || "").toLowerCase());
+        const descClean = removeAccents((region.description || "").toLowerCase());
+        if (!nameClean.includes(cleanSearch) && !descClean.includes(cleanSearch)) return false;
+      }
+      if (regionZoneType !== "all" && region.zone_type !== regionZoneType) return false;
+      return true;
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [initialRegions, cleanSearch, regionZoneType]);
+
   // Navigate to Gu tab and filter by name
   const locateGu = (guId: string) => {
     setActiveTab("gus");
@@ -300,6 +451,26 @@ export default function WikiClientView({
       setSearchQuery(target.name);
     } else {
       setSearchQuery(guId);
+    }
+  };
+
+  const locateMonster = (monsterId: string) => {
+    setActiveTab("monsters");
+    const target = monsterMap.get(monsterId);
+    if (target) {
+      setSearchQuery(target.name);
+    } else {
+      setSearchQuery(monsterId);
+    }
+  };
+
+  const locateRegion = (regionId: string) => {
+    setActiveTab("regions");
+    const target = regionMap.get(regionId);
+    if (target) {
+      setSearchQuery(target.name);
+    } else {
+      setSearchQuery(regionId);
     }
   };
 
@@ -399,6 +570,28 @@ export default function WikiClientView({
             <Cpu className="w-4 h-4" />
             Cổ Phương
           </button>
+          <button
+            onClick={() => handleTabChange("monsters")}
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold font-serif uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+              activeTab === "monsters"
+                ? "border-red-500 text-red-400 bg-red-950/5"
+                : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-zinc-800/10"
+            }`}
+          >
+            <Skull className="w-4 h-4" />
+            Quái Vật
+          </button>
+          <button
+            onClick={() => handleTabChange("regions")}
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold font-serif uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+              activeTab === "regions"
+                ? "border-orange-500 text-orange-400 bg-orange-950/5"
+                : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-zinc-800/10"
+            }`}
+          >
+            <Map className="w-4 h-4" />
+            Khu Vực
+          </button>
         </div>
 
         {/* Search Bar & Filters Panel */}
@@ -414,7 +607,11 @@ export default function WikiClientView({
                       ? "Tìm kiếm Cổ trùng theo tên, ID, mô tả..."
                       : activeTab === "items"
                       ? "Tìm kiếm Vật phẩm theo tên, ID, mô tả..."
-                      : "Tìm kiếm công thức luyện Cổ theo tên Cổ đích..."
+                      : activeTab === "recipes"
+                      ? "Tìm kiếm công thức luyện Cổ theo tên Cổ đích..."
+                      : activeTab === "monsters"
+                      ? "Tìm kiếm Quái vật theo tên, ID, loại..."
+                      : "Tìm kiếm Khu vực theo tên, mô tả..."
                   }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -589,6 +786,46 @@ export default function WikiClientView({
                     </div>
                   </>
                 )}
+
+                {activeTab === "monsters" && (
+                  <>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-wider">Phân loại (Type)</label>
+                      <select
+                        value={monsterType}
+                        onChange={(e) => setMonsterType(e.target.value)}
+                        className="w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none"
+                      >
+                        <option value="all">Tất cả loại quái</option>
+                        {allMonsterTypes.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
+
+                {activeTab === "regions" && (
+                  <>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-wider">Loại khu vực</label>
+                      <select
+                        value={regionZoneType}
+                        onChange={(e) => setRegionZoneType(e.target.value)}
+                        className="w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none"
+                      >
+                        <option value="all">Tất cả loại khu vực</option>
+                        {allZoneTypes.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -716,6 +953,30 @@ export default function WikiClientView({
                         </span>
                       ))}
                     </div>
+
+                    {/* Source Locations */}
+                    {guSourceMap.has(gu.id) && (guSourceMap.get(gu.id)!.wildRegions.length > 0 || guSourceMap.get(gu.id)!.dropMonsters.length > 0) && (
+                      <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-zinc-900/40">
+                        {guSourceMap.get(gu.id)!.wildRegions.slice(0, 2).map((rId) => {
+                          const region = regionMap.get(rId);
+                          return (
+                            <span key={`w-${rId}`} className="px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-500/20 text-[8px] font-mono flex items-center gap-1">
+                              <MapPin className="w-2.5 h-2.5" />
+                              {region ? region.name : rId}
+                            </span>
+                          );
+                        })}
+                        {guSourceMap.get(gu.id)!.dropMonsters.slice(0, 2).map((mId) => {
+                          const monster = monsterMap.get(mId);
+                          return (
+                            <span key={`m-${mId}`} className="px-1.5 py-0.5 rounded bg-red-950/30 text-red-400 border border-red-500/20 text-[8px] font-mono flex items-center gap-1">
+                              <Skull className="w-2.5 h-2.5" />
+                              {monster ? monster.name : mId}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
                   </Link>
                 ))}
               </div>
@@ -775,6 +1036,30 @@ export default function WikiClientView({
                     <p className="text-[11px] text-[var(--text-muted)] leading-relaxed mt-3 line-clamp-2">
                       {item.description || "Không có mô tả chi tiết."}
                     </p>
+
+                    {/* Source Locations */}
+                    {itemSourceMap.has(item.id) && (itemSourceMap.get(item.id)!.regions.length > 0 || itemSourceMap.get(item.id)!.monsters.length > 0) && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {itemSourceMap.get(item.id)!.regions.slice(0, 2).map((rId) => {
+                          const region = regionMap.get(rId);
+                          return (
+                            <span key={`r-${rId}`} className="px-1.5 py-0.5 rounded bg-orange-950/30 text-orange-400 border border-orange-500/20 text-[8px] font-mono flex items-center gap-1">
+                              <MapPin className="w-2.5 h-2.5" />
+                              {region ? region.name : rId}
+                            </span>
+                          );
+                        })}
+                        {itemSourceMap.get(item.id)!.monsters.slice(0, 2).map((mId) => {
+                          const monster = monsterMap.get(mId);
+                          return (
+                            <span key={`m-${mId}`} className="px-1.5 py-0.5 rounded bg-red-950/30 text-red-400 border border-red-500/20 text-[8px] font-mono flex items-center gap-1">
+                              <Skull className="w-2.5 h-2.5" />
+                              {monster ? monster.name : mId}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     {/* Stats & Price */}
                     <div className="flex items-center justify-between mt-auto pt-3 border-t border-zinc-900/60 text-[10px] font-mono text-[var(--text-muted)]">
@@ -944,6 +1229,256 @@ export default function WikiClientView({
                           {recipe.immortal_essence_stones_cost > 0 && (
                             <div className="flex items-center justify-end gap-1.5 text-[10px] font-mono text-amber-500 font-bold">
                               <span>{recipe.immortal_essence_stones_cost.toLocaleString()} Tiên nguyên thạch</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+      {/* 5. MONSTERS TAB */}
+        {activeTab === "monsters" && (
+          <div>
+            {filteredMonsters.length === 0 ? (
+              <div className="text-center py-20 bg-zinc-900/10 rounded-2xl border border-[var(--border)] border-dashed">
+                <ShieldAlert className="w-8 h-8 mx-auto text-[var(--text-muted)] mb-2" />
+                <p className="text-[var(--text-muted)] font-mono text-xs">Không tìm thấy quái vật nào trùng khớp với bộ lọc</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredMonsters.map((monster) => {
+                  const regions = monsterRegionMap.get(monster.id) || [];
+                  const lootTable = lootTableMap.get(monster.loot_table_id);
+
+                  return (
+                    <div
+                      key={monster.id}
+                      className="flex flex-col p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] shadow-sm hover:border-red-500/20 transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-3 border-b border-zinc-900/80 pb-4 mb-4">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl p-2 rounded-xl bg-zinc-950/60 border border-zinc-800/40">
+                            {monster.type === "Boss" ? "👹" : monster.type === "Elite" ? "👺" : "🐺"}
+                          </span>
+                          <div>
+                            <h3 className="text-sm font-serif font-bold text-[var(--text-primary)]">
+                              {monster.name}
+                            </h3>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold border ${
+                                monster.type === "Boss" ? "bg-red-950/30 text-red-400 border-red-500/20" :
+                                monster.type === "Elite" ? "bg-orange-950/30 text-orange-400 border-orange-500/20" :
+                                "bg-zinc-900/50 text-zinc-400 border-zinc-800"
+                              }`}>
+                                {monster.type}
+                              </span>
+                              <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                                ID: {monster.id}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right flex flex-col gap-1 items-end">
+                          <span className="text-[10px] font-mono text-rose-400 px-2 py-0.5 rounded bg-rose-950/20 border border-rose-500/10 flex items-center gap-1">
+                            ❤️ {monster.max_hp.toLocaleString()}
+                          </span>
+                          <div className="flex gap-1">
+                            <span className="text-[9px] font-mono text-amber-400 px-1.5 py-0.5 rounded bg-amber-950/20">⚔️ {monster.base_attack}</span>
+                            <span className="text-[9px] font-mono text-sky-400 px-1.5 py-0.5 rounded bg-sky-950/20">🛡️ {monster.base_defense}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] text-[var(--text-muted)] leading-relaxed mb-4 italic font-serif">
+                        &ldquo;{monster.description}&rdquo;
+                      </p>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-auto pt-4 border-t border-zinc-900/60">
+                        {/* Spawns */}
+                        <div>
+                          <h4 className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <MapPin className="w-3 h-3 text-emerald-500" />
+                            Khu vực xuất hiện
+                          </h4>
+                          {regions.length === 0 ? (
+                            <p className="text-[10px] text-zinc-600 italic font-mono">Không rõ khu vực</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {regions.map((rId) => {
+                                const region = regionMap.get(rId);
+                                return (
+                                  <button
+                                    key={rId}
+                                    onClick={() => locateRegion(rId)}
+                                    className="px-2 py-1 rounded bg-zinc-950/40 text-[10px] text-[var(--text-secondary)] border border-zinc-900/60 hover:border-emerald-500/30 hover:text-emerald-400 transition-colors cursor-pointer text-left"
+                                  >
+                                    {region ? region.name : rId}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Drops */}
+                        <div>
+                          <h4 className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <Layers className="w-3 h-3 text-amber-500" />
+                            Vật phẩm rơi (Loot)
+                          </h4>
+                          {!lootTable || lootTable.entries.length === 0 ? (
+                            <p className="text-[10px] text-zinc-600 italic font-mono">Không có vật phẩm rơi</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {lootTable.entries.slice(0, 5).map((e, idx) => {
+                                const targetName = e.item_id 
+                                  ? (itemMap.get(e.item_id)?.name || e.item_id)
+                                  : e.gu_id 
+                                    ? (guMap.get(e.gu_id)?.name || e.gu_id)
+                                    : "Unknown";
+                                
+                                return (
+                                  <div key={idx} className="flex items-center justify-between text-[10px] font-mono p-1.5 rounded-lg bg-zinc-950/30 border border-zinc-900/40">
+                                    <span className="text-[var(--text-primary)] truncate max-w-[120px]">
+                                      {targetName}
+                                    </span>
+                                    <span className="text-zinc-500 shrink-0">{(e.chance * 100).toFixed(1)}%</span>
+                                  </div>
+                                );
+                              })}
+                              {lootTable.entries.length > 5 && (
+                                <p className="text-[9px] text-zinc-500 italic text-center mt-1">
+                                  + {lootTable.entries.length - 5} mục khác
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 6. REGIONS TAB */}
+        {activeTab === "regions" && (
+          <div>
+            {filteredRegions.length === 0 ? (
+              <div className="text-center py-20 bg-zinc-900/10 rounded-2xl border border-[var(--border)] border-dashed">
+                <ShieldAlert className="w-8 h-8 mx-auto text-[var(--text-muted)] mb-2" />
+                <p className="text-[var(--text-muted)] font-mono text-xs">Không tìm thấy khu vực nào trùng khớp với bộ lọc</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredRegions.map((region) => {
+                  const wildGus = region.pool_weights?.wild_gus || [];
+                  const resources = region.pool_weights?.resources || [];
+                  const monstersInRegion = regionMonsterMap.get(region.id) || [];
+
+                  return (
+                    <div
+                      key={region.id}
+                      className="flex flex-col p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] shadow-sm hover:border-orange-500/20 transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-3 border-b border-zinc-900/80 pb-4 mb-4">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl p-2 rounded-xl bg-zinc-950/60 border border-zinc-800/40">
+                            {region.zone_type === "Danger" ? "🌋" : region.zone_type === "Safe" ? "🏛️" : "🌲"}
+                          </span>
+                          <div>
+                            <h3 className="text-sm font-serif font-bold text-[var(--text-primary)]">
+                              {region.name}
+                            </h3>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold border ${
+                                region.zone_type === "Danger" ? "bg-red-950/30 text-red-400 border-red-500/20" :
+                                region.zone_type === "Safe" ? "bg-emerald-950/30 text-emerald-400 border-emerald-500/20" :
+                                "bg-zinc-900/50 text-zinc-400 border-zinc-800"
+                              }`}>
+                                {region.zone_type}
+                              </span>
+                              <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                                Cấp {region.min_rank} - {region.max_rank}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] text-[var(--text-muted)] leading-relaxed mb-4 italic font-serif">
+                        &ldquo;{region.description}&rdquo;
+                      </p>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-auto pt-4 border-t border-zinc-900/60">
+                        {/* Spawns */}
+                        <div>
+                          <h4 className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <Skull className="w-3 h-3 text-red-500" />
+                            Quái vật xuất hiện
+                          </h4>
+                          {monstersInRegion.length === 0 ? (
+                            <p className="text-[10px] text-zinc-600 italic font-mono">Khu vực an toàn</p>
+                          ) : (
+                            <div className="flex flex-col gap-1.5">
+                              {monstersInRegion.slice(0, 5).map((mId) => {
+                                const monster = monsterMap.get(mId);
+                                return (
+                                  <button
+                                    key={mId}
+                                    onClick={() => locateMonster(mId)}
+                                    className="px-2 py-1 rounded-lg bg-zinc-950/30 text-[10px] text-[var(--text-secondary)] border border-zinc-900/40 hover:border-red-500/30 hover:text-red-400 transition-colors cursor-pointer text-left truncate flex items-center justify-between"
+                                  >
+                                    <span className="truncate">{monster ? monster.name : mId}</span>
+                                    {monster?.type === "Boss" && <span className="text-[8px] text-red-500 bg-red-950/40 px-1 rounded ml-1">BOSS</span>}
+                                  </button>
+                                );
+                              })}
+                              {monstersInRegion.length > 5 && (
+                                <p className="text-[9px] text-zinc-500 italic text-center mt-1">
+                                  + {monstersInRegion.length - 5} quái khác
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Resources */}
+                        <div>
+                          <h4 className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <Sparkles className="w-3 h-3 text-indigo-500" />
+                            Tài nguyên & Cổ
+                          </h4>
+                          {resources.length === 0 && wildGus.length === 0 ? (
+                            <p className="text-[10px] text-zinc-600 italic font-mono">Vùng đất cằn cỗi</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {wildGus.slice(0, 4).map((gId) => {
+                                const gu = guMap.get(gId);
+                                return (
+                                  <span key={`gu-${gId}`} className="px-1.5 py-0.5 rounded bg-indigo-950/30 text-indigo-400 border border-indigo-500/20 text-[9px] font-mono truncate max-w-full">
+                                    {gu ? gu.name : gId}
+                                  </span>
+                                );
+                              })}
+                              {resources.slice(0, 4).map((rId) => {
+                                const item = itemMap.get(rId);
+                                return (
+                                  <span key={`res-${rId}`} className="px-1.5 py-0.5 rounded bg-sky-950/30 text-sky-400 border border-sky-500/20 text-[9px] font-mono truncate max-w-full">
+                                    {item ? item.name : rId}
+                                  </span>
+                                );
+                              })}
+                              {(wildGus.length + resources.length > 8) && (
+                                <span className="px-1.5 py-0.5 rounded bg-zinc-900/50 text-zinc-500 text-[9px] font-mono">
+                                  +{wildGus.length + resources.length - 8}
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>

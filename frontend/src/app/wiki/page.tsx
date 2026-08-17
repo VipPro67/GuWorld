@@ -5,15 +5,15 @@ import WikiClientView from "@/components/WikiClientView";
 
 export const metadata: Metadata = {
   title: "Thư Viện Cổ Trùng",
-  description: "Tra cứu toàn bộ Cổ Trùng, Vật phẩm và Cổ phương trong Cổ Giới: thuộc tính, hệ phái, tác dụng, công thức phối hợp.",
+  description: "Tra cứu toàn bộ Cổ Trùng, Vật phẩm, Quái vật, Khu vực và Cổ phương trong Cổ Giới: thuộc tính, hệ phái, tác dụng, công thức phối hợp, nguồn gốc vật phẩm.",
   openGraph: {
     title: "Thư Viện Cổ Trùng | Cổ Giới",
-    description: "Tra cứu toàn bộ Cổ Trùng, Vật phẩm và Cổ phương trong Cổ Giới.",
+    description: "Tra cứu toàn bộ Cổ Trùng, Vật phẩm, Quái vật, Khu vực và Cổ phương trong Cổ Giới.",
   },
 };
 
 export default async function WikiIndexPage() {
-  const { gus, items } = await fetchDictionaryUnified();
+  const { gus, items, monsters, lootTables, regions, monsterSpawns } = await fetchDictionaryUnified();
   const recipes = await fetchMasterRecipes();
 
   const guideSections = wikiPages.filter((p) => !p.subCategory && p.category !== "roadmap");
@@ -40,6 +40,10 @@ export default async function WikiIndexPage() {
       initialGus={gus}
       initialItems={items}
       initialRecipes={recipes}
+      initialMonsters={monsters}
+      initialLootTables={lootTables}
+      initialRegions={regions}
+      initialMonsterSpawns={monsterSpawns}
       guideSections={guideSections}
       roadmap={roadmap}
       subByParent={subByParent}

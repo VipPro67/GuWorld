@@ -121,6 +121,58 @@ export interface ItemSpec {
   image_url?: string;
 }
 
+export interface MonsterTemplate {
+  id: string;
+  name: string;
+  type: string;
+  max_hp: number;
+  base_attack: number;
+  base_defense: number;
+  loot_table_id: string;
+  description: string;
+  is_capturable: boolean;
+  capture_chance: number;
+}
+
+export interface LootEntry {
+  item_id?: string;
+  gu_id?: string;
+  min_qty?: number;
+  max_qty?: number;
+  chance: number;
+}
+
+export interface LootTable {
+  id: string;
+  name: string;
+  entries: LootEntry[];
+}
+
+export interface WikiRegion {
+  id: string;
+  name: string;
+  description: string;
+  min_rank: number;
+  max_rank: number;
+  parent_id?: string;
+  zone_type: string;
+  pool_weights: {
+    cell_type_weights?: Record<string, number>;
+    resources?: string[];
+    wild_gus?: string[];
+  };
+}
+
+export interface WikiMonsterSpawn {
+  region_id: string;
+  monster_id: string;
+  chance: number;
+  min_rank: number;
+  max_rank: number;
+  is_boss_spawn: boolean;
+}
+
+
 export interface RequiredGuItem {
   rank: number; // 0 = any rank (legacy recipe)
   qty: number;
@@ -152,26 +204,38 @@ export interface RefiningRecipe {
   completion_rate?: number;
 }
 
-export async function fetchDictionaryUnified(): Promise<{ gus: GuDictionaryItem[]; items: ItemSpec[] }> {
+export async function fetchDictionaryUnified(): Promise<{
+  gus: GuDictionaryItem[];
+  items: ItemSpec[];
+  monsters: MonsterTemplate[];
+  lootTables: LootTable[];
+  regions: WikiRegion[];
+  monsterSpawns: WikiMonsterSpawn[];
+}> {
   try {
     const res = await fetch(`${BACKEND_URL}/api/dictionary`, {
       cache: "force-cache",
       next: { revalidate: 3600 },
     });
-    if (!res.ok) return { gus: [], items: [] };
+    if (!res.ok) return { gus: [], items: [], monsters: [], lootTables: [], regions: [], monsterSpawns: [] };
     const data = await res.json();
     const gu: Record<string, GuDictionaryItem> = data.gu || {};
     const itemsRecord: Record<string, ItemSpec> = data.items || {};
+    const monstersRecord: Record<string, MonsterTemplate> = data.monsters || {};
     
     const gus = Object.values(gu);
     const items = Object.values(itemsRecord).map((item) => ({
       ...item,
       item_type: item.item_type || item.type || "Material",
     }));
+    const monsters = Object.values(monstersRecord);
+    const lootTables: LootTable[] = data.loot_tables || [];
+    const regions: WikiRegion[] = data.regions || [];
+    const monsterSpawns: WikiMonsterSpawn[] = data.monster_spawns || [];
     
-    return { gus, items };
+    return { gus, items, monsters, lootTables, regions, monsterSpawns };
   } catch {
-    return { gus: [], items: [] };
+    return { gus: [], items: [], monsters: [], lootTables: [], regions: [], monsterSpawns: [] };
   }
 }
 
