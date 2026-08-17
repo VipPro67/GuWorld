@@ -49,6 +49,9 @@ type Effects struct {
 	MentalResistanceBonus float64 `json:"mental_resistance"`
 	// SoulDefenseBonus is a percentage reduction of soul damage taken.
 	SoulDefenseBonus float64 `json:"soul_defense"`
+	// SoulRegenBonus is a percentage increase of passive soul_hp regeneration
+	// (dưỡng hồn). E.g. 0.50 => +50% soul_hp recovered per hour.
+	SoulRegenBonus float64 `json:"soul_regen"`
 	// ApertureStressBonus is an additive multiplier on the aperture stress
 	// (áp lực không khiếu) gained per trùng kích attempt. 1.0 => stress ×2.
 	ApertureStressBonus float64 `json:"aperture_stress_bonus"`

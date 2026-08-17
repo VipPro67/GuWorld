@@ -110,7 +110,7 @@ export const LobbyView: React.FC = () => {
   const hpRegenRealHourly = (player?.hp_regen_rate || 0) * timeSpeedMultiplier;
   const manaRegenRealHourly = (player?.mana_regen_rate || 0) * effectiveManaMultiplier;
   const thoughtRegenRealHourly = (player?.thought_regen_rate || 0) * timeSpeedMultiplier;
-  const soulRegenRealHourly = (player?.max_soul || 0) * 0.10 * timeSpeedMultiplier;
+  const soulRegenRealHourly = (player?.soul_regen_rate ?? (player?.max_soul || 0) * 0.10) * timeSpeedMultiplier;
 
   const displayedThoughtPercent = player
     ? (player.max_thought > 0 ? Math.min(100, ((player.current_thought || 0) / player.max_thought) * 100) : 0)

@@ -135,5 +135,6 @@ func addEffects(dst *Effects, src Effects) {
 	dst.HPRegenBonus += src.HPRegenBonus
 	dst.MentalResistanceBonus += src.MentalResistanceBonus
 	dst.SoulDefenseBonus += src.SoulDefenseBonus
+	dst.SoulRegenBonus += src.SoulRegenBonus
 	dst.ApertureStressBonus += src.ApertureStressBonus
 }

@@ -284,6 +284,8 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 	effMaxHP := gamefx.EffectiveMaxHP(player)
 	player.HPRegenRate = (effMaxHP*0.05 + gamefx.Get(player).HPRegenBonus) * (1.0 + gamefx.Get(player).HealingReceivedBonus)
 
+	player.SoulRegenRate = (float64(player.MaxSoul) * 0.10) * (1.0 + gamefx.Get(player).SoulRegenBonus) + models.SoulRegenTickPerHour(player.GuInventory, player.Rank)
+
 	secondsPassed := now.Sub(player.LastManaUpdate).Seconds()
 	if secondsPassed > 0 {
 		effectiveMultiplier := player.TimeSpeedMultiplier
@@ -315,7 +317,7 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 		}
 
 		if player.SoulHP > 0 && player.SoulHP < player.MaxSoul {
-			soulRegenPerHour := float64(player.MaxSoul) * 0.10
+			soulRegenPerHour := player.SoulRegenRate
 			earnedSoulFloat := (secondsPassed * player.TimeSpeedMultiplier / 3600.0) * soulRegenPerHour
 			earnedSoulInt := int(earnedSoulFloat)
 			fraction := earnedSoulFloat - float64(earnedSoulInt)

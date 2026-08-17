@@ -141,6 +141,7 @@ func TestEffectsJSONRoundTrip(t *testing.T) {
 		PathResistanceBonus:        map[string]float64{"fire": 0.10},
 		CultivationEfficiencyBonus: 0.20,
 		SoulDefenseBonus:           0.15,
+		SoulRegenBonus:             0.50,
 		ApertureStressBonus:        1.0,
 	}
 	raw, err := json.Marshal(want)
@@ -159,6 +160,9 @@ func TestEffectsJSONRoundTrip(t *testing.T) {
 	}
 	if got.HPRegenBonus != 0.0 {
 		t.Errorf("hp regen bonus = %v, want 0.0", got.HPRegenBonus)
+	}
+	if got.SoulRegenBonus != 0.50 {
+		t.Errorf("soul regen bonus = %v, want 0.50", got.SoulRegenBonus)
 	}
 }
 

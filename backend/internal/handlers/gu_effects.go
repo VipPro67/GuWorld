@@ -435,6 +435,18 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		}
 		player.MaxSoul += int(val)
 		return fmt.Sprintf("Linh Hồn tối đa tăng thêm %.0f điểm.", val), nil
+	case "RESTORE_SOUL_HP":
+		val, _ := params["value"].(float64)
+		if val <= 0 {
+			val = 10
+		}
+		before := player.SoulHP
+		player.SoulHP += int(val)
+		if player.SoulHP > player.MaxSoul {
+			player.SoulHP = player.MaxSoul
+		}
+		restored := player.SoulHP - before
+		return fmt.Sprintf("Hồn phách được dưỡng hồi (+%d Hồn Phách).", restored), nil
 	// ── New action codes ──────────────────────────────────────────────
 	case "TIME_ACCELERATION":
 		val, _ := params["value"].(float64)

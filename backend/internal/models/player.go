@@ -239,6 +239,7 @@ type Player struct {
 	// UI Transient fields
 	ManaRegenRate float64 `json:"mana_regen_rate"`
 	HPRegenRate   float64 `json:"hp_regen_rate"`
+	SoulRegenRate float64 `json:"soul_regen_rate"`
 	IsSparseGuInventory bool `json:"is_sparse_gu_inventory,omitempty"`
 }
 

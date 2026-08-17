@@ -571,3 +571,35 @@ func ThoughtRegenTickPerHour(inventory []GuInstance, playerRank int) float64 {
 	return total
 }
 
+// SoulRegenTickPerHour sums the per-hour soul_hp contribution of every equipped
+// ACTIVE Gu that carries an ON_TICK SOUL_REGEN_TICK effect. It reuses the
+// ManaRegenTickFactor rank scaling so a Gu gives its full value only when its
+// rank matches the player's.
+func SoulRegenTickPerHour(inventory []GuInstance, playerRank int) float64 {
+	var total float64
+	for _, gu := range inventory {
+		if !gu.Equipped || gu.Status != "ACTIVE" {
+			continue
+		}
+		spec, ok := GetGu(gu.GuID, gu.Rank)
+		if !ok {
+			continue
+		}
+		for _, mech := range spec.Effects.Other {
+			if mech.EventTrigger != "ON_TICK" || mech.ActionCode != "SOUL_REGEN_TICK" {
+				continue
+			}
+			var params map[string]interface{}
+			if len(mech.Params) > 0 {
+				json.Unmarshal(mech.Params, &params)
+			}
+			val, _ := params["value"].(float64)
+			if val <= 0 {
+				val = 1.0
+			}
+			total += val * ManaRegenTickFactor(playerRank, gu.Rank)
+		}
+	}
+	return total
+}
+

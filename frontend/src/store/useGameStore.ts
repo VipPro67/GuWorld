@@ -168,6 +168,7 @@ export interface Player {
   thought_regen_rate: number;
   mana_regen_rate: number;
   hp_regen_rate: number;
+  soul_regen_rate?: number;
   growth_data?: {
     boosts: { attack: number; defense: number; hp: number; speed: number };
     fully_grown: { gu_id: string; rank: number; attack: number; defense: number; hp: number; speed: number }[];
