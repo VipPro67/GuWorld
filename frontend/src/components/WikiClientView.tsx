@@ -1096,7 +1096,10 @@ export default function WikiClientView({
                       {item.base_price ? (
                         <div className="flex items-center gap-1 text-amber-500 font-bold text-[10px]">
                           <Coins className="w-3.5 h-3.5" />
-                          <span>{item.base_price} Đá</span>
+                          <span>
+                            {item.base_price.toLocaleString()}{" "}
+                            {item.rank && item.rank >= 6 ? "Tiên nguyên thạch" : "Nguyên thạch"}
+                          </span>
                         </div>
                       ) : null}
                     </div>

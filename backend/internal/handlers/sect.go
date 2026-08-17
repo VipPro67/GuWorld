@@ -1680,6 +1680,24 @@ func BuyFromSectVault(c *gin.Context) {
 
 		m.ContributionPoints -= cost
 
+		// Remove recipe from vault
+		for i := range vaultRecipes {
+			if vaultRecipes[i].RecipeID == req.ItemID {
+				vaultRecipes = append(vaultRecipes[:i], vaultRecipes[i+1:]...)
+				break
+			}
+		}
+		newVaultRecipes, err := json.Marshal(vaultRecipes)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to serialize updated recipes list"})
+			return
+		}
+		_, err = tx.Exec(`UPDATE sects SET vault_recipes = $1 WHERE id = $2`, newVaultRecipes, s.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect vault recipes list"})
+			return
+		}
+
 		// Grant the recipe to the buyer, keeping the higher completion rate.
 		grantedRate := recipeEntry.CompletionRate
 		if existing, err := RecipeSvc.Get(tx, player.ID.String(), req.ItemID); err == nil && existing != nil {
@@ -2026,7 +2044,7 @@ func CompleteSectMission(c *gin.Context) {
 	}
 
 	// Update mission status
-	_, err = tx.Exec(`UPDATE player_sect_missions SET status = 'COMPLETED' WHERE id = $1`, psm.ID)
+	_, err = tx.Exec(`DELETE FROM player_sect_missions WHERE id = $1`, psm.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete mission"})
 		return
