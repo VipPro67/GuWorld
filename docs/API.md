@@ -191,6 +191,12 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 
 **Loại tiền theo rank (Thương Đội):** `/shop/list` trả thêm `rank` và `currency` cho mỗi món hàng; `/shop/buy` trừ và `/shop/sell` / `/shop/sell-bulk` trả theo loại tiền tương ứng rank của món (item/Gu/bí phương): **rank < 6 → Nguyên Thạch (`primeval_stones`), rank ≥ 6 → Tiên Nguyên Thạch (`immortal_stones`)**. Quy tắc tập trung ở `pkg/pricing.StoneTierByRank`.
 
+**Rank cho Cổ đa rank:** `/shop/buy` nhận thêm `rank` (body, mặc định 0 = tự suy variant rank thấp nhất); `rank > 0` mua đúng variant đó. `/shop/sell` và `/shop/sell-bulk` cũng nhận thêm `rank` cho từng món. `caravan_shop_items` có khóa `(id, rank)`, `rank = 0` = auto.
+
+**Xoay vòng hàng theo ngày:** `is_default = true` luôn hiển thị; món `is_default = false` được shuffle deterministic theo ngày (seed `YYYYMMDD` UTC) theo tỷ lệ **~40 Cổ / ~60 item**. Ngoài ra mọi **Cổ trùng rank < 5** và **thức ăn của chúng** được tự thêm vào pool ngẫu nhiên (không persist, không có trong danh sách admin/export). Giá món random = `base_price × 1.5`; mỗi món có **stock hằng ngày theo rank** (R1=100, R2=50, R3=20, R4=5, R5=2, R6+=1), lưu trong `caravan_shop_daily_stock`, `/shop/buy` trừ stock và từ chối khi hết.
+
+**Admin shop** (thêm/sửa/xóa theo rank): `PUT /admin/shop/:id/:rank`, `DELETE /admin/shop/:id/:rank`; body POST/PUT chứa `rank` (0 = auto).
+
 ## Chat/mail, soul and instances
 
 | Method | Path |

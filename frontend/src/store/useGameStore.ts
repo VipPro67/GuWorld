@@ -1000,9 +1000,9 @@ interface GameState {
   fetchGrid: () => Promise<{ x: number; y: number; vision_radius: number; cells: any[]; stats: any; players_on_map?: any[]; world_width?: number; world_height?: number } | null>;
   dropGu: (instanceId: string) => Promise<boolean>;
   dropGus: (instanceIds: string[]) => Promise<boolean>;
-  buyShopItem: (itemId: string, quantity: number) => Promise<boolean>;
-  sellShopItem: (itemId: string, quantity: number, itemType: "Gu" | "Material" | "Recipe") => Promise<boolean>;
-  sellShopItemsBulk: (items: { item_id: string; quantity: number; item_type: "Gu" | "Material" | "Recipe" }[]) => Promise<boolean>;
+  buyShopItem: (itemId: string, quantity: number, rank?: number) => Promise<boolean>;
+  sellShopItem: (itemId: string, quantity: number, itemType: "Gu" | "Material" | "Recipe", rank?: number) => Promise<boolean>;
+  sellShopItemsBulk: (items: { item_id: string; quantity: number; item_type: "Gu" | "Material" | "Recipe"; rank?: number }[]) => Promise<boolean>;
   marketplaceListings: any[];
   fetchMarketplaceListings: () => Promise<void>;
   createMarketplaceListing: (payload: { itemType: "Gu" | "Material" | "Recipe"; guInstanceId?: string; guInstanceIds?: string[]; itemId?: string; quantity: number; price: number; durationHours: number; currency: "primeval" | "immortal"; listingType: "MARKET" | "AUCTION" | "TRADE"; targetBuyerUsername?: string }) => Promise<boolean>;
@@ -3718,7 +3718,7 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
-  buyShopItem: async (itemId, quantity) => {
+  buyShopItem: async (itemId, quantity, rank = 0) => {
     const { player, token, actionLoading, logout } = get();
     if (!player || !token || actionLoading) return false;
 
@@ -3733,6 +3733,7 @@ export const useGameStore = create<GameState>((set, get) => {
           player_id: player.id,
           item_id: itemId,
           quantity: quantity,
+          rank: rank,
         }),
       });
 
@@ -3760,7 +3761,7 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
 
-  sellShopItem: async (itemId, quantity, itemType) => {
+  sellShopItem: async (itemId, quantity, itemType, rank = 0) => {
     const { player, token, actionLoading, logout } = get();
     if (!player || !token || actionLoading) return false;
     set({ actionLoading: true, error: null });
@@ -3768,7 +3769,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/shop/sell`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ player_id: player.id, item_id: itemId, quantity, item_type: itemType }),
+        body: JSON.stringify({ player_id: player.id, item_id: itemId, quantity, item_type: itemType, rank }),
       });
       if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();

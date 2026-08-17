@@ -359,7 +359,7 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 				turnLogs = append(turnLogs, tickStatusEffects(c, turn)...)
 				ComputeEffectMultipliers(c)
-				
+
 				// Thơ Cổ (GU_POEM_IMMORTAL) - Start of turn logic
 				if hasGuEquipped(c, "GU_POEM_IMMORTAL") {
 					c.CustomState["thi_y"] += 1
@@ -376,7 +376,7 @@ func Simulate(state *CombatState) []CombatLog {
 						Action:    "BUFF",
 						Detail:    fmt.Sprintf("[Thơ Cổ] Tích tụ 1 tầng Thi Ý (hiện có %d tầng), tạo Thi Hộ giảm 40%% sát thương nhận vào trong lượt!", c.CustomState["thi_y"]),
 					})
-					
+
 					if c.CustomState["thi_y"] >= 10 {
 						// Immediately destroy all enemies' shields if reaching 10 at start of turn
 						c.CustomState["thi_y"] = 0
@@ -393,7 +393,7 @@ func Simulate(state *CombatState) []CombatLog {
 						} else {
 							enemyTargets = state.Allies
 						}
-						
+
 						for _, e := range enemyTargets {
 							if e.VirtualShield > 0 {
 								e.VirtualShield = 0
@@ -544,7 +544,7 @@ func Simulate(state *CombatState) []CombatLog {
 							ActorId:   actor.ID,
 							ActorName: actor.Name,
 							Action:    "MANA_RESTORE",
-							Detail:    fmt.Sprintf("%s tự động hấp thu 100 Nguyên Thạch, khôi phục %d chân nguyên!", actor.Name, restore),
+							Detail:    fmt.Sprintf("%s tự động hấp thu 100 Nguyên Thạch, khôi phục %d %s!", actor.Name, restore, actor.GetManaName()),
 						})
 					}
 				}
@@ -621,7 +621,7 @@ func Simulate(state *CombatState) []CombatLog {
 						ActorId:   actor.ID,
 						ActorName: actor.Name,
 						Action:    "INSUFFICIENT_MANA",
-						Detail:    fmt.Sprintf("%s không đủ chân nguyên để dùng [%s] (cần %.0f, còn %d)", actor.Name, a.Name, a.ManaCost, actor.Mana),
+						Detail:    fmt.Sprintf("%s không đủ %s để dùng [%s] (cần %.0f, còn %d)", actor.Name, actor.GetManaName(), a.Name, a.ManaCost, actor.Mana),
 					})
 					continue
 				}
@@ -637,6 +637,7 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 
 				hasExecutedAny = true
+				actionStartIndex := len(turnLogs)
 				manaCost := int(a.ManaCost)
 				actor.Mana -= manaCost
 
@@ -647,7 +648,7 @@ func Simulate(state *CombatState) []CombatLog {
 						ActorName: actor.Name,
 						Action:    "MANA_COST",
 						Damage:    manaCost,
-						Detail:    fmt.Sprintf("%s tiêu hao %d chân nguyên (còn %d/%d)", actor.Name, manaCost, actor.Mana, actor.MaxMana),
+						Detail:    fmt.Sprintf("%s tiêu hao %d %s (còn %d)", actor.Name, manaCost, actor.GetManaName(), actor.Mana),
 					})
 				}
 
@@ -1100,33 +1101,33 @@ func Simulate(state *CombatState) []CombatLog {
 						}
 					}
 
-				if a.LifeStealPct > 0 && totalDamageDealt > 0 {
-					healAmount := int(float64(totalDamageDealt) * a.LifeStealPct)
-					hpNeeded := actor.MaxHP - actor.HP
-					if healAmount <= hpNeeded {
-						actor.HP += healAmount
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "LIFESTEAL",
-							Damage:    healAmount,
-							Detail:    fmt.Sprintf("%s hút %d máu từ sát chiêu, hồi phục HP!", actor.Name, healAmount),
-						})
-					} else {
-						actor.HP = actor.MaxHP
-						excess := healAmount - hpNeeded
-						actor.VirtualShield += excess
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "LIFESTEAL_SHIELD",
-							Damage:    excess,
-							Detail:    fmt.Sprintf("%s hút %d máu từ sát chiêu, HP đầy, chuyển %d thành khiên!", actor.Name, healAmount, excess),
-						})
+					if a.LifeStealPct > 0 && totalDamageDealt > 0 {
+						healAmount := int(float64(totalDamageDealt) * a.LifeStealPct)
+						hpNeeded := actor.MaxHP - actor.HP
+						if healAmount <= hpNeeded {
+							actor.HP += healAmount
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   actor.ID,
+								ActorName: actor.Name,
+								Action:    "LIFESTEAL",
+								Damage:    healAmount,
+								Detail:    fmt.Sprintf("%s hút %d máu từ sát chiêu, hồi phục HP!", actor.Name, healAmount),
+							})
+						} else {
+							actor.HP = actor.MaxHP
+							excess := healAmount - hpNeeded
+							actor.VirtualShield += excess
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   actor.ID,
+								ActorName: actor.Name,
+								Action:    "LIFESTEAL_SHIELD",
+								Damage:    excess,
+								Detail:    fmt.Sprintf("%s hút %d máu từ sát chiêu, HP đầy, chuyển %d thành khiên!", actor.Name, healAmount, excess),
+							})
+						}
 					}
-				}
 				} else {
 					turnLogs = append(turnLogs, CombatLog{
 						Turn:      turn,
@@ -1340,6 +1341,62 @@ func Simulate(state *CombatState) []CombatLog {
 						Action:    "TAUNT_BUFF",
 						Detail:    fmt.Sprintf("%s khiêu khích, buộc kẻ địch tấn công mình trong %d lượt!", actor.Name, dur),
 					})
+				}
+
+				// Merge action logs into a single consolidated log entry for this Gu/Action
+				if len(turnLogs) > actionStartIndex {
+					logs := make([]CombatLog, len(turnLogs)-actionStartIndex)
+					copy(logs, turnLogs[actionStartIndex:])
+					
+					var useLog *CombatLog
+					var costLog *CombatLog
+					var gainLog *CombatLog
+					var resultLogs []CombatLog
+					
+					for i := range logs {
+						log := &logs[i]
+						if strings.Contains(log.Detail, " dùng [") && useLog == nil {
+							useLog = log
+						} else if log.Action == "MANA_COST" {
+							costLog = log
+						} else if log.Action == "PATH_MASTERY_GAIN" {
+							gainLog = log
+						} else if log.Action != "PATH_MASTERY_CAP" { // skip or merge cap if needed
+							resultLogs = append(resultLogs, *log)
+						}
+					}
+					
+					if useLog != nil {
+						mergedDetail := useLog.Detail
+						
+						cleanDetail := func(detail string, actorName string) string {
+							prefix := actorName + " "
+							if strings.HasPrefix(detail, prefix) {
+								return strings.TrimPrefix(detail, prefix)
+							}
+							return detail
+						}
+						
+						if costLog != nil {
+							mergedDetail += " " + cleanDetail(costLog.Detail, actor.Name)
+						}
+						
+						for _, rLog := range resultLogs {
+							mergedDetail += ", " + cleanDetail(rLog.Detail, actor.Name)
+						}
+						
+						if gainLog != nil {
+							parts := strings.Split(gainLog.Detail, "! ")
+							if len(parts) > 1 {
+								mergedDetail += " (Ngộ Đạo " + strings.TrimSuffix(parts[1], ".") + ")"
+							} else {
+								mergedDetail += " (" + strings.TrimPrefix(strings.TrimSuffix(gainLog.Detail, "."), "-> ") + ")"
+							}
+						}
+						
+						useLog.Detail = mergedDetail
+						turnLogs = append(turnLogs[:actionStartIndex], *useLog)
+					}
 				}
 			}
 
@@ -1608,22 +1665,22 @@ func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]C
 		// Thơ Cổ: Ghi nhận khiên và xuyên khiên
 		if hasGuEquipped(actor, "GU_POEM_IMMORTAL") {
 			stacks := actor.CustomState["thi_y"]
-			
+
 			// Xuyên khiên (chỉ 1 lần mỗi lượt)
 			if stacks >= 3 && !shieldBypass && actor.CustomState["thi_y_pierce_turn"] != turn {
 				actor.CustomState["thi_y_pierce_turn"] = turn
-				
+
 				usableMultiples := stacks / 3
 				ignorePct := float64(usableMultiples) * 0.30
 				if ignorePct > 1.0 {
 					ignorePct = 1.0
 				}
-				
+
 				shieldIgnored := float64(target.VirtualShield) * ignorePct
 				if shieldIgnored > damage {
 					shieldIgnored = damage
 				}
-				
+
 				if shieldIgnored > 0 {
 					target.HP -= int(shieldIgnored)
 					if target.HP < 0 {
@@ -1640,7 +1697,7 @@ func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]C
 					})
 				}
 			}
-			
+
 			// Thu thập thông tin khi chạm khiên (chỉ 1 lần mỗi lượt)
 			if actor.CustomState["thi_y_shield_turn"] != turn {
 				actor.CustomState["thi_y_shield_turn"] = turn
@@ -1652,7 +1709,7 @@ func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]C
 					Action:    "BUFF",
 					Detail:    fmt.Sprintf("[Thơ Cổ] Chạm trán khiên, thu thập tin tức! Nhận thêm 1 tầng Thi Ý (hiện có %d tầng)!", actor.CustomState["thi_y"]),
 				})
-				
+
 				if actor.CustomState["thi_y"] >= 10 {
 					actor.CustomState["thi_y"] = 0
 					target.VirtualShield = 0

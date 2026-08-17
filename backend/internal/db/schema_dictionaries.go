@@ -93,15 +93,42 @@ func schemaDictionaries() error {
 	}
 
 	// Shop ids are polymorphic (an item id, a gu id or a recipe key) so they
-	// deliberately have no FK to item_dictionary.
+	// deliberately have no FK to item_dictionary. A shop entry is keyed by
+	// (id, rank): rank > 0 pins a specific dictionary rank (used for multi-rank
+	// Gus), rank = 0 means "auto-resolve" (item rank / lowest Gu rank / recipe
+	// target rank) which preserves the legacy single-rank behaviour.
 	if err := execSchema("caravan_shop_items", `
 	CREATE TABLE IF NOT EXISTS caravan_shop_items (
-		id VARCHAR(50) PRIMARY KEY,
+		id VARCHAR(50),
+		rank INTEGER NOT NULL DEFAULT 0,
 		price INTEGER NOT NULL,
 		stock INTEGER NOT NULL DEFAULT -1,
 		is_default BOOLEAN NOT NULL DEFAULT TRUE,
 		sort_order INTEGER NOT NULL DEFAULT 0,
-		updated_at TIMESTAMP DEFAULT NOW()
+		updated_at TIMESTAMP DEFAULT NOW(),
+		PRIMARY KEY (id, rank)
+	);`); err != nil {
+		return err
+	}
+	// Upgrade legacy databases that still carry the single-column (id) primary
+	// key: add the rank column and promote the key to the composite (id, rank).
+	if err := execSchema("caravan_shop_items_rank_upgrade", `
+	ALTER TABLE caravan_shop_items ADD COLUMN IF NOT EXISTS rank INTEGER NOT NULL DEFAULT 0;
+	ALTER TABLE caravan_shop_items DROP CONSTRAINT IF EXISTS caravan_shop_items_pkey;
+	ALTER TABLE caravan_shop_items ADD CONSTRAINT caravan_shop_items_pkey PRIMARY KEY (id, rank);`); err != nil {
+		return err
+	}
+
+	// Tracks how much of each daily-random shop item (auto pool: rank < 5 Gus +
+	// their food) remains for the current day. The per-day stock resets
+	// naturally because the primary key includes `day`.
+	if err := execSchema("caravan_shop_daily_stock", `
+	CREATE TABLE IF NOT EXISTS caravan_shop_daily_stock (
+		day DATE NOT NULL,
+		id VARCHAR(50) NOT NULL,
+		rank INTEGER NOT NULL DEFAULT 0,
+		remaining INTEGER NOT NULL DEFAULT 0,
+		PRIMARY KEY (day, id, rank)
 	);`); err != nil {
 		return err
 	}

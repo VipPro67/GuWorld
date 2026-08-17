@@ -2414,6 +2414,7 @@ func AdminGetAuditLogs(c *gin.Context) {
 
 type AdminShopItem struct {
 	ID        string `json:"id"`
+	Rank      int    `json:"rank"`
 	Price     int    `json:"price"`
 	Stock     int    `json:"stock"`
 	IsDefault bool   `json:"is_default"`
@@ -2428,7 +2429,7 @@ func AdminListShopItems(c *gin.Context) {
 	}
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT c.id, c.price, c.stock, c.is_default, c.sort_order,
+		SELECT c.id, c.rank, c.price, c.stock, c.is_default, c.sort_order,
 			COALESCE(i.name, g.name, 'Công thức ' || rg.name, c.id) AS name,
 			CASE WHEN r.target_gu_id IS NOT NULL THEN 'Recipe' ELSE COALESCE(i.item_type, 'Gu') END AS item_type
 		FROM caravan_shop_items c
@@ -2436,7 +2437,7 @@ func AdminListShopItems(c *gin.Context) {
 		LEFT JOIN gu_dictionary g ON c.id = g.id
 		LEFT JOIN refining_recipes r ON c.id = ('recipe_' || r.target_gu_id || '_' || r.target_rank::text || '_' || r.variant::text)
 		LEFT JOIN gu_dictionary rg ON r.target_gu_id = rg.id
-		ORDER BY c.sort_order, c.id
+		ORDER BY c.sort_order, c.id, c.rank
 	`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải danh sách shop: " + err.Error()})
@@ -2447,7 +2448,7 @@ func AdminListShopItems(c *gin.Context) {
 	items := []AdminShopItem{}
 	for rows.Next() {
 		var item AdminShopItem
-		if err := rows.Scan(&item.ID, &item.Price, &item.Stock, &item.IsDefault, &item.SortOrder, &item.Name, &item.ItemType); err != nil {
+		if err := rows.Scan(&item.ID, &item.Rank, &item.Price, &item.Stock, &item.IsDefault, &item.SortOrder, &item.Name, &item.ItemType); err != nil {
 			continue
 		}
 		items = append(items, item)
@@ -2458,6 +2459,7 @@ func AdminListShopItems(c *gin.Context) {
 
 type AdminShopItemRequest struct {
 	ID        string `json:"id"`
+	Rank      int    `json:"rank"`
 	Price     int    `json:"price"`
 	Stock     int    `json:"stock"`
 	IsDefault bool   `json:"is_default"`
@@ -2483,15 +2485,24 @@ func AdminCreateShopItem(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm không tồn tại trong item_dictionary, gu_dictionary hoặc công thức"})
 		return
 	}
+	// A pinned rank must exist for the target Gu (rank = 0 means auto).
+	if req.Rank > 0 {
+		var guRankExists bool
+		_ = db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM gu_dictionary WHERE id=$1 AND rank=$2)`, req.ID, req.Rank).Scan(&guRankExists)
+		if !guRankExists {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng không có rank này trong gu_dictionary"})
+			return
+		}
+	}
 
-	_, err := db.DB.Exec(`INSERT INTO caravan_shop_items (id, price, stock, is_default, sort_order) VALUES ($1,$2,$3,$4,$5)`,
-		req.ID, req.Price, req.Stock, req.IsDefault, req.SortOrder)
+	_, err := db.DB.Exec(`INSERT INTO caravan_shop_items (id, rank, price, stock, is_default, sort_order) VALUES ($1,$2,$3,$4,$5,$6)`,
+		req.ID, req.Rank, req.Price, req.Stock, req.IsDefault, req.SortOrder)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thêm: " + err.Error()})
 		return
 	}
 
-	auditlog.Logf(db.DB, &adminID, "admin.create_shop_item", "id=%s price=%d stock=%d", req.ID, req.Price, req.Stock)
+	auditlog.Logf(db.DB, &adminID, "admin.create_shop_item", "id=%s rank=%d price=%d stock=%d", req.ID, req.Rank, req.Price, req.Stock)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã thêm mặt hàng vào shop"})
 }
 
@@ -2502,20 +2513,24 @@ func AdminUpdateShopItem(c *gin.Context) {
 	}
 
 	itemID := c.Param("id")
+	rank := 0
+	if raw := c.Param("rank"); raw != "" {
+		fmt.Sscanf(raw, "%d", &rank)
+	}
 	var req AdminShopItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
 		return
 	}
 
-	_, err := db.DB.Exec(`UPDATE caravan_shop_items SET price=$1, stock=$2, is_default=$3, sort_order=$4, updated_at=NOW() WHERE id=$5`,
-		req.Price, req.Stock, req.IsDefault, req.SortOrder, itemID)
+	_, err := db.DB.Exec(`UPDATE caravan_shop_items SET price=$1, stock=$2, is_default=$3, sort_order=$4, updated_at=NOW() WHERE id=$5 AND rank=$6`,
+		req.Price, req.Stock, req.IsDefault, req.SortOrder, itemID, rank)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật: " + err.Error()})
 		return
 	}
 
-	auditlog.Logf(db.DB, &adminID, "admin.update_shop_item", "id=%s price=%d stock=%d is_default=%v", itemID, req.Price, req.Stock, req.IsDefault)
+	auditlog.Logf(db.DB, &adminID, "admin.update_shop_item", "id=%s rank=%d price=%d stock=%d is_default=%v", itemID, rank, req.Price, req.Stock, req.IsDefault)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật mặt hàng"})
 }
 
@@ -2526,14 +2541,18 @@ func AdminDeleteShopItem(c *gin.Context) {
 	}
 
 	itemID := c.Param("id")
+	rank := 0
+	if raw := c.Param("rank"); raw != "" {
+		fmt.Sscanf(raw, "%d", &rank)
+	}
 
-	_, err := db.DB.Exec(`DELETE FROM caravan_shop_items WHERE id=$1`, itemID)
+	_, err := db.DB.Exec(`DELETE FROM caravan_shop_items WHERE id=$1 AND rank=$2`, itemID, rank)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa: " + err.Error()})
 		return
 	}
 
-	auditlog.Logf(db.DB, &adminID, "admin.delete_shop_item", "id=%s", itemID)
+	auditlog.Logf(db.DB, &adminID, "admin.delete_shop_item", "id=%s rank=%d", itemID, rank)
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa mặt hàng khỏi shop"})
 }
 

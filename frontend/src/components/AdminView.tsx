@@ -486,7 +486,7 @@ export const AdminView: React.FC = () => {
   const [shopLoading, setShopLoading] = useState(false);
   const [showShopAdd, setShowShopAdd] = useState(false);
   const [showShopEdit, setShowShopEdit] = useState<string | null>(null);
-  const [shopForm, setShopForm] = useState({ id: "", price: 100, stock: -1, is_default: true, sort_order: 0 });
+  const [shopForm, setShopForm] = useState({ id: "", rank: 0, price: 100, stock: -1, is_default: true, sort_order: 0 });
 
   // ----- Arena Shop state -----
   const [arenaShopItems, setArenaShopItems] = useState<any[]>([]);
@@ -3072,7 +3072,7 @@ export const AdminView: React.FC = () => {
                   <Package className="w-4 h-4 text-emerald-400" />
                   Quản Lý Cửa Hàng
                 </h3>
-                <button onClick={() => { setShopForm({ id: "", price: 100, stock: -1, is_default: true, sort_order: 0 }); setShowShopAdd(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer">
+                <button onClick={() => { setShopForm({ id: "", rank: 0, price: 100, stock: -1, is_default: true, sort_order: 0 }); setShowShopAdd(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer">
                   <Plus className="w-3.5 h-3.5" />Thêm
                 </button>
               </div>
@@ -3089,6 +3089,7 @@ export const AdminView: React.FC = () => {
                     <thead>
                       <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
                         <th className="px-3 py-2.5 font-semibold">ID</th>
+                        <th className="px-3 py-2.5 font-semibold">Rank</th>
                         <th className="px-3 py-2.5 font-semibold">Tên</th>
                         <th className="px-3 py-2.5 font-semibold">Loại</th>
                         <th className="px-3 py-2.5 font-semibold text-right">Giá</th>
@@ -3100,8 +3101,9 @@ export const AdminView: React.FC = () => {
                     </thead>
                     <tbody>
                       {shopItems.map((item: any) => (
-                        <tr key={item.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                        <tr key={`${item.id}-${item.rank ?? 0}`} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                           <td className="px-3 py-2.5 text-zinc-500 font-mono">{item.id}</td>
+                          <td className="px-3 py-2.5 text-violet-400 font-mono">{item.rank ?? 0}</td>
                           <td className="px-3 py-2.5 font-semibold text-zinc-200">{item.name || item.id}</td>
                           <td className="px-3 py-2.5 text-zinc-400">{translateItemType(item.item_type) || "—"}</td>
                           <td className="px-3 py-2.5 text-right font-mono text-yellow-500">{item.price?.toLocaleString()}</td>
@@ -3109,8 +3111,8 @@ export const AdminView: React.FC = () => {
                           <td className="px-3 py-2.5 text-center">{item.is_default ? <span className="text-emerald-400">✓</span> : <span className="text-zinc-600">–</span>}</td>
                           <td className="px-3 py-2.5 text-right font-mono text-zinc-400">{item.sort_order}</td>
                           <td className="px-3 py-2.5 text-right">
-                            <button onClick={() => { setShopForm({ id: item.id, price: item.price, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowShopEdit(item.id); }} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
-                            <button onClick={async () => { if (!confirm(`Xóa ${item.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/shop/${item.id}`, "DELETE"); if (ok) fetchShopItems(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
+                            <button onClick={() => { setShopForm({ id: item.id, rank: item.rank ?? 0, price: item.price, stock: item.stock, is_default: item.is_default, sort_order: item.sort_order }); setShowShopEdit(`${item.id}/${item.rank ?? 0}`); }} className="text-amber-400 hover:text-amber-300 mr-2 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5 inline" /></button>
+                            <button onClick={async () => { if (!confirm(`Xóa ${item.id}?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/shop/${item.id}/${item.rank ?? 0}`, "DELETE"); if (ok) fetchShopItems(); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5 inline" /></button>
                           </td>
                         </tr>
                       ))}
@@ -3195,6 +3197,10 @@ export const AdminView: React.FC = () => {
               </div>
               <div className="flex gap-3">
                 <div className="flex-1">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Rank (0 = tự động)</label>
+                  <input type="number" value={shopForm.rank} onChange={e => setShopForm(f => ({ ...f, rank: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div className="flex-1">
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Giá</label>
                   <input type="number" value={shopForm.price} onChange={e => setShopForm(f => ({ ...f, price: parseInt(e.target.value) || 0 }))} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50" />
                 </div>
@@ -3228,7 +3234,7 @@ export const AdminView: React.FC = () => {
       {showShopEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowShopEdit(null)}>
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">Sửa mặt hàng: {shopForm.id}</h3>
+            <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">Sửa mặt hàng: {shopForm.id} (rank {shopForm.rank ?? 0})</h3>
             <div className="space-y-3">
               <div className="flex gap-3">
                 <div className="flex-1">

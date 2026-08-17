@@ -1423,6 +1423,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		ID:               player.ID.String(),
 		Name:             player.Username,
 		Kind:             "Player",
+		Rank:             player.Rank,
 		GridX:            2,
 		GridY:            3,
 		MaxHP:            simMaxHP,

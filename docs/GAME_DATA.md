@@ -14,7 +14,7 @@ Nguồn dữ liệu chính nằm trong các file CSV ở `backend/`. Khi backend
 | `backend/MonsterSpawn.csv` | 48 | Pool spawn monster theo zone/toạ độ/rank (Roaming/Random). |
 | `backend/Region.csv` | 31 | Zone lồng nhau (1 HUB + 6 Đại Vực 3×2 + 7 địa danh): geometry, rank range, pool_weights. `resources` của mỗi vùng bao gồm thức ăn cổ rank<6 khớp dải rank vùng. |
 | `backend/MapCell.csv` | 29 | Ô persistent dùng chung: boss, tài nguyên cao, điểm an toàn. |
-| `backend/ShopItem.csv` | 61 | Shop NPC/caravan items. |
+| `backend/ShopItem.csv` | 61 | Shop NPC/caravan items. Cột `rank` (0 = tự suy, >0 = bán đúng rank đó cho Cổ đa rank). |
 | `backend/ArenaShopItem.csv` | 26 | Shop đấu trường (tiền ARENA_COIN). |
 | `backend/PremiumShopPackage.csv` | 4 | Gói premium shop mua bằng ví. |
 | `backend/TopupPackage.csv` | 5 | Gói nạp tiền. |
@@ -461,16 +461,24 @@ Indexes: `idx_player_pets_player_id`, `idx_player_pets_player_id_template`.
 
 ### Giá tiền theo rank (Thương Đội)
 
-Bảng `caravan_shop_items` chỉ lưu `price` (số lượng, không lưu loại tiền). Loại tiền được suy ra từ **rank** của món hàng qua `pkg/pricing.StoneTierByRank`:
+Bảng `caravan_shop_items` lưu `price` (số lượng, không lưu loại tiền) và có khóa `(id, rank)`. Cột `rank` quy ước:
+- **`rank = 0`** (mặc định) → tự suy rank: item dùng `item_dictionary.rank`, Cổ trùng dùng variant rank **thấp nhất** (`gu_dictionary.rank`, đồng nhất `models.GetGuAny`), bí phương dùng `refining_recipes.target_rank`.
+- **`rank > 0`** → bán **đúng rank đó** của Cổ trùng (cho phép 1 Cổ đa rank xuất hiện nhiều lần trong shop với giá khác nhau), đồng thời giữ hành vi cũ cho mọi dòng `rank = 0`.
+
+Loại tiền được suy ra từ **rank hiệu dụng** qua `pkg/pricing.StoneTierByRank`:
 
 - **rank < 6** → Nguyên Thạch (`primeval_stones`)
 - **rank ≥ 6** → Tiên Nguyên Thạch (`immortal_stones`)
 
-Áp dụng cho cả **item** (`item_dictionary.rank`), **cổ trùng** (`gu_dictionary.rank`, lấy variant rank thấp nhất như `models.GetGuAny`) và **bí phương / công thức** (`refining_recipes.target_rank`):
-
 - `/api/shop/list` trả thêm `rank` + `currency` mỗi món.
-- `/api/shop/buy` trừ đúng balance theo `currency`.
-- `/api/shop/sell` và `/api/shop/sell-bulk` trả về đúng loại tiền theo rank món bán (bí phương dùng `target_rank`).
+- `/api/shop/buy` nhận thêm `rank` (0 = auto); trừ đúng balance theo `currency`.
+- `/api/shop/sell` và `/api/shop/sell-bulk` nhận thêm `rank` và trả về đúng loại tiền theo rank món bán (bí phương dùng `target_rank`).
+
+**Hàng mặc định + xoay vòng ngẫu nhiên theo ngày:** món `is_default = true` luôn hiển thị. Món `is_default = false` được shuffle deterministic theo ngày (seed = `YYYYMMDD` UTC) theo **tỷ lệ cân bằng ~40 Cổ / ~60 item** (`maxDailyRandomGus`/`maxDailyRandomItems`; cache Redis key theo ngày).
+
+**Pool ngẫu nhiên tự sinh (virtual):** ngoài các món `is_default = false` trong `caravan_shop_items`, `autoShopPool()` (handlers/shop.go) tự bổ sung vào pool ngẫu nhiên mọi **Cổ trùng rank < 5** (mỗi variant pinned đúng rank) cùng **thức ăn của chúng** (các item trong `gu_dictionary.food_types`, trừ `primeval_stone`/`immortal_stone`), trừ các id đã có trong `caravan_shop_items`. Các món này **không được persist** vào bảng shop nên không làm bẩn danh sách admin hay CSV export.
+
+**Giá + số lượng (stock) món random:** giá mua = `base_price × 1.5` (`randomPoolMarkup`, làm tròn xuống, tối thiểu 1). Mỗi món có stock hằng ngày theo rank qua `randomPoolStock(rank)`: **R1 = 100, R2 = 50, R3 = 20, R4 = 5, R5 = 2, R6+ = 1**. Số còn lại trong ngày lưu ở bảng `caravan_shop_daily_stock(day, id, rank, remaining)` — key theo ngày nên tự reset mỗi ngày. `/api/shop/buy` trừ stock nguyên tử (`UPDATE ... WHERE remaining >= qty`), hết thì trả lỗi "Hàng này hôm nay đã hết". Món default/admin trong `caravan_shop_items` **không** áp dụng cơ chế này (stock CSV của chúng vẫn chỉ hiển thị).
 
 **`base_price` rank ≥ 6 là Tiên Nguyên Thạch** — bảng giá mặc định (fallback trong `pkg/pricing/pricing.go`, dùng khi CSV không ghi `base_price`):
 

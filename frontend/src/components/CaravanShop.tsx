@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { GuInstance, Player, GuSpec, ItemSpec, useGameStore, formatRecipeName } from "@/store/useGameStore";
+import { GuInstance, Player, GuSpec, ItemSpec, useGameStore, formatRecipeName, guSpecFor } from "@/store/useGameStore";
 import { ShoppingBag, Coins, Sparkles, AlertCircle, ShoppingCart, ArrowLeftRight, Trash2, Search, Check } from "lucide-react";
 import { translatePath } from "@/lib/translate";
 
@@ -27,9 +27,9 @@ const currencyLabel = (tier: StoneTier): string =>
 interface CaravanShopProps {
   player: Player;
   actionLoading: boolean;
-  onBuy: (itemId: string, quantity: number) => Promise<boolean>;
-  onSell?: (itemId: string, quantity: number, itemType: "Gu" | "Material" | "Recipe") => Promise<boolean>;
-  onSellBulk: (items: { item_id: string; quantity: number; item_type: "Gu" | "Material" | "Recipe" }[]) => Promise<boolean>;
+  onBuy: (itemId: string, quantity: number, rank?: number) => Promise<boolean>;
+  onSell?: (itemId: string, quantity: number, itemType: "Gu" | "Material" | "Recipe", rank?: number) => Promise<boolean>;
+  onSellBulk: (items: { item_id: string; quantity: number; item_type: "Gu" | "Material" | "Recipe"; rank?: number }[]) => Promise<boolean>;
 }
 
 export const CaravanShop: React.FC<CaravanShopProps> = ({
@@ -106,8 +106,8 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
   const guRankBasePrice = [0, 200, 500, 1200, 2500, 5000, 200, 500, 1200, 2500];
   const itemRankBasePrice = [0, 1, 3, 6, 13, 25, 10, 25, 60, 150];
 
-  const getGuBasePrice = (guId: string): number => {
-    const spec = guDictionary[guId];
+  const getGuBasePrice = (guId: string, rank?: number): number => {
+    const spec = guSpecFor(guId, rank) || guDictionary[guId];
     if (!spec) return 200;
     if (spec.base_price && spec.base_price > 0) return spec.base_price;
     return guRankBasePrice[spec.rank || 1] || 200;
@@ -124,8 +124,8 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
   const getSellPrice = (basePrice: number): number => Math.max(1, Math.floor(basePrice * sellBackRatio));
 
   // Helper to calculate exact sell price matching pricing.go
-  const getItemSellPrice = (itemId: string, type: "Gu" | "Material"): number => {
-    const basePrice = type === "Gu" ? getGuBasePrice(itemId) : getItemBasePrice(itemId);
+  const getItemSellPrice = (itemId: string, type: "Gu" | "Material", rank?: number): number => {
+    const basePrice = type === "Gu" ? getGuBasePrice(itemId, rank) : getItemBasePrice(itemId);
     return getSellPrice(basePrice);
   };
 
@@ -160,19 +160,21 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
     (player.gu_inventory || [])
       .filter((gu) => !gu.is_vital && !gu.equipped && gu.status !== "DEAD")
       .reduce((acc, gu) => {
-        acc[gu.gu_id] = (acc[gu.gu_id] || 0) + 1;
+        const key = `${gu.gu_id}@${gu.rank}`;
+        acc[key] = (acc[key] || 0) + 1;
         return acc;
       }, {} as Record<string, number>)
-  ).map(([guId, count]) => {
-    const spec = guDictionary[guId];
-    const rank = spec?.rank || 1;
+  ).map(([key, count]) => {
+    const guId = key.split("@")[0];
+    const rank = Number(key.split("@")[1]) || 1;
+    const spec = guSpecFor(guId, rank) || guDictionary[guId];
     return {
       id: guId,
       name: spec?.name || guId,
       description: spec?.description || "Cổ trùng bản thân nuôi dưỡng.",
       type: "Gu" as const,
       owned: count,
-      price: getItemSellPrice(guId, "Gu"),
+      price: getItemSellPrice(guId, "Gu", rank),
       rank,
       currency: stoneTier(rank),
       paths: spec?.path || [],
@@ -188,7 +190,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
       description: `Bí phương luyện chế Cổ trùng. Độ hoàn thiện: ${recipe.completion_rate}%`,
       type: "Recipe" as const,
       owned: 1,
-      price: Math.max(1, Math.floor(getGuBasePrice(targetGuID) * sellBackRatio)),
+      price: Math.max(1, Math.floor(getGuBasePrice(targetGuID, targetGuRank) * sellBackRatio)),
       rank: targetGuRank,
       currency: stoneTier(targetGuRank),
       paths: [] as string[],
@@ -219,14 +221,12 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
       return;
     }
 
-    const success = await onBuy(selectedBuyItem.id, buyQuantity);
+    const success = await onBuy(selectedBuyItem.id, buyQuantity, selectedBuyItem.rank ?? 0);
     if (success) {
       setSuccessMessage("Giao dịch thành công! Đã thêm vào túi đồ.");
       setTimeout(() => {
         setSelectedBuyItem(null);
       }, 1000);
-    } else {
-      setErrorMessage("Giao dịch thất bại. Bách Bảo Nang có thể đã đầy hoặc lỗi hệ thống.");
     }
   };
 
@@ -286,7 +286,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
     rank: number;
   }) => {
     setSelectedSellItems((prev) => {
-      const key = `${item.type}-${item.id}`;
+      const key = `${item.type}-${item.id}-${item.rank}`;
       const next = { ...prev };
       if (next[key]) {
         delete next[key];
@@ -332,7 +332,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
       const next = { ...prev };
       let addedCount = Object.keys(prev).length;
       for (const item of itemsToSelect) {
-        const key = `${item.type}-${item.id}`;
+        const key = `${item.type}-${item.id}-${item.rank}`;
         if (!next[key]) {
           if (addedCount >= 50) {
             setErrorMessage("Mỗi lần thanh lý tối đa 50 loại vật phẩm! Đã tự động giới hạn ở 50.");
@@ -367,7 +367,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
       const next = { ...prev };
       let addedCount = Object.keys(prev).length;
       for (const item of filtered) {
-        const key = `${item.type}-${item.id}`;
+        const key = `${item.type}-${item.id}-${item.rank}`;
         if (!next[key]) {
           if (addedCount >= 50) {
             setErrorMessage("Mỗi lần thanh lý tối đa 50 loại vật phẩm! Đã tự động giới hạn ở 50.");
@@ -410,6 +410,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
       item_id: item.id,
       quantity: item.quantityToSell,
       item_type: item.type,
+      rank: item.rank,
     }));
     if (items.length === 0) return;
 
@@ -760,7 +761,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
 
               return (
                 <div
-                  key={item.id}
+                  key={`${item.id}-${item.rank || 0}`}
                   className="bg-zinc-950/50 border border-zinc-900 rounded-2xl p-4 flex flex-col justify-between hover:border-zinc-800 hover:bg-zinc-950/80 transition-all group"
                 >
                   <div className="space-y-2 mb-3">
@@ -768,6 +769,11 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                       <span className="text-[9px] font-mono border border-zinc-800 px-2 py-0.5 rounded text-zinc-500 uppercase tracking-wider">
                         {item.type === "Gu" ? "Cổ Trùng" : item.type === "Material" ? "Nguyên Liệu" : "Tiêu Hao"}
                       </span>
+                      {item.rank ? (
+                        <span className="text-[9px] font-mono border border-zinc-800 px-2 py-0.5 rounded text-violet-400">
+                          Hạng {item.rank}
+                        </span>
+                      ) : null}
                       <span className={`text-xs font-mono font-bold flex items-center gap-1 ${itemTier === "immortal" ? "text-violet-400" : "text-amber-400"}`}>
                         {itemTier === "immortal"
                           ? <Sparkles className="w-3.5 h-3.5 text-violet-400" />
@@ -828,7 +834,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-6">
             {activeSellList.map((item) => {
-              const key = `${item.type}-${item.id}`;
+              const key = `${item.type}-${item.id}-${item.rank}`;
               const isSelected = !!selectedSellItems[key];
               const selectedItem = selectedSellItems[key];
               return (

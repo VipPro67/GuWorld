@@ -180,6 +180,7 @@ type CombatantAuto struct {
 	ID       string
 	Name     string
 	Kind     string // "Player", "Enemy", "Boss", "Minion"
+	Rank     int
 	GridX    int    // 1=Front, 2=Mid, 3=Back
 	GridY    int    // 1=Top, 2=Mid, 3=Bottom
 	MaxHP    int
@@ -312,3 +313,32 @@ type CombatLog struct {
 	Detail    string           `json:"detail,omitempty"`  // Human readable flavor text
 	Snapshot  *CombatSnapshot  `json:"snapshot,omitempty"`
 }
+
+func (c *CombatantAuto) GetManaName() string {
+	if c.Kind != "Player" {
+		return "chân nguyên"
+	}
+	switch c.Rank {
+	case 1:
+		return "Thanh Đồng Chân Nguyên"
+	case 2:
+		return "Xích Thiết Chân Nguyên"
+	case 3:
+		return "Bạch Ngân Chân Nguyên"
+	case 4:
+		return "Hoàng Kim Chân Nguyên"
+	case 5:
+		return "Tử Tinh Chân Nguyên"
+	case 6:
+		return "Thanh Đề Tiên Nguyên"
+	case 7:
+		return "Hồng Tảo Tiên Nguyên"
+	case 8:
+		return "Bạch Lệ Tiên Nguyên"
+	case 9:
+		return "Hoàng Hạnh Tiên Nguyên"
+	default:
+		return "chân nguyên"
+	}
+}
+

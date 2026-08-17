@@ -994,7 +994,7 @@ func seedShopItemsFromCSV(filename string) error {
 
 	col := func(name string) int { return colIndex(header, name) }
 	idIdx, priceIdx := col("id"), col("price")
-	stockIdx, sortIdx, defaultIdx := col("stock"), col("sort_order"), col("is_default")
+	rankIdx, stockIdx, sortIdx, defaultIdx := col("rank"), col("stock"), col("sort_order"), col("is_default")
 	if idIdx < 0 || priceIdx < 0 {
 		return fmt.Errorf("ShopItem.csv missing required columns (id, price)")
 	}
@@ -1017,7 +1017,10 @@ func seedShopItemsFromCSV(filename string) error {
 		if id == "" {
 			continue
 		}
-		price, stock, sortOrder := 0, -1, seeded
+		rank, price, stock, sortOrder := 0, 0, -1, seeded
+		if rankRaw := get(row, rankIdx); rankRaw != "" {
+			fmt.Sscanf(rankRaw, "%d", &rank)
+		}
 		if priceRaw := get(row, priceIdx); priceRaw != "" {
 			fmt.Sscanf(get(row, priceIdx), "%d", &price)
 		}
@@ -1035,12 +1038,12 @@ func seedShopItemsFromCSV(filename string) error {
 			}
 		}
 		_, err = DB.Exec(`
-			INSERT INTO caravan_shop_items (id, price, stock, is_default, sort_order, updated_at)
-			VALUES ($1, $2, $3, $4, $5, NOW())
-			ON CONFLICT (id) DO UPDATE
+			INSERT INTO caravan_shop_items (id, rank, price, stock, is_default, sort_order, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, NOW())
+			ON CONFLICT (id, rank) DO UPDATE
 			SET price=EXCLUDED.price, stock=EXCLUDED.stock, is_default=EXCLUDED.is_default,
 			    sort_order=EXCLUDED.sort_order, updated_at=NOW()
-		`, id, price, stock, isDefault, sortOrder)
+		`, id, rank, price, stock, isDefault, sortOrder)
 		if err != nil {
 			return fmt.Errorf("upsert shop item %s: %w", id, err)
 		}
@@ -2267,8 +2270,8 @@ func ExportToCSV() error {
 		},
 		{
 			filename: "ShopItem.csv",
-			columns:  []string{"id", "price", "stock", "is_default", "sort_order"},
-			query:    `SELECT id, price, COALESCE(stock,-1), is_default, COALESCE(sort_order,0) FROM caravan_shop_items ORDER BY id`,
+			columns:  []string{"id", "rank", "price", "stock", "is_default", "sort_order"},
+			query:    `SELECT id, rank, price, COALESCE(stock,-1), is_default, COALESCE(sort_order,0) FROM caravan_shop_items ORDER BY id, rank`,
 		},
 		{
 			filename: "ArenaShopItem.csv",

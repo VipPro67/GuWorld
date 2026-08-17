@@ -1,11 +1,12 @@
 package handlers
 
 import (
+	"database/sql"
 	"fmt"
 	"math/rand"
 	"net/http"
 	"strings"
-
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -29,16 +30,22 @@ type ShopItem struct {
 	Rank        int    `json:"rank"`
 	Currency    string `json:"currency"` // "primeval" (rank < 6) | "immortal" (rank >= 6)
 	Stock       int    `json:"stock"`    // -1 for unlimited
+	IsAuto      bool   `json:"-"`        // true when sourced from the virtual random pool (daily stock enforced)
 }
 
 // shopCatalogRankExpr resolves a single rank for a polymorphic shop item:
-// items use item_dictionary.rank, Gus use their lowest-rank variant
-// (consistent with models.GetGuAny), recipes use refining_recipes.target_rank.
-const shopCatalogRankExpr = `COALESCE(i.rank, g.rank, r.target_rank, 1)`
+// a pinned rank (c.rank > 0) wins; otherwise items use item_dictionary.rank,
+// Gus use their lowest-rank variant (consistent with models.GetGuAny), and
+// recipes use refining_recipes.target_rank.
+const shopCatalogRankExpr = `CASE WHEN c.rank > 0 THEN c.rank ELSE COALESCE(i.rank, g.rank, r.target_rank, 1) END`
 
-// shopCatalogGuJoin constrains the Gu join to the lowest-rank variant so
+// shopCatalogGuJoin constrains the Gu join: a pinned rank matches that exact
+// variant, while an auto (rank = 0) entry matches the lowest-rank variant so
 // multi-rank Gus never produce duplicate catalog rows.
-const shopCatalogGuJoin = `AND g.rank = (SELECT MIN(g2.rank) FROM gu_dictionary g2 WHERE g2.id = g.id)`
+const shopCatalogGuJoin = `AND (
+	(c.rank > 0 AND g.rank = c.rank) OR
+	(c.rank = 0 AND g.rank = (SELECT MIN(g2.rank) FROM gu_dictionary g2 WHERE g2.id = g.id))
+)`
 
 // currencyLabel returns the Vietnamese name for the stone currency tier of an
 // entity with the given rank.
@@ -47,6 +54,202 @@ func currencyLabel(rank int) string {
 		return "Tiên Nguyên Thạch"
 	}
 	return "Nguyên Thạch"
+}
+
+// Daily random rotation targets: Gu and item (food/material/recipe) entries are
+// balanced so the random list favours items over Gus (roughly 40/60 split).
+// Default entries are always shown on top of these.
+const (
+	maxDailyRandomGus   = 40
+	maxDailyRandomItems = 60
+)
+
+// randomPoolMarkup is the price multiplier applied to auto random-pool items
+// on top of their dictionary base_price.
+const randomPoolMarkup = 1.5
+
+// randomPoolStock returns the per-day stock for an auto random-pool item of the
+// given rank. Higher ranks are scarcer.
+func randomPoolStock(rank int) int {
+	switch {
+	case rank >= 6:
+		return 1
+	case rank == 5:
+		return 2
+	case rank == 4:
+		return 5
+	case rank == 3:
+		return 20
+	case rank == 2:
+		return 50
+	default:
+		return 100
+	}
+}
+
+// markedUpPrice applies the random-pool markup to a base price (minimum 1).
+func markedUpPrice(basePrice int) int {
+	p := int(float64(basePrice) * randomPoolMarkup)
+	if p < 1 {
+		return 1
+	}
+	return p
+}
+
+// shopCatalogCacheKey scopes the Redis catalog cache to the current day so the
+// daily random rotation refreshes automatically after midnight.
+func shopCatalogCacheKey() string {
+	return "caravan_shop_catalog:" + time.Now().Format("2006-01-02")
+}
+
+// invalidateShopCatalogCache drops the Redis catalog cache and the in-memory
+// auto-pool cache so the next /api/shop/list reflects the latest remaining
+// stock after a purchase.
+func invalidateShopCatalogCache() {
+	_ = cache.Delete(shopCatalogCacheKey())
+	autoPoolCacheMu.Lock()
+	autoPoolCache = nil
+	autoPoolCacheAt = time.Time{}
+	autoPoolCacheMu.Unlock()
+}
+
+// dailyShopSeed derives a stable integer seed from the current UTC date so the
+// random subset is identical for every request on the same day.
+func dailyShopSeed() int64 {
+	now := time.Now().UTC()
+	return int64(now.Year()*10000 + int(now.Month())*100 + now.Day())
+}
+
+// dailyShopRandomSubset deterministically shuffles a pool using the date as a
+// seed and returns at most limit entries. The result is stable within a day and
+// rotates daily.
+func dailyShopRandomSubset(pool []ShopItem, limit int) []ShopItem {
+	if len(pool) == 0 {
+		return pool
+	}
+	shuffled := make([]ShopItem, len(pool))
+	copy(shuffled, pool)
+	rng := rand.New(rand.NewSource(dailyShopSeed()))
+	rng.Shuffle(len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
+	if len(shuffled) > limit {
+		shuffled = shuffled[:limit]
+	}
+	return shuffled
+}
+
+// autoShopPool builds the virtual random pool sourced from the dictionaries:
+// every rank < 5 Gu variant (pinned to its specific rank) plus the food items
+// those Gus eat. Ids already listed in caravan_shop_items are excluded so
+// manually managed entries (including defaults) take precedence. These entries
+// live outside caravan_shop_items, so they never pollute the admin list or CSV
+// export.
+func autoShopPool() ([]ShopItem, error) {
+	items := []ShopItem{}
+
+	// Rank < 5 Gus not already listed in the shop, with today's remaining stock
+	// (falls back to the per-rank daily limit when no row exists yet).
+	guRows, err := db.DB.Query(`
+		SELECT g.id, g.rank, COALESCE(g.name, g.id), COALESCE(g.description, ''), COALESCE(g.base_price, 0), ds.remaining
+		FROM gu_dictionary g
+		LEFT JOIN caravan_shop_daily_stock ds
+		       ON ds.day = CURRENT_DATE AND ds.id = g.id AND ds.rank = g.rank
+		WHERE g.rank < 5
+		  AND NOT EXISTS (SELECT 1 FROM caravan_shop_items c WHERE c.id = g.id)
+		ORDER BY g.id, g.rank
+	`)
+	if err != nil {
+		return nil, err
+	}
+	for guRows.Next() {
+		var id, name, desc string
+		var rank, basePrice int
+		var remaining sql.NullInt64
+		if err := guRows.Scan(&id, &rank, &name, &desc, &basePrice, &remaining); err != nil {
+			guRows.Close()
+			return nil, err
+		}
+		stock := randomPoolStock(rank)
+		if remaining.Valid {
+			stock = int(remaining.Int64)
+		}
+		items = append(items, ShopItem{
+			ID: id, Name: name, Description: desc, Type: "Gu",
+			Price: markedUpPrice(pricing.GuBasePrice(basePrice, rank)), Rank: rank,
+			Currency: pricing.StoneTierByRank(rank), Stock: stock, IsAuto: true,
+		})
+	}
+	if err := guRows.Err(); err != nil {
+		guRows.Close()
+		return nil, err
+	}
+	guRows.Close()
+
+	// Food items referenced by any rank < 5 Gu. The special stone markers
+	// ("primeval_stone", "immortal_stone") are not item_dictionary rows so the
+	// join naturally drops them. Deduplicated via DISTINCT.
+	foodRows, err := db.DB.Query(`
+		SELECT DISTINCT i.id, COALESCE(i.name, i.id), COALESCE(i.description, ''), COALESCE(i.item_type, 'Food'), COALESCE(i.rank, 1), COALESCE(i.base_price, 0), ds.remaining
+		FROM gu_dictionary g
+		JOIN LATERAL jsonb_array_elements_text(g.food_types) AS f(fid) ON TRUE
+		JOIN item_dictionary i ON i.id = f.fid
+		LEFT JOIN caravan_shop_daily_stock ds
+		       ON ds.day = CURRENT_DATE AND ds.id = i.id AND ds.rank = COALESCE(i.rank, 1)
+		WHERE g.rank < 5
+		  AND NOT EXISTS (SELECT 1 FROM caravan_shop_items c WHERE c.id = i.id)
+		ORDER BY i.id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	for foodRows.Next() {
+		var id, name, desc, itemType string
+		var rank, basePrice int
+		var remaining sql.NullInt64
+		if err := foodRows.Scan(&id, &name, &desc, &itemType, &rank, &basePrice, &remaining); err != nil {
+			foodRows.Close()
+			return nil, err
+		}
+		stock := randomPoolStock(rank)
+		if remaining.Valid {
+			stock = int(remaining.Int64)
+		}
+		items = append(items, ShopItem{
+			ID: id, Name: name, Description: desc, Type: itemType,
+			Price: markedUpPrice(pricing.ItemBasePrice(basePrice, rank)), Rank: rank,
+			Currency: pricing.StoneTierByRank(rank), Stock: stock, IsAuto: true,
+		})
+	}
+	if err := foodRows.Err(); err != nil {
+		foodRows.Close()
+		return nil, err
+	}
+	foodRows.Close()
+
+	return items, nil
+}
+
+// autoPoolCache memoizes autoShopPool() briefly since the pool only changes
+// when an admin imports dictionary data (which also refreshes the Redis
+// catalog cache).
+var (
+	autoPoolCacheMu sync.Mutex
+	autoPoolCache   []ShopItem
+	autoPoolCacheAt time.Time
+)
+
+func cachedAutoShopPool() ([]ShopItem, error) {
+	autoPoolCacheMu.Lock()
+	defer autoPoolCacheMu.Unlock()
+	if autoPoolCache != nil && time.Since(autoPoolCacheAt) < 5*time.Minute {
+		return autoPoolCache, nil
+	}
+	pool, err := autoShopPool()
+	if err != nil {
+		return nil, err
+	}
+	autoPoolCache = pool
+	autoPoolCacheAt = time.Now()
+	return pool, nil
 }
 
 func loadCaravanShopCatalog() ([]ShopItem, error) {
@@ -61,14 +264,15 @@ func loadCaravanShopCatalog() ([]ShopItem, error) {
 		LEFT JOIN gu_dictionary g ON c.id = g.id ` + shopCatalogGuJoin + `
 		LEFT JOIN refining_recipes r ON c.id = ('recipe_' || r.target_gu_id || '_' || r.target_rank::text || '_' || r.variant::text)
 		LEFT JOIN gu_dictionary rg ON r.target_gu_id = rg.id
-		ORDER BY c.sort_order ASC, c.id ASC
+		ORDER BY c.sort_order ASC, c.id ASC, c.rank ASC
 	`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	items := []ShopItem{}
+	defaults := []ShopItem{}
+	randomPool := []ShopItem{}
 	for rows.Next() {
 		var item ShopItem
 		var isDefault bool
@@ -78,20 +282,46 @@ func loadCaravanShopCatalog() ([]ShopItem, error) {
 		item.Currency = pricing.StoneTierByRank(item.Rank)
 
 		if isDefault {
-			items = append(items, item)
+			defaults = append(defaults, item)
 		} else {
-			// 30% chance to appear
-			if rand.Float32() < 0.3 {
-				items = append(items, item)
-			}
+			randomPool = append(randomPool, item)
 		}
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// Append the auto-generated random pool (rank<5 Gus + their food) that is
+	// derived from the dictionaries and never persisted to caravan_shop_items.
+	auto, err := cachedAutoShopPool()
+	if err != nil {
+		return nil, err
+	}
+	randomPool = append(randomPool, auto...)
+	// Drop sold-out auto items (remaining == 0) so they don't take a daily slot.
+	available := randomPool[:0]
+	for _, it := range randomPool {
+		if it.IsAuto && it.Stock <= 0 {
+			continue
+		}
+		available = append(available, it)
+	}
+	randomPool = available
+	// Balance the daily rotation: pick a fixed number of Gus and items.
+	var guPool, itemPool []ShopItem
+	for _, it := range randomPool {
+		if it.Type == "Gu" {
+			guPool = append(guPool, it)
+		} else {
+			itemPool = append(itemPool, it)
+		}
+	}
+	items := append(defaults, dailyShopRandomSubset(guPool, maxDailyRandomGus)...)
+	items = append(items, dailyShopRandomSubset(itemPool, maxDailyRandomItems)...)
+	return items, nil
 }
 
-func findCaravanShopItem(itemID string) (*ShopItem, error) {
-	var item ShopItem
-	err := db.DB.QueryRow(`
+func findCaravanShopItem(itemID string, rank int) (*ShopItem, error) {
+	query := `
 		SELECT c.id, 
 		       COALESCE(i.name, g.name, 'Công thức ' || rg.name, c.id) AS name, 
 		       COALESCE(i.description, g.description, '') AS description,
@@ -102,9 +332,23 @@ func findCaravanShopItem(itemID string) (*ShopItem, error) {
 		LEFT JOIN gu_dictionary g ON c.id = g.id ` + shopCatalogGuJoin + `
 		LEFT JOIN refining_recipes r ON c.id = ('recipe_' || r.target_gu_id || '_' || r.target_rank::text || '_' || r.variant::text)
 		LEFT JOIN gu_dictionary rg ON r.target_gu_id = rg.id
-		WHERE c.id = $1
-	`, itemID).Scan(&item.ID, &item.Name, &item.Description, &item.Type, &item.Price, &item.Rank, &item.Stock)
+		WHERE c.id = $1 AND c.rank = $2
+	`
+	var item ShopItem
+	// Exact (id, rank) match first, falling back to the auto (rank = 0) entry.
+	err := db.DB.QueryRow(query, itemID, rank).Scan(&item.ID, &item.Name, &item.Description, &item.Type, &item.Price, &item.Rank, &item.Stock)
+	if err != nil && rank != 0 {
+		err = db.DB.QueryRow(query, itemID, 0).Scan(&item.ID, &item.Name, &item.Description, &item.Type, &item.Price, &item.Rank, &item.Stock)
+	}
 	if err != nil {
+		// Fall back to the virtual auto pool (rank<5 Gus + their food).
+		if auto, aerr := cachedAutoShopPool(); aerr == nil {
+			for _, a := range auto {
+				if a.ID == itemID && a.Rank == rank {
+					return &a, nil
+				}
+			}
+		}
 		return nil, err
 	}
 	item.Currency = pricing.StoneTierByRank(item.Rank)
@@ -114,7 +358,7 @@ func findCaravanShopItem(itemID string) (*ShopItem, error) {
 // GetShopList returns the database-backed shop inventory, cached in Redis.
 func GetShopList(c *gin.Context) {
 	var items []ShopItem
-	cacheKey := "caravan_shop_catalog"
+	cacheKey := shopCatalogCacheKey()
 
 	if err := cache.GetJSON(cacheKey, &items); err == nil && len(items) > 0 {
 		c.JSON(http.StatusOK, items)
@@ -137,6 +381,7 @@ type BuyShopRequest struct {
 	PlayerID string `json:"player_id" binding:"required"`
 	ItemID   string `json:"item_id" binding:"required"`
 	Quantity int    `json:"quantity" binding:"required,min=1"`
+	Rank     int    `json:"rank"` // 0 = auto (lowest/legacy); >0 = pinned rank variant
 }
 
 // BuyShopItem executes purchasing shop goods and updates player inventory
@@ -161,7 +406,7 @@ func BuyShopItem(c *gin.Context) {
 
 	// 1. Verify item is in current cached shop catalog
 	var items []ShopItem
-	cacheKey := "caravan_shop_catalog"
+	cacheKey := shopCatalogCacheKey()
 	if err := cache.GetJSON(cacheKey, &items); err != nil || len(items) == 0 {
 		// If cache missing, load it to establish the current catalog
 		items, _ = loadCaravanShopCatalog()
@@ -172,7 +417,7 @@ func BuyShopItem(c *gin.Context) {
 
 	foundInCatalog := false
 	for _, item := range items {
-		if item.ID == req.ItemID {
+		if item.ID == req.ItemID && (req.Rank == 0 || item.Rank == req.Rank) {
 			foundInCatalog = true
 			break
 		}
@@ -184,7 +429,7 @@ func BuyShopItem(c *gin.Context) {
 	}
 
 	// 2. Find product in database to get exact price and stock
-	selectedItem, err := findCaravanShopItem(req.ItemID)
+	selectedItem, err := findCaravanShopItem(req.ItemID, req.Rank)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy vật phẩm này trong CSDL."})
 		return
@@ -205,6 +450,34 @@ func BuyShopItem(c *gin.Context) {
 		return
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
+
+	// 3.1 Enforce daily stock for virtual random-pool items (rank<5 Gus + food).
+	if selectedItem.IsAuto {
+		limit := randomPoolStock(selectedItem.Rank)
+		// Ensure a row exists for today (full daily limit) when never sold yet.
+		if _, err := tx.Exec(`
+			INSERT INTO caravan_shop_daily_stock (day, id, rank, remaining)
+			VALUES (CURRENT_DATE, $1, $2, $3)
+			ON CONFLICT (day, id, rank) DO NOTHING
+		`, selectedItem.ID, selectedItem.Rank, limit); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật tồn kho."})
+			return
+		}
+		// Atomically decrement only if enough stock remains (race-safe).
+		res, err := tx.Exec(`
+			UPDATE caravan_shop_daily_stock
+			SET remaining = remaining - $3
+			WHERE day = CURRENT_DATE AND id = $1 AND rank = $2 AND remaining >= $3
+		`, selectedItem.ID, selectedItem.Rank, req.Quantity)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật tồn kho."})
+			return
+		}
+		if affected, _ := res.RowsAffected(); affected == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Hàng này hôm nay đã hết, hãy quay lại vào ngày mai!"})
+			return
+		}
+	}
 
 	// 4. Validate Funds
 	currency := selectedItem.Currency
@@ -251,7 +524,10 @@ func BuyShopItem(c *gin.Context) {
 	switch selectedItem.Type {
 	case "Gu":
 		logger.S.Infof("Adding %d x %s to player %s inventory", req.Quantity, selectedItem.Name, player.ID)
-		spec, ok := models.GetGuAny(selectedItem.ID)
+		spec, ok := models.GetGu(selectedItem.ID, selectedItem.Rank)
+		if !ok {
+			spec, ok = models.GetGuAny(selectedItem.ID)
+		}
 		if !ok {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy định nghĩa của Cổ trùng trong Dictionary"})
 			return
@@ -315,6 +591,12 @@ func BuyShopItem(c *gin.Context) {
 		return
 	}
 
+	// Refresh the catalog caches so the frontend sees the updated remaining
+	// stock immediately (auto random-pool items are daily-stock limited).
+	if selectedItem.IsAuto {
+		invalidateShopCatalogCache()
+	}
+
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "shop.buy", EntityType: "shop_item",
 		EntityID:       selectedItem.ID,
@@ -330,6 +612,7 @@ type SellShopRequest struct {
 	ItemID   string `json:"item_id" binding:"required"`
 	Quantity int    `json:"quantity" binding:"required,min=1"`
 	ItemType string `json:"item_type" binding:"required"`
+	Rank     int    `json:"rank"` // 0 = auto; >0 = the specific rank being sold
 }
 
 func SellShopItem(c *gin.Context) {
@@ -377,7 +660,7 @@ func SellShopItem(c *gin.Context) {
 		InventorySvc.RemoveItem(tx, player.ID.String(), req.ItemID, cat, req.Quantity)
 		// Resolve sell price: prefer shop catalog price, fallback to item_dictionary rank
 		var unitSellPrice int
-		if shopItem, err := findCaravanShopItem(req.ItemID); err == nil {
+		if shopItem, err := findCaravanShopItem(req.ItemID, req.Rank); err == nil {
 			unitSellPrice = pricing.SellPrice(shopItem.Price)
 			sellRank = shopItem.Rank
 		} else {
@@ -405,12 +688,17 @@ func SellShopItem(c *gin.Context) {
 		player.GuInventory = newInv
 		// Resolve sell price: prefer shop catalog price, fallback to gu_dictionary rank
 		var unitSellPrice int
-		if shopItem, err := findCaravanShopItem(req.ItemID); err == nil {
+		if shopItem, err := findCaravanShopItem(req.ItemID, req.Rank); err == nil {
 			unitSellPrice = pricing.SellPrice(shopItem.Price)
 			sellRank = shopItem.Rank
 		} else {
 			var dbBasePrice, rank int
-			_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1 ORDER BY rank ASC LIMIT 1`, req.ItemID).Scan(&dbBasePrice, &rank)
+			if req.Rank > 0 {
+				_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1 AND rank=$2`, req.ItemID, req.Rank).Scan(&dbBasePrice, &rank)
+			}
+			if rank == 0 {
+				_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1 ORDER BY rank ASC LIMIT 1`, req.ItemID).Scan(&dbBasePrice, &rank)
+			}
 			sellRank = rank
 			unitSellPrice = pricing.SellPrice(pricing.GuBasePrice(dbBasePrice, rank))
 		}
@@ -480,6 +768,7 @@ type SellShopItemInfo struct {
 	ItemID   string `json:"item_id" binding:"required"`
 	Quantity int    `json:"quantity" binding:"required,min=1"`
 	ItemType string `json:"item_type" binding:"required"`
+	Rank     int    `json:"rank"` // 0 = auto; >0 = the specific rank being sold
 }
 
 type SellShopBulkRequest struct {
@@ -554,7 +843,7 @@ func SellShopItemsBulk(c *gin.Context) {
 
 			var unitSellPrice int
 			sellRank := 1
-			if shopItem, err := findCaravanShopItem(item.ItemID); err == nil {
+			if shopItem, err := findCaravanShopItem(item.ItemID, item.Rank); err == nil {
 				unitSellPrice = pricing.SellPrice(shopItem.Price)
 				sellRank = shopItem.Rank
 			} else {
@@ -593,12 +882,17 @@ func SellShopItemsBulk(c *gin.Context) {
 
 			var unitSellPrice int
 			sellRank := 1
-			if shopItem, err := findCaravanShopItem(item.ItemID); err == nil {
+			if shopItem, err := findCaravanShopItem(item.ItemID, item.Rank); err == nil {
 				unitSellPrice = pricing.SellPrice(shopItem.Price)
 				sellRank = shopItem.Rank
 			} else {
 				var dbBasePrice, rank int
-				_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1 ORDER BY rank ASC LIMIT 1`, item.ItemID).Scan(&dbBasePrice, &rank)
+				if item.Rank > 0 {
+					_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1 AND rank=$2`, item.ItemID, item.Rank).Scan(&dbBasePrice, &rank)
+				}
+				if rank == 0 {
+					_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1 ORDER BY rank ASC LIMIT 1`, item.ItemID).Scan(&dbBasePrice, &rank)
+				}
 				sellRank = rank
 				unitSellPrice = pricing.SellPrice(pricing.GuBasePrice(dbBasePrice, rank))
 			}
