@@ -1239,7 +1239,9 @@ export default function WikiClientView({
               </div>
             )}
           </div>
-      {/* 5. MONSTERS TAB */}
+        )}
+
+        {/* 5. MONSTERS TAB */}
         {activeTab === "monsters" && (
           <div>
             {filteredMonsters.length === 0 ? (
