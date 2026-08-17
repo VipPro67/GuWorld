@@ -151,11 +151,13 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | GET | `/immortal-aperture/nodes` |
 | POST | `/immortal-aperture/nodes` |
 | POST | `/immortal-aperture/nodes/:id/collect` |
+| POST | `/immortal-aperture/nodes/collect-all` |
 | POST | `/immortal-aperture/nodes/:id/uninstall` |
 | DELETE | `/immortal-aperture/nodes/:id` |
 | POST | `/immortal-aperture/time-rate` |
 | POST | `/immortal-aperture/labor` |
 | POST | `/immortal-aperture/nodes/:id/repair` |
+| POST | `/immortal-aperture/nodes/repair-all` |
 | GET | `/immortal-aperture/variant-humans` |
 | GET | `/dao-marks` |
 | GET | `/dao-marks/dao-ngan` | Đạo ngân (composite dao power) calculation. |

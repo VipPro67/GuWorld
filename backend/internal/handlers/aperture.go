@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"net/http"
 	"sort"
@@ -862,9 +863,109 @@ func CollectApertureResource(c *gin.Context) {
 	}
 	rows.Close()
 
+	totalReward, suitabilityNote, err := computeApertureNodeReward(tx, playerID, n, multiples, areaSize, allNodes, 1.0)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tính sản lượng mỏ"})
+		return
+	}
+
+	// 3. Grant rewards
+	var rewardMsg string
+	if n.ProductionType == "Stones" {
+		_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2`, totalReward, playerID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Nguyên Thạch"})
+			return
+		}
+		rewardMsg = fmt.Sprintf("Thu hoạch được %d Nguyên Thạch!", totalReward)
+	} else if n.ProductionType == "Material" {
+		template, ok := ResourceNodeTemplates[n.NodeType]
+		prodKey := "unknown"
+		if ok {
+			prodKey = template.ProdKey
+		}
+
+		err = InventorySvc.AddItem(tx, playerID.String(), prodKey, "materials", totalReward)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng vật phẩm thu hoạch"})
+			return
+		}
+
+		// Translate item name for nice display
+		translatedName := prodKey
+		if itemSpec, exists := models.ItemRegistry[prodKey]; exists {
+			translatedName = itemSpec.Name
+		}
+		rewardMsg = fmt.Sprintf("Thu hoạch được %dx %s!", totalReward, translatedName)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Loại sản phẩm không hợp lệ"})
+		return
+	}
+
+	rewardMsg += suitabilityNote
+
+	// 4. Update node timer
+	_, err = tx.Exec(`
+		UPDATE aperture_resource_nodes 
+		SET last_collected_at = NOW() 
+		WHERE id = $1
+	`, nodeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật thời gian mỏ"})
+		return
+	}
+
+	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 2, $1) WHERE id = $2", MaxHumanQi, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save collection"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": rewardMsg + " Nhân Khí +2.",
+	})
+}
+
+// applyBulkReward applies a combined multiplier and an optional bulk discount to a base reward,
+// clamping the result to at least 1 whenever the base reward is positive.
+func applyBulkReward(baseReward int, combinedMultiplier float64, bulkMultiplier float64) int {
+	totalReward := int(float64(baseReward) * combinedMultiplier * bulkMultiplier)
+	if totalReward < 1 && baseReward > 0 {
+		totalReward = 1
+	}
+	return totalReward
+}
+
+// computeBulkRepairCost returns the repair cost for a node after applying a bulk fee multiplier
+// (rounded up). Destroyed nodes cost max_hp*2; damaged nodes cost max_hp - hp.
+func computeBulkRepairCost(hp, maxHP int, isDestroyed bool, feeMultiplier float64) (baseCost, totalCost int) {
+	if isDestroyed {
+		baseCost = maxHP * 2
+	} else {
+		baseCost = maxHP - hp
+	}
+	if baseCost <= 0 {
+		return 0, 0
+	}
+	totalCost = int(math.Ceil(float64(baseCost) * feeMultiplier))
+	return baseCost, totalCost
+}
+
+// computeApertureNodeReward computes the total reward for harvesting a single resource node,
+// applying all multipliers (Dao marks, conflicts, ecosystem, labor, suitability, area size)
+// and an optional bulkMultiplier (used by collect-all, e.g. 0.8 for a -20% bulk penalty).
+// It returns the reward amount and a suitability warning note (empty when production is optimal).
+func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.ApertureResourceNode, multiples int, areaSize int64, allNodes []models.ApertureResourceNode, bulkMultiplier float64) (int, string, error) {
 	// 1. Dao Marks multiplier
 	var nodeDaoJSON []byte
-	_ = tx.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&nodeDaoJSON)
+	if err := tx.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&nodeDaoJSON); err != nil {
+		return 0, "", err
+	}
 	nodeDaoMap := make(map[string]int)
 	if len(nodeDaoJSON) > 0 {
 		_ = json.Unmarshal(nodeDaoJSON, &nodeDaoMap)
@@ -917,12 +1018,10 @@ func CollectApertureResource(c *gin.Context) {
 	// 4. Variant Human labor intensity multiplier
 	laborMultiplier := 1.0
 	variantBonus := 1.0
-
-	// Check if Rockman labor boosts mine nodes
 	if n.NodeType == "JADE_STONE_MINE" || n.NodeType == "PRIMEVAL_MINE" {
 		var pop int
 		var intensity string
-		err = tx.QueryRow(`
+		err := tx.QueryRow(`
 			SELECT population, labor_intensity FROM aperture_variant_humans 
 			WHERE aperture_id = $1 AND race = 'ROCKMAN'
 		`, n.ApertureID).Scan(&pop, &intensity)
@@ -943,7 +1042,6 @@ func CollectApertureResource(c *gin.Context) {
 			}
 		}
 	} else if n.NodeType == "HAIRY_MAN_SETTLEMENT" || n.NodeType == "ROCKMAN_TRIBE" || n.NodeType == "FEATHERMAN_CANYON" {
-		// Settlement production is boosted by its own labor intensity setting
 		var race string
 		if n.NodeType == "HAIRY_MAN_SETTLEMENT" {
 			race = "HAIRY_MAN"
@@ -952,12 +1050,11 @@ func CollectApertureResource(c *gin.Context) {
 		} else {
 			race = "FEATHERMAN"
 		}
-		var pop int
 		var intensity string
-		err = tx.QueryRow(`
-			SELECT population, labor_intensity FROM aperture_variant_humans 
+		err := tx.QueryRow(`
+			SELECT labor_intensity FROM aperture_variant_humans 
 			WHERE aperture_id = $1 AND race = $2
-		`, n.ApertureID, race).Scan(&pop, &intensity)
+		`, n.ApertureID, race).Scan(&intensity)
 		if err == nil {
 			switch intensity {
 			case "LOW":
@@ -974,8 +1071,8 @@ func CollectApertureResource(c *gin.Context) {
 
 	// Calculate dynamic environment parameters from player's Dao Marks
 	var daoJSON []byte
-	var daoMap models.DaoMarksMap
 	_ = tx.QueryRow(`SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&daoJSON)
+	var daoMap models.DaoMarksMap
 	if daoJSON != nil {
 		_ = json.Unmarshal(daoJSON, &daoMap)
 	}
@@ -1026,63 +1123,167 @@ func CollectApertureResource(c *gin.Context) {
 
 	baseReward := n.ProductionAmount * multiples
 
-	// Apply area size production multiplier
+	// Apply area size production multiplier + optional bulk discount
 	areaMultiplier := 1.0 + float64(areaSize)/10000000.0
-	totalReward := int(float64(baseReward) * areaMultiplier * daoMultiplier * conflictMultiplier * ecoMultiplier * variantBonus * laborMultiplier * suitabilityMultiplier)
-	if totalReward < 1 && baseReward > 0 {
-		totalReward = 1
+	totalReward := applyBulkReward(baseReward, areaMultiplier*daoMultiplier*conflictMultiplier*ecoMultiplier*variantBonus*laborMultiplier*suitabilityMultiplier, bulkMultiplier)
+
+	note := ""
+	if suitabilityMultiplier < 1.0 {
+		note = " (Sản lượng bị giảm do sinh cảnh Tiên Khiếu không tương thích!)"
 	}
 
-	// 3. Grant rewards
-	var rewardMsg string
-	if n.ProductionType == "Stones" {
-		_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2`, totalReward, playerID)
+	return totalReward, note, nil
+}
+
+// CollectAllApertureResources harvests every resource node whose production timer is ready, in a
+// single transaction. As a convenience cost, yield is reduced by 20% and Human Qi gain is halved.
+func CollectAllApertureResources(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	// 1. Fetch aperture (area size + time rate)
+	var apertureID string
+	var areaSize int64
+	var timeRate float64
+	err = tx.QueryRow(`
+		SELECT id, area_size, time_rate FROM immortal_apertures WHERE player_id = $1
+	`, playerID).Scan(&apertureID, &areaSize, &timeRate)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa khai mở Tiên Khiếu"})
+		return
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra Tiên Khiếu"})
+		return
+	}
+
+	if timeRate <= 0 {
+		timeRate = 1.0
+	}
+
+	// 2. Load all active nodes (for ecosystem/conflict) and candidate resource nodes
+	rows, err := tx.Query(`
+		SELECT id, aperture_id, node_type, name, path, level, hp, max_hp, x, y,
+			production_type, production_amount, production_interval_hours, last_collected_at,
+			is_destroyed, created_at, updated_at,
+			COALESCE(node_category, 'RESOURCE'), COALESCE(defense_power, 0), COALESCE(attack_range, 0),
+			COALESCE(hp_bonus, 0), COALESCE(damage_reduction, 0), COALESCE(blocks_movement, false),
+			COALESCE(required_gu_id, ''), COALESCE(required_gu_rank, 0)
+		FROM aperture_resource_nodes
+		WHERE aperture_id = $1 AND is_destroyed = false
+	`, apertureID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải danh sách mỏ"})
+		return
+	}
+
+	var allNodes []models.ApertureResourceNode
+	for rows.Next() {
+		var n models.ApertureResourceNode
+		var lastCol sql.NullTime
+		if err := rows.Scan(&n.ID, &n.ApertureID, &n.NodeType, &n.Name, &n.Path, &n.Level, &n.HP, &n.MaxHP, &n.X, &n.Y,
+			&n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol,
+			&n.IsDestroyed, &n.CreatedAt, &n.UpdatedAt,
+			&n.NodeCategory, &n.DefensePower, &n.AttackRange,
+			&n.HPBonus, &n.DamageReduction, &n.BlocksMovement,
+			&n.RequiredGuID, &n.RequiredGuRank); err == nil {
+			if lastCol.Valid {
+				n.LastCollectedAt = &lastCol.Time
+			}
+			allNodes = append(allNodes, n)
+		}
+	}
+	rows.Close()
+
+	// 3. Determine ready resource nodes and compute rewards
+	type collectResult struct {
+		NodeID string `json:"node_id"`
+		Name   string `json:"name"`
+		Reward int    `json:"reward"`
+	}
+	var results []collectResult
+	totalStones := 0
+	materialTotals := map[string]int{}
+	readyCount := 0
+
+	for _, n := range allNodes {
+		if n.NodeCategory == "DEFENSE" || n.IsDestroyed {
+			continue
+		}
+
+		// Timer check (mirror single collect)
+		lastTime := time.Now().Add(-24 * time.Hour)
+		if n.LastCollectedAt != nil {
+			lastTime = *n.LastCollectedAt
+		}
+		elapsed := time.Since(lastTime)
+		elapsedInternal := time.Duration(float64(elapsed) * timeRate)
+		requiredHoursInternal := time.Duration(n.ProductionIntervalHours) * time.Hour
+		if elapsedInternal < requiredHoursInternal {
+			continue
+		}
+
+		multiples := int(elapsedInternal / requiredHoursInternal)
+		if multiples > 3 {
+			multiples = 3
+		}
+
+		reward, _, err := computeApertureNodeReward(tx, playerID, n, multiples, areaSize, allNodes, 0.8)
 		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tính sản lượng mỏ"})
+			return
+		}
+
+		if n.ProductionType == "Stones" {
+			totalStones += reward
+		} else if n.ProductionType == "Material" {
+			prodKey := "unknown"
+			if template, ok := ResourceNodeTemplates[n.NodeType]; ok {
+				prodKey = template.ProdKey
+			}
+			materialTotals[prodKey] += reward
+		}
+
+		results = append(results, collectResult{NodeID: n.ID, Name: n.Name, Reward: reward})
+		readyCount++
+	}
+
+	if readyCount == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có mỏ nào sẵn sàng để thu hoạch."})
+		return
+	}
+
+	// 4. Grant rewards
+	if totalStones > 0 {
+		if _, err := tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2`, totalStones, playerID); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng Nguyên Thạch"})
 			return
 		}
-		rewardMsg = fmt.Sprintf("Thu hoạch được %d Nguyên Thạch!", totalReward)
-	} else if n.ProductionType == "Material" {
-		template, ok := ResourceNodeTemplates[n.NodeType]
-		prodKey := "unknown"
-		if ok {
-			prodKey = template.ProdKey
-		}
-
-		err = InventorySvc.AddItem(tx, playerID.String(), prodKey, "materials", totalReward)
-		if err != nil {
+	}
+	for prodKey, amount := range materialTotals {
+		if err := InventorySvc.AddItem(tx, playerID.String(), prodKey, "materials", amount); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng vật phẩm thu hoạch"})
 			return
 		}
+	}
 
-		// Translate item name for nice display
-		translatedName := prodKey
-		if itemSpec, exists := models.ItemRegistry[prodKey]; exists {
-			translatedName = itemSpec.Name
+	// 5. Reset timers + Human Qi for harvested nodes
+	for _, r := range results {
+		if _, err := tx.Exec(`UPDATE aperture_resource_nodes SET last_collected_at = NOW() WHERE id = $1`, r.NodeID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật thời gian mỏ"})
+			return
 		}
-		rewardMsg = fmt.Sprintf("Thu hoạch được %dx %s!", totalReward, translatedName)
-	} else {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Loại sản phẩm không hợp lệ"})
-		return
 	}
-
-	if suitabilityMultiplier < 1.0 {
-		rewardMsg += " (Sản lượng bị giảm do sinh cảnh Tiên Khiếu không tương thích!)"
-	}
-
-	// 4. Update node timer
-	_, err = tx.Exec(`
-		UPDATE aperture_resource_nodes 
-		SET last_collected_at = NOW() 
-		WHERE id = $1
-	`, nodeID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật thời gian mỏ"})
-		return
-	}
-
-	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 2, $1) WHERE id = $2", MaxHumanQi, playerID)
-	if err != nil {
+	if _, err := tx.Exec(`UPDATE players SET human_qi = LEAST(human_qi + $1, $2) WHERE id = $3`, float64(readyCount), MaxHumanQi, playerID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Nhân Khí"})
 		return
 	}
@@ -1093,7 +1294,123 @@ func CollectApertureResource(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": rewardMsg + " Nhân Khí +2.",
+		"message":      fmt.Sprintf("Thu hoạch hàng loạt %d mỏ thành công! (Sản lượng -20%%) Nhân Khí +%d.", readyCount, readyCount),
+		"count":        readyCount,
+		"total_stones": totalStones,
+		"materials":    materialTotals,
+		"collected":    results,
+	})
+}
+
+// RepairAllApertureNodes repairs every damaged or destroyed node in the player's aperture at
+// once. As a convenience cost, each node's repair fee is increased by 30% (rounded up).
+func RepairAllApertureNodes(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	// 1. Fetch aperture
+	var apertureID string
+	err = tx.QueryRow(`SELECT id FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&apertureID)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa khai mở Tiên Khiếu"})
+		return
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra Tiên Khiếu"})
+		return
+	}
+
+	// 2. Load damaged/destroyed nodes
+	rows, err := tx.Query(`
+		SELECT id, name, hp, max_hp, is_destroyed
+		FROM aperture_resource_nodes
+		WHERE aperture_id = $1 AND (is_destroyed = true OR hp < max_hp)
+	`, apertureID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tải danh sách công trình"})
+		return
+	}
+
+	type repairResult struct {
+		NodeID string `json:"node_id"`
+		Name   string `json:"name"`
+		Cost   int    `json:"cost"`
+	}
+	var results []repairResult
+	totalCost := 0
+
+	for rows.Next() {
+		var id, name string
+		var hp, maxHP int
+		var destroyed bool
+		if err := rows.Scan(&id, &name, &hp, &maxHP, &destroyed); err != nil {
+			rows.Close()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc dữ liệu công trình"})
+			return
+		}
+		_, cost := computeBulkRepairCost(hp, maxHP, destroyed, 1.3)
+		if cost <= 0 {
+			continue
+		}
+		totalCost += cost
+		results = append(results, repairResult{NodeID: id, Name: name, Cost: cost})
+	}
+	rows.Close()
+
+	if len(results) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có công trình nào cần sửa chữa."})
+		return
+	}
+
+	// 3. Check player stones
+	var stones int
+	err = tx.QueryRow(`SELECT FLOOR(primeval_stones)::BIGINT FROM players WHERE id = $1`, playerID).Scan(&stones)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})
+		return
+	}
+
+	if stones < totalCost {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Nguyên Thạch không đủ để sửa chữa toàn bộ (Yêu cầu: %d, Hiện có: %d).", totalCost, stones)})
+		return
+	}
+
+	// 4. Deduct + repair
+	if _, err := tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2`, totalCost, playerID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Nguyên Thạch"})
+		return
+	}
+
+	for _, r := range results {
+		if _, err := tx.Exec(`
+			UPDATE aperture_resource_nodes
+			SET hp = max_hp, is_destroyed = false, updated_at = NOW()
+			WHERE id = $1
+		`, r.NodeID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật trạng thái sửa chữa"})
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save repair"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":        fmt.Sprintf("Sửa chữa hàng loạt %d công trình thành công! Tiêu tốn %d Nguyên Thạch (Phí +30%%).", len(results), totalCost),
+		"repaired_count": len(results),
+		"total_cost":     totalCost,
+		"nodes":          results,
 	})
 }
 

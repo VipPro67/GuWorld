@@ -166,6 +166,8 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
   - LOW: 2 mỏ, MID: 3 mỏ, HIGH/EXTREME: 4 mỏ.
   - Các mỏ khởi đầu: Nguyệt Lan, Thanh Trúc, Ngọc Thạch, Nguyên Thạch, Kiếm Diệp, Hươu Linh.
 - Cổ sư đặt thêm node tài nguyên theo toạ độ, thu hoạch, gỡ/xóa, sửa chữa node.
+- **Thu hoạch tất cả** các mỏ đã đủ thời gian tích tụ cùng lúc; sản lượng giảm **20%** và Nhân Khí nhận được giảm còn **+1/mỏ** (so với thu hoạch từng mỏ).
+- **Sửa chữa tất cả** các công trình hư tổn/phế tích cùng lúc; phí sửa mỗi công trình tăng **30%**.
 - Hệ sinh thái node có kiểm tra xung đột đường tu/path và cân bằng plant/herbivore/carnivore.
 - Dị nhân trong tiên khiếu có population, happiness, oppression, rebellion rate và labor intensity.
 

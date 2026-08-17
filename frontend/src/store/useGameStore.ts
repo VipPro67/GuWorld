@@ -1108,11 +1108,13 @@ interface GameState {
   fetchVariantHumans: () => Promise<void>;
   placeApertureNode: (nodeType: string, x: number, y: number) => Promise<boolean>;
   collectResourceNode: (nodeId: string) => Promise<boolean>;
+  collectAllResourceNodes: () => Promise<boolean>;
   uninstallApertureNode: (nodeId: string) => Promise<boolean>;
   deleteApertureNode: (nodeId: string) => Promise<boolean>;
   setApertureTimeRate: (rate: number) => Promise<boolean>;
   setApertureLabor: (race: string, intensity: string) => Promise<boolean>;
   repairApertureNode: (nodeId: string) => Promise<boolean>;
+  repairAllApertureNodes: () => Promise<boolean>;
   upgradeApertureNode: (nodeId: string) => Promise<boolean>;
   fetchActiveTribulation: () => Promise<void>;
   attackTribulationEnemy: (eventId: string, enemyId: string, guIds: string[]) => Promise<boolean>;
@@ -4989,6 +4991,36 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
+  collectAllResourceNodes: async () => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/collect-all`, {
+        method: "POST",
+      });
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể thu hoạch tài nguyên");
+      }
+      get().addToast(data.message || "Thu hoạch hàng loạt thành công!", "success");
+      get().addLog(data.message || "Thu hoạch hàng loạt tài nguyên thành công.");
+      await get().initializeSession();
+      await get().fetchApertureNodes();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
   uninstallApertureNode: async (nodeId: string) => {
     const { token, actionLoading, logout } = get();
     if (!token || actionLoading) return false;
@@ -5150,6 +5182,37 @@ export const useGameStore = create<GameState>((set, get) => {
       }
       get().addToast(data.message || "Sửa chữa thành công!", "success");
       get().addLog(data.message || "Đã sửa chữa điểm tài nguyên.");
+      await get().initializeSession();
+      await get().fetchApertureNodes();
+      await get().fetchVariantHumans();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  repairAllApertureNodes: async () => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/repair-all`, {
+        method: "POST",
+      });
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn.");
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể sửa chữa công trình");
+      }
+      get().addToast(data.message || "Sửa chữa hàng loạt thành công!", "success");
+      get().addLog(data.message || "Đã sửa chữa hàng loạt công trình.");
       await get().initializeSession();
       await get().fetchApertureNodes();
       await get().fetchVariantHumans();

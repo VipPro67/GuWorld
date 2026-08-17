@@ -182,11 +182,13 @@ export const ImmortalApertureView: React.FC = () => {
     fetchVariantHumans,
     placeApertureNode,
     collectResourceNode,
+    collectAllResourceNodes,
     uninstallApertureNode,
     deleteApertureNode,
     setApertureTimeRate,
     setApertureLabor,
     repairApertureNode,
+    repairAllApertureNodes,
     upgradeApertureNode,
     fetchActiveTribulation,
     attackTribulationEnemy,
@@ -393,6 +395,22 @@ export const ImmortalApertureView: React.FC = () => {
     }
   };
 
+  const handleCollectAll = async () => {
+    const success = await collectAllResourceNodes();
+    if (success) {
+      setSelectedCell(null);
+      setSelectedNode(null);
+    }
+  };
+
+  const handleRepairAll = async () => {
+    const success = await repairAllApertureNodes();
+    if (success) {
+      setSelectedCell(null);
+      setSelectedNode(null);
+    }
+  };
+
   const handleUninstall = async () => {
     if (!selectedNode) return;
     if (await showConfirm(`Đạo hữu có chắc chắn muốn tháo dỡ ${selectedNode.name}? Mỏ sẽ được thu hồi thành vật phẩm cất vào túi đồ.`)) {
@@ -503,6 +521,14 @@ export const ImmortalApertureView: React.FC = () => {
   const starvationHerb = herbCount > 0 && plantCount === 0;
   const starvationCarn = carnCount > 0 && herbCount === 0;
   const overgrazing = herbCount > plantCount && carnCount === 0 && plantCount > 0;
+
+  // Bulk action helpers
+  const bulkCollectableNodes = apertureNodes.filter(n => !n.is_destroyed && n.node_category !== "DEFENSE" && canCollect(n, aperture?.time_rate ?? 1.0));
+  const bulkReadyCount = bulkCollectableNodes.length;
+  const bulkDamagedNodes = apertureNodes.filter(n => !n.is_destroyed && n.hp < n.max_hp);
+  const bulkRepairCount = bulkDamagedNodes.length;
+  const bulkRepairCost = bulkDamagedNodes.reduce((sum, n) => sum + Math.ceil((n.max_hp - n.hp) * 1.3), 0);
+  const canAffordBulkRepair = player.primeval_stones >= bulkRepairCost;
 
   // Total Food Production
   const totalFoodProd = apertureNodes.reduce((sum, n) => {
@@ -937,6 +963,26 @@ export const ImmortalApertureView: React.FC = () => {
                 <MapIcon className="w-5 h-5 text-amber-400" />
                 Lưới Địa Hình Tiên Khiếu
               </h2>
+
+              {/* Bulk actions */}
+              <div className="w-full flex flex-col sm:flex-row gap-2 mb-4">
+                <button
+                  onClick={handleCollectAll}
+                  disabled={actionLoading || bulkReadyCount === 0}
+                  className="flex-1 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:from-slate-800 disabled:to-slate-900 disabled:text-slate-500 text-white font-bold text-xs rounded-lg transition"
+                  title="Thu hoạch mọi mỏ đã đủ thời gian tích tụ (sản lượng -20%, Nhân Khí +1/mỏ)"
+                >
+                  {actionLoading ? "Đang xử lý..." : `Thu Hoạch Tất Cả (${bulkReadyCount} mỏ, −20%)`}
+                </button>
+                <button
+                  onClick={handleRepairAll}
+                  disabled={actionLoading || bulkRepairCount === 0 || !canAffordBulkRepair}
+                  className="flex-1 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:from-slate-800 disabled:to-slate-900 disabled:text-slate-500 text-white font-bold text-xs rounded-lg transition"
+                  title="Sửa chữa mọi công trình hư tổn (phí +30%)"
+                >
+                  {actionLoading ? "Đang xử lý..." : `Sửa Chữa Tất Cả (${bulkRepairCount} công trình, ${bulkRepairCost.toLocaleString()} Đá)`}
+                </button>
+              </div>
 
               {/* Grid 20x20 container */}
               <div

@@ -384,6 +384,8 @@ func SetupRouter() *gin.Engine {
 			aperture.GET("/nodes", handlers.GetApertureNodes)
 			aperture.POST("/nodes", handlers.PlaceApertureNode)
 			aperture.POST("/nodes/:id/collect", handlers.CollectApertureResource)
+			aperture.POST("/nodes/collect-all", handlers.CollectAllApertureResources)
+			aperture.POST("/nodes/repair-all", handlers.RepairAllApertureNodes)
 			aperture.POST("/nodes/:id/uninstall", handlers.UninstallApertureNode)
 			aperture.DELETE("/nodes/:id", handlers.DeleteApertureNode)
 			aperture.POST("/time-rate", handlers.SetApertureTimeRate)
