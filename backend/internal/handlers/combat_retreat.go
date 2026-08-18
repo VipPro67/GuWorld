@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"time"
 
@@ -212,6 +213,27 @@ func Flee(c *gin.Context) {
 	enemyName := player.ActiveCombat.EnemyName
 	var logMsg string
 	var defeatAudit *auditlog.Entry
+
+	fleeChance := 0.70
+	if player.ActiveCombat.EnemyType == "BOSS" || player.ActiveCombat.EnemyType == "TRIBULATION_BOSS" || player.ActiveCombat.EnemyType == "TRIBULATION_MONSTER" {
+		fleeChance = 0.40
+	}
+	roll := rand.Float64()
+	success := roll < fleeChance
+
+	if !success {
+		logMsg = fmt.Sprintf("Đạo hữu cố gắng rút lui khỏi %s thất bại! Tỷ lệ thành công: %.1f%%. Trận chiến vẫn tiếp tục!", enemyName, fleeChance*100)
+		if err = tx.Commit(); err != nil {
+			respondCombatTxErr(c, err, "Transaction commit failed")
+			return
+		}
+		auditlog.Logf(db.DB, &authID, "combat.flee_failed", "enemy=%s", enemyName)
+		responseWithPlayer(c, http.StatusOK, player, gin.H{
+			"flee_success": false,
+			"log":          logMsg,
+		})
+		return
+	}
 
 	isExploration := player.ActiveCombat.CombatMode != "virtual" && player.ActiveCombat.EnemyTemplateID != "monster_heavenly_tribulation"
 

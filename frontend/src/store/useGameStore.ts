@@ -3364,6 +3364,13 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Bỏ chạy thất bại.");
       }
 
+      if (data.flee_success === false) {
+        setPlayerFromServer(data.player);
+        get().addLog(data.log || "Rút lui thất bại!");
+        get().addToast(data.log || "Rút lui thất bại!", "warning");
+        return;
+      }
+
       const combat = player.active_combat;
       let returnView = "explore";
       if (combat) {
