@@ -316,7 +316,7 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 			}
 		}
 
-		if player.SoulHP > 0 && player.SoulHP < player.MaxSoul {
+		if player.SoulHP < player.MaxSoul {
 			soulRegenPerHour := player.SoulRegenRate
 			earnedSoulFloat := (secondsPassed * player.TimeSpeedMultiplier / 3600.0) * soulRegenPerHour
 			earnedSoulInt := int(earnedSoulFloat)
