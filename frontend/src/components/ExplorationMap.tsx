@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useGameStore, Player } from "@/store/useGameStore";
-import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, Gem, Flower2, HelpCircle, Wine, Crown, Package, Home } from "lucide-react";
-import { translateItemType, translatePath } from "@/lib/translate";
+import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, Gem, Flower2, HelpCircle, Wine, Crown, Home } from "lucide-react";
+
 import { LogConsole } from "./LogConsole";
 
 interface ExplorationMapProps {
@@ -68,7 +68,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
 
   const handleExitMap = async () => {
     if (isExploringActiveRegion) {
-      if (await showConfirm("Đạo hữu có chắc chắn muốn rời khỏi bản đồ khám phá? Tất cả Nguyên Thạch, Cổ trùng và tài nguyên thu thập tạm thời sẽ được thu hoạch an toàn về túi đồ.")) {
+      if (await showConfirm("Đạo hữu có chắc chắn muốn rời khỏi bản đồ khám phá và trở về Trấn?")) {
         await retreat();
         if (onBack) {
           onBack();
@@ -263,7 +263,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                     : "border-zinc-800 text-zinc-400 hover:bg-zinc-900"
                 }`}
               >
-                {isExploringActiveRegion ? "Thoát & Nhận Đồ" : "Trở Về"}
+                {isExploringActiveRegion ? "Thoát & Về Trấn" : "Trở Về"}
               </button>
             )}
           </div>
@@ -444,7 +444,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
               onClick={handleExitMap}
               className="py-1.5 px-3 bg-emerald-950/40 text-emerald-400 border border-emerald-900/60 hover:bg-emerald-950/60 hover:border-emerald-700 rounded-xl text-[10px] cursor-pointer font-mono font-bold transition-all shadow-[0_0_10px_rgba(16,185,129,0.1)]"
             >
-              Thoát & Nhận Đồ
+              Thoát & Về Trấn
             </button>
           )}
         </div>
@@ -757,109 +757,6 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                 </button>
               </div>
             )}
-          </div>
-
-          {/* Temporary Loot Panel */}
-          <div className="bg-zinc-950/40 border border-zinc-900 rounded-3xl p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-900/60 pb-2">
-              <h4 className="font-serif font-bold text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                <Package className="w-4 h-4 text-emerald-400" /> CHIẾN LỢI PHẨM TẠM THỜI
-              </h4>
-              <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest bg-emerald-950/30 border border-emerald-900/40 px-1.5 py-0.5 rounded">
-                Tạm thời
-              </span>
-            </div>
-
-            {(() => {
-              const tempLoot = player.temp_loot || { gu_inventory: [], materials_inventory: {}, primeval_stones: 0 };
-              const isEmptyLoot =
-                tempLoot.primeval_stones === 0 &&
-                tempLoot.gu_inventory.length === 0 &&
-                Object.values(tempLoot.materials_inventory).every((qty) => qty <= 0);
-
-              if (isEmptyLoot) {
-                return (
-                  <div className="text-center py-3">
-                    <p className="text-[11px] text-zinc-500 leading-normal italic">
-                      Đạo hữu chưa thu thập được gì. Di chuyển trên lưới bản đồ để tìm tài nguyên hoặc đánh bại đối thủ.
-                    </p>
-                  </div>
-                );
-              }
-
-              return (
-                <div className="space-y-2 max-h-[160px] overflow-y-auto custom-scrollbar pr-1">
-                  {/* Primeval Stones */}
-                  {tempLoot.primeval_stones > 0 && (
-                    <div className="flex items-center justify-between bg-zinc-950/60 border border-amber-900/20 rounded-xl p-2 text-xs">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                          <Gem className="w-3.5 h-3.5 text-amber-500" />
-                        </div>
-                        <span className="font-semibold text-zinc-300">Nguyên Thạch</span>
-                      </div>
-                      <span className="font-mono font-bold text-amber-400">+{tempLoot.primeval_stones}</span>
-                    </div>
-                  )}
-
-                  {/* Gu Inventory */}
-                  {tempLoot.gu_inventory.map((gu, idx) => {
-                    const spec = guDictionary[gu.gu_id] || { name: gu.gu_id, path: ["Không rõ"] };
-                    return (
-                      <div
-                        key={gu.instance_id || idx}
-                        className="flex items-center justify-between bg-zinc-950/60 border border-emerald-900/20 rounded-xl p-2 text-xs"
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                            <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                          </div>
-                          <div>
-                            <span className="font-semibold text-zinc-300 block leading-tight">{spec.name}</span>
-                            <span className="text-[8px] text-zinc-550 font-mono">
-                              {spec.path && (Array.isArray(spec.path) ? spec.path.map(translatePath).join(" / ") : translatePath(spec.path))}
-                            </span>
-                          </div>
-                        </div>
-                        <span className="text-[8px] font-mono text-emerald-400 bg-emerald-950/20 border border-emerald-900/30 px-1 py-0.5 rounded uppercase tracking-wide shrink-0">
-                          Cổ trùng
-                        </span>
-                      </div>
-                    );
-                  })}
-
-                  {/* Materials */}
-                  {Object.entries(tempLoot.materials_inventory)
-                    .filter(([_, qty]) => qty > 0)
-                    .map(([matId, qty]) => {
-                      const spec = itemDictionary[matId] || { name: matId, item_type: "Nguyên Liệu" };
-                      return (
-                        <div
-                          key={matId}
-                          className="flex items-center justify-between bg-zinc-950/60 border border-zinc-900 rounded-xl p-2 text-xs"
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-lg bg-zinc-900/60 flex items-center justify-center">
-                              {matId.includes("wine") ? (
-                                <Wine className="w-3.5 h-3.5 text-amber-500" />
-                              ) : matId.includes("petal") || matId.includes("flower") ? (
-                                <Flower2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                              ) : (
-                                <Gem className="w-3.5 h-3.5 text-cyan-400" />
-                              )}
-                            </div>
-                            <div>
-                              <span className="font-semibold text-zinc-300 block leading-tight">{spec.name}</span>
-                              <span className="text-[8px] text-zinc-550 font-mono">{translateItemType(spec.item_type)}</span>
-                            </div>
-                          </div>
-                          <span className="font-mono font-bold text-zinc-400 shrink-0">x{qty}</span>
-                        </div>
-                      );
-                    })}
-                </div>
-              );
-            })()}
           </div>
 
         </div>

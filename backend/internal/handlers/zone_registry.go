@@ -296,6 +296,33 @@ func hubEntryPoint() (int, int) {
 	return HubEntryPoint.X, HubEntryPoint.Y
 }
 
+// NearestHub returns the region ID and entry coordinates of the closest HUB zone.
+func NearestHub(x, y int) (string, int, int) {
+	zoneReg.mu.RLock()
+	defer zoneReg.mu.RUnlock()
+
+	var bestHub *models.Region
+	var minDist float64 = -1
+
+	for i := range zoneReg.zones {
+		z := &zoneReg.zones[i]
+		if z.ZoneType == ZoneTypeHub {
+			dx := float64(z.EntryX - x)
+			dy := float64(z.EntryY - y)
+			dist := dx*dx + dy*dy
+			if minDist < 0 || dist < minDist {
+				minDist = dist
+				bestHub = z
+			}
+		}
+	}
+
+	if bestHub != nil && bestHub.EntryX != 0 && bestHub.EntryY != 0 {
+		return bestHub.ID, bestHub.EntryX, bestHub.EntryY
+	}
+	return HubRegionID, HubEntryPoint.X, HubEntryPoint.Y
+}
+
 // DeriveRegionAt resolves the current_region for a world position.
 func DeriveRegionAt(x, y int) string {
 	if z := FindZoneAt(x, y); z != nil {

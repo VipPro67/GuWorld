@@ -140,11 +140,6 @@ export interface Player {
   completed_quests: string[];
   aperture_stress?: number;
   last_cultivate_time?: string;
-  temp_loot?: {
-    gu_inventory: GuInstance[];
-    materials_inventory: Record<string, number>;
-    primeval_stones: number;
-  };
   soul_hp: number;
   max_soul: number;
   soul_tier: string;

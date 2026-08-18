@@ -344,7 +344,7 @@ func GetGrid(c *gin.Context) {
 	})
 }
 
-// HasExplorationInventorySpace checks bag capacity including temporary loot
+// HasExplorationInventorySpace checks bag capacity of the real inventory.
 func HasExplorationInventorySpace(player *models.Player, incomingCount int) bool {
 	stats := CalculatePlayerStats(player)
 	maxSlots := int(stats["storage"])
@@ -358,13 +358,6 @@ func HasExplorationInventorySpace(player *models.Player, incomingCount int) bool
 	for _, inv := range invItems {
 		if !seen[inv.ItemID] {
 			seen[inv.ItemID] = true
-			currentSize++
-		}
-	}
-
-	currentSize += len(player.TempLoot.GuInventory)
-	for _, qty := range player.TempLoot.MaterialsInventory {
-		if qty > 0 {
 			currentSize++
 		}
 	}
@@ -470,11 +463,10 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				itemName = item.Name
 			}
 			if HasExplorationInventorySpace(player, 1) {
-				if player.TempLoot.MaterialsInventory == nil {
-					player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
+				if err := InventorySvc.AddItem(tx, player.ID.String(), cell.Content, "materials", 1); err != nil {
+					logger.S.Errorf("Failed to add resource %s to player %s: %v", cell.Content, player.ID, err)
 				}
-				player.TempLoot.MaterialsInventory[cell.Content]++
-				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Đạo hữu tìm thấy nguyên liệu hoang dã: 1x %s (được giữ tạm thời trong bản đồ)!", player.X, player.Y, itemName)
+				logMsg = fmt.Sprintf("Di chuyển đến (%d, %d). Đạo hữu tìm thấy nguyên liệu hoang dã: 1x %s!", player.X, player.Y, itemName)
 
 				MarkPersistentCellCleared(tx, player.ID, player.X, player.Y)
 
@@ -507,8 +499,8 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 					Status:     "ACTIVE",
 					Equipped:   false,
 				}
-				player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, newGu)
-				logMsg = fmt.Sprintf("Cơ duyên! Đạo hữu bắt gặp và thu phục thành công Cổ trùng hoang dã: %s (được giữ tạm thời trong bản đồ)!", guName)
+				player.GuInventory = append(player.GuInventory, newGu)
+				logMsg = fmt.Sprintf("Cơ duyên! Đạo hữu bắt gặp và thu phục thành công Cổ trùng hoang dã: %s!", guName)
 
 				if player.ClearedCells == nil {
 					player.ClearedCells = make(models.ClearedCellsMap)
@@ -807,14 +799,14 @@ func MovePlayer(c *gin.Context) {
 	// Update DB
 	updateQuery := `
 		UPDATE players
-		SET current_mana = $1, x = $2, y = $3, current_region = $4, cleared_cells = $5, active_combat = $6, temp_loot = $7, last_mana_update = $8, primeval_stones = $9, hp = $10, max_mana = $11, human_qi = $12, visited_subzones = $13
-		WHERE id = $14
+		SET current_mana = $1, x = $2, y = $3, current_region = $4, cleared_cells = $5, active_combat = $6, last_mana_update = $7, primeval_stones = $8, hp = $9, max_mana = $10, human_qi = $11, visited_subzones = $12
+		WHERE id = $13
 	`
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return
 	}
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, player.ActiveCombat, player.TempLoot, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
+	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, player.ActiveCombat, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return
@@ -997,9 +989,9 @@ func MovePlayerPath(c *gin.Context) {
 	}
 	_, err = tx.Exec(`
 		UPDATE players
-		SET current_mana = $1, x = $2, y = $3, current_region = $4, cleared_cells = $5, active_combat = $6, temp_loot = $7, last_mana_update = $8, primeval_stones = $9, hp = $10, max_mana = $11, human_qi = $12, visited_subzones = $13
-		WHERE id = $14
-	`, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, player.ActiveCombat, player.TempLoot, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
+		SET current_mana = $1, x = $2, y = $3, current_region = $4, cleared_cells = $5, active_combat = $6, last_mana_update = $7, primeval_stones = $8, hp = $9, max_mana = $10, human_qi = $11, visited_subzones = $12
+		WHERE id = $13
+	`, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, player.ActiveCombat, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return

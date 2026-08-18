@@ -55,3 +55,8 @@ monster_grand_calamity_boss,Hạo Kiếp Thần Ma,Tribulation_Boss,3000,300,70,
 monster_myriad_tribulation_boss,Vạn Kiếp Thần Ma,Tribulation_Boss,5000,450,100,[],{},{},{},boss_balanced,loot_boss_wolf_king,Vạn kiếp giáng lâm chỉ có Tôn Giả Cửu Chuyển mới đủ sức đối kháng.,true,false,0.0,6.0
 monster_chaos_calamity_boss,Hỗn Độn Thần Ma,Tribulation_Boss,8000,650,150,[],{},{},{},boss_balanced,loot_boss_wolf_king,Hỗn Độn Chi Giới xâm lấn sức mạnh hủy diệt toàn bộ thiên địa thế giới.,true,false,0.0,8.0
 monster_spirit_guardian,Thủ Vệ Sơn Thần,Elite,350,34,24,[],{},{},{},beast_basic,loot_jade_golem,Thủ vệ sơn lâm tụ linh khí thiên địa trấn thủ các vùng đất linh mạch.,true,true,0.08,3.0
+monster_wan_xa_poison_snake,Vạn Xà Cốc Độc Mãng,Normal,200,28,10,[],{},{},{},beast_basic,loot_wan_xa_snake,Loài độc mãng khổng lồ mang kịch độc xà đạo sinh sống tại thung lũng Vạn Xà Nam Cương.,True,True,0.15,2.5
+monster_hu_tien_fox,Hồ Tiên Biến Hóa Phi Hồ,Elite,360,45,18,[],{},{},{},beast_basic,loot_hu_tien_fox,"Dị chủng phi hồ hấp thu tinh niệm Trí đạo của Hồ Tiên, có khả năng huyễn hóa khôn lường.",True,True,0.08,3.0
+monster_snow_yeti,Tuyết Nguyên Nhân Tuyết Ma,Elite,500,55,30,[],{},{},{},beast_basic,loot_snow_yeti,Sinh vật tuyết khổng lồ bảo vệ vùng đất của tộc Người Tuyết Bắc Nguyên.,True,True,0.05,3.5
+monster_blood_sand_scorpion,Huyết Sa Hoàng Kim Hạt,Elite,300,38,22,[],{},{},{},beast_basic,loot_blood_sand_scorpion,"Bọ cạp khổng lồ ẩn nấp dưới cát đỏ Huyết Sa Khâu Tây Mạc, hút máu sinh linh dã thú.",True,True,0.1,3.0
+monster_east_sea_dragonfish,Đông Hải Thượng Cổ Long Ngư,Boss,1000,85,45,[],{},{},{},boss_balanced,loot_east_sea_dragonfish,"Dị chủng Long Ngư khổng lồ hấp thu Thủy đạo đạo ngân lâu năm tiến hóa, sừng sững bảo hộ Long Ngư Đảo Đông Hải.",True,False,0.02,5.0

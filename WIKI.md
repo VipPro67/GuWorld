@@ -239,7 +239,7 @@ Cổ sư có thể:
 - Dùng Cổ tiêu hao hoặc Cổ hỗ trợ.
 - Vứt bỏ Cổ.
 
-**Tiên Cổ duy nhất:** Cổ từ **Lục Chuyển trở lên (Tiên Cổ)** là độc nhất toàn thiên hạ — mỗi `gu_id` chỉ tồn tại một instance trên toàn server. Các kênh nhận Cổ (Mở đá, Rương Mỏ Linh Thạch, Luyện Cổ, quái rơi đồ) đều loại trừ Tiên Cổ đã tồn tại (trong túi bất kỳ đạo hữu, đấu giá, rương tạm) trước khi roll; nếu hết ứng viên hợp lệ sẽ rơi vật phẩm/thạch bù trừ.
+**Tiên Cổ duy nhất:** Cổ từ **Lục Chuyển trở lên (Tiên Cổ)** là độc nhất toàn thiên hạ — mỗi `gu_id` chỉ tồn tại một instance trên toàn server. Các kênh nhận Cổ (Mở đá, Rương Mỏ Linh Thạch, Luyện Cổ, quái rơi đồ) đều loại trừ Tiên Cổ đã tồn tại (trong túi bất kỳ đạo hữu, đấu giá) trước khi roll; nếu hết ứng viên hợp lệ sẽ rơi vật phẩm/thạch bù trừ.
 
 **Hiệu ứng Trưởng thành (Growth):** Một số Cổ (Lực đạo/Thổ đạo như Hùng Lực, Hắc Thỉ, Ngọc Bì, Thiết Cốt, Tự Lực...) có hiệu ứng `growth` — khi trang bị ở trạng thái ACTIVE, chỉ số thưởng (Công/Thủ/Máu/Tốc) tăng dần theo thời gian tới mức tối đa (`hours_to_max` giờ). Quy tắc:
 
@@ -300,9 +300,11 @@ Cổ sư có thể:
 - Combat PvE khởi tạo từ thám hiểm, mỏ hoặc các hệ thống gọi combat.
 - Cổ sư dùng Cổ trang bị, có thể charge và chọn mục tiêu.
 - Chỉ định mục tiêu hỗ trợ vị trí/hàng/cột/toàn bộ tùy `target_type` của Cổ.
-- Combat state hỗ trợ đội hình địch/ta, status effects, cooldown, Chân Nguyên/Sinh lực, chiến lợi phẩm tạm.
-- Thắng trận áp dụng chiến lợi phẩm; thua trận cập nhật trạng thái theo handler combat.
-- **Bỏ chạy (Rút Lui) khỏi chiến đấu** khiến đạo hữu chịu **−20% Max HP**; nếu HP không đủ sẽ ngất xỉu tại HUB và **mất toàn bộ tài nguyên thu thập** (Nguyên Thạch, Cổ trùng, nguyên liệu tạm). Khi HP ≤ 20% Max, hệ thống hiện cảnh báo xác nhận trước khi bỏ chạy.
+- Combat state hỗ trợ đội hình địch/ta, status effects, cooldown, Chân Nguyên/Sinh lực, chiến lợi phẩm.
+- Thắng trận áp dụng chiến lợi phẩm vào thẳng túi đồ thật; thua trận cập nhật trạng thái theo handler combat.
+- **Túi đồ khi khám phá là túi thật:** nguyên liệu/Cổ/tiền nhặt được trong chuyến đi vào thẳng túi đồ (không còn "túi tạm"). Khi về trấn an toàn không có bước "thu hoạch" — đồ đã nằm sẵn trong túi.
+- **Chết thì rơi đồ (hình phạt, tùy chỉnh trong `handlers/death_penalty.go`):** khi bại trận dã ngoại, Bỏ chạy ngất xỉu, hay thua PvP, đạo hữu rơi mất một phần tài nguyên đang giữ theo cấu hình: % Nguyên Thạch / Tiên Nguyên Thạch, một phần nguyên liệu, một số Cổ (luôn trừ Cổ đang trang bị & Bản Mệnh Cổ) và một số Bí phương. Chết vì quái (PvE) thì đồ rơi vào hư không; thua PvP thì kẻ thắng cướp đoạt số đồ rơi đó.
+- **Bỏ chạy (Rút Lui) khỏi chiến đấu** khiến đạo hữu chịu **−20% Max HP**; nếu HP không đủ sẽ ngất xỉu tại HUB và chịu hình phạt rơi đồ như trên. Khi HP ≤ 20% Max, hệ thống hiện cảnh báo xác nhận trước khi bỏ chạy.
 - Khi hệ thống quá tải (tranh chấp khoá dữ liệu do nhiều thao tác cùng lúc), các thao tác chiến đấu (bỏ chạy/rút lui/bắt sủng…) trả về thông báo **bận và yêu cầu thử lại** thay vì treo vô hạn.
 
 ### Bộ Cổ Chiến Đấu (Cài đặt chiến thuật tự động)

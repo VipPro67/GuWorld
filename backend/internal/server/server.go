@@ -280,9 +280,9 @@ func SetupRouter() *gin.Engine {
 		gacha := api.Group("/gacha")
 		gacha.Use(middleware.AuthRequired())
 		gacha.Use(middleware.RateLimitByGroup("gacha", 200, time.Minute))
+		gacha.GET("/pools", handlers.GetGachaPools)
 		gacha.Use(middleware.RateLimitByPlayer(5, time.Minute))
 		{
-			gacha.GET("/pools", handlers.GetGachaPools)
 			gacha.POST("/open", handlers.OpenGacha)
 			gacha.POST("/open10", handlers.OpenGacha10)
 		}

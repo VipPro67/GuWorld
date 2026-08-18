@@ -287,3 +287,8 @@ soul_abyss_chain,U Minh Tỏa Hồn Liên,Material,9,{},Xích sắt giam cầm v
 bear_gall,Hùng Đảm,Material,2,{},Mật gấu Thiết Giáp Hùng đại bổ khí huyết.,12,
 bear_palm,Hùng Chưởng,Food,2,"{""restore_hp"": 5.0}",Bàn chân gấu nướng món ăn gia tăng thể lực.,15,
 dream_realm_core,Hạch Tâm Mộng Cảnh,Material,9,{},Hạch tâm cốt lõi ngưng tụ từ quy tắc mộng cảnh huyền ảo.,100,
+wan_xa_snake_gall,Mật Rắn Vạn Xà,Material,3,{},"Mật của độc mãng Vạn Xà Cốc, dùng luyện chế Độc đạo cổ trùng hoặc đan dược giải độc vĩnh viễn.",8,
+hu_tien_crystal_thoughts,Hồ Tiên Tinh Niệm Hoa,Material,4,"{""hunger"": 50}","Tinh hoa ý niệm tinh thuần của Hồ Tiên Phúc Địa, là thức ăn tuyệt vời cho Trí đạo và Biến hóa đạo cổ trùng.",20,
+snow_yeti_heart_ice,Hạt Nhân Băng Tâm,Material,4,{},"Hạt nhân tuyết tinh ngưng tụ từ ngực Tuyết Ma, nguyên liệu tối hảo chế tạo Băng đạo cổ trùng.",25,
+blood_sand_scorpion_poison,Nọc Độc Huyết Sa,Material,3,{},"Nọc độc đỏ thẫm tinh luyện từ đuôi Huyết Sa Hoàng Kim Hạt, kịch độc ăn mòn huyết mạch.",10,
+ancient_dragonfish_liver,Gan Long Ngư Thượng Cổ,Material,5,{},"Lá gan của Đông Hải Thượng Cổ Long Ngư, chứa sức sống dồi dào và Thủy đạo quy tắc.",50,

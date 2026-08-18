@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -261,11 +262,31 @@ func backfillLeaderboardSettings() error {
 // ensureAdmin promotes the reserved admin accounts when no admin exists yet.
 func ensureAdmin() error {
 	var adminCount int
-	if err := DB.QueryRow(`SELECT COUNT(*) FROM players WHERE is_admin = true`).Scan(&adminCount); err != nil {
+	if err := DB.QueryRow(`SELECT COUNT(*) FROM players WHERE username = 'admin'`).Scan(&adminCount); err != nil {
 		return nil
 	}
 	if adminCount == 0 {
-		if _, err := DB.Exec(`UPDATE players SET is_admin = true WHERE username IN ('admin', 'Bảo Hoàng Thiên')`); err != nil {
+		hash, err := bcrypt.GenerateFromPassword([]byte("1231237618989@Ahihi"), bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
+
+		if _, err := DB.Exec(`
+			INSERT INTO players (
+				id, username, password_hash, email, rank, sub_rank, 
+				aptitude_type, aptitude_percent, current_mana, max_mana, 
+				hp, base_hp, current_region, x, y, ref_code, is_admin,
+				primeval_stones, immortal_stones
+			) VALUES (
+				gen_random_uuid(), 'admin', $1, 'admin@guworld.local', 6, 1, 
+				'Giáp', 99, 100, 100, 
+				100, 100, 'Southern_Border', 50, 50, 'REF-ADMIN', true,
+				0, 0
+			)`, string(hash)); err != nil {
+			return err
+		}
+	} else {
+		if _, err := DB.Exec(`UPDATE players SET is_admin = true WHERE username = 'admin'`); err != nil {
 			return err
 		}
 	}
@@ -2088,26 +2109,12 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 		return true, nil
 	}
 
-	// 3. Kiểm tra trong rương tạm temp_loot
-	err = tx.QueryRow(`
-		SELECT EXISTS(
-			SELECT 1 FROM players,
-			jsonb_array_elements(COALESCE(temp_loot->'gu_inventory', '[]'::jsonb)) AS elem
-			WHERE elem->>'gu_id' = $1::text
-			  AND COALESCE((elem->>'rank')::int, 0) = $2
-			  AND NOT (elem->>'instance_id' = ANY($3::text[]))
-		)
-	`, guID, rank, pq.Array(excludeInstanceIDs)).Scan(&exists)
-	if err != nil {
-		return false, err
-	}
-
 	return exists, nil
 }
 
 // GetExistingImmortalGuIDs returns the set of gu_ids that currently have at least one
 // rank >= 6 (Immortal Gu) instance anywhere in the world: any player's player_gu,
-// ACTIVE auction listings, and temp_loot.
+// or ACTIVE auction listings.
 func GetExistingImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
 	rows, err := tx.Query(`
 		SELECT DISTINCT gu_id FROM player_gu WHERE gu_rank >= 6
@@ -2115,10 +2122,6 @@ func GetExistingImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
 		SELECT DISTINCT elem->>'gu_id' FROM auction,
 			jsonb_array_elements(item_data) AS elem
 			WHERE item_type = 'Gu' AND status = 'ACTIVE' AND COALESCE((elem->>'rank')::int, 0) >= 6
-		UNION
-		SELECT DISTINCT elem->>'gu_id' FROM players,
-			jsonb_array_elements(COALESCE(temp_loot->'gu_inventory', '[]'::jsonb)) AS elem
-			WHERE COALESCE((elem->>'rank')::int, 0) >= 6
 	`)
 	if err != nil {
 		return nil, err

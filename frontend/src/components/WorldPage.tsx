@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useWorldStore } from "@/store/useWorldStore";
 import { useGameStore } from "@/store/useGameStore";
 import { WorldLogViewer } from "./WorldLogViewer";
+import { Menu, X, User, Briefcase, Flame, Sparkles, Shield, Store, Trophy, Gift, Swords, Gem, Compass } from "lucide-react";
 
 const WorldCanvas = dynamic(() => import("@/components/WorldCanvas"), {
   ssr: false,
@@ -14,6 +15,18 @@ const WorldCanvas = dynamic(() => import("@/components/WorldCanvas"), {
     </div>
   ),
 });
+
+const GuInventory = dynamic(() => import("./GuInventory").then(m => m.GuInventory), { ssr: false });
+const Aperture = dynamic(() => import("./Aperture").then(m => m.Aperture), { ssr: false });
+const RefiningFurnace = dynamic(() => import("./RefiningFurnace").then(m => m.RefiningFurnace), { ssr: false });
+const SectView = dynamic(() => import("./SectView").then(m => m.SectView), { ssr: false });
+const BaoHoangMarket = dynamic(() => import("./BaoHoangMarket").then(m => m.BaoHoangMarket), { ssr: false });
+const LeaderboardView = dynamic(() => import("./LeaderboardView").then(m => m.LeaderboardView), { ssr: false });
+const GachaPanel = dynamic(() => import("./GachaPanel").then(m => m.GachaPanel), { ssr: false });
+const ArenaView = dynamic(() => import("./ArenaView").then(m => m.ArenaView), { ssr: false });
+const PremiumStoreView = dynamic(() => import("./PremiumStoreView").then(m => m.PremiumStoreView), { ssr: false });
+const DungeonView = dynamic(() => import("./DungeonView").then(m => m.DungeonView), { ssr: false });
+const ImmortalApertureView = dynamic(() => import("./ImmortalApertureView").then(m => m.ImmortalApertureView), { ssr: false });
 
 const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; borderColor: string; bgColor: string }> = {
   Boss:     { icon: "⚔️",  label: "Boss",        color: "text-red-300",     borderColor: "border-red-500/30",     bgColor: "bg-red-950/60" },
@@ -46,7 +59,49 @@ export function WorldPage() {
   const fetchPlayerProfile = useGameStore((s) => s.fetchPlayerProfile);
   const movePlayer = useGameStore((s) => s.movePlayer);
 
+  const feedGu = useGameStore((s) => s.feedGu);
+  const feedGuGroup = useGameStore((s) => s.feedGuGroup);
+  const actionLoading = useGameStore((s) => s.actionLoading);
+  const equipGu = useGameStore((s) => s.equipGu);
+  const useItem = useGameStore((s) => s.useItem);
+  const useItems = useGameStore((s) => s.useItems);
+  const updateGuStatus = useGameStore((s) => s.updateGuStatus);
+  const setVitalGu = useGameStore((s) => s.setVitalGu);
+  const useGu = useGameStore((s) => s.useGu);
+  const useGus = useGameStore((s) => s.useGus);
+  const dropGu = useGameStore((s) => s.dropGu);
+  const dropGus = useGameStore((s) => s.dropGus);
+
+  // RefiningFurnace
+  const refineGu = useGameStore((s) => s.refineGu);
+
+  // BaoHoangMarket
+  const marketplaceListings = useGameStore((s) => s.marketplaceListings);
+  const fetchMarketplaceListings = useGameStore((s) => s.fetchMarketplaceListings);
+  const createMarketplaceListing = useGameStore((s) => s.createMarketplaceListing);
+  const placeMarketplaceBid = useGameStore((s) => s.placeMarketplaceBid);
+  const cancelMarketplaceListing = useGameStore((s) => s.cancelMarketplaceListing);
+  const buyMarketplaceListing = useGameStore((s) => s.buyMarketplaceListing);
+
   const [mapMode, setMapMode] = useState<"select" | "drag">("select");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [activeModal, setActiveModal] = useState<string | null>(null);
+  const setView = useGameStore((s) => s.setView);
+  const isImmortal = gamePlayer ? gamePlayer.rank >= 6 : false;
+
+  const menuItems = [
+    { id: "character", label: "Nhân Vật", icon: User, color: "text-emerald-400" },
+    { id: "inventory", label: "Túi Đồ", icon: Briefcase, color: "text-cyan-400" },
+    { id: "aperture", label: "Không Khiếu", icon: Flame, color: "text-rose-400" },
+    { id: "refine", label: "Luyện Cổ", icon: Sparkles, color: "text-purple-400" },
+    { id: "sect", label: "Tông Môn", icon: Shield, color: "text-blue-400" },
+    { id: "market", label: "Chợ Tiên", icon: Store, color: "text-amber-400", locked: !isImmortal },
+    // { id: "leaderboard", label: "Xếp Hạng", icon: Trophy, color: "text-yellow-400" },
+    // { id: "gacha", label: "Rút Thưởng", icon: Gift, color: "text-pink-400" },
+    // { id: "arena", label: "Đấu Trường", icon: Swords, color: "text-red-400" },
+    // { id: "premium_store", label: "Cửa Hàng", icon: Gem, color: "text-sky-400" },
+    // { id: "dungeon", label: "Bí Cảnh", icon: Compass, color: "text-indigo-400" },
+  ];
 
   useEffect(() => {
     if (!regionsLoaded) fetchRegions();
@@ -87,16 +142,136 @@ export function WorldPage() {
         <WorldCanvas mode={mapMode} />
       </div>
 
+      <div className="absolute top-2 right-2 flex flex-col items-end gap-2 pointer-events-none z-30">
+        <button
+          onClick={() => setMenuOpen(!menuOpen)}
+          className="w-10 h-10 flex items-center justify-center bg-zinc-900/85 backdrop-blur-sm rounded-xl border border-zinc-800/40 text-zinc-300 shadow-lg pointer-events-auto hover:bg-zinc-800 transition-colors cursor-pointer"
+        >
+          {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
+
+        {menuOpen && (
+          <div className="flex flex-col gap-1.5 p-2 bg-zinc-900/95 backdrop-blur-md rounded-xl border border-zinc-700/50 shadow-2xl pointer-events-auto w-48 max-h-[70vh] overflow-y-auto animate-fade-in-down origin-top-right">
+            {menuItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setMenuOpen(false);
+                  setActiveModal(item.id);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-left transition-all cursor-pointer ${
+                  item.locked 
+                    ? "opacity-50 cursor-not-allowed bg-zinc-800/30 text-zinc-500" 
+                    : "hover:bg-zinc-800/80 text-zinc-300 hover:text-white"
+                }`}
+                disabled={item.locked}
+              >
+                <item.icon className={`w-4 h-4 ${item.locked ? 'text-zinc-600' : item.color}`} />
+                <span className="font-serif">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {activeModal && (
+        <div className="absolute inset-0 z-40 bg-black/70 flex items-center justify-center p-4 sm:p-8 backdrop-blur-sm overflow-hidden pointer-events-auto">
+          <div className="relative w-full h-full max-w-7xl max-h-[90vh] bg-zinc-950/95 rounded-2xl border border-zinc-800 shadow-2xl flex flex-col overflow-y-auto">
+            <button
+              onClick={() => setActiveModal(null)}
+              className="absolute top-4 right-6 z-50 p-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors border border-zinc-600 cursor-pointer shadow-lg"
+              title="Đóng"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <div className="flex-1 w-full p-2 sm:p-4 overflow-y-auto relative">
+              {activeModal === "character" && <Aperture player={gamePlayer!} guDictionary={guDictionary} />}
+              {activeModal === "inventory" && (
+                <GuInventory
+                  player={gamePlayer!}
+                  onFeed={feedGu}
+                  onFeedGroup={feedGuGroup}
+                  actionLoading={actionLoading}
+                  guDictionary={guDictionary}
+                  itemDictionary={itemDictionary}
+                  onEquipToggle={equipGu}
+                  onUseItem={useItem}
+                  onUseItems={useItems}
+                  onUpdateStatus={updateGuStatus}
+                  onSetVital={setVitalGu}
+                  onUseGu={useGu}
+                  onUseGus={useGus}
+                  onDropGu={dropGu}
+                  onDropGus={dropGus}
+                />
+              )}
+              {activeModal === "aperture" && <ImmortalApertureView />}
+              {activeModal === "refine" && (
+                <RefiningFurnace
+                  player={gamePlayer!}
+                  guDictionary={guDictionary}
+                  itemDictionary={itemDictionary}
+                  actionLoading={actionLoading}
+                  onRefine={refineGu}
+                />
+              )}
+              {activeModal === "sect" && <SectView />}
+              {activeModal === "market" && (
+                <BaoHoangMarket
+                  player={gamePlayer!}
+                  guInventory={gamePlayer!.gu_inventory || []}
+                  materials={gamePlayer!.materials_inventory || {}}
+                  actionLoading={actionLoading}
+                  listings={marketplaceListings}
+                  onRefresh={fetchMarketplaceListings}
+                  onCreate={createMarketplaceListing}
+                  onBid={placeMarketplaceBid}
+                  onCancel={cancelMarketplaceListing}
+                  onBuy={buyMarketplaceListing}
+                  guDictionary={guDictionary}
+                  itemDictionary={itemDictionary}
+                />
+              )}
+              {activeModal === "leaderboard" && <LeaderboardView />}
+              {activeModal === "gacha" && <GachaPanel />}
+              {activeModal === "arena" && <ArenaView />}
+              {activeModal === "premium_store" && <PremiumStoreView />}
+              {activeModal === "dungeon" && <DungeonView />}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="absolute top-2 left-2 flex flex-col gap-2 pointer-events-none z-10">
         {gamePlayer && (
           <div className="px-3 py-1.5 flex flex-col items-center bg-zinc-900/85 backdrop-blur-sm rounded-xl border border-zinc-800/40 text-xs text-zinc-300 font-serif shadow-lg pointer-events-auto">
-            <div className="w-32 h-2 bg-zinc-800 rounded-full overflow-hidden mt-1">
-              <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${(gamePlayer.hp / gamePlayer.base_hp) * 100}%` }}></div>
+            <div className="w-full flex flex-col gap-1 my-1">
+              <div className="relative w-32 h-3 bg-zinc-800 rounded overflow-hidden" title={`Máu: ${Math.round(gamePlayer.hp)}`}>
+                <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${Math.min(100, (gamePlayer.hp / (gamePlayer.base_hp || 1)) * 100)}%` }} />
+                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-md">
+                  {Math.round(gamePlayer.hp).toLocaleString('vi-VN')}
+                </span>
+              </div>
+              <div className="relative w-32 h-3 bg-zinc-800 rounded overflow-hidden" title={`Chân Nguyên: ${Math.floor(gamePlayer.current_mana)}`}>
+                <div className="h-full bg-sky-500 transition-all duration-300" style={{ width: `${gamePlayer.rank >= 6 ? 100 : Math.min(100, (gamePlayer.current_mana / (gamePlayer.max_mana || 1)) * 100)}%` }} />
+                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-md">
+                  {Math.floor(gamePlayer.current_mana).toLocaleString('vi-VN')}
+                </span>
+              </div>
+              <div className="relative w-32 h-3 bg-zinc-800 rounded overflow-hidden" title={`Linh Hồn: ${Math.round(gamePlayer.soul_hp)}`}>
+                <div className="h-full bg-purple-500 transition-all duration-300" style={{ width: `${gamePlayer.rank >= 6 ? 100 : Math.min(100, (gamePlayer.soul_hp / (gamePlayer.max_soul || 1)) * 100)}%` }} />
+                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-md">
+                  {Math.round(gamePlayer.soul_hp).toLocaleString('vi-VN')}
+                </span>
+              </div>
+              <div className="relative w-32 h-3 bg-zinc-800 rounded overflow-hidden" title={`Tinh Thần: ${Math.round(gamePlayer.current_thought)}`}>
+                <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: `${gamePlayer.rank >= 6 ? 100 : Math.min(100, (gamePlayer.current_thought / (gamePlayer.max_thought || 1)) * 100)}%` }} />
+                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-md">
+                  {Math.round(gamePlayer.current_thought).toLocaleString('vi-VN')}
+                </span>
+              </div>
             </div>
-            <div className="font-bold mb-1">
-              {Math.round(gamePlayer.hp)}/{Math.round(gamePlayer.base_hp)} HP
-            </div>
-            <div className="text-emerald-400 font-bold text-center">
+            <div className="text-emerald-400 font-bold text-center mt-1">
               {currentZone?.name || gamePlayer.current_region || "Ngoài bản đồ"}
             </div>
             <div className="text-[10px] text-zinc-400 font-mono mt-0.5">

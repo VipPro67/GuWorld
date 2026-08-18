@@ -203,7 +203,8 @@ Cột `players.gu_inventory` (JSONB) đã được **thay thế hoàn toàn** b�
 - Migration `migrate_player_gu_from_inventory` (chạy một lần khi còn cột `gu_inventory`) copy toàn bộ dữ liệu cũ sang `player_gu`, sau đó `DROP COLUMN IF EXISTS gu_inventory` loại bỏ cột. An toàn chạy lặp lại.
 - Cổ đang trang bị/Bản Mệnh vẫn được mirror trong cột JSONB `players.equipped_gus` (danh sách `instance_id`) để các truy vấn nhẹ (status) không cần join.
 - API `GET /api/player/status/:id` chỉ trả Cổ đang trang bị/vital; toàn bộ túi Cổ lấy qua `GET /api/player/inventory/gus` (helper `db.GuInventoryAggregate` / `db.LoadPlayerGus`).
-- `temp_loot.gu_inventory` và `monster_templates.gu_inventory` (JSON trong `temp_loot` / cột monster) **giữ nguyên**, không đổi.
+- `monster_templates.gu_inventory` (JSON trong cột monster) **giữ nguyên**, không đổi.
+- Cột `players.temp_loot` đã bị **bỏ hẳn** (migration `ALTER TABLE players DROP COLUMN IF EXISTS temp_loot;`). Chiến lợi phẩm khám phá giờ vào thẳng túi thật (nguyên liệu → `player_inventory_items`, thạch → `players.primeval_stones`/`immortal_stones`, Cổ → `player_gu`).
 
 ### Bảng `aperture_resource_nodes`
 

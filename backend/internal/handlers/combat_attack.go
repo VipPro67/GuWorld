@@ -1034,59 +1034,26 @@ func CombatAttack(c *gin.Context) {
 		}
 
 		if isPVP && !isVirtual {
-			stolenStones := 10.0
 			if player.ActiveCombat.TargetPlayerID != "dummy" {
 				targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID)
 				if parseErr == nil {
-					var targetStones float64
 					var targetHP float64
-					var targetLootBytes []byte
-					err = tx.QueryRow("SELECT primeval_stones, hp, temp_loot FROM players WHERE id = $1 FOR UPDATE", targetUUID).Scan(&targetStones, &targetHP, &targetLootBytes)
-					if err == nil {
-						stolenStones = targetStones * 0.10
-						if stolenStones < 1 {
-							stolenStones = 1
-						}
-						if targetStones < stolenStones {
-							stolenStones = targetStones
-						}
-						targetStones -= stolenStones
+					if errHP := tx.QueryRow("SELECT hp FROM players WHERE id = $1 FOR UPDATE", targetUUID).Scan(&targetHP); errHP == nil {
 						targetHP -= 30.0
 						if targetHP < 10.0 {
 							targetHP = 10.0
 						}
-
-						var targetLoot models.TempLoot
-						if len(targetLootBytes) > 0 {
-							json.Unmarshal(targetLootBytes, &targetLoot)
-						}
-
-						player.TempLoot.PrimevalStones += targetLoot.PrimevalStones
-						if player.TempLoot.MaterialsInventory == nil {
-							player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
-						}
-						for matID, qty := range targetLoot.MaterialsInventory {
-							player.TempLoot.MaterialsInventory[matID] += qty
-						}
-						player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, targetLoot.GuInventory...)
-
-						emptyLoot := models.TempLoot{
-							GuInventory:        models.GuInventory{},
-							MaterialsInventory: models.MaterialsInventory{},
-							PrimevalStones:     0,
-						}
-
-						_, _ = tx.Exec("UPDATE players SET primeval_stones = $1, hp = $2, temp_loot = $3 WHERE id = $4", targetStones, targetHP, emptyLoot, targetUUID)
-
-						ctx.Logs = append(ctx.Logs, fmt.Sprintf("Thu hoạch toàn bộ chiến lợi phẩm tạm thời của bại binh! Hút được %.0f Nguyên Thạch, %d Cổ trùng, và các nguyên liệu khác từ đối phương.", targetLoot.PrimevalStones, len(targetLoot.GuInventory)))
+						_, _ = tx.Exec("UPDATE players SET hp = $1 WHERE id = $2", targetHP, targetUUID)
 					}
-
+					dropSummary := applyDeathDropRecord(tx, &targetUUID, &player.ID)
+					if dropSummary != "" {
+						ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chiến thắng PVP vang dội! Đạo hữu cướp đoạt từ bại binh: %s.", dropSummary))
+					} else {
+						ctx.Logs = append(ctx.Logs, "Chiến thắng PVP vang dội! Bại binh không còn gì đáng giá để cướp đoạt.")
+					}
 				}
 			}
-			player.PrimevalStones += stolenStones
-			ctx.Logs = append(ctx.Logs, fmt.Sprintf("Chiến thắng PVP vang dội! Đạo hữu cướp đoạt %.0f Nguyên Thạch từ đối phương!", stolenStones))
 		} else {
-			isExplore := player.CurrentRegion != "Southern_Border" && player.CurrentRegion != "Lobby"
 			if player.ActiveCombat != nil && player.ActiveCombat.LootTableID != "" {
 				lt, err := db.LoadLootTable(tx, player.ActiveCombat.LootTableID)
 				if err == nil {
@@ -1109,26 +1076,10 @@ func CombatAttack(c *gin.Context) {
 							}
 							for _, memberID := range partyMembers {
 								if memberID == player.ID {
-									if isExplore {
-										player.TempLoot.PrimevalStones += float64(splitStones)
-										ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch (giữ tạm thời).", splitStones))
-									} else {
-										player.PrimevalStones += float64(splitStones)
-										ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch.", splitStones))
-									}
+									player.PrimevalStones += float64(splitStones)
+									ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch.", splitStones))
 								} else {
-									if isExplore {
-										var targetLoot models.TempLoot
-										var targetLootBytes []byte
-										_ = tx.QueryRow("SELECT temp_loot FROM players WHERE id = $1 FOR UPDATE", memberID).Scan(&targetLootBytes)
-										if len(targetLootBytes) > 0 {
-											json.Unmarshal(targetLootBytes, &targetLoot)
-										}
-										targetLoot.PrimevalStones += float64(splitStones)
-										_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, memberID)
-									} else {
-										_, _ = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", splitStones, memberID)
-									}
+									_, _ = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", splitStones, memberID)
 									var uname string
 									_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", memberID).Scan(&uname)
 									ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s nhận được %d Nguyên Thạch.", uname, splitStones))
@@ -1143,38 +1094,15 @@ func CombatAttack(c *gin.Context) {
 							for q := 0; q < qty; q++ {
 								winnerID := partyMembers[rand.Intn(len(partyMembers))]
 								if winnerID == player.ID {
-									if isExplore {
-										if player.TempLoot.MaterialsInventory == nil {
-											player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
-										}
-										player.TempLoot.MaterialsInventory[matID]++
-										ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhặt được 1x %s (giữ tạm thời).", matID))
-									} else {
-										if err := InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", 1); err != nil {
-											logger.S.Errorf("Failed to add loot item %s to player %s: %v", matID, player.ID, err)
-										}
-										ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhặt được 1x %s.", matID))
+									if err := InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", 1); err != nil {
+										logger.S.Errorf("Failed to add loot item %s to player %s: %v", matID, player.ID, err)
 									}
+									ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhặt được 1x %s.", matID))
 								} else {
 									var uname string
 									_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
-
-									if isExplore {
-										var targetLoot models.TempLoot
-										var targetLootBytes []byte
-										_ = tx.QueryRow("SELECT temp_loot FROM players WHERE id = $1 FOR UPDATE", winnerID).Scan(&targetLootBytes)
-										if len(targetLootBytes) > 0 {
-											json.Unmarshal(targetLootBytes, &targetLoot)
-										}
-										if targetLoot.MaterialsInventory == nil {
-											targetLoot.MaterialsInventory = make(models.MaterialsInventory)
-										}
-										targetLoot.MaterialsInventory[matID]++
-										_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, winnerID)
-									} else {
-										if err := InventorySvc.AddItem(tx, winnerID.String(), matID, "materials", 1); err != nil {
-											logger.S.Errorf("Failed to distribute loot %s to party member %s: %v", matID, winnerID, err)
-										}
+									if err := InventorySvc.AddItem(tx, winnerID.String(), matID, "materials", 1); err != nil {
+										logger.S.Errorf("Failed to distribute loot %s to party member %s: %v", matID, winnerID, err)
 									}
 									ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s nhặt được 1x %s.", uname, matID))
 								}
@@ -1193,34 +1121,12 @@ func CombatAttack(c *gin.Context) {
 								Equipped:   false,
 							}
 							if winnerID == player.ID {
-								if isExplore {
-									player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, newGu)
-									ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn bắt được 1x %s (giữ tạm thời)!", gID))
-								} else {
-									player.GuInventory = append(player.GuInventory, newGu)
-									ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn bắt được 1x %s!", gID))
-								}
+								player.GuInventory = append(player.GuInventory, newGu)
+								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn bắt được 1x %s!", gID))
 							} else {
 								var uname string
 								_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
-
-								if isExplore {
-									var targetLoot models.TempLoot
-									var targetLootBytes []byte
-									_ = tx.QueryRow("SELECT temp_loot FROM players WHERE id = $1 FOR UPDATE", winnerID).Scan(&targetLootBytes)
-									if len(targetLootBytes) > 0 {
-										json.Unmarshal(targetLootBytes, &targetLoot)
-									}
-									targetLoot.GuInventory = append(targetLoot.GuInventory, newGu)
-									_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, winnerID)
-								} else {
-									targetGuInv, err := db.LoadPlayerGus(tx, winnerID.String(), false)
-									if err != nil {
-										targetGuInv = models.GuInventory{}
-									}
-									targetGuInv = append(targetGuInv, newGu)
-									_ = db.AddPlayerGu(tx, winnerID.String(), newGu)
-								}
+								_ = db.AddPlayerGu(tx, winnerID.String(), newGu)
 								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, gID))
 							}
 						}
@@ -1316,46 +1222,28 @@ func CombatAttack(c *gin.Context) {
 		defeat = true
 		qiGained := AddHumanQi(&player, 5.0)
 		ctx.Logs = append(ctx.Logs, fmt.Sprintf("Dù bại trận, đạo hữu vẫn giữ được chí khí. Nhân Khí +%.0f.", qiGained))
+
+		isTribulation := player.ActiveCombat != nil && player.ActiveCombat.EnemyTemplateID == "monster_heavenly_tribulation"
+
 		if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
 			ctx.Logs = append(ctx.Logs, "Thách đấu mỏ linh thạch thất bại, không thể chiếm lĩnh mỏ.")
-		} else {
-			ctx.Logs = append(ctx.Logs, "Đại bại! Đạo hữu bất tỉnh nhân sự trước áp lực của đối thủ. May mắn thoát chết nhưng rơi rớt mất sạch chiến lợi phẩm thu thập trong chuyến đi này.")
-		}
-
-		if isPVP && !isVirtual && player.ActiveCombat.TargetPlayerID != "dummy" {
-			targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID)
-			if parseErr == nil {
-				var targetLootBytes []byte
-				errLoot := tx.QueryRow("SELECT temp_loot FROM players WHERE id = $1 FOR UPDATE", targetUUID).Scan(&targetLootBytes)
-				if errLoot == nil {
-					var targetLoot models.TempLoot
-					if len(targetLootBytes) > 0 {
-						json.Unmarshal(targetLootBytes, &targetLoot)
-					}
-					targetLoot.PrimevalStones += player.TempLoot.PrimevalStones
-					if targetLoot.MaterialsInventory == nil {
-						targetLoot.MaterialsInventory = make(models.MaterialsInventory)
-					}
-					for matID, qty := range player.TempLoot.MaterialsInventory {
-						targetLoot.MaterialsInventory[matID] += qty
-					}
-					targetLoot.GuInventory = append(targetLoot.GuInventory, player.TempLoot.GuInventory...)
-
-					_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, targetUUID)
+		} else if !isTribulation {
+			var winnerID *uuid.UUID
+			if isPVP && !isVirtual && player.ActiveCombat != nil && player.ActiveCombat.TargetPlayerID != "dummy" {
+				if targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID); parseErr == nil {
+					winnerID = &targetUUID
 				}
+			}
+			if dropSummary := applyDeathDrop(tx, &player, winnerID); dropSummary != "" {
+				ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất: %s.", dropSummary))
+			} else {
+				ctx.Logs = append(ctx.Logs, "Đại bại! Đạo hữu bất tỉnh nhân sự trước áp lực của đối thủ. May mắn thoát chết.")
 			}
 		}
 
-		player.TempLoot = models.TempLoot{
-			GuInventory:        models.GuInventory{},
-			MaterialsInventory: models.MaterialsInventory{},
-			PrimevalStones:     0,
-		}
+		player.CurrentRegion, player.X, player.Y = NearestHub(player.X, player.Y)
 
-		player.CurrentRegion = HubRegionID
-		player.X, player.Y = hubEntryPoint()
-
-		if player.ActiveCombat != nil && player.ActiveCombat.EnemyTemplateID == "monster_heavenly_tribulation" {
+		if isTribulation {
 			player.ImmortalStones = player.ImmortalStones * 0.5
 			_, _ = tx.Exec(`
 				UPDATE immortal_apertures 
@@ -1398,11 +1286,11 @@ func CombatAttack(c *gin.Context) {
 	updateQuery := `
 		UPDATE players
 		SET hp = $1, current_mana = $2, primeval_stones = $3, cleared_cells = $4, active_combat = $5,
-		    temp_loot = $6, current_region = $7, x = $8, y = $9, human_qi = $10, path_masteries = $11
-		WHERE id = $12
+		    current_region = $6, x = $7, y = $8, human_qi = $9, path_masteries = $10
+		WHERE id = $11
 	`
 	_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.PrimevalStones, player.ClearedCells, player.ActiveCombat,
-		player.TempLoot, player.CurrentRegion, player.X, player.Y, player.HumanQi, player.PathMasteries, player.ID)
+		player.CurrentRegion, player.X, player.Y, player.HumanQi, player.PathMasteries, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update combat results"})
 		return

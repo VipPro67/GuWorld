@@ -230,7 +230,6 @@ type Player struct {
 	ImmortalState      ImmortalState      `json:"immortal_state"`
 	GuInventory        GuInventory        `json:"gu_inventory"`
 	ActiveCombat       *CombatState       `json:"active_combat"`
-	TempLoot           TempLoot           `json:"temp_loot"`
 	GrowthData         GrowthData         `json:"growth_data"`
 	MaterialsInventory map[string]int     `json:"materials_inventory,omitempty"`
 	CompletedQuests    CompletedQuestsList `json:"completed_quests,omitempty"`
@@ -241,34 +240,6 @@ type Player struct {
 	HPRegenRate   float64 `json:"hp_regen_rate"`
 	SoulRegenRate float64 `json:"soul_regen_rate"`
 	IsSparseGuInventory bool `json:"is_sparse_gu_inventory,omitempty"`
-}
-
-type TempLoot struct {
-	GuInventory        GuInventory        `json:"gu_inventory"`
-	MaterialsInventory MaterialsInventory `json:"materials_inventory"`
-	PrimevalStones     float64            `json:"primeval_stones"`
-}
-
-// Scan implements the sql.Scanner interface for TempLoot
-func (t *TempLoot) Scan(value interface{}) error {
-	if value == nil {
-		*t = TempLoot{
-			GuInventory:        GuInventory{},
-			MaterialsInventory: MaterialsInventory{},
-			PrimevalStones:     0,
-		}
-		return nil
-	}
-	bytes, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
-	}
-	return json.Unmarshal(bytes, t)
-}
-
-// Value implements the driver.Valuer interface for TempLoot
-func (t TempLoot) Value() (driver.Value, error) {
-	return json.Marshal(t)
 }
 
 type GrowthBoosts struct {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -248,36 +247,6 @@ func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec
 	return msg, nil
 }
 
-// guRarityWeight maps Gu rarity string → weight (lower = rarer = less likely)
-func guRarityWeight(rarity string) float64 {
-	switch rarity {
-	case "COMMON":
-		return 100.0
-	case "UNCOMMON":
-		return 60.0
-	case "RARE":
-		return 30.0
-	case "EPIC":
-		return 12.0
-	case "LEGENDARY":
-		return 4.0
-	case "MYTHIC":
-		return 1.0
-	case "IMMORTAL":
-		return 0.5
-	case "IMMORTAL_6":
-		return 0.2
-	case "IMMORTAL_7":
-		return 0.08
-	case "IMMORTAL_8":
-		return 0.03
-	case "IMMORTAL_9":
-		return 0.01
-	default:
-		return 50.0
-	}
-}
-
 // rankDropMultiplier returns a weight multiplier for Gu/material of a given rank.
 // Higher chest rank → lower multiplier → rarer drops. Rank ≥ 6 is extremely low.
 func rankDropMultiplier(rank int) float64 {
@@ -368,93 +337,6 @@ func rollMaterialDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) (
 		"name":     matName,
 		"quantity": 1,
 	}
-}
-
-func rollGuDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, map[string]interface{}) {
-	excludedImmortal, err := db.GetExistingImmortalGuIDs(tx)
-	if err != nil {
-		logger.S.Warnf("rollGuDrop: failed to load existing immortal Gu: %v", err)
-		excludedImmortal = map[string]bool{}
-	}
-
-	type weightedGu struct {
-		id     string
-		weight float64
-	}
-	var pool []weightedGu
-	var totalWeight float64
-
-	for id, ranks := range models.GuRegistry {
-		if excludedImmortal[id] {
-			continue
-		}
-		for _, spec := range ranks {
-			w := rankDropMultiplier(spec.Rank)
-			if w > 0 {
-				pool = append(pool, weightedGu{id: id, weight: w})
-				totalWeight += w
-			}
-		}
-	}
-
-	if len(pool) == 0 || totalWeight <= 0 {
-		return "", nil
-	}
-
-	// Weighted random pick
-	r := rand.Float64() * totalWeight
-	var chosenID string
-	for _, g := range pool {
-		r -= g.weight
-		if r <= 0 {
-			chosenID = g.id
-			break
-		}
-	}
-	if chosenID == "" {
-		chosenID = pool[0].id
-	}
-
-	// Hunger: random 0-10%
-	hunger := rand.Intn(11) // 0 to 10
-	spec, _ := models.GetGuAny(chosenID)
-
-	newInstance := models.GuInstance{
-		InstanceID: "gu-" + uuid.New().String(),
-		GuID:       chosenID,
-		Rank:       spec.Rank,
-		Hunger:     hunger,
-		Status:     "ACTIVE",
-		Equipped:   false,
-	}
-	player.GuInventory = append(player.GuInventory, newInstance)
-
-	// Save the newly dropped Gu immediately
-	if err := db.AddPlayerGu(tx, player.ID.String(), newInstance); err != nil {
-		logger.S.Errorf("rollGuDrop: failed to save player Gu inventory: %v", err)
-		return "", nil
-	}
-
-	guName := chosenID
-	isImmortal := false
-	if spec.ID != "" {
-		guName = spec.Name
-		isImmortal = spec.Rank >= 6 // Assuming rank 6+ is immortal
-	}
-
-	rewardMeta := map[string]interface{}{
-		"type":        "gu",
-		"id":          chosenID,
-		"name":        guName,
-		"instance_id": newInstance.InstanceID,
-		"rank":        spec.Rank,
-		"hunger":      hunger,
-	}
-
-	if isImmortal {
-		return fmt.Sprintf("- Thiên đại cơ duyên! Đạo hữu nhận được Tiên Cổ: [%s]! (Độ no: %d%%)\n", guName, hunger), rewardMeta
-	}
-	return fmt.Sprintf("- Cơ duyên xảo hợp! Đạo hữu nhận được Cổ trùng: [%s] (Độ no: %d%%)\n", guName, hunger), rewardMeta
 }
 
 func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) (string, map[string]interface{}) {

@@ -107,26 +107,13 @@ func RollLoot(lt models.LootTable, rank int) RolledLoot {
 }
 
 func ApplyLoot(tx *sql.Tx, player *models.Player, loot RolledLoot) []string {
-	isExplore := player.CurrentRegion != "Southern_Border" && player.CurrentRegion != "Lobby"
 	var logs []string
-	if !isExplore {
-		// items go directly via InventorySvc in the loop below
-	} else {
-		if player.TempLoot.MaterialsInventory == nil {
-			player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
-		}
-	}
 	materialsToAdd := make(map[string]int)
 
 	for itemID, qty := range loot.Items {
 		if itemID == "primeval_stone" {
-			if !isExplore {
-				player.PrimevalStones += float64(qty)
-				logs = append(logs, fmt.Sprintf("Thu hoạch Nguyên Thạch: +%d Nguyên Thạch.", qty))
-			} else {
-				player.TempLoot.PrimevalStones += float64(qty)
-				logs = append(logs, fmt.Sprintf("Thu hoạch Nguyên Thạch: +%d Nguyên Thạch (giữ tạm thời).", qty))
-			}
+			player.PrimevalStones += float64(qty)
+			logs = append(logs, fmt.Sprintf("Thu hoạch Nguyên Thạch: +%d Nguyên Thạch.", qty))
 		} else {
 			name := itemID
 			switch itemID {
@@ -141,13 +128,8 @@ func ApplyLoot(tx *sql.Tx, player *models.Player, loot RolledLoot) []string {
 			case "green_bamboo_wine":
 				name = "Rượu Thanh Trúc"
 			}
-			if !isExplore {
-				materialsToAdd[itemID] += qty
-				logs = append(logs, fmt.Sprintf("Thu hoạch chiến lợi phẩm thú dữ: %dx %s.", qty, name))
-			} else {
-				player.TempLoot.MaterialsInventory[itemID] += qty
-				logs = append(logs, fmt.Sprintf("Thu hoạch chiến lợi phẩm thú dữ: %dx %s (giữ tạm thời).", qty, name))
-			}
+			materialsToAdd[itemID] += qty
+			logs = append(logs, fmt.Sprintf("Thu hoạch chiến lợi phẩm thú dữ: %dx %s.", qty, name))
 		}
 	}
 
@@ -170,19 +152,8 @@ func ApplyLoot(tx *sql.Tx, player *models.Player, loot RolledLoot) []string {
 		if guSpec.ID != "" {
 			guName = guSpec.Name
 		}
-		if !isExplore {
-			player.GuInventory = append(player.GuInventory, newInstance)
-			logs = append(logs, fmt.Sprintf("Chúc mừng đạo hữu thu phục được hoang dã Cổ trùng: [%s]!", guName))
-		} else {
-			player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, newInstance)
-			logs = append(logs, fmt.Sprintf("Chúc mừng đạo hữu thu phục được hoang dã Cổ trùng: [%s] (giữ tạm thời)!", guName))
-		}
+		player.GuInventory = append(player.GuInventory, newInstance)
+		logs = append(logs, fmt.Sprintf("Chúc mừng đạo hữu thu phục được hoang dã Cổ trùng: [%s]!", guName))
 	}
 	return logs
-}
-
-func TransferTempLootToInventory(tx *sql.Tx, player *models.Player) {
-	InventorySvc.BulkAddItems(tx, player.ID.String(), "materials", player.TempLoot.MaterialsInventory)
-	player.PrimevalStones += player.TempLoot.PrimevalStones
-	player.GuInventory = append(player.GuInventory, player.TempLoot.GuInventory...)
 }

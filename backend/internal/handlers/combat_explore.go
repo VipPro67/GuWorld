@@ -15,6 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/util"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type ExploreRequest struct {
@@ -97,8 +98,8 @@ func ExploreNode(c *gin.Context) {
 
 	if roll < 40 {
 		stonesFound := 1 + rand.Intn(3)
-		player.TempLoot.PrimevalStones += float64(stonesFound)
-		logMsg = fmt.Sprintf("Khám phá hoàn tất tại %s. Đạo hữu may mắn phát hiện thấy %d viên Nguyên Thạch (được giữ tạm thời trong bản đồ)!", nodeName, stonesFound)
+		player.PrimevalStones += float64(stonesFound)
+		logMsg = fmt.Sprintf("Khám phá hoàn tất tại %s. Đạo hữu may mắn phát hiện thấy %d viên Nguyên Thạch!", nodeName, stonesFound)
 	} else if roll < 70 {
 		combatTriggered = true
 
@@ -163,11 +164,10 @@ func ExploreNode(c *gin.Context) {
 		foodID := foods[idx]
 		foodName := foodNames[idx]
 
-		if player.TempLoot.MaterialsInventory == nil {
-			player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
+		if err := InventorySvc.AddItem(tx, player.ID.String(), foodID, "materials", 1); err != nil {
+			logger.S.Errorf("Failed to add explore food %s to player %s: %v", foodID, player.ID, err)
 		}
-		player.TempLoot.MaterialsInventory[foodID]++
-		logMsg = fmt.Sprintf("Đi qua khu rừng rậm ở %s, đạo hữu nhặt được nguyên liệu trân quý: 1x %s (được giữ tạm thời trong bản đồ).", nodeName, foodName)
+		logMsg = fmt.Sprintf("Đi qua khu rừng rậm ở %s, đạo hữu nhặt được nguyên liệu trân quý: 1x %s.", nodeName, foodName)
 	} else {
 		logMsg = fmt.Sprintf("Đạo hữu cẩn thận thăm dò địa khu %s nhưng cảnh vật hoang tàn, không tìm thấy thứ gì có giá trị.", nodeName)
 	}
@@ -187,11 +187,11 @@ func ExploreNode(c *gin.Context) {
 	updateQuery := `
 		UPDATE players
 		SET current_mana = $1, primeval_stones = $2, active_combat = $3, current_region = $4, x = $5, y = $6,
-		    temp_loot = $7, explore_count = $8, last_explore_reset = $9, human_qi = $10, visited_subzones = $11
-		WHERE id = $12
+		    explore_count = $7, last_explore_reset = $8, human_qi = $9, visited_subzones = $10
+		WHERE id = $11
 	`
 	_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.ActiveCombat, player.CurrentRegion, player.X, player.Y,
-		player.TempLoot, player.ExploreCount, player.LastExploreReset, player.HumanQi, player.VisitedSubZones, player.ID)
+		player.ExploreCount, player.LastExploreReset, player.HumanQi, player.VisitedSubZones, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save exploration progress"})
 		return

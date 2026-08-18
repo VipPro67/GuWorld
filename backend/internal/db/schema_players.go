@@ -37,7 +37,6 @@ func schemaPlayers() error {
 		equipped_gus JSONB NOT NULL DEFAULT '[]',
 		cleared_cells JSONB NOT NULL DEFAULT '{}',
 		materials_inventory JSONB NOT NULL DEFAULT '{}',
-		temp_loot JSONB NOT NULL DEFAULT '{"gu_inventory":[],"materials_inventory":{},"primeval_stones":0}',
 		statuses JSONB NOT NULL DEFAULT '[]',
 		earned_achievements JSONB NOT NULL DEFAULT '[]',
 		growth_data JSONB NOT NULL DEFAULT '{"boosts":{"attack":0,"defense":0,"hp":0,"speed":0},"fully_grown":[]}',

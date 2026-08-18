@@ -7,7 +7,7 @@
 //	combat_targeting.go  - ResolveSingleTarget, ResolveTargets, findCombatant
 //	combat_damage.go     - applyDamageWithLogs, calculateLooseGuFailureChance
 //	combat_ai.go         - BuildEnemyActions, BuildBasicEnemyAction, SelectActionsByAI
-//	combat_loot.go       - RollLoot, ApplyLoot, TransferTempLootToInventory
+//	combat_loot.go       - RollLoot, ApplyLoot
 //	combat_integration.go- IntegratePassiveGus
 //	combat_explore.go    - ExploreNode, checkAndIncrementExploreLimit
 //	combat_retreat.go    - Retreat handler

@@ -638,9 +638,9 @@ func RegisterPlayer(c *gin.Context) {
 
 	var player models.Player
 	query := `
-		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, lifespan, time_speed_multiplier, email, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, avatar_url, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding, race, gender)
-		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, $14, $15, $11, '{}'::jsonb, '[]'::jsonb, $8, '{}'::jsonb, NULL, 100.0, 1.0, $9, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $10, true, $12, $13)
-		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, avatar_url, needs_onboarding, race, gender, constitution, statuses
+		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, lifespan, time_speed_multiplier, email, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, avatar_url, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding, race, gender)
+		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, $14, $15, $11, '{}'::jsonb, '[]'::jsonb, $8, '{}'::jsonb, NULL, 100.0, 1.0, $9, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $10, true, $12, $13)
+		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, avatar_url, needs_onboarding, race, gender, constitution, statuses
 	`
 
 	var activeCombatBytes []byte
@@ -655,7 +655,7 @@ func RegisterPlayer(c *gin.Context) {
 		&player.CurrentRegion, &player.PathMasteries, &activeCombatBytes,
 		&player.LastManaUpdate, &player.CreatedAt,
 		&player.Lifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
-		&player.Email, &player.GoogleID, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+		&player.Email, &player.GoogleID, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
 		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.AvatarURL, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.Statuses,
 	)
@@ -927,7 +927,7 @@ func LoginPlayer(c *gin.Context) {
 	var passwordHash string
 
 	query := `
-		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregateEquipped("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, COALESCE(email, ''), google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), 		COALESCE(avatar_url, ''), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses, growth_data
+		SELECT id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregateEquipped("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, 		       party_id, arena_rank, COALESCE(email, ''), google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, COALESCE(bio, ''), COALESCE(fake_rank, 1), COALESCE(fake_sub_rank, 1), COALESCE(fake_vital_gu, ''), COALESCE(is_disguised, false), COALESCE(is_admin, false), 		COALESCE(avatar_url, ''), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses, growth_data
 		FROM players
 		WHERE LOWER(email) = $1
 	`
@@ -942,7 +942,7 @@ func LoginPlayer(c *gin.Context) {
 		&player.CurrentRegion, &player.PathMasteries, &activeCombatBytes,
 		&player.LastManaUpdate, &player.CreatedAt,
 		&player.Lifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
-		&player.Email, &player.GoogleID, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+		&player.Email, &player.GoogleID, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
 		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.AvatarURL,
 		&player.Race, &player.Gender, &player.Constitution, &player.Statuses,
@@ -4354,7 +4354,7 @@ func GoogleCallback(c *gin.Context) {
 
 	// 1. Try to search by google_id
 	err = tx.QueryRow(`
-		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregateEquipped("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses
+		SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregateEquipped("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses
 		FROM players
 		WHERE google_id = $1
 	`, googleUser.ID).Scan(
@@ -4367,7 +4367,7 @@ func GoogleCallback(c *gin.Context) {
 		&player.CurrentRegion, &player.PathMasteries,
 		&player.LastManaUpdate, &player.CreatedAt,
 		&player.Lifespan, &player.TimeSpeedMultiplier,
-		&player.Email, &player.GoogleID, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+		&player.Email, &player.GoogleID, &player.ExploreCount, &player.LastExploreReset,
 		&player.ApertureStress, &player.LastCultivateTime,
 		&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.Statuses,
 	)
@@ -4382,7 +4382,7 @@ func GoogleCallback(c *gin.Context) {
 	if !hasPlayer {
 		// 2. Try to search by email (Merge Account!)
 		err = tx.QueryRow(`
-			SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregateEquipped("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses
+			SELECT id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, `+db.GuInventoryAggregateEquipped("players.id")+`, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, last_mana_update, created_at, lifespan, time_speed_multiplier, email, google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, COALESCE(ref_code, ''), COALESCE(needs_onboarding, false), COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses
 			FROM players
 			WHERE email = $1
 		`, googleUser.Email).Scan(
@@ -4395,7 +4395,7 @@ func GoogleCallback(c *gin.Context) {
 			&player.CurrentRegion, &player.PathMasteries,
 			&player.LastManaUpdate, &player.CreatedAt,
 			&player.Lifespan, &player.TimeSpeedMultiplier,
-			&player.Email, &player.GoogleID, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+			&player.Email, &player.GoogleID, &player.ExploreCount, &player.LastExploreReset,
 			&player.ApertureStress, &player.LastCultivateTime,
 			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.Statuses,
 		)
@@ -4519,9 +4519,9 @@ func GoogleCallback(c *gin.Context) {
 		refCode := "REF-" + strings.ToUpper(uuid.New().String()[:8])
 
 		queryInsert := `
-			INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, lifespan, time_speed_multiplier, email, google_id, temp_loot, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding, race, gender)
-			VALUES ($1, '', 1, 1, $2, $3, $4, $5, $6, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, $11, $12, $10, '{}'::jsonb, '[]'::jsonb, 'Southern_Border', '{}'::jsonb, NULL, 100.0, 1.0, $7, $8, '{"gu_inventory": [], "materials_inventory": {}, "primeval_stones": 0}'::jsonb, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', 1, 1, '', false, $9, true, 'human', 'male')
-			RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, temp_loot, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, needs_onboarding, race, gender, constitution, statuses
+			INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, lifespan, time_speed_multiplier, email, google_id, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding, race, gender)
+			VALUES ($1, '', 1, 1, $2, $3, $4, $5, $6, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, $11, $12, $10, '{}'::jsonb, '[]'::jsonb, 'Southern_Border', '{}'::jsonb, NULL, 100.0, 1.0, $7, $8, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', 1, 1, '', false, $9, true, 'human', 'male')
+			RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, needs_onboarding, race, gender, constitution, statuses
 		`
 
 		var activeCombatBytes []byte
@@ -4536,7 +4536,7 @@ func GoogleCallback(c *gin.Context) {
 			&player.CurrentRegion, &player.PathMasteries, &activeCombatBytes,
 			&player.LastManaUpdate, &player.CreatedAt,
 			&player.Lifespan, &player.TimeSpeedMultiplier, &player.PartyID, &player.ArenaRank,
-			&player.Email, &player.GoogleID, &player.TempLoot, &player.ExploreCount, &player.LastExploreReset,
+			&player.Email, &player.GoogleID, &player.ExploreCount, &player.LastExploreReset,
 			&player.ApertureStress, &player.LastCultivateTime,
 			&player.SoulHP, &player.MaxSoul, &player.SoulTier, &player.NeedsSoulRefine, &player.Bio, &player.FakeRank, &player.FakeSubRank, &player.FakeVitalGu, &player.IsDisguised, &player.IsAdmin, &player.RefCode, &player.NeedsOnboarding, &player.Race, &player.Gender, &player.Constitution, &player.Statuses,
 		)

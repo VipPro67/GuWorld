@@ -435,7 +435,6 @@ func AutoCombatStart(c *gin.Context) {
 			updateQuery = `UPDATE players SET active_combat = NULL WHERE id = $1`
 			args = append(args, player.ID)
 		} else {
-			isExplore := player.CurrentRegion != "Southern_Border" && player.CurrentRegion != "Lobby"
 			var partyMembers []uuid.UUID
 			if player.PartyID != nil {
 				var membersRaw []byte
@@ -480,26 +479,10 @@ func AutoCombatStart(c *gin.Context) {
 							}
 							for _, memberID := range partyMembers {
 								if memberID == player.ID {
-									if isExplore {
-										player.TempLoot.PrimevalStones += float64(splitStones)
-										lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch (giữ tạm thời).", splitStones))
-									} else {
-										player.PrimevalStones += float64(splitStones)
-										lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch.", splitStones))
-									}
+									player.PrimevalStones += float64(splitStones)
+									lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch.", splitStones))
 								} else {
-									if isExplore {
-										var targetLoot models.TempLoot
-										var targetLootBytes []byte
-										_ = tx.QueryRow("SELECT temp_loot FROM players WHERE id = $1 FOR UPDATE", memberID).Scan(&targetLootBytes)
-										if len(targetLootBytes) > 0 {
-											json.Unmarshal(targetLootBytes, &targetLoot)
-										}
-										targetLoot.PrimevalStones += float64(splitStones)
-										_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, memberID)
-									} else {
-										_, _ = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", splitStones, memberID)
-									}
+									_, _ = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", splitStones, memberID)
 									var uname string
 									_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", memberID).Scan(&uname)
 									lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s nhận được %d Nguyên Thạch.", uname, splitStones))
@@ -514,38 +497,15 @@ func AutoCombatStart(c *gin.Context) {
 							for q := 0; q < qty; q++ {
 								winnerID := partyMembers[rand.Intn(len(partyMembers))]
 								if winnerID == player.ID {
-									if isExplore {
-										if player.TempLoot.MaterialsInventory == nil {
-											player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
-										}
-										player.TempLoot.MaterialsInventory[matID]++
-										lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhặt được 1x %s (giữ tạm thời).", matID))
-									} else {
-										if err := InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", 1); err != nil {
-											logger.S.Errorf("Failed to add loot item %s to player %s: %v", matID, player.ID, err)
-										}
-										lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhặt được 1x %s.", matID))
+									if err := InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", 1); err != nil {
+										logger.S.Errorf("Failed to add loot item %s to player %s: %v", matID, player.ID, err)
 									}
+									lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhặt được 1x %s.", matID))
 								} else {
 									var uname string
 									_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
-
-									if isExplore {
-										var targetLoot models.TempLoot
-										var targetLootBytes []byte
-										_ = tx.QueryRow("SELECT temp_loot FROM players WHERE id = $1 FOR UPDATE", winnerID).Scan(&targetLootBytes)
-										if len(targetLootBytes) > 0 {
-											json.Unmarshal(targetLootBytes, &targetLoot)
-										}
-										if targetLoot.MaterialsInventory == nil {
-											targetLoot.MaterialsInventory = make(models.MaterialsInventory)
-										}
-										targetLoot.MaterialsInventory[matID]++
-										_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, winnerID)
-									} else {
-										if err := InventorySvc.AddItem(tx, winnerID.String(), matID, "materials", 1); err != nil {
-											logger.S.Errorf("Failed to distribute loot %s to party member %s: %v", matID, winnerID, err)
-										}
+									if err := InventorySvc.AddItem(tx, winnerID.String(), matID, "materials", 1); err != nil {
+										logger.S.Errorf("Failed to distribute loot %s to party member %s: %v", matID, winnerID, err)
 									}
 									lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s nhặt được 1x %s.", uname, matID))
 								}
@@ -564,72 +524,30 @@ func AutoCombatStart(c *gin.Context) {
 								Equipped:   false,
 							}
 							if winnerID == player.ID {
-								if isExplore {
-									player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, newGu)
-									lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn bắt được 1x %s (giữ tạm thời)!", gID))
-								} else {
-									player.GuInventory = append(player.GuInventory, newGu)
-									lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn bắt được 1x %s!", gID))
-								}
+								player.GuInventory = append(player.GuInventory, newGu)
+								lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn bắt được 1x %s!", gID))
 							} else {
 								var uname string
 								_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
-
-								if isExplore {
-									var targetLoot models.TempLoot
-									var targetLootBytes []byte
-									_ = tx.QueryRow("SELECT temp_loot FROM players WHERE id = $1 FOR UPDATE", winnerID).Scan(&targetLootBytes)
-									if len(targetLootBytes) > 0 {
-										json.Unmarshal(targetLootBytes, &targetLoot)
-									}
-									targetLoot.GuInventory = append(targetLoot.GuInventory, newGu)
-									_, _ = tx.Exec("UPDATE players SET temp_loot = $1 WHERE id = $2", targetLoot, winnerID)
-								} else {
-									targetGuInv, err := db.LoadPlayerGus(tx, winnerID.String(), false)
-									if err != nil {
-										targetGuInv = models.GuInventory{}
-									}
-									targetGuInv = append(targetGuInv, newGu)
-									_ = db.AddPlayerGu(tx, winnerID.String(), newGu)
-								}
+								_ = db.AddPlayerGu(tx, winnerID.String(), newGu)
 								lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, gID))
 							}
 						}
 					} else {
 						stoneQty := loot.Items["primeval_stone"]
-						if isExplore {
-							player.TempLoot.PrimevalStones += float64(stoneQty)
-							for matID, qty := range loot.Items {
-								if matID == "primeval_stone" {
-									continue
-								}
-								if player.TempLoot.MaterialsInventory == nil {
-									player.TempLoot.MaterialsInventory = make(models.MaterialsInventory)
-								}
-								player.TempLoot.MaterialsInventory[matID] += qty
+						player.PrimevalStones += float64(stoneQty)
+						for matID, qty := range loot.Items {
+							if matID == "primeval_stone" {
+								continue
 							}
-							for _, guID := range loot.Gus {
-								guSpec, _ := models.GetGuAny(guID)
-								newGu := models.GuInstance{
-									InstanceID: uuid.New().String(), GuID: guID, Rank: guSpec.Rank, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
-								}
-								player.TempLoot.GuInventory = append(player.TempLoot.GuInventory, newGu)
+							InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", qty)
+						}
+						for _, guID := range loot.Gus {
+							guSpec, _ := models.GetGuAny(guID)
+							newGu := models.GuInstance{
+								InstanceID: uuid.New().String(), GuID: guID, Rank: guSpec.Rank, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
 							}
-						} else {
-							player.PrimevalStones += float64(stoneQty)
-							for matID, qty := range loot.Items {
-								if matID == "primeval_stone" {
-									continue
-								}
-								InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", qty)
-							}
-							for _, guID := range loot.Gus {
-								guSpec, _ := models.GetGuAny(guID)
-								newGu := models.GuInstance{
-									InstanceID: uuid.New().String(), GuID: guID, Rank: guSpec.Rank, Hunger: 0, Status: "ACTIVE", Equipped: false, IsVital: false,
-								}
-								player.GuInventory = append(player.GuInventory, newGu)
-							}
+							player.GuInventory = append(player.GuInventory, newGu)
 						}
 
 						if stoneQty > 0 || len(loot.Items) > 1 || len(loot.Gus) > 0 {
@@ -708,16 +626,14 @@ func AutoCombatStart(c *gin.Context) {
 				}
 			}
 
-			tempLootJSON, _ := json.Marshal(player.TempLoot)
-
 			if player.ClearedCells == nil {
 				player.ClearedCells = make(models.ClearedCellsMap)
 			}
 			coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
 			player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
 
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, primeval_stones = $4, aptitude_percent = $5, lifespan = $6, path_masteries = $7, cleared_cells = $8 WHERE id = $9`
-			args = append(args, finalPlayerHP, finalMana, tempLootJSON, player.PrimevalStones, player.AptitudePercent, player.Lifespan, player.PathMasteries, player.ClearedCells, player.ID)
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, aptitude_percent = $4, lifespan = $5, path_masteries = $6, cleared_cells = $7 WHERE id = $8`
+			args = append(args, finalPlayerHP, finalMana, player.PrimevalStones, player.AptitudePercent, player.Lifespan, player.PathMasteries, player.ClearedCells, player.ID)
 		}
 	} else {
 		if isVirtual {
@@ -739,13 +655,9 @@ func AutoCombatStart(c *gin.Context) {
 			})
 		} else {
 			player.HP = 1.0
-			player.CurrentRegion = HubRegionID
-			player.X, player.Y = hubEntryPoint()
-			player.TempLoot = models.TempLoot{
-				GuInventory:        models.GuInventory{},
-				MaterialsInventory: models.MaterialsInventory{},
-				PrimevalStones:     0,
-			}
+			player.CurrentRegion, player.X, player.Y = NearestHub(player.X, player.Y)
+
+			dropSummary := applyDeathDrop(tx, &player, nil)
 
 			for _, ally := range player.ActiveCombat.Allies {
 				allyUUID, errParse := uuid.Parse(ally.ID)
@@ -754,15 +666,18 @@ func AutoCombatStart(c *gin.Context) {
 				}
 			}
 
+			defeatMsg := "Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết."
+			if dropSummary != "" {
+				defeatMsg = fmt.Sprintf("Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất: %s.", dropSummary)
+			}
 			logs = append(logs, simulator.CombatLog{
 				Turn:   simState.Turn,
 				Action: "BATTLE_END",
-				Detail: "Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất sạch chiến lợi phẩm.",
+				Detail: defeatMsg,
 			})
 
-			tempLootJSON, _ := json.Marshal(player.TempLoot)
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, temp_loot = $3, current_region = $4, x = $5, y = $6, aptitude_percent = $7, lifespan = $8, primeval_stones = $9, path_masteries = $10 WHERE id = $11`
-			args = append(args, player.HP, finalMana, tempLootJSON, player.CurrentRegion, player.X, player.Y, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.PathMasteries, player.ID)
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, current_region = $3, x = $4, y = $5, aptitude_percent = $6, lifespan = $7, primeval_stones = $8, path_masteries = $9 WHERE id = $10`
+			args = append(args, player.HP, finalMana, player.CurrentRegion, player.X, player.Y, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.PathMasteries, player.ID)
 		}
 	}
 
