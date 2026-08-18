@@ -61,6 +61,13 @@ func beginCombatTx(c *gin.Context) (*sql.Tx, context.CancelFunc) {
 	if _, errSet := tx.Exec("SET LOCAL lock_timeout = '5000'"); errSet != nil {
 		logger.S.Warnf("beginCombatTx: failed to SET LOCAL lock_timeout: %v", errSet)
 	}
+	// The default 15s statement_timeout (from the connection string) can abort
+	// large bulk Gu inventory writes (e.g. a retreat that harvests many Gus).
+	// Raise it for combat mutation flows; the surrounding context still caps the
+	// whole request at 30s.
+	if _, errSet := tx.Exec("SET LOCAL statement_timeout = '60000'"); errSet != nil {
+		logger.S.Warnf("beginCombatTx: failed to SET LOCAL statement_timeout: %v", errSet)
+	}
 	return tx, cancel
 }
 
@@ -107,6 +114,7 @@ func Retreat(c *gin.Context) {
 		return
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
+	inventoryBefore := len(before)
 
 	logMsg := "Đạo hữu trở về an toàn từ hành trình."
 
@@ -302,21 +310,34 @@ func Retreat(c *gin.Context) {
 		return
 	}
 
+	var dbBefore int
+	_ = tx.QueryRow(`SELECT COUNT(*) FROM player_gu WHERE player_id = $1`, player.ID).Scan(&dbBefore)
+
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		respondCombatTxErr(c, err, "Failed to save player Gus after retreat")
 		return
 	}
+
+	inventoryAfter := len(player.GuInventory)
+	var dbAfterTx int
+	_ = tx.QueryRow(`SELECT COUNT(*) FROM player_gu WHERE player_id = $1`, player.ID).Scan(&dbAfterTx)
 
 	if err = tx.Commit(); err != nil {
 		respondCombatTxErr(c, err, "Transaction commit failed")
 		return
 	}
 
+	var dbAfter int
+	_ = db.DB.QueryRow(`SELECT COUNT(*) FROM player_gu WHERE player_id = $1`, player.ID).Scan(&dbAfter)
+
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "combat.retreat",
-		RequestSummary: fmt.Sprintf("hadCombat=%v stones=%.0f gus=%d mats=%d", hadCombat, originalStones, originalGus, originalMats),
+		RequestSummary: fmt.Sprintf("hadCombat=%v stones=%.0f gus=%d mats=%d invBefore=%d invAfter=%d added=%d dbBefore=%d dbAfterTx=%d dbAfter=%d",
+			hadCombat, originalStones, originalGus, originalMats, inventoryBefore, inventoryAfter, inventoryAfter-inventoryBefore, dbBefore, dbAfterTx, dbAfter),
 		IPAddress: c.ClientIP(), Success: true,
 	})
+	logger.S.Infof("Retreat player=%s invBefore=%d invAfter=%d added=%d dbBefore=%d dbAfterTx=%d dbAfter=%d",
+		player.ID, inventoryBefore, inventoryAfter, inventoryAfter-inventoryBefore, dbBefore, dbAfterTx, dbAfter)
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"log":    logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})

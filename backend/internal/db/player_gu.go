@@ -6,6 +6,7 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // Queryer is satisfied by both *sql.DB and *sql.Tx for read queries.
@@ -205,8 +206,14 @@ func UpdatePlayerGusBulk(tx Execer, gus models.GuInventory) error {
 // (e.g. the inventory loaded at the start of a request) and after the desired
 // post-state. Only changed rows are written: removed instances are deleted, new
 // instances inserted, and instances whose mutable fields changed are updated.
-// When the change set covers a large fraction of the inventory it falls back to
-// SavePlayerGus (delete + bulk insert), which is cheaper than many row writes.
+//
+// The change set is always applied incrementally (delete removed ids, bulk
+// update changed rows, bulk insert new rows). We deliberately avoid a full
+// delete-and-reinsert rewrite: `before` is loaded outside the players row lock
+// (PlayerService.Load reads player_gu on a pool connection in a goroutine), so
+// a full rewrite would race the hunger/growth workers that UPDATE/DELETE
+// player_gu directly, silently losing or resurrecting rows whenever a large
+// batch triggers the destructive path.
 func SyncPlayerGus(tx *sql.Tx, playerID string, before models.GuInventory, after models.GuInventory) error {
 	beforeIndex := make(map[string]models.GuInstance, len(before))
 	for _, gu := range before {
@@ -225,13 +232,16 @@ func SyncPlayerGus(tx *sql.Tx, playerID string, before models.GuInventory, after
 	}
 	var added models.GuInventory
 	var updated models.GuInventory
+	dropped := 0
 	for _, gu := range after {
 		prev, ok := beforeIndex[gu.InstanceID]
 		if !ok {
 			// Drop instances whose (gu_id, gu_rank) no longer exist in the
-			// dictionary, matching SavePlayerGus, to avoid FK violations.
+			// dictionary to avoid FK violations.
 			if _, valid := models.GetGu(gu.GuID, gu.Rank); valid {
 				added = append(added, gu)
+			} else {
+				dropped++
 			}
 			continue
 		}
@@ -240,16 +250,13 @@ func SyncPlayerGus(tx *sql.Tx, playerID string, before models.GuInventory, after
 		}
 	}
 
-	changed := len(removed) + len(added) + len(updated)
-	if changed == 0 {
+	if dropped > 0 {
+		logger.S.Warnf("SyncPlayerGus player=%s before=%d after=%d dropped=%d (invalid gu_id/rank) removed=%d updated=%d added=%d",
+			playerID, len(before), len(after), dropped, len(removed), len(updated), len(added))
+	}
+
+	if len(removed) == 0 && len(added) == 0 && len(updated) == 0 {
 		return nil
-	}
-	maxTotal := len(before)
-	if len(after) > maxTotal {
-		maxTotal = len(after)
-	}
-	if maxTotal > 0 && changed*4 > maxTotal {
-		return SavePlayerGus(tx, playerID, after)
 	}
 
 	if len(removed) > 0 {
@@ -302,69 +309,8 @@ func UpdatePlayerGu(tx Execer, gu models.GuInstance) error {
 	return err
 }
 
-// SavePlayerGus replaces a player's full Gu inventory in the player_gu table.
-// Uses bulk INSERT via unnest to avoid N+1 round-trips.
-// Invalid Gu instances (missing from gu_dictionary) are silently dropped to
-// prevent FK violations after admin deletes a Gu type from the dictionary.
-func SavePlayerGus(tx *sql.Tx, playerID string, inv models.GuInventory) error {
-	if _, err := tx.Exec(`DELETE FROM player_gu WHERE player_id = $1`, playerID); err != nil {
-		return err
-	}
-
-	// Filter out Gus whose (gu_id, gu_rank) no longer exist in gu_dictionary
-	filtered := make(models.GuInventory, 0, len(inv))
-	for i := range inv {
-		if _, ok := models.GetGu(inv[i].GuID, inv[i].Rank); ok {
-			filtered = append(filtered, inv[i])
-		}
-	}
-
-	if len(filtered) == 0 {
-		return nil
-	}
-
-	n := len(filtered)
-	ids := make([]string, n)
-	guIDs := make([]string, n)
-	ranks := make([]int, n)
-	hunger := make([]int, n)
-	states := make([]string, n)
-	equipped := make([]bool, n)
-	vital := make([]bool, n)
-	intTimes := make([]float64, n)
-	growths := make([]float64, n)
-	equippedAts := make([]string, n) // "NULL" or timestamp string
-
-	for i, gu := range filtered {
-		ids[i] = gu.InstanceID
-		guIDs[i] = gu.GuID
-		ranks[i] = gu.Rank
-		hunger[i] = gu.Hunger
-		states[i] = gu.Status
-		equipped[i] = gu.Equipped
-		vital[i] = gu.IsVital
-		intTimes[i] = gu.IntegrationTime
-		growths[i] = gu.GrowthHours
-		if gu.EquippedAt != nil {
-			equippedAts[i] = gu.EquippedAt.Format("2006-01-02T15:04:05Z")
-		} else {
-			equippedAts[i] = ""
-		}
-	}
-
-	query := `INSERT INTO player_gu (id, player_id, gu_id, gu_rank, rank, level, hunger, state, location, is_locked, equipped, is_vital, integration_time, equipped_at, growth_hours)
-		SELECT unnest($1::text[]), $2, unnest($3::text[]), unnest($4::int[]), unnest($4::int[]), 1, unnest($5::int[]), unnest($6::text[]), 'INVENTORY', false, unnest($7::bool[]), unnest($8::bool[]), unnest($9::float[]), NULLIF(unnest($10::text[]), '')::timestamptz, unnest($11::float[])`
-
-	_, err := tx.Exec(query,
-		pq.Array(ids), playerID,
-		pq.Array(guIDs), pq.Array(ranks), pq.Array(hunger), pq.Array(states),
-		pq.Array(equipped), pq.Array(vital), pq.Array(intTimes),
-		pq.Array(equippedAts), pq.Array(growths))
-	return err
-}
-
 // AddPlayerGusBulk inserts multiple Gu instances for a player in a single query.
-// Unlike SavePlayerGus, it does not delete existing Gu instances.
+// It does not delete or modify existing Gu instances.
 func AddPlayerGusBulk(tx Execer, playerID string, gus []models.GuInstance) error {
 	if len(gus) == 0 {
 		return nil

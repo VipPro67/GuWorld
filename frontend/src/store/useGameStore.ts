@@ -3311,7 +3311,7 @@ export const useGameStore = create<GameState>((set, get) => {
     try {
       const response = await authFetch(`${BACKEND_URL}/api/explore/retreat/${player.id}`, {
         method: "POST",
-        timeoutMs: 10000,
+        timeoutMs: 30000,
       });
 
       if (response.status === 401 || response.status === 403) {
@@ -3356,7 +3356,7 @@ export const useGameStore = create<GameState>((set, get) => {
     try {
       const response = await authFetch(`${BACKEND_URL}/api/explore/flee/${player.id}`, {
         method: "POST",
-        timeoutMs: 10000,
+        timeoutMs: 30000,
       });
 
       if (response.status === 401 || response.status === 403) {
