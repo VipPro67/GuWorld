@@ -3367,7 +3367,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (data.flee_success === false) {
         setPlayerFromServer(data.player);
         get().addLog(data.log || "Rút lui thất bại!");
-        get().addToast(data.log || "Rút lui thất bại!", "warning");
+        get().addToast(data.log || "Rút lui thất bại!", "info");
         return;
       }
 
