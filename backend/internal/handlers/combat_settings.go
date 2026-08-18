@@ -11,6 +11,51 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
+// filterGuLoadout restricts a combatant's Gu inventory to their saved combat
+// loadout (gu_priorities). It first keeps only equipped+ACTIVE Gus with
+// combat-relevant active effects (mirroring InitializeCombatState's PVP filter),
+// then, if a loadout is configured, restricts to the loadout's gu_ids in order.
+// Falls back to all equipped+ACTIVE combat Gus when the loadout is empty or none
+// of its gu_ids resolve to a valid instance.
+func filterGuLoadout(inv models.GuInventory, cs models.AutoCombatConfig) models.GuInventory {
+	combatGu := make(models.GuInventory, 0, len(inv))
+	byID := make(map[string]models.GuInstance, len(inv))
+	for _, g := range inv {
+		if !g.Equipped || g.Status != "ACTIVE" {
+			continue
+		}
+		spec, ok := models.GetGu(g.GuID, g.Rank)
+		if !ok || !hasCombatActiveEffects(&spec) {
+			continue
+		}
+		combatGu = append(combatGu, g)
+		if best, exists := byID[g.GuID]; !exists || g.Rank > best.Rank {
+			byID[g.GuID] = g
+		}
+	}
+
+	if len(cs.GuPriorities) == 0 {
+		return combatGu
+	}
+
+	// Preserve loadout order, skipping duplicate gu_ids.
+	seen := make(map[string]bool, len(cs.GuPriorities))
+	result := make(models.GuInventory, 0, len(cs.GuPriorities))
+	for _, t := range cs.GuPriorities {
+		if seen[t.GuID] {
+			continue
+		}
+		seen[t.GuID] = true
+		if g, ok := byID[t.GuID]; ok {
+			result = append(result, g)
+		}
+	}
+	if len(result) == 0 {
+		return combatGu
+	}
+	return result
+}
+
 // GetCombatSettings returns the player's persistent auto-combat settings.
 func GetCombatSettings(c *gin.Context) {
 	authID, ok := middleware.GetPlayerID(c)
@@ -60,11 +105,32 @@ func UpdateCombatSettings(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	_, err = evaluateManaTx(tx, authID)
+	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player"})
 		return
 	}
+
+	// Sanitize gu_priorities: only keep Gu the player owns, is equipped and ACTIVE.
+	ownedActive := make(map[string]bool)
+	for _, g := range player.GuInventory {
+		if g.Equipped && g.Status == "ACTIVE" {
+			ownedActive[g.GuID] = true
+		}
+	}
+	seen := make(map[string]bool)
+	validGu := req.CombatSettings.GuPriorities[:0]
+	for _, t := range req.CombatSettings.GuPriorities {
+		if !ownedActive[t.GuID] || seen[t.GuID] {
+			continue
+		}
+		seen[t.GuID] = true
+		if t.Priority < 1 {
+			t.Priority = 1
+		}
+		validGu = append(validGu, t)
+	}
+	req.CombatSettings.GuPriorities = validGu
 
 	settingsJSON, _ := json.Marshal(req.CombatSettings)
 	_, err = tx.Exec(`UPDATE players SET combat_settings = $1 WHERE id = $2`, settingsJSON, authID)

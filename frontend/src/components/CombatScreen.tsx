@@ -153,6 +153,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const [manaThreshold, setManaThreshold] = useState(30);
   const [guSortMode, setGuSortMode] = useState<"rank" | "path">("rank");
   const [showRecommendation, setShowRecommendation] = useState(true);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const executeAutoCombat = useGameStore((state) => state.executeAutoCombat);
   const executePracticeCombat = useGameStore((state) => state.executePracticeCombat);
@@ -174,8 +175,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   useEffect(() => {
     if (!combatSettings && !combatSettingsFetched.current) {
       combatSettingsFetched.current = true;
-      fetchCombatSettings();
+      fetchCombatSettings().finally(() => setSettingsLoaded(true));
     } else if (combatSettings) {
+      setSettingsLoaded(true);
       setAutoHealHP(combatSettings.auto_heal_hp);
       setHealThreshold(combatSettings.heal_threshold);
       setAutoRestoreMana(combatSettings.auto_restore_mana);
@@ -804,13 +806,38 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   const hasAutoRecommended = useRef(false);
   useEffect(() => {
-    if (eligibleGus.length > 0 && !hasAutoRecommended.current) {
-      setTimeout(() => {
-        recommendLoadout();
-      }, 0);
-      hasAutoRecommended.current = true;
+    if (!settingsLoaded || eligibleGus.length === 0 || hasAutoRecommended.current) {
+      return;
     }
-  }, [eligibleGus.length, recommendLoadout]);
+
+    const loadout = combatSettings?.gu_priorities;
+    if (loadout && loadout.length > 0) {
+      const instanceIds: string[] = [];
+      for (const t of loadout) {
+        if (!t.gu_id) continue;
+        const best = eligibleGus
+          .filter(g => g.gu_id === t.gu_id)
+          .sort((a, b) => b.rank - a.rank)[0];
+        if (best && !instanceIds.includes(best.instance_id)) {
+          instanceIds.push(best.instance_id);
+        }
+      }
+
+      if (instanceIds.length > 0) {
+        // Populate recommended killer moves, then override the Gu selection
+        // with the player's saved loadout (higher priority than recommendation).
+        recommendLoadout();
+        setSelectedGuIds(instanceIds.slice(0, 7));
+        hasAutoRecommended.current = true;
+        return;
+      }
+    }
+
+    setTimeout(() => {
+      recommendLoadout();
+    }, 0);
+    hasAutoRecommended.current = true;
+  }, [settingsLoaded, eligibleGus, combatSettings, recommendLoadout]);
 
   // Sorting for Gu list
   // Only show killer moves whose component Gus are all ACTIVE

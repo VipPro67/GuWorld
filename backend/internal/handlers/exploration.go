@@ -397,7 +397,7 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 	if attackTargetID != "" {
 		var targetPlayer models.Player
 		queryStr := `
-			SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.current_mana, p.base_hp, p.path_masteries, ` + db.GuInventoryAggregate("p.id") + `, COALESCE(ia.dao_marks, '{}'::jsonb)
+			SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.current_mana, p.base_hp, p.path_masteries, ` + db.GuInventoryAggregate("p.id") + `, COALESCE(ia.dao_marks, '{}'::jsonb), p.combat_settings
 			FROM players p
 			LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
 			WHERE p.x = $1 AND p.y = $2 AND p.id != $3
@@ -409,13 +409,13 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 			errTarget = tx.QueryRow(queryStr, player.X, player.Y, player.ID, player.PartyID).Scan(
 				&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
 				&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
-				&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks,
+				&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks, &targetPlayer.CombatSettings,
 			)
 		} else {
 			errTarget = tx.QueryRow(queryStr, player.X, player.Y, player.ID).Scan(
 				&targetPlayer.ID, &targetPlayer.Username, &targetPlayer.Rank, &targetPlayer.SubRank,
 				&targetPlayer.HP, &targetPlayer.MaxMana, &targetPlayer.CurrentMana, &targetPlayer.BaseHP,
-				&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks,
+				&targetPlayer.PathMasteries, &targetPlayer.GuInventory, &targetPlayer.DaoMarks, &targetPlayer.CombatSettings,
 			)
 		}
 		if errTarget == nil && attackTargetID == targetPlayer.ID.String() {
@@ -450,7 +450,7 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 				EnemySpeed:         targetStats["speed"],
 				EnemyRank:          targetPlayer.Rank,
 				EnemySubRank:       targetPlayer.SubRank,
-				EnemyGuInventory:   targetPlayer.GuInventory,
+				EnemyGuInventory:   filterGuLoadout(targetPlayer.GuInventory, targetPlayer.CombatSettings),
 				EnemyDaoMarks:      targetPlayer.DaoMarks,
 				EnemyPathMasteries: targetPlayer.PathMasteries,
 				TargetPlayerID:     targetPlayer.ID.String(),

@@ -1220,9 +1220,20 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		autoRestoreMana = reqLoadout.AutoRestoreMana
 		manaThreshold = reqLoadout.ManaThreshold
 	} else {
-		// Non-initiator: automatically select all equipped, active Gus
-		for guID := range equippedInstByGuID {
-			selectedGuIDs = append(selectedGuIDs, guID)
+		// Non-initiator: use the player's saved combat loadout (gu_priorities)
+		// when configured, otherwise fall back to all equipped active Gus.
+		settings := player.CombatSettings
+		if len(settings.GuPriorities) > 0 {
+			for _, t := range settings.GuPriorities {
+				if ownedGuTypeSet[t.GuID] {
+					selectedGuIDs = append(selectedGuIDs, t.GuID)
+				}
+			}
+		}
+		if len(selectedGuIDs) == 0 {
+			for guID := range equippedInstByGuID {
+				selectedGuIDs = append(selectedGuIDs, guID)
+			}
 		}
 
 		// Automatically select all active killer moves they have

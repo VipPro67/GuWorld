@@ -1587,60 +1587,69 @@ export const Aperture: React.FC<ApertureProps> = ({
                     </div>
                   </div>
 
-                  {/* Gu Priorities */}
+                  {/* Gu Loadout */}
                   <div className="border-t border-zinc-900/30 pt-3">
-                    <div className="text-[10px] text-zinc-400 font-bold mb-2">Cổ Trùng (sắp xếp theo độ ưu tiên)</div>
+                    <div className="text-[10px] text-zinc-400 font-bold mb-1">Bộ Cổ Chiến Đấu</div>
+                    <p className="text-[9px] text-zinc-600 italic mb-2">Chọn cổ mang theo. Bộ cổ này được dùng khi tấn công (ưu tiên hơn gợi ý) và khi bị tấn công. Bỏ trống = dùng tất cả cổ đang trang bị.</p>
                     {eligibleGusForCombat.length === 0 ? (
                       <p className="text-[10px] text-zinc-600 italic">Chưa có cổ trùng nào được trang bị.</p>
                     ) : (
                       <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                        {eligibleGusForCombat.map((gu, idx) => {
+                        {eligibleGusForCombat.map(gu => {
                           const spec = guDictionary[gu.gu_id];
-                          const tactic = csGuPriorities.find(t => t.gu_id === gu.gu_id);
-                          const priority = tactic?.priority ?? idx + 1;
+                          const idx = csGuPriorities.findIndex(t => t.gu_id === gu.gu_id);
+                          const inLoadout = idx !== -1;
+                          const tactic = inLoadout ? csGuPriorities[idx] : null;
                           const condition = tactic?.use_condition || "always";
                           const condVal = tactic?.condition_value || 30;
+                          const reorder = (dir: number) => {
+                            const list = [...csGuPriorities];
+                            const i = list.findIndex(t => t.gu_id === gu.gu_id);
+                            const j = i + dir;
+                            if (i < 0 || j < 0 || j >= list.length) return;
+                            const tmp = list[i];
+                            list[i] = list[j];
+                            list[j] = tmp;
+                            setCsGuPriorities(list.map((t, k) => ({ ...t, priority: k + 1 })));
+                          };
                           return (
-                            <div key={gu.instance_id} className="flex items-center gap-2 bg-zinc-950/50 rounded-lg px-2.5 py-1.5 border border-zinc-900">
-                              <span className="text-[10px] text-zinc-500 font-mono w-4">{priority}</span>
-                              <span className="text-[11px] text-zinc-200 flex-1 truncate">{spec?.name || gu.gu_id}</span>
-                              <select value={condition}
+                            <div key={gu.instance_id} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border ${inLoadout ? "bg-zinc-950/50 border-zinc-800" : "bg-zinc-950/20 border-zinc-900 opacity-60"}`}>
+                              <input type="checkbox" checked={inLoadout}
                                 onChange={e => {
-                                  const newList = csGuPriorities.filter(t => t.gu_id !== gu.gu_id);
-                                  newList.push({ gu_id: gu.gu_id, priority, use_condition: e.target.value, condition_value: condVal });
-                                  setCsGuPriorities(newList);
+                                  if (e.target.checked) {
+                                    setCsGuPriorities([...csGuPriorities, { gu_id: gu.gu_id, priority: csGuPriorities.length + 1, use_condition: "always", condition_value: 30 }]);
+                                  } else {
+                                    setCsGuPriorities(csGuPriorities.filter(t => t.gu_id !== gu.gu_id));
+                                  }
                                 }}
-                                className="bg-zinc-950 border border-zinc-800 rounded text-[9px] text-zinc-300 px-1.5 py-0.5 font-mono"
-                              >
-                                <option value="always">Luôn</option>
-                                <option value="hp_below">HP &lt; %</option>
-                                <option value="mana_above">Chân nguyên &gt; %</option>
-                                <option value="enemy_hp_below">Máu địch &lt; %</option>
-                              </select>
-                              {condition !== "always" && (
-                                <input type="number" min="1" max="99" value={condVal}
-                                  onChange={e => {
-                                    const newList = csGuPriorities.filter(t => t.gu_id !== gu.gu_id);
-                                    newList.push({ gu_id: gu.gu_id, priority, use_condition: condition, condition_value: Number(e.target.value) });
-                                    setCsGuPriorities(newList);
-                                  }}
-                                  className="w-12 bg-zinc-950 border border-zinc-800 rounded text-[9px] text-zinc-300 px-1.5 py-0.5 font-mono text-center"
-                                />
+                                className="accent-emerald-500 w-3 h-3 cursor-pointer shrink-0" />
+                              {inLoadout && <span className="text-[10px] text-zinc-500 font-mono w-4">{idx + 1}</span>}
+                              <span className="text-[11px] text-zinc-200 flex-1 truncate">{spec?.name || gu.gu_id}</span>
+                              {inLoadout && (
+                                <>
+                                  <select value={condition}
+                                    onChange={e => setCsGuPriorities(csGuPriorities.map(t => t.gu_id === gu.gu_id ? { ...t, use_condition: e.target.value } : t))}
+                                    className="bg-zinc-950 border border-zinc-800 rounded text-[9px] text-zinc-300 px-1.5 py-0.5 font-mono"
+                                  >
+                                    <option value="always">Luôn</option>
+                                    <option value="hp_below">HP &lt; %</option>
+                                    <option value="mana_above">Chân nguyên &gt; %</option>
+                                    <option value="enemy_hp_below">Máu địch &lt; %</option>
+                                  </select>
+                                  {condition !== "always" && (
+                                    <input type="number" min="1" max="99" value={condVal}
+                                      onChange={e => setCsGuPriorities(csGuPriorities.map(t => t.gu_id === gu.gu_id ? { ...t, condition_value: Number(e.target.value) } : t))}
+                                      className="w-12 bg-zinc-950 border border-zinc-800 rounded text-[9px] text-zinc-300 px-1.5 py-0.5 font-mono text-center"
+                                    />
+                                  )}
+                                  <div className="flex gap-0.5">
+                                    <button type="button" onClick={() => reorder(-1)} disabled={idx === 0}
+                                      className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-30 text-zinc-400 rounded">▲</button>
+                                    <button type="button" onClick={() => reorder(1)} disabled={idx === csGuPriorities.length - 1}
+                                      className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-30 text-zinc-400 rounded">▼</button>
+                                  </div>
+                                </>
                               )}
-                              <div className="flex gap-0.5">
-                                <button type="button"
-                                  onClick={() => {
-                                    const newList = csGuPriorities.map(t => t.gu_id === gu.gu_id ? { ...t, priority: Math.max(1, priority - 1) } : t);
-                                    setCsGuPriorities(newList);
-                                  }}
-                                  className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 rounded">▲</button>
-                                <button type="button"
-                                  onClick={() => {
-                                    const newList = csGuPriorities.map(t => t.gu_id === gu.gu_id ? { ...t, priority: priority + 1 } : t);
-                                    setCsGuPriorities(newList);
-                                  }}
-                                  className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 rounded">▼</button>
-                              </div>
                             </div>
                           );
                         })}

@@ -305,6 +305,16 @@ Cổ sư có thể:
 - **Bỏ chạy (Rút Lui) khỏi chiến đấu** khiến đạo hữu chịu **−20% Max HP**; nếu HP không đủ sẽ ngất xỉu tại HUB và **mất toàn bộ tài nguyên thu thập** (Nguyên Thạch, Cổ trùng, nguyên liệu tạm). Khi HP ≤ 20% Max, hệ thống hiện cảnh báo xác nhận trước khi bỏ chạy.
 - Khi hệ thống quá tải (tranh chấp khoá dữ liệu do nhiều thao tác cùng lúc), các thao tác chiến đấu (bỏ chạy/rút lui/bắt sủng…) trả về thông báo **bận và yêu cầu thử lại** thay vì treo vô hạn.
 
+### Bộ Cổ Chiến Đấu (Cài đặt chiến thuật tự động)
+
+Trong tab **Cài đặt** của hồ sơ (Aperture), đạo hữu có thể chọn **Bộ Cổ Chiến Đấu** — danh sách Cổ mang theo khi xuất trận:
+
+- **Dùng khi tấn công:** Khi mở màn hình chiến đấu, bộ Cổ đã lưu được **chọn sẵn** (ưu tiên hơn gợi ý tự động). Đạo hữu vẫn có thể bấm gợi ý hoặc chỉnh tay để đổi bộ cho trận đó.
+- **Dùng khi bị tấn công:** Khi bị Cổ sư khác tấn công (mỏ, võ đài, bản đồ), người phòng thủ sẽ chiến đấu bằng đúng bộ Cổ đã lưu (theo thứ tự ưu tiên) — không dùng toàn bộ Cổ đang trang bị.
+- **Để trống** (không chọn Cổ nào) = dùng tất cả Cổ đang trang bị & ACTIVE.
+- Chỉ các Cổ **đang có trong túi và ở trạng thái ACTIVE** mới được giữ lại khi lưu; Cổ không hợp lệ sẽ bị hệ thống tự bỏ qua.
+- Ngoài ra vẫn có thể đặt **điều kiện dùng** (Luôn / HP thấp / Chân nguyên cao / Máu địch thấp) và **thứ tự ưu tiên** cho từng Cổ trong bộ.
+
 
 ### Bắt sủng vật (Monster Capture)
 
