@@ -222,15 +222,178 @@ func Flee(c *gin.Context) {
 	success := roll < fleeChance
 
 	if !success {
-		logMsg = fmt.Sprintf("Đạo hữu cố gắng rút lui khỏi %s thất bại! Tỷ lệ thành công: %.1f%%. Trận chiến vẫn tiếp tục!", enemyName, fleeChance*100)
+		// Initialize allies/enemies if not already done
+		if len(player.ActiveCombat.Allies) == 0 {
+			player.ActiveCombat = InitializeCombatState(tx, player.ActiveCombat, &player)
+		}
+
+		var turnLogs []string
+		turnLogs = append(turnLogs, fmt.Sprintf("Đạo hữu cố gắng rút lui khỏi %s thất bại! Tỷ lệ thành công: %.0f%%. Địch nhân thừa cơ tấn công!", enemyName, fleeChance*100))
+
+		// Execute enemy actions
+		for eIdx := range player.ActiveCombat.Enemies {
+			enemy := &player.ActiveCombat.Enemies[eIdx]
+			if enemy.HP <= 0 {
+				continue
+			}
+			targetsIdx := ResolveTargets(player.ActiveCombat.Allies, "SINGLE", 2, 3, false)
+			if len(targetsIdx) > 0 {
+				targetAlly := &player.ActiveCombat.Allies[targetsIdx[0]]
+				enemyCtx := &CombatContext{
+					Attacker: enemy,
+					Defender: targetAlly,
+					Logs:     []string{},
+				}
+				enemyActions := BuildEnemyActions(enemyCtx, enemy)
+				if len(enemyActions) > 0 {
+					act := enemyActions[0]
+					if act.ManaCost > 0 {
+						if player.ActiveCombat.EnemyType != "PVP" && enemy.Kind != "Player" {
+							hpCost := enemy.MaxHP * 0.05
+							if hpCost < 1.0 {
+								hpCost = 1.0
+							}
+							enemy.HP -= hpCost
+							turnLogs = append(turnLogs, fmt.Sprintf("-> %s tiêu hao sinh lực (Mất %.1f HP) để thúc dục Cổ ký sinh!", enemy.Name, hpCost))
+							if enemy.HP <= 0 {
+								turnLogs = append(turnLogs, fmt.Sprintf("-> %s bị Cổ ký sinh vắt kiệt sinh mệnh đến chết!", enemy.Name))
+								continue
+							}
+						} else if enemy.CurrentMana >= act.ManaCost {
+							enemy.CurrentMana -= act.ManaCost
+						}
+					}
+
+					isHealing := act.Def > 0 && (act.IsUtility || (len(act.StatusEffects) == 0 && act.Dmg == 0))
+					isAttack := act.Dmg > 0 || len(act.StatusEffects) > 0
+
+					if isHealing {
+						healVal := act.Def
+						enemy.HP += healVal
+						if enemy.HP > enemy.MaxHP {
+							enemy.HP = enemy.MaxHP
+						}
+						turnLogs = append(turnLogs, fmt.Sprintf("-> %s kích hoạt phòng ngự/trị liệu %s, hồi %.1f HP.", enemy.Name, act.Name, healVal))
+					} else if isAttack {
+						netDmg := act.Dmg - targetAlly.BaseDefense
+						if netDmg < 1.0 {
+							netDmg = 1.0
+						}
+						dmgLog := applyDamageWithLogs(enemy.Name, targetAlly.Name, targetAlly, netDmg)
+						turnLogs = append(turnLogs, fmt.Sprintf("-> %s kích hoạt %s tấn công!", enemy.Name, act.Name), dmgLog)
+					} else {
+						turnLogs = append(turnLogs, fmt.Sprintf("-> %s kích hoạt %s (Hỗ trợ)!", enemy.Name, act.Name))
+					}
+				} else {
+					dmgVal := enemy.BaseAttack
+					if dmgVal <= 0 {
+						dmgVal = 5.0
+					}
+					netDmg := dmgVal - targetAlly.BaseDefense
+					if netDmg < 1.0 {
+						netDmg = 1.0
+					}
+					dmgLog := applyDamageWithLogs(enemy.Name, targetAlly.Name, targetAlly, netDmg)
+					turnLogs = append(turnLogs, fmt.Sprintf("-> %s đánh thường!", enemy.Name), dmgLog)
+				}
+			}
+		}
+
+		// Update player and allies HP
+		casterIdx := -1
+		for idx, ally := range player.ActiveCombat.Allies {
+			if ally.ID == player.ID.String() {
+				casterIdx = idx
+				break
+			}
+		}
+		if casterIdx >= 0 {
+			player.HP = player.ActiveCombat.Allies[casterIdx].HP
+			player.CurrentMana = player.ActiveCombat.Allies[casterIdx].CurrentMana
+		}
+
+		for _, ally := range player.ActiveCombat.Allies {
+			if ally.ID != player.ID.String() {
+				if ally.Kind == "Pet" {
+					if ally.HP <= 0 {
+						_, _ = tx.Exec(`DELETE FROM player_pets WHERE id = $1 AND player_id = $2`, ally.ID, player.ID)
+					} else {
+						_, _ = tx.Exec(`UPDATE player_pets SET hp = $1, updated_at = NOW() WHERE id = $2 AND player_id = $3`,
+							ally.HP, ally.ID, player.ID)
+					}
+					continue
+				}
+				allyUUID, errParse := uuid.Parse(ally.ID)
+				if errParse == nil {
+					allyHP := ally.HP
+					if allyHP < 0 {
+						allyHP = 0
+					}
+					_, _ = tx.Exec("UPDATE players SET hp = $1 WHERE id = $2", allyHP, allyUUID)
+				}
+			}
+		}
+
+		defeat := player.HP <= 0
+		var defeatAudit *auditlog.Entry
+
+		if defeat {
+			turnLogs = append(turnLogs, "=== THẤT BẠI THẢM HẠI ===")
+			isExploration := player.ActiveCombat.CombatMode != "virtual" && player.ActiveCombat.EnemyTemplateID != "monster_heavenly_tribulation"
+			if isExploration {
+				player.HP = 1.0
+				player.CurrentRegion, player.X, player.Y = NearestHub(player.X, player.Y)
+
+				dropSummary := applyDeathDropRecord(tx, &authID, nil)
+				_ = tx.QueryRow("SELECT primeval_stones, immortal_stones FROM players WHERE id = $1", authID).Scan(&player.PrimevalStones, &player.ImmortalStones)
+
+				defeatAudit = &auditlog.Entry{
+					PlayerID:       &authID,
+					Action:         "combat.flee_failed_death",
+					RequestSummary: fmt.Sprintf("lost=%s", dropSummary),
+					IPAddress:      c.ClientIP(),
+					Success:        true,
+				}
+
+				if dropSummary != "" {
+					turnLogs = append(turnLogs, fmt.Sprintf("Đạo hữu bị đánh trọng thương ngất xỉu. Tỉnh dậy đã thấy ở an toàn nhưng rơi rớt mất: %s.", dropSummary))
+				} else {
+					turnLogs = append(turnLogs, "Đạo hữu bị đánh trọng thương ngất xỉu. Tỉnh dậy đã thấy ở an toàn.")
+				}
+			} else {
+				player.HP = 1.0
+				turnLogs = append(turnLogs, "Đạo hữu bại trận!")
+			}
+			player.ActiveCombat = nil
+		}
+
+		// Update players table
+		updateQuery := `
+			UPDATE players
+			SET hp = $1, current_mana = $2, primeval_stones = $3, x = $4, y = $5, current_region = $6, active_combat = $7
+			WHERE id = $8
+		`
+		_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.PrimevalStones, player.X, player.Y, player.CurrentRegion, player.ActiveCombat, player.ID)
+		if err != nil {
+			respondCombatTxErr(c, err, "Failed to update player status after failed retreat")
+			return
+		}
+
 		if err = tx.Commit(); err != nil {
 			respondCombatTxErr(c, err, "Transaction commit failed")
 			return
 		}
+
+		if defeatAudit != nil {
+			auditlog.Log(db.DB, *defeatAudit)
+		}
 		auditlog.Logf(db.DB, &authID, "combat.flee_failed", "enemy=%s", enemyName)
+
 		responseWithPlayer(c, http.StatusOK, player, gin.H{
 			"flee_success": false,
-			"log":          logMsg,
+			"logs":         turnLogs,
+			"enemy":        player.ActiveCombat,
+			"defeat":       defeat,
 		})
 		return
 	}

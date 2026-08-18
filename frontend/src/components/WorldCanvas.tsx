@@ -677,7 +677,69 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       }
     };
 
+    let initialTouchDistance = 0;
+    let initialScale = 0;
+    let initialTouchCenter = { x: 0, y: 0 };
+
+    const getTouchDistance = (t1: Touch, t2: Touch) => {
+      return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+    };
+
+    const getTouchCenter = (t1: Touch, t2: Touch) => {
+      return {
+        x: (t1.clientX + t2.clientX) / 2,
+        y: (t1.clientY + t2.clientY) / 2,
+      };
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        initialTouchDistance = getTouchDistance(e.touches[0], e.touches[1]);
+        initialScale = scaleRef.current;
+        initialTouchCenter = getTouchCenter(e.touches[0], e.touches[1]);
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && initialTouchDistance > 0) {
+        e.preventDefault();
+        const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
+        const ratio = currentDistance / initialTouchDistance;
+        let newScale = initialScale * ratio;
+
+        const app = appRef.current;
+        const minScale = app ? Math.min(app.screen.width / WORLD_W, app.screen.height / WORLD_H) : 0.005;
+        newScale = Math.max(minScale, Math.min(40, newScale));
+
+        const oldScale = scaleRef.current;
+        scaleRef.current = newScale;
+
+        if (appRef.current && stageRef.current) {
+          const rect = canvasElement.getBoundingClientRect();
+          const centerX = initialTouchCenter.x - rect.left;
+          const centerY = initialTouchCenter.y - rect.top;
+
+          const stageX = stageRef.current.position.x;
+          const stageY = stageRef.current.position.y;
+          const worldX = (centerX - stageX) / oldScale;
+          const worldY = (centerY - stageY) / oldScale;
+
+          stageRef.current.scale.set(newScale);
+          stageRef.current.position.set(centerX - worldX * newScale, centerY - worldY * newScale);
+          setCamera(newScale, stageRef.current.position.x, stageRef.current.position.y);
+          fogDirtyRef.current = true;
+        }
+      }
+    };
+
+    const handleTouchEnd = () => {
+      initialTouchDistance = 0;
+    };
+
     canvasElement.addEventListener("wheel", handleWheel, { passive: false });
+    canvasElement.addEventListener("touchstart", handleTouchStart, { passive: false });
+    canvasElement.addEventListener("touchmove", handleTouchMove, { passive: false });
+    canvasElement.addEventListener("touchend", handleTouchEnd);
 
     const initApp = async () => {
       const app = new Application();
@@ -829,6 +891,9 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       setAppReady(false);
       cancelAnimationFrame(animIdRef.current);
       canvasElement.removeEventListener("wheel", handleWheel);
+      canvasElement.removeEventListener("touchstart", handleTouchStart);
+      canvasElement.removeEventListener("touchmove", handleTouchMove);
+      canvasElement.removeEventListener("touchend", handleTouchEnd);
       if (appRef.current) {
         appRef.current.destroy();
         appRef.current = null;

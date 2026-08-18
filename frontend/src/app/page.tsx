@@ -191,11 +191,19 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col py-2 sm:py-8 px-2 sm:px-6 lg:px-8 relative">
+    <div className={`min-h-screen flex flex-col py-2 sm:py-8 ${(currentView === "world-map" || currentView === "explore") ? "px-0" : "px-2"} sm:px-6 lg:px-8 relative`}>
       {/* Top Header Navigation */}
       <header className="w-full max-w-[1600px] px-4 sm:px-8 mx-auto flex justify-between items-center pb-4 border-b border-[var(--border-default)] mb-4">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
+          <div 
+            onClick={() => {
+              if (player && !inCombat && currentView !== "dashboard") {
+                setView("dashboard");
+              }
+            }}
+            className={`flex items-center gap-2 ${player && !inCombat && currentView !== "dashboard" ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
+            title={player && !inCombat && currentView !== "dashboard" ? "Trở về Sảnh" : undefined}
+          >
               <div className="w-8 h-8 rounded-lg bg-[var(--brand-dim)] border border-[var(--brand-primary)] flex items-center justify-center shrink-0">
                 <Sparkles className="w-4 h-4 text-emerald-400" />
               </div>
@@ -204,15 +212,6 @@ export default function Home() {
               </h1>
           </div>
         </div>
-        {player && !inCombat && currentView !== "dashboard" && (
-            <button
-              onClick={() => setView("dashboard")}
-              className="px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-default)] serif transition-colors cursor-pointer flex items-center gap-1"
-            >
-              <span>⬅</span>
-              <span>Trở về Sảnh</span>
-            </button>
-          )}
 
         <div className="flex items-center gap-2">
           {player && !inCombat && currentView !== "wiki" && (
@@ -240,7 +239,7 @@ export default function Home() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-grow flex items-start justify-center w-full max-w-[1600px] px-4 sm:px-8 mx-auto">
+      <main className={`flex-grow flex items-start justify-center w-full max-w-[1600px] ${(currentView === "world-map" || currentView === "explore") ? "px-0" : "px-4"} sm:px-8 mx-auto`}>
         {!player ? (
           <div className="py-12 w-full flex justify-center">
             <Registration

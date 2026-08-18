@@ -3366,8 +3366,14 @@ export const useGameStore = create<GameState>((set, get) => {
 
       if (data.flee_success === false) {
         setPlayerFromServer(data.player);
-        get().addLog(data.log || "Rút lui thất bại!");
-        get().addToast(data.log || "Rút lui thất bại!", "info");
+        if (data.logs && Array.isArray(data.logs)) {
+          data.logs.forEach((logLine: string) => {
+            get().addLog(logLine);
+          });
+        } else {
+          get().addLog("Rút lui thất bại!");
+        }
+        get().addToast("Cố gắng rút lui thất bại! Địch nhân thừa cơ tấn công!", "info");
         return;
       }
 
