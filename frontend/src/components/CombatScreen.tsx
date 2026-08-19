@@ -17,7 +17,7 @@ interface CombatScreenProps {
   practiceDummyConfig?: any;
   onPracticeDummyConfigChange?: (config: any) => void;
   onAttack?: () => Promise<unknown>;
-  onRetreat?: () => Promise<void>;
+  onRetreat?: () => Promise<any>;
 }
 
 const rankLabel = (r: number) => {
@@ -1079,6 +1079,93 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       {/* Ally Intel Panel */}
       {renderAllyIntel()}
 
+      {/* Action Buttons (Tấn công, Bắt quái, Rút lui) */}
+      <div className="flex gap-4 flex-wrap">
+        <button
+          onClick={handleStartSimulation}
+          disabled={actionLoading || selectedGuIds.length === 0}
+          className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          <Play className="w-6 h-6" />
+          <span>Tấn Công / Chiến Đấu</span>
+        </button>
+        {(() => {
+          if (isPracticeMode) return null;
+          const monsterSpec = monsterDictionary[enemy.enemy_template_id || ""];
+          const captureCandidates = selectedGuIds
+            .map(id => {
+              const gu = eligibleGus.find(g => g.instance_id === id);
+              if (!gu) return null;
+              const spec = guSpecFor(gu.gu_id, gu.rank);
+              return spec?.effects?.active?.capture_bonus ? { gu, spec } : null;
+            })
+            .filter((x): x is { gu: GuInstance; spec: GuSpec } => x !== null);
+          const hasCaptureBonus = captureCandidates.length > 0;
+          const bestCaptureRank = captureCandidates.reduce((max, c) => Math.max(max, c.spec.rank || 0), 0);
+          const monsterRank = enemy.enemy_rank ?? 0;
+          const isCapturable = monsterSpec?.is_capturable && hasCaptureBonus;
+          if (!isCapturable) return null;
+          const rankInsufficient = bestCaptureRank < monsterRank;
+          if (rankInsufficient) {
+            return (
+              <div className="flex flex-col gap-1 w-full sm:w-auto">
+                <button
+                  disabled
+                  className="w-full sm:px-6 bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white font-bold py-4 rounded-xl opacity-40 flex items-center justify-center gap-2 cursor-not-allowed"
+                >
+                  <PawPrint className="w-6 h-6" />
+                  <span>Thu Phục</span>
+                </button>
+                <div className="flex items-center gap-1.5 text-[11px] text-amber-400">
+                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>Cổ bắt rank {bestCaptureRank} không đủ bắt quái rank {monsterRank}. Cần rank {monsterRank} trở lên.</span>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <button
+              onClick={async () => {
+                const result = await useGameStore.getState().captureMonster();
+                if (result?.captured) {
+                  handleExitSimulation();
+                } else if (result) {
+                  handleStartSimulation();
+                }
+              }}
+              disabled={actionLoading}
+              className="px-6 bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 text-white font-bold py-4 rounded-xl transition-all shadow-[0_0_15px_rgba(168,85,247,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              <PawPrint className="w-6 h-6" />
+              <span>Thu Phục</span>
+            </button>
+          );
+        })()}
+        {onRetreat && (
+          <button
+            onClick={async () => {
+              const res = await onRetreat();
+              if (res && res.flee_success === false) {
+                const simulatedLogs = (res.logs || []).map((line: string, idx: number) => ({
+                  turn: 1,
+                  actor_id: "enemy",
+                  actor_name: "Địch",
+                  action: "BASIC_ATTACK",
+                  detail: line
+                }));
+                setSimulationLogs(simulatedLogs);
+                setSimulationWinner("Phe Địch");
+                setSimulationCombatants(res.enemy?.enemies || []);
+              }
+            }}
+            disabled={actionLoading}
+            className="px-6 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold py-4 rounded-xl border border-zinc-800 transition-all flex items-center gap-2 justify-center"
+          >
+            <span>Rút Lui</span>
+          </button>
+        )}
+      </div>
+
       {/* Recommendation Panel */}
       {playerBestPaths.length > 0 && showRecommendation && (
         <div className="bg-gradient-to-r from-emerald-950/30 to-cyan-950/30 border border-emerald-800/30 rounded-xl p-4 mb-2">
@@ -1185,6 +1272,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             </div>
           );
         })()}
+
+
 
         {/* Single Gu Selection Grid */}
         <div className="mb-6">
@@ -1350,74 +1439,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           </div>
         </div>
 
-        <div className="flex gap-4">
-          <button
-            onClick={handleStartSimulation}
-            disabled={actionLoading || selectedGuIds.length === 0}
-            className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            <Play className="w-6 h-6" />
-          </button>
-          {(() => {
-            if (isPracticeMode) return null;
-            const monsterSpec = monsterDictionary[enemy.enemy_template_id || ""];
-            const captureCandidates = selectedGuIds
-              .map(id => {
-                const gu = eligibleGus.find(g => g.instance_id === id);
-                if (!gu) return null;
-                const spec = guSpecFor(gu.gu_id, gu.rank);
-                return spec?.effects?.active?.capture_bonus ? { gu, spec } : null;
-              })
-              .filter((x): x is { gu: GuInstance; spec: GuSpec } => x !== null);
-            const hasCaptureBonus = captureCandidates.length > 0;
-            const bestCaptureRank = captureCandidates.reduce((max, c) => Math.max(max, c.spec.rank || 0), 0);
-            const monsterRank = enemy.enemy_rank ?? 0;
-            const isCapturable = monsterSpec?.is_capturable && hasCaptureBonus;
-            if (!isCapturable) return null;
-            const rankInsufficient = bestCaptureRank < monsterRank;
-            if (rankInsufficient) {
-              return (
-                <div className="flex flex-col gap-1">
-                  <button
-                    disabled
-                    className="px-6 bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white font-bold py-4 rounded-xl opacity-40 flex items-center justify-center gap-2 cursor-not-allowed"
-                  >
-                    <PawPrint className="w-6 h-6" />
-                  </button>
-                  <div className="flex items-center gap-1.5 text-[11px] text-amber-400">
-                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span>Cổ bắt rank {bestCaptureRank} không đủ bắt quái rank {monsterRank}. Cần rank {monsterRank} trở lên.</span>
-                  </div>
-                </div>
-              );
-            }
-            return (
-              <button
-                onClick={async () => {
-                  const result = await useGameStore.getState().captureMonster();
-                  if (result?.captured) {
-                    handleExitSimulation();
-                  } else if (result) {
-                    handleStartSimulation();
-                  }
-                }}
-                disabled={actionLoading}
-                className="px-6 bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 text-white font-bold py-4 rounded-xl transition-all shadow-[0_0_15px_rgba(168,85,247,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                <PawPrint className="w-6 h-6" />
-              </button>
-            );
-          })()}
-          {onRetreat && (
-            <button
-              onClick={onRetreat}
-              disabled={actionLoading}
-              className="px-6 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold py-4 rounded-xl border border-zinc-800 transition-all"
-            >
-              Rút Lui
-            </button>
-          )}
-        </div>
+
       </div>
     </div>
   );

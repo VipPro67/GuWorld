@@ -763,6 +763,18 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
     return null;
   }, [isCompleted, parseSummary]);
 
+  const rewards = useMemo(() => {
+    return logs.filter(log => ["LOOT", "ARENA_REWARD", "ARENA_RANK_UP", "MINE_LOOT", "MINE_OCCUPY", "PATH_MASTERY_GAIN"].includes(log.action));
+  }, [logs]);
+
+  const losses = useMemo(() => {
+    return logs.filter(log => {
+      if (log.action === "PET_DEATH") return true;
+      if (log.action === "BATTLE_END" && log.detail?.includes("rơi rớt mất")) return true;
+      return false;
+    });
+  }, [logs]);
+
   const totalTurns = useMemo(() => {
     let maxTurn = 0;
     for (const log of logs) {
@@ -829,6 +841,90 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Result Summary */}
+      {isCompleted && summary && (
+        <div className="bg-black/50 border border-zinc-800 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Swords className="w-4 h-4 text-amber-400" />
+            <h3 className="text-sm font-bold text-zinc-200">Kết quả</h3>
+            <span className={`ml-auto text-xs px-2 py-0.5 rounded font-bold ${winner === 'Phe Ta' ? 'bg-emerald-900/50 text-emerald-400 border border-emerald-800' : 'bg-rose-900/50 text-rose-400 border border-rose-800'}`}>
+              {winner === 'Phe Ta' ? 'THẮNG LỢI' : 'THẤT BẠI'}
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-3 text-xs">
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
+              <div className="text-zinc-500">Sát thương gây</div>
+              <div className="font-bold text-lg text-amber-400"><Num value={summary.totalDmgDealt} /></div>
+            </div>
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
+              <div className="text-zinc-500">Sát thương nhận</div>
+              <div className="font-bold text-lg text-rose-400"><Num value={summary.totalDmgTaken} /></div>
+            </div>
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
+              <div className="text-zinc-500">Khiên dùng</div>
+              <div className="font-bold text-lg text-blue-400"><Num value={summary.shieldsUsed} /></div>
+            </div>
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
+              <div className="text-zinc-500">Mana tiêu hao</div>
+              <div className="font-bold text-lg text-purple-400"><Num value={summary.manaCost} /></div>
+            </div>
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
+              <div className="text-zinc-500">Số item dùng</div>
+              <div className="font-bold text-lg text-emerald-400"><Num value={summary.itemsUsed} /></div>
+            </div>
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
+              <div className="text-zinc-500">Nguyên Thạch dùng</div>
+              <div className="font-bold text-lg text-orange-400"><Num value={summary.stonesUsed} /></div>
+            </div>
+          </div>
+
+          {/* Rewards & Gained */}
+          {rewards.length > 0 && (
+            <div className="mt-4 border-t border-zinc-800 pt-3">
+              <div className="text-xs font-semibold text-emerald-400 mb-1.5 flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5" />
+                Nhận được:
+              </div>
+              <div className="space-y-1 bg-emerald-950/20 border border-emerald-900/30 rounded-lg p-2.5">
+                {rewards.map((r, idx) => (
+                  <div key={idx} className="text-xs text-emerald-300 flex items-start gap-1.5">
+                    <span className="text-emerald-500">•</span>
+                    <span>{r.detail}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Losses */}
+          {winner !== 'Phe Ta' && losses.length > 0 && (
+            <div className="mt-4 border-t border-zinc-800 pt-3">
+              <div className="text-xs font-semibold text-rose-400 mb-1.5 flex items-center gap-1">
+                <Skull className="w-3.5 h-3.5" />
+                Tổn thất:
+              </div>
+              <div className="space-y-1 bg-rose-950/20 border border-rose-900/30 rounded-lg p-2.5">
+                {losses.map((l, idx) => (
+                  <div key={idx} className="text-xs text-rose-300 flex items-start gap-1.5">
+                    <span className="text-rose-500">•</span>
+                    <span>{l.detail}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {isCompleted && (
+        <button
+          onClick={onBack}
+          className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold py-3 rounded-xl transition-all"
+        >
+          Trở Về
+        </button>
+      )}
 
       {/* Grid Battlefield: 2 grids side by side */}
       <div className="flex flex-col md:flex-row gap-4">
@@ -899,45 +995,6 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
               </div>
             );
           })}
-        </div>
-      )}
-
-      {/* Result Summary */}
-      {isCompleted && summary && (
-        <div className="bg-black/50 border border-zinc-800 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Swords className="w-4 h-4 text-amber-400" />
-            <h3 className="text-sm font-bold text-zinc-200">Kết quả</h3>
-            <span className={`ml-auto text-xs px-2 py-0.5 rounded font-bold ${winner === 'Phe Ta' ? 'bg-emerald-900/50 text-emerald-400 border border-emerald-800' : 'bg-rose-900/50 text-rose-400 border border-rose-800'}`}>
-              {winner === 'Phe Ta' ? 'THẮNG LỢI' : 'THẤT BẠI'}
-            </span>
-          </div>
-          <div className="grid grid-cols-3 gap-3 text-xs">
-            <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
-              <div className="text-zinc-500">Sát thương gây</div>
-              <div className="font-bold text-lg text-amber-400"><Num value={summary.totalDmgDealt} /></div>
-            </div>
-            <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
-              <div className="text-zinc-500">Sát thương nhận</div>
-              <div className="font-bold text-lg text-rose-400"><Num value={summary.totalDmgTaken} /></div>
-            </div>
-            <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
-              <div className="text-zinc-500">Khiên dùng</div>
-              <div className="font-bold text-lg text-blue-400"><Num value={summary.shieldsUsed} /></div>
-            </div>
-            <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
-              <div className="text-zinc-500">Mana tiêu hao</div>
-              <div className="font-bold text-lg text-purple-400"><Num value={summary.manaCost} /></div>
-            </div>
-            <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
-              <div className="text-zinc-500">Số item dùng</div>
-              <div className="font-bold text-lg text-emerald-400"><Num value={summary.itemsUsed} /></div>
-            </div>
-            <div className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-3 text-center">
-              <div className="text-zinc-500">Nguyên Thạch dùng</div>
-              <div className="font-bold text-lg text-orange-400"><Num value={summary.stonesUsed} /></div>
-            </div>
-          </div>
         </div>
       )}
 
@@ -1018,14 +1075,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
         </div>
       </div>
 
-      {isCompleted && (
-        <button
-          onClick={onBack}
-          className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold py-3 rounded-xl transition-all"
-        >
-          Trở Về
-        </button>
-      )}
+
 
       {renderDetailPopup()}
     </div>

@@ -268,7 +268,7 @@ func RefineGu(c *gin.Context) {
 
 	// 4b. Validate Costs (Immortal Essence Stones)
 	if recipe.ImmortalEssenceStonesCost > 0 && player.ImmortalStones < recipe.ImmortalEssenceStonesCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Not enough Immortal Essence Stones (Tiên Tinh Thạch)"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Not enough Immortal Essence Stones"})
 		return
 	}
 

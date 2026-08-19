@@ -979,7 +979,7 @@ interface GameState {
   currentView: string;
   setView: (view: string) => void;
   retreat: () => Promise<void>;
-  fleeCombat: () => Promise<void>;
+  fleeCombat: () => Promise<any>;
   combatSettings: AutoCombatConfig | null;
   combatSettingsLoading: boolean;
   fetchCombatSettings: () => Promise<void>;
@@ -3393,7 +3393,7 @@ export const useGameStore = create<GameState>((set, get) => {
           get().addLog("Rút lui thất bại!");
         }
         get().addToast("Cố gắng rút lui thất bại! Địch nhân thừa cơ tấn công!", "info");
-        return;
+        return data;
       }
 
       const combat = player.active_combat;
@@ -3404,6 +3404,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
       setPlayerFromServer(data.player, { currentView: returnView });
       get().addLog(data.log || "Đạo hữu đã bỏ chạy an toàn.");
+      return data;
     } catch (err: any) {
       set({ error: err.message });
       get().addToast(err.message || "Thao tác thất bại.", "error");

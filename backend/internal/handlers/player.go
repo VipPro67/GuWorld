@@ -504,25 +504,33 @@ func RegisterPlayer(c *gin.Context) {
 	}
 	passwordHash := string(hashedBytes)
 
-	// 2. Gacha rolling for aptitude
-	// For test so increase Giáp, Ất rate
-	//roll := rand.Intn(101)
-	roll := rand.Intn(31) // 0-30 for testing
+	roll := rand.Intn(100)
+
 	var aptitudeType string
 	var aptitudePercent int
 
-	if roll < 10 {
+	switch {
+	case roll < 5:
 		aptitudeType = "Giáp"
-		aptitudePercent = 80 + rand.Intn(20) // 80 - 99
-	} else if roll < 30 {
+		aptitudePercent = 80 + rand.Intn(21)
+	case roll < 20:
 		aptitudeType = "Ất"
-		aptitudePercent = 60 + rand.Intn(20) // 60 - 79
-	} else if roll < 60 {
+		aptitudePercent = 60 + rand.Intn(20)
+	case roll < 50:
 		aptitudeType = "Bính"
-		aptitudePercent = 40 + rand.Intn(20) // 40 - 59
-	} else {
+		aptitudePercent = 50 + rand.Intn(10)
+	default:
 		aptitudeType = "Đinh"
-		aptitudePercent = 20 + rand.Intn(20) // 20 - 39
+		aptitudePercent = 30 + rand.Intn(10)
+	}
+
+	var constitution string = ""
+	if aptitudePercent == 100 {
+		defs := gamefx.AllConstitutions()
+		if len(defs) > 0 {
+			idx := rand.Intn(len(defs))
+			constitution = defs[idx].Key
+		}
 	}
 
 	// Map aptitude type to numeric grade (1 = A/Giáp .. 4 = D/Đinh)
@@ -638,14 +646,14 @@ func RegisterPlayer(c *gin.Context) {
 
 	var player models.Player
 	query := `
-		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, lifespan, time_speed_multiplier, email, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, avatar_url, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding, race, gender)
-		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, $14, $15, $11, '{}'::jsonb, '[]'::jsonb, $8, '{}'::jsonb, NULL, 100.0, 1.0, $9, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $10, true, $12, $13)
+		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, lifespan, time_speed_multiplier, email, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, avatar_url, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding, race, gender, constitution)
+		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, $14, $15, $11, '{}'::jsonb, '[]'::jsonb, $8, '{}'::jsonb, NULL, 100.0, 1.0, $9, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $10, true, $12, $13, $16)
 		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, avatar_url, needs_onboarding, race, gender, constitution, statuses
 	`
 
 	var activeCombatBytes []byte
 	hx, hy := hubEntryPoint()
-	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, req.StartingRegion, req.Email, refCode, equippedGus, req.Race, req.Gender, hx, hy).Scan(
+	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, req.StartingRegion, req.Email, refCode, equippedGus, req.Race, req.Gender, hx, hy, constitution).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
 		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
