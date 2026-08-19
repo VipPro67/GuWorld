@@ -216,12 +216,16 @@ func Flee(c *gin.Context) {
 	var logMsg string
 	var defeatAudit *auditlog.Entry
 
+	// Mine and PvP combat always allow a free escape — fleeing is not gated by
+	// a random roll and carries no penalty for those encounter types.
+	freeFlee := fleeFreeRetreat(player.ActiveCombat)
+
 	fleeChance := 0.70
 	if player.ActiveCombat.EnemyType == "BOSS" || player.ActiveCombat.EnemyType == "TRIBULATION_BOSS" || player.ActiveCombat.EnemyType == "TRIBULATION_MONSTER" {
 		fleeChance = 0.40
 	}
 	roll := rand.Float64()
-	success := roll < fleeChance
+	success := freeFlee || roll < fleeChance
 
 	if !success {
 		// Initialize allies/enemies if not already done
@@ -337,11 +341,61 @@ func Flee(c *gin.Context) {
 		}
 
 		defeat := player.HP <= 0
-		var defeatAudit *auditlog.Entry
+		enemyCombatState := player.ActiveCombat
+
+		// If the counterattack killed every remaining enemy (e.g. the enemy
+		// self-destructed through its parasitic Gu cost), the player wins on the
+		// spot instead of continuing the fight.
+		victory := false
+		if !defeat {
+			victory = true
+			for _, enemy := range player.ActiveCombat.Enemies {
+				if enemy.HP > 0 {
+					victory = false
+					break
+				}
+			}
+		}
+
+		if victory {
+			victoryLogs := fleeFailVictory(tx, &player)
+			turnLogs = append(turnLogs, victoryLogs...)
+
+			updateQuery := `
+				UPDATE players
+				SET hp = $1, current_mana = $2, primeval_stones = $3, x = $4, y = $5, current_region = $6,
+				    active_combat = $7, human_qi = $8, cleared_cells = $9
+				WHERE id = $10
+			`
+			_, err = tx.Exec(updateQuery, player.HP, player.CurrentMana, player.PrimevalStones, player.X, player.Y, player.CurrentRegion,
+				player.ActiveCombat, player.HumanQi, player.ClearedCells, player.ID)
+			if err != nil {
+				respondCombatTxErr(c, err, "Failed to update player status after fleeing")
+				return
+			}
+
+			if err = tx.Commit(); err != nil {
+				respondCombatTxErr(c, err, "Transaction commit failed")
+				return
+			}
+
+			setWorldPosFromPlayer(&player)
+
+			auditlog.Logf(db.DB, &authID, "combat.flee_victory", "enemy=%s", enemyName)
+			responseWithPlayer(c, http.StatusOK, player, gin.H{
+				"flee_success": false,
+				"victory":      true,
+				"defeat":       false,
+				"logs":         turnLogs,
+				"enemy":        enemyCombatState,
+			})
+			return
+		}
 
 		if defeat {
 			turnLogs = append(turnLogs, "=== THẤT BẠI THẢM HẠI ===")
 			isExploration := player.ActiveCombat.CombatMode != "virtual" && player.ActiveCombat.EnemyTemplateID != "monster_heavenly_tribulation"
+			isMine := player.ActiveCombat.MineSlotID > 0
 			if isExploration {
 				player.HP = 1.0
 				player.CurrentRegion, player.X, player.Y = NearestHub(player.X, player.Y)
@@ -350,6 +404,33 @@ func Flee(c *gin.Context) {
 			} else {
 				player.HP = 1.0
 				turnLogs = append(turnLogs, "Đạo hữu bại trận!")
+			}
+
+			// Death penalty applies to real PvE exploration and normal PvP only.
+			// Mine and arena (virtual) defeats never drop items/stones.
+			if isExploration && !isMine {
+				var winnerID *uuid.UUID
+				if player.ActiveCombat.TargetPlayerID != "" {
+					if winner, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID); parseErr == nil {
+						winnerID = &winner
+					}
+				}
+				dropSummary := applyDeathDropRecord(tx, &authID, winnerID)
+				_ = tx.QueryRow("SELECT primeval_stones, immortal_stones FROM players WHERE id = $1", authID).Scan(&player.PrimevalStones, &player.ImmortalStones)
+				if dropSummary != "" {
+					defeatAudit = &auditlog.Entry{
+						PlayerID:       &authID,
+						Action:         "combat.flee_fail_death",
+						RequestSummary: fmt.Sprintf("lost=%s", dropSummary),
+						IPAddress:      c.ClientIP(),
+						Success:        true,
+					}
+					if winnerID != nil {
+						turnLogs = append(turnLogs, fmt.Sprintf("Đạo hữu bại trận và bị đối thủ cướp đoạt: %s.", dropSummary))
+					} else {
+						turnLogs = append(turnLogs, fmt.Sprintf("Đạo hữu bại trận và rơi rớt mất: %s.", dropSummary))
+					}
+				}
 			}
 			player.ActiveCombat = nil
 		}
@@ -375,19 +456,21 @@ func Flee(c *gin.Context) {
 
 		if defeatAudit != nil {
 			auditlog.Log(db.DB, *defeatAudit)
+		} else {
+			auditlog.Logf(db.DB, &authID, "combat.flee_failed", "enemy=%s", enemyName)
 		}
-		auditlog.Logf(db.DB, &authID, "combat.flee_failed", "enemy=%s", enemyName)
 
 		responseWithPlayer(c, http.StatusOK, player, gin.H{
 			"flee_success": false,
+			"victory":      false,
 			"logs":         turnLogs,
-			"enemy":        player.ActiveCombat,
+			"enemy":        enemyCombatState,
 			"defeat":       defeat,
 		})
 		return
 	}
 
-	isExploration := player.ActiveCombat.CombatMode != "virtual" && player.ActiveCombat.EnemyTemplateID != "monster_heavenly_tribulation" && player.ActiveCombat.MineSlotID == 0
+	isExploration := player.ActiveCombat.CombatMode != "virtual" && player.ActiveCombat.EnemyTemplateID != "monster_heavenly_tribulation" && player.ActiveCombat.MineSlotID == 0 && player.ActiveCombat.EnemyType != "PVP"
 
 	if isExploration {
 		maxHP := gamefx.EffectiveMaxHP(&player)
@@ -454,4 +537,68 @@ func Flee(c *gin.Context) {
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"log": logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})
+}
+
+// fleeFreeRetreat reports whether an active combat allows a guaranteed,
+// penalty-free escape (PvP and mine encounters).
+func fleeFreeRetreat(cs *models.CombatState) bool {
+	if cs == nil {
+		return false
+	}
+	return cs.EnemyType == "PVP" || cs.MineSlotID > 0
+}
+
+// fleeFailVictory handles the edge case where a failed flee's enemy counterattack
+// ends up killing every remaining enemy (e.g. the enemy self-destructs through
+// its parasitic Gu cost). The player wins on the spot: loot is granted, the
+// enemy is cleared from the map (boss cell / explored cell), and the player
+// stays at their current position. Returns the victory logs.
+func fleeFailVictory(tx *sql.Tx, player *models.Player) []string {
+	var logs []string
+	cs := player.ActiveCombat
+	if cs == nil {
+		return logs
+	}
+
+	isPvE := cs.CombatMode != "virtual" && cs.EnemyTemplateID != "monster_heavenly_tribulation" &&
+		cs.MineSlotID == 0 && cs.EnemyType != "PVP"
+
+	logs = append(logs, "=== CHIẾN THẮNG BẤT NGỜ ===")
+	logs = append(logs, "Đạo hữu cố gắng bỏ chạy nhưng địch nhân tự chuốc lấy diệt vong!")
+
+	// The Flee handler uses the light (equipped-only) inventory loader, so the
+	// before-snapshot is a subset of the post-loot inventory — SyncPlayerGus
+	// therefore only inserts the newly looted Gus without deleting anything.
+	before := append(models.GuInventory(nil), player.GuInventory...)
+
+	if isPvE && cs.LootTableID != "" {
+		if lt, err := db.LoadLootTable(tx, cs.LootTableID); err == nil {
+			loot := RollLoot(lt, cs.EnemyRank)
+			if cs.EnemyGuInventory != nil && len(cs.EnemyGuInventory) > 0 {
+				for _, eg := range cs.EnemyGuInventory {
+					if rand.Intn(100) < 10 {
+						loot.Gus = append(loot.Gus, eg.GuID)
+					}
+				}
+			}
+			logs = append(logs, ApplyLoot(tx, player, loot)...)
+		}
+	}
+
+	markBossCleared(tx, player)
+	if player.ClearedCells == nil {
+		player.ClearedCells = make(models.ClearedCellsMap)
+	}
+	coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
+	player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
+
+	qiGained := AddHumanQi(player, 20.0)
+	logs = append(logs, fmt.Sprintf("Chiến thắng đem lại sự tin tưởng của bá tánh. Nhân Khí +%.0f.", qiGained))
+
+	player.ActiveCombat = nil
+
+	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
+		return logs
+	}
+	return logs
 }

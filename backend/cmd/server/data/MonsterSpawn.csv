@@ -34,10 +34,10 @@ dai_vuc_dong_hai,monster_dark_squid,,,Roaming,0.2,90,4,6,False,True
 dai_vuc_dong_hai,monster_mirror_turtle,,,Roaming,0.2,90,3,6,False,True
 dai_vuc_dong_hai,monster_deep_sea_horror,,,Roaming,0.15,120,6,8,False,True
 dai_vuc_dong_hai,monster_tide_dragon,,,Roaming,0.05,240,7,8,True,True
-dai_vuc_hac_thien,monster_deep_sea_horror,,,Roaming,0.3,120,6,8,False,True
-dai_vuc_hac_thien,monster_tide_dragon,,,Roaming,0.2,180,7,9,False,True
-dai_vuc_hac_thien,monster_year_beast_tiger,,,Roaming,0.1,240,7,9,True,True
-dai_vuc_hac_thien,monster_immemorial_soul_beast,,,Roaming,0.1,240,7,9,True,True
+dai_vuc_hac_thien,monster_deep_sea_horror,,,Roaming,0.3,120,8,9,False,True
+dai_vuc_hac_thien,monster_tide_dragon,,,Roaming,0.2,180,8,9,False,True
+dai_vuc_hac_thien,monster_year_beast_tiger,,,Roaming,0.1,240,8,9,True,True
+dai_vuc_hac_thien,monster_immemorial_soul_beast,,,Roaming,0.1,240,8,9,True,True
 dai_vuc_hac_thien,monster_reverse_flow_spirit,,,Roaming,0.08,300,8,9,True,True
 dai_vuc_hac_thien,monster_soul_gate_godfiend,,,Roaming,0.05,300,8,9,True,True
 qing_mao_mountain,monster_wild_boar,,,Roaming,0.45,60,1,2,False,True
@@ -138,3 +138,12 @@ huyet_sa_khau,monster_desert_ghost_wraith,,,Roaming,0.25,90,3,5,False,True
 long_ngu_dao,monster_mirror_turtle,,,Roaming,0.35,90,3,6,False,True
 long_ngu_dao,monster_water_serpent,,,Roaming,0.3,90,4,7,False,True
 long_ngu_dao,monster_sea_beast,,,Roaming,0.35,60,3,6,False,True
+huyet_sa_khau,monster_blood_hound,,,Roaming,0.35,60,2,4,False,True
+blood_lake_purple_sand,monster_blood_hound,,,Roaming,0.30,60,2,4,False,True
+dai_vuc_tay_mac,monster_blood_hound,,,Roaming,0.20,60,2,4,False,True
+dai_vuc_hac_thien,monster_ancient_blood_golem,,,Roaming,0.15,120,6,8,False,True
+dai_vuc_hac_thien,monster_dao_spirit,,,Roaming,0.12,120,7,9,False,True
+quang_am_chi_ha,monster_dao_spirit,,,Roaming,0.15,120,7,9,False,True
+sinh_tu_mon,monster_dao_spirit,,,Roaming,0.20,120,8,9,False,True
+nghich_luu_ha,monster_ancient_blood_golem,,,Roaming,0.12,120,7,8,False,True
+dang_hon_son,monster_ancient_blood_golem,,,Roaming,0.15,120,6,8,False,True

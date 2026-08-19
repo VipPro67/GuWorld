@@ -64,6 +64,8 @@ export default function Home() {
     exploreNode,
     retreat,
     fleeCombat,
+    activeCombatReplay,
+    setActiveCombatReplay,
     buyShopItem,
     sellShopItem,
     sellShopItemsBulk,
@@ -141,8 +143,8 @@ export default function Home() {
     logout();
   };
 
-  // Force combat view if player is actively in combat
-  const inCombat = player && player.active_combat;
+  // Force combat view if player is actively in combat or if we have an active replay
+  const inCombat = (player && player.active_combat) || !!activeCombatReplay;
 
   
   const IS_MAINTENANCE = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
@@ -259,7 +261,7 @@ export default function Home() {
           <div className="w-full">
             <CombatScreen
               player={player}
-              enemy={player.active_combat!}
+              enemy={player.active_combat || activeCombatReplay!.enemy}
               guDictionary={guDictionary}
               actionLoading={actionLoading}
               onRetreat={fleeCombat}

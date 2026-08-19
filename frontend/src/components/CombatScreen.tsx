@@ -209,8 +209,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const investigationLevel = useMemo(() => computeInvestigation(), [player.gu_inventory, guDictionary]);
 
   const enemyInfoRevealed = useMemo(() => {
+    if (!enemy) return { showHP: false, showStats: false, showLootHints: false };
     const inv = investigationLevel;
-    const hpRange = enemy.enemy_max_hp > 10000 ? "Cao" : enemy.enemy_max_hp > 1000 ? "Trung bình" : "Thấp";
     return {
       showHP: inv >= 2,
       showStats: inv >= 4,
@@ -308,10 +308,12 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   }, [selectedGuIds, eligibleGus, guDictionary]);
 
   const handleExitSimulation = async () => {
+    useGameStore.getState().setActiveCombatReplay(null);
+    setSimulationLogs([]);
+    setSimulationCombatants([]);
+    setSimulationWinner(null);
+
     if (isPracticeMode) {
-      setSimulationLogs([]);
-      setSimulationCombatants([]);
-      setSimulationWinner(null);
       return;
     }
     await fetchPlayerStatus(player.id);
@@ -961,6 +963,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   };
 
   const renderEnemyIntel = () => {
+    if (!enemy) return null;
     if (isPracticeMode && practiceDummyConfig && onPracticeDummyConfigChange) {
       const { dummyHP, dummyShield, dummyAtk, dummyDef, dummySpeed } = practiceDummyConfig;
       const updateConfig = (key: string, val: number) => {
@@ -1061,6 +1064,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   };
 
   const renderAllyIntel = () => {
+    if (!enemy) return null;
     const allAllies = enemy.allies && enemy.allies.length > 0 ? enemy.allies : [];
     if (allAllies.length === 0) return null;
     return renderCombatantList(
@@ -1153,9 +1157,33 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                   action: "BASIC_ATTACK",
                   detail: line
                 }));
-                setSimulationLogs(simulatedLogs);
-                setSimulationWinner("Phe Địch");
-                setSimulationCombatants(res.enemy?.enemies || []);
+                const combatants = [
+                  ...(res.enemy?.allies || []),
+                  ...(res.enemy?.enemies || [])
+                ];
+                if (res.defeat || res.victory) {
+                  // The counterattack settled the fight: show an end replay
+                  // (defeat => Phe Địch, victory => Phe Ta).
+                  const winner = res.defeat ? "Phe Địch" : "Phe Ta";
+                  useGameStore.getState().setActiveCombatReplay({
+                    logs: simulatedLogs,
+                    winner,
+                    combatants,
+                    enemy: res.enemy
+                  });
+                  setSimulationLogs(simulatedLogs);
+                  setSimulationWinner(winner);
+                  setSimulationCombatants(combatants);
+                } else {
+                  // Survived the counterattack — continue the battle
+                  // immediately using the already-loaded (settings or
+                  // recommended) loadout.
+                  setSimulationLogs([]);
+                  setSimulationWinner(null);
+                  setSimulationCombatants([]);
+                  useGameStore.getState().setActiveCombatReplay(null);
+                  await handleStartSimulation();
+                }
               }
             }}
             disabled={actionLoading}

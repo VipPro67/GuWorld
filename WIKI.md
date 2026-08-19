@@ -88,7 +88,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 
 - Ngũ Chuyển Đỉnh phong (Chuyển 5, SubRank 4) có thể thăng tiên khi Nhân Khí đạt mức mong muốn.
 - **Tỉ lệ thành công tuyến tính theo Nhân Khí:** `chance = NhânKhí / 100.000`. 0 Nhân Khí → 0%, 40.000 → 40%, 100.000 → chắc chắn thành công.
-- **Thành công:** lên Lục Chuyển Cổ Tiên, nhận 10 Tiên Nguyên Thạch, Đạo Ngân Thiên/Địa = 100, kiếp đầu tiên sau 10 ngày. **Tiên Khiếu được khai mở ngay**, phẩm cấp được định đoạt theo Nhân Khí tại thời điểm thăng tiên (xem mục Tiên khiếu).
+- **Thành công:** lên Lục Chuyển Cổ Tiên, nhận 10 Tiên Nguyên Thạch, Đạo Ngân Thiên/Địa = 100. Kiếp đầu tiên giáng lâm vào **năm nội bộ thứ 10**, tương đương khoảng **2–10 giờ đời thật** tùy phẩm chất Tiên Khiếu (xem mục Gia tốc thời gian). **Tiên Khiếu được khai mở ngay**, phẩm cấp được định đoạt theo Nhân Khí tại thời điểm thăng tiên (xem mục Tiên khiếu).
 - **Thất bại:** Nhân Khí về 0, tu vi phế bỏ rơi về Nhất Chuyển Sơ giai, mất hết tiến độ phá vách.
 - Cổ Tiên có tiên khiếu, đạo ngân, tiên nguyên/tài nguyên riêng.
 - Tai kiếp có worker kiểm tra tự động mỗi 60 giây. Khi năm nội bộ đạt mốc tiếp theo, worker sinh kiếp và resolve.
@@ -192,7 +192,17 @@ Ngoài các mỏ tài nguyên, đạo hữu có thể xây dựng **công trình
 
 ### Gia tốc thời gian (Time Rate)
 
-- `time_rate` (1.0x - 100.0x) điều chỉnh tốc độ thời gian bên trong Tiên Khiếu.
+- `time_rate` (1.0x - 100.0x) điều chỉnh tốc độ thời gian bên trong Tiên Khiếu. Phẩm cấp Tiên Khiếu quyết định `time_rate` khởi tạo: **LOW 10–15×, MID 20–28×, HIGH 30–40×, EXTREME 40–55×**.
+- **1 năm nội bộ = 36.000 giây đời thật ÷ `time_rate`** (hằng số 36.000 giây/năm trong `tribulation.go` / `aperture.go`).
+- **Kiếp nạn đầu tiên** giáng lâm vào năm nội bộ thứ 10 → thời gian đời thật chờ = `10 × 36.000 ÷ time_rate` giây:
+
+| Phẩm cấp Tiên Khiếu | `time_rate` | Kiếp đầu tiên (đời thật) |
+|---|---|---|
+| LOW | 10–15× | 6h40m – 10 giờ |
+| MID | 20–28× | 3h34m – 5 giờ |
+| HIGH | 30–40× | 2h30m – 3h20m |
+| EXTREME | 40–55× | 1h49m – 2h30m |
+
 - **Ảnh hưởng đến:**
   - Tốc độ thu hoạch tài nguyên (cây, quặng, linh thú)
   - Tăng trưởng dân cư dị nhân
@@ -206,7 +216,7 @@ Ngoài các mỏ tài nguyên, đạo hữu có thể xây dựng **công trình
 
 ### Gia tốc thời gian cá nhân (Time Speed Multiplier)
 
-- `time_speed_multiplier` nhân tốc độ dòng thời gian cho mọi Cổ sư (mặc định 1.0; Cổ Tiên có Tiên Khiếu dùng mặc định 10.0).
+- `time_speed_multiplier` nhân tốc độ dòng thời gian cho mọi Cổ sư. Giá trị thực tế được lưu và dùng trong tính toán là **1.0** (chuẩn hóa trong `player_service.setDefaults`).
 - **Ảnh hưởng đến (chỉ nhân `time_speed_multiplier`, không nhân `time_rate`):**
   - Tốc độ hồi Sinh lực (HP)
   - Tiêu hao Thọ nguyên (trôi nhanh hơn)

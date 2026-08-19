@@ -980,6 +980,8 @@ interface GameState {
   setView: (view: string) => void;
   retreat: () => Promise<void>;
   fleeCombat: () => Promise<any>;
+  activeCombatReplay: { logs: any[]; winner: string; combatants: any[]; enemy: CombatState } | null;
+  setActiveCombatReplay: (replay: { logs: any[]; winner: string; combatants: any[]; enemy: CombatState } | null) => void;
   combatSettings: AutoCombatConfig | null;
   combatSettingsLoading: boolean;
   fetchCombatSettings: () => Promise<void>;
@@ -3316,6 +3318,9 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
+  activeCombatReplay: null,
+  setActiveCombatReplay: (replay) => set({ activeCombatReplay: replay }),
+
   retreat: async () => {
     const { player, token, actionLoading, logout } = get();
     if (!player || !token || actionLoading) return;
@@ -3354,9 +3359,11 @@ export const useGameStore = create<GameState>((set, get) => {
 
     // HP quá thấp (< 20% max): bỏ chạy trừ 20% Max HP — gần như chắc chắn ngất
     // xỉu, mất toàn bộ tài nguyên thu thập. Cảnh báo và chặn lại cho đạo hữu cân nhắc.
+    // Mine và PvP được bỏ chạy tự do nên bỏ qua cảnh báo này.
     const maxHP = player.base_hp || player.hp || 1;
     const isMine = !!player.active_combat?.mine_slot_id;
-    if (!isMine && player.hp <= 0.2 * maxHP) {
+    const isPVP = player.active_combat?.enemy_type === "PVP";
+    if (!isMine && !isPVP && player.hp <= 0.2 * maxHP) {
       set({ actionLoading: true });
       const proceed = await showConfirm(
         "HP của đạo hữu đang rất thấp. Bỏ chạy khỏi chiến đấu sẽ khiến đạo hữu chịu thêm 20% sát thương theo HP tối đa — gần như chắc chắn sẽ ngất xỉu, làm rơi mất toàn bộ Nguyên Thạch, Cổ trùng và tài nguyên thu thập. Vẫn muốn bỏ chạy?",
@@ -3392,7 +3399,13 @@ export const useGameStore = create<GameState>((set, get) => {
         } else {
           get().addLog("Rút lui thất bại!");
         }
-        get().addToast("Cố gắng rút lui thất bại! Địch nhân thừa cơ tấn công!", "info");
+        if (data.victory) {
+          get().addToast("Địch nhân tự chuốc lấy diệt vong! Chiến thắng bất ngờ!", "success");
+        } else if (data.defeat) {
+          get().addToast("Rút lui thất bại! Đạo hữu bị đánh bại!", "error");
+        } else {
+          get().addToast("Cố gắng rút lui thất bại! Địch nhân thừa cơ tấn công!", "info");
+        }
         return data;
       }
 

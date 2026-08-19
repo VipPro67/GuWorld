@@ -311,7 +311,7 @@ export const WikiView: React.FC = () => {
                   Tích lũy <strong>Nhân Khí (Human Qi)</strong> thông qua các hoạt động hàng ngày trước khi thăng tiên để gia tăng tỉ lệ thành công (tối đa 100k Nhân Khí = chắc chắn 100% thành công). Nếu thăng tiên thất bại, tu vi sẽ bị phế bỏ rơi về Nhất Chuyển.
                 </p>
                 <p>
-                  Sau khi thăng tiên, đạo hữu sẽ sở hữu <strong>Tiên Khiếu</strong> riêng biệt và phải đối đầu với các <strong>Kiếp Nạn</strong> (Địa Tai, Thiên Kiếp...) định kỳ. Kiếp đầu tiên giáng lâm sau <strong>10 ngày đời thật</strong>. Vượt qua kiếp nạn thành công sẽ nhận được lượng lớn Đạo Ngân để gia tăng sức mạnh vượt bậc.
+                  Sau khi thăng tiên, đạo hữu sẽ sở hữu <strong>Tiên Khiếu</strong> riêng biệt và phải đối đầu với các <strong>Kiếp Nạn</strong> (Địa Tai, Thiên Kiếp...) định kỳ. Kiếp đầu tiên giáng lâm vào <strong>năm nội bộ thứ 10</strong> — tính ra khoảng <strong>2–10 giờ đời thật</strong> tùy phẩm chất Tiên Khiếu (1 năm nội bộ = 10 giờ đời thật ÷ hệ số gia tốc time_rate 10–55×). Vượt qua kiếp nạn thành công sẽ nhận được lượng lớn Đạo Ngân để gia tăng sức mạnh vượt bậc.
                 </p>
               </div>
             </div>
@@ -347,7 +347,7 @@ export const WikiView: React.FC = () => {
                       <td className="p-3">Làm mới lượt thám hiểm (20 lượt), khiêu chiến Đấu Trường (10 trận), tái lập mỏ khai thác.</td>
                     </tr>
                     <tr>
-                      <td className="p-3 font-bold text-zinc-200">Sau 10 ngày thăng tiên</td>
+                      <td className="p-3 font-bold text-zinc-200">Vài giờ sau thăng tiên (tùy phẩm chất Tiên Khiếu)</td>
                       <td className="p-3">Kiếp nạn đầu tiên giáng lâm — chuẩn bị phòng thủ Tiên Khiếu và chiến lực.</td>
                     </tr>
                   </tbody>

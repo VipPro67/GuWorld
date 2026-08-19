@@ -42,6 +42,8 @@ Tạo ngay tại thời điểm người chơi thăng tiên lên Rank 6. `grade`
 - `earth_calamity_count`, `heavenly_tribulation_count`, `grand_tribulation_count`, `myriad_tribulation_count`, `chaos_calamity_count` — bộ đếm kiếp nạn
 - `state` — STABLE / DAMAGED
 
+> **Hằng số thời gian nội bộ:** 1 năm nội bộ = **36.000 giây đời thật ÷ `time_rate`** (`tribulation.go` worker, `aperture.go` projection, `SetApertureTimeRate`). Kiếp nạn đầu tiên đến vào năm nội bộ thứ 10 → chờ khoảng `10 × 36.000 ÷ time_rate` giây đời thật (khoảng 2–10 giờ, tùy phẩm cấp Tiên Khiếu). Kiếp đang ACTIVE quá **6 giờ đời thật** tự động kết toán thất bại.
+
 ### Đạo Ngân (Đạo Ấn)
 
 Đạo Ngân chỉ lưu trong cột JSONB `players.dao_marks` (ví dụ `{"strength": 100, "fire": 2500}`). Bảng quan hệ `dao_marks` đã bị xóa — không còn mirror. Path được normalize dạng lowercase (không có hậu tố `" path"`) khi lưu.
