@@ -210,8 +210,8 @@ func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec
 		// Roll type: Material 80%, Recipe 20%
 		roll := rand.Float64() * 100.0
 
-		if roll < 20.0 {
-			// ── RECIPE DROP (20%) ──
+		if roll < 40.0 {
+			// ── RECIPE DROP (40%) ──
 			var recipeMsg string
 			recipeMsg, reward = rollRecipeDrop(tx, player, item)
 			if recipeMsg != "" {
@@ -222,7 +222,7 @@ func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec
 				msg += matMsg
 			}
 		} else {
-			// ── MATERIAL DROP (80%) ──
+			// ── MATERIAL DROP (60%) ──
 			var matMsg string
 			matMsg, reward = rollMaterialDrop(tx, player, item)
 			msg += matMsg

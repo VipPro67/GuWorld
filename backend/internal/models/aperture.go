@@ -123,22 +123,6 @@ type TribTypeConfig struct {
 	Interval float64
 }
 
-func GetTribTypeCount(a *ImmortalAperture, tribType string) int {
-	switch tribType {
-	case "EARTH_CALAMITY":
-		return a.EarthCalamityCount
-	case "HEAVENLY_TRIBULATION":
-		return a.HeavenlyTribulationCount
-	case "GRAND_TRIBULATION":
-		return a.GrandTribulationCount
-	case "MYRIAD_TRIBULATION":
-		return a.MyriadTribulationCount
-	case "CHAOS_CALAMITY":
-		return a.ChaosCalamityCount
-	}
-	return 0
-}
-
 func GetTribulationInterval(rank int, tribType string) float64 {
 	switch rank {
 	case 6:
@@ -224,7 +208,7 @@ func tribulationPriority(t string) int {
 	return 0
 }
 
-func GetNextTribulationInfo(rank int, earthCnt, heavenCnt, grandCnt, myriadCnt, chaosCnt int) (nextYear float64, nextType string) {
+func GetNextTribulationInfo(rank int, rankStartYear float64, earthCnt, heavenCnt, grandCnt, myriadCnt, chaosCnt int) (nextYear float64, nextType string) {
 	types := []struct {
 		Type     string
 		Interval float64
@@ -244,7 +228,10 @@ func GetNextTribulationInfo(rank int, earthCnt, heavenCnt, grandCnt, myriadCnt, 
 		if t.Interval <= 0 {
 			continue
 		}
-		year := t.Interval * float64(t.Count+1)
+		// Schedule is relative to when the current rank began, so each rank's
+		// tribulation cadence (e.g. Địa Tai every 10 internal years) restarts
+		// cleanly after a breakthrough.
+		year := rankStartYear + t.Interval*float64(t.Count+1)
 		priority := tribulationPriority(t.Type)
 
 		if year < nextYear || (math.Abs(year-nextYear) < 0.001 && priority > tribulationPriority(nextType)) {
