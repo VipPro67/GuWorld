@@ -6,7 +6,7 @@ Nguồn dữ liệu chính nằm trong các file CSV ở `backend/`. Khi backend
 
 | File | Số dòng dữ liệu | Nội dung |
 | --- | ---: | --- |
-| `backend/Gu.csv` | 594 | Dictionary Cổ: rank, path, type, mana cost, effects, hunger, food, targeting, rarity, role/tags. Chuẩn scale sức mạnh theo rank xem `docs/GuRankScaling.md`. |
+| `backend/Gu.csv` | 596 | Dictionary Cổ: rank, path, type, mana cost, effects, hunger, food, targeting, rarity, role/tags. Chuẩn scale sức mạnh theo rank xem `docs/GuRankScaling.md`. |
 | `backend/Item.csv` | 229 | Vật phẩm, nguyên liệu, tiền tệ, consumable, effects/tags/description. |
 | `backend/Recipe.csv` | 31 | Công thức luyện Cổ: target, Cổ/nguyên liệu yêu cầu, success rate, cost. |
 | `backend/Monster.csv` | 30 | Monster templates: chỉ số, Gu inventory, loot table, AI profile, bắt sủng vật. |
@@ -256,8 +256,12 @@ Các trường quan trọng trong dictionary:
 
 - `id`, `name`, `rank`, `path` (mảng JSON các Đạo học — 49 path có thể có, xem danh sách ở `docs/CANH_GIOI_DAO_NGAN.md`), `gu_type`.
 - `base_mana_cost`.
-- `effects` JSON: active/passive/combat/support tuỳ Cổ.
-  - **Cơ chế `other` (SpecialMechanic):** mảng `{event_trigger, action_code, params}`. Các action code hồi phục liên quan tới Hồn Phách:
+- `effects` JSON: active/passive/growth/other/support tuỳ Cổ. Schema Go nằm ở `models.GuEffects` (`backend/internal/models/gu.go`): `ActiveEffect`, `PassiveEffect`, `GrowthEffect`, `SpecialMechanic`.
+  - **Khối `active`:** effect chủ động dùng trong combat — `damage_flat`, `damage_mult`, `damage_path`, `heal_flat`, `shield_flat`, `apply_status` + `status_tick_damage`/`status_duration_ticks`, `target_selector`, `summon_*`, `curve_attack`, `lifesteal`, … Danh sách đầy đủ + catalog chuẩn xem mục **"Hiệu ứng Cổ (effects)"** bên dưới.
+  - **Khối `passive`:** chỉ số vĩnh viễn cộng dồn (`stat_base_*`), `damage_reduction`, `movement`, `evasion`, `luck`, `storage_capacity`, …
+  - **Shorthand status:** một số key viết tắt trong struct `ActiveEffect` (`freeze`, `slow`, `slow1`, `weak`, `stun`, `silence`, `bleed`, `poison`, `thorns`, `regen`, `atk_up`, `def_up`, `taunt`) được `ActiveEffect.normalize()` tự đổi về `apply_status` + `status_duration_ticks` khi load. Dữ liệu mới nên viết thẳng `apply_status` để thống nhất (xem mục Status chiến đấu).
+  - **Cơ chế `other` (SpecialMechanic):** mảng `{event_trigger, action_code, params}`. Trigger đang dùng: `ON_TICK`, `ON_CONSUME`, `ON_DEATH`, `ON_USE`. Action code hiện có (19): `MANA_REGEN_TICK`(8), `ADD_LIFESPAN_YEARS`(7), `RANK_PROGRESS`(5), `GENERATE_IMMORTAL_STONES_TICK`(4), `GENERATE_STONES_TICK`(3), `THOUGHT_REGEN_TICK`(2), `SACRIFICE_APTITUDE`, `THIRD_WATCH`, `STONE_APERTURE`, `ADD_SOUL_MAX`, `MAN_BEAST_BURIAL`, `REBORN`, `RESTORE_MENTAL`, `POISON_VOW`, `SPRING_EGG_HATCH`, `RECORD_MESSAGE`, `REDUCE_STRESS`, `SOUL_REGEN_TICK`, `RESTORE_SOUL_HP` (số trong ngoặc = số Cổ đang dùng trong `data/Gu.csv`).
+    - Action code liên quan Hồn Phách:
     - `SOUL_REGEN_TICK` (`event_trigger: ON_TICK`): hồi `soul_hp` theo giờ từ mỗi Cổ trang bị ACTIVE (`params.value` = số điểm/giờ, scale theo rank qua `ManaRegenTickFactor`; xử lý ở `models.SoulRegenTickPerHour`).
     - `RESTORE_SOUL_HP` (`event_trigger: ON_CONSUME`): hồi ngay `soul_hp` khi sử dụng Cổ tiêu hao (`params.value` mặc định 10, cap tại `max_soul`).
     - `ADD_SOUL_MAX` (`ON_CONSUME`): tăng `max_soul`; `SOUL_BOOST` (`ON_CONSUME`): cộng Hồn Đạo đạo ngân.
@@ -266,6 +270,165 @@ Các trường quan trọng trong dictionary:
 - `rarity`, `is_immortal`, `primary_role`, `combat_roles`, `combat_tags`, `support_tags`.
 - `base_price`: **đồng đều theo rank** — 200, 500, 1.200, 2.500, 5.000, 100.000, 250.000, 600.000, 1.500.000 cho rank 1–9 (nhảy mạnh ở Tiên Cổ rank ≥ 6). Fallback trong `pkg/pricing/pricing.go`.
 - **Phân phối thức ăn:** mọi item trong `food_types` của cổ rank <6 (72 item) được thêm vào (1) loot của quái **Normal/Elite** theo dải rank spawn, (2) `pool_weights.resources` của vùng non-HUB theo dải rank vùng, (3) `vault_materials` khởi đầu của 4 tông (qty 100, khớp dải rank vùng tông). Boss/Tribulation không rơi thêm thức ăn.
+
+### Hiệu ứng Cổ (effects)
+
+> Hai bảng dưới đây đối chiếu **key effect hiện có trong game** (quét `data/Gu.csv`, 596 Cổ) với **catalog chuẩn đề xuất** (nguồn `Turnbase_Combat_Schema_Co_Gioi.xlsx`, sheet `CORE_SCHEMA` + `ALL_EFFECTS`). Cột **Trạng thái trong game** phân loại: `CÓ` (đã có data + code xử lý), `CÓ data / chưa code` (key xuất hiện trong CSV nhưng combat không xử lý), `Đổi tên` (tồn tại nhưng key khác), `Cần thêm` (chưa có). Số trong ngoặc ở cột số Cổ = số Cổ đang dùng key đó.
+
+**Bảng A — 82 key đang có trong dữ liệu** (struct chuẩn: `models.ActiveEffect` / `models.PassiveEffect` / `models.GrowthEffect` / `models.SpecialMechanic`).
+
+*Khối `active` (44 key):*
+
+| Key | Số Cổ | Kiểu | Tác dụng |
+|---|---|---:|---|---|
+| `damage_flat` | 207 | number | Sát thương cố định (tính sau modifier, trước shield/HP) |
+| `damage_path` | 176 | enum | Hệ sát thương (`blood`, `Water Path`, `Sword Path`, `Fire Path`, `Ice Path`, … 20 giá trị) |
+| `shield_flat` | 96 | number | Tạo khiên hộ thể (nhận damage trước HP) |
+| `apply_status` | 97 | enum | Gắn status (phân bố xem mục Status chiến đấu) |
+| `status_duration_ticks` | 83 | integer | Số lượt status tồn tại |
+| `status_tick_damage` | 66 | number | Damage mỗi tick (chỉ DOT: bleed/poison/slow_damage; nơi khác là cường độ %) |
+| `target_selector` | 55 | enum | Quy tắc chọn mục tiêu: `COL`(38), `ALL`(17), `ROW`(1) |
+| `heal_flat` | 33 | number | Hồi HP cố định (cap max_hp) |
+| `damage_mult` | 18 | number | Nhân sát thương (×1.075 – ×1.35) |
+| `mana_regen` | 2 | number | Hồi chân nguyên khi dùng |
+| `armor_pen` | 2 | number | Xuyên Defense phẳng |
+| `blood_drain` | 2 | bool | Cơ chế hút máu (+50% LifeSteal) |
+| `cleansing_power` | 2 | number | Thanh tẩy (cấp độ) |
+| `capture_bonus` | 4 | number | +% tỉ lệ bắt monster |
+| `summon_monster_id` | 4 | string | Triệu hồi đơn vị (`MONSTER_*`) |
+| `summon_phantom` | 4 | bool | Triệu hồi hư ảnh (dmg = BaseAttack) |
+| `range` | 7 | number | Tầm tấn công |
+| `stat_base_attack` | 10 | number | Attack (chỉ số nền của Cổ — đa phần dùng passive thay thế) |
+| `stat_base_defense` | 1 | number | Defense |
+| `wood_transformation` | 3 | bool | Hóa thân mộc (+30 Thủ) |
+| `create_mud_zone` / `aoe_all` / `curve_attack` / `dash_distance` / `deploy_formation` / `detect_heat` / `enslave_beast_tier` / `ignite_power` / `ignore_defense` / `is_poem_immortal` / `lifesteal` / `refinement_core` / `refinement_material` / `shadow_walk` / `signal_range` / `store_gu` / `store_item` / `store_memory` / `slow` / `slow1` / `freeze` / `sleep` / `stun` | 1–3 | mixed | Cơ chế đặc thù cho 1–3 Cổ (xem struct `ActiveEffect` để biết kiểu) |
+| `description` | 4 | string | Ghi chú text (không phải effect) |
+
+*Khối `passive` (31 key):*
+
+| Key | Số Cổ | Kiểu | Tác dụng |
+|---|---|---:|---|---|
+| `stat_base_attack` | 151 | number | Attack vĩnh viễn (chỉ số nền, không buff tạm) |
+| `stat_base_defense` | 151 | number | Defense vĩnh viễn |
+| `path_conflict_reduction` | 40 | number | Giảm xung đột Đạo |
+| `movement` | 27 | number | Tốc độ di chuyển |
+| `stat_base_hp` | 15 | number | HP vĩnh viễn (Riêng `EffectiveMaxHP` cộng qua `gamefx.PassiveHPBonus`) |
+| `stat_base_speed` | 7 | number | Speed vĩnh viễn (không dùng làm Slow tạm) |
+| `success_rate_bonus` | 13 | number | +% tỉ lệ thành công |
+| `refine_mana_tier` | 9 | number | Bậc tinh luyện Chân Nguyên |
+| `investigation` | 7 | number | Điều tra |
+| `control_power` | 5 | number | Khống chế |
+| `soul_refinement` | 4 | number | Tinh luyện Hồn |
+| `luck` + `cleansing_power` + `evasion` + `storage_capacity` + `attack_speed` + `damage_multiplier` + `damage_multiplier_on_hit` + `damage_reduction` + `damage_reflect` | 1–6 | mixed | Minor (xem struct) |
+| `healing_multiplier` / `heal_received_multiplier` / `cold_resistance` / `water_resistance` / `dao_mark_multiplier` / `exclude_gu_storage` / `formation_power` / `refinement_power` / `storage_capacity_gu` / `target_selector`(=ROW) | 1 | mixed | Minor (xem struct) |
+| `description` | 5 | string | Ghi chú text |
+
+*Khối `growth` (5 key, 18 Cổ):* `max_attack`, `max_defense`, `max_hp`, `hours_to_max`, `max_speed`(4) — chỉ số tăng trưởng khi nuôi.
+
+*Khối `support` (2 key):* `description`(2), `heal_flat`(4).
+
+**Bảng B — Catalog chuẩn đề xuất (CORE_SCHEMA 30 key)** — dùng làm key chuẩn khi thêm Cổ mới:
+
+| Nhóm | Key chuẩn | Kiểu | Tác dụng | Trạng thái trong game |
+|---|---|---|---|---|
+| A - Direct | `damage_flat` | number | Sát thương cố định | CÓ (`damage_flat`) |
+| A - Direct | `damage_multiplier` | number | Sát thương theo Attack | Đổi tên (`damage_mult`) |
+| A - Direct | `heal_flat` | number | Hồi HP cố định | CÓ |
+| A - Direct | `shield_flat` | number | Tạo khiên | CÓ |
+| A - Direct | `mana_restore` | number | Hồi chân nguyên | Đổi tên (một phần `mana_regen`) |
+| A - Direct | `mana_burn` | number | Đốt chân nguyên mục tiêu | Cần thêm |
+| A - Direct | `revive_hp_percent` | number | Hồi sinh | Cần thêm (trong combat; đã có `REBORN` ở `other` ngoài trận) |
+| B - Status | `apply_status` | enum | Gắn status | CÓ |
+| B - Status | `status_value` | number | Cường độ status | Đổi tên (đang ghép vào `status_tick_damage`) |
+| B - Status | `status_duration_ticks` | integer | Số lượt | CÓ |
+| B - Status | `status_stack_limit` | integer | Giới hạn cộng tầng | Cần thêm |
+| B - Status | `status_tick_damage` | number | Damage mỗi tick (DOT) | CÓ (thiếu BURN) |
+| B - Status | `remove_status` | enum | Thanh tẩy chính xác | Cần thêm |
+| B - Status | `dispel_count` | integer | Xóa N buff/debuff | Cần thêm |
+| C - Persistent | `stat_base_hp/attack/defense/speed` | number | Chỉ số vĩnh viễn | CÓ |
+| C - Persistent | `damage_reduction` | decimal | Giảm damage % | CÓ |
+| C - Persistent | `crit_chance` / `crit_damage` | decimal | Bạo kích | Cần thêm |
+| C - Persistent | `accuracy` | decimal | Tỉ lệ đánh trúng | Cần thêm |
+| C - Persistent | `evasion` | decimal | Tỉ lệ né | CÓ (`evasion`) |
+| D - Turn | `cooldown_ticks` | integer | Hồi chiêu | Cần thêm |
+| D - Turn | `mana_cost` | number | Chi phí dùng Cổ | CÓ (cột `base_mana_cost`) |
+| D - Turn | `target_type` | enum | Quy tắc mục tiêu | Cần thêm (hiện dùng `target_selector` giới hạn) |
+| D - Turn | `priority_delta` | integer | Ưu tiên lượt | Cần thêm |
+| E - Condition | `condition_hp_below` | decimal | Gate theo HP | Cần thêm |
+| E - Condition | `trigger` | enum | Sự kiện kích hoạt | Cần thêm (chỉ có `other.event_trigger` ngoài trận) |
+| E - Condition | `chance` | decimal | Xác suất | Cần thêm (chỉ `params.chance` của `REBORN`) |
+
+**Bảng C — Trạng thái status thực tế (đối chiếu sheet STATUS đề xuất 18 status):**
+
+| Status | Loại | Có trong data | Code combat |
+|---|---|---|---|
+| SLOW | Debuff | CÓ (via `slow`) | CÓ |
+| SLOW1 | Debuff | CÓ (via `slow1`) | CÓ (không kháng) |
+| BLEED | DOT | CÓ (30) | CÓ |
+| POISON | DOT | CÓ (2) | CÓ |
+| STUN | Control | CÓ (via `stun`) | CÓ |
+| FREEZE | Control | CÓ (13) | CÓ |
+| SILENCE | Control | CÓ (3) | CÓ |
+| THORNS / REGEN / ATK_UP / DEF_UP / TAUNT / WEAK / SLOW_DAMAGE | Buff/Debuff | Không | CÓ code (không Cổ nào dùng hiện tại) |
+| **BURN** | DOT | CÓ (32) | **chưa code** |
+| **CONFUSE** | Control | CÓ (4) | **chưa code** |
+| **FEAR** | Control | CÓ (5) | **chưa code** |
+| **STEALTH** | Special | CÓ (4) | **chưa code** |
+| **SLEEP** | Control | CÓ (2) | **chưa code** |
+| **BLIND / CHARM / BIND** | Stat/Control | CÓ (1) | **chưa code** |
+| HASTE, ARMOR_BREAK, DEFENSE_UP, ATTACK_UP, DAMAGE_REDUCTION_UP, INVINCIBLE, REVIVE_LOCK | Buff/Debuff | Không | **Cần thêm** |
+
+**Bảng D — Mapping key cũ → key chuẩn** (dùng key chuẩn khi thêm Cổ mới):
+
+| Key cũ | Key chuẩn đề xuất | Ghi chú |
+|---|---|---|
+| `damage_mult` | `damage_multiplier` | Damage × Attack |
+| `mana_regen` | `mana_restore` | Khác ngữ nghĩa (hồi ngay vs regen/turn) |
+| `status_tick_damage` | `status_value` | Cường độ status; giữ `status_tick_damage` chỉ cho DOT |
+| `stat_base_attack` | `stat_base_attack` | Chỉ số vĩnh viễn, không dùng làm buff tạm |
+| `lifesteal` | `life_steal` | Hồi HP theo damage cuối |
+| `damage_reflect` | `reflect_damage` | Phản damage nhận vào |
+| `slow`/`freeze`/`sleep`/… | `apply_status: SLOW/FREEZE/SLEEP` | Bỏ shorthand key |
+
+### Status chiến đấu (combat)
+
+Hệ thống status in-combat xử lý ở hai nơi: **simulator** (`backend/internal/simulator/` — auto-battle) và legacy (`backend/internal/handlers/combat_attack.go` — manual). Status là struct `models.StatusEffect{Type, Value, Turns}` hoặc `simulator.Effect{ID,Type,Tier,Value,Duration}`; DoT/HoT là `simulator.DoTEffect`. Thứ tự tick một lượt xem `docs/STATUS_EFFECTS.md` (phần Flow xử lý mỗi lượt).
+
+**14 constant status đã code trong simulator (`simulator/models.go`):**
+
+| Status ID | Loại | Tier → % (TierToPercent) | Duration mặc định | Tick | Kháng |
+|---|---|---|---|---|---|
+| `slow` | Debuff | 15/25/35/45/55% speed | 3/3/4/4/5 | Không damage | CÓ |
+| `slow1` | Debuff | 15/25/35/45/55% speed | 3/3/4/4/5 | Không damage | KHÔNG |
+| `slow_damage` | Debuff | 15/25/35/45/55% speed | 3/3/4/4/5 | damage/tick | CÓ |
+| `weak` | Debuff | 10/20/30/40/50% dmg | 3/3/4/4/5 | Không damage | CÓ |
+| `freeze` | Control | 1/1/2/2/3 lượt | 1/1/2/2/3 | Không | CÓ |
+| `silence` | Control | 1/1/2/2/3 lượt | 2/2/3/3/4 | Không | CÓ |
+| `stun` | Control | 1/1/2/2/3 lượt | 1/1/2/2/3 | Không | CÓ |
+| `thorns` | Buff | 10/15/20/25/30% phản | 3/3/4/4/5 | Tại hit | — |
+| `regen` | Buff | 3/5/8/12/16% maxHP | 3/4/4/5/5 | heal cuối lượt | — |
+| `atk_up` | Buff | +10/15/20/25/30% dmg | 3/3/4/4/5 | Không | — |
+| `def_up` | Buff | +10/15/20/25/30% def | 3/3/4/4/5 | Không | — |
+| `taunt` | Buff | 1/2/2/3/3 lượt | 2/2/3/3/4 | Tại chọn target | — |
+| `bleed` | DOT | giá trị cố định `/tick` | từ `status_duration_ticks` | cuối lượt | Không |
+| `poison` | DOT | giá trị cố định `/tick` | từ `status_duration_ticks` | cuối lượt | Không |
+
+Lưu ý: `bleed`/`poison`/`slow_damage` dùng **giá trị số thật** (không qua tier). DoT tick **cuối lượt** người mang (`simulator/mechanics.go` `tickDoTs`); duration giảm **đầu lượt** (`tickStatusEffects`).
+
+**Status có trong data nhưng combat CHƯA CODE** (không có bất kỳ switch/constant nào trong `gu_effects.go`, `combat_attack.go`, `simulator`) — khi bật sẽ cần thêm code động cơ + log + enum:
+
+| Status | Số Cổ | Ví dụ Cổ | Đề xuất triển khai |
+|---|---:|---|---|
+| BURN | 32 | Thiên Hỏa Cổ, Dung Hỏa Cổ, Đại Nhật Hỏa Cổ | DoT hỏa (tick tương tự bleed/poison, theo hệ Fire Path) |
+| FEAR | 5 | Quỷ Khiếu Cổ, Hồn Khiếu Cổ | Bỏ offensive action, fallback phòng thủ |
+| CONFUSE | 4 | Hoán Hồn Cổ, Vô Thanh Chi Âm Cổ | Xác suất chọn sai mục tiêu |
+| STEALTH | 4 | Độn Địa Cổ, Thụy Phục Cổ | Không bị chọn làm mục tiêu |
+| SLEEP | 2 | Mộng Chẩm Cổ | Mất action; nhận damage thì tỉnh |
+| BLIND | 1 | Thiểm Quang Cổ | Giảm accuracy |
+| CHARM | 1 | Nhiếp Tâm Cổ | Điều khiển mục tiêu |
+| BIND | 1 | Thiết Thủ Cầm Nã Cổ | Khóa movement/escape |
+
+**Status đề xuất còn thiếu hoàn toàn** (có trong catalog chuẩn, chưa có data + chưa code): `HASTE`, `ARMOR_BREAK`, `DEFENSE_UP`, `ATTACK_UP`, `DAMAGE_REDUCTION_UP`, `INVINCIBLE`, `REVIVE_LOCK`.
 
 ### Item
 

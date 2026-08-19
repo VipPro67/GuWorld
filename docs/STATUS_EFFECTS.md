@@ -291,10 +291,30 @@ Set `apply_status` trong `effects.active`:
 ```
 
 **Supported `apply_status` values:**
-`BLEED`, `POISON`, `STUN`, `SLOW`, `WEAK`, `FREEZE`, `SILENCE`, `THORNS`, `REGEN`, `ATK_UP`, `DEF_UP`, `TAUNT`
+`BLEED`, `POISON`, `STUN`, `SLOW`, `SLOW1`, `SLOW_DAMAGE`, `WEAK`, `FREEZE`, `SILENCE`, `THORNS`, `REGEN`, `ATK_UP`, `DEF_UP`, `TAUNT`
 
 - `status_tick_damage`: tier (1-5) cho effects mới, hoặc damage/tick cho bleed/poison
 - `status_duration_ticks`: duration override (nếu 0 → dùng tier default)
+
+### Chênh lệch dữ liệu hiện tại (quét `data/Gu.csv`)
+
+Bảng dưới đối chiếu status **có trong Gu dictionary** với **code combat đã xử lý**. Xem thêm `docs/GAME_DATA.md` → "Status chiến đấu (combat)".
+
+| Status | Số Cổ trong data | Code combat | Ghi chú |
+|---|---:|---|---|
+| BURN | 32 | ❌ chưa code | DoT hỏa; cần thêm enum + tick như bleed/poison |
+| BLEED | 30 | ✅ | — |
+| FREEZE | 13 | ✅ | — |
+| FEAR | 5 | ❌ chưa code | — |
+| STEALTH | 4 | ❌ chưa code | — |
+| CONFUSE | 4 | ❌ chưa code | — |
+| SILENCE | 3 | ✅ | — |
+| STUN | 3 | ✅ | qua shorthand `stun` + `apply_status` |
+| SLEEP | 2 | ❌ chưa code | — |
+| POISON | 2 | ✅ | — |
+| CHARM / BIND / BLIND / SLOW / SLOW1 | 1 mỗi loại | SLOW/SLOW1 ✅, còn lại ❌ | — |
+
+Lưu ý: `THORNS`, `REGEN`, `ATK_UP`, `DEF_UP`, `TAUNT`, `WEAK`, `SLOW_DAMAGE` đã có code (constant + flow) nhưng **hiện không Cổ nào trong `Gu.csv` sử dụng** — chỉ phát sinh qua KillerMove hoặc sinh ra bởi code.
 
 ### Từ KillerMove (JSON effects)
 
