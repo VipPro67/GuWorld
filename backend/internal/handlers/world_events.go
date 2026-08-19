@@ -2,11 +2,17 @@ package handlers
 
 import (
 	"sync"
+	"time"
+
+	"github.com/vippro67/GuWorld/backend/internal/db"
 )
 
 // WorldPosEvent is broadcast whenever a player's position changes on the
 // shared world map so nearby clients can glide markers smoothly instead of
-// waiting for a poll. Clients keep the full viewport-filter again locally.
+// waiting for a poll. Fan-out is interest-managed: an event is delivered only
+// to subscribers (players) whose current position lies within
+// WorldPosInterestRadius of the mover, so traffic scales with local density
+// instead of the total number of connected clients.
 type WorldPosEvent struct {
 	ID        string `json:"id"`
 	Username  string `json:"username"`
@@ -18,36 +24,89 @@ type WorldPosEvent struct {
 
 var worldPosHub = struct {
 	sync.Mutex
-	subs map[chan WorldPosEvent]struct{}
-}{subs: map[chan WorldPosEvent]struct{}{}}
+	subs map[string]map[chan WorldPosEvent]struct{}
+}{subs: map[string]map[chan WorldPosEvent]struct{}{}}
 
-func subscribeWorldPos() chan WorldPosEvent {
+func subscribeWorldPos(playerID string) chan WorldPosEvent {
+	ensureWorldPosLoaded(playerID)
 	ch := make(chan WorldPosEvent, 1)
 	worldPosHub.Lock()
 	defer worldPosHub.Unlock()
-	worldPosHub.subs[ch] = struct{}{}
+	if worldPosHub.subs[playerID] == nil {
+		worldPosHub.subs[playerID] = map[chan WorldPosEvent]struct{}{}
+	}
+	worldPosHub.subs[playerID][ch] = struct{}{}
 	return ch
 }
 
-func unsubscribeWorldPos(ch chan WorldPosEvent) {
+func unsubscribeWorldPos(playerID string, ch chan WorldPosEvent) {
 	worldPosHub.Lock()
 	defer worldPosHub.Unlock()
-	delete(worldPosHub.subs, ch)
+	if m := worldPosHub.subs[playerID]; m != nil {
+		delete(m, ch)
+		if len(m) == 0 {
+			delete(worldPosHub.subs, playerID)
+		}
+	}
 	close(ch)
 }
 
+// broadcastWorldPos upserts the mover into the position index (so interest
+// resolution is always based on the freshest position) and fans the event out
+// to subscribers within interest radius.
 func broadcastWorldPos(payload WorldPosEvent) {
+	worldPosIndex.Set(WorldPosEntry{
+		ID:        payload.ID,
+		Username:  payload.Username,
+		AvatarURL: payload.AvatarURL,
+		X:         payload.X,
+		Y:         payload.Y,
+		TS:        payload.TS,
+	})
+
+	nearby := worldPosIndex.Nearby(payload.X, payload.Y, WorldPosInterestRadius, payload.ID)
+
 	worldPosHub.Lock()
 	defer worldPosHub.Unlock()
-	for ch := range worldPosHub.subs {
-		select {
-		case ch <- payload:
-		default:
-			select {
-			case <-ch:
-			default:
-			}
-			ch <- payload
+	for _, e := range nearby {
+		for ch := range worldPosHub.subs[e.ID] {
+			sendWorldPos(ch, payload)
 		}
 	}
+}
+
+// sendWorldPos delivers a position event to a subscriber's channel, keeping the
+// newest position when the buffer is full (older intermediate positions are
+// dropped so clients always glide toward the latest known coordinate).
+func sendWorldPos(ch chan WorldPosEvent, payload WorldPosEvent) {
+	select {
+	case ch <- payload:
+	default:
+		select {
+		case <-ch:
+		default:
+		}
+		ch <- payload
+	}
+}
+
+// ensureWorldPosLoaded makes sure a subscriber has an entry in the position
+// index so interest-managed fan-out can find it. Positions are loaded from the
+// database on first use; movement broadcasts then keep it fresh.
+func ensureWorldPosLoaded(playerID string) {
+	if _, ok := worldPosIndex.Get(playerID); ok {
+		return
+	}
+	var e WorldPosEntry
+	var ts time.Time
+	err := db.DB.QueryRow(`
+		SELECT id, username, COALESCE(avatar_url, ''), x, y, COALESCE(current_region, ''), last_mana_update
+		FROM players
+		WHERE id = $1
+	`, playerID).Scan(&e.ID, &e.Username, &e.AvatarURL, &e.X, &e.Y, &e.Region, &ts)
+	if err != nil {
+		return
+	}
+	e.TS = ts.UnixMilli()
+	worldPosIndex.Set(e)
 }

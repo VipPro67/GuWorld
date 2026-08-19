@@ -202,6 +202,8 @@ func ExploreNode(c *gin.Context) {
 		return
 	}
 
+	setWorldPosFromPlayer(&player)
+
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"log":              logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 		"combat_triggered": combatTriggered,

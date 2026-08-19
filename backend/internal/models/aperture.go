@@ -259,11 +259,11 @@ func GetNextTribulationInfo(rank int, earthCnt, heavenCnt, grandCnt, myriadCnt, 
 func CheckImmortalBreakthrough(rank int, earthCnt, heavenCnt, grandCnt, myriadCnt, chaosCnt int, yearsAtRank float64) (bool, int) {
 	switch rank {
 	case 6:
-		if heavenCnt >= 3 {
+		if heavenCnt >= 3 && yearsAtRank >= 300 {
 			return true, 7
 		}
 	case 7:
-		if grandCnt >= 3 {
+		if grandCnt >= 3 && yearsAtRank >= 300 {
 			return true, 8
 		}
 	case 8:

@@ -2120,7 +2120,6 @@ var pathTranslations = map[string]string{
 	"sun":            "Nhật",
 	"sword":          "Kiếm",
 	"theft":          "Trộm",
-	"theme":          "Chủ Đề",
 	"time":           "Trụ",
 	"transformation": "Biến Hóa",
 	"water":          "Thủy",

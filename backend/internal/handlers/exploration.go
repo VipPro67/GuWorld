@@ -79,6 +79,15 @@ func pickWeightedType(weights map[string]int, rng *rand.Rand) string {
 // map matches gameplay. Cleared cells are suppressed per player via the
 // cleared_cells cooldown, which acts as the respawn mechanism.
 func GenerateCell(x, y int) models.Cell {
+	if cell, ok := cellGenCache.get(x, y); ok {
+		return cell
+	}
+	cell := generateCellUncached(x, y)
+	cellGenCache.put(x, y, cell)
+	return cell
+}
+
+func generateCellUncached(x, y int) models.Cell {
 	if !inWorld(x, y) {
 		return models.Cell{X: x, Y: y, Type: "Empty", Content: "Biên Giới Cổ Giới (World Edge)"}
 	}
@@ -283,30 +292,21 @@ func GetGrid(c *gin.Context) {
 		Y         int    `json:"y"`
 	}
 	nearbyPlayers := []NearbyPlayer{}
-	rows, errQuery := tx.Query(`
-		SELECT id, username, avatar_url, x, y 
-		FROM players 
-		WHERE id != $1
-		  AND last_mana_update >= NOW() - INTERVAL '15 minutes'
-		  AND x >= $2 AND x <= $3
-		  AND y >= $4 AND y <= $5
-	`, player.ID, player.X-visualVisionRadius, player.X+visualVisionRadius, player.Y-visualVisionRadius, player.Y+visualVisionRadius)
-	if errQuery == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var np NearbyPlayer
-			if errScan := rows.Scan(&np.ID, &np.Username, &np.AvatarURL, &np.X, &np.Y); errScan == nil {
-				nearbyPlayers = append(nearbyPlayers, np)
-			}
-		}
+	seenIDs := map[string]bool{}
+
+	// Radius-based nearby players come from the in-memory position index
+	// (fast path). SQL fallback only while the index is cold.
+	entries := worldPosIndex.Nearby(player.X, player.Y, visualVisionRadius, player.ID.String())
+	if worldPosIndex.Len() == 0 {
+		entries = queryNearbyPlayersSQL(c, player.ID, player.X, player.Y, visualVisionRadius)
+	}
+	for _, e := range entries {
+		seenIDs[e.ID] = true
+		nearbyPlayers = append(nearbyPlayers, NearbyPlayer{ID: e.ID, Username: e.Username, AvatarURL: e.AvatarURL, X: e.X, Y: e.Y})
 	}
 
 	// Always include party members regardless of distance for position sync
 	if player.PartyID != nil {
-		seenIDs := map[string]bool{}
-		for _, np := range nearbyPlayers {
-			seenIDs[np.ID] = true
-		}
 		partyRows, errParty := tx.Query(`
 			SELECT id, username, avatar_url, x, y
 			FROM players
@@ -1198,8 +1198,9 @@ func GetNearbyPlayers(c *gin.Context) {
 	}
 
 	if x == 0 && y == 0 {
-		player, err := loadPlayerForStatus(db.DB, authID, false)
-		if err == nil {
+		if entry, ok := worldPosIndex.Get(authID.String()); ok {
+			x, y = entry.X, entry.Y
+		} else if player, err := loadPlayerForStatus(db.DB, authID, false); err == nil {
 			x, y = player.X, player.Y
 		}
 	}
@@ -1212,29 +1213,53 @@ func GetNearbyPlayers(c *gin.Context) {
 		Y         int    `json:"y"`
 	}
 
-	nearbyPlayers := []NearbyPlayer{}
+	// Fast path: serve from the in-memory position index. Fall back to SQL only
+	// while the index is still cold (e.g. very early startup before the first
+	// sync worker reconcile).
+	entries := worldPosIndex.Nearby(x, y, r, authID.String())
+	if worldPosIndex.Len() == 0 {
+		entries = queryNearbyPlayersSQL(c, authID, x, y, r)
+	}
+
+	nearbyPlayers := make([]NearbyPlayer, 0, len(entries))
+	for _, e := range entries {
+		nearbyPlayers = append(nearbyPlayers, NearbyPlayer{
+			ID:        e.ID,
+			Username:  e.Username,
+			AvatarURL: e.AvatarURL,
+			X:         e.X,
+			Y:         e.Y,
+		})
+	}
+
+	c.JSON(http.StatusOK, nearbyPlayers)
+}
+
+// queryNearbyPlayersSQL is the legacy SQL path for nearby players, kept as a
+// cold-start fallback for the in-memory position index.
+func queryNearbyPlayersSQL(c *gin.Context, authID uuid.UUID, x, y, r int) []WorldPosEntry {
+	entries := []WorldPosEntry{}
 	rows, errQuery := db.DB.QueryContext(c.Request.Context(), `
-		SELECT id, username, COALESCE(avatar_url, ''), x, y 
-		FROM players 
+		SELECT id, username, COALESCE(avatar_url, ''), x, y
+		FROM players
 		WHERE id != $1
 		  AND last_mana_update >= NOW() - INTERVAL '15 minutes'
 		  AND x >= $2 AND x <= $3
 		  AND y >= $4 AND y <= $5
 	`, authID, x-r, x+r, y-r, y+r)
-
-	if errQuery == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var np NearbyPlayer
-			if errScan := rows.Scan(&np.ID, &np.Username, &np.AvatarURL, &np.X, &np.Y); errScan == nil {
-				nearbyPlayers = append(nearbyPlayers, np)
-			}
-		}
-	} else {
+	if errQuery != nil {
 		logger.S.Error("Failed to fetch nearby players:", errQuery)
+		return entries
 	}
-
-	c.JSON(http.StatusOK, nearbyPlayers)
+	defer rows.Close()
+	for rows.Next() {
+		var e WorldPosEntry
+		if errScan := rows.Scan(&e.ID, &e.Username, &e.AvatarURL, &e.X, &e.Y); errScan == nil {
+			e.TS = time.Now().UnixMilli()
+			entries = append(entries, e)
+		}
+	}
+	return entries
 }
 
 // GetRegions fetches all active regions (zones) from the database

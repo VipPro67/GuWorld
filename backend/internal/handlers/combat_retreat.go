@@ -158,6 +158,8 @@ func Retreat(c *gin.Context) {
 		return
 	}
 
+	setWorldPosFromPlayer(&player)
+
 	var dbAfter int
 	_ = db.DB.QueryRow(`SELECT COUNT(*) FROM player_gu WHERE player_id = $1`, player.ID).Scan(&dbAfter)
 
@@ -344,22 +346,7 @@ func Flee(c *gin.Context) {
 				player.HP = 1.0
 				player.CurrentRegion, player.X, player.Y = NearestHub(player.X, player.Y)
 
-				dropSummary := applyDeathDropRecord(tx, &authID, nil)
-				_ = tx.QueryRow("SELECT primeval_stones, immortal_stones FROM players WHERE id = $1", authID).Scan(&player.PrimevalStones, &player.ImmortalStones)
-
-				defeatAudit = &auditlog.Entry{
-					PlayerID:       &authID,
-					Action:         "combat.flee_failed_death",
-					RequestSummary: fmt.Sprintf("lost=%s", dropSummary),
-					IPAddress:      c.ClientIP(),
-					Success:        true,
-				}
-
-				if dropSummary != "" {
-					turnLogs = append(turnLogs, fmt.Sprintf("Đạo hữu bị đánh trọng thương ngất xỉu. Tỉnh dậy đã thấy ở an toàn nhưng rơi rớt mất: %s.", dropSummary))
-				} else {
-					turnLogs = append(turnLogs, "Đạo hữu bị đánh trọng thương ngất xỉu. Tỉnh dậy đã thấy ở an toàn.")
-				}
+				turnLogs = append(turnLogs, "Đạo hữu bị đánh trọng thương ngất xỉu. Tỉnh dậy đã thấy ở an toàn.")
 			} else {
 				player.HP = 1.0
 				turnLogs = append(turnLogs, "Đạo hữu bại trận!")
@@ -384,6 +371,8 @@ func Flee(c *gin.Context) {
 			return
 		}
 
+		setWorldPosFromPlayer(&player)
+
 		if defeatAudit != nil {
 			auditlog.Log(db.DB, *defeatAudit)
 		}
@@ -398,7 +387,7 @@ func Flee(c *gin.Context) {
 		return
 	}
 
-	isExploration := player.ActiveCombat.CombatMode != "virtual" && player.ActiveCombat.EnemyTemplateID != "monster_heavenly_tribulation"
+	isExploration := player.ActiveCombat.CombatMode != "virtual" && player.ActiveCombat.EnemyTemplateID != "monster_heavenly_tribulation" && player.ActiveCombat.MineSlotID == 0
 
 	if isExploration {
 		maxHP := gamefx.EffectiveMaxHP(&player)
@@ -454,6 +443,8 @@ func Flee(c *gin.Context) {
 		respondCombatTxErr(c, err, "Transaction commit failed")
 		return
 	}
+
+	setWorldPosFromPlayer(&player)
 
 	// Best-effort audit logs AFTER commit — never inside the transaction.
 	if defeatAudit != nil {

@@ -834,6 +834,8 @@ func AutoCombatStart(c *gin.Context) {
 		return
 	}
 
+	setWorldPosFromPlayer(&player)
+
 	winner := "Phe Địch"
 	if alliesAlive {
 		winner = "Phe Ta"

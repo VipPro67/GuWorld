@@ -1228,17 +1228,7 @@ func CombatAttack(c *gin.Context) {
 		if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
 			ctx.Logs = append(ctx.Logs, "Thách đấu mỏ linh thạch thất bại, không thể chiếm lĩnh mỏ.")
 		} else if !isTribulation {
-			var winnerID *uuid.UUID
-			if isPVP && !isVirtual && player.ActiveCombat != nil && player.ActiveCombat.TargetPlayerID != "dummy" {
-				if targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID); parseErr == nil {
-					winnerID = &targetUUID
-				}
-			}
-			if dropSummary := applyDeathDrop(tx, &player, winnerID); dropSummary != "" {
-				ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất: %s.", dropSummary))
-			} else {
-				ctx.Logs = append(ctx.Logs, "Đại bại! Đạo hữu bất tỉnh nhân sự trước áp lực của đối thủ. May mắn thoát chết.")
-			}
+			ctx.Logs = append(ctx.Logs, "Đại bại! Đạo hữu bất tỉnh nhân sự trước áp lực của đối thủ. May mắn thoát chết.")
 		}
 
 		player.CurrentRegion, player.X, player.Y = NearestHub(player.X, player.Y)
@@ -1300,6 +1290,8 @@ func CombatAttack(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
 	}
+
+	setWorldPosFromPlayer(&player)
 
 	// Save combat history asynchronously
 	if victory || defeat {

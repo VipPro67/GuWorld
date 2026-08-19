@@ -310,6 +310,8 @@ Stream hợp nhất (`StreamUnifiedEvents`) cho authenticated player. Các event
 | `combat.started` / `combat.ended` | Trạng thái chiến đấu. |
 | `trade.updated` | Trạng thái giao dịch. |
 | `chat.messages.world` / `chat.messages.general` / `chat.messages.sect` | Chat channel. |
-| `world.player.pos` | **Vị trí người chơi trên bản đồ lớn**: broadcast sau mỗi commit di chuyển (`/explore/move`, `/explore/move-path`). Payload `{id, username, avatar_url, x, y, ts}`. Client lọc theo viewport và nội suy marker để hiển thị chuyển động mượt (không teleport). Broadcast qua hub `world_events.go`; frontend phát `CustomEvent("gu_world_pos")` → `useWorldStore.upsertPlayerPosition`. |
+| `world.player.pos` | **Vị trí người chơi trên bản đồ lớn**: broadcast sau mỗi commit di chuyển (`/explore/move`, `/explore/move-path`). Payload `{id, username, avatar_url, x, y, ts}`. Client lọc theo viewport và nội suy marker để hiển thị chuyển động mượt (không teleport). Broadcast qua hub `world_events.go`; frontend phát `CustomEvent("gu_world_pos")` → `useWorldStore.upsertPlayerPosition`. Fan-out được interest-manage theo vị trí (chỉ gửi cho subscriber trong bán kính `WorldPosInterestRadius`). |
+| `world.cell.cleared` | **Cell cố định (boss/resource cao cấp) bị clear**: payload `{x, y, cell_type, content_id}`. Frontend phát `CustomEvent("gu_world_cell")` → refresh `useWorldStore.fetchObjects()`. |
+| `world.cell.respawn` | **Cell cố định respawn** (hết `respawn_seconds`, reset lười khi đọc): payload `{x, y, cell_type, content_id}`. Frontend xử lý tương tự `gu_world_cell`. |
 
 Kèm theo: `GET /player/events` (stream player snapshot + heartbeat riêng), `GET /trade/events`, `GET /chat/bao-hoang/events`.

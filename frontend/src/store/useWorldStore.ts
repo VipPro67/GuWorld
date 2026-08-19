@@ -255,16 +255,14 @@ export const useWorldStore = create<WorldStoreState>((set) => ({
             positions[p.id] = { ...p, ts: prev.ts };
           }
         }
-        const w = s.nearbyWindow;
+        // Keep the nearby window in sync with the fast player poll so the
+        // slower cell poll can back off without freezing the viewport filter.
+        const w = { x, y, r };
         let nearbyPlayers = s.nearbyPlayers;
-        if (w) {
-          nearbyPlayers = Object.keys(positions)
-            .map((id) => positions[id])
-            .filter((p2) => p2.x >= w.x - w.r && p2.x <= w.x + w.r && p2.y >= w.y - w.r && p2.y <= w.y + w.r);
-        } else {
-          nearbyPlayers = players;
-        }
-        return { playerPositions: positions, nearbyPlayers };
+        nearbyPlayers = Object.keys(positions)
+          .map((id) => positions[id])
+          .filter((p2) => p2.x >= w.x - w.r && p2.x <= w.x + w.r && p2.y >= w.y - w.r && p2.y <= w.y + w.r);
+        return { playerPositions: positions, nearbyPlayers, nearbyWindow: w };
       });
     } catch (err) {
       console.error("fetchNearbyPlayers error:", err instanceof Error ? err.message : err);

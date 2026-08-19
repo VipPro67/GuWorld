@@ -1802,6 +1802,24 @@ export const useGameStore = create<GameState>((set, get) => {
       }
     });
 
+    source.addEventListener("world.cell.cleared", (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent<string>).data);
+        window.dispatchEvent(new CustomEvent("gu_world_cell", { detail: { ...payload, type: "cleared" } }));
+      } catch (err) {
+        console.error("Failed to process world cell cleared event", err);
+      }
+    });
+
+    source.addEventListener("world.cell.respawn", (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent<string>).data);
+        window.dispatchEvent(new CustomEvent("gu_world_cell", { detail: { ...payload, type: "respawn" } }));
+      } catch (err) {
+        console.error("Failed to process world cell respawn event", err);
+      }
+    });
+
     source.addEventListener("chat.messages.world", (event) => {
       try {
         const payload = JSON.parse((event as MessageEvent<string>).data);
@@ -3337,7 +3355,8 @@ export const useGameStore = create<GameState>((set, get) => {
     // HP quá thấp (< 20% max): bỏ chạy trừ 20% Max HP — gần như chắc chắn ngất
     // xỉu, mất toàn bộ tài nguyên thu thập. Cảnh báo và chặn lại cho đạo hữu cân nhắc.
     const maxHP = player.base_hp || player.hp || 1;
-    if (player.hp <= 0.2 * maxHP) {
+    const isMine = !!player.active_combat?.mine_slot_id;
+    if (!isMine && player.hp <= 0.2 * maxHP) {
       set({ actionLoading: true });
       const proceed = await showConfirm(
         "HP của đạo hữu đang rất thấp. Bỏ chạy khỏi chiến đấu sẽ khiến đạo hữu chịu thêm 20% sát thương theo HP tối đa — gần như chắc chắn sẽ ngất xỉu, làm rơi mất toàn bộ Nguyên Thạch, Cổ trùng và tài nguyên thu thập. Vẫn muốn bỏ chạy?",

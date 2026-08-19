@@ -889,6 +889,7 @@ func CompleteOnboarding(c *gin.Context) {
 	player.EquippedGus = equippedGus
 	player.MaterialsInventory = loadMaterialsInventory(playerID.String())
 	player.MaxMana = gamefx.EffectiveMaxMana(&player)
+	setWorldPosFromPlayer(&player)
 	c.JSON(http.StatusOK, player)
 }
 

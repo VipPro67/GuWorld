@@ -991,20 +991,31 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
       }
     };
 
+    const onWorldCell = () => {
+      // A persistent cell was cleared or respawned server-side; refresh the
+      // object list so markers and the detail card reflect the new state.
+      fetchObjects();
+    };
+
     pollCells();
     pollPlayers();
     prefetch();
     window.addEventListener("gu_world_pos", onWorldPos);
-    const cellsId = setInterval(pollCells, 8000);
+    window.addEventListener("gu_world_cell", onWorldCell);
+    // Cells are deterministic (server now serves them from a cache), so a slow
+    // safety refresh plus push-based cell events is enough; the fast 2s player
+    // poll keeps the nearby window current for the viewport filter.
+    const cellsId = setInterval(pollCells, 30000);
     const playersId = setInterval(pollPlayers, 2000);
     const prefetchId = setInterval(prefetch, 3000);
     return () => {
       window.removeEventListener("gu_world_pos", onWorldPos);
+      window.removeEventListener("gu_world_cell", onWorldCell);
       clearInterval(cellsId);
       clearInterval(playersId);
       clearInterval(prefetchId);
     };
-  }, [appReady, gamePlayer?.x, gamePlayer?.y, investigationRange, fetchNearbyCells, fetchNearbyPlayers, fetchCellsRect, upsertPlayerPosition, pruneStalePlayers]);
+  }, [appReady, gamePlayer?.x, gamePlayer?.y, investigationRange, fetchNearbyCells, fetchNearbyPlayers, fetchCellsRect, upsertPlayerPosition, pruneStalePlayers, fetchObjects]);
 
   // Keep the live X/Y position in sync with the game player when idle.
   useEffect(() => {

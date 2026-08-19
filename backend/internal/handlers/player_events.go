@@ -227,8 +227,12 @@ func StreamUnifiedEvents(c *gin.Context) {
 	hasSect := err == nil && sectID != ""
 
 	// 3. Subscribe to World Position broadcasts
-	worldPosCh := subscribeWorldPos()
-	defer unsubscribeWorldPos(worldPosCh)
+	worldPosCh := subscribeWorldPos(playerID.String())
+	defer unsubscribeWorldPos(playerID.String(), worldPosCh)
+
+	// 3b. Subscribe to world cell state changes (cleared / respawn)
+	worldCellCh := subscribeWorldCell()
+	defer unsubscribeWorldCell(worldCellCh)
 
 	// 4. Subscribe to Chat Channels
 	worldCh := subscribeChat(chatChannelKey("world", sql.NullString{}))
@@ -325,6 +329,12 @@ func StreamUnifiedEvents(c *gin.Context) {
 
 		case payload := <-worldPosCh:
 			if err := writeSSE(c, "world.player.pos", payload); err != nil {
+				return
+			}
+			flusher.Flush()
+
+		case payload := <-worldCellCh:
+			if err := writeSSE(c, payload.Name, payload.Data); err != nil {
 				return
 			}
 			flusher.Flush()

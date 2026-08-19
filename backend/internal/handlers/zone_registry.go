@@ -204,6 +204,10 @@ func LoadZoneRegistry(db *sql.DB) error {
 	zoneReg.spawnPools = newReg.spawnPools
 	zoneReg.mu.Unlock()
 
+	// Procedural cell content depends on the zone layout, so any (re)load
+	// invalidates cached cells.
+	cellGenCache.clear()
+
 	logger.S.Infof("Zone registry loaded: %d zones, %d persistent cells, %d spawn pools", len(newReg.zones), len(newReg.persistent), len(newReg.spawnPools))
 	return nil
 }
@@ -352,6 +356,7 @@ func MarkPersistentCellCleared(tx *sql.Tx, playerID uuid.UUID, x, y int) {
 	if !ok {
 		return
 	}
+	wasCleared := pc.cleared
 	pc.LastCleared = time.Now()
 	pc.cleared = true
 	zoneReg.mu.Lock()
@@ -359,6 +364,9 @@ func MarkPersistentCellCleared(tx *sql.Tx, playerID uuid.UUID, x, y int) {
 	zoneReg.mu.Unlock()
 	if tx != nil {
 		_, _ = tx.Exec(`UPDATE map_cells SET last_cleared_at = NOW(), cleared_by = $1 WHERE x = $2 AND y = $3`, playerID, x, y)
+	}
+	if !wasCleared {
+		broadcastWorldCell(cellEventCleared, WorldCellEvent{X: pc.X, Y: pc.Y, CellType: pc.Type, ContentID: pc.Content})
 	}
 }
 
@@ -371,14 +379,28 @@ func MarkPersistentCellClearedNoTx(x, y int) {
 
 // PersistentCellAt returns the shared cell at (x,y) if any. found=false means
 // there is no shared cell; cleared=true means it exists but is inside its
-// respawn window (treat as empty).
+// respawn window (treat as empty). When the respawn window has elapsed, the
+// cell is lazily reset here (no background goroutine needed) and a respawn
+// event is broadcast so map clients can refresh the marker.
 func PersistentCellAt(x, y int) (pc persistentCell, found, cleared bool) {
 	key := persistentCellKey{X: x, Y: y}
 	zoneReg.mu.RLock()
-	defer zoneReg.mu.RUnlock()
 	pc, ok := zoneReg.persistent[key]
+	zoneReg.mu.RUnlock()
 	if !ok {
 		return pc, false, false
+	}
+	if pc.cleared && !pc.LastCleared.IsZero() && pc.RespawnSeconds > 0 &&
+		time.Since(pc.LastCleared) >= time.Duration(pc.RespawnSeconds)*time.Second {
+		zoneReg.mu.Lock()
+		if cur, ok2 := zoneReg.persistent[key]; ok2 && cur.cleared {
+			cur.cleared = false
+			zoneReg.persistent[key] = cur
+			pc = cur
+		}
+		zoneReg.mu.Unlock()
+		broadcastWorldCell(cellEventRespawn, WorldCellEvent{X: pc.X, Y: pc.Y, CellType: pc.Type, ContentID: pc.Content})
+		return pc, true, false
 	}
 	return pc, true, pc.cleared
 }
