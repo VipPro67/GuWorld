@@ -48,13 +48,14 @@ export const UtilitiesView: React.FC = () => {
     const matchesRank = selectedRank === "all" || gu.rank.toString() === selectedRank;
 
     if (activeTab === "seal") {
-      // Seal tab: show active or sleeping Gu bugs that are NOT already sealed, NOT dead, and NOT vital
+      // Seal tab: show active or sleeping Gu bugs that are NOT already sealed, NOT dead, NOT vital, and NOT equipped
       return (
         matchesSearch &&
         matchesRank &&
         gu.status !== "SEALED" &&
         gu.status !== "DEAD" &&
-        !gu.is_vital
+        !gu.is_vital &&
+        !gu.equipped
       );
     } else if (activeTab === "unseal") {
       // Unseal tab: show only sealed Gu bugs
@@ -66,14 +67,17 @@ export const UtilitiesView: React.FC = () => {
   const handleSealGu = async (gu: GuInstance, name: string) => {
     if (actionLoading || processingId) return;
 
+    if (gu.equipped) {
+      addToast("Không thể phong ấn Cổ trùng đang được trang bị. Hãy tháo ra trước!", "error");
+      return;
+    }
+
     if (sealingStoneQty < 1) {
       addToast("Đạo hữu không có đủ Đá Phong Ấn (sealing_stone)!", "error");
       return;
     }
 
-    const confirmMsg = `Phong ấn Cổ trùng "${name}" (Rank ${gu.rank}) sẽ tiêu hao 1x Đá Phong Ấn.\n${
-      gu.equipped ? "Cảnh báo: Cổ trùng này đang được trang bị và sẽ tự động tháo ra.\n" : ""
-    }Đạo hữu chắc chắn muốn phong ấn chứ?`;
+    const confirmMsg = `Phong ấn Cổ trùng "${name}" (Rank ${gu.rank}) sẽ tiêu hao 1x Đá Phong Ấn.\nĐạo hữu chắc chắn muốn phong ấn chứ?`;
 
     if (!(await showConfirm(confirmMsg))) return;
 

@@ -2970,6 +2970,10 @@ func UpdateGuStatus(c *gin.Context) {
 	}
 
 	if req.Status == "SEALED" && targetGu.Status != "SEALED" {
+		if targetGu.Equipped {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể phong ấn Cổ trùng đang được trang bị. Hãy tháo ra trước."})
+			return
+		}
 		qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), "sealing_stone", "materials")
 		if err != nil || qty < 1 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ sealing_stone để phong ấn Cổ trùng."})
