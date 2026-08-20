@@ -366,19 +366,19 @@ Các trường quan trọng trong dictionary:
 |---|---|---|---|
 | SLOW | Debuff | CÓ (via `slow`) | CÓ |
 | SLOW1 | Debuff | CÓ (via `slow1`) | CÓ (không kháng) |
-| BLEED | DOT | CÓ (30) | CÓ |
-| POISON | DOT | CÓ (2) | CÓ |
+| BLEED | DOT | CÓ (30) | CÓ (registry) |
+| POISON | DOT | CÓ (2) | CÓ (registry) |
 | STUN | Control | CÓ (via `stun`) | CÓ |
 | FREEZE | Control | CÓ (13) | CÓ |
 | SILENCE | Control | CÓ (3) | CÓ |
 | THORNS / REGEN / ATK_UP / DEF_UP / TAUNT / WEAK / SLOW_DAMAGE | Buff/Debuff | Không | CÓ code (không Cổ nào dùng hiện tại) |
-| **BURN** | DOT | CÓ (32) | **chưa code** |
-| **CONFUSE** | Control | CÓ (4) | **chưa code** |
-| **FEAR** | Control | CÓ (5) | **chưa code** |
-| **STEALTH** | Special | CÓ (4) | **chưa code** |
-| **SLEEP** | Control | CÓ (2) | **chưa code** |
-| **BLIND / CHARM / BIND** | Stat/Control | CÓ (1) | **chưa code** |
-| HASTE, ARMOR_BREAK, DEFENSE_UP, ATTACK_UP, DAMAGE_REDUCTION_UP, INVINCIBLE, REVIVE_LOCK | Buff/Debuff | Không | **Cần thêm** |
+| **BURN** | DOT | CÓ (32) | **CÓ (registry)** |
+| **CONFUSE** | Control | CÓ (4) | **CÓ (registry)** |
+| **FEAR** | Control | CÓ (5) | **CÓ (registry)** |
+| **STEALTH** | Special | CÓ (4) | **CÓ (registry)** |
+| **SLEEP** | Control | CÓ (2) | **CÓ (registry)** |
+| **BLIND / CHARM / BIND** | Stat/Control | CÓ (1) | **CÓ (registry)** |
+| HASTE, ARMOR_BREAK, DAMAGE_REDUCTION_UP, INVINCIBLE, REVIVE_LOCK | Buff/Debuff | Không | **CÓ (registry)** |
 
 **Bảng D — Mapping key cũ → key chuẩn** (dùng key chuẩn khi thêm Cổ mới):
 
@@ -417,20 +417,11 @@ Hệ thống status in-combat xử lý ở hai nơi: **simulator** (`backend/int
 
 Lưu ý: `bleed`/`poison`/`slow_damage` dùng **giá trị số thật** (không qua tier). DoT tick **cuối lượt** người mang (`simulator/mechanics.go` `tickDoTs`); duration giảm **đầu lượt** (`tickStatusEffects`).
 
-**Status có trong data nhưng combat CHƯA CODE** (không có bất kỳ switch/constant nào trong `gu_effects.go`, `combat_attack.go`, `simulator`) — khi bật sẽ cần thêm code động cơ + log + enum:
+**Status có trong data, đã wire qua registry `statusfx`** (xem `docs/STATUS_EFFECTS.md` → "Registry status"): `BURN` (DoT hỏa), `FEAR` (force basic), `CONFUSE` (40% mis-target), `STEALTH` (untargetable), `SLEEP` (skip turn + break on damage), `BLIND` (35% miss), `CHARM` (điều khiển), `BIND` (mất lượt).
 
-| Status | Số Cổ | Ví dụ Cổ | Đề xuất triển khai |
-|---|---:|---|---|
-| BURN | 32 | Thiên Hỏa Cổ, Dung Hỏa Cổ, Đại Nhật Hỏa Cổ | DoT hỏa (tick tương tự bleed/poison, theo hệ Fire Path) |
-| FEAR | 5 | Quỷ Khiếu Cổ, Hồn Khiếu Cổ | Bỏ offensive action, fallback phòng thủ |
-| CONFUSE | 4 | Hoán Hồn Cổ, Vô Thanh Chi Âm Cổ | Xác suất chọn sai mục tiêu |
-| STEALTH | 4 | Độn Địa Cổ, Thụy Phục Cổ | Không bị chọn làm mục tiêu |
-| SLEEP | 2 | Mộng Chẩm Cổ | Mất action; nhận damage thì tỉnh |
-| BLIND | 1 | Thiểm Quang Cổ | Giảm accuracy |
-| CHARM | 1 | Nhiếp Tâm Cổ | Điều khiển mục tiêu |
-| BIND | 1 | Thiết Thủ Cầm Nã Cổ | Khóa movement/escape |
+**Status catalog đã wire qua registry**: `HASTE` (tăng tốc), `ARMOR_BREAK` (giảm thủ), `DAMAGE_REDUCTION_UP` (giảm sát thương nhận), `INVINCIBLE` (miễn nhiễm sát thương), `REVIVE_LOCK` (chặn hồi sinh).
 
-**Status đề xuất còn thiếu hoàn toàn** (có trong catalog chuẩn, chưa có data + chưa code): `HASTE`, `ARMOR_BREAK`, `DEFENSE_UP`, `ATTACK_UP`, `DAMAGE_REDUCTION_UP`, `INVINCIBLE`, `REVIVE_LOCK`.
+Thêm status mới: 1 entry `statusfx.Registry` + tùy chọn 1 behaviour hook `simulator/status_apply.go`.
 
 ### Item
 

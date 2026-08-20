@@ -6,6 +6,8 @@ import (
 	"math/rand"
 	"sort"
 	"strings"
+
+	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
 
 func hasGuEquipped(c *CombatantAuto, guID string) bool {
@@ -86,12 +88,12 @@ func actorDaoMultiplier(c *CombatantAuto, paths []string) (float64, bool) {
 }
 
 // resistControl returns true if the combatant's mental resistance causes a
-// control effect to be resisted.
-func resistControl(c *CombatantAuto) bool {
+// control effect to be resisted. Uses the provided rng for deterministic combat.
+func resistControl(c *CombatantAuto, rng *rand.Rand) bool {
 	if c == nil || c.MentalResistance <= 0 {
 		return false
 	}
-	return rand.Float64() < c.MentalResistance
+	return rng.Float64() < c.MentalResistance
 }
 
 func cloneCombatState(state *CombatState) *CombatState {
@@ -191,6 +193,20 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 	}
 	if len(alive) == 0 {
 		return nil
+	}
+
+	// Stealth: single-target actions cannot select stealthed combatants unless
+	// there are no other valid targets.
+	if targetType == "SINGLE" {
+		var visible []*CombatantAuto
+		for _, e := range alive {
+			if !e.IsStealthed {
+				visible = append(visible, e)
+			}
+		}
+		if len(visible) > 0 {
+			alive = visible
+		}
 	}
 
 	targetX := action.TargetX
@@ -318,6 +334,9 @@ func Simulate(state *CombatState) []CombatLog {
 		}
 	}
 
+	// Deterministic RNG seeded from the battle seed.
+	rng := rand.New(rand.NewSource(state.Seed))
+
 	var logs []CombatLog
 	cicadaUsed := false
 	initialState := cloneCombatState(state)
@@ -411,20 +430,6 @@ func Simulate(state *CombatState) []CombatLog {
 			}
 		}
 
-		// ── Decrement active effects durations ──
-		for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
-			for _, c := range combatants {
-				var kept []Effect
-				for _, eff := range c.ActiveEffects {
-					eff.Duration--
-					if eff.Duration > 0 {
-						kept = append(kept, eff)
-					}
-				}
-				c.ActiveEffects = kept
-			}
-		}
-
 		// ── Virtual mode: restore mana for all combatants each turn ──
 		if state.VirtualMode {
 			for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
@@ -483,8 +488,32 @@ func Simulate(state *CombatState) []CombatLog {
 				continue
 			}
 
-			// Check silence — force basic attack only
-			if actor.IsSilenced {
+			// Check sleep (like stun but breaks on damage)
+			if actor.IsSleeping {
+				turnLogs = append(turnLogs, CombatLog{
+					Turn:      turn,
+					ActorId:   actor.ID,
+					ActorName: actor.Name,
+					Action:    "SLEEPING",
+					Detail:    fmt.Sprintf("%s đang ngủ, bỏ lượt!", actor.Name),
+				})
+				continue
+			}
+
+			// Check bind (immobilized, loses turn)
+			if actor.IsBound {
+				turnLogs = append(turnLogs, CombatLog{
+					Turn:      turn,
+					ActorId:   actor.ID,
+					ActorName: actor.Name,
+					Action:    "BOUND",
+					Detail:    fmt.Sprintf("%s bị trói, không thể hành động!", actor.Name),
+				})
+				continue
+			}
+
+			// Check silence / fear — force basic attack only
+			if actor.IsSilenced || actor.IsFeared {
 				// Will be handled in action loop below (skip non-basic actions)
 			}
 
@@ -606,12 +635,37 @@ func Simulate(state *CombatState) []CombatLog {
 				enemyTargets = state.Allies
 			}
 
+			// ── Charm: charmed combatant attacks its own side ──
+			if actor.IsCharmed {
+				if isAlly {
+					enemyTargets = state.Allies
+				} else {
+					enemyTargets = state.Enemies
+				}
+			}
+
+			// ── Confuse: chance to mis-target an ally instead of an enemy ──
+			if actor.IsConfused && rng.Float64() < 0.40 {
+				if isAlly {
+					enemyTargets = state.Allies
+				} else {
+					enemyTargets = state.Enemies
+				}
+				turnLogs = append(turnLogs, CombatLog{
+					Turn:      turn,
+					ActorId:   actor.ID,
+					ActorName: actor.Name,
+					Action:    "CONFUSED",
+					Detail:    fmt.Sprintf("%s bị mê loạn, tấn công nhầm đồng minh!", actor.Name),
+				})
+			}
+
 			hasExecutedAny := false
 			for ai := range actor.Actions {
 				a := &actor.Actions[ai]
 
-				// Silence: skip skills and killer moves, only allow basic attack
-				if actor.IsSilenced && a.ActionType != "BASIC_ATTACK" {
+				// Silence / Fear: skip skills and killer moves, only allow basic attack
+				if (actor.IsSilenced || actor.IsFeared) && a.ActionType != "BASIC_ATTACK" {
 					continue
 				}
 
@@ -893,8 +947,8 @@ func Simulate(state *CombatState) []CombatLog {
 					effectsChoices := []string{"crit_500", "invulnerable_1_turn", "reduce_enemy_hp_90"}
 					costChoices := []string{"aptitude_10", "lifespan_5", "luck_50"}
 
-					chosenEffect := effectsChoices[rand.Intn(len(effectsChoices))]
-					chosenCost := costChoices[rand.Intn(len(costChoices))]
+					chosenEffect := effectsChoices[rng.Intn(len(effectsChoices))]
+					chosenCost := costChoices[rng.Intn(len(costChoices))]
 
 					effectMsg := ""
 					if chosenEffect == "crit_500" {
@@ -969,6 +1023,21 @@ func Simulate(state *CombatState) []CombatLog {
 					for _, target := range resolved {
 						totalDmg := 0.0
 
+						// Blind: chance to miss the target entirely
+						if actor.IsBlinded && actor.AccuracyPenalty > 0 {
+							if rng.Float64() < actor.AccuracyPenalty {
+								turnLogs = append(turnLogs, CombatLog{
+									Turn:      turn,
+									ActorId:   actor.ID,
+									ActorName: actor.Name,
+									Action:    "BLIND_MISS",
+									TargetId:  target.ID,
+									Detail:    fmt.Sprintf("%s bị mù, đòn tấn công đánh trượt %s!", actor.Name, target.Name),
+								})
+								continue
+							}
+						}
+
 						targetDef := float64(target.BaseDef) * target.DefenseMultiplier
 						if a.SourceID == "GU_BREAK_SPACE" {
 							targetDef = math.Max(0, targetDef-30.0)
@@ -984,7 +1053,7 @@ func Simulate(state *CombatState) []CombatLog {
 							if netDmg < 1 {
 								netDmg = 1
 							}
-							totalDmg += applyDamageToTarget(actor, target, netDmg, &turnLogs, turn, shieldBypass)
+							totalDmg += applyDamageToTarget(actor, target, netDmg, &turnLogs, turn, shieldBypass, rng)
 						}
 						totalDamageDealt += int(totalDmg)
 
@@ -1024,7 +1093,7 @@ func Simulate(state *CombatState) []CombatLog {
 							phantomNet := (a.PhantomDmg * dmgMultiplier) - phantomDef
 							phantomNet *= (1.0 - pathBonus(target.PathResistance, a.Path))
 							phantomNet = math.Max(1, phantomNet)
-							phantomDealt := applyDamageToTarget(actor, target, phantomNet, &turnLogs, turn, shieldBypass)
+							phantomDealt := applyDamageToTarget(actor, target, phantomNet, &turnLogs, turn, shieldBypass, rng)
 							totalDamageDealt += int(phantomDealt)
 							turnLogs = append(turnLogs, CombatLog{
 								Turn:      turn,
@@ -1039,7 +1108,7 @@ func Simulate(state *CombatState) []CombatLog {
 
 						// ── Freeze break: if target is frozen and takes damage, 50% chance to break ──
 						if target.IsFrozen && int(totalDmg) > 0 {
-							if rand.Float64() < 0.50 {
+							if rng.Float64() < 0.50 {
 								var unfrozenKept []Effect
 								for _, eff := range target.ActiveEffects {
 									if eff.ID == EffectFreeze {
@@ -1081,7 +1150,7 @@ func Simulate(state *CombatState) []CombatLog {
 
 					if a.ThornsDmg > 0 && totalDamageDealt > 0 {
 						thornsNet := math.Max(1, a.ThornsDmg-float64(actor.BaseDef))
-						applyDamageToTarget(firstTarget, actor, thornsNet, &turnLogs, turn, false)
+						applyDamageToTarget(firstTarget, actor, thornsNet, &turnLogs, turn, false, rng)
 						turnLogs = append(turnLogs, CombatLog{
 							Turn:      turn,
 							ActorId:   actor.ID,
@@ -1172,7 +1241,7 @@ func Simulate(state *CombatState) []CombatLog {
 							Detail:    fmt.Sprintf("%s bị trúng độc (%.0f/lượt trong 3 lượt)!", target.Name, a.PoisonPerTurn),
 						})
 					}
-					if a.StunTier > 0 && !resistControl(target) {
+					if a.StunTier > 0 && !resistControl(target, rng) {
 						dur := TierToDuration(EffectStun, a.StunTier)
 						target.ActiveEffects = append(target.ActiveEffects, Effect{
 							ID: EffectStun, Type: "debuff", Tier: a.StunTier, Value: 1, Duration: dur,
@@ -1185,7 +1254,7 @@ func Simulate(state *CombatState) []CombatLog {
 							Detail:    fmt.Sprintf("%s dùng [%s] → %s bị choáng %d lượt!", actor.Name, a.Name, target.Name, dur),
 						})
 					}
-					if a.SlowTier > 0 && !resistControl(target) {
+					if a.SlowTier > 0 && !resistControl(target, rng) {
 						pct := int(TierToPercent(EffectSlow, a.SlowTier))
 						dur := TierToDuration(EffectSlow, a.SlowTier)
 						target.ActiveEffects = append(target.ActiveEffects, Effect{
@@ -1213,7 +1282,7 @@ func Simulate(state *CombatState) []CombatLog {
 							Detail:    fmt.Sprintf("%s bị chậm %d%% trong %d lượt (không thể kháng)!", target.Name, pct, dur),
 						})
 					}
-					if a.SlowDamageTier > 0 && !resistControl(target) {
+					if a.SlowDamageTier > 0 && !resistControl(target, rng) {
 						pct := int(TierToPercent(EffectSlowDamage, a.SlowDamageTier))
 						dur := TierToDuration(EffectSlowDamage, a.SlowDamageTier)
 						target.ActiveEffects = append(target.ActiveEffects, Effect{
@@ -1230,7 +1299,7 @@ func Simulate(state *CombatState) []CombatLog {
 							Detail:    fmt.Sprintf("%s bị chậm sát thương %d%% và mất %d HP/lượt trong %d lượt!", target.Name, pct, pct, dur),
 						})
 					}
-					if a.WeakTier > 0 && !resistControl(target) {
+					if a.WeakTier > 0 && !resistControl(target, rng) {
 						pct := int(TierToPercent(EffectWeak, a.WeakTier))
 						dur := TierToDuration(EffectWeak, a.WeakTier)
 						target.ActiveEffects = append(target.ActiveEffects, Effect{
@@ -1244,7 +1313,7 @@ func Simulate(state *CombatState) []CombatLog {
 							Detail:    fmt.Sprintf("%s bị yếu, giảm %d%% sát thương trong %d lượt!", target.Name, pct, dur),
 						})
 					}
-					if a.FreezeTier > 0 && !resistControl(target) {
+					if a.FreezeTier > 0 && !resistControl(target, rng) {
 						dur := TierToDuration(EffectFreeze, a.FreezeTier)
 						target.ActiveEffects = append(target.ActiveEffects, Effect{
 							ID: EffectFreeze, Type: "debuff", Tier: a.FreezeTier, Value: 1, Duration: dur,
@@ -1257,7 +1326,7 @@ func Simulate(state *CombatState) []CombatLog {
 							Detail:    fmt.Sprintf("%s bị đóng băng trong %d lượt!", target.Name, dur),
 						})
 					}
-					if a.SilenceTier > 0 && !resistControl(target) {
+					if a.SilenceTier > 0 && !resistControl(target, rng) {
 						dur := TierToDuration(EffectSilence, a.SilenceTier)
 						target.ActiveEffects = append(target.ActiveEffects, Effect{
 							ID: EffectSilence, Type: "debuff", Tier: a.SilenceTier, Value: 1, Duration: dur,
@@ -1343,16 +1412,21 @@ func Simulate(state *CombatState) []CombatLog {
 					})
 				}
 
+				// ── Registry-driven statuses (BURN, FEAR, CONFUSE, ...) ──
+				if len(a.StatusOps) > 0 {
+					applyStatusOps(actor, resolved, a.StatusOps, turn, rng, &turnLogs)
+				}
+
 				// Merge action logs into a single consolidated log entry for this Gu/Action
 				if len(turnLogs) > actionStartIndex {
 					logs := make([]CombatLog, len(turnLogs)-actionStartIndex)
 					copy(logs, turnLogs[actionStartIndex:])
-					
+
 					var useLog *CombatLog
 					var costLog *CombatLog
 					var gainLog *CombatLog
 					var resultLogs []CombatLog
-					
+
 					for i := range logs {
 						log := &logs[i]
 						if strings.Contains(log.Detail, " dùng [") && useLog == nil {
@@ -1365,10 +1439,10 @@ func Simulate(state *CombatState) []CombatLog {
 							resultLogs = append(resultLogs, *log)
 						}
 					}
-					
+
 					if useLog != nil {
 						mergedDetail := useLog.Detail
-						
+
 						cleanDetail := func(detail string, actorName string) string {
 							prefix := actorName + " "
 							if strings.HasPrefix(detail, prefix) {
@@ -1376,15 +1450,15 @@ func Simulate(state *CombatState) []CombatLog {
 							}
 							return detail
 						}
-						
+
 						if costLog != nil {
 							mergedDetail += " " + cleanDetail(costLog.Detail, actor.Name)
 						}
-						
+
 						for _, rLog := range resultLogs {
 							mergedDetail += ", " + cleanDetail(rLog.Detail, actor.Name)
 						}
-						
+
 						if gainLog != nil {
 							parts := strings.Split(gainLog.Detail, "! ")
 							if len(parts) > 1 {
@@ -1393,7 +1467,7 @@ func Simulate(state *CombatState) []CombatLog {
 								mergedDetail += " (" + strings.TrimPrefix(strings.TrimSuffix(gainLog.Detail, "."), "-> ") + ")"
 							}
 						}
-						
+
 						useLog.Detail = mergedDetail
 						turnLogs = append(turnLogs[:actionStartIndex], *useLog)
 					}
@@ -1420,7 +1494,7 @@ func Simulate(state *CombatState) []CombatLog {
 					if netDmg < 1 {
 						netDmg = 1
 					}
-					applied := applyDamageToTarget(actor, target, netDmg, &turnLogs, turn, false)
+					applied := applyDamageToTarget(actor, target, netDmg, &turnLogs, turn, false, rng)
 					detailMsg := fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %d HP)", actor.Name, fallbackAction.Name, target.Name, applied, target.HP)
 					if daoMult > 1.0 {
 						baseDmgVal := float64(actor.BaseDmg)
@@ -1467,8 +1541,8 @@ func Simulate(state *CombatState) []CombatLog {
 		// ── Death triggers check (e.g. Xuân Thu Thiền) ──
 		rewound := false
 		for _, a := range state.Allies {
-			if a.HP <= 0 && hasGuEquipped(a, "GU_SPRING_AUTUMN_CICADA") && !cicadaUsed {
-				if rand.Float64() < 0.15 {
+			if a.HP <= 0 && hasGuEquipped(a, "GU_SPRING_AUTUMN_CICADA") && !cicadaUsed && !a.IsReviveLocked {
+				if rng.Float64() < 0.15 {
 					cicadaUsed = true
 					rewound = true
 					logs = append(logs, CombatLog{
@@ -1567,7 +1641,7 @@ func buildSnapshot(state *CombatState) *CombatSnapshot {
 	return snap
 }
 
-func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]CombatLog, turn int, shieldBypass bool) float64 {
+func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]CombatLog, turn int, shieldBypass bool, rng *rand.Rand) float64 {
 	if damage < 1 {
 		damage = 1
 	}
@@ -1605,7 +1679,7 @@ func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]C
 
 	// ── Freeze break: taking damage has 50% chance to break freeze ──
 	if target.IsFrozen && damage > 0 {
-		if rand.Float64() < 0.50 {
+		if rng.Float64() < 0.50 {
 			var unfrozenKept []Effect
 			for _, eff := range target.ActiveEffects {
 				if eff.ID == EffectFreeze {
@@ -1623,6 +1697,26 @@ func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]C
 			target.ActiveEffects = unfrozenKept
 			target.IsFrozen = false
 		}
+	}
+
+	// ── Sleep break: taking damage wakes the target ──
+	if target.IsSleeping && damage > 0 {
+		var wokeKept []Effect
+		for _, eff := range target.ActiveEffects {
+			if eff.ID == statusfx.StatusSleep {
+				*logs = append(*logs, CombatLog{
+					Turn:      turn,
+					ActorId:   target.ID,
+					ActorName: target.Name,
+					Action:    "SLEEP_BREAK",
+					Detail:    fmt.Sprintf("%s bị đánh thức!", target.Name),
+				})
+				continue
+			}
+			wokeKept = append(wokeKept, eff)
+		}
+		target.ActiveEffects = wokeKept
+		target.IsSleeping = false
 	}
 
 	// Phá Không Cổ shield bypass
@@ -1657,6 +1751,29 @@ func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]C
 			})
 			break
 		}
+	}
+
+	// Registry-driven damage reduction (DAMAGE_REDUCTION_UP / INVINCIBLE).
+	if target.DamageTakenReduction > 0 {
+		if target.DamageTakenReduction >= 1.0 {
+			*logs = append(*logs, CombatLog{
+				Turn:      turn,
+				ActorId:   target.ID,
+				ActorName: target.Name,
+				Action:    "BLOCKED",
+				Detail:    fmt.Sprintf("%s miễn nhiễm sát thương (Bất Tử)!", target.Name),
+			})
+			return 0
+		}
+		reduced := damage * target.DamageTakenReduction
+		damage -= reduced
+		*logs = append(*logs, CombatLog{
+			Turn:      turn,
+			ActorId:   target.ID,
+			ActorName: target.Name,
+			Action:    "DAMAGE_REDUCTION",
+			Detail:    fmt.Sprintf("%s giảm %.0f%% sát thương nhận vào (cản %.0f sát thương)!", target.Name, target.DamageTakenReduction*100, reduced),
+		})
 	}
 
 	hpDamageDealt := 0.0

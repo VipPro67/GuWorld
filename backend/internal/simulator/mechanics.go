@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+
+	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
 
 // tickDoTs applies damage-over-time effects and returns log entries.
@@ -42,6 +44,8 @@ func tickDoTs(c *CombatantAuto, turn int) []CombatLog {
 				label = "Độc"
 			case EffectSlowDamage:
 				label = "Tê Cóng"
+			case "burn":
+				label = "Thiêu Đốt"
 			default:
 				label = dot.Type
 			}
@@ -135,6 +139,16 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 	c.IsFrozen = false
 	c.HasTaunt = false
 	c.TaunterID = ""
+	c.IsSleeping = false
+	c.IsFeared = false
+	c.IsCharmed = false
+	c.IsStealthed = false
+	c.IsConfused = false
+	c.IsBlinded = false
+	c.IsBound = false
+	c.IsReviveLocked = false
+	c.AccuracyPenalty = 0.0
+	c.DamageTakenReduction = 0.0
 
 	speedMult := 1.0
 	for _, eff := range c.ActiveEffects {
@@ -158,6 +172,35 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 		case EffectTaunt:
 			c.HasTaunt = true
 			c.TaunterID = c.ID
+
+		// New registry-driven statuses.
+		case statusfx.StatusSleep:
+			c.IsSleeping = true
+		case statusfx.StatusFear:
+			c.IsFeared = true
+		case statusfx.StatusCharm:
+			c.IsCharmed = true
+		case statusfx.StatusStealth:
+			c.IsStealthed = true
+		case statusfx.StatusConfuse:
+			c.IsConfused = true
+		case statusfx.StatusBlind:
+			c.IsBlinded = true
+			c.AccuracyPenalty = float64(eff.Value) / 100.0
+		case statusfx.StatusBind:
+			c.IsBound = true
+		case statusfx.StatusInvincible:
+			c.DamageTakenReduction = 1.0
+		case statusfx.StatusHaste:
+			speedMult *= (1.0 + float64(eff.Value)/100.0)
+		case statusfx.StatusArmorBreak:
+			c.DefenseMultiplier *= (1.0 - float64(eff.Value)/100.0)
+		case statusfx.StatusDamageReduction:
+			if r := float64(eff.Value) / 100.0; r > c.DamageTakenReduction {
+				c.DamageTakenReduction = r
+			}
+		case statusfx.StatusReviveLock:
+			c.IsReviveLocked = true
 		}
 	}
 	c.EffectiveSpeed = c.Speed * speedMult

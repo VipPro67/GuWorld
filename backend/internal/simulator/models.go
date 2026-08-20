@@ -1,10 +1,12 @@
 package simulator
 
+import "github.com/vippro67/GuWorld/backend/internal/statusfx"
+
 // CombatLoadout represents the input data from the player before the battle starts.
 type CombatLoadout struct {
-	GuIds         []string  `json:"GuIds"`
-	KillerMoveIds []string  `json:"KillerMoveIds"`
-	ImmortalGuId  *string   `json:"ImmortalGuId,omitempty"`
+	GuIds         []string `json:"GuIds"`
+	KillerMoveIds []string `json:"KillerMoveIds"`
+	ImmortalGuId  *string  `json:"ImmortalGuId,omitempty"`
 
 	AutoHealHP      bool    `json:"AutoHealHP"`
 	HealThreshold   float64 `json:"HealThreshold"`
@@ -15,20 +17,20 @@ type CombatLoadout struct {
 // ── Status Effect Type Constants ─────────────────────────────────────────
 // Tier system: Value stores the tier (1-5), actual % computed by tierToPercent().
 const (
-	EffectSlow      = "slow"       // reduces speed → changes turn order (MentalResistance gated)
-	EffectSlow1     = "slow1"      // reduces speed → guaranteed apply (no resist check)
+	EffectSlow       = "slow"        // reduces speed → changes turn order (MentalResistance gated)
+	EffectSlow1      = "slow1"       // reduces speed → guaranteed apply (no resist check)
 	EffectSlowDamage = "slow_damage" // reduces speed and deals damage per turn
-	EffectWeak     = "weak"     // reduces damage dealt
-	EffectFreeze   = "freeze"   // like stun but can be broken by taking damage
-	EffectSilence  = "silence"  // prevents skill use, only basic attack
-	EffectThorns   = "thorns"   // reflects damage when hit
-	EffectRegen    = "regen"    // heals HP each turn
-	EffectAtkUp    = "atk_up"   // increases attack damage
-	EffectDefUp    = "def_up"   // increases defense
-	EffectTaunt    = "taunt"    // forces enemies to attack the taunter
-	EffectStun     = "stun"     // skips turn entirely
-	EffectBleed    = "bleed"    // DoT bleed
-	EffectPoison   = "poison"   // DoT poison
+	EffectWeak       = "weak"        // reduces damage dealt
+	EffectFreeze     = "freeze"      // like stun but can be broken by taking damage
+	EffectSilence    = "silence"     // prevents skill use, only basic attack
+	EffectThorns     = "thorns"      // reflects damage when hit
+	EffectRegen      = "regen"       // heals HP each turn
+	EffectAtkUp      = "atk_up"      // increases attack damage
+	EffectDefUp      = "def_up"      // increases defense
+	EffectTaunt      = "taunt"       // forces enemies to attack the taunter
+	EffectStun       = "stun"        // skips turn entirely
+	EffectBleed      = "bleed"       // DoT bleed
+	EffectPoison     = "poison"      // DoT poison
 )
 
 // tierToPercent converts a tier (1-5) to a percentage value for the effect.
@@ -108,36 +110,41 @@ func TierToDuration(effectType string, tier int) int {
 // It is produced by the handler using CalculateGuEffectForCombatant + BuildCombatAction
 // and consumed by the simulator engine.
 type SimAction struct {
-	ActionType   string  // "BASIC_ATTACK" | "GU_SKILL" | "KILLER_MOVE" | "HEAL" | "SHIELD"
-	Name         string  // display name
-	SourceID     string  // GuID or KillerMoveID for tactic matching
-	Path         []string // dao paths used to compute the dao mark bonus in the engine
-	Rank         int     // rank of the Gu/Skill
-	Damage       float64 // raw damage before defense mitigation (excludes dao bonus; engine applies it)
-	DamageMult   float64 // damage multiplier (applied on top of Damage)
-	Defense      float64 // shield value granted to self (excludes dao bonus)
-	Healing      float64 // HP restored to self (excludes dao bonus)
-	ManaCost     float64 // mana consumed on use
-	BleedPerTurn float64 // bleed DoT per turn (applied to target)
-	PoisonPerTurn float64 // poison DoT per turn (applied to target)
-	LifeStealPct float64 // percentage of damage dealt healed back (0-1)
-	MultiHit     int     // number of hits (chain_damage compound)
-	PhantomDmg   float64 // bonus phantom damage
-	ThornsDmg    float64 // reflect damage to attacker
+	ActionType    string   // "BASIC_ATTACK" | "GU_SKILL" | "KILLER_MOVE" | "HEAL" | "SHIELD"
+	Name          string   // display name
+	SourceID      string   // GuID or KillerMoveID for tactic matching
+	Path          []string // dao paths used to compute the dao mark bonus in the engine
+	Rank          int      // rank of the Gu/Skill
+	Damage        float64  // raw damage before defense mitigation (excludes dao bonus; engine applies it)
+	DamageMult    float64  // damage multiplier (applied on top of Damage)
+	Defense       float64  // shield value granted to self (excludes dao bonus)
+	Healing       float64  // HP restored to self (excludes dao bonus)
+	ManaCost      float64  // mana consumed on use
+	BleedPerTurn  float64  // bleed DoT per turn (applied to target)
+	PoisonPerTurn float64  // poison DoT per turn (applied to target)
+	LifeStealPct  float64  // percentage of damage dealt healed back (0-1)
+	MultiHit      int      // number of hits (chain_damage compound)
+	PhantomDmg    float64  // bonus phantom damage
+	ThornsDmg     float64  // reflect damage to attacker
 
 	// ── New status effect fields (tier-based) ──
-	StunTier      int     // tier (1-5) for stun on target
-	SlowTier      int     // tier (1-5) for slow debuff on target (gated)
-	Slow1Tier     int     // tier (1-5) for slow debuff on target (guaranteed)
-	SlowDamageTier int     // tier (1-5) for slow damage debuff on target
-	WeakTier     int     // tier (1-5) for weak debuff on target
-	FreezeTier   int     // tier (1-5) for freeze debuff on target
-	SilenceTier  int     // tier (1-5) for silence debuff on target
-	ThornsTier   int     // tier (1-5) for thorns buff on self
-	RegenTier    int     // tier (1-5) for regen buff on self
-	AtkUpTier    int     // tier (1-5) for attack up buff on self
-	DefUpTier    int     // tier (1-5) for defense up buff on self
-	TauntTier    int     // tier (1-5) for taunt buff on self
+	StunTier       int // tier (1-5) for stun on target
+	SlowTier       int // tier (1-5) for slow debuff on target (gated)
+	Slow1Tier      int // tier (1-5) for slow debuff on target (guaranteed)
+	SlowDamageTier int // tier (1-5) for slow damage debuff on target
+	WeakTier       int // tier (1-5) for weak debuff on target
+	FreezeTier     int // tier (1-5) for freeze debuff on target
+	SilenceTier    int // tier (1-5) for silence debuff on target
+	ThornsTier     int // tier (1-5) for thorns buff on self
+	RegenTier      int // tier (1-5) for regen buff on self
+	AtkUpTier      int // tier (1-5) for attack up buff on self
+	DefUpTier      int // tier (1-5) for defense up buff on self
+	TauntTier      int // tier (1-5) for taunt buff on self
+
+	// StatusOps holds normalized status applications resolved by the statusfx
+	// registry (catalog semantics: Value = intensity, Turns = duration). Used by
+	// the engine for statuses driven by the data registry (e.g. BURN, FEAR, ...).
+	StatusOps []statusfx.StatusOp
 
 	// Backlash from using Gu rank > actor rank
 	BacklashDamage float64 // HP damage taken by caster from Gu backlash
@@ -152,7 +159,7 @@ type SimAction struct {
 	Priority int
 
 	// Conditional-use fields. Empty condition = always use.
-	UseCondition   string  // "always","hp_below","mana_above","enemy_hp_below"
+	UseCondition   string // "always","hp_below","mana_above","enemy_hp_below"
 	ConditionValue float64
 }
 
@@ -177,19 +184,19 @@ type DaoMarks map[string]int
 
 // CombatantAuto represents a stripped-down, deterministic entity in the combat grid.
 type CombatantAuto struct {
-	ID       string
-	Name     string
-	Kind     string // "Player", "Enemy", "Boss", "Minion"
-	Rank     int
-	GridX    int    // 1=Front, 2=Mid, 3=Back
-	GridY    int    // 1=Top, 2=Mid, 3=Bottom
-	MaxHP    int
-	HP       int
-	MaxMana  int
-	Mana     int
-	BaseDmg  int // fallback basic-attack damage
-	BaseDef  int
-	Speed    float64
+	ID      string
+	Name    string
+	Kind    string // "Player", "Enemy", "Boss", "Minion"
+	Rank    int
+	GridX   int // 1=Front, 2=Mid, 3=Back
+	GridY   int // 1=Top, 2=Mid, 3=Bottom
+	MaxHP   int
+	HP      int
+	MaxMana int
+	Mana    int
+	BaseDmg int // fallback basic-attack damage
+	BaseDef int
+	Speed   float64
 
 	// Pre-combat Auto-Barrier
 	VirtualShield int
@@ -233,6 +240,18 @@ type CombatantAuto struct {
 	HasTaunt          bool    // forces enemies to attack this unit
 	TaunterID         string  // ID of the taunter (for target redirection)
 
+	// ── New status-derived flags (driven by statusfx registry) ──
+	IsSleeping           bool    // loses turn, breaks on damage (SLEEP)
+	IsFeared             bool    // only basic attack, like silence (FEAR)
+	IsCharmed            bool    // forced to attack the charmer's enemies (CHARM)
+	IsStealthed          bool    // untargetable by single-target actions (STEALTH)
+	IsConfused           bool    // chance to mis-target an ally (CONFUSE)
+	IsBlinded            bool    // chance to miss (BLIND)
+	IsBound              bool    // immobilize, loses turn (BIND)
+	IsReviveLocked       bool    // cannot be revived (REVIVE_LOCK)
+	AccuracyPenalty      float64 // 0..1 miss chance (BLIND)
+	DamageTakenReduction float64 // 0..1 damage reduction multiplier (DAMAGE_REDUCTION_UP / INVINCIBLE)
+
 	// Auto-use settings
 	AutoHealHP      bool
 	HealThreshold   float64
@@ -263,10 +282,10 @@ type CombatantAuto struct {
 
 // CombatState represents the mutable snapshot of the battlefield at any given moment.
 type CombatState struct {
-	Turn     int
-	Seed     int64
-	Allies   []*CombatantAuto
-	Enemies  []*CombatantAuto
+	Turn    int
+	Seed    int64
+	Allies  []*CombatantAuto
+	Enemies []*CombatantAuto
 
 	// Boss specific tracking
 	BossPhase int // 0 = 100-70%, 1 = 70-30%, 2 = 30-0%
@@ -277,41 +296,41 @@ type CombatState struct {
 
 // CombatSnapshot captures full stats of all combatants at a point in time.
 type CombatSnapshot struct {
-	Turn      int                    `json:"turn"`
-	Allies    []CombatantSnapshot   `json:"allies"`
-	Enemies   []CombatantSnapshot   `json:"enemies"`
+	Turn    int                 `json:"turn"`
+	Allies  []CombatantSnapshot `json:"allies"`
+	Enemies []CombatantSnapshot `json:"enemies"`
 }
 
 // CombatantSnapshot is a point-in-time snapshot of one combatant's stats.
 type CombatantSnapshot struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name"`
-	Kind     string  `json:"kind"`
-	HP       int     `json:"hp"`
-	MaxHP    int     `json:"max_hp"`
-	Mana     int     `json:"mana"`
-	MaxMana  int     `json:"max_mana"`
-	GridX    int     `json:"grid_x"`
-	GridY    int     `json:"grid_y"`
-	Shield   int     `json:"shield"`
-	Damage   float64 `json:"damage"`
-	Defense  float64 `json:"defense"`
-	Speed    float64 `json:"speed"`
-	IsDead   bool    `json:"is_dead"`
+	ID      string  `json:"id"`
+	Name    string  `json:"name"`
+	Kind    string  `json:"kind"`
+	HP      int     `json:"hp"`
+	MaxHP   int     `json:"max_hp"`
+	Mana    int     `json:"mana"`
+	MaxMana int     `json:"max_mana"`
+	GridX   int     `json:"grid_x"`
+	GridY   int     `json:"grid_y"`
+	Shield  int     `json:"shield"`
+	Damage  float64 `json:"damage"`
+	Defense float64 `json:"defense"`
+	Speed   float64 `json:"speed"`
+	IsDead  bool    `json:"is_dead"`
 }
 
 // CombatLog represents a granular event to be stringified as JSON.
 type CombatLog struct {
-	Turn      int              `json:"turn"`
-	ActorId   string           `json:"actor_id"`
-	ActorName string           `json:"actor_name"`
-	Action    string           `json:"action"`   // e.g. "CAST_KILLER_MOVE", "BASIC_ATTACK", "TRIGGERED", "PHASE_TRANSITION"
-	TargetId  string           `json:"target_id,omitempty"`
-	Damage    int              `json:"damage,omitempty"`
-	IsCrit    bool             `json:"is_crit,omitempty"`
-	Trigger   string           `json:"trigger,omitempty"` // Name of the fixed trigger e.g. "THIET_HUYET_CO"
-	Detail    string           `json:"detail,omitempty"`  // Human readable flavor text
-	Snapshot  *CombatSnapshot  `json:"snapshot,omitempty"`
+	Turn      int             `json:"turn"`
+	ActorId   string          `json:"actor_id"`
+	ActorName string          `json:"actor_name"`
+	Action    string          `json:"action"` // e.g. "CAST_KILLER_MOVE", "BASIC_ATTACK", "TRIGGERED", "PHASE_TRANSITION"
+	TargetId  string          `json:"target_id,omitempty"`
+	Damage    int             `json:"damage,omitempty"`
+	IsCrit    bool            `json:"is_crit,omitempty"`
+	Trigger   string          `json:"trigger,omitempty"` // Name of the fixed trigger e.g. "THIET_HUYET_CO"
+	Detail    string          `json:"detail,omitempty"`  // Human readable flavor text
+	Snapshot  *CombatSnapshot `json:"snapshot,omitempty"`
 }
 
 func (c *CombatantAuto) GetManaName() string {
@@ -341,4 +360,3 @@ func (c *CombatantAuto) GetManaName() string {
 		return "chân nguyên"
 	}
 }
-

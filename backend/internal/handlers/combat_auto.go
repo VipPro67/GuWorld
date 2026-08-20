@@ -18,6 +18,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
+	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -917,11 +918,22 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		if active.ShieldFlat > 0 {
 			act.Defense += active.ShieldFlat
 		}
-		if active.ApplyStatus == "BLEED" {
-			act.BleedPerTurn += active.StatusTickDamage
-		}
-		if active.ApplyStatus == "POISON" {
-			act.PoisonPerTurn += active.StatusTickDamage
+		// Registry-driven statuses (BLEED/POISON/BURN/FEAR/CONFUSE/STEALTH/
+		// SLEEP/BLIND/CHARM/BIND + catalog). Resolved with real turns from
+		// status_duration_ticks instead of a hardcoded 3.
+		if active.ApplyStatus != "" {
+			switch active.ApplyStatus {
+			// Tier-based legacy statuses keep their existing field mapping.
+			case "STUN", "SLOW", "SLOW1", "SLOW_DAMAGE", "WEAK", "FREEZE",
+				"SILENCE", "THORNS", "REGEN", "ATK_UP", "DEF_UP", "TAUNT":
+				// handled below
+			default:
+				if op, err := statusfx.ResolveStatus(active.ApplyStatus, active.StatusTickDamage, active.StatusDurationTicks); err == nil {
+					act.StatusOps = append(act.StatusOps, op)
+				} else {
+					logger.S.Warnf("Gu %s: %v", spec.ID, err)
+				}
+			}
 		}
 		if active.ApplyStatus == "STUN" {
 			act.StunTier = active.StatusDurationTicks

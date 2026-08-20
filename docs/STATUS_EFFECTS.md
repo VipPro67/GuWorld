@@ -256,20 +256,24 @@ for _, enemy := range enemies {
    - DefenseMultiplier (def_up)
    - ThornsDamage (thorns)
    - IsSilenced, IsFrozen, HasTaunt
+   - IsSleeping, IsFeared, IsCharmed, IsStealthed, IsConfused, IsBlinded, IsBound
 4. Sort actors theo EffectiveSpeed
 5. Với mỗi actor:
    a. Check stun → skip lượt
    b. Check freeze → skip lượt
-   c. Check silence → force basic attack
-   d. Taunt redirect target
-   e. Execute action:
+   c. Check sleep → skip lượt
+   d. Check bind → skip lượt
+   e. Check silence/fear → force basic attack
+   f. Charm/confuse → redirect target sang phe mình
+   g. Taunt redirect target
+   h. Execute action:
+      - Blind → xác suất miss
       - Apply weak/atk_up multiplier to damage
       - Apply def_up to target defense
-      - Deal damage
+      - Deal damage (sleep/freeze break on damage)
       - Apply thorns reflect
-      - Freeze break (50% on damage)
-      - Apply status effects to target (slow, weak, freeze, silence)
-      - Apply self-buffs (thorns, regen, atk_up, def_up, taunt)
+      - Apply status effects to target (slow, weak, freeze, silence, burn, ...)
+      - Apply self-buffs (thorns, regen, atk_up, def_up, taunt, stealth)
 ```
 
 ---
@@ -291,10 +295,32 @@ Set `apply_status` trong `effects.active`:
 ```
 
 **Supported `apply_status` values:**
-`BLEED`, `POISON`, `STUN`, `SLOW`, `SLOW1`, `SLOW_DAMAGE`, `WEAK`, `FREEZE`, `SILENCE`, `THORNS`, `REGEN`, `ATK_UP`, `DEF_UP`, `TAUNT`
+`BLEED`, `POISON`, `STUN`, `SLOW`, `SLOW1`, `SLOW_DAMAGE`, `WEAK`, `FREEZE`, `SILENCE`, `THORNS`, `REGEN`, `ATK_UP`, `DEF_UP`, `TAUNT`, `BURN`, `FEAR`, `CONFUSE`, `STEALTH`, `SLEEP`, `BLIND`, `CHARM`, `BIND`
 
-- `status_tick_damage`: tier (1-5) cho effects mới, hoặc damage/tick cho bleed/poison
-- `status_duration_ticks`: duration override (nếu 0 → dùng tier default)
+- `status_tick_damage`: tier (1-5) cho effects cũ, hoặc giá trị/lượt (DoT) cho status registry
+- `status_duration_ticks`: duration override (nếu 0 → dùng default trong registry)
+
+### Registry status (mới — data-driven qua `statusfx`)
+
+Từ đợt này, các status mới được chuẩn hóa về **catalog semantics** và quản lý tập trung trong package `internal/statusfx` (không còn if-chain rải rác):
+
+| Status | Behaviour | Cơ chế | Dur mặc định | Resist |
+|--------|-----------|--------|-------------|--------|
+| **BURN** (Thiêu Đốt) | `dot` | DoT hỏa: trừ `status_tick_damage` HP mỗi lượt | 3 | ❌ |
+| **FEAR** (Khiếp Sợ) | `force_basic` | Chỉ tấn công cơ bản (như silence) | 2 | ✅ |
+| **CONFUSE** (Mê Loạn) | `confuse` | 40% tấn công nhầm đồng minh | 2 | ✅ |
+| **STEALTH** (Ẩn Thân) | `stealth` | Không bị chọn mục tiêu (single-target) | 2 | ❌ (self) |
+| **SLEEP** (Ngủ) | `sleep` | Mất lượt, **thức dậy khi bị tấn công** | 2 | ✅ |
+| **BLIND** (Mù) | `blind` | 35% đòn đánh trượt | 2 | ✅ |
+| **CHARM** (Mê Hoặc) | `charm` | Bị điều khiển, tấn công phe mình | 3 | ✅ |
+| **BIND** (Trói) | `bind` | Mất lượt (không hành động) | 3 | ✅ |
+| **HASTE** (Tăng Tốc) | `haste` | Tăng % tốc độ (self) | 3 | ❌ (self) |
+| **ARMOR_BREAK** (Phá Giáp) | `armor_break` | Giảm % phòng thủ | 3 | ✅ |
+| **DAMAGE_REDUCTION_UP** (Giảm Sát Thương) | `damage_reduction` | Giảm % sát thương nhận vào (self) | 3 | ❌ (self) |
+| **INVINCIBLE** (Bất Tử) | `invincible` | Miễn nhiễm mọi sát thương (self) | 1 | ❌ (self) |
+| **REVIVE_LOCK** (Khóa Hồi Sinh) | `revive_lock` | Chặn hồi sinh (Xuân Thu Thiền) | 3 | ✅ |
+
+**Thêm status mới = 1 entry trong `statusfx.Registry` + tùy chọn 1 behaviour hook trong `simulator/status_apply.go`.** Không cần sửa switch nữa.
 
 ### Chênh lệch dữ liệu hiện tại (quét `data/Gu.csv`)
 
@@ -302,19 +328,21 @@ Bảng dưới đối chiếu status **có trong Gu dictionary** với **code co
 
 | Status | Số Cổ trong data | Code combat | Ghi chú |
 |---|---:|---|---|
-| BURN | 32 | ❌ chưa code | DoT hỏa; cần thêm enum + tick như bleed/poison |
+| BURN | 32 | ✅ (registry) | DoT hỏa qua `statusfx` |
 | BLEED | 30 | ✅ | — |
 | FREEZE | 13 | ✅ | — |
-| FEAR | 5 | ❌ chưa code | — |
-| STEALTH | 4 | ❌ chưa code | — |
-| CONFUSE | 4 | ❌ chưa code | — |
+| FEAR | 5 | ✅ (registry) | force basic, resist-gated |
+| STEALTH | 4 | ✅ (registry) | untargetable single-target |
+| CONFUSE | 4 | ✅ (registry) | 40% mis-target |
 | SILENCE | 3 | ✅ | — |
 | STUN | 3 | ✅ | qua shorthand `stun` + `apply_status` |
-| SLEEP | 2 | ❌ chưa code | — |
+| SLEEP | 2 | ✅ (registry) | skip turn + break on damage |
 | POISON | 2 | ✅ | — |
-| CHARM / BIND / BLIND / SLOW / SLOW1 | 1 mỗi loại | SLOW/SLOW1 ✅, còn lại ❌ | — |
+| CHARM / BIND / BLIND / SLOW / SLOW1 | 1 mỗi loại | ✅ (registry cho CHARM/BIND/BLIND; SLOW/SLOW1 tier) | — |
 
 Lưu ý: `THORNS`, `REGEN`, `ATK_UP`, `DEF_UP`, `TAUNT`, `WEAK`, `SLOW_DAMAGE` đã có code (constant + flow) nhưng **hiện không Cổ nào trong `Gu.csv` sử dụng** — chỉ phát sinh qua KillerMove hoặc sinh ra bởi code.
+
+Catalog đã đăng ký trong `statusfx.Registry` nhưng **chưa wire combat**: `HASTE`, `ARMOR_BREAK`, `DAMAGE_REDUCTION_UP`, `INVINCIBLE`, `REVIVE_LOCK`.
 
 ### Từ KillerMove (JSON effects)
 
@@ -340,10 +368,13 @@ Lưu ý: `THORNS`, `REGEN`, `ATK_UP`, `DEF_UP`, `TAUNT`, `WEAK`, `SLOW_DAMAGE` �
 
 | File | Mục đích |
 |------|----------|
+| `statusfx/status.go` | Canonical status IDs + behaviour tags |
+| `statusfx/spec.go` | `StatusSpec` + `Registry` + `ResolveStatus()` |
+| `simulator/status_apply.go` | `applyStatusOps()` — registry-driven apply/tick |
 | `simulator/models.go` | Constants, `TierToPercent()`, `TierToDuration()`, `SimAction` fields |
 | `simulator/mechanics.go` | `tickDoTs()`, `tickStatusEffects()`, `ComputeEffectMultipliers()`, `ApplyThornsDamage()` |
 | `simulator/engine.go` | Auto-battle: sort, freeze/stun/silence/taunt checks, damage calc, effect application |
 | `handlers/combat_attack.go` | Manual combat: tick loop, slow sort, weak damage, silence/freeze checks |
-| `handlers/combat_auto.go` | Map Gu/KillerMove effects → SimAction fields |
+| `handlers/combat_auto.go` | Map Gu/KillerMove effects → SimAction fields (BLEED/POISON + registry statuses → StatusOps) |
 | `handlers/gu_effects.go` | `BuildCombatAction()`, `GetFlatGuEffects()`, `tickStatusEffects()` |
 | `models/gu.go` | `GetFlatGuEffects()` — flat effect mapping |
