@@ -1750,12 +1750,13 @@ func AdminStockSectVault(c *gin.Context) {
 		for i, item := range guItems {
 			if item.ID == req.ItemID && (req.Rank == 0 || item.Rank == req.Rank) {
 				guItems[i].Quantity += req.Quantity
+				guItems[i].Hunger = vaultGuMaxHunger(req.ItemID, item.Rank)
 				found = true
 				break
 			}
 		}
 		if !found {
-			guItems = append(guItems, SectVaultGuItem{ID: req.ItemID, Rank: req.Rank, Cost: 0, Quantity: req.Quantity})
+			guItems = append(guItems, SectVaultGuItem{ID: req.ItemID, Rank: req.Rank, Cost: 0, Quantity: req.Quantity, Hunger: vaultGuMaxHunger(req.ItemID, req.Rank)})
 		}
 		updated, _ := json.Marshal(guItems)
 		_, err = tx.Exec(`UPDATE sects SET vault_gu=$1 WHERE id=$2`, updated, sectID)

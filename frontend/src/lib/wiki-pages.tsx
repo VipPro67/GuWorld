@@ -364,7 +364,7 @@ export const wikiPages: WikiPage[] = [
                 <li><strong>Cổ Bị Động & Tăng Trưởng:</strong> Tự động cộng các chỉ số thuộc tính vĩnh viễn (Sinh Lực, Tấn công, Tốc độ) khi được trang bị.</li>
               </ul>
               <div className="p-3 rounded-lg bg-rose-950/20 border border-rose-500/10 text-rose-300">
-                ⚠️ <strong>Quy luật sinh tồn:</strong> Cổ trùng tiêu hao <strong>Độ No (Hunger)</strong> liên tục <strong>mỗi 3 giờ</strong>. Hãy tích lũy đúng loại thức ăn (thịt thú, khoáng vật, ngọc lộ...) và cho chúng ăn kịp thời. Cổ trùng đói về 0 độ no sẽ <strong>chết vĩnh viễn và biến mất khỏi hòm đồ</strong>!
+                ⚠️ <strong>Quy luật sinh tồn:</strong> Cổ trùng tiêu hao <strong>Độ No (Hunger)</strong> liên tục <strong>mỗi 3 giờ</strong>. Hãy tích lũy đúng loại thức ăn (thịt thú, khoáng vật, ngọc lộ...) và cho chúng ăn kịp thời. Cổ trùng đói về 0 độ no sẽ <strong>chết vĩnh viễn và biến mất khỏi hòm đồ</strong>! Quy luật này áp dụng cả với Cổ nằm trong <strong>Bảo khố Tông Môn</strong> — Cổ trong kho vẫn hao Độ No và có thể chết trong kho.
               </div>
             </div>
           </div>

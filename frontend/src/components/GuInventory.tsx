@@ -1139,7 +1139,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                     )}
 
                                     {/* Hóa Bản Mệnh */}
-                                    {!isDead && !gu.is_vital && onSetVital && (
+                                    {!isDead && !gu.is_vital && spec.gu_type !== "Consumable" && onSetVital && (
                                       <button
                                         type="button"
                                         disabled={actionLoading || settingVitalId === gu.instance_id || gu.rank > player.rank}

@@ -119,10 +119,53 @@ func canManageSect(rank string) bool {
 }
 
 type SectVaultGuItem struct {
-	ID       string `json:"id"`
-	Rank     int    `json:"rank,omitempty"`
-	Cost     int    `json:"cost"`
-	Quantity int    `json:"quantity"`
+	ID       string  `json:"id"`
+	Rank     int     `json:"rank,omitempty"`
+	Cost     int     `json:"cost"`
+	Quantity int     `json:"quantity"`
+	Hunger   float64 `json:"hunger,omitempty"`
+}
+
+// vaultGuMaxHunger returns the effective max hunger for a vault Gu group,
+// falling back to 100 when the dictionary entry is missing or lacks a max.
+func vaultGuMaxHunger(id string, rank int) float64 {
+	if spec, ok := models.GetGu(id, rank); ok && spec.MaxHunger > 0 {
+		return float64(spec.MaxHunger)
+	}
+	if spec, ok := models.GetGuAny(id); ok && spec.MaxHunger > 0 {
+		return float64(spec.MaxHunger)
+	}
+	return 100
+}
+
+// normalizeVaultGuHunger backfills legacy entries (missing hunger) to the
+// effective max and clamps the value into [0, max].
+func normalizeVaultGuHunger(id string, rank int, h float64) float64 {
+	max := vaultGuMaxHunger(id, rank)
+	if h <= 0 {
+		return max
+	}
+	if h > max {
+		return max
+	}
+	return h
+}
+
+// mergeVaultGuHunger raises the group hunger to the donated Gu's hunger when
+// the incoming Gu is fresher (max of existing vs donated), clamped to [0, max].
+func mergeVaultGuHunger(id string, rank int, current, donated float64) float64 {
+	max := vaultGuMaxHunger(id, rank)
+	merged := current
+	if donated > merged {
+		merged = donated
+	}
+	if merged <= 0 {
+		return max
+	}
+	if merged > max {
+		return max
+	}
+	return merged
 }
 
 type DonateStonesRequest struct {
@@ -909,11 +952,13 @@ func DonateGu(c *gin.Context) {
 		_ = json.Unmarshal(vaultGuRaw, &vaultGus)
 	}
 
-	// Increment quantity if Gu type already exists in vault, otherwise add new entry
+	// Increment quantity if Gu type already exists in vault, otherwise add new
+	// entry. Raise the group hunger to the donated Gu's hunger when fresher.
 	donatedGuFound := false
 	for i, v := range vaultGus {
 		if v.ID == guInstance.GuID && v.Rank == guInstance.Rank {
 			vaultGus[i].Quantity++
+			vaultGus[i].Hunger = mergeVaultGuHunger(guInstance.GuID, guInstance.Rank, v.Hunger, float64(guInstance.Hunger))
 			donatedGuFound = true
 			break
 		}
@@ -924,6 +969,7 @@ func DonateGu(c *gin.Context) {
 			Rank:     guInstance.Rank,
 			Cost:     vaultItemCost,
 			Quantity: 1,
+			Hunger:   normalizeVaultGuHunger(guInstance.GuID, guInstance.Rank, float64(guInstance.Hunger)),
 		})
 	}
 
@@ -1281,11 +1327,13 @@ func DonateBulk(c *gin.Context) {
 
 				totalGainedContribution += gained
 
-				// Update Vault Gu count
+				// Update Vault Gu count, raising group hunger when the donated
+				// Gu is fresher.
 				donatedGuFound := false
 				for idx, v := range vaultGus {
 					if v.ID == gi.GuID && v.Rank == gi.Rank {
 						vaultGus[idx].Quantity++
+						vaultGus[idx].Hunger = mergeVaultGuHunger(gi.GuID, gi.Rank, v.Hunger, float64(gi.Hunger))
 						donatedGuFound = true
 						break
 					}
@@ -1296,6 +1344,7 @@ func DonateBulk(c *gin.Context) {
 						Rank:     gi.Rank,
 						Cost:     vaultItemCost,
 						Quantity: 1,
+						Hunger:   normalizeVaultGuHunger(gi.GuID, gi.Rank, float64(gi.Hunger)),
 					})
 				}
 
@@ -1567,6 +1616,7 @@ func BuyFromSectVault(c *gin.Context) {
 		if actualRank == 0 {
 			actualRank = guSpec.Rank
 		}
+		buyHunger := normalizeVaultGuHunger(req.ItemID, actualRank, vaultGus[targetIdx].Hunger)
 
 		if vaultGus[targetIdx].Quantity <= 0 {
 			vaultGus = append(vaultGus[:targetIdx], vaultGus[targetIdx+1:]...)
@@ -1576,7 +1626,7 @@ func BuyFromSectVault(c *gin.Context) {
 				InstanceID: uuid.New().String(),
 				GuID:       req.ItemID,
 				Rank:       actualRank,
-				Hunger:     100,
+				Hunger:     int(buyHunger),
 				Status:     "ACTIVE",
 				Equipped:   false,
 			}
@@ -1998,6 +2048,8 @@ func CompleteSectMission(c *gin.Context) {
 
 		// Remove Gu from player
 		donatedGuID := player.GuInventory[targetIdx].GuID
+		donatedGuInstRank := player.GuInventory[targetIdx].Rank
+		donatedGuHunger := float64(player.GuInventory[targetIdx].Hunger)
 		donatedInstanceID := player.GuInventory[targetIdx].InstanceID
 		player.GuInventory = append(player.GuInventory[:targetIdx], player.GuInventory[targetIdx+1:]...)
 		if err := db.RemovePlayerGu(tx, donatedInstanceID); err != nil {
@@ -2026,6 +2078,7 @@ func CompleteSectMission(c *gin.Context) {
 				for i, v := range vaultGus {
 					if v.ID == donatedGuID {
 						vaultGus[i].Quantity++
+						vaultGus[i].Hunger = mergeVaultGuHunger(donatedGuID, donatedGuInstRank, v.Hunger, donatedGuHunger)
 						missionGuFound = true
 						break
 					}
@@ -2035,6 +2088,7 @@ func CompleteSectMission(c *gin.Context) {
 						ID:       donatedGuID,
 						Cost:     pricing.VaultCost(pricing.GuBasePrice(donatedGuBase, donatedGuRank)),
 						Quantity: 1,
+						Hunger:   normalizeVaultGuHunger(donatedGuID, donatedGuInstRank, donatedGuHunger),
 					})
 				}
 				newVaultGus, _ := json.Marshal(vaultGus)
@@ -2825,6 +2879,7 @@ func StockSectVault(c *gin.Context) {
 			if v.ID == req.ItemID {
 				vaultGus[i].Quantity += req.Quantity
 				vaultGus[i].Cost = stockGuCost // refresh cost to current pricing
+				vaultGus[i].Hunger = vaultGuMaxHunger(req.ItemID, stockGuRank)
 				found = true
 				break
 			}
@@ -2836,6 +2891,7 @@ func StockSectVault(c *gin.Context) {
 				Rank:     stockGuRank,
 				Cost:     stockGuCost,
 				Quantity: req.Quantity,
+				Hunger:   vaultGuMaxHunger(req.ItemID, stockGuRank),
 			})
 		}
 
@@ -3044,12 +3100,13 @@ func StockSectVaultBulk(c *gin.Context) {
 				if vaultGus[i].ID == line.itemID {
 					vaultGus[i].Quantity += line.quantity
 					vaultGus[i].Cost = stockGuCost
+					vaultGus[i].Hunger = vaultGuMaxHunger(line.itemID, stockGuRank)
 					found = true
 					break
 				}
 			}
 			if !found {
-				vaultGus = append(vaultGus, SectVaultGuItem{ID: line.itemID, Rank: stockGuRank, Cost: stockGuCost, Quantity: line.quantity})
+				vaultGus = append(vaultGus, SectVaultGuItem{ID: line.itemID, Rank: stockGuRank, Cost: stockGuCost, Quantity: line.quantity, Hunger: vaultGuMaxHunger(line.itemID, stockGuRank)})
 			}
 		} else if line.itemType == "recipe" {
 			found := false

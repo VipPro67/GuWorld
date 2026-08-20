@@ -55,6 +55,10 @@ func processHungerDecay(db *sql.DB) {
 	if err := runHungerDecayBatch(db); err != nil {
 		logger.S.Errorf("Hunger Worker Error running decay batch: %v", err)
 	}
+
+	// 4. Sect vault (kho tông môn) decay: Gu stored in a vault still get hungry
+	//    at the ACTIVE rate and starve to death in storage.
+	processVaultHungerDecay(db)
 }
 
 // findOnTickPlayers returns the player ids that own at least one equipped
@@ -382,6 +386,164 @@ func processPlayerHungerDecayOnce(db *sql.DB, playerID string) error {
 	// Remove starved (now DEAD) Gu instances.
 	if _, err := tx.Exec(`DELETE FROM player_gu WHERE id = ANY($1::text[])`, pq.Array(deadIDs)); err != nil {
 		return err
+	}
+
+	return tx.Commit()
+}
+
+// ---- Sect vault (kho tông môn) hunger decay ---------------------------------
+
+// vaultGuItem is the JSONB shape of a single entry in sects.vault_gu.
+type vaultGuItem struct {
+	ID       string  `json:"id"`
+	Rank     int     `json:"rank,omitempty"`
+	Quantity int     `json:"quantity"`
+	Hunger   float64 `json:"hunger,omitempty"`
+}
+
+// vaultGuSpec returns (maxHunger, hungerRate) for a vault Gu group, with safe
+// defaults when the dictionary entry is missing.
+func vaultGuSpec(id string, rank int) (float64, float64) {
+	if spec, ok := models.GetGu(id, rank); ok {
+		return float64(spec.MaxHunger), float64(spec.HungerRate)
+	}
+	if spec, ok := models.GetGuAny(id); ok {
+		return float64(spec.MaxHunger), float64(spec.HungerRate)
+	}
+	return 100, 0
+}
+
+// processVaultHungerDecay decays hunger for Gu stored in every sect vault at the
+// same ACTIVE rate as equipped Gu, removing groups that starve to 0. Each sect
+// is processed in its own short transaction.
+func processVaultHungerDecay(db *sql.DB) {
+	sectIDs, err := findSectIDsWithVaultGu(db)
+	if err != nil {
+		logger.S.Errorf("Hunger Worker Error finding sects with vault Gu: %v", err)
+		return
+	}
+	for _, id := range sectIDs {
+		if err := processSectVaultHungerDecay(db, id); err != nil {
+			logger.S.Errorf("Hunger Worker Error decaying sect %s vault: %v", id, err)
+		}
+	}
+}
+
+func findSectIDsWithVaultGu(db *sql.DB) ([]string, error) {
+	rows, err := db.Query(`SELECT id FROM sects WHERE vault_gu <> '[]'::jsonb`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids, rows.Err()
+}
+
+// processSectVaultHungerDecay retries a few times on transient deadlocks, mirroring
+// the per-player decay loop.
+func processSectVaultHungerDecay(db *sql.DB, sectID string) error {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		lastErr = processSectVaultHungerDecayOnce(db, sectID)
+		if lastErr == nil {
+			return nil
+		}
+		if !isDeadlockOrLockTimeout(lastErr) {
+			return lastErr
+		}
+		time.Sleep(time.Duration(attempt+1) * time.Second)
+	}
+	return lastErr
+}
+
+// processSectVaultHungerDecayOnce decays hunger for one sect vault and removes
+// groups that starve, writing an audit log per removed group.
+func processSectVaultHungerDecayOnce(db *sql.DB, sectID string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`SET LOCAL statement_timeout = '600000'`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`SET LOCAL lock_timeout = '60000'`); err != nil {
+		return err
+	}
+
+	var raw []byte
+	if err := tx.QueryRow(`SELECT vault_gu FROM sects WHERE id = $1 FOR UPDATE`, sectID).Scan(&raw); err != nil {
+		return err
+	}
+
+	var items []vaultGuItem
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &items); err != nil {
+			return err
+		}
+	}
+
+	type starved struct {
+		name string
+	}
+	var starvedGroups []starved
+	changed := false
+
+	for i := range items {
+		maxH, rate := vaultGuSpec(items[i].ID, items[i].Rank)
+		if items[i].Hunger <= 0 {
+			// Legacy/backfilled entry with no stored hunger: treat as full.
+			items[i].Hunger = maxH
+		}
+		items[i].Hunger -= rate
+		if items[i].Hunger < 0 {
+			items[i].Hunger = 0
+		}
+		changed = true
+
+		name := items[i].ID
+		if spec, ok := models.GetGu(items[i].ID, items[i].Rank); ok {
+			name = spec.Name
+		}
+		if items[i].Hunger <= 0 {
+			starvedGroups = append(starvedGroups, starved{name: name})
+		}
+	}
+
+	if len(starvedGroups) > 0 {
+		kept := items[:0]
+		for _, it := range items {
+			if it.Hunger > 0 {
+				kept = append(kept, it)
+			}
+		}
+		items = kept
+	}
+
+	if changed {
+		newRaw, err := json.Marshal(items)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`UPDATE sects SET vault_gu = $1 WHERE id = $2`, newRaw, sectID); err != nil {
+			return err
+		}
+	}
+
+	for _, s := range starvedGroups {
+		if _, err := tx.Exec(`
+			INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
+			VALUES (NULL, 'sect.vault_gu_starve', 'sect', $1, $2, '{}'::jsonb, '', false, 'Chết đói trong Bảo khố', NOW())`,
+			sectID, s.name+" | Cổ trong Bảo khố chết đói"); err != nil {
+			return err
+		}
 	}
 
 	return tx.Commit()

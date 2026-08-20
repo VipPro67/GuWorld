@@ -505,6 +505,7 @@ Không có seed CSV cho bảng này. Row được tạo tự động qua `INSERT
 | `funds` | BIGINT | Quỹ tông môn (đổi từ INTEGER → BIGINT để tránh tràn số khi tích lũy lãnh địa). |
 | `require_approval` | BOOLEAN | DEFAULT FALSE. Bật = phải duyệt đơn gia nhập. |
 | `require_promotion_approval` | BOOLEAN | DEFAULT FALSE. Bật = **mọi** thăng cấp đều tạo yêu cầu chờ duyệt. |
+| `vault_gu` | JSONB | Cổ trùng trong Bảo khố, gộp theo `(id, rank)`. Định dạng `[{"id": "...", "rank": 1, "cost": N, "quantity": N, "hunger": float}]`. `hunger` là độ no chung của nhóm; worker đói trừ mỗi 3h đúng mức `ACTIVE` (full `hunger_rate`), khi ≤ 0 nhóm bị xóa khỏi kho kèm audit `sect.vault_gu_starve`. Khi quyên góp, `hunger` nhóm lấy **max** giữa giá trị cũ và Cổ được góp; khi đổi ra, Cổ nhận đúng `hunger` hiện tại của nhóm (không reset 100). Entry cũ thiếu `hunger` được backfill về `max_hunger` khi chạy. |
 | `vault_recipes` | JSONB | Danh sách Bí phương trong bảo khố. Định dạng `[{"recipe_id": "recipe_...", "completion_rate": 100}]`. Seed từ `Sect.csv`. |
 
 Các cột được thêm sau khi tạo bảng bằng `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` trong `db.go`.

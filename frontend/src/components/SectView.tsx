@@ -1609,6 +1609,9 @@ export const SectView: React.FC = () => {
               <p className="text-xs text-zinc-500 mt-0.5">
                 Dùng điểm cống hiến môn phái để đổi lấy thiên tài địa bảo, cổ trùng hay công thức bí truyền.
               </p>
+              <p className="text-[10px] text-amber-500/80 mt-0.5 font-mono">
+                ⚠️ Cổ trong Bảo khố vẫn hao Độ No mỗi 3 giờ ngang mức hoạt động; về 0 sẽ chết và bị xóa khỏi kho.
+              </p>
             </div>
 
             {/* Sub Tabs */}
@@ -1685,6 +1688,9 @@ export const SectView: React.FC = () => {
                       const unaffordable = (member?.contribution_points || 0) < totalCost;
                       const displayRank = vg.rank || spec?.rank || 1;
                       const ownedCount = player?.gu_inventory?.filter((g: any) => g.gu_id === vg.id && g.rank === displayRank && g.status !== "DEAD").length || 0;
+                      const vgMaxHunger = spec?.max_hunger || 100;
+                      const vgHunger = typeof vg.hunger === "number" && vg.hunger > 0 ? vg.hunger : vgMaxHunger;
+                      const vgHungerPct = Math.max(0, Math.min(100, (vgHunger / vgMaxHunger) * 100));
                       return (
                         <div
                           key={uKey}
@@ -1703,6 +1709,24 @@ export const SectView: React.FC = () => {
                                 </>
                               )}
                             </span>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-[9px] text-zinc-500 font-mono">Độ no:</span>
+                              <div className="w-16 h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-850">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-300 ${
+                                    vgHungerPct < 20
+                                      ? "bg-rose-500 animate-pulse"
+                                      : vgHungerPct < 50
+                                      ? "bg-amber-505"
+                                      : "bg-emerald-500"
+                                  }`}
+                                  style={{ width: `${vgHungerPct}%` }}
+                                />
+                              </div>
+                              <span className="text-[9px] font-mono text-zinc-400">
+                                {Math.round(vgHunger)}/{vgMaxHunger}
+                              </span>
+                            </div>
                             <p className="text-xs text-zinc-500 leading-snug line-clamp-2 mt-1.5">
                               {spec?.description || "Không có mô tả bí thuật..."}
                             </p>

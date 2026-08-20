@@ -3456,6 +3456,12 @@ func SetVitalGu(c *gin.Context) {
 		return
 	}
 
+	dictGu, ok := models.GetGu(targetGu.GuID, targetGu.Rank)
+	if ok && (dictGu.Type == "Consumable" || dictGu.Type == "consumable") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể thiết lập Cổ trùng tiêu hao (Consumable) làm Bản Mệnh Cổ"})
+		return
+	}
+
 	if targetGu.IsVital {
 		responseWithPlayer(c, http.StatusOK, player, gin.H{
 			"message": "Cổ trùng này đã là Bản Mệnh Cổ của đạo hữu rồi.",
