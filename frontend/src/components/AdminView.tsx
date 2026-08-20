@@ -524,7 +524,24 @@ export const AdminView: React.FC = () => {
   const [onlineLoading, setOnlineLoading] = useState(false);
 
   // ----- Dictionary state -----
-  const [dataTab, setDataTab] = useState<"import" | "tables" | "gus" | "items" | "recipes" | "monsters" | "loot_tables">("import");
+  const [dataTab, setDataTab] = useState<"import" | "tables" | "gus" | "items" | "recipes" | "monsters" | "loot_tables" | "regions" | "map_cells">("import");
+  const [regions, setRegions] = useState<any[]>([]);
+  const [regionsLoading, setRegionsLoading] = useState(false);
+  const [regionEdit, setRegionEdit] = useState<any | null>(null);
+  const [regionSearch, setRegionSearch] = useState("");
+  const [regionsPage, setRegionsPage] = useState(1);
+  const [regionsTotal, setRegionsTotal] = useState(0);
+  const [regionsTotalPages, setRegionsTotalPages] = useState(1);
+
+  const [mapCells, setMapCells] = useState<any[]>([]);
+  const [mapCellsLoading, setMapCellsLoading] = useState(false);
+  const [mapCellEdit, setMapCellEdit] = useState<any | null>(null);
+  const [mapCellSearch, setMapCellSearch] = useState("");
+  const [mapCellRegionFilter, setMapCellRegionFilter] = useState("");
+  const [mapCellTypeFilter, setMapCellTypeFilter] = useState("");
+  const [mapCellsPage, setMapCellsPage] = useState(1);
+  const [mapCellsTotal, setMapCellsTotal] = useState(0);
+  const [mapCellsTotalPages, setMapCellsTotalPages] = useState(1);
   const [gus, setGus] = useState<any[]>([]);
   const [gusLoading, setGusLoading] = useState(false);
   const [guEdit, setGuEdit] = useState<any | null>(null);
@@ -841,6 +858,46 @@ export const AdminView: React.FC = () => {
     catch {} finally { setLootTablesLoading(false); }
   }, []);
 
+  const fetchRegions = useCallback(async (pageVal = regionsPage, searchVal = regionSearch) => {
+    setRegionsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: pageVal.toString(),
+        page_size: "20",
+        search: searchVal,
+      });
+      const res = await authFetch(`${BACKEND_URL}/api/admin/regions?${params.toString()}`);
+      if (res.ok) {
+        const json = await res.json();
+        setRegions(json.data || []);
+        setRegionsTotal(json.total || 0);
+        setRegionsTotalPages(json.last_page || 1);
+        setRegionsPage(json.page || 1);
+      }
+    } catch {} finally { setRegionsLoading(false); }
+  }, [regionsPage, regionSearch]);
+
+  const fetchMapCells = useCallback(async (pageVal = mapCellsPage, searchVal = mapCellSearch, rFilter = mapCellRegionFilter, tFilter = mapCellTypeFilter) => {
+    setMapCellsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: pageVal.toString(),
+        page_size: "20",
+        search: searchVal,
+        region_id: rFilter,
+        cell_type: tFilter,
+      });
+      const res = await authFetch(`${BACKEND_URL}/api/admin/map-cells?${params.toString()}`);
+      if (res.ok) {
+        const json = await res.json();
+        setMapCells(json.data || []);
+        setMapCellsTotal(json.total || 0);
+        setMapCellsTotalPages(json.last_page || 1);
+        setMapCellsPage(json.page || 1);
+      }
+    } catch {} finally { setMapCellsLoading(false); }
+  }, [mapCellsPage, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter]);
+
   const ensureShopSearchLoaded = useCallback(async () => {
     if (shopSearchLoaded) return;
     const [g, i, r] = await Promise.all([
@@ -938,7 +995,17 @@ export const AdminView: React.FC = () => {
     if (section === "gift_codes") fetchGiftCodes();
   }, [section, fetchGiftCodes]);
 
-  useEffect(() => { if (section === "data") { if (dataTab === "gus") fetchGus(); else if (dataTab === "items") fetchItems(); else if (dataTab === "recipes") fetchRecipes(); else if (dataTab === "monsters") fetchMonsters(); else if (dataTab === "loot_tables") fetchLootTables(); } }, [section, dataTab, fetchGus, fetchItems, fetchRecipes, fetchMonsters, fetchLootTables]);
+  useEffect(() => {
+    if (section === "data") {
+      if (dataTab === "gus") fetchGus();
+      else if (dataTab === "items") fetchItems();
+      else if (dataTab === "recipes") fetchRecipes();
+      else if (dataTab === "monsters") fetchMonsters();
+      else if (dataTab === "loot_tables") fetchLootTables();
+      else if (dataTab === "regions") fetchRegions(1, regionSearch);
+      else if (dataTab === "map_cells") fetchMapCells(1, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter);
+    }
+  }, [section, dataTab, fetchGus, fetchItems, fetchRecipes, fetchMonsters, fetchLootTables, fetchRegions, fetchMapCells, regionSearch, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter]);
 
   useEffect(() => {
     if (section === "players" && playersTab === "online") fetchOnlinePlayers();
@@ -2566,27 +2633,33 @@ export const AdminView: React.FC = () => {
       {/* Data section: import/export + dictionary management */}
       {section === "data" && (
         <div className="space-y-4">
-          <div className="border-b border-zinc-800/80 flex gap-0 mb-4">
-            <button onClick={() => setDataTab("import")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${dataTab === "import" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+          <div className="border-b border-zinc-800/80 flex gap-0 mb-4 overflow-x-auto whitespace-nowrap scrollbar-none max-w-full [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <button onClick={() => setDataTab("import")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "import" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <Database className="w-3.5 h-3.5 inline mr-1.5" />Import / Export
             </button>
-            <button onClick={() => setDataTab("tables")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${dataTab === "tables" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+            <button onClick={() => setDataTab("tables")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "tables" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <List className="w-3.5 h-3.5 inline mr-1.5" />Bảng dữ liệu
             </button>
-            <button onClick={() => setDataTab("gus")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${dataTab === "gus" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+            <button onClick={() => setDataTab("gus")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "gus" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <Bug className="w-3.5 h-3.5 inline mr-1.5" />Cổ trùng
             </button>
-            <button onClick={() => setDataTab("items")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${dataTab === "items" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+            <button onClick={() => setDataTab("items")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "items" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <Package className="w-3.5 h-3.5 inline mr-1.5" />Vật phẩm
             </button>
-            <button onClick={() => setDataTab("recipes")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${dataTab === "recipes" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+            <button onClick={() => setDataTab("recipes")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "recipes" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <FlaskConical className="w-3.5 h-3.5 inline mr-1.5" />Cổ phương
             </button>
-            <button onClick={() => setDataTab("monsters")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${dataTab === "monsters" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+            <button onClick={() => setDataTab("monsters")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "monsters" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <PawPrint className="w-3.5 h-3.5 inline mr-1.5" />Quái vật
             </button>
-            <button onClick={() => setDataTab("loot_tables")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${dataTab === "loot_tables" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+            <button onClick={() => setDataTab("loot_tables")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "loot_tables" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <Gift className="w-3.5 h-3.5 inline mr-1.5" />Bảng Loot
+            </button>
+            <button onClick={() => setDataTab("regions")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "regions" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <Globe className="w-3.5 h-3.5 inline mr-1.5" />Khu vực
+            </button>
+            <button onClick={() => setDataTab("map_cells")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "map_cells" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <MapPin className="w-3.5 h-3.5 inline mr-1.5" />Ô bản đồ
             </button>
           </div>
 
@@ -2938,6 +3011,203 @@ export const AdminView: React.FC = () => {
                     })()}</tbody>
                   </table>
                 </div>
+              )}
+            </div>
+          )}
+
+          {dataTab === "regions" && (
+            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-amber-400" />Quản Lý Khu Vực
+                </h3>
+                <button 
+                  onClick={() => setRegionEdit({ id: "", name: "", description: "", width: 100, height: 100, min_rank: 1, max_rank: 5, is_active: true, zone_type: "KHU_VUC", min_x: 0, min_y: 0, max_x: 0, max_y: 0, entry_x: 0, entry_y: 0, pool_weights: { cell_type_weights: {}, resources: [], wild_gus: [] }, _isNew: true })} 
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer w-full sm:w-auto"
+                >
+                  <Plus className="w-3.5 h-3.5" />Thêm Khu Vực
+                </button>
+              </div>
+              
+              <div className="flex gap-2 mb-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                  <input 
+                    value={regionSearch} 
+                    onChange={e => setRegionSearch(e.target.value)} 
+                    onKeyDown={e => { if (e.key === "Enter") fetchRegions(1, regionSearch); }}
+                    placeholder="Tìm kiếm khu vực theo ID hoặc Tên..." 
+                    className="w-full pl-9 pr-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 placeholder-zinc-500" 
+                  />
+                </div>
+                <button onClick={() => fetchRegions(1, regionSearch)} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-xs font-bold text-zinc-200 cursor-pointer">Tìm</button>
+              </div>
+
+              {regionsLoading ? (
+                <div className="flex justify-center py-8"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div>
+              ) : regions.length === 0 ? (
+                <div className="text-center py-8 text-zinc-500 text-xs">Không tìm thấy khu vực nào.</div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
+                          <th className="px-3 py-2">ID</th>
+                          <th className="px-3 py-2">Tên</th>
+                          <th className="px-3 py-2">Mô tả</th>
+                          <th className="px-3 py-2">Loại</th>
+                          <th className="px-3 py-2">Kích thước</th>
+                          <th className="px-3 py-2">Tọa độ</th>
+                          <th className="px-3 py-2">Cảnh giới</th>
+                          <th className="px-3 py-2 text-right">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {regions.map((r: any) => (
+                          <tr key={r.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                            <td className="px-3 py-2 font-mono text-zinc-400">{r.id}</td>
+                            <td className="px-3 py-2 font-semibold text-zinc-200">{r.name}</td>
+                            <td className="px-3 py-2 text-zinc-400 max-w-[150px] truncate" title={r.description}>{r.description || "–"}</td>
+                            <td className="px-3 py-2 text-amber-400">{r.zone_type}</td>
+                            <td className="px-3 py-2 text-zinc-400">{r.width}x{r.height}</td>
+                            <td className="px-3 py-2 text-zinc-500 font-mono text-[10px]">({r.min_x},{r.min_y}) to ({r.max_x},{r.max_y})</td>
+                            <td className="px-3 py-2 text-zinc-300">C{r.min_rank} - C{r.max_rank}</td>
+                            <td className="px-3 py-2 text-right flex justify-end gap-2">
+                              <button onClick={() => setRegionEdit(r)} className="text-amber-500 hover:text-amber-400 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5" /></button>
+                              <button onClick={async () => { if (!confirm(`Xóa khu vực "${r.name}" (${r.id})? Hành động này có thể ảnh hưởng đến dữ liệu liên kết.`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/regions/${r.id}`, "DELETE"); if (ok) fetchRegions(regionsPage, regionSearch); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex items-center justify-between mt-4 text-xs font-semibold text-zinc-500">
+                    <div>Tổng số: <span className="text-zinc-300">{regionsTotal}</span> khu vực</div>
+                    <div className="flex items-center gap-2">
+                      <span>Trang {regionsPage}/{regionsTotalPages}</span>
+                      <button onClick={() => fetchRegions(regionsPage - 1)} disabled={regionsPage <= 1} className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded disabled:opacity-50 text-zinc-300 hover:text-white cursor-pointer">Trước</button>
+                      <button onClick={() => fetchRegions(regionsPage + 1)} disabled={regionsPage >= regionsTotalPages} className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded disabled:opacity-50 text-zinc-300 hover:text-white cursor-pointer">Sau</button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {dataTab === "map_cells" && (
+            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-amber-400" />Quản Lý Ô Bản Đồ
+                </h3>
+                <button 
+                  onClick={() => setMapCellEdit({ id: "", region_id: "", x: 0, y: 0, cell_type: "Resource", content_id: "", metadata: {}, respawn_seconds: 300, is_active: true, _isNew: true })} 
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold cursor-pointer w-full sm:w-auto"
+                >
+                  <Plus className="w-3.5 h-3.5" />Thêm Ô Bản Đồ
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tìm kiếm</label>
+                  <input 
+                    value={mapCellSearch} 
+                    onChange={e => setMapCellSearch(e.target.value)} 
+                    onKeyDown={e => { if (e.key === "Enter") fetchMapCells(1, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter); }}
+                    placeholder="Tọa độ x, y hoặc Content ID..." 
+                    className="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" 
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Khu vực</label>
+                  <input 
+                    value={mapCellRegionFilter} 
+                    onChange={e => setMapCellRegionFilter(e.target.value)} 
+                    placeholder="ID khu vực..." 
+                    className="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" 
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Loại ô</label>
+                  <select 
+                    value={mapCellTypeFilter} 
+                    onChange={e => setMapCellTypeFilter(e.target.value)} 
+                    className="w-full px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200"
+                  >
+                    <option value="">Tất cả</option>
+                    <option value="Resource">Resource (Tài nguyên)</option>
+                    <option value="Monster">Monster (Quái/Boss)</option>
+                    <option value="Safe">Safe (Làng/Trạm nghỉ)</option>
+                    <option value="Portal">Portal (Cổng chuyển dịch)</option>
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <button 
+                    onClick={() => fetchMapCells(1, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter)} 
+                    className="w-full py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-xs font-bold text-zinc-200 cursor-pointer"
+                  >
+                    Tìm Kiếm
+                  </button>
+                </div>
+              </div>
+
+              {mapCellsLoading ? (
+                <div className="flex justify-center py-8"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div>
+              ) : mapCells.length === 0 ? (
+                <div className="text-center py-8 text-zinc-500 text-xs">Không tìm thấy ô bản đồ nào.</div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
+                          <th className="px-3 py-2">Khu vực</th>
+                          <th className="px-3 py-2">Tọa độ (X, Y)</th>
+                          <th className="px-3 py-2">Loại ô</th>
+                          <th className="px-3 py-2">Content ID</th>
+                          <th className="px-3 py-2">Respawn</th>
+                          <th className="px-3 py-2">Metadata</th>
+                          <th className="px-3 py-2">Active</th>
+                          <th className="px-3 py-2 text-right">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {mapCells.map((c: any) => (
+                          <tr key={c.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
+                            <td className="px-3 py-2 text-zinc-300 font-mono text-[10px]">{c.region_id}</td>
+                            <td className="px-3 py-2 font-mono text-amber-400">({c.x}, {c.y})</td>
+                            <td className="px-3 py-2">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                c.cell_type === "Safe" ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/30" :
+                                c.cell_type === "Monster" ? "bg-red-950/80 text-red-400 border border-red-500/30" :
+                                c.cell_type === "Portal" ? "bg-purple-950/80 text-purple-400 border border-purple-500/30" :
+                                "bg-amber-950/80 text-amber-400 border border-amber-500/30"
+                              }`}>{c.cell_type}</span>
+                            </td>
+                            <td className="px-3 py-2 font-mono text-zinc-400">{c.content_id || "–"}</td>
+                            <td className="px-3 py-2 text-zinc-400">{c.respawn_seconds}s</td>
+                            <td className="px-3 py-2 text-zinc-500 font-mono text-[10px] max-w-[120px] truncate" title={JSON.stringify(c.metadata)}>{JSON.stringify(c.metadata)}</td>
+                            <td className="px-3 py-2">{c.is_active ? <span className="text-emerald-400 font-bold">ON</span> : <span className="text-zinc-600">OFF</span>}</td>
+                            <td className="px-3 py-2 text-right flex justify-end gap-2">
+                              <button onClick={() => setMapCellEdit(c)} className="text-amber-500 hover:text-amber-400 cursor-pointer" title="Sửa"><Edit3 className="w-3.5 h-3.5" /></button>
+                              <button onClick={async () => { if (!confirm(`Xóa ô bản đồ tại (${c.x}, ${c.y})?`)) return; const ok = await exec(`${BACKEND_URL}/api/admin/map-cells/${c.id}`, "DELETE"); if (ok) fetchMapCells(mapCellsPage, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter); }} className="text-red-400 hover:text-red-300 cursor-pointer" title="Xóa"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex items-center justify-between mt-4 text-xs font-semibold text-zinc-500">
+                    <div>Tổng số: <span className="text-zinc-300">{mapCellsTotal}</span> ô</div>
+                    <div className="flex items-center gap-2">
+                      <span>Trang {mapCellsPage}/{mapCellsTotalPages}</span>
+                      <button onClick={() => fetchMapCells(mapCellsPage - 1)} disabled={mapCellsPage <= 1} className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded disabled:opacity-50 text-zinc-300 hover:text-white cursor-pointer">Trước</button>
+                      <button onClick={() => fetchMapCells(mapCellsPage + 1)} disabled={mapCellsPage >= mapCellsTotalPages} className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded disabled:opacity-50 text-zinc-300 hover:text-white cursor-pointer">Sau</button>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -4418,6 +4688,198 @@ export const AdminView: React.FC = () => {
               }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
               <datalist id="item-list-lt">{items.map((it: any) => <option key={it.id} value={it.id} />)}</datalist>
               <datalist id="gu-list-lt">{gus.map((g: any) => <option key={g.id} value={g.id} />)}</datalist>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Region Edit Modal */}
+      {regionEdit !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 overflow-y-auto" onClick={() => setRegionEdit(null)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-2xl mx-4 my-8 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">{regionEdit._isNew ? "Thêm" : "Sửa"} Khu Vực</h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID khu vực</label>
+                  <input disabled={!regionEdit._isNew} value={regionEdit.id || ""} onChange={e => setRegionEdit({...regionEdit, id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 disabled:opacity-50" placeholder="e.g. Southern_Border" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tên khu vực</label>
+                  <input value={regionEdit.name || ""} onChange={e => setRegionEdit({...regionEdit, name: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" placeholder="e.g. Nam Cương" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Mô tả</label>
+                <textarea value={regionEdit.description || ""} onChange={e => setRegionEdit({...regionEdit, description: e.target.value})} rows={2} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Width</label>
+                  <input type="number" value={regionEdit.width} onChange={e => setRegionEdit({...regionEdit, width: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Height</label>
+                  <input type="number" value={regionEdit.height} onChange={e => setRegionEdit({...regionEdit, height: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Min Rank</label>
+                  <input type="number" value={regionEdit.min_rank} onChange={e => setRegionEdit({...regionEdit, min_rank: parseInt(e.target.value) || 1})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Max Rank</label>
+                  <input type="number" value={regionEdit.max_rank} onChange={e => setRegionEdit({...regionEdit, max_rank: parseInt(e.target.value) || 5})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Min X</label>
+                  <input type="number" value={regionEdit.min_x} onChange={e => setRegionEdit({...regionEdit, min_x: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Min Y</label>
+                  <input type="number" value={regionEdit.min_y} onChange={e => setRegionEdit({...regionEdit, min_y: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Max X</label>
+                  <input type="number" value={regionEdit.max_x} onChange={e => setRegionEdit({...regionEdit, max_x: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Max Y</label>
+                  <input type="number" value={regionEdit.max_y} onChange={e => setRegionEdit({...regionEdit, max_y: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Entry X</label>
+                  <input type="number" value={regionEdit.entry_x} onChange={e => setRegionEdit({...regionEdit, entry_x: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Entry Y</label>
+                  <input type="number" value={regionEdit.entry_y} onChange={e => setRegionEdit({...regionEdit, entry_y: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Loại Zone</label>
+                  <select value={regionEdit.zone_type} onChange={e => setRegionEdit({...regionEdit, zone_type: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200">
+                    <option value="HUB">HUB</option>
+                    <option value="SAFE_ZONE">SAFE_ZONE</option>
+                    <option value="BOSS_ZONE">BOSS_ZONE</option>
+                    <option value="SECRET_REALM">SECRET_REALM</option>
+                    <option value="DUNGEON">DUNGEON</option>
+                    <option value="PVP_ZONE">PVP_ZONE</option>
+                    <option value="NGU_VUC">NGU_VUC</option>
+                    <option value="KHU_VUC">KHU_VUC</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Parent ID</label>
+                  <input value={regionEdit.parent_id || ""} onChange={e => setRegionEdit({...regionEdit, parent_id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" placeholder="e.g. central_continent" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center gap-2 mt-4">
+                  <input type="checkbox" checked={!!regionEdit.is_active} onChange={e => setRegionEdit({...regionEdit, is_active: e.target.checked})} className="w-4 h-4 bg-zinc-850 border-zinc-700 rounded" />
+                  <label className="text-xs font-semibold text-zinc-300">Hoạt động (is_active)</label>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setRegionEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
+              <button onClick={async () => {
+                const isNew = !!regionEdit._isNew;
+                const { _isNew, ...body } = regionEdit;
+                if (!body.pool_weights) {
+                  body.pool_weights = { cell_type_weights: {}, resources: [], wild_gus: [] };
+                }
+                const url = isNew ? `${BACKEND_URL}/api/admin/regions` : `${BACKEND_URL}/api/admin/regions/${regionEdit.id}`;
+                const method = isNew ? "POST" : "PUT";
+                const ok = await exec(url, method, body);
+                if (ok) { setRegionEdit(null); fetchRegions(regionsPage, regionSearch); }
+              }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MapCell Edit Modal */}
+      {mapCellEdit !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 overflow-y-auto" onClick={() => setMapCellEdit(null)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 w-full max-w-lg mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-serif font-bold text-zinc-200 mb-4">{mapCellEdit._isNew ? "Thêm" : "Sửa"} Ô Bản Đồ</h3>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Region ID</label>
+                  <input value={mapCellEdit.region_id || ""} onChange={e => setMapCellEdit({...mapCellEdit, region_id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" placeholder="e.g. Southern_Border" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Loại Ô</label>
+                  <select value={mapCellEdit.cell_type} onChange={e => setMapCellEdit({...mapCellEdit, cell_type: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200">
+                    <option value="Resource">Resource</option>
+                    <option value="Monster">Monster</option>
+                    <option value="Safe">Safe</option>
+                    <option value="Portal">Portal</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tọa độ X</label>
+                  <input type="number" value={mapCellEdit.x} onChange={e => setMapCellEdit({...mapCellEdit, x: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tọa độ Y</label>
+                  <input type="number" value={mapCellEdit.y} onChange={e => setMapCellEdit({...mapCellEdit, y: parseInt(e.target.value) || 0})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Content ID</label>
+                  <input value={mapCellEdit.content_id || ""} onChange={e => setMapCellEdit({...mapCellEdit, content_id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" placeholder="e.g. boss_beast" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Hồi chiêu (seconds)</label>
+                  <input type="number" value={mapCellEdit.respawn_seconds} onChange={e => setMapCellEdit({...mapCellEdit, respawn_seconds: parseInt(e.target.value) || 300})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Metadata (JSON string)</label>
+                <textarea 
+                  value={typeof mapCellEdit.metadata === 'object' ? JSON.stringify(mapCellEdit.metadata) : mapCellEdit.metadata || ""} 
+                  onChange={e => {
+                    try {
+                      const parsed = JSON.parse(e.target.value);
+                      setMapCellEdit({...mapCellEdit, metadata: parsed});
+                    } catch {
+                      setMapCellEdit({...mapCellEdit, metadata: e.target.value});
+                    }
+                  }} 
+                  rows={3} 
+                  placeholder='{"rank": 5}'
+                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs font-mono text-zinc-200" 
+                />
+              </div>
+              <div className="flex items-center gap-2 mt-3">
+                <input type="checkbox" checked={!!mapCellEdit.is_active} onChange={e => setMapCellEdit({...mapCellEdit, is_active: e.target.checked})} className="w-4 h-4 bg-zinc-850 border-zinc-700 rounded" />
+                <label className="text-xs font-semibold text-zinc-300">Hoạt động (is_active)</label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setMapCellEdit(null)} className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer">Hủy</button>
+              <button onClick={async () => {
+                const isNew = !!mapCellEdit._isNew;
+                const { _isNew, ...body } = mapCellEdit;
+                if (typeof body.metadata === 'string') {
+                  try {
+                    body.metadata = JSON.parse(body.metadata);
+                  } catch {
+                    body.metadata = {};
+                  }
+                }
+                const url = isNew ? `${BACKEND_URL}/api/admin/map-cells` : `${BACKEND_URL}/api/admin/map-cells/${mapCellEdit.id}`;
+                const method = isNew ? "POST" : "PUT";
+                const ok = await exec(url, method, body);
+                if (ok) { setMapCellEdit(null); fetchMapCells(mapCellsPage, mapCellSearch, mapCellRegionFilter, mapCellTypeFilter); }
+              }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold cursor-pointer">Lưu</button>
             </div>
           </div>
         </div>

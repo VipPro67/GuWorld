@@ -20,13 +20,14 @@ const BG_COLOR = 0x1d1e2c;
 
 interface WorldCanvasProps {
   mode: "select" | "drag";
+  showLabels?: boolean;
 }
 
 const WORLD_W = 30000;
 const WORLD_H = 20000;
 const SUBZONE_SIZE = 1000;
 
-export default function WorldCanvas({ mode }: WorldCanvasProps) {
+export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const [appReady, setAppReady] = useState(false);
@@ -44,6 +45,11 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
   const fogDirtyRef = useRef(true);
   const scaleRef = useRef<number>(0.05);
   const modeRef = useRef(mode);
+  const showLabelsRef = useRef(showLabels);
+
+  useEffect(() => {
+    showLabelsRef.current = showLabels;
+  }, [showLabels]);
   const moveTargetRef = useRef<{ x: number; y: number } | null>(null);
   const animIdRef = useRef<number>(0);
   const isMovingRef = useRef(false);
@@ -78,6 +84,7 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
   const cameraCenterRequest = useWorldStore((s) => s.cameraCenterRequest);
   const fetchObjects = useWorldStore((s) => s.fetchObjects);
   const guDictionary = useGameStore((s) => s.guDictionary);
+  const itemDictionary = useGameStore((s) => s.itemDictionary);
 
   const movementSpeed = useMemo(() => computeMovementSpeed(gamePlayer, guDictionary), [gamePlayer, guDictionary]);
 
@@ -552,7 +559,7 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
         g.stroke({ color: 0x7f1d1d, width: 0.1 });
         const label = new Text({
           text: monsterDictionary[c.content]?.name || c.content,
-          style: { fontSize: 2, fill: 0xfecaca, fontFamily: "serif", stroke: { color: 0x000000, width: 0.5 } },
+          style: { fontSize: 12, fill: 0xfecaca, fontFamily: "sans-serif", stroke: { color: 0x000000, width: 2 } },
         });
         label.anchor.set(0.5, 1);
         label.y = -0.8;
@@ -560,8 +567,64 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
         g.position.set(c.x + 0.5, c.y + 0.5);
         container.addChild(g);
       }
+
+      // Draw names/ranks for monsters, resources, and wild gu if enabled
+      if (showLabels && gamePlayer) {
+        const px = gamePlayer.x;
+        const py = gamePlayer.y;
+        
+        const sortedCells = [...cells].sort((a, b) => {
+          const distA = Math.hypot(a.x - px, a.y - py);
+          const distB = Math.hypot(b.x - px, b.y - py);
+          return distA - distB;
+        });
+
+        // Limit to nearest 250 cells to maintain good FPS
+        const labelCells = sortedCells.slice(0, 250);
+
+        for (const c of labelCells) {
+          if (c.cell_type === "Boss") continue; // Boss is already handled above
+          let text = "";
+          let fill = 0xffffff;
+          if (c.cell_type === "Monster") {
+            const name = monsterDictionary[c.content]?.name || c.content;
+            const r = c.rank ? ` R${c.rank}` : "";
+            text = `${name}${r}`;
+            fill = 0xfecaca;
+          } else if (c.cell_type === "WildGu") {
+            const name = guDictionary[c.content]?.name || c.content;
+            const r = c.rank ? ` R${c.rank}` : "";
+            text = `${name}${r}`;
+            fill = 0xf5d0fe;
+          } else if (c.cell_type === "Resource") {
+            const name = itemDictionary[c.content]?.name || c.content;
+            text = name;
+            fill = 0xd1fae5;
+          }
+
+          if (text) {
+            const label = new Text({
+              text,
+              style: { 
+                fontSize: 11, 
+                fill, 
+                fontFamily: "sans-serif", 
+                stroke: { color: 0x000000, width: 2 } 
+              },
+            });
+            label.anchor.set(0.5, 1);
+            label.y = -0.6;
+            
+            const labelContainer = new Container();
+            labelContainer.name = "monster-label";
+            labelContainer.position.set(c.x + 0.5, c.y + 0.5);
+            labelContainer.addChild(label);
+            container.addChild(labelContainer);
+          }
+        }
+      }
     },
-    [monsterDictionary],
+    [monsterDictionary, guDictionary, itemDictionary, showLabels, gamePlayer],
   );
 
   const drawFog = useCallback(() => {
@@ -810,6 +873,34 @@ export default function WorldCanvas({ mode }: WorldCanvasProps) {
           if (t >= 1) {
             m.container.position.set(m.toX, m.toY);
             m.active = false;
+          }
+        }
+
+        // Dynamically adjust label scales to remain constant screen size and perfectly crisp
+        const currentScale = scaleRef.current;
+        if (currentScale > 0) {
+          const showLabelsAtThisZoom = showLabelsRef.current && currentScale >= 12;
+          const targetScale = 1.0 / currentScale; // 1:1 crisp scale
+
+          for (const child of monstersContainerRef.current.children) {
+            if (child.name === "monster-label") {
+              child.visible = showLabelsAtThisZoom;
+              if (showLabelsAtThisZoom) {
+                for (const sub of child.children) {
+                  if (sub instanceof Text) {
+                    sub.scale.set(targetScale);
+                  }
+                }
+              }
+            } else if (child instanceof Graphics) {
+              // Bosses (Graphics containing a Text child)
+              for (const sub of child.children) {
+                if (sub instanceof Text) {
+                  sub.scale.set(targetScale);
+                  sub.y = -0.6 - (6 * targetScale);
+                }
+              }
+            }
           }
         }
       });

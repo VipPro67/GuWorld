@@ -1198,16 +1198,6 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                             </button>
                                           </>
                                         )} */}
-                                        {status === "SEALED" && (
-                                          <button
-                                            type="button"
-                                            disabled={actionLoading || statusUpdatingId === gu.instance_id}
-                                            onClick={() => handleStatusUpdate(gu.instance_id, "ACTIVE")}
-                                            className="text-[9px] font-bold py-1 px-2.5 bg-zinc-950/50 text-emerald-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono transition-all cursor-pointer"
-                                          >
-                                            {statusUpdatingId === gu.instance_id ? "..." : "🔓 Giải Ấn"}
-                                          </button>
-                                        )}
                                       </>
                                     )}
 

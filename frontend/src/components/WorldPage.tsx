@@ -86,6 +86,20 @@ export function WorldPage() {
   const [mapMode, setMapMode] = useState<"select" | "drag">("select");
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [showLabels, setShowLabels] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("gu_world_show_labels") === "true";
+    }
+    return false;
+  });
+
+  const toggleLabels = () => {
+    setShowLabels((prev) => {
+      const next = !prev;
+      localStorage.setItem("gu_world_show_labels", String(next));
+      return next;
+    });
+  };
   const setView = useGameStore((s) => s.setView);
   const isImmortal = gamePlayer ? gamePlayer.rank >= 6 : false;
 
@@ -139,7 +153,7 @@ export function WorldPage() {
       )}
 
       <div className="w-full h-[calc(100vh-8rem)] min-h-[480px]">
-        <WorldCanvas mode={mapMode} />
+        <WorldCanvas mode={mapMode} showLabels={showLabels} />
       </div>
 
       <div className="absolute top-2 right-2 flex flex-col items-end gap-2 pointer-events-none z-30">
@@ -282,26 +296,15 @@ export function WorldPage() {
 
         <div className="flex flex-col gap-1.5 p-1.5 bg-zinc-900/85 backdrop-blur-sm rounded-xl border border-zinc-800/40 shadow-lg pointer-events-auto w-fit">
           <button
-            onClick={() => setMapMode("select")}
-            title="Di chuyển"
+            onClick={() => setMapMode(mapMode === "select" ? "drag" : "select")}
+            title={mapMode === "select" ? "Chế độ: Di chuyển (Click để đổi sang Kéo bản đồ)" : "Chế độ: Kéo bản đồ (Click để đổi sang Di chuyển)"}
             className={`w-9 h-9 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
               mapMode === "select"
                 ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-inner"
-                : "text-zinc-400 hover:text-zinc-200 border border-transparent hover:bg-zinc-800/50"
+                : "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-inner"
             }`}
           >
-            <span className="text-lg">🎯</span>
-          </button>
-          <button
-            onClick={() => setMapMode("drag")}
-            title="Xem bản đồ"
-            className={`w-9 h-9 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
-              mapMode === "drag"
-                ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-inner"
-                : "text-zinc-400 hover:text-zinc-200 border border-transparent hover:bg-zinc-800/50"
-            }`}
-          >
-            <span className="text-lg">🖐️</span>
+            <span className="text-lg">{mapMode === "select" ? "🎯" : "🖐️"}</span>
           </button>
           <div className="border-t border-zinc-700/40 my-0.5 mx-1" />
           <button
@@ -310,6 +313,18 @@ export function WorldPage() {
             className="w-9 h-9 flex items-center justify-center rounded-lg transition-all cursor-pointer text-sky-400 hover:text-sky-300 border border-transparent hover:bg-sky-500/10"
           >
             <span className="text-lg">📍</span>
+          </button>
+          <div className="border-t border-zinc-700/40 my-0.5 mx-1" />
+          <button
+            onClick={toggleLabels}
+            title={showLabels ? "Ẩn tên/rank" : "Hiện tên/rank"}
+            className={`w-9 h-9 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
+              showLabels
+                ? "bg-purple-500/20 text-purple-300 border border-purple-500/30 shadow-inner"
+                : "text-zinc-400 hover:text-zinc-200 border border-transparent hover:bg-zinc-800/50"
+            }`}
+          >
+            <span className="text-lg">🏷️</span>
           </button>
         </div>
       </div>
