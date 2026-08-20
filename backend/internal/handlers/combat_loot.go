@@ -96,7 +96,7 @@ func RollLoot(lt models.LootTable, rank int) RolledLoot {
 			if entry.ItemID != "" {
 				rolled.Items[entry.ItemID] += qty
 			}
-			if entry.GuID != "" {
+			if entry.GuID != "" && !models.HasImmortalRank(entry.GuID) {
 				for i := 0; i < qty; i++ {
 					rolled.Gus = append(rolled.Gus, entry.GuID)
 				}

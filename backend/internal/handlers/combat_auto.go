@@ -463,7 +463,7 @@ func AutoCombatStart(c *gin.Context) {
 
 					if player.ActiveCombat.EnemyGuInventory != nil && len(player.ActiveCombat.EnemyGuInventory) > 0 {
 						for _, eg := range player.ActiveCombat.EnemyGuInventory {
-							if rand.Intn(100) < 10 {
+							if rand.Intn(100) < 10 && !models.HasImmortalRank(eg.GuID) {
 								loot.Gus = append(loot.Gus, eg.GuID)
 							}
 						}
@@ -1348,28 +1348,28 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	}
 
 	simCombatant := &simulator.CombatantAuto{
-		ID:               player.ID.String(),
-		Name:             player.Username,
-		Kind:             "Player",
-		Rank:             player.Rank,
-		GridX:            2,
-		GridY:            3,
-		MaxHP:            simMaxHP,
-		HP:               simHP,
-		MaxMana:          int(player.MaxMana),
-		Mana:             simMana,
-		BaseDmg:          int(playerStats["attack"]),
-		BaseDef:          int(playerStats["defense"]),
-		Speed:            playerStats["speed"],
-		DaoMarks:         simulator.DaoMarks(player.DaoMarks),
-		PathMasteries:    player.PathMasteries,
+		ID:                   player.ID.String(),
+		Name:                 player.Username,
+		Kind:                 "Player",
+		Rank:                 player.Rank,
+		GridX:                2,
+		GridY:                3,
+		MaxHP:                simMaxHP,
+		HP:                   simHP,
+		MaxMana:              int(player.MaxMana),
+		Mana:                 simMana,
+		BaseDmg:              int(playerStats["attack"]),
+		BaseDef:              int(playerStats["defense"]),
+		Speed:                playerStats["speed"],
+		DaoMarks:             simulator.DaoMarks(player.DaoMarks),
+		PathMasteries:        player.PathMasteries,
 		PathMasteryGainLimit: gamefx.PathMasteryBattleGainLimit(player.Rank),
-		DaoBonus:         charFX.DaoNganBonus,
-		PathDamageBonus:  charFX.PathDamageBonus,
-		PathResistance:   charFX.PathResistanceBonus,
-		HealingReceived:  charFX.HealingReceivedBonus,
-		MentalResistance: charFX.MentalResistanceBonus,
-		Actions:          allActions,
+		DaoBonus:             charFX.DaoNganBonus,
+		PathDamageBonus:      charFX.PathDamageBonus,
+		PathResistance:       charFX.PathResistanceBonus,
+		HealingReceived:      charFX.HealingReceivedBonus,
+		MentalResistance:     charFX.MentalResistanceBonus,
+		Actions:              allActions,
 
 		AutoHealHP:      autoHealHP,
 		HealThreshold:   healThreshold,

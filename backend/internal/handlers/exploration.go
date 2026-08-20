@@ -142,7 +142,12 @@ func generateCellUncached(x, y int) models.Cell {
 		}
 		return models.Cell{X: x, Y: y, Type: "Resource", Content: pool[rng.Intn(len(pool))]}
 	case "WildGu":
-		pool := zone.PoolWeights.WildGus
+		pool := make([]string, 0, len(zone.PoolWeights.WildGus))
+		for _, id := range zone.PoolWeights.WildGus {
+			if !models.HasImmortalRank(id) {
+				pool = append(pool, id)
+			}
+		}
 		if len(pool) == 0 {
 			pool = defaultWildGuPool
 		}

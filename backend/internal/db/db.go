@@ -15,6 +15,7 @@ import (
 	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -1294,7 +1295,7 @@ func seedRegionsFromCSV(filename string) error {
 		entryX, entryY := parseInt(row, entryXIdx, (minX+maxX)/2), parseInt(row, entryYIdx, (minY+maxY)/2)
 		poolWeights := "{}"
 		if v := get(row, poolIdx); v != "" {
-			poolWeights = v
+			poolWeights = filterImmortalWildGus(v)
 		}
 		var parentID interface{}
 		if p := get(row, parentIdx); p != "" {
@@ -1350,6 +1351,7 @@ func seedLootTablesFromCSV(filename string) error {
 			continue
 		}
 		entries := safeJSONArray(get(row, entriesIdx), "[]", fmt.Sprintf("loot table %s entries", id))
+		entries = FilterImmortalLootEntries(entries)
 		_, err = DB.Exec(`INSERT INTO loot_tables (id, name, entries, updated_at) VALUES ($1,$2,$3::jsonb,NOW()) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, entries=EXCLUDED.entries, updated_at=NOW()`, id, get(row, nameIdx), entries)
 		if err != nil {
 			return fmt.Errorf("upsert loot table %s: %w", id, err)
@@ -1358,6 +1360,70 @@ func seedLootTablesFromCSV(filename string) error {
 	}
 	logger.S.Infof("Loot tables seeded from %s (%d seeded)", filename, seeded)
 	return nil
+}
+
+// FilterImmortalLootEntries removes loot entries that would grant a rank >= 6
+// (Tiên Cổ) gu from an imported loot table entries JSON, since immortal Gus
+// must only be obtained from gacha/refinement/auction, never from loot.
+func FilterImmortalLootEntries(entries string) string {
+	var list []models.LootEntry
+	if err := json.Unmarshal([]byte(entries), &list); err != nil {
+		return entries
+	}
+	hasImmortal := false
+	for _, e := range list {
+		if e.GuID != "" && models.HasImmortalRank(e.GuID) {
+			hasImmortal = true
+			break
+		}
+	}
+	if !hasImmortal {
+		return entries
+	}
+	kept := list[:0]
+	for _, e := range list {
+		if e.GuID != "" && models.HasImmortalRank(e.GuID) {
+			continue
+		}
+		kept = append(kept, e)
+	}
+	out, err := json.Marshal(kept)
+	if err != nil {
+		return entries
+	}
+	return string(out)
+}
+
+// filterImmortalWildGus removes rank >= 6 (Tiên Cổ) gu ids from an imported
+// region pool_weights JSON, since immortal Gus must never spawn as wild Gus.
+func filterImmortalWildGus(poolWeights string) string {
+	var pools models.ZonePools
+	if err := json.Unmarshal([]byte(poolWeights), &pools); err != nil {
+		return poolWeights
+	}
+	hasImmortal := false
+	for _, id := range pools.WildGus {
+		if models.HasImmortalRank(id) {
+			hasImmortal = true
+			break
+		}
+	}
+	if !hasImmortal {
+		return poolWeights
+	}
+	kept := pools.WildGus[:0]
+	for _, id := range pools.WildGus {
+		if models.HasImmortalRank(id) {
+			continue
+		}
+		kept = append(kept, id)
+	}
+	pools.WildGus = kept
+	out, err := json.Marshal(pools)
+	if err != nil {
+		return poolWeights
+	}
+	return string(out)
 }
 
 func seedMonsterTemplatesFromCSV(filename string) error {
@@ -2070,8 +2136,13 @@ func seedSectMissionsFromCSV(filename string) error {
 	return nil
 }
 
-// CheckImmortalGuExists verifies if a specific Immortal Gu (id, rank) exists anywhere in the world,
-// excluding instances whose InstanceID is in excludeInstanceIDs (being consumed in a refine).
+// CheckImmortalGuExists verifies if a specific Immortal Gu (id) exists anywhere in the world,
+// by matching the same gu_id at any rank >= 6 (a tiên cổ is unique by id: different rank of the
+// same id still counts as a duplicate). Excludes instances whose InstanceID is in
+// excludeInstanceIDs (being consumed in a refine). Sources scanned:
+//  1. player_gu — every player's inventory
+//  2. auction — ACTIVE Gu listings
+//  3. sects.vault_gu — sect vault (kho tông môn)
 func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs []string) (bool, error) {
 	var exists bool
 
@@ -2080,10 +2151,10 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 		SELECT EXISTS(
 			SELECT 1 FROM player_gu
 			WHERE gu_id = $1
-			  AND gu_rank = $2
-			  AND NOT (id = ANY($3::text[]))
+			  AND gu_rank >= 6
+			  AND NOT (id = ANY($2::text[]))
 		)
-	`, guID, rank, pq.Array(excludeInstanceIDs)).Scan(&exists)
+	`, guID, pq.Array(excludeInstanceIDs)).Scan(&exists)
 	if err != nil {
 		return false, err
 	}
@@ -2099,9 +2170,9 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 			WHERE item_type = 'Gu'
 			  AND status = 'ACTIVE'
 			  AND elem->>'gu_id' = $1::text
-			  AND COALESCE((elem->>'rank')::int, 0) = $2
+			  AND COALESCE((elem->>'rank')::int, 0) >= 6
 		)
-	`, guID, rank).Scan(&exists)
+	`, guID).Scan(&exists)
 	if err != nil {
 		return false, err
 	}
@@ -2109,12 +2180,26 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 		return true, nil
 	}
 
+	// 3. Kiểm tra trong kho tông môn (sects.vault_gu) — một tiên cổ nằm trong kho vẫn
+	//    được tính là "đang tồn tại trong thiên hạ".
+	err = tx.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM sects,
+			jsonb_array_elements(vault_gu) AS elem
+			WHERE elem->>'id' = $1::text
+			  AND COALESCE((elem->>'rank')::int, 0) >= 6
+		)
+	`, guID).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+
 	return exists, nil
 }
 
 // GetExistingImmortalGuIDs returns the set of gu_ids that currently have at least one
 // rank >= 6 (Immortal Gu) instance anywhere in the world: any player's player_gu,
-// or ACTIVE auction listings.
+// ACTIVE auction listings, or the sect vault (sects.vault_gu).
 func GetExistingImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
 	rows, err := tx.Query(`
 		SELECT DISTINCT gu_id FROM player_gu WHERE gu_rank >= 6
@@ -2122,6 +2207,10 @@ func GetExistingImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
 		SELECT DISTINCT elem->>'gu_id' FROM auction,
 			jsonb_array_elements(item_data) AS elem
 			WHERE item_type = 'Gu' AND status = 'ACTIVE' AND COALESCE((elem->>'rank')::int, 0) >= 6
+		UNION
+		SELECT DISTINCT elem->>'id' FROM sects,
+			jsonb_array_elements(vault_gu) AS elem
+			WHERE COALESCE((elem->>'rank')::int, 0) >= 6
 	`)
 	if err != nil {
 		return nil, err

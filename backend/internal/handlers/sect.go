@@ -2833,6 +2833,7 @@ func StockSectVault(c *gin.Context) {
 		if !found {
 			vaultGus = append(vaultGus, SectVaultGuItem{
 				ID:       req.ItemID,
+				Rank:     stockGuRank,
 				Cost:     stockGuCost,
 				Quantity: req.Quantity,
 			})
@@ -3048,7 +3049,7 @@ func StockSectVaultBulk(c *gin.Context) {
 				}
 			}
 			if !found {
-				vaultGus = append(vaultGus, SectVaultGuItem{ID: line.itemID, Cost: stockGuCost, Quantity: line.quantity})
+				vaultGus = append(vaultGus, SectVaultGuItem{ID: line.itemID, Rank: stockGuRank, Cost: stockGuCost, Quantity: line.quantity})
 			}
 		} else if line.itemType == "recipe" {
 			found := false

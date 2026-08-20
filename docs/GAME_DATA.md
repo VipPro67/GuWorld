@@ -270,6 +270,8 @@ Các trường quan trọng trong dictionary:
 - `rarity`, `is_immortal`, `primary_role`, `combat_roles`, `combat_tags`, `support_tags`.
 - `base_price`: **đồng đều theo rank** — 200, 500, 1.200, 2.500, 5.000, 100.000, 250.000, 600.000, 1.500.000 cho rank 1–9 (nhảy mạnh ở Tiên Cổ rank ≥ 6). Fallback trong `pkg/pricing/pricing.go`.
 - **Phân phối thức ăn:** mọi item trong `food_types` của cổ rank <6 (72 item) được thêm vào (1) loot của quái **Normal/Elite** theo dải rank spawn, (2) `pool_weights.resources` của vùng non-HUB theo dải rank vùng, (3) `vault_materials` khởi đầu của 4 tông (qty 100, khớp dải rank vùng tông). Boss/Tribulation không rơi thêm thức ăn.
+- **Tính duy nhất của Tiên Cổ (rank ≥ 6):** cổ trùng rank ≥ 6 là **duy nhất toàn server, tính theo `gu_id`** (cùng id khác rank vẫn bị tính trùng). Khi luyện cổ/refine thành công và khi quyên góp Cổ vào kho Tông Môn, hệ thống chặn nếu một instance có cùng `gu_id` và `gu_rank ≥ 6` đã tồn tại ở bất kỳ nguồn nào: `players.gu_inventory`, `auction` (`item_type='Gu'`) và `sects.vault_gu`. Instance cùng `gu_id` nhưng rank < 6 **không** tính là trùng. Nếu `gu_id` chưa từng có variant rank ≥ 6 trong `gu_dictionary` thì check luôn pass (không phải Cổ Tiên). Nguồn kiểm tra: `db.CheckImmortalGuExists` / `db.GetExistingImmortalGuIDs`.
+- **Tiên Cổ không xuất hiện từ loot/region:** mọi entry loot table có `gu_id` là cổ rank ≥ 6 bị **lọc bỏ** khi (1) import CSV LootTable, (2) Admin tạo/sửa bảng loot, (3) `RollLoot` roll thực tế. `pool_weights.wild_gus` của Region cũng được lọc Cổ Tiên khi import CSV (xem `filterImmortalWildGus`) và khi sinh ô WildGu (`GenerateCell`), đảm bảo Cổ Tiên chỉ đến từ gacha, luyện cổ và đấu giá.
 
 ### Hiệu ứng Cổ (effects)
 

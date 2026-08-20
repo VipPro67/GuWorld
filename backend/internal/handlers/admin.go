@@ -3859,6 +3859,7 @@ func AdminCreateLootTable(c *gin.Context) {
 	if len(req.Entries) == 0 {
 		req.Entries = json.RawMessage(`[]`)
 	}
+	req.Entries = json.RawMessage(db.FilterImmortalLootEntries(string(req.Entries)))
 
 	_, err := db.DB.Exec(`INSERT INTO loot_tables(id,name,entries) VALUES($1,$2,$3::jsonb)`,
 		req.ID, req.Name, req.Entries)
@@ -3891,6 +3892,7 @@ func AdminUpdateLootTable(c *gin.Context) {
 		idx++
 	}
 	if req.Entries != nil {
+		req.Entries = json.RawMessage(db.FilterImmortalLootEntries(string(req.Entries)))
 		sets = append(sets, "entries=$"+strconv.Itoa(idx)+"::jsonb")
 		args = append(args, req.Entries)
 		idx++
