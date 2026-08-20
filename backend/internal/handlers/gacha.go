@@ -45,7 +45,6 @@ var gachaPools = []GachaPool{
 		CostType:    "primeval_stones",
 		CostAmount:  2000,
 		Rewards: []GachaRewardItem{
-			{Type: "primeval_stones", Min: 500, Max: 1500, Weight: 40.0, Label: "500~1.500 Nguyên Thạch"},
 			{Type: "item", Min: 1, Max: 1, Weight: 25.0, Label: "Vật liệu cấp thấp"},
 			{Type: "primeval_stones", Min: 2000, Max: 3000, Weight: 10.0, Label: "2.000~5.000 Nguyên Thạch"},
 			{Type: "gu_rank", ID: "1", Min: 1, Max: 1, Weight: 12.0, Label: "Cổ Trùng R1"},

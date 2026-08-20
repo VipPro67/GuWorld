@@ -332,15 +332,16 @@ func MergePets(c *gin.Context) {
 	}
 	mergeLimit := mergePackLimit(maxSoul)
 
-	// Validate all sources: same template, same player, formation_slot=0
-	validSources := 0
+	// Validate all sources: same template, same player, formation_slot=0.
+	// Sum each source's `count` so merging a pack source adds all its individuals.
+	addedCount := 0
 	for _, srcID := range req.SourceIDs {
 		var srcTemplateID string
-		var srcFormationSlot int
+		var srcFormationSlot, srcCount int
 		errSrc := tx.QueryRow(`
-			SELECT monster_template_id, formation_slot
+			SELECT monster_template_id, formation_slot, count
 			FROM player_pets WHERE id = $1 AND player_id = $2 FOR UPDATE
-		`, srcID, authID).Scan(&srcTemplateID, &srcFormationSlot)
+		`, srcID, authID).Scan(&srcTemplateID, &srcFormationSlot, &srcCount)
 		if errSrc != nil {
 			continue
 		}
@@ -350,16 +351,16 @@ func MergePets(c *gin.Context) {
 		if srcFormationSlot > 0 {
 			continue // can't merge from formation
 		}
-		validSources++
+		addedCount += srcCount
 	}
 
-	if validSources == 0 {
+	if addedCount == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có pet nguồn hợp lệ (cùng loại, không trong đội hình)."})
 		return
 	}
 
 	// Merge: increase count, recompute stats sub-linearly from base (no compound)
-	newCount := targetCount + validSources
+	newCount := targetCount + addedCount
 	if newCount > mergeLimit {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":       fmt.Sprintf("Bầy tối đa %d cá thể (giới hạn = max_soul/%d). Đạo hữu cần tăng Hồn Phách để gộp thêm.", mergeLimit, mergeSoulDivisor),

@@ -55,7 +55,9 @@ export const PetPanel: React.FC<PetPanelProps> = ({
   const maxSlots = Math.min(1 + player.rank, 8);
   const mergeLimit = Math.max(1, Math.floor((player.max_soul || 0) / 10));
   const formationSoulCost = formationPets.reduce((sum, p) => sum + (p.count || 1), 0);
-  const mergeTotalCount = mergeTarget ? (pets.find((p) => p.id === mergeTarget)?.count || 1) + mergeSources.length : 0;
+  const mergeTargetCount = mergeTarget ? pets.find((p) => p.id === mergeTarget)?.count || 1 : 0;
+  const mergeSourceTotal = mergeSources.reduce((sum, id) => sum + (pets.find((p) => p.id === id)?.count || 0), 0);
+  const mergeTotalCount = mergeTarget ? mergeTargetCount + mergeSourceTotal : 0;
   const mergeOverLimit = !!(mergeMode && mergeTarget && mergeSources.length > 0 && mergeTotalCount > mergeLimit);
 
   const hungerValue = (item: ItemSpec): number => {
@@ -92,7 +94,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
 
   const handleMerge = async () => {
     if (!mergeTarget || mergeSources.length === 0) return;
-    const confirmed = await showConfirm(`Gộp ${mergeSources.length} pet cùng loại vào một bầy?`, { confirmText: "Gộp" });
+    const confirmed = await showConfirm(`Gộp ${mergeSourceTotal} cá thể cùng loại vào một bầy?`, { confirmText: "Gộp" });
     if (confirmed) {
       await mergePets(mergeTarget, mergeSources);
       setMergeMode(false);
@@ -233,7 +235,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
         )}
         {mergeMode && mergeTarget && mergeSources.length > 0 && (
           <button onClick={handleMerge} disabled={actionLoading || mergeOverLimit} className="text-xs px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-600 text-white font-bold disabled:opacity-50">
-            Xác Nhận Gộp ({mergeSources.length} pet)
+            Xác Nhận Gộp (+{mergeSourceTotal} cá thể)
           </button>
         )}
         {mergeOverLimit && (
