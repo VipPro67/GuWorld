@@ -23,6 +23,7 @@ import {
   Award,
   Trophy,
   PawPrint,
+  Layers,
 } from "lucide-react";
 import { LogConsole } from "./LogConsole";
 import { Num } from "./Num";
@@ -241,7 +242,15 @@ export const LobbyView: React.FC = () => {
       borderColor: "border-amber-400/30",
       iconColor: "text-amber-500",
     },
-    
+    {
+      id: "utilities",
+      label: "Tiện Ích",
+      icon: Layers,
+      gradient: "from-amber-600 to-orange-700",
+      glow: "group-hover:shadow-[0_0_25px_rgba(245,158,11,0.45)]",
+      borderColor: "border-amber-500/30",
+      iconColor: "text-amber-500",
+    },
   ];
 
   const activityItems: HubItem[] = [

@@ -39,6 +39,7 @@ import { LeaderboardView } from "@/components/LeaderboardView";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TrainingRoom } from "@/components/TrainingRoom";
 import { MaintenanceView } from "@/components/MaintenanceView";
+import { UtilitiesView } from "@/components/UtilitiesView";
 
 export default function Home() {
   const {
@@ -418,6 +419,10 @@ export default function Home() {
         ) : currentView === "audit-logs" ? (
           <div className="w-full">
             <AuditLogsView />
+          </div>
+        ) : currentView === "utilities" ? (
+          <div className="w-full">
+            <UtilitiesView />
           </div>
         ) : (
           <div className="text-center py-12 text-zinc-500 font-mono">Giao diện không khả dụng</div>
