@@ -18,6 +18,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
   redis:
     image: redis:7-alpine
     container_name: guworld-redis
@@ -34,7 +35,7 @@ services:
     container_name: guworld-backend
     restart: always
     ports:
-      - "127.0.0.1:8080:8080"  # Chỉ cho phép truy cập cục bộ trên host, ngoài internet sẽ đi qua Caddy
+      - "127.0.0.1:8080:8080"
     env_file:
       - ./backend/.env
     environment:
@@ -56,6 +57,17 @@ services:
       redis:
         condition: service_started
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: guworld-frontend
+    restart: always
+    environment:
+      - NEXT_PUBLIC_BACKEND_URL=https://api.cogioi.io.vn
+    depends_on:
+      - backend
+
   caddy:
     image: caddy:2-alpine
     container_name: guworld-caddy
@@ -63,13 +75,14 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "443:443/udp" # Hỗ trợ HTTP/3
+      - "443:443/udp"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
       - backend
+      - frontend
 
 volumes:
   postgres_data:

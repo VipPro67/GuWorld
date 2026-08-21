@@ -1,3 +1,7 @@
+cogioi.io.vn, www.cogioi.io.vn {
+    reverse_proxy frontend:3000
+}
+
 api.cogioi.io.vn {
     reverse_proxy backend:8080
 }
