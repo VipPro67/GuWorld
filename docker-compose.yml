@@ -57,17 +57,17 @@ services:
       redis:
         condition: service_started
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: guworld-frontend
-    restart: always
-    environment:
-      - NEXT_PUBLIC_BACKEND_URL=https://api.cogioi.io.vn
-    depends_on:
-      - backend
-
+frontend:
+  build:
+    context: ./frontend
+    dockerfile: Dockerfile
+    args:
+      NEXT_PUBLIC_BACKEND_URL: https://api.cogioi.io.vn
+  container_name: guworld-frontend
+  restart: always
+  depends_on:
+    - backend
+    
   caddy:
     image: caddy:2-alpine
     container_name: guworld-caddy
