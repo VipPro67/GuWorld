@@ -1,4 +1,4 @@
-cogioi.io.vn, www.cogioi.io.vn {
+www.cogioi.io.vn {
     reverse_proxy frontend:3000
 }
 
