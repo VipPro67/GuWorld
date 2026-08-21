@@ -1,5 +1,5 @@
 www.cogioi.io.vn {
-    redir https://cogioi.io.vn{uri}
+    redir https://cogioi.io.vn{uri} permanent
 }
 
 cogioi.io.vn {
