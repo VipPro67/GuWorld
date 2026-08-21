@@ -1,7 +1,7 @@
 www.cogioi.io.vn {
-    reverse_proxy frontend:3000
+    redir https://cogioi.io.vn{uri}
 }
 
-api.cogioi.io.vn {
-    reverse_proxy backend:8080
+cogioi.io.vn {
+    reverse_proxy frontend:3000
 }
