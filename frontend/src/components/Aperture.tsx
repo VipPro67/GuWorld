@@ -183,10 +183,11 @@ const formatGuName = (name: string) => {
 
 interface TribulationRealTimeInfoProps {
   aperture: ImmortalAperture;
+  timeSpeedMultiplier?: number;
   isCompact?: boolean;
 }
 
-const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ aperture, isCompact }) => {
+const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ aperture, timeSpeedMultiplier = 1, isCompact }) => {
   const [timeLeftText, setTimeLeftText] = useState<string>("");
   const [arrivalTimeText, setArrivalTimeText] = useState<string>("");
   const [isPassed, setIsPassed] = useState<boolean>(false);
@@ -200,7 +201,7 @@ const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ apert
         return;
       }
 
-      const rate = aperture.time_rate || 1.0;
+      const rate = (aperture.time_rate || 1.0) * (timeSpeedMultiplier > 0 ? timeSpeedMultiplier : 1.0);
       const internalYearsLeft = aperture.next_tribulation_year - aperture.internal_years_passed;
       if (internalYearsLeft <= 0) {
         setTimeLeftText("Đang ập đến");
@@ -248,7 +249,7 @@ const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ apert
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
-  }, [aperture.next_tribulation_year, aperture.internal_years_passed, aperture.time_rate, aperture.state, aperture.updated_at]);
+  }, [aperture.next_tribulation_year, aperture.internal_years_passed, aperture.time_rate, aperture.state, aperture.updated_at, timeSpeedMultiplier]);
 
   if (isCompact) {
     return (
@@ -2026,8 +2027,12 @@ function BlessedLandControls() {
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs">
-                <span className="text-zinc-400 font-medium">Lưu tốc thời gian:</span>
+                <span className="text-zinc-400 font-medium">Lưu tốc tiên khiếu:</span>
                 <span className="text-cyan-400 font-semibold">x{aperture.time_rate} lần</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-zinc-400 font-medium">Lưu tốc bản thân:</span>
+                <span className="text-violet-400 font-semibold">x{(player.time_speed_multiplier || 1).toFixed(2)} lần</span>
               </div>
 
               <div className="flex justify-between items-center text-xs">
@@ -2046,7 +2051,7 @@ function BlessedLandControls() {
                     style={{ width: `${Math.min(100, (aperture.internal_years_passed / aperture.next_tribulation_year) * 100)}%` }}
                   />
                 </div>
-                <TribulationRealTimeInfo aperture={aperture} isCompact={true} />
+                <TribulationRealTimeInfo aperture={aperture} timeSpeedMultiplier={player.time_speed_multiplier || 1} isCompact={true} />
               </div>
             </>
           )}

@@ -152,7 +152,7 @@ func playerRealtimeSnapshot(player models.Player) PlayerRealtimeSnapshot {
 		CurrentMana:         player.CurrentMana,
 		MaxMana:             player.MaxMana,
 		LastManaUpdate:      player.LastManaUpdate,
-		TimeSpeedMultiplier: player.TimeSpeedMultiplier,
+		TimeSpeedMultiplier: player.TimeSpeedMultiplier + models.EquippedTimeSpeedBonus(player.GuInventory),
 		ActiveCombat:        player.ActiveCombat,
 		ApertureStress:      player.ApertureStress,
 		HP:                  player.HP,

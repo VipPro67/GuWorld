@@ -2054,6 +2054,7 @@ func loadCompletedQuests(playerID string) models.CompletedQuestsList {
 func responseWithPlayer(c *gin.Context, status int, player models.Player, extra ...gin.H) {
 	player.MaxMana = gamefx.EffectiveMaxMana(&player)
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
+	player.TimeSpeedMultiplier += models.EquippedTimeSpeedBonus(player.GuInventory)
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
 	player.CompletedQuests = loadCompletedQuests(player.ID.String())
 	player.UnlockedRecipes = loadUnlockedRecipes(player.ID.String())
@@ -2071,6 +2072,7 @@ func responseWithPlayer(c *gin.Context, status int, player models.Player, extra 
 func responseWithPlayerData(c *gin.Context, status int, player models.Player, materials map[string]int, quests models.CompletedQuestsList, extra ...gin.H) {
 	player.MaxMana = gamefx.EffectiveMaxMana(&player)
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
+	player.TimeSpeedMultiplier += models.EquippedTimeSpeedBonus(player.GuInventory)
 	player.MaterialsInventory = materials
 	player.CompletedQuests = quests
 	player.UnlockedRecipes = loadUnlockedRecipes(player.ID.String())

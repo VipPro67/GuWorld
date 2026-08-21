@@ -69,10 +69,11 @@ const CountdownTimer: React.FC<{ node: ApertureResourceNode; timeRate: number; o
 
 interface TribulationRealTimeInfoProps {
   aperture: ImmortalAperture;
+  timeSpeedMultiplier?: number;
   isCompact?: boolean;
 }
 
-const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ aperture, isCompact }) => {
+const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ aperture, timeSpeedMultiplier = 1, isCompact }) => {
   const [timeLeftText, setTimeLeftText] = useState<string>("");
   const [arrivalTimeText, setArrivalTimeText] = useState<string>("");
   const [isPassed, setIsPassed] = useState<boolean>(false);
@@ -86,7 +87,7 @@ const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ apert
         return;
       }
 
-      const rate = aperture.time_rate || 1.0;
+      const rate = (aperture.time_rate || 1.0) * (timeSpeedMultiplier > 0 ? timeSpeedMultiplier : 1.0);
       const internalYearsLeft = aperture.next_tribulation_year - aperture.internal_years_passed;
       if (internalYearsLeft <= 0) {
         setTimeLeftText("Đang ập đến");
@@ -134,7 +135,7 @@ const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ apert
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
-  }, [aperture.next_tribulation_year, aperture.internal_years_passed, aperture.time_rate, aperture.state, aperture.updated_at]);
+  }, [aperture.next_tribulation_year, aperture.internal_years_passed, aperture.time_rate, aperture.state, aperture.updated_at, timeSpeedMultiplier]);
 
   if (isCompact) {
     return (
@@ -670,6 +671,11 @@ export const ImmortalApertureView: React.FC = () => {
                 </div>
 
                 <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800/80">
+                  <div className="text-slate-400 text-xs font-semibold">Tốc Độ Cá Nhân</div>
+                  <div className="text-lg font-bold text-violet-400 mt-1">x{timeSpeedMultiplier.toFixed(2)} lần</div>
+                </div>
+
+                <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800/80">
                   <div className="text-slate-400 text-xs font-semibold">{manaName} Dự Trữ</div>
                   <div className="text-lg font-bold text-yellow-400 mt-1 flex items-center gap-1">
                     <Coins className="w-5 h-5 text-yellow-500" />
@@ -842,7 +848,7 @@ export const ImmortalApertureView: React.FC = () => {
                       style={{ width: `${Math.min(100, (aperture.internal_years_passed / aperture.next_tribulation_year) * 100)}%` }}
                     />
                   </div>
-                  <TribulationRealTimeInfo aperture={aperture} isCompact={false} />
+                  <TribulationRealTimeInfo aperture={aperture} timeSpeedMultiplier={player?.time_speed_multiplier ?? 1} isCompact={false} />
                 </div>
               </div>
 
