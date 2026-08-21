@@ -427,6 +427,13 @@ Thêm status mới: 1 entry `statusfx.Registry` + tùy chọn 1 behaviour hook `
 
 Item dùng cho consumable, material, currency và shop. Effects hỗ trợ hồi mana/HP, soul, đạo ngân, xóa trạng thái xấu, điều kiện mortal/immortal hoặc các tác động đặc thù khác. **Quy ước `base_price`:** đồng đều theo rank — 1, 3, 6, 13, 25, 500, 1.250, 3.000, 7.500 cho rank 1–9 (rank 1 = 1, scale tỉ lệ như Cổ); item rank 0 quy về rank 1.
 
+Các effect key đặc biệt của Consumable (resolve trong `backend/internal/handlers/item_effects.go`, map `ApplyItemEffects`):
+
+- `random_constitution` (value `1`): khi dùng sẽ random **thể chất** mới từ `gamefx.AllConstitutions()`, loại trừ thể chất hiện tại của người chơi. Kết quả được ghi vào `players.constitution`.
+- `random_race` (value `1`): khi dùng sẽ random **chủng tộc** mới từ `gamefx.AllRaces()`, loại trừ chủng tộc hiện tại. Kết quả được ghi vào `players.race`.
+
+Hai item mẫu trong `Item.csv`: `ITEM_RANDOM_CONSTITUTION` (Hoán Thể Đan) và `ITEM_RANDOM_RACE` (Hoán Huyết Đan), cùng rank 7 / base_price 200.
+
 ### Recipe
 
 Recipe yêu cầu Cổ instance và/hoặc material. Một số recipe cần suy diễn bằng `/api/refine/deduce` trước khi luyện ổn định.

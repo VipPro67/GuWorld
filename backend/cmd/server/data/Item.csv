@@ -292,3 +292,5 @@ hu_tien_crystal_thoughts,Hồ Tiên Tinh Niệm Hoa,Material,4,"{""hunger"": 50}
 snow_yeti_heart_ice,Hạt Nhân Băng Tâm,Material,4,{},"Hạt nhân tuyết tinh ngưng tụ từ ngực Tuyết Ma, nguyên liệu tối hảo chế tạo Băng đạo cổ trùng.",25,
 blood_sand_scorpion_poison,Nọc Độc Huyết Sa,Material,3,{},"Nọc độc đỏ thẫm tinh luyện từ đuôi Huyết Sa Hoàng Kim Hạt, kịch độc ăn mòn huyết mạch.",10,
 ancient_dragonfish_liver,Gan Long Ngư Thượng Cổ,Material,5,{},"Lá gan của Đông Hải Thượng Cổ Long Ngư, chứa sức sống dồi dào và Thủy đạo quy tắc.",50,
+ITEM_RANDOM_CONSTITUTION,Hoán Thể Đan,Consumable,9,"{""random_constitution"": 1}",Đan dược nghịch thiên cải mệnh, tẩy rửa thể chất ngẫu nhiên.,200,
+ITEM_RANDOM_RACE,Hoán Huyết Đan,Consumable,9,"{""random_race"": 1}",Đan dược hoán đổi huyết mạch, chuyển hóa chủng tộc ngẫu nhiên.,200,

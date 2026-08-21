@@ -3155,10 +3155,12 @@ func UseItem(c *gin.Context) {
 	_, err = tx.Exec(`
 		UPDATE players 
 		SET current_mana = $1, max_mana = $2, hp = $3, base_hp = $4,
-		    primeval_stones = $5, lifespan = $6, human_qi = $7
-		WHERE id = $8`,
+		    primeval_stones = $5, lifespan = $6, human_qi = $7,
+		    race = $8, constitution = $9
+		WHERE id = $10`,
 		player.CurrentMana, player.MaxMana, player.HP, player.BaseHP,
 		player.PrimevalStones, player.Lifespan, player.HumanQi,
+		player.Race, player.Constitution,
 		player.ID,
 	)
 	if err != nil {
@@ -3296,10 +3298,12 @@ func UseItems(c *gin.Context) {
 	_, err = tx.Exec(`
 		UPDATE players 
 		SET current_mana = $1, max_mana = $2, hp = $3, base_hp = $4,
-		    primeval_stones = $5, lifespan = $6, human_qi = $7
-		WHERE id = $8`,
+		    primeval_stones = $5, lifespan = $6, human_qi = $7,
+		    race = $8, constitution = $9
+		WHERE id = $10`,
 		player.CurrentMana, player.MaxMana, player.HP, player.BaseHP,
 		player.PrimevalStones, player.Lifespan, player.HumanQi,
+		player.Race, player.Constitution,
 		player.ID,
 	)
 	if err != nil {

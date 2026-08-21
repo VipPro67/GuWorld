@@ -32,6 +32,44 @@ var ApplyItemEffects = map[string]ItemEffectHandler{
 	"open_mine_chest":        openMineChestEffect,
 	"heal_aperture":          healApertureEffect,
 	"increase_human_qi":      increaseHumanQi,
+	"random_constitution":    randomConstitutionEffect,
+	"random_race":            randomRaceEffect,
+}
+
+func randomConstitutionEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
+	defs := gamefx.AllConstitutions()
+	if len(defs) == 0 {
+		return "", fmt.Errorf("không có thể chất nào trong registry.")
+	}
+	if len(defs) == 1 {
+		def := defs[0]
+		player.Constitution = def.Key
+		return fmt.Sprintf("Đạo hữu sử dụng %s, thức tỉnh thể chất [%s]!", item.Name, gamefx.ConstitutionDisplayName(def.Key)), nil
+	}
+	chosen := defs[rand.Intn(len(defs))]
+	for chosen.Key == player.Constitution {
+		chosen = defs[rand.Intn(len(defs))]
+	}
+	player.Constitution = chosen.Key
+	return fmt.Sprintf("Đạo hữu sử dụng %s, thức tỉnh thể chất [%s]!", item.Name, gamefx.ConstitutionDisplayName(chosen.Key)), nil
+}
+
+func randomRaceEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
+	defs := gamefx.AllRaces()
+	if len(defs) == 0 {
+		return "", fmt.Errorf("không có chủng tộc nào trong registry.")
+	}
+	if len(defs) == 1 {
+		def := defs[0]
+		player.Race = def.Key
+		return fmt.Sprintf("Đạo hữu sử dụng %s, chuyển hóa thành chủng tộc [%s]!", item.Name, gamefx.RaceDisplayName(def.Key)), nil
+	}
+	chosen := defs[rand.Intn(len(defs))]
+	for chosen.Key == player.Race {
+		chosen = defs[rand.Intn(len(defs))]
+	}
+	player.Race = chosen.Key
+	return fmt.Sprintf("Đạo hữu sử dụng %s, chuyển hóa thành chủng tộc [%s]!", item.Name, gamefx.RaceDisplayName(chosen.Key)), nil
 }
 
 func healApertureEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
