@@ -288,9 +288,14 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 
 	secondsPassed := now.Sub(player.LastManaUpdate).Seconds()
 	if secondsPassed > 0 {
-		effectiveMultiplier := player.TimeSpeedMultiplier
+		equippedBonus := models.EquippedTimeSpeedBonus(player.GuInventory)
+		effectiveBase := player.TimeSpeedMultiplier + equippedBonus
+		if effectiveBase <= 0 {
+			effectiveBase = 1.0
+		}
+		effectiveMultiplier := effectiveBase
 		if player.Rank >= 6 {
-			effectiveMultiplier = player.TimeSpeedMultiplier * timeRate
+			effectiveMultiplier = effectiveBase * timeRate
 		}
 		subjectiveSeconds := secondsPassed * effectiveMultiplier
 		earnedMana := (subjectiveSeconds / 3600.0) * regenRatePerHour * (1.0 + gamefx.Get(player).ManaRegenBonus)
@@ -305,7 +310,7 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 		}
 
 		if player.HP > 0 && player.HP < effMaxHP {
-			earnedHP := (secondsPassed * player.TimeSpeedMultiplier / 3600.0) * player.HPRegenRate
+			earnedHP := (secondsPassed * effectiveBase / 3600.0) * player.HPRegenRate
 			newHP := player.HP + earnedHP
 			if newHP > effMaxHP {
 				newHP = effMaxHP
@@ -318,7 +323,7 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 
 		if player.SoulHP < player.MaxSoul {
 			soulRegenPerHour := player.SoulRegenRate
-			earnedSoulFloat := (secondsPassed * player.TimeSpeedMultiplier / 3600.0) * soulRegenPerHour
+			earnedSoulFloat := (secondsPassed * effectiveBase / 3600.0) * soulRegenPerHour
 			earnedSoulInt := int(earnedSoulFloat)
 			fraction := earnedSoulFloat - float64(earnedSoulInt)
 			if fraction > 0 && rand.Float64() < fraction {
@@ -334,7 +339,7 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 		}
 
 		if player.CurrentThought < player.MaxThought {
-			earnedThought := (secondsPassed * player.TimeSpeedMultiplier / 3600.0) * player.RegenRate
+			earnedThought := (secondsPassed * effectiveBase / 3600.0) * player.RegenRate
 			newThought := player.CurrentThought + earnedThought
 			if newThought > player.MaxThought {
 				newThought = player.MaxThought
@@ -345,7 +350,7 @@ func applyProjectedStatus(player *models.Player, essenceProd int, timeRate float
 			}
 		}
 
-		yearsPassed := (secondsPassed * player.TimeSpeedMultiplier) / 36000.0
+		yearsPassed := (secondsPassed * effectiveBase) / 36000.0
 		player.Lifespan -= yearsPassed
 		if player.Lifespan < 0 {
 			player.Lifespan = 0

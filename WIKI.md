@@ -225,6 +225,7 @@ Ngoài các mỏ tài nguyên, đạo hữu có thể xây dựng **công trình
 - **Nhân cả `time_speed_multiplier` × `time_rate` (Cổ Tiên):**
   - Tốc độ hồi Chân Nguyên (Tiên Nguyên)
   - Tích lũy năm nội bộ / sản xuất tiên khí
+- **Cổ ảnh hưởng `time_speed_multiplier`:** một số Cổ Trụ đạo có thể gia tốc vĩnh viễn (Cổ tiêu hao) hoặc khi trang bị (Cổ thụ động) dòng thời gian cá nhân — hồi phục nhanh hơn nhưng tuổi thọ trôi nhanh hơn.
 
 ### Đạo ngân
 

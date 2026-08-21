@@ -260,11 +260,13 @@ Các trường quan trọng trong dictionary:
   - **Khối `active`:** effect chủ động dùng trong combat — `damage_flat`, `damage_mult`, `damage_path`, `heal_flat`, `shield_flat`, `apply_status` + `status_tick_damage`/`status_duration_ticks`, `target_selector`, `summon_*`, `curve_attack`, `lifesteal`, … Danh sách đầy đủ + catalog chuẩn xem mục **"Hiệu ứng Cổ (effects)"** bên dưới.
   - **Khối `passive`:** chỉ số vĩnh viễn cộng dồn (`stat_base_*`), `damage_reduction`, `movement`, `evasion`, `luck`, `storage_capacity`, …
   - **Shorthand status:** một số key viết tắt trong struct `ActiveEffect` (`freeze`, `slow`, `slow1`, `weak`, `stun`, `silence`, `bleed`, `poison`, `thorns`, `regen`, `atk_up`, `def_up`, `taunt`) được `ActiveEffect.normalize()` tự đổi về `apply_status` + `status_duration_ticks` khi load. Dữ liệu mới nên viết thẳng `apply_status` để thống nhất (xem mục Status chiến đấu).
-  - **Cơ chế `other` (SpecialMechanic):** mảng `{event_trigger, action_code, params}`. Trigger đang dùng: `ON_TICK`, `ON_CONSUME`, `ON_DEATH`, `ON_USE`. Action code hiện có (19): `MANA_REGEN_TICK`(8), `ADD_LIFESPAN_YEARS`(7), `RANK_PROGRESS`(5), `GENERATE_IMMORTAL_STONES_TICK`(4), `GENERATE_STONES_TICK`(3), `THOUGHT_REGEN_TICK`(2), `SACRIFICE_APTITUDE`, `THIRD_WATCH`, `STONE_APERTURE`, `ADD_SOUL_MAX`, `MAN_BEAST_BURIAL`, `REBORN`, `RESTORE_MENTAL`, `POISON_VOW`, `SPRING_EGG_HATCH`, `RECORD_MESSAGE`, `REDUCE_STRESS`, `SOUL_REGEN_TICK`, `RESTORE_SOUL_HP` (số trong ngoặc = số Cổ đang dùng trong `data/Gu.csv`).
+  - **Cơ chế `other` (SpecialMechanic):** mảng `{event_trigger, action_code, params}`. Trigger đang dùng: `ON_TICK`, `ON_CONSUME`, `ON_DEATH`, `ON_USE`. Action code hiện có (20): `MANA_REGEN_TICK`(8), `ADD_LIFESPAN_YEARS`(7), `RANK_PROGRESS`(5), `GENERATE_IMMORTAL_STONES_TICK`(4), `GENERATE_STONES_TICK`(3), `THOUGHT_REGEN_TICK`(2), `SACRIFICE_APTITUDE`, `THIRD_WATCH`, `STONE_APERTURE`, `ADD_SOUL_MAX`, `MAN_BEAST_BURIAL`, `REBORN`, `RESTORE_MENTAL`, `POISON_VOW`, `SPRING_EGG_HATCH`, `RECORD_MESSAGE`, `REDUCE_STRESS`, `SOUL_REGEN_TICK`, `RESTORE_SOUL_HP`, `INCREASE_TIME_SPEED` (số trong ngoặc = số Cổ đang dùng trong `data/Gu.csv`).
     - Action code liên quan Hồn Phách:
     - `SOUL_REGEN_TICK` (`event_trigger: ON_TICK`): hồi `soul_hp` theo giờ từ mỗi Cổ trang bị ACTIVE (`params.value` = số điểm/giờ, scale theo rank qua `ManaRegenTickFactor`; xử lý ở `models.SoulRegenTickPerHour`).
     - `RESTORE_SOUL_HP` (`event_trigger: ON_CONSUME`): hồi ngay `soul_hp` khi sử dụng Cổ tiêu hao (`params.value` mặc định 10, cap tại `max_soul`).
     - `ADD_SOUL_MAX` (`ON_CONSUME`): tăng `max_soul`; `SOUL_BOOST` (`ON_CONSUME`): cộng Hồn Đạo đạo ngân.
+    - Action code liên quan dòng thời gian:
+    - `INCREASE_TIME_SPEED` (`event_trigger: ON_CONSUME`): cộng vĩnh viễn `params.value` vào `players.time_speed_multiplier` → hồi mana/hp/soul/niệm nhanh hơn nhưng tuổi thọ cũng trôi nhanh hơn.
 - `hunger_rate`, `food_types`, `max_hunger`. **Quy ước `hunger_rate`:** cổ có `food_types` không rỗng → `6` nếu `effects.passive` không rỗng, ngược lại `3`; cổ không có thức ăn → `0` (không đói). `max_hunger` mặc định `rank × 100`.
 - `target_type`: `SINGLE`, `ROW`, `COLUMN`, `ALL`, v.v.
 - `rarity`, `is_immortal`, `primary_role`, `combat_roles`, `combat_tags`, `support_tags`.
@@ -306,7 +308,7 @@ Các trường quan trọng trong dictionary:
 | `create_mud_zone` / `aoe_all` / `curve_attack` / `dash_distance` / `deploy_formation` / `detect_heat` / `enslave_beast_tier` / `ignite_power` / `ignore_defense` / `is_poem_immortal` / `lifesteal` / `refinement_core` / `refinement_material` / `shadow_walk` / `signal_range` / `store_gu` / `store_item` / `store_memory` / `slow` / `slow1` / `freeze` / `sleep` / `stun` | 1–3 | mixed | Cơ chế đặc thù cho 1–3 Cổ (xem struct `ActiveEffect` để biết kiểu) |
 | `description` | 4 | string | Ghi chú text (không phải effect) |
 
-*Khối `passive` (31 key):*
+*Khối `passive` (32 key):*
 
 | Key | Số Cổ | Kiểu | Tác dụng |
 |---|---|---:|---|---|
@@ -321,6 +323,7 @@ Các trường quan trọng trong dictionary:
 | `investigation` | 7 | number | Điều tra |
 | `control_power` | 5 | number | Khống chế |
 | `soul_refinement` | 4 | number | Tinh luyện Hồn |
+| `time_speed_multiplier` | 1 | number | +`time_speed_multiplier` khi trang bị ACTIVE (cộng vào `players.time_speed_multiplier`, xử lý ở `models.EquippedTimeSpeedBonus`) |
 | `luck` + `cleansing_power` + `evasion` + `storage_capacity` + `attack_speed` + `damage_multiplier` + `damage_multiplier_on_hit` + `damage_reduction` + `damage_reflect` | 1–6 | mixed | Minor (xem struct) |
 | `healing_multiplier` / `heal_received_multiplier` / `cold_resistance` / `water_resistance` / `dao_mark_multiplier` / `exclude_gu_storage` / `formation_power` / `refinement_power` / `storage_capacity_gu` / `target_selector`(=ROW) | 1 | mixed | Minor (xem struct) |
 | `description` | 5 | string | Ghi chú text |

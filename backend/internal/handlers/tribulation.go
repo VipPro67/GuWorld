@@ -1081,6 +1081,9 @@ func CheckAndTriggerTribulations() error {
 			if timeSpeedMultiplier <= 0 {
 				timeSpeedMultiplier = 1.0
 			}
+			if bonus, err := db.EquippedTimeSpeedBonus(db.DB, ap.PlayerID); err == nil {
+				timeSpeedMultiplier += bonus
+			}
 			if currentLifespan <= 0.0 {
 				// Lifespan already depleted, time does not flow and no message spam
 				continue

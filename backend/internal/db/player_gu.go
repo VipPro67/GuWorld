@@ -401,3 +401,17 @@ func GuInventoryAggregateEquipped(playerRef string) string {
 	) ORDER BY pg.created_at, pg.id), '[]'::jsonb)
 	FROM player_gu pg WHERE pg.player_id = ` + playerRef + ` AND pg.equipped = true AND pg.state = 'ACTIVE')`
 }
+
+// EquippedTimeSpeedBonus sums the passive time_speed_multiplier contributed by
+// a player's equipped ACTIVE Gus. It queries the gu_dictionary directly, so it
+// works for SQL-only call sites (aperture projection, tribulation lifespan
+// decay) that do not load the full player inventory.
+func EquippedTimeSpeedBonus(q Queryer, playerID string) (float64, error) {
+	var bonus float64
+	err := q.QueryRow(`
+		SELECT COALESCE(SUM((gd.effects->'passive'->>'time_speed_multiplier')::double precision), 0)
+		FROM player_gu pg
+		JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank
+		WHERE pg.player_id = $1 AND pg.equipped = true AND pg.state = 'ACTIVE'`, playerID).Scan(&bonus)
+	return bonus, err
+}

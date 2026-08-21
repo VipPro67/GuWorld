@@ -274,6 +274,9 @@ func GetImmortalAperture(c *gin.Context) {
 			if tsm <= 0 {
 				tsm = 1.0
 			}
+			if bonus, err := db.EquippedTimeSpeedBonus(tx, playerID.String()); err == nil {
+				tsm += bonus
+			}
 			elapsedInternalYears := elapsedSec * ap.TimeRate * tsm / 36000.0
 			ap.InternalYearsPassed += elapsedInternalYears
 			ap.UpdatedAt = now
@@ -1684,7 +1687,7 @@ func SetApertureTimeRate(c *gin.Context) {
 	now := time.Now()
 	res, err := tx.Exec(`
 		UPDATE immortal_apertures ia
-		SET internal_years_passed = ia.internal_years_passed + GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ia.updated_at))) * ia.time_rate * p.time_speed_multiplier / 36000.0,
+		SET internal_years_passed = ia.internal_years_passed + GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ia.updated_at))) * ia.time_rate * (p.time_speed_multiplier + COALESCE((SELECT SUM((gd.effects->'passive'->>'time_speed_multiplier')::double precision) FROM player_gu pg JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank WHERE pg.player_id = p.id AND pg.equipped = true AND pg.state = 'ACTIVE'), 0)) / 36000.0,
 			time_rate = $1, updated_at = $2
 		FROM players p
 		WHERE ia.player_id = p.id AND ia.player_id = $3

@@ -100,6 +100,8 @@ func updatePlayerGrowth(db *sql.DB, playerID string) error {
 		return err
 	}
 
+	timeSpeedMultiplier += models.EquippedTimeSpeedBonus(guInv)
+
 	var growthData models.GrowthData
 	if err := json.Unmarshal(growthDataRaw, &growthData); err != nil {
 		growthData = models.GrowthData{
