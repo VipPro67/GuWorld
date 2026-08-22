@@ -403,6 +403,17 @@ Sủng vật là quái vật đã bắt, hỗ trợ chiến đấu:
 - Cửa hàng gói quý mua bằng ví.
 - **Đổi đá** (tab "Đổi Đá" trong Cát Bảo Các): đổi Tiên Nguyên Thạch ↔ Nguyên Thạch theo tỷ giá cố định — 1 Tiên Nguyên Thạch = 100 Nguyên Thạch, 100.000 Nguyên Thạch = 1 Tiên Nguyên Thạch.
 
+### Khu Giải Trí
+
+Khu vực thư giãn cho các đạo hữu đọ vận may và tranh đoạt Nguyên Thạch. Gồm hai phần:
+- **Cổ Từ Bảo Khố (Đổ Thạch):** Mở đá huyền bí đọ cơ duyên nhận Nguyên Thạch, Cổ trùng hoặc Thọ Nguyên.
+- **Đấu Thú Đặt Cược:**
+  - Hai phe **Tả Thanh Long** (Phe Đỏ) và **Hữu Bạch Hổ** (Phe Xanh) xuất quân với 9 linh thú giống nhau, cắn nhau ngẫu nhiên.
+  - Đạo hữu có thể đặt cược Nguyên Thạch vào phe tin rằng sẽ chiến thắng.
+  - Phiên cược diễn ra mỗi giờ một lần. **Khóa đặt cược vào phút thứ 55 của mỗi giờ**.
+  - Kết quả trận đấu được phân định vào đầu giờ tiếp theo bằng cách mô phỏng trận chiến ngẫu nhiên của các linh thú.
+  - Tổng số tiền thắng cược (phần thưởng thêm chia từ bên thua) sẽ được khấu trừ 10% làm phí duy trì hệ thống (bảo đảm hệ thống không lỗ). Số Nguyên Thạch còn lại chia đều tỷ lệ thuận theo lượng cược cho bên thắng (cân kèo chia thưởng).
+
 ## 13. Môn phái
 
 Hệ thống môn phái hiện có:

@@ -18,7 +18,7 @@ import Link from "next/link";
 import { BaoHoangMarket } from "@/components/BaoHoangMarket";
 import { ArenaView } from "@/components/ArenaView";
 import { MineView } from "@/components/MineView";
-import { GachaPanel } from "@/components/GachaPanel";
+import { EntertainmentPanel } from "@/components/EntertainmentPanel";
 import AchievementsPanel from "@/components/AchievementsPanel";
 import { LobbyView } from "@/components/LobbyView";
 import { GlobalChatOverlay } from "@/components/GlobalChatOverlay";
@@ -373,7 +373,7 @@ export default function Home() {
           </div>
         ) : currentView === "gacha" ? (
           <div className="w-full">
-            <GachaPanel />
+            <EntertainmentPanel />
           </div>
         ) : currentView === "achievements" ? (
           <div className="w-full">

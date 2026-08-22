@@ -22,7 +22,7 @@ const RefiningFurnace = dynamic(() => import("./RefiningFurnace").then(m => m.Re
 const SectView = dynamic(() => import("./SectView").then(m => m.SectView), { ssr: false });
 const BaoHoangMarket = dynamic(() => import("./BaoHoangMarket").then(m => m.BaoHoangMarket), { ssr: false });
 const LeaderboardView = dynamic(() => import("./LeaderboardView").then(m => m.LeaderboardView), { ssr: false });
-const GachaPanel = dynamic(() => import("./GachaPanel").then(m => m.GachaPanel), { ssr: false });
+const EntertainmentPanel = dynamic(() => import("./EntertainmentPanel").then(m => m.EntertainmentPanel), { ssr: false });
 const ArenaView = dynamic(() => import("./ArenaView").then(m => m.ArenaView), { ssr: false });
 const PremiumStoreView = dynamic(() => import("./PremiumStoreView").then(m => m.PremiumStoreView), { ssr: false });
 const DungeonView = dynamic(() => import("./DungeonView").then(m => m.DungeonView), { ssr: false });
@@ -247,7 +247,7 @@ export function WorldPage() {
                 />
               )}
               {activeModal === "leaderboard" && <LeaderboardView />}
-              {activeModal === "gacha" && <GachaPanel />}
+              {activeModal === "gacha" && <EntertainmentPanel />}
               {activeModal === "arena" && <ArenaView />}
               {activeModal === "premium_store" && <PremiumStoreView />}
               {activeModal === "dungeon" && <DungeonView />}

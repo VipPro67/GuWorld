@@ -251,6 +251,11 @@ func SetupRouter() *gin.Engine {
 			player.GET("/notifications/unread-count", handlers.GetUnreadNotificationsCount)
 			player.POST("/notifications/read", handlers.MarkNotificationsRead)
 			player.POST("/notifications/read-all", handlers.MarkAllNotificationsRead)
+
+			// Beast betting
+			player.GET("/beast-betting/current", handlers.GetCurrentBettingRound)
+			player.GET("/beast-betting/history", handlers.GetBettingHistory)
+			player.POST("/beast-betting/bet", handlers.PlaceBeastBet)
 		}
 		// SSE — no rate limit
 		api.GET("/player/events", middleware.AuthRequired(), handlers.StreamPlayerEvents)

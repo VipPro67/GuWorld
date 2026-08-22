@@ -66,6 +66,9 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | POST | `/player/simulate-deposit` | Admin only. |
 | POST | `/player/avatar` |
 | POST | `/player/sacrifice` |
+| GET | `/player/beast-betting/current` | Lấy phiên cược đấu thú hiện tại của user. |
+| GET | `/player/beast-betting/history` | Lấy lịch sử 10 trận đấu thú gần nhất và log chiến đấu. |
+| POST | `/player/beast-betting/bet` | Đặt cược Nguyên Thạch vào phe Đỏ hoặc Xanh. Body: `{"team": "team_a"|"team_b", "amount": float64}`. |
 
 ## Cultivation and quests
 

@@ -145,6 +145,7 @@ func main() {
 	handlers.StartMidnightMineWorker(ctx)
 	handlers.StartArenaSettlementWorker(ctx)
 	handlers.StartAuctionSettlementWorker(ctx)
+	go handlers.StartBeastBettingWorker(ctx)
 	worker.StartPoolWatchdog(ctx, db.DB, 60*time.Second)
 	worker.StartSectMissionWorker(ctx, db.DB, 60*time.Second)
 	worker.StartSectTerritoryWorker(ctx, db.DB, 60*time.Second)

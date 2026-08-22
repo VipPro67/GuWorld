@@ -285,8 +285,8 @@ export const LobbyView: React.FC = () => {
     },
     {
       id: "gacha",
-      label: "Đổ Thạch",
-      icon: Gift,
+      label: "Giải Trí",
+      icon: Sparkles,
       gradient: "from-pink-500 to-rose-600",
       glow: "group-hover:shadow-[0_0_25px_rgba(236,72,153,0.45)]",
       borderColor: "border-pink-400/30",
