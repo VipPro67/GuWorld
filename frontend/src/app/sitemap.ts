@@ -1,8 +1,10 @@
 import type { MetadataRoute } from "next";
 
-const siteUrl = process.env.NEXT_PUBLIC_BACKEND_URL
-  ? process.env.NEXT_PUBLIC_BACKEND_URL.replace("://", "://www.").replace(/:\d+$/, "")
-  : "https://www.cogioi.io.vn";
+// Bỏ qua pre-render tĩnh khi build Docker trên GitHub, tạo động khi có request
+export const dynamic = "force-dynamic";
+export const revalidate = 3600;
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.cogioi.io.vn";
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
 interface GuItem {
@@ -32,9 +34,10 @@ const wikiGuidePages = [
 
 async function fetchGuList(): Promise<GuItem[]> {
   try {
+    // Thêm timeout 3 giây để tránh bị treo 60s nếu backend chưa sẵn sàng
     const res = await fetch(`${backendUrl}/api/dictionary`, {
-      cache: "force-cache",
-      next: { revalidate: 3600 },
+      cache: "no-store",
+      signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return [];
     const data = await res.json();
