@@ -368,6 +368,11 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 
 	isRefund := winner == "draw" || totalA == 0 || totalB == 0
 
+	// New payout logic: 1:1 matching. Matched = min(totalA, totalB).
+	// Winners receive their original stake back plus profit equal to their share of the matched pool.
+	// Any unmatched amount on the larger side is effectively refunded because winners always get their stake back.
+	matched := math.Min(totalA, totalB)
+
 	for _, b := range bets {
 		pID, err := uuid.Parse(b.PlayerID)
 		if err != nil {
@@ -383,21 +388,27 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 			note = fmt.Sprintf("Hoàn trả cược Đấu Thú vòng %s (một bên không có cược)", r.CreatedAt.Format("15:00 02/01"))
 			txType = "REFUND"
 		} else if b.Team == winner {
-			var winningPool, losingPool float64
+			// Calculate matched portion of this bet (share of the matched pool)
+			var totalWinning float64
 			if winner == "team_a" {
-				winningPool = totalA
-				losingPool = totalB
+				totalWinning = totalA
 			} else {
-				winningPool = totalB
-				losingPool = totalA
+				totalWinning = totalB
 			}
-			grossProfit := b.Amount * (losingPool / winningPool)
-			netProfit := grossProfit * 0.9 // 10% fee on profit
-			payout = b.Amount + netProfit
-			payout = math.Round(payout) // Round payout to nearest integer
-			note = fmt.Sprintf("Thưởng thắng cược Đấu Thú vòng %s ", r.CreatedAt.Format("15:00 02/01"))
+
+			var matchedPortion float64
+			if totalWinning > 0 {
+				matchedPortion = b.Amount * (matched / totalWinning)
+			} else {
+				matchedPortion = 0
+			}
+
+			profit := math.Round(matchedPortion) // round profit to nearest integer
+			payout = b.Amount + profit
+			note = fmt.Sprintf("Thưởng thắng cược Đấu Thú vòng %s", r.CreatedAt.Format("15:00 02/01"))
 			txType = "EXCHANGE"
 		} else {
+			// losing bet: nothing returned
 			payout = 0
 		}
 
@@ -425,9 +436,9 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 
 		// Send win/lose/refund notification to player
 		if isRefund {
-			notify.Send(tx, pID, "BEAST_BETTING", "Hoàn trả cược Đấu Thú", fmt.Sprintf("Vòng đấu %s đã được hoàn trả %.0f Nguyên Thạch do một bên không có cược hoặc trận đấu hòa.", r.CreatedAt.Format("15:00 02/01"), b.Amount))
+			notify.Send(tx, pID, "BEAST_BETTING", "Hoàn trả cược Đấu Thú", fmt.Sprintf("Vòng đấu %s đã được hoàn trả %.0f Nguyên Thạch do một bên không có cược hoặc trận đấu Hòa.", r.CreatedAt.Format("15:00 02/01"), payout))
 		} else if b.Team == winner {
-			notify.Send(tx, pID, "BEAST_BETTING", "Thắng cược Đấu Thú!", fmt.Sprintf("Chúc mừng đạo hữu đã đoán trúng kết quả vòng %s! Nhận được %.0f Nguyên Thạch .", r.CreatedAt.Format("15:00 02/01"), payout))
+			notify.Send(tx, pID, "BEAST_BETTING", "Thắng cược Đấu Thú!", fmt.Sprintf("Chúc mừng đạo hữu đã đoán trúng kết quả vòng %s! Nhận được %.0f Nguyên Thạch.", r.CreatedAt.Format("15:00 02/01"), payout))
 		} else {
 			notify.Send(tx, pID, "BEAST_BETTING", "Thua cược Đấu Thú", fmt.Sprintf("Rất tiếc, phe cược của đạo hữu đã thất bại ở vòng đấu %s. Chúc đạo hữu may mắn lần sau!", r.CreatedAt.Format("15:00 02/01")))
 		}
@@ -440,14 +451,14 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 
 	if isRefund {
 		if winner == "draw" {
-			chatContent = fmt.Sprintf("[Đấu Thú] Trận đấu kết thúc với kết quả Hòa! Tổng cược Đỏ: %.0f, Xanh: %.0f Nguyên Thạch. Đã hoàn trả toàn bộ Nguyên Thạch cược cho các đạo hữu.", totalA, totalB)
+			chatContent = fmt.Sprintf("[Đấu Thú] Trận đấu kết thúc với kết quả Hòa! Tổng cược Đỏ: %.0f, Xanh: %.0f Nguyên Thạch. Đã hoàn trả toàn bộ Nguyên Thạch cược.", totalA, totalB)
 		} else {
-			chatContent = fmt.Sprintf("[Đấu Thú] Vòng đấu kết thúc nhưng một bên không có cược! Tổng cược Đỏ: %.0f, Xanh: %.0f Nguyên Thạch. Đã hoàn trả toàn bộ Nguyên Thạch cược cho các đạo hữu.", totalA, totalB)
+			chatContent = fmt.Sprintf("[Đấu Thú] Vòng đấu kết thúc nhưng một bên không có cược! Tổng cược Đỏ: %.0f, Xanh: %.0f Nguyên Thạch. Đã hoàn trả toàn bộ Nguyên Thạch cược.", totalA, totalB)
 		}
 	} else if winner == "team_a" {
-		chatContent = fmt.Sprintf("[Đấu Thú] Trận đấu kịch tính kết thúc! Phe Đỏ (Tả Thanh Long) giành chiến thắng. Tổng cược Đỏ: %.0f, Xanh: %.0f Nguyên Thạch. Đạo hữu đoán trúng đã nhận thưởng.", totalA, totalB)
+		chatContent = fmt.Sprintf("[Đấu Thú] Trận đấu kịch tính kết thúc! Phe Đỏ (Tả Thanh Long) giành chiến thắng. Tổng cược Đỏ: %.0f, Xanh: %.0f Nguyên Thạch.", totalA, totalB)
 	} else {
-		chatContent = fmt.Sprintf("[Đấu Thú] Trận đấu kịch tính kết thúc! Phe Xanh (Hữu Bạch Hổ) giành chiến thắng. Tổng cược Đỏ: %.0f, Xanh: %.0f Nguyên Thạch. Đạo hữu đoán trúng đã nhận thưởng.", totalA, totalB)
+		chatContent = fmt.Sprintf("[Đấu Thú] Trận đấu kịch tính kết thúc! Phe Xanh (Hữu Bạch Hổ) giành chiến thắng. Tổng cược Đỏ: %.0f, Xanh: %.0f Nguyên Thạch.", totalA, totalB)
 	}
 
 	_, err = tx.Exec(`
