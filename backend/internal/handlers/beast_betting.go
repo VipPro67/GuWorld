@@ -370,8 +370,14 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 
 	// New payout logic: 1:1 matching. Matched = min(totalA, totalB).
 	// Winners receive their original stake back plus profit equal to their share of the matched pool.
-	// Any unmatched amount on the larger side is effectively refunded because winners always get their stake back.
+	// Losers receive back their share of the unmatched pool (if any).
 	matched := math.Min(totalA, totalB)
+	var unmatchedA, unmatchedB float64
+	if totalA > totalB {
+		unmatchedA = totalA - matched
+	} else {
+		unmatchedB = totalB - matched
+	}
 
 	for _, b := range bets {
 		pID, err := uuid.Parse(b.PlayerID)
@@ -408,8 +414,27 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 			note = fmt.Sprintf("Thưởng thắng cược Đấu Thú vòng %s", r.CreatedAt.Format("15:00 02/01"))
 			txType = "EXCHANGE"
 		} else {
-			// losing bet: nothing returned
-			payout = 0
+			// Losing bet: refund unmatched portion of losing side
+			var totalLosing float64
+			var unmatched float64
+			if b.Team == "team_a" {
+				totalLosing = totalA
+				unmatched = unmatchedA
+			} else {
+				totalLosing = totalB
+				unmatched = unmatchedB
+			}
+
+			var refundPortion float64
+			if totalLosing > 0 {
+				refundPortion = b.Amount * (unmatched / totalLosing)
+			} else {
+				refundPortion = 0
+			}
+
+			payout = math.Round(refundPortion)
+			note = fmt.Sprintf("Hoàn trả phần dư cược Đấu Thú vòng %s (phe thua)", r.CreatedAt.Format("15:00 02/01"))
+			txType = "REFUND"
 		}
 
 		if payout > 0 {
@@ -436,11 +461,11 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 
 		// Send win/lose/refund notification to player
 		if isRefund {
-			notify.Send(tx, pID, "BEAST_BETTING", "Hoàn trả cược Đấu Thú", fmt.Sprintf("Vòng đấu %s đã được hoàn trả %.0f Nguyên Thạch do một bên không có cược hoặc trận đấu Hòa.", r.CreatedAt.Format("15:00 02/01"), payout))
+			notify.Send(tx, pID, "BEAST_BETTING", "Hoàn trả cược Đấu Thú", fmt.Sprintf("Vòng đấu %s đã được hoàn trả %.0f Nguyên Thạch do một bên không có cược hoặc trận hòa.", r.CreatedAt.Format("15:00 02/01"), b.Amount))
 		} else if b.Team == winner {
 			notify.Send(tx, pID, "BEAST_BETTING", "Thắng cược Đấu Thú!", fmt.Sprintf("Chúc mừng đạo hữu đã đoán trúng kết quả vòng %s! Nhận được %.0f Nguyên Thạch.", r.CreatedAt.Format("15:00 02/01"), payout))
 		} else {
-			notify.Send(tx, pID, "BEAST_BETTING", "Thua cược Đấu Thú", fmt.Sprintf("Rất tiếc, phe cược của đạo hữu đã thất bại ở vòng đấu %s. Chúc đạo hữu may mắn lần sau!", r.CreatedAt.Format("15:00 02/01")))
+			notify.Send(tx, pID, "BEAST_BETTING", "Thua cược Đấu Thú", fmt.Sprintf("Rất tiếc, phe cược của đạo hữu đã thất bại ở vòng đấu %s. Hoàn trả phần dư: %.0f Nguyên Thạch.", r.CreatedAt.Format("15:00 02/01"), payout))
 		}
 	}
 
