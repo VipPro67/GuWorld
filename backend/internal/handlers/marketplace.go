@@ -17,6 +17,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 type CreateListingRequest struct {
@@ -566,6 +567,14 @@ func PlaceBid(c *gin.Context) {
 			RequestSummary: fmt.Sprintf("người mua=%s | giá=%.0f | %s", authID, req.Amount, currency),
 			IPAddress:      c.ClientIP(), Success: true,
 		})
+		currencyName := "Nguyên Thạch"
+		if currency == "immortal" {
+			currencyName = "Tiên Nguyên Thạch"
+		}
+		var buyerUsername string
+		_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, authID).Scan(&buyerUsername)
+		notify.Send(db.DB, sellerID, "auction_bid", "Ai đó đặt giá",
+			fmt.Sprintf("%s đã đặt giá %.0f %s cho mặt hàng của bạn.", buyerUsername, req.Amount, currencyName))
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đặt giá thành công"})
 }
@@ -776,6 +785,17 @@ func BuyListing(c *gin.Context) {
 		RequestSummary: fmt.Sprintf("người mua=%s | sl=%d | %.0f %s", authID, purchaseQty, totalPrice, currency),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
+	currencyName := "Nguyên Thạch"
+	if currency == "immortal" {
+		currencyName = "Tiên Nguyên Thạch"
+	}
+	itemName := GetItemName(itemType, rawItemData)
+	if sellerID != authID {
+		notify.Send(db.DB, sellerID, "market_sold", "Mặt hàng đã bán",
+			fmt.Sprintf("%s đã mua %d %s với giá %.0f %s.", buyer.Username, purchaseQty, itemName, totalPrice, currencyName))
+	}
+	notify.Send(db.DB, authID, "market_bought", "Mua hàng thành công",
+		fmt.Sprintf("Bạn đã mua %d %s với giá %.0f %s.", purchaseQty, itemName, totalPrice, currencyName))
 	buyer.MaterialsInventory = loadMaterialsInventory(buyer.ID.String())
 	responseWithPlayer(c, http.StatusOK, buyer, gin.H{"message": "Mua hàng thành công"})
 }
@@ -901,7 +921,26 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 			Success: true,
 		})
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	// Notifications after successful commit (best-effort).
+	currencyName := "Nguyên Thạch"
+	if currency == "immortal" {
+		currencyName = "Tiên Nguyên Thạch"
+	}
+	if highestBidderID.Valid {
+		bidderUUID, _ := uuid.Parse(highestBidderID.String)
+		notify.Send(db.DB, bidderUUID, "auction_won", "Thắng đấu giá",
+			fmt.Sprintf("Bạn đã thắng đấu giá với giá %.0f %s!", currentPrice, currencyName))
+		notify.Send(db.DB, sellerID, "auction_sold", "Đấu giá hoàn tất",
+			fmt.Sprintf("Mặt hàng đã được bán với giá %.0f %s.", currentPrice, currencyName))
+	} else {
+		notify.Send(db.DB, sellerID, "auction_expired", "Đấu giá hết hạn",
+			"Phiên đấu giá đã hết hạn và không có người đặt giá.")
+	}
+	return nil
 }
 
 func addAuctionItemToPlayer(tx *sql.Tx, player *models.Player, itemType, itemData string, qty int) error {

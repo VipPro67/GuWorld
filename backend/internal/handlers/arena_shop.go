@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 type ArenaShopItem struct {
@@ -124,6 +125,14 @@ func BuyArenaShopItem(c *gin.Context) {
 	_, _ = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 5, $1) WHERE id = $2", MaxHumanQi, authID)
 
 	tx.Commit()
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "arena_shop_purchase", EntityType: "arena_shop_item",
+		EntityID:       req.ItemID,
+		RequestSummary: fmt.Sprintf("%s | giá=%d Xu Đấu Trường", targetName, targetPrice),
+		Metadata:       map[string]interface{}{"item_id": req.ItemID, "qty": targetQty},
+		IPAddress:      c.ClientIP(), Success: true,
+	})
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đổi vật phẩm thành công! Nhân Khí +5.", "cost": targetPrice})
 }

@@ -22,6 +22,7 @@ import { GachaPanel } from "@/components/GachaPanel";
 import AchievementsPanel from "@/components/AchievementsPanel";
 import { LobbyView } from "@/components/LobbyView";
 import { GlobalChatOverlay } from "@/components/GlobalChatOverlay";
+import { NotificationBell } from "@/components/NotificationBell";
 import { ImmortalApertureView } from "@/components/ImmortalApertureView";
 import { DungeonView } from "@/components/DungeonView";
 import { PetPanel } from "@/components/PetPanel";
@@ -228,6 +229,8 @@ export default function Home() {
               <span>Wiki Game</span>
             </Link>
           )}
+
+          {player && !inCombat && <NotificationBell />}
 
           {player && !inCombat && (
             <button

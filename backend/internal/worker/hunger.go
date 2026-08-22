@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 // StartHungerWorker begins the background process for depleting Gu bug hunger.
@@ -388,7 +390,26 @@ func processPlayerHungerDecayOnce(db *sql.DB, playerID string) error {
 		return err
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	// Send notifications after successful commit (best-effort).
+	if parsedPID, err := uuid.Parse(playerID); err == nil {
+		for _, s := range dead {
+			ntype := "gu_death"
+			title := "Cổ trùng chết đói"
+			content := fmt.Sprintf("%s đã chết vì đói!", s.guName)
+			if s.isVital {
+				ntype = "vital_gu_death"
+				title = "Bản mệnh cổ chết đói"
+				content = fmt.Sprintf("Bản mệnh cổ %s đã chết vì đói! Bạn nhận 80 sát thương.", s.guName)
+			}
+			notify.Send(db, parsedPID, ntype, title, content)
+		}
+	}
+
+	return nil
 }
 
 // ---- Sect vault (kho tông môn) hunger decay ---------------------------------

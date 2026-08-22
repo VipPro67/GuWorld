@@ -111,5 +111,22 @@ func schemaSocial() error {
 		return err
 	}
 
+	if err := execSchema("notifications", `
+	CREATE TABLE IF NOT EXISTS notifications (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		type VARCHAR(50) NOT NULL,
+		title TEXT NOT NULL,
+		content TEXT NOT NULL,
+		is_read BOOLEAN NOT NULL DEFAULT FALSE,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("notifications_player_idx", `
+	CREATE INDEX IF NOT EXISTS idx_notifications_player ON notifications (player_id, created_at DESC);`); err != nil {
+		return err
+	}
+
 	return nil
 }

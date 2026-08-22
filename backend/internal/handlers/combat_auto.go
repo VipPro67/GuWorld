@@ -21,6 +21,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 // AutoCombatStartRequest payload for starting automated combat
@@ -557,6 +558,7 @@ func AutoCombatStart(c *gin.Context) {
 								lootMsg = fmt.Sprintf("Nhặt được: %d Nguyên Thạch.", stoneQty)
 							}
 							lootDetailLogs = append(lootDetailLogs, lootMsg)
+							notify.Send(db.DB, player.ID, "combat_loot", "Chiến lợi phẩm", lootMsg)
 						}
 					}
 				}

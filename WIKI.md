@@ -384,6 +384,12 @@ Sủng vật là quái vật đã bắt, hỗ trợ chiến đấu:
 - Có đặt giá, mua, hủy và kết toán đấu giá hết hạn.
 - Có chat Bảo Hoàng và SSE messages.
 
+### Thông báo
+
+- Chuông thông báo (góc trên phải) báo tin mới theo thời gian thực qua SSE.
+- Thông báo khi: Cổ chết đói (kể cả bản mệnh cổ), tử đạo đánh rơi tài sản, nhặt chiến lợi phẩm, ai mua hàng của bạn, ai đặt giá đấu giá, thắng đấu giá, đấu giá hết hạn.
+- Hỗ trợ đánh dấu đã đọc từng mục hoặc tất cả.
+
 ### Giao dịch trực tiếp
 
 - Hai Cổ sư có thể khởi tạo, chấp nhận/từ chối, đề nghị, khóa và xác nhận.

@@ -314,5 +314,17 @@ Stream hợp nhất (`StreamUnifiedEvents`) cho authenticated player. Các event
 | `world.player.pos` | **Vị trí người chơi trên bản đồ lớn**: broadcast sau mỗi commit di chuyển (`/explore/move`, `/explore/move-path`). Payload `{id, username, avatar_url, x, y, ts}`. Client lọc theo viewport và nội suy marker để hiển thị chuyển động mượt (không teleport). Broadcast qua hub `world_events.go`; frontend phát `CustomEvent("gu_world_pos")` → `useWorldStore.upsertPlayerPosition`. Fan-out được interest-manage theo vị trí (chỉ gửi cho subscriber trong bán kính `WorldPosInterestRadius`). |
 | `world.cell.cleared` | **Cell cố định (boss/resource cao cấp) bị clear**: payload `{x, y, cell_type, content_id}`. Frontend phát `CustomEvent("gu_world_cell")` → refresh `useWorldStore.fetchObjects()`. |
 | `world.cell.respawn` | **Cell cố định respawn** (hết `respawn_seconds`, reset lười khi đọc): payload `{x, y, cell_type, content_id}`. Frontend xử lý tương tự `gu_world_cell`. |
+| `notification.new` | **Thông báo mới** cho người chơi (bell icon). Payload là object `{id, player_id, type, title, content, is_read, created_at}`. |
 
 Kèm theo: `GET /player/events` (stream player snapshot + heartbeat riêng), `GET /trade/events`, `GET /chat/bao-hoang/events`.
+
+## Thông báo (Notification) — Auth
+
+| Method | Endpoint | Mô tả |
+| --- | --- | --- |
+| GET | `/player/notifications?page=&pageSize=` | Danh sách thông báo của người chơi (mới nhất trước). Trả `{notifications, page, pageSize}`. |
+| GET | `/player/notifications/unread-count` | Số thông báo chưa đọc. Trả `{unread}`. |
+| POST | `/player/notifications/read` | Đánh dấu đã đọc theo `{ids: [...]}`. |
+| POST | `/player/notifications/read-all` | Đánh dấu tất cả đã đọc. |
+
+Các loại `type` thông báo: `gu_death`, `vital_gu_death` (cổ chết đói), `death_drop` (tử đạo mất tài sản), `loot_gained` (PvP nhặt chiến lợi phẩm), `combat_loot` (nhặt đồ sau khi thắng quái), `market_sold`/`market_bought` (mua bán), `auction_bid` (ai đặt giá), `auction_won`/`auction_sold`/`auction_expired` (đấu giá).

@@ -889,6 +889,12 @@ func CompleteOnboarding(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "player.onboarding",
+		RequestSummary: fmt.Sprintf("region=%s attack=%s defense=%s vital=%s", req.StartingRegion, req.AttackGuID, req.DefenseGuID, req.VitalGuChoice),
+		IPAddress:      c.ClientIP(), Success: true,
+	})
+
 	player.NeedsOnboarding = false
 	player.CurrentRegion = startingHubID
 	player.X = spawnX
@@ -1187,6 +1193,12 @@ func RechargeWithStones(c *gin.Context) {
 			return
 		}
 
+		auditlog.Log(db.DB, auditlog.Entry{
+			PlayerID: &authID, Action: "player.recharge",
+			RequestSummary: fmt.Sprintf("%d Tiên Nguyên Thạch → %d Tiên Nguyên", stonesToUse, int(manaGain)),
+			IPAddress:      c.ClientIP(), Success: true,
+		})
+
 		responseWithPlayer(c, http.StatusOK, player, gin.H{
 			"message": fmt.Sprintf("Luyện hóa thành công %d Tiên Nguyên Thạch thành %d hạt Tiên Nguyên!", stonesToUse, int(manaGain)),
 		})
@@ -1257,6 +1269,12 @@ func RechargeWithStones(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
 	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "player.recharge",
+		RequestSummary: fmt.Sprintf("%.0f Nguyên Thạch → %.4f%% chân nguyên", stonesToUse, addedMana),
+		IPAddress:      c.ClientIP(), Success: true,
+	})
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Nạp %.0f nguyên thạch, khôi phục %.4f%% chân nguyên.", stonesToUse, addedMana),
@@ -3188,6 +3206,13 @@ func UseItem(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "item.use", EntityType: "item",
+		EntityID:       req.ItemID,
+		RequestSummary: item.Name,
+		IPAddress:      c.ClientIP(), Success: true,
+	})
+
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": strings.Join(messages, " ")})
 }
@@ -3405,6 +3430,12 @@ func UseItems(c *gin.Context) {
 		aggregatedSpecial := aggregateChestSpecialMessages(specialMessages)
 		finalMessage += "\n" + strings.Join(aggregatedSpecial, "\n")
 	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "item.use_bulk",
+		RequestSummary: strings.Join(usageDetails, ", "),
+		IPAddress:      c.ClientIP(), Success: true,
+	})
 
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": finalMessage})
@@ -3997,6 +4028,12 @@ func UseSupportGu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "gu.use_support", EntityType: "gu_instance",
+		EntityID: req.GuInstanceID, RequestSummary: logMsg,
+		IPAddress: c.ClientIP(), Success: true,
+	})
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),

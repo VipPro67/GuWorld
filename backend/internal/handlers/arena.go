@@ -12,6 +12,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 type ArenaRanking struct {
@@ -246,6 +247,8 @@ func ChallengeArena(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database commit failed"})
 		return
 	}
+
+	auditlog.Logf(db.DB, &authID, "arena.challenge", "target=%s targetId=%s", targetPlayer.Username, targetUUID)
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Khiêu chiến Võ Đài bắt đầu! Nhân Khí +%.0f.", qiGained),

@@ -332,6 +332,13 @@ func UseRelicGu(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "cultivate.relic_gu", EntityType: "material",
+		EntityID:       req.RelicKey,
+		RequestSummary: fmt.Sprintf("rank=%d sub=%d", player.Rank, player.SubRank),
+		IPAddress:      c.ClientIP(), Success: true,
+	})
+
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Relic Gu consumed. Instant advancement!"})
 }
 
@@ -431,6 +438,12 @@ func Ascension(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "cultivate.ascension",
+		RequestSummary: fmt.Sprintf("thành công=%t rank=%d sub=%d", success, player.Rank, player.SubRank),
+		IPAddress:      c.ClientIP(), Success: success,
+	})
+
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"success": success, "message": msg})
 }
 
@@ -499,6 +512,12 @@ func Tribulation(c *gin.Context) {
 		return
 	}
 
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "cultivate.tribulation_start",
+		RequestSummary: fmt.Sprintf("rank=%d bossHP=%.0f", player.Rank, bossHP),
+		IPAddress:      c.ClientIP(), Success: true,
+	})
+
 	responseWithPlayer(c, http.StatusOK, player, gin.H{"message": "Thiên kiếp giáng lâm! Hãy chuẩn bị chiến đấu! Nhân Khí +5."})
 }
 
@@ -554,6 +573,12 @@ func ClearStress(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
 	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "cultivate.clear_stress",
+		RequestSummary: "stress -50 | -100 Nguyên Thạch",
+		IPAddress:      c.ClientIP(), Success: true,
+	})
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message": fmt.Sprintf("Không khiếu đã được tịnh hóa thành công! Giảm 50%% áp lực. Nhân Khí +%.0f.", qiGained),

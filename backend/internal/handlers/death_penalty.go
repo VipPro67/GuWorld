@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 // deathPenaltyConfig — mức phạt khi chết (áp vào túi thật).
@@ -162,7 +163,19 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, primev
 	if len(lost) == 0 {
 		return ""
 	}
-	return joinDropList(lost)
+	summary := joinDropList(lost)
+
+	// Notify loser and (PvP) winner — best-effort, non-fatal.
+	notify.Send(db.DB, loserID, "death_drop", "Tử đạo - mất tài sản",
+		fmt.Sprintf("Bạn đã tử đạo và đánh rơi: %s.", summary))
+	if winnerID != nil {
+		var loserName string
+		_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, loserID).Scan(&loserName)
+		notify.Send(db.DB, *winnerID, "loot_gained", "Nhặt được chiến lợi phẩm",
+			fmt.Sprintf("Bạn đã thu được chiến lợi phẩm từ %s: %s.", loserName, summary))
+	}
+
+	return summary
 }
 
 // selectEligibleGus returns the remaining inventory and the randomly chosen,

@@ -11,6 +11,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 type PartyMember struct {
@@ -72,6 +73,8 @@ func CreateParty(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
 		return
 	}
+
+	auditlog.Logf(db.DB, &authID, "party.create", "partyId=%s", partyID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Tạo tổ đội thành công! Nhân Khí +2.",
@@ -279,6 +282,8 @@ func LeaveParty(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
+
+	auditlog.Logf(db.DB, &authID, "party.leave", "partyId=%s", partyID)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Rời tổ đội thành công!"})
 }

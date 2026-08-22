@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 type SacrificeNPCRequest struct {
@@ -116,6 +117,13 @@ func SacrificeNPC(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction commit failed"})
 		return
 	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "player.sacrifice", EntityType: "npc",
+		EntityID:       req.NPCID,
+		RequestSummary: fmt.Sprintf("%s | tư chất %d%% → %d%%", npcName, oldAptitude, player.AptitudePercent),
+		IPAddress:      c.ClientIP(), Success: true,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":       fmt.Sprintf("Hiến tế thành công %s! Huyết Sọ Cổ đã nghiền nát cốt nhục đệ tử, chuyển hóa chân huyết nâng cao tư chất Không khiếu của đạo hữu (+5%% tư chất). Nhân Khí +%.0f.", npcName, qiGained),

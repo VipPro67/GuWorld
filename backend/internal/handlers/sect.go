@@ -1946,6 +1946,8 @@ func AcceptSectMission(c *gin.Context) {
 		return
 	}
 
+	auditlog.Logf(db.DB, &playerID, "sect.mission_accept", "sectId=%s missionId=%s", sm.SectID, missionID)
+
 	c.JSON(http.StatusOK, gin.H{"message": "Nhận nhiệm vụ tông môn thành công!"})
 }
 
@@ -2127,6 +2129,8 @@ func CompleteSectMission(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
 		return
 	}
+
+	auditlog.Logf(db.DB, &playerID, "sect.mission_complete", "sectId=%s missionId=%s reward=%d", m.SectID, missionID, sm.RewardContribution)
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"message":             "Hoàn thành nhiệm vụ tông môn! Nhận được " + strconv.Itoa(sm.RewardContribution) + " Điểm cống hiến.",
@@ -2381,6 +2385,8 @@ func CreateSect(c *gin.Context) {
 		return
 	}
 
+	auditlog.Logf(db.DB, &playerID, "sect.create", "sectId=%s name=%s", sectID, req.Name)
+
 	// Trigger System Chat Notification on Sect channel
 	_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("Chúc mừng đạo hữu %s đã lập phái thành công! Tông môn %s chính thức được thành lập.", player.Username, req.Name))
 
@@ -2628,6 +2634,8 @@ func KickMember(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Commit failed"})
 		return
 	}
+
+	auditlog.Logf(db.DB, &playerID, "sect.kick", "sectId=%s targetId=%s target=%s", targetSectID, targetMemberID, targetUsername)
 
 	if targetUsername != "" {
 		_ = SendSystemMessage("sect", sql.NullString{String: targetSectID, Valid: true}, fmt.Sprintf("Đạo hữu %s đã bị trục xuất khỏi tông môn.", targetUsername))

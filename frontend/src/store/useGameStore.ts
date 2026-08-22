@@ -812,6 +812,16 @@ export interface ToastMessage {
   duration?: number;
 }
 
+export interface PlayerNotification {
+  id: string;
+  player_id: string;
+  type: string;
+  title: string;
+  content: string;
+  is_read: boolean;
+  created_at: string;
+}
+
 export interface Region {
   id: string;
   name: string;
@@ -1064,6 +1074,15 @@ interface GameState {
   fetchInbox: () => Promise<void>;
   sendBaoHoangChat: (content: string, channel: string) => Promise<boolean>;
   fetchBaoHoangMessages: (channel: string) => Promise<void>;
+
+  // Notification State & Actions
+  notifications: PlayerNotification[];
+  notificationsLoaded: boolean;
+  unreadNotifications: number;
+  fetchNotifications: () => Promise<void>;
+  fetchUnreadNotificationsCount: () => Promise<void>;
+  markNotificationRead: (id: string) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
 
   // Mine State & Actions
   mineSlots: MineSlot[];
@@ -1508,6 +1527,9 @@ export const useGameStore = create<GameState>((set, get) => {
   chatOpen: false,
   chatMessages: { world: [], general: [], sect: [] },
   unreadChannels: { world: false, general: false, sect: false },
+  notifications: [],
+  notificationsLoaded: false,
+  unreadNotifications: 0,
   mineSlots: [],
   aperture: null,
   daoMarks: [],
@@ -1593,6 +1615,7 @@ export const useGameStore = create<GameState>((set, get) => {
       void get().fetchGuInventory();
       get().subscribePlayerEvents();
       get().subscribeTradeEvents();
+      void get().fetchNotifications();
       get().addLog(`Đồng chí ${data.player.username} đã quy vị!`);
       const today = new Date().toISOString().split('T')[0];
       const hiddenUntil = typeof window !== "undefined" ? localStorage.getItem("gu_changelog_hide_until") : null;
@@ -1684,6 +1707,7 @@ export const useGameStore = create<GameState>((set, get) => {
       void get().fetchGuInventory();
       get().subscribePlayerEvents();
       get().subscribeTradeEvents();
+      void get().fetchNotifications();
       get().addLog(`Cổ sư ${data.player.username} khai mở Không Khiếu! Tư chất: ${data.player.aptitude_type} (${data.player.aptitude_percent}%)`);
       return true;
     } catch (err: any) {
@@ -1889,6 +1913,26 @@ export const useGameStore = create<GameState>((set, get) => {
         });
       } catch (err) {
         console.error("Failed to process sect chat event", err);
+      }
+    });
+
+    source.addEventListener("notification.new", (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent<string>).data) as PlayerNotification;
+        if (!payload?.id) return;
+        set((state) => {
+          const exists = state.notifications.some((n) => n.id === payload.id);
+          if (exists) return {};
+          return {
+            notifications: [payload, ...state.notifications].slice(0, 50),
+            unreadNotifications: state.unreadNotifications + 1,
+          };
+        });
+        if (payload.title) {
+          get().addToast(payload.title, "info");
+        }
+      } catch (err) {
+        console.error("Failed to process notification event", err);
       }
     });
 
@@ -4629,6 +4673,73 @@ export const useGameStore = create<GameState>((set, get) => {
     } catch (err) {
       console.error("fetch chat messages failed", err);
       get().addToast("Lỗi tải tin nhắn.", "error");
+    }
+  },
+
+  fetchNotifications: async () => {
+    const { token, logout } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/notifications?page=1&pageSize=50`);
+      if (response.status === 401 || response.status === 403) { logout(); return; }
+      const data = await response.json();
+      const list = Array.isArray(data.notifications) ? data.notifications : [];
+      set({
+        notifications: list,
+        notificationsLoaded: true,
+        unreadNotifications: list.filter((n: PlayerNotification) => !n.is_read).length,
+      });
+    } catch (err) {
+      console.error("fetch notifications failed", err);
+    }
+  },
+
+  fetchUnreadNotificationsCount: async () => {
+    const { token } = get();
+    if (!token) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/player/notifications/unread-count`);
+      if (!response.ok) return;
+      const data = await response.json();
+      set({ unreadNotifications: typeof data.unread === "number" ? data.unread : 0 });
+    } catch (err) {
+      console.error("fetch unread count failed", err);
+    }
+  },
+
+  markNotificationRead: async (id) => {
+    const { token } = get();
+    if (!token) return;
+    set((state) => ({
+      notifications: state.notifications.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
+      unreadNotifications: Math.max(0, state.unreadNotifications - 1),
+    }));
+    try {
+      await authFetch(`${BACKEND_URL}/api/player/notifications/read`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [id] }),
+      });
+    } catch (err) {
+      console.error("mark notification read failed", err);
+    }
+  },
+
+  markAllNotificationsRead: async () => {
+    const { token } = get();
+    if (!token) return;
+    set((state) => ({
+      notifications: state.notifications.map((n) => ({ ...n, is_read: true })),
+      unreadNotifications: 0,
+    }));
+    try {
+      await authFetch(`${BACKEND_URL}/api/player/notifications/read-all`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+    } catch (err) {
+      console.error("mark all notifications read failed", err);
     }
   },
 

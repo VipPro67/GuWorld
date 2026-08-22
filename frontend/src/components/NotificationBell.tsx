@@ -1,0 +1,112 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { Bell, CheckCheck, Package, Skull, ShoppingBag, Gavel, Coins, Info } from "lucide-react";
+import { useGameStore, type PlayerNotification } from "@/store/useGameStore";
+
+const TYPE_ICONS: Record<string, { icon: React.ReactNode; color: string }> = {
+  gu_death: { icon: <Skull className="w-4 h-4" />, color: "text-red-400" },
+  vital_gu_death: { icon: <Skull className="w-4 h-4" />, color: "text-red-400" },
+  death_drop: { icon: <Skull className="w-4 h-4" />, color: "text-rose-400" },
+  loot_gained: { icon: <Package className="w-4 h-4" />, color: "text-emerald-400" },
+  combat_loot: { icon: <Package className="w-4 h-4" />, color: "text-emerald-400" },
+  market_sold: { icon: <ShoppingBag className="w-4 h-4" />, color: "text-amber-400" },
+  market_bought: { icon: <ShoppingBag className="w-4 h-4" />, color: "text-sky-400" },
+  auction_bid: { icon: <Gavel className="w-4 h-4" />, color: "text-amber-400" },
+  auction_won: { icon: <Gavel className="w-4 h-4" />, color: "text-emerald-400" },
+  auction_sold: { icon: <Gavel className="w-4 h-4" />, color: "text-emerald-400" },
+  auction_expired: { icon: <Gavel className="w-4 h-4" />, color: "text-zinc-400" },
+  coins: { icon: <Coins className="w-4 h-4" />, color: "text-amber-400" },
+};
+
+function relativeTime(iso: string): string {
+  if (!iso) return "";
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const diff = Math.max(0, Date.now() - then);
+  const sec = Math.floor(diff / 1000);
+  if (sec < 60) return "vừa xong";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} phút trước`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} giờ trước`;
+  const day = Math.floor(hr / 24);
+  return `${day} ngày trước`;
+}
+
+export const NotificationBell: React.FC = () => {
+  const { notifications, unreadNotifications, fetchNotifications, markNotificationRead, markAllNotificationsRead } = useGameStore();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (open) fetchNotifications();
+  }, [open, fetchNotifications]);
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="relative w-9 h-9 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] text-zinc-400 hover:text-zinc-200 transition-colors border border-[var(--border-default)] flex items-center justify-center cursor-pointer"
+        aria-label="Thông báo"
+      >
+        <Bell className="w-4 h-4" />
+        {unreadNotifications > 0 && (
+          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+            {unreadNotifications > 99 ? "99+" : unreadNotifications}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 mt-2 w-[320px] sm:w-[360px] max-h-[70vh] flex flex-col bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-2xl shadow-2xl z-50">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-default)]">
+            <span className="text-sm font-semibold text-[var(--text-primary)]">Thông báo</span>
+            <button
+              onClick={markAllNotificationsRead}
+              className="inline-flex items-center gap-1 text-xs text-emerald-500 hover:text-emerald-400 transition-colors cursor-pointer"
+            >
+              <CheckCheck className="w-3.5 h-3.5" />
+              Đánh dấu đã đọc
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {notifications.length === 0 ? (
+              <div className="px-4 py-8 text-center text-xs text-zinc-500">Chưa có thông báo nào.</div>
+            ) : (
+              notifications.map((n: PlayerNotification) => {
+                const meta = TYPE_ICONS[n.type] || { icon: <Info className="w-4 h-4" />, color: "text-zinc-400" };
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => markNotificationRead(n.id)}
+                    className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-[var(--bg-elevated)] transition-colors border-b border-[var(--border-default)] last:border-b-0 cursor-pointer ${
+                      n.is_read ? "opacity-60" : ""
+                    }`}
+                  >
+                    <span className={`mt-0.5 shrink-0 ${meta.color}`}>{meta.icon}</span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-xs font-semibold text-[var(--text-primary)] truncate">{n.title}</span>
+                      <span className="block text-[11px] text-zinc-400 mt-0.5 line-clamp-2">{n.content}</span>
+                      <span className="block text-[10px] text-zinc-500 mt-1">{relativeTime(n.created_at)}</span>
+                    </span>
+                    {!n.is_read && <span className="mt-1 shrink-0 w-2 h-2 rounded-full bg-emerald-500" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

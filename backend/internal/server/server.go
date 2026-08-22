@@ -247,6 +247,10 @@ func SetupRouter() *gin.Engine {
 			player.GET("/combat-settings", handlers.GetCombatSettings)
 			player.PUT("/combat-settings", handlers.UpdateCombatSettings)
 			player.GET("/audit-logs", handlers.GetMyAuditLogs)
+			player.GET("/notifications", handlers.GetNotifications)
+			player.GET("/notifications/unread-count", handlers.GetUnreadNotificationsCount)
+			player.POST("/notifications/read", handlers.MarkNotificationsRead)
+			player.POST("/notifications/read-all", handlers.MarkAllNotificationsRead)
 		}
 		// SSE — no rate limit
 		api.GET("/player/events", middleware.AuthRequired(), handlers.StreamPlayerEvents)

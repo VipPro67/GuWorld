@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 const (
@@ -234,6 +235,10 @@ func StreamUnifiedEvents(c *gin.Context) {
 	worldCellCh := subscribeWorldCell()
 	defer unsubscribeWorldCell(worldCellCh)
 
+	// 3c. Subscribe to notifications
+	notificationCh := notify.Subscribe(playerID)
+	defer notify.Unsubscribe(playerID, notificationCh)
+
 	// 4. Subscribe to Chat Channels
 	worldCh := subscribeChat(chatChannelKey("world", sql.NullString{}))
 	defer unsubscribeChat(chatChannelKey("world", sql.NullString{}), worldCh)
@@ -347,6 +352,12 @@ func StreamUnifiedEvents(c *gin.Context) {
 
 		case payload := <-sectCh:
 			if err := writeSSE(c, "chat.messages.sect", payload); err != nil {
+				return
+			}
+			flusher.Flush()
+
+		case payload := <-notificationCh:
+			if err := writeSSE(c, "notification.new", payload); err != nil {
 				return
 			}
 			flusher.Flush()
