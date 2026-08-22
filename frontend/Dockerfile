@@ -1,38 +1,33 @@
-FROM node:24-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
 ARG NEXT_PUBLIC_BACKEND_URL
-
 ENV NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY package.json package-lock.json ./
-
 RUN npm ci
 
 COPY . .
 
-RUN echo "BACKEND URL = $NEXT_PUBLIC_BACKEND_URL"
-
 RUN npm run build
 
-FROM node:24-alpine AS runner
+# Stage Runner siêu nhẹ (chạy trực tiếp không cần node_modules)
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/package-lock.json ./
-
-RUN npm ci --omit=dev
-
-COPY --from=builder /app/.next ./.next
+# Copy các static assets và standalone server đã build sẵn
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/next.config.* ./
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["node", "server.js"]

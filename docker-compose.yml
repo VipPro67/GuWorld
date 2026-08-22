@@ -29,9 +29,7 @@ services:
       - redis_data:/data
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ghcr.io/vippro67/guworld-backend:latest
     container_name: guworld-backend
     restart: always
     ports:
@@ -58,15 +56,11 @@ services:
         condition: service_started
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_BACKEND_URL: https://api.cogioi.io.vn
+    image: ghcr.io/vippro67/guworld-frontend:latest
     container_name: guworld-frontend
     restart: always
     depends_on:
-    - backend
+      - backend
 
   caddy:
     image: caddy:2-alpine
