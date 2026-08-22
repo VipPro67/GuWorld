@@ -284,10 +284,12 @@ func runWorkerTick(ctx context.Context) error {
 	rows.Close()
 
 	// Resolve all of them
+	resolvedAny := false
 	for _, r := range pastRounds {
 		if err := resolveRound(tx, &r); err != nil {
 			return err
 		}
+		resolvedAny = true
 	}
 
 	// Get or create current hour's round
@@ -308,7 +310,15 @@ func runWorkerTick(ctx context.Context) error {
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	if resolvedAny {
+		notifyBaoHoangMessages("world", sql.NullString{})
+	}
+
+	return nil
 }
 
 func resolveRound(tx *sql.Tx, r *BettingRound) error {
@@ -385,7 +395,7 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 			netProfit := grossProfit * 0.9 // 10% fee on profit
 			payout = b.Amount + netProfit
 			payout = math.Round(payout) // Round payout to nearest integer
-			note = fmt.Sprintf("Thưởng thắng cược Đấu Thú vòng %s (đã trừ 10%% phí thắng)", r.CreatedAt.Format("15:00 02/01"))
+			note = fmt.Sprintf("Thưởng thắng cược Đấu Thú vòng %s ", r.CreatedAt.Format("15:00 02/01"))
 			txType = "EXCHANGE"
 		} else {
 			payout = 0
@@ -417,10 +427,35 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 		if isRefund {
 			notify.Send(tx, pID, "BEAST_BETTING", "Hoàn trả cược Đấu Thú", fmt.Sprintf("Vòng đấu %s đã được hoàn trả %.0f Nguyên Thạch do một bên không có cược hoặc trận đấu hòa.", r.CreatedAt.Format("15:00 02/01"), b.Amount))
 		} else if b.Team == winner {
-			notify.Send(tx, pID, "BEAST_BETTING", "Thắng cược Đấu Thú!", fmt.Sprintf("Chúc mừng đạo hữu đã đoán trúng kết quả vòng %s! Nhận được %.0f Nguyên Thạch (đã trừ 10%% phí thắng).", r.CreatedAt.Format("15:00 02/01"), payout))
+			notify.Send(tx, pID, "BEAST_BETTING", "Thắng cược Đấu Thú!", fmt.Sprintf("Chúc mừng đạo hữu đã đoán trúng kết quả vòng %s! Nhận được %.0f Nguyên Thạch .", r.CreatedAt.Format("15:00 02/01"), payout))
 		} else {
 			notify.Send(tx, pID, "BEAST_BETTING", "Thua cược Đấu Thú", fmt.Sprintf("Rất tiếc, phe cược của đạo hữu đã thất bại ở vòng đấu %s. Chúc đạo hữu may mắn lần sau!", r.CreatedAt.Format("15:00 02/01")))
 		}
+	}
+
+	// Broadcast round results to global chat
+	var chatContent string
+	systemID := "11111111-1111-1111-1111-111111111111"
+	globalUUID := "00000000-0000-0000-0000-000000000000"
+
+	if isRefund {
+		if winner == "draw" {
+			chatContent = fmt.Sprintf("[Đấu Thú] Trận đấu kết thúc với kết quả Hòa! Tổng cược Đỏ: %.0f, Xanh: %.0f Nguyên Thạch. Đã hoàn trả toàn bộ Nguyên Thạch cược cho các đạo hữu.", totalA, totalB)
+		} else {
+			chatContent = fmt.Sprintf("[Đấu Thú] Vòng đấu kết thúc nhưng một bên không có cược! Tổng cược Đỏ: %.0f, Xanh: %.0f Nguyên Thạch. Đã hoàn trả toàn bộ Nguyên Thạch cược cho các đạo hữu.", totalA, totalB)
+		}
+	} else if winner == "team_a" {
+		chatContent = fmt.Sprintf("[Đấu Thú] Trận đấu kịch tính kết thúc! Phe Đỏ (Tả Thanh Long) giành chiến thắng. Tổng cược Đỏ: %.0f, Xanh: %.0f Nguyên Thạch. Đạo hữu đoán trúng đã nhận thưởng.", totalA, totalB)
+	} else {
+		chatContent = fmt.Sprintf("[Đấu Thú] Trận đấu kịch tính kết thúc! Phe Xanh (Hữu Bạch Hổ) giành chiến thắng. Tổng cược Đỏ: %.0f, Xanh: %.0f Nguyên Thạch. Đạo hữu đoán trúng đã nhận thưởng.", totalA, totalB)
+	}
+
+	_, err = tx.Exec(`
+		INSERT INTO messages (sender_id, receiver_id, content, channel)
+		VALUES ($1, $2, $3, 'world')
+	`, systemID, globalUUID, chatContent)
+	if err != nil {
+		logger.S.Errorf("beast_betting: failed to insert global chat announcement: %v", err)
 	}
 
 	return nil
