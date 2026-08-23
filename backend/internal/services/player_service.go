@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"math"
 	"math/rand"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,37 +34,21 @@ func (s *PlayerService) DB() *sql.DB {
 }
 
 // Load reads a full player row from the database.
-// The Gu inventory load runs in parallel with the row load for better performance.
 func (s *PlayerService) Load(q QueryRower, id uuid.UUID, forUpdate bool) (models.Player, error) {
-	// Start Gu inventory load in background
-	var (
-		inv     models.GuInventory
-		invErr  error
-		invOnce sync.Once
-		invDone = make(chan struct{})
-	)
-	if s.db != nil {
-		go func() {
-			defer close(invDone)
-			g, err := db.LoadPlayerGus(s.db, id.String(), false)
-			invOnce.Do(func() {
-				inv = g
-				invErr = err
-			})
-		}()
-	}
-
 	player, err := s.loadRow(q, id, forUpdate)
 	if err != nil {
-		if s.db != nil {
-			<-invDone
-		}
 		return player, err
 	}
 
 	if s.db != nil {
-		<-invDone
-		if invErr == nil {
+		var qy db.Queryer
+		if tx, ok := q.(db.Queryer); ok {
+			qy = tx
+		} else {
+			qy = s.db
+		}
+		inv, err := db.LoadPlayerGus(qy, id.String(), false)
+		if err == nil {
 			player.GuInventory = inv
 		}
 	}
@@ -85,7 +68,7 @@ func (s *PlayerService) LoadForUpdateEquipped(tx *sql.Tx, id uuid.UUID) (models.
 		return player, err
 	}
 	if s.db != nil {
-		if inv, errR := db.LoadPlayerGus(s.db, id.String(), true); errR == nil {
+		if inv, errR := db.LoadPlayerGus(tx, id.String(), true); errR == nil {
 			player.GuInventory = inv
 		}
 	}
@@ -101,7 +84,13 @@ func (s *PlayerService) LoadEquipped(q QueryRower, id uuid.UUID) (models.Player,
 		return player, err
 	}
 	if s.db != nil {
-		if inv, err := db.LoadPlayerGus(s.db, id.String(), true); err == nil {
+		var qy db.Queryer
+		if tx, ok := q.(db.Queryer); ok {
+			qy = tx
+		} else {
+			qy = s.db
+		}
+		if inv, err := db.LoadPlayerGus(qy, id.String(), true); err == nil {
 			player.GuInventory = inv
 		}
 	}

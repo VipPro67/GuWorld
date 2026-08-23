@@ -497,20 +497,24 @@ func AutoCombatStart(c *gin.Context) {
 							if matID == "primeval_stone" {
 								continue
 							}
+							itemName := matID
+							if item, ok := models.ItemRegistry[matID]; ok {
+								itemName = item.Name
+							}
 							for q := 0; q < qty; q++ {
 								winnerID := partyMembers[rand.Intn(len(partyMembers))]
 								if winnerID == player.ID {
 									if err := InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", 1); err != nil {
 										logger.S.Errorf("Failed to add loot item %s to player %s: %v", matID, player.ID, err)
 									}
-									lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhặt được 1x %s.", matID))
+									lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhặt được 1x %s.", itemName))
 								} else {
 									var uname string
 									_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
 									if err := InventorySvc.AddItem(tx, winnerID.String(), matID, "materials", 1); err != nil {
 										logger.S.Errorf("Failed to distribute loot %s to party member %s: %v", matID, winnerID, err)
 									}
-									lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s nhặt được 1x %s.", uname, matID))
+									lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s nhặt được 1x %s.", uname, itemName))
 								}
 							}
 						}
@@ -518,6 +522,10 @@ func AutoCombatStart(c *gin.Context) {
 						for _, gID := range loot.Gus {
 							winnerID := partyMembers[rand.Intn(len(partyMembers))]
 							guSpec, _ := models.GetGuAny(gID)
+							guName := gID
+							if guSpec.Name != "" {
+								guName = guSpec.Name
+							}
 							newGu := models.GuInstance{
 								InstanceID: uuid.New().String(),
 								GuID:       gID,
@@ -528,12 +536,12 @@ func AutoCombatStart(c *gin.Context) {
 							}
 							if winnerID == player.ID {
 								player.GuInventory = append(player.GuInventory, newGu)
-								lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn bắt được 1x %s!", gID))
+								lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn bắt được 1x %s!", guName))
 							} else {
 								var uname string
 								_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
 								_ = db.AddPlayerGu(tx, winnerID.String(), newGu)
-								lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, gID))
+								lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, guName))
 							}
 						}
 					} else {
@@ -553,13 +561,32 @@ func AutoCombatStart(c *gin.Context) {
 							player.GuInventory = append(player.GuInventory, newGu)
 						}
 
-						if stoneQty > 0 || len(loot.Items) > 1 || len(loot.Gus) > 0 {
-							lootMsg := fmt.Sprintf("Nhặt được: %d Nguyên Thạch, %d nguyên liệu, %d Cổ trùng.", stoneQty, len(loot.Items)-1, len(loot.Gus))
-							if len(loot.Items) <= 1 && len(loot.Gus) == 0 {
-								lootMsg = fmt.Sprintf("Nhặt được: %d Nguyên Thạch.", stoneQty)
+						var lootParts []string
+						if stoneQty > 0 {
+							lootParts = append(lootParts, fmt.Sprintf("%d Nguyên Thạch", stoneQty))
+						}
+						for matID, qty := range loot.Items {
+							if matID == "primeval_stone" || qty <= 0 {
+								continue
 							}
+							itemName := matID
+							if item, ok := models.ItemRegistry[matID]; ok {
+								itemName = item.Name
+							}
+							lootParts = append(lootParts, fmt.Sprintf("%dx %s", qty, itemName))
+						}
+						for _, guID := range loot.Gus {
+							guName := guID
+							if guSpec, ok := models.GetGuAny(guID); ok {
+								guName = guSpec.Name
+							}
+							lootParts = append(lootParts, fmt.Sprintf("1x %s (Cổ trùng)", guName))
+						}
+
+						if len(lootParts) > 0 {
+							lootMsg := "Nhặt được: " + strings.Join(lootParts, ", ") + "."
 							lootDetailLogs = append(lootDetailLogs, lootMsg)
-							notify.Send(db.DB, player.ID, "combat_loot", "Chiến lợi phẩm", lootMsg)
+							notify.Send(tx, player.ID, "combat_loot", "Chiến lợi phẩm", lootMsg)
 						}
 					}
 				}

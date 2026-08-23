@@ -166,12 +166,12 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, primev
 	summary := joinDropList(lost)
 
 	// Notify loser and (PvP) winner — best-effort, non-fatal.
-	notify.Send(db.DB, loserID, "death_drop", "Tử đạo - mất tài sản",
+	notify.Send(tx, loserID, "death_drop", "Tử đạo - mất tài sản",
 		fmt.Sprintf("Bạn đã tử đạo và đánh rơi: %s.", summary))
 	if winnerID != nil {
 		var loserName string
-		_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, loserID).Scan(&loserName)
-		notify.Send(db.DB, *winnerID, "loot_gained", "Nhặt được chiến lợi phẩm",
+		_ = tx.QueryRow(`SELECT username FROM players WHERE id = $1`, loserID).Scan(&loserName)
+		notify.Send(tx, *winnerID, "loot_gained", "Nhặt được chiến lợi phẩm",
 			fmt.Sprintf("Bạn đã thu được chiến lợi phẩm từ %s: %s.", loserName, summary))
 	}
 
