@@ -168,7 +168,7 @@ func AttackTribulationEnemy(c *gin.Context) {
 	// 2. Fetch Player stats
 	var player models.Player
 	err = tx.QueryRow(`
-		SELECT p.id, p.username, p.rank, p.sub_rank, p.current_mana, p.max_mana, p.hp, p.base_hp, p.primeval_stones, `+db.GuInventoryAggregate("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.path_masteries, p.growth_data
+		SELECT p.id, p.username, p.rank, p.sub_rank, p.current_mana, p.max_mana, p.hp, p.base_hp, p.primeval_stones, `+db.GuInventoryAggregateEquipped("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.path_masteries, p.growth_data
 		FROM players p
 		LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
 		WHERE p.id = $1

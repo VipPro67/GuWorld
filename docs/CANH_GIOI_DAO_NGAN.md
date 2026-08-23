@@ -182,7 +182,7 @@ Cảnh giới không còn nhảy trực tiếp — điểm tích lũy từ nhi�
 - Log: "nhận được X điểm Chân Ý lưu phái ..."
 
 **Dữ liệu seed — `db.go` `SeedInstanceTemplates`:**
-- `dungeon_flower_wine`: `{"attainment": {"path": "Moon Path", "amount": 10}}`
+- `dungeon_flower_wine`: `{"attainment": {"path": "Star Path", "amount": 10}}`
 - Mộng cảnh được đưa vào **CSV-driven** từ `backend/cmd/server/data/DreamRealm.csv` (import/export qua Admin tab "Dữ liệu" → "Mộng cảnh"):
   - `dream_realm_star_constellation`: `{"attainment": {"path": "Dream Path", "amount": 50}}`
   - **49 mộng cảnh** `dream_realm_<path>` — 1 cho mỗi lưu phái (danh sách `dreamRealmPaths` trong `db.go`), thưởng `{"attainment": {"path": "<Path> Path", "amount": 50}}` + tài liệu path + 100 Nguyên Thạch, vào bằng `dream_material`, cooldown 24h. Cột `map_data` trống → sinh tự động theo `path`; điền `map_data` để ghi cốt truyện riêng.

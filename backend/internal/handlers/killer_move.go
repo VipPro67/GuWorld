@@ -19,9 +19,9 @@ import (
 )
 
 const (
-	killerMoveSupportCostRate         = 0.8
-	killerMoveBaseSuccessRate         = 95.0
-	killerMoveSupportCountPenalty     = 5.0
+	killerMoveSupportCostRate     = 0.8
+	killerMoveBaseSuccessRate     = 95.0
+	killerMoveSupportCountPenalty = 5.0
 	// TODO: dùng cổ trùng để tăng tỉ lệ thành công thay vì Wisdom stat
 	killerMoveAttainmentBonusFactor   = 2.0
 	killerMovePathConflictPenaltyBase = 10.0
@@ -611,7 +611,7 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 			if len(core.Spec.Path) > 0 {
 				return core.Spec.Path[0]
 			}
-			return "Moon Path"
+			return "Star Path"
 		}(),
 		MoveType:        moveType,
 		RankRequired:    rankRequired,

@@ -3,62 +3,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { fetchAllGus, fetchGuById, type GuDictionaryItem } from "@/lib/gu-dict";
 import { notFound } from "next/navigation";
+import { translatePath, translateMastery, masteryKeyForPoints, masteryLevelForPoints, PATH_MASTERY_MILESTONES } from "@/lib/translate";
 
 type Props = {
   params: Promise<{ guId: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-};
-
-const pathLabels: Record<string, string> = {
-  "Blade Path": "Đao Đạo",
-  "Blood Path": "Huyết Đạo",
-  "Bone Path": "Cốt Đạo",
-  "Cloud Path": "Vân Đạo",
-  "Concealment Path": "Ẩn Nặc Đạo",
-  "Creation Path": "Tạo Hóa Đạo",
-  "Dark Path": "Hắc Ám Đạo",
-  "Death Path": "Tử Vong Đạo",
-  "Destruction Path": "Hủy Diệt Đạo",
-  "Dream Path": "Mộng Đạo",
-  "Earth Path": "Thổ Đạo",
-  "Enchantment Path": "Phù Chú Đạo",
-  "Enslavement Path": "Nô Dịch Đạo",
-  "Fire Path": "Hỏa Đạo",
-  "Food Path": "Thực Đạo",
-  "Formation Path": "Trận Pháp Đạo",
-  "Heaven Path": "Thiên Đạo",
-  "Human Path": "Nhân Đạo",
-  "Ice Path": "Hàn Băng Đạo",
-  "Illusion Path": "Ảo Giác Đạo",
-  "Information Path": "Tín Đạo",
-  "Investigation Path": "Trinh Sát Đạo",
-  "Life Path": "Sinh Đạo",
-  "Light Path": "Quang Minh Đạo",
-  "Lightning Path": "Lôi Đạo",
-  "Luck Path": "Khí Vận Đạo",
-  "Metal Path": "Kim Đạo",
-  "Moon Path": "Nguyệt Đạo",
-  "Movement Path": "Di Động Đạo",
-  "Poison Path": "Độc Đạo",
-  "Qi Path": "Khí Đạo",
-  "Refinement Path": "Tinh Luyện Đạo",
-  "Rule Path": "Quy Tắc Đạo",
-  "Shadow Path": "Ảnh Đạo",
-  "Smoke Path": "Yên Vụ Đạo",
-  "Soul Path": "Hồn Đạo",
-  "Sound Path": "Âm Thanh Đạo",
-  "Space Path": "Không Gian Đạo",
-  "Strength Path": "Lực Đạo",
-  "Sun Path": "Nhật Đạo",
-  "Sword Path": "Kiếm Đạo",
-  "Theft Path": "Trộm Đạo",
-  "Theme Path": "Chủ Đề Đạo",
-  "Time Path": "Thời Gian Đạo",
-  "Transformation Path": "Biến Hóa Đạo",
-  "Water Path": "Thủy Đạo",
-  "Wind Path": "Phong Đạo",
-  "Wisdom Path": "Trí Đạo",
-  "Wood Path": "Mộc Đạo",
 };
 
 const rarityLabels: Record<string, string> = {
@@ -195,7 +144,7 @@ function GuPageContent({ gu }: { gu: GuDictionaryItem }) {
               </span>
               {gu.path && gu.path.map(p => (
                 <span key={p} className="px-2 py-0.5 rounded-md bg-[var(--bg-card)] text-[11px] text-[var(--text-secondary)] font-mono border border-[var(--border)]">
-                  {pathLabels[p] || p}
+                  translatePath
                 </span>
               ))}
               <span className="px-2 py-0.5 rounded-md bg-[var(--bg-card)] text-[11px] text-[var(--text-secondary)] font-mono border border-[var(--border)]">
@@ -360,7 +309,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const gu = await fetchGuById(guId);
   if (!gu) return { title: "Cổ Trùng Không Tìm Thấy" };
 
-  const pathName = gu.path && gu.path.length > 0 ? gu.path.map(p => pathLabels[p] || p).join(" / ") : "Không có";
+  const pathName = gu.path && gu.path.length > 0 ? gu.path.map(p => translatePath(p) || p).join(" / ") : "Không có";
 
   return {
     title: gu.name,

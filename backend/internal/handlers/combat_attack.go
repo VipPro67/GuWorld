@@ -330,7 +330,7 @@ func CombatAttack(c *gin.Context) {
 					if player.CurrentRegion == "three_kings_inheritance" {
 						hasAllowedPath := false
 						for _, p := range spec.Path {
-							if p == "Moon Path" || p == "Earth Path" {
+							if p == "Star Path" || p == "Earth Path" {
 								hasAllowedPath = true
 								break
 							}

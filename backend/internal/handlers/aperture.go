@@ -44,7 +44,7 @@ var ResourceNodeTemplates = map[string]ResourceNodeTemplate{
 	"MOON_ORCHID_FIELD": {
 		NodeType:          "MOON_ORCHID_FIELD",
 		Name:              "Cánh Đồng Hoa Nguyệt Lan",
-		Path:              "Moon Path",
+		Path:              "Star Path",
 		CostStones:        500,
 		ProdType:          "Material",
 		ProdKey:           "moon_orchid_petal",
@@ -153,16 +153,16 @@ var ResourceNodeTemplates = map[string]ResourceNodeTemplate{
 		CostGuRank:     1,
 	},
 	"WATCHTOWER": {
-		NodeType:       "WATCHTOWER",
-		Name:           "Tháp Canh Tiên Khiếu",
-		Path:           "Metal Path",
-		CostStones:     1200,
-		NodeCategory:   "DEFENSE",
-		HPMax:          2000,
-		DefensePower:   5,
-		AttackRange:    3,
-		CostGu:         []string{"GU_IRON_SKIN", "GU_HALF_STONE"},
-		CostGuRank:     2,
+		NodeType:     "WATCHTOWER",
+		Name:         "Tháp Canh Tiên Khiếu",
+		Path:         "Metal Path",
+		CostStones:   1200,
+		NodeCategory: "DEFENSE",
+		HPMax:        2000,
+		DefensePower: 5,
+		AttackRange:  3,
+		CostGu:       []string{"GU_IRON_SKIN", "GU_HALF_STONE"},
+		CostGuRank:   2,
 	},
 	"GUARDIAN_STATUE": {
 		NodeType:     "GUARDIAN_STATUE",
@@ -2142,4 +2142,3 @@ func translatePath(path string) string {
 	}
 	return strings.Title(path)
 }
-

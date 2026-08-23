@@ -40,7 +40,7 @@ func PracticeCombatStart(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	player, err := evaluateManaTx(tx, authID)
+	player, err := evaluateManaTxEquipped(tx, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
 		return

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
@@ -72,7 +73,7 @@ func AutoCombatStart(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	player, err := evaluateManaTx(tx, authID)
+	player, err := evaluateManaTxEquipped(tx, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
 		return
@@ -139,7 +140,7 @@ func AutoCombatStart(c *gin.Context) {
 		// Party member allies
 		allyUUID, errParse := uuid.Parse(ally.ID)
 		if errParse == nil {
-			mPlayer, errMember := evaluateManaTx(tx, allyUUID)
+			mPlayer, errMember := evaluateManaTxEquipped(tx, allyUUID)
 			if errMember == nil {
 				simAlly, errBuild := buildSimCombatant(tx, &mPlayer, isVirtual, false, nil)
 				if errBuild == nil {
@@ -886,6 +887,78 @@ func AutoCombatStart(c *gin.Context) {
 
 // ── helpers ────────────────────────────────────────────────────────────
 
+func scanKillerMoveRow(rows *sql.Rows) (models.KillerMove, error) {
+	var m models.KillerMove
+	err := rows.Scan(
+		&m.ID, &m.PlayerID, &m.Name, &m.Path, &m.MoveType, &m.RankRequired,
+		&m.CorePlayerGuID, &m.TotalManaCost, &m.SuccessRate, &m.DamageValue,
+		&m.DefenseValue, &m.Cooldown, &m.ChannelTime, &m.Effects, &m.IsMastered,
+		&m.IsReliable, &m.IsInstantCast, &m.CreatedAt, &m.UpdatedAt,
+	)
+	return m, err
+}
+
+func loadKillerMovesBatch(tx *sql.Tx, playerID uuid.UUID, ids []string) (map[string]models.KillerMove, map[string][]models.KillerMoveSlot, error) {
+	var query string
+	var args []any
+	if ids == nil {
+		query = `SELECT id, player_id, name, path, move_type, rank_required, core_player_gu_id, total_mana_cost, success_rate, damage_value, defense_value, cooldown, channel_time, effects, is_mastered, is_reliable, is_instant_cast, created_at, updated_at 
+		         FROM killer_moves WHERE player_id = $1`
+		args = []any{playerID}
+	} else {
+		if len(ids) == 0 {
+			return nil, nil, nil
+		}
+		query = `SELECT id, player_id, name, path, move_type, rank_required, core_player_gu_id, total_mana_cost, success_rate, damage_value, defense_value, cooldown, channel_time, effects, is_mastered, is_reliable, is_instant_cast, created_at, updated_at 
+		         FROM killer_moves WHERE player_id = $1 AND id = ANY($2)`
+		args = []any{playerID, pq.Array(ids)}
+	}
+
+	rows, err := tx.Query(query, args...)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	kmMap := make(map[string]models.KillerMove)
+	var kmIDs []string
+	for rows.Next() {
+		m, err := scanKillerMoveRow(rows)
+		if err != nil {
+			return nil, nil, err
+		}
+		kmMap[m.ID] = m
+		kmIDs = append(kmIDs, m.ID)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	slotsMap := make(map[string][]models.KillerMoveSlot)
+	if len(kmIDs) > 0 {
+		slotRows, err := tx.Query(`SELECT id, killer_move_id, player_gu_id, slot_type, slot_index, created_at 
+		                           FROM killer_move_slots WHERE killer_move_id = ANY($1) 
+		                           ORDER BY killer_move_id, slot_index ASC`, pq.Array(kmIDs))
+		if err != nil {
+			return nil, nil, err
+		}
+		defer slotRows.Close()
+
+		for slotRows.Next() {
+			var s models.KillerMoveSlot
+			if err := slotRows.Scan(&s.ID, &s.KillerMoveID, &s.PlayerGuID, &s.SlotType, &s.SlotIndex, &s.CreatedAt); err != nil {
+				return nil, nil, err
+			}
+			slotsMap[s.KillerMoveID] = append(slotsMap[s.KillerMoveID], s)
+		}
+		if err = slotRows.Err(); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return kmMap, slotsMap, nil
+}
+
 func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem, actionType string) (simulator.SimAction, error) {
 	// Mortal users cannot use immortal Gu that cost mana (skip the action).
 	if !gamefx.CanUseGuWithMana(actor.Rank, spec) {
@@ -1168,32 +1241,21 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		}
 
 		// Automatically select all active killer moves they have
-		kmRows, err := tx.Query("SELECT id FROM killer_moves WHERE player_id = $1", player.ID)
-		if err == nil {
-			var kmIDs []string
-			for kmRows.Next() {
-				var kmID string
-				if errScan := kmRows.Scan(&kmID); errScan == nil {
-					kmIDs = append(kmIDs, kmID)
-				}
-			}
-			kmRows.Close()
-
-			for _, kmID := range kmIDs {
-				km, slots, errLoad := loadKillerMoveTx(tx, player.ID, kmID)
-				if errLoad == nil {
-					// Check if component Gus are active
-					if ownedGuInstanceSet[km.CorePlayerGuID] {
-						allSlotsValid := true
-						for _, slot := range slots {
-							if !ownedGuInstanceSet[slot.PlayerGuID] {
-								allSlotsValid = false
-								break
-							}
+		kmMap, slotsMap, errLoadBatch := loadKillerMovesBatch(tx, player.ID, nil)
+		if errLoadBatch == nil {
+			for kmID, km := range kmMap {
+				slots := slotsMap[kmID]
+				// Check if component Gus are active
+				if ownedGuInstanceSet[km.CorePlayerGuID] {
+					allSlotsValid := true
+					for _, slot := range slots {
+						if !ownedGuInstanceSet[slot.PlayerGuID] {
+							allSlotsValid = false
+							break
 						}
-						if allSlotsValid {
-							selectedKMIDs = append(selectedKMIDs, kmID)
-						}
+					}
+					if allSlotsValid {
+						selectedKMIDs = append(selectedKMIDs, kmID)
 					}
 				}
 			}
@@ -1224,14 +1286,20 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	}
 
 	// Add killer moves
-	for _, kmID := range selectedKMIDs {
-		km, slots, err := loadKillerMoveTx(tx, player.ID, kmID)
-		if err != nil {
-			continue
+	if len(selectedKMIDs) > 0 {
+		kmMap, slotsMap, errLoadBatch := loadKillerMovesBatch(tx, player.ID, selectedKMIDs)
+		if errLoadBatch == nil {
+			for _, kmID := range selectedKMIDs {
+				km, ok := kmMap[kmID]
+				if !ok {
+					continue
+				}
+				slots := slotsMap[kmID]
+				act := buildSimActionFromKillerMove(km, slots, player.DaoMarks)
+				act.SourceID = kmID
+				allActions = append(allActions, act)
+			}
 		}
-		act := buildSimActionFromKillerMove(km, slots, player.DaoMarks)
-		act.SourceID = kmID
-		allActions = append(allActions, act)
 	}
 
 	// Basic attack fallback

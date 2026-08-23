@@ -60,7 +60,7 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 					if errParse == nil {
 						var mPlayer models.Player
 						errMember := tx.QueryRow(`
-							SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.current_mana, p.path_masteries, `+db.GuInventoryAggregate("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.body_mods, p.base_hp, p.avatar_url
+							SELECT p.id, p.username, p.rank, p.sub_rank, p.hp, p.max_mana, p.current_mana, p.path_masteries, `+db.GuInventoryAggregateEquipped("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.body_mods, p.base_hp, p.avatar_url
 							FROM players p 
 							LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
 							WHERE p.id = $1 AND p.current_region = $2`,

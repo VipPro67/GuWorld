@@ -648,7 +648,7 @@ func seedGusFromCSV(filename string) error {
 				pathJSON = fmt.Sprintf(`["%s"]`, path)
 			}
 		} else {
-			pathJSON = `["Moon Path"]`
+			pathJSON = `["Star Path"]`
 		}
 		effectsRaw = normalizedGuEffectsJSON(effectsRaw, fmt.Sprintf("%s effects", id))
 		foodTypesJSON := "[]"
@@ -1673,36 +1673,79 @@ var dreamRealmPaths = []struct {
 	Key string // lowercase path key, e.g. "fire"
 	VN  string // Vietnamese display name, e.g. "Hỏa Đạo"
 }{
-	{"blade", "Đao Đạo"}, {"blood", "Huyết Đạo"}, {"bone", "Cốt Đạo"},
-	{"cloud", "Vân Đạo"}, {"concealment", "Ẩn Nặc Đạo"}, {"creation", "Tạo Hóa Đạo"},
-	{"dark", "Hắc Ám Đạo"}, {"death", "Tử Vong Đạo"}, {"destruction", "Hủy Diệt Đạo"},
-	{"dream", "Mộng Đạo"}, {"earth", "Thổ Đạo"}, {"enchantment", "Phù Chú Đạo"},
-	{"enslavement", "Nô Dịch Đạo"}, {"fire", "Hỏa Đạo"}, {"food", "Thực Đạo"},
-	{"formation", "Trận Pháp Đạo"}, {"heaven", "Thiên Đạo"}, {"human", "Nhân Đạo"},
-	{"ice", "Hàn Băng Đạo"}, {"illusion", "Ảo Giác Đạo"}, {"information", "Tín Đạo"},
-	{"investigation", "Trinh Sát Đạo"}, {"life", "Sinh Đạo"}, {"light", "Quang Minh Đạo"},
-	{"lightning", "Lôi Đạo"}, {"luck", "Khí Vận Đạo"}, {"metal", "Kim Đạo"},
-	{"moon", "Nguyệt Đạo"}, {"movement", "Di Động Đạo"}, {"poison", "Độc Đạo"},
-	{"qi", "Khí Đạo"}, {"refinement", "Tinh Luyện Đạo"}, {"rule", "Quy Tắc Đạo"},
-	{"shadow", "Ảnh Đạo"}, {"smoke", "Yên Vụ Đạo"}, {"soul", "Hồn Đạo"},
-	{"sound", "Âm Thanh Đạo"}, {"space", "Không Gian Đạo"}, {"strength", "Lực Đạo"},
-	{"sun", "Nhật Đạo"}, {"sword", "Kiếm Đạo"}, {"theft", "Trộm Đạo"},
-	{"theme", "Chủ Đề Đạo"}, {"time", "Thời Gian Đạo"}, {"transformation", "Biến Hóa Đạo"},
-	{"water", "Thủy Đạo"}, {"wind", "Phong Đạo"}, {"wisdom", "Trí Đạo"},
+	// Ngũ hành & Tự nhiên
+	{"metal", "Kim Đạo"},
 	{"wood", "Mộc Đạo"},
+	{"water", "Thủy Đạo"},
+	{"fire", "Hỏa Đạo"},
+	{"earth", "Thổ Đạo"},
+	{"wind", "Phong Đạo"},
+	{"lightning", "Lôi Đạo"},
+	{"ice", "Băng Tuyết Đạo"},
+	{"cloud", "Vân Đạo"},
+	{"light", "Quang Đạo"},
+	{"dark", "Ám Đạo"},
+	{"star", "Tinh Đạo"},
+	{"sound", "Âm Đạo"},
+
+	// Không - Thời gian & Vũ trụ
+	{"space", "Vũ Đạo"},
+	{"time", "Trụ Đạo"},
+	{"heaven", "Thiên Đạo"},
+
+	// Quy tắc & Kỹ nghệ
+	{"rule", "Luật Đạo"},
+	{"refinement", "Luyện Đạo"},
+	{"formation", "Trận Đạo"},
+	{"qi", "Khí Đạo"},
+
+	// Cơ thể, Tinh thần & Xã hội
+	{"strength", "Lực Đạo"},
+	{"soul", "Hồn Đạo"},
+	{"wisdom", "Trí Đạo"},
+	{"emotion", "Tình Đạo"},
+	{"transformation", "Biến Hóa Đạo"},
+	{"enslavement", "Nô Đạo"},
+	{"information", "Tín Đạo"},
+	{"blood", "Huyết Đạo"},
+	{"poison", "Độc Đạo"},
+	{"bone", "Cốt Đạo"},
+	{"human", "Nhân Đạo"},
+	{"dream", "Mộng Đạo"},
+	{"food", "Thực Đạo"},
+	{"luck", "Vận Đạo"},
+
+	// Vũ khí, Sát phạt & Đặc thù
+	{"sword", "Kiếm Đạo"},
+	{"blade", "Đao Đạo"},
+	{"theft", "Thâu Đạo"},
+	{"phantom", "Huyễn Đạo"},
+	{"painting", "Họa Đạo"},
+	{"weapon", "Binh Đạo"},
+	{"killing", "Sát Đạo"},
+	{"restriction", "Cấm Đạo"},
+	{"pill", "Đan Đạo"},
 }
 
-// pathMaterialIDs lists the path keys that have a dedicated *_path_material
-// item in Item.csv. Paths missing from this set fall back to guts_gu.
 var pathMaterialIDs = map[string]bool{
-	"blade": true, "blood": true, "bone": true, "cloud": true, "dark": true,
-	"dream": true, "earth": true, "enslavement": true, "fire": true,
-	"food": true, "formation": true, "human": true, "ice": true,
-	"information": true, "lightning": true, "light": true, "luck": true,
-	"moon": true, "poison": true, "qi": true, "refinement": true,
-	"rule": true, "soul": true, "space": true, "strength": true,
-	"sword": true, "time": true, "transformation": true, "water": true,
-	"wind": true, "wisdom": true, "wood": true,
+	// Ngũ hành & Tự nhiên
+	"metal": true, "wood": true, "water": true, "fire": true, "earth": true,
+	"wind": true, "lightning": true, "ice": true, "cloud": true,
+	"light": true, "dark": true, "star": true, "sound": true,
+
+	// Vũ trụ, Quy tắc & Kỹ nghệ
+	"space": true, "time": true, "heaven": true,
+	"rule": true, "refinement": true, "formation": true, "qi": true,
+
+	// Cơ thể, Tinh thần & Xã hội
+	"strength": true, "soul": true, "wisdom": true, "emotion": true,
+	"transformation": true, "enslavement": true, "information": true,
+	"blood": true, "poison": true, "bone": true, "human": true,
+	"dream": true, "food": true, "luck": true,
+
+	// Vũ khí, Sát phạt & Đặc thù
+	"sword": true, "blade": true, "theft": true, "phantom": true,
+	"painting": true, "weapon": true, "killing": true, "restriction": true, "pill": true,
 }
 
 // pathMaterialID returns the reward material id for a path key, falling back
@@ -1898,7 +1941,7 @@ func SeedInstanceTemplates() error {
 			ReqRank:       1,
 			EntryItem:     "NONE",
 			Description:   "Di tích động đá ẩn mật của Hoa Tửu Hành Giả lưu lại từ trăm năm trước, ẩn chứa cơ duyên Moonlight Gu và nguy cơ tử vong.",
-			Rewards:       `{"materials": {"guts_gu": 2, "green_bamboo_wine": 1}, "primeval_stones": 100, "attainment": {"path": "Moon Path", "amount": 10}}`,
+			Rewards:       `{"materials": {"guts_gu": 2, "green_bamboo_wine": 1}, "primeval_stones": 100, "attainment": {"path": "Star Path", "amount": 10}}`,
 			CooldownHours: 24,
 			MapData: `[
 				{

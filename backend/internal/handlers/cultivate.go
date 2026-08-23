@@ -239,11 +239,11 @@ func GetBreakthroughChance(rank int, aptitude string) float64 {
 
 	// Rank càng cao càng khó
 	rankPenalty := map[int]float64{
-		1: 0.00, // Nhất -> Nhị
-		2: 0.05, // Nhị -> Tam
-		3: 0.10, // Tam -> Tứ
-		4: 0.20, // Tứ -> Ngũ
-		5: 0.35, // Ngũ -> Lục (chỉ dùng nếu sau này có)
+		1: 0.1,
+		2: 0.2,
+		3: 0.3,
+		4: 0.5,
+		5: 0.7,
 	}
 
 	chance := baseChance
@@ -388,6 +388,8 @@ func Ascension(c *gin.Context) {
 		rand.Shuffle(len(pathsList), func(i, j int) {
 			pathsList[i], pathsList[j] = pathsList[j], pathsList[i]
 		})
+		//get path vital gu
+
 		player.DaoMarks[pathsList[0]] = 100
 		player.DaoMarks[pathsList[1]] = 100
 

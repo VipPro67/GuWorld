@@ -22,6 +22,8 @@ import {
 import { type GuDictionaryItem, type MonsterTemplate, type LootTable, type WikiRegion, type WikiMonsterSpawn, reqGuQty, reqGuRank } from "@/lib/gu-dict";
 import { type ItemSpec, type RefiningRecipe } from "@/store/useGameStore";
 import { getPathColor } from "@/lib/utils";
+import { translatePath, translateMastery, masteryKeyForPoints, masteryLevelForPoints, PATH_MASTERY_MILESTONES } from "@/lib/translate";
+
 
 // Types
 type TabType = "guides" | "gus" | "items" | "recipes" | "monsters" | "regions";
@@ -57,58 +59,6 @@ const rarityLabels: Record<string, string> = {
   EPIC: "Sử thi",
   LEGENDARY: "Huyền thoại",
   MYTHIC: "Thần thoại",
-};
-
-const pathLabels: Record<string, string> = {
-  "Blade Path": "Đao Đạo",
-  "Blood Path": "Huyết Đạo",
-  "Bone Path": "Cốt Đạo",
-  "Cloud Path": "Vân Đạo",
-  "Concealment Path": "Ẩn Nặc Đạo",
-  "Creation Path": "Tạo Hóa Đạo",
-  "Dark Path": "Hắc Ám Đạo",
-  "Death Path": "Tử Vong Đạo",
-  "Destruction Path": "Hủy Diệt Đạo",
-  "Dream Path": "Mộng Đạo",
-  "Earth Path": "Thổ Đạo",
-  "Enchantment Path": "Phù Chú Đạo",
-  "Enslavement Path": "Nô Dịch Đạo",
-  "Fire Path": "Hỏa Đạo",
-  "Food Path": "Thực Đạo",
-  "Formation Path": "Trận Pháp Đạo",
-  "Heaven Path": "Thiên Đạo",
-  "Human Path": "Nhân Đạo",
-  "Ice Path": "Hàn Băng Đạo",
-  "Illusion Path": "Ảo Giác Đạo",
-  "Information Path": "Tín Đạo",
-  "Investigation Path": "Trinh Sát Đạo",
-  "Life Path": "Sinh Đạo",
-  "Light Path": "Quang Minh Đạo",
-  "Lightning Path": "Lôi Đạo",
-  "Luck Path": "Khí Vận Đạo",
-  "Metal Path": "Kim Đạo",
-  "Moon Path": "Nguyệt Đạo",
-  "Movement Path": "Di Động Đạo",
-  "Poison Path": "Độc Đạo",
-  "Qi Path": "Khí Đạo",
-  "Refinement Path": "Tinh Luyện Đạo",
-  "Rule Path": "Quy Tắc Đạo",
-  "Shadow Path": "Ảnh Đạo",
-  "Smoke Path": "Yên Vụ Đạo",
-  "Soul Path": "Hồn Đạo",
-  "Sound Path": "Âm Thanh Đạo",
-  "Space Path": "Không Gian Đạo",
-  "Strength Path": "Lực Đạo",
-  "Sun Path": "Nhật Đạo",
-  "Sword Path": "Kiếm Đạo",
-  "Theft Path": "Trộm Đạo",
-  "Theme Path": "Chủ Đề Đạo",
-  "Time Path": "Thời Gian Đạo",
-  "Transformation Path": "Biến Hóa Đạo",
-  "Water Path": "Thủy Đạo",
-  "Wind Path": "Phong Đạo",
-  "Wisdom Path": "Trí Đạo",
-  "Wood Path": "Mộc Đạo",
 };
 
 const itemTypeLabels: Record<string, string> = {
@@ -673,7 +623,7 @@ export default function WikiClientView({
                         <option value="all">Tất cả hệ phái</option>
                         {allPaths.map((p) => (
                           <option key={p} value={p}>
-                            {pathLabels[p] || p}
+                            {translatePath(p)}
                           </option>
                         ))}
                       </select>
@@ -958,7 +908,7 @@ export default function WikiClientView({
                             key={pathName}
                             className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-semibold border ${pathColor.bg} ${pathColor.text} ${pathColor.border}`}
                           >
-                            {pathLabels[pathName] || pathName}
+                            pathName
                           </span>
                         );
                       })}
