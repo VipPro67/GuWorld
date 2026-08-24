@@ -1,3 +1,19 @@
+(cors) {
+    @options {
+        method OPTIONS
+    }
+    handle @options {
+        header Access-Control-Allow-Origin "{header.Origin}"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+        header Access-Control-Allow-Headers "*"
+        header Access-Control-Allow-Credentials "true"
+        header Access-Control-Max-Age "86400"
+        respond 204
+    }
+    header Access-Control-Allow-Origin "{header.Origin}"
+    header Access-Control-Allow-Credentials "true"
+}
+
 www.cogioi.io.vn {
     redir https://cogioi.io.vn{uri} permanent
 }
@@ -7,9 +23,31 @@ cogioi.io.vn {
 }
 
 api.cogioi.io.vn {
-    reverse_proxy /api/events backend:8080 {
-        flush_interval -1
+    import cors
+
+    # Xử lý riêng cho SSE
+    @events {
+        path /api/events*
+    }
+    handle @events {
+        reverse_proxy backend:8080 {
+            flush_interval -1
+            transport http {
+                response_header_timeout 0
+                keepalive 120s
+                keepalive_idle_conns 500
+            }
+        }
     }
 
-    reverse_proxy backend:8080
+    # Các API thông thường (Dictionary, Auth, Shop...)
+    handle {
+        reverse_proxy backend:8080 {
+            transport http {
+                dial_timeout 5s
+                keepalive 60s
+                keepalive_idle_conns 100
+            }
+        }
+    }
 }
