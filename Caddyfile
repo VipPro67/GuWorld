@@ -7,5 +7,9 @@ cogioi.io.vn {
 }
 
 api.cogioi.io.vn {
+    reverse_proxy /api/events backend:8080 {
+        flush_interval -1
+    }
+
     reverse_proxy backend:8080
 }

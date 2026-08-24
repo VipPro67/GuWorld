@@ -34,6 +34,13 @@ func schemaAperture() error {
 		return err
 	}
 
+	// Ensure tribulation_pending_at column exists in case the table was created earlier.
+	if err := execSchema("immortal_apertures_tribulation_pending_at_upgrade", `
+	ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS tribulation_pending_at TIMESTAMP WITH TIME ZONE;
+	`); err != nil {
+		return err
+	}
+
 	if err := execSchema("aperture_resource_nodes", `
 	CREATE TABLE IF NOT EXISTS aperture_resource_nodes (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
