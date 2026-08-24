@@ -427,7 +427,7 @@ func SetupRouter() *gin.Engine {
 		tribulations.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			tribulations.GET("/active", handlers.GetActiveTribulation)
-			tribulations.POST("/:eventId/attack", handlers.AttackTribulationEnemy)
+			tribulations.POST("/:eventId/engage", handlers.EngageTribulation)
 			tribulations.POST("/:eventId/resolve", handlers.ResolveTribulation)
 		}
 

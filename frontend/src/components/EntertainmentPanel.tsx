@@ -175,17 +175,6 @@ export const EntertainmentPanel: React.FC = () => {
 										className="bg-gradient-to-l from-blue-600 to-indigo-500 transition-all duration-500"
 									/>
 								</div>
-
-								<div className="flex justify-between text-[11px] text-zinc-400 font-mono">
-									<div>
-										Pool: <span className="text-zinc-200">{formatStones(totalA)}</span>
-										<div className="text-[10px] text-zinc-500 mt-0.5">Hệ số ước tính: x{estMultA.toFixed(2)}</div>
-									</div>
-									<div className="text-right">
-										Pool: <span className="text-zinc-200">{formatStones(totalB)}</span>
-										<div className="text-[10px] text-zinc-500 mt-0.5">Hệ số ước tính: x{estMultB.toFixed(2)}</div>
-									</div>
-								</div>
 							</div>
 
 							{/* User Bet Details and Timer */}

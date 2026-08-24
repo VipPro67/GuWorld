@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useGameStore, ApertureResourceNode, TribulationEnemy, GuInstance, ImmortalAperture } from "@/store/useGameStore";
+import { useGameStore, ApertureResourceNode, TribulationEnemy, ImmortalAperture } from "@/store/useGameStore";
 import {
   Shield,
   Activity,
@@ -174,7 +174,6 @@ export const ImmortalApertureView: React.FC = () => {
     apertureNodes,
     variantHumans,
     activeTribulation,
-    guDictionary,
     itemDictionary,
     actionLoading,
     fetchAperture,
@@ -192,7 +191,7 @@ export const ImmortalApertureView: React.FC = () => {
     repairAllApertureNodes,
     upgradeApertureNode,
     fetchActiveTribulation,
-    attackTribulationEnemy,
+    engageTribulationCombat,
     resolveTribulation,
     useItems: consumeItems,
     setView,
@@ -202,8 +201,6 @@ export const ImmortalApertureView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"overview" | "map" | "dao" | "tribulation" | "ecosystem" | "variant_humans">("overview");
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   const [selectedNode, setSelectedNode] = useState<ApertureResourceNode | null>(null);
-  const [selectedEnemy, setSelectedEnemy] = useState<TribulationEnemy | null>(null);
-  const [selectedGus, setSelectedGus] = useState<string[]>([]);
   const [showHealMenu, setShowHealMenu] = useState(false);
 
   const [sliderRate, setSliderRate] = useState<number>(aperture?.time_rate || 10.0);
@@ -309,17 +306,6 @@ export const ImmortalApertureView: React.FC = () => {
     }
   };
 
-  // Sync state if activeTribulation changes
-  useEffect(() => {
-    if (activeTribulation && activeTribulation.enemies.length > 0) {
-      // Set default selected enemy to boss if exists, else first enemy
-      const boss = activeTribulation.enemies.find((e) => e.is_boss);
-      setSelectedEnemy(boss || activeTribulation.enemies[0]);
-    } else {
-      setSelectedEnemy(null);
-    }
-  }, [activeTribulation]);
-
   if (!player) {
     return (
       <div className="flex flex-col items-center justify-center p-8 bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-700/50 max-w-lg mx-auto text-center">
@@ -367,13 +353,6 @@ export const ImmortalApertureView: React.FC = () => {
   const handleCellClick = (x: number, y: number) => {
     const coordKey = `${x},${y}`;
     const node = nodeMap.get(coordKey);
-    const enemy = enemyMap.get(coordKey);
-
-    if (enemy) {
-      setSelectedEnemy(enemy);
-      setActiveTab("map");
-      return;
-    }
 
     setSelectedCell({ x, y });
     setSelectedNode(node || null);
@@ -437,9 +416,9 @@ export const ImmortalApertureView: React.FC = () => {
     }
   };
 
-  const handleAttack = async () => {
-    if (!activeTribulation || !selectedEnemy || selectedGus.length === 0) return;
-    await attackTribulationEnemy(activeTribulation.event.id, selectedEnemy.id, selectedGus);
+  const handleEngage = async () => {
+    if (!activeTribulation) return;
+    await engageTribulationCombat(activeTribulation.event.id);
   };
 
   const handleResolve = async () => {
@@ -481,15 +460,6 @@ export const ImmortalApertureView: React.FC = () => {
   };
 
   const getApertureState = getStateName(aperture?.state);
-
-  // Filter player active Gu bugs
-  const activeGus = player.gu_inventory.filter((gu) => gu.status === "ACTIVE" && gu.equipped === true);
-  //continue from activeGus, filter out only those that are in guDictionary and have effect active
-  const activeGusWithEffect = activeGus.filter((gu) => {
-    const spec = guDictionary[gu.gu_id];
-    return spec && spec.effects && spec.effects.active && Object.keys(spec.effects.active).length > 0;
-  });
-  const allEligibleGuIds = Array.from(new Set(activeGusWithEffect.map((gu) => gu.gu_id)));
 
   // Helper to check for path conflict with other nodes
   const checkConflict = (nd: ApertureResourceNode, all: ApertureResourceNode[]) => {
@@ -865,6 +835,13 @@ export const ImmortalApertureView: React.FC = () => {
                     Vào Vượt Kiếp
                   </button>
                 </div>
+              ) : aperture.state === "TRIBULATION_PENDING" ? (
+                <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-center space-y-2">
+                  <Hourglass className="w-8 h-8 text-amber-400 mx-auto" />
+                  <p className="text-sm text-amber-200 font-medium">
+                    Tai kiếp đang chờ. Vì đạo hữu vắng mặt, quái tai kiếp chưa xuất hiện để phá hoại — chúng sẽ giáng xuống khi bạn online. Trì hoãn quá 24 giờ sẽ làm giảm phần thưởng Đạo Ngân.
+                  </p>
+                </div>
               ) : (''
                 // <div className="p-4 bg-slate-950/50 border border-slate-850 rounded-xl text-center">
                 //   <Check className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
@@ -1192,130 +1169,49 @@ export const ImmortalApertureView: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Target Select Dropdown or small list */}
+                    {/* Enemies summary + engage */}
                     <div className="space-y-3">
                       <div className="text-xs font-bold text-slate-300 flex justify-between items-center">
-                        <span>Chọn Mục Tiêu Tấn Công</span>
+                        <span>Quái Tai Kiếp</span>
                         <span className="text-slate-500 font-normal">Còn lại: {activeTribulation.enemies.length} quái</span>
                       </div>
 
                       <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-800 rounded-xl p-2 bg-slate-950/50">
-                        {activeTribulation.enemies.map((enemy) => {
-                          const isSelected = selectedEnemy?.id === enemy.id;
-                          return (
-                            <div
-                              key={enemy.id}
-                              onClick={() => setSelectedEnemy(enemy)}
-                              className={`p-2 rounded-lg text-xs flex justify-between items-center cursor-pointer border transition ${
-                                isSelected
-                                  ? "bg-rose-950/40 border-rose-500/40 text-rose-200"
-                                  : "bg-slate-900 border-transparent hover:border-slate-800 text-slate-400"
-                              }`}
-                            >
-                              <div>
-                                <div className="font-bold flex items-center gap-1">
-                                  {enemy.is_boss ? "👑" : "👾"} {enemy.name}
-                                </div>
-                                <div className="text-[10px] text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
-                                  <span>Tọa độ: ({enemy.x}, {enemy.y})</span>
-                                  <span className="text-rose-400 font-semibold">⚔️ Công: <Num value={enemy.attack} /></span>
-                                  <span className="text-emerald-400 font-semibold">🛡️ Thủ: <Num value={enemy.defense} /></span>
-                                </div>
+                        {activeTribulation.enemies.map((enemy) => (
+                          <div
+                            key={enemy.id}
+                            className="p-2 rounded-lg text-xs flex justify-between items-center bg-slate-900 border border-transparent text-slate-400"
+                          >
+                            <div>
+                              <div className="font-bold flex items-center gap-1">
+                                {enemy.is_boss ? "👑" : "👾"} {enemy.name}
                               </div>
-                              <div className="text-right">
-                                <div className="font-bold text-rose-400"><Num value={enemy.hp} /> HP</div>
+                              <div className="text-[10px] text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
+                                <span>Tọa độ: ({enemy.x}, {enemy.y})</span>
+                                <span className="text-rose-400 font-semibold">⚔️ Công: <Num value={enemy.attack} /></span>
+                                <span className="text-emerald-400 font-semibold">🛡️ Thủ: <Num value={enemy.defense} /></span>
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Gu Select */}
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <label className="text-xs text-slate-300 font-bold">Chọn Cổ Trùng</label>
-                        <div className="flex gap-2 items-center">
-                          {allEligibleGuIds.length > 0 && selectedGus.length < allEligibleGuIds.length && (
-                            <button
-                              onClick={() => setSelectedGus(allEligibleGuIds)}
-                              className="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold cursor-pointer"
-                            >
-                              Chọn tất cả
-                            </button>
-                          )}
-                          {allEligibleGuIds.length > 0 && selectedGus.length < allEligibleGuIds.length && selectedGus.length > 0 && (
-                            <span className="text-[10px] text-slate-700">|</span>
-                          )}
-                          {selectedGus.length > 0 && (
-                            <button
-                              onClick={() => setSelectedGus([])}
-                              className="text-[10px] text-amber-500 hover:text-amber-400 font-semibold cursor-pointer"
-                            >
-                              Bỏ chọn tất cả
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <div className="space-y-2 max-h-40 overflow-y-auto border border-slate-800 rounded-xl p-2 bg-slate-950/50">
-                        {activeGusWithEffect.length === 0 ? (
-                          <div className="text-center text-slate-500 py-6 text-xs leading-normal">
-                            Không tìm thấy Cổ trùng phù hợp.
+                            <div className="text-right">
+                              <div className="font-bold text-rose-400"><Num value={enemy.hp} /> HP</div>
+                            </div>
                           </div>
-                        ) : (
-                          activeGusWithEffect.map((instance) => {
-                            const spec = guDictionary[instance.gu_id];
-                            if (!spec) return null;
-                            const isSelected = selectedGus.includes(instance.gu_id);
-
-                            return (
-                              <div
-                                key={instance.instance_id}
-                                onClick={() => {
-                                  if (isSelected) {
-                                    setSelectedGus(selectedGus.filter((id) => id !== instance.gu_id));
-                                  } else {
-                                    setSelectedGus([...selectedGus, instance.gu_id]);
-                                  }
-                                }}
-                                className={`p-2 rounded-lg text-xs flex justify-between items-center cursor-pointer border transition ${
-                                  isSelected
-                                    ? "bg-amber-950/40 border-amber-500/40 text-amber-200"
-                                    : "bg-slate-900 border-transparent hover:border-slate-800 text-slate-400"
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={() => {}} // handled by div onClick
-                                    className="rounded border-slate-700 text-amber-600 focus:ring-amber-500 bg-slate-950 pointer-events-none"
-                                  />
-                                  <div>
-                                    <div className="font-bold">{spec.name}</div>
-                                    <div className="text-[10px] text-slate-500">
-                                      Cấp: {spec.rank} | {spec.rank < 6 ? '' : spec.base_mana_cost + ' ' + manaName}
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="text-right text-[10px] text-slate-400">
-                                  Đói: {instance.hunger}%
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
+                        ))}
                       </div>
-                    </div>
 
-                    <button
-                      onClick={handleAttack}
-                      disabled={actionLoading || !selectedEnemy}
-                      className="w-full py-3 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 disabled:from-slate-850 disabled:to-slate-900 disabled:text-slate-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg"
-                    >
-                      <Sword className="w-4 h-4" />
-                      {actionLoading ? "Đang tiến hành công kích..." : (selectedGus.length > 0 ? `Phát Động Công Kích (${selectedGus.length} Cổ)` : "Phát Động Đánh Thường (Lực Đạo)")}
-                    </button>
+                      <p className="text-[11px] text-amber-500 font-semibold leading-relaxed">
+                        Xuất trận sẽ mở giao diện chiến đấu thông thường. Giáp và máu của đạo hữu tiêu hao trước; sát thương tràn qua mới làm tổn hại Tiên Khiếu.
+                      </p>
+
+                      <button
+                        onClick={handleEngage}
+                        disabled={actionLoading}
+                        className="w-full py-3 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 disabled:from-slate-850 disabled:to-slate-900 disabled:text-slate-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg"
+                      >
+                        <Sword className="w-4 h-4" />
+                        {actionLoading ? "Đang xuất trận..." : "Xuất Trận Chiến Đấu"}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Resolve Panel */}

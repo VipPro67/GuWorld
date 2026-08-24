@@ -99,14 +99,12 @@ func GetActiveTribulation(c *gin.Context) {
 	})
 }
 
-type AttackEnemyRequest struct {
-	EnemyID string   `json:"enemy_id" binding:"required"`
-	GuID    string   `json:"gu_id"`  // Gu bug ID used for attack (legacy/fallback)
-	GuIDs   []string `json:"gu_ids"` // List of Gu IDs to apply simultaneously
-}
-
-// AttackTribulationEnemy allows the player to use a Gu to damage a tribulation boss/enemy
-func AttackTribulationEnemy(c *gin.Context) {
+// EngageTribulation starts a standard combat encounter against the live enemies
+// of an active tribulation (tai kiếp) event. The resulting combat state is
+// persisted into players.active_combat and fought via the shared auto-combat
+// simulator (POST /api/combat/start). Enemy damage that overflows the player's
+// shield + HP spills into the Immortal Aperture (Tiên Khiếu).
+func EngageTribulation(c *gin.Context) {
 	playerID, exists := middleware.GetPlayerID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -119,20 +117,6 @@ func AttackTribulationEnemy(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Mã đợt tai kiếp không hợp lệ"})
 		return
 	}
-
-	var req AttackEnemyRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu yêu cầu không hợp lệ"})
-		return
-	}
-
-	// Support both single gu_id and multiple gu_ids
-	guIDs := req.GuIDs
-	if len(guIDs) == 0 && req.GuID != "" {
-		guIDs = []string{req.GuID}
-	}
-
-	// It is now allowed to attack with 0 Gu (Basic Attack only)
 
 	tx, err := db.DB.Begin()
 	if err != nil {
@@ -155,7 +139,7 @@ func AttackTribulationEnemy(c *gin.Context) {
 		return
 	}
 
-	// 1b. Player may only fight back while the Aperture is above 5% max HP
+	// 2. Aperture gate: player may only fight while the Aperture is above 5% max HP
 	var apHP, apMaxHP int
 	err = tx.QueryRow(`
 		SELECT aperture_hp, max_aperture_hp FROM immortal_apertures WHERE id = $1
@@ -165,275 +149,126 @@ func AttackTribulationEnemy(c *gin.Context) {
 		return
 	}
 
-	// 2. Fetch Player stats
-	var player models.Player
-	err = tx.QueryRow(`
-		SELECT p.id, p.username, p.rank, p.sub_rank, p.current_mana, p.max_mana, p.hp, p.base_hp, p.primeval_stones, `+db.GuInventoryAggregateEquipped("p.id")+`, COALESCE(ia.dao_marks, '{}'::jsonb), p.path_masteries, p.growth_data
-		FROM players p
-		LEFT JOIN immortal_apertures ia ON p.id = ia.player_id
-		WHERE p.id = $1
-	`, playerID).Scan(
-		&player.ID, &player.Username, &player.Rank, &player.SubRank,
-		&player.CurrentMana, &player.MaxMana, &player.HP, &player.BaseHP,
-		&player.PrimevalStones, &player.GuInventory, &player.DaoMarks,
-		&player.PathMasteries, &player.GrowthData,
-	)
+	// 3. Load player (equipped/vital inventory) and reject if already in combat.
+	player, err := evaluateManaTxEquipped(tx, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy thông tin cổ sư"})
 		return
 	}
+	if player.ActiveCombat != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang ở trong trạng thái chiến đấu!"})
+		return
+	}
 
-	// Verify player has all the selected Gu bugs and they are active and equipped
-	var foundGus []*models.GuInstance
-	for _, targetGuID := range guIDs {
-		var foundGu *models.GuInstance
-		for i := range player.GuInventory {
-			if player.GuInventory[i].GuID == targetGuID && player.GuInventory[i].Status == "ACTIVE" && player.GuInventory[i].Equipped {
-				foundGu = &player.GuInventory[i]
-				break
-			}
-		}
+	// 4. Load all live enemies of this event (boss first for stable ordering).
+	rows, err := tx.Query(`
+		SELECT id, name, hp, max_hp, attack, defense, is_boss
+		FROM tribulation_enemies
+		WHERE event_id = $1 AND is_dead = false
+		ORDER BY is_boss DESC, max_hp DESC
+	`, eventID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy danh sách quái tai kiếp"})
+		return
+	}
+	defer rows.Close()
 
-		if foundGu == nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đạo hữu không sở hữu, chưa trang bị (equipped) hoặc Cổ trùng %s không ở trạng thái ACTIVE", targetGuID)})
+	type liveEnemy struct {
+		ID      string
+		Name    string
+		HP      int
+		MaxHP   int
+		Attack  int
+		Defense int
+		IsBoss  bool
+	}
+	var enemies []liveEnemy
+	for rows.Next() {
+		var e liveEnemy
+		if err := rows.Scan(&e.ID, &e.Name, &e.HP, &e.MaxHP, &e.Attack, &e.Defense, &e.IsBoss); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc quái tai kiếp"})
 			return
 		}
-		foundGus = append(foundGus, foundGu)
+		enemies = append(enemies, e)
 	}
-
-	totalManaCost := 0.0
-	var guSpecs []models.GuDictionaryItem
-	for _, fg := range foundGus {
-		spec, ok := models.GetGu(fg.GuID, fg.Rank)
-		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đặc tính Cổ trùng %s không hợp lệ", fg.GuID)})
-			return
-		}
-		_, _, cost, errGu := CalculateGuEffect(&player, &spec)
-		if errGu == nil {
-			totalManaCost += cost
-		} else {
-			totalManaCost += spec.BaseManaCost
-		}
-		guSpecs = append(guSpecs, spec)
-	}
-
-	if player.CurrentMana < totalManaCost {
-		manaType := "Chân Nguyên"
-		if player.Rank >= 6 {
-			manaType = "Tiên Nguyên"
-		}
-
-		guNames := []string{}
-		for _, gu := range foundGus {
-			guNames = append(guNames, gu.GuID)
-		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("%s không đủ để thi triển %s (cần %.0f, hiện có %.0f)", manaType, strings.Join(guNames, ", "), totalManaCost, player.CurrentMana)})
+	if len(enemies) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không còn kẻ địch nào để chiến đấu. Hãy kết toán vượt kiếp."})
 		return
 	}
 
-	// 3. Fetch Enemy
-	var en models.TribulationEnemy
-	err = tx.QueryRow(`
-		SELECT id, name, hp, max_hp, attack, defense, is_boss, is_dead
-		FROM tribulation_enemies WHERE id = $1 AND event_id = $2
-	`, req.EnemyID, eventID).Scan(&en.ID, &en.Name, &en.HP, &en.MaxHP, &en.Attack, &en.Defense, &en.IsBoss, &en.IsDead)
-	if err == sql.ErrNoRows || en.IsDead {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Kẻ thù tai kiếp này đã bị tiêu diệt hoặc không tồn tại"})
-		return
-	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy thông tin kẻ thù"})
-		return
+	first := enemies[0]
+	combatType := "TRIBULATION_MONSTER"
+	if first.IsBoss {
+		combatType = "TRIBULATION_BOSS"
 	}
 
-	// 4. Calculate Player Damage (augmented by Dao Marks) and other effects across all Gu
-	totalFinalDmg := 0.0
-	totalHeal := 0.0
-	totalShield := 0.0
-	var guNames []string
-
-	actor := models.CombatantFromPlayer(&player, CalculatePlayerStats(&player))
-
-	// Always apply Basic Attack (Đánh thường)
-	daoMult := gamefx.DaoMultiplierForPaths(actor.DaoMarks, []string{"strength"}, gamefx.Get(&player).DaoNganBonus)
-	dmgVal := actor.BaseAttack
-	if dmgVal <= 0 {
-		dmgVal = 10.0
+	base := models.CombatState{
+		EnemyTemplateID:    first.ID,
+		EnemyName:          first.Name,
+		EnemyType:          combatType,
+		CombatMode:         "real",
+		EnemyHP:            float64(first.HP),
+		EnemyMaxHP:         float64(first.MaxHP),
+		EnemyDamage:        float64(first.Attack),
+		EnemyDefense:       float64(first.Defense),
+		EnemyRank:          6,
+		EnemySubRank:       1,
+		TargetPlayerID:     "",
+		MineSlotID:         0,
+		TribulationEventID: eventIDStr,
+		ApertureHP:         float64(apHP),
+		ApertureMaxHP:      float64(apMaxHP),
 	}
-	fullDmg := dmgVal * daoMult
-	totalFinalDmg = fullDmg
-	if daoMult > 1.0 {
-		dmgDao := fullDmg - dmgVal
-		guNames = append(guNames, fmt.Sprintf("Đánh thường (gây %.0f sát thương [Gốc: %.0f, Đạo Ngân: +%.0f])", fullDmg, dmgVal, dmgDao))
+
+	state := StartCombat(tx, &base, &player)
+
+	// Fix the first enemy combatant (built from flat fields): tribulation enemies
+	// have no Gu inventory and use basic attacks only, so we just correct its Kind.
+	if first.IsBoss {
+		state.Enemies[0].Kind = "Boss"
 	} else {
-		guNames = append(guNames, fmt.Sprintf("Đánh thường (gây %.0f sát thương)", dmgVal))
+		state.Enemies[0].Kind = "Normal"
 	}
 
-	if player.PathMasteries == nil {
-		player.PathMasteries = make(models.PathMasteriesMap)
+	// Append remaining live enemies and assign grid slots.
+	enemySlots := [][2]int{
+		{2, 3}, {2, 1}, {1, 1}, {3, 1}, {2, 2}, {1, 2}, {3, 2}, {1, 3}, {3, 3},
 	}
-	// Basic Attack gives Strength Path Mastery
-	player.PathMasteries["strength"] += 1
-	var pathGainLogs []string
-	pathGainLogs = append(pathGainLogs, "+1 Lực")
-
-	// Apply selected active Gu effects
-	for _, spec := range guSpecs {
-		dmgBase, defBase, _, errGuBase := CalculateGuEffectForCombatant(&actor, &spec, false, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)
-		dmg, def, _, errGu := CalculateGuEffectForCombatant(&actor, &spec, true, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)
-
-		if errGu == nil && errGuBase == nil {
-			totalFinalDmg += dmg
-			totalShield += def
-		} else {
-			activeEffects := models.GetFlatGuEffects(spec)
-			baseDmg := 35.0
-			if d, hasDmg := activeEffects["damage"]; hasDmg {
-				baseDmg = d
-			}
-			totalFinalDmg += baseDmg
-			dmg = baseDmg
-			dmgBase = baseDmg
-			if shieldVal, hasShield := activeEffects["defense"]; hasShield && shieldVal > 0 {
-				totalShield += shieldVal
-				def = shieldVal
-				defBase = shieldVal
-			}
+	for i := 1; i < len(enemies); i++ {
+		e := enemies[i]
+		kind := "Normal"
+		if e.IsBoss {
+			kind = "Boss"
 		}
-
-		if len(spec.Path) > 0 {
-			cleanPath := strings.TrimSuffix(strings.ToLower(spec.Path[0]), " path")
-			gain := 1
-			if spec.Rank >= 6 {
-				gain = 10
-			}
-			player.PathMasteries[cleanPath] += gain
-			pathGainLogs = append(pathGainLogs, fmt.Sprintf("+%d %s", gain, strings.Title(cleanPath)))
+		c := models.Combatant{
+			ID:          e.ID,
+			Name:        e.Name,
+			Kind:        kind,
+			Rank:        6,
+			SubRank:     1,
+			HP:          float64(e.HP),
+			MaxHP:       float64(e.MaxHP),
+			CurrentMana: 100,
+			MaxMana:     100,
+			BaseAttack:  float64(e.Attack),
+			BaseDefense: float64(e.Defense),
+			Speed:       10.0,
 		}
-
-		activeEffects := models.GetFlatGuEffects(spec)
-		healVal, hasHeal := activeEffects["heal"]
-		if hasHeal && healVal > 0 {
-			totalHeal += healVal
+		if i < len(enemySlots) {
+			c.GridX = enemySlots[i][0]
+			c.GridY = enemySlots[i][1]
 		}
-
-		// Build detailed logs for this specific Gu
-		var details []string
-		if dmg > 0 {
-			dmgDao := dmg - dmgBase
-			if dmgDao > 0 {
-				details = append(details, fmt.Sprintf("gây %.0f sát thương [Gốc: %.0f, Đạo Ngân: +%.0f]", dmg, dmgBase, dmgDao))
-			} else {
-				details = append(details, fmt.Sprintf("gây %.0f sát thương", dmg))
-			}
-		}
-		if def > 0 {
-			defDao := def - defBase
-			if defDao > 0 {
-				details = append(details, fmt.Sprintf("tạo %.0f Khiên [Gốc: %.0f, Đạo Ngân: +%.0f]", def, defBase, defDao))
-			} else {
-				details = append(details, fmt.Sprintf("tạo %.0f Khiên", def))
-			}
-		}
-		if hasHeal && healVal > 0 {
-			details = append(details, fmt.Sprintf("hồi %.0f HP", healVal))
-		}
-
-		guDesc := spec.Name
-		if len(details) > 0 {
-			guDesc += fmt.Sprintf(" (%s)", strings.Join(details, ", "))
-		}
-		guNames = append(guNames, guDesc)
+		state.Enemies = append(state.Enemies, c)
 	}
 
-	netDmg := int(totalFinalDmg) - en.Defense
-	if netDmg < 0 {
-		netDmg = 0
-	}
-
-	en.HP -= netDmg
-	if en.HP <= 0 {
-		en.HP = 0
-		en.IsDead = true
-	}
-
-	// 5. Player self-buffs from the Gu: heal, then raise a shield
-	if totalHeal > 0 {
-		player.HP += totalHeal
-		if player.HP > gamefx.EffectiveMaxHP(&player) {
-			player.HP = gamefx.EffectiveMaxHP(&player)
-		}
-	}
-	shield := totalShield
-
-	// 6. Enemy Counter-attacks! (Damages player HP and Aperture HP) only if they survived
-	rawCounterDmg := 0
-	counterDmg := 0
-	playerHpDmg := 0.0
-	absorbed := 0.0
-
-	if !en.IsDead {
-		rawCounterDmg = en.Attack
-		if en.IsBoss {
-			rawCounterDmg = en.Attack * 2
-		}
-
-		// Subtract player defense from counter attack damage
-		counterDmg = rawCounterDmg - int(actor.BaseDefense)
-		if counterDmg < 10 {
-			counterDmg = 10
-		}
-
-		if player.Rank >= 6 {
-			// Gu Immortal: Shield protects the Immortal Aperture from raw counterDmg
-			if shield > 0 {
-				absorbed = math.Min(shield, float64(counterDmg))
-				shield -= absorbed
-				counterDmg -= int(absorbed)
-			}
-			// Body damage is a fraction of the remaining counterDmg
-			playerHpDmg = float64(counterDmg) / 1000.0
-		} else {
-			// Mortal: Shield protects body HP directly
-			playerHpDmg = float64(counterDmg) / 10.0
-			if shield > 0 {
-				absorbed = math.Min(shield, playerHpDmg)
-				shield -= absorbed
-				playerHpDmg -= absorbed
-			}
-		}
-
-		player.HP -= playerHpDmg
-		if player.HP <= 0 {
-			player.HP = 1.0 // Prevent instant death in normal mode
-		}
-
-		newApHP := apHP - counterDmg
-		if newApHP < 0 {
-			newApHP = 0
-		}
-		_, _ = tx.Exec(`UPDATE immortal_apertures SET aperture_hp = $1 WHERE id = $2`, newApHP, apertureID)
-	}
-
-	// 7. Update Database State
-	player.CurrentMana -= totalManaCost
-	_, err = tx.Exec(`
-		UPDATE players
-		SET current_mana = $1, hp = $2, path_masteries = $3
-		WHERE id = $4
-	`, player.CurrentMana, player.HP, player.PathMasteries, playerID)
+	combatBytes, err := json.Marshal(state)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu trạng thái Cổ sư"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tạo trạng thái chiến đấu"})
 		return
 	}
-
-	_, err = tx.Exec(`
-		UPDATE tribulation_enemies
-		SET hp = $1, is_dead = $2
-		WHERE id = $3
-	`, en.HP, en.IsDead, en.ID)
+	_, err = tx.Exec(`UPDATE players SET active_combat = $1, human_qi = LEAST(human_qi + 3, $2) WHERE id = $3`, combatBytes, MaxHumanQi, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu trạng thái quái"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu trạng thái chiến đấu"})
 		return
 	}
 
@@ -442,55 +277,8 @@ func AttackTribulationEnemy(c *gin.Context) {
 		return
 	}
 
-	// Formulate log message
-	var playerActionMsg string
-	if netDmg > 0 {
-		playerActionMsg = fmt.Sprintf("Kích hoạt %s => Gây %d sát thương lên %s", strings.Join(guNames, ", "), netDmg, en.Name)
-	} else {
-		playerActionMsg = fmt.Sprintf("Kích hoạt %s => Không thể xuyên qua phòng ngự của %s (gây 0 sát thương)", strings.Join(guNames, ", "), en.Name)
-	}
-
-	extras := []string{}
-	if totalShield > 0 {
-		extras = append(extras, fmt.Sprintf("tạo %.0f Khiên", totalShield))
-	}
-	if totalHeal > 0 {
-		extras = append(extras, fmt.Sprintf("hồi phục %.0f HP", totalHeal))
-	}
-	if len(extras) > 0 {
-		playerActionMsg += ", " + strings.Join(extras, " và ")
-	}
-	if len(pathGainLogs) > 0 {
-		playerActionMsg += fmt.Sprintf(". Ngộ Đạo: %s", strings.Join(pathGainLogs, ", "))
-	}
-	playerActionMsg += "."
-
-	combatLog := playerActionMsg
-	if en.IsDead {
-		combatLog += fmt.Sprintf(" Kẻ địch %s đã bị tiêu diệt hoàn toàn!", en.Name)
-	} else {
-		targetType := "cơ thể"
-		dmgSuffered := int(playerHpDmg)
-		if player.Rank >= 6 {
-			targetType = "Tiên Khiếu"
-			dmgSuffered = counterDmg
-		}
-
-		counterMsg := fmt.Sprintf(" Kẻ địch %s phản công gây %d sát thương.", en.Name, rawCounterDmg)
-		if absorbed > 0 {
-			counterMsg += fmt.Sprintf(" Khiên hấp thụ %.0f sát thương.", absorbed)
-		}
-		counterMsg += fmt.Sprintf(" Đạo hữu gánh chịu %d sát thương lên %s.", dmgSuffered, targetType)
-		combatLog += counterMsg
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":       combatLog,
-		"enemy_hp":      en.HP,
-		"player_hp":     player.HP,
-		"player_shield": shield,
-		"player_mana":   player.CurrentMana,
-	})
+	auditlog.Logf(db.DB, &playerID, "tribulation.engage", "event=%s enemies=%d", eventIDStr, len(enemies))
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Xuất trận nghênh chiến %d quái tai kiếp! Nhân Khí +3.", len(enemies))})
 }
 
 // ResolveTribulation resolves the tribulation event manually if all enemies are dead, or auto-resolves with risk
@@ -890,7 +678,7 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 
 	if ap.InternalYearsPassed >= triggerYear {
 		spawnType := calcNextType
-		err = spawnTribulationEventWorker(ap.ID, ap.PlayerID, ap.TribulationCount+1, ap.ApertureHP, ap.InternalYearsPassed, spawnType)
+		err = spawnTribulationEventWorker(ap.ID, ap.PlayerID, ap.TribulationCount+1, ap.ApertureHP, ap.InternalYearsPassed, spawnType, 1.0)
 		if err != nil {
 			return err
 		}
@@ -1029,13 +817,33 @@ func guardNextTribulationYear(nextYear, currentYears float64) float64 {
 	return nextYear
 }
 
+// Offline-protection tuning for tribulations. While the player is offline the
+// tribulation is held (no spawn / no damage); the years still flow so players
+// cannot game the calendar. A grace period after spawn/return lets them prepare.
+const (
+	tribulationOnlineWindow = 5 * time.Minute // how fresh last_activity must be to count as "online"
+	tribulationGracePeriod  = 5 * time.Minute // enemies idle this long after spawn/return
+	tribulationPenaltyAfter = 24 * time.Hour  // offline hold beyond this halves the Dao Ngân reward
+)
+
+// isPlayerOnline reports whether the player has been active within the online
+// window. The SSE heartbeat refreshes players.last_activity every 60s.
+func isPlayerOnline(playerID string) bool {
+	var la sql.NullTime
+	err := db.DB.QueryRow(`SELECT last_activity FROM players WHERE id = $1`, playerID).Scan(&la)
+	if err != nil || !la.Valid {
+		return false
+	}
+	return time.Since(la.Time) <= tribulationOnlineWindow
+}
+
 func CheckAndTriggerTribulations() error {
 	// Query stable apertures
 	rows, err := db.DB.Query(`
 		SELECT id, player_id, time_rate, aperture_hp, max_aperture_hp, internal_years_passed, next_tribulation_year, tribulation_count, essence_production_per_year,
-			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count
+			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, tribulation_pending_at
 		FROM immortal_apertures
-		WHERE state IN ('STABLE', 'DAMAGED')
+		WHERE state IN ('STABLE', 'DAMAGED', 'TRIBULATION_PENDING')
 	`)
 	if err != nil {
 		return err
@@ -1058,13 +866,14 @@ func CheckAndTriggerTribulations() error {
 		GrandTribulationCount    int
 		MyriadTribulationCount   int
 		ChaosCalamityCount       int
+		TribulationPendingAt     sql.NullTime
 	}
 
 	apertures := []ApertureCheck{}
 	for rows.Next() {
 		var ap ApertureCheck
 		if err := rows.Scan(&ap.ID, &ap.PlayerID, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.TribulationCount, &ap.EssenceProductionPerYear,
-			&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount); err == nil {
+			&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.TribulationPendingAt); err == nil {
 			apertures = append(apertures, ap)
 		}
 	}
@@ -1312,15 +1121,35 @@ func CheckAndTriggerTribulations() error {
 		}
 
 		if newYearsPassed >= triggerYear {
+			// Offline grace: hold the tribulation until the player returns so they
+			// are not destroyed while away. Years keep flowing but no enemies spawn.
+			if !isPlayerOnline(ap.PlayerID) {
+				_, _ = db.DB.Exec(`
+					UPDATE immortal_apertures
+					SET state = 'TRIBULATION_PENDING',
+					    tribulation_pending_at = COALESCE(tribulation_pending_at, NOW()),
+					    internal_years_passed = $1, next_tribulation_year = $2, updated_at = NOW()
+					WHERE id = $3
+				`, newYearsPassed, triggerYear, ap.ID)
+				continue
+			}
+
+			// Offline-hold penalty: halve the Dao Ngân reward if held offline
+			// beyond the threshold.
+			rewardMult := 1.0
+			if ap.TribulationPendingAt.Valid && time.Since(ap.TribulationPendingAt.Time) > tribulationPenaltyAfter {
+				rewardMult = 0.5
+			}
+
 			_, _ = db.DB.Exec(`
 				UPDATE immortal_apertures
-				SET internal_years_passed = $1, updated_at = NOW()
+				SET internal_years_passed = $1, tribulation_pending_at = NULL, updated_at = NOW()
 				WHERE id = $2
 			`, newYearsPassed, ap.ID)
 
 			// Spawn the highest priority type due at this milestone
 			spawnType := calcNextType
-			err := spawnTribulationEventWorker(ap.ID, ap.PlayerID, ap.TribulationCount+1, ap.ApertureHP, newYearsPassed, spawnType)
+			err := spawnTribulationEventWorker(ap.ID, ap.PlayerID, ap.TribulationCount+1, ap.ApertureHP, newYearsPassed, spawnType, rewardMult)
 			if err != nil {
 				logger.S.Errorf("Failed to spawn tribulation event for player %s: %v", ap.PlayerID, err)
 			}
@@ -1364,7 +1193,7 @@ func CheckAndTriggerTribulations() error {
 	return nil
 }
 
-func spawnTribulationEventWorker(apertureID string, playerID string, tribCount int, currentHP int, newYearsPassed float64, tribulationType string) error {
+func spawnTribulationEventWorker(apertureID string, playerID string, tribCount int, currentHP int, newYearsPassed float64, tribulationType string, rewardMult float64) error {
 	tx, err := db.DB.Begin()
 	if err != nil {
 		return err
@@ -1464,6 +1293,10 @@ func spawnTribulationEventWorker(apertureID string, playerID string, tribCount i
 	case "CHAOS_CALAMITY":
 		rewardMarks = 500000 + difficulty*10000
 	}
+	if rewardMult <= 0 {
+		rewardMult = 1.0
+	}
+	rewardMarks = int(float64(rewardMarks) * rewardMult)
 
 	// Insert Tribulation Event
 	eventID := uuid.New()
@@ -1682,7 +1515,7 @@ func ProcessActiveTribulationGrid() error {
 
 	// 1. Fetch all active tribulation events
 	rows, err := tx.Query(`
-		SELECT id, aperture_id, player_id, tribulation_type
+		SELECT id, aperture_id, player_id, tribulation_type, started_at
 		FROM tribulation_events 
 		WHERE status = 'ACTIVE'
 	`)
@@ -1696,17 +1529,31 @@ func ProcessActiveTribulationGrid() error {
 		ApertureID      string
 		PlayerID        string
 		TribulationType string
+		StartedAt       time.Time
 	}
 	var events []ActiveEvent
 	for rows.Next() {
 		var ev ActiveEvent
-		if err := rows.Scan(&ev.EventID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType); err == nil {
+		if err := rows.Scan(&ev.EventID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType, &ev.StartedAt); err == nil {
 			events = append(events, ev)
 		}
 	}
 	rows.Close()
 
 	for _, ev := range events {
+		// Freeze the tribulation while the player is offline: enemies hold their
+		// position and never damage nodes. Bump started_at so the 6h auto-resolve
+		// window only counts online time.
+		if !isPlayerOnline(ev.PlayerID) {
+			_, _ = tx.Exec(`UPDATE tribulation_events SET started_at = NOW() WHERE id = $1`, ev.EventID)
+			continue
+		}
+
+		// Grace period after spawn/return: enemies stay idle for a short window.
+		if time.Since(ev.StartedAt) < tribulationGracePeriod {
+			continue
+		}
+
 		// Fixed node damage per hit, based on tribulation type
 		nodeDmgPerHit := 1 // EARTH_CALAMITY
 		switch ev.TribulationType {

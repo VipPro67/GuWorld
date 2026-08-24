@@ -177,6 +177,11 @@ type CombatState struct {
 	// this combat, preventing a double charge when InitializeCombatState is
 	// re-invoked (e.g. combat_attack.go when Allies is empty).
 	PetSoulCharged bool `json:"pet_soul_charged,omitempty"`
+	// TribulationEventID links this combat to a tribulation (tai kiếp) event.
+	// When non-empty, enemies overflow damage spills into the Immortal Aperture.
+	TribulationEventID string  `json:"tribulation_event_id,omitempty"`
+	ApertureHP         float64 `json:"aperture_hp,omitempty"`
+	ApertureMaxHP      float64 `json:"aperture_max_hp,omitempty"`
 }
 
 // ImmortalState groups immortal expansion data.

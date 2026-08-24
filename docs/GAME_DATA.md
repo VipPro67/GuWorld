@@ -40,9 +40,11 @@ Tạo ngay tại thời điểm người chơi thăng tiên lên Rank 6. `grade`
 - `immortal_essence`, `essence_production_per_year` — Tiên Nguyên
 - `rank_start_year` — năm bắt đầu rank hiện tại (dùng cho auto-breakthrough)
 - `earth_calamity_count`, `heavenly_tribulation_count`, `grand_tribulation_count`, `myriad_tribulation_count`, `chaos_calamity_count` — bộ đếm kiếp nạn
-- `state` — STABLE / DAMAGED
+- `tribulation_pending_at` (TIMESTAMPTZ, NULL) — thời điểm tai kiếp bắt đầu bị "giữ" vì người chơi offline; dùng để tính phạt giảm thưởng Đạo Ngân (quá 24 giờ → còn 50%)
+- `state` — STABLE / TRIBULATION_PENDING / TRIBULATION_ACTIVE / DAMAGED / DESTROYED
 
-> **Hằng số thời gian nội bộ:** 1 năm nội bộ = **36.000 giây đời thật ÷ `time_rate`** (`tribulation.go` worker, `aperture.go` projection, `SetApertureTimeRate`). Kiếp nạn đầu tiên đến vào năm nội bộ thứ 10 → chờ khoảng `10 × 36.000 ÷ time_rate` giây đời thật (khoảng 2–10 giờ, tùy phẩm cấp Tiên Khiếu). Kiếp đang ACTIVE quá **6 giờ đời thật** tự động kết toán thất bại.
+> **Hằng số thời gian nội bộ:** 1 năm nội bộ = **36.000 giây đời thật ÷ `time_rate`** (`tribulation.go` worker, `aperture.go` projection, `SetApertureTimeRate`). Kiếp nạn đầu tiên đến vào năm nội bộ thứ 10 → chờ khoảng `10 × 36.000 ÷ time_rate` giây đời thật (khoảng 2–10 giờ, tùy phẩm cấp Tiên Khiếu). Kiếp đang ACTIVE quá **6 giờ đời thật** (chỉ tính thời gian online) tự động kết toán thất bại.
+> **Bảo hộ offline:** khi đến mốc kiếp mà người chơi offline, worker không sinh quái, đặt `state='TRIBULATION_PENDING'`. Khi online lại mới spawn và có 5 phút grace trước khi quái di chuyển/phá mỏ.
 
 ### Đạo Ngân (Đạo Ấn)
 

@@ -58,6 +58,9 @@ export interface CombatState {
   enemy_sub_rank?: number;
   combat_mode?: string;
   mine_slot_id?: number;
+  tribulation_event_id?: string;
+  aperture_hp?: number;
+  aperture_max_hp?: number;
 }
 
 export interface PlayerPet {
@@ -1141,7 +1144,7 @@ interface GameState {
   repairAllApertureNodes: () => Promise<boolean>;
   upgradeApertureNode: (nodeId: string) => Promise<boolean>;
   fetchActiveTribulation: () => Promise<void>;
-  attackTribulationEnemy: (eventId: string, enemyId: string, guIds: string[]) => Promise<boolean>;
+  engageTribulationCombat: (eventId: string) => Promise<boolean>;
   resolveTribulation: (eventId: string) => Promise<boolean>;
 
   // Soul foundation actions
@@ -1939,9 +1942,6 @@ export const useGameStore = create<GameState>((set, get) => {
             unreadNotifications: state.unreadNotifications + 1,
           };
         });
-        if (payload.title) {
-          get().addToast(payload.title, "info");
-        }
       } catch (err) {
         console.error("Failed to process notification event", err);
       }
@@ -3543,6 +3543,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (combat) {
         if (combat.combat_mode === "virtual") returnView = "arena";
         else if (combat.mine_slot_id) returnView = "mine";
+        else if (combat.tribulation_event_id) returnView = "aperture";
       }
       setPlayerFromServer(data.player, { currentView: returnView });
       get().addLog(data.log || "Đạo hữu đã bỏ chạy an toàn.");
@@ -5512,15 +5513,14 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
-  attackTribulationEnemy: async (eventId: string, enemyId: string, guIds: string[]) => {
+  engageTribulationCombat: async (eventId: string) => {
     const { token, actionLoading, logout } = get();
     if (!token || actionLoading) return false;
     set({ actionLoading: true, error: null });
     try {
-      const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/attack`, {
+      const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/engage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enemy_id: enemyId, gu_ids: guIds, gu_id: guIds[0] || "" }),
       });
       if (response.status === 401 || response.status === 403) {
         logout();
@@ -5528,13 +5528,10 @@ export const useGameStore = create<GameState>((set, get) => {
       }
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Tấn công thất bại");
+        throw new Error(data.error || "Xuất trận thất bại");
       }
-      get().addToast(data.message || "Tấn công kẻ địch tai kiếp!", "success");
-      get().addLog(data.message || "Gây sát thương lên kẻ địch tai kiếp.");
+      get().addLog(data.message || "Xuất trận nghênh chiến quái tai kiếp.");
       await get().initializeSession();
-      await get().fetchActiveTribulation();
-      await get().fetchAperture();
       return true;
     } catch (err: any) {
       set({ error: err.message });

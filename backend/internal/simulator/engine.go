@@ -101,12 +101,14 @@ func cloneCombatState(state *CombatState) *CombatState {
 		return nil
 	}
 	clone := &CombatState{
-		Turn:        state.Turn,
-		Seed:        state.Seed,
-		BossPhase:   state.BossPhase,
-		VirtualMode: state.VirtualMode,
-		Allies:      make([]*CombatantAuto, len(state.Allies)),
-		Enemies:     make([]*CombatantAuto, len(state.Enemies)),
+		Turn:          state.Turn,
+		Seed:          state.Seed,
+		BossPhase:     state.BossPhase,
+		VirtualMode:   state.VirtualMode,
+		ApertureHP:    state.ApertureHP,
+		ApertureMaxHP: state.ApertureMaxHP,
+		Allies:        make([]*CombatantAuto, len(state.Allies)),
+		Enemies:       make([]*CombatantAuto, len(state.Enemies)),
 	}
 	for i, a := range state.Allies {
 		clone.Allies[i] = cloneCombatant(a)
@@ -1053,7 +1055,7 @@ func Simulate(state *CombatState) []CombatLog {
 							if netDmg < 1 {
 								netDmg = 1
 							}
-							totalDmg += applyDamageToTarget(actor, target, netDmg, &turnLogs, turn, shieldBypass, rng)
+							totalDmg += applyDamageToTarget(state, actor, target, netDmg, &turnLogs, turn, shieldBypass, !isAlly, rng)
 						}
 						totalDamageDealt += int(totalDmg)
 
@@ -1093,7 +1095,7 @@ func Simulate(state *CombatState) []CombatLog {
 							phantomNet := (a.PhantomDmg * dmgMultiplier) - phantomDef
 							phantomNet *= (1.0 - pathBonus(target.PathResistance, a.Path))
 							phantomNet = math.Max(1, phantomNet)
-							phantomDealt := applyDamageToTarget(actor, target, phantomNet, &turnLogs, turn, shieldBypass, rng)
+							phantomDealt := applyDamageToTarget(state, actor, target, phantomNet, &turnLogs, turn, shieldBypass, !isAlly, rng)
 							totalDamageDealt += int(phantomDealt)
 							turnLogs = append(turnLogs, CombatLog{
 								Turn:      turn,
@@ -1150,7 +1152,7 @@ func Simulate(state *CombatState) []CombatLog {
 
 					if a.ThornsDmg > 0 && totalDamageDealt > 0 {
 						thornsNet := math.Max(1, a.ThornsDmg-float64(actor.BaseDef))
-						applyDamageToTarget(firstTarget, actor, thornsNet, &turnLogs, turn, false, rng)
+						applyDamageToTarget(state, firstTarget, actor, thornsNet, &turnLogs, turn, false, false, rng)
 						turnLogs = append(turnLogs, CombatLog{
 							Turn:      turn,
 							ActorId:   actor.ID,
@@ -1494,7 +1496,7 @@ func Simulate(state *CombatState) []CombatLog {
 					if netDmg < 1 {
 						netDmg = 1
 					}
-					applied := applyDamageToTarget(actor, target, netDmg, &turnLogs, turn, false, rng)
+					applied := applyDamageToTarget(state, actor, target, netDmg, &turnLogs, turn, false, !isAlly, rng)
 					detailMsg := fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %d HP)", actor.Name, fallbackAction.Name, target.Name, applied, target.HP)
 					if daoMult > 1.0 {
 						baseDmgVal := float64(actor.BaseDmg)
@@ -1568,6 +1570,8 @@ func Simulate(state *CombatState) []CombatLog {
 			for i, e := range initialState.Enemies {
 				state.Enemies[i] = cloneCombatant(e)
 			}
+			state.ApertureHP = initialState.ApertureHP
+			state.ApertureMaxHP = initialState.ApertureMaxHP
 			turn = 0 // loops will increment it to 1
 			continue
 		}
@@ -1619,7 +1623,7 @@ func Simulate(state *CombatState) []CombatLog {
 
 // buildSnapshot creates a CombatSnapshot from the current state.
 func buildSnapshot(state *CombatState) *CombatSnapshot {
-	snap := &CombatSnapshot{Turn: state.Turn}
+	snap := &CombatSnapshot{Turn: state.Turn, ApertureHP: state.ApertureHP, ApertureMaxHP: state.ApertureMaxHP}
 	for _, a := range state.Allies {
 		snap.Allies = append(snap.Allies, CombatantSnapshot{
 			ID: a.ID, Name: a.Name, Kind: a.Kind,
@@ -1641,7 +1645,7 @@ func buildSnapshot(state *CombatState) *CombatSnapshot {
 	return snap
 }
 
-func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]CombatLog, turn int, shieldBypass bool, rng *rand.Rand) float64 {
+func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damage float64, logs *[]CombatLog, turn int, shieldBypass bool, spillToAperture bool, rng *rand.Rand) float64 {
 	if damage < 1 {
 		damage = 1
 	}
@@ -1722,7 +1726,9 @@ func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]C
 	// Phá Không Cổ shield bypass
 	if shieldBypass {
 		target.HP -= int(damage)
-		if target.HP < 0 {
+		if spillToAperture {
+			redirectApertureOverflow(state, target, logs, turn)
+		} else if target.HP < 0 {
 			target.HP = 0
 		}
 		*logs = append(*logs, CombatLog{
@@ -1862,7 +1868,9 @@ func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]C
 		damage -= absorbed
 		target.VirtualShield = 0
 		target.HP -= int(damage)
-		if target.HP < 0 {
+		if spillToAperture {
+			redirectApertureOverflow(state, target, logs, turn)
+		} else if target.HP < 0 {
 			target.HP = 0
 		}
 		hpDamageDealt += damage
@@ -1880,10 +1888,38 @@ func applyDamageToTarget(actor, target *CombatantAuto, damage float64, logs *[]C
 
 	// Direct HP damage (no shield)
 	target.HP -= int(damage)
-	if target.HP < 0 {
+	if spillToAperture {
+		redirectApertureOverflow(state, target, logs, turn)
+	} else if target.HP < 0 {
 		target.HP = 0
 	}
 	return hpDamageDealt + damage
+}
+
+// redirectApertureOverflow spills damage that reduced a defending ally below 0 HP
+// into the Immortal Aperture (Tiên Khiếu). Called only for tribulation combat where
+// ApertureMaxHP > 0 and the attacker is an enemy.
+func redirectApertureOverflow(state *CombatState, target *CombatantAuto, logs *[]CombatLog, turn int) {
+	if state == nil || state.ApertureMaxHP <= 0 {
+		return
+	}
+	if target.HP >= 0 {
+		return
+	}
+	overflow := -target.HP
+	target.HP = 0
+	state.ApertureHP -= overflow
+	if state.ApertureHP < 0 {
+		state.ApertureHP = 0
+	}
+	*logs = append(*logs, CombatLog{
+		Turn:      turn,
+		ActorId:   target.ID,
+		ActorName: target.Name,
+		Action:    "APERTURE_DAMAGE",
+		Damage:    overflow,
+		Detail:    fmt.Sprintf("Tiên Khiếu chịu %d sát thương xuyên phá (còn %d/%d)!", overflow, state.ApertureHP, state.ApertureMaxHP),
+	})
 }
 
 // checkActionCondition returns true if the action's use condition is met.

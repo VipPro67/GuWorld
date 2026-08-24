@@ -113,7 +113,7 @@ export const PATH_MAP: Record<string, string> = {
   Pill: "Đan",
 };
 
-const pathLabels: Record<string, string> = {
+export const pathLabels: Record<string, string> = {
   // Ngũ hành & Tự nhiên
   "Metal Path": "Kim Đạo",
   "Wood Path": "Mộc Đạo",

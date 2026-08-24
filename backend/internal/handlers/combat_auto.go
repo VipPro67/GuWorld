@@ -91,13 +91,16 @@ func AutoCombatStart(c *gin.Context) {
 	}
 
 	isVirtual := player.ActiveCombat.CombatMode == "virtual"
+	isTribulation := player.ActiveCombat.TribulationEventID != ""
 
 	seed := time.Now().UnixNano()
 	simState := &simulator.CombatState{
-		Turn:        0,
-		Seed:        seed,
-		BossPhase:   0,
-		VirtualMode: isVirtual,
+		Turn:          0,
+		Seed:          seed,
+		BossPhase:     0,
+		VirtualMode:   isVirtual,
+		ApertureHP:    int(player.ActiveCombat.ApertureHP),
+		ApertureMaxHP: int(player.ActiveCombat.ApertureMaxHP),
 	}
 
 	simPlayer, err := buildSimCombatant(tx, &player, isVirtual, true, &req.Loadout)
@@ -660,8 +663,10 @@ func AutoCombatStart(c *gin.Context) {
 			if player.ClearedCells == nil {
 				player.ClearedCells = make(models.ClearedCellsMap)
 			}
-			coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
-			player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
+			if !isTribulation {
+				coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
+				player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
+			}
 
 			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, aptitude_percent = $4, lifespan = $5, path_masteries = $6, cleared_cells = $7 WHERE id = $8`
 			args = append(args, finalPlayerHP, finalMana, player.PrimevalStones, player.AptitudePercent, player.Lifespan, player.PathMasteries, player.ClearedCells, player.ID)
@@ -686,9 +691,16 @@ func AutoCombatStart(c *gin.Context) {
 			})
 		} else {
 			player.HP = 1.0
-			player.CurrentRegion, player.X, player.Y = NearestHub(player.X, player.Y)
-
-			dropSummary := applyDeathDrop(tx, &player, nil)
+			defeatMsg := "Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết."
+			if isTribulation {
+				defeatMsg = "Đạo hữu kiệt sức trước quái tai kiếp! Tiên Khiếu phải gánh chịu phần sát thương còn lại."
+			} else {
+				player.CurrentRegion, player.X, player.Y = NearestHub(player.X, player.Y)
+				dropSummary := applyDeathDrop(tx, &player, nil)
+				if dropSummary != "" {
+					defeatMsg = fmt.Sprintf("Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất: %s.", dropSummary)
+				}
+			}
 
 			for _, ally := range player.ActiveCombat.Allies {
 				allyUUID, errParse := uuid.Parse(ally.ID)
@@ -697,10 +709,6 @@ func AutoCombatStart(c *gin.Context) {
 				}
 			}
 
-			defeatMsg := "Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết."
-			if dropSummary != "" {
-				defeatMsg = fmt.Sprintf("Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết nhưng rơi rớt mất: %s.", dropSummary)
-			}
 			logs = append(logs, simulator.CombatLog{
 				Turn:   simState.Turn,
 				Action: "BATTLE_END",
@@ -730,6 +738,37 @@ func AutoCombatStart(c *gin.Context) {
 			Action: "GU_EVENT",
 			Detail: playerMsg,
 		})
+	}
+
+	// ── Tribulation combat: persist aperture HP and sync enemy HP back to the event ──
+	if isTribulation && player.ActiveCombat != nil {
+		_, errAp := tx.Exec(`
+			UPDATE immortal_apertures SET aperture_hp = $1, updated_at = NOW()
+			WHERE id = (SELECT aperture_id FROM tribulation_events WHERE id = $2 AND player_id = $3)
+		`, simState.ApertureHP, player.ActiveCombat.TribulationEventID, player.ID)
+		if errAp != nil {
+			logger.S.Errorf("Failed to persist aperture HP after tribulation combat: %v", errAp)
+		}
+
+		// Sync enemy HP using LEAST so watchtower/worker damage is never overwritten upward.
+		finalByID := make(map[string]int)
+		for _, e := range simState.Enemies {
+			finalByID[e.ID] = e.HP
+		}
+		for _, en := range player.ActiveCombat.Enemies {
+			finalHP, ok := finalByID[en.ID]
+			if !ok {
+				continue
+			}
+			_, errEn := tx.Exec(`
+				UPDATE tribulation_enemies
+				SET hp = LEAST(hp, $1), is_dead = CASE WHEN LEAST(hp, $1) <= 0 THEN true ELSE is_dead END, updated_at = NOW()
+				WHERE id = $2
+			`, finalHP, en.ID)
+			if errEn != nil {
+				logger.S.Errorf("Failed to sync tribulation enemy %s HP: %v", en.ID, errEn)
+			}
+		}
 	}
 
 	_, err = tx.Exec(updateQuery, args...)
@@ -905,10 +944,12 @@ func AutoCombatStart(c *gin.Context) {
 		IPAddress:      c.ClientIP(), Success: alliesAlive,
 	})
 	c.JSON(http.StatusOK, gin.H{
-		"message":    "Chiến đấu hoàn tất. Nhân Khí +3.",
-		"logs":       logs,
-		"winner":     winner,
-		"combatants": combatantInfos,
+		"message":         "Chiến đấu hoàn tất. Nhân Khí +3.",
+		"logs":            logs,
+		"winner":          winner,
+		"combatants":      combatantInfos,
+		"aperture_hp":     simState.ApertureHP,
+		"aperture_max_hp": simState.ApertureMaxHP,
 	})
 }
 

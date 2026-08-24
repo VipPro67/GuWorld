@@ -51,6 +51,8 @@ interface CombatReplayViewProps {
   winner: string;
   onBack: () => void;
   playerName?: string;
+  apertureHp?: number;
+  apertureMaxHp?: number;
 }
 
 interface CombatantState {
@@ -91,10 +93,12 @@ interface ReplayState {
   highlightedActor: string | null;
   highlightedTarget: string | null;
   events: FloatingEvent[];
+  apertureHp: number;
+  apertureMaxHp: number;
 }
 
 type ReplayAction =
-  | { type: "INIT"; combatants: Record<string, CombatantState> }
+  | { type: "INIT"; combatants: Record<string, CombatantState>; apertureHp?: number; apertureMaxHp?: number }
   | { type: "ADVANCE"; log: CombatLogEntry }
   | { type: "SET_INDEX"; index: number }
   | { type: "TOGGLE_PLAY" }
@@ -119,6 +123,8 @@ function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
         highlightedActor: null,
         highlightedTarget: null,
         events: [],
+        apertureHp: action.apertureHp ?? state.apertureHp,
+        apertureMaxHp: action.apertureMaxHp ?? state.apertureMaxHp,
       };
 
     case "ADVANCE": {
@@ -217,6 +223,11 @@ function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
         }
       }
 
+      let apertureHp = state.apertureHp;
+      if (log.action === "APERTURE_DAMAGE" && log.damage) {
+        apertureHp = Math.max(0, apertureHp - log.damage);
+      }
+
       return {
         ...state,
         combatantStates: next,
@@ -224,6 +235,7 @@ function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
         highlightedActor: log.actor_id || null,
         highlightedTarget: log.target_id || null,
         events,
+        apertureHp,
       };
     }
 
@@ -268,6 +280,7 @@ const actionIcon = (action: string) => {
     case "STUNNED": return <Zap className="w-3 h-3" />;
     case "MINE_LOOT": return <Coins className="w-3 h-3" />;
     case "MINE_OCCUPY": return <Gem className="w-3 h-3" />;
+    case "APERTURE_DAMAGE": return <Sparkles className="w-3 h-3" />;
     case "BUFF": return <Sparkles className="w-3 h-3" />;
     case "DEFEND": return <Shield className="w-3 h-3" />;
     default: return <ChevronRight className="w-3 h-3" />;
@@ -287,6 +300,7 @@ const actionColor = (action: string) => {
     case "BATTLE_START": case "BATTLE_END": return "text-amber-400";
     case "MINE_LOOT": return "text-yellow-400";
     case "MINE_OCCUPY": return "text-emerald-400";
+    case "APERTURE_DAMAGE": return "text-amber-400";
     case "BUFF": return "text-emerald-300";
     default: return "text-zinc-400";
   }
@@ -298,6 +312,8 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
   winner,
   onBack,
   playerName,
+  apertureHp: initialApertureHp = 0,
+  apertureMaxHp: initialApertureMaxHp = 0,
 }) => {
   const [speed, setSpeed] = React.useState(1);
   const logContainerRef = useRef<HTMLDivElement>(null);
@@ -387,11 +403,14 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
     highlightedActor: null,
     highlightedTarget: null,
     events: [],
+    apertureHp: initialApertureHp,
+    apertureMaxHp: initialApertureMaxHp,
   });
 
   // Re-initialize when combatants change
   useEffect(() => {
-    dispatch({ type: "INIT", combatants: parsedCombatants });
+    dispatch({ type: "INIT", combatants: parsedCombatants, apertureHp: initialApertureHp, apertureMaxHp: initialApertureMaxHp });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parsedCombatants]);
 
   const intervalMs = useMemo(() => {
@@ -473,11 +492,12 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
   const handleTogglePlay = useCallback(() => {
     if (state.currentIndex >= logs.length - 1) {
       // Reset and play
-      dispatch({ type: "INIT", combatants: parsedCombatants });
+      dispatch({ type: "INIT", combatants: parsedCombatants, apertureHp: initialApertureHp, apertureMaxHp: initialApertureMaxHp });
       setTimeout(() => dispatch({ type: "TOGGLE_PLAY" }), 0);
     } else {
       dispatch({ type: "TOGGLE_PLAY" });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.currentIndex, logs.length, parsedCombatants]);
 
   const handleSkip = useCallback(() => {
@@ -787,7 +807,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
 
   const actionLogs = useMemo(() =>
     visibleLogs.filter(log =>
-      ["BASIC_ATTACK", "GU_SKILL", "KILLER_MOVE", "DAMAGE", "HEAL", "ITEM_HEAL", "SHIELD_GAIN", "DOT_TICK", "DIED", "LIFESTEAL", "STUNNED", "PHANTOM_ATTACK", "THORNS", "SHIELD_ABSORB", "SHIELD_BREAK", "BLEED_APPLIED", "POISON_APPLIED", "STUN_APPLIED", "MANA_RESTORE", "MANA_COST", "PRE_COMBAT_BARRIER", "MULTI_HIT", "LOOT", "AUTO_ITEM_USAGE", "AUTO_STONE_USAGE", "MINE_LOOT", "MINE_OCCUPY"].includes(log.action)
+      ["BASIC_ATTACK", "GU_SKILL", "KILLER_MOVE", "DAMAGE", "HEAL", "ITEM_HEAL", "SHIELD_GAIN", "DOT_TICK", "DIED", "LIFESTEAL", "STUNNED", "PHANTOM_ATTACK", "THORNS", "SHIELD_ABSORB", "SHIELD_BREAK", "BLEED_APPLIED", "POISON_APPLIED", "STUN_APPLIED", "MANA_RESTORE", "MANA_COST", "PRE_COMBAT_BARRIER", "MULTI_HIT", "LOOT", "AUTO_ITEM_USAGE", "AUTO_STONE_USAGE", "MINE_LOOT", "MINE_OCCUPY", "APERTURE_DAMAGE"].includes(log.action)
     ), [visibleLogs]);
 
   return (
@@ -841,6 +861,27 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Aperture (Tiên Khiếu) HP — tribulation combat only */}
+      {initialApertureMaxHp > 0 && (
+        <div className="bg-black/50 border border-amber-800/50 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span className="text-sm font-bold text-amber-300">Máu Tiên Khiếu</span>
+            </div>
+            <span className="text-xs font-mono text-amber-200">
+              {state.apertureHp.toLocaleString()} / {state.apertureMaxHp.toLocaleString()}
+            </span>
+          </div>
+          <div className="h-3 w-full bg-zinc-900 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all"
+              style={{ width: `${state.apertureMaxHp > 0 ? Math.max(0, Math.min(100, (state.apertureHp / state.apertureMaxHp) * 100)) : 0}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Result Summary */}
       {isCompleted && summary && (

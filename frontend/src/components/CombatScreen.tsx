@@ -6,7 +6,7 @@ import { Sparkles, Play, Swords, Eye, Shield, Zap, ChevronDown, ChevronUp, Wand2
 import { CombatReplayView } from "./CombatReplayView";
 import { Num } from "./Num";
 import { getPathColor } from "@/lib/utils";
-import { masteryKeyForPoints, masteryLevelForPoints } from "@/lib/translate";
+import { masteryKeyForPoints, masteryLevelForPoints, pathLabels } from "@/lib/translate";
 
 interface CombatScreenProps {
   player: Player;
@@ -261,8 +261,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     if (selectedGuIds.includes(id)) {
       setSelectedGuIds(selectedGuIds.filter(i => i !== id));
     } else {
-      if (selectedGuIds.length >= 7) {
-        addToast("Chỉ được mang tối đa 7 Cổ!", "error");
+      if (selectedGuIds.length >= 15) {
+        addToast("Chỉ được mang tối đa 15 Cổ!", "error");
         return;
       }
       setSelectedGuIds([...selectedGuIds, id]);
@@ -339,23 +339,17 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const bestPath = useMemo(() => playerBestPaths[0]?.path || "", [playerBestPaths]);
 
   const pathLabel = (path: string) => {
-    const labels: Record<string, string> = {
-      blade: "Đao", blood: "Huyết", bone: "Cốt", cloud: "Vân",
-      concealment: "Ẩn Nặc", creation: "Tạo Hóa", dark: "Hắc Ám",
-      death: "Tử Vong", destruction: "Hủy Diệt", dream: "Mộng",
-      earth: "Thổ", enchantment: "Phù Chú", enslavement: "Nô Dịch",
-      fire: "Hỏa", food: "Thực", formation: "Trận Pháp", heaven: "Thiên",
-      human: "Nhân", ice: "Băng", illusion: "Ảo Giác", information: "Thông Tin",
-      investigation: "Trinh Sát", life: "Sinh", light: "Quang Minh",
-      lightning: "Lôi", luck: "Khí Vận", metal: "Kim", moon: "Nguyệt",
-      movement: "Di Động", poison: "Độc", qi: "Khí", refinement: "Tinh Luyện",
-      rule: "Quy Tắc", shadow: "Ảnh", smoke: "Yên Vụ", soul: "Hồn",
-      sound: "Âm Thanh", space: "Không Gian", strength: "Lực", sun: "Nhật",
-      sword: "Kiếm", theft: "Trộm", theme: "Chủ Đề", time: "Thời Gian",
-      transformation: "Biến Hóa", water: "Thủy", wind: "Phong",
-      wisdom: "Trí", wood: "Mộc",
-    };
-    return labels[path] || path;
+    if (!path) return "";
+    let key = path.endsWith(" Path") ? path : path.charAt(0).toUpperCase() + path.slice(1).toLowerCase() + " Path";
+    if (pathLabels[key]) return pathLabels[key];
+    
+    const lowerKey = key.toLowerCase();
+    for (const [k, v] of Object.entries(pathLabels)) {
+      if (k.toLowerCase() === lowerKey) return v;
+    }
+    
+    const base = path.endsWith(" Path") ? path.slice(0, -5) : path;
+    return base.charAt(0).toUpperCase() + base.slice(1).toLowerCase() + " Đạo";
   };
 
   const multiPathPenalty = useMemo(() => {
@@ -1075,8 +1069,32 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
     );
   };
 
+  const renderApertureBar = () => {
+    if (!enemy || !enemy.aperture_max_hp) return null;
+    const hp = enemy.aperture_hp ?? 0;
+    const max = enemy.aperture_max_hp ?? 1;
+    const pct = Math.max(0, Math.min(100, (hp / max) * 100));
+    return (
+      <div className="bg-gradient-to-b from-amber-950/40 to-amber-900/20 border border-amber-700/40 rounded-2xl p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <span className="text-sm font-bold text-amber-300">Máu Tiên Khiếu</span>
+          </div>
+          <span className="text-xs font-mono text-amber-200">{Math.round(hp).toLocaleString()} / {Math.round(max).toLocaleString()}</span>
+        </div>
+        <div className="h-3 w-full bg-zinc-900 rounded-full overflow-hidden">
+          <div className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+    );
+  };
+
   const renderLoadoutPhase = () => (
     <div className="flex flex-col gap-6">
+      {/* Aperture (Tiên Khiếu) HP — tribulation combat only */}
+      {renderApertureBar()}
+
       {/* Enemy Intel Panel */}
       {renderEnemyIntel()}
 
@@ -1479,6 +1497,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       winner={simulationWinner || "Phe Địch"}
       onBack={handleExitSimulation}
       playerName={player.username}
+      apertureHp={enemy?.aperture_hp ?? 0}
+      apertureMaxHp={enemy?.aperture_max_hp ?? 0}
     />
   );
 

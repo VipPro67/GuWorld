@@ -394,7 +394,8 @@ func Flee(c *gin.Context) {
 
 		if defeat {
 			turnLogs = append(turnLogs, "=== THẤT BẠI THẢM HẠI ===")
-			isExploration := player.ActiveCombat.CombatMode != "virtual" && player.ActiveCombat.EnemyTemplateID != "monster_heavenly_tribulation"
+			isTribulation := player.ActiveCombat.TribulationEventID != "" || player.ActiveCombat.EnemyTemplateID == "monster_heavenly_tribulation"
+			isExploration := player.ActiveCombat.CombatMode != "virtual" && !isTribulation
 			isMine := player.ActiveCombat.MineSlotID > 0
 			if isExploration {
 				player.HP = 1.0

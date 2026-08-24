@@ -292,6 +292,12 @@ type CombatState struct {
 
 	// Virtual mode: illusion combat, auto-restore mana each turn
 	VirtualMode bool
+
+	// Aperture (Tiên Khiếu) being defended during tribulation combat. When
+	// ApertureMaxHP > 0, enemy damage that overflows the player's shield + HP
+	// spills into the aperture. Tracked so the replay can show it depleting.
+	ApertureHP    int
+	ApertureMaxHP int
 }
 
 // CombatSnapshot captures full stats of all combatants at a point in time.
@@ -299,6 +305,9 @@ type CombatSnapshot struct {
 	Turn    int                 `json:"turn"`
 	Allies  []CombatantSnapshot `json:"allies"`
 	Enemies []CombatantSnapshot `json:"enemies"`
+
+	ApertureHP    int `json:"aperture_hp"`
+	ApertureMaxHP int `json:"aperture_max_hp"`
 }
 
 // CombatantSnapshot is a point-in-time snapshot of one combatant's stats.

@@ -18,6 +18,7 @@ func schemaAperture() error {
 		essence_production_per_year INTEGER NOT NULL DEFAULT 10,
 		internal_years_passed DOUBLE PRECISION NOT NULL DEFAULT 0,
 		next_tribulation_year DOUBLE PRECISION NOT NULL DEFAULT 10,
+		tribulation_pending_at TIMESTAMP WITH TIME ZONE,
 		tribulation_count INTEGER NOT NULL DEFAULT 0,
 		rank_start_year DOUBLE PRECISION NOT NULL DEFAULT 0,
 		earth_calamity_count INTEGER NOT NULL DEFAULT 0,

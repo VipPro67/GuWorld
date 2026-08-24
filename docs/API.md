@@ -168,7 +168,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | GET | `/dao-marks` |
 | GET | `/dao-marks/dao-ngan` | Đạo ngân (composite dao power) calculation. |
 | GET | `/tribulations/active` |
-| POST | `/tribulations/:eventId/attack` |
+| POST | `/tribulations/:eventId/engage` | Xuất trận chống quái tai kiếp — tạo `active_combat` (nhiều địch, `enemy_type` = `TRIBULATION_BOSS`/`TRIBULATION_MONSTER`) rồi đánh qua combat UI thông thường (`/combat/start`). Giáp + máu người chơi tiêu hao trước, sát thương tràn sẽ trừ `immortal_apertures.aperture_hp`. |
 | POST | `/tribulations/:eventId/resolve` |
 
 ## Shop, marketplace and P2P trade

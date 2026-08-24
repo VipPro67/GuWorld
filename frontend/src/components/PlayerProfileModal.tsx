@@ -5,64 +5,21 @@ import { useGameStore, ImmortalAperture } from "@/store/useGameStore";
 import { formatGameEffects } from "@/lib/effects";
 import { X, Eye, EyeOff, Flame, Coins, Sparkles, Crown, Award, Activity, Heart } from "lucide-react";
 
-const pathNameMap: Record<string, string> = {
-  blade: "Đao Đạo",
-  blood: "Huyết Đạo",
-  bone: "Cốt Đạo",
-  cloud: "Vân Đạo",
-  concealment: "Ẩn Nặc Đạo",
-  creation: "Tạo Hóa Đạo",
-  dark: "Hắc Ám Đạo",
-  death: "Tử Vong Đạo",
-  destruction: "Hủy Diệt Đạo",
-  dream: "Mộng Đạo",
-  earth: "Thổ Đạo",
-  enchantment: "Phù Chú Đạo",
-  enslavement: "Nô Dịch Đạo",
-  fire: "Hỏa Đạo",
-  food: "Thực Đạo",
-  formation: "Trận Pháp Đạo",
-  heaven: "Thiên Đạo",
-  human: "Nhân Đạo",
-  ice: "Hàn Băng Đạo",
-  illusion: "Ảo Giác Đạo",
-  information: "Tín Đạo",
-  investigation: "Trinh Sát Đạo",
-  life: "Sinh Đạo",
-  light: "Quang Minh Đạo",
-  lightning: "Lôi Đạo",
-  luck: "Khí Vận Đạo",
-  metal: "Kim Đạo",
-  moon: "Nguyệt Đạo",
-  movement: "Di Động Đạo",
-  painting: "Họa Đạo",
-  phantom: "Huyễn Đạo",
-  poison: "Độc Đạo",
-  qi: "Khí Đạo",
-  refinement: "Tinh Luyện Đạo",
-  rule: "Quy Tắc Đạo",
-  shadow: "Ảnh Đạo",
-  smoke: "Yên Vụ Đạo",
-  soul: "Hồn Đạo",
-  sound: "Âm Thanh Đạo",
-  space: "Không Gian Đạo",
-  strength: "Lực Đạo",
-  sun: "Nhật Đạo",
-  sword: "Kiếm Đạo",
-  theft: "Trộm Đạo",
-  theme: "Chủ Đề Đạo",
-  time: "Thời Gian Đạo",
-  transformation: "Biến Hóa Đạo",
-  water: "Thủy Đạo",
-  wind: "Phong Đạo",
-  wisdom: "Trí Đạo",
-  wood: "Mộc Đạo",
-};
+
+import { pathLabels } from "@/lib/translate";
 
 const translatePath = (path: string): string => {
-  const normalized = path.toLowerCase().trim();
-  if (pathNameMap[normalized]) return pathNameMap[normalized];
-  return path.charAt(0).toUpperCase() + path.slice(1) + " Đạo";
+  if (!path) return "";
+  let key = path.endsWith(" Path") ? path : path.charAt(0).toUpperCase() + path.slice(1).toLowerCase() + " Path";
+  if (pathLabels[key]) return pathLabels[key];
+  
+  const lowerKey = key.toLowerCase();
+  for (const [k, v] of Object.entries(pathLabels)) {
+    if (k.toLowerCase() === lowerKey) return v;
+  }
+  
+  const base = path.endsWith(" Path") ? path.slice(0, -5) : path;
+  return base.charAt(0).toUpperCase() + base.slice(1).toLowerCase() + " Đạo";
 };
 
 export const PlayerProfileModal: React.FC = () => {
