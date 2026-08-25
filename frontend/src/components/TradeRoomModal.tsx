@@ -561,6 +561,27 @@ export const TradeRoomModal: React.FC = () => {
                         {!myLocked && tradeableGus.length > 0 && (
                           <div className="flex items-center gap-1.5 flex-wrap bg-zinc-950/40 border border-zinc-900 rounded-xl p-2">
                             <span className="text-[9px] font-mono text-zinc-500">Chọn nhanh:</span>
+                            {Array.from(new Set(tradeableGus.map(g => guDictionary[g.gu_id]?.rank || g.rank || 1))).sort((a,b)=>a-b).map(rank => (
+                              <button
+                                key={rank}
+                                type="button"
+                                onClick={() => {
+                                  const rankGus = tradeableGus.filter(g => (guDictionary[g.gu_id]?.rank || g.rank || 1) === rank).map(g => g.instance_id);
+                                  const currentGus = [...(myOffer?.gus || [])];
+                                  const updatedGus = Array.from(new Set([...currentGus, ...rankGus]));
+                                  updateTradeOffer(activeTrade.id, {
+                                    primeval_stones: myOffer?.primeval_stones || 0,
+                                    immortal_stones: myOffer?.immortal_stones || 0,
+                                    gus: updatedGus,
+                                    materials: myOffer?.materials || {},
+                                    recipes: myOffer?.recipes || {},
+                                  });
+                                }}
+                                className="px-2 py-0.5 text-[9px] font-mono rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-zinc-800 transition-colors cursor-pointer"
+                              >
+                                Rank {rank}
+                              </button>
+                            ))}
                             <button
                               type="button"
                               onClick={() => {
@@ -684,6 +705,70 @@ export const TradeRoomModal: React.FC = () => {
                     {/* Materials selectors */}
                     {activeTab === "materials" && (
                       <div className="space-y-3">
+                        {/* Quick select bar */}
+                        {!myLocked && availableMaterials.length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-wrap bg-zinc-950/40 border border-zinc-900 rounded-xl p-2 mb-2">
+                            <span className="text-[9px] font-mono text-zinc-500">Chọn nhanh:</span>
+                            {Array.from(new Set(availableMaterials.map(m => itemDictionary[m]?.rank || 1))).sort((a,b)=>a-b).map(rank => (
+                              <button
+                                key={rank}
+                                type="button"
+                                onClick={() => {
+                                  const currentMats = { ...(myOffer?.materials || {}) };
+                                  availableMaterials.forEach(m => {
+                                    if ((itemDictionary[m]?.rank || 1) === rank) {
+                                      currentMats[m] = player.materials_inventory[m];
+                                    }
+                                  });
+                                  updateTradeOffer(activeTrade.id, {
+                                    primeval_stones: myOffer?.primeval_stones || 0,
+                                    immortal_stones: myOffer?.immortal_stones || 0,
+                                    gus: myOffer?.gus || [],
+                                    materials: currentMats,
+                                    recipes: myOffer?.recipes || {},
+                                  });
+                                }}
+                                className="px-2 py-0.5 text-[9px] font-mono rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-zinc-800 transition-colors cursor-pointer"
+                              >
+                                Rank {rank}
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentMats = { ...(myOffer?.materials || {}) };
+                                availableMaterials.forEach(m => {
+                                  currentMats[m] = player.materials_inventory[m];
+                                });
+                                updateTradeOffer(activeTrade.id, {
+                                  primeval_stones: myOffer?.primeval_stones || 0,
+                                  immortal_stones: myOffer?.immortal_stones || 0,
+                                  gus: myOffer?.gus || [],
+                                  materials: currentMats,
+                                  recipes: myOffer?.recipes || {},
+                                });
+                              }}
+                              className="px-2 py-0.5 text-[9px] font-mono rounded bg-emerald-950/20 hover:bg-emerald-950/30 text-emerald-400 border border-emerald-900/30 transition-colors cursor-pointer"
+                            >
+                              Tất cả Vật Phẩm
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateTradeOffer(activeTrade.id, {
+                                  primeval_stones: myOffer?.primeval_stones || 0,
+                                  immortal_stones: myOffer?.immortal_stones || 0,
+                                  gus: myOffer?.gus || [],
+                                  materials: {},
+                                  recipes: myOffer?.recipes || {},
+                                });
+                              }}
+                              className="px-2 py-0.5 text-[9px] font-mono rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 border border-zinc-800 transition-colors cursor-pointer"
+                            >
+                              Bỏ chọn hết
+                            </button>
+                          </div>
+                        )}
                         <div className="flex gap-2">
                           <select
                             value={selectedMat}
@@ -727,6 +812,70 @@ export const TradeRoomModal: React.FC = () => {
                     {/* Recipes selectors */}
                     {activeTab === "recipes" && (
                       <div className="space-y-3">
+                        {/* Quick select bar */}
+                        {!myLocked && recipes.filter((r) => !myOffer?.recipes?.[r.id]).length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-wrap bg-zinc-950/40 border border-zinc-900 rounded-xl p-2 mb-2">
+                            <span className="text-[9px] font-mono text-zinc-500">Chọn nhanh:</span>
+                            {Array.from(new Set(recipes.filter((r) => !myOffer?.recipes?.[r.id]).map(r => r.target_rank || 1))).sort((a,b)=>a-b).map(rank => (
+                              <button
+                                key={rank}
+                                type="button"
+                                onClick={() => {
+                                  const currentRecipes = { ...(myOffer?.recipes || {}) };
+                                  recipes.filter((r) => !myOffer?.recipes?.[r.id]).forEach(r => {
+                                    if ((r.target_rank || 1) === rank) {
+                                      currentRecipes[r.id] = r.completion_rate ?? 100;
+                                    }
+                                  });
+                                  updateTradeOffer(activeTrade.id, {
+                                    primeval_stones: myOffer?.primeval_stones || 0,
+                                    immortal_stones: myOffer?.immortal_stones || 0,
+                                    gus: myOffer?.gus || [],
+                                    materials: myOffer?.materials || {},
+                                    recipes: currentRecipes,
+                                  });
+                                }}
+                                className="px-2 py-0.5 text-[9px] font-mono rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-zinc-800 transition-colors cursor-pointer"
+                              >
+                                Rank {rank}
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentRecipes = { ...(myOffer?.recipes || {}) };
+                                recipes.filter((r) => !myOffer?.recipes?.[r.id]).forEach(r => {
+                                  currentRecipes[r.id] = r.completion_rate ?? 100;
+                                });
+                                updateTradeOffer(activeTrade.id, {
+                                  primeval_stones: myOffer?.primeval_stones || 0,
+                                  immortal_stones: myOffer?.immortal_stones || 0,
+                                  gus: myOffer?.gus || [],
+                                  materials: myOffer?.materials || {},
+                                  recipes: currentRecipes,
+                                });
+                              }}
+                              className="px-2 py-0.5 text-[9px] font-mono rounded bg-emerald-950/20 hover:bg-emerald-950/30 text-emerald-400 border border-emerald-900/30 transition-colors cursor-pointer"
+                            >
+                              Tất cả Bí Phương
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateTradeOffer(activeTrade.id, {
+                                  primeval_stones: myOffer?.primeval_stones || 0,
+                                  immortal_stones: myOffer?.immortal_stones || 0,
+                                  gus: myOffer?.gus || [],
+                                  materials: myOffer?.materials || {},
+                                  recipes: {},
+                                });
+                              }}
+                              className="px-2 py-0.5 text-[9px] font-mono rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 border border-zinc-800 transition-colors cursor-pointer"
+                            >
+                              Bỏ chọn hết
+                            </button>
+                          </div>
+                        )}
                         <div className="flex gap-2">
                           <select
                             value={selectedRecipe}

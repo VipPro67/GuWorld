@@ -219,11 +219,6 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   }, [investigationLevel, enemy]);
 
   const handleStartSimulation = async () => {
-    if (selectedGuIds.length === 0) {
-      addToast("Vui lòng chọn ít nhất 1 Cổ!", "error");
-      return;
-    }
-
     const loadout = {
       GuIds: selectedGuIds.map(id => eligibleGus.find(g => g.instance_id === id)?.gu_id || id),
       KillerMoveIds: selectedKillerMoveIds,

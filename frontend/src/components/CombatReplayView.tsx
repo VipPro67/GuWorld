@@ -610,7 +610,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             </div>
 
             {/* Mana Bar */}
-            {c.maxMp > 0 && (
+            {c.maxMp > 0 && (isAlly || (c.kindDetail && c.kindDetail.toLowerCase() === "player")) && (
               <>
                 <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden mt-0.5">
                   <div
@@ -624,12 +624,29 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
               </>
             )}
 
-            {/* Shield */}
-            {c.shield > 0 && (
-              <div className="text-[6px] font-mono text-cyan-400/80 mt-0.5 flex items-center gap-0.5">
-                🛡 <Num value={Math.round(c.shield)} />
-              </div>
-            )}
+            {/* Combat Stats */}
+            <div className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 mt-1 w-full">
+              {c.damage > 0 && (
+                <div className="text-[6px] font-mono text-rose-400/90 flex items-center gap-[2px]">
+                  ⚔ <Num value={Math.round(c.damage)} />
+                </div>
+              )}
+              {c.defense > 0 && (
+                <div className="text-[6px] font-mono text-blue-400/90 flex items-center gap-[2px]">
+                  🛡 <Num value={Math.round(c.defense)} />
+                </div>
+              )}
+              {c.speed > 0 && (
+                <div className="text-[6px] font-mono text-cyan-400/90 flex items-center gap-[2px]">
+                  ⚡ <Num value={Math.round(c.speed)} />
+                </div>
+              )}
+              {c.shield > 0 && (
+                <div className="text-[6px] font-mono text-indigo-400/90 flex items-center gap-[2px]">
+                  🔮 <Num value={Math.round(c.shield)} />
+                </div>
+              )}
+            </div>
           </>
         ) : (
           <span className="text-[8px] text-zinc-800 mx-auto mt-auto mb-auto">
