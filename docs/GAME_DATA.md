@@ -13,7 +13,7 @@ Nguồn dữ liệu chính nằm trong các file CSV ở `backend/`. Khi backend
 | `backend/LootTable.csv` | 25 | Bảng loot cho combat/monster (thức ăn cổ rank<6 được thêm vào loot quái Normal/Elite theo dải rank). |
 | `backend/MonsterSpawn.csv` | 48 | Pool spawn monster theo zone/toạ độ/rank (Roaming/Random). |
 | `backend/Region.csv` | 31 | Zone lồng nhau (1 HUB + 6 Đại Vực 3×2 + 7 địa danh): geometry, rank range, pool_weights. `resources` của mỗi vùng bao gồm thức ăn cổ rank<6 khớp dải rank vùng. |
-| `backend/MapCell.csv` | 29 | Ô persistent dùng chung: boss, tài nguyên cao, điểm an toàn. |
+| `backend/MapCell.csv` | 110 | Ô persistent dùng chung: 23 boss (17 boss landmark theo địa danh + 6 boss tribulation/Long Ngư cố định) + 87 điểm linh tài cao cấp (3/địa danh × 29). `UNIQUE(x,y)` toàn cầu; toạ độ trong bbox region, tránh rect HUB. |
 | `backend/ShopItem.csv` | 61 | Shop NPC/caravan items. Cột `rank` (0 = tự suy, >0 = bán đúng rank đó cho Cổ đa rank). |
 | `backend/ArenaShopItem.csv` | 26 | Shop đấu trường (tiền ARENA_COIN). |
 | `backend/PremiumShopPackage.csv` | 4 | Gói premium shop mua bằng ví. |
