@@ -1649,7 +1649,7 @@ func FeedGu(c *gin.Context) {
 					break
 				}
 			} else {
-				qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), food, "materials")
+				qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), food)
 				if qty > 0 {
 					chosenFoodItem = food
 					break
@@ -1865,7 +1865,7 @@ func FeedGroup(c *gin.Context) {
 					return food
 				}
 			} else if !strings.HasPrefix(food, "GU_") {
-				qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), food, "materials")
+				qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), food)
 				if qty > 0 {
 					return food
 				}
@@ -2994,7 +2994,7 @@ func UpdateGuStatus(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể phong ấn Cổ trùng đang được trang bị. Hãy tháo ra trước."})
 			return
 		}
-		qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), "sealing_stone", "materials")
+		qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), "sealing_stone")
 		if err != nil || qty < 1 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ sealing_stone để phong ấn Cổ trùng."})
 			return

@@ -317,7 +317,7 @@ func EnterInstance(c *gin.Context) {
 
 	// Consume entry item if required
 	if template.EntryItem != "NONE" {
-		qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), template.EntryItem, "materials")
+		qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), template.EntryItem)
 		if err != nil || qty < 1 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu thiếu vật phẩm \"" + template.EntryItem + "\" để tiến vào!"})
 			return
@@ -482,7 +482,7 @@ func ActionInstance(c *gin.Context) {
 				return
 			}
 			requiredAmt := int(amtFloat)
-			qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), matID, "materials")
+			qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), matID)
 			if err != nil || qty < requiredAmt {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ nguyên liệu \"" + matID + "\" yêu cầu!"})
 				return

@@ -557,6 +557,45 @@ export const TradeRoomModal: React.FC = () => {
                     {/* Gus selectors */}
                     {activeTab === "gus" && (
                       <div className="space-y-1.5">
+                        {/* Quick select bar */}
+                        {!myLocked && tradeableGus.length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-wrap bg-zinc-950/40 border border-zinc-900 rounded-xl p-2">
+                            <span className="text-[9px] font-mono text-zinc-500">Chọn nhanh:</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const allInstanceIds = tradeableGus.map(g => g.instance_id);
+                                const updatedOffer = {
+                                  primeval_stones: myOffer?.primeval_stones || 0,
+                                  immortal_stones: myOffer?.immortal_stones || 0,
+                                  gus: allInstanceIds,
+                                  materials: myOffer?.materials || {},
+                                  recipes: myOffer?.recipes || {},
+                                };
+                                updateTradeOffer(activeTrade.id, updatedOffer);
+                              }}
+                              className="px-2 py-0.5 text-[9px] font-mono rounded bg-emerald-950/20 hover:bg-emerald-950/30 text-emerald-400 border border-emerald-900/30 transition-colors cursor-pointer"
+                            >
+                              Tất cả Cổ trùng
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updatedOffer = {
+                                  primeval_stones: myOffer?.primeval_stones || 0,
+                                  immortal_stones: myOffer?.immortal_stones || 0,
+                                  gus: [],
+                                  materials: myOffer?.materials || {},
+                                  recipes: myOffer?.recipes || {},
+                                };
+                                updateTradeOffer(activeTrade.id, updatedOffer);
+                              }}
+                              className="px-2 py-0.5 text-[9px] font-mono rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 border border-zinc-800 transition-colors cursor-pointer"
+                            >
+                              Bỏ chọn hết
+                            </button>
+                          </div>
+                        )}
                         {tradeableGus.length > 0 ? (
                           (() => {
                             const grouped: Record<string, GuInstance[]> = {};

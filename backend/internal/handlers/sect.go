@@ -770,7 +770,7 @@ func DonateMaterials(c *gin.Context) {
 		return
 	}
 
-	qty, _ := InventorySvc.GetQuantity(tx, playerID.String(), req.MaterialID, "materials")
+	qty, _ := InventorySvc.GetQuantity(tx, playerID.String(), req.MaterialID)
 	if qty < req.Amount {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không có đủ linh tài yêu cầu!"})
 		return
@@ -1239,7 +1239,7 @@ func DonateBulk(c *gin.Context) {
 		}
 
 		for _, matReq := range req.Materials {
-			qty, _ := InventorySvc.GetQuantity(tx, playerID.String(), matReq.MaterialID, "materials")
+			qty, _ := InventorySvc.GetQuantity(tx, playerID.String(), matReq.MaterialID)
 			if qty < matReq.Amount {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đạo hữu không có đủ linh tài: %s", matReq.MaterialID)})
 				return
@@ -2004,7 +2004,7 @@ func CompleteSectMission(c *gin.Context) {
 
 	// Verify completion requirements
 	if sm.MissionType == "GATHER" {
-		qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), sm.TargetID, "materials")
+		qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), sm.TargetID)
 		if qty < sm.TargetAmount {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa thu thập đủ linh tài yêu cầu!"})
 			return

@@ -404,7 +404,7 @@ func UpdateTradeOffer(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Số lượng vật phẩm giao dịch không hợp lệ"})
 			return
 		}
-		availableQty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), matID, "materials")
+		availableQty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), matID)
 		if availableQty < qty {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ số lượng vật phẩm trong kho: %s", matID)})
 			return
@@ -665,7 +665,7 @@ func ConfirmTrade(c *gin.Context) {
 
 		// Deduct sender materials
 		for matID, qty := range senderOffer.Materials {
-			avail, _ := InventorySvc.GetQuantity(tx, sender.ID.String(), matID, "materials")
+			avail, _ := InventorySvc.GetQuantity(tx, sender.ID.String(), matID )
 			if avail < qty {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bên gửi thiếu vật phẩm: %s", matID)})
 				return
@@ -726,7 +726,7 @@ func ConfirmTrade(c *gin.Context) {
 
 		// Deduct receiver materials
 		for matID, qty := range receiverOffer.Materials {
-			avail, _ := InventorySvc.GetQuantity(tx, receiver.ID.String(), matID, "materials")
+			avail, _ := InventorySvc.GetQuantity(tx, receiver.ID.String(), matID )
 			if avail < qty {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bên nhận thiếu vật phẩm: %s", matID)})
 				return

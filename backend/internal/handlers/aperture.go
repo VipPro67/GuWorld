@@ -652,7 +652,7 @@ func PlaceApertureNode(c *gin.Context) {
 	}
 
 	nodeItemID := "node_" + strings.ToLower(req.NodeType)
-	qty, err := InventorySvc.GetQuantity(tx, playerID.String(), nodeItemID, "materials")
+	qty, err := InventorySvc.GetQuantity(tx, playerID.String(), nodeItemID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn túi đồ"})
 		return

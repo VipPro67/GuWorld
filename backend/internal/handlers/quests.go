@@ -117,10 +117,10 @@ func CheckQuest(questID string, p *models.Player) bool {
 		}
 		return false
 	case "quest_13_gather_lan_flower":
-		qty, _ := InventorySvc.GetQuantity(db.DB, p.ID.String(), "moon_orchid_petal", "materials")
+		qty, _ := InventorySvc.GetQuantity(db.DB, p.ID.String(), "moon_orchid_petal")
 		return qty >= 50
 	case "quest_14_immortal_material":
-		qty, _ := InventorySvc.GetQuantity(db.DB, p.ID.String(), "immortal_blood", "materials")
+		qty, _ := InventorySvc.GetQuantity(db.DB, p.ID.String(), "immortal_blood")
 		return qty >= 1
 	default:
 		return false

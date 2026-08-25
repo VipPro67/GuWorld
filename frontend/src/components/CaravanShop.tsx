@@ -983,8 +983,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
               </div>
             </div>
 
-            {selectedBuyItem.type !== "Gu" ? (
-              <div className="space-y-2">
+            <div className="space-y-2">
                 <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500 uppercase">
                   <span>Số lượng cần mua:</span>
                   <span>
@@ -1062,11 +1061,6 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                   </button>
                 </div>
               </div>
-            ) : (
-              <div className="text-xs text-zinc-500 italic py-1">
-                * Cổ trùng quý hiếm, chỉ giao dịch từng con một để đảm bảo sinh khí.
-              </div>
-            )}
 
             {/* Total Cost Display */}
             <div className="flex justify-between items-center pt-2 font-mono border-t border-dashed border-zinc-900 text-xs">

@@ -277,7 +277,7 @@ func CombatAttack(c *gin.Context) {
 		}
 
 		if !isVirtual {
-			qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), req.ItemID, "materials")
+			qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), req.ItemID)
 			if err != nil || qty <= 0 {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Không có vật phẩm này trong túi đồ"})
 				return

@@ -292,7 +292,7 @@ func UseRelicGu(c *gin.Context) {
 	}
 
 	// Check ownership of relic in materials inventory
-	qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), req.RelicKey, "materials")
+	qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), req.RelicKey)
 	if err != nil || qty <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "You do not possess that Relic Gu"})
 		return

@@ -274,7 +274,7 @@ func RefineGu(c *gin.Context) {
 
 	// 5. Validate Costs (Required Materials)
 	for matID, reqQty := range recipe.RequiredMaterials {
-		currentQty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), matID, "materials")
+		currentQty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), matID)
 		if currentQty < reqQty {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Not enough required material items: " + matID})
 			return

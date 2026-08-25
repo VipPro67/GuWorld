@@ -288,7 +288,7 @@ func CreateListing(c *gin.Context) {
 		if req.Quantity <= 0 {
 			req.Quantity = 1
 		}
-		qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), req.ItemID, "materials")
+		qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), req.ItemID)
 		if err != nil || qty < req.Quantity {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ vật phẩm"})
 			return

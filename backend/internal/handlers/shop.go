@@ -502,7 +502,7 @@ func BuyShopItem(c *gin.Context) {
 	if selectedItem.Type == "Gu" {
 		incomingCount = req.Quantity
 	} else {
-		qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), selectedItem.ID, "materials")
+		qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), selectedItem.ID)
 		if qty == 0 {
 			incomingCount = 1
 		}
@@ -652,7 +652,7 @@ func SellShopItem(c *gin.Context) {
 		if req.ItemType == "Consumable" {
 			cat = "consumables"
 		}
-		qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), req.ItemID, cat)
+		qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), req.ItemID)
 		if qty < req.Quantity {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ vật phẩm để bán"})
 			return
@@ -834,7 +834,7 @@ func SellShopItemsBulk(c *gin.Context) {
 			if item.ItemType == "Consumable" {
 				cat = "consumables"
 			}
-			qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), item.ItemID, cat)
+			qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), item.ItemID)
 			if qty < item.Quantity {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ vật phẩm %s để bán", item.ItemID)})
 				return

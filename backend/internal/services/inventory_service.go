@@ -53,12 +53,12 @@ func (s *InventoryService) ListByPlayer(playerID string) ([]InventoryItem, error
 }
 
 // GetQuantity returns the quantity of a specific item, or 0 if not found.
-func (s *InventoryService) GetQuantity(q QueryRower, playerID, itemID, category string) (int, error) {
+func (s *InventoryService) GetQuantity(q QueryRower, playerID, itemID string) (int, error) {
 	var qty int
 	err := q.QueryRow(`
 		SELECT quantity FROM player_inventory_items
-		WHERE player_id = $1 AND item_id = $2 AND category = $3
-	`, playerID, itemID, category).Scan(&qty)
+		WHERE player_id = $1 AND item_id = $2
+	`, playerID, itemID).Scan(&qty)
 	if err == sql.ErrNoRows {
 		return 0, nil
 	}

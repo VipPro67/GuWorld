@@ -2099,6 +2099,73 @@ export const SectView: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Quick select bar */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[9px] font-mono text-zinc-500">Chọn nhanh:</span>
+                    {availableDonateMatRanks.map((rank) => (
+                      <button
+                        key={rank}
+                        type="button"
+                        onClick={() => {
+                          setSelectedDonateMaterials(prev => {
+                            const next = { ...prev };
+                            filteredMaterials.filter(([matId]) => (itemDictionary[matId]?.rank || 1) === rank).forEach(([matId, qty]) => {
+                              if (!next[matId]) {
+                                const spec = itemDictionary[matId];
+                                next[matId] = {
+                                  material_id: matId,
+                                  name: spec?.name || matId,
+                                  owned: qty,
+                                  valuePerItem: getMaterialValue(matId),
+                                  amountToDonate: qty
+                                };
+                              } else {
+                                next[matId] = { ...next[matId], amountToDonate: next[matId].owned };
+                              }
+                            });
+                            return next;
+                          });
+                        }}
+                        className="px-2 py-0.5 text-[9px] font-mono rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-zinc-800 transition-colors cursor-pointer"
+                      >
+                        Rank {rank}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDonateMaterials(prev => {
+                          const next = { ...prev };
+                          filteredMaterials.forEach(([matId, qty]) => {
+                            if (!next[matId]) {
+                              const spec = itemDictionary[matId];
+                              next[matId] = {
+                                material_id: matId,
+                                name: spec?.name || matId,
+                                owned: qty,
+                                valuePerItem: getMaterialValue(matId),
+                                amountToDonate: qty
+                              };
+                            } else {
+                              next[matId] = { ...next[matId], amountToDonate: next[matId].owned };
+                            }
+                          });
+                          return next;
+                        });
+                      }}
+                      className="px-2 py-0.5 text-[9px] font-mono rounded bg-blue-950/20 hover:bg-blue-950/30 text-blue-400 border border-blue-900/30 transition-colors cursor-pointer"
+                    >
+                      Tất cả tab này
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDonateMaterials({})}
+                      className="px-2 py-0.5 text-[9px] font-mono rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 border border-zinc-800 transition-colors cursor-pointer"
+                    >
+                      Bỏ chọn hết
+                    </button>
+                  </div>
+
                   {/* Grid layout for items */}
                   <div className="max-h-[480px] overflow-y-auto pr-1 grid grid-cols-1 sm:grid-cols-2 gap-3 scrollbar-thin">
                     {filteredMaterials.length === 0 ? (
@@ -2319,6 +2386,40 @@ export const SectView: React.FC = () => {
                     />
                   </div>
 
+                  {/* Quick select bar */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[9px] font-mono text-zinc-500">Chọn nhanh:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDonateRecipes(prev => {
+                          const next = { ...prev };
+                          availableRecipes.forEach(r => {
+                            if (!next[r.recipe_id]) {
+                              next[r.recipe_id] = {
+                                recipe_id: r.recipe_id,
+                                name: r.name,
+                                completion_rate: r.completion_rate,
+                                value: r.value
+                              };
+                            }
+                          });
+                          return next;
+                        });
+                      }}
+                      className="px-2 py-0.5 text-[9px] font-mono rounded bg-blue-950/20 hover:bg-blue-950/30 text-blue-400 border border-blue-900/30 transition-colors cursor-pointer"
+                    >
+                      Tất cả tab này
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDonateRecipes({})}
+                      className="px-2 py-0.5 text-[9px] font-mono rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 border border-zinc-800 transition-colors cursor-pointer"
+                    >
+                      Bỏ chọn hết
+                    </button>
+                  </div>
+
                   {/* Recipe List */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-96 overflow-y-auto pr-1 scrollbar-thin">
                     {availableRecipes.length === 0 ? (
@@ -2522,6 +2623,79 @@ export const SectView: React.FC = () => {
                         ))}
                       </select>
                     </div>
+                  </div>
+
+                  {/* Quick select bar */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[9px] font-mono text-zinc-500">Chọn nhanh:</span>
+                    {availableDonateGuRanks.map((rank) => (
+                      <button
+                        key={rank}
+                        type="button"
+                        onClick={() => {
+                          setSelectedDonateGus(prev => {
+                            const next = { ...prev };
+                            filteredGus.filter(g => g.rank === rank).forEach(g => {
+                              const key = `${g.gu_id}_rank_${g.rank}`;
+                              if (!next[key]) {
+                                next[key] = {
+                                  key,
+                                  gu_id: g.gu_id,
+                                  rank: g.rank,
+                                  name: g.name,
+                                  valuePerItem: g.value,
+                                  ownedCount: g.instances.length,
+                                  amountToDonate: g.instances.length,
+                                  instances: g.instances
+                                };
+                              } else {
+                                next[key] = { ...next[key], amountToDonate: next[key].ownedCount };
+                              }
+                            });
+                            return next;
+                          });
+                        }}
+                        className="px-2 py-0.5 text-[9px] font-mono rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-zinc-800 transition-colors cursor-pointer"
+                      >
+                        Rank {rank}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDonateGus(prev => {
+                          const next = { ...prev };
+                          filteredGus.forEach(g => {
+                            const key = `${g.gu_id}_rank_${g.rank}`;
+                            if (!next[key]) {
+                              next[key] = {
+                                key,
+                                gu_id: g.gu_id,
+                                rank: g.rank,
+                                name: g.name,
+                                valuePerItem: g.value,
+                                ownedCount: g.instances.length,
+                                amountToDonate: g.instances.length,
+                                instances: g.instances
+                              };
+                            } else {
+                              next[key] = { ...next[key], amountToDonate: next[key].ownedCount };
+                            }
+                          });
+                          return next;
+                        });
+                      }}
+                      className="px-2 py-0.5 text-[9px] font-mono rounded bg-blue-950/20 hover:bg-blue-950/30 text-blue-400 border border-blue-900/30 transition-colors cursor-pointer"
+                    >
+                      Tất cả tab này
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDonateGus({})}
+                      className="px-2 py-0.5 text-[9px] font-mono rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 border border-zinc-800 transition-colors cursor-pointer"
+                    >
+                      Bỏ chọn hết
+                    </button>
                   </div>
 
                   {/* Grid layout for Gu items */}

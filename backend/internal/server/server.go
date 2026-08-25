@@ -519,7 +519,6 @@ func SetupRouter() *gin.Engine {
 		soul.Use(middleware.AuthRequired())
 		soul.Use(middleware.RateLimitByPlayer(15, time.Minute))
 		{
-			soul.POST("/use-guts", handlers.UseGutsGu)
 			soul.POST("/refine", handlers.RefineSoul)
 		}
 
