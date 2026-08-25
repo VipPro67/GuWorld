@@ -2841,7 +2841,7 @@ func AdminListGuItems(c *gin.Context) {
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, rank, path, gu_type,
 		base_mana_cost, effects, food_types, hunger_rate, max_hunger,
-		COALESCE(description,''), COALESCE(target_type,'SINGLE'), COALESCE(rarity,''),
+		COALESCE(description,''), COALESCE(target_type,'SINGLE'), COALESCE(rarity,0),
 		COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles,'[]'::jsonb),
 		COALESCE(combat_tags,'[]'::jsonb), COALESCE(support_tags,'[]'::jsonb), COALESCE(base_price,0),
 		COALESCE(image_url,'')
@@ -2865,7 +2865,7 @@ func AdminListGuItems(c *gin.Context) {
 		MaxHunger    int             `json:"max_hunger"`
 		Description  string          `json:"description"`
 		TargetType   string          `json:"target_type"`
-		Rarity       string          `json:"rarity"`
+		Rarity       int             `json:"rarity"`
 		IsImmortal   bool            `json:"is_immortal"`
 		PrimaryRole  string          `json:"primary_role"`
 		CombatRoles  json.RawMessage `json:"combat_roles"`
@@ -2902,7 +2902,7 @@ type AdminGuInput struct {
 	MaxHunger    int             `json:"max_hunger"`
 	Description  string          `json:"description"`
 	TargetType   string          `json:"target_type"`
-	Rarity       string          `json:"rarity"`
+	Rarity       int             `json:"rarity"`
 	IsImmortal   bool            `json:"is_immortal"`
 	PrimaryRole  string          `json:"primary_role"`
 	CombatRoles  []string        `json:"combat_roles"`
@@ -3061,7 +3061,7 @@ func AdminUpdateGuItem(c *gin.Context) {
 			args = append(args, req.TargetType)
 			idx++
 		}
-		if req.Rarity != "" || true {
+		if req.Rarity >= 0 || true {
 			sets = append(sets, "rarity=$"+strconv.Itoa(idx))
 			args = append(args, req.Rarity)
 			idx++
@@ -3161,7 +3161,7 @@ func AdminListItemItems(c *gin.Context) {
 	if _, ok := requireAdmin(c); !ok {
 		return
 	}
-	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, item_type, rank, effects, COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,'') FROM item_dictionary ORDER BY name`)
+	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT id, name, item_type, rank, effects, COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), COALESCE(rarity,0) FROM item_dictionary ORDER BY name`)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -3177,11 +3177,12 @@ func AdminListItemItems(c *gin.Context) {
 		Description string          `json:"description"`
 		BasePrice   int             `json:"base_price"`
 		ImageURL    string          `json:"image_url"`
+		Rarity      int             `json:"rarity"`
 	}
 	items := []ItemRow{}
 	for rows.Next() {
 		var r ItemRow
-		if err := rows.Scan(&r.ID, &r.Name, &r.ItemType, &r.Rank, &r.Effects, &r.Description, &r.BasePrice, &r.ImageURL); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.ItemType, &r.Rank, &r.Effects, &r.Description, &r.BasePrice, &r.ImageURL, &r.Rarity); err != nil {
 			continue
 		}
 		items = append(items, r)
@@ -3198,6 +3199,7 @@ type AdminItemInput struct {
 	Description string          `json:"description"`
 	BasePrice   int             `json:"base_price"`
 	ImageURL    string          `json:"image_url"`
+	Rarity      int             `json:"rarity"`
 }
 
 func AdminCreateItemItem(c *gin.Context) {
@@ -3216,8 +3218,8 @@ func AdminCreateItemItem(c *gin.Context) {
 	if len(req.Effects) == 0 {
 		req.Effects = json.RawMessage(`{}`)
 	}
-	_, err := db.DB.Exec(`INSERT INTO item_dictionary(id,name,item_type,rank,effects,description,base_price,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
-		req.ID, req.Name, req.ItemType, req.Rank, req.Effects, req.Description, req.BasePrice, req.ImageURL)
+	_, err := db.DB.Exec(`INSERT INTO item_dictionary(id,name,item_type,rank,effects,description,base_price,image_url,rarity) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+		req.ID, req.Name, req.ItemType, req.Rank, req.Effects, req.Description, req.BasePrice, req.ImageURL, req.Rarity)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -3264,6 +3266,11 @@ func AdminUpdateItemItem(c *gin.Context) {
 	if req.BasePrice > 0 || true {
 		sets = append(sets, "base_price=$"+strconv.Itoa(idx))
 		args = append(args, req.BasePrice)
+		idx++
+	}
+	if req.Rarity >= 0 || true {
+		sets = append(sets, "rarity=$"+strconv.Itoa(idx))
+		args = append(args, req.Rarity)
 		idx++
 	}
 	if req.ImageURL != "" {

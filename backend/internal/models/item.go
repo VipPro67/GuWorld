@@ -45,6 +45,7 @@ type ItemSpec struct {
 	Description string      `json:"description"`
 	BasePrice   int         `json:"base_price"`
 	ImageURL    string      `json:"image_url"`
+	Rarity      int         `json:"rarity"`
 }
 
 // ItemRegistry holds the memory map cache of all Item specifications.
@@ -68,7 +69,7 @@ func ItemIDsByName(search string) []string {
 // LoadItemRegistry queries the database and populates the in-memory cache
 func LoadItemRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
-		SELECT id, name, item_type, rank, effects, description, COALESCE(base_price, 0), COALESCE(image_url, '')
+		SELECT id, name, item_type, rank, effects, description, COALESCE(base_price, 0), COALESCE(image_url, ''), COALESCE(rarity, 0)
 		FROM item_dictionary
 	`)
 	if err != nil {
@@ -85,7 +86,7 @@ func LoadItemRegistry(db *sql.DB) error {
 		err = rows.Scan(
 			&item.ID, &item.Name, &item.Type, &item.Rank,
 			&item.Effects, &item.Description, &item.BasePrice,
-			&item.ImageURL,
+			&item.ImageURL, &item.Rarity,
 		)
 		if err != nil {
 			logger.S.Warnf("failed to scan Item spec row: %v", err)

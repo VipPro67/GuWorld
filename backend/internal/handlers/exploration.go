@@ -142,16 +142,44 @@ func generateCellUncached(x, y int) models.Cell {
 		}
 		return models.Cell{X: x, Y: y, Type: "Resource", Content: pool[rng.Intn(len(pool))]}
 	case "WildGu":
-		pool := make([]string, 0, len(zone.PoolWeights.WildGus))
+		type weightedGu struct {
+			id     string
+			weight float64
+		}
+		var pool []weightedGu
+		var total float64
 		for _, id := range zone.PoolWeights.WildGus {
-			if !models.HasImmortalRank(id) {
-				pool = append(pool, id)
+			if models.HasImmortalRank(id) {
+				continue
 			}
+			w := 1.0
+			if spec, ok := models.GetGuAny(id); ok {
+				w = guRarityWeightByRank(effectiveDropLevel(spec.Rank, spec.Rarity))
+			}
+			if w <= 0 {
+				w = 1.0
+			}
+			pool = append(pool, weightedGu{id: id, weight: w})
+			total += w
 		}
 		if len(pool) == 0 {
-			pool = defaultWildGuPool
+			for _, id := range defaultWildGuPool {
+				pool = append(pool, weightedGu{id: id, weight: 1.0})
+				total += 1.0
+			}
 		}
-		guID := pool[rng.Intn(len(pool))]
+		guID := ""
+		r := rng.Float64() * total
+		for _, e := range pool {
+			r -= e.weight
+			if r <= 0 {
+				guID = e.id
+				break
+			}
+		}
+		if guID == "" {
+			guID = pool[0].id
+		}
 		rank := zone.MinRank
 		if rank < 1 {
 			rank = 1

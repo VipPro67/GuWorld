@@ -310,20 +310,14 @@ func rankDropMultiplier(rank int) float64 {
 	}
 }
 
-// itemRarityWeight maps item rarity int → weight
-func itemRarityWeight(rarity int) float64 {
-	switch {
-	case rarity <= 1:
-		return 100.0
-	case rarity == 2:
-		return 50.0
-	case rarity == 3:
-		return 20.0
-	case rarity == 4:
-		return 5.0
-	default:
-		return 1.0
+// effectiveDropLevel returns the drop-weighting level for a Gu/item, taking the
+// higher of its rank and its rarity tier (1-9). A rank < 6 mortal Gu tagged
+// with a high rarity is thus as rare as a high-rank Gu.
+func effectiveDropLevel(rank, rarity int) int {
+	if rarity > rank {
+		return rarity
 	}
+	return rank
 }
 
 func rollMaterialDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, map[string]interface{}) {
@@ -339,7 +333,7 @@ func rollMaterialDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) (
 		if spec.Type != "Material" {
 			continue
 		}
-		w := rankDropMultiplier(spec.Rank)
+		w := rankDropMultiplier(effectiveDropLevel(spec.Rank, spec.Rarity))
 		if w > 0 {
 			pool = append(pool, weightedMat{id: id, weight: w})
 			totalWeight += w

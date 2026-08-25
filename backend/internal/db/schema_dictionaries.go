@@ -15,7 +15,8 @@ func schemaDictionaries() error {
 		effects JSONB NOT NULL DEFAULT '{}',
 		description TEXT,
 		base_price INTEGER NOT NULL DEFAULT 0,
-		image_url TEXT NOT NULL DEFAULT ''
+		image_url TEXT NOT NULL DEFAULT '',
+		rarity INTEGER NOT NULL DEFAULT 0
 	);`); err != nil {
 		return err
 	}
@@ -34,7 +35,7 @@ func schemaDictionaries() error {
 		max_hunger INTEGER DEFAULT 100,
 		description TEXT,
 		target_type VARCHAR(50) NOT NULL DEFAULT 'SINGLE',
-		rarity VARCHAR(50),
+		rarity INTEGER NOT NULL DEFAULT 0,
 		is_immortal BOOLEAN DEFAULT false,
 		primary_role VARCHAR(80),
 		combat_roles JSONB DEFAULT '[]',

@@ -529,7 +529,7 @@ export interface GuSpec {
   food_types: string[];
   max_hunger: number;
   description: string;
-  rarity: string;
+  rarity: number;
   is_immortal: boolean;
   primary_role: string;
   combat_roles: string[];

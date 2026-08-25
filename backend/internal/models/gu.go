@@ -117,7 +117,7 @@ type GuDictionaryItem struct {
 	HungerRate   int       `json:"hunger_rate"`
 	MaxHunger    int       `json:"max_hunger"`
 	Description  string    `json:"description"`
-	Rarity       string    `json:"rarity"`
+	Rarity       int       `json:"rarity"`
 	IsImmortal   bool      `json:"is_immortal"`
 	PrimaryRole  string    `json:"primary_role"`
 	CombatRoles  []string  `json:"combat_roles"`
@@ -406,7 +406,7 @@ func HasImmortalRank(id string) bool {
 
 func LoadGuRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
-		SELECT id, name, rank, path, gu_type, base_mana_cost, effects, food_types, hunger_rate, max_hunger, description, target_type, rarity, is_immortal, primary_role, combat_roles, combat_tags, support_tags, COALESCE(base_price, 0), COALESCE(image_url, '')
+		SELECT id, name, rank, path, gu_type, base_mana_cost, effects, food_types, hunger_rate, max_hunger, description, target_type, COALESCE(rarity, 0), is_immortal, primary_role, combat_roles, combat_tags, support_tags, COALESCE(base_price, 0), COALESCE(image_url, '')
 		FROM gu_dictionary
 	`)
 	if err != nil {
@@ -420,14 +420,14 @@ func LoadGuRegistry(db *sql.DB) error {
 	for rows.Next() {
 		var item GuDictionaryItem
 		var pathRaw, foodTypesRaw, combatRolesRaw, combatTagsRaw, supportTagsRaw []byte
-		var targetTypeRaw, rarityRaw []byte
+		var targetTypeRaw []byte
 		var isImmortalRaw bool
 		err = rows.Scan(
 			&item.ID, &item.Name, &item.Rank, &pathRaw,
 			&item.Type, &item.BaseManaCost,
 			&item.Effects, &foodTypesRaw, &item.HungerRate,
 			&item.MaxHunger, &item.Description,
-			&targetTypeRaw, &rarityRaw, &isImmortalRaw,
+			&targetTypeRaw, &item.Rarity, &isImmortalRaw,
 			&item.PrimaryRole,
 			&combatRolesRaw, &combatTagsRaw, &supportTagsRaw, &item.BasePrice,
 			&item.ImageURL,
@@ -445,12 +445,6 @@ func LoadGuRegistry(db *sql.DB) error {
 		_ = json.Unmarshal(combatTagsRaw, &item.CombatTags)
 		_ = json.Unmarshal(supportTagsRaw, &item.SupportTags)
 
-		if len(rarityRaw) > 0 {
-			_ = json.Unmarshal(rarityRaw, &item.Rarity)
-			if item.Rarity == "" {
-				item.Rarity = string(rarityRaw)
-			}
-		}
 		item.IsImmortal = isImmortalRaw
 
 		if _, ok := newRegistry[item.ID]; !ok {
@@ -622,4 +616,3 @@ func SoulRegenTickPerHour(inventory []GuInstance, playerRank int) float64 {
 	}
 	return total
 }
-

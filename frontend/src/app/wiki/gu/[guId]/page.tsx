@@ -10,22 +10,28 @@ type Props = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
-const rarityLabels: Record<string, string> = {
-  COMMON: "Phàm",
-  UNCOMMON: "Hiếm",
-  RARE: "Quý",
-  EPIC: "Sử thi",
-  LEGENDARY: "Huyền thoại",
-  MYTHIC: "Thần thoại",
+const rarityLabels: Record<number, string> = {
+  1: "Phàm",
+  2: "Tinh Phẩm",
+  3: "Hiếm",
+  4: "Quý",
+  5: "Sử Thi",
+  6: "Huyền Thoại",
+  7: "Thần Thoại",
+  8: "Chí Bảo",
+  9: "Tuyệt Thế",
 };
 
-const rarityColors: Record<string, string> = {
-  COMMON: "text-[var(--text-secondary)] border-zinc-700",
-  UNCOMMON: "text-[var(--rarity-uncommon)] border-emerald-500/30",
-  RARE: "text-[var(--rarity-rare)] border-sky-500/30",
-  EPIC: "text-[var(--rarity-epic)] border-purple-500/30",
-  LEGENDARY: "text-[var(--rarity-legendary)] border-amber-500/30",
-  MYTHIC: "text-[var(--rarity-mythic)] border-rose-500/30",
+const rarityColors: Record<number, string> = {
+  1: "text-[var(--text-secondary)] border-zinc-700",
+  2: "text-[var(--rarity-uncommon)] border-emerald-500/30",
+  3: "text-[var(--rarity-rare)] border-sky-500/30",
+  4: "text-[var(--rarity-epic)] border-purple-500/30",
+  5: "text-[var(--rarity-legendary)] border-amber-500/30",
+  6: "text-[var(--rarity-mythic)] border-rose-500/30",
+  7: "text-red-400 border-red-500/30",
+  8: "text-orange-400 border-orange-500/30",
+  9: "text-fuchsia-400 border-fuchsia-500/30",
 };
 
 const tagLabels: Record<string, string> = {
@@ -136,9 +142,11 @@ function GuPageContent({ gu }: { gu: GuDictionaryItem }) {
           <div className="min-w-0">
             <h1 className="text-3xl font-serif font-bold tracking-wide">{gu.name}</h1>
             <div className="flex flex-wrap items-center gap-2 mt-2">
-              <span className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold border ${rarityColors[gu.rarity] || "text-[var(--text-muted)] border-zinc-700"}`}>
-                {rarityLabels[gu.rarity] || gu.rarity}
-              </span>
+              {gu.rarity > 0 && (
+                <span className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold border ${rarityColors[gu.rarity] || "text-[var(--text-muted)] border-zinc-700"}`}>
+                  {rarityLabels[gu.rarity] || `Độ hiếm ${gu.rarity}`}
+                </span>
+              )}
               <span className="px-2 py-0.5 rounded-md bg-[var(--bg-card)] text-[11px] text-[var(--text-secondary)] font-mono border border-[var(--border)]">
                 Chuyển {gu.rank}
               </span>

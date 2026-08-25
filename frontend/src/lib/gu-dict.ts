@@ -75,7 +75,7 @@ export interface GuDictionaryItem {
   hunger_rate: number;
   max_hunger: number;
   description: string;
-  rarity: string;
+  rarity: number;
   is_immortal: boolean;
   primary_role: string;
   combat_roles: string[];

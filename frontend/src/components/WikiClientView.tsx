@@ -43,22 +43,28 @@ interface Props {
 }
 
 // Translations and Mappings
-const rarityColors: Record<string, string> = {
-  COMMON: "text-zinc-400 border-zinc-700/50 bg-zinc-950/20",
-  UNCOMMON: "text-emerald-400 border-emerald-500/20 bg-emerald-950/10",
-  RARE: "text-sky-400 border-sky-500/20 bg-sky-950/10",
-  EPIC: "text-purple-400 border-purple-500/20 bg-purple-950/10",
-  LEGENDARY: "text-amber-400 border-amber-500/20 bg-amber-950/10",
-  MYTHIC: "text-rose-400 border-rose-500/20 bg-rose-950/10",
+const rarityColors: Record<number, string> = {
+  1: "text-zinc-400 border-zinc-700/50 bg-zinc-950/20",
+  2: "text-emerald-400 border-emerald-500/20 bg-emerald-950/10",
+  3: "text-sky-400 border-sky-500/20 bg-sky-950/10",
+  4: "text-purple-400 border-purple-500/20 bg-purple-950/10",
+  5: "text-amber-400 border-amber-500/20 bg-amber-950/10",
+  6: "text-rose-400 border-rose-500/20 bg-rose-950/10",
+  7: "text-red-400 border-red-500/20 bg-red-950/10",
+  8: "text-orange-400 border-orange-500/20 bg-orange-950/10",
+  9: "text-fuchsia-400 border-fuchsia-500/20 bg-fuchsia-950/10",
 };
 
-const rarityLabels: Record<string, string> = {
-  COMMON: "Phàm",
-  UNCOMMON: "Hiếm",
-  RARE: "Quý",
-  EPIC: "Sử thi",
-  LEGENDARY: "Huyền thoại",
-  MYTHIC: "Thần thoại",
+const rarityLabels: Record<number, string> = {
+  1: "Phàm",
+  2: "Tinh Phẩm",
+  3: "Hiếm",
+  4: "Quý",
+  5: "Sử Thi",
+  6: "Huyền Thoại",
+  7: "Thần Thoại",
+  8: "Chí Bảo",
+  9: "Tuyệt Thế",
 };
 
 const itemTypeLabels: Record<string, string> = {
@@ -324,7 +330,7 @@ export default function WikiClientView({
       // Path check
       if (guPath !== "all" && !gu.path?.includes(guPath)) return false;
       // Rarity check
-      if (guRarity !== "all" && gu.rarity !== guRarity) return false;
+      if (guRarity !== "all" && gu.rarity !== Number(guRarity)) return false;
       // Type check
       if (guType !== "all" && gu.gu_type !== guType) return false;
 
@@ -891,9 +897,11 @@ export default function WikiClientView({
                           </p>
                         </div>
                       </div>
-                      <span className={`px-2 py-0.5 rounded-md text-[9px] font-mono font-bold shrink-0 border border-zinc-800/60 ${rarityColors[gu.rarity] || "text-[var(--text-muted)]"}`}>
-                        {rarityLabels[gu.rarity] || gu.rarity}
-                      </span>
+                      {gu.rarity > 0 && (
+                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-mono font-bold shrink-0 border border-zinc-800/60 ${rarityColors[gu.rarity] || "text-[var(--text-muted)]"}`}>
+                          {rarityLabels[gu.rarity] || `Độ hiếm ${gu.rarity}`}
+                        </span>
+                      )}
                     </div>
 
                     <p className="text-[11px] text-[var(--text-muted)] leading-relaxed mt-3 line-clamp-2 italic font-serif">
@@ -1101,9 +1109,11 @@ export default function WikiClientView({
                               <span className="px-1.5 py-0.5 rounded bg-zinc-950/40 border border-zinc-800 text-[8px] text-[var(--text-secondary)] font-mono">
                                 Chuyển {recipe.target_rank || targetGu.rank}
                               </span>
-                              <span className={`px-1.5 py-0.5 rounded bg-zinc-950/40 border border-zinc-800 text-[8px] font-mono font-bold ${rarityColors[targetGu.rarity] || "text-[var(--text-muted)]"}`}>
-                                {rarityLabels[targetGu.rarity] || targetGu.rarity}
-                              </span>
+                              {targetGu.rarity > 0 && (
+                                <span className={`px-1.5 py-0.5 rounded bg-zinc-950/40 border border-zinc-800 text-[8px] font-mono font-bold ${rarityColors[targetGu.rarity] || "text-[var(--text-muted)]"}`}>
+                                  {rarityLabels[targetGu.rarity] || `Độ hiếm ${targetGu.rarity}`}
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>

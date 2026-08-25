@@ -6,8 +6,8 @@ Nguồn dữ liệu chính nằm trong các file CSV ở `backend/`. Khi backend
 
 | File | Số dòng dữ liệu | Nội dung |
 | --- | ---: | --- |
-| `backend/Gu.csv` | 596 | Dictionary Cổ: rank, path, type, mana cost, effects, hunger, food, targeting, rarity, role/tags. Chuẩn scale sức mạnh theo rank xem `docs/GuRankScaling.md`. |
-| `backend/Item.csv` | 229 | Vật phẩm, nguyên liệu, tiền tệ, consumable, effects/tags/description. |
+| `backend/Gu.csv` | 596 | Dictionary Cổ: rank, path, type, mana cost, effects, hunger, food, targeting, rarity (số 0–9), role/tags. Chuẩn scale sức mạnh theo rank xem `docs/GuRankScaling.md`. |
+| `backend/Item.csv` | 229 | Vật phẩm, nguyên liệu, tiền tệ, consumable, effects/tags/description, rarity (số 0–9). |
 | `backend/Recipe.csv` | 31 | Công thức luyện Cổ: target, Cổ/nguyên liệu yêu cầu, success rate, cost. |
 | `backend/Monster.csv` | 30 | Monster templates: chỉ số, Gu inventory, loot table, AI profile, bắt sủng vật. |
 | `backend/LootTable.csv` | 25 | Bảng loot cho combat/monster (thức ăn cổ rank<6 được thêm vào loot quái Normal/Elite theo dải rank). |
@@ -272,6 +272,7 @@ Các trường quan trọng trong dictionary:
 - `hunger_rate`, `food_types`, `max_hunger`. **Quy ước `hunger_rate`:** cổ có `food_types` không rỗng → `6` nếu `effects.passive` không rỗng, ngược lại `3`; cổ không có thức ăn → `0` (không đói). `max_hunger` mặc định `rank × 100`.
 - `target_type`: `SINGLE`, `ROW`, `COLUMN`, `ALL`, v.v.
 - `rarity`, `is_immortal`, `primary_role`, `combat_roles`, `combat_tags`, `support_tags`.
+  - **`rarity` là số nguyên 0–9** (`0` = chưa đặt, fallback theo rank). Dùng để cho Cổ phàm (rank < 6) độ hiếm cao: drop weight tính theo **`max(rank, rarity)`** (`handlers/effectiveDropLevel`), nối vào gacha, rương, và ô WildGu trên map. Item (`item_dictionary`) cũng có cột `rarity` cùng quy tắc. Giá trị cũ dạng chữ/boolean trong CSV đã được dọn về rỗng.
 - `base_price`: **đồng đều theo rank** — 200, 500, 1.200, 2.500, 5.000, 100.000, 250.000, 600.000, 1.500.000 cho rank 1–9 (nhảy mạnh ở Tiên Cổ rank ≥ 6). Fallback trong `pkg/pricing/pricing.go`.
 - **Phân phối thức ăn:** mọi item trong `food_types` của cổ rank <6 (72 item) được thêm vào (1) loot của quái **Normal/Elite** theo dải rank spawn, (2) `pool_weights.resources` của vùng non-HUB theo dải rank vùng, (3) `vault_materials` khởi đầu của 4 tông (qty 100, khớp dải rank vùng tông). Boss/Tribulation không rơi thêm thức ăn.
 - **Tính duy nhất của Tiên Cổ (rank ≥ 6):** cổ trùng rank ≥ 6 là **duy nhất toàn server, tính theo `gu_id`** (cùng id khác rank vẫn bị tính trùng). Khi luyện cổ/refine thành công và khi quyên góp Cổ vào kho Tông Môn, hệ thống chặn nếu một instance có cùng `gu_id` và `gu_rank ≥ 6` đã tồn tại ở bất kỳ nguồn nào: `players.gu_inventory`, `auction` (`item_type='Gu'`) và `sects.vault_gu`. Instance cùng `gu_id` nhưng rank < 6 **không** tính là trùng. Nếu `gu_id` chưa từng có variant rank ≥ 6 trong `gu_dictionary` thì check luôn pass (không phải Cổ Tiên). Nguồn kiểm tra: `db.CheckImmortalGuExists` / `db.GetExistingImmortalGuIDs`.

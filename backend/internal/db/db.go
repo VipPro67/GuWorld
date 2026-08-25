@@ -456,6 +456,26 @@ func normalizedGuEffectsJSON(raw string, rowLabel string) string {
 	return string(bytes)
 }
 
+// parseRarity parses the rarity column (1-9 tier, empty/unset = 0). Non-numeric
+// legacy values (e.g. stray booleans or word tiers) are coerced to 0.
+func parseRarity(raw string) int {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return 0
+	}
+	n := 0
+	if _, err := fmt.Sscanf(s, "%d", &n); err != nil {
+		return 0
+	}
+	if n < 0 {
+		return 0
+	}
+	if n > 9 {
+		return 9
+	}
+	return n
+}
+
 // seedItemsFromCSV reads Item.csv and upserts into item_dictionary.
 func seedItemsFromCSV(filename string) error {
 	f, r, header, err := openCSV(filename)
@@ -472,6 +492,7 @@ func seedItemsFromCSV(filename string) error {
 	descIdx := colIndex(header, "description")
 	basePriceIdx := colIndex(header, "base_price")
 	imageURLIdx := colIndex(header, "image_url")
+	rarityIdx := colIndex(header, "rarity")
 
 	if idIdx < 0 || nameIdx < 0 || typeIdx < 0 {
 		return fmt.Errorf("Item.csv missing required columns (id, name, item_type)")
@@ -520,15 +541,21 @@ func seedItemsFromCSV(filename string) error {
 			imageURL = strings.TrimSpace(row[imageURLIdx])
 		}
 
+		rarity := 0
+		if rarityIdx >= 0 && rarityIdx < len(row) {
+			rarity = parseRarity(strings.TrimSpace(row[rarityIdx]))
+		}
+
 		_, err = DB.Exec(`
-			INSERT INTO item_dictionary (id, name, item_type, rank, effects, description, base_price, image_url)
-			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)
+			INSERT INTO item_dictionary (id, name, item_type, rank, effects, description, base_price, image_url, rarity)
+			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9)
 			ON CONFLICT (id) DO UPDATE
 			SET name=EXCLUDED.name, item_type=EXCLUDED.item_type, rank=EXCLUDED.rank,
 			    effects=EXCLUDED.effects, description=EXCLUDED.description,
 			    base_price=CASE WHEN EXCLUDED.base_price > 0 THEN EXCLUDED.base_price ELSE item_dictionary.base_price END,
-			    image_url=CASE WHEN EXCLUDED.image_url <> '' THEN EXCLUDED.image_url ELSE item_dictionary.image_url END
-		`, id, name, itemType, rank, effects, desc, basePrice, imageURL)
+			    image_url=CASE WHEN EXCLUDED.image_url <> '' THEN EXCLUDED.image_url ELSE item_dictionary.image_url END,
+			    rarity=EXCLUDED.rarity
+		`, id, name, itemType, rank, effects, desc, basePrice, imageURL, rarity)
 		if err != nil {
 			return fmt.Errorf("upsert item %s: %w", id, err)
 		}
@@ -619,7 +646,7 @@ func seedGusFromCSV(filename string) error {
 		path := get(row, pathIdx)
 		manaCostStr := get(row, manaCostIdx)
 		effectsRaw := get(row, effectsIdx)
-		rarity := get(row, rarityIdx)
+		rarity := parseRarity(get(row, rarityIdx))
 		isImmortalRaw := strings.ToLower(get(row, isImmortalIdx))
 		primaryRole := get(row, primaryRoleIdx)
 		combatRolesRaw := get(row, combatRolesIdx)
@@ -2381,13 +2408,13 @@ func ExportToCSV() error {
 	exports := []exportDef{
 		{
 			filename: "Item.csv",
-			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url"},
-			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'{}'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,'') FROM item_dictionary ORDER BY id`,
+			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url", "rarity"},
+			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'{}'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END FROM item_dictionary ORDER BY id`,
 		},
 		{
 			filename: "Gu.csv",
 			columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
-			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'{"active":{},"support":{},"passive":{},"house":{}}'), COALESCE(rarity,''), COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
+			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'{"active":{},"support":{},"passive":{},"house":{}}'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
 		},
 		{
 			filename: "Constitution.csv",
@@ -2532,13 +2559,13 @@ func TableExport(table string) error {
 	defs := map[string]exportDef{
 		"item": {
 			filename: "Item.csv",
-			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url"},
-			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'{}'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,'') FROM item_dictionary ORDER BY id`,
+			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url", "rarity"},
+			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'{}'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END FROM item_dictionary ORDER BY id`,
 		},
 		"gu": {
 			filename: "Gu.csv",
 			columns:  []string{"id", "name", "rank", "gu_type", "hunger_rate", "food_types", "max_hunger", "description", "path", "base_mana_cost", "effects", "rarity", "is_immortal", "primary_role", "combat_roles", "combat_tags", "support_tags", "base_price", "image_url"},
-			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'{"active":{},"support":{},"passive":{},"house":{}}'), COALESCE(rarity,''), COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
+			query:    `SELECT id, name, rank, gu_type, COALESCE(hunger_rate,0), COALESCE(food_types::text,'[]'), COALESCE(max_hunger,100), COALESCE(description,''), COALESCE(path::text,'[]'), COALESCE(base_mana_cost,0), COALESCE(effects::text,'{"active":{},"support":{},"passive":{},"house":{}}'), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(is_immortal,false), COALESCE(primary_role,''), COALESCE(combat_roles::text,'[]'), COALESCE(combat_tags::text,'[]'), COALESCE(support_tags::text,'[]'), COALESCE(base_price,0), COALESCE(image_url,'') FROM gu_dictionary ORDER BY id`,
 		},
 		"constitution": {
 			filename: "Constitution.csv",

@@ -118,7 +118,7 @@ func precomputeGachaPools(tx *sql.Tx, excludedImmortal map[string]bool) precompu
 		if spec.Type != "Material" {
 			continue
 		}
-		w := rankDropMultiplier(spec.Rank)
+		w := rankDropMultiplier(effectiveDropLevel(spec.Rank, spec.Rarity))
 		if w > 0 {
 			pc.materials = append(pc.materials, weightedMaterialEntry{id: id, weight: w})
 			pc.totalMat += w
@@ -142,7 +142,7 @@ func precomputeGachaPools(tx *sql.Tx, excludedImmortal map[string]bool) precompu
 			}
 			for _, spec := range ranks {
 				if rankSet[spec.Rank] {
-					w := guRarityWeightByRank(spec.Rank)
+					w := guRarityWeightByRank(effectiveDropLevel(spec.Rank, spec.Rarity))
 					if w > 0 {
 						pool = append(pool, weightedGuEntry{id: id, weight: w, rank: spec.Rank})
 						total += w
@@ -604,7 +604,7 @@ func rollWeightedGu(rankFilter []string, excludedImmortal map[string]bool) strin
 					continue
 				}
 			}
-			w := guRarityWeightByRank(spec.Rank)
+			w := guRarityWeightByRank(effectiveDropLevel(spec.Rank, spec.Rarity))
 			if w > 0 {
 				pool = append(pool, weighted{id: id, weight: w})
 				totalWeight += w
@@ -638,7 +638,7 @@ func rollWeightedMaterial() string {
 		if spec.Type != "Material" {
 			continue
 		}
-		w := rankDropMultiplier(spec.Rank)
+		w := rankDropMultiplier(effectiveDropLevel(spec.Rank, spec.Rarity))
 		if w > 0 {
 			pool = append(pool, weighted{id: id, weight: w})
 			totalWeight += w
