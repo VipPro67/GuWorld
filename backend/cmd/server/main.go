@@ -102,6 +102,13 @@ func main() {
 		logger.S.Info("Race registry loaded successfully")
 	}
 
+	err = gamefx.LoadStatusRegistry(db.DB)
+	if err != nil {
+		logger.S.Warnf("Failed to load Status registry: %v (data may need import)", err)
+	} else {
+		logger.S.Info("Status registry loaded successfully")
+	}
+
 	err = models.LoadMonsterRegistry(db.DB)
 	if err != nil {
 		logger.S.Warnf("Failed to load Monster registry: %v (data may need import)", err)
@@ -137,6 +144,7 @@ func main() {
 	defer stop()
 
 	worker.StartHungerWorker(ctx, db.DB, 3*time.Hour)
+	worker.StartStatusExpiryWorker(ctx, db.DB, 1*time.Minute)
 	worker.StartPetHungerWorker(ctx, db.DB, 1*time.Hour)
 	worker.StartGrowthWorker(ctx, db.DB, 60*time.Second)
 	handlers.StartTribulationWorker(ctx)

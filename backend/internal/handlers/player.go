@@ -1323,6 +1323,12 @@ func Explore(c *gin.Context) {
 	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
+	// Statuses that block exploration (e.g. Trọng Thương).
+	if gamefx.HasBlockedAction(&player, gamefx.ActionExplore) {
+		c.JSON(http.StatusForbidden, gin.H{"error": statusBlockedMessage(&player, gamefx.ActionExplore)})
+		return
+	}
+
 	// 2. Check energy cost. Mortals spend Chân Nguyên; Immortals spend a smaller Tiên Nguyên travel upkeep.
 	energyCost := 10.0
 	if util.IsImmortalPlayer(&player) {
@@ -2042,6 +2048,13 @@ func evaluateManaTxEquipped(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	return PlayerSvc.EvaluateAndPersistManaEquipped(tx, id)
 }
 
+// evaluateManaTxEquippedReadonly loads an equipped-only player and projects
+// status in memory without persisting. Used for ally loading in auto-combat
+// where the caller manages the ally's own writes.
+func evaluateManaTxEquippedReadonly(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
+	return PlayerSvc.EvaluateManaEquipped(tx, id)
+}
+
 // GrantRace sets a player's race after validating the key. Dùng cho các hoạt động
 // trong game (quest, item, kỳ ngộ...) khi người chơi nhận được chủng tộc mới.
 func GrantRace(tx *sql.Tx, playerID uuid.UUID, race string) error {
@@ -2352,11 +2365,11 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 		stats[key] += delta
 		srcName := "Trạng thái"
 		srcID := "status"
-		for _, status := range player.Statuses {
-			label := gamefx.StatusDisplayName(status)
+		for _, status := range player.Statuses.Active() {
+			label := gamefx.StatusDisplayName(status.ID)
 			if srcID == "status" {
 				srcName = label
-				srcID = "status:" + status
+				srcID = "status:" + status.ID
 			} else {
 				srcName += ", " + label
 			}

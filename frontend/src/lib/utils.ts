@@ -76,3 +76,14 @@ export function getPathColor(path: string): { bg: string; text: string; border: 
   const key = path.replace(/\s*Đạo$/, "").trim();
   return PATH_COLORS[key] || DEFAULT_PATH_COLOR;
 }
+
+// statusRemainLabel renders a short remaining-time suffix (" · 12p") for a
+// timed player status, or "" for permanent/expired statuses.
+export function statusRemainLabel(expiresAt?: string | null, now = Date.now()): string {
+  if (!expiresAt) return "";
+  const remainMs = new Date(expiresAt).getTime() - now;
+  if (remainMs <= 0) return "";
+  const min = Math.ceil(remainMs / 60000);
+  if (min < 60) return ` · ${min}p`;
+  return ` · ${Math.floor(min / 60)}h ${min % 60}p`;
+}

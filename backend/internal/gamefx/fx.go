@@ -55,6 +55,10 @@ type Effects struct {
 	// ApertureStressBonus is an additive multiplier on the aperture stress
 	// (áp lực không khiếu) gained per trùng kích attempt. 1.0 => stress ×2.
 	ApertureStressBonus float64 `json:"aperture_stress_bonus"`
+	// BlockedActions is the set of gameplay actions currently gated by active
+	// statuses (keys: gamefx.Action* constants, e.g. "explore", "cultivate").
+	// Handlers consult it via HasBlockedAction before executing a flow.
+	BlockedActions map[string]bool `json:"blocked_actions,omitempty"`
 }
 
 // ValidRaces returns the set of accepted race keys.
@@ -85,13 +89,6 @@ func ValidConstitutions() map[string]bool {
 	return out
 }
 
-// ValidStatuses returns the set of accepted status keys.
-func ValidStatuses() map[string]bool {
-	return map[string]bool{
-		"severely_wounded": true, // Trọng Thương
-	}
-}
-
 // Get returns all effects from a player's character fields.
 func Get(p *models.Player) Effects {
 	fx := Effects{
@@ -108,12 +105,15 @@ func Get(p *models.Player) Effects {
 		addEffects(&fx, def.Effects)
 	}
 
-	for _, status := range p.Statuses {
-		switch status {
-		case "severely_wounded": // Trọng Thương
-			fx.StatMods["attack"] += -0.20
-			fx.StatMods["defense"] += -0.20
-			fx.StatMods["speed"] += -0.20
+	for _, status := range p.Statuses.Active() {
+		if def, ok := effectiveStatuses()[status.ID]; ok {
+			addEffects(&fx, def.Effects)
+			if fx.BlockedActions == nil {
+				fx.BlockedActions = map[string]bool{}
+			}
+			for _, action := range def.BlockedActions {
+				fx.BlockedActions[action] = true
+			}
 		}
 	}
 
@@ -218,12 +218,19 @@ func ConstitutionDisplayName(constitution string) string {
 
 // StatusDisplayName returns the Vietnamese label for a status key.
 func StatusDisplayName(status string) string {
-	switch status {
-	case "severely_wounded":
-		return "Trọng Thương"
-	default:
-		return status
+	if def, ok := effectiveStatuses()[status]; ok {
+		return def.Name
 	}
+	return status
+}
+
+// HasBlockedAction reports whether any of the player's active (non-expired)
+// statuses block the given action.
+func HasBlockedAction(p *models.Player, action string) bool {
+	if p == nil {
+		return false
+	}
+	return Get(p).BlockedActions[action]
 }
 
 // DaoPathMultiplier computes the standard dao-marks multiplier for a single

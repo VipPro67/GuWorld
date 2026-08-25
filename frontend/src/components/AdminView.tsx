@@ -171,7 +171,7 @@ interface PlayerDetail {
   soul_hp: number; max_soul: number; soul_tier: string;
   explore_count: number; aperture_stress: number;
   avatar_url: string; bio: string;
-  race: string; gender: string; constitution: string; statuses?: string[];
+  race: string; gender: string; constitution: string; statuses?: (string | { id: string; expires_at?: string | null })[];
   gu_count: number;
   item_count: number;
 }
@@ -1257,7 +1257,7 @@ export const AdminView: React.FC = () => {
                   explore_count: String(detail.explore_count ?? ""), aperture_stress: String(detail.aperture_stress ?? ""),
                   bio: detail.bio || "", avatar_url: detail.avatar_url || "",
                   race: detail.race || "", gender: detail.gender || "", constitution: detail.constitution || "",
-                  statuses: (detail.statuses || []).join(", "),
+                  statuses: (detail.statuses || []).map((s: string | { id: string }) => typeof s === "string" ? s : s.id).join(", "),
                 });
                 setShowEditPlayer(true);
               }
@@ -1892,7 +1892,8 @@ export const AdminView: React.FC = () => {
                   set("gender", detail.gender || "", editPlayerForm.gender);
                   set("constitution", detail.constitution || "", editPlayerForm.constitution);
                   const statusesRaw = (editPlayerForm.statuses || "").split(",").map(s => s.trim()).filter(Boolean);
-                  const statusesChanged = JSON.stringify(statusesRaw) !== JSON.stringify(detail.statuses || []);
+                  const detailStatusIds = (detail.statuses || []).map((s: string | { id: string }) => typeof s === "string" ? s : s.id);
+                  const statusesChanged = JSON.stringify(statusesRaw) !== JSON.stringify(detailStatusIds);
                   if (statusesChanged) body["statuses"] = statusesRaw;
                   if (Object.keys(body).length === 0) {
                     if (addToast) addToast("Không có thay đổi nào", "info");

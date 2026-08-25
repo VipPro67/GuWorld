@@ -1,0 +1,6 @@
+key,name,effects,default_duration_minutes,blocked_actions,description
+severely_wounded,Trọng Thương,"{""stat_mods"": {""attack"": -0.20, ""defense"": -0.20, ""speed"": -0.20}, ""healing_received"": -0.50}",0,"[""explore""]",Thân trúng trọng thương, công thủ tốc đều giảm mạnh.
+poisoned,Trúng Độc,"{""stat_mods"": {""attack"": -0.10, ""speed"": -0.10}}",30,[],Độc tố xâm nhập cơ thể, suy giảm công kích và tốc độ.
+exhausted,Kiệt Sức,"{""stat_mods"": {""speed"": -0.30}, ""cultivation_efficiency"": -0.50}",10,"[""cultivate""]",Lực kiệt sức, tạm thời không thể tu luyện.
+blessed,Phúc Trạch,"{""luck"": 5, ""cultivation_efficiency"": 0.10}",60,[],Nhận phúc trạch, may mắn và tu luyện hiệu quả hơn.
+death_penalty,Hình Phạt Tử Vong,"{""stat_mods"": {""attack"": -0.50, ""defense"": -0.50, ""speed"": -0.50}}",30,[],Sát khí chưa tan sau khi chết, toàn bộ chỉ số suy giảm.

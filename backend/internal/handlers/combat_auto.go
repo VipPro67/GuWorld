@@ -143,13 +143,17 @@ func AutoCombatStart(c *gin.Context) {
 		// Party member allies
 		allyUUID, errParse := uuid.Parse(ally.ID)
 		if errParse == nil {
-			mPlayer, errMember := evaluateManaTxEquipped(tx, allyUUID)
+			mPlayer, errMember := evaluateManaTxEquippedReadonly(tx, allyUUID)
 			if errMember == nil {
 				simAlly, errBuild := buildSimCombatant(tx, &mPlayer, isVirtual, false, nil)
 				if errBuild == nil {
+					simAlly.Kind = "Ally"
 					simAlly.GridX = ally.GridX
 					simAlly.GridY = ally.GridY
 					simAlly.HP = int(ally.HP) // Use their combat starting HP
+					if simAlly.HP > simAlly.MaxHP {
+						simAlly.HP = simAlly.MaxHP
+					}
 					simState.Allies = append(simState.Allies, simAlly)
 				}
 			}
@@ -442,22 +446,13 @@ func AutoCombatStart(c *gin.Context) {
 			args = append(args, player.ID)
 		} else {
 			var partyMembers []uuid.UUID
-			if player.PartyID != nil {
-				var membersRaw []byte
-				errPart := tx.QueryRow("SELECT members FROM parties WHERE id = $1", player.PartyID).Scan(&membersRaw)
-				if errPart == nil {
-					var members []PartyMember
-					json.Unmarshal(membersRaw, &members)
-					for _, m := range members {
-						mUUID, errParse := uuid.Parse(m.ID)
-						if errParse == nil {
-							var sameCell bool
-							errCell := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM players WHERE id = $1 AND x = $2 AND y = $3 AND current_region = $4)", mUUID, player.X, player.Y, player.CurrentRegion).Scan(&sameCell)
-							if errCell == nil && sameCell {
-								partyMembers = append(partyMembers, mUUID)
-							}
-						}
-					}
+			for _, ally := range player.ActiveCombat.Allies {
+				if ally.Kind == "Pet" {
+					continue
+				}
+				allyUUID, errParse := uuid.Parse(ally.ID)
+				if errParse == nil {
+					partyMembers = append(partyMembers, allyUUID)
 				}
 			}
 
@@ -780,7 +775,7 @@ func AutoCombatStart(c *gin.Context) {
 	// Update simulated allies' database status (HP, Mana, Stones, Items)
 	if !isVirtual {
 		for _, simAlly := range simState.Allies {
-			if simAlly.ID == player.ID.String() {
+			if simAlly.ID == player.ID.String() || simAlly.Kind == "Pet" {
 				continue
 			}
 			allyUUID := uuid.MustParse(simAlly.ID)
@@ -825,7 +820,7 @@ func AutoCombatStart(c *gin.Context) {
 		}
 	} else {
 		for _, simAlly := range simState.Allies {
-			if simAlly.ID == player.ID.String() {
+			if simAlly.ID == player.ID.String() || simAlly.Kind == "Pet" {
 				continue
 			}
 			_, _ = tx.Exec("UPDATE players SET active_combat = NULL WHERE id = $1", uuid.MustParse(simAlly.ID))

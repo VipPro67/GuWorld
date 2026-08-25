@@ -39,7 +39,7 @@ type PlayerProfileResponse struct {
 	Race            string            `json:"race"`
 	Gender          string            `json:"gender"`
 	Constitution    string            `json:"constitution"`
-	Statuses        []string          `json:"statuses"`
+	Statuses        models.StatusList `json:"statuses"`
 }
 
 // getDominantPath determines the player's primary path based on Dao Marks or Path Masteries
@@ -243,7 +243,7 @@ func GetPlayerProfile(c *gin.Context) {
 		resp.Race = target.Race
 		resp.Gender = target.Gender
 		resp.Constitution = target.Constitution
-		resp.Statuses = target.Statuses
+		resp.Statuses = target.Statuses.Active()
 
 		equipped := []string{}
 		for _, gu := range target.GuInventory {

@@ -60,6 +60,12 @@ func BreakWall(c *gin.Context) {
 		return
 	}
 
+	// Statuses that block cultivation (e.g. Kiệt Sức).
+	if gamefx.HasBlockedAction(&player, gamefx.ActionCultivate) {
+		c.JSON(http.StatusForbidden, gin.H{"error": statusBlockedMessage(&player, gamefx.ActionCultivate)})
+		return
+	}
+
 	// Only mortals (rank 1-5) can use wall breaking
 	if player.Rank >= 6 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Only Mortal cultivators can perform wall breaking"})

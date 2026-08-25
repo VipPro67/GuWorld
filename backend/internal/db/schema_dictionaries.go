@@ -66,6 +66,21 @@ func schemaDictionaries() error {
 		return err
 	}
 
+	// Persistent player statuses (trạng thái). effects uses the same JSON
+	// shape as constitution/race (gamefx.Effects); default_duration_minutes 0
+	// means permanent; blocked_actions gates gameplay flows (gamefx.Action*).
+	if err := execSchema("status_dictionary", `
+	CREATE TABLE IF NOT EXISTS status_dictionary (
+		key VARCHAR(100) PRIMARY KEY,
+		name VARCHAR(200) NOT NULL,
+		effects JSONB NOT NULL DEFAULT '{}',
+		default_duration_minutes INTEGER NOT NULL DEFAULT 0,
+		blocked_actions JSONB NOT NULL DEFAULT '[]',
+		description TEXT NOT NULL DEFAULT ''
+	);`); err != nil {
+		return err
+	}
+
 	if err := execSchema("loot_tables", `
 	CREATE TABLE IF NOT EXISTS loot_tables (
 		id VARCHAR(50) PRIMARY KEY,
@@ -192,6 +207,33 @@ func seedDefaultRaceConstitutionRows() error {
 	}
 	for _, c := range constitutions {
 		if _, err := DB.Exec(`INSERT INTO constitution_dictionary (key, name, effects) VALUES ($1,$2,$3::jsonb) ON CONFLICT (key) DO NOTHING`, c.key, c.name, c.effects); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// seedDefaultStatusRows pre-seeds the built-in status dictionary so statuses
+// resolve before any CSV import. The dataset mirrors gamefx.defaultStatuses;
+// Status.csv imports remain authoritative.
+func seedDefaultStatusRows() error {
+	statuses := []struct {
+		key, name, effects string
+		duration           int
+		blocked            string
+		desc               string
+	}{
+		{"severely_wounded", "Trọng Thương", `{"stat_mods":{"attack":-0.20,"defense":-0.20,"speed":-0.20},"healing_received":-0.50}`, 0, `["explore"]`, "Thân trúng trọng thương, công thủ tốc đều giảm mạnh."},
+		{"poisoned", "Trúng Độc", `{"stat_mods":{"attack":-0.10,"speed":-0.10}}`, 30, `[]`, "Độc tố xâm nhập cơ thể, suy giảm công kích và tốc độ."},
+		{"exhausted", "Kiệt Sức", `{"stat_mods":{"speed":-0.30},"cultivation_efficiency":-0.50}`, 10, `["cultivate"]`, "Lực kiệt sức, tạm thời không thể tu luyện."},
+		{"blessed", "Phúc Trạch", `{"luck":5,"cultivation_efficiency":0.10}`, 60, `[]`, "Nhận phúc trạch, may mắn và tu luyện hiệu quả hơn."},
+		{"death_penalty", "Hình Phạt Tử Vong", `{"stat_mods":{"attack":-0.50,"defense":-0.50,"speed":-0.50}}`, 30, `[]`, "Sát khí chưa tan sau khi chết, toàn bộ chỉ số suy giảm."},
+	}
+	for _, s := range statuses {
+		if _, err := DB.Exec(`
+			INSERT INTO status_dictionary (key, name, effects, default_duration_minutes, blocked_actions, description)
+			VALUES ($1,$2,$3::jsonb,$4,$5::jsonb,$6)
+			ON CONFLICT (key) DO NOTHING`, s.key, s.name, s.effects, s.duration, s.blocked, s.desc); err != nil {
 			return err
 		}
 	}

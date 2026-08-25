@@ -63,3 +63,8 @@ monster_east_sea_dragonfish,Đông Hải Thượng Cổ Long Ngư,Boss,1000,85,4
 monster_blood_hound,Huyết Liệp Khuyển,Normal,140,22,8,[],{},{},{},beast_basic,loot_blood_hound,Chó săn đẫm máu Huyết đạo lang thang vùng sa mạc đỏ Tây Mạc.,True,True,0.18,2.5
 monster_ancient_blood_golem,Cổ Huyết Nham Ma,Elite,600,65,28,[],{},{},{},beast_basic,loot_ancient_blood_golem,Nham thạch ngưng tụ huyết khí ngàn năm xuất hiện tại các vùng đất Huyết đạo cổ đại.,True,True,0.06,3.5
 monster_dao_spirit,Đạo Linh Hư Ảnh,Elite,520,58,22,[],{},{},{},beast_basic,loot_dao_spirit,Linh thể vô hình ngưng tụ từ đạo quy tắc thiên địa tại Hắc Thiên chứa đựng tinh hoa vạn đạo.,True,True,0.05,4.0
+monster_stone_man,Thạch Nhân Thổ Cư,Normal,120,14,12,[],{},{},{},beast_basic,loot_stone_man,Dị nhân Thạch Nhân sinh sống dưới lòng đất Nam Cương mang trái tim đất đá.,True,True,0.15,2.0
+monster_wind_bee,Phong Bạo Độc Phong,Normal,50,11,2,[],{},{},{},beast_basic,loot_wind_bee,Bầy ong gió tại các hẻm núi thu thập Phong Mật bồi dưỡng Hùng Lực Cổ.,True,True,0.30,1.5
+monster_featherman_scout,Vũ Nhân Trinh Sát,Normal,100,16,6,[],{},{},{},beast_basic,loot_featherman,Dị nhân người chim bay lượn trên thảo nguyên và tầng mây.,True,False,0.0,0.0
+monster_evil_cultivator,Ma Đạo Cổ Sư Tán Tu,HumanCultivator,160,22,8,[],{},{},{},beast_basic,loot_evil_cultivator,Tán tu ma đạo chuyên săn giết đồng đạo lấy máu và tài liệu luyện cổ.,True,False,0.0,0.0
+monster_sound_spirit_beast,Âm Ba Linh Thú,Normal,130,18,7,[],{},{},{},beast_basic,loot_sound_beast,Linh thú phát ra âm thanh dị thường chuyên tụ tập nơi có quặng Âm Thạch.,True,True,0.20,2.0

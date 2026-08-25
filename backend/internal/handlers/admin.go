@@ -867,7 +867,7 @@ type AdminUpdatePlayerRequest struct {
 	Race            *string   `json:"race"`
 	Gender          *string   `json:"gender"`
 	Constitution    *string   `json:"constitution"`
-	Statuses        *[]string `json:"statuses"`
+	Statuses        *models.StatusList `json:"statuses"`
 }
 
 // AdminUpdatePlayer allows admins to edit a wide range of player attributes in one call.
@@ -1075,13 +1075,13 @@ func AdminUpdatePlayer(c *gin.Context) {
 	if req.Statuses != nil {
 		statuses := *req.Statuses
 		for _, s := range statuses {
-			if s != "" && !gamefx.ValidStatuses()[s] {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Trạng thái không hợp lệ: " + s})
+			if s.ID != "" && !gamefx.ValidStatuses()[s.ID] {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Trạng thái không hợp lệ: " + s.ID})
 				return
 			}
 		}
 		sets = append(sets, "statuses=$"+strconv.Itoa(argIdx))
-		args = append(args, models.StatusList(statuses))
+		args = append(args, statuses)
 		argIdx++
 	}
 
@@ -2096,6 +2096,9 @@ func AdminImportData(c *gin.Context) {
 	if err := gamefx.LoadRaceRegistry(db.DB); err != nil {
 		logger.S.Warnf("failed to reload Race registry after import: %v", err)
 	}
+	if err := gamefx.LoadStatusRegistry(db.DB); err != nil {
+		logger.S.Warnf("failed to reload Status registry after import: %v", err)
+	}
 	if err := models.LoadMonsterRegistry(db.DB); err != nil {
 		logger.S.Warnf("failed to reload Monster registry after import: %v", err)
 	}
@@ -2179,6 +2182,11 @@ func AdminImportTable(c *gin.Context) {
 			logger.S.Warnf("failed to reload Race registry after import: %v", err)
 		}
 		cache.Delete("game_dictionary_unified")
+	case "status":
+		if err := gamefx.LoadStatusRegistry(db.DB); err != nil {
+			logger.S.Warnf("failed to reload Status registry after import: %v", err)
+		}
+		cache.Delete("game_dictionary_unified")
 	case "monster", "loot_table":
 		if err := models.LoadMonsterRegistry(db.DB); err != nil {
 			logger.S.Warnf("failed to reload Monster registry after import: %v", err)
@@ -2248,6 +2256,9 @@ func AdminClearCache(c *gin.Context) {
 	}
 	if err := gamefx.LoadRaceRegistry(db.DB); err != nil {
 		logger.S.Warnf("failed to reload Race registry: %v", err)
+	}
+	if err := gamefx.LoadStatusRegistry(db.DB); err != nil {
+		logger.S.Warnf("failed to reload Status registry: %v", err)
 	}
 	if err := models.LoadMonsterRegistry(db.DB); err != nil {
 		logger.S.Warnf("failed to reload Monster registry: %v", err)

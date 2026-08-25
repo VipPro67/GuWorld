@@ -438,11 +438,18 @@ func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models
 	return player, nil
 }
 
-// EvaluateAndPersistManaEquipped is like EvaluateAndPersistMana but loads only
-// equipped/vital Gus. Used for read-heavy endpoints (auth/me, challenge) where
-// shipping the full 12k+ inventory is unnecessary — the frontend fetches it
-// lazily via the dedicated inventory endpoint.
-func (s *PlayerService) EvaluateAndPersistManaEquipped(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
+// EvaluateManaEquipped loads a player with only equipped/vital Gus, takes a
+// FOR UPDATE lock, and projects time-variant fields (mana/HP regen, lifespan,
+// stress, thought) in memory WITHOUT persisting. Intended for callers that
+// build a combatant from the projected values but manage their own writes.
+func (s *PlayerService) EvaluateManaEquipped(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
+	return s.evaluateManaEquipped(tx, id)
+}
+
+// evaluateManaEquipped is the shared projection core for the equipped-only
+// evaluators: load with FOR UPDATE, apply defaults, and project status in
+// memory. It does not write to the database.
+func (s *PlayerService) evaluateManaEquipped(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
 	player, err := s.LoadForUpdateEquipped(tx, id)
 	if err != nil {
 		return player, err
@@ -459,6 +466,19 @@ func (s *PlayerService) EvaluateAndPersistManaEquipped(tx *sql.Tx, id uuid.UUID)
 	}
 	if stressChanged {
 		player.LastCultivateTime = now
+	}
+
+	return player, nil
+}
+
+// EvaluateAndPersistManaEquipped is like EvaluateAndPersistMana but loads only
+// equipped/vital Gus. Used for read-heavy endpoints (auth/me, challenge) where
+// shipping the full 12k+ inventory is unnecessary — the frontend fetches it
+// lazily via the dedicated inventory endpoint.
+func (s *PlayerService) EvaluateAndPersistManaEquipped(tx *sql.Tx, id uuid.UUID) (models.Player, error) {
+	player, err := s.evaluateManaEquipped(tx, id)
+	if err != nil {
+		return player, err
 	}
 
 	_, err = tx.Exec(`

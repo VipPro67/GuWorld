@@ -126,6 +126,9 @@ func InitSchema() error {
 	if err := seedDefaultRaceConstitutionRows(); err != nil {
 		return fmt.Errorf("seed default race/constitution rows: %w", err)
 	}
+	if err := seedDefaultStatusRows(); err != nil {
+		return fmt.Errorf("seed default status rows: %w", err)
+	}
 	if err := seedHubRegion(); err != nil {
 		return fmt.Errorf("seed hub region: %w", err)
 	}
@@ -309,6 +312,9 @@ func SeedDictionaries() error {
 	}
 	if err := seedRacesFromCSV("Race.csv"); err != nil {
 		return fmt.Errorf("CSV race seed failed: %w", err)
+	}
+	if err := seedStatusesFromCSV("Status.csv"); err != nil {
+		return fmt.Errorf("CSV status seed failed: %w", err)
 	}
 	if err := seedRecipesFromCSV("Recipe.csv"); err != nil {
 		return fmt.Errorf("CSV recipe seed failed: %w", err)
@@ -860,6 +866,80 @@ func seedRacesFromCSV(filename string) error {
 		}
 	}
 	logger.S.Infof("Race dictionary seeded from %s (%d entries)", filename, len(order))
+	return nil
+}
+
+// seedStatusesFromCSV reads Status.csv and upserts into status_dictionary.
+func seedStatusesFromCSV(filename string) error {
+	f, r, header, err := openCSV(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	keyIdx := colIndex(header, "key")
+	nameIdx := colIndex(header, "name")
+	effectsIdx := colIndex(header, "effects")
+	durationIdx := colIndex(header, "default_duration_minutes")
+	blockedIdx := colIndex(header, "blocked_actions")
+	descIdx := colIndex(header, "description")
+	if keyIdx < 0 || nameIdx < 0 {
+		return fmt.Errorf("%s missing required columns (key, name)", filename)
+	}
+
+	seen := make(map[string][]string)
+	order := []string{}
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			continue
+		}
+		if len(row) == 0 {
+			continue
+		}
+		key := strings.TrimSpace(row[keyIdx])
+		if key == "" {
+			continue
+		}
+		if _, exists := seen[key]; !exists {
+			order = append(order, key)
+		}
+		seen[key] = row
+	}
+
+	get := func(row []string, idx int) string {
+		if idx < 0 || idx >= len(row) {
+			return ""
+		}
+		return strings.TrimSpace(row[idx])
+	}
+
+	for _, key := range order {
+		row := seen[key]
+		name := get(row, nameIdx)
+		effects := safeJSONObject(get(row, effectsIdx), "{}", fmt.Sprintf("%s effects", key))
+		blocked := safeJSONArray(get(row, blockedIdx), "[]", fmt.Sprintf("%s blocked_actions", key))
+		duration := 0
+		if d := get(row, durationIdx); d != "" {
+			fmt.Sscanf(d, "%d", &duration)
+		}
+		description := get(row, descIdx)
+		_, err := DB.Exec(`
+			INSERT INTO status_dictionary (key, name, effects, default_duration_minutes, blocked_actions, description)
+			VALUES ($1, $2, $3::jsonb, $4, $5::jsonb, $6)
+			ON CONFLICT (key) DO UPDATE
+			SET name=EXCLUDED.name, effects=EXCLUDED.effects,
+			    default_duration_minutes=EXCLUDED.default_duration_minutes,
+			    blocked_actions=EXCLUDED.blocked_actions, description=EXCLUDED.description
+		`, key, name, effects, duration, blocked, description)
+		if err != nil {
+			return fmt.Errorf("upsert status %s: %w", key, err)
+		}
+	}
+	logger.S.Infof("Status dictionary seeded from %s (%d entries)", filename, len(order))
 	return nil
 }
 
@@ -2427,6 +2507,11 @@ func ExportToCSV() error {
 			query:    `SELECT key, name, COALESCE(effects::text,'{}') FROM race_dictionary ORDER BY key`,
 		},
 		{
+			filename: "Status.csv",
+			columns:  []string{"key", "name", "effects", "default_duration_minutes", "blocked_actions", "description"},
+			query:    `SELECT key, name, COALESCE(effects::text,'{}'), COALESCE(default_duration_minutes,0), COALESCE(blocked_actions::text,'[]'), COALESCE(description,'') FROM status_dictionary ORDER BY key`,
+		},
+		{
 			filename: "Recipe.csv",
 			columns:  []string{"id", "target_gu_id", "target_rank", "variant", "required_gus", "required_materials", "success_rate", "primeval_stones_cost", "immortal_essence_stones_cost"},
 			query:    `SELECT ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) AS id, target_gu_id, target_rank, variant, COALESCE(required_gus::text,'[]'), COALESCE(required_materials::text,'{}'), COALESCE(success_rate,0), COALESCE(primeval_stones_cost,0), COALESCE(immortal_essence_stones_cost,0) FROM refining_recipes ORDER BY target_gu_id, target_rank, variant`,
@@ -2504,7 +2589,7 @@ func AvailableTables() []string {
 	return []string{
 		"item", "gu", "constitution", "recipe", "shop_item", "arena_shop_item",
 		"region", "loot_table", "monster", "monster_spawn", "map_cell",
-		"sect", "sect_mission", "quest", "race", "dream_realm",
+		"sect", "sect_mission", "quest", "race", "dream_realm", "status",
 	}
 }
 
@@ -2519,6 +2604,8 @@ func TableImport(table string) error {
 		return seedConstitutionsFromCSV("Constitution.csv")
 	case "race":
 		return seedRacesFromCSV("Race.csv")
+	case "status":
+		return seedStatusesFromCSV("Status.csv")
 	case "recipe":
 		return seedRecipesFromCSV("Recipe.csv")
 	case "shop_item":
@@ -2576,6 +2663,11 @@ func TableExport(table string) error {
 			filename: "Race.csv",
 			columns:  []string{"key", "name", "effects"},
 			query:    `SELECT key, name, COALESCE(effects::text,'{}') FROM race_dictionary ORDER BY key`,
+		},
+		"status": {
+			filename: "Status.csv",
+			columns:  []string{"key", "name", "effects", "default_duration_minutes", "blocked_actions", "description"},
+			query:    `SELECT key, name, COALESCE(effects::text,'{}'), COALESCE(default_duration_minutes,0), COALESCE(blocked_actions::text,'[]'), COALESCE(description,'') FROM status_dictionary ORDER BY key`,
 		},
 		"recipe": {
 			filename: "Recipe.csv",

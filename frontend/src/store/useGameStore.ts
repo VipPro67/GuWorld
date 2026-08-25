@@ -174,7 +174,14 @@ export interface Player {
   race: string;
   gender: string;
   constitution: string;
-  statuses: string[];
+  statuses: PlayerStatusInstance[];
+}
+
+export interface PlayerStatusInstance {
+  id: string;
+  expires_at?: string | null;
+  source?: string;
+  value?: number;
 }
 
 

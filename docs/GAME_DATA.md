@@ -101,9 +101,36 @@ Các cột mô tả nhân dạng và trạng thái của người chơi, giá tr
 | `race` | VARCHAR(50) | Xem bảng chủng tộc bên dưới. Mặc định `human` lúc đăng ký. **Key phải tồn tại trong bảng `race_dictionary`** | Hiệu ứng đọc từ `race_dictionary.effects` (per-row) |
 | `gender` | VARCHAR(20) | `male`, `female` | Chưa có effect (chỉ hiển thị) |
 | `constitution` | VARCHAR(100) | Xem bảng thể chất bên dưới. **Key phải tồn tại trong bảng `constitution_dictionary`** | Hiệu ứng đọc từ `constitution_dictionary.effects` (per-row) |
-| `statuses` | JSONB (`[]string`) | `severely_wounded` (Trọng Thương) | -20% attack/defense/speed |
+| `statuses` | JSONB (mảng object) | Xem bảng trạng thái bên dưới | Hiệu ứng đọc từ `status_dictionary.effects` (per-row) |
 
 Chọn lúc đăng ký (`race`, `gender`); `constitution`/`statuses` đổi qua Admin panel (`PUT /api/admin/players/:id`) hoặc event trong game.
+
+**Trạng thái (statuses) — data-driven, seed từ `data/Status.csv` vào bảng `status_dictionary`, nạp registry trong memory (`gamefx.StatusRegistry`) khi khởi động:**
+
+Mỗi phần tử trong `players.statuses` là object `{ "id": string, "expires_at": timestamptz?, "source": string?, "value": number? }`. `expires_at` vắng mặt = vĩnh viễn; có giá trị = tự hết hạn theo **giờ thực** (worker dọn dẹp mỗi phút, effect resolution cũng lọc lazy). Format cũ (mảng string, ví dụ `["severely_wounded"]`) vẫn được unmarshal tương thích.
+
+Bảng `status_dictionary`:
+
+| Cột | Kiểu | Ghi chú |
+| --- | --- | --- |
+| `key` | VARCHAR(100) PK | Key tiếng Anh, lưu vào `players.statuses[].id` |
+| `name` | VARCHAR(200) | Tên tiếng Việt hiển thị |
+| `effects` | JSONB | Cùng format `effects` như thể chất (stat_mods, luck, ...) |
+| `default_duration_minutes` | INTEGER | 0 = vĩnh viễn; > 0 = thời hạn mặc định khi được cấp không kèm duration |
+| `blocked_actions` | JSONB (`[]string`) | Chặn hành động: `explore`, `cultivate`, `combat`, `refine`, `trade` |
+| `description` | TEXT | Mô tả |
+
+Danh sách hiện tại (5 trạng thái):
+
+| Key | Tên Việt | Effect | Thời hạn | Chặn |
+| --- | --- | --- | --- | --- |
+| `severely_wounded` | Trọng Thương | -20% attack/defense/speed, -50% hồi phục nhận | Vĩnh viễn | `explore` |
+| `poisoned` | Trúng Độc | -10% attack, -10% speed | 30 phút | — |
+| `exhausted` | Kiệt Sức | -30% speed, -50% hiệu suất tu luyện | 10 phút | `cultivate` |
+| `blessed` | Phúc Trạch | +5 may mắn, +10% hiệu suất tu luyện | 60 phút | — |
+| `death_penalty` | Hình Phạt Tử Vong | -50% attack/defense/speed | 30 phút | — |
+
+Helper dùng chung: `gamefx.Get(player)` (resolve effects + BlockedActions), `gamefx.HasBlockedAction(player, action)`, `gamefx.BlockingStatuses(player, action)`, `handlers.GrantPlayerStatus/RevokePlayerStatus/CleanExpiredPlayerStatuses` (cấp/gỡ/dọn trạng thái trong transaction), worker `worker.StartStatusExpiryWorker` (dọn hết hạn mỗi phút).
 
 **Bảng chủng tộc (race) — data-driven, seed từ `data/Race.csv` vào bảng `race_dictionary`, nạp registry trong memory (`gamefx.RaceRegistry`) khi khởi động:**
 

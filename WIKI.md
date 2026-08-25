@@ -33,9 +33,13 @@ Danh sách chủng tộc được **data-driven** từ bảng `race_dictionary` 
 
 **Trạng thái:**
 
-| Trạng thái | Hiệu ứng |
-| --- | --- |
-| Trọng Thương (`severely_wounded`) | **-20%** tấn công, phòng thủ, tốc độ |
+| Trạng thái | Hiệu ứng | Thời hạn |
+| --- | --- | --- |
+| Trọng Thương (`severely_wounded`) | **-20%** tấn công, phòng thủ, tốc độ; **-50%** hồi phục nhận; không thể thám hiểm | Vĩnh viễn (đến khi được chữa trị) |
+| Trúng Độc (`poisoned`) | **-10%** tấn công, **-10%** tốc độ | 30 phút |
+| Kiệt Sức (`exhausted`) | **-30%** tốc độ, **-50%** hiệu suất tu luyện; không thể tu luyện | 10 phút |
+| Phúc Trạch (`blessed`) | **+5** may mắn, **+10%** hiệu suất tu luyện | 60 phút |
+| Hình Phạt Tử Vong (`death_penalty`) | **-50%** tấn công, phòng thủ, tốc độ | 30 phút |
 
 **Thể chất (10 Thập Tuyệt Thể + Thuần Mộng Cầu Chân Thể):**
 
@@ -53,7 +57,7 @@ Danh sách chủng tộc được **data-driven** từ bảng `race_dictionary` 
 | Vũ Trụ Đại Diễn Thể (`universe_great_evolution_body`) | Không Gian Đạo đạo ngân ×150%, +15% tấn công/phòng thủ/tốc độ, +50% Chân Nguyên tối đa, +100% hồi mana |
 | Thuần Mộng Cầu Chân Thể (`pure_dream_reality_seeker_body`) | Mộng Đạo đạo ngân ×140%, +10% sát thương Mộng Đạo, +40% Chân Nguyên tối đa, +100% hồi mana |
 
-Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuses`). Danh sách thể chất được **data-driven** từ bảng `constitution_dictionary` (seed từ `data/Constitution.csv`): admin thêm thể chất mới bằng cách sửa CSV (thêm dòng `key,name,effects`) rồi Import bảng "Thể chất" trong Admin panel tab **Dữ liệu**. Effect format xem `docs/GAME_DATA.md`.
+Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuses`). Một số trạng thái có **thời hạn** (đếm theo giờ thực) và tự biến mất khi hết hạn. Danh sách trạng thái được **data-driven** từ bảng `status_dictionary` (seed từ `data/Status.csv`): admin thêm trạng thái mới bằng cách sửa CSV (thêm dòng `key,name,effects,default_duration_minutes,blocked_actions,description`) rồi Import bảng "Trạng thái" trong Admin panel tab **Dữ liệu**. Effect format xem `docs/GAME_DATA.md`.
 
 
 ## 2. Tu luyện
@@ -448,7 +452,7 @@ Hệ thống môn phái hiện có:
 ## 15. Tổ đội và Đấu trường
 
 - Tổ đội: tạo tổ đội, xem trạng thái, mời Cổ sư, rời tổ đội.
-- **Chiến đấu tổ đội:** Khi các thành viên trong tổ đội đứng cùng một ô trên bản đồ, họ sẽ cùng tham gia vào các trận chiến (cả Turn-based lẫn Auto Combat/Simulation). Đồng đội sẽ tự động chiến đấu bằng các Cổ trùng đang trang bị, Sát chiêu và Thiết lập tự động của chính họ. Phần thưởng chiến thắng (Nguyên thạch, Nguyên liệu, Cổ trùng) sẽ được chia đều cho tất cả thành viên tham chiến, và tiêu hao (Sinh lực, Chân Nguyên, Dược phẩm) cũng được cập nhật tương ứng.
+- **Chiến đấu tổ đội:** Các thành viên trong tổ đội ở cùng Đại Vực sẽ cùng tham gia vào trận chiến khi Trưởng nhóm khởi xướng (cả Turn-based lẫn Auto Combat/Simulation). Đồng đội sẽ tự động chiến đấu bằng các Cổ trùng đang trang bị, Sát chiêu và Thiết lập tự động của chính họ. Phần thưởng chiến thắng (Nguyên thạch, Nguyên liệu, Cổ trùng) sẽ được chia đều cho tất cả thành viên tham chiến, và tiêu hao (Sinh lực, Chân Nguyên, Dược phẩm) cũng được cập nhật tương ứng. Đồng đội không nhận điểm Chân Ý từ trận chiến — chỉ người chơi chính (Trưởng nhóm) được ngộ đạo.
 - Đấu trường: leaderboard và khiêu chiến Cổ sư khác.
 
 ## 16. Chat, mail và feedback

@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { estimateManaFromSnapshot, estimateHPFromSnapshot, GuInstance, GuSpec, Player, ImmortalAperture, useGameStore } from "@/store/useGameStore";
+import { estimateManaFromSnapshot, estimateHPFromSnapshot, GuInstance, GuSpec, Player, ImmortalAperture, PlayerStatusInstance, useGameStore } from "@/store/useGameStore";
 import {
   Sparkles,
   ShieldAlert,
@@ -26,7 +26,7 @@ import {
   Leaf,
   RefreshCw,
 } from "lucide-react";
-import { formatNumber } from "@/lib/utils";
+import { formatNumber, statusRemainLabel } from "@/lib/utils";
 import { formatGameEffects } from "@/lib/effects";
 import { translatePath, translateMastery, masteryKeyForPoints, masteryLevelForPoints, PATH_MASTERY_MILESTONES } from "@/lib/translate";
 
@@ -860,7 +860,13 @@ export const Aperture: React.FC<ApertureProps> = ({
                 const constitutionLabel = (key: string): string =>
                   constitutionDictionary?.[key]?.name || constitutionLabels[key] || key;
                 const constitutionEffects = player.constitution ? constitutionDictionary?.[player.constitution]?.effects : undefined;
-                const statusLabels: Record<string, string> = { severely_wounded: "Trọng Thương" };
+                const statusLabels: Record<string, string> = {
+                  severely_wounded: "Trọng Thương",
+                  poisoned: "Trúng Độc",
+                  exhausted: "Kiệt Sức",
+                  blessed: "Phúc Trạch",
+                  death_penalty: "Hình Phạt Tử Vong",
+                };
                 const cell = (label: string, value: string, accent = false) => (
                   <div className={`p-3 rounded-xl border ${accent ? "bg-zinc-950/40 border-zinc-800" : "bg-zinc-950/40 border-zinc-900"}`}>
                     <div className="text-[10px] text-zinc-500 font-mono">{label}</div>
@@ -902,9 +908,9 @@ export const Aperture: React.FC<ApertureProps> = ({
                       <div className="text-[10px] text-zinc-500 font-mono">Trạng Thái</div>
                       {player.statuses && player.statuses.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5 mt-1">
-                          {player.statuses.map((s: string) => (
-                            <span key={s} className="text-[10px] px-2 py-0.5 rounded-lg bg-rose-950/40 text-rose-400 border border-rose-900/40 font-mono font-semibold">
-                              {statusLabels[s] || s}
+                          {player.statuses.map((s: PlayerStatusInstance) => (
+                            <span key={s.id} className="text-[10px] px-2 py-0.5 rounded-lg bg-rose-950/40 text-rose-400 border border-rose-900/40 font-mono font-semibold">
+                              {statusLabels[s.id] || s.id}{statusRemainLabel(s.expires_at)}
                             </span>
                           ))}
                         </div>

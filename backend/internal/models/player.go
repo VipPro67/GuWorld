@@ -60,8 +60,90 @@ type PathMasteriesMap map[string]int
 // BodyModsList represents passive body modifications
 type BodyModsList []string
 
-// StatusList represents the player's active statuses (trạng thái), e.g. "severely_wounded".
-type StatusList []string
+// StatusInstance is a single active player status (trạng thái). ExpiresAt is
+// nil for permanent statuses; Source records where it came from ("admin",
+// "combat", "tribulation", ...); Value carries an optional intensity.
+type StatusInstance struct {
+	ID        string     `json:"id"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	Source    string     `json:"source,omitempty"`
+	Value     float64    `json:"value,omitempty"`
+}
+
+// StatusList represents the player's active statuses (trạng thái), e.g.
+// "severely_wounded". Persisted as a JSONB array of objects; legacy rows that
+// stored bare strings are normalized to {id: ...} on unmarshal.
+type StatusList []StatusInstance
+
+// Has reports whether a status id is currently active (expired entries still
+// count until they are cleaned; use ActiveIDs/Expire for time filtering).
+func (s StatusList) Has(id string) bool {
+	for _, st := range s {
+		if st.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// Add inserts or refreshes a status, deduping by id. d <= 0 means permanent.
+func (s *StatusList) Add(id, source string, d time.Duration, value float64) {
+	var expiry *time.Time
+	if d > 0 {
+		t := time.Now().Add(d)
+		expiry = &t
+	}
+	for i := range *s {
+		if (*s)[i].ID == id {
+			(*s)[i].ExpiresAt = expiry
+			(*s)[i].Source = source
+			(*s)[i].Value = value
+			return
+		}
+	}
+	*s = append(*s, StatusInstance{ID: id, ExpiresAt: expiry, Source: source, Value: value})
+}
+
+// Active returns the non-expired statuses (permanent ones always included),
+// without mutating the receiver.
+func (s StatusList) Active() StatusList {
+	out := make(StatusList, 0, len(s))
+	now := time.Now()
+	for _, st := range s {
+		if st.ExpiresAt != nil && !st.ExpiresAt.After(now) {
+			continue
+		}
+		out = append(out, st)
+	}
+	return out
+}
+
+// Remove drops every instance of a status id.
+func (s *StatusList) Remove(id string) {
+	out := (*s)[:0]
+	for _, st := range *s {
+		if st.ID != id {
+			out = append(out, st)
+		}
+	}
+	*s = out
+}
+
+// Expire filters out statuses whose ExpiresAt has passed and reports whether
+// the list changed. Permanent statuses (nil ExpiresAt) are kept.
+func (s *StatusList) Expire(now time.Time) bool {
+	out := (*s)[:0]
+	changed := false
+	for _, st := range *s {
+		if st.ExpiresAt != nil && !st.ExpiresAt.After(now) {
+			changed = true
+			continue
+		}
+		out = append(out, st)
+	}
+	*s = out
+	return changed
+}
 
 // VisitedSubZonesList tracks the small-zone keys the player has visited in the
 // shared world map (bounded set, used for exploration achievements).
@@ -77,7 +159,7 @@ type StatusEffect struct {
 type GuTactic struct {
 	GuID           string  `json:"gu_id"`
 	Priority       int     `json:"priority"`
-	UseCondition   string  `json:"use_condition"`   // "always","hp_below","mana_above","enemy_hp_below"
+	UseCondition   string  `json:"use_condition"` // "always","hp_below","mana_above","enemy_hp_below"
 	ConditionValue float64 `json:"condition_value"`
 }
 
@@ -137,42 +219,42 @@ func DefaultAutoCombatConfig() AutoCombatConfig {
 
 // CombatState represents the PVE combat status with a wild beast.
 type CombatState struct {
-	EnemyTemplateID     string            `json:"enemy_template_id,omitempty"`
-	EnemyName           string            `json:"enemy_name"`
-	EnemyAvatarURL      string            `json:"enemy_avatar_url,omitempty"`
-	EnemyType           string            `json:"enemy_type,omitempty"`
-	CombatMode          string            `json:"combat_mode,omitempty"` // "virtual" = illusion (no real cost), "real" = actual resource consumption, "" = legacy default
-	EnemyHP             float64           `json:"enemy_hp"`
-	EnemyMaxHP          float64           `json:"enemy_max_hp"`
-	EnemyMana           float64           `json:"enemy_mana,omitempty"`
-	EnemyMaxMana        float64           `json:"enemy_max_mana,omitempty"`
-	EnemyDamage         float64           `json:"enemy_damage"`
-	EnemyDefense        float64           `json:"enemy_defense"`
-	EnemySpeed          float64           `json:"enemy_speed,omitempty"`
-	EnemyRank           int               `json:"enemy_rank,omitempty"`
-	EnemySubRank        int               `json:"enemy_sub_rank,omitempty"`
-	EnemyGuInventory    GuInventory       `json:"enemy_gu_inventory,omitempty"`
-	EnemyDaoMarks       map[string]int    `json:"enemy_dao_marks,omitempty"`
-	EnemyPathMasteries  map[string]int    `json:"enemy_path_masteries,omitempty"`
-	AIProfile           string            `json:"ai_profile,omitempty"`
-	LootTableID         string            `json:"loot_table_id,omitempty"`
-	ChargePoints        int               `json:"charge_points"`
-	TargetPlayerID      string            `json:"target_player_id,omitempty"`
-	MineSlotID          int               `json:"mine_slot_id,omitempty"`
-	EnemyStatusEffects  []StatusEffect    `json:"enemy_status_effects,omitempty"`
-	PlayerStatusEffects []StatusEffect    `json:"player_status_effects,omitempty"`
+	EnemyTemplateID     string         `json:"enemy_template_id,omitempty"`
+	EnemyName           string         `json:"enemy_name"`
+	EnemyAvatarURL      string         `json:"enemy_avatar_url,omitempty"`
+	EnemyType           string         `json:"enemy_type,omitempty"`
+	CombatMode          string         `json:"combat_mode,omitempty"` // "virtual" = illusion (no real cost), "real" = actual resource consumption, "" = legacy default
+	EnemyHP             float64        `json:"enemy_hp"`
+	EnemyMaxHP          float64        `json:"enemy_max_hp"`
+	EnemyMana           float64        `json:"enemy_mana,omitempty"`
+	EnemyMaxMana        float64        `json:"enemy_max_mana,omitempty"`
+	EnemyDamage         float64        `json:"enemy_damage"`
+	EnemyDefense        float64        `json:"enemy_defense"`
+	EnemySpeed          float64        `json:"enemy_speed,omitempty"`
+	EnemyRank           int            `json:"enemy_rank,omitempty"`
+	EnemySubRank        int            `json:"enemy_sub_rank,omitempty"`
+	EnemyGuInventory    GuInventory    `json:"enemy_gu_inventory,omitempty"`
+	EnemyDaoMarks       map[string]int `json:"enemy_dao_marks,omitempty"`
+	EnemyPathMasteries  map[string]int `json:"enemy_path_masteries,omitempty"`
+	AIProfile           string         `json:"ai_profile,omitempty"`
+	LootTableID         string         `json:"loot_table_id,omitempty"`
+	ChargePoints        int            `json:"charge_points"`
+	TargetPlayerID      string         `json:"target_player_id,omitempty"`
+	MineSlotID          int            `json:"mine_slot_id,omitempty"`
+	EnemyStatusEffects  []StatusEffect `json:"enemy_status_effects,omitempty"`
+	PlayerStatusEffects []StatusEffect `json:"player_status_effects,omitempty"`
 	// Defender-side character effects for PVP enemies (race/constitution/status).
-	EnemyPathResistance  map[string]float64 `json:"enemy_path_resistance,omitempty"`
-	EnemyMentalResistance float64           `json:"enemy_mental_resistance,omitempty"`
-	SkillCooldowns      map[string]int    `json:"skill_cooldowns,omitempty"`
-	ItemsUsedCount      int               `json:"items_used_count"`
-	ItemCooldowns       map[string]int    `json:"item_cooldowns,omitempty"`
+	EnemyPathResistance   map[string]float64 `json:"enemy_path_resistance,omitempty"`
+	EnemyMentalResistance float64            `json:"enemy_mental_resistance,omitempty"`
+	SkillCooldowns        map[string]int     `json:"skill_cooldowns,omitempty"`
+	ItemsUsedCount        int                `json:"items_used_count"`
+	ItemCooldowns         map[string]int     `json:"item_cooldowns,omitempty"`
 	// PathMasteryGained tracks Chân Ý points already earned in this battle, so
 	// combat gains can be capped at PathMasteryBattleGainLimit(rank) per battle.
-	PathMasteryGained   int               `json:"path_mastery_gained,omitempty"`
-	Allies              []Combatant       `json:"allies,omitempty"`
-	PetIDs              []string          `json:"pet_ids,omitempty"`
-	Enemies             []Combatant       `json:"enemies,omitempty"`
+	PathMasteryGained int         `json:"path_mastery_gained,omitempty"`
+	Allies            []Combatant `json:"allies,omitempty"`
+	PetIDs            []string    `json:"pet_ids,omitempty"`
+	Enemies           []Combatant `json:"enemies,omitempty"`
 	// PetSoulCharged marks that pet deployment soul cost was already paid for
 	// this combat, preventing a double charge when InitializeCombatState is
 	// re-invoked (e.g. combat_attack.go when Allies is empty).
@@ -232,19 +314,19 @@ type Player struct {
 	SocialState
 	CombatConfig
 
-	ImmortalState      ImmortalState      `json:"immortal_state"`
-	GuInventory        GuInventory        `json:"gu_inventory"`
-	ActiveCombat       *CombatState       `json:"active_combat"`
-	GrowthData         GrowthData         `json:"growth_data"`
-	MaterialsInventory map[string]int     `json:"materials_inventory,omitempty"`
+	ImmortalState      ImmortalState       `json:"immortal_state"`
+	GuInventory        GuInventory         `json:"gu_inventory"`
+	ActiveCombat       *CombatState        `json:"active_combat"`
+	GrowthData         GrowthData          `json:"growth_data"`
+	MaterialsInventory map[string]int      `json:"materials_inventory,omitempty"`
 	CompletedQuests    CompletedQuestsList `json:"completed_quests,omitempty"`
 	UnlockedRecipes    UnlockedRecipesList `json:"unlocked_recipes,omitempty"`
 
 	// UI Transient fields
-	ManaRegenRate float64 `json:"mana_regen_rate"`
-	HPRegenRate   float64 `json:"hp_regen_rate"`
-	SoulRegenRate float64 `json:"soul_regen_rate"`
-	IsSparseGuInventory bool `json:"is_sparse_gu_inventory,omitempty"`
+	ManaRegenRate       float64 `json:"mana_regen_rate"`
+	HPRegenRate         float64 `json:"hp_regen_rate"`
+	SoulRegenRate       float64 `json:"soul_regen_rate"`
+	IsSparseGuInventory bool    `json:"is_sparse_gu_inventory,omitempty"`
 }
 
 type GrowthBoosts struct {
@@ -495,6 +577,32 @@ func (s StatusList) Value() (driver.Value, error) {
 		return "[]", nil
 	}
 	return json.Marshal(s)
+}
+
+// UnmarshalJSON accepts both the current array-of-objects form and the legacy
+// array-of-strings form (["severely_wounded"]), normalizing strings into
+// StatusInstance entries with no expiry.
+func (s *StatusList) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	out := make(StatusList, 0, len(raw))
+	for _, r := range raw {
+		var inst StatusInstance
+		if len(r) > 0 && r[0] == '"' {
+			var id string
+			if err := json.Unmarshal(r, &id); err != nil {
+				return err
+			}
+			inst = StatusInstance{ID: id}
+		} else if err := json.Unmarshal(r, &inst); err != nil {
+			return err
+		}
+		out = append(out, inst)
+	}
+	*s = out
+	return nil
 }
 
 // Scan implements the sql.Scanner interface for VisitedSubZonesList

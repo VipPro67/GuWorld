@@ -137,4 +137,10 @@ func addEffects(dst *Effects, src Effects) {
 	dst.SoulDefenseBonus += src.SoulDefenseBonus
 	dst.SoulRegenBonus += src.SoulRegenBonus
 	dst.ApertureStressBonus += src.ApertureStressBonus
+	if dst.BlockedActions == nil {
+		dst.BlockedActions = map[string]bool{}
+	}
+	for action := range src.BlockedActions {
+		dst.BlockedActions[action] = true
+	}
 }
