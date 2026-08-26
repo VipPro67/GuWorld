@@ -2295,15 +2295,22 @@ func seedSectMissionsFromCSV(filename string) error {
 //  2. auction — ACTIVE Gu listings
 //  3. sects.vault_gu — sect vault (kho tông môn)
 func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs []string) (bool, error) {
+	// Acquire transaction-level advisory lock to serialize checks/creation of this specific Immortal Gu.
+	// This prevents concurrent refinements of the same unique Gu from racing.
+	_, err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtext('refine_immortal_gu_' || $1))`, guID)
+	if err != nil {
+		return false, err
+	}
+
 	var exists bool
 
 	// 1. Kiểm tra trong bảng phụ player_gu (toàn bộ cổ của mọi người chơi)
-	err := tx.QueryRow(`
+	err = tx.QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM player_gu
 			WHERE gu_id = $1
 			  AND gu_rank >= 6
-			  AND NOT (id = ANY($2::text[]))
+			  AND ($2::text[] IS NULL OR cardinality($2::text[]) = 0 OR NOT (id = ANY($2::text[])))
 		)
 	`, guID, pq.Array(excludeInstanceIDs)).Scan(&exists)
 	if err != nil {

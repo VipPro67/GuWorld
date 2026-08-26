@@ -534,8 +534,7 @@ func RefineGu(c *gin.Context) {
 	var isUniqueImmortalFail bool
 
 	// Tiên cổ duy nhất check
-	spec, ok := models.GetGu(recipe.TargetGuID, recipe.TargetRank)
-	if ok && spec.Rank >= 6 {
+	if recipe.TargetRank >= 6 {
 		exists, _ := db.CheckImmortalGuExists(tx, recipe.TargetGuID, recipe.TargetRank, req.SelectedGuInstanceIDs)
 		if exists {
 			isUniqueImmortalFail = true
