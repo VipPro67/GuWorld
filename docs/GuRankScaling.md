@@ -35,7 +35,7 @@ Mỗi thuộc tính hiệu ứng có một anchor, các cổ trùng theo vai tr�
 | `passive.stat_base_attack` | `1 × P` | cộng tấn công nền |
 | `passive.stat_base_defense` | `5 × P` | cộng phòng ngự nền |
 | `passive.stat_base_hp` | `10 × P` | cộng máu nền |
-| `passive.stat_base_speed` | `1 × P` | cộng tốc độ nền |
+| `passive.stat_base_speed` | `1` | cộng tốc độ nền | ko scale mạnh như các chỉ số khác
 | `active.status_tick_damage` | `10 × P` | sát thương tick theo lượt (BURN/BLEED/PETRIFY...) |
 
 ## 3. Bảng chuẩn rank 1–9

@@ -87,7 +87,6 @@ GU_SWORD_SHIELD,2,1,"{""GU_FLYING_SWORD"": {""qty"": 1, ""rank"": 1}}","{""sword
 GU_WATER_SHIELD,2,1,"{""GU_WATER_ARROW"": {""qty"": 1, ""rank"": 1}}","{""fish_scales"": 4, ""spirit_spring_water"": 3, ""water_path_material"": 3}",0.8,40.0,0.0,
 GU_WATER_SPIKE,2,1,"{""GU_WATER_ARROW"": {""qty"": 1, ""rank"": 1}}","{""fish_scales"": 5, ""spirit_spring_water"": 3, ""water_path_material"": 3}",0.8,40.0,0.0,
 GU_BLOOD_COCOON,3,1,"{""GU_BLOOD_QI"": {""qty"": 1, ""rank"": 2}, ""GU_BLOOD_STONE"": {""qty"": 1, ""rank"": 2}}","{""blood_marrow"": 2, ""blood_bat_egg"": 1, ""blood_path_material"": 6}",0.7,80.0,0.0,
-GU_MY_WILL,3,1,"{""GU_WISDOM_GU"": {""qty"": 1, ""rank"": 9}}","{""soul_qi"": 2, ""paper_pulp"": 5, ""wisdom_path_material"": 5, ""heart_knowledge_grass"": 4}",0.7,80.0,0.0,
 GU_POISON_VOW,3,1,"{""GU_POISON_MIST"": {""qty"": 1, ""rank"": 8}}","{""bitter_water"": 5, ""poisonous_flesh"": 7, ""poison_path_material"": 5}",0.7,80.0,0.0,
 GU_RECORDING_SHADOW_SOUND,3,1,"{""GU_SHADOW"": {""qty"": 1, ""rank"": 1}}","{""paper_pulp"": 4, ""black_lacquer_mud"": 5, ""dark_path_material"": 5, ""information_path_material"": 5}",0.214,160.0,0.0,
 GU_RED_FLAME_ARMOR,3,1,"{""GU_FIRE_BALL"": {""qty"": 1, ""rank"": 1}}","{""fire_coal"": 5, ""sealing_stone"": 4, ""fire_path_material"": 5, ""formation_path_material"": 2}",0.214,160.0,0.0,
@@ -308,7 +307,6 @@ GU_BURNING_HEAVEN_IMMORTAL,6,1,"{""GU_FIRE_BALL"": {""qty"": 1, ""rank"": 1}}","
 GU_CLEANSE_SOUL,6,1,"{""GU_CLEANSE_SOUL"": {""qty"": 1, ""rank"": 6}}","{""soul_qi"": 8, ""soul_core"": 5, ""soul_dust"": 4, ""soul_path_material"": 24, ""white_lotus_giant_silkworm"": 6}",0.4,600.0,100.0,
 GU_CONNECT_LUCK,6,1,"{""GU_DOG_SHIT_LUCK"": {""qty"": 1, ""rank"": 1}}","{""beast_meat"": 7, ""sand_gull_soil"": 5, ""luck_path_material"": 24, ""six_headed_snake_blood"": 5, ""mountain_water_qi_laughing_stone"": 4}",0.010,600.0,100.0,
 GU_CUT_LUCK,6,1,"{""GU_DOG_SHIT_LUCK"": {""qty"": 1, ""rank"": 1}}","{""beast_meat"": 8, ""sand_gull_soil"": 5, ""luck_path_material"": 24, ""six_headed_snake_blood"": 4, ""mountain_water_qi_laughing_stone"": 4}",0.010,600.0,100.0,
-GU_DIAMOND_THOUGHT,6,1,"{""GU_WISDOM_GU"": {""qty"": 1, ""rank"": 9}}","{""star_thoughts"": 5, ""deer_god_fruit"": 4, ""memory_fragments"": 4, ""wisdom_path_material"": 24, ""heart_knowledge_grass"": 8}",0.4,600.0,100.0,
 GU_DREAM_WINGS,6,1,"{""GU_DREAM_WINGS"": {""qty"": 1, ""rank"": 6}}","{""nectar"": 8, ""soul_qi"": 8, ""dream_material"": 24, ""memory_fragments"": 5, ""space_path_material"": 11}",0.4,600.0,100.0,
 GU_ETERNAL_LIFE_TREE,6,1,"{""GU_GREEN_LEAF"": {""qty"": 1, ""rank"": 1}}","{""nectar"": 8, ""tree_sap"": 7, ""jade_celery_soil"": 5, ""wood_path_material"": 24, ""formation_path_material"": 11}",0.010,900.0,150.0,
 GU_FIRE_DRAGON,6,1,"{""GU_FIRE_BALL"": {""qty"": 6, ""rank"": 1}}","{""black_oil"": 4, ""fire_coal"": 7, ""fire_path_material"": 24, ""golden_crow_meteor"": 5, ""light_path_material"": 11}",0.010,900.0,150.0,
@@ -340,7 +338,6 @@ GU_RIFT_WIND,6,1,"{""GU_WIND_SLASH"": {""qty"": 1, ""rank"": 6}}","{""bat_wing""
 GU_SMALL_EAT,6,1,"{""GU_WHITE_BOAR"": {""qty"": 1, ""rank"": 1}}","{""meat"": 7, ""ginseng"": 7, ""beast_meat"": 7, ""black_oil_refined"": 4, ""food_path_material"": 24}",0.010,900.0,150.0,
 GU_SWORD_MARK,6,1,"{""GU_FLYING_SWORD"": {""qty"": 1, ""rank"": 1}}","{""sword_qi"": 6, ""blade_food"": 5, ""thread_water"": 5, ""sword_leaf_grass"": 8, ""sword_path_material"": 24}",0.010,600.0,100.0,
 GU_TIME_MARK,6,1,"{""GU_YEAR_GU"": {""qty"": 1, ""rank"": 3}}","{""star_thoughts"": 4, ""memory_fragments"": 5, ""time_river_water"": 5, ""time_path_material"": 24, ""heart_knowledge_grass"": 7}",0.057,600.0,100.0,
-GU_UNRAVEL_RIDDLE,6,1,"{""GU_WISDOM_GU"": {""qty"": 1, ""rank"": 9}}","{""star_thoughts"": 5, ""deer_god_fruit"": 4, ""memory_fragments"": 5, ""wisdom_path_material"": 24, ""heart_knowledge_grass"": 7}",0.4,600.0,100.0,
 GU_WATER_DISASTER_IMMORTAL,6,1,"{""GU_WATER_ARROW"": {""qty"": 1, ""rank"": 1}}","{""life_water"": 5, ""fish_scales"": 8, ""thread_water"": 5, ""spirit_spring_water"": 7, ""water_path_material"": 24}",0.010,900.0,150.0,
 GU_WAVE_BLADE,6,1,"{""GU_WATER_ARROW"": {""qty"": 1, ""rank"": 1}}","{""life_water"": 6, ""fish_scales"": 8, ""blade_path_material"": 11, ""spirit_spring_water"": 8, ""water_path_material"": 24}",0.010,1500.0,250.0,
 GU_WIND_POWER,6,1,"{""GU_WIND_SLASH"": {""qty"": 1, ""rank"": 6}}","{""bat_wing"": 4, ""sword_leaf_grass"": 7, ""cloud_dragon_scale"": 5, ""featherman_feather"": 7, ""wind_path_material"": 24}",0.4,600.0,100.0,
@@ -421,7 +418,6 @@ GU_STRENGTH,9,1,"{""GU_STRENGTH"": {""qty"": 1, ""rank"": 1}}","{""meat"": 18, "
 GU_SUN_EMPEROR,9,1,"{""GU_MOONLIGHT"": {""qty"": 1, ""rank"": 1}}","{""fire_coal"": 18, ""sun_flame"": 10, ""fire_path_material"": 52, ""light_path_material"": 52, ""abundant_spring_light"": 10, ""glory_of_the_immemorial_light"": 19}",0.010,0.0,800.0,
 GU_SUN_FIRE,9,1,"{""GU_FIRE_BALL"": {""qty"": 1, ""rank"": 1}}","{""black_oil"": 19, ""fire_coal"": 19, ""sun_flame"": 10, ""fire_path_material"": 52, ""golden_crow_meteor"": 19, ""light_path_material"": 23}",0.010,0.0,800.0,
 GU_THOUSAND_HAND_BODHISATTVA,9,1,"{""GU_WHITE_BOAR"": {""qty"": 1, ""rank"": 1}}","{""nectar"": 18, ""ginseng"": 18, ""tree_sap"": 19, ""jade_celery_soil"": 19, ""wood_path_material"": 52, ""formation_path_material"": 23, ""immortal_apertures_shards"": 7}",0.010,0.0,1600.0,
-GU_WISDOM_GU,9,1,"{""GU_WISDOM_GU"": {""qty"": 1, ""rank"": 9}}","{""star_thoughts"": 15, ""deer_god_fruit"": 15, ""dark_ink_seaweed"": 19, ""memory_fragments"": 14, ""wisdom_path_material"": 52, ""heart_knowledge_grass"": 19, ""immortal_apertures_shards"": 7}",0.1,0.0,800.0,
 GU_WHITE_COCOON,2,1,"{""GU_LIQUOR_WORM"": {""qty"": 1, ""rank"": 1}}","{""green_bamboo_wine"": 5, ""refinement_path_material"": 3, ""white_lotus_giant_silkworm"": 1}",0.8,40.0,0.0,
 GU_BLOOD_ARMOR,3,2,"{""GU_BLOOD_STONE"": {""qty"": 2, ""rank"": 2}}","{""blood_marrow"": 2, ""blood_bat_egg"": 2, ""blood_qi_pearl"": 1, ""blood_path_material"": 6, ""transformation_path_material"": 3}",0.7,80.0,0.0,
 GU_BLOOD_ARROW,3,2,"{""GU_BLOOD_SCENT"": {""qty"": 1, ""rank"": 2}}","{""blood_marrow"": 2, ""blood_bat_egg"": 2, ""blood_silver_sand"": 2, ""blood_path_material"": 9}",0.7,80.0,0.0,
@@ -1011,3 +1007,7 @@ GU_BLADE_HEAL_I,8,1,"{""GU_BLADE_HEAL_5"": {""qty"": 1, ""rank"": 5}}","{""immor
 GU_BLADE_DECISION_4,4,1,{},"{""shadow_blade_crystal"": 5}",0.600,200.0,0.0,
 GU_BLADE_DECISION_I,7,1,"{""GU_BLADE_DECISION_4"": {""qty"": 1, ""rank"": 4}}","{""immortal_blade_ore"": 2, ""immortal_essence"": 2}",0.144,0.0,200.0,
 GU_BLADE_DECISION_I,9,1,"{""GU_BLADE_DECISION_I"": {""qty"": 1, ""rank"": 7}}","{""immortal_blade_ore"": 5, ""immortal_essence"": 10}",0.043,0.0,2000.0,
+GU_COLD_STAR,1,1,"{""GU_CONDENSE_FROST"": {""qty"": 1, ""rank"": 1}}","{""ice_path_material"": 5, ""ice_crystal"": 5, ""beast_meat"": 5, ""iron_ore"": 5, ""ginseng"": 5}",0.9,20.0,0.0
+GU_THOUGHT_RECOVERY,3,1,"{""GU_WISDOM_LIGHT_2"": {""qty"": 1, ""rank"": 2}}","{""wisdom_path_material"": 5, ""iron_ore"": 3, ""ginseng"": 3, ""sealing_stone"": 3, ""life_water"": 3}",0.7,80.0,0.0
+GU_POEM_IMMORTAL,9,1,"{""GU_BOOKWORM"": {""qty"": 1, ""rank"": 1}}","{""information_path_material"": 52, ""book_worm"": 18, ""immortal_apertures_shards"": 18, ""heaven_qi"": 18, ""star_fragment"": 18}",0.1,0.0,800.0
+GU_SOUL_NOURISH,4,1,"{""GU_GUTS_GU"": {""qty"": 1, ""rank"": 1}}","{""soul_path_material"": 8, ""soul_qi"": 4, ""sealing_stone"": 4, ""jade_stone"": 4, ""cold_ice_grass"": 4}",0.6,150.0,0.0

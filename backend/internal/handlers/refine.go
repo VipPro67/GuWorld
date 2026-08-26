@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -20,13 +21,70 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 // Points of Cảnh Giới Lưu Phái earned by a successful Luyện Cổ (refine).
 const (
-	refinePathMasteryGain        = 2
+	refinePathMasteryGain         = 2
 	refinePathMasteryGainImmortal = 10
 )
+
+type RefineOutcome string
+const (
+	OutcomeSuccess      RefineOutcome = "SUCCESS"
+	OutcomeFailSafe     RefineOutcome = "FAIL_SAFE"
+	OutcomeFailNormal   RefineOutcome = "FAIL_NORMAL"
+	OutcomeFailBackfire RefineOutcome = "FAIL_BACKFIRE"
+)
+
+type RefineRateBreakdown struct {
+	BaseRate           float64 `json:"base_rate"`
+	CompletionPenalty  float64 `json:"completion_penalty"`
+	ComboAccuracy      bool    `json:"combo_accuracy"`
+	MaterialQuality    float64 `json:"material_quality"`
+	RefinementDaoMarks float64 `json:"refinement_dao_marks"`
+	RefinementMastery  float64 `json:"refinement_mastery"`
+	TargetPathMastery  float64 `json:"target_path_mastery"`
+	LuckBonus          float64 `json:"luck_bonus"`
+	SupportBonus       float64 `json:"support_bonus"`
+	EnvBonus           float64 `json:"env_bonus"`
+	FinalRate          float64 `json:"final_rate"`
+	RefinementRealm    int     `json:"refinement_realm"`
+}
+
+func determineRefineOutcome(roll, finalRate float64, refinementRealm, targetRank int) RefineOutcome {
+	if roll <= finalRate {
+		return OutcomeSuccess
+	}
+	safeZone := (1.0 - finalRate) * 0.25 * float64(refinementRealm) / 4.0
+	if roll <= finalRate+safeZone {
+		return OutcomeFailSafe
+	}
+	backfireThreshold := 0.90
+	if targetRank >= 6 {
+		backfireThreshold = 0.75
+	}
+	if roll >= backfireThreshold {
+		return OutcomeFailBackfire
+	}
+	return OutcomeFailNormal
+}
+
+func collectRefineSupportBonus(player *models.Player) float64 {
+	totalBonus := 0.0
+	for _, gu := range player.GuInventory {
+		if !gu.Equipped || gu.Status != "ACTIVE" {
+			continue
+		}
+		spec, ok := models.GetGu(gu.GuID, gu.Rank)
+		if !ok || spec.Effects.Passive == nil {
+			continue
+		}
+		totalBonus += spec.Effects.Passive.SuccessRateBonus
+	}
+	return totalBonus / 100.0
+}
 
 // ParseRecipeID parses recipe_GU_ID_RANK_VARIANT into components.
 // E.g., recipe_GU_BIG_BELLY_TOAD_1_1 -> target_gu_id = "GU_BIG_BELLY_TOAD", target_rank = 1, variant = 1
@@ -291,9 +349,10 @@ func RefineGu(c *gin.Context) {
 		return
 	}
 
-	// Count Gu types (matching the required rank) and verify ownership
+	// Count Gu types (matching the required rank or higher) and verify ownership
 	selectedGusCounts := make(map[string]int)
 	seenInstances := make(map[string]bool)
+	materialQualityBonus := 0.0
 
 	for _, instID := range req.SelectedGuInstanceIDs {
 		if seenInstances[instID] {
@@ -309,10 +368,12 @@ func RefineGu(c *gin.Context) {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot use a DEAD Gu bug for refining"})
 					return
 				}
-				// Count only instances that satisfy the recipe requirement.
-				// Rank 0 (legacy) means any rank is acceptable.
-				if req, ok := recipe.RequiredGus[item.GuID]; ok && (req.Rank == 0 || req.Rank == item.Rank) {
+				// Count instances that satisfy the recipe requirement (equal or higher rank).
+				if reqGu, ok := recipe.RequiredGus[item.GuID]; ok && (reqGu.Rank == 0 || item.Rank >= reqGu.Rank) {
 					selectedGusCounts[item.GuID]++
+					if reqGu.Rank > 0 && item.Rank > reqGu.Rank {
+						materialQualityBonus += 0.02 * float64(item.Rank-reqGu.Rank)
+					}
 				}
 				found = true
 				break
@@ -324,11 +385,10 @@ func RefineGu(c *gin.Context) {
 		}
 	}
 
-	// Check if selection matches recipe required Gus exactly (gu_id + rank).
-	// A wrong combo is allowed (drag-drop experiment) but guarantees the refine fails below.
+	// Check if selection matches recipe required Gus.
 	guRequirementsNotMet := false
-	for guID, req := range recipe.RequiredGus {
-		if selectedGusCounts[guID] != req.Qty {
+	for guID, reqGu := range recipe.RequiredGus {
+		if selectedGusCounts[guID] != reqGu.Qty {
 			guRequirementsNotMet = true
 			break
 		}
@@ -344,7 +404,7 @@ func RefineGu(c *gin.Context) {
 		InventorySvc.RemoveItem(tx, player.ID.String(), matID, "materials", reqQty)
 	}
 
-	// 8. RNG Roll
+	// 8. RNG Roll & 10 Factors Calculation
 	var pathRaw []byte
 	err = tx.QueryRow(`SELECT path FROM gu_dictionary WHERE id = $1 AND rank = $2`, recipe.TargetGuID, recipe.TargetRank).Scan(&pathRaw)
 	if err != nil {
@@ -357,7 +417,8 @@ func RefineGu(c *gin.Context) {
 		paths = []string{string(pathRaw)}
 	}
 
-	attainmentBonus := 0.0
+	// Calculate target path attainment bonus
+	targetPathMastery := 0.0
 	if player.PathMasteries != nil {
 		for _, path := range paths {
 			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
@@ -373,37 +434,99 @@ func RefineGu(c *gin.Context) {
 				case 4:
 					bonus = 0.20
 				}
-				if bonus > attainmentBonus {
-					attainmentBonus = bonus
+				if bonus > targetPathMastery {
+					targetPathMastery = bonus
 				}
 			}
 		}
 	}
 
-	finalSuccessRate := recipe.SuccessRate + attainmentBonus + gamefx.Get(&player).RefineBonus
-	hasWisdomGu := false
-	for _, gu := range player.GuInventory {
-		if gu.GuID == "GU_WISDOM_GU" && gu.Equipped && gu.Status == "ACTIVE" {
-			hasWisdomGu = true
+	// Refinement Dao Marks & Mastery
+	refinementMarks := 0
+	refinementPoints := 0
+	if player.DaoMarks != nil {
+		refinementMarks = player.DaoMarks["refinement"]
+	}
+	if player.PathMasteries != nil {
+		refinementPoints = player.PathMasteries["refinement"]
+	}
+	refinementDaoBonus := math.Min(0.20, float64(refinementMarks)/1000.0)
+	
+	refinementRealm := gamefx.PathMasteryLevel(refinementPoints)
+	refinementMasteryBonus := 0.0
+	switch refinementRealm {
+	case 1: refinementMasteryBonus = 0.03
+	case 2: refinementMasteryBonus = 0.06
+	case 3: refinementMasteryBonus = 0.10
+	case 4: refinementMasteryBonus = 0.15
+	}
+
+	// Luck Bonus
+	luckMarks := 0
+	if player.DaoMarks != nil {
+		luckMarks = player.DaoMarks["luck"]
+	}
+	fx := gamefx.Get(&player)
+	luckBonus := math.Min(0.10, (float64(luckMarks)*0.001)+fx.LuckBonus/100.0)
+
+	// Environment Bonus
+	var regionPathsRaw []byte
+	_ = tx.QueryRow(`SELECT COALESCE(paths, '[]') FROM regions WHERE id = $1`, player.CurrentRegion).Scan(&regionPathsRaw)
+	var regionPaths []string
+	json.Unmarshal(regionPathsRaw, &regionPaths)
+	envBonus := 0.0
+	for _, rp := range regionPaths {
+		cleanRP := strings.TrimSuffix(strings.ToLower(rp), " path")
+		for _, tp := range paths {
+			cleanTP := strings.TrimSuffix(strings.ToLower(tp), " path")
+			if cleanRP == cleanTP {
+				envBonus = 0.05
+				break
+			}
+		}
+		if envBonus > 0 {
 			break
 		}
 	}
-	if hasWisdomGu {
-		finalSuccessRate += 0.30
-	}
+
+	// Support Bonus
+	supportBonus := collectRefineSupportBonus(&player) + fx.RefineBonus
+
+	// Final Rate Calculation
+	baseRate := recipe.SuccessRate
+	sumBonus := refinementDaoBonus + refinementMasteryBonus + targetPathMastery + luckBonus + supportBonus + envBonus + materialQualityBonus
+	
+	finalSuccessRate := baseRate + sumBonus
+	completionPenalty := 1.0
 	if isForcedRefine {
-		finalSuccessRate = finalSuccessRate * (unlockedRate / 100.0)
+		completionPenalty = unlockedRate / 100.0
+		finalSuccessRate = finalSuccessRate * completionPenalty
 	}
+	
 	if finalSuccessRate > 1.0 {
 		finalSuccessRate = 1.0
 	}
 	if guRequirementsNotMet {
-		// Wrong Gu combo: the attempt proceeds but is guaranteed to fail (materials are consumed).
 		finalSuccessRate = 0.0
 	}
 
 	roll := rand.Float64()
-	success := roll <= finalSuccessRate
+	outcome := determineRefineOutcome(roll, finalSuccessRate, refinementRealm, recipe.TargetRank)
+	
+	breakdown := RefineRateBreakdown{
+		BaseRate:           baseRate,
+		CompletionPenalty:  completionPenalty,
+		ComboAccuracy:      !guRequirementsNotMet,
+		MaterialQuality:    materialQualityBonus,
+		RefinementDaoMarks: refinementDaoBonus,
+		RefinementMastery:  refinementMasteryBonus,
+		TargetPathMastery:  targetPathMastery,
+		LuckBonus:          luckBonus,
+		SupportBonus:       supportBonus,
+		EnvBonus:           envBonus,
+		FinalRate:          finalSuccessRate,
+		RefinementRealm:    refinementRealm,
+	}
 
 	var newGuInstance models.GuInstance
 	var statusMsg string
@@ -415,21 +538,35 @@ func RefineGu(c *gin.Context) {
 	if ok && spec.Rank >= 6 {
 		exists, _ := db.CheckImmortalGuExists(tx, recipe.TargetGuID, recipe.TargetRank, req.SelectedGuInstanceIDs)
 		if exists {
-			success = false
+			outcome = OutcomeFailNormal
 			statusStr = "failed"
 			statusMsg = "Tiên cổ là duy nhất, đã tồn tại trong thiên hạ, luyện chế thất bại!"
 			isUniqueImmortalFail = true
 		}
 	}
 
-	if success {
+	// Consume Materials based on outcome
+	if outcome == OutcomeFailSafe {
+		for matID, reqQty := range recipe.RequiredMaterials {
+			deductQty := int(math.Ceil(float64(reqQty) * 0.5))
+			if deductQty > 0 {
+				InventorySvc.RemoveItem(tx, player.ID.String(), matID, "materials", deductQty)
+			}
+		}
+	} else {
+		for matID, reqQty := range recipe.RequiredMaterials {
+			InventorySvc.RemoveItem(tx, player.ID.String(), matID, "materials", reqQty)
+		}
+	}
+
+	hasVitalIngredient := false
+	hasVitalSurvived := false
+	var refineEventMsg string
+
+	if outcome == OutcomeSuccess {
 		statusStr = "success"
 		statusMsg = "Hợp luyện thành công! Đạo hữu luyện chế được Cổ trùng mới."
-
-		// Check if any of the consumed ingredients was a Vital Gu & fire ON_REFINE_MATERIAL
-		hasVitalIngredient := false
 		newInventory := models.GuInventory{}
-		var refineEventMsg string
 		for _, item := range player.GuInventory {
 			if seenInstances[item.InstanceID] {
 				if item.IsVital {
@@ -447,7 +584,7 @@ func RefineGu(c *gin.Context) {
 		if refineEventMsg != "" {
 			statusMsg += " " + refineEventMsg
 		}
-
+		
 		newGuInstance = models.GuInstance{
 			InstanceID: uuid.New().String(),
 			GuID:       recipe.TargetGuID,
@@ -457,12 +594,9 @@ func RefineGu(c *gin.Context) {
 			Equipped:   false,
 			IsVital:    hasVitalIngredient,
 		}
-
 		newInventory = append(newInventory, newGuInstance)
 		player.GuInventory = newInventory
-
-		// Luyện Cổ thành công tăng Cảnh Giới Lưu Phái cho path của Cổ đích
-		// (+10 điểm cho Cổ Tiên rank >= 6, +2 điểm cho Cổ thường).
+		
 		pathGain := refinePathMasteryGain
 		if newGuInstance.Rank >= 6 {
 			pathGain = refinePathMasteryGainImmortal
@@ -476,7 +610,6 @@ func RefineGu(c *gin.Context) {
 			newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
 			statusMsg += fmt.Sprintf(" Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái %s (Cảnh giới: %s).", pathGain, strings.Title(cleanPath), gamefx.PathMasteryLevelName(newLevel))
 		}
-
 		if newGuInstance.Rank >= 6 {
 			guName := newGuInstance.GuID
 			if targetSpec, ok := models.GetGu(newGuInstance.GuID, newGuInstance.Rank); ok {
@@ -485,18 +618,20 @@ func RefineGu(c *gin.Context) {
 			message := fmt.Sprintf("Đạo hữu %s đã luyện chế thành công Cổ Trùng [%s] R%d!", player.Username, guName, newGuInstance.Rank)
 			_ = SendSystemMessage("world", sql.NullString{}, message)
 		}
-
+	} else if outcome == OutcomeFailSafe {
+		statusStr = "failed"
+		statusMsg = "Luyện cổ thất bại nhưng Cảnh Giới đủ cao giúp bảo toàn Cổ nguyên liệu! Chỉ mất 50% nguyên liệu phụ."
 	} else {
 		statusStr = "failed"
-		if guRequirementsNotMet {
+		if isUniqueImmortalFail {
+			// message already set
+		} else if guRequirementsNotMet {
 			statusMsg = "Cổ nguyên liệu không khớp công thức! Các nguyên liệu đã hóa thành tro bụi."
-		} else if !isUniqueImmortalFail {
+		} else {
 			statusMsg = "Hợp luyện thất bại! Các nguyên liệu thường đã hóa thành tro bụi."
 		}
-
-		hasVitalSurvived := false
+		
 		newInventory := models.GuInventory{}
-		var refineEventMsg string
 		for _, item := range player.GuInventory {
 			if seenInstances[item.InstanceID] {
 				if item.IsVital {
@@ -515,34 +650,39 @@ func RefineGu(c *gin.Context) {
 				newInventory = append(newInventory, item)
 			}
 		}
+		player.GuInventory = newInventory
 		if refineEventMsg != "" {
 			statusMsg += " " + refineEventMsg
 		}
-
+		
 		if !isUniqueImmortalFail {
-			if isForcedRefine {
+			if outcome == OutcomeFailBackfire {
+				hpLoss := gamefx.EffectiveMaxHP(&player) * 0.50
+				player.HP -= hpLoss
+				if player.HP < 10.0 {
+					player.HP = 10.0
+				}
+				soulLoss := int(math.Ceil(float64(player.MaxSoul) * 0.30))
+				player.SoulHP -= soulLoss
+				if player.SoulHP < 1 {
+					player.SoulHP = 1
+				}
+				statusMsg = fmt.Sprintf("Luyện cổ CHÁY NỔ (Backfire)! Phản phệ dữ dội, tổn thất %d Hồn Phách và %.0f HP.", soulLoss, hpLoss)
+			} else if isForcedRefine {
 				player.HP -= 30.0
 				if player.HP < 10.0 {
 					player.HP = 10.0
 				}
-				nolee := rand.Float64() < 0.20
-				if nolee {
-					player.MaxMana = player.MaxMana * 0.95
-					if player.CurrentMana > player.MaxMana {
-						player.CurrentMana = player.MaxMana
-					}
-					statusMsg = "Ép Luyện thất bại! Đạo hữu bị phản phệ dữ dội nổ Không Khiếu, tối đa Chân Nguyên bị suy giảm vĩnh viễn 5%!"
-				} else {
-					statusMsg = "Ép Luyện thất bại! Phản phệ chấn thương kinh mạch, tổn thất 30 HP."
-				}
-				if hasVitalSurvived {
-					statusMsg += " Riêng Cổ Bản Mệnh vẫn sống sót nhưng rơi vào trạng thái Hấp Hối!"
-				}
-			} else if hasVitalSurvived {
-				statusMsg = "Hợp luyện thất bại! Các nguyên liệu thường đã hóa thành tro bụi, riêng Cổ Bản Mệnh của đạo hữu vẫn sống sót nhưng rơi vào trạng thái Hấp Hối!"
+				statusMsg = "Ép Luyện thất bại! Phản phệ chấn thương kinh mạch, tổn thất 30 HP."
+			}
+			
+			if hasVitalSurvived {
+				statusMsg += " Riêng Cổ Bản Mệnh vẫn sống sót nhưng rơi vào trạng thái Hấp Hối!"
 			}
 		}
 	}
+
+	statusMsg = fmt.Sprintf("%s (Tỉ lệ: %.1f%%)", statusMsg, finalSuccessRate*100.0)
 
 	// Recalculate equipped_gus list
 	player.EquippedGus = []string{}
@@ -562,10 +702,10 @@ func RefineGu(c *gin.Context) {
 	}
 	updateQuery := `
 		UPDATE players
-		SET primeval_stones = $1, immortal_stones = $2, equipped_gus = $3, hp = $4, max_mana = $5, current_mana = $6, human_qi = $7, path_masteries = $8
-		WHERE id = $9
+		SET primeval_stones = $1, immortal_stones = $2, equipped_gus = $3, hp = $4, max_mana = $5, current_mana = $6, human_qi = $7, path_masteries = $8, soul_hp = $9
+		WHERE id = $10
 	`
-	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ImmortalStones, player.EquippedGus, player.HP, player.MaxMana, player.CurrentMana, player.HumanQi, player.PathMasteries, player.ID)
+	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ImmortalStones, player.EquippedGus, player.HP, player.MaxMana, player.CurrentMana, player.HumanQi, player.PathMasteries, player.SoulHP, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save refining results"})
 		return
@@ -580,31 +720,43 @@ func RefineGu(c *gin.Context) {
 	if targetSpec, ok := models.GetGu(recipe.TargetGuID, recipe.TargetRank); ok {
 		targetName = targetSpec.Name
 	}
+	
+	isSuccess := outcome == OutcomeSuccess
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "refine.gu", EntityType: "refining_recipe",
 		EntityID:       req.RecipeID,
-		RequestSummary: fmt.Sprintf("Luyện Cổ: công thức %s -> %s | Thành công: %v | Ép luyện: %v", req.RecipeID, targetName, success, isForcedRefine),
+		RequestSummary: fmt.Sprintf("Luyện Cổ: công thức %s -> %s | Thành công: %v | Ép luyện: %v | Outcome: %s", req.RecipeID, targetName, isSuccess, isForcedRefine, outcome),
 		Metadata: map[string]interface{}{
 			"recipe_id":      req.RecipeID,
 			"target_gu_id":   recipe.TargetGuID,
 			"target_gu_name": targetName,
-			"success":        success,
+			"success":        isSuccess,
+			"outcome":        outcome,
 			"is_forced":      isForcedRefine,
 		},
-		IPAddress: c.ClientIP(), Success: success,
+		IPAddress: c.ClientIP(), Success: isSuccess,
 	})
+
+	notifyTitle := "Luyện Cổ Thất Bại"
+	if isSuccess {
+		notifyTitle = "Luyện Cổ Thành Công"
+	}
+	notify.Send(db.DB, player.ID, "SYSTEM", notifyTitle, statusMsg)
+
 	// Return response
-	if success {
+	if isSuccess {
 		responseWithPlayer(c, http.StatusOK, player, gin.H{
-			"status":  statusStr,
-			"message": statusMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
-			"new_gu":  newGuInstance,
+			"status":         statusStr,
+			"message":        statusMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
+			"new_gu":         newGuInstance,
+			"rate_breakdown": breakdown,
 		})
 	} else {
 		responseWithPlayer(c, http.StatusOK, player, gin.H{
-			"status":  statusStr,
-			"message": statusMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
+			"status":         statusStr,
+			"message":        statusMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
+			"rate_breakdown": breakdown,
 		})
 	}
 }
@@ -661,18 +813,6 @@ func DeduceRecipe(c *gin.Context) {
 	thoughtCost := 15.0
 	stoneCost := 10.0
 
-	hasWisdomGu := false
-	for _, gu := range player.GuInventory {
-		if gu.GuID == "GU_WISDOM_GU" && gu.Equipped && gu.Status == "ACTIVE" {
-			hasWisdomGu = true
-			break
-		}
-	}
-	if hasWisdomGu {
-		thoughtCost = 7.5
-		stoneCost = 5
-	}
-
 	if player.CurrentThought < thoughtCost {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Niệm Lực (cần %.1f)", thoughtCost)})
 		return
@@ -688,9 +828,7 @@ func DeduceRecipe(c *gin.Context) {
 
 	// Roll for deduction outcome
 	inspirationFlashChance := 0.03
-	if hasWisdomGu {
-		inspirationFlashChance += 0.30
-	}
+
 	inspirationFlash := rand.Float64() < inspirationFlashChance
 	var improvement float64
 	var newRate float64
@@ -708,9 +846,6 @@ func DeduceRecipe(c *gin.Context) {
 	} else {
 		// improve by 10% - 25%
 		improvement = 10.0 + rand.Float64()*15.0
-		if hasWisdomGu {
-			improvement *= 1.3
-		}
 		// round to 1 decimal place for neatness
 		improvement = float64(int(improvement*10)) / 10.0
 

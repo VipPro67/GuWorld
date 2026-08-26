@@ -326,6 +326,15 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 	}
 }
 
+// actionOutcome reports the result of executing a single SimAction inside the
+// interleaved battle loop.
+type actionOutcome struct {
+	executed    bool
+	hasDamage   bool
+	abort       bool
+	firstTarget *CombatantAuto
+}
+
 // Simulate runs the deterministic auto-battle using pre-computed actions.
 func Simulate(state *CombatState) []CombatLog {
 	for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
@@ -452,6 +461,40 @@ func Simulate(state *CombatState) []CombatLog {
 		sort.SliceStable(allActors, func(i, j int) bool {
 			return allActors[i].EffectiveSpeed > allActors[j].EffectiveSpeed
 		})
+
+		// Pre-sort every combatant's actions by priority so slot execution and
+		// counter-attacks share one canonical order (replaces the per-slot
+		// lazy sort via nextActionIdx).
+		for _, c := range allActors {
+			sort.SliceStable(c.Actions, func(i, j int) bool {
+				return c.Actions[i].Priority < c.Actions[j].Priority
+			})
+		}
+		executedOnce := make(map[*CombatantAuto]bool)
+		actionCursor := make(map[*CombatantAuto]int)
+
+		// postActionChecks marks newly-dead combatants and runs boss phase
+		// transitions for the opposing side after each executed action.
+		postActionChecks := func(opposing []*CombatantAuto) {
+			for _, tgt := range opposing {
+				if tgt.HP <= 0 && !tgt.IsDead {
+					tgt.HP = 0
+					tgt.IsDead = true
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   tgt.ID,
+						ActorName: tgt.Name,
+						Action:    "DIED",
+						Detail:    fmt.Sprintf("%s đã gục ngã!", tgt.Name),
+					})
+				}
+			}
+			for _, tgt := range opposing {
+				if tgt.Kind == "Boss" {
+					turnLogs = append(turnLogs, CheckBossPhaseTransitions(state, tgt)...)
+				}
+			}
+		}
 
 		for _, actor := range allActors {
 			if actor.HP <= 0 || actor.IsDead {
@@ -618,16 +661,11 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 			}
 
-			// ── Multi-action per turn: execute all valid actions ──
+			// ── Multi-action per turn: actions resolve one at a time; each
+			// damage-dealing action is answered immediately by a counter from
+			// the victim (see tryCounter below). ──
 			if len(actor.Actions) == 0 {
 				continue
-			}
-			// Sort by priority once
-			if actor.nextActionIdx == 0 {
-				sort.SliceStable(actor.Actions, func(i, j int) bool {
-					return actor.Actions[i].Priority < actor.Actions[j].Priority
-				})
-				actor.nextActionIdx = 1
 			}
 
 			var enemyTargets []*CombatantAuto
@@ -662,13 +700,15 @@ func Simulate(state *CombatState) []CombatLog {
 				})
 			}
 
-			hasExecutedAny := false
-			for ai := range actor.Actions {
-				a := &actor.Actions[ai]
+			// runOne attempts a single action for the given actor. The body is
+			// identical to the previous inline action loop; skip/abort control
+			// flow is expressed through the returned actionOutcome.
+			runOne := func(actor *CombatantAuto, a *SimAction, isAlly bool, enemyTargets []*CombatantAuto) actionOutcome {
+				res := actionOutcome{}
 
 				// Silence / Fear: skip skills and killer moves, only allow basic attack
 				if (actor.IsSilenced || actor.IsFeared) && a.ActionType != "BASIC_ATTACK" {
-					continue
+					return res
 				}
 
 				if a.ManaCost > 0 && float64(actor.Mana) < a.ManaCost {
@@ -679,20 +719,22 @@ func Simulate(state *CombatState) []CombatLog {
 						Action:    "INSUFFICIENT_MANA",
 						Detail:    fmt.Sprintf("%s không đủ %s để dùng [%s] (cần %.0f, còn %d)", actor.Name, actor.GetManaName(), a.Name, a.ManaCost, actor.Mana),
 					})
-					continue
+					return res
 				}
 
 				resolved := resolveTargets(enemyTargets, a)
 				if len(resolved) == 0 {
-					break
+					res.abort = true
+					return res
 				}
 				firstTarget := resolved[0]
+				res.firstTarget = firstTarget
 
 				if !checkActionCondition(a, actor, firstTarget) {
-					continue
+					return res
 				}
 
-				hasExecutedAny = true
+				res.executed = true
 				actionStartIndex := len(turnLogs)
 				manaCost := int(a.ManaCost)
 				actor.Mana -= manaCost
@@ -779,7 +821,8 @@ func Simulate(state *CombatState) []CombatLog {
 						Detail:    fmt.Sprintf("[Phản Phệ] Cổ trùng Rank cao phản phệ %s, trừ %d HP (còn %d HP)!", actor.Name, backlash, actor.HP),
 					})
 					if actor.HP <= 0 {
-						break
+						res.abort = true
+						return res
 					}
 				}
 
@@ -875,7 +918,8 @@ func Simulate(state *CombatState) []CombatLog {
 						Action:    "HEAL",
 						Detail:    fmt.Sprintf("%s sử dụng Cổ Gan Dạ, hồi phục hoàn toàn HP linh hồn nhưng mất lượt hành động!", actor.Name),
 					})
-					break // Break action loop (Turn_Cost = 1)
+					res.abort = true // Break action loop (Turn_Cost = 1)
+					return res
 				}
 
 				if a.SourceID == "GU_SWORD_DRAGON_TRANSFORM" {
@@ -997,6 +1041,7 @@ func Simulate(state *CombatState) []CombatLog {
 				// ── Apply damage & compound effects to all resolved targets ──
 				totalDamageDealt := 0
 				hasDamage := a.ActionType == "BASIC_ATTACK" || a.Damage > 0
+				res.hasDamage = hasDamage
 
 				if hasDamage {
 					dmgMultiplier := 1.0
@@ -1474,10 +1519,97 @@ func Simulate(state *CombatState) []CombatLog {
 						turnLogs = append(turnLogs[:actionStartIndex], *useLog)
 					}
 				}
+				return res
+			}
+
+			// tryCounter lets the victim of a damage-dealing action answer
+			// immediately with their next available action. Counters never
+			// trigger further counters (no ping-pong chains).
+			tryCounter := func(victim *CombatantAuto) {
+				if victim == nil || victim.HP <= 0 || victim.IsDead ||
+					victim.IsFrozen || victim.IsSleeping || victim.IsBound {
+					return
+				}
+				stunned := false
+				for _, eff := range victim.ActiveEffects {
+					if eff.ID == EffectStun && eff.Duration >= 0 {
+						stunned = true
+						break
+					}
+				}
+				if stunned {
+					return
+				}
+				cur := actionCursor[victim]
+				if cur >= len(victim.Actions) {
+					return
+				}
+
+				vIsAlly := false
+				for _, a := range state.Allies {
+					if a.ID == victim.ID {
+						vIsAlly = true
+						break
+					}
+				}
+				vTargets := state.Enemies
+				if !vIsAlly {
+					vTargets = state.Allies
+				}
+				if getTarget(vTargets) == nil {
+					return
+				}
+				vEnemyTargets := vTargets
+				if victim.IsCharmed {
+					if vIsAlly {
+						vEnemyTargets = state.Allies
+					} else {
+						vEnemyTargets = state.Enemies
+					}
+				}
+				if victim.IsConfused && rng.Float64() < 0.40 {
+					if vIsAlly {
+						vEnemyTargets = state.Allies
+					} else {
+						vEnemyTargets = state.Enemies
+					}
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   victim.ID,
+						ActorName: victim.Name,
+						Action:    "CONFUSED",
+						Detail:    fmt.Sprintf("%s bị mê loạn, phản công nhầm đồng minh!", victim.Name),
+					})
+				}
+
+				out := runOne(victim, &victim.Actions[cur], vIsAlly, vEnemyTargets)
+				postActionChecks(vEnemyTargets)
+				if out.executed {
+					actionCursor[victim] = cur + 1
+					executedOnce[victim] = true
+				}
+			}
+
+			ai := actionCursor[actor]
+			for ai < len(actor.Actions) {
+				out := runOne(actor, &actor.Actions[ai], isAlly, enemyTargets)
+				postActionChecks(enemyTargets)
+				if out.abort {
+					actionCursor[actor] = len(actor.Actions)
+					break
+				}
+				ai++
+				actionCursor[actor] = ai
+				if out.executed {
+					executedOnce[actor] = true
+					if out.hasDamage {
+						tryCounter(out.firstTarget)
+					}
+				}
 			}
 
 			// Fallback: basic attack if no valid action
-			if !hasExecutedAny {
+			if !executedOnce[actor] {
 				daoMult, _ := actorDaoMultiplier(actor, []string{"strength"})
 				// Apply weak debuff to fallback basic attack
 				fallbackDmgMult := actor.DamageMultiplier
@@ -1515,27 +1647,7 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 			}
 
-			// Dying checks for all enemies
-			for _, tgt := range enemyTargets {
-				if tgt.HP <= 0 && !tgt.IsDead {
-					tgt.HP = 0
-					tgt.IsDead = true
-					turnLogs = append(turnLogs, CombatLog{
-						Turn:      turn,
-						ActorId:   tgt.ID,
-						ActorName: tgt.Name,
-						Action:    "DIED",
-						Detail:    fmt.Sprintf("%s đã gục ngã!", tgt.Name),
-					})
-				}
-			}
-
-			// Boss phase transitions
-			for _, tgt := range enemyTargets {
-				if tgt.Kind == "Boss" {
-					turnLogs = append(turnLogs, CheckBossPhaseTransitions(state, tgt)...)
-				}
-			}
+			postActionChecks(enemyTargets)
 		}
 
 		logs = append(logs, turnLogs...)

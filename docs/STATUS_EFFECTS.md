@@ -51,8 +51,8 @@ EffectiveSpeed = BaseSpeed × (1 - SlowPercent / 100)
 - Slow T5 (55%) có thể đảo ngược hoàn toàn thứ tự lượt
 
 **Triển khai:**
-- Auto-battle: `simulator/engine.go` — sort theo `EffectiveSpeed`
-- Manual combat: `combat_attack.go` — `sort.Slice` tính speed có考虑 slow
+- Auto-battle: `simulator/engine.go` — sort theo `EffectiveSpeed`; mỗi đòn gây sát thương bị nạn nhân đáp trả ngay 1 action (`tryCounter`), speed quyết định ai hành động trước
+- Manual combat: `combat_attack.go` — `effectiveCombatSpeed` (tính slow) dùng cho sort toàn cục và quyết định bên nào mở màn chuỗi đánh–đáp với mục tiêu chủ
 
 ---
 

@@ -274,9 +274,29 @@ Cổ sư có thể:
 
 - Cổ phương lấy từ `backend/Recipe.csv`.
 - Luyện Cổ dùng `/api/refine` với recipe và selected Gu instances.
-- Cổ nguyên liệu trong công thức yêu cầu **đúng bậc** (`required_gus` lưu cả `rank` lẫn `qty`); Cổ khác bậc sẽ không được tính vào công thức.
-- Có thể kéo-thả Cổ bất kỳ vào ô nguyên liệu (kể cả ô "Cổ Trùng Ẩn"). Nếu bộ Cổ không khớp công thức, khi Ép Luyện sẽ **thất bại chắc chắn** — nguyên liệu, tài nguyên vẫn bị tiêu hao và (nếu là Ép Luyện) chịu phản phệ như thất bại thường.
+- Cổ nguyên liệu trong công thức yêu cầu **bằng hoặc cao hơn bậc quy định**. Dùng Cổ nguyên liệu bậc cao hơn sẽ tăng thêm tỉ lệ thành công (Chất lượng nguyên liệu).
+- Có thể kéo-thả Cổ bất kỳ vào ô nguyên liệu (kể cả ô "Cổ Trùng Ẩn"). Nếu bộ Cổ không khớp công thức, khi Luyện sẽ **thất bại chắc chắn** — nguyên liệu, tài nguyên vẫn bị tiêu hao.
 - Suy diễn recipe dùng `/api/refine/deduce`, cập nhật tiến độ unlock recipe trong player.
+
+### Tỉ lệ Luyện Cổ và Hệ quả (MỚI)
+
+Tỉ lệ thành công của mỗi lần Luyện Cổ được tính dựa trên 10 yếu tố:
+1. **Tỷ lệ gốc:** Từ bí phương.
+2. **Độ hoàn thiện:** Ép luyện khi bí phương chưa 100% sẽ bị giảm tỉ lệ tương ứng.
+3. **Độ chính xác tổ hợp:** Lắp sai Cổ nguyên liệu lập tức tỷ lệ về 0%.
+4. **Chất lượng nguyên liệu:** Dùng Cổ nguyên liệu bậc cao hơn bậc yêu cầu (+2% mỗi bậc chênh lệch).
+5. **Đạo Ngân Luyện Đạo:** Tích lũy từ Tiên Khiếu (+0.1% mỗi điểm Đạo Ngân Luyện Đạo, tối đa +20%).
+6. **Cảnh giới Luyện Đạo:** Tăng tỉ lệ thành công (+3%, +6%, +10%, +15% tương ứng với cảnh giới Đại Sư trở lên).
+7. **Cảnh giới Lưu Phái đích:** Cảnh giới lưu phái của Cổ đang luyện (tối đa +20% ở Vô Thượng Tông Sư).
+8. **Khí vận:** Dựa trên Đạo Ngân Vận Đạo và hiệu ứng Phúc Trạch (tối đa +10%).
+9. **Hỗ trợ:** Cổ Trí Tuệ Đạo/Luyện Đạo đang kích hoạt (có dòng `success_rate_bonus`).
+10. **Môi trường:** Luyện Cổ tại Đại Vực có thuộc tính phù hợp (+5%).
+
+Hệ quả của quá trình luyện phân thành 4 bậc:
+- **Thành Công:** Nhận Cổ trùng mục tiêu, tăng Chân Ý lưu phái tương ứng.
+- **Thất Bại (Safe):** Nếu thất bại suýt sao và có Cảnh giới Luyện Đạo cao, đạo hữu được bảo toàn Cổ nguyên liệu chính, chỉ mất 50% nguyên liệu phụ (materials).
+- **Thất Bại (Normal):** Mất 100% nguyên liệu. Nếu có Cổ Bản Mệnh tham gia thì không chết mà rơi vào Hấp Hối (Hunger = 1).
+- **Cháy Nổ (Backfire):** Nếu vận rủi tột cùng (xúc xắc >= 90%, hoặc >= 75% với Tiên Cổ), Lò Luyện phát nổ! Tổn thất 50% HP tối đa và 30% Hồn Phách tối đa. Cổ nguyên liệu thường hóa thành tro bụi.
 
 ## 7. Sát chiêu
 
@@ -316,6 +336,8 @@ Cổ sư có thể:
 - Combat PvE khởi tạo từ thám hiểm, mỏ hoặc các hệ thống gọi combat.
 - Cổ sư dùng Cổ trang bị, có thể charge và chọn mục tiêu.
 - Chỉ định mục tiêu hỗ trợ vị trí/hàng/cột/toàn bộ tùy `target_type` của Cổ.
+- **Giao trân "đánh trả từng phát":** các Cổ trong lượt tấn công được kích hoạt **lần lượt từng chiêu**, không còn xả trọn bộ trong một nhịp. Sau mỗi đòn đánh ra, mục tiêu chủ (đối thủ chính) sẽ **đáp trả ngay một đòn** vào đạo hữu. Tốc độ quyết định **ai giao trân trước** (tính cả hiệu ứng Chậm) — bên nhanh hơn mở màn chuỗi đánh–đáp, sau đó hai bên luân phiên từng phát. Dùng vật phẩm/hút Nguyên Thạch/tụ lực không bị đáp trả; Bộc Phá Sát Chiêu và đánh thường vẫn bị đáp trả bình thường. Đối thủ ngoài đáp trả vẫn giữ đúng một hành động AI mỗi lượt như cũ.
+- **Auto battle (tự chiến/luyện chiến) cùng cơ chế:** mỗi đòn Cổ gây sát thương đều bị nạn nhân **đáp trả ngay bằng viên Cổ kế tiếp** trong bộ của họ (trừ mana, chịu khống chế như thường); cast hỗ trợ/hồi/khiên không bị đáp trả; đòn đáp trả không bị đáp trả ngược (không dây chuyền); AoE chỉ được đáp trả 1 lần bởi mục tiêu trúng đòn chính. Hành động đã dùng để đáp trả sẽ không còn khi tới lượt speed của nhân vật đó.
 - Combat state hỗ trợ đội hình địch/ta, status effects, cooldown, Chân Nguyên/Sinh lực, chiến lợi phẩm.
 - Thắng trận áp dụng chiến lợi phẩm vào thẳng túi đồ thật; thua trận cập nhật trạng thái theo handler combat.
 - **Túi đồ khi khám phá là túi thật:** nguyên liệu/Cổ/tiền nhặt được trong chuyến đi vào thẳng túi đồ (không còn "túi tạm"). Khi về trấn an toàn không có bước "thu hoạch" — đồ đã nằm sẵn trong túi.
@@ -487,7 +509,7 @@ Hệ thống tích hợp 18 Cổ trùng đặc biệt mang lại các hiệu ứ
     - *Cái giá*: Giảm vĩnh viễn 10% Tư chất, giảm vĩnh viễn 5 năm tuổi thọ, hoặc mất 50% Nguyên Thạch.
 
 ### Ngoài chiến đấu (Handlers)
-1. **Trí Tuệ Cổ (GU_WISDOM_GU)**: Tỏa ra vầng sáng trí tuệ, giảm 50% chi phí Chân Nguyên/Nguyên Thạch khi thôi diễn và luyện cổ, đồng thời tăng 30% tỷ lệ thành công.
+1. **Trí Tuệ Cổ (GU_WISDOM)**: Tỏa ra vầng sáng trí tuệ, giảm 50% chi phí Chân Nguyên/Nguyên Thạch khi thôi diễn và luyện cổ, đồng thời tăng 30% tỷ lệ thành công.
 2. **Huyết Sọ Cổ (GU_BLOOD_SKULL)**: Cho phép hiến tế đệ tử môn phái để gia tăng vĩnh viễn tư chất Không khiếu của bản thân (+5% tư chất/lần, tối đa 99% - tư chất Giáp).
 3. **Cổ Thiên Cơ (GU_HEAVEN_SECRET)**: Tăng gấp đôi tầm nhìn khám phá bản đồ (Vision Radius) và hiển thị trực quan tỷ lệ rớt đồ của quái vật trên bản đồ.
 4. **Cổ Thọ Nguyên 100 Năm (GU_LIFESPAN_100)**: Tiêu hao để gia tăng vĩnh viễn 100 năm tuổi thọ cho Cổ sư.

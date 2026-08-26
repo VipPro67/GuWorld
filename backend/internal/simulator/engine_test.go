@@ -174,3 +174,128 @@ func TestInvincibleBlocksDamage(t *testing.T) {
 		t.Fatalf("expected full damage reduction, got %v", c.DamageTakenReduction)
 	}
 }
+
+// firstTurnDamageActors returns the actor IDs of damage-dealing logs from the
+// first turn of the simulation, in execution order.
+func firstTurnDamageActors(logs []CombatLog) []string {
+	var ids []string
+	turnCount := 0
+	for _, l := range logs {
+		if l.Action == "TURN_START" {
+			turnCount++
+			if turnCount > 1 {
+				break
+			}
+			continue
+		}
+		if turnCount == 1 && l.Damage > 0 && l.ActorId != "" {
+			ids = append(ids, l.ActorId)
+		}
+	}
+	return ids
+}
+
+func idsEqual(a []string, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// TestDamageTriggersCounterInterleave verifies that each damage-dealing action
+// is answered immediately by the victim's next action, instead of one side
+// dumping its whole kit: expected order is ally, enemy, ally, enemy.
+func TestDamageTriggersCounterInterleave(t *testing.T) {
+	state := &CombatState{
+		Seed: 99,
+		Allies: []*CombatantAuto{
+			newTestCombatant("ally", "Player", 1000, 10),
+		},
+		Enemies: []*CombatantAuto{
+			newTestCombatant("enemy", "Enemy", 1000, 5),
+		},
+	}
+	state.Allies[0].Speed = 100
+	state.Allies[0].Actions = []SimAction{
+		{ActionType: "GU_SKILL", Name: "A1", Damage: 10},
+		{ActionType: "GU_SKILL", Name: "A2", Damage: 10},
+	}
+	state.Enemies[0].Speed = 50
+	state.Enemies[0].Actions = []SimAction{
+		{ActionType: "GU_SKILL", Name: "E1", Damage: 5},
+		{ActionType: "GU_SKILL", Name: "E2", Damage: 5},
+	}
+
+	logs := Simulate(state)
+	got := firstTurnDamageActors(logs)
+	want := []string{"ally", "enemy", "ally", "enemy"}
+	if !idsEqual(got, want) {
+		t.Fatalf("expected interleaved order %v, got %v", want, got)
+	}
+}
+
+// TestCounterDoesNotChain verifies a counter-attack never provokes another
+// counter (depth cap of one): exactly four damage events in the first turn.
+func TestCounterDoesNotChain(t *testing.T) {
+	state := &CombatState{
+		Seed: 7,
+		Allies: []*CombatantAuto{
+			newTestCombatant("ally", "Player", 1000, 10),
+		},
+		Enemies: []*CombatantAuto{
+			newTestCombatant("enemy", "Enemy", 1000, 5),
+		},
+	}
+	state.Allies[0].Speed = 100
+	state.Allies[0].Actions = []SimAction{
+		{ActionType: "GU_SKILL", Name: "A1", Damage: 10},
+	}
+	state.Enemies[0].Speed = 50
+	state.Enemies[0].Actions = []SimAction{
+		{ActionType: "GU_SKILL", Name: "E1", Damage: 5},
+	}
+
+	logs := Simulate(state)
+	got := firstTurnDamageActors(logs)
+	want := []string{"ally", "enemy"}
+	if !idsEqual(got, want) {
+		t.Fatalf("expected single exchange [ally enemy], got %v", got)
+	}
+}
+
+// TestSupportDoesNotProvokeCounter verifies that a non-damaging support cast
+// does not grant the opponent a counter window: the enemy answers only the
+// damage cast, then spends its remaining action at its own speed slot.
+func TestSupportDoesNotProvokeCounter(t *testing.T) {
+	state := &CombatState{
+		Seed: 21,
+		Allies: []*CombatantAuto{
+			newTestCombatant("ally", "Player", 1000, 10),
+		},
+		Enemies: []*CombatantAuto{
+			newTestCombatant("enemy", "Enemy", 1000, 5),
+		},
+	}
+	state.Allies[0].Speed = 100
+	state.Allies[0].Actions = []SimAction{
+		{ActionType: "GU_SKILL", Name: "Buff", DefUpTier: 1},
+		{ActionType: "GU_SKILL", Name: "A2", Damage: 10},
+	}
+	state.Enemies[0].Speed = 50
+	state.Enemies[0].Actions = []SimAction{
+		{ActionType: "GU_SKILL", Name: "E1", Damage: 5},
+		{ActionType: "GU_SKILL", Name: "E2", Damage: 5},
+	}
+
+	logs := Simulate(state)
+	got := firstTurnDamageActors(logs)
+	want := []string{"ally", "enemy", "enemy"}
+	if !idsEqual(got, want) {
+		t.Fatalf("expected [ally damage -> enemy counter, then enemy slot], got %v", got)
+	}
+}

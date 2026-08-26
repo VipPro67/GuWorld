@@ -397,7 +397,13 @@ func CombatAttack(c *gin.Context) {
 	}
 	var actions []CombatAction
 
+	casterID := player.ID.String()
+	primaryEnemyID := ""
+	hasDuel := false
+	var duelSeq []func() []string
+
 	if targetIdx != -1 {
+		primaryEnemyID = player.ActiveCombat.Enemies[targetIdx].ID
 		casterCombatant := &player.ActiveCombat.Allies[casterIdx]
 		prefX := req.TargetX
 		prefY := req.TargetY
@@ -408,30 +414,376 @@ func CombatAttack(c *gin.Context) {
 			prefY = 2
 		}
 
-		actions = append(actions, CombatAction{
-			InitiatorID: player.ID.String(),
-			Speed:       casterCombatant.Speed,
-			Execute: func() []string {
-				var logs []string
-				refCaster, _, _ := findCombatant(player.ActiveCombat, player.ID.String())
+		// ── Interleaved exchange ("đánh trả từng phát"): the caster's strikes
+		// resolve one by one and the primary target answers each strike with a
+		// riposte. Effective speed decides who opens the exchange. ──
+		numStrikes := 0
+		switch {
+		case isUsingStones, isUsingItem, isChargingThisTurn:
+			numStrikes = 0
+		default:
+			numStrikes = 1
+			if !isUnleashingCharge && len(selectedSpecs) > 1 {
+				numStrikes = len(selectedSpecs)
+			}
+		}
+		strikeFired := make([]bool, numStrikes)
+
+		// guCastLogs resolves a single equipped Gu against the battlefield,
+		// appending its logs (per-Gu behavior identical to the previous
+		// all-at-once resolution).
+		guCastLogs := func(logs *[]string, spec models.GuDictionaryItem) {
+			refCaster, _, _ := findCombatant(player.ActiveCombat, player.ID.String())
+			if refCaster == nil || refCaster.HP <= 0 {
+				return
+			}
+			{
+				dmgBase, defBase, _, _ := CalculateGuEffectForCombatant(refCaster, &spec, false, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)
+
+				if !isVirtual {
+					if len(spec.Path) > 0 {
+						cleanPath := strings.TrimSuffix(strings.ToLower(spec.Path[0]), " path")
+						pathGain := 1
+						if spec.Rank >= 6 {
+							pathGain = 10
+						}
+						gained := applyPathMasteryGain(&player, cleanPath, pathGain)
+						if gained > 0 {
+							newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
+							*logs = append(*logs, fmt.Sprintf("-> Ngộ Đạo tăng tiến (%s)! +%d điểm Chân Ý %s (Cảnh giới: %s).", spec.Name, gained, strings.Title(cleanPath), gamefx.PathMasteryLevelName(newLevel)))
+						}
+					}
+				}
+				dmg, def, cost, errGu := CalculateGuEffectForCombatant(refCaster, &spec, true, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)
+				if errGu == nil && refCaster.CurrentMana >= cost {
+					refCaster.CurrentMana -= cost
+					if refCaster.Rank < spec.Rank {
+						backlashHP := 5.0
+						if refCaster.HP <= backlashHP {
+							refCaster.HP = 0
+						} else {
+							refCaster.HP -= backlashHP
+						}
+						*logs = append(*logs, fmt.Sprintf("[Phản Phệ] Cổ trùng Rank cao phản phệ %s, trừ %.0f HP (còn %.0f HP)!", refCaster.Name, backlashHP, refCaster.HP))
+					}
+
+					// Apply weak debuff to damage
+					weakMult := 1.0
+					for _, eff := range refCaster.StatusEffects {
+						if eff.Type == "weak" && eff.Turns > 0 {
+							weakMult *= (1.0 - eff.Value/100.0)
+						}
+					}
+					dmg *= weakMult
+					dmgBase *= weakMult
+
+					isHealing := false
+					isDefense := spec.Type == "Defense"
+					isAttack := spec.Type == "Attack" || spec.Type == "Active"
+					if spec.Effects.Active != nil {
+						isHealing = spec.Effects.Active.HealFlat > 0
+						if spec.Effects.Active.ShieldFlat > 0 {
+							isDefense = true
+						}
+						if spec.Effects.Active.DamageFlat > 0 || spec.Effects.Active.DamageMult > 0 {
+							isAttack = true
+						}
+					}
+
+					if isHealing {
+						healVal := def
+						if false {
+							healVal = refCaster.BaseAttack * 1.5
+						}
+						if healVal <= 0 {
+							healVal = 30.0
+						}
+						healVal *= (1.0 + gamefx.Get(&player).HealingReceivedBonus)
+						refCaster.HP += healVal
+						if refCaster.HP > refCaster.MaxHP {
+							refCaster.HP = refCaster.MaxHP
+						}
+						healBase := defBase
+						if healBase <= 0 {
+							healBase = 30.0
+						}
+						healDao := healVal - healBase
+						if healDao > 0 {
+							*logs = append(*logs, fmt.Sprintf("-> %s kích hoạt %s, khôi phục %.1f HP bản thân (HP hiện tại: %.1f) [Gốc: %.1f, Đạo Ngân: +%.1f].", refCaster.Name, spec.Name, healVal, refCaster.HP, healBase, healDao))
+						} else {
+							*logs = append(*logs, fmt.Sprintf("-> %s kích hoạt %s, khôi phục %.1f HP bản thân (HP hiện tại: %.1f).", refCaster.Name, spec.Name, healVal, refCaster.HP))
+						}
+					} else if isDefense {
+						shieldVal := def * 10.0
+						if shieldVal <= 0 {
+							shieldVal = 150.0
+						}
+						refCaster.VirtualShield += shieldVal
+						shieldBase := defBase * 10.0
+						if shieldBase <= 0 {
+							shieldBase = 150.0
+						}
+						shieldDao := shieldVal - shieldBase
+						if shieldDao > 0 {
+							*logs = append(*logs, fmt.Sprintf("-> %s thi triển %s phòng thủ, nhận %.1f Khiên hộ thể (Virtual Shield: %.1f) [Gốc: %.1f, Đạo Ngân: +%.1f].", refCaster.Name, spec.Name, shieldVal, refCaster.VirtualShield, shieldBase, shieldDao))
+						} else {
+							*logs = append(*logs, fmt.Sprintf("-> %s thi triển %s phòng thủ, nhận %.1f Khiên hộ thể (Virtual Shield: %.1f).", refCaster.Name, spec.Name, shieldVal, refCaster.VirtualShield))
+						}
+					} else if isAttack {
+						hasBypass := spec.Effects.Active != nil && spec.Effects.Active.CurveAttack
+						targetType := spec.Effects.Active.TargetSelector
+						targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, targetType, prefX, prefY, hasBypass)
+						if len(targetsIdx) > 0 {
+							dmgDao := dmg - dmgBase
+							if dmgDao > 0 {
+								*logs = append(*logs, fmt.Sprintf("-> %s kích hoạt %s! (Sức mạnh: %.1f [Gốc: %.1f, Đạo Ngân: +%.1f])", refCaster.Name, spec.Name, dmg, dmgBase, dmgDao))
+							} else {
+								*logs = append(*logs, fmt.Sprintf("-> %s kích hoạt %s!", refCaster.Name, spec.Name))
+							}
+							for _, eIdx := range targetsIdx {
+								tEnemy := &player.ActiveCombat.Enemies[eIdx]
+								netDmg := dmg - tEnemy.BaseDefense
+								netDmg *= (1.0 - enemyPathResistance(&player, spec.Path))
+								if netDmg < 1.0 {
+									netDmg = 1.0
+								}
+								dmgLog := applyDamageWithLogs(refCaster.Name, tEnemy.Name, tEnemy, netDmg)
+								*logs = append(*logs, dmgLog)
+
+								// Apply status effects from Gu to target
+								if spec.Effects.Active != nil {
+									active := spec.Effects.Active
+									resisted := enemyResistsControl(&player)
+									switch active.ApplyStatus {
+									case "SILENCE":
+										if !resisted {
+											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+												Type: "silence", Value: 1, Turns: active.StatusDurationTicks,
+											})
+											*logs = append(*logs, fmt.Sprintf("%s bị Im lặng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
+										}
+									case "STUN":
+										if !resisted {
+											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+												Type: "stun", Value: 1, Turns: active.StatusDurationTicks,
+											})
+											*logs = append(*logs, fmt.Sprintf("%s bị Choáng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
+										}
+									case "FREEZE":
+										if !resisted {
+											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+												Type: "freeze", Value: 1, Turns: active.StatusDurationTicks,
+											})
+											*logs = append(*logs, fmt.Sprintf("%s bị Đóng băng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
+										}
+									case "SLOW":
+										if !resisted {
+											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+												Type: "slow", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
+											})
+											*logs = append(*logs, fmt.Sprintf("%s bị Chậm %d%% %d lượt!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
+										}
+									case "SLOW1":
+										tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+											Type: "slow1", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
+										})
+										*logs = append(*logs, fmt.Sprintf("%s bị Chậm %d%% %d lượt (không thể kháng)!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
+									case "SLOW_DAMAGE":
+										if !resisted {
+											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+												Type: "slow_damage", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
+											})
+											*logs = append(*logs, fmt.Sprintf("%s bị Chậm sát thương %d%% và mất %d HP/lượt trong %d lượt!", tEnemy.Name, int(active.StatusTickDamage), int(active.StatusTickDamage), active.StatusDurationTicks))
+										}
+									case "WEAK":
+										if !resisted {
+											tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+												Type: "weak", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
+											})
+											*logs = append(*logs, fmt.Sprintf("%s bị Yếu %d%% %d lượt!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
+										}
+									case "BLEED":
+										tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+											Type: "bleed", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
+										})
+										*logs = append(*logs, fmt.Sprintf("%s bị Chảy máu (%.0f/lượt %d lượt)!", tEnemy.Name, active.StatusTickDamage, active.StatusDurationTicks))
+									case "POISON":
+										tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
+											Type: "poison", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
+										})
+										*logs = append(*logs, fmt.Sprintf("%s bị Độc (%.0f/lượt %d lượt)!", tEnemy.Name, active.StatusTickDamage, active.StatusDurationTicks))
+									}
+								}
+							}
+						}
+					} else {
+						*logs = append(*logs, fmt.Sprintf("-> %s kích hoạt %s (Hỗ trợ)!", refCaster.Name, spec.Name))
+					}
+				}
+			}
+		}
+
+		// basicAttackLogs performs a plain basic attack against the preferred
+		// target (used for empty selections and when silenced).
+		basicAttackLogs := func(logs *[]string, grantsMastery bool) {
+			refCaster, _, _ := findCombatant(player.ActiveCombat, player.ID.String())
+			if refCaster == nil || refCaster.HP <= 0 {
+				return
+			}
+			targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, "SINGLE", prefX, prefY, false)
+			if len(targetsIdx) == 0 {
+				return
+			}
+			targetEnemy := &player.ActiveCombat.Enemies[targetsIdx[0]]
+			daoMult := gamefx.DaoMultiplierForPaths(refCaster.DaoMarks, []string{"strength"}, gamefx.Get(&player).DaoNganBonus)
+			dmgVal := refCaster.BaseAttack
+			if dmgVal <= 0 {
+				dmgVal = 5.0
+			}
+			// Apply weak debuff
+			for _, eff := range refCaster.StatusEffects {
+				if eff.Type == "weak" && eff.Turns > 0 {
+					dmgVal *= (1.0 - eff.Value/100.0)
+				}
+			}
+			fullDmg := dmgVal * daoMult
+			netDmg := (fullDmg - targetEnemy.BaseDefense) * (1.0 - enemyPathResistance(&player, []string{"strength"}))
+			if netDmg < 1.0 {
+				netDmg = 1.0
+			}
+			dmgLog := applyDamageWithLogs(refCaster.Name, targetEnemy.Name, targetEnemy, netDmg)
+
+			strengthNote := ""
+			if grantsMastery {
+				strengthGain := applyPathMasteryGain(&player, "strength", 1)
+				if strengthGain > 0 {
+					pts := player.PathMasteries["strength"]
+					lvlName := "Sơ Học"
+					if pts >= 10000 {
+						lvlName = "Vô Thượng Tông Sư"
+					} else if pts >= 2500 {
+						lvlName = "Đại Tông Sư"
+					} else if pts >= 500 {
+						lvlName = "Tông Sư"
+					} else if pts >= 100 {
+						lvlName = "Đại Sư"
+					}
+					strengthNote = fmt.Sprintf(" Ngộ Đạo: +1 Chân Ý Lực (%s)", lvlName)
+				}
+			}
+
+			if daoMult > 1.0 {
+				dmgDao := fullDmg - dmgVal
+				*logs = append(*logs, fmt.Sprintf("-> %s đánh thường (Basic Attack) [Gốc: %.1f, Đạo Ngân: +%.1f]!%s", refCaster.Name, dmgVal, dmgDao, strengthNote), dmgLog)
+			} else {
+				*logs = append(*logs, fmt.Sprintf("-> %s đánh thường (Basic Attack)!%s", refCaster.Name, strengthNote), dmgLog)
+			}
+		}
+
+		// casterStrike builds the k-th caster exchange step. Step 0 carries the
+		// turn guards (stun/silence/loose-Gu failure); later steps stay silent
+		// when those conditions block them.
+		casterStrike := func(k int) func() []string {
+			return func() []string {
+				refCaster, _, _ := findCombatant(player.ActiveCombat, casterID)
 				if refCaster == nil || refCaster.HP <= 0 {
 					return nil
 				}
+				stunned := false
+				silenced := false
 				for _, eff := range refCaster.StatusEffects {
-					if (eff.Type == "stun" || eff.Type == "freeze") && eff.Turns > 0 {
+					if eff.Turns > 0 {
+						if eff.Type == "stun" || eff.Type == "freeze" {
+							stunned = true
+						}
+						if eff.Type == "silence" {
+							silenced = true
+						}
+					}
+				}
+				var logs []string
+				if k == 0 {
+					if stunned {
 						return []string{fmt.Sprintf("-> %s bị choáng/đóng băng và mất lượt!", refCaster.Name)}
 					}
+					if len(selectedSpecs) > 0 && silenced {
+						strikeFired[k] = true
+						basicAttackLogs(&logs, false)
+						return logs
+					}
+					if len(selectedSpecs) > 0 && looseGuFailureChance > 0 && rand.Float64() < looseGuFailureChance {
+						wastedMana := totalManaCost * 0.5
+						if wastedMana > refCaster.CurrentMana {
+							wastedMana = refCaster.CurrentMana
+						}
+						refCaster.CurrentMana -= wastedMana
+						return []string{fmt.Sprintf("-> %s cưỡng ép vận nhiều Cổ riêng lẻ, đạo ngân hỗn loạn khiến chiêu thất bại! Hao phí %.1f nguyên khí.", refCaster.Name, wastedMana)}
+					}
+					strikeFired[k] = true
+					if len(selectedSpecs) > 0 {
+						guCastLogs(&logs, selectedSpecs[k])
+					} else {
+						basicAttackLogs(&logs, true)
+					}
+					return logs
 				}
-				// Check silence — force basic attack only
-				isSilenced := false
-				for _, eff := range refCaster.StatusEffects {
-					if eff.Type == "silence" && eff.Turns > 0 {
-						isSilenced = true
-						break
+				if stunned || silenced {
+					return nil
+				}
+				strikeFired[k] = true
+				guCastLogs(&logs, selectedSpecs[k])
+				return logs
+			}
+		}
+
+		// counterStrike builds the riposte answering the k-th caster strike.
+		counterStrike := func(k int, enemyID string) func() []string {
+			return func() []string {
+				if !strikeFired[k] {
+					return nil
+				}
+				refEnemy, _, _ := findCombatant(player.ActiveCombat, enemyID)
+				if refEnemy == nil || refEnemy.HP <= 0 {
+					return nil
+				}
+				refCaster, _, _ := findCombatant(player.ActiveCombat, casterID)
+				if refCaster == nil || refCaster.HP <= 0 {
+					return nil
+				}
+				for _, eff := range refEnemy.StatusEffects {
+					if (eff.Type == "stun" || eff.Type == "freeze") && eff.Turns > 0 {
+						return []string{fmt.Sprintf("-> %s bị choáng/đóng băng, không thể đáp trả!", refEnemy.Name)}
 					}
 				}
+				dmgVal := refEnemy.BaseAttack
+				if dmgVal <= 0 {
+					dmgVal = 5.0
+				}
+				netDmg := dmgVal - refCaster.BaseDefense
+				if netDmg < 1.0 {
+					netDmg = 1.0
+				}
+				dmgLog := applyDamageWithLogs(refEnemy.Name, refCaster.Name, refCaster, netDmg)
+				return []string{fmt.Sprintf("-> %s không chậm trễ, đáp trả %s một đòn!", refEnemy.Name, refCaster.Name), dmgLog}
+			}
+		}
 
-				if isUsingStones {
+		switch {
+		case isUsingStones:
+			actions = append(actions, CombatAction{
+				InitiatorID: casterID,
+				Speed:       casterCombatant.Speed,
+				Execute: func() []string {
+					var logs []string
+					refCaster, _, _ := findCombatant(player.ActiveCombat, casterID)
+					if refCaster == nil || refCaster.HP <= 0 {
+						return nil
+					}
+					for _, eff := range refCaster.StatusEffects {
+						if (eff.Type == "stun" || eff.Type == "freeze") && eff.Turns > 0 {
+							return []string{fmt.Sprintf("-> %s bị choáng/đóng băng và mất lượt!", refCaster.Name)}
+						}
+					}
 					if isVirtual {
 						refCaster.CurrentMana = refCaster.MaxMana
 						logs = append(logs, fmt.Sprintf("-> [Ảnh Chiếu] %s vận chuyển Chân Nguyên đầy đủ từ thân xác thật!", refCaster.Name))
@@ -458,7 +810,24 @@ func CombatAttack(c *gin.Context) {
 							logs = append(logs, fmt.Sprintf("-> %s định dùng Nguyên Thạch nhưng không đủ!", refCaster.Name))
 						}
 					}
-				} else if isUsingItem {
+					return logs
+				},
+			})
+		case isUsingItem:
+			actions = append(actions, CombatAction{
+				InitiatorID: casterID,
+				Speed:       casterCombatant.Speed,
+				Execute: func() []string {
+					var logs []string
+					refCaster, _, _ := findCombatant(player.ActiveCombat, casterID)
+					if refCaster == nil || refCaster.HP <= 0 {
+						return nil
+					}
+					for _, eff := range refCaster.StatusEffects {
+						if (eff.Type == "stun" || eff.Type == "freeze") && eff.Turns > 0 {
+							return []string{fmt.Sprintf("-> %s bị choáng/đóng băng và mất lượt!", refCaster.Name)}
+						}
+					}
 					itemSpec := models.ItemRegistry[req.ItemID]
 					healVal := itemSpec.Effects["restore_hp"]
 					if healVal == 0 {
@@ -478,9 +847,44 @@ func CombatAttack(c *gin.Context) {
 						}
 						logs = append(logs, fmt.Sprintf("-> %s sử dụng %s, khôi phục %.1f HP (HP hiện tại: %.1f).", refCaster.Name, itemSpec.Name, healVal, refCaster.HP))
 					}
-				} else if isChargingThisTurn {
-					logs = append(logs, fmt.Sprintf("%s tích tụ Nguyên Khí, vận chuyển Chân Nguyên chuẩn bị cho Đại Sát Chiêu!", refCaster.Name))
-				} else if isUnleashingCharge {
+					return logs
+				},
+			})
+		case isChargingThisTurn:
+			actions = append(actions, CombatAction{
+				InitiatorID: casterID,
+				Speed:       casterCombatant.Speed,
+				Execute: func() []string {
+					refCaster, _, _ := findCombatant(player.ActiveCombat, casterID)
+					if refCaster == nil || refCaster.HP <= 0 {
+						return nil
+					}
+					for _, eff := range refCaster.StatusEffects {
+						if (eff.Type == "stun" || eff.Type == "freeze") && eff.Turns > 0 {
+							return []string{fmt.Sprintf("-> %s bị choáng/đóng băng và mất lượt!", refCaster.Name)}
+						}
+					}
+					return []string{fmt.Sprintf("%s tích tụ Nguyên Khí, vận chuyển Chân Nguyên chuẩn bị cho Đại Sát Chiêu!", refCaster.Name)}
+				},
+			})
+		default:
+			// Duel paths: unleash charge, Gu casts, or basic attack — each
+			// strike is answered by a riposte from the primary target.
+			hasDuel = true
+			casterSteps := make([]func() []string, 0, numStrikes)
+			if isUnleashingCharge {
+				casterSteps = append(casterSteps, func() []string {
+					refCaster, _, _ := findCombatant(player.ActiveCombat, casterID)
+					if refCaster == nil || refCaster.HP <= 0 {
+						return nil
+					}
+					for _, eff := range refCaster.StatusEffects {
+						if (eff.Type == "stun" || eff.Type == "freeze") && eff.Turns > 0 {
+							return []string{fmt.Sprintf("-> %s bị choáng/đóng băng và mất lượt!", refCaster.Name)}
+						}
+					}
+					var logs []string
+					strikeFired[0] = true
 					targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, "SINGLE", prefX, prefY, false)
 					if len(targetsIdx) > 0 {
 						targetEnemy := &player.ActiveCombat.Enemies[targetsIdx[0]]
@@ -498,270 +902,35 @@ func CombatAttack(c *gin.Context) {
 						dmgLog := applyDamageWithLogs(refCaster.Name, targetEnemy.Name, targetEnemy, netDmg)
 						logs = append(logs, fmt.Sprintf("-> %s kích hoạt Bộc Phá Sát Chiêu (Unleash Charge)!", refCaster.Name), dmgLog)
 					}
-				} else if isSilenced {
-					// Silence: force basic attack only
-					targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, "SINGLE", prefX, prefY, false)
-					if len(targetsIdx) > 0 {
-						targetEnemy := &player.ActiveCombat.Enemies[targetsIdx[0]]
-						daoMult := gamefx.DaoMultiplierForPaths(refCaster.DaoMarks, []string{"strength"}, gamefx.Get(&player).DaoNganBonus)
-						dmgVal := refCaster.BaseAttack
-						if dmgVal <= 0 {
-							dmgVal = 5.0
-						}
-						fullDmg := dmgVal * daoMult
-						netDmg := (fullDmg - targetEnemy.BaseDefense) * (1.0 - enemyPathResistance(&player, []string{"strength"}))
-						if netDmg < 1.0 {
-							netDmg = 1.0
-						}
-						dmgLog := applyDamageWithLogs(refCaster.Name, targetEnemy.Name, targetEnemy, netDmg)
-						logs = append(logs, fmt.Sprintf("-> %s bị Im Lặng, chỉ có thể đánh thường!", refCaster.Name), dmgLog)
-					}
-				} else {
-					if looseGuFailureChance > 0 && rand.Float64() < looseGuFailureChance {
-						wastedMana := totalManaCost * 0.5
-						if wastedMana > refCaster.CurrentMana {
-							wastedMana = refCaster.CurrentMana
-						}
-						refCaster.CurrentMana -= wastedMana
-						logs = append(logs, fmt.Sprintf("-> %s cưỡng ép vận nhiều Cổ riêng lẻ, đạo ngân hỗn loạn khiến chiêu thất bại! Hao phí %.1f nguyên khí.", refCaster.Name, wastedMana))
-						return logs
-					}
-
-					for _, spec := range selectedSpecs {
-						dmgBase, defBase, _, _ := CalculateGuEffectForCombatant(refCaster, &spec, false, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)
-
-						if !isVirtual {
-							if len(spec.Path) > 0 {
-								cleanPath := strings.TrimSuffix(strings.ToLower(spec.Path[0]), " path")
-								pathGain := 1
-								if spec.Rank >= 6 {
-									pathGain = 10
-								}
-								gained := applyPathMasteryGain(&player, cleanPath, pathGain)
-								if gained > 0 {
-									newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
-									logs = append(logs, fmt.Sprintf("-> Ngộ Đạo tăng tiến (%s)! +%d điểm Chân Ý %s (Cảnh giới: %s).", spec.Name, gained, strings.Title(cleanPath), gamefx.PathMasteryLevelName(newLevel)))
-								}
-							}
-						}
-						dmg, def, cost, errGu := CalculateGuEffectForCombatant(refCaster, &spec, true, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)
-						if errGu == nil && refCaster.CurrentMana >= cost {
-							refCaster.CurrentMana -= cost
-							if refCaster.Rank < spec.Rank {
-								backlashHP := 5.0
-								if refCaster.HP <= backlashHP {
-									refCaster.HP = 0
-								} else {
-									refCaster.HP -= backlashHP
-								}
-								logs = append(logs, fmt.Sprintf("[Phản Phệ] Cổ trùng Rank cao phản phệ %s, trừ %.0f HP (còn %.0f HP)!", refCaster.Name, backlashHP, refCaster.HP))
-							}
-
-							// Apply weak debuff to damage
-							weakMult := 1.0
-							for _, eff := range refCaster.StatusEffects {
-								if eff.Type == "weak" && eff.Turns > 0 {
-									weakMult *= (1.0 - eff.Value/100.0)
-								}
-							}
-							dmg *= weakMult
-							dmgBase *= weakMult
-
-							isHealing := false
-							isDefense := spec.Type == "Defense"
-							isAttack := spec.Type == "Attack" || spec.Type == "Active"
-							if spec.Effects.Active != nil {
-								isHealing = spec.Effects.Active.HealFlat > 0
-								if spec.Effects.Active.ShieldFlat > 0 {
-									isDefense = true
-								}
-								if spec.Effects.Active.DamageFlat > 0 || spec.Effects.Active.DamageMult > 0 {
-									isAttack = true
-								}
-							}
-
-							if isHealing {
-								healVal := def
-								if false {
-									healVal = refCaster.BaseAttack * 1.5
-								}
-								if healVal <= 0 {
-									healVal = 30.0
-								}
-								healVal *= (1.0 + gamefx.Get(&player).HealingReceivedBonus)
-								refCaster.HP += healVal
-								if refCaster.HP > refCaster.MaxHP {
-									refCaster.HP = refCaster.MaxHP
-								}
-								healBase := defBase
-								if healBase <= 0 {
-									healBase = 30.0
-								}
-								healDao := healVal - healBase
-								if healDao > 0 {
-									logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s, khôi phục %.1f HP bản thân (HP hiện tại: %.1f) [Gốc: %.1f, Đạo Ngân: +%.1f].", refCaster.Name, spec.Name, healVal, refCaster.HP, healBase, healDao))
-								} else {
-									logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s, khôi phục %.1f HP bản thân (HP hiện tại: %.1f).", refCaster.Name, spec.Name, healVal, refCaster.HP))
-								}
-							} else if isDefense {
-								shieldVal := def * 10.0
-								if shieldVal <= 0 {
-									shieldVal = 150.0
-								}
-								refCaster.VirtualShield += shieldVal
-								shieldBase := defBase * 10.0
-								if shieldBase <= 0 {
-									shieldBase = 150.0
-								}
-								shieldDao := shieldVal - shieldBase
-								if shieldDao > 0 {
-									logs = append(logs, fmt.Sprintf("-> %s thi triển %s phòng thủ, nhận %.1f Khiên hộ thể (Virtual Shield: %.1f) [Gốc: %.1f, Đạo Ngân: +%.1f].", refCaster.Name, spec.Name, shieldVal, refCaster.VirtualShield, shieldBase, shieldDao))
-								} else {
-									logs = append(logs, fmt.Sprintf("-> %s thi triển %s phòng thủ, nhận %.1f Khiên hộ thể (Virtual Shield: %.1f).", refCaster.Name, spec.Name, shieldVal, refCaster.VirtualShield))
-								}
-							} else if isAttack {
-								hasBypass := spec.Effects.Active != nil && spec.Effects.Active.CurveAttack
-								targetType := spec.Effects.Active.TargetSelector
-								targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, targetType, prefX, prefY, hasBypass)
-								if len(targetsIdx) > 0 {
-									dmgDao := dmg - dmgBase
-									if dmgDao > 0 {
-										logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s! (Sức mạnh: %.1f [Gốc: %.1f, Đạo Ngân: +%.1f])", refCaster.Name, spec.Name, dmg, dmgBase, dmgDao))
-									} else {
-										logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s!", refCaster.Name, spec.Name))
-									}
-									for _, eIdx := range targetsIdx {
-										tEnemy := &player.ActiveCombat.Enemies[eIdx]
-										netDmg := dmg - tEnemy.BaseDefense
-										netDmg *= (1.0 - enemyPathResistance(&player, spec.Path))
-										if netDmg < 1.0 {
-											netDmg = 1.0
-										}
-										dmgLog := applyDamageWithLogs(refCaster.Name, tEnemy.Name, tEnemy, netDmg)
-										logs = append(logs, dmgLog)
-
-										// Apply status effects from Gu to target
-										if spec.Effects.Active != nil {
-											active := spec.Effects.Active
-											resisted := enemyResistsControl(&player)
-											switch active.ApplyStatus {
-											case "SILENCE":
-												if !resisted {
-													tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-														Type: "silence", Value: 1, Turns: active.StatusDurationTicks,
-													})
-													logs = append(logs, fmt.Sprintf("%s bị Im lặng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
-												}
-											case "STUN":
-												if !resisted {
-													tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-														Type: "stun", Value: 1, Turns: active.StatusDurationTicks,
-													})
-													logs = append(logs, fmt.Sprintf("%s bị Choáng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
-												}
-											case "FREEZE":
-												if !resisted {
-													tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-														Type: "freeze", Value: 1, Turns: active.StatusDurationTicks,
-													})
-													logs = append(logs, fmt.Sprintf("%s bị Đóng băng %d lượt!", tEnemy.Name, active.StatusDurationTicks))
-												}
-											case "SLOW":
-												if !resisted {
-													tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-														Type: "slow", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
-													})
-													logs = append(logs, fmt.Sprintf("%s bị Chậm %d%% %d lượt!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
-												}
-											case "SLOW1":
-												tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-													Type: "slow1", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
-												})
-												logs = append(logs, fmt.Sprintf("%s bị Chậm %d%% %d lượt (không thể kháng)!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
-											case "SLOW_DAMAGE":
-												if !resisted {
-													tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-														Type: "slow_damage", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
-													})
-													logs = append(logs, fmt.Sprintf("%s bị Chậm sát thương %d%% và mất %d HP/lượt trong %d lượt!", tEnemy.Name, int(active.StatusTickDamage), int(active.StatusTickDamage), active.StatusDurationTicks))
-												}
-											case "WEAK":
-												if !resisted {
-													tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-														Type: "weak", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
-													})
-													logs = append(logs, fmt.Sprintf("%s bị Yếu %d%% %d lượt!", tEnemy.Name, int(active.StatusTickDamage), active.StatusDurationTicks))
-												}
-											case "BLEED":
-												tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-													Type: "bleed", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
-												})
-												logs = append(logs, fmt.Sprintf("%s bị Chảy máu (%.0f/lượt %d lượt)!", tEnemy.Name, active.StatusTickDamage, active.StatusDurationTicks))
-											case "POISON":
-												tEnemy.StatusEffects = append(tEnemy.StatusEffects, models.StatusEffect{
-													Type: "poison", Value: active.StatusTickDamage, Turns: active.StatusDurationTicks,
-												})
-												logs = append(logs, fmt.Sprintf("%s bị Độc (%.0f/lượt %d lượt)!", tEnemy.Name, active.StatusTickDamage, active.StatusDurationTicks))
-											}
-										}
-									}
-								}
-							} else {
-								logs = append(logs, fmt.Sprintf("-> %s kích hoạt %s (Hỗ trợ)!", refCaster.Name, spec.Name))
-							}
-						}
-					}
-					if len(selectedSpecs) == 0 {
-						targetsIdx := ResolveTargets(player.ActiveCombat.Enemies, "SINGLE", prefX, prefY, false)
-						if len(targetsIdx) > 0 {
-							targetEnemy := &player.ActiveCombat.Enemies[targetsIdx[0]]
-							daoMult := gamefx.DaoMultiplierForPaths(refCaster.DaoMarks, []string{"strength"}, gamefx.Get(&player).DaoNganBonus)
-							dmgVal := refCaster.BaseAttack
-							if dmgVal <= 0 {
-								dmgVal = 5.0
-							}
-							// Apply weak debuff
-							for _, eff := range refCaster.StatusEffects {
-								if eff.Type == "weak" && eff.Turns > 0 {
-									dmgVal *= (1.0 - eff.Value/100.0)
-								}
-							}
-							fullDmg := dmgVal * daoMult
-							netDmg := (fullDmg - targetEnemy.BaseDefense) * (1.0 - enemyPathResistance(&player, []string{"strength"}))
-							if netDmg < 1.0 {
-								netDmg = 1.0
-							}
-							dmgLog := applyDamageWithLogs(refCaster.Name, targetEnemy.Name, targetEnemy, netDmg)
-
-							strengthGain := applyPathMasteryGain(&player, "strength", 1)
-							strengthNote := ""
-							if strengthGain > 0 {
-								pts := player.PathMasteries["strength"]
-								lvlName := "Sơ Học"
-								if pts >= 10000 {
-									lvlName = "Vô Thượng Tông Sư"
-								} else if pts >= 2500 {
-									lvlName = "Đại Tông Sư"
-								} else if pts >= 500 {
-									lvlName = "Tông Sư"
-								} else if pts >= 100 {
-									lvlName = "Đại Sư"
-								}
-								strengthNote = fmt.Sprintf(" Ngộ Đạo: +1 Chân Ý Lực (%s)", lvlName)
-							}
-
-							if daoMult > 1.0 {
-								dmgDao := fullDmg - dmgVal
-								logs = append(logs, fmt.Sprintf("-> %s đánh thường (Basic Attack) [Gốc: %.1f, Đạo Ngân: +%.1f]!%s", refCaster.Name, dmgVal, dmgDao, strengthNote), dmgLog)
-							} else {
-								logs = append(logs, fmt.Sprintf("-> %s đánh thường (Basic Attack)!%s", refCaster.Name, strengthNote), dmgLog)
-							}
-						}
-					}
+					return logs
+				})
+			} else {
+				for k := 0; k < numStrikes; k++ {
+					casterSteps = append(casterSteps, casterStrike(k))
 				}
-				return logs
-			},
-		})
+			}
+
+			// Assemble the interleaved sequence: effective speed decides who
+			// opens, then both sides alternate strictly.
+			openedByCaster := effectiveCombatSpeed(player.ActiveCombat, casterID) >= effectiveCombatSpeed(player.ActiveCombat, primaryEnemyID)
+			duelSeq = make([]func() []string, 0, numStrikes*2)
+			for k := 0; k < numStrikes; k++ {
+				counter := counterStrike(k, primaryEnemyID)
+				if openedByCaster {
+					duelSeq = append(duelSeq, casterSteps[k], counter)
+				} else {
+					duelSeq = append(duelSeq, counter, casterSteps[k])
+				}
+			}
+
+			// Caster slot participates in the global speed ordering; its
+			// content already lives inside the duel sequence.
+			actions = append(actions, CombatAction{
+				InitiatorID: casterID,
+				Speed:       casterCombatant.Speed,
+				Execute:     func() []string { return nil },
+			})
+		}
 	}
 
 	for aIdx := range player.ActiveCombat.Allies {
@@ -890,37 +1059,40 @@ func CombatAttack(c *gin.Context) {
 	}
 
 	sort.SliceStable(actions, func(i, j int) bool {
-		speedI := actions[i].Speed
-		speedJ := actions[j].Speed
-		// Apply slow debuff to effective speed
-		refI, _, _ := findCombatant(player.ActiveCombat, actions[i].InitiatorID)
-		if refI != nil {
-			for _, eff := range refI.StatusEffects {
-				if (eff.Type == "slow" || eff.Type == "slow_damage" || eff.Type == "slow1") && eff.Turns > 0 {
-					speedI *= (1.0 - eff.Value/100.0)
-				}
-			}
-		}
-		refJ, _, _ := findCombatant(player.ActiveCombat, actions[j].InitiatorID)
-		if refJ != nil {
-			for _, eff := range refJ.StatusEffects {
-				if (eff.Type == "slow" || eff.Type == "slow_damage" || eff.Type == "slow1") && eff.Turns > 0 {
-					speedJ *= (1.0 - eff.Value/100.0)
-				}
-			}
-		}
-		return speedI > speedJ
+		return effectiveCombatSpeed(player.ActiveCombat, actions[i].InitiatorID) > effectiveCombatSpeed(player.ActiveCombat, actions[j].InitiatorID)
 	})
 
+	// runDuel executes the interleaved exchange between the caster and the
+	// primary target: each caster strike is answered by a riposte.
+	runDuel := func() {
+		for _, step := range duelSeq {
+			if stepLogs := step(); len(stepLogs) > 0 {
+				turnLogs = append(turnLogs, stepLogs...)
+			}
+		}
+	}
+
+	duelRan := false
 	for _, act := range actions {
 		refActor, _, _ := findCombatant(player.ActiveCombat, act.InitiatorID)
 		if refActor == nil || refActor.HP <= 0 {
 			continue
 		}
+		if hasDuel && !duelRan && (act.InitiatorID == casterID || act.InitiatorID == primaryEnemyID) {
+			duelRan = true
+			runDuel()
+			if act.InitiatorID == casterID {
+				// Caster content was executed inside the duel sequence.
+				continue
+			}
+		}
 		resLogs := act.Execute()
 		if len(resLogs) > 0 {
 			turnLogs = append(turnLogs, resLogs...)
 		}
+	}
+	if hasDuel && !duelRan {
+		runDuel()
 	}
 
 	if !isVirtual {
