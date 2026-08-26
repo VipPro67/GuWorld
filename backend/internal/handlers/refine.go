@@ -400,10 +400,6 @@ func RefineGu(c *gin.Context) {
 		player.ImmortalStones -= recipe.ImmortalEssenceStonesCost
 	}
 
-	for matID, reqQty := range recipe.RequiredMaterials {
-		InventorySvc.RemoveItem(tx, player.ID.String(), matID, "materials", reqQty)
-	}
-
 	// 8. RNG Roll & 10 Factors Calculation
 	var pathRaw []byte
 	err = tx.QueryRow(`SELECT path FROM gu_dictionary WHERE id = $1 AND rank = $2`, recipe.TargetGuID, recipe.TargetRank).Scan(&pathRaw)
@@ -538,10 +534,10 @@ func RefineGu(c *gin.Context) {
 	if ok && spec.Rank >= 6 {
 		exists, _ := db.CheckImmortalGuExists(tx, recipe.TargetGuID, recipe.TargetRank, req.SelectedGuInstanceIDs)
 		if exists {
-			outcome = OutcomeFailNormal
-			statusStr = "failed"
-			statusMsg = "Tiên cổ là duy nhất, đã tồn tại trong thiên hạ, luyện chế thất bại!"
 			isUniqueImmortalFail = true
+			if outcome == OutcomeSuccess || outcome == OutcomeFailSafe {
+				outcome = OutcomeFailNormal
+			}
 		}
 	}
 
@@ -624,7 +620,7 @@ func RefineGu(c *gin.Context) {
 	} else {
 		statusStr = "failed"
 		if isUniqueImmortalFail {
-			// message already set
+			statusMsg = "Tiên cổ là duy nhất, đã tồn tại trong thiên hạ, luyện chế thất bại!"
 		} else if guRequirementsNotMet {
 			statusMsg = "Cổ nguyên liệu không khớp công thức! Các nguyên liệu đã hóa thành tro bụi."
 		} else {
@@ -655,30 +651,28 @@ func RefineGu(c *gin.Context) {
 			statusMsg += " " + refineEventMsg
 		}
 		
-		if !isUniqueImmortalFail {
-			if outcome == OutcomeFailBackfire {
-				hpLoss := gamefx.EffectiveMaxHP(&player) * 0.50
-				player.HP -= hpLoss
-				if player.HP < 10.0 {
-					player.HP = 10.0
-				}
-				soulLoss := int(math.Ceil(float64(player.MaxSoul) * 0.30))
-				player.SoulHP -= soulLoss
-				if player.SoulHP < 1 {
-					player.SoulHP = 1
-				}
-				statusMsg = fmt.Sprintf("Luyện cổ CHÁY NỔ (Backfire)! Phản phệ dữ dội, tổn thất %d Hồn Phách và %.0f HP.", soulLoss, hpLoss)
-			} else if isForcedRefine {
-				player.HP -= 30.0
-				if player.HP < 10.0 {
-					player.HP = 10.0
-				}
-				statusMsg = "Ép Luyện thất bại! Phản phệ chấn thương kinh mạch, tổn thất 30 HP."
+		if outcome == OutcomeFailBackfire {
+			hpLoss := gamefx.EffectiveMaxHP(&player) * 0.50
+			player.HP -= hpLoss
+			if player.HP < 10.0 {
+				player.HP = 10.0
 			}
-			
-			if hasVitalSurvived {
-				statusMsg += " Riêng Cổ Bản Mệnh vẫn sống sót nhưng rơi vào trạng thái Hấp Hối!"
+			soulLoss := int(math.Ceil(float64(player.MaxSoul) * 0.30))
+			player.SoulHP -= soulLoss
+			if player.SoulHP < 1 {
+				player.SoulHP = 1
 			}
+			statusMsg += fmt.Sprintf(" Luyện cổ CHÁY NỔ (Backfire)! Phản phệ dữ dội, tổn thất %d Hồn Phách và %.0f HP.", soulLoss, hpLoss)
+		} else if isForcedRefine {
+			player.HP -= 30.0
+			if player.HP < 10.0 {
+				player.HP = 10.0
+			}
+			statusMsg += " Ép Luyện thất bại! Phản phệ chấn thương kinh mạch, tổn thất 30 HP."
+		}
+		
+		if hasVitalSurvived {
+			statusMsg += " Riêng Cổ Bản Mệnh vẫn sống sót nhưng rơi vào trạng thái Hấp Hối!"
 		}
 	}
 
