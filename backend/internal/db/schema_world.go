@@ -24,8 +24,14 @@ func schemaWorld() error {
 		max_y INT NOT NULL DEFAULT 0,
 		entry_x INT NOT NULL DEFAULT 0,
 		entry_y INT NOT NULL DEFAULT 0,
-		pool_weights JSONB NOT NULL DEFAULT '{}'
+		pool_weights JSONB NOT NULL DEFAULT '{}',
+		paths JSONB NOT NULL DEFAULT '[]'
 	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("regions_paths_column", `
+	ALTER TABLE regions ADD COLUMN IF NOT EXISTS paths JSONB NOT NULL DEFAULT '[]';`); err != nil {
 		return err
 	}
 
