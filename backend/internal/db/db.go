@@ -2317,7 +2317,12 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 	err = tx.QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM auction,
-			jsonb_array_elements(item_data) AS elem
+			jsonb_array_elements(
+				CASE 
+					WHEN jsonb_typeof(item_data) = 'array' THEN item_data 
+					ELSE '[]'::jsonb 
+				END
+			) AS elem
 			WHERE item_type = 'Gu'
 			  AND status = 'ACTIVE'
 			  AND elem->>'gu_id' = $1::text
@@ -2336,7 +2341,12 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 	err = tx.QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM sects,
-			jsonb_array_elements(vault_gu) AS elem
+			jsonb_array_elements(
+				CASE 
+					WHEN jsonb_typeof(vault_gu) = 'array' THEN vault_gu 
+					ELSE '[]'::jsonb 
+				END
+			) AS elem
 			WHERE elem->>'id' = $1::text
 			  AND COALESCE((elem->>'rank')::int, 0) >= 6
 		)
@@ -2356,11 +2366,21 @@ func GetExistingImmortalGuIDs(tx *sql.Tx) (map[string]bool, error) {
 		SELECT DISTINCT gu_id FROM player_gu WHERE gu_rank >= 6
 		UNION
 		SELECT DISTINCT elem->>'gu_id' FROM auction,
-			jsonb_array_elements(item_data) AS elem
+			jsonb_array_elements(
+				CASE 
+					WHEN jsonb_typeof(item_data) = 'array' THEN item_data 
+					ELSE '[]'::jsonb 
+				END
+			) AS elem
 			WHERE item_type = 'Gu' AND status = 'ACTIVE' AND COALESCE((elem->>'rank')::int, 0) >= 6
 		UNION
 		SELECT DISTINCT elem->>'id' FROM sects,
-			jsonb_array_elements(vault_gu) AS elem
+			jsonb_array_elements(
+				CASE 
+					WHEN jsonb_typeof(vault_gu) = 'array' THEN vault_gu 
+					ELSE '[]'::jsonb 
+				END
+			) AS elem
 			WHERE COALESCE((elem->>'rank')::int, 0) >= 6
 	`)
 	if err != nil {

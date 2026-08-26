@@ -1201,7 +1201,9 @@ func AdminSearchGus(c *gin.Context) {
 		COALESCE((g->>'is_vital')::boolean, false) AS is_vital,
 		COALESCE(a.status, '') AS listing_status, NULL::text AS shop_name
 	FROM auction a
-	CROSS JOIN LATERAL jsonb_array_elements(a.item_data) g
+	CROSS JOIN LATERAL jsonb_array_elements(
+		CASE WHEN jsonb_typeof(a.item_data) = 'array' THEN a.item_data ELSE '[]'::jsonb END
+	) g
 	JOIN players pl ON pl.id = a.seller_id
 	WHERE a.item_type = 'Gu' AND ` + guWhere
 
