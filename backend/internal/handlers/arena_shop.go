@@ -3,8 +3,10 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
@@ -47,11 +49,19 @@ func loadArenaShopItems() ([]ArenaShopItem, error) {
 }
 
 func GetArenaShop(c *gin.Context) {
+	var items []ArenaShopItem
+	if err := cache.GetJSON("arena_shop_items", &items); err == nil && len(items) > 0 {
+		c.JSON(http.StatusOK, gin.H{"items": items})
+		return
+	}
+
 	items, err := loadArenaShopItems()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải Shop Đấu Trường"})
 		return
 	}
+
+	_ = cache.SetJSON("arena_shop_items", items, 24*time.Hour)
 	c.JSON(http.StatusOK, gin.H{"items": items})
 }
 

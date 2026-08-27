@@ -4,6 +4,11 @@ import type { RequiredGus } from "@/lib/gu-dict";
 import type { EffectDictionaryEntry } from "@/lib/effects";
 
 let confirmResolve: ((value: boolean) => void) | null = null;
+let fetchAperturePromise: Promise<void> | null = null;
+let fetchApertureNodesPromise: Promise<void> | null = null;
+let fetchVariantHumansPromise: Promise<void> | null = null;
+let fetchGuInventoryPromise: Promise<void> | null = null;
+let fetchMySectStatusPromise: Promise<void> | null = null;
 
 export interface GuInstance {
   instance_id: string;
@@ -2295,34 +2300,41 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
   fetchGuInventory: async () => {
-    const { token, logout } = get();
-    if (!token) return;
+    if (fetchGuInventoryPromise) return fetchGuInventoryPromise;
+    const executeFetch = async () => {
+      const { token, logout } = get();
+      if (!token) return;
 
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/player/inventory/gus`);
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/player/inventory/gus`);
 
-      if (response.status === 401 || response.status === 403) {
-        logout();
-        return;
+        if (response.status === 401 || response.status === 403) {
+          logout();
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch inventory");
+        }
+
+        const data: { gu_inventory: GuInstance[]; equipped_gus: string[] } = await response.json();
+        const currentPlayer = get().player;
+        if (!currentPlayer) return;
+
+        setPlayerFromServer({
+          ...currentPlayer,
+          gu_inventory: data.gu_inventory,
+          equipped_gus: data.equipped_gus,
+        });
+        set({ guInventoryLoaded: true });
+      } catch (err: any) {
+        console.error("Gu inventory fetch failed:", err.message);
+      } finally {
+        fetchGuInventoryPromise = null;
       }
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch inventory");
-      }
-
-      const data: { gu_inventory: GuInstance[]; equipped_gus: string[] } = await response.json();
-      const currentPlayer = get().player;
-      if (!currentPlayer) return;
-
-      setPlayerFromServer({
-        ...currentPlayer,
-        gu_inventory: data.gu_inventory,
-        equipped_gus: data.equipped_gus,
-      });
-      set({ guInventoryLoaded: true });
-    } catch (err: any) {
-      console.error("Gu inventory fetch failed:", err.message);
-    }
+    };
+    fetchGuInventoryPromise = executeFetch();
+    return fetchGuInventoryPromise;
   },
 
   fetchPlayerProfile: async (username) => {
@@ -5110,29 +5122,36 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
   fetchAperture: async () => {
-    const { token, logout } = get();
-    if (!token) return;
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture`);
-      if (response.status === 401 || response.status === 403) {
-        logout();
-        return;
-      }
-      if (!response.ok) {
+    if (fetchAperturePromise) return fetchAperturePromise;
+    const executeFetch = async () => {
+      const { token, logout } = get();
+      if (!token) return;
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture`);
+        if (response.status === 401 || response.status === 403) {
+          logout();
+          return;
+        }
+        if (!response.ok) {
+          set({ aperture: null });
+          return;
+        }
+        const data = await response.json();
+        set({ aperture: data });
+        const player = get().player;
+        if (player) {
+          set({ manaSnapshot: createManaSnapshotFromPlayer(player, get().guDictionary, get().constitutionDictionary, data.time_rate) });
+        }
+      } catch (err) {
+        console.error("Failed to fetch aperture:", err);
+        get().addToast("Lỗi tải tiên thể.", "error");
         set({ aperture: null });
-        return;
+      } finally {
+        fetchAperturePromise = null;
       }
-      const data = await response.json();
-      set({ aperture: data });
-      const player = get().player;
-      if (player) {
-        set({ manaSnapshot: createManaSnapshotFromPlayer(player, get().guDictionary, get().constitutionDictionary, data.time_rate) });
-      }
-    } catch (err) {
-      console.error("Failed to fetch aperture:", err);
-      get().addToast("Lỗi tải tiên thể.", "error");
-      set({ aperture: null });
-    }
+    };
+    fetchAperturePromise = executeFetch();
+    return fetchAperturePromise;
   },
 
   fetchDaoMarks: async () => {
@@ -5155,22 +5174,29 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
   fetchApertureNodes: async () => {
-    const { token, logout } = get();
-    if (!token) return;
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes`);
-      if (response.status === 401 || response.status === 403) {
-        logout();
-        return;
+    if (fetchApertureNodesPromise) return fetchApertureNodesPromise;
+    const executeFetch = async () => {
+      const { token, logout } = get();
+      if (!token) return;
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes`);
+        if (response.status === 401 || response.status === 403) {
+          logout();
+          return;
+        }
+        if (response.ok) {
+          const data = await response.json();
+          set({ apertureNodes: data });
+        }
+      } catch (err) {
+        console.error("Failed to fetch aperture nodes:", err);
+        get().addToast("Lỗi tải tiên thể.", "error");
+      } finally {
+        fetchApertureNodesPromise = null;
       }
-      if (response.ok) {
-        const data = await response.json();
-        set({ apertureNodes: data });
-      }
-    } catch (err) {
-      console.error("Failed to fetch aperture nodes:", err);
-      get().addToast("Lỗi tải tiên thể.", "error");
-    }
+    };
+    fetchApertureNodesPromise = executeFetch();
+    return fetchApertureNodesPromise;
   },
 
   placeApertureNode: async (nodeType: string, x: number, y: number) => {
@@ -5329,22 +5355,29 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
   fetchVariantHumans: async () => {
-    const { token, logout } = get();
-    if (!token) return;
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/variant-humans`);
-      if (response.status === 401 || response.status === 403) {
-        logout();
-        return;
+    if (fetchVariantHumansPromise) return fetchVariantHumansPromise;
+    const executeFetch = async () => {
+      const { token, logout } = get();
+      if (!token) return;
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/variant-humans`);
+        if (response.status === 401 || response.status === 403) {
+          logout();
+          return;
+        }
+        if (response.ok) {
+          const data = await response.json();
+          set({ variantHumans: data });
+        }
+      } catch (err) {
+        console.error("Failed to fetch variant humans:", err);
+        get().addToast("Lỗi tải tiên thể.", "error");
+      } finally {
+        fetchVariantHumansPromise = null;
       }
-      if (response.ok) {
-        const data = await response.json();
-        set({ variantHumans: data });
-      }
-    } catch (err) {
-      console.error("Failed to fetch variant humans:", err);
-      get().addToast("Lỗi tải tiên thể.", "error");
-    }
+    };
+    fetchVariantHumansPromise = executeFetch();
+    return fetchVariantHumansPromise;
   },
 
   setApertureTimeRate: async (rate: number) => {
@@ -5814,19 +5847,26 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
   fetchMySectStatus: async () => {
-    const { token, logout } = get();
-    if (!token) return;
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/sects/me`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
-      if (response.ok) {
-        const data = await response.json();
-        set({ mySectStatus: data });
+    if (fetchMySectStatusPromise) return fetchMySectStatusPromise;
+    const executeFetch = async () => {
+      const { token, logout } = get();
+      if (!token) return;
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/sects/me`);
+        if (response.status === 401 || response.status === 403) { logout(); return; }
+        if (response.ok) {
+          const data = await response.json();
+          set({ mySectStatus: data });
+        }
+      } catch (err) {
+        console.error("Failed to fetch my sect status:", err);
+        get().addToast("Lỗi tải thông tin tông môn.", "error");
+      } finally {
+        fetchMySectStatusPromise = null;
       }
-    } catch (err) {
-      console.error("Failed to fetch my sect status:", err);
-      get().addToast("Lỗi tải thông tin tông môn.", "error");
-    }
+    };
+    fetchMySectStatusPromise = executeFetch();
+    return fetchMySectStatusPromise;
   },
 
   promoteSectRank: async () => {

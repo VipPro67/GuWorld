@@ -281,7 +281,7 @@ export const LobbyView: React.FC = () => {
       glow: "group-hover:shadow-[0_0_25px_rgba(168,85,247,0.45)]",
       borderColor: "border-purple-400/30",
       iconColor: "text-purple-500",
-      locked: true, // Locked for dev
+      //locked: true, // Locked for dev
     },
     {
       id: "gacha",

@@ -105,8 +105,27 @@ type precomputedPools struct {
 	totalMat          float64
 }
 
-func precomputeGachaPools(tx *sql.Tx, excludedImmortal map[string]bool) precomputedPools {
-	pc := precomputedPools{
+var globalPrecomputedPools *precomputedPools
+var gachaPoolsMu sync.RWMutex
+var gachaPoolsLastUpdate time.Time
+
+func getPrecomputedPools() *precomputedPools {
+	gachaPoolsMu.RLock()
+	if globalPrecomputedPools != nil && time.Since(gachaPoolsLastUpdate) < 1*time.Hour {
+		defer gachaPoolsMu.RUnlock()
+		return globalPrecomputedPools
+	}
+	gachaPoolsMu.RUnlock()
+
+	gachaPoolsMu.Lock()
+	defer gachaPoolsMu.Unlock()
+	
+	// Double check
+	if globalPrecomputedPools != nil && time.Since(gachaPoolsLastUpdate) < 1*time.Hour {
+		return globalPrecomputedPools
+	}
+
+	pc := &precomputedPools{
 		guByRank:          make(map[string][]weightedGuEntry),
 		recipesByRank:     make(map[string][]weightedRecipeEntry),
 		totalByRank:       make(map[string]float64),
@@ -137,9 +156,6 @@ func precomputeGachaPools(tx *sql.Tx, excludedImmortal map[string]bool) precompu
 			rankSet[r] = true
 		}
 		for id, ranks := range models.GuRegistry {
-			if excludedImmortal[id] {
-				continue
-			}
 			for _, spec := range ranks {
 				if rankSet[spec.Rank] {
 					w := guRarityWeightByRank(effectiveDropLevel(spec.Rank, spec.Rarity))
@@ -155,13 +171,7 @@ func precomputeGachaPools(tx *sql.Tx, excludedImmortal map[string]bool) precompu
 	}
 
 	// Build Recipe pools by rank
-	var rows *sql.Rows
-	var err error
-	if tx != nil {
-		rows, err = tx.Query(`SELECT target_gu_id, target_rank, variant FROM refining_recipes`)
-	} else {
-		rows, err = db.DB.Query(`SELECT target_gu_id, target_rank, variant FROM refining_recipes`)
-	}
+	rows, err := db.DB.Query(`SELECT target_gu_id, target_rank, variant FROM refining_recipes`)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -172,29 +182,41 @@ func precomputeGachaPools(tx *sql.Tx, excludedImmortal map[string]bool) precompu
 				weight := rankDropMultiplier(targetRank)
 				if weight > 0 {
 					rankStr := fmt.Sprintf("%d", targetRank)
-					pc.recipesByRank[rankStr] = append(pc.recipesByRank[rankStr], weightedRecipeEntry{
+					entry := weightedRecipeEntry{
 						id:         rID,
 						targetGuID: targetGuID,
 						targetRank: targetRank,
 						weight:     weight,
-					})
+					}
+					pc.recipesByRank[rankStr] = append(pc.recipesByRank[rankStr], entry)
 					pc.totalRecipeByRank[rankStr] += weight
+					
+					// Also add to an "all_recipes" bucket for open_mine_chest
+					pc.recipesByRank["all"] = append(pc.recipesByRank["all"], entry)
+					pc.totalRecipeByRank["all"] += weight
 				}
 			}
 		}
 	}
 
+	globalPrecomputedPools = pc
+	gachaPoolsLastUpdate = time.Now()
 	return pc
 }
 
-func (pc *precomputedPools) rollGu(rankKey string) (string, int) {
+func (pc *precomputedPools) rollGu(rankKey string, excludedImmortal map[string]bool) (string, int) {
 	pool := pc.guByRank[rankKey]
 	total := pc.totalByRank[rankKey]
 	if len(pool) == 0 || total <= 0 {
 		return "", 0
 	}
+	
+	// Fast path: if no immortals to exclude, or rankKey doesn't contain immortal ranks, roll normally
 	r := rand.Float64() * total
 	for _, g := range pool {
+		if excludedImmortal != nil && excludedImmortal[g.id] {
+			continue // Skip excluded immortal Gus. This slightly shifts probabilities but is very fast.
+		}
 		r -= g.weight
 		if r <= 0 {
 			return g.id, g.rank
@@ -335,8 +357,8 @@ func runGachaOpen(c *gin.Context, forced int) {
 		unlockedMap[recipes[idx].RecipeID] = &recipes[idx]
 	}
 
-	// Pre-compute weighted pools once
-	pc := precomputeGachaPools(tx, excludedImmortal)
+	// Pre-compute weighted pools once (globally cached)
+	pc := getPrecomputedPools()
 
 	// Roll all rewards, batch items, apply non-item rewards in-memory
 	rewards := make([]GachaResultItem, quantity)
@@ -369,7 +391,7 @@ func runGachaOpen(c *gin.Context, forced int) {
 		if rewards[i].Type == "gu" || rewards[i].Type == "gu_rank" {
 			if models.HasImmortalRank(rewards[i].ID) {
 				excludedImmortal[rewards[i].ID] = true
-				pc = precomputeGachaPools(tx, excludedImmortal)
+				// Pool doesn't need to be rebuilt anymore! rollGu skips excludedImmortal dynamically!
 			}
 		}
 	}
@@ -480,11 +502,11 @@ type GachaResultItem struct {
 }
 
 func rollGachaReward(pool *GachaPool, excludedImmortal map[string]bool) GachaResultItem {
-	pc := precomputeGachaPools(nil, excludedImmortal)
+	pc := getPrecomputedPools()
 	return rollGachaRewardPrecomputed(pool, pc, excludedImmortal)
 }
 
-func rollGachaRewardPrecomputed(pool *GachaPool, pc precomputedPools, excludedImmortal map[string]bool) GachaResultItem {
+func rollGachaRewardPrecomputed(pool *GachaPool, pc *precomputedPools, excludedImmortal map[string]bool) GachaResultItem {
 	var totalWeight float64
 	for _, r := range pool.Rewards {
 		totalWeight += r.Weight
@@ -520,7 +542,7 @@ func rollGachaRewardPrecomputed(pool *GachaPool, pc precomputedPools, excludedIm
 		return GachaResultItem{Type: "item", ID: itemID, Amount: 1, Label: fmt.Sprintf("1x %s", itemName), IsRare: isRare}
 
 	case "gu":
-		guID, rank := pc.rollGu("1,2,3")
+		guID, rank := pc.rollGu("1,2,3", excludedImmortal)
 		if guID == "" {
 			return GachaResultItem{Type: "primeval_stones", Amount: 100, Label: "100 Nguyên Thạch"}
 		}
@@ -531,7 +553,7 @@ func rollGachaRewardPrecomputed(pool *GachaPool, pc precomputedPools, excludedIm
 		return GachaResultItem{Type: "gu", ID: guID, Rank: rank, Amount: 1, Label: fmt.Sprintf("1x %s", guName), IsRare: isRare}
 
 	case "gu_rank":
-		guID, rank := pc.rollGu(chosen.ID)
+		guID, rank := pc.rollGu(chosen.ID, excludedImmortal)
 		if guID == "" {
 			return GachaResultItem{Type: "primeval_stones", Amount: 100, Label: "100 Nguyên Thạch"}
 		}

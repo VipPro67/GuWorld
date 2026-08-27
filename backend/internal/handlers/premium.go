@@ -21,6 +21,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -65,6 +66,11 @@ func handlerCSVPath(filename string) string {
 }
 
 func loadTopupPackages() ([]TopupPackage, error) {
+	var packages []TopupPackage
+	if err := cache.GetJSON("topup_packages", &packages); err == nil && len(packages) > 0 {
+		return packages, nil
+	}
+
 	file, err := os.Open(handlerCSVPath("TopupPackage.csv"))
 	if err != nil {
 		return nil, err
@@ -98,7 +104,7 @@ func loadTopupPackages() ([]TopupPackage, error) {
 		}
 		return strings.TrimSpace(row[idx])
 	}
-	packages := []TopupPackage{}
+	packages = []TopupPackage{}
 	for _, row := range rows[1:] {
 		id := get(row, idIdx)
 		if id == "" {
@@ -109,6 +115,7 @@ func loadTopupPackages() ([]TopupPackage, error) {
 		fmt.Sscanf(get(row, jadeIdx), "%d", &jade)
 		packages = append(packages, TopupPackage{ID: id, Name: get(row, nameIdx), AmountVND: amount, Jade: jade})
 	}
+	_ = cache.SetJSON("topup_packages", packages, 24*time.Hour)
 	return packages, nil
 }
 
@@ -148,6 +155,11 @@ type ShopPackageDTO struct {
 }
 
 func loadPremiumShopPackages() ([]PremiumShopPackage, error) {
+	var packages []PremiumShopPackage
+	if err := cache.GetJSON("premium_shop_packages", &packages); err == nil && len(packages) > 0 {
+		return packages, nil
+	}
+
 	file, err := os.Open(handlerCSVPath("PremiumShopPackage.csv"))
 	if err != nil {
 		return nil, err
@@ -182,7 +194,7 @@ func loadPremiumShopPackages() ([]PremiumShopPackage, error) {
 		}
 		return strings.TrimSpace(row[idx])
 	}
-	packages := []PremiumShopPackage{}
+	packages = []PremiumShopPackage{}
 	for _, row := range rows[1:] {
 		id := get(row, idIdx)
 		if id == "" {
@@ -206,6 +218,7 @@ func loadPremiumShopPackages() ([]PremiumShopPackage, error) {
 		}
 		packages = append(packages, PremiumShopPackage{ID: id, Name: get(row, nameIdx), PriceJade: price, Rewards: rewards, Requirements: req, Limit: ShopLimit{Count: limitCount, Period: get(row, limitPeriodIdx)}, Description: get(row, descIdx)})
 	}
+	_ = cache.SetJSON("premium_shop_packages", packages, 24*time.Hour)
 	return packages, nil
 }
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
@@ -321,41 +320,10 @@ func effectiveDropLevel(rank, rarity int) int {
 }
 
 func rollMaterialDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, map[string]interface{}) {
-	// Build weighted pool of materials
-	type weightedMat struct {
-		id     string
-		weight float64
-	}
-	var pool []weightedMat
-	var totalWeight float64
-
-	for id, spec := range models.ItemRegistry {
-		if spec.Type != "Material" {
-			continue
-		}
-		w := rankDropMultiplier(effectiveDropLevel(spec.Rank, spec.Rarity))
-		if w > 0 {
-			pool = append(pool, weightedMat{id: id, weight: w})
-			totalWeight += w
-		}
-	}
-
-	if len(pool) == 0 || totalWeight <= 0 {
-		return "- Hòm trống rỗng, không có gì đặc biệt.\n", map[string]interface{}{"type": "none"}
-	}
-
-	// Weighted random pick
-	r := rand.Float64() * totalWeight
-	var chosen string
-	for _, m := range pool {
-		r -= m.weight
-		if r <= 0 {
-			chosen = m.id
-			break
-		}
-	}
+	pc := getPrecomputedPools()
+	chosen := pc.rollMaterial()
 	if chosen == "" {
-		chosen = pool[0].id
+		return "- Hòm trống rỗng, không có gì đặc biệt.\n", map[string]interface{}{"type": "none"}
 	}
 
 	InventorySvc.AddItem(tx, player.ID.String(), chosen, "materials", 1)
@@ -372,29 +340,8 @@ func rollMaterialDrop(tx *sql.Tx, player *models.Player, item models.ItemSpec) (
 }
 
 func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) (string, map[string]interface{}) {
-	rows, err := db.DB.Query(`SELECT target_gu_id, target_rank, variant FROM refining_recipes`)
-	if err != nil {
-		return "", nil
-	}
-	defer rows.Close()
-
-	type recipeInfo struct {
-		id         string
-		targetGuID string
-		weight     float64
-	}
-	var allRecipes []recipeInfo
-	for rows.Next() {
-		var targetGuID string
-		var targetRank, variant int
-		if err := rows.Scan(&targetGuID, &targetRank, &variant); err == nil {
-			allRecipes = append(allRecipes, recipeInfo{
-				id:         fmt.Sprintf("recipe_%s_%d_%d", targetGuID, targetRank, variant),
-				targetGuID: targetGuID,
-				weight:     rankDropMultiplier(targetRank),
-			})
-		}
-	}
+	pc := getPrecomputedPools()
+	allRecipes := pc.recipesByRank["all"]
 	if len(allRecipes) == 0 {
 		return "", nil
 	}
@@ -409,7 +356,7 @@ func rollRecipeDrop(tx *sql.Tx, player *models.Player, _ models.ItemSpec) (strin
 	}
 
 	// Filter to candidates: not yet unlocked, or unlocked but < 100%
-	var candidates []recipeInfo
+	var candidates []weightedRecipeEntry
 	for _, ri := range allRecipes {
 		if rate, ok := unlockedMap[ri.id]; !ok || rate < 100.0 {
 			candidates = append(candidates, ri)

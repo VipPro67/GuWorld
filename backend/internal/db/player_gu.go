@@ -403,15 +403,27 @@ func GuInventoryAggregateEquipped(playerRef string) string {
 }
 
 // EquippedTimeSpeedBonus sums the passive time_speed_multiplier contributed by
-// a player's equipped ACTIVE Gus. It queries the gu_dictionary directly, so it
-// works for SQL-only call sites (aperture projection, tribulation lifespan
-// decay) that do not load the full player inventory.
+// a player's equipped ACTIVE Gus. It queries player_gu and looks up the memory 
+// registry, avoiding complex JSONB SQL queries that trigger JIT compilation.
 func EquippedTimeSpeedBonus(q Queryer, playerID string) (float64, error) {
-	var bonus float64
-	err := q.QueryRow(`
-		SELECT COALESCE(SUM((gd.effects->'passive'->>'time_speed_multiplier')::double precision), 0)
-		FROM player_gu pg
-		JOIN gu_dictionary gd ON gd.id = pg.gu_id AND gd.rank = pg.gu_rank
-		WHERE pg.player_id = $1 AND pg.equipped = true AND pg.state = 'ACTIVE'`, playerID).Scan(&bonus)
-	return bonus, err
+	rows, err := q.Query(`
+		SELECT gu_id, gu_rank 
+		FROM player_gu 
+		WHERE player_id = $1 AND equipped = true AND state = 'ACTIVE'`, playerID)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	var total float64
+	for rows.Next() {
+		var guID string
+		var rank int
+		if err := rows.Scan(&guID, &rank); err == nil {
+			if spec, ok := models.GetGu(guID, rank); ok && spec.Effects.Passive != nil {
+				total += spec.Effects.Passive.TimeSpeedMultiplier
+			}
+		}
+	}
+	return total, nil
 }

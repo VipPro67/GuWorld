@@ -29,6 +29,7 @@ export const TradeRoomModal: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"stones" | "gus" | "materials" | "recipes">("stones");
   const [expandedGus, setExpandedGus] = useState<Record<string, boolean>>({});
   const [tradeFilterRank, setTradeFilterRank] = useState<number | "all">("all");
+  const [searchTerm, setSearchTerm] = useState<string>("");
   const toggleGuGroup = (guId: string) => {
     setExpandedGus((prev) => ({ ...prev, [guId]: !prev[guId] }));
   };
@@ -279,9 +280,26 @@ export const TradeRoomModal: React.FC = () => {
     }
   );
 
+  // Search-filtered lists for each tab
+  const searchLower = searchTerm.trim().toLowerCase();
+  const filteredGus = searchLower
+    ? tradeableGus.filter(g => {
+        const name = guDictionary[g.gu_id]?.name || g.gu_id;
+        return name.toLowerCase().includes(searchLower);
+      })
+    : tradeableGus;
+
+  const filteredMaterials = searchLower
+    ? availableMaterials.filter(matId => getMatName(matId).toLowerCase().includes(searchLower))
+    : availableMaterials;
+
+  const filteredRecipes = searchLower
+    ? recipes.filter(r => !myOffer?.recipes?.[r.id]).filter(r => formatRecipeName(r.id).toLowerCase().includes(searchLower))
+    : recipes.filter(r => !myOffer?.recipes?.[r.id]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/85 backdrop-blur-md animate-fade-in">
-      <div className="w-full max-w-4xl bg-zinc-950 border border-zinc-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="w-full max-w-screen-xl bg-zinc-950 border border-zinc-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
         
         {/* Header */}
         <div className="px-6 py-4 border-b border-zinc-900 flex justify-between items-center bg-gradient-to-r from-zinc-950 to-zinc-900">
@@ -369,7 +387,7 @@ export const TradeRoomModal: React.FC = () => {
                       const guRank = getGuRank(instId);
                       return (
                         <span key={instId} className="text-xs px-2.5 py-1 rounded-xl bg-emerald-950/30 border border-emerald-900/40 text-emerald-400 flex items-center gap-1.5">
-                          <span>{guName}</span>
+                          <span className="max-w-full truncate">{guName}</span>
                           <span className="text-[9px] font-mono opacity-80 px-1 bg-emerald-900/20 border border-emerald-800/35 rounded text-emerald-300">
                             Rank {guRank}
                           </span>
@@ -391,7 +409,7 @@ export const TradeRoomModal: React.FC = () => {
                   <span className="text-[9px] text-zinc-500 font-mono">Nguyên liệu:</span>
                   <div className="flex flex-wrap gap-1.5">
                     {Object.entries(myOffer.materials as Record<string, number>).map(([matId, qty]) => (
-                      <span key={matId} className="text-xs px-2.5 py-1 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 flex items-center gap-1.5">
+                      <span key={matId} className="text-xs px-2.5 py-1 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 flex items-center gap-1.5 max-w-full truncate">
                         {getMatName(matId)} (x{qty})
                         {!myLocked && (
                           <div className="flex items-center gap-1 border-l border-zinc-800 pl-1.5 ml-1">
@@ -418,7 +436,7 @@ export const TradeRoomModal: React.FC = () => {
                   <span className="text-[9px] text-zinc-500 font-mono">Bí phương:</span>
                   <div className="flex flex-wrap gap-1.5">
                     {Object.entries(myOffer.recipes as Record<string, number>).map(([recipeId, rate]) => (
-                      <span key={recipeId} className="text-xs px-2.5 py-1 rounded-xl bg-violet-950/30 border border-violet-500/30 text-violet-300 flex items-center gap-1.5">
+                      <span key={recipeId} className="text-xs px-2.5 py-1 rounded-xl bg-violet-950/30 border border-violet-500/30 text-violet-300 flex items-center gap-1.5 max-w-full truncate">
                         {getRecipeName(recipeId)} ({rate.toFixed(0)}%)
                         {!myLocked && (
                           <button onClick={() => removeRecipe(recipeId)} className="hover:text-red-400 cursor-pointer ml-1">
@@ -437,12 +455,19 @@ export const TradeRoomModal: React.FC = () => {
             </div>
 
             {/* Asset Selectors Panel (Disabled if locked) */}
-            <div className="flex-1 flex flex-col border border-zinc-900 rounded-2xl overflow-hidden bg-zinc-950/20">
-              
+            {activeTab !== "stones" && (
+              <input
+                type="text"
+                placeholder="Tìm kiếm..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full p-2 mb-2 bg-zinc-950 border border-zinc-900 rounded-xl text-xs text-zinc-300 focus:outline-none"
+              />
+            )}
               {/* Selectors tabs */}
               <div className="flex border-b border-zinc-900 text-xs font-mono bg-zinc-950">
                 <button
-                  onClick={() => setActiveTab("stones")}
+                  onClick={() => { setSearchTerm(""); setActiveTab("stones"); }}
                   className={`flex-1 py-2.5 border-b-2 font-bold cursor-pointer transition-all ${
                     activeTab === "stones"
                       ? "text-amber-400 border-amber-500/40 bg-amber-950/5"
@@ -452,7 +477,7 @@ export const TradeRoomModal: React.FC = () => {
                   Linh Thạch
                 </button>
                 <button
-                  onClick={() => setActiveTab("gus")}
+                  onClick={() => { setSearchTerm(""); setActiveTab("gus"); }}
                   className={`flex-1 py-2.5 border-b-2 font-bold cursor-pointer transition-all ${
                     activeTab === "gus"
                       ? "text-emerald-400 border-emerald-500/40 bg-emerald-950/5"
@@ -462,7 +487,7 @@ export const TradeRoomModal: React.FC = () => {
                   Cổ Trùng
                 </button>
                 <button
-                  onClick={() => setActiveTab("materials")}
+                  onClick={() => { setSearchTerm(""); setActiveTab("materials"); }}
                   className={`flex-1 py-2.5 border-b-2 font-bold cursor-pointer transition-all ${
                     activeTab === "materials"
                       ? "text-violet-400 border-violet-500/40 bg-violet-950/5"
@@ -472,7 +497,7 @@ export const TradeRoomModal: React.FC = () => {
                   Nguyên Liệu
                 </button>
                 <button
-                  onClick={() => setActiveTab("recipes")}
+                  onClick={() => { setSearchTerm(""); setActiveTab("recipes"); }}
                   className={`flex-1 py-2.5 border-b-2 font-bold cursor-pointer transition-all ${
                     activeTab === "recipes"
                       ? "text-pink-400 border-pink-500/40 bg-pink-950/5"
@@ -620,12 +645,17 @@ export const TradeRoomModal: React.FC = () => {
                         {tradeableGus.length > 0 ? (
                           (() => {
                             const grouped: Record<string, GuInstance[]> = {};
-                            tradeableGus.forEach((gu) => {
+                            filteredGus.forEach((gu) => {
                               if (!grouped[gu.gu_id]) grouped[gu.gu_id] = [];
                               grouped[gu.gu_id].push(gu);
                             });
 
-                            return Object.entries(grouped).map(([guId, list]) => {
+                            const entries = Object.entries(grouped);
+                            if (entries.length === 0 && searchLower) {
+                              return <p className="text-xs text-zinc-600 italic text-center py-4">Không tìm thấy Cổ trùng nào phù hợp</p>;
+                            }
+
+                            return entries.map(([guId, list]) => {
                               const name = guDictionary[guId]?.name || guId;
                               const rank = guDictionary[guId]?.rank || 1;
                               const isExpanded = !!expandedGus[guId];
@@ -776,7 +806,7 @@ export const TradeRoomModal: React.FC = () => {
                             className="flex-grow bg-zinc-950 border border-zinc-900 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none font-serif cursor-pointer"
                           >
                             <option value="">-- Chọn Nguyên Liệu --</option>
-                            {availableMaterials.map((matId) => (
+                            {filteredMaterials.map((matId) => (
                               <option key={matId} value={matId}>
                                 {getMatName(matId)} (x{player.materials_inventory[matId] - (myOffer?.materials?.[matId] || 0)})
                               </option>
@@ -883,8 +913,7 @@ export const TradeRoomModal: React.FC = () => {
                             className="flex-grow bg-zinc-950 border border-zinc-900 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none font-serif cursor-pointer"
                           >
                             <option value="">-- Chọn Bí Phương --</option>
-                            {recipes
-                              .filter((r) => !myOffer?.recipes?.[r.id])
+                            {filteredRecipes
                               .map((r) => (
                                 <option key={r.id} value={r.id}>
                                   {getRecipeName(r.id)} ({r.completion_rate ?? 100}%)
@@ -901,7 +930,7 @@ export const TradeRoomModal: React.FC = () => {
                           </button>
                         </div>
 
-                        {recipes.filter((r) => !myOffer?.recipes?.[r.id]).length === 0 && (
+                        {filteredRecipes.length === 0 && (
                           <p className="text-xs text-zinc-600 italic text-center py-2">Không có Bí phương nào có thể giao dịch</p>
                         )}
                       </div>
@@ -1073,6 +1102,5 @@ export const TradeRoomModal: React.FC = () => {
         </div>
 
       </div>
-    </div>
   );
 };
