@@ -156,6 +156,12 @@ export interface WikiRegion {
   max_rank: number;
   parent_id?: string;
   zone_type: string;
+  min_x?: number;
+  min_y?: number;
+  max_x?: number;
+  max_y?: number;
+  entry_x?: number;
+  entry_y?: number;
   pool_weights: {
     cell_type_weights?: Record<string, number>;
     resources?: string[];

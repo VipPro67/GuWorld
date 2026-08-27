@@ -330,6 +330,20 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
     const baseColors = [0x2d5f3f, 0x3f5f2d, 0x5f4f2d, 0x4f2d5f, 0x2d3f5f, 0x5f2d3f];
     const colorFor = (idx: number) => baseColors[idx % baseColors.length];
 
+    const addRegionLabel = (z: { name: string }, rx: number, ry: number, rw: number, rh: number, color: number, fontSize: number) => {
+      const label = new Text({
+        text: z.name,
+        style: { fontSize, fill: color, fontFamily: "serif", stroke: { color: 0x000000, width: 4 }, fontWeight: "bold" },
+      });
+      label.anchor.set(0.5, 0.5);
+      
+      const labelContainer = new Container();
+      labelContainer.name = "region-label";
+      labelContainer.position.set(rx + rw / 2, ry + rh / 2);
+      labelContainer.addChild(label);
+      container.addChild(labelContainer);
+    };
+
     largeZones.forEach((z, i) => {
       if (z.min_x === undefined || z.max_x === undefined || z.min_y === undefined || z.max_y === undefined) return;
       const rx = z.min_x, ry = z.min_y, rw = z.max_x - z.min_x + 1, rh = z.max_y - z.min_y + 1;
@@ -339,24 +353,29 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
       g.fill({ color, alpha: 0.05 });
       g.stroke({ color, width: 3, alpha: 0.8 });
       container.addChild(g);
+      addRegionLabel(z, rx, ry, rw, rh, 0x86efac, 48); // Large zone label
     });
 
     namedZones.forEach((z) => {
       if (z.min_x === undefined || z.max_x === undefined || z.min_y === undefined || z.max_y === undefined) return;
+      const rx = z.min_x, ry = z.min_y, rw = z.max_x - z.min_x + 1, rh = z.max_y - z.min_y + 1;
       const g = new Graphics();
-      g.rect(z.min_x, z.min_y, z.max_x - z.min_x + 1, z.max_y - z.min_y + 1);
+      g.rect(rx, ry, rw, rh);
       g.fill({ color: 0xffffff, alpha: 0.04 });
       g.stroke({ color: 0xffffff, width: 1, alpha: 0.2 });
       container.addChild(g);
+      addRegionLabel(z, rx, ry, rw, rh, 0xd8b4fe, 24); // Named zone label
     });
 
     hub.forEach((z) => {
       if (z.min_x === undefined || z.max_x === undefined || z.min_y === undefined || z.max_y === undefined) return;
+      const rx = z.min_x, ry = z.min_y, rw = z.max_x - z.min_x + 1, rh = z.max_y - z.min_y + 1;
       const g = new Graphics();
-      g.rect(z.min_x, z.min_y, z.max_x - z.min_x + 1, z.max_y - z.min_y + 1);
+      g.rect(rx, ry, rw, rh);
       g.fill({ color: 0xfbbf24, alpha: 0.18 });
       g.stroke({ color: 0xfbbf24, width: 3, alpha: 0.9 });
       container.addChild(g);
+      addRegionLabel(z, rx, ry, rw, rh, 0xfde047, 36); // Hub label
     });
   }, []);
 
@@ -405,17 +424,27 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
         container.addChild(g);
 
         const labelColor = isBoss ? 0xfecaca : 0xffffff;
+        let text = o.content_id;
+        if (isBoss || o.cell_type === "Monster") {
+          text = monsterDictionary[o.content_id]?.name || text;
+        } else if (isResource) {
+          text = itemDictionary[o.content_id]?.name || text;
+        } else if (o.cell_type === "WildGu") {
+          text = guDictionary[o.content_id]?.name || text;
+        }
+        
         const label = new Text({
-          text: o.content_id,
-          style: { fontSize: 12, fill: labelColor, fontFamily: "serif", stroke: { color: 0x000000, width: 3 } },
+          text: text,
+          style: { fontSize: 12, fill: labelColor, fontFamily: "sans-serif", stroke: { color: 0x000000, width: 3 } },
         });
         label.anchor.set(0.5, 1);
         label.y = -size - 4;
+        label.name = "object-label-text";
         g.addChild(label);
         g.position.set(o.x + 0.5, o.y + 0.5);
       }
     },
-    [handleObjectClick],
+    [handleObjectClick, monsterDictionary, itemDictionary, guDictionary],
   );
 
   const drawPlayers = useCallback(
@@ -880,6 +909,7 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
         const currentScale = scaleRef.current;
         if (currentScale > 0) {
           const showLabelsAtThisZoom = showLabelsRef.current && currentScale >= 12;
+          const showRegionLabels = showLabelsRef.current;
           const targetScale = 1.0 / currentScale; // 1:1 crisp scale
 
           for (const child of monstersContainerRef.current.children) {
@@ -898,6 +928,36 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
                 if (sub instanceof Text) {
                   sub.scale.set(targetScale);
                   sub.y = -0.6 - (6 * targetScale);
+                }
+              }
+            }
+          }
+
+          // Persistent object labels
+          for (const child of objectsContainerRef.current.children) {
+            if (child instanceof Graphics) {
+              for (const sub of child.children) {
+                if (sub.name === "object-label-text" && sub instanceof Text) {
+                  sub.visible = showLabelsAtThisZoom;
+                  if (showLabelsAtThisZoom) {
+                    sub.scale.set(targetScale);
+                    // The icon radius is ~12 in world units, plus some padding in screen pixels
+                    sub.y = -12 - (4 * targetScale);
+                  }
+                }
+              }
+            }
+          }
+
+          // Adjust region labels
+          for (const child of regionsContainerRef.current.children) {
+            if (child.name === "region-label") {
+              child.visible = showRegionLabels;
+              if (showRegionLabels) {
+                for (const sub of child.children) {
+                  if (sub instanceof Text) {
+                    sub.scale.set(targetScale);
+                  }
                 }
               }
             }

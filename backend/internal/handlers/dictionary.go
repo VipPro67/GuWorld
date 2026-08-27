@@ -25,6 +25,10 @@ type WikiRegion struct {
 	MaxRank     int              `json:"max_rank"`
 	ParentID    string           `json:"parent_id,omitempty"`
 	ZoneType    string           `json:"zone_type"`
+	MinX        int              `json:"min_x,omitempty"`
+	MinY        int              `json:"min_y,omitempty"`
+	MaxX        int              `json:"max_x,omitempty"`
+	MaxY        int              `json:"max_y,omitempty"`
 	PoolWeights models.ZonePools `json:"pool_weights"`
 }
 
@@ -135,6 +139,10 @@ func buildWikiRegions() []WikiRegion {
 			MaxRank:     z.MaxRank,
 			ParentID:    z.ParentID,
 			ZoneType:    z.ZoneType,
+			MinX:        z.MinX,
+			MinY:        z.MinY,
+			MaxX:        z.MaxX,
+			MaxY:        z.MaxY,
 			PoolWeights: z.PoolWeights,
 		})
 	}

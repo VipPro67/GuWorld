@@ -1381,7 +1381,7 @@ export default function WikiClientView({
                             <h3 className="text-sm font-serif font-bold text-[var(--text-primary)]">
                               {region.name}
                             </h3>
-                            <div className="flex items-center gap-2 mt-1">
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
                               <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold border ${
                                 region.zone_type === "Danger" ? "bg-red-950/30 text-red-400 border-red-500/20" :
                                 region.zone_type === "Safe" ? "bg-emerald-950/30 text-emerald-400 border-emerald-500/20" :
@@ -1392,6 +1392,12 @@ export default function WikiClientView({
                               <span className="text-[10px] font-mono text-[var(--text-muted)]">
                                 Cấp {region.min_rank} - {region.max_rank}
                               </span>
+                              {(region.min_x !== undefined && region.min_y !== undefined) && (
+                                <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900/50 px-1.5 py-0.5 rounded border border-zinc-800 flex items-center gap-1">
+                                  <MapPin className="w-2.5 h-2.5" />
+                                  {region.min_x}, {region.min_y} → {region.max_x}, {region.max_y}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
