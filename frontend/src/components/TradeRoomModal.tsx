@@ -18,8 +18,13 @@ export const TradeRoomModal: React.FC = () => {
     guDictionary, 
     itemDictionary,
     recipes,
+    fetchRecipes,
     showConfirm,
   } = useGameStore();
+
+  useEffect(() => {
+    fetchRecipes();
+  }, [fetchRecipes]);
 
   const [primevalInput, setPrimevalInput] = useState<number>(0);
   const [immortalInput, setImmortalInput] = useState<number>(0);
@@ -939,7 +944,6 @@ export const TradeRoomModal: React.FC = () => {
                 )}
               </div>
             </div>
-          </div>
 
           {/* RIGHT SIDE: Opponent (Partner) */}
           <div className="p-6 flex flex-col gap-5 bg-zinc-950/20">
@@ -1102,5 +1106,6 @@ export const TradeRoomModal: React.FC = () => {
         </div>
 
       </div>
+    </div>
   );
 };

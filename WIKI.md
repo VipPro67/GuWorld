@@ -10,7 +10,7 @@ Wiki này phản ánh các hệ thống đã có trong codebase hiện tại, di
 
 ### Chủng tộc, Giới tính, Thể chất, Trạng thái
 
-Khi đăng ký, đạo hữu chọn **Chủng tộc** (mặc định Nhân Tộc) và **Giới tính**. Trong quá trình tu hành, **Thể chất** và **Trạng thái** có thể thay đổi qua sự kiện/quà hoặc Admin. Mỗi giá trị mang hiệu ứng riêng:
+Khi đăng ký, đạo hữu mặc định Nhân Tộc  và chọn **Giới tính**. Trong quá trình tu hành, **Thể chất** và **Trạng thái** có thể thay đổi qua sự kiện/quà hoặc Admin. Mỗi giá trị mang hiệu ứng riêng:
 
 **Chủng tộc:**
 
@@ -87,7 +87,7 @@ Trạng thái có thể tồn tại đồng thời nhiều cái (mảng `statuse
 - Khi đủ tiến độ, nhân vật đột phá tiểu cảnh giới hoặc lên Chuyển kế tiếp.
 - Tư chất ảnh hưởng tốc độ hồi/phá vách: Giáp, Ất, Bính, Đinh.
 - Xá Lợi Cổ có thể được dùng qua hệ thống `use-relic-gu` nếu bọc đồ có Cổ phù hợp.
-
+- cẩn thận áp lực không khiếu
 ### Thăng Tiên và Độ Kiếp
 
 - Ngũ Chuyển Đỉnh phong (Chuyển 5, SubRank 4) có thể thăng tiên khi Nhân Khí đạt mức mong muốn.

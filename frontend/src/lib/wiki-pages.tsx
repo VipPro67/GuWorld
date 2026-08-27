@@ -570,33 +570,40 @@ export const wikiPages: WikiPage[] = [
         </p>
 
         <div className="space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">1. Phân cấp đệ tử & Khảo hạch</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">1. Phân cấp chức vụ & Khảo hạch</h3>
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-            Bạn sẽ bắt đầu là một Đệ tử ngoại môn và leo dần lên các bậc cao hơn. Mỗi bậc đều giới hạn số lượng người chơi tối đa và yêu cầu vượt qua các kỳ thi định kỳ:
+            Hệ thống chức vụ: <strong>Ngoại Môn ➔ Nội Môn ➔ Tinh Anh ➔ Chân Truyền ➔ Trưởng Lão ➔ Hộ Pháp ➔ Chưởng Môn</strong>. Chi phí thăng cấp bằng Điểm cống hiến lần lượt là: <strong>100 / 500 / 2.000 / 10.000 / 30.000</strong>. Đệ tử ngoại môn và nội môn cần vượt qua các kỳ khảo hạch:
           </p>
           <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3 text-xs">
             <div className="flex justify-between border-b border-zinc-800 pb-2">
               <span className="font-bold text-[var(--text-primary)]">Tiểu Khảo</span>
-              <span className="text-[var(--text-muted)]">Mỗi 3 ngày thực tế • Điều kiện thăng cấp Nội Môn</span>
+              <span className="text-[var(--text-muted)]">Mỗi 3 ngày thực tế • Thăng cấp Nội Môn</span>
             </div>
             <div className="flex justify-between border-b border-zinc-800 pb-2">
               <span className="font-bold text-[var(--text-primary)]">Trung Khảo</span>
-              <span className="text-[var(--text-muted)]">Mỗi 8 ngày thực tế • Quyết đấu chọn đệ tử Tinh Anh</span>
+              <span className="text-[var(--text-muted)]">Mỗi 8 ngày thực tế • Quyết đấu chọn Tinh Anh</span>
             </div>
             <div className="flex justify-between pb-1">
               <span className="font-bold text-[var(--text-primary)]">Đại Khảo</span>
-              <span className="text-[var(--text-muted)]">Mỗi 15 ngày thực tế • Sinh tồn chọn đệ tử Chân Truyền</span>
+              <span className="text-[var(--text-muted)]">Mỗi 15 ngày thực tế • Sinh tồn chọn Chân Truyền</span>
             </div>
           </div>
         </div>
 
         <div className="space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">2. Điểm Cống Hiến & Tàng Kinh Các</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">2. Lãnh địa mỏ Tông môn & Quỹ</h3>
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            Đây là kinh tế cốt lõi trong tông môn. Điểm cống hiến nhận được khi bạn quyên góp cổ trùng, nguyên thạch hoặc làm nhiệm vụ tông môn tại Bảng Nhiệm Vụ (thu thập dược liệu, luyện bồi tập đấu, chinh phạt hoang thú dã ngoại).
+            Môn phái có thể chiếm Lãnh địa để tự sinh <strong>Quỹ tông môn</strong> và <strong>Linh tài</strong> theo giờ. Lãnh đạo (Trưởng Lão, Hộ Pháp, Chưởng Môn) được quyền bố trí đệ tử hoặc thuê thần thú canh giữ, đồng thời phát động tấn công mỏ của tông môn khác. Đệ tử phòng thủ nhận +20 cống hiến/giờ, các thành viên khác +2 cống hiến/giờ (tối đa 200/ngày).
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">3. Điểm Cống Hiến & Bảo Khố</h3>
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+            Điểm cống hiến nhận được khi quyên góp cổ trùng, nguyên thạch, bí phương hoặc làm nhiệm vụ tông môn.
           </p>
           <div className="p-4 rounded-2xl bg-indigo-950/20 border border-indigo-500/10 text-xs leading-relaxed text-indigo-300">
-            💡 <strong>Sử dụng Điểm cống hiến:</strong> Đổi lấy các công thức cổ phương độc quyền, mượn Tiên Cổ từ kho tông môn theo ngày, hoặc đổi lấy sách bí phương sát chiêu tại Tàng Kinh Các.
+            💡 <strong>Sử dụng Điểm cống hiến:</strong> Đổi lấy các công thức, Tiên Cổ từ kho tông môn, sách bí phương hoặc dùng để thăng cấp chức vụ.
           </div>
         </div>
       </div>
@@ -704,8 +711,8 @@ export const wikiPages: WikiPage[] = [
                 </tr>
                 <tr>
                   <td className="p-3 font-bold text-[var(--text-primary)]">Nhân Khí (Human Qi)</td>
-                  <td className="p-3">Tài nguyên phản ánh hoạt động tích cực của đạo hữu trong giới tu tiên, giới hạn tối đa 100.000.</td>
-                  <td className="p-3">Quyết định tỉ lệ Thăng Tiên thành công và phẩm cấp Tiên Khiếu khi mở.</td>
+                  <td className="p-3">Tích luỹ qua mọi hoạt động tu tiên. Giới hạn 100.000.</td>
+                  <td className="p-3">Quyết định tỉ lệ Thăng Tiên (100k = 100%) và phẩm cấp Tiên Khiếu (Thấp, Trung, Cao, Cực Hạn).</td>
                 </tr>
                 <tr>
                   <td className="p-3 font-bold text-[var(--text-primary)]">Tư chất Không Khiếu</td>
@@ -753,7 +760,7 @@ export const wikiPages: WikiPage[] = [
             <li>Mỗi lần click nút <strong>Trùng Kích Vách Khiếu</strong>, thanh áp lực tăng thêm <strong>+5</strong>.</li>
             <li>Thanh áp lực tự động suy giảm theo thời gian thực: cứ <strong>mỗi 2 giờ đời thật</strong>, áp lực giảm đi <strong>phân nửa</strong>.</li>
             <li>Nếu áp lực vượt mốc <strong>80%</strong>, hiệu quả trùng kích chỉ còn <strong>25%</strong> so với bình thường.</li>
-            <li>Nếu áp lực chạm mốc <strong>100%</strong>, Không khiếu bị nứt: đạo hữu <strong>mất vĩnh viễn 5% Chân Nguyên tối đa</strong>, tiến độ vách khiếu về 0, áp lực giảm về 50% và <strong>rớt xuống một Tiểu Cảnh Giới (hoặc một Chuyển nếu đang ở Sơ Giai)</strong>!</li>
+            <li>Nếu áp lực chạm mốc <strong>100%</strong>, Không khiếu bị nứt: đạo hữu <strong>rớt 1 Tiểu cảnh giới (hoặc 1 Chuyển nếu đang ở Sơ Giai)</strong>, tiến độ vách khiếu về 0, áp lực giảm về 50%, và <strong>mất vĩnh viễn 5% Chân Nguyên tối đa</strong>!</li>
           </ul>
           <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-xs leading-relaxed text-[var(--text-secondary)]">
             💡 <strong>Mẹo:</strong> Sử dụng vật phẩm tiêu hao <strong>Tịnh Thủy Cổ</strong> để lập tức thanh lọc, đưa thanh Áp lực vách khiếu về 0% ngay tức khắc.
@@ -972,7 +979,7 @@ export const wikiPages: WikiPage[] = [
         <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Hệ thống nuôi Cổ trùng</h3>
           <div className="p-4 rounded-2xl bg-rose-950/20 border border-rose-500/10 text-xs text-rose-300 leading-relaxed">
-            ⚠️ <strong>Lưu ý cực kỳ quan trọng:</strong> Mỗi con Cổ trang bị đều có thanh độ no. Độ no giảm dần sau mỗi lượt chiến đấu hoặc theo thời gian thực tế. Nếu độ no về 0, Cổ sẽ rơi vào trạng thái <strong>Hấp Hối</strong> và sẽ <strong>chết vĩnh viễn</strong> nếu không được cho ăn kịp thời!
+            ⚠️ <strong>Lưu ý cực kỳ quan trọng:</strong> Mỗi con Cổ (dù đang trang bị hay trong Bảo Khố) đều có thanh độ no. Độ no giảm dần <strong>sau mỗi 3 giờ thực tế</strong>. Nếu độ no về 0, Cổ sẽ rơi vào trạng thái <strong>Hấp Hối</strong> và sẽ <strong>chết vĩnh viễn</strong> nếu không được cho ăn kịp thời!
           </div>
 
           <p className="text-xs text-[var(--text-muted)] leading-relaxed mt-2">
@@ -1039,12 +1046,19 @@ export const wikiPages: WikiPage[] = [
         </div>
 
         <div className="space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">2. Khiên ảo & Tốc độ</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">2. Cơ Chế Giao Trân & Đáp Trả</h3>
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            Sinh mạng cơ bản của Cổ sư cực kỳ mong manh (chỉ 100 Sinh Lực). Do đó, bạn bắt buộc phải trang bị Cổ phòng ngự để nhận được lớp <strong>Khiên ảo</strong> lớn. Khi bị tấn công, sát thương trừ vào khiên trước, khiên vỡ mới tính vào sinh lực cơ thể.
+            Các Cổ trong lượt tấn công được kích hoạt <strong>lần lượt từng chiêu</strong> ("đánh trả từng phát"). Sau mỗi đòn đánh ra, mục tiêu chủ sẽ lập tức <strong>đáp trả ngay một đòn</strong> vào đạo hữu. Tốc độ quyết định ai giao trân trước, hai bên luân phiên từng phát. Dùng vật phẩm hay tụ lực không bị đáp trả.
           </p>
-          <div className="p-4 rounded-2xl bg-indigo-950/20 border border-indigo-500/10 text-xs leading-relaxed text-indigo-300">
-            ⚡ <strong>Tốc độ lượt đấu:</strong> Lượt đánh của toàn bộ mục tiêu được sắp xếp theo chỉ số Tốc độ từ cao tới thấp. Nếu mục tiêu của bạn bị tiêu diệt trước bởi đồng đội có tốc độ cao hơn, lượt đánh của bạn sẽ bị hủy bỏ hoặc chuyển hướng ngẫu nhiên.
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">3. Khiên ảo & Sinh Mạng</h3>
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+            Sinh mạng cơ bản của Cổ sư rất mong manh. Hãy trang bị Cổ phòng ngự để nhận <strong>Khiên ảo</strong> (Shield). Khi bị tấn công, sát thương trừ vào khiên trước; <strong>sát thương tràn qua Khiên ảo mới trừ trực tiếp vào Sinh lực cơ thể</strong>. Nếu Sinh lực về 0, đạo hữu sẽ ngã xuống.
+          </p>
+          <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/10 text-xs leading-relaxed text-amber-300">
+            💀 <strong>Tử Đạo (Chết rơi đồ):</strong> Khi bại trận dã ngoại, bỏ chạy ngất xỉu, hay thua PvP, đạo hữu sẽ đánh rơi một phần tài sản đang giữ: Nguyên Thạch, nguyên liệu, Cổ trùng (trừ Cổ đang trang bị & Bản Mệnh Cổ) và Bí phương.
           </div>
         </div>
       </div>
@@ -1064,14 +1078,17 @@ export const wikiPages: WikiPage[] = [
         <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Cơ chế Lò Luyện</h3>
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-            Mỗi con Cổ nâng cấp hoặc hợp thành đều cần một bản vẽ <strong>Cổ Phương</strong> cụ thể. Bạn cần đưa Cổ trùng nguyên liệu chính và các nguyên liệu phụ trợ (Hàn Ngọc, Địa Tinh, Quặng Sắt...) kèm theo lượng lớn Nguyên Thạch để kích hoạt.
+            Tỉ lệ Luyện Cổ thành công được quyết định bởi 10 yếu tố: Tỷ lệ gốc của bí phương, Độ hoàn thiện của phương thức, Độ chính xác tổ hợp nguyên liệu, Chất lượng nguyên liệu đầu vào (+2% mỗi bậc chênh lệch), Đạo Ngân Luyện Đạo (+0.1% mỗi điểm, max 20%), Cảnh giới Luyện Đạo (lên tới +15%), Cảnh giới Lưu Phái của Cổ (max +20%), Khí vận (max +10%), Cổ phụ trợ kích hoạt, và Môi trường Đại Vực (+5%). Lắp sai nguyên liệu lập tức tỷ lệ về 0%.
           </p>
           <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/10 text-xs text-amber-300 leading-relaxed">
-            ⚠️ <strong>Rủi ro luyện cổ:</strong> Mọi quá trình luyện cổ đều có tỷ lệ thất bại tự nhiên. Khi thất bại, bạn sẽ mất toàn bộ nguyên liệu phụ và có xác suất bị hư hỏng hoặc mất vĩnh viễn Cổ trùng nguyên liệu chính!
+            ⚠️ <strong>Hậu quả luyện cổ:</strong> Có 4 mốc hậu quả:
+            <ul className="list-disc list-inside mt-2 space-y-1">
+              <li><strong>Thành công:</strong> Nhận Cổ trùng, tăng Chân Ý lưu phái.</li>
+              <li><strong>Thất bại (Safe):</strong> Cảnh giới Luyện Đạo cao cứu vãn, giữ lại nguyên liệu chính, chỉ mất 50% nguyên liệu phụ.</li>
+              <li><strong>Thất bại (Normal):</strong> Mất 100% nguyên liệu. Nếu là Cổ Bản Mệnh thì không chết mà rơi vào Hấp Hối (Hunger = 1).</li>
+              <li><strong>Cháy Nổ (Backfire):</strong> Tỉ lệ tột cùng xui xẻo (xúc xắc ≥ 90%, hoặc ≥ 75% với Tiên Cổ) khiến lò nổ, mất 50% HP max và 30% Hồn Phách max, nguyên liệu hóa tro bụi.</li>
+            </ul>
           </div>
-          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            Nâng cao cảnh giới <strong>Luyện Đạo</strong> hoặc thu phục chủng tộc dị nhân <strong>Người Lông</strong> làm việc trong Tiên Khiếu sẽ giúp gia tăng tỉ lệ thành công đáng kể.
-          </p>
         </div>
       </div>
     )
