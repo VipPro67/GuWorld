@@ -338,9 +338,10 @@ func CreateListing(c *gin.Context) {
 		return
 	}
 
+	itemName := GetItemName(req.ItemType, itemDataJSON)
+
 	// Trigger System Chat Notification on Bảo Hoàng Thiên channel
 	if req.ListingType == "MARKET" || req.ListingType == "AUCTION" {
-		itemName := GetItemName(req.ItemType, itemDataJSON)
 		currencyName := "Nguyên Thạch"
 		if req.Currency == "immortal" {
 			currencyName = "Tiên Nguyên Thạch"
@@ -357,7 +358,7 @@ func CreateListing(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.create_listing", EntityType: "auction",
 		EntityID:       listingID,
-		RequestSummary: fmt.Sprintf("%s | %s | sl=%d | %.0f %s | loại=%s", req.ItemType, req.ItemID, req.Quantity, req.Price, req.Currency, req.ListingType),
+		RequestSummary: fmt.Sprintf("người bán=%s (%s) | loại vật phẩm=%s | tên=%s | id=%s | sl=%d | giá=%.0f %s | loại=%s", player.Username, authID, req.ItemType, itemName, req.ItemID, req.Quantity, req.Price, req.Currency, req.ListingType),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đăng bán thành công", "listing_id": listingID})
@@ -487,6 +488,7 @@ func PlaceBid(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
@@ -506,11 +508,18 @@ func PlaceBid(c *gin.Context) {
 	}
 
 	var sellerID uuid.UUID
+	var sellerName, itemType string
+	var rawItemData []byte
 	var currency, status, listingType string
 	var current float64
 	var bidder sql.NullString
 	var end time.Time
-	err = tx.QueryRow(`SELECT seller_id,currency,current_price,highest_bidder_id,status,end_time,listing_type FROM auction WHERE id=$1 FOR UPDATE`, req.ListingID).Scan(&sellerID, &currency, &current, &bidder, &status, &end, &listingType)
+	err = tx.QueryRow(`
+		SELECT a.seller_id, p.username, a.currency, a.current_price, a.highest_bidder_id, a.status, a.end_time, a.listing_type, a.item_type, a.item_data 
+		FROM auction a
+		JOIN players p ON a.seller_id = p.id
+		WHERE a.id=$1 FOR UPDATE
+	`, req.ListingID).Scan(&sellerID, &sellerName, &currency, &current, &bidder, &status, &end, &listingType, &itemType, &rawItemData)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phiên giao dịch"})
 		return
@@ -556,17 +565,27 @@ func PlaceBid(c *gin.Context) {
 		player.ImmortalStones -= neededAmount
 	}
 
-	// Refund previous bidder if different person
+	// Refund the previous bidder
 	if bidder.Valid && bidder.String != player.ID.String() {
-		if currency == "primeval" {
-			_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id=$2`, current, bidder.String)
-		} else {
-			_, err = tx.Exec(`UPDATE players SET immortal_stones = immortal_stones + $1 WHERE id=$2`, current, bidder.String)
-		}
+		var prevBidder models.Player
+		prevBidderID, _ := uuid.Parse(bidder.String)
+		prevBidder, err = evaluateManaTx(tx, prevBidderID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn tiền cho người đặt giá trước"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load previous bidder"})
 			return
 		}
+		if currency == "primeval" {
+			prevBidder.PrimevalStones += current
+			_, err = tx.Exec(`UPDATE players SET primeval_stones=$1 WHERE id=$2`, prevBidder.PrimevalStones, prevBidder.ID)
+		} else {
+			prevBidder.ImmortalStones += current
+			_, err = tx.Exec(`UPDATE players SET immortal_stones=$1 WHERE id=$2`, prevBidder.ImmortalStones, prevBidder.ID)
+		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "refund failed"})
+			return
+		}
+		notify.Send(db.DB, prevBidder.ID, "auction_outbid", "Bị đè giá", fmt.Sprintf("Bạn đã bị đè giá ở phòng đấu giá cho vật phẩm đấu giá. Được hoàn trả %.2f %s.", current, currency))
 	}
 	AddHumanQi(&player, 3.0)
 
@@ -584,6 +603,9 @@ func PlaceBid(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "bid failed"})
 		return
 	}
+
+	itemName := GetItemName(itemType, rawItemData)
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
@@ -591,14 +613,14 @@ func PlaceBid(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.bid", EntityType: "auction",
 		EntityID:       req.ListingID,
-		RequestSummary: fmt.Sprintf("giá=%.0f | hiện tại=%.0f | %s", req.Amount, current, currency),
+		RequestSummary: fmt.Sprintf("người đặt giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | giá=%.0f %s | giá cũ=%.0f %s", player.Username, authID, sellerName, sellerID, itemName, req.Amount, currency, current, currency),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	if sellerID != authID {
 		auditlog.Log(db.DB, auditlog.Entry{
 			PlayerID: &sellerID, Action: "marketplace.bid_notify", EntityType: "auction",
 			EntityID:       req.ListingID,
-			RequestSummary: fmt.Sprintf("người mua=%s | giá=%.0f | %s", authID, req.Amount, currency),
+			RequestSummary: fmt.Sprintf("người đặt giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | giá=%.0f %s", player.Username, authID, sellerName, sellerID, itemName, req.Amount, currency),
 			IPAddress:      c.ClientIP(), Success: true,
 		})
 		currencyName := "Nguyên Thạch"
@@ -804,6 +826,8 @@ func BuyListing(c *gin.Context) {
 		return
 	}
 
+	itemName := GetItemName(itemType, rawItemData)
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete purchase"})
 		return
@@ -812,20 +836,19 @@ func BuyListing(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.buy", EntityType: "auction",
 		EntityID:       req.ListingID,
-		RequestSummary: fmt.Sprintf("seller=%s | sl=%d | %.0f %s", sellerID, purchaseQty, totalPrice, currency),
+		RequestSummary: fmt.Sprintf("người mua=%s (%s) | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá=%.0f %s | loại=%s", buyer.Username, authID, seller.Username, sellerID, itemName, purchaseQty, totalPrice, currency, listingType),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &sellerID, Action: "marketplace.sold", EntityType: "auction",
 		EntityID:       req.ListingID,
-		RequestSummary: fmt.Sprintf("người mua=%s | sl=%d | %.0f %s", authID, purchaseQty, totalPrice, currency),
+		RequestSummary: fmt.Sprintf("người bán=%s (%s) | người mua=%s (%s) | vật phẩm=%s | sl=%d | nhận=%.0f %s (giá=%.0f, phí=%.0f) | loại=%s", seller.Username, sellerID, buyer.Username, authID, itemName, purchaseQty, payout, currency, totalPrice, commission, listingType),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	currencyName := "Nguyên Thạch"
 	if currency == "immortal" {
 		currencyName = "Tiên Nguyên Thạch"
 	}
-	itemName := GetItemName(itemType, rawItemData)
 	if sellerID != authID {
 		notify.Send(db.DB, sellerID, "market_sold", "Mặt hàng đã bán",
 			fmt.Sprintf("%s đã mua %d %s với giá %.0f %s.", buyer.Username, purchaseQty, itemName, totalPrice, currencyName))
@@ -930,6 +953,14 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 		if _, err := tx.Exec(`UPDATE auction SET status='COMPLETED' WHERE id=$1`, auctionID); err != nil {
 			return err
 		}
+
+		itemName := GetItemName(itemType, []byte(itemData))
+		auditlog.Log(tx, auditlog.Entry{
+			PlayerID: &buyerID, Action: "marketplace.settle_auction_win", EntityType: "auction",
+			EntityID:       auctionID,
+			RequestSummary: fmt.Sprintf("người thắng đấu giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá=%.0f %s | loại=%s", buyer.Username, buyerID, seller.Username, sellerID, itemName, qty, currentPrice, currency, listingType),
+			Success:        true,
+		})
 	} else {
 		if err := addAuctionItemToPlayer(tx, &seller, itemType, itemData, qty); err != nil {
 			return err
@@ -940,23 +971,16 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 		if _, err := tx.Exec(`UPDATE auction SET status='CANCELLED' WHERE id=$1`, auctionID); err != nil {
 			return err
 		}
-	}
 
-	if highestBidderID.Valid {
-		bidderUUID, _ := uuid.Parse(highestBidderID.String)
-		auditlog.Log(tx, auditlog.Entry{
-			PlayerID: &bidderUUID, Action: "marketplace.settle_auction_win", EntityType: "auction",
-			EntityID:       auctionID,
-			RequestSummary: fmt.Sprintf("seller=%s | %.0f %s | sl=%d", sellerID, currentPrice, currency, qty),
-			Success:        true,
-		})
-	} else {
+		itemName := GetItemName(itemType, []byte(itemData))
 		auditlog.Log(tx, auditlog.Entry{
 			PlayerID: &sellerID, Action: "marketplace.settle_auction_expired", EntityType: "auction",
-			EntityID: auctionID, RequestSummary: "Không ai đặt giá",
-			Success: true,
+			EntityID:       auctionID,
+			RequestSummary: fmt.Sprintf("đấu giá hết hạn không có người mua | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá khởi điểm=%.0f %s | loại=%s", seller.Username, sellerID, itemName, qty, currentPrice, currency, listingType),
+			Success:        true,
 		})
 	}
+
 	if err := tx.Commit(); err != nil {
 		return err
 	}
@@ -1064,10 +1088,10 @@ func CancelListing(c *gin.Context) {
 	}
 	defer tx.Rollback()
 	var sellerID uuid.UUID
-	var itemType, status string
+	var itemType, status, listingType string
 	var rawItemData []byte
 	var qty int
-	err = tx.QueryRow(`SELECT seller_id,item_type,item_data,quantity,status FROM auction WHERE id=$1 FOR UPDATE`, req.ListingID).Scan(&sellerID, &itemType, &rawItemData, &qty, &status)
+	err = tx.QueryRow(`SELECT seller_id,item_type,item_data,quantity,status,listing_type FROM auction WHERE id=$1 FOR UPDATE`, req.ListingID).Scan(&sellerID, &itemType, &rawItemData, &qty, &status, &listingType)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy listing"})
 		return
@@ -1115,14 +1139,18 @@ func CancelListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hủy listing"})
 		return
 	}
+
+	itemName := GetItemName(itemType, rawItemData)
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.cancel_listing", EntityType: "auction",
-		EntityID: req.ListingID, RequestSummary: itemType + " | sl=" + fmt.Sprint(qty),
-		IPAddress: c.ClientIP(), Success: true,
+		EntityID:       req.ListingID,
+		RequestSummary: fmt.Sprintf("người hủy=%s (%s) | vật phẩm=%s | sl=%d | loại=%s", player.Username, authID, itemName, qty, listingType),
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã hủy listing và hoàn trả vật phẩm"})
 }

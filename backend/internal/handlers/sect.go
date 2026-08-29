@@ -770,8 +770,31 @@ func DonateMaterials(c *gin.Context) {
 		return
 	}
 
-	qty, _ := InventorySvc.GetQuantity(tx, playerID.String(), req.MaterialID)
-	if qty < req.Amount {
+	rows, err := tx.Query(`SELECT category, quantity FROM player_inventory_items WHERE player_id = $1 AND item_id = $2`, playerID.String(), req.MaterialID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking inventory"})
+		return
+	}
+
+	type invItem struct {
+		category string
+		quantity int
+	}
+	var invs []invItem
+	totalQty := 0
+	for rows.Next() {
+		var iv invItem
+		if err := rows.Scan(&iv.category, &iv.quantity); err != nil {
+			rows.Close()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error scanning inventory"})
+			return
+		}
+		invs = append(invs, iv)
+		totalQty += iv.quantity
+	}
+	rows.Close()
+
+	if totalQty < req.Amount {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không có đủ linh tài yêu cầu!"})
 		return
 	}
@@ -789,14 +812,56 @@ func DonateMaterials(c *gin.Context) {
 
 	// Calculate value dynamically from item_dictionary.base_price + rank (via pricing package)
 	var dbBasePrice, matRank int
-	if err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, req.MaterialID).Scan(&dbBasePrice, &matRank); err != nil {
+	var itemType string
+	if err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1), COALESCE(item_type,'') FROM item_dictionary WHERE id=$1`, req.MaterialID).Scan(&dbBasePrice, &matRank, &itemType); err != nil {
 		matRank = 1
 		dbBasePrice = 0
+		itemType = ""
 	}
 	pointsPerItem := pricing.DonatePoints(pricing.ItemBasePrice(dbBasePrice, matRank))
 
 	gainedContribution := pointsPerItem * req.Amount
-	InventorySvc.RemoveItem(tx, playerID.String(), req.MaterialID, "materials", req.Amount)
+
+	preferredCat := "materials"
+	if itemType == "Consumable" {
+		preferredCat = "consumables"
+	}
+
+	remainingDeduct := req.Amount
+	for _, iv := range invs {
+		if iv.category == preferredCat {
+			deduct := iv.quantity
+			if deduct > remainingDeduct {
+				deduct = remainingDeduct
+			}
+			if err := InventorySvc.RemoveItem(tx, playerID.String(), req.MaterialID, iv.category, deduct); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa vật phẩm khỏi túi đồ"})
+				return
+			}
+			remainingDeduct -= deduct
+			if remainingDeduct <= 0 {
+				break
+			}
+		}
+	}
+	if remainingDeduct > 0 {
+		for _, iv := range invs {
+			if iv.category != preferredCat {
+				deduct := iv.quantity
+				if deduct > remainingDeduct {
+					deduct = remainingDeduct
+				}
+				if err := InventorySvc.RemoveItem(tx, playerID.String(), req.MaterialID, iv.category, deduct); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa vật phẩm khỏi túi đồ"})
+					return
+				}
+				remainingDeduct -= deduct
+				if remainingDeduct <= 0 {
+					break
+				}
+			}
+		}
+	}
 
 	m.ContributionPoints += int64(gainedContribution)
 	qiGained := AddHumanQi(&player, 5.0)
@@ -1239,24 +1304,88 @@ func DonateBulk(c *gin.Context) {
 		}
 
 		for _, matReq := range req.Materials {
-			qty, _ := InventorySvc.GetQuantity(tx, playerID.String(), matReq.MaterialID)
-			if qty < matReq.Amount {
+			rows, err := tx.Query(`SELECT category, quantity FROM player_inventory_items WHERE player_id = $1 AND item_id = $2`, playerID.String(), matReq.MaterialID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking inventory"})
+				return
+			}
+
+			type invItem struct {
+				category string
+				quantity int
+			}
+			var invs []invItem
+			totalQty := 0
+			for rows.Next() {
+				var iv invItem
+				if err := rows.Scan(&iv.category, &iv.quantity); err != nil {
+					rows.Close()
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error scanning inventory"})
+					return
+				}
+				invs = append(invs, iv)
+				totalQty += iv.quantity
+			}
+			rows.Close()
+
+			if totalQty < matReq.Amount {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đạo hữu không có đủ linh tài: %s", matReq.MaterialID)})
 				return
 			}
 
 			// Calculate contribution points dynamically
 			var dbBasePrice, matRank int
-			if err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, matReq.MaterialID).Scan(&dbBasePrice, &matRank); err != nil {
+			var itemType string
+			if err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1), COALESCE(item_type,'') FROM item_dictionary WHERE id=$1`, matReq.MaterialID).Scan(&dbBasePrice, &matRank, &itemType); err != nil {
 				matRank = 1
 				dbBasePrice = 0
+				itemType = ""
 			}
 			pointsPerItem := pricing.DonatePoints(pricing.ItemBasePrice(dbBasePrice, matRank))
 			gained := pointsPerItem * matReq.Amount
 			totalGainedContribution += gained
 
+			preferredCat := "materials"
+			if itemType == "Consumable" {
+				preferredCat = "consumables"
+			}
+
 			// Update Inventory
-			InventorySvc.RemoveItem(tx, playerID.String(), matReq.MaterialID, "materials", matReq.Amount)
+			remainingDeduct := matReq.Amount
+			for _, iv := range invs {
+				if iv.category == preferredCat {
+					deduct := iv.quantity
+					if deduct > remainingDeduct {
+						deduct = remainingDeduct
+					}
+					if err := InventorySvc.RemoveItem(tx, playerID.String(), matReq.MaterialID, iv.category, deduct); err != nil {
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa vật phẩm khỏi túi đồ"})
+						return
+					}
+					remainingDeduct -= deduct
+					if remainingDeduct <= 0 {
+						break
+					}
+				}
+			}
+			if remainingDeduct > 0 {
+				for _, iv := range invs {
+					if iv.category != preferredCat {
+						deduct := iv.quantity
+						if deduct > remainingDeduct {
+							deduct = remainingDeduct
+						}
+						if err := InventorySvc.RemoveItem(tx, playerID.String(), matReq.MaterialID, iv.category, deduct); err != nil {
+							c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa vật phẩm khỏi túi đồ"})
+							return
+						}
+						remainingDeduct -= deduct
+						if remainingDeduct <= 0 {
+							break
+						}
+					}
+				}
+			}
 
 			// Update Sect Vault map
 			vaultMats[matReq.MaterialID] += matReq.Amount

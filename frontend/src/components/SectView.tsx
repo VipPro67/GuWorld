@@ -848,6 +848,7 @@ export const SectView: React.FC = () => {
   }
 
   const { member, sect, leaderboard } = mySectStatus;
+  const isLeaderOrElder = member?.member_rank === "CHUONG_MON" || member?.member_rank === "TRUONG_LAO" || member?.member_rank === "HO_PHAP";
 
   // 2. STATE: MEMBER PANEL
   return (
@@ -905,21 +906,22 @@ export const SectView: React.FC = () => {
       </div>
 
       <GameTabs
-  items={[
-    { id: "lobby", label: "Sảnh", disabled: false },
-    { id: "missions", label: "Nhiệm Vụ", disabled: false },
-    { id: "vault", label: "Bảo Khố", disabled: false },
-    { id: "donate", label: "Quyên Góp", disabled: false },
-    { id: "territory", label: "Lãnh Địa", disabled: false },
-  ]}
-  activeId={activeTab}
-  onChange={(id) => setActiveTab(id as any)}
-  variant="pills"
-  size="md"
-  className=""
-  scrollable={true}
-  fullWidth={false}
->
+      items={[
+        { id: "lobby", label: "Sảnh", disabled: false },
+        { id: "missions", label: "Nhiệm Vụ", disabled: false },
+        { id: "vault", label: "Bảo Khố", disabled: false },
+        { id: "donate", label: "Quyên Góp", disabled: false },
+        { id: "territory", label: "Lãnh Địa", disabled: false },
+        ...(isLeaderOrElder ? [{ id: "manage", label: "Quản Lý", disabled: false }] : []),
+      ]}
+      activeId={activeTab}
+      onChange={(id) => setActiveTab(id as any)}
+      variant="pills"
+      size="md"
+      className=""
+      scrollable={true}
+      fullWidth={false}
+    >
 </GameTabs>
       {/* Tab Panels */}
       {activeTab === "lobby" && (

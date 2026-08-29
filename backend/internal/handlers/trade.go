@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -22,6 +23,96 @@ type TradeOffer struct {
 	Gus            []string           `json:"gus"`       // slice of Gu instance IDs
 	Materials      map[string]int     `json:"materials"` // map of itemID -> quantity
 	Recipes        map[string]float64 `json:"recipes"`   // map of recipeID -> completion_rate
+}
+
+func getGuName(guID string, rank int) string {
+	if spec, ok := models.GetGu(guID, rank); ok {
+		return spec.Name
+	}
+	return guID
+}
+
+func getMaterialName(matID string) string {
+	if spec, ok := models.ItemRegistry[matID]; ok {
+		return spec.Name
+	}
+	return matID
+}
+
+func getRecipeName(recipeID string) string {
+	var targetGuID string
+	if tg, _, _, err := ParseRecipeID(recipeID); err == nil {
+		targetGuID = tg
+	} else {
+		_ = db.DB.QueryRow(`SELECT target_gu_id FROM refining_recipes WHERE ('recipe_' || target_gu_id || '_' || target_rank::text || '_' || variant::text) = $1`, recipeID).Scan(&targetGuID)
+	}
+	if targetGuID != "" {
+		if spec, ok := models.GetGuAny(targetGuID); ok {
+			return fmt.Sprintf("Bí phương %s", spec.Name)
+		}
+	}
+	return fmt.Sprintf("Bí phương %s", recipeID)
+}
+
+func getGuNamesFromInstances(tx *sql.Tx, instIDs []string) []string {
+	if len(instIDs) == 0 {
+		return nil
+	}
+	names := []string{}
+	for _, instID := range instIDs {
+		var guID string
+		var rank int
+		err := tx.QueryRow(`SELECT gu_id, rank FROM player_gu WHERE id = $1`, instID).Scan(&guID, &rank)
+		if err == nil {
+			names = append(names, fmt.Sprintf("%s (Hạng %d)", getGuName(guID, rank), rank))
+		} else {
+			names = append(names, instID)
+		}
+	}
+	return names
+}
+
+func formatOffer(tx *sql.Tx, offer TradeOffer) string {
+	var parts []string
+	if offer.PrimevalStones > 0 {
+		parts = append(parts, fmt.Sprintf("%.0f Nguyên Thạch", offer.PrimevalStones))
+	}
+	if offer.ImmortalStones > 0 {
+		parts = append(parts, fmt.Sprintf("%.0f Tiên Nguyên Thạch", offer.ImmortalStones))
+	}
+	if len(offer.Gus) > 0 {
+		guNames := getGuNamesFromInstances(tx, offer.Gus)
+		parts = append(parts, fmt.Sprintf("Cổ trùng: %s", strings.Join(guNames, ", ")))
+	}
+	if len(offer.Materials) > 0 {
+		var matParts []string
+		for k, v := range offer.Materials {
+			matParts = append(matParts, fmt.Sprintf("%s x%d", getMaterialName(k), v))
+		}
+		parts = append(parts, fmt.Sprintf("Vật phẩm: %s", strings.Join(matParts, ", ")))
+	}
+	if len(offer.Recipes) > 0 {
+		var recParts []string
+		for k, v := range offer.Recipes {
+			recParts = append(recParts, fmt.Sprintf("%s (%.1f%%)", getRecipeName(k), v))
+		}
+		parts = append(parts, fmt.Sprintf("Bí phương: %s", strings.Join(recParts, ", ")))
+	}
+	if len(parts) == 0 {
+		return "Trống"
+	}
+	return strings.Join(parts, ", ")
+}
+
+func getTradeParticipantsWithUsernames(tradeID string) (senderID uuid.UUID, senderName string, receiverID uuid.UUID, receiverName string, err error) {
+	err = db.DB.QueryRow(`
+		SELECT t.sender_id, p1.username, t.receiver_id, p2.username
+		FROM trades t
+		JOIN players p1 ON t.sender_id = p1.id
+		JOIN players p2 ON t.receiver_id = p2.id
+		WHERE t.id = $1
+	`, tradeID).Scan(&senderID, &senderName, &receiverID, &receiverName)
+	return
 }
 
 type InitiateTradeRequest struct {
@@ -185,7 +276,7 @@ func InitiateTrade(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "trade.initiate", EntityType: "trade",
 		EntityID:       tradeID.String(),
-		RequestSummary: fmt.Sprintf("người gửi=%s → người nhận=%s", authID, receiverID),
+		RequestSummary: fmt.Sprintf("người gửi=%s (%s) → người nhận=%s (%s)", sender.Username, sender.ID, receiver.Username, receiver.ID),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{
@@ -218,7 +309,7 @@ func AcceptTrade(c *gin.Context) {
 		return
 	}
 
-	senderID, receiverID, err := getTradeParticipants(tradeID)
+	senderID, senderName, receiverID, receiverName, err := getTradeParticipantsWithUsernames(tradeID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Giao dịch không tồn tại"})
 		return
@@ -237,7 +328,9 @@ func AcceptTrade(c *gin.Context) {
 	notifyTradeParticipants(senderID, receiverID)
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "trade.accept", EntityType: "trade",
-		EntityID: tradeID, IPAddress: c.ClientIP(), Success: true,
+		EntityID: tradeID,
+		RequestSummary: fmt.Sprintf("người nhận=%s (%s) đã chấp nhận giao dịch từ người gửi=%s (%s)", receiverName, receiverID, senderName, senderID),
+		IPAddress: c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã chấp nhận giao dịch"})
 }
@@ -250,7 +343,7 @@ func DeclineTrade(c *gin.Context) {
 		return
 	}
 
-	senderID, receiverID, err := getTradeParticipants(tradeID)
+	senderID, senderName, receiverID, receiverName, err := getTradeParticipantsWithUsernames(tradeID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Giao dịch không tồn tại"})
 		return
@@ -269,7 +362,9 @@ func DeclineTrade(c *gin.Context) {
 	notifyTradeParticipants(senderID, receiverID)
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "trade.decline", EntityType: "trade",
-		EntityID: tradeID, IPAddress: c.ClientIP(), Success: true,
+		EntityID: tradeID,
+		RequestSummary: fmt.Sprintf("người nhận=%s (%s) đã từ chối giao dịch từ người gửi=%s (%s)", receiverName, receiverID, senderName, senderID),
+		IPAddress: c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã từ chối giao dịch"})
 }
@@ -282,7 +377,7 @@ func CancelTrade(c *gin.Context) {
 		return
 	}
 
-	senderID, receiverID, err := getTradeParticipants(tradeID)
+	senderID, senderName, receiverID, receiverName, err := getTradeParticipantsWithUsernames(tradeID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Giao dịch không tồn tại"})
 		return
@@ -299,9 +394,17 @@ func CancelTrade(c *gin.Context) {
 	}
 
 	notifyTradeParticipants(senderID, receiverID)
+	var cancellerName string
+	if authID == senderID {
+		cancellerName = senderName
+	} else {
+		cancellerName = receiverName
+	}
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "trade.cancel", EntityType: "trade",
-		EntityID: tradeID, IPAddress: c.ClientIP(), Success: true,
+		EntityID: tradeID,
+		RequestSummary: fmt.Sprintf("người hủy=%s (%s) đã hủy giao dịch giữa người gửi=%s (%s) và người nhận=%s (%s)", cancellerName, authID, senderName, senderID, receiverName, receiverID),
+		IPAddress: c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã hủy giao dịch"})
 }
@@ -329,12 +432,16 @@ func UpdateTradeOffer(c *gin.Context) {
 
 	// 1. Load trade details
 	var senderID, receiverID uuid.UUID
+	var senderName, receiverName string
 	var status string
 	var senderLocked, receiverLocked bool
 	err = tx.QueryRow(`
-		SELECT sender_id, receiver_id, status, sender_locked, receiver_locked 
-		FROM trades WHERE id = $1 FOR UPDATE
-	`, tradeID).Scan(&senderID, &receiverID, &status, &senderLocked, &receiverLocked)
+		SELECT t.sender_id, p1.username, t.receiver_id, p2.username, t.status, t.sender_locked, t.receiver_locked 
+		FROM trades t
+		JOIN players p1 ON t.sender_id = p1.id
+		JOIN players p2 ON t.receiver_id = p2.id
+		WHERE t.id = $1 FOR UPDATE
+	`, tradeID).Scan(&senderID, &senderName, &receiverID, &receiverName, &status, &senderLocked, &receiverLocked)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phiên giao dịch"})
 		return
@@ -471,11 +578,33 @@ func UpdateTradeOffer(c *gin.Context) {
 		return
 	}
 
+	offerStr := formatOffer(tx, offer)
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
 	notifyTradeParticipants(senderID, receiverID)
+
+	var updaterName string
+	if authID == senderID {
+		updaterName = senderName
+	} else {
+		updaterName = receiverName
+	}
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &authID, Action: "trade.update_offer", EntityType: "trade",
+		EntityID:       tradeID,
+		RequestSummary: fmt.Sprintf("người cập nhật=%s (%s) | ưu đãi=%s | người gửi=%s (%s) - người nhận=%s (%s)", updaterName, authID, offerStr, senderName, senderID, receiverName, receiverID),
+		Metadata: map[string]interface{}{
+			"offer":         offer,
+			"sender_id":     senderID.String(),
+			"sender_name":   senderName,
+			"receiver_id":   receiverID.String(),
+			"receiver_name": receiverName,
+		},
+		IPAddress: c.ClientIP(), Success: true,
+	})
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật ưu đãi thành công, trạng thái khóa của 2 bên đã được đặt lại. Nhân Khí +1."})
 }
@@ -496,10 +625,15 @@ func LockTrade(c *gin.Context) {
 	defer tx.Rollback()
 
 	var senderID, receiverID uuid.UUID
+	var senderName, receiverName string
 	var status string
 	err = tx.QueryRow(`
-		SELECT sender_id, receiver_id, status FROM trades WHERE id = $1 FOR UPDATE
-	`, tradeID).Scan(&senderID, &receiverID, &status)
+		SELECT t.sender_id, p1.username, t.receiver_id, p2.username, t.status 
+		FROM trades t
+		JOIN players p1 ON t.sender_id = p1.id
+		JOIN players p2 ON t.receiver_id = p2.id
+		WHERE t.id = $1 FOR UPDATE
+	`, tradeID).Scan(&senderID, &senderName, &receiverID, &receiverName, &status)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Giao dịch không tồn tại"})
 		return
@@ -535,9 +669,17 @@ func LockTrade(c *gin.Context) {
 		return
 	}
 	notifyTradeParticipants(senderID, receiverID)
+	var lockerName string
+	if authID == senderID {
+		lockerName = senderName
+	} else {
+		lockerName = receiverName
+	}
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "trade.lock", EntityType: "trade",
-		EntityID: tradeID, IPAddress: c.ClientIP(), Success: true,
+		EntityID: tradeID,
+		RequestSummary: fmt.Sprintf("người khóa=%s (%s) | người gửi=%s (%s) - người nhận=%s (%s)", lockerName, authID, senderName, senderID, receiverName, receiverID),
+		IPAddress: c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã khóa vật phẩm giao dịch. Nhân Khí +1."})
 }
@@ -558,15 +700,19 @@ func ConfirmTrade(c *gin.Context) {
 	defer tx.Rollback()
 
 	var senderID, receiverID uuid.UUID
+	var senderName, receiverName string
 	var status string
 	var senderOfferBytes, receiverOfferBytes []byte
 	var senderLocked, receiverLocked, senderConfirmed, receiverConfirmed bool
 
 	err = tx.QueryRow(`
-		SELECT sender_id, receiver_id, status, sender_offer, receiver_offer, 
-		       sender_locked, receiver_locked, sender_confirmed, receiver_confirmed
-		FROM trades WHERE id = $1 FOR UPDATE
-	`, tradeID).Scan(&senderID, &receiverID, &status, &senderOfferBytes, &receiverOfferBytes,
+		SELECT t.sender_id, p1.username, t.receiver_id, p2.username, t.status, t.sender_offer, t.receiver_offer, 
+		       t.sender_locked, t.receiver_locked, t.sender_confirmed, t.receiver_confirmed
+		FROM trades t
+		JOIN players p1 ON t.sender_id = p1.id
+		JOIN players p2 ON t.receiver_id = p2.id
+		WHERE t.id = $1 FOR UPDATE
+	`, tradeID).Scan(&senderID, &senderName, &receiverID, &receiverName, &status, &senderOfferBytes, &receiverOfferBytes,
 		&senderLocked, &receiverLocked, &senderConfirmed, &receiverConfirmed)
 
 	if err != nil {
@@ -813,19 +959,49 @@ func ConfirmTrade(c *gin.Context) {
 			return
 		}
 	}
+	var senderOffer, receiverOffer TradeOffer
+	_ = json.Unmarshal(senderOfferBytes, &senderOffer)
+	_ = json.Unmarshal(receiverOfferBytes, &receiverOffer)
+
+	var senderOfferStr, receiverOfferStr string
+	if senderConfirmed && receiverConfirmed {
+		senderOfferStr = formatOffer(tx, senderOffer)
+		receiverOfferStr = formatOffer(tx, receiverOffer)
+	}
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
 	}
 	notifyTradeParticipants(senderID, receiverID)
+
 	action := "trade.confirm"
+	var confirmerName string
+	if authID == senderID {
+		confirmerName = senderName
+	} else {
+		confirmerName = receiverName
+	}
+	summary := fmt.Sprintf("người xác nhận=%s (%s) | người gửi=%s (%s) - người nhận=%s (%s)", confirmerName, authID, senderName, senderID, receiverName, receiverID)
+	var metadata map[string]interface{}
+
 	if senderConfirmed && receiverConfirmed {
 		action = "trade.complete"
+		summary = fmt.Sprintf("Hoàn tất giao dịch: %s (%s) gửi [%s] ↔ %s (%s) gửi [%s]", senderName, senderID, senderOfferStr, receiverName, receiverID, receiverOfferStr)
+		metadata = map[string]interface{}{
+			"sender_id":      senderID.String(),
+			"sender_name":    senderName,
+			"sender_offer":   senderOffer,
+			"receiver_id":    receiverID.String(),
+			"receiver_name":  receiverName,
+			"receiver_offer": receiverOffer,
+		}
 	}
+
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: action, EntityType: "trade",
-		EntityID: tradeID, IPAddress: c.ClientIP(), Success: true,
+		EntityID: tradeID, RequestSummary: summary, Metadata: metadata,
+		IPAddress: c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"message":            "Xác nhận thành công",
