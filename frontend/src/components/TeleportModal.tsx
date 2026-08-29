@@ -130,7 +130,7 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
     try {
       const res = await useGuOnMap(selectedGu, parseInt(targetX), parseInt(targetY));
       if (res) {
-        useGameStore.getState().addToast({ type: "success", title: "Thành công", message: res.message });
+        useGameStore.getState().addToast(res.message, "success");
         onClose();
       }
     } catch (err) {
