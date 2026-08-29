@@ -453,6 +453,27 @@ export function BaoHoangMarket({
     );
   }
 
+  const hasConnectingHeaven = Array.isArray(guInventory) && guInventory.some(
+    (g) => g.gu_id === "GU_CONNECTING_HEAVEN" && g.status !== "DEAD"
+  );
+
+  if (!hasConnectingHeaven) {
+    return (
+      <div className="w-full mx-auto glass-panel-gold p-6 rounded-3xl border border-amber-500/20 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-cyan-500/5 rounded-full blur-[120px] pointer-events-none" />
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <AlertCircle className="w-16 h-16 text-zinc-700 mb-6" />
+          <h3 className="text-lg font-serif font-bold text-zinc-500 mb-2">Chưa thể kết nối Bảo Hoàng Thiên</h3>
+          <p className="text-sm text-zinc-600 font-serif max-w-md">
+            Đạo hữu cần sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để kết nối với Bảo Hoàng Thiên.
+            Hãy tu luyện và tìm kiếm thêm.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full mx-auto glass-panel-gold p-6 rounded-3xl border border-amber-500/20 shadow-2xl relative overflow-hidden">
       {/* Background decoration */}

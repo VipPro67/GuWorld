@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -16,11 +17,11 @@ import (
 )
 
 type TradeOffer struct {
-	PrimevalStones float64             `json:"primeval_stones"`
-	ImmortalStones float64             `json:"immortal_stones"`
-	Gus            []string            `json:"gus"`       // slice of Gu instance IDs
-	Materials      map[string]int      `json:"materials"` // map of itemID -> quantity
-	Recipes        map[string]float64  `json:"recipes"`   // map of recipeID -> completion_rate
+	PrimevalStones float64            `json:"primeval_stones"`
+	ImmortalStones float64            `json:"immortal_stones"`
+	Gus            []string           `json:"gus"`       // slice of Gu instance IDs
+	Materials      map[string]int     `json:"materials"` // map of itemID -> quantity
+	Recipes        map[string]float64 `json:"recipes"`   // map of recipeID -> completion_rate
 }
 
 type InitiateTradeRequest struct {
@@ -80,19 +81,6 @@ func InitiateTrade(c *gin.Context) {
 		return
 	}
 
-	// Verify sender has Connecting Heaven Gu
-	senderHasConnecting := false
-	for _, gu := range sender.GuInventory {
-		if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
-			senderHasConnecting = true
-			break
-		}
-	}
-	if !senderHasConnecting {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu cần có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để mở kết nối giao dịch!"})
-		return
-	}
-
 	// Find receiver
 	var receiverID uuid.UUID
 	err = tx.QueryRow(`SELECT id FROM players WHERE username = $1`, req.ReceiverUsername).Scan(&receiverID)
@@ -117,17 +105,40 @@ func InitiateTrade(c *gin.Context) {
 		return
 	}
 
-	// Verify receiver has Connecting Heaven Gu
-	receiverHasConnecting := false
-	for _, gu := range receiver.GuInventory {
-		if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
-			receiverHasConnecting = true
-			break
+	isCloseEnough := false
+	if sender.CurrentRegion == receiver.CurrentRegion {
+		dist := int(math.Max(math.Abs(float64(sender.X-receiver.X)), math.Abs(float64(sender.Y-receiver.Y))))
+		if dist <= 10 {
+			isCloseEnough = true
 		}
 	}
-	if !receiverHasConnecting {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đối phương không sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để kết nối giao dịch!"})
-		return
+
+	if !isCloseEnough {
+		// Verify sender has Connecting Heaven Gu
+		senderHasConnecting := false
+		for _, gu := range sender.GuInventory {
+			if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
+				senderHasConnecting = true
+				break
+			}
+		}
+		if !senderHasConnecting {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu cần có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) hoặc ở gần đối phương để mở kết nối giao dịch!"})
+			return
+		}
+
+		// Verify receiver has Connecting Heaven Gu
+		receiverHasConnecting := false
+		for _, gu := range receiver.GuInventory {
+			if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
+				receiverHasConnecting = true
+				break
+			}
+		}
+		if !receiverHasConnecting {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Đối phương không sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để kết nối giao dịch từ xa!"})
+			return
+		}
 	}
 
 	// Check if either player is already in an active trade (PENDING or ACCEPTED)
@@ -173,9 +184,9 @@ func InitiateTrade(c *gin.Context) {
 	notifyTradeParticipants(sender.ID, receiver.ID)
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "trade.initiate", EntityType: "trade",
-		EntityID: tradeID.String(),
+		EntityID:       tradeID.String(),
 		RequestSummary: fmt.Sprintf("người gửi=%s → người nhận=%s", authID, receiverID),
-		IPAddress: c.ClientIP(), Success: true,
+		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "Yêu cầu giao dịch đã được gửi! Nhân Khí +2.",
@@ -608,24 +619,34 @@ func ConfirmTrade(c *gin.Context) {
 			return
 		}
 
-		// Double-check Connecting Heaven Gu on both sides
-		senderConnecting := false
-		for _, gu := range sender.GuInventory {
-			if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
-				senderConnecting = true
-				break
+		isCloseEnough := false
+		if sender.CurrentRegion == receiver.CurrentRegion {
+			dist := int(math.Max(math.Abs(float64(sender.X-receiver.X)), math.Abs(float64(sender.Y-receiver.Y))))
+			if dist <= 10 {
+				isCloseEnough = true
 			}
 		}
-		receiverConnecting := false
-		for _, gu := range receiver.GuInventory {
-			if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
-				receiverConnecting = true
-				break
+
+		if !isCloseEnough {
+			// Double-check Connecting Heaven Gu on both sides
+			senderConnecting := false
+			for _, gu := range sender.GuInventory {
+				if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
+					senderConnecting = true
+					break
+				}
 			}
-		}
-		if !senderConnecting || !receiverConnecting {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Giao dịch thất bại! Cần phải có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để duy trì kết nối."})
-			return
+			receiverConnecting := false
+			for _, gu := range receiver.GuInventory {
+				if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
+					receiverConnecting = true
+					break
+				}
+			}
+			if !senderConnecting || !receiverConnecting {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Giao dịch thất bại! Cần phải có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) hoặc ở gần đối phương để duy trì kết nối."})
+				return
+			}
 		}
 
 		// 1. Verify and deduct sender assets
@@ -665,7 +686,7 @@ func ConfirmTrade(c *gin.Context) {
 
 		// Deduct sender materials
 		for matID, qty := range senderOffer.Materials {
-			avail, _ := InventorySvc.GetQuantity(tx, sender.ID.String(), matID )
+			avail, _ := InventorySvc.GetQuantity(tx, sender.ID.String(), matID)
 			if avail < qty {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bên gửi thiếu vật phẩm: %s", matID)})
 				return
@@ -726,7 +747,7 @@ func ConfirmTrade(c *gin.Context) {
 
 		// Deduct receiver materials
 		for matID, qty := range receiverOffer.Materials {
-			avail, _ := InventorySvc.GetQuantity(tx, receiver.ID.String(), matID )
+			avail, _ := InventorySvc.GetQuantity(tx, receiver.ID.String(), matID)
 			if avail < qty {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Bên nhận thiếu vật phẩm: %s", matID)})
 				return

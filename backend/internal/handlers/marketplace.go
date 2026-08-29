@@ -151,6 +151,18 @@ func CreateListing(c *gin.Context) {
 		return
 	}
 
+	hasConnectingHeaven := false
+	for _, gu := range player.GuInventory {
+		if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
+			hasConnectingHeaven = true
+			break
+		}
+	}
+	if !hasConnectingHeaven {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để truy cập Bảo Hoàng Thiên!"})
+		return
+	}
+
 	if player.Rank < 6 && req.Currency == "immortal" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ sư dưới Lục Chuyển không thể giao dịch bằng Tiên Nguyên Thạch"})
 		return
@@ -160,17 +172,6 @@ func CreateListing(c *gin.Context) {
 	if req.ListingType == "TRADE" {
 		if req.TargetBuyerUsername == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Giao dịch Bảo Hoàng Thiên yêu cầu phải chỉ định người nhận (TargetBuyerUsername)"})
-			return
-		}
-		hasConnectingHeaven := false
-		for _, gu := range player.GuInventory {
-			if gu.GuID == "GU_CONNECTING_HEAVEN" {
-				hasConnectingHeaven = true
-				break
-			}
-		}
-		if !hasConnectingHeaven {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Giao dịch trực tiếp yêu cầu cần có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN)!"})
 			return
 		}
 
@@ -364,11 +365,31 @@ func CreateListing(c *gin.Context) {
 
 func ListListings(c *gin.Context) {
 	authID, ok := middleware.GetPlayerID(c)
-	cacheKey := "market_listings_public"
-	if ok {
-		cacheKey = "market_listings_user_" + authID.String()
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
 	}
 
+	var inventoryJSON []byte
+	err := db.DB.QueryRow(`SELECT gu_inventory FROM players WHERE id = $1`, authID).Scan(&inventoryJSON)
+	hasConnectingHeaven := false
+	if err == nil {
+		var gus []models.GuInstance
+		if json.Unmarshal(inventoryJSON, &gus) == nil {
+			for _, gu := range gus {
+				if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
+					hasConnectingHeaven = true
+					break
+				}
+			}
+		}
+	}
+	if !hasConnectingHeaven {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để truy cập Bảo Hoàng Thiên!"})
+		return
+	}
+
+	cacheKey := "market_listings_user_" + authID.String()
 	var cachedOut []gin.H
 	if err := cache.GetJSON(cacheKey, &cachedOut); err == nil {
 		c.JSON(http.StatusOK, cachedOut)
@@ -376,9 +397,9 @@ func ListListings(c *gin.Context) {
 	}
 
 	var rows *sql.Rows
-	var err error
+	var queryErr error
 	if ok {
-		rows, err = db.DB.QueryContext(c.Request.Context(), `
+		rows, queryErr = db.DB.QueryContext(c.Request.Context(), `
 			SELECT 
 				a.id, a.seller_id, a.item_type, a.item_data, a.quantity, a.currency, 
 				a.start_price, a.current_price, a.highest_bidder_id, a.end_time, 
@@ -391,7 +412,7 @@ func ListListings(c *gin.Context) {
 			ORDER BY a.created_at DESC
 		`, authID)
 	} else {
-		rows, err = db.DB.QueryContext(c.Request.Context(), `
+		rows, queryErr = db.DB.QueryContext(c.Request.Context(), `
 			SELECT 
 				a.id, a.seller_id, a.item_type, a.item_data, a.quantity, a.currency, 
 				a.start_price, a.current_price, a.highest_bidder_id, a.end_time, 
@@ -403,7 +424,7 @@ func ListListings(c *gin.Context) {
 			ORDER BY a.created_at DESC
 		`)
 	}
-	if err != nil {
+	if queryErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query marketplace"})
 		return
 	}
@@ -471,6 +492,19 @@ func PlaceBid(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
 		return
 	}
+
+	hasConnectingHeaven := false
+	for _, gu := range player.GuInventory {
+		if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
+			hasConnectingHeaven = true
+			break
+		}
+	}
+	if !hasConnectingHeaven {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để truy cập Bảo Hoàng Thiên!"})
+		return
+	}
+
 	var sellerID uuid.UUID
 	var currency, status, listingType string
 	var current float64
@@ -602,6 +636,19 @@ func BuyListing(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load buyer details"})
 		return
 	}
+
+	hasConnectingHeaven := false
+	for _, gu := range buyer.GuInventory {
+		if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
+			hasConnectingHeaven = true
+			break
+		}
+	}
+	if !hasConnectingHeaven {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để truy cập Bảo Hoàng Thiên!"})
+		return
+	}
+
 	buyerBefore := append(models.GuInventory(nil), buyer.GuInventory...)
 
 	var sellerID uuid.UUID
@@ -626,18 +673,7 @@ func BuyListing(c *gin.Context) {
 	}
 	if listingType == "TRADE" {
 		if !targetBuyerID.Valid || targetBuyerID.String != buyer.ID.String() {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Vật phẩm này được dành riêng cho người chơi khác, bạn không thể mua!"})
-			return
-		}
-		hasConnectingHeaven := false
-		for _, gu := range buyer.GuInventory {
-			if gu.GuID == "GU_CONNECTING_HEAVEN" {
-				hasConnectingHeaven = true
-				break
-			}
-		}
-		if !hasConnectingHeaven {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Để thực hiện giao dịch trực tiếp, bạn cần có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN)!"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Vật phẩm này được dành riêng cho người chơi khác, bạn không thể mua!"})
 			return
 		}
 	}
@@ -874,13 +910,13 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 		commission := currentPrice * getCommissionPct(listingType, durationHours)
 		payout := currentPrice - commission
 
-	if currency == "primeval" {
-		seller.PrimevalStones += payout
-	} else {
-		seller.ImmortalStones += payout
-	}
+		if currency == "primeval" {
+			seller.PrimevalStones += payout
+		} else {
+			seller.ImmortalStones += payout
+		}
 
-	if err := addAuctionItemToPlayer(tx, &buyer, itemType, itemData, qty); err != nil {
+		if err := addAuctionItemToPlayer(tx, &buyer, itemType, itemData, qty); err != nil {
 			return err
 		}
 
@@ -1037,7 +1073,7 @@ func CancelListing(c *gin.Context) {
 		return
 	}
 	if sellerID != authID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Bạn không phải chủ listing"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn không phải chủ listing"})
 		return
 	}
 	itemData := ""
@@ -1051,6 +1087,18 @@ func CancelListing(c *gin.Context) {
 	player, err := evaluateManaTx(tx, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player"})
+		return
+	}
+
+	hasConnectingHeaven := false
+	for _, gu := range player.GuInventory {
+		if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
+			hasConnectingHeaven = true
+			break
+		}
+	}
+	if !hasConnectingHeaven {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để truy cập Bảo Hoàng Thiên!"})
 		return
 	}
 	playerBefore := append(models.GuInventory(nil), player.GuInventory...)
