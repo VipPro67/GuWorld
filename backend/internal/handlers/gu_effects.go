@@ -375,6 +375,27 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 			}
 		}
 		return fmt.Sprintf("Tăng tư chất Không khiếu lên %d%%.", player.AptitudePercent), nil
+	case "SACRIFICE_APTITUDE":
+		val, _ := params["value"].(float64)
+		value := int(val)
+		if value <= 0 {
+			value = 5 // Default boost for blood skull
+		}
+		if player.AptitudePercent >= 99 {
+			return "", fmt.Errorf("Tư chất đã đạt mức tối đa (99%%), không thể hiến tế thêm!")
+		}
+		player.AptitudePercent += value
+		if player.AptitudePercent > 99 {
+			player.AptitudePercent = 99
+		}
+		delta := float64(value)
+		if delta > 0 {
+			player.MaxMana += delta
+			if player.CurrentMana > player.MaxMana {
+				player.CurrentMana = player.MaxMana
+			}
+		}
+		return fmt.Sprintf("Hiến tế huyết mạch thành công! Tư chất Không khiếu tăng lên %d%%.", player.AptitudePercent), nil
 	case "RANK_PROGRESS":
 		if spec.Rank != player.Rank {
 			return "", fmt.Errorf("%s chỉ dùng cho %s", spec.Name, getRankName(spec.Rank))

@@ -3886,15 +3886,40 @@ func UseConsumableGu(c *gin.Context) {
 		newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
 		logMsg += fmt.Sprintf(" Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái %s (Cảnh giới: %s).", pathGain, strings.Title(cleanPath), gamefx.PathMasteryLevelName(newLevel))
 	}
-
-	// Delete from inventory
-	RemoveGuFromInventory(&player, targetGu.InstanceID)
-
-	if err := db.RemovePlayerGu(tx, targetGu.InstanceID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using Gu"})
-		fmt.Println("Failed to update player state after using Gu:", err)
-		return
+	// Check if this gu should reduce hunger instead of disappearing
+	var reduceHunger bool
+	var hungerCost int = 20
+	if specs.Effects.Other != nil {
+		for _, mechanic := range specs.Effects.Other {
+			if mechanic.ActionCode == "SACRIFICE_APTITUDE" {
+				reduceHunger = true
+				break
+			}
+		}
 	}
+
+	if reduceHunger {
+		if targetGu.Hunger < hungerCost {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng quá đói, không đủ độ no để hiến tế!"})
+			return
+		}
+		targetGu.Hunger -= hungerCost
+		if err := db.UpdatePlayerGu(tx, *targetGu); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update Gu hunger"})
+			return
+		}
+		logMsg += fmt.Sprintf(" Cổ trùng bị suy yếu, độ no giảm %d.", hungerCost)
+	} else {
+		// Delete from inventory
+		RemoveGuFromInventory(&player, targetGu.InstanceID)
+
+		if err := db.RemovePlayerGu(tx, targetGu.InstanceID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using Gu"})
+			fmt.Println("Failed to update player state after using Gu:", err)
+			return
+		}
+	}
+
 	_, err = tx.Exec(`
 		UPDATE players 
 		SET sub_rank = $1, rank = $2, primeval_stones = $3, max_mana = $4, current_mana = $5, equipped_gus = $6, wall_progress = $7, hp = $8, lifespan = $9, aptitude_percent = $10, immortal_stones = $11, aperture_stress = $12, human_qi = $13, max_soul = $14, current_thought = $15, path_masteries = $16, time_speed_multiplier = $17
