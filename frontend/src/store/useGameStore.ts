@@ -1219,6 +1219,7 @@ interface GameState {
   upgradeSect: () => Promise<boolean>;
   toggleSectApproval: (requireApproval: boolean) => Promise<boolean>;
   toggleSectPromotionApproval: (requirePromotionApproval: boolean) => Promise<boolean>;
+  paySectSalary: () => Promise<boolean>;
   fetchJoinRequests: () => Promise<void>;
   actionJoinRequest: (requestId: string, action: 'approve' | 'reject') => Promise<boolean>;
   fetchPromotionRequests: () => Promise<void>;
@@ -1243,6 +1244,7 @@ interface GameState {
 export interface MineSlot {
   id: number;
   rarity: string;
+  mine_type?: string;
   occupier_id?: string;
   occupier_name?: string;
   monster_id?: string;
@@ -6387,6 +6389,30 @@ export const useGameStore = create<GameState>((set, get) => {
       if (!response.ok) throw new Error(data.error || "Cài đặt thất bại.");
       get().addToast(data.message || "Đã cập nhật cài đặt duyệt lên cấp!", "success");
       await get().fetchMySectStatus();
+      return true;
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally { set({ actionLoading: false }); }
+  },
+
+  paySectSalary: async () => {
+    const { token, actionLoading, logout } = get();
+    if (!token || actionLoading) return false;
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/sects/pay-salary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      });
+      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Phát lương thất bại.");
+      get().addToast(data.message || "Đã phát lương thành công!", "success");
+      await get().fetchMySectStatus();
+      await get().fetchSectMembers();
       return true;
     } catch (err: any) {
       set({ error: err.message });

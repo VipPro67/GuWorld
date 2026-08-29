@@ -28,6 +28,16 @@ import {
   Ban,
 } from "lucide-react";
 
+const rankSalaryBonus: Record<string, number> = {
+  NGOAI_MON: 0,
+  NOI_MON: 50,
+  TINH_ANH: 150,
+  CHAN_TRUYEN: 400,
+  TRUONG_LAO: 1000,
+  HO_PHAP: 2000,
+  CHUONG_MON: 5000,
+};
+
 interface StockSelection {
   item_type: "gu" | "material" | "recipe";
   item_id: string;
@@ -75,20 +85,22 @@ export const SectView: React.FC = () => {
     sectJoinRequests,
     sectPromotionRequests,
     toggleSectApproval,
-    toggleSectPromotionApproval,
-    fetchJoinRequests,
-    actionJoinRequest,
-    fetchPromotionRequests,
-    actionPromotionRequest,
-    fetchPlayerProfile,
-    sectMines,
-    fetchSectMines,
-    attackSectMine,
-    assignSectMineDefender,
-    removeSectMineDefender,
-    addToast,
-    showConfirm,
-    recipes,
+  toggleSectPromotionApproval,
+  fetchJoinRequests,
+  actionJoinRequest,
+  fetchPromotionRequests,
+  actionPromotionRequest,
+  fetchPlayerProfile,
+  sectMines,
+  fetchSectMines,
+  attackSectMine,
+  assignSectMineDefender,
+  removeSectMineDefender,
+  addToast,
+  showConfirm,
+  recipes,
+  paySectSalary,
+
   } = useGameStore();
 
   const [activeTab, setActiveTab] = useState<"lobby" | "missions" | "vault" | "donate" | "territory" | "manage">("lobby");
@@ -2898,9 +2910,10 @@ export const SectView: React.FC = () => {
                     onClick={async () => {
                       await toggleSectApproval(!mySectStatus?.sect?.require_approval);
                     }}
-                    disabled={actionLoading}
-                    className={`w-9 h-5 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-300 ${mySectStatus?.sect?.require_approval ? "bg-emerald-600" : "bg-zinc-800"
+                    disabled={actionLoading || (mySectStatus?.sect?.level || 1) < 10}
+                    className={`w-9 h-5 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-300 ${(mySectStatus?.sect?.level || 1) < 10 ? "opacity-50 cursor-not-allowed" : mySectStatus?.sect?.require_approval ? "bg-emerald-600" : "bg-zinc-800"
                       }`}
+                    title={(mySectStatus?.sect?.level || 1) < 10 ? "Tông môn phải đạt cấp 10 mới có thể bật duyệt thành viên" : ""}
                   >
                     <div
                       className={`bg-white w-3 h-3 rounded-full shadow-md transform transition-transform duration-300 ${mySectStatus?.sect?.require_approval ? "translate-x-4" : "translate-x-0"
@@ -2961,6 +2974,15 @@ export const SectView: React.FC = () => {
                       {(sectJoinRequests?.length || 0) + (sectPromotionRequests?.length || 0)}
                     </span>
                   )}
+                </button>
+              )}
+              {(mySectStatus?.member?.member_rank === "CHUONG_MON" || mySectStatus?.member?.member_rank === "TRUONG_LAO" || mySectStatus?.member?.member_rank === "HO_PHAP") && (
+                <button
+                  onClick={() => setMgmtTab("salary")}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${mgmtTab === "salary" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                    }`}
+                >
+                  Phát Lương
                 </button>
               )}
             </div>
@@ -3228,6 +3250,87 @@ export const SectView: React.FC = () => {
             </div>
           )}
 
+          {/* Salary Management Tab */}
+          {mgmtTab === "salary" && (
+            <div className="bg-zinc-950/20 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-5">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-zinc-900 pb-4">
+                <div>
+                  <h4 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-1.5">
+                    <Coins className="w-4 h-4 text-yellow-400" />
+                    Phát Lương Thường Nhất
+                  </h4>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Trả lương cho toàn thể đệ tử từ quỹ tông môn. Lương = (Cấp tông môn × 100) + Phụ cấp chức vụ.
+                  </p>
+                </div>
+                <div className="bg-zinc-900/40 px-4 py-3 rounded-xl border border-zinc-800/80 self-start sm:self-auto">
+                  <span className="text-[10px] text-zinc-500 font-mono block">Quỹ tông môn hiện có:</span>
+                  <span className="font-mono font-bold text-cyan-400 text-sm flex items-center gap-1">
+                    <Coins className="w-4 h-4 text-yellow-500" />
+                    {(mySectStatus?.sect?.funds || 0).toLocaleString()} Quỹ
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-zinc-900/30 border border-zinc-800/60 rounded-xl p-4 flex flex-col gap-3">
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div className="bg-zinc-950/50 rounded-lg p-3">
+                    <span className="text-zinc-400 font-mono block">Cấp Tông Môn</span>
+                    <span className="font-bold text-cyan-400 text-lg font-mono">{mySectStatus?.sect?.level || 1}</span>
+                  </div>
+                  <div className="bg-zinc-950/50 rounded-lg p-3">
+                    <span className="text-zinc-400 font-mono block">Lương Cơ Bản / Người</span>
+                    <span className="font-bold text-emerald-400 text-lg font-mono">{(mySectStatus?.sect?.level || 1) * 100} Linh Thạch</span>
+                  </div>
+                </div>
+                <div className="text-[10px] text-zinc-500 font-mono">
+                  Phụ cấp chức vụ: NGOẠI MÔN: 0 | NỘI MÔN: 50 | TINH ANH: 150 | CHÂN TRUYỀN: 400 | TRƯỞNG LÃO: 1.000 | HỘ PHÁP: 2.000 | CHƯƠNG MÔN: 5.000
+                </div>
+                {sectMembers && sectMembers.length > 0 && (
+                  <div className="border-t border-zinc-900 pt-3">
+                    <span className="text-xs text-zinc-300 font-semibold">Danh sách nhận lương dự kiến:</span>
+                    <div className="flex flex-col gap-1 max-h-[200px] overflow-y-auto mt-2 pr-1">
+                      {sectMembers.map((m) => {
+                        const baseSalary = (mySectStatus?.sect?.level || 1) * 100;
+                        const rankBonus = rankSalaryBonus[m.member_rank] || 0;
+                        const totalSalary = baseSalary + rankBonus;
+                        return (
+                          <div key={m.player_id} className="flex justify-between items-center text-[11px] bg-zinc-950/30 rounded-lg px-2 py-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-zinc-400">{getRankName(m.member_rank)}</span>
+                              <span className="text-zinc-100 truncate max-w-[120px]">{m.username}</span>
+                            </div>
+                            <span className="font-bold text-emerald-400 font-mono">{totalSalary.toLocaleString()} Linh Thạch</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                <div className="bg-zinc-950/50 rounded-lg p-3 text-center text-xs">
+                  <span className="text-zinc-400 font-mono">Tổng lương dự kiến: </span>
+                  <span className="font-bold text-emerald-400 text-lg font-mono">
+                    {(() => {
+                      if (!sectMembers) return 0;
+                      const base = (mySectStatus?.sect?.level || 1) * 100;
+                      return sectMembers.reduce((sum, m) => sum + base + (rankSalaryBonus[m.member_rank] || 0), 0);
+                    })().toLocaleString()} Linh Thạch
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await paySectSalary();
+                  }}
+                  disabled={actionLoading}
+                  className="w-full py-3 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-400 rounded-xl font-semibold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {actionLoading ? "Đang phát lương..." : "Xác Nhận Phát Lương"}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Create Mission Tab */}
           {mgmtTab === "missions" && (
             <form onSubmit={handleCreateCustomMission} className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-4 mx-auto w-full">
@@ -3365,7 +3468,7 @@ export const SectView: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
               {/* Stock Vault Card */}
               
-              {/* <div className="bg-zinc-950/20 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-5 md:col-span-2">
+              {<div className="bg-zinc-950/20 border border-zinc-900 rounded-2xl p-5 flex flex-col gap-5 md:col-span-2">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-zinc-900 pb-4">
                   <div>
                     <h4 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-1.5">
@@ -3516,8 +3619,9 @@ export const SectView: React.FC = () => {
                           ) : (
                             filtered.map(([id, spec]) => {
                               const name = spec.name || id;
-                              const rank = spec.rank || 1;
-                              const locked = rank > sectLvl;
+const rank = spec.rank || 1;
+                               const maxItemLevel = Math.min(5, Math.floor(sectLvl / 10) + 1);
+                               const locked = rank > maxItemLevel;
                               const unitCost = getStockUnitCost(stockItemType, id);
                               const isSelected = !!stockSelections[id];
                               const sel = stockSelections[id];
@@ -3667,7 +3771,7 @@ export const SectView: React.FC = () => {
                     </div>
                   );
                 })()}
-              </div> */}
+              </div>}
 
               {/* Upgrade Sect Card */}
               <div className="bg-zinc-900/10 border border-zinc-900 rounded-2xl p-5 flex flex-col justify-between gap-4">

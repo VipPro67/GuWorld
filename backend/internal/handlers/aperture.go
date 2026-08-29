@@ -25,19 +25,22 @@ type ResourceNodeTemplate struct {
 	Path              string
 	CostStones        int
 	CostImmortal      int
-	ProdType          string // "Material" | "Stones"
-	ProdKey           string // e.g. "moon_orchid_petal"
+	ProdType          string   // "Material" | "Stones"
+	ProdKey           string   // e.g. "moon_orchid_petal"
 	ProdAmount        int
 	ProdIntervalHours int
-	NodeCategory      string   // "RESOURCE" | "DEFENSE"
-	HPMax             int      // max HP for node (default 1000)
-	DefensePower      int      // damage per tick (WATCHTOWER)
-	AttackRange       int      // radius in cells (Manhattan distance)
-	HPBonus           int      // bonus HP to nearby nodes (GUARDIAN_STATUE)
-	DamageReduction   int      // % damage reduction (BARRACKS, FORCE_FIELD)
-	BlocksMovement    bool     // wall blocks enemy movement
-	CostGu            []string // required Gu IDs
-	CostGuRank        int      // minimum rank for each required Gu
+	NodeCategory      string    // "RESOURCE" | "DEFENSE"
+	HPMax             int       // max HP for node (default 1000)
+	DefensePower      int       // damage per tick (WATCHTOWER)
+	AttackRange       int       // radius in cells (Manhattan distance)
+	HPBonus           int       // bonus HP to nearby nodes (GUARDIAN_STATUE)
+	DamageReduction   int       // % damage reduction (BARRACKS, FORCE_FIELD)
+	BlocksMovement    bool      // wall blocks enemy movement
+	CostGu            []string  // required Gu IDs
+	CostGuRank        int       // minimum rank for each required Gu
+	FoodPath          string    // path of the food item produced (if any)
+	ItemTier          string    // tier of the item (T1-T9)
+	ZoneType          string    // zone type (khu_trong, khu_nuoi, khu_khai_thac, khu_che_bien, khu_phong_thu, khu_thuc_an)
 }
 
 var ResourceNodeTemplates = map[string]ResourceNodeTemplate{
@@ -199,6 +202,344 @@ var ResourceNodeTemplates = map[string]ResourceNodeTemplate{
 		AttackRange:     2,
 		CostGu:          []string{"GU_SUPREME_SHIELD", "GU_GOLDEN_BELL_SHIELD"},
 		CostGuRank:      4,
+	},
+	"TRI_FARM": {
+		NodeType:          "TRI_FARM",
+		Name:              "Trang Trại Trí Đạo",
+		Path:              "Wisdom Path",
+		CostStones:        2000,
+		ProdType:          "Material",
+		ProdKey:           "star_thoughts",
+		ProdAmount:        15,
+		ProdIntervalHours: 12,
+		FoodPath:          "wisdom",
+		ItemTier:          "T5",
+		ZoneType:          "khu_trong",
+	},
+	"TRI_FARM_ADV": {
+		NodeType:          "TRI_FARM_ADV",
+		Name:              "Trang Trại Trí Đạo Cao Cấp",
+		Path:              "Wisdom Path",
+		CostStones:        5000,
+		ProdType:          "Material",
+		ProdKey:           "deer_god_fruit",
+		ProdAmount:        25,
+		ProdIntervalHours: 24,
+		FoodPath:          "wisdom",
+		ItemTier:          "T6",
+		ZoneType:          "khu_trong",
+	},
+	"HOA_FARM": {
+		NodeType:          "HOA_FARM",
+		Name:              "Lò Đốt Hỏa Đá",
+		Path:              "Fire Path",
+		CostStones:        800,
+		ProdType:          "Material",
+		ProdKey:           "fire_coal",
+		ProdAmount:        5,
+		ProdIntervalHours: 8,
+		FoodPath:          "fire",
+		ItemTier:          "T1",
+		ZoneType:          "khu_trong",
+	},
+	"TIN_FARM": {
+		NodeType:          "TIN_FARM",
+		Name:              "Xưởng Giấy Tương",
+		Path:              "Faith Path",
+		CostStones:        300,
+		ProdType:          "Material",
+		ProdKey:           "paper_pulp",
+		ProdAmount:        10,
+		ProdIntervalHours: 4,
+		FoodPath:          "faith",
+		ItemTier:          "T1",
+		ZoneType:          "khu_trong",
+	},
+	"AM_FARM": {
+		NodeType:          "AM_FARM",
+		Name:              "Vườn Dạ Sương",
+		Path:              "Dark Path",
+		CostStones:        1000,
+		ProdType:          "Material",
+		ProdKey:           "night_fog",
+		ProdAmount:        8,
+		ProdIntervalHours: 8,
+		FoodPath:          "dark",
+		ItemTier:          "T3",
+		ZoneType:          "khu_trong",
+	},
+	"DOC_FARM": {
+		NodeType:          "DOC_FARM",
+		Name:              "Vườn Độc Trùng",
+		Path:              "Poison Path",
+		CostStones:        600,
+		ProdType:          "Material",
+		ProdKey:           "poisonous_flesh",
+		ProdAmount:        6,
+		ProdIntervalHours: 6,
+		FoodPath:          "poison",
+		ItemTier:          "T2",
+		ZoneType:          "khu_trong",
+	},
+	"NO_FARM": {
+		NodeType:          "NO_FARM",
+		Name:              "Bãi Nuôi Bò",
+		Path:              "Beast Path",
+		CostStones:        400,
+		ProdType:          "Material",
+		ProdKey:           "beast_meat",
+		ProdAmount:        8,
+		ProdIntervalHours: 6,
+		FoodPath:          "beast",
+		ItemTier:          "T1",
+		ZoneType:          "khu_nuoi",
+	},
+	"NO_FARM_ADV": {
+		NodeType:          "NO_FARM_ADV",
+		Name:              "Bãi Nuôi Sói",
+		Path:              "Slave Path",
+		CostStones:        2000,
+		ProdType:          "Material",
+		ProdKey:           "wolf_heart_meat",
+		ProdAmount:        12,
+		ProdIntervalHours: 12,
+		FoodPath:          "slave",
+		ItemTier:          "T5",
+		ZoneType:          "khu_nuoi",
+	},
+	"THOI_FARM": {
+		NodeType:          "THOI_FARM",
+		Name:              "Đồng Cỏ Lịch Sử",
+		Path:              "Time Path",
+		CostStones:        8000,
+		ProdType:          "Material",
+		ProdKey:           "historical_dust",
+		ProdAmount:        20,
+		ProdIntervalHours: 24,
+		FoodPath:          "time",
+		ItemTier:          "T7",
+		ZoneType:          "khu_trong",
+	},
+	"PHONG_FARM": {
+		NodeType:          "PHONG_FARM",
+		Name:              "Đỉnh Cuồng Phong",
+		Path:              "Wind Path",
+		CostStones:        20000,
+		ProdType:          "Material",
+		ProdKey:           "gale_of_the_nine_heavens",
+		ProdAmount:        30,
+		ProdIntervalHours: 48,
+		FoodPath:          "wind",
+		ItemTier:          "T9",
+		ZoneType:          "khu_trong",
+	},
+	"BAO_FARM": {
+		NodeType:          "BAO_FARM",
+		Name:              "Kho Cacao Đá",
+		Path:              "Earth Path",
+		CostStones:        1500,
+		ProdType:          "Material",
+		ProdKey:           "earth_qi",
+		ProdAmount:        10,
+		ProdIntervalHours: 8,
+		FoodPath:          "earth",
+		ItemTier:          "T1",
+		ZoneType:          "khu_trong",
+	},
+	"QUANG_FARM": {
+		NodeType:          "QUANG_FARM",
+		Name:              "Vườn Ánh Sáng",
+		Path:              "Light Path",
+		CostStones:        800,
+		ProdType:          "Material",
+		ProdKey:           "light",
+		ProdAmount:        10,
+		ProdIntervalHours: 4,
+		FoodPath:          "light",
+		ItemTier:          "T1",
+		ZoneType:          "khu_trong",
+	},
+	"KIEM_FARM": {
+		NodeType:          "KIEM_FARM",
+		Name:              "Đồng Cỏ Kiếm Cao Cấp",
+		Path:              "Sword Path",
+		CostStones:        1500,
+		ProdType:          "Material",
+		ProdKey:           "sword_qi",
+		ProdAmount:        12,
+		ProdIntervalHours: 8,
+		FoodPath:          "sword",
+		ItemTier:          "T3",
+		ZoneType:          "khu_trong",
+	},
+	"THUY_FARM": {
+		NodeType:          "THUY_FARM",
+		Name:              "Khu Tưới Nước",
+		Path:              "Water Path",
+		CostStones:        500,
+		ProdType:          "Water",
+		ProdKey:           "water",
+		ProdAmount:        15,
+		ProdIntervalHours: 6,
+		FoodPath:          "water",
+		ItemTier:          "T0",
+		ZoneType:          "khu_trong",
+	},
+	"BAC_FARM": {
+		NodeType:          "BAC_FARM",
+		Name:              "Lò Yếu Đá",
+		Path:              "Ice Path",
+		CostStones:        600,
+		ProdType:          "Material",
+		ProdKey:           "ice_crystal",
+		ProdAmount:        8,
+		ProdIntervalHours: 6,
+		FoodPath:          "ice",
+		ItemTier:          "T1",
+		ZoneType:          "khu_trong",
+	},
+	"CHUA_FARM": {
+		NodeType:          "CHUA_FARM",
+		Name:              "Đồng Cây Xương Rỗ",
+		Path:              "Bone Path",
+		CostStones:        700,
+		ProdType:          "Material",
+		ProdKey:           "beast_bones",
+		ProdAmount:        5,
+		ProdIntervalHours: 8,
+		FoodPath:          "beast",
+		ItemTier:          "T1",
+		ZoneType:          "khu_trong",
+	},
+	"CAM_FARM": {
+		NodeType:          "CAM_FARM",
+		Name:              "Mỏ Cuội Đá",
+		Path:              "Metal Path",
+		CostStones:        1200,
+		ProdType:          "Material",
+		ProdKey:           "copper_ore",
+		ProdAmount:        4,
+		ProdIntervalHours: 8,
+		FoodPath:          "metal",
+		ItemTier:          "T1",
+		ZoneType:          "khu_khai_thac",
+	},
+	"KIM_FARM": {
+		NodeType:          "KIM_FARM",
+		Name:              "Mỏ Sắt Cao Cấp",
+		Path:              "Metal Path",
+		CostStones:        1500,
+		ProdType:          "Material",
+		ProdKey:           "iron_ore",
+		ProdAmount:        5,
+		ProdIntervalHours: 6,
+		FoodPath:          "metal",
+		ItemTier:          "T1",
+		ZoneType:          "khu_khai_thac",
+	},
+	"VANG_FARM": {
+		NodeType:          "VANG_FARM",
+		Name:              "Mỏ Vàng",
+		Path:              "Metal Path",
+		CostStones:        2000,
+		ProdType:          "Material",
+		ProdKey:           "gold_ore",
+		ProdAmount:        6,
+		ProdIntervalHours: 12,
+		FoodPath:          "metal",
+		ItemTier:          "T3",
+		ZoneType:          "khu_khai_thac",
+	},
+	"HUYET_FARM": {
+		NodeType:          "HUYET_FARM",
+		Name:              "Khu Lồng Máu",
+		Path:              "Blood Path",
+		CostStones:        500,
+		ProdType:          "Material",
+		ProdKey:           "blood_sickle_grass",
+		ProdAmount:        10,
+		ProdIntervalHours: 6,
+		FoodPath:          "blood",
+		ItemTier:          "T1",
+		ZoneType:          "khu_trong",
+	},
+	"THAT_FARM": {
+		NodeType:          "THAT_FARM",
+		Name:              "Kho Dầu Đen",
+		Path:              "Fire Path",
+		CostStones:        2000,
+		ProdType:          "Material",
+		ProdKey:           "black_oil",
+		ProdAmount:        8,
+		ProdIntervalHours: 12,
+		FoodPath:          "fire",
+		ItemTier:          "T5",
+		ZoneType:          "khu_khai_thac",
+	},
+	"THAY_THUAT_FARM": {
+		NodeType:          "THAY_THUAT_FARM",
+		Name:              "Xưởng Thuốc Truyền",
+		Path:              "Sound Path",
+		CostStones:        800,
+		ProdType:          "Material",
+		ProdKey:           "sound_crystal",
+		ProdAmount:        6,
+		ProdIntervalHours: 8,
+		FoodPath:          "sound",
+		ItemTier:          "T1",
+		ZoneType:          "khu_trong",
+	},
+	"LUAT_FARM": {
+		NodeType:          "LUAT_FARM",
+		Name:              "Kho Nguyên Tinh",
+		Path:              "Law Path",
+		CostStones:        1500,
+		ProdType:          "Material",
+		ProdKey:           "sealing_stone",
+		ProdAmount:        4,
+		ProdIntervalHours: 10,
+		FoodPath:          "law",
+		ItemTier:          "T1",
+		ZoneType:          "khu_trong",
+	},
+	"THUAT_FARM": {
+		NodeType:          "THUAT_FARM",
+		Name:              "Vườn Sao Tinh",
+		Path:              "Light Path",
+		CostStones:        1000,
+		ProdType:          "Material",
+		ProdKey:           "soul_qi",
+		ProdAmount:        6,
+		ProdIntervalHours: 8,
+		FoodPath:          "soul",
+		ItemTier:          "T2",
+		ZoneType:          "khu_trong",
+	},
+	"THOI_THUAT_FARM": {
+		NodeType:          "THOI_THUAT_FARM",
+		Name:              "Ngọn Lửa Mặt Trời",
+		Path:              "Sun Flame Path",
+		CostStones:        5000,
+		ProdType:          "Material",
+		ProdKey:           "sun_flame",
+		ProdAmount:        15,
+		ProdIntervalHours: 24,
+		FoodPath:          "fire",
+		ItemTier:          "T9",
+		ZoneType:          "khu_trong",
+	},
+	"LUC_FARM": {
+		NodeType:          "LUC_FARM",
+		Name:              "Đồng Thịt Lạc",
+		Path:              "Strength Path",
+		CostStones:        1500,
+		ProdType:          "Material",
+		ProdKey:           "wolf_heart_meat",
+		ProdAmount:        12,
+		ProdIntervalHours: 12,
+		FoodPath:          "strength",
+		ItemTier:          "T5",
+		ZoneType:          "khu_nuoi",
 	},
 }
 
@@ -1122,11 +1463,30 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 		}
 	}
 
+	// Item path Dao Mark boost - lookup food path from node_outputs
+	var itemFoodPath string
+	itemFoodPathMultiplier := 1.0
+	if n.ProductionType == "Material" {
+		prodKey := ""
+		if template, ok := ResourceNodeTemplates[n.NodeType]; ok {
+			prodKey = template.ProdKey
+		}
+		if prodKey != "" {
+			err := tx.QueryRow(`
+				SELECT food_path FROM node_outputs WHERE item_id = $1
+			`, prodKey).Scan(&itemFoodPath)
+			if err == nil && itemFoodPath != "" {
+				itemDaoMarks := daoMap[strings.ToLower(itemFoodPath)]
+				itemFoodPathMultiplier = 1.0 + float64(itemDaoMarks)*0.003
+			}
+		}
+	}
+
 	baseReward := n.ProductionAmount * multiples
 
 	// Apply area size production multiplier + optional bulk discount
 	areaMultiplier := 1.0 + float64(areaSize)/10000000.0
-	totalReward := applyBulkReward(baseReward, areaMultiplier*daoMultiplier*conflictMultiplier*ecoMultiplier*variantBonus*laborMultiplier*suitabilityMultiplier, bulkMultiplier)
+	totalReward := applyBulkReward(baseReward, areaMultiplier*daoMultiplier*conflictMultiplier*ecoMultiplier*variantBonus*laborMultiplier*suitabilityMultiplier*itemFoodPathMultiplier, bulkMultiplier)
 
 	note := ""
 	if suitabilityMultiplier < 1.0 {
@@ -1612,11 +1972,16 @@ func EvaluateEcosystem(allNodes []models.ApertureResourceNode) (plants, herbivor
 			continue
 		}
 		switch n.NodeType {
-		case "MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS":
+		case "MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS",
+			"TRI_FARM", "TRI_FARM_ADV", "HOA_FARM", "TIN_FARM", "AM_FARM", "DOC_FARM",
+			"BAC_FARM", "QUANG_FARM", "KIEM_FARM", "THUY_FARM", "CHUA_FARM", "CAM_FARM",
+			"KIM_FARM", "VANG_FARM", "HUYET_FARM", "THAT_FARM", "THAY_THUAT_FARM", "LUAT_FARM",
+			"THUAT_FARM", "THOI_THUAT_FARM", "LUC_FARM", "THOI_FARM", "PHONG_FARM",
+			"NO_FARM", "NO_FARM_ADV":
 			plants++
 		case "SPIRIT_DEER_PASTURE":
 			herbivores++
-		case "SILVER_WOLF_DEN":
+		case "SILVER_WOLF_DEN", "FEATHERMAN_CANYON", "HAIRY_MAN_SETTLEMENT", "ROCKMAN_TRIBE":
 			carnivores++
 		}
 	}

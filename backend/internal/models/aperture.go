@@ -260,3 +260,16 @@ func CheckImmortalBreakthrough(rank int, earthCnt, heavenCnt, grandCnt, myriadCn
 	}
 	return false, 0
 }
+
+type NodeOutput struct {
+	ItemID          string `json:"item_id"`
+	ItemName        string `json:"item_name"`
+	ItemType        string `json:"item_type"`
+	ItemCategory    string `json:"item_category"`
+	FoodPath        string `json:"food_path"`
+	ItemTier        string `json:"item_tier"`
+	Rank            int    `json:"rank"`
+	GuEatenCount    int    `json:"gu_eaten_count"`
+	IsRecipeMaterial bool   `json:"is_recipe_material"`
+	Description     string `json:"description"`
+}

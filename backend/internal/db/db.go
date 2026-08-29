@@ -201,7 +201,7 @@ func seedMineSlots() error {
 	if err := DB.QueryRow(`SELECT COUNT(*) FROM mine_slots`).Scan(&count); err != nil {
 		return err
 	}
-	if count > 0 {
+	if count >= 62 {
 		return nil
 	}
 	slotRarities := map[int]string{}
@@ -218,11 +218,17 @@ func seedMineSlots() error {
 		}
 	}
 	for i := 1; i <= 31; i++ {
-		if _, err := DB.Exec("INSERT INTO mine_slots (id, rarity, abandoned_at) VALUES ($1, $2, NOW()) ON CONFLICT (id) DO NOTHING", i, slotRarities[i]); err != nil {
-			logger.S.Errorf("Failed to seed mine %d: %v", i, err)
+		if _, err := DB.Exec("INSERT INTO mine_slots (id, rarity, abandoned_at, mine_type) VALUES ($1, $2, NOW(), 'mortal') ON CONFLICT (id) DO NOTHING", i, slotRarities[i]); err != nil {
+			logger.S.Errorf("Failed to seed mortal mine %d: %v", i, err)
 		}
 	}
-	logger.S.Info("Seeded 31 initial world mine slots.")
+	for i := 101; i <= 131; i++ {
+		idx := i - 100
+		if _, err := DB.Exec("INSERT INTO mine_slots (id, rarity, abandoned_at, mine_type) VALUES ($1, $2, NOW(), 'immortal') ON CONFLICT (id) DO NOTHING", i, slotRarities[idx]); err != nil {
+			logger.S.Errorf("Failed to seed immortal mine %d: %v", i, err)
+		}
+	}
+	logger.S.Info("Seeded world mine slots.")
 	return nil
 }
 
@@ -569,6 +575,90 @@ func seedItemsFromCSV(filename string) error {
 	logger.S.Infof("Item dictionary seeded from %s", filename)
 	return nil
 }
+
+// seedNodeOutputsFromCSV reads NodeOutput.csv and upserts into node_outputs.
+func seedNodeOutputsFromCSV(filename string) error {
+	f, r, header, err := openCSV(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	idIdx := colIndex(header, "item_id")
+	nameIdx := colIndex(header, "item_name")
+	typeIdx := colIndex(header, "item_type")
+	catIdx := colIndex(header, "item_category")
+	pathIdx := colIndex(header, "food_path")
+	tierIdx := colIndex(header, "item_tier")
+	rankIdx := colIndex(header, "rank")
+	eatenIdx := colIndex(header, "gu_eaten_count")
+	recipeIdx := colIndex(header, "is_recipe_material")
+	descIdx := colIndex(header, "description")
+
+	if idIdx < 0 || nameIdx < 0 || typeIdx < 0 || catIdx < 0 || pathIdx < 0 {
+		return fmt.Errorf("NodeOutput.csv missing required columns (item_id, item_name, item_type)")
+	}
+
+	countRows := 0
+	for {
+		row, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil || len(row) == 0 {
+			continue
+		}
+		id := strings.TrimSpace(row[idIdx])
+		if id == "" {
+			continue
+		}
+		name := strings.TrimSpace(row[nameIdx])
+		itemType := strings.TrimSpace(row[typeIdx])
+		itemCategory := ""
+		if catIdx >= 0 && catIdx < len(row) {
+			itemCategory = strings.TrimSpace(row[catIdx])
+		}
+		foodPath := ""
+		if pathIdx >= 0 && pathIdx < len(row) {
+			foodPath = strings.TrimSpace(row[pathIdx])
+		}
+		itemTier := "T1"
+		if tierIdx >= 0 && tierIdx < len(row) {
+			itemTier = strings.TrimSpace(row[tierIdx])
+		}
+		rank := 1
+		if rankIdx >= 0 && rankIdx < len(row) {
+			fmt.Sscanf(strings.TrimSpace(row[rankIdx]), "%d", &rank)
+		}
+		guEatenCount := 0
+		if eatenIdx >= 0 && eatenIdx < len(row) {
+			fmt.Sscanf(strings.TrimSpace(row[eatenIdx]), "%d", &guEatenCount)
+		}
+		isRecipeMaterial := false
+		if recipeIdx >= 0 && recipeIdx < len(row) {
+			isRecipeMaterial = strings.ToLower(strings.TrimSpace(row[recipeIdx])) == "true"
+		}
+		desc := ""
+		if descIdx >= 0 && descIdx < len(row) {
+			desc = strings.TrimSpace(row[descIdx])
+		}
+
+		_, err = DB.Exec(`
+			INSERT INTO node_outputs (item_id, item_name, item_type, item_category, food_path, item_tier, rank, gu_eaten_count, is_recipe_material, description)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			ON CONFLICT (item_id) DO UPDATE
+			SET item_name=EXCLUDED.item_name, item_type=EXCLUDED.item_type, item_category=EXCLUDED.item_category, food_path=EXCLUDED.food_path, item_tier=EXCLUDED.item_tier, rank=EXCLUDED.rank, gu_eaten_count=EXCLUDED.gu_eaten_count, is_recipe_material=EXCLUDED.is_recipe_material, description=EXCLUDED.description
+		`, id, name, itemType, itemCategory, foodPath, itemTier, rank, guEatenCount, isRecipeMaterial, desc)
+		if err != nil {
+			return fmt.Errorf("upsert node_output %s: %w", id, err)
+		}
+		countRows++
+	}
+	logger.S.Infof("Node outputs seeded from %s (%d entries)", filename, countRows)
+	return nil
+}
+
+// countRows helper - we need to count rows read
 
 // seedGusFromCSV reads Gu.csv and upserts into gu_dictionary.
 // Duplicate IDs are resolved by keeping the last occurrence.
@@ -2616,7 +2706,7 @@ func AvailableTables() []string {
 	return []string{
 		"item", "gu", "constitution", "recipe", "shop_item", "arena_shop_item",
 		"region", "loot_table", "monster", "monster_spawn", "map_cell",
-		"sect", "sect_mission", "quest", "race", "dream_realm", "status",
+		"sect", "sect_mission", "quest", "race", 	"dream_realm", "status", "node_output",
 	}
 }
 
@@ -2632,9 +2722,11 @@ func TableImport(table string) error {
 	case "race":
 		return seedRacesFromCSV("Race.csv")
 	case "status":
-		return seedStatusesFromCSV("Status.csv")
+			return seedStatusesFromCSV("Status.csv")
 	case "recipe":
-		return seedRecipesFromCSV("Recipe.csv")
+			return seedRecipesFromCSV("Recipe.csv")
+	case "node_output":
+			return seedNodeOutputsFromCSV("NodeOutput.csv")
 	case "shop_item":
 		return seedShopItemsFromCSV("ShopItem.csv")
 	case "arena_shop_item":
@@ -2755,6 +2847,11 @@ func TableExport(table string) error {
 			filename: "DreamRealm.csv",
 			columns:  []string{"id", "name", "path", "type", "required_rank", "entry_item", "description", "rewards", "map_data", "cooldown_hours"},
 			query:    `SELECT id, name, CASE WHEN id LIKE 'dream_realm_%' THEN substring(id from 13) ELSE '' END, type, required_rank, entry_item, COALESCE(description,''), COALESCE(rewards::text,'{}'), COALESCE(map_data::text,'[]'), cooldown_hours FROM instance_templates WHERE type='DREAM_REALM' ORDER BY id`,
+		},
+		"node_output": {
+			filename: "NodeOutput.csv",
+			columns:  []string{"item_id", "item_name", "item_type", "item_category", "food_path", "item_tier", "rank", "gu_eaten_count", "is_recipe_material", "description"},
+			query:    `SELECT item_id, item_name, item_type, COALESCE(item_category,''), COALESCE(food_path,''), COALESCE(item_tier,'T1'), rank, gu_eaten_count, is_recipe_material, COALESCE(description,'') FROM node_outputs ORDER BY item_id`,
 		},
 	}
 

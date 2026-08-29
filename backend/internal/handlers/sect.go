@@ -2747,36 +2747,23 @@ type StockVaultRequest struct {
 func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int, int, string) {
 	itemType = strings.ToLower(itemType)
 	if itemType == "gu" {
-		var guRank, guBasePrice int
-		err := tx.QueryRow(`SELECT COALESCE(rank,1), COALESCE(base_price,0) FROM gu_dictionary WHERE id = $1 ORDER BY rank DESC LIMIT 1`, itemID).Scan(&guRank, &guBasePrice)
-		if err != nil {
-			guRank = 1
-			guBasePrice = 0
-		}
-
-		// Hard cap: cannot stock Gu rank >= 6 (too powerful for sect shop)
-		if guRank >= 6 {
-			return 0, http.StatusForbidden, fmt.Sprintf("Không thể thêm Cổ trùng hạng %d vào bảo khố! Chỉ được nhập Cổ trùng hạng 1–5.", guRank)
-		}
-
-		// Level gate: Gu rank must be <= sect level
-		if guRank > sectLevel {
-			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Cổ trùng hạng %d! (Hiện tại: Cấp %d)", guRank, guRank, sectLevel)
-		}
-
-		return pricing.GuBasePrice(guBasePrice, guRank), http.StatusOK, ""
+		return 0, http.StatusForbidden, "Không thể nhập Cổ trùng vào bảo khố."
 	}
 
 	if itemType == "material" {
+		// calculate max allowed item level based on sect level (10 sect levels = 1 item level, max 5)
+		maxLevel := sectLevel/10 + 1
+		if maxLevel > 5 {
+			maxLevel = 5
+		}
 		var matRank int
 		err := tx.QueryRow(`SELECT rank FROM item_dictionary WHERE id = $1`, itemID).Scan(&matRank)
 		if err != nil {
 			matRank = 1
 		}
 
-		// Level gate: material rank must be <= sect level
-		if matRank > sectLevel {
-			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Linh tài hạng %d! (Hiện tại: Cấp %d)", matRank, matRank, sectLevel)
+		if matRank > maxLevel {
+			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Linh tài hạng %d! (Hiện tại: Cấp %d)", maxLevel, matRank, sectLevel)
 		}
 
 		return matRank * 50, http.StatusOK, ""
@@ -2796,8 +2783,13 @@ func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int,
 		if !exists {
 			return 0, http.StatusBadRequest, "Bí phương không tồn tại trong tàng kinh các"
 		}
-		if targetGuRank > sectLevel {
-			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Bí phương hạng %d! (Hiện tại: Cấp %d)", targetGuRank, targetGuRank, sectLevel)
+		// calculate max allowed item level based on sect level (10 sect levels = 1 item level, max 5)
+		maxLevel := sectLevel/10 + 1
+		if maxLevel > 5 {
+			maxLevel = 5
+		}
+		if targetGuRank > maxLevel {
+			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Bí phương hạng %d! (Hiện tại: Cấp %d)", maxLevel, targetGuRank, sectLevel)
 		}
 		return pricing.RecipeCostByGuRank(targetGuRank), http.StatusOK, ""
 	}
@@ -3261,7 +3253,8 @@ func ToggleSectApproval(c *gin.Context) {
 	defer tx.Rollback()
 
 	var sectID, callerRank string
-	err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
+	var sectLevel int
+	err = tx.QueryRow(`SELECT sect_id, member_rank, (SELECT level FROM sects WHERE id = sect_members.sect_id) FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank, &sectLevel)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
@@ -3269,6 +3262,11 @@ func ToggleSectApproval(c *gin.Context) {
 
 	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Trưởng Lão hoặc Chưởng Môn mới có quyền thay đổi thiết lập này!"})
+		return
+	}
+
+	if req.RequireApproval && sectLevel < 10 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Tông môn phải đạt cấp 10 mới có thể bật duyệt thành viên!"})
 		return
 	}
 

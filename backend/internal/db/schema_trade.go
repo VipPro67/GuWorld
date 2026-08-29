@@ -109,10 +109,12 @@ func schemaTrade() error {
 		last_claimed_at TIMESTAMPTZ NULL,
 		abandoned_at TIMESTAMPTZ DEFAULT NOW(),
 		monster_rank INT NOT NULL DEFAULT 1,
-		monster_sub_rank INT NOT NULL DEFAULT 1
+		monster_sub_rank INT NOT NULL DEFAULT 1,
+		mine_type VARCHAR(20) NOT NULL DEFAULT 'mortal'
 	);`); err != nil {
 		return err
 	}
+	execSchema("mine_slots_type", `ALTER TABLE mine_slots ADD COLUMN IF NOT EXISTS mine_type VARCHAR(20) NOT NULL DEFAULT 'mortal';`)
 	if err := execSchema("mine_slots_occupier_idx", `
 	CREATE INDEX IF NOT EXISTS idx_mine_slots_occupier ON mine_slots (occupier_id);`); err != nil {
 		return err

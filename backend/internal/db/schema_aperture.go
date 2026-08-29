@@ -141,5 +141,30 @@ func schemaAperture() error {
 		return err
 	}
 
+	if err := execSchema("node_outputs", `
+	CREATE TABLE IF NOT EXISTS node_outputs (
+		item_id VARCHAR(100) PRIMARY KEY,
+		item_name VARCHAR(100) NOT NULL,
+		item_type VARCHAR(50) NOT NULL,
+		item_category VARCHAR(50),
+		food_path VARCHAR(50),
+		item_tier VARCHAR(10),
+		rank INT NOT NULL DEFAULT 1,
+		gu_eaten_count INT DEFAULT 0,
+		is_recipe_material BOOLEAN DEFAULT false,
+		description TEXT,
+		created_at TIMESTAMPTZ DEFAULT now()
+	);`); err != nil {
+		return err
+	}
+	if err := execSchema("node_outputs_category_idx", `
+	CREATE INDEX IF NOT EXISTS idx_node_outputs_category ON node_outputs (item_category);`); err != nil {
+		return err
+	}
+	if err := execSchema("node_outputs_food_path_idx", `
+	CREATE INDEX IF NOT EXISTS idx_node_outputs_food_path ON node_outputs (food_path);`); err != nil {
+		return err
+	}
+
 	return nil
 }

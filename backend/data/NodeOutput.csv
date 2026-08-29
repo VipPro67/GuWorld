@@ -1,0 +1,78 @@
+item_id,item_name,item_type,item_category,food_path,item_tier,rank,gu_eaten_count,is_recipe_material,description
+blood_membrane_dew,Blood Membrane Dew,food,blood,blood,T2,2,59,true,Blood membrane essence for Blood path
+black_oil,Black Oil,food,fire,fire,T5,5,50,true,Black oil for Fire path
+immortal_stone,Immortal Stone,stone,,heaven,T1,1,40,false,Basic immortal stone
+jade_celery_soil,Jade Celery Soil,material,wood,wood,T5,5,37,true,Precious soil for fish farming
+meat,Fresh Meat,food,beast,beast,T1,1,37,false,Raw beast meat
+life_water,Life Water,water,water,water,T3,3,36,true,Living water with spiritual essence
+ice_crystal,Ice Crystal,material,ice,ice,T1,1,36,true,Ice crystal for Ice path
+sword_qi,Sword Qi,food,sword,sword,T3,3,35,true,Sword energy for Sword path
+heart_blood,Heart Blood,blood,blood,,T1,1,29,true,Heart blood of wild beasts
+blood_sickle_grass,Blood Sickle Grass,food,blood,blood,T1,1,29,true,Blood grass for Blood path
+sound_crystal,Sound Crystal,material,sound,sound,T1,1,27,true,Sound crystal for Sound path
+sound_stone,Sound Stone,material,sound,sound,T1,1,27,true,Sound-emitting stone
+musical_beast,Musical Beast,food,sound,sound,T1,1,27,false,Music-producing beast
+primeval_stone,Primeval Stone,stone,,rule,T1,1,27,false,Basic primeval stone
+beast_bones,Beast Bones,material,beast,beast,T1,1,22,true,Beast bones
+blade_food,Blade Food,food,blade,blade,T6,6,20,true,Food for Blade path
+beast_blood,Beast Blood,food,blood,blood,T1,1,18,true,Beast blood
+heaven_qi,Heaven Qi,food,heaven,heaven,T4,4,18,true,Heavenly qi
+moon_orchid_petal,Moon Orchid Petal,food,moon,moon,T1,1,18,false,Moon orchid petal
+tree_sap,Tree Sap,food,wood,wood,T1,1,17,true,Tree sap
+jade_stone,Jade Stone,stone,,T1,1,16,false,Jade stone
+star_thoughts,Star Thoughts,food,wisdom,wisdom,T5,6,15,true,Star thoughts for Wisdom path
+cloud_dragon_scale,Cloud Dragon Scale,material,cloud,cloud,T5,5,14,true,Cloud dragon scale
+copper_ore,Copper Ore,stone,,metal,T1,1,14,true,Copper ore
+light,Light,food,light,light,T1,1,13,true,Natural light
+soul_qi,Soul Qi,food,soul,soul,T2,2,13,true,Soul qi
+iron_ore,Iron Ore,stone,,metal,T1,1,13,true,Iron ore
+beast_meat,Beast Meat,food,beast,beast,T1,1,11,false,Wild beast meat
+earth_qi,Earth Qi,food,earth,earth,T1,2,11,true,Earth qi
+flowing_light_apple,Flowing Light Apple,food,light,light,T8,8,11,true,Luminous fruit
+sword_leaf_grass,Sword Leaf Grass,food,sword,sword,T2,2,10,true,Sword leaf grass
+sun_flame,Sun Flame,food,fire,fire,T9,9,9,true,Sun fire
+nectar,Nectar,food,wood,wood,T1,1,9,true,Flower nectar
+void_rocks,Void Rocks,material,void,void,T1,1,8,false,Void rocks
+water,Pure Water,water,water,water,T0,0,8,false,Pure water
+lightning_pearl,Lightning Pearl,material,lightning,lightning,T3,3,8,true,Lightning pearl
+regret_water,Regret Water,food,regret,regret,T6,6,7,true,Regret water
+featherman_feather,Featherman Feather,material,human,human,T2,2,6,false,Featherman feather
+poisonous_flesh,Poisonous Flesh,food,poison,poison,T2,2,6,false,Poisonous flesh
+time_river_water,Time River Water,food,time,time,T5,5,6,true,Time river water
+sealing_stone,Sealing Stone,material,law,law,T1,1,6,true,Sealing stone
+cloud_qi,Cloud Qi,food,cloud,cloud,T3,3,6,true,Cloud qi
+yellow_mud,Yellow Mud,food,earth,earth,T2,2,5,true,Yellow mud
+floating_tea_grass,Floating Tea Grass,food,wood,wood,T1,1,4,true,Floating tea grass
+dragon_scale_soil,Dragon Scale Soil,material,dragon,dragon,T5,5,4,true,Dragon scale soil
+paper_pulp,Paper Pulp,food,faith,faith,T1,1,4,true,Paper pulp
+heavy_gold_ore,Heavy Gold Ore,stone,,metal,T6,6,4,true,Heavy gold ore
+wolf_heart_meat,Wolf Heart Meat,food,slave,slave,T5,5,4,true,Wolf heart meat
+night_fog,Night Fog,food,dark,dark,T3,3,4,true,Night fog
+water_weed,Water Weed,food,water,water,T1,1,3,true,Water weed
+green_bamboo_wine,Green Bamboo Wine,food,wood,wood,T1,1,3,false,Green bamboo wine
+fire_coal,Fire Coal,food,fire,fire,T1,1,3,true,Fire coal
+boar_meat,Boar Meat,food,beast,beast,T1,1,2,false,Wild boar meat
+flying_bear_meat,Flying Bear Meat,food,strength,strength,T5,5,2,false,Flying bear meat
+water_of_time,Water of Time,food,time,time,T7,7,2,true,Water of time
+gale_of_the_nine_heavens,Gale of Nine Heavens,food,wind,wind,T9,9,2,true,Gale of nine heavens
+heart_knowledge_grass,Heart Knowledge Grass,food,wisdom,wisdom,T1,1,2,true,Heart knowledge grass
+spirit_spring_water,Spirit Spring Water,food,water,water,T2,2,2,true,Pure spirit spring water
+storm_qi_wind,Storm Qi Wind,food,wind,wind,T5,5,2,true,Storm qi wind
+stone_man_heart,Stone Man Heart,food,strength,strength,T1,1,1,false,Stone man heart
+water_of_mask,Water of Mask,food,disguise,,T6,6,1,false,Water of disguise
+wind_honey,Wind Honey,food,strength,strength,T1,1,1,false,Wind honey
+bitter_water,Bitter Water,food,suffering,suffering,T1,1,1,false,Bitter water
+deep_sea_lightning_eel,Deep Sea Lightning Eel,food,water,water,T5,5,1,false,Deep sea lightning eel
+fresh_blood_relatives,Relative Blood,food,blood,blood,T5,5,1,false,Blood of relatives
+gu_master_blood,Gu Master Blood,food,blood,blood,T3,3,1,false,Gu master blood
+womans_heart,Woman's Heart,food,poison,poison,T6,6,1,false,Woman's heart
+thread_water,Thread Water,food,law,law,T5,5,1,true,Spider thread water
+sand_gull_soil,Sand Gull Soil,food,regret,regret,T6,6,1,true,Sand gull soil
+deer_god_fruit,Deer God Fruit,food,wisdom,wisdom,T6,6,1,true,Deer god fruit
+historical_dust,Historical Dust,food,time,time,T7,7,1,true,Historical dust
+memory_fragments,Memory Fragments,food,wisdom,wisdom,T6,6,1,true,Memory fragments
+black_oil_refined,Refined Black Oil,food,fire,fire,T5,5,1,true,Refined black oil
+sweet_wine,Sweet Wine,food,law,law,T1,1,1,false,Sweet honey wine
+bitter_wine,Bitter Wine,food,law,law,T1,1,0,false,Bitter wine
+sour_wine,Sour Wine,food,law,law,T1,1,0,false,Sour wine
+spicy_wine,Spicy Wine,food,law,law,T1,1,0,false,Spicy wine

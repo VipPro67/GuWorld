@@ -36,6 +36,7 @@ var MineRarityRates = map[string]MineRates{
 type MineSlotResponse struct {
 	ID                int        `json:"id"`
 	Rarity            string     `json:"rarity"`
+	MineType          string     `json:"mine_type"`
 	OccupierID        *string    `json:"occupier_id"`
 	OccupierName      *string    `json:"occupier_name"`
 	MonsterID         *string    `json:"monster_id"`
@@ -74,19 +75,25 @@ func CalculateMineRewards(slotID int, rarity string, lastClaimedAt time.Time) (i
 	return stones, qi, chests
 }
 
-func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int, qi float64, chests int) error {
+func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int, qi float64, chests int, mineType string) error {
 	var currentStones int
+	var currentImmortalStones int
 	var currentQi float64
 
 	err := tx.QueryRow(`
-		SELECT FLOOR(primeval_stones)::BIGINT, human_qi
+		SELECT FLOOR(primeval_stones)::BIGINT, FLOOR(immortal_stones)::BIGINT, human_qi
 		FROM players WHERE id = $1 FOR UPDATE
-	`, playerID).Scan(&currentStones, &currentQi)
+	`, playerID).Scan(&currentStones, &currentImmortalStones, &currentQi)
 	if err != nil {
 		return err
 	}
 
-	currentStones += stones
+	if mineType == "immortal" {
+		currentImmortalStones += stones
+	} else {
+		currentStones += stones
+	}
+
 	currentQi += qi
 	if currentQi > 100000.0 {
 		currentQi = 100000.0
@@ -94,9 +101,9 @@ func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int, qi flo
 
 	_, err = tx.Exec(`
 		UPDATE players
-		SET primeval_stones = $1, human_qi = $2
-		WHERE id = $3
-	`, currentStones, currentQi, playerID)
+		SET primeval_stones = $1, immortal_stones = $2, human_qi = $3
+		WHERE id = $4
+	`, currentStones, currentImmortalStones, currentQi, playerID)
 	if err != nil {
 		return err
 	}
@@ -111,7 +118,7 @@ func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int, qi flo
 
 func GetMineSlots(c *gin.Context) {
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT m.id, m.rarity, m.occupier_id, m.monster_id, m.occupied_at, m.last_claimed_at, p.username
+		SELECT m.id, m.rarity, m.mine_type, m.occupier_id, m.monster_id, m.occupied_at, m.last_claimed_at, p.username
 		FROM mine_slots m
 		LEFT JOIN players p ON m.occupier_id = p.id
 		ORDER BY m.id
@@ -126,12 +133,13 @@ func GetMineSlots(c *gin.Context) {
 	for rows.Next() {
 		var id int
 		var rarity string
+		var mineType string
 		var occupierID *string
 		var monsterID *string
 		var occupiedAt, lastClaimedAt *time.Time
 		var occupierName sql.NullString
 
-		err = rows.Scan(&id, &rarity, &occupierID, &monsterID, &occupiedAt, &lastClaimedAt, &occupierName)
+		err = rows.Scan(&id, &rarity, &mineType, &occupierID, &monsterID, &occupiedAt, &lastClaimedAt, &occupierName)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan mine slots"})
 			return
@@ -153,6 +161,7 @@ func GetMineSlots(c *gin.Context) {
 		slots = append(slots, MineSlotResponse{
 			ID:                id,
 			Rarity:            rarity,
+			MineType:          mineType,
 			OccupierID:        occupierID,
 			OccupierName:      name,
 			MonsterID:         monsterID,
@@ -287,9 +296,10 @@ func ClaimMineRewards(c *gin.Context) {
 
 	// 1. Verify and lock slot
 	var rarity string
+	var mineType string
 	var occupierID *string
 	var lastClaimedAt *time.Time
-	err = tx.QueryRow("SELECT rarity, occupier_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", req.SlotID).Scan(&rarity, &occupierID, &lastClaimedAt)
+	err = tx.QueryRow("SELECT rarity, mine_type, occupier_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", req.SlotID).Scan(&rarity, &mineType, &occupierID, &lastClaimedAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify slot"})
 		return
@@ -308,7 +318,7 @@ func ClaimMineRewards(c *gin.Context) {
 	}
 
 	// 3. Update player rewards
-	err = AddMineRewardsToPlayerTx(tx, authID, stones, qi, chests)
+	err = AddMineRewardsToPlayerTx(tx, authID, stones, qi, chests, mineType)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add rewards to player"})
 		return
@@ -362,9 +372,10 @@ func AbandonMineSlot(c *gin.Context) {
 
 	// 1. Verify and lock slot
 	var rarity string
+	var mineType string
 	var occupierID *string
 	var lastClaimedAt *time.Time
-	err = tx.QueryRow("SELECT rarity, occupier_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", req.SlotID).Scan(&rarity, &occupierID, &lastClaimedAt)
+	err = tx.QueryRow("SELECT rarity, mine_type, occupier_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", req.SlotID).Scan(&rarity, &mineType, &occupierID, &lastClaimedAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify slot"})
 		return
@@ -378,7 +389,7 @@ func AbandonMineSlot(c *gin.Context) {
 	// 2. Calculate and grant rewards
 	stones, qi, chests := CalculateMineRewards(req.SlotID, rarity, *lastClaimedAt)
 	if stones > 0 || qi > 0.0 || chests > 0 {
-		err = AddMineRewardsToPlayerTx(tx, authID, stones, qi, chests)
+		err = AddMineRewardsToPlayerTx(tx, authID, stones, qi, chests, mineType)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add rewards to player"})
 			return
@@ -631,7 +642,7 @@ func AssignMonstersToMines() {
 
 	// Find abandoned mines
 	rows, err := tx.Query(`
-		SELECT id, rarity 
+		SELECT id, rarity, mine_type 
 		FROM mine_slots 
 		WHERE occupier_id IS NULL AND monster_id IS NULL 
 		AND abandoned_at < NOW() - INTERVAL '24 hours'
@@ -643,13 +654,14 @@ func AssignMonstersToMines() {
 	defer rows.Close()
 
 	type Slot struct {
-		ID     int
-		Rarity string
+		ID       int
+		Rarity   string
+		MineType string
 	}
 	var abandonedSlots []Slot
 	for rows.Next() {
 		var s Slot
-		if err := rows.Scan(&s.ID, &s.Rarity); err == nil {
+		if err := rows.Scan(&s.ID, &s.Rarity, &s.MineType); err == nil {
 			abandonedSlots = append(abandonedSlots, s)
 		}
 	}
@@ -661,17 +673,30 @@ func AssignMonstersToMines() {
 
 	for _, slot := range abandonedSlots {
 		var targetRank int
-		switch slot.Rarity {
-		case "Siêu Cấp":
-			targetRank = 6
-		case "Truyền Thuyết":
-			targetRank = 5
-		case "Sử Thi":
-			targetRank = 4
-		case "Hiếm":
-			targetRank = 3
-		default:
-			targetRank = 2
+		if slot.MineType == "immortal" {
+			switch slot.Rarity {
+			case "Siêu Cấp":
+				targetRank = 9
+			case "Truyền Thuyết":
+				targetRank = 8
+			case "Sử Thi":
+				targetRank = 7
+			default:
+				targetRank = 6
+			}
+		} else {
+			switch slot.Rarity {
+			case "Siêu Cấp":
+				targetRank = 6
+			case "Truyền Thuyết":
+				targetRank = 5
+			case "Sử Thi":
+				targetRank = 4
+			case "Hiếm":
+				targetRank = 3
+			default:
+				targetRank = 2
+			}
 		}
 
 		// Find a monster template
@@ -735,7 +760,7 @@ func AssignMonstersToEmptyMines() {
 	defer tx.Rollback()
 
 	rows, err := tx.Query(`
-		SELECT id, rarity 
+		SELECT id, rarity, mine_type 
 		FROM mine_slots 
 		WHERE occupier_id IS NULL AND monster_id IS NULL
 	`)
@@ -746,13 +771,14 @@ func AssignMonstersToEmptyMines() {
 	defer rows.Close()
 
 	type Slot struct {
-		ID     int
-		Rarity string
+		ID       int
+		Rarity   string
+		MineType string
 	}
 	var emptySlots []Slot
 	for rows.Next() {
 		var s Slot
-		if err := rows.Scan(&s.ID, &s.Rarity); err == nil {
+		if err := rows.Scan(&s.ID, &s.Rarity, &s.MineType); err == nil {
 			emptySlots = append(emptySlots, s)
 		}
 	}
@@ -764,17 +790,30 @@ func AssignMonstersToEmptyMines() {
 
 	for _, slot := range emptySlots {
 		var targetRank int
-		switch slot.Rarity {
-		case "Siêu Cấp":
-			targetRank = 6
-		case "Truyền Thuyết":
-			targetRank = 5
-		case "Sử Thi":
-			targetRank = 4
-		case "Hiếm":
-			targetRank = 3
-		default:
-			targetRank = 2
+		if slot.MineType == "immortal" {
+			switch slot.Rarity {
+			case "Siêu Cấp":
+				targetRank = 9
+			case "Truyền Thuyết":
+				targetRank = 8
+			case "Sử Thi":
+				targetRank = 7
+			default:
+				targetRank = 6
+			}
+		} else {
+			switch slot.Rarity {
+			case "Siêu Cấp":
+				targetRank = 6
+			case "Truyền Thuyết":
+				targetRank = 5
+			case "Sử Thi":
+				targetRank = 4
+			case "Hiếm":
+				targetRank = 3
+			default:
+				targetRank = 2
+			}
 		}
 
 		var chosenMonsterID string

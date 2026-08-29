@@ -603,24 +603,33 @@ func AutoCombatStart(c *gin.Context) {
 			if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
 				slotID := player.ActiveCombat.MineSlotID
 				var rarity string
+				var mineType string
 				var currentOccupierStr *string
 				var monsterIDStr *string
 				var lastClaimedAt *time.Time
-				err = tx.QueryRow("SELECT rarity, occupier_id, monster_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &currentOccupierStr, &monsterIDStr, &lastClaimedAt)
+				err = tx.QueryRow("SELECT rarity, mine_type, occupier_id, monster_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &mineType, &currentOccupierStr, &monsterIDStr, &lastClaimedAt)
 				if err == nil && currentOccupierStr != nil && lastClaimedAt != nil {
 					stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
 					stonesHalf := stones / 2
 					qiHalf := qi / 2.0
 					chestsHalf := chests / 2
 					if stonesHalf > 0 || qiHalf > 0.0 || chestsHalf > 0 {
-						if errMine := AddMineRewardsToPlayerTx(tx, player.ID, stonesHalf, qiHalf, chestsHalf); errMine != nil {
+						if errMine := AddMineRewardsToPlayerTx(tx, player.ID, stonesHalf, qiHalf, chestsHalf, mineType); errMine != nil {
 							logger.S.Errorf("Failed to add mine rewards to player %s (slot %d): %v", player.ID, slotID, errMine)
 						} else {
-							player.PrimevalStones += float64(stonesHalf)
+							if mineType == "immortal" {
+								player.ImmortalStones += float64(stonesHalf)
+							} else {
+								player.PrimevalStones += float64(stonesHalf)
+							}
+							var stoneName = "Nguyên Thạch"
+							if mineType == "immortal" {
+								stoneName = "Tiên Nguyên Thạch"
+							}
 							logs = append(logs, simulator.CombatLog{
 								Turn:   simState.Turn,
 								Action: "MINE_LOOT",
-								Detail: fmt.Sprintf("Cướp mỏ thành công! +%d Nguyên Thạch, +%.0f Nhân Khí, +%d Rương Mỏ", stonesHalf, qiHalf, chestsHalf),
+								Detail: fmt.Sprintf("Cướp mỏ thành công! +%d %s, +%.0f Nhân Khí, +%d Rương Mỏ", stonesHalf, stoneName, qiHalf, chestsHalf),
 							})
 						}
 					} else {

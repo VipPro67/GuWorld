@@ -7,32 +7,7 @@ export const MaintenanceView = () => {
   const [timeLeft, setTimeLeft] = useState("");
 
   useEffect(() => {
-    // 19:00 15/08/2026 GMT+7
-    const targetDate = new Date("2026-08-15T19:00:00+07:00").getTime();
-
-    const updateTimer = () => {
-      const now = new Date().getTime();
-      const difference = targetDate - now;
-
-      if (difference <= 0) {
-        setTimeLeft("00:00:00");
-        return;
-      }
-
-      const hours = Math.floor(difference / (1000 * 60 * 60));
-      const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-
-      setTimeLeft(
-        `${hours.toString().padStart(2, "0")}:${minutes
-          .toString()
-          .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
-      );
-    };
-
-    updateTimer();
-    const interval = setInterval(updateTimer, 1000);
-    return () => clearInterval(interval);
+    setTimeLeft("CHƯA RÕ");
   }, []);
 
   return (
@@ -75,17 +50,17 @@ export const MaintenanceView = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10 relative z-10">
           <div className="bg-zinc-950/60 border border-zinc-800/60 rounded-xl p-4 flex flex-col items-center text-center gap-2">
             <ShieldAlert className="w-6 h-6 text-red-400" />
-            <div className="text-sm font-mono text-zinc-400">09:00 — 15/08</div>
+            <div className="text-sm font-mono text-zinc-400">Chưa rõ</div>
             <div className="text-sm font-bold text-zinc-200">Tiến hành Reset</div>
           </div>
           <div className="bg-zinc-950/60 border border-zinc-800/60 rounded-xl p-4 flex flex-col items-center text-center gap-2">
             <Wrench className="w-6 h-6 text-amber-400" />
-            <div className="text-sm font-mono text-zinc-400">09:00 → 19:00</div>
+            <div className="text-sm font-mono text-zinc-400">Chưa rõ</div>
             <div className="text-sm font-bold text-zinc-200">Bảo trì & Cập nhật</div>
           </div>
           <div className="bg-zinc-950/60 border border-emerald-900/30 rounded-xl p-4 flex flex-col items-center text-center gap-2">
             <Star className="w-6 h-6 text-emerald-400" />
-            <div className="text-sm font-mono text-emerald-400/80">19:00 — 15/08</div>
+            <div className="text-sm font-mono text-emerald-400/80">Chưa rõ</div>
             <div className="text-sm font-bold text-emerald-300">Dự kiến mở server</div>
           </div>
         </div>

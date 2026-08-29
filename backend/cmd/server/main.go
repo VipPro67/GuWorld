@@ -157,6 +157,7 @@ func main() {
 	worker.StartPoolWatchdog(ctx, db.DB, 60*time.Second)
 	worker.StartSectMissionWorker(ctx, db.DB, 60*time.Second)
 	worker.StartSectTerritoryWorker(ctx, db.DB, 60*time.Second)
+	worker.StartSectMaintenanceWorker(ctx, db.DB, 24*time.Hour)
 
 	r := server.SetupRouter()
 

@@ -16,6 +16,8 @@ export const MineView: React.FC = () => {
 
   const [time, setTime] = useState(Date.now());
 
+  const [activeTab, setActiveTab] = useState<"mortal" | "immortal">("mortal");
+
   // Fetch slots on mount and set polling interval
   useEffect(() => {
     fetchMineSlots();
@@ -115,6 +117,11 @@ export const MineView: React.FC = () => {
     (slot) => slot.occupier_id === player?.id
   );
 
+  const displayedSlots = mineSlots.filter((slot) => {
+    const type = slot.mine_type || "mortal";
+    return type === activeTab;
+  });
+
   return (
     <div className="w-full mx-auto px-1 sm:px-4 py-2">
       {/* SVG gradients definition */}
@@ -150,7 +157,7 @@ export const MineView: React.FC = () => {
       </svg>
 
       {/* Header Summary */}
-      <div className="bg-zinc-950/60 border border-zinc-900 rounded-3xl p-4 sm:p-6 mb-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl backdrop-blur-md">
+      <div className="bg-zinc-950/60 border border-zinc-900 rounded-3xl p-4 sm:p-6 mb-4 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl backdrop-blur-md">
         <div className="flex flex-col gap-2">
           <h2 className="text-xl sm:text-2xl font-bold font-serif text-zinc-100 flex items-center gap-2.5">
             <Coins className="w-6 h-6 text-yellow-500 animate-pulse" />
@@ -185,9 +192,33 @@ export const MineView: React.FC = () => {
         )}
       </div>
 
+      {/* Tabs */}
+      <div className="flex justify-center gap-4 mb-8">
+        <button
+          onClick={() => setActiveTab("mortal")}
+          className={`px-6 py-2.5 rounded-xl font-serif font-bold tracking-wider transition-all duration-300 border ${
+            activeTab === "mortal"
+              ? "bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_15px_rgba(251,191,36,0.2)]"
+              : "bg-zinc-900/50 text-zinc-500 border-zinc-800 hover:bg-zinc-800 hover:text-zinc-300"
+          }`}
+        >
+          Phàm Mạch (Nguyên Thạch)
+        </button>
+        <button
+          onClick={() => setActiveTab("immortal")}
+          className={`px-6 py-2.5 rounded-xl font-serif font-bold tracking-wider transition-all duration-300 border ${
+            activeTab === "immortal"
+              ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.2)]"
+              : "bg-zinc-900/50 text-zinc-500 border-zinc-800 hover:bg-zinc-800 hover:text-zinc-300"
+          }`}
+        >
+          Tiên Mạch (Tiên Nguyên Thạch)
+        </button>
+      </div>
+
       {/* Grid of Slots */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        {mineSlots.map((slot) => {
+        {displayedSlots.map((slot) => {
           const styles = getRarityStyles(slot.rarity);
           const isOwnSlot = slot.occupier_id === player?.id;
           const isOccupied = !!slot.occupier_id;
@@ -269,8 +300,8 @@ export const MineView: React.FC = () => {
 
               {/* Rewards Indicators */}
               <div className="w-full bg-zinc-950/40 border border-zinc-900 rounded-2xl py-2 px-3 flex items-center justify-around gap-2 mb-5">
-                <div className="flex items-center gap-1 text-[10px] text-zinc-300 font-mono" title="Nguyên Thạch">
-                  <Coins className="w-3.5 h-3.5 text-yellow-500" />
+                <div className="flex items-center gap-1 text-[10px] text-zinc-300 font-mono" title={activeTab === "immortal" ? "Tiên Nguyên Thạch" : "Nguyên Thạch"}>
+                  <Coins className={`w-3.5 h-3.5 ${activeTab === "immortal" ? "text-cyan-400" : "text-yellow-500"}`} />
                   <span>{slot.accumulated_stones}</span>
                 </div>
                 <div className="w-px h-4 bg-zinc-900" />
