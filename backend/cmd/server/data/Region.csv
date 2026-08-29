@@ -1,4 +1,5 @@
 id,name,description,width,height,min_rank,max_rank,is_active,parent_id,zone_type,min_x,min_y,max_x,max_y,entry_x,entry_y,pool_weights,safe_zone_x,safe_zone_y
+hub_nam_cuong,Nam Cương Thành,"Thành trì an toàn giữa thập vạn đại sơn, nơi các gia tộc Nam Cương giao thương và nghỉ chân.",201,201,1,9,True,,HUB,4900,4900,5100,5100,5000,5000,"{""cell_type_weights"": {""Empty"": 100}, ""wild_gus"": []}",5000,5000
 hub_trung_chau,Trung Châu Thành,"Kinh đô phồn hoa của Trung Châu, khu vực cấm tranh đấu tuyệt đối, nơi tụ hội của Thập Đại Cổ Phái.",201,201,1,9,True,,HUB,14900,4900,15100,5100,15000,5000,"{""cell_type_weights"": {""Empty"": 100}, ""wild_gus"": []}",15000,5000
 hub_bac_nguyen,Bắc Nguyên Trấn,"Trấn an toàn giữa thảo nguyên mênh mông Bắc Nguyên, nơi các bộ lạc Hoàng Kim dừng chân.",201,201,1,9,True,,HUB,24900,4900,25100,5100,25000,5000,"{""cell_type_weights"": {""Empty"": 100}, ""wild_gus"": []}",25000,5000
 hub_tay_mac,Tây Mạc Trấn,"Ốc đảo an toàn giữa sa mạc Tây Mạc, trạm dừng chân của các thương đội.",201,201,1,9,True,,HUB,4900,14900,5100,15100,5000,15000,"{""cell_type_weights"": {""Empty"": 100}, ""wild_gus"": []}",5000,15000
