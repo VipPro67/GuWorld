@@ -18,16 +18,23 @@ function computeMovementSpeed(gamePlayer: Player | null, guDictionary: Record<st
 
 const BG_COLOR = 0x1d1e2c;
 
+export interface MapLabelSettings {
+  monster: boolean;
+  hub: boolean;
+  khu_vuc: boolean;
+  ngu_vuc: boolean;
+}
+
 interface WorldCanvasProps {
   mode: "select" | "drag";
-  showLabels?: boolean;
+  labelSettings: MapLabelSettings;
 }
 
 const WORLD_W = 30000;
 const WORLD_H = 20000;
 const SUBZONE_SIZE = 1000;
 
-export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasProps) {
+export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const [appReady, setAppReady] = useState(false);
@@ -45,11 +52,11 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
   const fogDirtyRef = useRef(true);
   const scaleRef = useRef<number>(0.05);
   const modeRef = useRef(mode);
-  const showLabelsRef = useRef(showLabels);
+  const labelSettingsRef = useRef(labelSettings);
 
   useEffect(() => {
-    showLabelsRef.current = showLabels;
-  }, [showLabels]);
+    labelSettingsRef.current = labelSettings;
+  }, [labelSettings]);
   const moveTargetRef = useRef<{ x: number; y: number } | null>(null);
   const animIdRef = useRef<number>(0);
   const isMovingRef = useRef(false);
@@ -345,7 +352,7 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
     const baseColors = [0x2d5f3f, 0x3f5f2d, 0x5f4f2d, 0x4f2d5f, 0x2d3f5f, 0x5f2d3f];
     const colorFor = (idx: number) => baseColors[idx % baseColors.length];
 
-    const addRegionLabel = (z: { name: string }, rx: number, ry: number, rw: number, rh: number, color: number, fontSize: number) => {
+    const addRegionLabel = (z: { name: string }, rx: number, ry: number, rw: number, rh: number, color: number, fontSize: number, type: string) => {
       const label = new Text({
         text: z.name,
         style: { fontSize, fill: color, fontFamily: "serif", stroke: { color: 0x000000, width: 4 }, fontWeight: "bold" },
@@ -353,7 +360,7 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
       label.anchor.set(0.5, 0.5);
       
       const labelContainer = new Container();
-      labelContainer.name = "region-label";
+      labelContainer.name = `region-label-${type}`;
       labelContainer.position.set(rx + rw / 2, ry + rh / 2);
       labelContainer.addChild(label);
       container.addChild(labelContainer);
@@ -368,7 +375,7 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
       g.fill({ color, alpha: 0.05 });
       g.stroke({ color, width: 3, alpha: 0.8 });
       container.addChild(g);
-      addRegionLabel(z, rx, ry, rw, rh, 0x86efac, 48); // Large zone label
+      addRegionLabel(z, rx, ry, rw, rh, 0x86efac, 48, "NGU_VUC"); // Large zone label
     });
 
     namedZones.forEach((z) => {
@@ -379,7 +386,7 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
       g.fill({ color: 0xffffff, alpha: 0.04 });
       g.stroke({ color: 0xffffff, width: 1, alpha: 0.2 });
       container.addChild(g);
-      addRegionLabel(z, rx, ry, rw, rh, 0xd8b4fe, 24); // Named zone label
+      addRegionLabel(z, rx, ry, rw, rh, 0xd8b4fe, 24, "KHU_VUC"); // Named zone label
     });
 
     hub.forEach((z) => {
@@ -390,7 +397,7 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
       g.fill({ color: 0xfbbf24, alpha: 0.18 });
       g.stroke({ color: 0xfbbf24, width: 3, alpha: 0.9 });
       container.addChild(g);
-      addRegionLabel(z, rx, ry, rw, rh, 0xfde047, 36); // Hub label
+      addRegionLabel(z, rx, ry, rw, rh, 0xfde047, 36, "HUB"); // Hub label
     });
   }, []);
 
@@ -613,7 +620,7 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
       }
 
       // Draw names/ranks for monsters, resources, and wild gu if enabled
-      if (showLabels && gamePlayer) {
+      if (labelSettings.monster && gamePlayer) {
         const px = gamePlayer.x;
         const py = gamePlayer.y;
         
@@ -668,7 +675,7 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
         }
       }
     },
-    [monsterDictionary, guDictionary, itemDictionary, showLabels, gamePlayer],
+    [monsterDictionary, guDictionary, itemDictionary, labelSettings.monster, gamePlayer],
   );
 
   const drawFog = useCallback(() => {
@@ -923,14 +930,14 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
         // Dynamically adjust label scales to remain constant screen size and perfectly crisp
         const currentScale = scaleRef.current;
         if (currentScale > 0) {
-          const showLabelsAtThisZoom = showLabelsRef.current && currentScale >= 12;
-          const showRegionLabels = showLabelsRef.current;
+          const settings = labelSettingsRef.current;
+          const showMonsters = settings.monster && currentScale >= 12;
           const targetScale = 1.0 / currentScale; // 1:1 crisp scale
 
           for (const child of monstersContainerRef.current.children) {
             if (child.name === "monster-label") {
-              child.visible = showLabelsAtThisZoom;
-              if (showLabelsAtThisZoom) {
+              child.visible = showMonsters;
+              if (showMonsters) {
                 for (const sub of child.children) {
                   if (sub instanceof Text) {
                     sub.scale.set(targetScale);
@@ -953,8 +960,8 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
             if (child instanceof Graphics) {
               for (const sub of child.children) {
                 if (sub.name === "object-label-text" && sub instanceof Text) {
-                  sub.visible = showLabelsAtThisZoom;
-                  if (showLabelsAtThisZoom) {
+                  sub.visible = showMonsters;
+                  if (showMonsters) {
                     sub.scale.set(targetScale);
                     // The icon radius is ~12 in world units, plus some padding in screen pixels
                     sub.y = -12 - (4 * targetScale);
@@ -966,9 +973,19 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
 
           // Adjust region labels
           for (const child of regionsContainerRef.current.children) {
-            if (child.name === "region-label") {
-              child.visible = showRegionLabels;
-              if (showRegionLabels) {
+            let labelType: "hub" | "khu_vuc" | "ngu_vuc" | null = null;
+            if (child.name === "region-label-HUB") {
+              labelType = "hub";
+            } else if (child.name === "region-label-KHU_VUC") {
+              labelType = "khu_vuc";
+            } else if (child.name === "region-label-NGU_VUC") {
+              labelType = "ngu_vuc";
+            }
+
+            if (labelType) {
+              const isVisible = settings[labelType];
+              child.visible = isVisible;
+              if (isVisible) {
                 for (const sub of child.children) {
                   if (sub instanceof Text) {
                     sub.scale.set(targetScale);

@@ -332,12 +332,15 @@ func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCod
 				player.WallProgress = 1.0
 			}
 		case "recipe":
-			RecipeSvc.Upsert(tx, &services.RecipeProgress{
+			err := RecipeSvc.Upsert(tx, &services.RecipeProgress{
 				PlayerID:       player.ID.String(),
 				RecipeID:       r.ID,
 				CompletionRate: 100,
 				IsUnlocked:    true,
 			})
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	return newGus, nil
@@ -397,6 +400,12 @@ func buildGiftCodeRewardLabel(rewards []GiftCodeReward) string {
 				guName = gu.Name
 			}
 			parts = append(parts, fmt.Sprintf("%.0fx %s", r.Amount, guName))
+		case "recipe":
+			recipeName := r.Label
+			if recipeName == "" {
+				recipeName = r.ID
+			}
+			parts = append(parts, fmt.Sprintf("Cổ Phương %s", recipeName))
 		case "lifespan":
 			parts = append(parts, fmt.Sprintf("%.0f năm Thọ Nguyên", r.Amount))
 		case "wall_progress":

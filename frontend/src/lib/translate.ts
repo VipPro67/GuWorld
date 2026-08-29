@@ -22,6 +22,7 @@ export const ITEM_TYPE_MAP: Record<string, string> = {
   Consumable: "Tiêu hao",
   Food: "Thức ăn",
   Currency: "Tiền tệ",
+  Recipe: "Cổ phương",
 };
 
 export const TARGET_TYPE_MAP: Record<string, string> = {

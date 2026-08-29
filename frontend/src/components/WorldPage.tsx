@@ -87,17 +87,31 @@ export function WorldPage() {
   const [mapMode, setMapMode] = useState<"select" | "drag">("select");
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [showLabels, setShowLabels] = useState<boolean>(() => {
+  interface MapLabelSettings {
+    monster: boolean;
+    hub: boolean;
+    khu_vuc: boolean;
+    ngu_vuc: boolean;
+  }
+
+  const [labelSettings, setLabelSettings] = useState<MapLabelSettings>(() => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("gu_world_show_labels") === "true";
+      const saved = localStorage.getItem("gu_world_map_label_settings");
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {}
+      }
     }
-    return false;
+    return { monster: false, hub: true, khu_vuc: true, ngu_vuc: true };
   });
 
-  const toggleLabels = () => {
-    setShowLabels((prev) => {
-      const next = !prev;
-      localStorage.setItem("gu_world_show_labels", String(next));
+  const [showLabelMenu, setShowLabelMenu] = useState(false);
+
+  const updateLabelSetting = (key: keyof MapLabelSettings, val: boolean) => {
+    setLabelSettings((prev) => {
+      const next = { ...prev, [key]: val };
+      localStorage.setItem("gu_world_map_label_settings", JSON.stringify(next));
       return next;
     });
   };
@@ -155,7 +169,7 @@ export function WorldPage() {
       )}
 
       <div className="w-full h-[calc(100vh-8rem)] min-h-[480px]">
-        <WorldCanvas mode={mapMode} showLabels={showLabels} />
+        <WorldCanvas mode={mapMode} labelSettings={labelSettings} />
       </div>
 
       <div className="absolute top-2 right-2 flex flex-col items-end gap-2 pointer-events-none z-30">
@@ -320,17 +334,60 @@ export function WorldPage() {
             <span className="text-lg">📍</span>
           </button>
           <div className="border-t border-zinc-700/40 my-0.5 mx-1" />
-          <button
-            onClick={toggleLabels}
-            title={showLabels ? "Ẩn tên/rank" : "Hiện tên/rank"}
-            className={`w-9 h-9 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
-              showLabels
-                ? "bg-purple-500/20 text-purple-300 border border-purple-500/30 shadow-inner"
-                : "text-zinc-400 hover:text-zinc-200 border border-transparent hover:bg-zinc-800/50"
-            }`}
-          >
-            <span className="text-lg">🏷️</span>
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowLabelMenu(!showLabelMenu)}
+              title="Cài đặt hiển thị nhãn"
+              className={`w-9 h-9 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
+                showLabelMenu || Object.values(labelSettings).some(Boolean)
+                  ? "bg-purple-500/20 text-purple-300 border border-purple-500/30 shadow-inner"
+                  : "text-zinc-400 hover:text-zinc-200 border border-transparent hover:bg-zinc-800/50"
+              }`}
+            >
+              <span className="text-lg">🏷️</span>
+            </button>
+            {showLabelMenu && (
+              <div className="absolute left-11 top-0 ml-1.5 p-3 bg-zinc-950/95 backdrop-blur-md rounded-xl border border-zinc-800 shadow-2xl z-50 w-48 flex flex-col gap-2 pointer-events-auto select-none">
+                <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1 font-serif">Hiển thị nhãn</div>
+                <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer hover:text-white">
+                  <input
+                    type="checkbox"
+                    checked={labelSettings.monster}
+                    onChange={(e) => updateLabelSetting("monster", e.target.checked)}
+                    className="accent-purple-500 cursor-pointer"
+                  />
+                  <span className="font-serif">Quái & Cổ trùng</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer hover:text-white">
+                  <input
+                    type="checkbox"
+                    checked={labelSettings.hub}
+                    onChange={(e) => updateLabelSetting("hub", e.target.checked)}
+                    className="accent-purple-500 cursor-pointer"
+                  />
+                  <span className="font-serif">Điểm tập trung (Hub)</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer hover:text-white">
+                  <input
+                    type="checkbox"
+                    checked={labelSettings.khu_vuc}
+                    onChange={(e) => updateLabelSetting("khu_vuc", e.target.checked)}
+                    className="accent-purple-500 cursor-pointer"
+                  />
+                  <span className="font-serif">Khu vực</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer hover:text-white">
+                  <input
+                    type="checkbox"
+                    checked={labelSettings.ngu_vuc}
+                    onChange={(e) => updateLabelSetting("ngu_vuc", e.target.checked)}
+                    className="accent-purple-500 cursor-pointer"
+                  />
+                  <span className="font-serif">Ngự vực</span>
+                </label>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       {selectedObject && (
