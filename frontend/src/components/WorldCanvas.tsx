@@ -223,6 +223,12 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
               }
               
               if (!res.reached && !res.combat_triggered) {
+                if (res.skip_result && res.skip_result.winner !== "Phe Ta") {
+                  isMovingRef.current = false;
+                  setMoving(false);
+                  selectObject(null);
+                  return;
+                }
                 const desired = moveTargetRef.current;
                 if (desired && (desired.x !== tx || desired.y !== ty)) {
                   // The goal changed while this segment was in flight: begin a

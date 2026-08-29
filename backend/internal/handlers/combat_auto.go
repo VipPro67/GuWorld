@@ -1126,6 +1126,18 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 	// Run Simulator
 	logs := simulator.Simulate(simState)
 
+	var alliesAlive bool
+	for _, a := range simState.Allies {
+		if a.ID == player.ID.String() {
+			alliesAlive = (a.HP > 0)
+			break
+		}
+	}
+
+	if !alliesAlive {
+		return "Phe Địch", nil, nil, fmt.Errorf("AUTO_COMBAT_DEFEAT")
+	}
+
 	// Apply outcome to DB (simplified from AutoCombatStart)
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
@@ -1158,11 +1170,9 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 		player.PrimevalStones = player.PrimevalStones / 2
 	}
 
-	var alliesAlive bool
 	var finalPlayerHP int
 	for _, a := range simState.Allies {
 		if a.ID == player.ID.String() {
-			alliesAlive = (a.HP > 0)
 			finalPlayerHP = a.HP
 		}
 	}
