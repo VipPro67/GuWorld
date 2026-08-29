@@ -1506,6 +1506,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		Name:                 player.Username,
 		Kind:                 "Player",
 		Rank:                 player.Rank,
+		SubRank:              player.SubRank,
 		GridX:                2,
 		GridY:                3,
 		MaxHP:                simMaxHP,

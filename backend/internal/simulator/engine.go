@@ -599,45 +599,65 @@ func Simulate(state *CombatState) []CombatLog {
 					}
 				}
 
-				// Auto-restore mana using stones
-				if actor.AutoRestoreMana && actor.Mana < actor.MaxMana {
-					manaPct := float64(actor.Mana) / float64(actor.MaxMana) * 100
-					if manaPct <= actor.ManaThreshold {
-						regenMult := 1.0
-						if actor.RefineManaTier > 0 {
-							regenMult = 0.4 + actor.RefineManaTier*0.1
-						}
+// Auto-restore mana using stones (rank-scaled formula matching manual recharge)
+			if actor.AutoRestoreMana && actor.Mana < actor.MaxMana {
+				manaPct := float64(actor.Mana) / float64(actor.MaxMana) * 100
+				if manaPct <= actor.ManaThreshold {
+					regenMult := 1.0
+					if actor.RefineManaTier > 0 {
+						regenMult = 0.4 + actor.RefineManaTier*0.1
+					}
+					neededMana := float64(actor.MaxMana - actor.Mana)
+
+					if actor.Rank >= 6 {
+						// Tiên Nguyên (Rank 6+): manaGain = stones / 100^(rank-6)
 						if actor.ImmortalStones >= 1 {
-							actor.ImmortalStones -= 1
-							restore := int(float64(100) * regenMult)
-							actor.Mana += restore
-							if actor.Mana > actor.MaxMana {
-								actor.Mana = actor.MaxMana
+							manaPerStone := (1.0 / math.Pow(100, float64(actor.Rank-6))) * regenMult
+							if manaPerStone > 0 {
+								stonesNeeded := math.Ceil(neededMana / manaPerStone)
+								stonesToConsume := math.Min(stonesNeeded, actor.ImmortalStones)
+								restore := int(stonesToConsume * manaPerStone)
+								actor.ImmortalStones -= stonesToConsume
+								actor.Mana += restore
+								if actor.Mana > actor.MaxMana {
+									actor.Mana = actor.MaxMana
+								}
+								turnLogs = append(turnLogs, CombatLog{
+									Turn:      turn,
+									ActorId:   actor.ID,
+									ActorName: actor.Name,
+									Action:    "MANA_RESTORE",
+									Detail:    fmt.Sprintf("%s tự động nghiền nát %.0f Tiên Nguyên Thạch, khôi phục %d tiên nguyên!", actor.Name, stonesToConsume, restore),
+								})
 							}
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   actor.ID,
-								ActorName: actor.Name,
-								Action:    "MANA_RESTORE",
-								Detail:    fmt.Sprintf("%s tự động nghiền nát Tiên Nguyên Thạch, khôi phục %d tiên nguyên!", actor.Name, restore),
-							})
-						} else if actor.PrimevalStones >= 100 {
-							actor.PrimevalStones -= 100
-							restore := int(float64(50) * regenMult)
-							actor.Mana += restore
-							if actor.Mana > actor.MaxMana {
-								actor.Mana = actor.MaxMana
+						}
+					} else {
+						// Chân Nguyên (Rank 1-5): manaPerStone = 20 / (10^(rank-1) * 2^(subRank-1))
+						if actor.PrimevalStones >= 1 {
+							rankMult := math.Pow(10.0, float64(actor.Rank-1))
+							subRankMult := math.Pow(2.0, float64(actor.SubRank-1))
+							manaPerStone := (20.0 / (rankMult * subRankMult)) * regenMult
+							if manaPerStone > 0 {
+								stonesNeeded := math.Ceil(neededMana / manaPerStone)
+								stonesToConsume := math.Min(stonesNeeded, actor.PrimevalStones)
+								restore := int(stonesToConsume * manaPerStone)
+								actor.PrimevalStones -= stonesToConsume
+								actor.Mana += restore
+								if actor.Mana > actor.MaxMana {
+									actor.Mana = actor.MaxMana
+								}
+								turnLogs = append(turnLogs, CombatLog{
+									Turn:      turn,
+									ActorId:   actor.ID,
+									ActorName: actor.Name,
+									Action:    "MANA_RESTORE",
+									Detail:    fmt.Sprintf("%s tự động hấp thu %.0f Nguyên Thạch, khôi phục %d %s!", actor.Name, stonesToConsume, restore, actor.GetManaName()),
+								})
 							}
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   actor.ID,
-								ActorName: actor.Name,
-								Action:    "MANA_RESTORE",
-								Detail:    fmt.Sprintf("%s tự động hấp thu 100 Nguyên Thạch, khôi phục %d %s!", actor.Name, restore, actor.GetManaName()),
-							})
 						}
 					}
 				}
+			}
 
 				// Determine target side
 				var targets []*CombatantAuto

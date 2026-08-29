@@ -188,6 +188,7 @@ type CombatantAuto struct {
 	Name    string
 	Kind    string // "Player", "Enemy", "Boss", "Minion"
 	Rank    int
+	SubRank int
 	GridX   int // 1=Front, 2=Mid, 3=Back
 	GridY   int // 1=Top, 2=Mid, 3=Bottom
 	MaxHP   int
