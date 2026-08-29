@@ -910,11 +910,22 @@ export const Aperture: React.FC<ApertureProps> = ({
                       <div className="text-[10px] text-zinc-500 font-mono">Trạng Thái</div>
                       {player.statuses && player.statuses.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5 mt-1">
-                          {player.statuses.map((s: PlayerStatusInstance) => (
-                            <span key={s.id} className="text-[10px] px-2 py-0.5 rounded-lg bg-rose-950/40 text-rose-400 border border-rose-900/40 font-mono font-semibold">
-                              {statusLabels[s.id] || s.id}{statusRemainLabel(s.expires_at)}
-                            </span>
-                          ))}
+                          {player.statuses.map((s: PlayerStatusInstance) => {
+                            let displayName = statusLabels[s.id] || s.id;
+                            if (s.id.startsWith("cd_gu_")) {
+                              const instanceId = s.id.substring(6);
+                              const gu = player.gu_inventory?.find((g: any) => g.instance_id === instanceId);
+                              const specName = gu ? guDictionary[gu.gu_id]?.name || "Cổ Trùng" : "Cổ Trùng";
+                              displayName = `Hồi chiêu: ${specName}`;
+                            } else if (s.id.startsWith("cd_km_")) {
+                              displayName = "Hồi chiêu Sát Chiêu";
+                            }
+                            return (
+                              <span key={s.id} className="text-[10px] px-2 py-0.5 rounded-lg bg-rose-950/40 text-rose-400 border border-rose-900/40 font-mono font-semibold">
+                                {displayName}{statusRemainLabel(s.expires_at)}
+                              </span>
+                            );
+                          })}
                         </div>
                       ) : (
                         <div className="text-base font-bold text-zinc-100 font-mono mt-0.5">Bình thường</div>

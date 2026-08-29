@@ -346,11 +346,19 @@ export const PlayerProfileModal: React.FC = () => {
               <span className="text-[10px] uppercase tracking-widest font-mono text-[var(--text-muted)]">Trạng thái</span>
               {statuses && statuses.length > 0 ? (
                 <div className="flex flex-wrap gap-1">
-                  {statuses.map((s: { id: string; expires_at?: string | null }) => (
-                    <span key={s.id} className="text-[10px] px-2 py-0.5 rounded-lg bg-rose-950/40 text-rose-400 border border-rose-900/40 font-mono font-semibold">
-                      {statusLabels[s.id] || s.id}{statusRemainLabel(s.expires_at)}
-                    </span>
-                  ))}
+                  {statuses.map((s: { id: string; expires_at?: string | null }) => {
+                    let displayName = statusLabels[s.id] || s.id;
+                    if (s.id.startsWith("cd_gu_")) {
+                      displayName = "Hồi chiêu Cổ Trùng";
+                    } else if (s.id.startsWith("cd_km_")) {
+                      displayName = "Hồi chiêu Sát Chiêu";
+                    }
+                    return (
+                      <span key={s.id} className="text-[10px] px-2 py-0.5 rounded-lg bg-rose-950/40 text-rose-400 border border-rose-900/40 font-mono font-semibold">
+                        {displayName}{statusRemainLabel(s.expires_at)}
+                      </span>
+                    );
+                  })}
                 </div>
               ) : (
                 <span className="text-sm font-semibold text-[var(--text-primary)]">Bình thường</span>

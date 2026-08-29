@@ -478,6 +478,8 @@ func SetupRouter() *gin.Engine {
 		api.POST("/explore/move", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.MovePlayer)
 		api.POST("/explore/move-path", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.MovePlayerPath)
 		api.POST("/explore/teleport", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.TeleportToRegion)
+		api.POST("/explore/use_gu", middleware.AuthRequired(), middleware.RateLimitByPlayer(30, time.Minute), handlers.UseGuOnMap)
+		api.POST("/explore/use_killer_move", middleware.AuthRequired(), middleware.RateLimitByPlayer(30, time.Minute), handlers.UseKillerMoveOnMap)
 
 		// Shop — group: 30/min, per player: 10/min
 		api.GET("/shop/packages", middleware.AuthRequired(), handlers.GetPremiumShopPackages)

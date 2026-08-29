@@ -2316,6 +2316,19 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 		}
 	}
 
+	// Active statuses (World Map buffs)
+	for _, st := range player.Statuses.Active() {
+		if st.ID == "buff_atk" {
+			addSrc("attack", "status:"+st.ID, st.Source, st.Value, 1, 1)
+		}
+		if st.ID == "buff_def" {
+			addSrc("defense", "status:"+st.ID, st.Source, st.Value, 1, 1)
+		}
+		if st.ID == "buff_speed" {
+			addSrc("speed", "status:"+st.ID, st.Source, st.Value, 1, 1)
+		}
+	}
+
 	// Build totals and details
 	stats := map[string]float64{
 		"attack":        0.0,

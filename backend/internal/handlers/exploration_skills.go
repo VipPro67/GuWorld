@@ -1,0 +1,358 @@
+package handlers
+
+import (
+	"encoding/json"
+	"fmt"
+	"math"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/models"
+)
+
+type UseGuOnMapRequest struct {
+	GuInstanceID string `json:"gu_instance_id" binding:"required"`
+	TargetX      int    `json:"target_x"`
+	TargetY      int    `json:"target_y"`
+}
+
+func UseGuOnMap(c *gin.Context) {
+	playerID, ok := middleware.GetPlayerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	var req UseGuOnMapRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot load player"})
+		return
+	}
+
+	if player.ActiveCombat != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể sử dụng kỹ năng World Map khi đang trong chiến đấu!"})
+		return
+	}
+
+	var targetGu *models.GuInstance
+	for i := range player.GuInventory {
+		if player.GuInventory[i].InstanceID == req.GuInstanceID {
+			targetGu = &player.GuInventory[i]
+			break
+		}
+	}
+	if targetGu == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Cổ trùng này."})
+		return
+	}
+
+	specs, found := models.GetGu(targetGu.GuID, targetGu.Rank)
+	if !found {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cổ trùng không tồn tại trong từ điển."})
+		return
+	}
+
+	// Validate usability
+	if err := ValidateGuUsable(&player, targetGu, &specs, true); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check Cooldown
+	cdID := "cd_gu_" + req.GuInstanceID
+	if player.Statuses.Has(cdID) {
+		activeStatuses := player.Statuses.Active()
+		for _, st := range activeStatuses {
+			if st.ID == cdID {
+				remains := time.Until(*st.ExpiresAt).Seconds()
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cổ trùng đang trong thời gian hồi (%.0f giây)", remains)})
+				return
+			}
+		}
+	}
+
+	cost := gamefx.EnergyCost(&player, &specs)
+	logs := []string{}
+	var cdDuration time.Duration = 10 * time.Second // default CD
+
+	applied := false
+
+	// Apply effects from Active (Combat mapping to World Map)
+	if specs.Effects.Active != nil {
+		active := specs.Effects.Active
+		
+		if active.ManaRegen > 0 {
+			player.CurrentMana += active.ManaRegen
+			if player.CurrentMana > player.MaxMana {
+				player.CurrentMana = player.MaxMana
+			}
+			logs = append(logs, fmt.Sprintf("%s hồi phục %.1f Chân Nguyên.", specs.Name, active.ManaRegen))
+			applied = true
+			cdDuration = 30 * time.Second
+		}
+		if active.PortalCreate {
+			// We can teleport to TargetX, TargetY if within bounds
+			if inWorld(req.TargetX, req.TargetY) {
+				player.X = req.TargetX
+				player.Y = req.TargetY
+				logs = append(logs, fmt.Sprintf("%s xé rách không gian, dịch chuyển đến (%d, %d).", specs.Name, player.X, player.Y))
+				applied = true
+				cdDuration = 120 * time.Second
+			} else {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ không hợp lệ!"})
+				return
+			}
+		}
+		// HOT tick -> heal
+		if active.ApplyStatus == "REGEN" {
+			healVal := active.StatusTickDamage * float64(active.StatusDurationTicks)
+			player.HP += healVal
+			if player.HP > gamefx.EffectiveMaxHP(&player) {
+				player.HP = gamefx.EffectiveMaxHP(&player)
+			}
+			logs = append(logs, fmt.Sprintf("%s kích hoạt Hồi Sinh, phục hồi %.1f HP.", specs.Name, healVal))
+			applied = true
+			cdDuration = 60 * time.Second
+		}
+		// Shield -> Virtual Shield
+		if active.ShieldFlat > 0 {
+			player.Statuses.Add("virtual_shield", "world_map", 5*time.Minute, active.ShieldFlat)
+			logs = append(logs, fmt.Sprintf("%s tạo một lớp ảo thuẫn hộ thể (%.1f) duy trì 5 phút.", specs.Name, active.ShieldFlat))
+			applied = true
+			cdDuration = 60 * time.Second
+		}
+		// Stat Buffs
+		if active.ApplyStatus == "ATK_UP" {
+			buffValue := active.StatusTickDamage
+			if buffValue == 0 {
+				buffValue = 50 // fallback
+			}
+			duration := time.Duration(active.StatusDurationTicks) * time.Minute
+			if duration == 0 {
+				duration = 5 * time.Minute
+			}
+			player.Statuses.Add("buff_atk", specs.Name, duration, buffValue)
+			logs = append(logs, fmt.Sprintf("%s tăng %.0f Công Kích trong %.0f phút.", specs.Name, buffValue, duration.Minutes()))
+			applied = true
+			cdDuration = duration + (30 * time.Second)
+		}
+		if active.ApplyStatus == "DEF_UP" {
+			buffValue := active.StatusTickDamage
+			if buffValue == 0 {
+				buffValue = 50 // fallback
+			}
+			duration := time.Duration(active.StatusDurationTicks) * time.Minute
+			if duration == 0 {
+				duration = 5 * time.Minute
+			}
+			player.Statuses.Add("buff_def", specs.Name, duration, buffValue)
+			logs = append(logs, fmt.Sprintf("%s tăng %.0f Phòng Ngự trong %.0f phút.", specs.Name, buffValue, duration.Minutes()))
+			applied = true
+			cdDuration = duration + (30 * time.Second)
+		}
+	}
+
+	// Apply Other Mechanics for World Map
+	if specs.Effects.Other != nil {
+		for _, mechanic := range specs.Effects.Other {
+			if mechanic.EventTrigger == "ON_WORLD_MAP" {
+				msg, err := HandleGuEvent(&player, specs, *targetGu, "ON_WORLD_MAP")
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+					return
+				}
+				if msg != "" {
+					logs = append(logs, msg)
+					applied = true
+				}
+			}
+		}
+	}
+
+	if !applied {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng này không có hiệu ứng nào có thể kích hoạt trên World Map!"})
+		return
+	}
+
+	player.CurrentMana -= cost
+	player.Statuses.Add(cdID, "cooldown", cdDuration, 0)
+
+	statusesJSON, _ := json.Marshal(player.Statuses)
+	_, err = tx.Exec(`UPDATE players SET current_mana = $1, hp = $2, x = $3, y = $4, statuses = $5 WHERE id = $6`,
+		player.CurrentMana, player.HP, player.X, player.Y, statusesJSON, player.ID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu trạng thái"})
+		return
+	}
+	
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+		return
+	}
+
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
+		"message": strings.Join(logs, " "),
+		"logs":    logs,
+	})
+}
+
+type UseKillerMoveOnMapRequest struct {
+	KillerMoveID string `json:"killer_move_id" binding:"required"`
+	TargetX      int    `json:"target_x"`
+	TargetY      int    `json:"target_y"`
+}
+
+func UseKillerMoveOnMap(c *gin.Context) {
+	playerID, ok := middleware.GetPlayerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	var req UseKillerMoveOnMapRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, playerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot load player"})
+		return
+	}
+
+	if player.ActiveCombat != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể sử dụng kỹ năng World Map khi đang trong chiến đấu!"})
+		return
+	}
+
+	move, slots, err := loadKillerMoveTx(tx, playerID, req.KillerMoveID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy sát chiêu"})
+		return
+	}
+
+	// Calculate stats
+	supportIDs := []string{}
+	for _, slot := range slots {
+		if slot.SlotType == models.KillerMoveSlotSupport {
+			supportIDs = append(supportIDs, slot.PlayerGuID)
+		}
+	}
+	preview, err := calculateKillerMoveStatsForPlayer(CalculateKillerMoveRequest{CorePlayerGuID: move.CorePlayerGuID, SupportPlayerGuIDs: supportIDs}, &player, tx)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	cdID := "cd_km_" + req.KillerMoveID
+	if player.Statuses.Has(cdID) {
+		activeStatuses := player.Statuses.Active()
+		for _, st := range activeStatuses {
+			if st.ID == cdID {
+				remains := time.Until(*st.ExpiresAt).Seconds()
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Sát chiêu đang trong thời gian hồi (%.0f giây)", remains)})
+				return
+			}
+		}
+	}
+
+	if player.CurrentMana < preview.TotalManaCost {
+		c.JSON(http.StatusBadRequest, gin.H{"error": insufficientEnergyMessage(&player)})
+		return
+	}
+	player.CurrentMana -= preview.TotalManaCost
+
+	succeeded := math.Max(0.0, float64(preview.SuccessRate)) >= (100.0 * 0.5)
+	logs := []string{}
+
+	if !succeeded {
+		backlashDamage := preview.TotalManaCost * 0.5
+		player.HP -= backlashDamage
+		logs = append(logs, fmt.Sprintf("Sát chiêu thất bại, phản phệ %.1f sát thương.", backlashDamage))
+	} else {
+		applied := false
+		var cdDuration time.Duration = time.Duration(preview.Cooldown) * 10 * time.Second
+
+		// Interpret the effects
+		for k, v := range preview.Effects {
+			if k == "mana_regen" {
+				player.CurrentMana += v
+				if player.CurrentMana > player.MaxMana {
+					player.CurrentMana = player.MaxMana
+				}
+				logs = append(logs, fmt.Sprintf("Sát chiêu hồi phục %.1f Chân Nguyên.", v))
+				applied = true
+			}
+			if k == "heal_hp" || k == "regen" {
+				player.HP += v
+				if player.HP > gamefx.EffectiveMaxHP(&player) {
+					player.HP = gamefx.EffectiveMaxHP(&player)
+				}
+				logs = append(logs, fmt.Sprintf("Sát chiêu hồi phục %.1f HP.", v))
+				applied = true
+			}
+			if k == "portal_create" {
+				if inWorld(req.TargetX, req.TargetY) {
+					player.X = req.TargetX
+					player.Y = req.TargetY
+					logs = append(logs, fmt.Sprintf("Sát chiêu xé rách không gian, dịch chuyển đến (%d, %d).", player.X, player.Y))
+					applied = true
+				} else {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ không hợp lệ!"})
+					return
+				}
+			}
+		}
+
+		if !applied {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Sát chiêu này không có hiệu ứng áp dụng trên World Map!"})
+			return
+		}
+		player.Statuses.Add(cdID, "cooldown", cdDuration, 0)
+	}
+
+	// encoding/json missing? Handled.
+	statusesJSON, _ := json.Marshal(player.Statuses)
+	_, err = tx.Exec(`UPDATE players SET current_mana = $1, hp = $2, x = $3, y = $4, statuses = $5 WHERE id = $6`,
+		player.CurrentMana, player.HP, player.X, player.Y, statusesJSON, player.ID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu trạng thái"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction error"})
+		return
+	}
+
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
+		"message": strings.Join(logs, " "),
+		"logs":    logs,
+	})
+}

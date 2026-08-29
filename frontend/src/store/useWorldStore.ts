@@ -98,6 +98,7 @@ interface WorldStoreState {
   pruneStalePlayers: () => void;
   movePath: (x: number, y: number) => Promise<{ player: Player; log: string; combat_triggered: boolean; reached: boolean; skip_result?: any } | null>;
   teleportToRegion: (regionId: string) => Promise<TeleportResponse | null>;
+  useGuOnMap: (guInstanceId: string, targetX: number, targetY: number) => Promise<{ message: string; logs: string[] } | null>;
   setExploredSubZones: (keys: string[]) => void;
   setMovementRange: (r: number) => void;
   setInvestigationRange: (r: number) => void;
@@ -185,6 +186,35 @@ export const useWorldStore = create<WorldStoreState>((set) => ({
       return null;
     } finally {
       set({ isMoving: false });
+    }
+  },
+
+  useGuOnMap: async (guInstanceId: string, targetX: number, targetY: number) => {
+    set({ loading: true, error: null });
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/explore/use_gu`, {
+        method: "POST",
+        headers: { ...authHeaders("POST"), "Content-Type": "application/json" },
+        body: JSON.stringify({ gu_instance_id: guInstanceId, target_x: targetX, target_y: targetY }),
+      });
+      const body = await res.text();
+      let data;
+      try {
+        data = JSON.parse(body);
+      } catch (e) {
+        throw new Error(body || "Invalid response");
+      }
+      if (!res.ok) {
+        set({ error: data?.error || data?.message || "Failed to use Gu on map", loading: false });
+        return null;
+      }
+      useGameStore.getState().setPlayer(data.player);
+      get().refreshNearby();
+      set({ loading: false });
+      return data;
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : "Error", loading: false });
+      return null;
     }
   },
 

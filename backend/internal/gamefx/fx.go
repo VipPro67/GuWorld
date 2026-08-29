@@ -185,7 +185,13 @@ func EffectiveMaxHP(p *models.Player) float64 {
 	if p == nil {
 		return 0
 	}
-	return p.BaseHP + PassiveHPBonus(p)
+	base := p.BaseHP + PassiveHPBonus(p)
+	for _, st := range p.Statuses.Active() {
+		if st.ID == "buff_hp" {
+			base += st.Value
+		}
+	}
+	return base
 }
 
 // RaceDisplayName returns the Vietnamese label for a race key.

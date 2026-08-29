@@ -39,6 +39,7 @@ type ActiveEffect struct {
 	SummonPhantom      bool    `json:"summon_phantom,omitempty"`
 	GenerateGu         bool    `json:"generate_gu,omitempty"`
 	CaptureBonus       float64 `json:"capture_bonus,omitempty"` // +% tỉ lệ bắt monster (0..1)
+	PortalCreate       bool    `json:"portal_create,omitempty"`
 
 	SummonGrowthPhantoms bool    `json:"summon_growth_phantoms,omitempty"`
 	SummonCountPerTick   float64 `json:"summon_count_per_tick,omitempty"`
