@@ -38,6 +38,16 @@ export interface WorldPlayer {
   current_region: string;
 }
 
+export interface TeleportResponse {
+  player: Player;
+  x: number;
+  y: number;
+  region: string;
+  cost: number;
+  currency: string;
+  message: string;
+}
+
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
 const getCookie = (name: string): string | null => {
@@ -87,6 +97,7 @@ interface WorldStoreState {
   upsertPlayerPosition: (p: NearbyPlayer) => void;
   pruneStalePlayers: () => void;
   movePath: (x: number, y: number) => Promise<{ player: Player; log: string; combat_triggered: boolean; reached: boolean } | null>;
+  teleportToRegion: (regionId: string) => Promise<TeleportResponse | null>;
   setExploredSubZones: (keys: string[]) => void;
   setMovementRange: (r: number) => void;
   setInvestigationRange: (r: number) => void;
@@ -174,6 +185,69 @@ export const useWorldStore = create<WorldStoreState>((set) => ({
       return null;
     } finally {
       set({ isMoving: false });
+    }
+  },
+
+  teleportToRegion: async (regionId: string) => {
+    set({ loading: true, error: null });
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/explore/teleport`, {
+        method: "POST",
+        headers: { ...authHeaders("POST"), "Content-Type": "application/json" },
+        body: JSON.stringify({ region_id: regionId }),
+      });
+      const body = await res.text();
+      if (!res.ok) {
+        let msg = `Di Chuyển thất bại: ${res.status}`;
+        try {
+          const errData = JSON.parse(body);
+          if (errData.error) msg = errData.error;
+        } catch {
+          /* ignore */
+        }
+        set((s) => ({
+          loading: false,
+          error: msg,
+          worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
+        }));
+        return null;
+      }
+      const data = JSON.parse(body);
+      // Update local position immediately for smooth UX
+      if (data.x !== undefined && data.y !== undefined) {
+        set({ liveX: data.x, liveY: data.y });
+        // Also update game store player position
+        if (typeof window !== "undefined") {
+          const { useGameStore } = await import("@/store/useGameStore");
+          const currentPlayer = useGameStore.getState().player;
+          if (currentPlayer) {
+            useGameStore.getState().setPlayerFromServer({
+              ...currentPlayer,
+              x: data.x,
+              y: data.y,
+              current_region: data.region,
+              primeval_stones: data.player?.primeval_stones ?? currentPlayer.primeval_stones,
+              immortal_stones: data.player?.immortal_stones ?? currentPlayer.immortal_stones,
+            });
+          }
+        }
+      }
+      // Refetch nearby cells for new position
+      setTimeout(() => {
+        useWorldStore.getState().fetchNearbyCells(data.x, data.y, 300);
+        useWorldStore.getState().fetchNearbyPlayers(data.x, data.y, 300);
+      }, 100);
+      return data;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      set((s) => ({
+        error: msg,
+        loading: false,
+        worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
+      }));
+      return null;
+    } finally {
+      set({ loading: false });
     }
   },
 

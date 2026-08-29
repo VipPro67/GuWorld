@@ -492,6 +492,7 @@ Từ phiên bản map 3×2, thế giới là **một bản đồ liên tục duy
 | `zone_type` | VARCHAR | `HUB` / `SAFE_ZONE` / `BOSS_ZONE` / `SECRET_REALM` / `DUNGEON` / `PVP_ZONE` / `NGU_VUC` / `KHU_VUC`. |
 | `min_x, min_y, max_x, max_y` | INT | hình chữ nhật toàn cầu (inclusive) của zone. |
 | `entry_x, entry_y` | INT | tọa độ cổng truyền tống khi du hành tới zone. |
+| `safe_zone_x, safe_zone_y` | INT | tọa độ điểm an toàn trong khu vực (được dùng cho dịch chuyển tức thời). |
 | `pool_weights` | JSONB | pool sinh nội dung procedural của zone (xem dưới). |
 
 **`pool_weights`** JSONB — ví dụ:

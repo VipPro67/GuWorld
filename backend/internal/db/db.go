@@ -1446,7 +1446,7 @@ func seedRegionsFromCSV(filename string) error {
 	idIdx, nameIdx := col("id"), col("name")
 	descIdx, widthIdx, heightIdx, minRankIdx, maxRankIdx, activeIdx := col("description"), col("width"), col("height"), col("min_rank"), col("max_rank"), col("is_active")
 	parentIdx, typeIdx := col("parent_id"), col("zone_type")
-	minXIdx, minYIdx, maxXIdx, maxYIdx, entryXIdx, entryYIdx, poolIdx := col("min_x"), col("min_y"), col("max_x"), col("max_y"), col("entry_x"), col("entry_y"), col("pool_weights")
+	minXIdx, minYIdx, maxXIdx, maxYIdx, entryXIdx, entryYIdx, poolIdx, safeXIdx, safeYIdx := col("min_x"), col("min_y"), col("max_x"), col("max_y"), col("entry_x"), col("entry_y"), col("pool_weights"), col("safe_zone_x"), col("safe_zone_y")
 	if idIdx < 0 || nameIdx < 0 {
 		return fmt.Errorf("Region.csv missing required columns (id, name)")
 	}
@@ -1491,6 +1491,8 @@ func seedRegionsFromCSV(filename string) error {
 		minX, minY := parseInt(row, minXIdx, 0), parseInt(row, minYIdx, 0)
 		maxX, maxY := parseInt(row, maxXIdx, width-1), parseInt(row, maxYIdx, height-1)
 		entryX, entryY := parseInt(row, entryXIdx, (minX+maxX)/2), parseInt(row, entryYIdx, (minY+maxY)/2)
+		safeX := parseInt(row, safeXIdx, entryX)
+		safeY := parseInt(row, safeYIdx, entryY)
 		poolWeights := "{}"
 		if v := get(row, poolIdx); v != "" {
 			poolWeights = filterImmortalWildGus(v)
@@ -1500,15 +1502,15 @@ func seedRegionsFromCSV(filename string) error {
 			parentID = p
 		}
 		_, err = DB.Exec(`
-			INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, parent_id, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights, updated_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,NOW())
+			INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, parent_id, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, safe_zone_x, safe_zone_y, pool_weights, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,NOW())
 			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description,
 			width=EXCLUDED.width, height=EXCLUDED.height, min_rank=EXCLUDED.min_rank, max_rank=EXCLUDED.max_rank,
 			is_active=EXCLUDED.is_active, parent_id=EXCLUDED.parent_id, zone_type=EXCLUDED.zone_type,
 			min_x=EXCLUDED.min_x, min_y=EXCLUDED.min_y, max_x=EXCLUDED.max_x, max_y=EXCLUDED.max_y,
-			entry_x=EXCLUDED.entry_x, entry_y=EXCLUDED.entry_y, pool_weights=EXCLUDED.pool_weights, updated_at=NOW()
+			entry_x=EXCLUDED.entry_x, entry_y=EXCLUDED.entry_y, safe_zone_x=EXCLUDED.safe_zone_x, safe_zone_y=EXCLUDED.safe_zone_y, pool_weights=EXCLUDED.pool_weights, updated_at=NOW()
 		`, id, get(row, nameIdx), get(row, descIdx), width, height, minRank, maxRank, active,
-			parentID, zoneType, minX, minY, maxX, maxY, entryX, entryY, poolWeights)
+			parentID, zoneType, minX, minY, maxX, maxY, entryX, entryY, safeX, safeY, poolWeights)
 		if err != nil {
 			return fmt.Errorf("upsert region %s: %w", id, err)
 		}

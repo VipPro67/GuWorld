@@ -35,6 +35,12 @@ func schemaWorld() error {
 		return err
 	}
 
+	if err := execSchema("regions_safe_zone", `
+	ALTER TABLE regions ADD COLUMN IF NOT EXISTS safe_zone_x INT;
+	ALTER TABLE regions ADD COLUMN IF NOT EXISTS safe_zone_y INT;`); err != nil {
+		return err
+	}
+
 	if err := execSchema("monster_templates", `
 	CREATE TABLE IF NOT EXISTS monster_templates (
 		id VARCHAR(50) PRIMARY KEY,

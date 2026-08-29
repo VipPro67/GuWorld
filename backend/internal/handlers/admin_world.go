@@ -44,7 +44,8 @@ func AdminListRegions(c *gin.Context) {
 	offset := (page - 1) * pageSize
 
 	query := `SELECT id, name, COALESCE(description,''), width, height, min_rank, max_rank, is_active, 
-	                 COALESCE(parent_id,''), zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, 
+	                 COALESCE(parent_id,''), zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y,
+	                 safe_zone_x, safe_zone_y,
 	                 COALESCE(pool_weights::text, '{}') 
 	          FROM regions`
 	countQuery := `SELECT COUNT(*) FROM regions`
@@ -87,18 +88,28 @@ func AdminListRegions(c *gin.Context) {
 		var r models.Region
 		var poolRaw string
 		var parentID sql.NullString
+		var safeZoneX sql.NullInt64
+		var safeZoneY sql.NullInt64
 		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &r.Width, &r.Height, &r.MinRank, &r.MaxRank, &r.IsActive,
-			&parentID, &r.ZoneType, &r.MinX, &r.MinY, &r.MaxX, &r.MaxY, &r.EntryX, &r.EntryY, &poolRaw); err != nil {
+			&parentID, &r.ZoneType, &r.MinX, &r.MinY, &r.MaxX, &r.MaxY, &r.EntryX, &r.EntryY, &safeZoneX, &safeZoneY, &poolRaw); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Scan error"})
 			return
 		}
 		if parentID.Valid {
 			r.ParentID = parentID.String
 		}
-		if poolRaw != "" {
-			_ = json.Unmarshal([]byte(poolRaw), &r.PoolWeights)
-		}
-		list = append(list, r)
+if poolRaw != "" {
+		_ = json.Unmarshal([]byte(poolRaw), &r.PoolWeights)
+	}
+	if safeZoneX.Valid {
+		val := int(safeZoneX.Int64)
+		r.SafeZoneX = &val
+	}
+	if safeZoneY.Valid {
+		val := int(safeZoneY.Int64)
+		r.SafeZoneY = &val
+	}
+	list = append(list, r)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -142,12 +153,12 @@ func AdminCreateRegion(c *gin.Context) {
 	}
 
 	query := `INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, 
-	                              parent_id, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights)
-	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`
+	                              parent_id, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, safe_zone_x, safe_zone_y, pool_weights)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`
 
 	_, err = db.DB.ExecContext(c.Request.Context(), query,
 		req.ID, req.Name, req.Description, req.Width, req.Height, req.MinRank, req.MaxRank, req.IsActive,
-		parentID, req.ZoneType, req.MinX, req.MinY, req.MaxX, req.MaxY, req.EntryX, req.EntryY, poolWeightsBytes)
+		parentID, req.ZoneType, req.MinX, req.MinY, req.MaxX, req.MaxY, req.EntryX, req.EntryY, req.SafeZoneX, req.SafeZoneY, poolWeightsBytes)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo khu vực: " + err.Error()})
@@ -199,15 +210,15 @@ func AdminUpdateRegion(c *gin.Context) {
 		parentID = nil
 	}
 
-	query := `UPDATE regions 
-	          SET name = $1, description = $2, width = $3, height = $4, min_rank = $5, max_rank = $6, 
-	              is_active = $7, parent_id = $8, zone_type = $9, min_x = $10, min_y = $11, 
-	              max_x = $12, max_y = $13, entry_x = $14, entry_y = $15, pool_weights = $16, updated_at = NOW()
-	          WHERE id = $17`
+query := `UPDATE regions 
+          SET name = $1, description = $2, width = $3, height = $4, min_rank = $5, max_rank = $6, 
+              is_active = $7, parent_id = $8, zone_type = $9, min_x = $10, min_y = $11, 
+              max_x = $12, max_y = $13, entry_x = $14, entry_y = $15, safe_zone_x = $16, safe_zone_y = $17, pool_weights = $18, updated_at = NOW()
+          WHERE id = $19`
 
 	res, err := db.DB.ExecContext(c.Request.Context(), query,
 		req.Name, req.Description, req.Width, req.Height, req.MinRank, req.MaxRank, req.IsActive,
-		parentID, req.ZoneType, req.MinX, req.MinY, req.MaxX, req.MaxY, req.EntryX, req.EntryY, poolWeightsBytes, id)
+		parentID, req.ZoneType, req.MinX, req.MinY, req.MaxX, req.MaxY, req.EntryX, req.EntryY, req.SafeZoneX, req.SafeZoneY, poolWeightsBytes, id)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật khu vực: " + err.Error()})

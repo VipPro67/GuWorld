@@ -255,16 +255,6 @@ export const LobbyView: React.FC = () => {
 
   const activityItems: HubItem[] = [
     {
-      id: "explore",
-      label: "Khám Phá",
-      icon: Compass,
-      gradient: "from-teal-500 to-emerald-600",
-      glow: "group-hover:shadow-[0_0_25px_rgba(20,184,166,0.45)]",
-      borderColor: "border-teal-400/30",
-      iconColor: "text-teal-500",
-    },
-    
-    {
       id: "mine",
       label: "Mỏ Linh Thạch",
       icon: Coins,

@@ -118,6 +118,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | GET | `/explore/cells/rect` | Các ô non-empty trong hình chữ nhật `?min_x=&min_y=&max_x=&max_y=` (mỗi cạnh ≤ 900) — dùng để prefetch đúng vùng nhìn / dải phía trước hướng đi; client gộp vào cache ổn định thay vì thay thế. Trả cùng định dạng `[{x,y,cell_type,content,rank,sub_rank}]`. |
 | POST | `/explore/move` | Di chuyển tới toạ độ trong thế giới (bounds = `world_width`/`world_height`). |
 | POST | `/explore/move-path` | Di chuyển tự do theo đường thẳng từ ô hiện tại tới toạ độ đích, trigger cell action trên từng ô đi qua (gom loot; **chỉ chạm trán quái khi bước vào ô thật sự có quái/boss**, không có phục kích ngẫu nhiên trên ô trống). Mỗi request tiến **tối đa 150 ô** để commit vị trí mịn (người chơi khác thấy chuyển động gần real-time, đổi hướng/dừng sớm hơn); trả `{player, logs, log, combat_triggered, reached, stats}`; nếu `reached=false` và không combat, client chain tiếp request từ vị trí mới cho tới khi tới đích. |
+| POST | `/explore/teleport` | Dịch chuyển tức thời đến vùng an toàn của một khu vực (KHU_VUC/NGU_VUC). Body: `{"region_id": "..."}`. Chi phí dựa trên khoảng cách Chebyshev, tu vi (rank/sub_rank), và độ đầy túi đồ. Trả Primeval Stones (cấp < 6) hoặc Immortal Stones (cấp ≥ 6). Response: `{player, x, y, region, cost, currency, message}`. |
 
 ## Sủng vật (Pets)
 

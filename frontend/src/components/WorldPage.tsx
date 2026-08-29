@@ -5,7 +5,8 @@ import dynamic from "next/dynamic";
 import { useWorldStore } from "@/store/useWorldStore";
 import { useGameStore } from "@/store/useGameStore";
 import { WorldLogViewer } from "./WorldLogViewer";
-import { Menu, X, User, Briefcase, Flame, Sparkles, Shield, Store, Trophy, Gift, Swords, Gem, Compass } from "lucide-react";
+import TeleportModal from "./TeleportModal";
+import { Menu, X, User, Briefcase, Flame, Sparkles, Shield, Store, Trophy, Gift, Swords, Gem, Compass, Zap } from "lucide-react";
 
 const WorldCanvas = dynamic(() => import("@/components/WorldCanvas"), {
   ssr: false,
@@ -110,6 +111,7 @@ export function WorldPage() {
     { id: "refine", label: "Luyện Cổ", icon: Sparkles, color: "text-purple-400" },
     { id: "sect", label: "Tông Môn", icon: Shield, color: "text-blue-400" },
     { id: "market", label: "Chợ Tiên", icon: Store, color: "text-amber-400", locked: !isImmortal },
+    { id: "teleport", label: "Di Chuyển", icon: Zap, color: "text-yellow-400" },
     // { id: "leaderboard", label: "Xếp Hạng", icon: Trophy, color: "text-yellow-400" },
     // { id: "gacha", label: "Rút Thưởng", icon: Gift, color: "text-pink-400" },
     // { id: "arena", label: "Đấu Trường", icon: Swords, color: "text-red-400" },
@@ -251,6 +253,9 @@ export function WorldPage() {
               {activeModal === "arena" && <ArenaView />}
               {activeModal === "premium_store" && <PremiumStoreView />}
               {activeModal === "dungeon" && <DungeonView />}
+              {activeModal === "teleport" && (
+                <TeleportModal isOpen={true} onClose={() => setActiveModal(null)} />
+              )}
             </div>
           </div>
         </div>

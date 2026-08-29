@@ -15,6 +15,8 @@ type ZonePools struct {
 // 10000x10000 each) and KHU_VUC (named areas that live inside a NGU_VUC).
 // Coordinates are global world coordinates.
 type Region struct {
+	SafeZoneX *int `json:"safe_zone_x,omitempty"`
+	SafeZoneY *int `json:"safe_zone_y,omitempty"`
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`

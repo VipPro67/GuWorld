@@ -83,7 +83,8 @@ func LoadZoneRegistry(db *sql.DB) error {
 		       COALESCE(min_rank,1), COALESCE(max_rank,5), is_active,
 		       COALESCE(parent_id,''), COALESCE(zone_type,'KHU_VUC'),
 		       COALESCE(min_x,0), COALESCE(min_y,0), COALESCE(max_x,0), COALESCE(max_y,0),
-		       COALESCE(entry_x,0), COALESCE(entry_y,0), COALESCE(pool_weights::text,'{}')
+		       COALESCE(entry_x,0), COALESCE(entry_y,0), COALESCE(pool_weights::text,'{}'),
+		       COALESCE(safe_zone_x,0), COALESCE(safe_zone_y,0)
 		FROM regions
 		WHERE is_active = TRUE
 	`)
@@ -96,16 +97,28 @@ func LoadZoneRegistry(db *sql.DB) error {
 		var z models.Region
 		var active bool
 		var poolRaw string
-		if err := rows.Scan(&z.ID, &z.Name, &z.Description, &z.Width, &z.Height,
-			&z.MinRank, &z.MaxRank, &active,
-			&z.ParentID, &z.ZoneType,
-			&z.MinX, &z.MinY, &z.MaxX, &z.MaxY,
-			&z.EntryX, &z.EntryY, &poolRaw); err != nil {
+			var safeX, safeY sql.NullInt64
+			if err := rows.Scan(&z.ID, &z.Name, &z.Description, &z.Width, &z.Height,
+				&z.MinRank, &z.MaxRank, &active,
+				&z.ParentID, &z.ZoneType,
+				&z.MinX, &z.MinY, &z.MaxX, &z.MaxY,
+				&z.EntryX, &z.EntryY, &poolRaw, &safeX, &safeY); err != nil {
+
 			logger.S.Warnf("zone registry scan: %v", err)
 			continue
 		}
 		if z.ZoneType == "" {
 			z.ZoneType = ZoneTypeNamed
+		}
+		z.IsActive = active
+		// Assign safe zone pointers if present
+		if safeX.Valid {
+			val := int(safeX.Int64)
+			z.SafeZoneX = &val
+		}
+		if safeY.Valid {
+			val := int(safeY.Int64)
+			z.SafeZoneY = &val
 		}
 		if poolRaw != "" && poolRaw != "{}" {
 			_ = json.Unmarshal([]byte(poolRaw), &z.PoolWeights)
@@ -333,6 +346,18 @@ func DeriveRegionAt(x, y int) string {
 		return z.ID
 	}
 	return HubRegionID
+}
+
+// GetSafePoint returns safe coordinates for a region (fallback to entry point)
+func GetSafePoint(regionID string) (int, int) {
+	if z := ZoneByID(regionID); z != nil {
+		if z.SafeZoneX != nil && z.SafeZoneY != nil {
+			return *z.SafeZoneX, *z.SafeZoneY
+		}
+		return z.EntryX, z.EntryY
+	}
+	// fallback to hub entry point
+	return HubEntryPoint.X, HubEntryPoint.Y
 }
 
 // SubZoneKey returns the small-zone key ("<large>:<col>:<row>") for a point.
