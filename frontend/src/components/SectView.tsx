@@ -377,11 +377,11 @@ export const SectView: React.FC = () => {
 
   const getRegionName = (region: string): string => {
     switch (region) {
-      case "Central_Continent": return "Trung Châu";
-      case "Southern_Border": return "Nam Cương";
-      case "Northern_Plains": return "Bắc Nguyên";
-      case "Western_Desert": return "Tây Mạc";
-      case "Eastern_Sea": return "Đông Hải";
+      case "hub_trung_chau": return "Trung Châu";
+      case "hub_nam_cuong": return "Nam Cương";
+      case "hub_bac_nguyen": return "Bắc Nguyên";
+      case "hub_tay_mac": return "Tây Mạc";
+      case "hub_dong_hai": return "Đông Hải";
       default: return region;
     }
   };
@@ -535,11 +535,11 @@ export const SectView: React.FC = () => {
               className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-500/50 cursor-pointer"
             >
               <option value="all">Tất cả Vực Giới</option>
-              <option value="Central_Continent">Trung Châu</option>
-              <option value="Southern_Border">Nam Cương</option>
-              <option value="Northern_Plains">Bắc Nguyên</option>
-              <option value="Western_Desert">Tây Mạc</option>
-              <option value="Eastern_Sea">Đông Hải</option>
+              <option value="hub_trung_chau">Trung Châu</option>
+              <option value="hub_nam_cuong">Nam Cương</option>
+              <option value="hub_bac_nguyen">Bắc Nguyên</option>
+              <option value="hub_tay_mac">Tây Mạc</option>
+              <option value="hub_dong_hai">Đông Hải</option>
             </select>
           </div>
         </div>
@@ -803,11 +803,11 @@ export const SectView: React.FC = () => {
                     onChange={(e) => setCreateSectRegion(e.target.value)}
                     className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-yellow-500/50"
                   >
-                    <option value="Central_Continent">Trung Châu</option>
-                    <option value="Southern_Border">Nam Cương</option>
-                    <option value="Northern_Plains">Bắc Nguyên</option>
-                    <option value="Western_Desert">Tây Mạc</option>
-                    <option value="Eastern_Sea">Đông Hải</option>
+                    <option value="hub_trung_chau">Trung Châu</option>
+                    <option value="hub_nam_cuong">Nam Cương</option>
+                    <option value="hub_bac_nguyen">Bắc Nguyên</option>
+                    <option value="hub_tay_mac">Tây Mạc</option>
+                    <option value="hub_dong_hai">Đông Hải</option>
                   </select>
                 </div>
 

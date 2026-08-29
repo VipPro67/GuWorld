@@ -24,7 +24,7 @@ func schemaPlayers() error {
 		immortal_stones DOUBLE PRECISION DEFAULT 0,
 		hp DOUBLE PRECISION NOT NULL DEFAULT 100,
 		base_hp DOUBLE PRECISION NOT NULL DEFAULT 100,
-		current_region VARCHAR(50) NOT NULL DEFAULT 'Southern_Border' REFERENCES regions(id),
+		current_region VARCHAR(50) NOT NULL DEFAULT 'hub_nam_cuong' REFERENCES regions(id),
 		x INTEGER NOT NULL DEFAULT 50,
 		y INTEGER NOT NULL DEFAULT 50,
 		race VARCHAR(50) NOT NULL DEFAULT 'human' REFERENCES race_dictionary(key),

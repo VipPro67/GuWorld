@@ -91,7 +91,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     }
   }, [regionsLoaded, fetchRegions]);
 
-  const isExploringActiveRegion = player.current_region !== "Southern_Border" && player.current_region !== "Lobby" && regions.find((r) => r.id === player.current_region)?.zone_type !== "HUB";
+  const isExploringActiveRegion = player.current_region !== "hub_nam_cuong" && player.current_region !== "Lobby" && regions.find((r) => r.id === player.current_region)?.zone_type !== "HUB";
   const isPartyMemberNotLeader = party !== null && party.leader_id !== player.id;
 
   const loadGrid = async () => {
@@ -343,11 +343,11 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                 <button
                   type="button"
                   disabled={actionLoading || !!player.active_combat}
-                  onClick={() => handleNodeClick("Southern_Border")}
+                  onClick={() => handleNodeClick("hub_nam_cuong")}
                   className="w-full py-2.5 px-3 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-emerald-950/40 text-emerald-400 border border-emerald-900/60 hover:bg-emerald-950/60 hover:border-emerald-700"
                 >
                   <Home className="w-3.5 h-3.5" />
-                  Trở Về Trấn Thanh Bản (An Toàn)
+                  Trở Về Khu An Toàn
                 </button>
               )}
             </div>

@@ -53,7 +53,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | GET | `/player/stats` |
 | GET | `/player/passive-stats` | Detailed passive stats breakdown with per-source attribution. |
 | POST | `/player/explore/:id` |
-| POST | `/player/complete-onboarding` | Hoàn tất thiết lập ban đầu. Body: `{"starting_region","attack_gu_id","defense_gu_id","vital_gu_choice"}`. `starting_region` gồm `Southern_Border`/`Central_Continent`/`Northern_Plains`/`Western_Desert`/`Eastern_Sea`; người chơi được đặt vào HUB tương ứng của Đại Vực đã chọn. |
+| POST | `/player/complete-onboarding` | Hoàn tất thiết lập ban đầu. Body: `{"starting_region","attack_gu_id","defense_gu_id","vital_gu_choice"}`. `starting_region` gồm `hub_nam_cuong`/`hub_trung_chau`/`hub_bac_nguyen`/`hub_tay_mac`/`hub_dong_hai`; người chơi được đặt vào HUB tương ứng của Đại Vực đã chọn. |
 | POST | `/player/use-item` |
 | POST | `/player/use-items` |
 | POST | `/player/recharge` |
@@ -107,7 +107,7 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | --- | --- | --- |
 | POST | `/combat/attack` | |
 | POST | `/combat/capture` | Bắt quái vật làm sủng vật. |
-| POST | `/explore` | Du hành tới zone: body `{"player_id","node_id"}` (node_id = id Đại Vực / địa danh / `Southern_Border`). |
+| POST | `/explore` | Du hành tới zone: body `{"player_id","node_id"}` (node_id = id Đại Vực / địa danh / `hub_nam_cuong`). |
 | POST | `/explore/retreat/:id` | |
 | POST | `/explore/flee/:id` | Bỏ chạy khỏi trận đang chiến. **Mỏ & PvP: luôn thành công, không phạt.** Còn lại: 70% thành công (BOSS/Tribulation 40%). Thành công → trừ 20% Max HP nếu là PvE thường (có thể ngất + rơi đồ). Thất bại → địch phản công; trả `flee_success:false` kèm `defeat` / `victory` (địch tự chết → thắng tại chỗ + nhận loot + xoá địch khỏi map) và `logs`. |
 | GET | `/explore/grid` | Viewport 5×5 quanh player; trả thêm `world_width`, `world_height`. Bỏ `explored_cells`. |

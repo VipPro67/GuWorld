@@ -99,7 +99,7 @@ export const Registration: React.FC<RegistrationProps> = ({
         usernameValue,
         password,
         emailValue,
-        "Southern_Border",
+        "hub_nam_cuong",
         true,
         referralCode,
         "GU_MOONLIGHT",

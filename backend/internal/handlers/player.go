@@ -434,10 +434,14 @@ func RegisterPlayer(c *gin.Context) {
 	}
 
 	validRegions := map[string]bool{
-		"Southern_Border": true,
+		"hub_nam_cuong":  true,
+		"hub_trung_chau": true,
+		"hub_bac_nguyen": true,
+		"hub_tay_mac":    true,
+		"hub_dong_hai":   true,
 	}
 	if req.StartingRegion == "" {
-		req.StartingRegion = "Southern_Border"
+		req.StartingRegion = "hub_nam_cuong"
 	}
 	if !validRegions[req.StartingRegion] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Starting region không hợp lệ"})
@@ -761,29 +765,20 @@ func CompleteOnboarding(c *gin.Context) {
 	}
 
 	validRegions := map[string]bool{
-		"Southern_Border":   true,
-		"Central_Continent": true,
-		"Northern_Plains":   true,
-		"Western_Desert":    true,
-		"Eastern_Sea":       true,
+		"hub_nam_cuong":  true,
+		"hub_trung_chau": true,
+		"hub_bac_nguyen": true,
+		"hub_tay_mac":    true,
+		"hub_dong_hai":   true,
 	}
 	if !validRegions[req.StartingRegion] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Starting region không hợp lệ"})
 		return
 	}
 
-	// Mỗi vị trí đăng ký tương ứng với một HUB (trấn an toàn) riêng. Người chơi
-	// mới được đặt vào HUB của Đại Vực mình chọn thay vì tất cả cùng một trấn.
-	startingRegionHubs := map[string]string{
-		"Southern_Border":   "hub_thuong_gia_thanh",
-		"Central_Continent": "hub_trung_chau",
-		"Northern_Plains":   "hub_bac_nguyen",
-		"Western_Desert":    "hub_tay_mac",
-		"Eastern_Sea":       "hub_dong_hai",
-	}
-	startingHubID := startingRegionHubs[req.StartingRegion]
+	startingHubID := req.StartingRegion
 	if startingHubID == "" {
-		startingHubID = HubRegionID
+		startingHubID = "hub_nam_cuong"
 	}
 	spawnX, spawnY := hubEntryPoint()
 	if hub := ZoneByID(startingHubID); hub != nil && hub.EntryX != 0 && hub.EntryY != 0 {
@@ -4633,7 +4628,7 @@ func GoogleCallback(c *gin.Context) {
 
 		queryInsert := `
 			INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, lifespan, time_speed_multiplier, email, google_id, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding, race, gender)
-			VALUES ($1, '', 1, 1, $2, $3, $4, $5, $6, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, $11, $12, $10, '{}'::jsonb, '[]'::jsonb, 'Southern_Border', '{}'::jsonb, NULL, 100.0, 1.0, $7, $8, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', 1, 1, '', false, $9, true, 'human', 'male')
+			VALUES ($1, '', 1, 1, $2, $3, $4, $5, $6, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, $11, $12, $10, '{}'::jsonb, '[]'::jsonb, 'hub_nam_cuong', '{}'::jsonb, NULL, 100.0, 1.0, $7, $8, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', 1, 1, '', false, $9, true, 'human', 'male')
 			RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, needs_onboarding, race, gender, constitution, statuses
 		`
 

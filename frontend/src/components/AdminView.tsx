@@ -4706,7 +4706,7 @@ export const AdminView: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">ID khu vực</label>
-                  <input disabled={!regionEdit._isNew} value={regionEdit.id || ""} onChange={e => setRegionEdit({...regionEdit, id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 disabled:opacity-50" placeholder="e.g. Southern_Border" />
+                  <input disabled={!regionEdit._isNew} value={regionEdit.id || ""} onChange={e => setRegionEdit({...regionEdit, id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200 disabled:opacity-50" placeholder="e.g. hub_nam_cuong" />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tên khu vực</label>
@@ -4814,7 +4814,7 @@ export const AdminView: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Region ID</label>
-                  <input value={mapCellEdit.region_id || ""} onChange={e => setMapCellEdit({...mapCellEdit, region_id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" placeholder="e.g. Southern_Border" />
+                  <input value={mapCellEdit.region_id || ""} onChange={e => setMapCellEdit({...mapCellEdit, region_id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200" placeholder="e.g. hub_nam_cuong" />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Loại Ô</label>

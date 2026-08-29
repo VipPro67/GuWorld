@@ -75,11 +75,11 @@ const STARTING_DEFENSE_GUS = [
 ];
 
 const REGIONS = [
-  { id: "Southern_Border", name: "Nam Cương", desc: "Núi non hiểm trở, quê hương Cổ Nguyệt Gia Tộc" },
-  { id: "Central_Continent", name: "Trung Châu", desc: "Trung tâm huyền thoại, đất thánh của các đại tông môn" },
-  { id: "Northern_Plains", name: "Bắc Nguyên", desc: "Đồng bát ngát, nơi các thế lực Ma đạo ngự trị" },
-  { id: "Western_Desert", name: "Tây Mạc", desc: "Sa mạc mênh mông, đất dụng Trận đạo và Thổ đạo" },
-  { id: "Eastern_Sea", name: "Đông Hải", desc: "Biển cả bao la, vương quốc của Giao Nhân tộc" },
+  { id: "hub_nam_cuong", name: "Nam Cương", desc: "Thành trì an toàn giữa thập vạn đại sơn, nơi các gia tộc Nam Cương giao thương và nghỉ chân." },
+  { id: "hub_trung_chau", name: "Trung Châu", desc: "Kinh đô phồn hoa của Trung Châu, khu vực cấm tranh đấu tuyệt đối, nơi tụ hội của Thập Đại Cổ Phái." },
+  { id: "hub_bac_nguyen", name: "Bắc Nguyên", desc: "Trấn an toàn giữa thảo nguyên mênh mông Bắc Nguyên, nơi các bộ lạc Hoàng Kim dừng chân." },
+  { id: "hub_tay_mac", name: "Tây Mạc", desc: "Ốc đảo an toàn giữa sa mạc Tây Mạc, trạm dừng chân của các thương đội." },
+  { id: "hub_dong_hai", name: "Đông Hải", desc: "Cảng an toàn bên bờ Đông Hải, cửa ngõ giao thương đường biển của tộc Giao Nhân." },
 ];
 
 interface OnboardingModalProps {
@@ -92,7 +92,7 @@ interface OnboardingModalProps {
 }
 
 export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) => {
-  const [selectedRegion, setSelectedRegion] = useState("Southern_Border");
+  const [selectedRegion, setSelectedRegion] = useState("hub_nam_cuong");
   const [selectedAttackGu, setSelectedAttackGu] = useState("GU_MOONLIGHT");
   const [selectedDefenseGu, setSelectedDefenseGu] = useState("GU_STONE_SKIN");
   const [selectedVital, setSelectedVital] = useState("ATTACK");

@@ -169,7 +169,7 @@ func execSchema(name, sql string) error {
 func seedHubRegion() error {
 	if _, err := DB.Exec(`
 	INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, pool_weights, updated_at)
-	VALUES ('Southern_Border', 'Thanh Bản Thôn', 'Trấn an toàn khởi nguyên của Cổ Sư. Nơi giao nhau của Lục Đại Vực.', 2001, 2001, 1, 9, true, 'HUB', 14000, 9000, 16000, 11000, 15000, 10000, '{"cell_type_weights":{"Empty":100}}', NOW())
+	VALUES ('hub_nam_cuong', 'Nam Cương Thành', 'Thành trì an toàn giữa thập vạn đại sơn, nơi các gia tộc Nam Cương giao thương và nghỉ chân.', 201, 201, 1, 9, true, 'HUB', 4900, 4900, 5100, 5100, 5000, 5000, '{"cell_type_weights":{"Empty":100}}', NOW())
 	ON CONFLICT (id) DO NOTHING;`); err != nil {
 		return err
 	}
@@ -181,13 +181,13 @@ func seedHubRegion() error {
 func seedSystemPlayers() error {
 	if _, err := DB.Exec(`
 	INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, hp, base_hp, current_region, x, y, email, ref_code, is_admin)
-	VALUES ('00000000-0000-0000-0000-000000000000', 'Bảo Hoàng Thiên', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'Southern_Border', 50, 50, 'system@guworld.local', 'REF-SYSTEM', true)
+	VALUES ('00000000-0000-0000-0000-000000000000', 'Bảo Hoàng Thiên', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'hub_nam_cuong', 50, 50, 'system@guworld.local', 'REF-SYSTEM', true)
 	ON CONFLICT (id) DO NOTHING;`); err != nil {
 		return err
 	}
 	if _, err := DB.Exec(`
 	INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, hp, base_hp, current_region, x, y, email, ref_code, is_admin)
-	VALUES ('11111111-1111-1111-1111-111111111111', 'Hệ thống', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'Southern_Border', 50, 50, 'system_npc@guworld.local', 'REF-SYSTEM-NPC', true)
+	VALUES ('11111111-1111-1111-1111-111111111111', 'Hệ thống', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'hub_nam_cuong', 50, 50, 'system_npc@guworld.local', 'REF-SYSTEM-NPC', true)
 	ON CONFLICT (id) DO NOTHING;`); err != nil {
 		return err
 	}
@@ -291,7 +291,7 @@ func ensureAdmin() error {
 			) VALUES (
 				gen_random_uuid(), 'admin', $1, 'admin@guworld.local', 6, 1, 
 				'Giáp', 99, 100, 100, 
-				100, 100, 'Southern_Border', 50, 50, 'REF-ADMIN', true,
+				100, 100, 'hub_nam_cuong', 50, 50, 'REF-ADMIN', true,
 				0, 0
 			)`, string(hash)); err != nil {
 			return err
