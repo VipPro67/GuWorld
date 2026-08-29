@@ -200,7 +200,7 @@ export const SectView: React.FC = () => {
   }, [donateType, activeTab]);
 
   // Sect management sub-tab
-  const [mgmtTab, setMgmtTab] = useState<"members" | "missions" | "stock" | "requests">("members");
+  const [mgmtTab, setMgmtTab] = useState<"members" | "missions" | "stock" | "requests"| "salary">("members");
 
   // Custom mission creation form state
   const [mTitle, setMTitle] = useState("");

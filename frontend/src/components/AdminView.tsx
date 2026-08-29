@@ -2686,6 +2686,10 @@ export const AdminView: React.FC = () => {
                   <Trash2 className="w-4 h-4" />
                   {actionLoading ? "Đang xử lý..." : "Xóa Cache Dictionary"}
                 </button>
+                <button disabled={actionLoading} onClick={async () => { if (!confirm("Thao tác này sẽ xóa toàn bộ cache Redis (bao gồm session, cooldown...). Tiếp tục?")) return; const ok = await exec(`${BACKEND_URL}/api/admin/clear-redis-cache`, "POST", {}); if (ok) addToast("Toàn bộ cache Redis đã được xóa!", "success"); }} className="flex items-center gap-2 px-5 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer">
+                  <Trash2 className="w-4 h-4" />
+                  {actionLoading ? "Đang xử lý..." : "Xóa Cache Redis"}
+                </button>
               </div>
             </div>
           )}

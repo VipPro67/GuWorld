@@ -173,6 +173,7 @@ func SetupRouter() *gin.Engine {
 			admin.POST("/data/import/:table", handlers.AdminImportTable)
 			admin.POST("/data/export/:table", handlers.AdminExportTable)
 			admin.POST("/clear-cache", handlers.AdminClearCache)
+			admin.POST("/clear-redis-cache", handlers.AdminClearRedisCache)
 			admin.GET("/audit-logs", handlers.AdminGetAuditLogs)
 			admin.GET("/regions", handlers.AdminListRegions)
 			admin.POST("/regions", handlers.AdminCreateRegion)

@@ -2288,6 +2288,22 @@ func AdminClearCache(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa và tải lại toàn bộ cache dữ liệu thành công!"})
 }
 
+// AdminClearRedisCache completely flushes all keys from the connected Redis instance.
+// POST /api/admin/clear-redis-cache
+func AdminClearRedisCache(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+	if cache.Client != nil {
+		if err := cache.Client.FlushAll(cache.Ctx).Err(); err != nil {
+			logger.S.Errorf("Failed to flush redis cache: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa toàn bộ cache Redis"})
+			return
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa toàn bộ cache Redis thành công!"})
+}
+
 // AdminGetAuditLogs returns all audit logs (admin only) with optional filtering.
 // GET /api/admin/audit-logs
 func AdminGetAuditLogs(c *gin.Context) {
