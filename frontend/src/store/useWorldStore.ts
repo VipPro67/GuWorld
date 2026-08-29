@@ -96,7 +96,7 @@ interface WorldStoreState {
   fetchNearbyPlayers: (x: number, y: number, r: number) => Promise<void>;
   upsertPlayerPosition: (p: NearbyPlayer) => void;
   pruneStalePlayers: () => void;
-  movePath: (x: number, y: number) => Promise<{ player: Player; log: string; combat_triggered: boolean; reached: boolean } | null>;
+  movePath: (x: number, y: number) => Promise<{ player: Player; log: string; combat_triggered: boolean; reached: boolean; skip_result?: any } | null>;
   teleportToRegion: (regionId: string) => Promise<TeleportResponse | null>;
   setExploredSubZones: (keys: string[]) => void;
   setMovementRange: (r: number) => void;

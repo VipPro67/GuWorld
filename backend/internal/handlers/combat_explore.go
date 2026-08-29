@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -123,7 +124,76 @@ func ExploreNode(c *gin.Context) {
 		enemy := models.BuildCombatStateFromMonster(monTemplate, rank, subRank)
 
 		player.ActiveCombat = StartCombat(tx, &enemy, &player)
-		logMsg = fmt.Sprintf("Nguy hiểm! Đột nhiên từ bụi cỏ rậm rạp tại %s, một con %s lao ra tấn công đạo hữu!", nodeName, enemy.EnemyName)
+
+		// Check if player has skip_battle enabled
+		if player.CombatSettings.SkipBattle {
+			// Auto-resolve combat using saved settings
+			winner, _, skipSummary, err := AutoResolveCombat(tx, &player)
+			if err != nil {
+				logger.S.Errorf("Auto-resolve combat failed: %v", err)
+				// Fall back to normal combat flow
+				logMsg = fmt.Sprintf("Nguy hiểm! Đột nhiên từ bụi cỏ rậm rạp tại %s, một con %s lao ra tấn công đạo hữu!", nodeName, enemy.EnemyName)
+				combatTriggered = true
+			} else {
+				combatTriggered = false // Combat was auto-resolved, no need for frontend combat screen
+				if winner == "Phe Ta" {
+					logMsg = fmt.Sprintf("Tự động chiến thắng %s tại %s! Nhân Khí +3.", enemy.EnemyName, nodeName)
+				} else {
+					logMsg = fmt.Sprintf("Tự động chiến đấu với %s tại %s thất bại! Đạo hữu bị truyền tống về an toàn.", enemy.EnemyName, nodeName)
+				}
+				// Add loot info to log message if available
+				if skipSummary != nil {
+					if loot, ok := skipSummary["loot"].([]string); ok && len(loot) > 0 {
+						logMsg += " " + strings.Join(loot, " ")
+					}
+					if mineOccupied, ok := skipSummary["mine_occupied"].(int); ok && mineOccupied > 0 {
+						logMsg += fmt.Sprintf(" Đã chiếm mỏ %d!", mineOccupied)
+					}
+				}
+
+				// Return early with skip result
+				zone := ZoneByID(req.NodeID)
+				if zone == nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Khu vực du ngoạn không tồn tại."})
+					return
+				}
+				player.CurrentRegion = zone.ID
+				player.X = zone.EntryX
+				player.Y = zone.EntryY
+				recordVisitedSubZone(&player, SubZoneKey(player.X, player.Y))
+
+				qiGained := AddHumanQi(&player, 3.0)
+
+				updateQuery := `
+					UPDATE players
+					SET current_mana = $1, primeval_stones = $2, active_combat = NULL, current_region = $3, x = $4, y = $5,
+					    explore_count = $6, last_explore_reset = $7, human_qi = $8, visited_subzones = $9
+					WHERE id = $10
+				`
+				_, err = tx.Exec(updateQuery, player.CurrentMana, player.PrimevalStones, player.CurrentRegion, player.X, player.Y,
+					player.ExploreCount, player.LastExploreReset, player.HumanQi, player.VisitedSubZones, player.ID)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save exploration progress"})
+					return
+				}
+
+				if err = tx.Commit(); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+					return
+				}
+
+				setWorldPosFromPlayer(&player)
+
+				responseWithPlayer(c, http.StatusOK, player, gin.H{
+					"log":              logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
+					"combat_triggered": false,
+					"skip_result":      skipSummary,
+				})
+				return
+			}
+		} else {
+			logMsg = fmt.Sprintf("Nguy hiểm! Đột nhiên từ bụi cỏ rậm rạp tại %s, một con %s lao ra tấn công đạo hữu!", nodeName, enemy.EnemyName)
+		}
 
 		hasHeavenSecret := false
 		for _, gu := range player.GuInventory {

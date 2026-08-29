@@ -211,6 +211,7 @@ export interface AutoCombatConfig {
   mana_threshold: number;
   gu_priorities: GuTactic[];
   km_priorities: KillerMoveTactic[];
+  skip_battle: boolean;
 }
 
 export interface KillerMoveSlot {
@@ -987,7 +988,7 @@ interface GameState {
   claimAchievement: (achievementId: string) => Promise<{ success: boolean; message: string } | null>;
   selectTitleFrame: (title: string, frame: string) => Promise<{ success: boolean; message: string } | null>;
   sacrificeNPC: (npcId: string) => Promise<{ success: boolean; message: string } | null>;
-  exploreNode: (nodeId: string) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
+  exploreNode: (nodeId: string) => Promise<{ player: Player; log: string; combat_triggered: boolean; skip_result?: any } | null>;
   executeCombatTurn: (equippedGuIds: string[], isCharge?: boolean, targetId?: string, targetX?: number, targetY?: number) => Promise<{ player: Player; logs: string[]; enemy: CombatState | null; victory: boolean; defeat: boolean } | null>;
   executeAutoCombat: (loadout: any) => Promise<{ logs: any[]; winner: string; combatants?: any[] } | null>;
   executePracticeCombat: (loadout: any, dummyConfig: any) => Promise<{ logs: any[]; winner: string; combatants?: any[], player_won?: boolean } | null>;
@@ -1027,7 +1028,7 @@ interface GameState {
   useGus: (instanceIds: string[]) => Promise<boolean>;
   useItem: (itemId: string) => Promise<void>;
   useItems: (itemIds: string[]) => Promise<boolean>;
-  movePlayer: (x: number, y: number, attackTargetId?: string) => Promise<{ player: Player; log: string; combat_triggered: boolean } | null>;
+  movePlayer: (x: number, y: number, attackTargetId?: string) => Promise<{ player: Player; log: string; combat_triggered: boolean; skip_result?: any } | null>;
   fetchGrid: () => Promise<{ x: number; y: number; vision_radius: number; cells: any[]; stats: any; players_on_map?: any[]; world_width?: number; world_height?: number } | null>;
   dropGu: (instanceId: string) => Promise<boolean>;
   dropGus: (instanceIds: string[]) => Promise<boolean>;
@@ -3126,6 +3127,20 @@ export const useGameStore = create<GameState>((set, get) => {
 
       setPlayerFromServer(data.player);
       get().addLog(data.log);
+      
+      // Handle skip battle result from explore
+      if (data.skip_result) {
+        const skipResult = data.skip_result;
+        if (skipResult.winner === "Phe Ta") {
+          get().addToast(`Tự động chiến thắng ${skipResult.enemy_name || "kẻ thù"}!`, "success");
+          if (skipResult.mine_occupied) {
+            get().addToast(`Đã chiếm mỏ ${skipResult.mine_occupied}!`, "info");
+          }
+        } else {
+          get().addToast(`Tự động chiến đấu thất bại! ${skipResult.enemy_name || "Kẻ thù"} quá mạnh.`, "error");
+        }
+      }
+      
       return data;
     } catch (err: any) {
       set({ error: err.message });
@@ -3560,7 +3575,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       const combat = player.active_combat;
-      let returnView = "explore";
+      let returnView = get().currentView;
       if (combat) {
         if (combat.combat_mode === "virtual") returnView = "arena";
         else if (combat.mine_slot_id) returnView = "mine";
@@ -4402,6 +4417,20 @@ export const useGameStore = create<GameState>((set, get) => {
 
       setPlayerFromServer(data.player);
       get().addLog(data.log || "Di chuyển thành công.");
+      
+      // Handle skip battle result
+      if (data.skip_result) {
+        const skipResult = data.skip_result;
+        if (skipResult.winner === "Phe Ta") {
+          get().addToast(`Tự động chiến thắng ${skipResult.enemy_name || "kẻ thù"}!`, "success");
+          if (skipResult.mine_occupied) {
+            get().addToast(`Đã chiếm mỏ ${skipResult.mine_occupied}!`, "info");
+          }
+        } else {
+          get().addToast(`Tự động chiến đấu thất bại! ${skipResult.enemy_name || "Kẻ thù"} quá mạnh.`, "error");
+        }
+      }
+      
       return data;
     } catch (err: any) {
       set({ error: err.message });

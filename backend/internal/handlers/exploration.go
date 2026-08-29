@@ -830,6 +830,45 @@ func MovePlayer(c *gin.Context) {
 
 	qiGained := AddHumanQi(&player, 1.0)
 
+	// Auto-resolve combat if skip_battle is enabled
+	if combatTriggered && player.CombatSettings.SkipBattle && player.ActiveCombat != nil {
+		winner, _, skipSummary, err := AutoResolveCombat(tx, &player)
+		if err != nil {
+			logger.S.Errorf("Auto-resolve combat failed during move: %v", err)
+		} else {
+			combatTriggered = false // Combat was auto-resolved
+			enemyName := "kẻ thù"
+			if e, ok := skipSummary["enemy_name"].(string); ok {
+				enemyName = e
+			}
+			if winner == "Phe Ta" {
+				logMsg = fmt.Sprintf("Tự động chiến thắng %s tại (%d, %d)! Nhân Khí +3.", enemyName, player.X, player.Y)
+			} else {
+				logMsg = fmt.Sprintf("Tự động chiến đấu với %s tại (%d, %d) thất bại! Đạo hữu bị truyền tống về an toàn.", enemyName, player.X, player.Y)
+			}
+			if skipSummary != nil {
+				if loot, ok := skipSummary["loot"].([]string); ok && len(loot) > 0 {
+					logMsg += " " + strings.Join(loot, " ")
+				}
+				if mineOccupied, ok := skipSummary["mine_occupied"].(int); ok && mineOccupied > 0 {
+					logMsg += fmt.Sprintf(" Đã chiếm mỏ %d!", mineOccupied)
+				}
+			}
+			if err := tx.Commit(); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+				return
+			}
+			// Include skip summary in response
+			responseWithPlayer(c, http.StatusOK, player, gin.H{
+				"log":              logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
+				"combat_triggered": false,
+				"skip_result":      skipSummary,
+				"stats":            CalculatePlayerStats(&player),
+			})
+			return
+		}
+	}
+
 	// Update DB
 	updateQuery := `
 		UPDATE players
@@ -1001,6 +1040,7 @@ func MovePlayerPath(c *gin.Context) {
 	reached := len(path) < maxPathCells
 	var logs []string
 	combatTriggered := false
+	var logMsg string
 	for _, step := range path {
 		logMsg, triggered, errArrival := resolveCellArrival(tx, &player, step[0], step[1], "", true)
 		if errArrival != nil {
@@ -1016,6 +1056,48 @@ func MovePlayerPath(c *gin.Context) {
 	}
 
 	qiGained := AddHumanQi(&player, 1.0)
+
+	// Auto-resolve combat if skip_battle is enabled
+	if combatTriggered && player.CombatSettings.SkipBattle && player.ActiveCombat != nil {
+		winner, _, skipSummary, err := AutoResolveCombat(tx, &player)
+		if err != nil {
+			logger.S.Errorf("Auto-resolve combat failed during path move: %v", err)
+		} else {
+			combatTriggered = false // Combat was auto-resolved
+			enemyName := "kẻ thù"
+			if e, ok := skipSummary["enemy_name"].(string); ok {
+				enemyName = e
+			}
+			if winner == "Phe Ta" {
+				logMsg = fmt.Sprintf("Tự động chiến thắng %s tại (%d, %d)! Nhân Khí +3.", enemyName, player.X, player.Y)
+			} else {
+				logMsg = fmt.Sprintf("Tự động chiến đấu với %s tại (%d, %d) thất bại! Đạo hữu bị truyền tống về an toàn.", enemyName, player.X, player.Y)
+			}
+			if skipSummary != nil {
+				if loot, ok := skipSummary["loot"].([]string); ok && len(loot) > 0 {
+					logMsg += " " + strings.Join(loot, " ")
+				}
+				if mineOccupied, ok := skipSummary["mine_occupied"].(int); ok && mineOccupied > 0 {
+					logMsg += fmt.Sprintf(" Đã chiếm mỏ %d!", mineOccupied)
+				}
+			}
+			logs = append(logs, logMsg)
+			if err := tx.Commit(); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+				return
+			}
+			// Include skip summary in response
+			responseWithPlayer(c, http.StatusOK, player, gin.H{
+				"log":              strings.Join(logs, "\n") + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
+				"logs":             logs,
+				"combat_triggered": false,
+				"skip_result":      skipSummary,
+				"reached":          reached,
+				"stats":            CalculatePlayerStats(&player),
+			})
+			return
+		}
+	}
 
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})

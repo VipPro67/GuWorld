@@ -9,7 +9,7 @@ import { LogConsole } from "./LogConsole";
 interface ExplorationMapProps {
   player: Player;
   actionLoading: boolean;
-  onExplore: (nodeId: string) => Promise<{ player: any; log: string; combat_triggered: boolean } | null>;
+  onExplore: (nodeId: string) => Promise<{ player: any; log: string; combat_triggered: boolean; skip_result?: any } | null>;
   onBack?: () => void;
 }
 
@@ -57,7 +57,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
     world_height?: number;
   } | null>(null);
 
-  const { fetchGrid, movePlayer, party, partyInvitations, createParty, fetchPartyStatus, fetchPartyInvitations, invitePlayer, respondPartyInvitation, leaveParty, retreat, fetchPlayerProfile, showConfirm } = useGameStore();
+  const { fetchGrid, movePlayer, party, partyInvitations, createParty, fetchPartyStatus, fetchPartyInvitations, invitePlayer, respondPartyInvitation, leaveParty, retreat, fetchPlayerProfile, showConfirm, addToast } = useGameStore();
   const [inviteUsername, setInviteUsername] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [partyLoading, setPartyLoading] = useState(false);

@@ -179,6 +179,7 @@ type AutoCombatConfig struct {
 	ManaThreshold   float64            `json:"mana_threshold"`
 	GuPriorities    []GuTactic         `json:"gu_priorities"`
 	KMPriorities    []KillerMoveTactic `json:"km_priorities"`
+	SkipBattle      bool               `json:"skip_battle"`
 }
 
 // Scan implements the sql.Scanner interface for AutoCombatConfig.
@@ -214,6 +215,7 @@ func DefaultAutoCombatConfig() AutoCombatConfig {
 		ManaThreshold:   30,
 		GuPriorities:    []GuTactic{},
 		KMPriorities:    []KillerMoveTactic{},
+		SkipBattle:      false,
 	}
 }
 

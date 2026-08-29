@@ -367,7 +367,7 @@ export const Aperture: React.FC<ApertureProps> = ({
   const [fakeVitalGu, setFakeVitalGu] = useState(player.fake_vital_gu || "GU_SHADOW");
 
   // Auto combat settings state
-  const defaults = { auto_heal_hp: false, heal_threshold: 30, auto_restore_mana: false, mana_threshold: 30, gu_priorities: [], km_priorities: [] };
+  const defaults = { auto_heal_hp: false, heal_threshold: 30, auto_restore_mana: false, mana_threshold: 30, gu_priorities: [], km_priorities: [], skip_battle: false };
   const saved = player.combat_settings || store.combatSettings || defaults;
   const [csAutoHealHP, setCsAutoHealHP] = useState(saved.auto_heal_hp);
   const [csHealThreshold, setCsHealThreshold] = useState(saved.heal_threshold);
@@ -375,6 +375,7 @@ export const Aperture: React.FC<ApertureProps> = ({
   const [csManaThreshold, setCsManaThreshold] = useState(saved.mana_threshold);
   const [csGuPriorities, setCsGuPriorities] = useState(saved.gu_priorities || []);
   const [csKMPriorities, setCsKMPriorities] = useState(saved.km_priorities || []);
+  const [csSkipBattle, setCsSkipBattle] = useState(saved.skip_battle);
   const [combatSettingsLoaded, setCombatSettingsLoaded] = useState(false);
 
   React.useEffect(() => {
@@ -392,6 +393,7 @@ export const Aperture: React.FC<ApertureProps> = ({
       setCsHealThreshold(cs.heal_threshold);
       setCsAutoRestoreMana(cs.auto_restore_mana);
       setCsManaThreshold(cs.mana_threshold);
+      setCsSkipBattle(cs.skip_battle);
       setCsGuPriorities(cs.gu_priorities || []);
       setCsKMPriorities(cs.km_priorities || []);
     }
@@ -1594,6 +1596,19 @@ export const Aperture: React.FC<ApertureProps> = ({
                     </div>
                   </div>
 
+                  {/* Skip Battle */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" className="sr-only peer" checked={csSkipBattle}
+                          onChange={e => setCsSkipBattle(e.target.checked)} />
+                        <div className="w-9 h-5 bg-zinc-700 rounded-full peer peer-checked:bg-amber-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all" />
+                      </label>
+                      <span className="text-xs text-zinc-300">Tự động bỏ qua chiến thắng</span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500">(Chỉ áp dụng khi khám phá bản đồ)</span>
+                  </div>
+
                   {/* Gu Loadout */}
                   <div className="border-t border-zinc-900/30 pt-3">
                     <div className="text-[10px] text-zinc-400 font-bold mb-1">Bộ Cổ Chiến Đấu</div>
@@ -1736,6 +1751,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                         mana_threshold: csManaThreshold,
                         gu_priorities: csGuPriorities,
                         km_priorities: csKMPriorities,
+                        skip_battle: csSkipBattle,
                       });
                       if (success) {
                         store.addLog("Đã lưu cài đặt chiến thuật tự động.");

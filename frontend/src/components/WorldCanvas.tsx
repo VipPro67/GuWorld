@@ -200,6 +200,21 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
               setPlayerFromServer(np);
               setExploredSubZones(np.visited_subzones || []);
               if (res.log) addWorldLog(res.log);
+              
+              // Handle skip battle result
+              if (res.skip_result) {
+                const skipResult = res.skip_result;
+                const addToast = useGameStore.getState().addToast;
+                if (skipResult.winner === "Phe Ta") {
+                  addToast(`Tự động chiến thắng ${skipResult.enemy_name || "kẻ thù"}!`, "success");
+                  if (skipResult.mine_occupied) {
+                    addToast(`Đã chiếm mỏ ${skipResult.mine_occupied}!`, "info");
+                  }
+                } else {
+                  addToast(`Tự động chiến đấu thất bại! ${skipResult.enemy_name || "Kẻ thù"} quá mạnh.`, "error");
+                }
+              }
+              
               if (!res.reached && !res.combat_triggered) {
                 const desired = moveTargetRef.current;
                 if (desired && (desired.x !== tx || desired.y !== ty)) {
@@ -387,33 +402,33 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
         const isBoss = o.cell_type === "Boss";
         const isResource = o.cell_type === "Resource";
         const g = new Graphics();
-        const size = isBoss ? 12 : 8;
+        const size = isBoss ? 0.8 : 0.6;
         if (isBoss) {
           // Boss: Star/Diamond shape with glowing aura
-          g.circle(0, 0, size + 2);
+          g.circle(0, 0, size + 0.2);
           g.fill({ color: 0xef4444, alpha: 0.3 }); // Aura
           g.poly([0, -size, size, 0, 0, size, -size, 0]);
           g.fill({ color: 0xef4444 });
-          g.stroke({ color: 0x7f1d1d, width: 2 });
+          g.stroke({ color: 0x7f1d1d, width: 0.1 });
           g.circle(0, 0, size / 3);
           g.fill({ color: 0xfca5a5 }); // Inner highlight
         } else if (isResource) {
           // Resource / Tree: Layered green circles
-          g.circle(0, 2, size * 0.8);
+          g.circle(0, 0.15, size * 0.8);
           g.fill({ color: 0x064e3b, alpha: 0.5 }); // Drop shadow
           g.circle(0, 0, size * 0.8);
           g.fill({ color: 0x065f46 }); // Dark base
-          g.circle(0, -2, size * 0.6);
+          g.circle(0, -0.15, size * 0.6);
           g.fill({ color: 0x10b981 }); // Lighter top
-          g.circle(-2, -4, size * 0.3);
+          g.circle(-0.15, -0.3, size * 0.3);
           g.fill({ color: 0x34d399 }); // Highlight
         } else {
           // Empty / Location: Small shrine or stone marker
           g.rect(-size / 1.5, -size / 2, size * 1.33, size);
           g.fill({ color: 0x52525b }); // Stone base
-          g.poly([0, -size, size / 1.5 + 2, -size / 2, -size / 1.5 - 2, -size / 2]);
+          g.poly([0, -size, size / 1.5 + 0.1, -size / 2, -size / 1.5 - 0.1, -size / 2]);
           g.fill({ color: 0x0ea5e9 }); // Blue roof
-          g.stroke({ color: 0x0284c7, width: 1 });
+          g.stroke({ color: 0x0284c7, width: 0.05 });
         }
         g.eventMode = "static";
         g.cursor = "pointer";
@@ -438,7 +453,7 @@ export default function WorldCanvas({ mode, showLabels = false }: WorldCanvasPro
           style: { fontSize: 12, fill: labelColor, fontFamily: "sans-serif", stroke: { color: 0x000000, width: 3 } },
         });
         label.anchor.set(0.5, 1);
-        label.y = -size - 4;
+        label.y = -size - 0.8;
         label.name = "object-label-text";
         g.addChild(label);
         g.position.set(o.x + 0.5, o.y + 0.5);
