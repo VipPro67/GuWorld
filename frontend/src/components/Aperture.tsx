@@ -29,6 +29,8 @@ import {
 import { formatNumber, statusRemainLabel } from "@/lib/utils";
 import { formatGameEffects } from "@/lib/effects";
 import { translatePath, translateMastery, masteryKeyForPoints, masteryLevelForPoints, PATH_MASTERY_MILESTONES } from "@/lib/translate";
+import { GamePanel, GameTabs, GameButton, GameCard, GameProgressBar, GameBadge, GameSection } from "@/components/ui";
+// UI migrated to shared components
 
 function formatStat(val: number): string {
   return Math.abs(val) >= 10000 
@@ -502,7 +504,7 @@ export const Aperture: React.FC<ApertureProps> = ({
   const animId2 = `aperture-wave2-${rank}`;
 
   return (
-    <>
+    <GamePanel variant="gold" className="space-y-4">
       <style>{`
         @keyframes ${animId1} {
           from { transform: translateX(0); }
@@ -552,51 +554,31 @@ export const Aperture: React.FC<ApertureProps> = ({
 
 
         {/* Reload + Tab Selection */}
-        <div className="flex gap-2 w-full bg-zinc-950/60 p-1.5 rounded-2xl border border-zinc-900 mb-5 z-10 items-center">
-          <button
+        <div className="flex gap-2 w-full mb-5 z-10 items-center">
+          <GameButton
             onClick={handleReloadAll}
             disabled={isReloading}
-            className="px-2.5 py-1.5 rounded-xl text-zinc-400 hover:text-amber-400 border border-transparent hover:border-amber-500/20 transition-all cursor-pointer disabled:opacity-50 shrink-0"
+            variant="ghost"
+            size="sm"
             title="Tải lại dữ liệu"
           >
             <RefreshCw className={`w-4 h-4 ${isReloading ? "animate-spin" : ""}`} />
-          </button>
-          <button
-            onClick={() => setActiveTab("aperture")}
-            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${activeTab === "aperture"
-              ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-              : "text-zinc-500 hover:text-zinc-300"
-              }`}
+          </GameButton>
+          <GameTabs
+            items={[
+              { id: "aperture", label: "Không Khiếu", disabled: false },
+              { id: "growth", label: "Bản Thân", disabled: false },
+              { id: "referrals", label: "Phúc Lợi", disabled: false },
+              { id: "settings", label: "Cài Đặt", disabled: false },
+            ]}
+            activeId={activeTab}
+            onChange={(id) => setActiveTab(id as any)}
+            variant="pills"
+            size="sm"
+            scrollable={true}
+            fullWidth={true}
           >
-            Không Khiếu
-          </button>
-          <button
-            onClick={() => setActiveTab("growth")}
-            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${activeTab === "growth"
-              ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-              : "text-zinc-500 hover:text-zinc-300"
-              }`}
-          >
-            Bản Thân
-          </button>
-          <button
-            onClick={() => setActiveTab("referrals")}
-            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${activeTab === "referrals"
-              ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-              : "text-zinc-500 hover:text-zinc-300"
-              }`}
-          >
-            Phúc Lợi
-          </button>
-          <button
-            onClick={() => setActiveTab("settings")}
-            className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${activeTab === "settings"
-              ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-              : "text-zinc-500 hover:text-zinc-300"
-              }`}
-          >
-            Cài Đặt
-          </button>
+          </GameTabs>
         </div>
 
         {/* Tab Content */}
@@ -1806,8 +1788,8 @@ export const Aperture: React.FC<ApertureProps> = ({
             </div>
           </div>
         )}
-      </div>
-    </>
+</div>
+    </GamePanel>
   );
 };
 

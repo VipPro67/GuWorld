@@ -531,6 +531,7 @@ func ResolveTribulation(c *gin.Context) {
 			// Failed Tribulation
 			var playerRank int
 			_ = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, playerID).Scan(&playerRank)
+			
 			// Compute nextYear using simulated incremented counts
 			earthVal := ap.EarthCalamityCount
 			heavenVal := ap.HeavenlyTribulationCount
@@ -555,15 +556,26 @@ func ResolveTribulation(c *gin.Context) {
 			ap.State = "DAMAGED"
 			ap.ApertureHP = ap.MaxApertureHP / 10
 
-			_, _ = tx.Exec(`
-				UPDATE aperture_resource_nodes 
-				SET is_destroyed = true 
-				WHERE id IN (
-					SELECT id FROM aperture_resource_nodes 
-					WHERE aperture_id = $1 AND is_destroyed = false 
-					ORDER BY random() LIMIT 2
-				)
-			`, ap.ID)
+			// Phá hủy 30% tài nguyên
+			var activeNodesCount int
+			_ = tx.QueryRow(`SELECT COUNT(*) FROM aperture_resource_nodes WHERE aperture_id = $1 AND is_destroyed = false`, ap.ID).Scan(&activeNodesCount)
+			nodesToDestroy := int(float64(activeNodesCount) * 0.3)
+			if nodesToDestroy < 1 && activeNodesCount > 0 {
+				nodesToDestroy = 1
+			}
+
+			if nodesToDestroy > 0 {
+				_, _ = tx.Exec(`
+					UPDATE aperture_resource_nodes 
+					SET is_destroyed = true 
+					WHERE id IN (
+						SELECT id FROM aperture_resource_nodes 
+						WHERE aperture_id = $1 AND is_destroyed = false 
+						ORDER BY random() 
+						LIMIT $2
+					)
+				`, ap.ID, nodesToDestroy)
+			}
 
 			_, _ = tx.Exec(`
 				UPDATE players 
@@ -571,11 +583,14 @@ func ResolveTribulation(c *gin.Context) {
 				WHERE id = $1
 			`, playerID)
 
+			// Giảm diện tích và tốc độ thời gian
 			_, _ = tx.Exec(`
 				UPDATE immortal_apertures 
 				SET state = $1, next_tribulation_year = $2, aperture_hp = $3,
 					earth_calamity_count = $4, heavenly_tribulation_count = $5, grand_tribulation_count = $6,
-					myriad_tribulation_count = $7, chaos_calamity_count = $8, tribulation_count = $9
+					myriad_tribulation_count = $7, chaos_calamity_count = $8, tribulation_count = $9,
+					area_size = GREATEST(0, CAST(area_size AS numeric) * 0.9),
+					time_rate = GREATEST(1.0, time_rate * 0.9)
 				WHERE id = $10
 			`, ap.State, ap.NextTribulationYear, ap.ApertureHP,
 				ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount,
@@ -587,7 +602,7 @@ func ResolveTribulation(c *gin.Context) {
 				WHERE id = $3
 			`, ap.ApertureHP, now, ev.ID)
 
-			msg = "Kiếp nạn vượt thất bại! Thiên Ý cuồng bạo tàn phá Tiên Khiếu, Nguyên khí hư hao, bạn mất 2,000 Nguyên Thạch, 5 Tiên Nguyên và nhiều điểm tài nguyên bị san phẳng."
+			msg = "Kiếp nạn vượt thất bại! Thiên Ý cuồng bạo tàn phá Tiên Khiếu, Nguyên khí hư hao, bạn mất 2,000 Nguyên Thạch, 5 Tiên Nguyên, diện tích Tiên Khiếu và tốc độ thời gian bị giảm, 30% điểm tài nguyên bị san phẳng."
 		}
 	}
 
@@ -1163,11 +1178,11 @@ func CheckAndTriggerTribulations() error {
 		}
 	}
 
-	// 2. Check and auto-resolve pending active tribulations that exceeded 6 hours
+	// 2. Check and auto-resolve pending active tribulations that exceeded 24 hours
 	autoRows, err := db.DB.Query(`
 		SELECT id, player_id
 		FROM tribulation_events
-		WHERE status = 'ACTIVE' AND started_at < NOW() - INTERVAL '6 hours'
+		WHERE status = 'ACTIVE' AND started_at < NOW() - INTERVAL '24 hours'
 	`)
 	if err == nil {
 		type EventResolve struct {
@@ -1542,7 +1557,7 @@ func ProcessActiveTribulationGrid() error {
 
 	for _, ev := range events {
 		// Freeze the tribulation while the player is offline: enemies hold their
-		// position and never damage nodes. Bump started_at so the 6h auto-resolve
+		// position and never damage nodes. Bump started_at so the 24h auto-resolve
 		// window only counts online time.
 		if !isPlayerOnline(ev.PlayerID) {
 			_, _ = tx.Exec(`UPDATE tribulation_events SET started_at = NOW() WHERE id = $1`, ev.EventID)
