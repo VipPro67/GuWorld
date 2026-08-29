@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { Player } from "@/store/useGameStore";
+import { useGameStore, type Player } from "@/store/useGameStore";
 
 export interface WorldObject {
   id?: string;
@@ -110,7 +110,7 @@ interface WorldStoreState {
   addWorldLog: (text: string) => void;
 }
 
-export const useWorldStore = create<WorldStoreState>((set) => ({
+export const useWorldStore = create<WorldStoreState>((set, get) => ({
   objects: [],
   nearbyCells: [],
   cellCache: {},
@@ -208,8 +208,11 @@ export const useWorldStore = create<WorldStoreState>((set) => ({
         set({ error: data?.error || data?.message || "Failed to use Gu on map", loading: false });
         return null;
       }
-      useGameStore.getState().setPlayer(data.player);
-      get().refreshNearby();
+      useGameStore.getState().setPlayerFromServer(data.player);
+      if (data.player) {
+        get().fetchNearbyCells(data.player.x, data.player.y, 300);
+        get().fetchNearbyPlayers(data.player.x, data.player.y, 300);
+      }
       set({ loading: false });
       return data;
     } catch (err) {
