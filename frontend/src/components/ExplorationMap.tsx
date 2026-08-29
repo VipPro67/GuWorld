@@ -5,6 +5,8 @@ import { useGameStore, Player } from "@/store/useGameStore";
 import { Compass, Users, Map as MapIcon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Flag, User, Swords, ArrowRight, Activity, ArrowLeftRight, Leaf, Sparkles, MapPin, ShieldAlert, Award, Footprints, Flame, Gem, Flower2, HelpCircle, Wine, Crown, Home } from "lucide-react";
 
 import { LogConsole } from "./LogConsole";
+import { GamePanel, GameButton } from "@/components/ui";
+// UI migrated to shared components
 
 interface ExplorationMapProps {
   player: Player;
@@ -418,7 +420,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
   const movementRange = gridData?.stats?.movement || 1;
 
   return (
-    <div className="glass-panel-gold rounded-3xl p-6 w-full mx-auto space-y-6 text-left relative">
+    <GamePanel variant="gold" className="rounded-3xl p-6 w-full mx-auto space-y-6 text-left relative">
       {/* Grid Map Header */}
       <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
         <div className="flex items-center gap-2.5">
@@ -433,19 +435,21 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <GameButton
             onClick={() => setShowRegionsList(true)}
-            className="py-1.5 px-3 bg-zinc-950 border border-zinc-800 hover:bg-zinc-900 rounded-xl text-[10px] text-zinc-400 hover:text-zinc-200 cursor-pointer font-mono"
+            variant="secondary"
+            className="py-1.5 px-3 text-[10px] font-mono"
           >
             Đổi Bản Đồ
-          </button>
+          </GameButton>
           {onBack && (
-            <button
+            <GameButton
               onClick={handleExitMap}
-              className="py-1.5 px-3 bg-emerald-950/40 text-emerald-400 border border-emerald-900/60 hover:bg-emerald-950/60 hover:border-emerald-700 rounded-xl text-[10px] cursor-pointer font-mono font-bold transition-all shadow-[0_0_10px_rgba(16,185,129,0.1)]"
+              variant="success"
+              className="py-1.5 px-3 text-[10px] font-mono font-bold"
             >
               Thoát & Về Trấn
-            </button>
+            </GameButton>
           )}
         </div>
       </div>
@@ -764,6 +768,6 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
           <LogConsole logs={logs} />
         </div>
       </div>
-    </div>
+    </GamePanel>
   );
 };

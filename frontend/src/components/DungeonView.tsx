@@ -1,5 +1,7 @@
 "use client";
 import React, { useEffect } from "react";
+import { GamePanel, GameCard } from "@/components/ui";
+// UI migrated to shared components
 import { useGameStore, InstanceListItem } from "@/store/useGameStore";
 import {
   Compass,
@@ -78,7 +80,7 @@ export const DungeonView: React.FC = () => {
   const activeTag = activeType ? activeType.label : "Phó Bản";
 
   return (
-    <div className="w-full mx-auto px-4 py-4 flex flex-col gap-6">
+    <GamePanel variant="default" className="w-full mx-auto px-4 py-4 flex flex-col gap-6">
       {/* Header bar */}
       <div className="flex items-center justify-between bg-zinc-950/60 border border-zinc-900 rounded-2xl p-4 shadow-lg backdrop-blur-md">
         <div className="flex items-center gap-3">
@@ -189,14 +191,15 @@ export const DungeonView: React.FC = () => {
             const cdText = formatCooldown(dg.cooldown_remaining ?? 0);
 
             return (
-              <div
-                key={dg.id}
-                className={`bg-zinc-950/40 border border-zinc-900 rounded-3xl p-6 flex flex-col justify-between gap-5 transition-all duration-350 hover:-translate-y-1 hover:border-zinc-800 ${
-                  isDream
-                    ? "hover:shadow-[0_0_30px_rgba(168,85,247,0.08)]"
-                    : "hover:shadow-[0_0_30px_rgba(239,68,68,0.08)]"
-                }`}
-              >
+<GameCard
+                  key={dg.id}
+                  variant={isDream ? "danger" : "default"}
+                  className={`border rounded-3xl p-6 flex flex-col justify-between gap-5 transition-all duration-350 hover:-translate-y-1 hover:border-zinc-800 ${
+                    isDream
+                      ? "hover:shadow-[0_0_30px_rgba(168,85,247,0.08)]"
+                      : "hover:shadow-[0_0_30px_rgba(239,68,68,0.08)]"
+                  }`}
+                >
                 <div className="space-y-3">
                   <div className="flex justify-between items-start gap-2">
                     <h3 className="text-base font-serif font-bold text-zinc-100">{dg.name}</h3>
@@ -273,16 +276,16 @@ export const DungeonView: React.FC = () => {
                     Bắt Đầu Thám Hiểm
                   </button>
                 ) : (
-                  <div className="w-full text-center py-2.5 rounded-xl bg-zinc-900/40 border border-zinc-900 text-zinc-650 text-xs font-mono">
+                  <GameCard className="w-full text-center py-2.5 rounded-xl bg-zinc-900/40 border border-zinc-900 text-zinc-650 text-xs font-mono">
                     {inCooldown ? `Hồi chiêu: ${cdText}` : "Khóa"}
-                  </div>
+                  </GameCard>
                 )}
-              </div>
+              </GameCard>
             );
           })}
         </div>
         )
       )}
-    </div>
+    </GamePanel>
   );
 };

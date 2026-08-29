@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { GamePanel, GameCard } from "@/components/ui";
+// UI migrated to shared components
 import { Player, GuSpec, ItemSpec, RefiningRecipe, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
 import { reqGuQty, reqGuRank } from "@/lib/gu-dict";
 import { Flame, Sparkles, AlertCircle, Check, X, RefreshCw, Coins, Zap, Trophy, HelpCircle, ChevronDown, Search } from "lucide-react";
@@ -379,7 +381,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full mx-auto relative">
+    <GamePanel variant="default" className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full mx-auto relative">
       {/* 1. LEFT PANEL: Inventory List */}
       <div className="lg:col-span-5 glass-panel-gold rounded-3xl p-5 flex flex-col max-h-[580px] overflow-hidden">
         <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-3 mb-4 shrink-0">
@@ -1066,6 +1068,6 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </GamePanel>
   );
 };

@@ -27,6 +27,8 @@ import {
   Trash2,
   Ban,
 } from "lucide-react";
+import { GamePanel, GameButton, GameCard, GameTabs, GameModal, GameInput, GameSelect, GameBadge, GameProgressBar, GameSection } from "@/components/ui";
+// UI migrated to shared components
 
 const rankSalaryBonus: Record<string, number> = {
   NGOAI_MON: 0,
@@ -849,7 +851,7 @@ export const SectView: React.FC = () => {
 
   // 2. STATE: MEMBER PANEL
   return (
-    <div className="w-full mx-auto px-2 py-4 flex flex-col gap-6 animate-fade-in">
+    <GamePanel variant="default" className="w-full mx-auto px-2 py-4 flex flex-col gap-6 animate-fade-in">
       {/* Sect Banner HUD */}
       <div className="bg-zinc-950/60 border border-zinc-900 rounded-3xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-5 shadow-xl backdrop-blur-md relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl -z-10" />
@@ -902,55 +904,23 @@ export const SectView: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs Menu */}
-      <div className="overflow-x-auto">
-        <div className="flex bg-zinc-950/50 p-1.5 rounded-2xl border border-zinc-900/60 backdrop-blur-sm self-start w-full sm:w-auto">
-          <button
-            onClick={() => setActiveTab("lobby")}
-            className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${activeTab === "lobby" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
-              }`}
-          >
-            Sảnh
-          </button>
-          <button
-            onClick={() => setActiveTab("missions")}
-            className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${activeTab === "missions" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
-              }`}
-          >
-            Nhiệm Vụ
-          </button>
-          <button
-            onClick={() => setActiveTab("vault")}
-            className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${activeTab === "vault" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
-              }`}
-          >
-            Bảo Khố
-          </button>
-          <button
-            onClick={() => setActiveTab("donate")}
-            className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${activeTab === "donate" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
-              }`}
-          >
-            Quyên Góp
-          </button>
-          <button
-            onClick={() => setActiveTab("territory")}
-            className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${activeTab === "territory" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
-              }`}
-          >
-            Lãnh Địa
-          </button>
-          {member?.member_rank && (member.member_rank === "CHUONG_MON" || member.member_rank === "TRUONG_LAO" || member.member_rank === "HO_PHAP") && (
-            <button
-              onClick={() => setActiveTab("manage")}
-              className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-serif font-bold rounded-xl transition-all cursor-pointer ${activeTab === "manage" ? "bg-blue-600 text-white shadow-md shadow-blue-600/10" : "text-zinc-400 hover:text-zinc-200"
-                }`}
-            >
-              Quản Lý
-            </button>
-          )}
-        </div>
-      </div>
+      <GameTabs
+  items={[
+    { id: "lobby", label: "Sảnh", disabled: false },
+    { id: "missions", label: "Nhiệm Vụ", disabled: false },
+    { id: "vault", label: "Bảo Khố", disabled: false },
+    { id: "donate", label: "Quyên Góp", disabled: false },
+    { id: "territory", label: "Lãnh Địa", disabled: false },
+  ]}
+  activeId={activeTab}
+  onChange={(id) => setActiveTab(id as any)}
+  variant="pills"
+  size="md"
+  className=""
+  scrollable={true}
+  fullWidth={false}
+>
+</GameTabs>
       {/* Tab Panels */}
       {activeTab === "lobby" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-slide-up">
@@ -3517,7 +3487,7 @@ export const SectView: React.FC = () => {
 
                 {(() => {
                   const sectLvl = sect?.level || 1;
-                  const recipeEntries: [string, { name: string; rank: number; path?: string[] | string }][] = recipes
+                  const recipeEntries: [string, { name: string; rank: number; rarity: number; path?: string[] | string }][] = recipes
                     ? (recipes.map((r) => {
                         const targetGuSpec = guDictionary[r.target_gu_id];
                         return [
@@ -3525,17 +3495,18 @@ export const SectView: React.FC = () => {
                           {
                             name: targetGuSpec?.name || r.id.replace("recipe_", "").toUpperCase(),
                             rank: targetGuSpec?.rank || 1,
+                            rarity: targetGuSpec?.rarity || 0,
                             path: targetGuSpec?.path,
                           },
-                        ] as [string, { name: string; rank: number; path?: string[] | string }];
+                        ] as [string, { name: string; rank: number; rarity: number; path?: string[] | string }];
                       }))
                     : [];
 
                   const allEntries = stockItemType === "gu"
-                    ? Object.entries(guDictionary || {}).filter(([, spec]) => (spec.rank || 1) < 6)
+                    ? Object.entries(guDictionary || {}).filter(([, spec]) => Math.max(spec.rank || 1, spec.rarity || 0) < 6)
                     : stockItemType === "recipe"
-                    ? recipeEntries.filter(([, spec]) => (spec.rank || 1) < 6)
-                    : Object.entries(itemDictionary || {});
+                    ? recipeEntries.filter(([, spec]) => Math.max(spec.rank || 1, spec.rarity || 0) < 6)
+                    : Object.entries(itemDictionary || {}).filter(([, spec]) => Math.max(spec.rank || 1, spec.rarity || 0) < 6);
 
                   const availableRanks = Array.from(new Set(allEntries.map(([, spec]) => (spec.rank || 1)))).sort((a, b) => a - b);
 
@@ -3831,6 +3802,6 @@ const rank = spec.rank || 1;
           )}
         </div>
       )}
-    </div>
+    </GamePanel>
   );
 };

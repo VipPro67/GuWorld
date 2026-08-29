@@ -4,6 +4,8 @@ import React, { useEffect, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import { Swords, Trophy, ShieldAlert, Award, RefreshCw, Star, Store } from "lucide-react";
 import { ArenaShopView } from "./ArenaShopView";
+import { GamePanel, GameButton, GameCard } from "@/components/ui";
+// UI migrated to shared components
 
 export const ArenaView: React.FC = () => {
   const { player, arenaLeaderboard, arenaDailyChallenges, fetchArenaLeaderboard, challengeArena, actionLoading, fetchPlayerProfile } = useGameStore();
@@ -36,7 +38,7 @@ export const ArenaView: React.FC = () => {
   const playerRank = player.arena_rank || 999;
   
   return (
-    <div className="glass-panel-gold rounded-3xl p-6 w-full mx-auto space-y-6 text-left relative overflow-hidden group">
+    <GamePanel variant="gold" className="rounded-3xl p-6 w-full mx-auto space-y-6 text-left relative overflow-hidden group">
       {/* Decorative background grid pattern */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(217,119,6,0.01)_1px,transparent_1px),linear-gradient(to_bottom,rgba(217,119,6,0.01)_1px,transparent_1px)] bg-[size:16px_28px] pointer-events-none" />
 
@@ -53,26 +55,25 @@ export const ArenaView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
+          <GameButton
             onClick={() => setActiveTab(activeTab === 'ranking' ? 'shop' : 'ranking')}
-            className={`p-2 border rounded-xl transition-all cursor-pointer font-mono shrink-0 flex items-center gap-1.5 text-xs font-semibold ${
-              activeTab === 'shop' 
-                ? "bg-amber-950/40 border-amber-500/50 text-amber-500" 
-                : "border-zinc-800 hover:border-zinc-700 bg-zinc-950 hover:bg-zinc-900 text-zinc-455 hover:text-zinc-200"
-            }`}
+            variant={activeTab === 'shop' ? 'warning' : 'ghost'}
+            className="shrink-0"
           >
             <Store className="w-3.5 h-3.5" />
-            {activeTab === 'ranking' ? 'Bảo Các' : 'Xếp Hạng'}
-          </button>
+{activeTab === 'ranking' ? 'Bảo Các' : 'Xếp Hạng'}
+</GameButton>
 
-          <button
+          <GameButton
             onClick={handleRefresh}
             disabled={loading || actionLoading}
-            className="p-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-950 hover:bg-zinc-900 rounded-xl text-zinc-455 hover:text-zinc-200 transition-all cursor-pointer font-mono shrink-0 flex items-center gap-1.5 text-xs font-semibold"
+            variant="ghost"
+            loading={loading}
+            className="shrink-0"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-amber-400" : ""}`} />
-            Tải lại
-          </button>
+Tải lại
+</GameButton>
         </div>
       </div>
 
@@ -125,14 +126,15 @@ export const ArenaView: React.FC = () => {
             const canChallenge = !isMe && arenaDailyChallenges < 10;
             
             return (
-              <div
-                key={row.player_id}
-                className={`flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-2xl transition-all duration-300 ${
-                  isMe
-                    ? "bg-amber-955/10 border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.05)]"
-                    : "bg-zinc-950/40 border-zinc-900 hover:border-zinc-800/80 hover:bg-zinc-950/60"
-                }`}
-              >
+<GameCard
+                 key={row.player_id}
+                 variant={isMe ? "selected" : "default"}
+                 className={`flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-2xl transition-all duration-300 ${
+                   isMe
+                     ? "bg-amber-955/10 border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.05)]"
+                     : "bg-zinc-950/40 border-zinc-900 hover:border-zinc-800/80 hover:bg-zinc-950/60"
+                 }`}
+               >
                 <div className="flex items-center gap-3">
                   {/* Rank Badge */}
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-serif font-bold text-sm ${
@@ -177,14 +179,15 @@ export const ArenaView: React.FC = () => {
 
                 <div className="mt-3 sm:mt-0 w-full sm:w-auto shrink-0 flex items-center gap-3">
                   {canChallenge ? (
-                    <button
-                      onClick={() => handleChallenge(row.player_id, row.username)}
-                      disabled={actionLoading}
-                      className="w-full sm:w-auto py-1.5 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold text-xs rounded-xl transition-all active:scale-[0.98] shadow-md hover:shadow-amber-500/10 cursor-pointer flex items-center justify-center gap-1.5 font-mono"
-                    >
+<GameButton
+                        onClick={() => handleChallenge(row.player_id, row.username)}
+                        disabled={actionLoading}
+                        variant="warning"
+                        className="w-full sm:w-auto py-1.5 px-4 font-mono"
+                      >
                       <Swords className="w-3.5 h-3.5" />
                       Khiêu Chiến
-                    </button>
+</GameButton>
                   ) : !isMe ? (
                     <span className="text-[10px] text-zinc-600 font-mono italic select-none">
                       (Đã hết lượt)
@@ -195,7 +198,7 @@ export const ArenaView: React.FC = () => {
                     </span>
                   )}
                 </div>
-              </div>
+              </GameCard>
             );
           })
         )}
@@ -212,6 +215,6 @@ export const ArenaView: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </GamePanel>
   );
 };

@@ -57,7 +57,7 @@ meat,Thịt Tươi,Food,1,"{""hunger"": 10}",Thịt tươi sống.,1,,
 hundred_year_lifespan_gu,Bách Niên Thọ Cổ,Material,5,{},"Thọ Cổ trường tồn trăm năm, nguyên liệu quý cho luyện chế cao cấp.",25,,
 fire_coal,Hỏa Thán,Food,1,"{""hunger"": 10}","Than lửa, thức ăn Hỏa đạo cơ bản.",1,,
 vital_energy_blood,Khí Huyết,Material,4,{},"Tinh khí huyết ngưng tụ, nguyên liệu quan trọng trong luyện chế Huyết đạo.",13,,
-HUMAN_QI_PILL,Nhân Khí Đan,Consumable,9,"{""increase_human_qi"": 50000}",Đan dược tăng 50.000 nhân khí.,1,,
+HUMAN_QI_PILL,Nhân Khí Đan,Consumable,9,"{""increase_human_qi"": 50000}",Đan dược tăng 50.000 nhân khí.,1,,9
 ITEM_BLOOD_GINSENG,Huyết Sâm,Consumable,2,"{""restore_hp"": 150.0}",Dược liệu quý hiếm hồi máu số lượng lớn.,3,,
 ITEM_IMMORTAL_SPRING_WATER,Tiên Tuyền Thủy,Consumable,6,"{""restore_hp"": 500.0, ""heal_aperture"": 500.0}",Nước suối tiên khôi phục cả đạo ngân và tiên khiếu.,10,,
 floating_tea_grass,Cỏ Phù Cầu Trà,Material,1,{},Cỏ sinh trưởng trên không trung dùng làm vật liệu của trà Vân Yên.,1,,

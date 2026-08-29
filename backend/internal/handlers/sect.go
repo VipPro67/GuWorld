@@ -2756,42 +2756,59 @@ func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int,
 		if maxLevel > 5 {
 			maxLevel = 5
 		}
-		var matRank int
-		err := tx.QueryRow(`SELECT rank FROM item_dictionary WHERE id = $1`, itemID).Scan(&matRank)
+		var matRank, matRarity int
+		err := tx.QueryRow(`SELECT COALESCE(rank, 1), COALESCE(rarity, 0) FROM item_dictionary WHERE id = $1`, itemID).Scan(&matRank, &matRarity)
 		if err != nil {
 			matRank = 1
+			matRarity = 0
+		}
+		effectiveLevel := matRank
+		if matRarity > effectiveLevel {
+			effectiveLevel = matRarity
 		}
 
-		if matRank > maxLevel {
-			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Linh tài hạng %d! (Hiện tại: Cấp %d)", maxLevel, matRank, sectLevel)
+		if effectiveLevel >= 6 {
+			return 0, http.StatusForbidden, "Không thể nhập Tiên phẩm Linh tài vào bảo khố tông môn (chỉ hỗ trợ phàm phẩm cấp 1-5)."
 		}
 
-		return matRank * 50, http.StatusOK, ""
+		if effectiveLevel > maxLevel {
+			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Linh tài hạng %d! (Hiện tại: Cấp %d)", maxLevel, effectiveLevel, sectLevel)
+		}
+
+		return effectiveLevel * 50, http.StatusOK, ""
 	}
 
 	if itemType == "recipe" {
 		var targetGuRank int = 1
-		if _, tr, _, err := ParseRecipeID(itemID); err == nil {
-			targetGuRank = tr
-		}
-		var exists bool
-		_ = tx.QueryRow(`
-			SELECT EXISTS(SELECT 1 FROM refining_recipes rr
-			JOIN gu_dictionary gd ON gd.id=rr.target_gu_id AND gd.rank=rr.target_rank
-			WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text)=$1)
-		`, itemID).Scan(&exists)
-		if !exists {
+		var targetGuRarity int = 0
+		err := tx.QueryRow(`
+			SELECT COALESCE(gd.rank, 1), COALESCE(gd.rarity, 0)
+			FROM refining_recipes rr
+			JOIN gu_dictionary gd ON gd.id = rr.target_gu_id AND gd.rank = rr.target_rank
+			WHERE ('recipe_' || rr.target_gu_id || '_' || rr.target_rank::text || '_' || rr.variant::text) = $1
+		`, itemID).Scan(&targetGuRank, &targetGuRarity)
+		if err != nil {
 			return 0, http.StatusBadRequest, "Bí phương không tồn tại trong tàng kinh các"
 		}
+
+		effectiveLevel := targetGuRank
+		if targetGuRarity > effectiveLevel {
+			effectiveLevel = targetGuRarity
+		}
+
+		if effectiveLevel >= 6 {
+			return 0, http.StatusForbidden, "Không thể nhập Tiên cấp Bí phương vào bảo khố tông môn (chỉ hỗ trợ phàm cấp 1-5)."
+		}
+
 		// calculate max allowed item level based on sect level (10 sect levels = 1 item level, max 5)
 		maxLevel := sectLevel/10 + 1
 		if maxLevel > 5 {
 			maxLevel = 5
 		}
-		if targetGuRank > maxLevel {
-			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Bí phương hạng %d! (Hiện tại: Cấp %d)", maxLevel, targetGuRank, sectLevel)
+		if effectiveLevel > maxLevel {
+			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Bí phương hạng %d! (Hiện tại: Cấp %d)", maxLevel, effectiveLevel, sectLevel)
 		}
-		return pricing.RecipeCostByGuRank(targetGuRank), http.StatusOK, ""
+		return pricing.RecipeCostByGuRank(effectiveLevel), http.StatusOK, ""
 	}
 
 	return 0, http.StatusBadRequest, "Loại vật phẩm không hợp lệ (chỉ hỗ trợ gu, material hoặc recipe)"

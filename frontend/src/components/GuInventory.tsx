@@ -6,6 +6,8 @@ import { Player, GuSpec, ItemSpec, GuInstance, useGameStore, guSpecFor } from "@
 import { Flower2, Wine, Gem, ShieldAlert, Sparkles, HelpCircle, Search, Shield, Zap, ChevronDown, ChevronUp, Lock, Unlock, BookOpen } from "lucide-react";
 import { translateGuType, translateItemType, translatePath } from "@/lib/translate";
 import { getPathColor as _getPathColor } from "@/lib/utils";
+import { GamePanel } from "@/components/ui";
+// UI migrated to shared components
 
 interface GuInventoryProps {
   player: Player;
@@ -1291,7 +1293,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                   };
 
               return (
-                <div className="space-y-6">
+                <GamePanel variant="default" className="space-y-6">
                   {equippedGroups.length > 0 && (
                     <div>
                       <h3 className="text-xs font-bold text-emerald-400 mb-3 flex items-center gap-2">
@@ -1314,7 +1316,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                       </div>
                     </div>
                   )}
-                </div>
+                </GamePanel>
               );
             })()
           )}

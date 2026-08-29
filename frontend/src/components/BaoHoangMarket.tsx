@@ -19,6 +19,8 @@ import {
   RefreshCw,
   AlertTriangle,
 } from "lucide-react";
+import { GamePanel, GameTabs, GameButton, GameCard, GameInput, GameSelect } from "@/components/ui";
+// UI migrated to shared components
 
 interface RecipeData {
   recipe_id: string;
@@ -475,7 +477,7 @@ export function BaoHoangMarket({
   }
 
   return (
-    <div className="w-full mx-auto glass-panel-gold p-6 rounded-3xl border border-amber-500/20 shadow-2xl relative overflow-hidden">
+    <GamePanel variant="gold" className="rounded-3xl p-6 border border-amber-500/20 shadow-2xl relative overflow-hidden">
       {/* Background decoration */}
       <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-80 h-80 bg-cyan-500/5 rounded-full blur-[120px] pointer-events-none" />
@@ -509,41 +511,20 @@ export function BaoHoangMarket({
 
       {/* Navigation tabs & Actions */}
       <div className="flex flex-col items-stretch gap-3 mb-6">
-        <div className="flex bg-zinc-950/80 p-1.5 rounded-2xl border border-zinc-900 gap-1.5 flex-wrap">
-          <button
-            onClick={() => setTab("market")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold font-serif transition-all cursor-pointer ${
-              tab === "market"
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                : "text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            <ShoppingCart className="w-4 h-4" />
-            Chợ Giao Dịch
-          </button>
-          <button
-            onClick={() => setTab("auction")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold font-serif transition-all cursor-pointer ${
-              tab === "auction"
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                : "text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            <Gavel className="w-4 h-4" />
-            Sảnh Đấu Giá
-          </button>
-          <button
-            onClick={() => setTab("sell")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold font-serif transition-all cursor-pointer ${
-              tab === "sell"
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                : "text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            <PlusCircle className="w-4 h-4" />
-            Đăng Bán
-          </button>
-        </div>
+        <GameTabs
+          items={[
+            { id: "market", label: "Chợ Giao Dịch", icon: <ShoppingCart className="w-4 h-4" />, disabled: false },
+            { id: "auction", label: "Sảnh Đấu Giá", icon: <Gavel className="w-4 h-4" />, disabled: false },
+            { id: "sell", label: "Đăng Bán", icon: <PlusCircle className="w-4 h-4" />, disabled: false },
+          ]}
+          activeId={tab}
+          onChange={(id) => setTab(id as any)}
+          variant="pills"
+          size="sm"
+          scrollable={true}
+          fullWidth={false}
+        >
+        </GameTabs>
 
         {tab !== "sell" && (
           <div className="flex flex-col gap-3">
@@ -1648,6 +1629,6 @@ export function BaoHoangMarket({
         </div>,
         document.body
       )}
-    </div>
+    </GamePanel>
   );
 }

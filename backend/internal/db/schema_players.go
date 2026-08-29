@@ -72,8 +72,35 @@ func schemaPlayers() error {
 		last_activity TIMESTAMP WITH TIME ZONE DEFAULT NULL,
 		current_thought DOUBLE PRECISION NOT NULL DEFAULT 100.0,
 		max_thought DOUBLE PRECISION NOT NULL DEFAULT 100.0,
-		thought_regen_rate DOUBLE PRECISION NOT NULL DEFAULT 1.0
+		thought_regen_rate DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+		register_fingerprint VARCHAR(255) NOT NULL DEFAULT '',
+		register_ip VARCHAR(50) NOT NULL DEFAULT '',
+		last_login_fingerprint VARCHAR(255) NOT NULL DEFAULT '',
+		last_login_ip VARCHAR(50) NOT NULL DEFAULT '',
+		last_login_time TIMESTAMP WITH TIME ZONE DEFAULT NULL
 	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("players_fingerprint_columns", `
+	DO $$
+	BEGIN
+		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='register_fingerprint') THEN
+			ALTER TABLE players ADD COLUMN register_fingerprint VARCHAR(255) NOT NULL DEFAULT '';
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='register_ip') THEN
+			ALTER TABLE players ADD COLUMN register_ip VARCHAR(50) NOT NULL DEFAULT '';
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='last_login_fingerprint') THEN
+			ALTER TABLE players ADD COLUMN last_login_fingerprint VARCHAR(255) NOT NULL DEFAULT '';
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='last_login_ip') THEN
+			ALTER TABLE players ADD COLUMN last_login_ip VARCHAR(50) NOT NULL DEFAULT '';
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='last_login_time') THEN
+			ALTER TABLE players ADD COLUMN last_login_time TIMESTAMP WITH TIME ZONE DEFAULT NULL;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 

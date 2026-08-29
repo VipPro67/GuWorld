@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { translatePath } from "@/lib/translate";
 import { Num } from "./Num";
+import { GamePanel, GameTabs, GameButton, GameCard, GameModal, GameProgressBar, GameSection } from "@/components/ui";
+// UI migrated to shared components
 
 const CountdownTimer: React.FC<{ node: ApertureResourceNode; timeRate: number; onComplete?: () => void }> = ({ node, timeRate, onComplete }) => {
   const [timeLeft, setTimeLeft] = useState<string>("");
@@ -514,8 +516,8 @@ export const ImmortalApertureView: React.FC = () => {
   const foodNeeded = totalVariantHumanPop / 100.0;
   const foodSurplus = totalFoodProd >= foodNeeded;
 
-  return (
-    <div className="w-full mx-auto space-y-6">
+return (
+    <GamePanel variant="default" className="w-full mx-auto space-y-6">
       {/* Header Panel */}
       <div className="relative overflow-hidden bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-2xl p-6 shadow-xl">
         <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl -z-10" />
@@ -553,69 +555,21 @@ export const ImmortalApertureView: React.FC = () => {
       </div>
 
       {/* Tabs Navigation */}
-      <div className="grid grid-cols-2 md:flex md:flex-row md:overflow-x-auto bg-slate-950/40 p-1.5 rounded-xl border border-slate-800/80 gap-1.5">
-        <button
-          onClick={() => setActiveTab("overview")}
-          className={`flex items-center justify-center gap-2 px-3 py-2.5 sm:px-5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-            activeTab === "overview"
-              ? "bg-gradient-to-r from-amber-500/20 to-yellow-600/20 border border-amber-500/40 text-amber-300"
-              : "text-slate-400 hover:text-slate-200 border border-transparent"
-          }`}
-        >
-          <Activity className="w-4 h-4 shrink-0" />
-          Tổng Quan
-        </button>
-        <button
-          onClick={() => setActiveTab("map")}
-          className={`flex items-center justify-center gap-2 px-3 py-2.5 sm:px-5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap relative ${
-            activeTab === "map"
-              ? "bg-gradient-to-r from-amber-500/20 to-yellow-600/20 border border-amber-500/40 text-amber-300"
-              : "text-slate-400 hover:text-slate-200 border border-transparent"
-          }`}
-        >
-          <MapIcon className="w-4 h-4 shrink-0" />
-          Bản Đồ & Phòng Thủ
-          {aperture?.state === "TRIBULATION_ACTIVE" && (
-            <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab("dao")}
-          className={`flex items-center justify-center gap-2 px-3 py-2.5 sm:px-5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-            activeTab === "dao"
-              ? "bg-gradient-to-r from-amber-500/20 to-yellow-600/20 border border-amber-500/40 text-amber-300"
-              : "text-slate-400 hover:text-slate-200 border border-transparent"
-          }`}
-        >
-          <Layers className="w-4 h-4 shrink-0" />
-          Bảng Đạo Ngân
-        </button>
-        <button
-          onClick={() => setActiveTab("ecosystem")}
-          className={`flex items-center justify-center gap-2 px-3 py-2.5 sm:px-5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-            activeTab === "ecosystem"
-              ? "bg-gradient-to-r from-amber-500/20 to-yellow-600/20 border border-amber-500/40 text-amber-300"
-              : "text-slate-400 hover:text-slate-200 border border-transparent"
-          }`}
-        >
-          <Leaf className="w-4 h-4 shrink-0" />
-          Hệ Sinh Thái
-        </button>
-        <button
-          onClick={() => setActiveTab("variant_humans")}
-          className={`col-span-2 md:col-span-1 flex items-center justify-center gap-2 px-3 py-2.5 sm:px-5 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
-            activeTab === "variant_humans"
-              ? "bg-gradient-to-r from-amber-500/20 to-yellow-600/20 border border-amber-500/40 text-amber-300"
-              : "text-slate-400 hover:text-slate-200 border border-transparent"
-          }`}
-        >
-          <Users className="w-4 h-4 shrink-0" />
-          Dị Nhân
-        </button>
-      </div>
+      <GameTabs
+        items={[
+          { id: "overview", label: "Tổng Quan", icon: <Activity className="w-4 h-4 shrink-0" />, disabled: false },
+          { id: "map", label: "Bản Đồ & Phòng Thủ", icon: <MapIcon className="w-4 h-4 shrink-0" />, disabled: false, badge: aperture?.state === "TRIBULATION_ACTIVE" ? <span className="absolute top-0 right-0 flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span></span> : undefined },
+          { id: "dao", label: "Bảng Đạo Ngân", icon: <Layers className="w-4 h-4 shrink-0" />, disabled: false },
+          { id: "ecosystem", label: "Hệ Sinh Thái", icon: <Leaf className="w-4 h-4 shrink-0" />, disabled: false },
+          { id: "variant_humans", label: "Dị Nhân", icon: <Users className="w-4 h-4 shrink-0" />, disabled: false },
+        ]}
+        activeId={activeTab}
+        onChange={(id) => setActiveTab(id as any)}
+        variant="pills"
+        size="sm"
+        scrollable={true}
+      >
+      </GameTabs>
 
       {/* Tab Contents */}
       <div className="grid grid-cols-1 gap-6">
@@ -2155,7 +2109,7 @@ export const ImmortalApertureView: React.FC = () => {
           </div>
         )}
       </div>
-    </div>
+    </GamePanel>
   );
 };
 

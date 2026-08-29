@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useGameStore } from "@/store/useGameStore";
 import {
   Sparkles,
   Compass,
@@ -121,9 +122,12 @@ export const Registration: React.FC<RegistrationProps> = ({
     setOtpSuccessMessage(null);
   };
 
-  const handleGoogleLogin = () => {
+  const handleGoogleLogin = async () => {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
-    const queryParams = referralCode ? `?ref=${encodeURIComponent(referralCode)}` : "";
+    const fingerprint = await useGameStore.getState().getBrowserFingerprint();
+    const queryParams = referralCode 
+      ? `?ref=${encodeURIComponent(referralCode)}&fingerprint=${encodeURIComponent(fingerprint)}`
+      : `?fingerprint=${encodeURIComponent(fingerprint)}`;
     window.location.href = `${backendUrl}/api/auth/google/login${queryParams}`;
   };
 

@@ -7,6 +7,8 @@ import { CombatReplayView } from "./CombatReplayView";
 import { Num } from "./Num";
 import { getPathColor } from "@/lib/utils";
 import { masteryKeyForPoints, masteryLevelForPoints, pathLabels } from "@/lib/translate";
+import { GamePanel, GameButton, GameCard, GameProgressBar, GameSection } from "@/components/ui";
+// UI migrated to shared components
 
 interface CombatScreenProps {
   player: Player;
@@ -1498,8 +1500,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   );
 
   return (
-    <div className="w-full mx-auto">
+    <GamePanel variant="default" className="w-full mx-auto">
       {simulationLogs.length === 0 ? renderLoadoutPhase() : renderReplayPhase()}
-    </div>
+    </GamePanel>
   );
 };

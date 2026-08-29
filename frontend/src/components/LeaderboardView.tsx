@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useEffect } from "react";
+import { GamePanel, GameButton, GameCard, GameTabs } from "@/components/ui";
 import { useGameStore } from "@/store/useGameStore";
 import { Trophy, Eye, EyeOff, Users, RefreshCw, Coins, Sparkles, Bug, Star } from "lucide-react";
+// UI migrated to shared components
 import { Num } from "./Num";
 
 const CATEGORIES = [
@@ -69,7 +71,7 @@ export const LeaderboardView: React.FC = () => {
   const currentCat = CATEGORIES.find(c => c.id === leaderboardCategory) || CATEGORIES[0];
 
   return (
-    <div className="glass-panel-gold rounded-3xl p-6 w-full mx-auto space-y-6 text-left relative overflow-hidden group">
+    <GamePanel variant="gold" rounded="xl" className="p-6 w-full mx-auto space-y-6 text-left relative overflow-hidden group">
       <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(217,119,6,0.01)_1px,transparent_1px),linear-gradient(to_bottom,rgba(217,119,6,0.01)_1px,transparent_1px)] bg-[size:16px_28px] pointer-events-none" />
 
       {/* Header */}
@@ -85,27 +87,25 @@ export const LeaderboardView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleToggleVisibility}
-            className={`p-2 border rounded-xl transition-all cursor-pointer font-mono shrink-0 flex items-center gap-1.5 text-xs font-semibold ${
-              leaderboardShowOnLeaderboard
-                ? "bg-emerald-950/40 border-emerald-500/50 text-emerald-500 hover:bg-emerald-950/60"
-                : "bg-rose-950/40 border-rose-500/50 text-rose-500 hover:bg-rose-950/60"
-            }`}
-            title={leaderboardShowOnLeaderboard ? "Ẩn khỏi bảng xếp hạng" : "Hiển thị trên bảng xếp hạng"}
-          >
-            {leaderboardShowOnLeaderboard ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-            {leaderboardShowOnLeaderboard ? "Đang tham gia" : "Đã ẩn"}
-          </button>
+<GameButton
+              onClick={handleToggleVisibility}
+              variant={leaderboardShowOnLeaderboard ? "success" : "danger"}
+              className="shrink-0"
+              title={leaderboardShowOnLeaderboard ? "Ẩn khỏi bảng xếp hạng" : "Hiển thị trên bảng xếp hạng"}
+            >
+              {leaderboardShowOnLeaderboard ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+              {leaderboardShowOnLeaderboard ? "Đang tham gia" : "Đã ẩn"}
+            </GameButton>
 
-          <button
-            onClick={handleRefresh}
-            disabled={leaderboardLoading}
-            className="p-2 border border-zinc-800 hover:border-zinc-700 bg-zinc-950 hover:bg-zinc-900 rounded-xl text-zinc-455 hover:text-zinc-200 transition-all cursor-pointer font-mono shrink-0 flex items-center gap-1.5 text-xs font-semibold"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${leaderboardLoading ? "animate-spin text-amber-400" : ""}`} />
-            Tải lại
-          </button>
+            <GameButton
+              onClick={handleRefresh}
+              disabled={leaderboardLoading}
+              variant="ghost"
+              className="shrink-0"
+            >
+              <RefreshCw className={leaderboardLoading ? "animate-spin text-amber-400" : ""} />
+              Tải lại
+            </GameButton>
         </div>
       </div>
 
@@ -281,6 +281,6 @@ export const LeaderboardView: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </GamePanel>
   );
 };

@@ -66,7 +66,8 @@ func GetArenaShop(c *gin.Context) {
 }
 
 type BuyArenaShopRequest struct {
-	ItemID string `json:"item_id" binding:"required"`
+	ItemID   string `json:"item_id" binding:"required"`
+	Quantity int    `json:"quantity"`
 }
 
 func BuyArenaShopItem(c *gin.Context) {
@@ -74,6 +75,11 @@ func BuyArenaShopItem(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Thiếu mã vật phẩm"})
 		return
+	}
+
+	quantity := req.Quantity
+	if quantity <= 0 {
+		quantity = 1
 	}
 
 	authID, exists := middleware.GetPlayerID(c)
@@ -99,6 +105,9 @@ func BuyArenaShopItem(c *gin.Context) {
 		return
 	}
 
+	totalCost := targetPrice * quantity
+	totalQty := targetQty * quantity
+
 	tx, err := db.DB.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
@@ -107,7 +116,7 @@ func BuyArenaShopItem(c *gin.Context) {
 	defer tx.Rollback()
 
 	// Deduct coins (atomic FOR UPDATE + check + deduct)
-	if err := InventorySvc.RemoveItem(tx, authID.String(), "arena_coin", "materials", targetPrice); err != nil {
+	if err := InventorySvc.RemoveItem(tx, authID.String(), "arena_coin", "materials", totalCost); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Xu Đấu Trường!"})
 		return
 	}
@@ -122,9 +131,9 @@ func BuyArenaShopItem(c *gin.Context) {
 	// Give item
 	var giveErr error
 	if req.ItemID == "primeval_stone" {
-		_, giveErr = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", targetQty, authID)
+		_, giveErr = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", totalQty, authID)
 	} else {
-		giveErr = InventorySvc.AddItem(tx, authID.String(), req.ItemID, "materials", targetQty)
+		giveErr = InventorySvc.AddItem(tx, authID.String(), req.ItemID, "materials", totalQty)
 	}
 
 	if giveErr != nil {
@@ -132,17 +141,17 @@ func BuyArenaShopItem(c *gin.Context) {
 		return
 	}
 
-	_, _ = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + 5, $1) WHERE id = $2", MaxHumanQi, authID)
+	_, _ = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + $1, $2) WHERE id = $3", 5*quantity, MaxHumanQi, authID)
 
 	tx.Commit()
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "arena_shop_purchase", EntityType: "arena_shop_item",
 		EntityID:       req.ItemID,
-		RequestSummary: fmt.Sprintf("%s | giá=%d Xu Đấu Trường", targetName, targetPrice),
-		Metadata:       map[string]interface{}{"item_id": req.ItemID, "qty": targetQty},
+		RequestSummary: fmt.Sprintf("%s | qty=%d | giá=%d Xu Đấu Trường", targetName, totalQty, totalCost),
+		Metadata:       map[string]interface{}{"item_id": req.ItemID, "qty": totalQty, "quantity": quantity},
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 
-	c.JSON(http.StatusOK, gin.H{"message": "Đổi vật phẩm thành công! Nhân Khí +5.", "cost": targetPrice})
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Đổi %dx %s thành công! Nhân Khí +%d.", totalQty, targetName, 5*quantity), "cost": totalCost})
 }

@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Gem, ShoppingBag, QrCode, RefreshCw, ShieldCheck, Gift, Lock, ArrowLeftRight, Coins, Sparkles, Maximize2 } from "lucide-react";
 import { PremiumWallet, WalletBalance } from "./PremiumWallet";
 import { useGameStore } from "@/store/useGameStore";
+import { GamePanel, GameTabs, GameButton, GameCard } from "@/components/ui";
+// UI migrated to shared components
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
 function getCookie(name: string): string | null {
@@ -255,7 +257,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
   };
 
   return (
-    <div className="mx-auto w-full space-y-6 rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6 shadow-2xl backdrop-blur-md">
+    <GamePanel variant="default" className="mx-auto w-full space-y-6 rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6 shadow-2xl backdrop-blur-md">
       {/* Header & Wallet */}
       <div className="flex flex-col gap-4 border-b border-zinc-850 pb-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -270,50 +272,25 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
       </div>
 
       {/* Tabs Switcher */}
-      <div className="flex border-b border-zinc-900 gap-2 p-1 bg-zinc-900/30 rounded-xl w-fit">
-        <button
-          onClick={() => {
-            setActiveTab("packages");
-            setShopMessage(null);
-          }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
-            activeTab === "packages"
-              ? "bg-violet-950/80 border border-violet-500/30 text-violet-200"
-              : "text-zinc-400 hover:text-zinc-200"
-          }`}
-        >
-          <ShoppingBag className="h-4 w-4" />
-          Gói Tu Luyện
-        </button>
-        <button
-          onClick={() => {
-            setActiveTab("topup");
-            setTopupMessage(null);
-          }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
-            activeTab === "topup"
-              ? "bg-emerald-950/80 border border-emerald-500/30 text-emerald-200"
-              : "text-zinc-400 hover:text-zinc-200"
-          }`}
-        >
-          <Gem className="h-4 w-4" />
-          Nạp Tiên Ngọc
-        </button>
-        <button
-          onClick={() => {
-            setActiveTab("exchange");
-            setExchangeMessage(null);
-          }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
-            activeTab === "exchange"
-              ? "bg-amber-950/80 border border-amber-500/30 text-amber-200"
-              : "text-zinc-400 hover:text-zinc-200"
-          }`}
-        >
-          <ArrowLeftRight className="h-4 w-4" />
-          Đổi Đá
-        </button>
-      </div>
+      <GameTabs
+        items={[
+          { id: "packages", label: "Gói Tu Luyện", icon: <ShoppingBag className="h-4 w-4" />, disabled: false },
+          { id: "topup", label: "Nạp Tiên Ngọc", icon: <Gem className="h-4 w-4" />, disabled: false },
+          { id: "exchange", label: "Đổi Đá", icon: <ArrowLeftRight className="h-4 w-4" />, disabled: false },
+        ]}
+        activeId={activeTab}
+        onChange={(id) => {
+          setActiveTab(id as any);
+          if (id === "packages") setShopMessage(null);
+          else if (id === "topup") setTopupMessage(null);
+          else if (id === "exchange") setExchangeMessage(null);
+        }}
+        variant="pills"
+        size="sm"
+        scrollable={true}
+        fullWidth={false}
+      >
+      </GameTabs>
 
       {/* Tab 1: Gói Tu Luyện */}
       {activeTab === "packages" && (
@@ -577,7 +554,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
           </div>
         </div>
       )}
-    </div>
+    </GamePanel>
   );
 };
 
@@ -650,10 +627,9 @@ const ExchangePanel: React.FC<ExchangePanelProps> = ({
             >
               <Maximize2 className="h-3.5 w-3.5" /> MAX
             </button>
-          </div>
-        </div>
+</div>
 
-        <div className="flex items-center justify-center text-zinc-600">
+      <div className="flex items-center justify-center text-zinc-600">
           <ArrowLeftRight className="h-4 w-4" />
         </div>
 
@@ -679,4 +655,5 @@ const ExchangePanel: React.FC<ExchangePanelProps> = ({
       {isExchanging ? "Đang đổi..." : !canExchange ? blockReason || "Nhập số lượng" : "Xác nhận đổi"}
     </button>
   </div>
+</div>
 );

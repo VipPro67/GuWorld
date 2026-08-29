@@ -137,11 +137,46 @@ func generateCellUncached(x, y int) models.Cell {
 		}
 		return models.Cell{X: x, Y: y, Type: "Monster", Content: monsterID, Rank: rank, SubRank: rng.Intn(5) + 1}
 	case "Resource":
-		pool := zone.PoolWeights.Resources
-		if len(pool) == 0 {
-			pool = defaultResourcePool
+		type weightedResource struct {
+			id     string
+			weight float64
 		}
-		return models.Cell{X: x, Y: y, Type: "Resource", Content: pool[rng.Intn(len(pool))]}
+		var pool []weightedResource
+		var total float64
+		for _, id := range zone.PoolWeights.Resources {
+			w := 1.0
+			if spec, ok := models.ItemRegistry[id]; ok {
+				w = guRarityWeightByRank(effectiveDropLevel(spec.Rank, spec.Rarity))
+			}
+			if w <= 0 {
+				w = 1.0
+			}
+			pool = append(pool, weightedResource{id: id, weight: w})
+			total += w
+		}
+		if len(pool) == 0 {
+			for _, id := range defaultResourcePool {
+				w := 1.0
+				if spec, ok := models.ItemRegistry[id]; ok {
+					w = guRarityWeightByRank(effectiveDropLevel(spec.Rank, spec.Rarity))
+				}
+				pool = append(pool, weightedResource{id: id, weight: w})
+				total += w
+			}
+		}
+		itemID := ""
+		r := rng.Float64() * total
+		for _, e := range pool {
+			r -= e.weight
+			if r <= 0 {
+				itemID = e.id
+				break
+			}
+		}
+		if itemID == "" {
+			itemID = pool[0].id
+		}
+		return models.Cell{X: x, Y: y, Type: "Resource", Content: itemID}
 	case "WildGu":
 		type weightedGu struct {
 			id     string

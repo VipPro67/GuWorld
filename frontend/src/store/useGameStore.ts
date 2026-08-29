@@ -1,5 +1,6 @@
 import { ToastContainer } from "@/components/ToastContainer";
 import { create } from "zustand";
+import FingerprintJS from "@fingerprintjs/fingerprintjs";
 import type { RequiredGus } from "@/lib/gu-dict";
 import type { EffectDictionaryEntry } from "@/lib/effects";
 
@@ -912,6 +913,7 @@ interface GameState {
   uploadAvatar: (file: File) => Promise<string | null>;
   login: (email: string, password: string) => Promise<boolean>;
   sendOTP: (email: string) => Promise<boolean>;
+  getBrowserFingerprint: () => Promise<string>;
   register: (
     username: string,
     password: string,
@@ -1068,7 +1070,7 @@ interface GameState {
   fetchArenaLeaderboard: () => Promise<void>;
   fetchArenaShop: () => Promise<void>;
   challengeArena: (targetPlayerId: string) => Promise<boolean>;
-  buyArenaItem: (itemId: string) => Promise<boolean>;
+  buyArenaItem: (itemId: string, quantity?: number) => Promise<boolean>;
 
   // Leaderboard State & Actions
   leaderboardEntries: any[];
@@ -1622,10 +1624,11 @@ export const useGameStore = create<GameState>((set, get) => {
   login: async (email, password) => {
     set({ isLoading: true, error: null });
     try {
+      const fingerprint = await get().getBrowserFingerprint();
       const response = await authFetch(`${BACKEND_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, fingerprint }),
       });
 
       if (!response.ok) {
@@ -1684,6 +1687,19 @@ export const useGameStore = create<GameState>((set, get) => {
       set({ isLoading: false });
     }
   },
+  
+  getBrowserFingerprint: async (): Promise<string> => {
+    if (typeof window === "undefined") {
+      return "server-ssr-fallback";
+    }
+    try {
+      const fp = await FingerprintJS.load();
+      const result = await fp.get();
+      return result.visitorId;
+    } catch (e) {
+      return "fingerprint-error";
+    }
+  },
 
   register: async (
     username,
@@ -1701,6 +1717,7 @@ export const useGameStore = create<GameState>((set, get) => {
   ) => {
     set({ isLoading: true, error: null });
     try {
+      const fingerprint = await get().getBrowserFingerprint();
       const response = await authFetch(`${BACKEND_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1717,6 +1734,7 @@ export const useGameStore = create<GameState>((set, get) => {
           otp: otp || "",
           race: race || "human",
           gender: gender || "male",
+          fingerprint,
         }),
       });
 
@@ -2233,6 +2251,13 @@ export const useGameStore = create<GameState>((set, get) => {
       const tokenFromUrl = urlParams.get("token");
       if (tokenFromUrl) {
         localStorage.setItem("gu_auth_token", tokenFromUrl);
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
+      const errorFromUrl = urlParams.get("error");
+      if (errorFromUrl) {
+        set({ error: errorFromUrl });
+        get().addToast(errorFromUrl, "error");
         const cleanUrl = window.location.pathname;
         window.history.replaceState({}, document.title, cleanUrl);
       }
@@ -4628,14 +4653,14 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   },
 
-  buyArenaItem: async (itemId) => {
+  buyArenaItem: async (itemId, quantity) => {
     const { token, actionLoading } = get();
     if (!token || actionLoading) return false;
     set({ actionLoading: true, error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/arena/shop/buy`, {
         method: "POST",
-        body: JSON.stringify({ item_id: itemId }),
+        body: JSON.stringify({ item_id: itemId, quantity: quantity || 1 }),
       });
       const data = await response.json();
       if (response.ok) {

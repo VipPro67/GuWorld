@@ -27,6 +27,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/internal/util"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -303,6 +304,32 @@ func isValidUsername(username string) bool {
 	return true
 }
 
+func normalizeEmail(email string) string {
+	email = strings.ToLower(strings.TrimSpace(email))
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return email
+	}
+	local := parts[0]
+	domain := parts[1]
+
+	// Handle Gmail-specific normalization
+	if domain == "gmail.com" || domain == "googlemail.com" {
+		// Remove everything after '+'
+		if idx := strings.Index(local, "+"); idx != -1 {
+			local = local[:idx]
+		}
+		// Remove dots '.'
+		local = strings.ReplaceAll(local, ".", "")
+	} else {
+		// For non-gmail, still remove plus aliases as it's common (RFC 5233)
+		if idx := strings.Index(local, "+"); idx != -1 {
+			local = local[:idx]
+		}
+	}
+	return local + "@" + domain
+}
+
 // CreatePlayerRequest represents the incoming registration payload
 type CreatePlayerRequest struct {
 	Username       string `json:"username" binding:"required,min=3,max=30"`
@@ -317,6 +344,7 @@ type CreatePlayerRequest struct {
 	OTP            string `json:"otp" binding:"required"`
 	Race           string `json:"race"`
 	Gender         string `json:"gender"`
+	Fingerprint    string `json:"fingerprint" binding:"required"`
 }
 
 // CreatePlayerResponse represents the output payload for registration/login
@@ -459,8 +487,8 @@ func RegisterPlayer(c *gin.Context) {
 		return
 	}
 
-	// Email format verification
-	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	// Email format verification and normalization
+	req.Email = normalizeEmail(req.Email)
 	if !isValidEmail(req.Email) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Định dạng Email không hợp lệ!"})
 		return
@@ -645,19 +673,31 @@ func RegisterPlayer(c *gin.Context) {
 		return
 	}
 
+	// Verify device fingerprint registration limit (max 2 accounts)
+	var fingerprintCount int
+	err = tx.QueryRow("SELECT COUNT(1) FROM players WHERE register_fingerprint = $1", strings.TrimSpace(req.Fingerprint)).Scan(&fingerprintCount)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra giới hạn thiết bị đăng ký"})
+		return
+	}
+	if fingerprintCount >= 2 {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Thiết bị này đã đạt giới hạn đăng ký tối đa (2 tài khoản)!"})
+		return
+	}
+
 	// Generate unique referral code
 	refCode := "REF-" + strings.ToUpper(uuid.New().String()[:8])
 
 	var player models.Player
 	query := `
-		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, lifespan, time_speed_multiplier, email, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, avatar_url, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding, race, gender, constitution)
-		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, $14, $15, $11, '{}'::jsonb, '[]'::jsonb, $8, '{}'::jsonb, NULL, 100.0, 1.0, $9, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $10, true, $12, $13, $16)
+		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, lifespan, time_speed_multiplier, email, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, avatar_url, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding, race, gender, constitution, register_fingerprint, register_ip)
+		VALUES ($1, $2, 1, 1, $3, $4, $5, $6, $7, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, $14, $15, $11, '{}'::jsonb, '[]'::jsonb, $8, '{}'::jsonb, NULL, 100.0, 1.0, $9, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $10, true, $12, $13, $16, $17, $18)
 		RETURNING id, username, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, ` + db.GuInventoryAggregate("players.id") + `, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, active_combat, last_mana_update, created_at, lifespan, time_speed_multiplier, party_id, arena_rank, email, google_id, explore_count, last_explore_reset, aperture_stress, last_cultivate_time, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, is_admin, ref_code, avatar_url, needs_onboarding, race, gender, constitution, statuses
 	`
 
 	var activeCombatBytes []byte
 	hx, hy := hubEntryPoint()
-	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, req.StartingRegion, req.Email, refCode, equippedGus, req.Race, req.Gender, hx, hy, constitution).Scan(
+	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, req.StartingRegion, req.Email, refCode, equippedGus, req.Race, req.Gender, hx, hy, constitution, strings.TrimSpace(req.Fingerprint), c.ClientIP()).Scan(
 		&player.ID, &player.Username, &player.Rank, &player.SubRank,
 		&player.AptitudeType, &player.AptitudePercent, &player.AptitudeGrade, &player.CurrentMana,
 		&player.MaxMana, &player.PrimevalStones, &player.ImmortalStones, &player.GuInventory,
@@ -907,9 +947,10 @@ func CompleteOnboarding(c *gin.Context) {
 // backwards-compatible JSON field for older clients that already send an email
 // value under "username".
 type LoginRequest struct {
-	Email    string `json:"email"`
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Email       string `json:"email"`
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	Fingerprint string `json:"fingerprint"`
 }
 
 // LoginPlayer validates cultivator credentials and signs a JWT token
@@ -932,6 +973,8 @@ func LoginPlayer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Vui lòng đăng nhập bằng email hợp lệ"})
 		return
 	}
+
+	loginEmail = normalizeEmail(loginEmail)
 
 	var player models.Player
 	var passwordHash string
@@ -991,6 +1034,70 @@ func LoginPlayer(c *gin.Context) {
 	err = bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
+		return
+	}
+
+	// Enforce fingerprint multi-login rotation limit
+	fingerprint := strings.TrimSpace(req.Fingerprint)
+	if fingerprint == "" {
+		fingerprint = "ip-" + c.ClientIP()
+	}
+
+	var otherAccountsCount int
+	err = db.DB.QueryRow(`
+		SELECT COUNT(DISTINCT id) FROM players
+		WHERE last_login_fingerprint = $1
+		  AND last_login_time > NOW() - INTERVAL '24 hours'
+		  AND id != $2`,
+		fingerprint, player.ID).Scan(&otherAccountsCount)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi kiểm tra thiết bị đăng nhập"})
+		return
+	}
+
+	if otherAccountsCount >= 2 {
+		// Log to Audit Log for Admin
+		auditlog.Log(db.DB, auditlog.Entry{
+			PlayerID:       &player.ID,
+			Action:         "security.multi_login_blocked",
+			RequestSummary: fmt.Sprintf("Blocked login for %s due to multi-login fingerprint limit. Fingerprint=%s IP=%s", player.Username, fingerprint, c.ClientIP()),
+			IPAddress:      c.ClientIP(),
+			Success:        false,
+			ErrorMessage:   "Thiết bị đăng nhập quá nhiều tài khoản trong 24 giờ qua",
+		})
+
+		// Send real-time SSE notifications to the other active accounts from this fingerprint
+		rows, err := db.DB.Query(`
+			SELECT id FROM players
+			WHERE last_login_fingerprint = $1
+			  AND last_login_time > NOW() - INTERVAL '24 hours'
+			  AND id != $2`,
+			fingerprint, player.ID)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var otherPID uuid.UUID
+				if err := rows.Scan(&otherPID); err == nil {
+					notify.Send(db.DB, otherPID, "security_alert",
+						"Cảnh báo bảo mật",
+						fmt.Sprintf("Hệ thống đã chặn yêu cầu đăng nhập tài khoản thứ 3 (%s) trong ngày từ thiết bị của đạo hữu.", player.Username))
+				}
+			}
+		}
+
+		c.JSON(http.StatusForbidden, gin.H{"error": "Thiết bị này đã đạt giới hạn đăng nhập tối đa 2 tài khoản trong vòng 24 giờ!"})
+		return
+	}
+
+	// Update last login info
+	_, err = db.DB.Exec(`
+		UPDATE players
+		SET last_login_fingerprint = $1, last_login_ip = $2, last_login_time = NOW()
+		WHERE id = $3`,
+		fingerprint, c.ClientIP(), player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật phiên đăng nhập"})
 		return
 	}
 
@@ -4333,7 +4440,8 @@ func GoogleLogin(c *gin.Context) {
 	c.SetCookie("google_oauth_state", stateStr, 300, "/api/auth/google", "", authCookieSecure(c, false), true)
 
 	refCode := c.Query("ref")
-	state := stateStr + ":" + refCode
+	fingerprint := c.Query("fingerprint")
+	state := stateStr + ":" + refCode + ":" + fingerprint
 	googleURL := fmt.Sprintf("https://accounts.google.com/o/oauth2/v2/auth?client_id=%s&redirect_uri=%s&response_type=code&scope=openid+profile+email&state=%s",
 		clientID, url.QueryEscape(redirectURI), state)
 
@@ -4363,15 +4471,19 @@ func GoogleCallback(c *gin.Context) {
 	// Xóa cookie ngay lập tức
 	c.SetCookie("google_oauth_state", "", -1, "/api/auth/google", "", authCookieSecure(c, false), true)
 
-	parts := strings.SplitN(state, ":", 2)
+	parts := strings.Split(state, ":")
 	if len(parts) == 0 || parts[0] != stateCookie {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid security state mismatch"})
 		return
 	}
 
 	var referralCode string
-	if len(parts) == 2 {
+	if len(parts) >= 2 {
 		referralCode = parts[1]
+	}
+	var fingerprint string
+	if len(parts) >= 3 {
+		fingerprint = parts[2]
 	}
 
 	clientID := os.Getenv("GOOGLE_CLIENT_ID")
@@ -4699,6 +4811,79 @@ func GoogleCallback(c *gin.Context) {
 				}
 			}
 		}
+	}
+
+	// Enforce fingerprint multi-login rotation limit for Google OAuth
+	fingerprint = strings.TrimSpace(fingerprint)
+	if fingerprint == "" {
+		fingerprint = "ip-" + c.ClientIP()
+	}
+
+	var otherAccountsCount int
+	err = tx.QueryRow(`
+		SELECT COUNT(DISTINCT id) FROM players
+		WHERE last_login_fingerprint = $1
+		  AND last_login_time > NOW() - INTERVAL '24 hours'
+		  AND id != $2`,
+		fingerprint, player.ID).Scan(&otherAccountsCount)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi hệ thống khi kiểm tra thiết bị"})
+		return
+	}
+
+	if otherAccountsCount >= 2 {
+		// Log to Audit Log for Admin
+		auditlog.Log(tx, auditlog.Entry{
+			PlayerID:       &player.ID,
+			Action:         "security.multi_login_blocked",
+			RequestSummary: fmt.Sprintf("Blocked Google login for %s due to multi-login fingerprint limit. Fingerprint=%s IP=%s", player.Username, fingerprint, c.ClientIP()),
+			IPAddress:      c.ClientIP(),
+			Success:        false,
+			ErrorMessage:   "Thiết bị đăng nhập quá nhiều tài khoản trong 24 giờ qua",
+		})
+
+		// Send real-time SSE notifications to the other active accounts from this fingerprint
+		rows, err := tx.Query(`
+			SELECT id FROM players
+			WHERE last_login_fingerprint = $1
+			  AND last_login_time > NOW() - INTERVAL '24 hours'
+			  AND id != $2`,
+			fingerprint, player.ID)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var otherPID uuid.UUID
+				if err := rows.Scan(&otherPID); err == nil {
+					notify.Send(tx, otherPID, "security_alert",
+						"Cảnh báo bảo mật",
+						fmt.Sprintf("Hệ thống đã chặn yêu cầu đăng nhập tài khoản Google thứ 3 (%s) trong ngày từ thiết bị của đạo hữu.", player.Username))
+				}
+			}
+		}
+
+		// Redirect back to frontend with error query parameter
+		frontendURL := os.Getenv("CORS_ALLOWED_ORIGINS")
+		if frontendURL == "" {
+			frontendURL = "http://localhost:3000"
+		}
+		if strings.Contains(frontendURL, ",") {
+			frontendURL = strings.Split(frontendURL, ",")[0]
+		}
+		redirectURL := frontendURL + "?error=" + url.QueryEscape("Thiết bị này đã đạt giới hạn đăng nhập tối đa 2 tài khoản trong vòng 24 giờ!")
+		c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+		return
+	}
+
+	// Update last login info
+	_, err = tx.Exec(`
+		UPDATE players
+		SET last_login_fingerprint = $1, last_login_ip = $2, last_login_time = NOW()
+		WHERE id = $3`,
+		fingerprint, c.ClientIP(), player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update Google login details"})
+		return
 	}
 
 	if err := tx.Commit(); err != nil {

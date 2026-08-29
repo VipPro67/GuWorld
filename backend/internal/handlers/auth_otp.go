@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -22,7 +21,7 @@ func SendOTP(c *gin.Context) {
 		return
 	}
 
-	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.Email = normalizeEmail(req.Email)
 	if !isValidEmail(req.Email) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Định dạng Email không hợp lệ!"})
 		return

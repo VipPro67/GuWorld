@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { GamePanel, GameButton, GameCard, GameBadge } from "@/components/ui";
 import { Player, PlayerPet, ItemSpec, MonsterSpec, useGameStore } from "@/store/useGameStore";
 import { PawPrint, Heart, Swords, Moon, Trash2, Merge, Users, ChevronDown, ChevronUp } from "lucide-react";
+// UI migrated to shared components
 
 interface PetPanelProps {
   player: Player;
@@ -110,10 +112,10 @@ export const PetPanel: React.FC<PetPanelProps> = ({
 
   if (pets.length === 0) {
     return (
-      <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-6 text-center">
+      <GamePanel variant="default" className="text-center">
         <PawPrint className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
         <p className="text-zinc-400 text-sm">Chưa có cổ thú nào. Hãy bắt monster trong chiến đấu!</p>
-      </div>
+      </GamePanel>
     );
   }
 
@@ -148,34 +150,33 @@ export const PetPanel: React.FC<PetPanelProps> = ({
 
         {editingFormation ? (
           <div className="space-y-2">
-            <div className="grid grid-cols-4 gap-2">
-              {Array.from({ length: maxSlots }).map((_, i) => {
-                const petId = formationDraft[i];
-                const pet = petId ? pets.find((p) => p.id === petId) : null;
-                return (
-                  <div
-                    key={i}
-                    className={`border rounded-lg p-2 text-center text-xs cursor-pointer transition-all ${
-                      pet ? "border-amber-700 bg-amber-950/30" : "border-zinc-700 bg-zinc-800/50 border-dashed"
-                    }`}
-                    onClick={() => {
-                      if (pet) {
-                        setFormationDraft(formationDraft.filter((_, j) => j !== i));
-                      }
-                    }}
-                  >
-                    {pet ? (
-                      <>
-                        <div className="text-amber-300 font-bold truncate">{pet.nickname}</div>
-                        <div className="text-zinc-500">x{pet.count}</div>
-                      </>
-                    ) : (
-                      <div className="text-zinc-600">Slot {i + 1}</div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+<div className="grid grid-cols-4 gap-2">
+                {Array.from({ length: maxSlots }).map((_, i) => {
+                  const petId = formationDraft[i];
+                  const pet = petId ? pets.find((p) => p.id === petId) : null;
+                  return (
+                    <GameCard
+                      key={i}
+                      variant={pet ? "selected" : "default"}
+                      className="p-2 text-center text-xs cursor-pointer"
+                      onClick={() => {
+                        if (pet) {
+                          setFormationDraft(formationDraft.filter((_, j) => j !== i));
+                        }
+                      }}
+                    >
+                      {pet ? (
+                        <>
+                          <div className="text-amber-300 font-bold truncate">{pet.nickname}</div>
+                          <div className="text-zinc-500">x{pet.count}</div>
+                        </>
+                      ) : (
+                        <div className="text-zinc-600">Slot {i + 1}</div>
+                      )}
+                    </GameCard>
+                  );
+                })}
+              </div>
             {/* Available pets to add */}
             {storagePets.length > 0 && formationDraft.length < maxSlots && (
               <div className="flex flex-wrap gap-1 mt-2">
@@ -190,36 +191,41 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                 ))}
               </div>
             )}
-            <button
+            <GameButton
               onClick={handleFormationSave}
-              disabled={actionLoading}
-              className="w-full mt-2 py-2 bg-amber-700 hover:bg-amber-600 text-white text-xs font-bold rounded-lg disabled:opacity-50"
+              variant="warning"
+              fullWidth
+              loading={actionLoading}
             >
               Lưu Đội Hình
-            </button>
+            </GameButton>
           </div>
         ) : (
-          <div className="grid grid-cols-4 gap-2">
-            {Array.from({ length: maxSlots }).map((_, i) => {
-              const pet = formationPets[i];
-              return (
-                <div key={i} className={`border rounded-lg p-2 text-center text-xs ${pet ? "border-amber-700 bg-amber-950/30" : "border-zinc-700 bg-zinc-800/50 border-dashed"}`}>
-                  {pet ? (
-                    <>
-                      <div className="text-amber-300 font-bold truncate">{pet.nickname}</div>
-                      <div className="text-zinc-500">x{pet.count} · HP {Math.round(pet.hp)}</div>
-                    </>
-                  ) : (
-                    <div className="text-zinc-600">Trống</div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+<div className="grid grid-cols-4 gap-2">
+              {Array.from({ length: maxSlots }).map((_, i) => {
+                const pet = formationPets[i];
+                return (
+                  <GameCard
+                    key={i}
+                    variant={pet ? "selected" : "default"}
+                    className="p-2 text-center text-xs"
+                  >
+                    {pet ? (
+                      <>
+                        <div className="text-amber-300 font-bold truncate">{pet.nickname}</div>
+                        <div className="text-zinc-500">x{pet.count} · HP {Math.round(pet.hp)}</div>
+                      </>
+                    ) : (
+                      <div className="text-zinc-600">Trống</div>
+                    )}
+                  </GameCard>
+                );
+              })}
+            </div>
         )}
       </div>
 
-      {/* Merge Mode Toggle */}
+       {/* Merge Mode Toggle */}
       <div className="flex gap-2">
         <button
           onClick={() => { setMergeMode(!mergeMode); setMergeTarget(null); setMergeSources([]); }}

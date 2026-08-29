@@ -6,6 +6,8 @@ import {
   X, Coins, Sparkles, Lock, Unlock, CheckCircle2, 
   Trash2, Plus, Minus, RefreshCw, User, ShieldAlert 
 } from "lucide-react";
+import { GameModal, GameTabs, GameButton, GameCard, GameBadge, GameInput } from "@/components/ui";
+// UI migrated to shared components
 
 export const TradeRoomModal: React.FC = () => {
   const { 
@@ -303,36 +305,19 @@ export const TradeRoomModal: React.FC = () => {
     : recipes.filter(r => !myOffer?.recipes?.[r.id]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/85 backdrop-blur-md animate-fade-in">
-            <div className="w-full max-w-screen-xl bg-zinc-950 border border-zinc-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
-        
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-zinc-900 flex justify-between items-center bg-gradient-to-r from-zinc-950 to-zinc-900">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-emerald-950/50 border border-emerald-500/20 flex items-center justify-center shrink-0">
-              <RefreshCw className="w-4 h-4 text-emerald-400 animate-spin" style={{ animationDuration: "10s" }} />
-            </div>
-            <div>
-              <h3 className="text-base font-serif font-bold text-zinc-100 flex items-center gap-2">
-                Không Gian Giao Dịch Thông Thiên
-              </h3>
-              <p className="text-[10px] text-zinc-500 font-mono">
-                Được liên kết an toàn qua tần số Thông Thiên Cổ
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={async () => {
-              if (await showConfirm("Đạo hữu có chắc chắn muốn hủy kết nối giao dịch này không?")) {
-                cancelTrade(activeTrade.id);
-              }
-            }}
-            className="p-1.5 rounded-lg bg-zinc-900/60 hover:bg-red-950/40 text-zinc-400 hover:text-red-400 border border-zinc-900/60 hover:border-red-900/30 transition-all cursor-pointer"
-            title="Hủy giao dịch"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+    <GameModal
+      open={!!activeTrade && !!player}
+      onClose={async () => {
+        if (await showConfirm("Đạo hữu có chắc chắn muốn hủy kết nối giao dịch này không?")) {
+          cancelTrade(activeTrade.id);
+        }
+      }}
+      title="Không Gian Giao Dịch Thông Thiên"
+      description="Được liên kết an toàn qua tần số Thông Thiên Cổ"
+      size="xl"
+      showCloseButton={false}
+    >
+      <div className="w-full max-w-screen-xl bg-zinc-950 border border-zinc-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
 
         {/* Main Workspace split */}
         <div className="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-zinc-900">
@@ -1106,6 +1091,6 @@ export const TradeRoomModal: React.FC = () => {
         </div>
 
       </div>
-    </div>
+    </GameModal>
   );
 };

@@ -648,16 +648,76 @@ func SellShopItem(c *gin.Context) {
 	sellRank := 1
 	var removedIDs []string
 	if req.ItemType == "Material" || req.ItemType == "Consumable" {
-		cat := "materials"
+		preferredCat := "materials"
 		if req.ItemType == "Consumable" {
-			cat = "consumables"
+			preferredCat = "consumables"
 		}
-		qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), req.ItemID)
-		if qty < req.Quantity {
+
+		rows, err := tx.Query(`SELECT category, quantity FROM player_inventory_items WHERE player_id = $1 AND item_id = $2`, player.ID.String(), req.ItemID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking inventory"})
+			return
+		}
+
+		type invItem struct {
+			category string
+			quantity int
+		}
+		var invs []invItem
+		totalQty := 0
+		for rows.Next() {
+			var iv invItem
+			if err := rows.Scan(&iv.category, &iv.quantity); err != nil {
+				rows.Close()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error scanning inventory"})
+				return
+			}
+			invs = append(invs, iv)
+			totalQty += iv.quantity
+		}
+		rows.Close()
+
+		if totalQty < req.Quantity {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ vật phẩm để bán"})
 			return
 		}
-		InventorySvc.RemoveItem(tx, player.ID.String(), req.ItemID, cat, req.Quantity)
+
+		remainingDeduct := req.Quantity
+		for _, iv := range invs {
+			if iv.category == preferredCat {
+				deduct := iv.quantity
+				if deduct > remainingDeduct {
+					deduct = remainingDeduct
+				}
+				if err := InventorySvc.RemoveItem(tx, player.ID.String(), req.ItemID, iv.category, deduct); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa vật phẩm khỏi túi đồ"})
+					return
+				}
+				remainingDeduct -= deduct
+				if remainingDeduct <= 0 {
+					break
+				}
+			}
+		}
+		if remainingDeduct > 0 {
+			for _, iv := range invs {
+				if iv.category != preferredCat {
+					deduct := iv.quantity
+					if deduct > remainingDeduct {
+						deduct = remainingDeduct
+					}
+					if err := InventorySvc.RemoveItem(tx, player.ID.String(), req.ItemID, iv.category, deduct); err != nil {
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa vật phẩm khỏi túi đồ"})
+						return
+					}
+					remainingDeduct -= deduct
+					if remainingDeduct <= 0 {
+						break
+					}
+				}
+			}
+		}
+
 		// Resolve sell price: prefer shop catalog price, fallback to item_dictionary rank
 		var unitSellPrice int
 		if shopItem, err := findCaravanShopItem(req.ItemID, req.Rank); err == nil {
@@ -830,16 +890,75 @@ func SellShopItemsBulk(c *gin.Context) {
 
 	for _, item := range req.Items {
 		if item.ItemType == "Material" || item.ItemType == "Consumable" {
-			cat := "materials"
+			preferredCat := "materials"
 			if item.ItemType == "Consumable" {
-				cat = "consumables"
+				preferredCat = "consumables"
 			}
-			qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), item.ItemID)
-			if qty < item.Quantity {
+
+			rows, err := tx.Query(`SELECT category, quantity FROM player_inventory_items WHERE player_id = $1 AND item_id = $2`, player.ID.String(), item.ItemID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking inventory"})
+				return
+			}
+
+			type invItem struct {
+				category string
+				quantity int
+			}
+			var invs []invItem
+			totalQty := 0
+			for rows.Next() {
+				var iv invItem
+				if err := rows.Scan(&iv.category, &iv.quantity); err != nil {
+					rows.Close()
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error scanning inventory"})
+					return
+				}
+				invs = append(invs, iv)
+				totalQty += iv.quantity
+			}
+			rows.Close()
+
+			if totalQty < item.Quantity {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ vật phẩm %s để bán", item.ItemID)})
 				return
 			}
-			InventorySvc.RemoveItem(tx, player.ID.String(), item.ItemID, cat, item.Quantity)
+
+			remainingDeduct := item.Quantity
+			for _, iv := range invs {
+				if iv.category == preferredCat {
+					deduct := iv.quantity
+					if deduct > remainingDeduct {
+						deduct = remainingDeduct
+					}
+					if err := InventorySvc.RemoveItem(tx, player.ID.String(), item.ItemID, iv.category, deduct); err != nil {
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa vật phẩm khỏi túi đồ"})
+						return
+					}
+					remainingDeduct -= deduct
+					if remainingDeduct <= 0 {
+						break
+					}
+				}
+			}
+			if remainingDeduct > 0 {
+				for _, iv := range invs {
+					if iv.category != preferredCat {
+						deduct := iv.quantity
+						if deduct > remainingDeduct {
+							deduct = remainingDeduct
+						}
+						if err := InventorySvc.RemoveItem(tx, player.ID.String(), item.ItemID, iv.category, deduct); err != nil {
+							c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể xóa vật phẩm khỏi túi đồ"})
+							return
+						}
+						remainingDeduct -= deduct
+						if remainingDeduct <= 0 {
+							break
+						}
+					}
+				}
+			}
 
 			var unitSellPrice int
 			sellRank := 1
