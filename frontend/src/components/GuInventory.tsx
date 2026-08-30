@@ -888,7 +888,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
                           {/* Group actions */}
                           <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end flex-wrap">
-                            {spec.gu_type !== "Consumable" && onFeedGroup && (
+                            {(spec.gu_type !== "Consumable" || (spec.max_hunger && spec.max_hunger > 0)) && onFeedGroup && (
                               <button
                                 type="button"
                                 disabled={actionLoading || isCurrentlyFeedingGroup}
@@ -1046,7 +1046,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                       {status === "DYING" && "💀 Hấp Hối"}
                                       {status === "DEAD" && "🪦 Đã Chết"}
                                     </span>
-                                    {spec.gu_type !== "Consumable" && (
+                                    {(spec.gu_type !== "Consumable" || (spec.max_hunger && spec.max_hunger > 0)) && (
                                       <div className="flex items-center gap-1.5">
                                         <span className="text-[9px] text-zinc-500 font-mono">Độ no:</span>
                                         <div className="w-16 h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-850">
@@ -1071,7 +1071,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                   {/* Actions */}
                                   <div className="flex items-center gap-1.5 justify-end flex-wrap">
                                     {/* Feed Individual */}
-                                    {spec.gu_type !== "Consumable" && !isDead && status !== "SEALED" && (
+                                    {(spec.gu_type !== "Consumable" || (spec.max_hunger && spec.max_hunger > 0)) && !isDead && status !== "SEALED" && (
                                       <button
                                         type="button"
                                         disabled={actionLoading || feedingId === gu.instance_id}

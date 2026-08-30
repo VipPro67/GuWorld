@@ -207,6 +207,9 @@ export const ImmortalApertureView: React.FC = () => {
 
   const [sliderRate, setSliderRate] = useState<number>(aperture?.time_rate || 10.0);
   const [buildCategory, setBuildCategory] = useState<"khu_trong" | "khu_nuoi" | "khu_khai_thac" | "defense">("khu_trong");
+  const [pendingBuildZone, setPendingBuildZone] = useState<string | null>(null);
+  const [buildPath, setBuildPath] = useState<string>("Wisdom Path");
+  const [buildProdKey, setBuildProdKey] = useState<string>("");
 
   const essenceProd = aperture?.essence_production_per_year ?? 10;
   const rank = player?.rank ?? 6;
@@ -360,12 +363,13 @@ export const ImmortalApertureView: React.FC = () => {
     setSelectedNode(node || null);
   };
 
-  const handleBuildNode = async (nodeType: string) => {
+  const handleBuildNode = async (nodeType: string, customPath?: string, customProdKey?: string) => {
     if (!selectedCell) return;
-    const success = await placeApertureNode(nodeType, selectedCell.x, selectedCell.y);
+    const success = await placeApertureNode(nodeType, selectedCell.x, selectedCell.y, customPath, customProdKey);
     if (success) {
       setSelectedCell(null);
       setSelectedNode(null);
+      setPendingBuildZone(null);
     }
   };
 
@@ -1617,11 +1621,7 @@ return (
                       const qtyKiemFarm = player.materials_inventory?.["node_kiem_farm"] || 0;
                       const qtyThuyFarm = player.materials_inventory?.["node_thuy_farm"] || 0;
                       const qtyChuaFarm = player.materials_inventory?.["node_chua_farm"] || 0;
-                      const qtyCamFarm = player.materials_inventory?.["node_cam_farm"] || 0;
-                      const qtyKimFarm = player.materials_inventory?.["node_kim_farm"] || 0;
-                      const qtyVangFarm = player.materials_inventory?.["node_vang_farm"] || 0;
                       const qtyHuyetFarm = player.materials_inventory?.["node_huyet_farm"] || 0;
-                      const qtyThatFarm = player.materials_inventory?.["node_that_farm"] || 0;
                       const qtyThayThuatFarm = player.materials_inventory?.["node_thay_thuat_farm"] || 0;
                       const qtyLuatFarm = player.materials_inventory?.["node_luat_farm"] || 0;
                       const qtyThuatFarm = player.materials_inventory?.["node_thuat_farm"] || 0;
@@ -1631,6 +1631,10 @@ return (
                       const qtyPhongFarm = player.materials_inventory?.["node_phong_farm"] || 0;
                       const qtyNoFarm = player.materials_inventory?.["node_no_farm"] || 0;
                       const qtyNoFarmAdv = player.materials_inventory?.["node_no_farm_adv"] || 0;
+                      const qtyCamFarm = player.materials_inventory?.["node_cam_farm"] || 0;
+                      const qtyKimFarm = player.materials_inventory?.["node_kim_farm"] || 0;
+                      const qtyVangFarm = player.materials_inventory?.["node_vang_farm"] || 0;
+                      const qtyThatFarm = player.materials_inventory?.["node_that_farm"] || 0;
 
                       const qtyWall = player.materials_inventory?.["node_wall"] || 0;
                       const qtyWatchtower = player.materials_inventory?.["node_watchtower"] || 0;
@@ -1647,35 +1651,33 @@ return (
                         zone: string;
                       };
 
-                      const categoryData: Record<string, NodeOption[]> = {
+                      const categoryData: Record<"khu_trong" | "khu_nuoi" | "khu_khai_thac" | "defense", NodeOption[]> = {
                         khu_trong: [
-                          { id: "TRI_FARM", name: "🧠 Trang Trại Trí Đạo", desc: "Sản xuất Tinh Niệm (Tri Đạo). Phí: 2000 Đá.", cost: 2000, qty: qtyTriFarm, zone: "khu_trong" },
-                          { id: "TRI_FARM_ADV", name: "🧠 Trang Trại Trí Đạo Cao Cấp", desc: "Sản xuất Lộc Thần Quả (Tri Đạo). Phí: 5000 Đá.", cost: 5000, qty: qtyTriFarmAdv, zone: "khu_trong" },
-                          { id: "HOA_FARM", name: "🔥 Lò Đốt Hỏa Đá", desc: "Sản xuất Hỏa Thán (Hỏa Đạo). Phí: 800 Đá.", cost: 800, qty: qtyHoaFarm, zone: "khu_trong" },
-                          { id: "TIN_FARM", name: "📄 Xưởng Giấy Tương", desc: "Sản xuất Giấy Tương (Tín Đạo). Phí: 300 Đá.", cost: 300, qty: qtyTinFarm, zone: "khu_trong" },
-                          { id: "AM_FARM", name: "🌑 Vườn Dạ Sương", desc: "Sản xuất Dạ Sương (Ám Đạo). Phí: 1000 Đá.", cost: 1000, qty: qtyAmFarm, zone: "khu_trong" },
-                          { id: "DOC_FARM", name: "☠️ Vườn Độc Trùng", desc: "Sản xuất Thịt Độc (Độc Đạo). Phí: 600 Đá.", cost: 600, qty: qtyDocFarm, zone: "khu_trong" },
-                          { id: "BAC_FARM", name: "🌍 Kho Cacao Đá", desc: "Sản xuất Hơi Đất (Thổ Đạo). Phí: 1500 Đá.", cost: 1500, qty: qtyBacFarm, zone: "khu_trong" },
-                          { id: "QUANG_FARM", name: "☀️ Vườn Ánh Sáng", desc: "Sản xuất Ánh Sáng (Quang Đạo). Phí: 800 Đá.", cost: 800, qty: qtyQuangFarm, zone: "khu_trong" },
-                          { id: "KIEM_FARM", name: "⚔️ Đồng Cỏ Kiếm Cao Cấp", desc: "Sản xuất Kiếm Khí (Kiếm Đạo). Phí: 1500 Đá.", cost: 1500, qty: qtyKiemFarm, zone: "khu_trong" },
-                          { id: "THUY_FARM", name: "💧 Khu Tưới Nước", desc: "Sản xuất Nước Sạch (Thủy Đạo). Phí: 500 Đá.", cost: 500, qty: qtyThuyFarm, zone: "khu_trong" },
-                          { id: "CHUA_FARM", name: "🦴 Đồng Cây Xương Rỗ", desc: "Sản xuất Xương Thú (Thú Đạo). Phí: 700 Đá.", cost: 700, qty: qtyChuaFarm, zone: "khu_trong" },
-                          { id: "CAM_FARM", name: "🥈 Mỏ Cuội Đá", desc: "Sản xuất Quặng Đồng (Kim Đạo). Phí: 1200 Đá.", cost: 1200, qty: qtyCamFarm, zone: "khu_khai_thac" },
-                          { id: "KIM_FARM", name: "🔩 Mỏ Sắt Cao Cấp", desc: "Sản xuất Quặng Sắt (Kim Đạo). Phí: 1500 Đá.", cost: 1500, qty: qtyKimFarm, zone: "khu_khai_thac" },
-                          { id: "VANG_FARM", name: "💰 Mỏ Vàng", desc: "Sản xuất Quặng Vàng (Kim Đạo). Phí: 2000 Đá.", cost: 2000, qty: qtyVangFarm, zone: "khu_khai_thac" },
-                          { id: "HUYET_FARM", name: "🩸 Khu Lồng Máu", desc: "Sản xuất Cỏ Liềm Máu (Huyết Đạo). Phí: 500 Đá.", cost: 500, qty: qtyHuyetFarm, zone: "khu_trong" },
-                          { id: "THAT_FARM", name: "🛢️ Kho Dầu Đen", desc: "Sản xuất Dầu Đen (Hỏa Đạo). Phí: 2000 Đá.", cost: 2000, qty: qtyThatFarm, zone: "khu_khai_thac" },
-                          { id: "THAY_THUAT_FARM", name: "🔊 Xưởng Thuốc Truyền", desc: "Sản xuất Tinh Thể Âm Thanh (Âm Đạo). Phí: 800 Đá.", cost: 800, qty: qtyThayThuatFarm, zone: "khu_trong" },
-                          { id: "LUAT_FARM", name: "⚖️ Kho Nguyên Tinh", desc: "Sản xuất Phong Ấn Thạch (Luật Đạo). Phí: 1500 Đá.", cost: 1500, qty: qtyLuatFarm, zone: "khu_trong" },
-                          { id: "THUAT_FARM", name: "👻 Vườn Sao Tinh", desc: "Sản xuất Hồn Khí (Thần Đạo). Phí: 1000 Đá.", cost: 1000, qty: qtyThuatFarm, zone: "khu_trong" },
+                          { id: "FARMING_ZONE", name: "🌱 Khu Trồng Trọt (Tùy chỉnh)", desc: "Trồng tài nguyên thực vật theo Đại Đạo. Phí: 500 Đá.", cost: 500, qty: 0, zone: "khu_trong" },
+                          { id: "MOON_ORCHID_FIELD", name: "🌸 Cánh Đồng Hoa Nguyệt Lan", desc: "Sản sinh Cánh hoa Nguyệt Lan. Cần Khí hậu mát. Phí: 500 Đá.", cost: 500, qty: qtyMoon, zone: "khu_trong" },
+                          { id: "GREEN_BAMBOO_GROVE", name: "🎋 Rừng Trúc Thanh Trúc", desc: "Sản sinh Rượu Thanh Trúc. Cần Khí hậu ẩm. Phí: 600 Đá.", cost: 600, qty: qtyBamboo, zone: "khu_trong" },
+                          { id: "SWORD_LEAF_GRASS", name: "⚔️ Đồng Cỏ Kiếm Diệp", desc: "Sản sinh Cỏ Kiếm Diệp. Cần Tiết trời hanh khô. Phí: 800 Đá.", cost: 800, qty: qtySword, zone: "khu_trong" },
+                          { id: "TRI_FARM", name: "🧠 Nấm Trí Tuệ", desc: "Sản xuất Nấm Trí Tuệ (Trí Đạo). Phí: 2000 Đá.", cost: 2000, qty: qtyTriFarm, zone: "khu_trong" },
+                          { id: "TRI_FARM_ADV", name: "🧠 Nấm Trí Tuệ Cao Cấp", desc: "Sản xuất Nấm Trí Tuệ Tốt (Trí Đạo). Phí: 5000 Đá.", cost: 5000, qty: qtyTriFarmAdv, zone: "khu_trong" },
+                          { id: "HOA_FARM", name: "🔥 Hỏa Liên Hoa", desc: "Sản xuất Hỏa Liên Hoa (Hỏa Đạo). Phí: 800 Đá.", cost: 800, qty: qtyHoaFarm, zone: "khu_trong" },
+                          { id: "TIN_FARM", name: "📜 Lá Thông Tin", desc: "Sản xuất Lá Thông Tin (Tín Đạo). Phí: 300 Đá.", cost: 300, qty: qtyTinFarm, zone: "khu_trong" },
+                          { id: "AM_FARM", name: "🌑 Cỏ Nguyệt Quang", desc: "Sản xuất Cỏ Nguyệt Quang (Ám Đạo). Phí: 1000 Đá.", cost: 1000, qty: qtyAmFarm, zone: "khu_trong" },
+                          { id: "DOC_FARM", name: "🧪 Độc Mao Mộc", desc: "Sản xuất Rễ Độc Mao (Độc Đạo). Phí: 600 Đá.", cost: 600, qty: qtyDocFarm, zone: "khu_trong" },
+                          { id: "BAC_FARM", name: "⚙️ Kim Trúc", desc: "Sản xuất Kim Trúc (Kim Đạo). Phí: 1500 Đá.", cost: 1500, qty: qtyBacFarm, zone: "khu_trong" },
+                          { id: "QUANG_FARM", name: "🌟 Hướng Dương Quang", desc: "Sản xuất Hạt Hướng Dương (Quang Đạo). Phí: 800 Đá.", cost: 800, qty: qtyQuangFarm, zone: "khu_trong" },
+                          { id: "KIEM_FARM", name: "🗡️ Kiếm Thảo", desc: "Sản xuất Lá Kiếm Thảo (Kiếm Đạo). Phí: 1500 Đá.", cost: 1500, qty: qtyKiemFarm, zone: "khu_trong" },
+                          { id: "THUY_FARM", name: "💧 Thủy Cúc", desc: "Sản xuất Hoa Thủy Cúc (Thủy Đạo). Phí: 500 Đá.", cost: 500, qty: qtyThuyFarm, zone: "khu_trong" },
+                          { id: "CHUA_FARM", name: "🌿 Dây Leo Gỗ", desc: "Sản xuất Dây Leo (Mộc Đạo). Phí: 700 Đá.", cost: 700, qty: qtyChuaFarm, zone: "khu_trong" },
+                          { id: "HUYET_FARM", name: "🩸 Huyết Mộc", desc: "Sản xuất Rễ Huyết Mộc (Huyết Đạo). Phí: 500 Đá.", cost: 500, qty: qtyHuyetFarm, zone: "khu_trong" },
+                          { id: "THAY_THUAT_FARM", name: "🎭 Thảo Dược Thay Đổi", desc: "Sản xuất Thảo Dược Đổi (Biến Hóa Đạo). Phí: 800 Đá.", cost: 800, qty: qtyThayThuatFarm, zone: "khu_trong" },
+                          { id: "LUAT_FARM", name: "⚖️ Cây Kỷ Luật", desc: "Sản xuất Lá Kỷ Luật (Luật Đạo). Phí: 1500 Đá.", cost: 1500, qty: qtyLuatFarm, zone: "khu_trong" },
+                          { id: "THUAT_FARM", name: "🌟 Tinh Linh Hoa", desc: "Sản xuất Tinh Linh Hoa (Tinh Đạo). Phí: 1000 Đá.", cost: 1000, qty: qtyThuatFarm, zone: "khu_trong" },
                           { id: "THOI_THUAT_FARM", name: "☀️ Ngọn Lửa Mặt Trời", desc: "Sản xuất Thái Dương Hỏa (Hỏa Đạo). Phí: 5000 Đá.", cost: 5000, qty: qtyThoiThuatFarm, zone: "khu_trong" },
-                          { id: "LUC_FARM", name: "💪 Đồng Thịt Lạc", desc: "Sản xuất Thịt Tim Sói (Lực Đạo). Phí: 1500 Đá.", cost: 1500, qty: qtyLucFarm, zone: "khu_nuoi" },
                           { id: "THOI_FARM", name: "🕰️ Đồng Cỏ Lịch Sử", desc: "Sản xuất Lịch Sử Trần (Thời Đạo). Phí: 8000 Đá.", cost: 8000, qty: qtyThoiFarm, zone: "khu_trong" },
                           { id: "PHONG_FARM", name: "🌪️ Đỉnh Cuồng Phong", desc: "Sản xuất Cửu Thiên Cuồng Phong (Phong Đạo). Phí: 20000 Đá.", cost: 20000, qty: qtyPhongFarm, zone: "khu_trong" },
-                          { id: "NO_FARM", name: "🐄 Bãi Nuôi Bò", desc: "Sản xuất Thịt Thú (Thú Đạo). Phí: 400 Đá.", cost: 400, qty: qtyNoFarm, zone: "khu_nuoi" },
-                          { id: "NO_FARM_ADV", name: "🐺 Bãi Nuôi Sói", desc: "Sản xuất Thịt Tim Sói (Nô Đạo). Phí: 2000 Đá.", cost: 2000, qty: qtyNoFarmAdv, zone: "khu_nuoi" },
                         ],
                         khu_nuoi: [
+                          { id: "BREEDING_ZONE", name: "🐄 Khu Chăn Nuôi (Tùy chỉnh)", desc: "Nuôi thú theo Đại Đạo. Phí: 1200 Đá.", cost: 1200, qty: 0, zone: "khu_nuoi" },
                           { id: "SPIRIT_DEER_PASTURE", name: "🦌 Bãi Chăn Thả Hươu Linh", desc: "Sản sinh Thịt Hươu Linh. Cần Thực vật. Phí: 1200 Đá.", cost: 1200, qty: qtyDeer, zone: "khu_nuoi" },
                           { id: "SILVER_WOLF_DEN", name: "🐺 Hang Sói Bạc", desc: "Sản sinh Da Sói Bạc. Cần Thú ăn cỏ. Phí: 2000 Đá.", cost: 2000, qty: qtyWolf, zone: "khu_nuoi" },
                           { id: "HAIRY_MAN_SETTLEMENT", name: "🧔 Bộ Lạc Người Lông", desc: "Chiêu mộ Người Lông, tăng Refine. Phí: 3000 Đá.", cost: 3000, qty: qtyHairy, zone: "khu_nuoi" },
@@ -1686,6 +1688,7 @@ return (
                           { id: "LUC_FARM", name: "💪 Đồng Thịt Lạc", desc: "Sản xuất Thịt Tim Sói (Lực Đạo). Phí: 1500 Đá.", cost: 1500, qty: qtyLucFarm, zone: "khu_nuoi" },
                         ],
                         khu_khai_thac: [
+                          { id: "MINING_ZONE", name: "⛏️ Khu Khai Thác (Tùy chỉnh)", desc: "Khai thác khoáng thạch theo Đại Đạo. Phí: 1000 Đá.", cost: 1000, qty: 0, zone: "khu_khai_thac" },
                           { id: "JADE_STONE_MINE", name: "💎 Mỏ Ngọc Thạch Bản Địa", desc: "Sản xuất Ngọc Thạch. Phí: 1000 Đá.", cost: 1000, qty: qtyJade, zone: "khu_khai_thac" },
                           { id: "PRIMEVAL_MINE", name: "🪙 Mạch Nguyên Thạch Tiên Khiếu", desc: "Sản sinh Nguyên Thạch cực nhanh. Phí: 1500 Đá.", cost: 1500, qty: qtyPrimeval, zone: "khu_khai_thac" },
                           { id: "CAM_FARM", name: "🥈 Mỏ Cuội Đá", desc: "Sản xuất Quặng Đồng (Kim Đạo). Phí: 1200 Đá.", cost: 1200, qty: qtyCamFarm, zone: "khu_khai_thac" },
@@ -1735,30 +1738,77 @@ return (
                           </div>
 
                           <div className="space-y-3 pt-2 max-h-[350px] overflow-y-auto pr-1">
-                            {categoryData[buildCategory]?.map((option) => {
-                              const nodeItemID = "node_" + option.id.toLowerCase();
-                              const hasModel = option.qty > 0;
-                              const canBuild = hasModel || player.primeval_stones >= option.cost;
-
-                              return (
-                                <div key={option.id} className="flex items-center justify-between p-3 bg-slate-950/60 hover:bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl transition gap-2">
-                                  <div className="flex-grow min-w-0">
-                                    <div className="text-xs font-bold text-slate-200 truncate">{option.name}</div>
-                                    <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">{option.desc}</div>
-                                    {hasModel && (
-                                      <div className="text-[9px] text-emerald-400 font-semibold mt-0.5">Sẵn có mô hình ({option.qty}x) | Miễn phí đặt</div>
-                                    )}
-                                  </div>
-                                  <button
-                                    onClick={() => handleBuildNode(option.id)}
-                                    disabled={actionLoading || isAtLimit || !canBuild}
-                                    className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-600 disabled:from-slate-800 disabled:to-slate-900 disabled:text-slate-500 hover:brightness-110 text-slate-950 font-bold text-[10px] rounded-lg transition whitespace-nowrap shrink-0"
+                            {pendingBuildZone ? (
+                              <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 space-y-3">
+                                <div className="text-xs font-bold text-slate-200">Tùy chỉnh Khu Nuôi Trồng</div>
+                                <div>
+                                  <label className="block text-[10px] text-slate-400 mb-1">Chọn Đại Đạo (Path)</label>
+                                  <select 
+                                    className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-300 rounded p-1.5"
+                                    value={buildPath} onChange={(e) => setBuildPath(e.target.value)}
                                   >
-                                    {hasModel ? "Đặt" : "Xây"}
+                                    {["Wisdom Path", "Star Path", "Wood Path", "Earth Path", "Fire Path", "Water Path", "Metal Path", "Sword Path", "Food Path", "Human Path", "Blood Path", "Dark Path", "Light Path"].map(p => (
+                                      <option key={p} value={p}>{p}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] text-slate-400 mb-1">Nhập Mã Vật Phẩm (Item ID)</label>
+                                  <input 
+                                    type="text" 
+                                    className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-300 rounded p-1.5"
+                                    placeholder="Ví dụ: moon_orchid_petal"
+                                    value={buildProdKey} onChange={(e) => setBuildProdKey(e.target.value)}
+                                  />
+                                </div>
+                                <div className="flex gap-2 pt-2">
+                                  <button
+                                    onClick={() => setPendingBuildZone(null)}
+                                    className="flex-1 py-1.5 bg-slate-800 text-slate-300 text-[10px] font-bold rounded hover:bg-slate-700 transition"
+                                  >
+                                    Hủy
+                                  </button>
+                                  <button
+                                    onClick={() => handleBuildNode(pendingBuildZone, buildPath, buildProdKey)}
+                                    disabled={actionLoading || !buildProdKey}
+                                    className="flex-1 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-600 disabled:from-slate-800 disabled:text-slate-500 text-slate-950 text-[10px] font-bold rounded transition"
+                                  >
+                                    {actionLoading ? "Đang xây..." : "Xác nhận Xây"}
                                   </button>
                                 </div>
-                              );
-                            })}
+                              </div>
+                            ) : (
+                              categoryData[buildCategory]?.map((option) => {
+                                const nodeItemID = "node_" + option.id.toLowerCase();
+                                const hasModel = option.qty > 0;
+                                const canBuild = hasModel || player.primeval_stones >= option.cost;
+
+                                return (
+                                  <div key={option.id} className="flex items-center justify-between p-3 bg-slate-950/60 hover:bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl transition gap-2">
+                                    <div className="flex-grow min-w-0">
+                                      <div className="text-xs font-bold text-slate-200 truncate">{option.name}</div>
+                                      <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">{option.desc}</div>
+                                      {hasModel && (
+                                        <div className="text-[9px] text-emerald-400 font-semibold mt-0.5">Sẵn có mô hình ({option.qty}x) | Miễn phí đặt</div>
+                                      )}
+                                    </div>
+                                    <button
+                                      onClick={() => {
+                                        if (["FARMING_ZONE", "BREEDING_ZONE", "MINING_ZONE"].includes(option.id)) {
+                                          setPendingBuildZone(option.id);
+                                        } else {
+                                          handleBuildNode(option.id);
+                                        }
+                                      }}
+                                      disabled={actionLoading || isAtLimit || !canBuild}
+                                      className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-600 disabled:from-slate-800 disabled:to-slate-900 disabled:text-slate-500 hover:brightness-110 text-slate-950 font-bold text-[10px] rounded-lg transition whitespace-nowrap shrink-0"
+                                    >
+                                      {hasModel ? "Đặt" : "Xây"}
+                                    </button>
+                                  </div>
+                                );
+                              })
+                            )}
                           </div>
                         </div>
                       );

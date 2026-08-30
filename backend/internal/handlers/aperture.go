@@ -143,6 +143,34 @@ var ResourceNodeTemplates = map[string]ResourceNodeTemplate{
 		ProdAmount:        4,
 		ProdIntervalHours: 18,
 	},
+	// ---- GENERIC ZONES ----
+	"FARMING_ZONE": {
+		NodeType:          "FARMING_ZONE",
+		Name:              "Khu Trồng Trọt",
+		Path:              "Wood Path",
+		CostStones:        500,
+		ProdType:          "Material",
+		ProdAmount:        10,
+		ProdIntervalHours: 4,
+	},
+	"BREEDING_ZONE": {
+		NodeType:          "BREEDING_ZONE",
+		Name:              "Khu Chăn Nuôi",
+		Path:              "Food Path",
+		CostStones:        1200,
+		ProdType:          "Material",
+		ProdAmount:        5,
+		ProdIntervalHours: 8,
+	},
+	"MINING_ZONE": {
+		NodeType:          "MINING_ZONE",
+		Name:              "Khu Khai Thác",
+		Path:              "Earth Path",
+		CostStones:        1000,
+		ProdType:          "Material",
+		ProdAmount:        3,
+		ProdIntervalHours: 8,
+	},
 	// ---- DEFENSE STRUCTURES ----
 	"WALL": {
 		NodeType:       "WALL",
@@ -884,6 +912,8 @@ type PlaceNodeRequest struct {
 	NodeType string `json:"node_type" binding:"required"`
 	X        int    `json:"x"`
 	Y        int    `json:"y"`
+	Path     string `json:"path"`
+	ProdKey  string `json:"prod_key"`
 }
 
 // PlaceApertureNode constructs a new resource node on the grid
@@ -1065,6 +1095,23 @@ func PlaceApertureNode(c *gin.Context) {
 		}
 	}
 
+	nodePath := template.Path
+	if req.Path != "" {
+		nodePath = req.Path
+	}
+	
+	nodeProdKey := template.ProdKey
+	if req.ProdKey != "" {
+		nodeProdKey = req.ProdKey
+	}
+
+	nodeName := template.Name
+	if nodeProdKey != "" {
+		if itemSpec, exists := models.ItemRegistry[nodeProdKey]; exists {
+			nodeName = template.Name + " (" + itemSpec.Name + ")"
+		}
+	}
+
 	// 4. Insert node
 	var node models.ApertureResourceNode
 	var createdAt time.Time
@@ -1072,16 +1119,16 @@ func PlaceApertureNode(c *gin.Context) {
 		INSERT INTO aperture_resource_nodes (aperture_id, node_type, name, path, level, hp, max_hp, x, y,
 			production_type, production_amount, production_interval_hours, last_collected_at,
 			node_category, defense_power, attack_range, hp_bonus, damage_reduction, blocks_movement,
-			required_gu_id, required_gu_rank, zone_type, food_path, item_tier)
+			required_gu_id, required_gu_rank, zone_type, food_path, item_tier, production_key)
 		VALUES ($1, $2, $3, $4, 1, $5, $5, $6, $7, $8, $9, $10, NOW(),
-			$11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+			$11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
 		RETURNING id, created_at
-	`, ap.ID, template.NodeType, template.Name, template.Path, nodeHPMax, req.X, req.Y,
+	`, ap.ID, template.NodeType, nodeName, nodePath, nodeHPMax, req.X, req.Y,
 		template.ProdType, template.ProdAmount, template.ProdIntervalHours,
 		nodeCategory, template.DefensePower, template.AttackRange, template.HPBonus,
 		template.DamageReduction, template.BlocksMovement,
 		strings.Join(template.CostGu, ","), template.CostGuRank,
-		template.ZoneType, template.FoodPath, template.ItemTier).Scan(&node.ID, &createdAt)
+		template.ZoneType, template.FoodPath, template.ItemTier, nodeProdKey).Scan(&node.ID, &createdAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu điểm tài nguyên: " + err.Error()})
 		return
@@ -1164,11 +1211,11 @@ func CollectApertureResource(c *gin.Context) {
 	var areaSize int64
 	var timeRate float64
 	err = tx.QueryRow(`
-		SELECT n.id, n.aperture_id, n.node_type, n.name, n.production_type, n.production_amount, n.production_interval_hours, n.last_collected_at, n.is_destroyed, a.area_size, a.time_rate, n.path, n.x, n.y
+		SELECT n.id, n.aperture_id, n.node_type, n.name, n.production_type, n.production_amount, n.production_interval_hours, n.last_collected_at, n.is_destroyed, a.area_size, a.time_rate, n.path, n.x, n.y, COALESCE(n.production_key, '')
 		FROM aperture_resource_nodes n
 		JOIN immortal_apertures a ON n.aperture_id = a.id
 		WHERE n.id = $1 AND a.player_id = $2
-	`, nodeID, playerID).Scan(&n.ID, &n.ApertureID, &n.NodeType, &n.Name, &n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol, &n.IsDestroyed, &areaSize, &timeRate, &n.Path, &n.X, &n.Y)
+	`, nodeID, playerID).Scan(&n.ID, &n.ApertureID, &n.NodeType, &n.Name, &n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol, &n.IsDestroyed, &areaSize, &timeRate, &n.Path, &n.X, &n.Y, &n.ProductionKey)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ tài nguyên không tồn tại hoặc không thuộc đạo hữu"})
@@ -1244,10 +1291,14 @@ func CollectApertureResource(c *gin.Context) {
 		}
 		rewardMsg = fmt.Sprintf("Thu hoạch được %d Nguyên Thạch!", totalReward)
 	} else if n.ProductionType == "Material" {
-		template, ok := ResourceNodeTemplates[n.NodeType]
-		prodKey := "unknown"
-		if ok {
-			prodKey = template.ProdKey
+		prodKey := n.ProductionKey
+		if prodKey == "" {
+			template, ok := ResourceNodeTemplates[n.NodeType]
+			if ok {
+				prodKey = template.ProdKey
+			} else {
+				prodKey = "unknown"
+			}
 		}
 
 		err = InventorySvc.AddItem(tx, playerID.String(), prodKey, "materials", totalReward)
@@ -1434,72 +1485,22 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 		}
 	}
 
-	// Calculate dynamic environment parameters from player's Dao Marks
-	var daoJSON []byte
-	_ = tx.QueryRow(`SELECT dao_marks FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&daoJSON)
-	var daoMap models.DaoMarksMap
-	if daoJSON != nil {
-		_ = json.Unmarshal(daoJSON, &daoMap)
-	}
-	if daoMap == nil {
-		daoMap = make(models.DaoMarksMap)
-	}
-
-	tempFire := daoMap["fire"]
-	tempIce := daoMap["ice"]
-	tempMoon := daoMap["moon"]
-	temperature := 25.0 + float64(tempFire)/500.0 - float64(tempIce+tempMoon)/500.0
-
-	tempWater := daoMap["water"]
-	humidity := 50.0 + float64(tempWater)/200.0 - float64(tempFire)/200.0
-	if humidity < 0 {
-		humidity = 0
-	}
-	if humidity > 100 {
-		humidity = 100
-	}
-
 	suitabilityMultiplier := 1.0
-	cleanNodePath := strings.TrimSuffix(strings.ToLower(n.Path), " path")
-	switch cleanNodePath {
-	case "moon":
-		if temperature > 40.0 || temperature < 10.0 {
-			suitabilityMultiplier *= 0.6
-		}
-		if humidity < 30.0 {
-			suitabilityMultiplier *= 0.7
-		}
-	case "wood":
-		if temperature < 5.0 {
-			suitabilityMultiplier *= 0.5
-		}
-		if humidity < 25.0 {
-			suitabilityMultiplier *= 0.6
-		}
-	case "fire":
-		if temperature < 20.0 {
-			suitabilityMultiplier *= 0.5
-		}
-	case "water":
-		if humidity < 40.0 {
-			suitabilityMultiplier *= 0.5
-		}
-	}
 
-	// Item path Dao Mark boost - lookup food path from node_outputs
+	// Item path Dao Mark boost - lookup path from models.ItemRegistry
 	var itemFoodPath string
 	itemFoodPathMultiplier := 1.0
 	if n.ProductionType == "Material" {
-		prodKey := ""
-		if template, ok := ResourceNodeTemplates[n.NodeType]; ok {
-			prodKey = template.ProdKey
+		prodKey := n.ProductionKey
+		if prodKey == "" {
+			if template, ok := ResourceNodeTemplates[n.NodeType]; ok {
+				prodKey = template.ProdKey
+			}
 		}
 		if prodKey != "" {
-			err := tx.QueryRow(`
-				SELECT food_path FROM node_outputs WHERE item_id = $1
-			`, prodKey).Scan(&itemFoodPath)
-			if err == nil && itemFoodPath != "" {
-				itemDaoMarks := daoMap[strings.ToLower(itemFoodPath)]
+			if item, exists := models.ItemRegistry[prodKey]; exists && item.Path != "" {
+				itemFoodPath = item.Path
+				itemDaoMarks := nodeDaoMap[strings.ToLower(itemFoodPath)]
 				itemFoodPathMultiplier = 1.0 + float64(itemDaoMarks)*0.003
 			}
 		}
@@ -1512,10 +1513,6 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 	totalReward := applyBulkReward(baseReward, areaMultiplier*daoMultiplier*conflictMultiplier*ecoMultiplier*variantBonus*laborMultiplier*suitabilityMultiplier*itemFoodPathMultiplier, bulkMultiplier)
 
 	note := ""
-	if suitabilityMultiplier < 1.0 {
-		note = " (Sản lượng bị giảm do sinh cảnh Tiên Khiếu không tương thích!)"
-	}
-
 	return totalReward, note, nil
 }
 
@@ -1561,7 +1558,7 @@ func CollectAllApertureResources(c *gin.Context) {
 			is_destroyed, created_at, updated_at,
 			COALESCE(node_category, 'RESOURCE'), COALESCE(defense_power, 0), COALESCE(attack_range, 0),
 			COALESCE(hp_bonus, 0), COALESCE(damage_reduction, 0), COALESCE(blocks_movement, false),
-			COALESCE(required_gu_id, ''), COALESCE(required_gu_rank, 0)
+			COALESCE(required_gu_id, ''), COALESCE(required_gu_rank, 0), COALESCE(production_key, '')
 		FROM aperture_resource_nodes
 		WHERE aperture_id = $1 AND is_destroyed = false
 	`, apertureID)
@@ -1579,7 +1576,7 @@ func CollectAllApertureResources(c *gin.Context) {
 			&n.IsDestroyed, &n.CreatedAt, &n.UpdatedAt,
 			&n.NodeCategory, &n.DefensePower, &n.AttackRange,
 			&n.HPBonus, &n.DamageReduction, &n.BlocksMovement,
-			&n.RequiredGuID, &n.RequiredGuRank); err == nil {
+			&n.RequiredGuID, &n.RequiredGuRank, &n.ProductionKey); err == nil {
 			if lastCol.Valid {
 				n.LastCollectedAt = &lastCol.Time
 			}
@@ -1630,9 +1627,13 @@ func CollectAllApertureResources(c *gin.Context) {
 		if n.ProductionType == "Stones" {
 			totalStones += reward
 		} else if n.ProductionType == "Material" {
-			prodKey := "unknown"
-			if template, ok := ResourceNodeTemplates[n.NodeType]; ok {
-				prodKey = template.ProdKey
+			prodKey := n.ProductionKey
+			if prodKey == "" {
+				if template, ok := ResourceNodeTemplates[n.NodeType]; ok {
+					prodKey = template.ProdKey
+				} else {
+					prodKey = "unknown"
+				}
 			}
 			materialTotals[prodKey] += reward
 		}

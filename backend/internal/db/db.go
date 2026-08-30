@@ -505,6 +505,7 @@ func seedItemsFromCSV(filename string) error {
 	basePriceIdx := colIndex(header, "base_price")
 	imageURLIdx := colIndex(header, "image_url")
 	rarityIdx := colIndex(header, "rarity")
+	pathIdx := colIndex(header, "path")
 
 	if idIdx < 0 || nameIdx < 0 || typeIdx < 0 {
 		return fmt.Errorf("Item.csv missing required columns (id, name, item_type)")
@@ -558,16 +559,21 @@ func seedItemsFromCSV(filename string) error {
 			rarity = parseRarity(strings.TrimSpace(row[rarityIdx]))
 		}
 
+		path := ""
+		if pathIdx >= 0 && pathIdx < len(row) {
+			path = strings.TrimSpace(row[pathIdx])
+		}
+
 		_, err = DB.Exec(`
-			INSERT INTO item_dictionary (id, name, item_type, rank, effects, description, base_price, image_url, rarity)
-			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9)
+			INSERT INTO item_dictionary (id, name, item_type, rank, effects, description, base_price, image_url, rarity, path)
+			VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10)
 			ON CONFLICT (id) DO UPDATE
 			SET name=EXCLUDED.name, item_type=EXCLUDED.item_type, rank=EXCLUDED.rank,
 			    effects=EXCLUDED.effects, description=EXCLUDED.description,
 			    base_price=CASE WHEN EXCLUDED.base_price > 0 THEN EXCLUDED.base_price ELSE item_dictionary.base_price END,
 			    image_url=CASE WHEN EXCLUDED.image_url <> '' THEN EXCLUDED.image_url ELSE item_dictionary.image_url END,
-			    rarity=EXCLUDED.rarity
-		`, id, name, itemType, rank, effects, desc, basePrice, imageURL, rarity)
+			    rarity=EXCLUDED.rarity, path=EXCLUDED.path
+		`, id, name, itemType, rank, effects, desc, basePrice, imageURL, rarity, path)
 		if err != nil {
 			return fmt.Errorf("upsert item %s: %w", id, err)
 		}
@@ -576,87 +582,7 @@ func seedItemsFromCSV(filename string) error {
 	return nil
 }
 
-// seedNodeOutputsFromCSV reads NodeOutput.csv and upserts into node_outputs.
-func seedNodeOutputsFromCSV(filename string) error {
-	f, r, header, err := openCSV(filename)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
 
-	idIdx := colIndex(header, "item_id")
-	nameIdx := colIndex(header, "item_name")
-	typeIdx := colIndex(header, "item_type")
-	catIdx := colIndex(header, "item_category")
-	pathIdx := colIndex(header, "food_path")
-	tierIdx := colIndex(header, "item_tier")
-	rankIdx := colIndex(header, "rank")
-	eatenIdx := colIndex(header, "gu_eaten_count")
-	recipeIdx := colIndex(header, "is_recipe_material")
-	descIdx := colIndex(header, "description")
-
-	if idIdx < 0 || nameIdx < 0 || typeIdx < 0 || catIdx < 0 || pathIdx < 0 {
-		return fmt.Errorf("NodeOutput.csv missing required columns (item_id, item_name, item_type)")
-	}
-
-	countRows := 0
-	for {
-		row, err := r.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil || len(row) == 0 {
-			continue
-		}
-		id := strings.TrimSpace(row[idIdx])
-		if id == "" {
-			continue
-		}
-		name := strings.TrimSpace(row[nameIdx])
-		itemType := strings.TrimSpace(row[typeIdx])
-		itemCategory := ""
-		if catIdx >= 0 && catIdx < len(row) {
-			itemCategory = strings.TrimSpace(row[catIdx])
-		}
-		foodPath := ""
-		if pathIdx >= 0 && pathIdx < len(row) {
-			foodPath = strings.TrimSpace(row[pathIdx])
-		}
-		itemTier := "T1"
-		if tierIdx >= 0 && tierIdx < len(row) {
-			itemTier = strings.TrimSpace(row[tierIdx])
-		}
-		rank := 1
-		if rankIdx >= 0 && rankIdx < len(row) {
-			fmt.Sscanf(strings.TrimSpace(row[rankIdx]), "%d", &rank)
-		}
-		guEatenCount := 0
-		if eatenIdx >= 0 && eatenIdx < len(row) {
-			fmt.Sscanf(strings.TrimSpace(row[eatenIdx]), "%d", &guEatenCount)
-		}
-		isRecipeMaterial := false
-		if recipeIdx >= 0 && recipeIdx < len(row) {
-			isRecipeMaterial = strings.ToLower(strings.TrimSpace(row[recipeIdx])) == "true"
-		}
-		desc := ""
-		if descIdx >= 0 && descIdx < len(row) {
-			desc = strings.TrimSpace(row[descIdx])
-		}
-
-		_, err = DB.Exec(`
-			INSERT INTO node_outputs (item_id, item_name, item_type, item_category, food_path, item_tier, rank, gu_eaten_count, is_recipe_material, description)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			ON CONFLICT (item_id) DO UPDATE
-			SET item_name=EXCLUDED.item_name, item_type=EXCLUDED.item_type, item_category=EXCLUDED.item_category, food_path=EXCLUDED.food_path, item_tier=EXCLUDED.item_tier, rank=EXCLUDED.rank, gu_eaten_count=EXCLUDED.gu_eaten_count, is_recipe_material=EXCLUDED.is_recipe_material, description=EXCLUDED.description
-		`, id, name, itemType, itemCategory, foodPath, itemTier, rank, guEatenCount, isRecipeMaterial, desc)
-		if err != nil {
-			return fmt.Errorf("upsert node_output %s: %w", id, err)
-		}
-		countRows++
-	}
-	logger.S.Infof("Node outputs seeded from %s (%d entries)", filename, countRows)
-	return nil
-}
 
 // countRows helper - we need to count rows read
 
@@ -2727,8 +2653,7 @@ func TableImport(table string) error {
 			return seedStatusesFromCSV("Status.csv")
 	case "recipe":
 			return seedRecipesFromCSV("Recipe.csv")
-	case "node_output":
-			return seedNodeOutputsFromCSV("NodeOutput.csv")
+
 	case "shop_item":
 		return seedShopItemsFromCSV("ShopItem.csv")
 	case "arena_shop_item":
@@ -2767,8 +2692,8 @@ func TableExport(table string) error {
 	defs := map[string]exportDef{
 		"item": {
 			filename: "Item.csv",
-			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url", "rarity"},
-			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'{}'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END FROM item_dictionary ORDER BY id`,
+			columns:  []string{"id", "name", "item_type", "rank", "effects", "description", "base_price", "image_url", "rarity", "path"},
+			query:    `SELECT id, name, item_type, rank, COALESCE(effects::text,'{}'), COALESCE(description,''), COALESCE(base_price,0), COALESCE(image_url,''), CASE WHEN COALESCE(rarity,0) = 0 THEN '' ELSE rarity::text END, COALESCE(path,'') FROM item_dictionary ORDER BY id`,
 		},
 		"gu": {
 			filename: "Gu.csv",
@@ -2849,11 +2774,6 @@ func TableExport(table string) error {
 			filename: "DreamRealm.csv",
 			columns:  []string{"id", "name", "path", "type", "required_rank", "entry_item", "description", "rewards", "map_data", "cooldown_hours"},
 			query:    `SELECT id, name, CASE WHEN id LIKE 'dream_realm_%' THEN substring(id from 13) ELSE '' END, type, required_rank, entry_item, COALESCE(description,''), COALESCE(rewards::text,'{}'), COALESCE(map_data::text,'[]'), cooldown_hours FROM instance_templates WHERE type='DREAM_REALM' ORDER BY id`,
-		},
-		"node_output": {
-			filename: "NodeOutput.csv",
-			columns:  []string{"item_id", "item_name", "item_type", "item_category", "food_path", "item_tier", "rank", "gu_eaten_count", "is_recipe_material", "description"},
-			query:    `SELECT item_id, item_name, item_type, COALESCE(item_category,''), COALESCE(food_path,''), COALESCE(item_tier,'T1'), rank, gu_eaten_count, is_recipe_material, COALESCE(description,'') FROM node_outputs ORDER BY item_id`,
 		},
 	}
 

@@ -464,6 +464,7 @@ export interface ApertureResourceNode {
   zone_type: string;
   food_path: string;
   item_tier: string;
+  production_key: string;
 }
 
 export interface ApertureVariantHuman {
@@ -1151,7 +1152,7 @@ interface GameState {
   fetchDaoMarks: () => Promise<void>;
   fetchApertureNodes: () => Promise<void>;
   fetchVariantHumans: () => Promise<void>;
-  placeApertureNode: (nodeType: string, x: number, y: number) => Promise<boolean>;
+  placeApertureNode: (nodeType: string, x: number, y: number, path?: string, prodKey?: string) => Promise<boolean>;
   collectResourceNode: (nodeId: string) => Promise<boolean>;
   collectAllResourceNodes: () => Promise<boolean>;
   uninstallApertureNode: (nodeId: string) => Promise<boolean>;
@@ -5258,7 +5259,7 @@ export const useGameStore = create<GameState>((set, get) => {
     return fetchApertureNodesPromise;
   },
 
-  placeApertureNode: async (nodeType: string, x: number, y: number) => {
+  placeApertureNode: async (nodeType: string, x: number, y: number, path?: string, prodKey?: string) => {
     const { token, actionLoading, logout } = get();
     if (!token || actionLoading) return false;
     set({ actionLoading: true, error: null });
@@ -5266,7 +5267,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ node_type: nodeType, x, y }),
+        body: JSON.stringify({ node_type: nodeType, x, y, path, prod_key: prodKey }),
       });
       if (response.status === 401 || response.status === 403) {
         logout();

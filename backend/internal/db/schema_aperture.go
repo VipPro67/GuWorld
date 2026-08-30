@@ -70,10 +70,18 @@ func schemaAperture() error {
 		required_gu_rank INTEGER DEFAULT 0,
 		zone_type VARCHAR(50),
 		food_path VARCHAR(50),
-		item_tier VARCHAR(10)
+		item_tier VARCHAR(10),
+		production_key VARCHAR(100)
 	);`); err != nil {
 		return err
 	}
+
+	if err := execSchema("aperture_resource_nodes_production_key_upgrade", `
+	ALTER TABLE aperture_resource_nodes ADD COLUMN IF NOT EXISTS production_key VARCHAR(100);
+	`); err != nil {
+		return err
+	}
+
 	if err := execSchema("aperture_nodes_category_idx", `
 	CREATE INDEX IF NOT EXISTS idx_aperture_nodes_category ON aperture_resource_nodes (aperture_id, node_category);`); err != nil {
 		return err
@@ -141,31 +149,6 @@ func schemaAperture() error {
 	}
 	if err := execSchema("tribulation_enemies_event_idx", `
 	CREATE INDEX IF NOT EXISTS idx_tribulation_enemies_event ON tribulation_enemies (event_id);`); err != nil {
-		return err
-	}
-
-	if err := execSchema("node_outputs", `
-	CREATE TABLE IF NOT EXISTS node_outputs (
-		item_id VARCHAR(100) PRIMARY KEY,
-		item_name VARCHAR(100) NOT NULL,
-		item_type VARCHAR(50) NOT NULL,
-		item_category VARCHAR(50),
-		food_path VARCHAR(50),
-		item_tier VARCHAR(10),
-		rank INT NOT NULL DEFAULT 1,
-		gu_eaten_count INT DEFAULT 0,
-		is_recipe_material BOOLEAN DEFAULT false,
-		description TEXT,
-		created_at TIMESTAMPTZ DEFAULT now()
-	);`); err != nil {
-		return err
-	}
-	if err := execSchema("node_outputs_category_idx", `
-	CREATE INDEX IF NOT EXISTS idx_node_outputs_category ON node_outputs (item_category);`); err != nil {
-		return err
-	}
-	if err := execSchema("node_outputs_food_path_idx", `
-	CREATE INDEX IF NOT EXISTS idx_node_outputs_food_path ON node_outputs (food_path);`); err != nil {
 		return err
 	}
 
