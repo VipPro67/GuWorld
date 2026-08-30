@@ -616,7 +616,7 @@ func AttackMineSlot(c *gin.Context) {
 
 // StartMineMonsterWorker runs periodically to assign monsters to abandoned mines
 func StartMineMonsterWorker(ctx context.Context) {
-	ticker := time.NewTicker(60 * time.Minute) // check every hour
+	ticker := time.NewTicker(10 * time.Minute) // check every 10 minutes
 	go func() {
 		defer ticker.Stop()
 		for {
@@ -645,7 +645,12 @@ func AssignMonstersToMines() {
 		SELECT id, rarity, mine_type 
 		FROM mine_slots 
 		WHERE occupier_id IS NULL AND monster_id IS NULL 
-		AND abandoned_at < NOW() - INTERVAL '24 hours'
+		AND (
+			(rarity = 'Siêu Cấp' AND abandoned_at < NOW() - INTERVAL '1 hour') OR
+			(rarity = 'Truyền Thuyết' AND abandoned_at < NOW() - INTERVAL '2 hours') OR
+			(rarity = 'Sử Thi' AND abandoned_at < NOW() - INTERVAL '4 hours') OR
+			(rarity NOT IN ('Siêu Cấp', 'Truyền Thuyết', 'Sử Thi') AND abandoned_at < NOW() - INTERVAL '6 hours')
+		)
 	`)
 	if err != nil {
 		logger.S.Errorf("Error finding abandoned mines: %v", err)

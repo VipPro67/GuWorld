@@ -317,11 +317,19 @@ func AutoCombatStart(c *gin.Context) {
 	}
 
 	// 5. Apply outcome to DB
+	enemiesAlive := false
+	for _, e := range simState.Enemies {
+		if e.HP > 0 {
+			enemiesAlive = true
+			break
+		}
+	}
+
 	var alliesAlive bool
 	var finalPlayerHP int
 	for _, a := range simState.Allies {
 		if a.ID == player.ID.String() {
-			alliesAlive = (a.HP > 0)
+			alliesAlive = (a.HP > 0) && !enemiesAlive
 			finalPlayerHP = a.HP
 		}
 	}
@@ -1126,10 +1134,18 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 	// Run Simulator
 	logs := simulator.Simulate(simState)
 
+	enemiesAlive := false
+	for _, e := range simState.Enemies {
+		if e.HP > 0 {
+			enemiesAlive = true
+			break
+		}
+	}
+
 	var alliesAlive bool
 	for _, a := range simState.Allies {
 		if a.ID == player.ID.String() {
-			alliesAlive = (a.HP > 0)
+			alliesAlive = (a.HP > 0) && !enemiesAlive
 			break
 		}
 	}
