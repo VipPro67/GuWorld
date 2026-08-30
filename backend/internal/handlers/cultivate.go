@@ -232,7 +232,7 @@ func GetBreakthroughChance(rank int, aptitude string) float64 {
 
 	switch aptitude {
 	case "A", "Giáp":
-		baseChance = 0.9
+		baseChance = 1
 	case "B", "Ất":
 		baseChance = 0.8
 	case "C", "Bính":
@@ -245,11 +245,11 @@ func GetBreakthroughChance(rank int, aptitude string) float64 {
 
 	// Rank càng cao càng khó
 	rankPenalty := map[int]float64{
-		1: 0.1,
-		2: 0.2,
-		3: 0.3,
-		4: 0.5,
-		5: 0.7,
+		1: 0.0,
+		2: 0.1,
+		3: 0.2,
+		4: 0.3,
+		5: 0.4,
 	}
 
 	chance := baseChance
@@ -259,8 +259,8 @@ func GetBreakthroughChance(rank int, aptitude string) float64 {
 	}
 
 	// Giới hạn
-	if chance > 0.99 {
-		chance = 0.99
+	if chance > 1 {
+		chance = 1
 	}
 
 	if chance < 0.05 {

@@ -1741,26 +1741,62 @@ return (
                             {pendingBuildZone ? (
                               <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 space-y-3">
                                 <div className="text-xs font-bold text-slate-200">Tùy chỉnh Khu Nuôi Trồng</div>
-                                <div>
-                                  <label className="block text-[10px] text-slate-400 mb-1">Chọn Đại Đạo (Path)</label>
-                                  <select 
-                                    className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-300 rounded p-1.5"
-                                    value={buildPath} onChange={(e) => setBuildPath(e.target.value)}
-                                  >
-                                    {["Wisdom Path", "Star Path", "Wood Path", "Earth Path", "Fire Path", "Water Path", "Metal Path", "Sword Path", "Food Path", "Human Path", "Blood Path", "Dark Path", "Light Path"].map(p => (
-                                      <option key={p} value={p}>{p}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <div>
-                                  <label className="block text-[10px] text-slate-400 mb-1">Nhập Mã Vật Phẩm (Item ID)</label>
-                                  <input 
-                                    type="text" 
-                                    className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-300 rounded p-1.5"
-                                    placeholder="Ví dụ: moon_orchid_petal"
-                                    value={buildProdKey} onChange={(e) => setBuildProdKey(e.target.value)}
-                                  />
-                                </div>
+                                
+                                {(() => {
+                                  // Compute valid paths (must have rank 1, rarity 1 items)
+                                  const validPathsSet = new Set<string>();
+                                  Object.values(itemDictionary).forEach(i => {
+                                    if (i.path && i.rank === 1 && i.rarity === 1) {
+                                      validPathsSet.add(i.path.toLowerCase());
+                                    }
+                                  });
+                                  const availablePaths = Array.from(validPathsSet).sort().map(p => p.charAt(0).toUpperCase() + p.slice(1) + " Path");
+                                  
+                                  // Compute available items for the currently selected path
+                                  const selectedRawPath = buildPath.replace(/ Path$/i, '').toLowerCase();
+                                  const availableItems = Object.values(itemDictionary).filter(i => 
+                                    i.path?.toLowerCase() === selectedRawPath && 
+                                    i.rank === 1 && 
+                                    i.rarity === 1
+                                  ).sort((a, b) => a.name.localeCompare(b.name));
+
+                                  return (
+                                    <>
+                                      <div>
+                                        <label className="block text-[10px] text-slate-400 mb-1">Chọn Đại Đạo (Path)</label>
+                                        <select 
+                                          className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-300 rounded p-1.5"
+                                          value={buildPath} 
+                                          onChange={(e) => {
+                                            setBuildPath(e.target.value);
+                                            setBuildProdKey(""); // reset item when path changes
+                                          }}
+                                        >
+                                          {availablePaths.length === 0 && <option value="Wisdom Path">Wisdom Path</option>}
+                                          {availablePaths.map(p => (
+                                            <option key={p} value={p}>{p}</option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                      
+                                      <div>
+                                        <label className="block text-[10px] text-slate-400 mb-1">Chọn Vật Phẩm Khởi Đầu (Rank 1, Rarity 1)</label>
+                                        <select 
+                                          className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-300 rounded p-1.5"
+                                          value={buildProdKey} 
+                                          onChange={(e) => setBuildProdKey(e.target.value)}
+                                        >
+                                          <option value="" disabled>-- Chọn một vật phẩm --</option>
+                                          {availableItems.map(item => (
+                                            <option key={item.id} value={item.id}>
+                                              {item.name} ({item.id})
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                    </>
+                                  );
+                                })()}
                                 <div className="flex gap-2 pt-2">
                                   <button
                                     onClick={() => setPendingBuildZone(null)}
