@@ -768,8 +768,9 @@ func seedConstitutionsFromCSV(filename string) error {
 	keyIdx := colIndex(header, "key")
 	nameIdx := colIndex(header, "name")
 	effectsIdx := colIndex(header, "effects")
-	if keyIdx < 0 || nameIdx < 0 {
-		return fmt.Errorf("%s missing required columns (key, name)", filename)
+	tierIdx := colIndex(header, "tier")
+	if keyIdx < 0 || nameIdx < 0 || effectsIdx < 0 {
+		return fmt.Errorf("%s missing required columns (key, name, effects)", filename)
 	}
 
 	seen := make(map[string][]string)
@@ -804,14 +805,21 @@ func seedConstitutionsFromCSV(filename string) error {
 
 	for _, key := range order {
 		row := seen[key]
-		name := get(row, nameIdx)
-		effects := safeJSONObject(get(row, effectsIdx), "{}", fmt.Sprintf("%s effects", key))
-		_, err := DB.Exec(`
-			INSERT INTO constitution_dictionary (key, name, effects)
-			VALUES ($1, $2, $3::jsonb)
-			ON CONFLICT (key) DO UPDATE
-			SET name=EXCLUDED.name, effects=EXCLUDED.effects
-		`, key, name, effects)
+name := get(row, nameIdx)
+	effects := safeJSONObject(get(row, effectsIdx), "{}", fmt.Sprintf("%s effects", key))
+	tierStr := get(row, tierIdx)
+	tierVal := 0
+	if tierStr != "" {
+		if v, err := strconv.Atoi(tierStr); err == nil {
+			tierVal = v
+		}
+	}
+	_, err := DB.Exec(`
+		INSERT INTO constitution_dictionary (key, name, effects, tier)
+		VALUES ($1, $2, $3::jsonb, $4)
+		ON CONFLICT (key) DO UPDATE
+		SET name=EXCLUDED.name, effects=EXCLUDED.effects, tier=EXCLUDED.tier
+		`, key, name, effects, tierVal)
 		if err != nil {
 			return fmt.Errorf("upsert constitution %s: %w", key, err)
 		}

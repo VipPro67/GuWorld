@@ -40,6 +40,7 @@ export interface GameEffects {
 
 // Định nghĩa một mục dictionary (thể chất / chủng tộc) trả về từ API.
 export interface EffectDictionaryEntry {
+  tier?: number;
   key: string;
   name: string;
   effects?: GameEffects;
