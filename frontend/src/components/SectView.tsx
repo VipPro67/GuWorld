@@ -3645,7 +3645,7 @@ const rank = spec.rank || 1;
                                       </p>
                                       {locked && (
                                         <p className="text-[10px] text-red-400/80 font-mono mt-0.5">
-                                          {(stockItemType === "gu" || stockItemType === "recipe") && rank >= 6 ? "Hạng 6+ không thể nhập" : `Cần Tông Môn Cấp ${rank}`}
+                                          {(stockItemType === "gu" || stockItemType === "recipe") && rank >= 6 ? "Hạng 6+ không thể nhập" : `Cần Tông Môn Cấp ${(rank - 1) * 10}`}
                                         </p>
                                       )}
                                     </div>

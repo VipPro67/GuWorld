@@ -2901,7 +2901,7 @@ func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int,
 		}
 
 		if effectiveLevel > maxLevel {
-			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Linh tài hạng %d! (Hiện tại: Cấp %d)", maxLevel, effectiveLevel, sectLevel)
+			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Linh tài hạng %d! (Hiện tại: Cấp %d)", (effectiveLevel-1)*10, effectiveLevel, sectLevel)
 		}
 
 		return effectiveLevel * 50, http.StatusOK, ""
@@ -2935,7 +2935,7 @@ func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int,
 			maxLevel = 5
 		}
 		if effectiveLevel > maxLevel {
-			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Bí phương hạng %d! (Hiện tại: Cấp %d)", maxLevel, effectiveLevel, sectLevel)
+			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Bí phương hạng %d! (Hiện tại: Cấp %d)", (effectiveLevel-1)*10, effectiveLevel, sectLevel)
 		}
 		return pricing.RecipeCostByGuRank(effectiveLevel), http.StatusOK, ""
 	}
