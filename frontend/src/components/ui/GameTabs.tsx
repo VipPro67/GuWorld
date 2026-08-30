@@ -117,7 +117,7 @@ export const GameTabs = React.forwardRef<HTMLDivElement, GameTabsProps>(
             "flex items-center",
             variant === "pills" || variant === "segmented" ? "gap-1.5" : "gap-1",
             fullWidth && (variant === "pills" || variant === "segmented") ? "w-full" : "",
-            scrollable && (variant !== "pills" && variant !== "segmented") ? "overflow-x-auto scrollbar-hide pb-1 -mb-1" : "",
+            scrollable ? "overflow-x-auto scrollbar-hide pb-1 -mb-1" : "",
           ].join(" ")}
           role="tablist"
           aria-label="Tabs"
