@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -74,12 +75,13 @@ func PaySectSalary(c *gin.Context) {
 	var sectID, callerRank string
 	var sectLevel int
 	var sectFunds int64
+	var lastSalaryPaidAt *time.Time
 	err = tx.QueryRow(`
-		SELECT sm.sect_id, sm.member_rank, s.level, s.funds
+		SELECT sm.sect_id, sm.member_rank, s.level, s.funds, s.last_salary_paid_at
 		FROM sect_members sm
 		JOIN sects s ON s.id = sm.sect_id
 		WHERE sm.player_id = $1
-	`, playerID).Scan(&sectID, &callerRank, &sectLevel, &sectFunds)
+	`, playerID).Scan(&sectID, &callerRank, &sectLevel, &sectFunds, &lastSalaryPaidAt)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
@@ -88,6 +90,14 @@ func PaySectSalary(c *gin.Context) {
 	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Trưởng Lão, Hộ Pháp hoặc Chưởng Môn mới có quyền phát lương!"})
 		return
+	}
+
+	if lastSalaryPaidAt != nil {
+		now := time.Now()
+		if now.Sub(*lastSalaryPaidAt) < 24*time.Hour {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Tông môn đã phát lương hôm nay. Vui lòng chờ 24h."})
+			return
+		}
 	}
 
 	rows, err := tx.Query(`
@@ -126,7 +136,7 @@ func PaySectSalary(c *gin.Context) {
 	}
 
 	newFunds := sectFunds - totalSalary
-	_, err = tx.Exec(`UPDATE sects SET funds = $1 WHERE id = $2`, newFunds, sectID)
+	_, err = tx.Exec(`UPDATE sects SET funds = $1, last_salary_paid_at = now() WHERE id = $2`, newFunds, sectID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update sect funds"})
 		return

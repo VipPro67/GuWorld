@@ -18,7 +18,8 @@ func schemaSects() error {
 		level INTEGER NOT NULL DEFAULT 1,
 		require_approval BOOLEAN NOT NULL DEFAULT FALSE,
 		require_promotion_approval BOOLEAN NOT NULL DEFAULT FALSE,
-		last_maintenance_at TIMESTAMP WITH TIME ZONE
+		last_maintenance_at TIMESTAMP WITH TIME ZONE,
+		last_salary_paid_at TIMESTAMP WITH TIME ZONE
 	);`); err != nil {
 		return err
 	}
