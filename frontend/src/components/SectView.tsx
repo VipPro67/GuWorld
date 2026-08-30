@@ -234,7 +234,7 @@ export const SectView: React.FC = () => {
   const [attackPlayerId, setAttackPlayerId] = useState("");
 
   // Vault stocking form state (donation-style multi-select)
-  const [stockItemType, setStockItemType] = useState<"gu" | "material" | "recipe">("gu");
+  const [stockItemType, setStockItemType] = useState<"gu" | "material" | "recipe">("material");
   const [stockSelections, setStockSelections] = useState<Record<string, StockSelection>>({});
   const [stockSearch, setStockSearch] = useState("");
   const [stockRankFilter, setStockRankFilter] = useState("All");
@@ -3460,32 +3460,7 @@ export const SectView: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/60 self-start sm:self-auto">
-                  <button
-                    type="button"
-                    onClick={() => { setStockItemType("gu"); setStockSearch(""); setStockRankFilter("All"); setStockPathFilter("All"); }}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${stockItemType === "gu" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
-                      }`}
-                  >
-                    Cổ Trùng
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setStockItemType("material"); setStockSearch(""); setStockRankFilter("All"); setStockPathFilter("All"); }}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${stockItemType === "material" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
-                      }`}
-                  >
-                    Linh Tài
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setStockItemType("recipe"); setStockSearch(""); setStockRankFilter("All"); setStockPathFilter("All"); }}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${stockItemType === "recipe" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
-                      }`}
-                  >
-                    Bí Phương
-                  </button>
-                </div>
+                {/* Tabs hidden: Only material deposit is allowed */}
 
                 {(() => {
                   const sectLvl = sect?.level || 1;

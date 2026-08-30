@@ -1313,7 +1313,7 @@ export const AdminView: React.FC = () => {
             </div>
 
             {/* Tabs */}
-            <div className="border-b border-zinc-800/80 flex gap-0">
+            <div className="border-b border-zinc-800/80 flex gap-0 overflow-x-auto scrollbar-hide whitespace-nowrap [&>button]:shrink-0">
               <button onClick={() => setActiveTab("items")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${activeTab === "items" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
                 <Package className="w-3.5 h-3.5 inline mr-1.5" />Vật phẩm ({detail.item_count || 0})
               </button>
@@ -1973,7 +1973,7 @@ export const AdminView: React.FC = () => {
             </div>
 
             {/* Detail tabs */}
-            <div className="border-b border-zinc-800/80 flex gap-0">
+            <div className="border-b border-zinc-800/80 flex gap-0 overflow-x-auto scrollbar-hide whitespace-nowrap [&>button]:shrink-0">
               <button onClick={() => setSectDetailTab("members")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${sectDetailTab === "members" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
                 <Users className="w-3.5 h-3.5 inline mr-1.5" />Thành viên ({selectedSectMembers?.length})
               </button>
@@ -2422,7 +2422,7 @@ export const AdminView: React.FC = () => {
       </div>
 
       {/* Section tabs */}
-      <div className="border-b border-zinc-800/80 flex gap-0 mb-4">
+      <div className="border-b border-zinc-800/80 flex gap-0 mb-4 overflow-x-auto scrollbar-hide whitespace-nowrap [&>button]:shrink-0">
         <button onClick={() => setSection("players")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "players" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
           <Users className="w-3.5 h-3.5 inline mr-1.5" />Người chơi
         </button>
@@ -2452,7 +2452,7 @@ export const AdminView: React.FC = () => {
       {/* Players section */}
       {section === "players" && (
         <>
-          <div className="border-b border-zinc-800/80 flex gap-0 mb-4">
+          <div className="border-b border-zinc-800/80 flex gap-0 mb-4 overflow-x-auto scrollbar-hide whitespace-nowrap [&>button]:shrink-0">
             <button onClick={() => setPlayersTab("list")} className={`px-4 py-2 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${playersTab === "list" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <Users className="w-3.5 h-3.5 inline mr-1.5" />Danh sách
             </button>
@@ -2634,7 +2634,7 @@ export const AdminView: React.FC = () => {
       {/* Data section: import/export + dictionary management */}
       {section === "data" && (
         <div className="space-y-4">
-          <div className="border-b border-zinc-800/80 flex gap-0 mb-4 overflow-x-auto whitespace-nowrap scrollbar-none max-w-full [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <div className="border-b border-zinc-800/80 flex gap-0 mb-4 overflow-x-auto scrollbar-hide whitespace-nowrap [&>button]:shrink-0">
             <button onClick={() => setDataTab("import")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "import" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <Database className="w-3.5 h-3.5 inline mr-1.5" />Import / Export
             </button>
