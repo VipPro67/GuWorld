@@ -582,8 +582,6 @@ func seedItemsFromCSV(filename string) error {
 	return nil
 }
 
-
-
 // countRows helper - we need to count rows read
 
 // seedGusFromCSV reads Gu.csv and upserts into gu_dictionary.
@@ -2634,7 +2632,7 @@ func AvailableTables() []string {
 	return []string{
 		"item", "gu", "constitution", "recipe", "shop_item", "arena_shop_item",
 		"region", "loot_table", "monster", "monster_spawn", "map_cell",
-		"sect", "sect_mission", "quest", "race", 	"dream_realm", "status", "node_output",
+		"sect", "sect_mission", "quest", "race", "dream_realm", "status", "node_output",
 	}
 }
 
@@ -2650,9 +2648,9 @@ func TableImport(table string) error {
 	case "race":
 		return seedRacesFromCSV("Race.csv")
 	case "status":
-			return seedStatusesFromCSV("Status.csv")
+		return seedStatusesFromCSV("Status.csv")
 	case "recipe":
-			return seedRecipesFromCSV("Recipe.csv")
+		return seedRecipesFromCSV("Recipe.csv")
 
 	case "shop_item":
 		return seedShopItemsFromCSV("ShopItem.csv")

@@ -140,7 +140,8 @@ export const pathLabels: Record<string, string> = {
   "Refinement Path": "Luyện Đạo",
   "Formation Path": "Trận Đạo",
   "Qi Path": "Khí Đạo",
-
+  "Death Path": "Tử Đạo",
+  
   // Cơ thể, Tinh thần & Xã hội
   "Strength Path": "Lực Đạo",
   "Soul Path": "Hồn Đạo",
