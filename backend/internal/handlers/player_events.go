@@ -23,6 +23,7 @@ const (
 	TradeEventUpdated    = "trade.updated"
 	ManaEventSnapshot    = "mana.snapshot"
 	PlayerEventHeartbeat = "player.heartbeat"
+	SessionEventKicked   = "session.kicked"
 )
 
 const playerEventsHeartbeatInterval = 60 * time.Second
@@ -183,6 +184,12 @@ func writeSSE(c *gin.Context, eventName string, payload any) error {
 
 func writeSSEError(c *gin.Context, err error) {
 	_ = writeSSE(c, "error", gin.H{"error": err.Error()})
+}
+
+// SendSessionKickedEvent sends a session.kicked event to the player's SSE connection
+// if they have an active StreamUnifiedEvents connection.
+func SendSessionKickedEvent(playerID uuid.UUID) {
+	notify.Send(db.DB, playerID, "session.kicked", "Phiên đăng nhập đã hết hạn", "Tài khoản đã đăng nhập từ thiết bị khác")
 }
 
 func apertureStressLevel(stress float64) string {

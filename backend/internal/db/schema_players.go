@@ -77,7 +77,8 @@ func schemaPlayers() error {
 		register_ip VARCHAR(50) NOT NULL DEFAULT '',
 		last_login_fingerprint VARCHAR(255) NOT NULL DEFAULT '',
 		last_login_ip VARCHAR(50) NOT NULL DEFAULT '',
-		last_login_time TIMESTAMP WITH TIME ZONE DEFAULT NULL
+		last_login_time TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+		active_session_id VARCHAR(64) NOT NULL DEFAULT ''
 	);`); err != nil {
 		return err
 	}
@@ -99,6 +100,9 @@ func schemaPlayers() error {
 		END IF;
 		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='last_login_time') THEN
 			ALTER TABLE players ADD COLUMN last_login_time TIMESTAMP WITH TIME ZONE DEFAULT NULL;
+		END IF;
+		IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='players' AND column_name='active_session_id') THEN
+			ALTER TABLE players ADD COLUMN active_session_id VARCHAR(64) NOT NULL DEFAULT '';
 		END IF;
 	END $$;`); err != nil {
 		return err

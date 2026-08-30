@@ -24,16 +24,18 @@ func init() {
 
 // CustomClaims represents the JWT claims
 type CustomClaims struct {
-	PlayerID string `json:"player_id"`
-	Username string `json:"username"`
+	PlayerID    string `json:"player_id"`
+	Username    string `json:"username"`
+	SessionID   string `json:"session_id"`
 	jwt.RegisteredClaims
 }
 
 // GenerateToken issues a new JWT token valid for 7 days
-func GenerateToken(playerID uuid.UUID, username string) (string, error) {
+func GenerateToken(playerID uuid.UUID, username, sessionID string) (string, error) {
 	claims := CustomClaims{
-		PlayerID: playerID.String(),
-		Username: username,
+		PlayerID:  playerID.String(),
+		Username:  username,
+		SessionID: sessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * 7 * time.Hour)), // 7 days
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

@@ -768,7 +768,14 @@ func RegisterPlayer(c *gin.Context) {
 	}
 
 	// 4. Generate token
-	token, err := auth.GenerateToken(player.ID, player.Username)
+	sessionID := uuid.New().String()
+	_, err = db.DB.Exec(`UPDATE players SET active_session_id = $1 WHERE id = $2`, sessionID, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update session"})
+		return
+	}
+
+	token, err := auth.GenerateToken(player.ID, player.Username, sessionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create access token"})
 		return
@@ -1112,7 +1119,14 @@ func LoginPlayer(c *gin.Context) {
 		}
 	}
 
-	token, err := auth.GenerateToken(player.ID, player.Username)
+	sessionID := uuid.New().String()
+	_, err = db.DB.Exec(`UPDATE players SET active_session_id = $1 WHERE id = $2`, sessionID, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update session"})
+		return
+	}
+
+	token, err := auth.GenerateToken(player.ID, player.Username, sessionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sign access token"})
 		return
@@ -4378,7 +4392,12 @@ func UpdateProfileSettings(c *gin.Context) {
 	}
 
 	// Update token cookie to keep session claim synchronized with the new username
-	newToken, err := auth.GenerateToken(player.ID, player.Username)
+	var sessionID string
+	err = tx.QueryRow(`SELECT COALESCE(active_session_id, '') FROM players WHERE id = $1`, player.ID).Scan(&sessionID)
+	if err != nil {
+		sessionID = ""
+	}
+	newToken, err := auth.GenerateToken(player.ID, player.Username, sessionID)
 	if err == nil {
 		setAuthCookie(c, newToken)
 	}
@@ -4892,7 +4911,14 @@ func GoogleCallback(c *gin.Context) {
 	}
 
 	// Generate JWT session token
-	token, err := auth.GenerateToken(player.ID, player.Username)
+	sessionID := uuid.New().String()
+	_, err = db.DB.Exec(`UPDATE players SET active_session_id = $1 WHERE id = $2`, sessionID, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update session"})
+		return
+	}
+
+	token, err := auth.GenerateToken(player.ID, player.Username, sessionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to sign access token"})
 		return

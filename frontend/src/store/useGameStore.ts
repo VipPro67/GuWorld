@@ -1344,7 +1344,14 @@ const apiFetch = async (input: RequestInfo | URL, init: ApiFetchInit = {}): Prom
     if (response.status === 401 || response.status === 403) {
       if (!silent) {
         const state = useGameStore.getState();
-        state.addToast("Phiên làm việc hết hạn. Vui lòng đăng nhập lại.", "error");
+        let errorMsg = "Phiên làm việc hết hạn. Vui lòng đăng nhập lại.";
+        try {
+          const errData = await response.clone().json();
+          if (errData.error) {
+            errorMsg = errData.error;
+          }
+        } catch {}
+        state.addToast(errorMsg, "error");
         state.logout();
       }
       return response;
@@ -1982,6 +1989,12 @@ export const useGameStore = create<GameState>((set, get) => {
       } catch (err) {
         console.error("Failed to process notification event", err);
       }
+    });
+
+    source.addEventListener("session.kicked", () => {
+      const state = get();
+      state.addToast("Tài khoản đã đăng nhập từ thiết bị khác. Bạn đã bị đăng xuất.", "error");
+      state.logout();
     });
 
     source.onopen = () => {
