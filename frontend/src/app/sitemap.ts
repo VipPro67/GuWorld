@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 3600;
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.cogioi.io.vn";
-const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
+const backendUrl = process.env.INTERNAL_BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
 interface GuItem {
   id: string;

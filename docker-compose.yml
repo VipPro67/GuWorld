@@ -37,6 +37,8 @@ services:
     image: ghcr.io/vippro67/guworld-frontend:latest
     container_name: guworld-frontend
     restart: always
+    environment:
+      - INTERNAL_BACKEND_URL=http://backend:8080
     depends_on:
       - backend
 
