@@ -742,9 +742,62 @@ func Simulate(state *CombatState) []CombatLog {
 					res := actionOutcome{}
 
 					// Silence / Fear: skip skills and killer moves, only allow basic attack
-					if (actor.IsSilenced || actor.IsFeared) && a.ActionType != "BASIC_ATTACK" {
-						return res
+if (actor.IsSilenced || actor.IsFeared) && a.ActionType != "BASIC_ATTACK" {
+			return res
+			}
+
+			// Path mastery handling (mirrors original logic) – awarded before mana check
+			if (a.ActionType == "GU_SKILL" || a.ActionType == "BASIC_ATTACK") && actor.Kind == "Player" && !state.VirtualMode {
+				remaining := actor.PathMasteryGainLimit - actor.PathMasteryGained
+				if remaining > 0 {
+					cleanPath := "strength"
+					pathGain := 1
+					if a.ActionType == "GU_SKILL" && len(a.Path) > 0 {
+						cleanPath = strings.TrimSuffix(strings.ToLower(a.Path[0]), " path")
+						if a.Rank >= 6 {
+							pathGain = 10
+						}
 					}
+					clamped := pathGain > remaining
+					if clamped {
+						pathGain = remaining
+					}
+					if actor.PathMasteries == nil {
+						actor.PathMasteries = make(map[string]int)
+					}
+					actor.PathMasteryGained += pathGain
+					actor.PathMasteries[cleanPath] += pathGain
+
+					pts := actor.PathMasteries[cleanPath]
+					lvlName := "Sơ Học"
+					if pts >= 10000 {
+						lvlName = "Vô Thượng Tông Sư"
+					} else if pts >= 2500 {
+						lvlName = "Đại Tông Sư"
+					} else if pts >= 500 {
+						lvlName = "Tông Sư"
+					} else if pts >= 100 {
+						lvlName = "Đại Sư"
+					}
+
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "PATH_MASTERY_GAIN",
+						Detail:    fmt.Sprintf("-> Ngộ Đạo tăng tiến (%s)! +%d điểm Chân Ý %s (Cảnh giới: %s).", a.Name, pathGain, strings.Title(cleanPath), lvlName),
+					})
+					if clamped {
+						turnLogs = append(turnLogs, CombatLog{
+							Turn:      turn,
+							ActorId:   actor.ID,
+							ActorName: actor.Name,
+							Action:    "PATH_MASTERY_CAP",
+							Detail:    fmt.Sprintf("-> %s đã đạt giới hạn %d điểm Chân Ý trong trận này, không thể ngộ đạo thêm.", actor.Name, actor.PathMasteryGainLimit),
+						})
+					}
+				}
+			}
 
 					if a.ManaCost > 0 && float64(actor.Mana) < a.ManaCost {
 						turnLogs = append(turnLogs, CombatLog{
@@ -785,60 +838,7 @@ func Simulate(state *CombatState) []CombatLog {
 						})
 					}
 
-					if (a.ActionType == "GU_SKILL" || a.ActionType == "BASIC_ATTACK") && actor.Kind == "Player" && !state.VirtualMode {
-						// Respect the per-battle Chân Ý gain cap (rank * 10).
-						remaining := actor.PathMasteryGainLimit - actor.PathMasteryGained
-						if remaining > 0 {
-							cleanPath := "strength"
-							pathGain := 1
-
-							if a.ActionType == "GU_SKILL" && len(a.Path) > 0 {
-								cleanPath = strings.TrimSuffix(strings.ToLower(a.Path[0]), " path")
-								if a.Rank >= 6 {
-									pathGain = 10
-								}
-							}
-							clamped := pathGain > remaining
-							if clamped {
-								pathGain = remaining
-							}
-
-							if actor.PathMasteries == nil {
-								actor.PathMasteries = make(map[string]int)
-							}
-							actor.PathMasteryGained += pathGain
-							actor.PathMasteries[cleanPath] += pathGain
-
-							pts := actor.PathMasteries[cleanPath]
-							lvlName := "Sơ Học"
-							if pts >= 10000 {
-								lvlName = "Vô Thượng Tông Sư"
-							} else if pts >= 2500 {
-								lvlName = "Đại Tông Sư"
-							} else if pts >= 500 {
-								lvlName = "Tông Sư"
-							} else if pts >= 100 {
-								lvlName = "Đại Sư"
-							}
-
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   actor.ID,
-								ActorName: actor.Name,
-								Action:    "PATH_MASTERY_GAIN",
-								Detail:    fmt.Sprintf("-> Ngộ Đạo tăng tiến (%s)! +%d điểm Chân Ý %s (Cảnh giới: %s).", a.Name, pathGain, strings.Title(cleanPath), lvlName),
-							})
-							if clamped {
-								turnLogs = append(turnLogs, CombatLog{
-									Turn:      turn,
-									ActorId:   actor.ID,
-									ActorName: actor.Name,
-									Action:    "PATH_MASTERY_CAP",
-									Detail:    fmt.Sprintf("-> %s đã đạt giới hạn %d điểm Chân Ý trong trận này, không thể ngộ đạo thêm.", actor.Name, actor.PathMasteryGainLimit),
-								})
-							}
-						}
-					}
+// Path mastery handling moved earlier (original block removed)
 
 					// Backlash damage from using Gu rank > actor rank
 					if a.BacklashDamage > 0 {

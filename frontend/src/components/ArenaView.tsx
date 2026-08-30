@@ -38,7 +38,7 @@ export const ArenaView: React.FC = () => {
   const playerRank = player.arena_rank || 999;
   
   return (
-    <GamePanel variant="gold" className="rounded-3xl p-6 w-full mx-auto space-y-6 text-left relative overflow-hidden group">
+    <GamePanel variant="gold" className="rounded-3xl p-3 sm:p-6 w-full mx-auto space-y-6 text-left relative overflow-hidden group">
       {/* Decorative background grid pattern */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(217,119,6,0.01)_1px,transparent_1px),linear-gradient(to_bottom,rgba(217,119,6,0.01)_1px,transparent_1px)] bg-[size:16px_28px] pointer-events-none" />
 
@@ -78,7 +78,7 @@ Tải lại
       </div>
 
       {/* Player ranking summary banner */}
-      <div className="bg-gradient-to-r from-amber-950/20 via-zinc-950/60 to-zinc-950/60 border border-amber-900/20 rounded-2xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-10 shadow-lg">
+      <div className="bg-gradient-to-r from-amber-950/20 via-zinc-950/60 to-zinc-950/60 border border-amber-900/20 rounded-2xl p-3 sm:p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-10 shadow-lg">
         <div className="space-y-1">
           <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono">Xếp hạng của bản tôn</span>
           <div className="flex items-baseline gap-2">

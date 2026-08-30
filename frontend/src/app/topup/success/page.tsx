@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function TopupSuccessPage() {
   return (
-    <main className="min-h-screen bg-[var(--bg-primary)] px-4 py-8 text-[var(--text-primary)]">
+    <main className="min-h-screen bg-[var(--bg-primary)] px-2 sm:px-4 py-8 text-[var(--text-primary)]">
       <PremiumStoreView defaultTab="topup" successMode />
     </main>
   );

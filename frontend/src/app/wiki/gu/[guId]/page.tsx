@@ -124,7 +124,7 @@ function GuPageContent({ gu }: { gu: GuDictionaryItem }) {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto px-2 sm:px-4 py-8">
         <nav className="text-xs text-[var(--text-muted)] font-mono mb-6 flex items-center gap-3">
           <Link href="/" className="hover:text-[var(--brand)] transition-colors font-bold text-emerald-400">
             ← Quay về Game

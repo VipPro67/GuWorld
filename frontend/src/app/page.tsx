@@ -153,8 +153,8 @@ export default function Home() {
 
   if (IS_MAINTENANCE) {
     return (
-      <div className="min-h-screen flex flex-col py-2 sm:py-8 px-2 sm:px-6 lg:px-8 relative bg-[var(--bg-primary)]">
-        <header className="w-full max-w-[1600px] px-4 sm:px-8 mx-auto flex justify-between items-center pb-4 border-b border-[var(--border-default)] mb-4">
+      <div className="min-h-screen flex flex-col py-2 sm:py-8 px-1 sm:px-6 lg:px-8 relative bg-[var(--bg-primary)]">
+        <header className="w-full max-w-[1600px] px-2 sm:px-8 mx-auto flex justify-between items-center pb-4 border-b border-[var(--border-default)] mb-4">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-[var(--brand-dim)] border border-[var(--brand-primary)] flex items-center justify-center shrink-0">
@@ -167,11 +167,11 @@ export default function Home() {
           </div>
         </header>
 
-        <main className="flex-grow flex items-center justify-center w-full max-w-[1600px] px-4 sm:px-8 mx-auto">
+        <main className="flex-grow flex items-center justify-center w-full max-w-[1600px] px-2 sm:px-8 mx-auto">
           <MaintenanceView />
         </main>
 
-        <footer className="w-full max-w-[1600px] px-4 sm:px-8 mx-auto text-center mt-8 pt-4 border-t border-zinc-950 flex flex-col items-center gap-2">
+        <footer className="w-full max-w-[1600px] px-2 sm:px-8 mx-auto text-center mt-8 pt-4 border-t border-zinc-950 flex flex-col items-center gap-2">
           <div className="flex items-center gap-3">
             <a href="https://www.facebook.com/profile.php?id=61587628762458" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-all">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
@@ -195,9 +195,9 @@ export default function Home() {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col py-2 sm:py-8 ${(currentView === "world-map" || currentView === "explore") ? "px-0" : "px-2"} sm:px-6 lg:px-8 relative`}>
+    <div className={`min-h-screen flex flex-col py-2 sm:py-8 ${(currentView === "world-map" || currentView === "explore") ? "px-0" : "px-1"} sm:px-6 lg:px-8 relative`}>
       {/* Top Header Navigation */}
-      <header className="w-full max-w-[1600px] px-4 sm:px-8 mx-auto flex justify-between items-center pb-4 border-b border-[var(--border-default)] mb-4">
+      <header className="w-full max-w-[1600px] px-2 sm:px-8 mx-auto flex justify-between items-center pb-4 border-b border-[var(--border-default)] mb-4">
         <div className="flex items-center gap-4">
           <div 
             onClick={() => {
@@ -245,7 +245,7 @@ export default function Home() {
       </header>
 
       {/* Main Content Area */}
-      <main className={`flex-grow flex items-start justify-center w-full max-w-[1600px] ${(currentView === "world-map" || currentView === "explore") ? "px-0" : "px-4"} sm:px-8 mx-auto`}>
+      <main className={`flex-grow flex items-start justify-center w-full max-w-[1600px] ${(currentView === "world-map" || currentView === "explore") ? "px-0" : "px-2"} sm:px-8 mx-auto`}>
         {!player ? (
           <div className="py-12 w-full flex justify-center">
             <Registration
@@ -433,7 +433,7 @@ export default function Home() {
       </main>
 
       {/* Footer Details */}
-      <footer className="w-full max-w-[1600px] px-4 sm:px-8 mx-auto text-center mt-8 pt-4 border-t border-primary flex flex-col items-center gap-2">
+      <footer className="w-full max-w-[1600px] px-2 sm:px-8 mx-auto text-center mt-8 pt-4 border-t border-primary flex flex-col items-center gap-2">
         <span className="px-2 py-0.5 text-[9px] sm:text-xs font-semibold font-mono tracking-wide rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 uppercase">
           Đang ở Bản Test Cuối Cùng. Hứa Luôn
         </span>

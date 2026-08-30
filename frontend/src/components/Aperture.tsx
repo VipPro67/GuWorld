@@ -519,7 +519,7 @@ export const Aperture: React.FC<ApertureProps> = ({
       `}</style>
 
       <div
-        className="flex flex-col items-center justify-center p-5 glass-panel-gold rounded-3xl w-full border border-amber-500/20 transition-all duration-300 relative overflow-hidden group"
+        className="flex flex-col items-center justify-center p-3 sm:p-5 glass-panel-gold rounded-3xl w-full border border-amber-500/20 transition-all duration-300 relative overflow-hidden group"
         style={{
           boxShadow: `0 8px 32px 0 rgba(0, 0, 0, 0.45), 0 0 25px ${c.glow}20`,
           borderColor: c.ring + "2a"
@@ -812,7 +812,7 @@ export const Aperture: React.FC<ApertureProps> = ({
         {activeTab === "growth" && (
           <div className="w-full z-10 space-y-5">
             {/* Character Identity */}
-            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4">
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-3 sm:p-5 shadow-inner flex flex-col gap-4">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
                 <User className="w-5 h-5 text-amber-400" />
                 <span className="font-serif font-bold text-zinc-100 text-sm">Thân Phận</span>
@@ -919,7 +919,7 @@ export const Aperture: React.FC<ApertureProps> = ({
             </div>
 
             {/* Growth Boosts */}
-            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4">
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-3 sm:p-5 shadow-inner flex flex-col gap-4">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
                 <TrendingUp className="w-5 h-5 text-emerald-400" />
                 <span className="font-serif font-bold text-zinc-100 text-sm">Cốt Tủy Không Khiếu</span>
@@ -961,7 +961,7 @@ export const Aperture: React.FC<ApertureProps> = ({
             </div>
 
             {/* Passive Effects from Equipped Gu */}
-            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4">
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-3 sm:p-5 shadow-inner flex flex-col gap-4">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
                 <Zap className="w-5 h-5 text-amber-400" />
                 <span className="font-serif font-bold text-zinc-100 text-sm">Thống Kê Bị Động</span>
@@ -1000,7 +1000,7 @@ export const Aperture: React.FC<ApertureProps> = ({
             </div>
 
             {/* In-progress + Fully Grown Gu List */}
-            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner space-y-4">
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-3 sm:p-5 shadow-inner space-y-4">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
                 <Leaf className="w-5 h-5 text-amber-400" />
                 <span className="font-serif font-bold text-zinc-100 text-sm">Cổ Trùng Đang Có Hiệu Ứng</span>
@@ -1082,7 +1082,7 @@ export const Aperture: React.FC<ApertureProps> = ({
 
 
             {/* Path Attainments */}
-            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner space-y-4">
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-3 sm:p-5 shadow-inner space-y-4">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
                 <Crown className="w-5 h-5 text-amber-400" />
                 <span className="font-serif font-bold text-zinc-100 text-sm">Cảnh Giới Lưu Phái</span>
@@ -1126,7 +1126,7 @@ export const Aperture: React.FC<ApertureProps> = ({
         {activeTab === "referrals" && (
           <div className="w-full z-10 space-y-5 text-left">
             {/* Master Referral Card */}
-            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4">
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-3 sm:p-5 shadow-inner flex flex-col gap-4">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
                 <Crown className="w-5 h-5 text-amber-400" />
                 <span className="font-serif font-bold text-zinc-100 text-sm">Liên Kết Sư Đồ</span>
@@ -1171,7 +1171,7 @@ export const Aperture: React.FC<ApertureProps> = ({
             </div>
 
             {/* Gift Code Redeem Card */}
-            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4">
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-3 sm:p-5 shadow-inner flex flex-col gap-4">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
                 <Gift className="w-5 h-5 text-amber-400" />
                 <span className="font-serif font-bold text-zinc-100 text-sm">Đổi Mã Quà</span>
@@ -1244,7 +1244,7 @@ export const Aperture: React.FC<ApertureProps> = ({
             </div> */}
 
             {/* Referees list */}
-            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4">
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-3 sm:p-5 shadow-inner flex flex-col gap-4">
               <div className="flex items-center justify-between border-b border-zinc-900 pb-2.5">
                 <div className="flex items-center gap-2">
                   <User className="w-5 h-5 text-amber-400" />
@@ -1335,7 +1335,7 @@ export const Aperture: React.FC<ApertureProps> = ({
 
         {activeTab === "settings" && (
           <div className="w-full z-10 space-y-5">
-            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 shadow-inner flex flex-col gap-4 text-left">
+            <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-3 sm:p-5 shadow-inner flex flex-col gap-4 text-left">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
                 <Crown className="w-5 h-5 text-amber-400" />
                 <span className="font-serif font-bold text-zinc-100 text-sm">Thiết Lập Hồ Sơ</span>

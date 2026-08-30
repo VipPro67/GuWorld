@@ -1786,6 +1786,8 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		return simulator.SimAction{
 			ActionType: actionType,
 			Name:       spec.Name,
+			Path:       spec.Path,
+			Rank:       spec.Rank,
 			ManaCost:   cost,
 		}, nil
 	}

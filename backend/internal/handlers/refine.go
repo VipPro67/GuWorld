@@ -609,6 +609,20 @@ func RefineGu(c *gin.Context) {
 			newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
 			statusMsg += fmt.Sprintf(" Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái %s (Cảnh giới: %s).", pathGain, strings.Title(cleanPath), gamefx.PathMasteryLevelName(newLevel))
 		}
+
+		// Also add refinement path mastery (Luyện Đạo)
+		refineGain := calculateRefinementPathGain(recipe.TargetRank, refinementRealm)
+		if refineGain > 0 {
+			if player.PathMasteries == nil {
+				player.PathMasteries = make(models.PathMasteriesMap)
+			}
+			player.PathMasteries["refinement"] += refineGain
+			newRefineLevel := gamefx.PathMasteryLevel(player.PathMasteries["refinement"])
+			if !strings.Contains(statusMsg, "Ngộ Đạo tăng tiến!") {
+				statusMsg += " Ngộ Đạo tăng tiến!"
+			}
+			statusMsg += fmt.Sprintf(" +%d điểm Chân Ý lưu phái Luyện Đạo (Cảnh giới: %s).", refineGain, gamefx.PathMasteryLevelName(newRefineLevel))
+		}
 		if newGuInstance.Rank >= 6 {
 			guName := newGuInstance.GuID
 			if targetSpec, ok := models.GetGu(newGuInstance.GuID, newGuInstance.Rank); ok {
@@ -891,4 +905,44 @@ func DeduceRecipe(c *gin.Context) {
 		"improvement":     improvement,
 		"completion_rate": newRate,
 	})
+}
+
+func calculateRefinementPathGain(targetRank int, refinementRealm int) int {
+	if targetRank <= refinementRealm {
+		return 0
+	}
+	baseGain := 0
+	switch targetRank {
+	case 1:
+		baseGain = 2
+	case 2:
+		baseGain = 4
+	case 3:
+		baseGain = 6
+	case 4:
+		baseGain = 8
+	case 5:
+		baseGain = 10
+	case 6:
+		baseGain = 20
+	case 7:
+		baseGain = 35
+	case 8:
+		baseGain = 50
+	case 9:
+		baseGain = 75
+	default:
+		baseGain = 0
+	}
+
+	factor := 1.0 - 0.20*float64(refinementRealm)
+	if factor < 0.0 {
+		factor = 0.0
+	}
+
+	gain := int(math.Round(float64(baseGain) * factor))
+	if gain < 1 && targetRank > refinementRealm {
+		gain = 1 // guarantee at least 1 point if not capped by level
+	}
+	return gain
 }

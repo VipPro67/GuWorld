@@ -71,7 +71,7 @@ export const LeaderboardView: React.FC = () => {
   const currentCat = CATEGORIES.find(c => c.id === leaderboardCategory) || CATEGORIES[0];
 
   return (
-    <GamePanel variant="gold" rounded="xl" className="p-6 w-full mx-auto space-y-6 text-left relative overflow-hidden group">
+    <GamePanel variant="gold" rounded="xl" className="p-3 sm:p-6 w-full mx-auto space-y-6 text-left relative overflow-hidden group">
       <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(217,119,6,0.01)_1px,transparent_1px),linear-gradient(to_bottom,rgba(217,119,6,0.01)_1px,transparent_1px)] bg-[size:16px_28px] pointer-events-none" />
 
       {/* Header */}

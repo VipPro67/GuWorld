@@ -440,7 +440,7 @@ export function BaoHoangMarket({
 
   if (!Array.isArray(guInventory) || !materials || typeof materials !== 'object') {
     return (
-      <div className="w-full mx-auto glass-panel-gold p-6 rounded-3xl border border-amber-500/20 shadow-2xl relative overflow-hidden">
+      <div className="w-full mx-auto glass-panel-gold p-3 sm:p-6 rounded-3xl border border-amber-500/20 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-[100px] pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-80 h-80 bg-cyan-500/5 rounded-full blur-[120px] pointer-events-none" />
         <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -477,7 +477,7 @@ export function BaoHoangMarket({
   }
 
   return (
-    <GamePanel variant="gold" className="rounded-3xl p-6 border border-amber-500/20 shadow-2xl relative overflow-hidden">
+    <GamePanel variant="gold" className="rounded-3xl p-3 sm:p-6 border border-amber-500/20 shadow-2xl relative overflow-hidden">
       {/* Background decoration */}
       <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-80 h-80 bg-cyan-500/5 rounded-full blur-[120px] pointer-events-none" />

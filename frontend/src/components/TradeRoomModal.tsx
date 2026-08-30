@@ -315,7 +315,7 @@ export const TradeRoomModal: React.FC = () => {
       title="Không Gian Giao Dịch Thông Thiên"
       description="Được liên kết an toàn qua tần số Thông Thiên Cổ"
       size="xl"
-      showCloseButton={false}
+      showCloseButton={true}
     >
       <div className="w-full max-w-screen-xl bg-zinc-950 border border-zinc-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
 

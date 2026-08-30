@@ -353,7 +353,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const showGus = selectedTab === "gu";
 
   return (
-    <div className="glass-panel-gold rounded-3xl p-4 sm:p-6 w-full space-y-4 sm:space-y-6">
+    <div className="glass-panel-gold rounded-3xl p-3 sm:p-6 w-full space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
         <div className="flex items-center gap-2">
@@ -851,7 +851,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                     return (
                       <div
                         key={groupKey}
-                        className={`p-4 sm:p-5 rounded-2xl border transition-all ${cardStyle}`}
+                        className={`p-3 sm:p-5 rounded-2xl border transition-all ${cardStyle}`}
                       >
                         {/* Summary Header */}
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">

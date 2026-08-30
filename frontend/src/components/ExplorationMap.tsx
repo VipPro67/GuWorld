@@ -420,7 +420,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
   const movementRange = gridData?.stats?.movement || 1;
 
   return (
-    <GamePanel variant="gold" className="rounded-3xl p-6 w-full mx-auto space-y-6 text-left relative">
+    <GamePanel variant="gold" className="rounded-3xl p-3 sm:p-6 w-full mx-auto space-y-6 text-left relative">
       {/* Grid Map Header */}
       <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
         <div className="flex items-center gap-2.5">

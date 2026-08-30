@@ -293,7 +293,7 @@ Tỉ lệ thành công của mỗi lần Luyện Cổ được tính dựa trên
 10. **Môi trường:** Luyện Cổ tại Đại Vực có thuộc tính phù hợp (+5%).
 
 Hệ quả của quá trình luyện phân thành 4 bậc:
-- **Thành Công:** Nhận Cổ trùng mục tiêu, tăng Chân Ý lưu phái tương ứng.
+- **Thành Công:** Nhận Cổ trùng mục tiêu, tăng Chân Ý lưu phái tương ứng của Cổ trùng và nhận thêm Chân Ý lưu phái Luyện Đạo (giảm dần khi Cảnh Giới Luyện Đạo tăng, và sẽ không nhận được Chân Ý Luyện Đạo khi luyện Cổ bậc thấp).
 - **Thất Bại (Safe):** Nếu thất bại suýt sao và có Cảnh giới Luyện Đạo cao, đạo hữu được bảo toàn Cổ nguyên liệu chính, chỉ mất 50% nguyên liệu phụ (materials).
 - **Thất Bại (Normal):** Mất 100% nguyên liệu. Nếu có Cổ Bản Mệnh tham gia thì không chết mà rơi vào Hấp Hối (Hunger = 1).
 - **Cháy Nổ (Backfire):** Nếu vận rủi tột cùng (xúc xắc >= 90%, hoặc >= 75% với Tiên Cổ), Lò Luyện phát nổ! Tổn thất 50% HP tối đa và 30% Hồn Phách tối đa. Cổ nguyên liệu thường hóa thành tro bụi.
