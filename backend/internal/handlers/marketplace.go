@@ -371,20 +371,9 @@ func ListListings(c *gin.Context) {
 		return
 	}
 
-	var inventoryJSON []byte
-	err := db.DB.QueryRow(`SELECT gu_inventory FROM players WHERE id = $1`, authID).Scan(&inventoryJSON)
-	hasConnectingHeaven := false
-	if err == nil {
-		var gus []models.GuInstance
-		if json.Unmarshal(inventoryJSON, &gus) == nil {
-			for _, gu := range gus {
-				if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
-					hasConnectingHeaven = true
-					break
-				}
-			}
-		}
-	}
+	var count int
+	err := db.DB.QueryRow(`SELECT COUNT(*) FROM player_gu WHERE player_id = $1 AND gu_id = 'GU_CONNECTING_HEAVEN' AND state != 'DEAD'`, authID).Scan(&count)
+	hasConnectingHeaven := err == nil && count > 0
 	if !hasConnectingHeaven {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để truy cập Bảo Hoàng Thiên!"})
 		return
