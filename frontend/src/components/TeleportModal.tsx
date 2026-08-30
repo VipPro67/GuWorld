@@ -48,9 +48,11 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
   // Filter Portal Gu
   const portalGus = player?.gu_inventory?.filter((gu) => {
     const spec = guDictionary[gu.gu_id];
-    return spec?.effects?.active?.portal_create === true;
+    return gu.equipped && gu.status === "ACTIVE" && (spec?.effects?.active?.portal_create === true || spec?.effects?.active?.random_portal === true);
   }) ?? [];
   const [selectedGu, setSelectedGu] = useState<string>("");
+  const activeSpec = selectedGu ? guDictionary[player?.gu_inventory?.find(g => g.instance_id === selectedGu)?.gu_id || ""] : null;
+  const isRandomPortal = activeSpec?.effects?.active?.random_portal === true;
 
   useEffect(() => {
     if (portalGus.length > 0 && !selectedGu) {
@@ -124,11 +126,15 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
   };
 
   const handleGuTeleport = async () => {
-    if (!selectedGu || !targetX || !targetY) return;
+    if (!selectedGu) return;
+    if (!isRandomPortal && (!targetX || !targetY)) return;
+
     setTeleporting(true);
     setError(null);
     try {
-      const res = await useGuOnMap(selectedGu, parseInt(targetX), parseInt(targetY));
+      const tx = isRandomPortal ? 0 : parseInt(targetX);
+      const ty = isRandomPortal ? 0 : parseInt(targetY);
+      const res = await useGuOnMap(selectedGu, tx, ty);
       if (res) {
         useGameStore.getState().addToast(res.message, "success");
         onClose();
@@ -240,54 +246,59 @@ function TeleportModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
                   <div className="text-center text-gray-400 py-8">Không có khu vực khả dụng</div>
                 )}
               </div>
-            )
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Chọn Cổ Trùng</label>
-                <select 
-                  className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white"
-                  value={selectedGu}
-                  onChange={(e) => setSelectedGu(e.target.value)}
+            )) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Chọn Cổ Trùng</label>
+                  <select 
+                    className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white"
+                    value={selectedGu}
+                    onChange={(e) => setSelectedGu(e.target.value)}
+                  >
+                    {portalGus.map(g => (
+                      <option key={g.instance_id} value={g.instance_id}>
+                        {guDictionary[g.gu_id]?.name || g.gu_id} (Rank {g.rank})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {isRandomPortal ? (
+                  <div className="p-3 bg-purple-950/40 border border-purple-500/30 rounded text-purple-300 text-sm">
+                    Cổ trùng này sẽ dịch chuyển đạo hữu tới một vị trí ngẫu nhiên trên thế giới. Không cần nhập tọa độ.
+                  </div>
+                ) : (
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <label className="block text-sm text-gray-400 mb-1">Tọa độ X</label>
+                      <input 
+                        type="number" 
+                        value={targetX} 
+                        onChange={e => setTargetX(e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white" 
+                        placeholder="Ví dụ: 100" 
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-sm text-gray-400 mb-1">Tọa độ Y</label>
+                      <input 
+                        type="number" 
+                        value={targetY} 
+                        onChange={e => setTargetY(e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white" 
+                        placeholder="Ví dụ: 100" 
+                      />
+                    </div>
+                  </div>
+                )}
+                <button 
+                  onClick={handleGuTeleport}
+                  disabled={teleporting || (!isRandomPortal && (!targetX || !targetY)) || !selectedGu}
+                  className="w-full mt-4 bg-purple-900/50 border border-purple-500/50 hover:bg-purple-800/50 text-purple-200 p-3 rounded font-bold disabled:opacity-50"
                 >
-                  {portalGus.map(g => (
-                    <option key={g.instance_id} value={g.instance_id}>
-                      {guDictionary[g.gu_id]?.name || g.gu_id} (Rank {g.rank})
-                    </option>
-                  ))}
-                </select>
+                  Kích Hoạt Dịch Chuyển
+                </button>
               </div>
-              <div className="flex gap-4">
-                <div className="flex-1">
-                  <label className="block text-sm text-gray-400 mb-1">Tọa độ X</label>
-                  <input 
-                    type="number" 
-                    value={targetX} 
-                    onChange={e => setTargetX(e.target.value)}
-                    className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white" 
-                    placeholder="Ví dụ: 100" 
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm text-gray-400 mb-1">Tọa độ Y</label>
-                  <input 
-                    type="number" 
-                    value={targetY} 
-                    onChange={e => setTargetY(e.target.value)}
-                    className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white" 
-                    placeholder="Ví dụ: 100" 
-                  />
-                </div>
-              </div>
-              <button 
-                onClick={handleGuTeleport}
-                disabled={teleporting || !targetX || !targetY || !selectedGu}
-                className="w-full mt-4 bg-purple-900/50 border border-purple-500/50 hover:bg-purple-800/50 text-purple-200 p-3 rounded font-bold disabled:opacity-50"
-              >
-                Kích Hoạt Dịch Chuyển
-              </button>
-            </div>
-          )}
+            )}
         </div>
 
         {teleporting && (

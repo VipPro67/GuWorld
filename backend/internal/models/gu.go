@@ -40,6 +40,7 @@ type ActiveEffect struct {
 	GenerateGu         bool    `json:"generate_gu,omitempty"`
 	CaptureBonus       float64 `json:"capture_bonus,omitempty"` // +% tỉ lệ bắt monster (0..1)
 	PortalCreate       bool    `json:"portal_create,omitempty"`
+	RandomPortal       bool    `json:"random_portal,omitempty"`
 
 	SummonGrowthPhantoms bool    `json:"summon_growth_phantoms,omitempty"`
 	SummonCountPerTick   float64 `json:"summon_count_per_tick,omitempty"`
@@ -303,6 +304,12 @@ func GetFlatGuEffects(gu Gu) map[string]float64 {
 		}
 		if gu.Effects.Active.BloodDrain {
 			res["blood_drain"] = 1.0
+		}
+		if gu.Effects.Active.PortalCreate {
+			res["portal_create"] = 1.0
+		}
+		if gu.Effects.Active.RandomPortal {
+			res["random_portal"] = 1.0
 		}
 		res["channel_time"] = 0 // default
 	}

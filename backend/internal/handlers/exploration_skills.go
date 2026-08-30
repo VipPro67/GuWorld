@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -89,6 +90,9 @@ func UseGuOnMap(c *gin.Context) {
 	}
 
 	cost := gamefx.EnergyCost(&player, &specs)
+	if specs.Effects.Active != nil && (specs.Effects.Active.PortalCreate || specs.Effects.Active.RandomPortal) {
+		cost = GetPortalManaCost(&player, &specs)
+	}
 	logs := []string{}
 	var cdDuration time.Duration = 10 * time.Second // default CD
 
@@ -112,6 +116,7 @@ func UseGuOnMap(c *gin.Context) {
 			if inWorld(req.TargetX, req.TargetY) {
 				player.X = req.TargetX
 				player.Y = req.TargetY
+				player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
 				logs = append(logs, fmt.Sprintf("%s xé rách không gian, dịch chuyển đến (%d, %d).", specs.Name, player.X, player.Y))
 				applied = true
 				cdDuration = 120 * time.Second
@@ -119,6 +124,14 @@ func UseGuOnMap(c *gin.Context) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ không hợp lệ!"})
 				return
 			}
+		}
+		if active.RandomPortal {
+			player.X = rand.Intn(WorldWidth)
+			player.Y = rand.Intn(WorldHeight)
+			player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
+			logs = append(logs, fmt.Sprintf("%s xé rách không gian hỗn loạn, dịch chuyển ngẫu nhiên đến (%d, %d).", specs.Name, player.X, player.Y))
+			applied = true
+			cdDuration = 120 * time.Second
 		}
 		// HOT tick -> heal
 		if active.ApplyStatus == "REGEN" {
@@ -195,8 +208,8 @@ func UseGuOnMap(c *gin.Context) {
 	player.Statuses.Add(cdID, "cooldown", cdDuration, 0)
 
 	statusesJSON, _ := json.Marshal(player.Statuses)
-	_, err = tx.Exec(`UPDATE players SET current_mana = $1, hp = $2, x = $3, y = $4, statuses = $5 WHERE id = $6`,
-		player.CurrentMana, player.HP, player.X, player.Y, statusesJSON, player.ID)
+	_, err = tx.Exec(`UPDATE players SET current_mana = $1, hp = $2, x = $3, y = $4, current_region = $5, statuses = $6 WHERE id = $7`,
+		player.CurrentMana, player.HP, player.X, player.Y, player.CurrentRegion, statusesJSON, player.ID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu trạng thái"})
@@ -320,12 +333,20 @@ func UseKillerMoveOnMap(c *gin.Context) {
 				if inWorld(req.TargetX, req.TargetY) {
 					player.X = req.TargetX
 					player.Y = req.TargetY
+					player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
 					logs = append(logs, fmt.Sprintf("Sát chiêu xé rách không gian, dịch chuyển đến (%d, %d).", player.X, player.Y))
 					applied = true
 				} else {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ không hợp lệ!"})
 					return
 				}
+			}
+			if k == "random_portal" {
+				player.X = rand.Intn(WorldWidth)
+				player.Y = rand.Intn(WorldHeight)
+				player.CurrentRegion = DeriveRegionAt(player.X, player.Y)
+				logs = append(logs, fmt.Sprintf("Sát chiêu xé rách không gian hỗn loạn, dịch chuyển ngẫu nhiên đến (%d, %d).", player.X, player.Y))
+				applied = true
 			}
 		}
 
@@ -338,8 +359,8 @@ func UseKillerMoveOnMap(c *gin.Context) {
 
 	// encoding/json missing? Handled.
 	statusesJSON, _ := json.Marshal(player.Statuses)
-	_, err = tx.Exec(`UPDATE players SET current_mana = $1, hp = $2, x = $3, y = $4, statuses = $5 WHERE id = $6`,
-		player.CurrentMana, player.HP, player.X, player.Y, statusesJSON, player.ID)
+	_, err = tx.Exec(`UPDATE players SET current_mana = $1, hp = $2, x = $3, y = $4, current_region = $5, statuses = $6 WHERE id = $7`,
+		player.CurrentMana, player.HP, player.X, player.Y, player.CurrentRegion, statusesJSON, player.ID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu trạng thái"})

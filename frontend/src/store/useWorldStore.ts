@@ -167,9 +167,10 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         } catch {
           /* ignore */
         }
+        useGameStore.getState().addToast(msg, "error");
         set((s) => ({
           isMoving: false,
-          error: msg,
+          error: null,
           worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
         }));
         return null;
@@ -178,8 +179,9 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       return data;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      useGameStore.getState().addToast(msg, "error");
       set((s) => ({
-        error: msg,
+        error: null,
         isMoving: false,
         worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
       }));
@@ -205,7 +207,13 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         throw new Error(body || "Invalid response");
       }
       if (!res.ok) {
-        set({ error: data?.error || data?.message || "Failed to use Gu on map", loading: false });
+        const msg = data?.error || data?.message || "Failed to use Gu on map";
+        useGameStore.getState().addToast(msg, "error");
+        set((s) => ({
+          error: null,
+          loading: false,
+          worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
+        }));
         return null;
       }
       useGameStore.getState().setPlayerFromServer(data.player);
@@ -216,7 +224,13 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       set({ loading: false });
       return data;
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : "Error", loading: false });
+      const msg = err instanceof Error ? err.message : "Error";
+      useGameStore.getState().addToast(msg, "error");
+      set((s) => ({
+        error: null,
+        loading: false,
+        worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
+      }));
       return null;
     }
   },
@@ -238,9 +252,10 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         } catch {
           /* ignore */
         }
+        useGameStore.getState().addToast(msg, "error");
         set((s) => ({
           loading: false,
-          error: msg,
+          error: null,
           worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
         }));
         return null;
@@ -273,8 +288,9 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       return data;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      useGameStore.getState().addToast(msg, "error");
       set((s) => ({
-        error: msg,
+        error: null,
         loading: false,
         worldLogs: [...s.worldLogs, { id: Math.random().toString(36).substr(2, 9), text: `❌ ${msg}`, timestamp: Date.now() }].slice(-50),
       }));

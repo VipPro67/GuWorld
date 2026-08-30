@@ -28,6 +28,29 @@ func getPathMasteryMultiplier(player *models.Player, paths []string) float64 {
 	return gamefx.PathMasteryMultiplier(player.PathMasteries, paths)
 }
 
+func GetPortalManaCost(player *models.Player, spec *models.GuDictionaryItem) float64 {
+	baseCost := spec.BaseManaCost
+	if baseCost <= 0 {
+		baseCost = 10.0 // default fallback
+	}
+
+	var computedBase float64
+	if player.Rank >= 6 {
+		// Immortal: flat cost in Tiên Nguyên
+		computedBase = baseCost
+	} else {
+		// Mortal: % of MaxMana in Chân Nguyên
+		computedBase = (baseCost / 100.0) * player.MaxMana
+	}
+
+	if spec.Rank == player.Rank {
+		return computedBase
+	}
+	// spec.Rank > player.Rank
+	diff := spec.Rank - player.Rank
+	return computedBase * math.Pow(2, float64(diff))
+}
+
 func ValidateGuUsable(player *models.Player, gu *models.GuInstance, spec *models.GuDictionaryItem, actionRequiresEquipped bool) error {
 	if gu.Status == "DEAD" {
 		return fmt.Errorf("Không thể sử dụng Cổ trùng ĐÃ CHẾT: %s", spec.Name)
@@ -44,6 +67,13 @@ func ValidateGuUsable(player *models.Player, gu *models.GuInstance, spec *models
 
 	// Rule 3: Energy cost
 	cost := gamefx.EnergyCost(player, spec)
+	if spec.Effects.Active != nil && (spec.Effects.Active.PortalCreate || spec.Effects.Active.RandomPortal) {
+		if spec.Rank < player.Rank {
+			return fmt.Errorf("Không thể thực hiện dịch chuyển: Cấp độ Cổ trùng (%d) thấp hơn tu vi bản thân (%d)!", spec.Rank, player.Rank)
+		}
+		cost = GetPortalManaCost(player, spec)
+	}
+
 	if player.CurrentMana < cost {
 		return fmt.Errorf("%s", insufficientEnergyMessage(player))
 	}

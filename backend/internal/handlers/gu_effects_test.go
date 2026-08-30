@@ -109,3 +109,97 @@ func TestCleanupInvalidEquippedNoInvalidGus(t *testing.T) {
 		t.Fatalf("expected no cleanup, got %+v", cleaned)
 	}
 }
+
+func TestPortalManaCostAndUsability(t *testing.T) {
+	playerMortal5 := &models.Player{
+		CultivationState: models.CultivationState{Rank: 5},
+		ResourceState:    models.ResourceState{CurrentMana: 250, MaxMana: 500},
+	}
+	specMortal5 := &models.GuDictionaryItem{
+		ID:           "GU_MORTAL_PORTAL",
+		Name:         "Địa Độn Cổ",
+		Rank:         5,
+		BaseManaCost: 10.0, // 10%
+		Effects: models.GuEffects{
+			Active: &models.ActiveEffect{
+				PortalCreate: true,
+			},
+		},
+	}
+
+	playerImmortal6 := &models.Player{
+		CultivationState: models.CultivationState{Rank: 6},
+		ResourceState:    models.ResourceState{CurrentMana: 50, MaxMana: 100},
+	}
+	specImmortal6 := &models.GuDictionaryItem{
+		ID:           "GU_IMMORTAL_PORTAL",
+		Name:         "Tiên Cổng Cổ",
+		Rank:         6,
+		BaseManaCost: 10.0, // 10 flat
+		Effects: models.GuEffects{
+			Active: &models.ActiveEffect{
+				PortalCreate: true,
+			},
+		},
+	}
+	specImmortal8 := &models.GuDictionaryItem{
+		ID:           "GU_IMMORTAL_PORTAL_HIGH",
+		Name:         "Cao Cấp Tiên Cổng Cổ",
+		Rank:         8,
+		BaseManaCost: 10.0, // 10 flat
+		Effects: models.GuEffects{
+			Active: &models.ActiveEffect{
+				PortalCreate: true,
+			},
+		},
+	}
+
+	// Test GetPortalManaCost
+	// 1. Mortal Rank 5 player, Rank 5 Gu, 10% base cost on MaxMana 500 = 50
+	if cost := GetPortalManaCost(playerMortal5, specMortal5); cost != 50.0 {
+		t.Errorf("expected 50.0, got %f", cost)
+	}
+
+	// 2. Immortal Rank 6 player, Rank 6 Gu, 10 base cost = 10
+	if cost := GetPortalManaCost(playerImmortal6, specImmortal6); cost != 10.0 {
+		t.Errorf("expected 10.0, got %f", cost)
+	}
+
+	// 3. Immortal Rank 6 player, Rank 8 Gu, 10 base cost * 2^2 = 40
+	if cost := GetPortalManaCost(playerImmortal6, specImmortal8); cost != 40.0 {
+		t.Errorf("expected 40.0, got %f", cost)
+	}
+
+	// Test ValidateGuUsable
+	guInstMortal5 := &models.GuInstance{
+		InstanceID: "inst_mortal_5",
+		GuID:       "GU_MORTAL_PORTAL",
+		Rank:       5,
+		Status:     "ACTIVE",
+		Equipped:   true,
+	}
+	guInstImmortal6 := &models.GuInstance{
+		InstanceID: "inst_immortal_6",
+		GuID:       "GU_IMMORTAL_PORTAL",
+		Rank:       6,
+		Status:     "ACTIVE",
+		Equipped:   true,
+	}
+
+	// 1. Mortal 5 using Mortal 5 -> Pass
+	if err := ValidateGuUsable(playerMortal5, guInstMortal5, specMortal5, true); err != nil {
+		t.Errorf("expected mortal 5 usability to pass, got: %v", err)
+	}
+
+	// 2. Mortal 5 using Mortal 5, but not enough mana (cost = 50, current = 40)
+	playerMortal5.CurrentMana = 40
+	if err := ValidateGuUsable(playerMortal5, guInstMortal5, specMortal5, true); err == nil {
+		t.Error("expected error due to insufficient mana, got nil")
+	}
+
+	// 3. Mortal 5 using Immortal 6 -> Blocked by CanUseGuWithMana
+	if err := ValidateGuUsable(playerMortal5, guInstImmortal6, specImmortal6, true); err == nil {
+		t.Error("expected mortal using immortal Gu to be blocked, got nil")
+	}
+}
+
