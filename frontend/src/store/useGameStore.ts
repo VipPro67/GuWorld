@@ -461,6 +461,9 @@ export interface ApertureResourceNode {
   blocks_movement: boolean;
   required_gu_id: string;
   required_gu_rank: number;
+  zone_type: string;
+  food_path: string;
+  item_tier: string;
 }
 
 export interface ApertureVariantHuman {

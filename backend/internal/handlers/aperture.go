@@ -671,12 +671,29 @@ func seedInitialApertureNodes(tx *sql.Tx, apertureID string, grade string) {
 		}
 		used[key] = true
 
+		nodeHPMax := tmpl.HPMax
+		if nodeHPMax <= 0 {
+			nodeHPMax = 1000
+		}
+		nodeCategory := tmpl.NodeCategory
+		if nodeCategory == "" {
+			nodeCategory = "RESOURCE"
+		}
+
 		_, _ = tx.Exec(`
 			INSERT INTO aperture_resource_nodes
 				(aperture_id, node_type, name, path, level, hp, max_hp, x, y,
-				 production_type, production_amount, production_interval_hours, last_collected_at)
-			VALUES ($1, $2, $3, $4, 1, 1000, 1000, $5, $6, $7, $8, $9, NOW())
-		`, apertureID, tmpl.NodeType, tmpl.Name, tmpl.Path, x, y, tmpl.ProdType, tmpl.ProdAmount, tmpl.ProdIntervalHours)
+				 production_type, production_amount, production_interval_hours, last_collected_at,
+				 node_category, defense_power, attack_range, hp_bonus, damage_reduction, blocks_movement,
+				 required_gu_id, required_gu_rank, zone_type, food_path, item_tier)
+			VALUES ($1, $2, $3, $4, 1, $5, $5, $6, $7, $8, $9, $10, NOW(),
+				$11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+		`, apertureID, tmpl.NodeType, tmpl.Name, tmpl.Path, nodeHPMax, x, y,
+			tmpl.ProdType, tmpl.ProdAmount, tmpl.ProdIntervalHours,
+			nodeCategory, tmpl.DefensePower, tmpl.AttackRange, tmpl.HPBonus,
+			tmpl.DamageReduction, tmpl.BlocksMovement,
+			strings.Join(tmpl.CostGu, ","), tmpl.CostGuRank,
+			tmpl.ZoneType, tmpl.FoodPath, tmpl.ItemTier)
 	}
 }
 
@@ -829,7 +846,8 @@ func GetApertureNodes(c *gin.Context) {
 			n.is_destroyed, n.created_at, n.updated_at,
 			COALESCE(n.node_category, 'RESOURCE'), COALESCE(n.defense_power, 0), COALESCE(n.attack_range, 0),
 			COALESCE(n.hp_bonus, 0), COALESCE(n.damage_reduction, 0), COALESCE(n.blocks_movement, false),
-			COALESCE(n.required_gu_id, ''), COALESCE(n.required_gu_rank, 0)
+			COALESCE(n.required_gu_id, ''), COALESCE(n.required_gu_rank, 0),
+			COALESCE(n.zone_type, ''), COALESCE(n.food_path, ''), COALESCE(n.item_tier, '')
 		FROM aperture_resource_nodes n
 		JOIN immortal_apertures a ON n.aperture_id = a.id
 		WHERE a.player_id = $1 AND n.is_destroyed = false
@@ -849,7 +867,8 @@ func GetApertureNodes(c *gin.Context) {
 			&n.IsDestroyed, &n.CreatedAt, &n.UpdatedAt,
 			&n.NodeCategory, &n.DefensePower, &n.AttackRange,
 			&n.HPBonus, &n.DamageReduction, &n.BlocksMovement,
-			&n.RequiredGuID, &n.RequiredGuRank)
+			&n.RequiredGuID, &n.RequiredGuRank,
+			&n.ZoneType, &n.FoodPath, &n.ItemTier)
 		if err == nil {
 			if lastCol.Valid {
 				n.LastCollectedAt = &lastCol.Time
@@ -1053,15 +1072,16 @@ func PlaceApertureNode(c *gin.Context) {
 		INSERT INTO aperture_resource_nodes (aperture_id, node_type, name, path, level, hp, max_hp, x, y,
 			production_type, production_amount, production_interval_hours, last_collected_at,
 			node_category, defense_power, attack_range, hp_bonus, damage_reduction, blocks_movement,
-			required_gu_id, required_gu_rank)
+			required_gu_id, required_gu_rank, zone_type, food_path, item_tier)
 		VALUES ($1, $2, $3, $4, 1, $5, $5, $6, $7, $8, $9, $10, NOW(),
-			$11, $12, $13, $14, $15, $16, $17, $18)
+			$11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
 		RETURNING id, created_at
 	`, ap.ID, template.NodeType, template.Name, template.Path, nodeHPMax, req.X, req.Y,
 		template.ProdType, template.ProdAmount, template.ProdIntervalHours,
 		nodeCategory, template.DefensePower, template.AttackRange, template.HPBonus,
 		template.DamageReduction, template.BlocksMovement,
-		strings.Join(template.CostGu, ","), template.CostGuRank).Scan(&node.ID, &createdAt)
+		strings.Join(template.CostGu, ","), template.CostGuRank,
+		template.ZoneType, template.FoodPath, template.ItemTier).Scan(&node.ID, &createdAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu điểm tài nguyên: " + err.Error()})
 		return
@@ -1104,6 +1124,9 @@ func PlaceApertureNode(c *gin.Context) {
 	node.BlocksMovement = template.BlocksMovement
 	node.RequiredGuID = strings.Join(template.CostGu, ",")
 	node.RequiredGuRank = template.CostGuRank
+	node.ZoneType = template.ZoneType
+	node.FoodPath = template.FoodPath
+	node.ItemTier = template.ItemTier
 	node.CreatedAt = createdAt
 	node.UpdatedAt = createdAt
 

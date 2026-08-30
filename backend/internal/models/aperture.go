@@ -69,6 +69,9 @@ type ApertureResourceNode struct {
 	BlocksMovement          bool       `json:"blocks_movement"`
 	RequiredGuID            string     `json:"required_gu_id"`
 	RequiredGuRank          int        `json:"required_gu_rank"`
+	ZoneType                string     `json:"zone_type"`
+	FoodPath                string     `json:"food_path"`
+	ItemTier                string     `json:"item_tier"`
 }
 
 type TribulationEvent struct {

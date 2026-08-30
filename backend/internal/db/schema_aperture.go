@@ -67,7 +67,10 @@ func schemaAperture() error {
 		damage_reduction INTEGER NOT NULL DEFAULT 0,
 		blocks_movement BOOLEAN NOT NULL DEFAULT false,
 		required_gu_id VARCHAR(50),
-		required_gu_rank INTEGER DEFAULT 0
+		required_gu_rank INTEGER DEFAULT 0,
+		zone_type VARCHAR(50),
+		food_path VARCHAR(50),
+		item_tier VARCHAR(10)
 	);`); err != nil {
 		return err
 	}

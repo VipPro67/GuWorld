@@ -206,7 +206,7 @@ export const ImmortalApertureView: React.FC = () => {
   const [showHealMenu, setShowHealMenu] = useState(false);
 
   const [sliderRate, setSliderRate] = useState<number>(aperture?.time_rate || 10.0);
-  const [buildCategory, setBuildCategory] = useState<"plants" | "beasts" | "humans" | "defense">("plants");
+  const [buildCategory, setBuildCategory] = useState<"khu_trong" | "khu_nuoi" | "khu_khai_thac" | "defense">("khu_trong");
 
   const essenceProd = aperture?.essence_production_per_year ?? 10;
   const rank = player?.rank ?? 6;
@@ -487,9 +487,18 @@ export const ImmortalApertureView: React.FC = () => {
     return null;
   };
 
-  const plantCount = apertureNodes.filter(n => !n.is_destroyed && ["MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS"].includes(n.node_type)).length;
+  const plantCount = apertureNodes.filter(n => !n.is_destroyed && 
+    ["MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS",
+     "TRI_FARM", "TRI_FARM_ADV", "HOA_FARM", "TIN_FARM", "AM_FARM", "DOC_FARM",
+     "BAC_FARM", "QUANG_FARM", "KIEM_FARM", "THUY_FARM", "CHUA_FARM", "CAM_FARM",
+     "KIM_FARM", "VANG_FARM", "HUYET_FARM", "THAT_FARM", "THAY_THUAT_FARM", "LUAT_FARM",
+     "THUAT_FARM", "THOI_THUAT_FARM", "LUC_FARM", "THOI_FARM", "PHONG_FARM",
+     "NO_FARM", "NO_FARM_ADV"].includes(n.node_type)
+  ).length;
   const herbCount = apertureNodes.filter(n => !n.is_destroyed && n.node_type === "SPIRIT_DEER_PASTURE").length;
-  const carnCount = apertureNodes.filter(n => !n.is_destroyed && n.node_type === "SILVER_WOLF_DEN").length;
+  const carnCount = apertureNodes.filter(n => !n.is_destroyed && 
+    ["SILVER_WOLF_DEN", "FEATHERMAN_CANYON", "HAIRY_MAN_SETTLEMENT", "ROCKMAN_TRIBE"].includes(n.node_type)
+  ).length;
 
   const starvationHerb = herbCount > 0 && plantCount === 0;
   const starvationCarn = carnCount > 0 && herbCount === 0;
@@ -505,7 +514,14 @@ export const ImmortalApertureView: React.FC = () => {
 
   // Total Food Production
   const totalFoodProd = apertureNodes.reduce((sum, n) => {
-    if (!n.is_destroyed && ["MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS", "SPIRIT_DEER_PASTURE"].includes(n.node_type)) {
+    if (!n.is_destroyed && 
+        ["MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS", "SPIRIT_DEER_PASTURE",
+         "TRI_FARM", "TRI_FARM_ADV", "HOA_FARM", "TIN_FARM", "AM_FARM", "DOC_FARM",
+         "BAC_FARM", "QUANG_FARM", "KIEM_FARM", "THUY_FARM", "CHUA_FARM", "CAM_FARM",
+         "KIM_FARM", "VANG_FARM", "HUYET_FARM", "THAT_FARM", "THAY_THUAT_FARM", "LUAT_FARM",
+         "THUAT_FARM", "THOI_THUAT_FARM", "LUC_FARM", "THOI_FARM", "PHONG_FARM",
+         "NO_FARM", "NO_FARM_ADV", "SILVER_WOLF_DEN", "FEATHERMAN_CANYON", "HAIRY_MAN_SETTLEMENT", "ROCKMAN_TRIBE"].includes(n.node_type)
+    ) {
       return sum + n.production_amount;
     }
     return sum;
@@ -1052,6 +1068,101 @@ return (
                               cellIcon = "🔮";
                               cellColor = "bg-purple-950/50 border-purple-500/40";
                               break;
+                            // New farm nodes
+                            case "TRI_FARM":
+                            case "TRI_FARM_ADV":
+                              cellIcon = "🧠";
+                              cellColor = "bg-violet-950/40 border-violet-500/30";
+                              break;
+                            case "HOA_FARM":
+                              cellIcon = "🔥";
+                              cellColor = "bg-red-950/40 border-red-500/30";
+                              break;
+                            case "TIN_FARM":
+                              cellIcon = "📄";
+                              cellColor = "bg-amber-950/40 border-amber-500/30";
+                              break;
+                            case "AM_FARM":
+                              cellIcon = "🌑";
+                              cellColor = "bg-zinc-950/40 border-zinc-500/30";
+                              break;
+                            case "DOC_FARM":
+                              cellIcon = "☠️";
+                              cellColor = "bg-green-950/40 border-green-500/30";
+                              break;
+                            case "BAC_FARM":
+                              cellIcon = "🌍";
+                              cellColor = "bg-amber-950/40 border-amber-500/30";
+                              break;
+                            case "QUANG_FARM":
+                              cellIcon = "☀️";
+                              cellColor = "bg-yellow-950/40 border-yellow-500/30";
+                              break;
+                            case "KIEM_FARM":
+                              cellIcon = "⚔️";
+                              cellColor = "bg-slate-950/40 border-slate-500/30";
+                              break;
+                            case "THUY_FARM":
+                              cellIcon = "💧";
+                              cellColor = "bg-blue-950/40 border-blue-500/30";
+                              break;
+                            case "CHUA_FARM":
+                              cellIcon = "🦴";
+                              cellColor = "bg-stone-950/40 border-stone-500/30";
+                              break;
+                            case "CAM_FARM":
+                              cellIcon = "🥈";
+                              cellColor = "bg-slate-950/40 border-slate-500/30";
+                              break;
+                            case "KIM_FARM":
+                              cellIcon = "🔩";
+                              cellColor = "bg-gray-950/40 border-gray-500/30";
+                              break;
+                            case "VANG_FARM":
+                              cellIcon = "💰";
+                              cellColor = "bg-yellow-950/40 border-yellow-500/30";
+                              break;
+                            case "HUYET_FARM":
+                              cellIcon = "🩸";
+                              cellColor = "bg-rose-950/40 border-rose-500/30";
+                              break;
+                            case "THAT_FARM":
+                              cellIcon = "🛢️";
+                              cellColor = "bg-red-950/40 border-red-500/30";
+                              break;
+                            case "THAY_THUAT_FARM":
+                              cellIcon = "🔊";
+                              cellColor = "bg-purple-950/40 border-purple-500/30";
+                              break;
+                            case "LUAT_FARM":
+                              cellIcon = "⚖️";
+                              cellColor = "bg-indigo-950/40 border-indigo-500/30";
+                              break;
+                            case "THUAT_FARM":
+                              cellIcon = "👻";
+                              cellColor = "bg-purple-950/40 border-purple-500/30";
+                              break;
+                            case "THOI_THUAT_FARM":
+                              cellIcon = "☀️";
+                              cellColor = "bg-orange-950/40 border-orange-500/30";
+                              break;
+                            case "LUC_FARM":
+                              cellIcon = "💪";
+                              cellColor = "bg-red-950/40 border-red-500/30";
+                              break;
+                            case "THOI_FARM":
+                              cellIcon = "🕰️";
+                              cellColor = "bg-purple-950/40 border-purple-500/30";
+                              break;
+                            case "PHONG_FARM":
+                              cellIcon = "🌪️";
+                              cellColor = "bg-sky-950/40 border-sky-500/30";
+                              break;
+                            case "NO_FARM":
+                            case "NO_FARM_ADV":
+                              cellIcon = "🐄";
+                              cellColor = "bg-amber-950/40 border-amber-500/30";
+                              break;
                             default:
                               cellIcon = "🏡";
                               cellColor = "bg-slate-800 border-slate-700";
@@ -1089,6 +1200,15 @@ return (
                 <div className="flex items-center gap-1">🎋 Trúc Thanh Trúc</div>
                 <div className="flex items-center gap-1">💎 Ngọc Thạch</div>
                 <div className="flex items-center gap-1">🪙 Mạch Nguyên Thạch</div>
+                <div className="flex items-center gap-1">🧠 Trí Đạo</div>
+                <div className="flex items-center gap-1">🔥 Hỏa Đạo</div>
+                <div className="flex items-center gap-1">🌑 Ám Đạo</div>
+                <div className="flex items-center gap-1">☠️ Độc Đạo</div>
+                <div className="flex items-center gap-1">⚔️ Kiếm Đạo</div>
+                <div className="flex items-center gap-1">💧 Thủy Đạo</div>
+                <div className="flex items-center gap-1">🌪️ Phong Đạo</div>
+                <div className="flex items-center gap-1">🩸 Huyết Đạo</div>
+                <div className="flex items-center gap-1">🐄 Thú Đạo</div>
                 <div className="flex items-center gap-1 text-rose-400">💀 Quái Tai Kiếp</div>
                 <div className="flex items-center gap-1 text-orange-400">🧱 Tường Thành</div>
                 <div className="flex items-center gap-1 text-blue-400">🗼 Tháp Canh</div>
@@ -1217,6 +1337,17 @@ return (
                             <span className="text-xs px-2 py-0.5 bg-slate-800 text-slate-400 rounded">Lv. {selectedNode.level}</span>
                           </div>
 
+                          <div className="flex items-center gap-2 text-xs text-slate-400">
+                            <span>Khu: </span>
+                            <span className="text-slate-300 font-medium capitalize">{selectedNode.zone_type || "unknown"}</span>
+                            <span className="text-slate-500">|</span>
+                            <span>Tier: </span>
+                            <span className="text-slate-300 font-medium">{selectedNode.item_tier || "T1"}</span>
+                            <span className="text-slate-500">|</span>
+                            <span>Food Path: </span>
+                            <span className="text-slate-300 font-medium capitalize">{selectedNode.food_path || "none"}</span>
+                          </div>
+
                           <div className="text-xs text-slate-400">
                             Loại sản sinh: <span className="text-slate-300 font-medium">{selectedNode.production_type === "Material" ? "Vật phẩm" : "Nguyên Thạch"}</span>
                           </div>
@@ -1252,14 +1383,28 @@ return (
                             };
 
                             const isConflicting = checkConflict(selectedNode);
-                            const isPlant = ["MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS"].includes(selectedNode.node_type);
+                            const isPlant = ["MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS",
+                              "TRI_FARM", "TRI_FARM_ADV", "HOA_FARM", "TIN_FARM", "AM_FARM", "DOC_FARM",
+                              "BAC_FARM", "QUANG_FARM", "KIEM_FARM", "THUY_FARM", "CHUA_FARM", "CAM_FARM",
+                              "KIM_FARM", "VANG_FARM", "HUYET_FARM", "THAT_FARM", "THAY_THUAT_FARM", "LUAT_FARM",
+                              "THUAT_FARM", "THOI_THUAT_FARM", "LUC_FARM", "THOI_FARM", "PHONG_FARM",
+                              "NO_FARM", "NO_FARM_ADV"].includes(selectedNode.node_type);
                             const isHerb = selectedNode.node_type === "SPIRIT_DEER_PASTURE";
-                            const isCarn = selectedNode.node_type === "SILVER_WOLF_DEN";
+                            const isCarn = ["SILVER_WOLF_DEN", "FEATHERMAN_CANYON", "HAIRY_MAN_SETTLEMENT", "ROCKMAN_TRIBE"].includes(selectedNode.node_type);
                             const isMine = ["JADE_STONE_MINE", "PRIMEVAL_MINE"].includes(selectedNode.node_type);
 
-                            const pCount = apertureNodes.filter(n => !n.is_destroyed && ["MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS"].includes(n.node_type)).length;
+                            const pCount = apertureNodes.filter(n => !n.is_destroyed && 
+                              ["MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS",
+                               "TRI_FARM", "TRI_FARM_ADV", "HOA_FARM", "TIN_FARM", "AM_FARM", "DOC_FARM",
+                               "BAC_FARM", "QUANG_FARM", "KIEM_FARM", "THUY_FARM", "CHUA_FARM", "CAM_FARM",
+                               "KIM_FARM", "VANG_FARM", "HUYET_FARM", "THAT_FARM", "THAY_THUAT_FARM", "LUAT_FARM",
+                               "THUAT_FARM", "THOI_THUAT_FARM", "LUC_FARM", "THOI_FARM", "PHONG_FARM",
+                               "NO_FARM", "NO_FARM_ADV"].includes(n.node_type)
+                            ).length;
                             const hCount = apertureNodes.filter(n => !n.is_destroyed && n.node_type === "SPIRIT_DEER_PASTURE").length;
-                            const cCount = apertureNodes.filter(n => !n.is_destroyed && n.node_type === "SILVER_WOLF_DEN").length;
+                            const cCount = apertureNodes.filter(n => !n.is_destroyed && 
+                              ["SILVER_WOLF_DEN", "FEATHERMAN_CANYON", "HAIRY_MAN_SETTLEMENT", "ROCKMAN_TRIBE"].includes(n.node_type)
+                            ).length;
 
                             const overgrazed = isPlant && hCount > pCount && cCount === 0;
                             const starvingHerb = isHerb && pCount === 0;
@@ -1375,6 +1520,13 @@ return (
                                 SILVER_WOLF_DEN: 2000, HAIRY_MAN_SETTLEMENT: 3000, ROCKMAN_TRIBE: 3000,
                                 FEATHERMAN_CANYON: 3000, WALL: 800, WATCHTOWER: 1200,
                                 GUARDIAN_STATUE: 1500, BARRACKS: 2000, FORCE_FIELD: 2500,
+                                TRI_FARM: 2000, TRI_FARM_ADV: 5000, HOA_FARM: 800, TIN_FARM: 300,
+                                AM_FARM: 1000, DOC_FARM: 600, BAC_FARM: 1500, QUANG_FARM: 800,
+                                KIEM_FARM: 1500, THUY_FARM: 500, CHUA_FARM: 700, CAM_FARM: 1200,
+                                KIM_FARM: 1500, VANG_FARM: 2000, HUYET_FARM: 500, THAT_FARM: 2000,
+                                THAY_THUAT_FARM: 800, LUAT_FARM: 1500, THUAT_FARM: 1000,
+                                THOI_THUAT_FARM: 5000, LUC_FARM: 1500, THOI_FARM: 8000,
+                                PHONG_FARM: 20000, NO_FARM: 400, NO_FARM_ADV: 2000,
                               };
                               return costs[selectedNode.node_type] || 500;
                             })();
@@ -1453,6 +1605,33 @@ return (
                       const qtyRock = player.materials_inventory?.["node_rockman_tribe"] || 0;
                       const qtyFeather = player.materials_inventory?.["node_featherman_canyon"] || 0;
 
+                      // New zone-based node quantities
+                      const qtyTriFarm = player.materials_inventory?.["node_tri_farm"] || 0;
+                      const qtyTriFarmAdv = player.materials_inventory?.["node_tri_farm_adv"] || 0;
+                      const qtyHoaFarm = player.materials_inventory?.["node_hoa_farm"] || 0;
+                      const qtyTinFarm = player.materials_inventory?.["node_tin_farm"] || 0;
+                      const qtyAmFarm = player.materials_inventory?.["node_am_farm"] || 0;
+                      const qtyDocFarm = player.materials_inventory?.["node_doc_farm"] || 0;
+                      const qtyBacFarm = player.materials_inventory?.["node_bac_farm"] || 0;
+                      const qtyQuangFarm = player.materials_inventory?.["node_quang_farm"] || 0;
+                      const qtyKiemFarm = player.materials_inventory?.["node_kiem_farm"] || 0;
+                      const qtyThuyFarm = player.materials_inventory?.["node_thuy_farm"] || 0;
+                      const qtyChuaFarm = player.materials_inventory?.["node_chua_farm"] || 0;
+                      const qtyCamFarm = player.materials_inventory?.["node_cam_farm"] || 0;
+                      const qtyKimFarm = player.materials_inventory?.["node_kim_farm"] || 0;
+                      const qtyVangFarm = player.materials_inventory?.["node_vang_farm"] || 0;
+                      const qtyHuyetFarm = player.materials_inventory?.["node_huyet_farm"] || 0;
+                      const qtyThatFarm = player.materials_inventory?.["node_that_farm"] || 0;
+                      const qtyThayThuatFarm = player.materials_inventory?.["node_thay_thuat_farm"] || 0;
+                      const qtyLuatFarm = player.materials_inventory?.["node_luat_farm"] || 0;
+                      const qtyThuatFarm = player.materials_inventory?.["node_thuat_farm"] || 0;
+                      const qtyThoiThuatFarm = player.materials_inventory?.["node_thoi_thuat_farm"] || 0;
+                      const qtyLucFarm = player.materials_inventory?.["node_luc_farm"] || 0;
+                      const qtyThoiFarm = player.materials_inventory?.["node_thoi_farm"] || 0;
+                      const qtyPhongFarm = player.materials_inventory?.["node_phong_farm"] || 0;
+                      const qtyNoFarm = player.materials_inventory?.["node_no_farm"] || 0;
+                      const qtyNoFarmAdv = player.materials_inventory?.["node_no_farm_adv"] || 0;
+
                       const qtyWall = player.materials_inventory?.["node_wall"] || 0;
                       const qtyWatchtower = player.materials_inventory?.["node_watchtower"] || 0;
                       const qtyGuardianStatue = player.materials_inventory?.["node_guardian_statue"] || 0;
@@ -1465,31 +1644,61 @@ return (
                         desc: string;
                         cost: number;
                         qty: number;
+                        zone: string;
                       };
 
                       const categoryData: Record<string, NodeOption[]> = {
-                        plants: [
-                          { id: "MOON_ORCHID_FIELD", name: "🌸 Cánh Đồng Hoa Nguyệt Lan", desc: "Sản xuất Nguyệt Lan Hoa. Phí: 500 Đá.", cost: 500, qty: qtyMoon },
-                          { id: "GREEN_BAMBOO_GROVE", name: "🎋 Rừng Trúc Thanh Trúc", desc: "Sản xuất Thanh Trúc Rượu. Phí: 600 Đá.", cost: 600, qty: qtyBamboo },
-                          { id: "SWORD_LEAF_GRASS", name: "⚔️ Đồng Cỏ Kiếm Diệp", desc: "Sản xuất Cỏ Kiếm Diệp (Kiếm Đạo). Phí: 800 Đá.", cost: 800, qty: qtySword },
+                        khu_trong: [
+                          { id: "TRI_FARM", name: "🧠 Trang Trại Trí Đạo", desc: "Sản xuất Tinh Niệm (Tri Đạo). Phí: 2000 Đá.", cost: 2000, qty: qtyTriFarm, zone: "khu_trong" },
+                          { id: "TRI_FARM_ADV", name: "🧠 Trang Trại Trí Đạo Cao Cấp", desc: "Sản xuất Lộc Thần Quả (Tri Đạo). Phí: 5000 Đá.", cost: 5000, qty: qtyTriFarmAdv, zone: "khu_trong" },
+                          { id: "HOA_FARM", name: "🔥 Lò Đốt Hỏa Đá", desc: "Sản xuất Hỏa Thán (Hỏa Đạo). Phí: 800 Đá.", cost: 800, qty: qtyHoaFarm, zone: "khu_trong" },
+                          { id: "TIN_FARM", name: "📄 Xưởng Giấy Tương", desc: "Sản xuất Giấy Tương (Tín Đạo). Phí: 300 Đá.", cost: 300, qty: qtyTinFarm, zone: "khu_trong" },
+                          { id: "AM_FARM", name: "🌑 Vườn Dạ Sương", desc: "Sản xuất Dạ Sương (Ám Đạo). Phí: 1000 Đá.", cost: 1000, qty: qtyAmFarm, zone: "khu_trong" },
+                          { id: "DOC_FARM", name: "☠️ Vườn Độc Trùng", desc: "Sản xuất Thịt Độc (Độc Đạo). Phí: 600 Đá.", cost: 600, qty: qtyDocFarm, zone: "khu_trong" },
+                          { id: "BAC_FARM", name: "🌍 Kho Cacao Đá", desc: "Sản xuất Hơi Đất (Thổ Đạo). Phí: 1500 Đá.", cost: 1500, qty: qtyBacFarm, zone: "khu_trong" },
+                          { id: "QUANG_FARM", name: "☀️ Vườn Ánh Sáng", desc: "Sản xuất Ánh Sáng (Quang Đạo). Phí: 800 Đá.", cost: 800, qty: qtyQuangFarm, zone: "khu_trong" },
+                          { id: "KIEM_FARM", name: "⚔️ Đồng Cỏ Kiếm Cao Cấp", desc: "Sản xuất Kiếm Khí (Kiếm Đạo). Phí: 1500 Đá.", cost: 1500, qty: qtyKiemFarm, zone: "khu_trong" },
+                          { id: "THUY_FARM", name: "💧 Khu Tưới Nước", desc: "Sản xuất Nước Sạch (Thủy Đạo). Phí: 500 Đá.", cost: 500, qty: qtyThuyFarm, zone: "khu_trong" },
+                          { id: "CHUA_FARM", name: "🦴 Đồng Cây Xương Rỗ", desc: "Sản xuất Xương Thú (Thú Đạo). Phí: 700 Đá.", cost: 700, qty: qtyChuaFarm, zone: "khu_trong" },
+                          { id: "CAM_FARM", name: "🥈 Mỏ Cuội Đá", desc: "Sản xuất Quặng Đồng (Kim Đạo). Phí: 1200 Đá.", cost: 1200, qty: qtyCamFarm, zone: "khu_khai_thac" },
+                          { id: "KIM_FARM", name: "🔩 Mỏ Sắt Cao Cấp", desc: "Sản xuất Quặng Sắt (Kim Đạo). Phí: 1500 Đá.", cost: 1500, qty: qtyKimFarm, zone: "khu_khai_thac" },
+                          { id: "VANG_FARM", name: "💰 Mỏ Vàng", desc: "Sản xuất Quặng Vàng (Kim Đạo). Phí: 2000 Đá.", cost: 2000, qty: qtyVangFarm, zone: "khu_khai_thac" },
+                          { id: "HUYET_FARM", name: "🩸 Khu Lồng Máu", desc: "Sản xuất Cỏ Liềm Máu (Huyết Đạo). Phí: 500 Đá.", cost: 500, qty: qtyHuyetFarm, zone: "khu_trong" },
+                          { id: "THAT_FARM", name: "🛢️ Kho Dầu Đen", desc: "Sản xuất Dầu Đen (Hỏa Đạo). Phí: 2000 Đá.", cost: 2000, qty: qtyThatFarm, zone: "khu_khai_thac" },
+                          { id: "THAY_THUAT_FARM", name: "🔊 Xưởng Thuốc Truyền", desc: "Sản xuất Tinh Thể Âm Thanh (Âm Đạo). Phí: 800 Đá.", cost: 800, qty: qtyThayThuatFarm, zone: "khu_trong" },
+                          { id: "LUAT_FARM", name: "⚖️ Kho Nguyên Tinh", desc: "Sản xuất Phong Ấn Thạch (Luật Đạo). Phí: 1500 Đá.", cost: 1500, qty: qtyLuatFarm, zone: "khu_trong" },
+                          { id: "THUAT_FARM", name: "👻 Vườn Sao Tinh", desc: "Sản xuất Hồn Khí (Thần Đạo). Phí: 1000 Đá.", cost: 1000, qty: qtyThuatFarm, zone: "khu_trong" },
+                          { id: "THOI_THUAT_FARM", name: "☀️ Ngọn Lửa Mặt Trời", desc: "Sản xuất Thái Dương Hỏa (Hỏa Đạo). Phí: 5000 Đá.", cost: 5000, qty: qtyThoiThuatFarm, zone: "khu_trong" },
+                          { id: "LUC_FARM", name: "💪 Đồng Thịt Lạc", desc: "Sản xuất Thịt Tim Sói (Lực Đạo). Phí: 1500 Đá.", cost: 1500, qty: qtyLucFarm, zone: "khu_nuoi" },
+                          { id: "THOI_FARM", name: "🕰️ Đồng Cỏ Lịch Sử", desc: "Sản xuất Lịch Sử Trần (Thời Đạo). Phí: 8000 Đá.", cost: 8000, qty: qtyThoiFarm, zone: "khu_trong" },
+                          { id: "PHONG_FARM", name: "🌪️ Đỉnh Cuồng Phong", desc: "Sản xuất Cửu Thiên Cuồng Phong (Phong Đạo). Phí: 20000 Đá.", cost: 20000, qty: qtyPhongFarm, zone: "khu_trong" },
+                          { id: "NO_FARM", name: "🐄 Bãi Nuôi Bò", desc: "Sản xuất Thịt Thú (Thú Đạo). Phí: 400 Đá.", cost: 400, qty: qtyNoFarm, zone: "khu_nuoi" },
+                          { id: "NO_FARM_ADV", name: "🐺 Bãi Nuôi Sói", desc: "Sản xuất Thịt Tim Sói (Nô Đạo). Phí: 2000 Đá.", cost: 2000, qty: qtyNoFarmAdv, zone: "khu_nuoi" },
                         ],
-                        beasts: [
-                          { id: "SPIRIT_DEER_PASTURE", name: "🦌 Bãi Chăn Thả Hươu Linh", desc: "Sản sinh Thịt Hươu Linh. Cần Thực vật. Phí: 1200 Đá.", cost: 1200, qty: qtyDeer },
-                          { id: "SILVER_WOLF_DEN", name: "🐺 Hang Sói Bạc", desc: "Sản sinh Da Sói Bạc. Cần Thú ăn cỏ. Phí: 2000 Đá.", cost: 2000, qty: qtyWolf },
+                        khu_nuoi: [
+                          { id: "SPIRIT_DEER_PASTURE", name: "🦌 Bãi Chăn Thả Hươu Linh", desc: "Sản sinh Thịt Hươu Linh. Cần Thực vật. Phí: 1200 Đá.", cost: 1200, qty: qtyDeer, zone: "khu_nuoi" },
+                          { id: "SILVER_WOLF_DEN", name: "🐺 Hang Sói Bạc", desc: "Sản sinh Da Sói Bạc. Cần Thú ăn cỏ. Phí: 2000 Đá.", cost: 2000, qty: qtyWolf, zone: "khu_nuoi" },
+                          { id: "HAIRY_MAN_SETTLEMENT", name: "🧔 Bộ Lạc Người Lông", desc: "Chiêu mộ Người Lông, tăng Refine. Phí: 3000 Đá.", cost: 3000, qty: qtyHairy, zone: "khu_nuoi" },
+                          { id: "ROCKMAN_TRIBE", name: "🗿 Bản Doanh Người Đá", desc: "Chiêu mộ Người Đá, tăng sản lượng Mỏ. Phí: 3000 Đá.", cost: 3000, qty: qtyRock, zone: "khu_nuoi" },
+                          { id: "FEATHERMAN_CANYON", name: "🦅 Hẻm Núi Người Lông Vũ", desc: "Chiêu mộ Người Lông Vũ, giảm sát thương Kiếp. Phí: 3000 Đá.", cost: 3000, qty: qtyFeather, zone: "khu_nuoi" },
+                          { id: "NO_FARM", name: "🐄 Bãi Nuôi Bò", desc: "Sản xuất Thịt Thú (Thú Đạo). Phí: 400 Đá.", cost: 400, qty: qtyNoFarm, zone: "khu_nuoi" },
+                          { id: "NO_FARM_ADV", name: "🐺 Bãi Nuôi Sói", desc: "Sản xuất Thịt Tim Sói (Nô Đạo). Phí: 2000 Đá.", cost: 2000, qty: qtyNoFarmAdv, zone: "khu_nuoi" },
+                          { id: "LUC_FARM", name: "💪 Đồng Thịt Lạc", desc: "Sản xuất Thịt Tim Sói (Lực Đạo). Phí: 1500 Đá.", cost: 1500, qty: qtyLucFarm, zone: "khu_nuoi" },
                         ],
-                        humans: [
-                          { id: "HAIRY_MAN_SETTLEMENT", name: "🧔 Bộ Lạc Người Lông", desc: "Chiêu mộ Người Lông, tăng Refine. Phí: 3000 Đá.", cost: 3000, qty: qtyHairy },
-                          { id: "ROCKMAN_TRIBE", name: "🗿 Bản Doanh Người Đá", desc: "Chiêu mộ Người Đá, tăng sản lượng Mỏ. Phí: 3000 Đá.", cost: 3000, qty: qtyRock },
-                          { id: "FEATHERMAN_CANYON", name: "🦅 Hẻm Núi Người Lông Vũ", desc: "Chiêu mộ Người Lông Vũ, giảm sát thương Kiếp. Phí: 3000 Đá.", cost: 3000, qty: qtyFeather },
-                          { id: "JADE_STONE_MINE", name: "💎 Mỏ Ngọc Thạch Bản Địa", desc: "Sản xuất Ngọc Thạch. Phí: 1000 Đá.", cost: 1000, qty: qtyJade },
-                          { id: "PRIMEVAL_MINE", name: "🪙 Mạch Nguyên Thạch Tiên Khiếu", desc: "Sản sinh Nguyên Thạch cực nhanh. Phí: 1500 Đá.", cost: 1500, qty: qtyPrimeval },
+                        khu_khai_thac: [
+                          { id: "JADE_STONE_MINE", name: "💎 Mỏ Ngọc Thạch Bản Địa", desc: "Sản xuất Ngọc Thạch. Phí: 1000 Đá.", cost: 1000, qty: qtyJade, zone: "khu_khai_thac" },
+                          { id: "PRIMEVAL_MINE", name: "🪙 Mạch Nguyên Thạch Tiên Khiếu", desc: "Sản sinh Nguyên Thạch cực nhanh. Phí: 1500 Đá.", cost: 1500, qty: qtyPrimeval, zone: "khu_khai_thac" },
+                          { id: "CAM_FARM", name: "🥈 Mỏ Cuội Đá", desc: "Sản xuất Quặng Đồng (Kim Đạo). Phí: 1200 Đá.", cost: 1200, qty: qtyCamFarm, zone: "khu_khai_thac" },
+                          { id: "KIM_FARM", name: "🔩 Mỏ Sắt Cao Cấp", desc: "Sản xuất Quặng Sắt (Kim Đạo). Phí: 1500 Đá.", cost: 1500, qty: qtyKimFarm, zone: "khu_khai_thac" },
+                          { id: "VANG_FARM", name: "💰 Mỏ Vàng", desc: "Sản xuất Quặng Vàng (Kim Đạo). Phí: 2000 Đá.", cost: 2000, qty: qtyVangFarm, zone: "khu_khai_thac" },
+                          { id: "THAT_FARM", name: "🛢️ Kho Dầu Đen", desc: "Sản xuất Dầu Đen (Hỏa Đạo). Phí: 2000 Đá.", cost: 2000, qty: qtyThatFarm, zone: "khu_khai_thac" },
                         ],
                         defense: [
-                          { id: "WALL", name: "🧱 Tường Thành", desc: "Chặn kẻ thù di chuyển. HP: 3000. Chi phí: 800 Đá + 2 Cổ trùng (Thú Bì, Thạch Bì).", cost: 800, qty: qtyWall },
-                          { id: "WATCHTOWER", name: "🗼 Tháp Canh", desc: "Bắn kẻ thù phạm vi 3 ô. HP: 2000. Chi phí: 1200 Đá + 2 Cổ trùng (Thiết Bì, Bán Thạch).", cost: 1200, qty: qtyWatchtower },
-                          { id: "GUARDIAN_STATUE", name: "🗿 Tượng Hộ Mệnh", desc: "Tăng 500 HP node lân cận (phạm vi 2 ô). HP: 2500. Chi phí: 1500 Đá + 2 Cổ trùng (Bạch Ngọc, Nguyệt Nghê).", cost: 1500, qty: qtyGuardianStatue },
-                          { id: "BARRACKS", name: "⚔️ Doanh Trại", desc: "Giảm 15% sát thương toàn bộ Tiên Khiếu. HP: 4000. Chi phí: 2000 Đá + 2 Cổ trùng (Kim Chung, Tượng Nha).", cost: 2000, qty: qtyBarracks },
-                          { id: "FORCE_FIELD", name: "🔮 Trường Lực", desc: "Giảm 30% sát thương phạm vi 2 ô. HP: 1500. Chi phí: 2500 Đá + 2 Cổ trùng (Chí Tôn, Kim Chung).", cost: 2500, qty: qtyForceField },
+                          { id: "WALL", name: "🧱 Tường Thành", desc: "Chặn kẻ thù di chuyển. HP: 3000. Chi phí: 800 Đá + 2 Cổ trùng (Thú Bì, Thạch Bì).", cost: 800, qty: qtyWall, zone: "defense" },
+                          { id: "WATCHTOWER", name: "🗼 Tháp Canh", desc: "Bắn kẻ thù phạm vi 3 ô. HP: 2000. Chi phí: 1200 Đá + 2 Cổ trùng (Thiết Bì, Bán Thạch).", cost: 1200, qty: qtyWatchtower, zone: "defense" },
+                          { id: "GUARDIAN_STATUE", name: "🗿 Tượng Hộ Mệnh", desc: "Tăng 500 HP node lân cận (phạm vi 2 ô). HP: 2500. Chi phí: 1500 Đá + 2 Cổ trùng (Bạch Ngọc, Nguyệt Nghê).", cost: 1500, qty: qtyGuardianStatue, zone: "defense" },
+                          { id: "BARRACKS", name: "⚔️ Doanh Trại", desc: "Giảm 15% sát thương toàn bộ Tiên Khiếu. HP: 4000. Chi phí: 2000 Đá + 2 Cổ trùng (Kim Chung, Tượng Nha).", cost: 2000, qty: qtyBarracks, zone: "defense" },
+                          { id: "FORCE_FIELD", name: "🔮 Trường Lực", desc: "Giảm 30% sát thương phạm vi 2 ô. HP: 1500. Chi phí: 2500 Đá + 2 Cổ trùng (Chí Tôn, Kim Chung).", cost: 2500, qty: qtyForceField, zone: "defense" },
                         ],
                       };
 
@@ -1512,7 +1721,7 @@ return (
 
                           {/* Category Tabs */}
                           <div className="flex bg-slate-950/80 p-1 rounded-lg border border-slate-800 text-[10px]">
-                            {["plants", "beasts", "humans", "defense"].map((cat) => (
+                            {["khu_trong", "khu_nuoi", "khu_khai_thac", "defense"].map((cat) => (
                               <button
                                 key={cat}
                                 onClick={() => setBuildCategory(cat as any)}
@@ -1520,7 +1729,7 @@ return (
                                   buildCategory === cat ? "bg-slate-800 text-amber-400" : "text-slate-400"
                                 }`}
                               >
-                                {cat === "plants" ? "Thực Vật" : cat === "beasts" ? "Sinh Vật" : cat === "humans" ? "Khai Khoáng & Dị Nhân" : "Phòng Thủ"}
+                                {cat === "khu_trong" ? "🌱 Khu Trồng" : cat === "khu_nuoi" ? "🐄 Khu Nuôi" : cat === "khu_khai_thac" ? "⛏️ Khu Khai Thác" : "🛡️ Phòng Thủ"}
                               </button>
                             ))}
                           </div>
