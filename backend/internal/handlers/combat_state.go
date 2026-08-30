@@ -137,6 +137,28 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 		}
 	}
 
+	if base.EnemyType == "MINE_PVE" {
+		for i := 0; i < 2; i++ {
+			minion := models.Combatant{
+				ID:            fmt.Sprintf("minion_%d_%s", i, uuid.New().String()),
+				Name:          fmt.Sprintf("Hộ Vệ %s", base.EnemyName),
+				Kind:          "Normal",
+				Rank:          base.EnemyRank,
+				SubRank:       1,
+				HP:            base.EnemyMaxHP * 0.5,
+				MaxHP:         base.EnemyMaxHP * 0.5,
+				CurrentMana:   base.EnemyMana * 0.5,
+				MaxMana:       base.EnemyMaxMana * 0.5,
+				BaseAttack:    base.EnemyDamage * 0.6,
+				BaseDefense:   base.EnemyDefense * 0.6,
+				AIProfile:     base.AIProfile,
+				StatusEffects: []models.StatusEffect{},
+			}
+			base.Enemies = append(base.Enemies, minion)
+		}
+	}
+
+
 	allySlots := [][2]int{
 		{2, 3}, // index 0 (player) -> visual center-back (middle row, leftmost column)
 		{2, 1}, // index 1 (pet slot 1) -> visual center-front (middle row, rightmost column)
