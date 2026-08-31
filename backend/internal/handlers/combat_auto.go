@@ -1507,11 +1507,11 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 			Detail: defeatMsg,
 		})
 
-updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, current_region = $3, x = $4, y = $5, aptitude_percent = $6, lifespan = $7, primeval_stones = $8, path_masteries = $9 WHERE id = $10`
-	args = append(args, player.HP, finalMana, player.CurrentRegion, player.X, player.Y, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.PathMasteries, player.ID)
-}
+		updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, current_region = $3, x = $4, y = $5, aptitude_percent = $6, lifespan = $7, primeval_stones = $8, path_masteries = $9 WHERE id = $10`
+		args = append(args, player.HP, finalMana, player.CurrentRegion, player.X, player.Y, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.PathMasteries, player.ID)
+	}
 
-// Fire ON_COMBAT_END on equipped ACTIVE Gus
+	// Fire ON_COMBAT_END on equipped ACTIVE Gus
 	var combatEndMsg string
 	for _, gu := range player.GuInventory {
 		if gu.Equipped && gu.Status == "ACTIVE" {
@@ -1913,6 +1913,26 @@ func hasCombatActiveEffects(spec *models.GuDictionaryItem) bool {
 		active.WoodTransformation || active.ManaRegen > 0 || active.CleansingPower > 0
 }
 
+func computeGlobalGuDamageMultiplier(selectedGuIDs []string, resolveSpec func(string) (models.GuDictionaryItem, bool)) float64 {
+	multiplier := 1.0
+	seen := make(map[string]struct{}, len(selectedGuIDs))
+	for _, guID := range selectedGuIDs {
+		if _, ok := seen[guID]; ok {
+			continue
+		}
+		seen[guID] = struct{}{}
+
+		spec, ok := resolveSpec(guID)
+		if !ok || spec.Effects.Active == nil {
+			continue
+		}
+		if spec.Effects.Active.DamageMult > 1.0 {
+			multiplier *= spec.Effects.Active.DamageMult
+		}
+	}
+	return multiplier
+}
+
 func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlot, daoMarks map[string]int) simulator.SimAction {
 	act := simulator.SimAction{
 		ActionType: "KILLER_MOVE",
@@ -2128,18 +2148,9 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		ManaCost:   0,
 	})
 
-	// Global damage multipliers from loadout Gus
-	globalMultiplier := 1.0
-	scanMultiplier := func(spec models.GuDictionaryItem) {
-		if spec.Effects.Active != nil && spec.Effects.Active.DamageMult > 1.0 {
-			globalMultiplier *= spec.Effects.Active.DamageMult
-		}
-	}
-	for _, guID := range selectedGuIDs {
-		if spec, ok := loadoutSpec(guID); ok {
-			scanMultiplier(spec)
-		}
-	}
+	// Global damage multipliers from loadout Gus. Apply each GuID at most once,
+	// using the highest-rank equipped instance for that GuID.
+	globalMultiplier := computeGlobalGuDamageMultiplier(selectedGuIDs, loadoutSpec)
 	if globalMultiplier > 1.0 {
 		for i := range allActions {
 			allActions[i].Damage *= globalMultiplier

@@ -9,10 +9,10 @@ import (
 func setupGuRegistry(t *testing.T) {
 	t.Helper()
 	models.GuRegistry = map[string]map[int]models.GuDictionaryItem{
-		"GU_A": {1: {ID: "GU_A", Name: "A", Rank: 1, Effects: models.GuEffects{Active: &models.ActiveEffect{DamageFlat: 10}}},
-			2: {ID: "GU_A", Name: "A", Rank: 2, Effects: models.GuEffects{Active: &models.ActiveEffect{DamageFlat: 12}}}},
-		"GU_B": {1: {ID: "GU_B", Name: "B", Rank: 1, Effects: models.GuEffects{Active: &models.ActiveEffect{DamageFlat: 20}}}},
-		"GU_C": {1: {ID: "GU_C", Name: "C", Rank: 1, Effects: models.GuEffects{Active: &models.ActiveEffect{DamageFlat: 30}}}},
+		"GU_A": {1: {ID: "GU_A", Name: "A", Rank: 1, Effects: models.GuEffects{Active: &models.ActiveEffect{DamageFlat: 10, DamageMult: 1.0}}},
+			2: {ID: "GU_A", Name: "A", Rank: 2, Effects: models.GuEffects{Active: &models.ActiveEffect{DamageFlat: 12, DamageMult: 1.5}}}},
+		"GU_B": {1: {ID: "GU_B", Name: "B", Rank: 1, Effects: models.GuEffects{Active: &models.ActiveEffect{DamageFlat: 20, DamageMult: 1.2}}}},
+		"GU_C": {1: {ID: "GU_C", Name: "C", Rank: 1, Effects: models.GuEffects{Active: &models.ActiveEffect{DamageFlat: 30, DamageMult: 1.3}}}},
 	}
 	t.Cleanup(func() { models.GuRegistry = map[string]map[int]models.GuDictionaryItem{} })
 }
@@ -84,5 +84,26 @@ func TestFilterGuLoadoutPicksHighestRank(t *testing.T) {
 	}
 	if got[0].InstanceID != "a_high" {
 		t.Fatalf("expected highest-rank instance a_high, got %+v", got)
+	}
+}
+
+func TestComputeGlobalGuDamageMultiplierDedupesByGuID(t *testing.T) {
+	setupGuRegistry(t)
+	loadoutSpec := func(guID string) (models.GuDictionaryItem, bool) {
+		switch guID {
+		case "GU_A":
+			return models.GetGu("GU_A", 2)
+		case "GU_B":
+			return models.GetGu("GU_B", 1)
+		case "GU_C":
+			return models.GetGu("GU_C", 1)
+		default:
+			return models.GuDictionaryItem{}, false
+		}
+	}
+
+	mult := computeGlobalGuDamageMultiplier([]string{"GU_A", "GU_A", "GU_B", "GU_C", "GU_B"}, loadoutSpec)
+	if mult != 1.5*1.2*1.3 {
+		t.Fatalf("expected 1.5*1.2*1.3=2.34, got %.4f", mult)
 	}
 }
