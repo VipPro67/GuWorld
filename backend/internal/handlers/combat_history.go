@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -31,7 +32,7 @@ type CombatSummary struct {
 	ShieldsUsed       int `json:"shields_used"`
 	FinalPlayerHP     int `json:"final_player_hp"`
 	ItemsUsed         int `json:"items_used"`
-	StonesUsed        float64 `json:"stones_used"`
+	StonesUsed        int64 `json:"stones_used"`
 	LootCount         int `json:"loot_count"`
 }
 
@@ -45,13 +46,12 @@ func SaveCombatHistory(playerID uuid.UUID, winner string, logs []interface{}, su
 	summaryJSON, _ := json.Marshal(summary)
 	combatantsJSON, _ := json.Marshal(combatants)
 
-	_, err := db.DB.Exec(
-		`INSERT INTO combat_history (player_id, winner, logs, summary, combatants, enemy_name, enemy_type, region) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		playerID, winner, logsJSON, summaryJSON, combatantsJSON, enemyName, enemyType, region,
-	)
+	_, err := db.DB.Exec(`
+		INSERT INTO combat_history (player_id, winner, logs, summary, combatants, enemy_name, enemy_type, region)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, playerID, winner, logsJSON, summaryJSON, combatantsJSON, enemyName, enemyType, region)
 	if err != nil {
-		// Non-critical, just log
-		return
+		fmt.Println("Error saving combat history:", err)
 	}
 }
 
@@ -63,7 +63,7 @@ func toInterfaceSlice(logs []simulator.CombatLog) []interface{} {
 	return s
 }
 
-func buildCombatSummaryFromLogs(logs []simulator.CombatLog, finalHP, itemsUsed int, stonesSpent float64) CombatSummary {
+func buildCombatSummaryFromLogs(logs []simulator.CombatLog, finalHP, itemsUsed int, stonesSpent int64) CombatSummary {
 	var totalDmgDealt, totalDmgTaken, shieldsUsed int
 	for _, log := range logs {
 		if log.Damage > 0 {

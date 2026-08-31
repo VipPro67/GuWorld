@@ -36,9 +36,9 @@ const (
 )
 
 type WalletDTO struct {
-	PrimevalStone        float64 `json:"primevalStone"`
-	ImmortalEssenceStone float64 `json:"immortalEssenceStone"`
-	ImmortalJade         int64   `json:"immortalJade"`
+	PrimevalStone        int64 `json:"primevalStone"`
+	ImmortalEssenceStone int64 `json:"immortalEssenceStone"`
+	ImmortalJade         int64 `json:"immortalJade"`
 }
 
 type TopupPackage struct {
@@ -523,18 +523,18 @@ func BuyPremiumPackage(c *gin.Context) {
 	for _, reward := range pkg.Rewards {
 		switch reward.Currency {
 		case CurrencyPrimevalStone:
-			before := int64(player.PrimevalStones)
-			player.PrimevalStones += float64(reward.Amount)
+			before := player.PrimevalStones
+			player.PrimevalStones += reward.Amount
 			wallet.PrimevalStone = player.PrimevalStones
-			if err = insertWalletTx(tx, playerID, "PACKAGE_REWARD", CurrencyPrimevalStone, reward.Amount, before, int64(player.PrimevalStones), nil, &pkg.ID, "Thưởng gói tu luyện"); err != nil {
+			if err = insertWalletTx(tx, playerID, "PACKAGE_REWARD", CurrencyPrimevalStone, reward.Amount, before, player.PrimevalStones, nil, &pkg.ID, "Thưởng gói tu luyện"); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch thưởng Nguyên Thạch"})
 				return
 			}
 		case CurrencyImmortalEssenceStone:
-			before := int64(player.ImmortalStones)
-			player.ImmortalStones += float64(reward.Amount)
+			before := player.ImmortalStones
+			player.ImmortalStones += reward.Amount
 			wallet.ImmortalEssenceStone = player.ImmortalStones
-			if err = insertWalletTx(tx, playerID, "PACKAGE_REWARD", CurrencyImmortalEssenceStone, reward.Amount, before, int64(player.ImmortalStones), nil, &pkg.ID, "Thưởng gói tu luyện"); err != nil {
+			if err = insertWalletTx(tx, playerID, "PACKAGE_REWARD", CurrencyImmortalEssenceStone, reward.Amount, before, player.ImmortalStones, nil, &pkg.ID, "Thưởng gói tu luyện"); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể ghi giao dịch thưởng Tiên Nguyên Thạch"})
 				return
 			}
@@ -644,34 +644,29 @@ func ExchangeStones(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khóa người chơi"})
 		return
 	}
-	// Keep BIGINT wallet/ledger in sync with the float8 players columns: drop any
-	// fractional remainder before mutating so both tables always agree.
-	player.PrimevalStones = math.Round(player.PrimevalStones)
-	player.ImmortalStones = math.Round(player.ImmortalStones)
-
 	wallet, err := ensureWalletTx(tx, playerID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải ví"})
 		return
 	}
 
-	primevalBefore := int64(player.PrimevalStones)
-	immortalBefore := int64(player.ImmortalStones)
+	primevalBefore := player.PrimevalStones
+	immortalBefore := player.ImmortalStones
 	switch req.Currency {
 	case CurrencyImmortalEssenceStone:
-		if player.ImmortalStones < float64(req.Amount) {
+		if player.ImmortalStones < req.Amount {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Tiên Nguyên Thạch"})
 			return
 		}
-		player.ImmortalStones -= float64(req.Amount)
-		player.PrimevalStones += float64(primevalGain)
+		player.ImmortalStones -= req.Amount
+		player.PrimevalStones += primevalGain
 	default:
-		if player.PrimevalStones < float64(req.Amount) {
+		if player.PrimevalStones < req.Amount {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch"})
 			return
 		}
-		player.PrimevalStones -= float64(req.Amount)
-		player.ImmortalStones += float64(immortalGain)
+		player.PrimevalStones -= req.Amount
+		player.ImmortalStones += immortalGain
 	}
 	wallet.PrimevalStone = player.PrimevalStones
 	wallet.ImmortalEssenceStone = player.ImmortalStones
@@ -748,7 +743,7 @@ func ensureWallet(database *sql.DB, playerID uuid.UUID) (WalletDTO, error) {
 	// Stone balances are authoritative in players. If the player row is missing
 	// (e.g. the account is not present in this DB), fall back to the wallets
 	// mirror so the display never breaks.
-	err := database.QueryRow(`SELECT COALESCE(primeval_stones,0)::DOUBLE PRECISION, COALESCE(immortal_stones,0)::DOUBLE PRECISION FROM players WHERE id=$1`, playerID).Scan(&w.PrimevalStone, &w.ImmortalEssenceStone)
+	err := database.QueryRow(`SELECT COALESCE(primeval_stones,0)::BIGINT, COALESCE(immortal_stones,0)::BIGINT FROM players WHERE id=$1`, playerID).Scan(&w.PrimevalStone, &w.ImmortalEssenceStone)
 	if err != nil && err != sql.ErrNoRows {
 		return WalletDTO{}, err
 	}
@@ -772,8 +767,8 @@ func ensureWalletTx(tx *sql.Tx, playerID uuid.UUID) (WalletDTO, error) {
 
 	if err := tx.QueryRow(`
 		SELECT
-			COALESCE(primeval_stones, 0)::DOUBLE PRECISION,
-			COALESCE(immortal_stones, 0)::DOUBLE PRECISION
+			COALESCE(primeval_stones, 0)::BIGINT,
+			COALESCE(immortal_stones, 0)::BIGINT
 		FROM players
 		WHERE id = $1
 	`, playerID).Scan(

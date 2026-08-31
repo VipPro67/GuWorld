@@ -119,8 +119,8 @@ func (s CultivationState) Apply(p *Player) {
 type ResourceState struct {
 	CurrentMana    float64   `json:"current_mana"`
 	MaxMana        float64   `json:"max_mana"`
-	PrimevalStones float64   `json:"primeval_stones"`
-	ImmortalStones float64   `json:"immortal_stones"`
+	PrimevalStones int64     `json:"primeval_stones"`
+	ImmortalStones int64     `json:"immortal_stones"`
 	LastManaUpdate time.Time `json:"last_mana_update"`
 }
 

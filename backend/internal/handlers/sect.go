@@ -683,7 +683,7 @@ func DonateStones(c *gin.Context) {
 		return
 	}
 
-	if player.PrimevalStones < float64(req.Amount) {
+	if player.PrimevalStones < int64(req.Amount) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Nguyên Thạch!"})
 		return
 	}
@@ -699,7 +699,7 @@ func DonateStones(c *gin.Context) {
 		return
 	}
 
-	player.PrimevalStones -= float64(req.Amount)
+	player.PrimevalStones -= int64(req.Amount)
 	m.ContributionPoints += int64(req.Amount)
 
 	// Increase sect funds
@@ -2453,7 +2453,7 @@ func CreateSect(c *gin.Context) {
 		return
 	}
 
-	cost := 30000.0
+	cost := int64(30000)
 	if player.PrimevalStones < cost {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không có đủ 30,000 Nguyên Thạch làm chi phí lập phái!"})
 		return

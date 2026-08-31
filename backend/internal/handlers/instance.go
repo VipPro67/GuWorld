@@ -53,7 +53,7 @@ type InstanceRewardAttainment struct {
 
 type InstanceReward struct {
 	Materials      map[string]int            `json:"materials"`
-	PrimevalStones float64                   `json:"primeval_stones"`
+	PrimevalStones int64                     `json:"primeval_stones"`
 	Attainment     *InstanceRewardAttainment `json:"attainment"`
 	DaoMarks       map[string]int            `json:"dao_marks"`
 }

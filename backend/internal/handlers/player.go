@@ -1279,15 +1279,15 @@ func RechargeWithStones(c *gin.Context) {
 
 	// Cổ Tiên (Rank 6+) sử dụng Tiên Nguyên Thạch, không nạp bằng Nguyên Thạch phàm tục
 	if player.Rank >= 6 {
-		if player.ImmortalStones < float64(req.Stones) {
+		if player.ImmortalStones < int64(req.Stones) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ Tiên Nguyên Thạch."})
 			return
 		}
 
-		stonesToUse := req.Stones
+		stonesToUse := int64(req.Stones)
 		manaGain := float64(stonesToUse) / math.Pow(100, float64(player.Rank-6))
 		player.CurrentMana += manaGain
-		player.ImmortalStones -= float64(stonesToUse)
+		player.ImmortalStones -= stonesToUse
 		if player.CurrentMana > player.MaxMana {
 			player.CurrentMana = player.MaxMana
 		}
@@ -1347,9 +1347,9 @@ func RechargeWithStones(c *gin.Context) {
 	// Tính số Nguyên Thạch TỐI ĐA cần dùng để sạc đầy Không khiếu
 	maxUsableStones := math.Ceil(neededMana / manaPerStone)
 
-	stonesToUse := float64(req.Stones)
-	if stonesToUse > maxUsableStones {
-		stonesToUse = maxUsableStones
+	stonesToUse := int64(req.Stones)
+	if float64(stonesToUse) > maxUsableStones {
+		stonesToUse = int64(maxUsableStones)
 	}
 
 	if stonesToUse > player.PrimevalStones {
@@ -1358,7 +1358,7 @@ func RechargeWithStones(c *gin.Context) {
 	}
 
 	// Tính toán số chân nguyên cộng vào
-	addedMana := stonesToUse * manaPerStone
+	addedMana := float64(stonesToUse) * manaPerStone
 
 	// Tránh việc nạp bị lố MaxMana do làm tròn math.Ceil
 	if player.CurrentMana+addedMana > player.MaxMana {
@@ -1388,19 +1388,19 @@ func RechargeWithStones(c *gin.Context) {
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "player.recharge",
-		RequestSummary: fmt.Sprintf("%.0f Nguyên Thạch → %.4f%% chân nguyên", stonesToUse, addedMana),
+		RequestSummary: fmt.Sprintf("%d Nguyên Thạch → %.4f%% chân nguyên", stonesToUse, addedMana),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message": fmt.Sprintf("Nạp %.0f nguyên thạch, khôi phục %.4f%% chân nguyên.", stonesToUse, addedMana),
+		"message": fmt.Sprintf("Nạp %d nguyên thạch, khôi phục %.4f%% chân nguyên.", stonesToUse, addedMana),
 	})
 }
 
 // ExploreResponse represents the action of exploring
 type ExploreResponse struct {
 	Player       models.Player `json:"player"`
-	RewardStones float64       `json:"reward_stones"`
+	RewardStones int64         `json:"reward_stones"`
 	Log          string        `json:"log"`
 }
 
@@ -1457,7 +1457,7 @@ func Explore(c *gin.Context) {
 
 	// 3. Deduct energy and roll reward stones
 	player.CurrentMana -= energyCost
-	rewardStones := float64(1 + rand.Intn(3)) // 1 to 3 primeval stones
+	rewardStones := int64(1 + rand.Intn(3)) // 1 to 3 primeval stones
 	player.PrimevalStones += rewardStones
 	player.LastManaUpdate = time.Now()
 
@@ -1759,13 +1759,13 @@ func FeedGu(c *gin.Context) {
 
 		for _, food := range foodOptions {
 			if food == "primeval_stone" {
-				cost := math.Pow(2, float64(targetGu.Rank))
+				cost := int64(math.Pow(2, float64(targetGu.Rank)))
 				if player.PrimevalStones >= cost {
 					chosenFoodItem = food
 					break
 				}
 			} else if food == "immortal_stone" {
-				cost := float64(targetGu.Rank)
+				cost := int64(targetGu.Rank)
 				if player.ImmortalStones >= cost {
 					chosenFoodItem = food
 					break
@@ -1830,16 +1830,16 @@ func FeedGu(c *gin.Context) {
 		//some Gu consume immortal_stone and primeval_stone as food, so we need to check if the foodID is a stone and deduct it from the player's inventory
 		switch foodID {
 		case "immortal_stone":
-			cost := float64(targetGu.Rank)
+			cost := int64(targetGu.Rank)
 			if player.ImmortalStones < cost {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Tiên Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %d Tiên Nguyên Thạch cho Cổ trùng hạng %d.", int(cost), targetGu.Rank)})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Tiên Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %d Tiên Nguyên Thạch cho Cổ trùng hạng %d.", cost, targetGu.Rank)})
 				return
 			}
 			player.ImmortalStones -= cost
 		case "primeval_stone":
-			cost := math.Pow(2, float64(targetGu.Rank))
+			cost := int64(math.Pow(2, float64(targetGu.Rank)))
 			if player.PrimevalStones < cost {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %.0f Nguyên Thạch cho Cổ trùng hạng %d.", cost, targetGu.Rank)})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để cho Cổ trùng ăn." + fmt.Sprintf(" Cần %d Nguyên Thạch cho Cổ trùng hạng %d.", cost, targetGu.Rank)})
 				return
 			}
 			player.PrimevalStones -= cost
@@ -1977,12 +1977,12 @@ func FeedGroup(c *gin.Context) {
 	getAvailableFood := func(targetRank int) string {
 		for _, food := range foodOptions {
 			if food == "primeval_stone" {
-				cost := math.Pow(2, float64(targetRank))
+				cost := int64(math.Pow(2, float64(targetRank)))
 				if player.PrimevalStones >= cost {
 					return food
 				}
 			} else if food == "immortal_stone" {
-				cost := float64(targetRank)
+				cost := int64(targetRank)
 				if player.ImmortalStones >= cost {
 					return food
 				}
@@ -2033,9 +2033,9 @@ func FeedGroup(c *gin.Context) {
 				if chosenFood != "" {
 					switch chosenFood {
 					case "primeval_stone":
-						player.PrimevalStones -= math.Pow(2, float64(gu.Rank))
+						player.PrimevalStones -= int64(math.Pow(2, float64(gu.Rank)))
 					case "immortal_stone":
-						player.ImmortalStones -= float64(gu.Rank)
+						player.ImmortalStones -= int64(gu.Rank)
 					default:
 						InventorySvc.RemoveItem(tx, player.ID.String(), chosenFood, "materials", 1)
 					}
@@ -3528,7 +3528,7 @@ func UseItems(c *gin.Context) {
 		statChanges = append(statChanges, fmt.Sprintf("+%.0f Nhân Khí", diffHumanQi))
 	}
 	if diffStones := player.PrimevalStones - initialStones; diffStones > 0 {
-		statChanges = append(statChanges, fmt.Sprintf("+%.0f Nguyên Thạch", diffStones))
+		statChanges = append(statChanges, fmt.Sprintf("+%d Nguyên Thạch", diffStones))
 	}
 	finalSoul := 0
 	if player.DaoMarks != nil {

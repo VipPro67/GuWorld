@@ -59,8 +59,8 @@ func applyDeathDrop(tx *sql.Tx, loser *models.Player, winnerID *uuid.UUID) strin
 	remainingGus, droppedGus := selectEligibleGus(loser.GuInventory)
 	loser.GuInventory = remainingGus
 
-	primevalLoss := math.Floor(loser.PrimevalStones * deathPenaltyConfig.PrimevalStonePct / 100)
-	immortalLoss := math.Floor(loser.ImmortalStones * deathPenaltyConfig.ImmortalStonePct / 100)
+	primevalLoss := int64(math.Floor(float64(loser.PrimevalStones) * deathPenaltyConfig.PrimevalStonePct / 100))
+	immortalLoss := int64(math.Floor(float64(loser.ImmortalStones) * deathPenaltyConfig.ImmortalStonePct / 100))
 	if primevalLoss < 0 {
 		primevalLoss = 0
 	}
@@ -77,7 +77,7 @@ func applyDeathDrop(tx *sql.Tx, loser *models.Player, winnerID *uuid.UUID) strin
 // fully loaded in memory (the PvP defender on the winner's side). All reads and
 // writes happen via SQL within the current transaction.
 func applyDeathDropRecord(tx *sql.Tx, loserID, winnerID *uuid.UUID) string {
-	var primevalStones, immortalStones float64
+	var primevalStones, immortalStones int64
 	err := tx.QueryRow(`
 		SELECT primeval_stones, immortal_stones
 		FROM players WHERE id = $1 FOR UPDATE
@@ -86,8 +86,8 @@ func applyDeathDropRecord(tx *sql.Tx, loserID, winnerID *uuid.UUID) string {
 		return ""
 	}
 
-	primevalLoss := math.Floor(primevalStones * deathPenaltyConfig.PrimevalStonePct / 100)
-	immortalLoss := math.Floor(immortalStones * deathPenaltyConfig.ImmortalStonePct / 100)
+	primevalLoss := int64(math.Floor(float64(primevalStones) * deathPenaltyConfig.PrimevalStonePct / 100))
+	immortalLoss := int64(math.Floor(float64(immortalStones) * deathPenaltyConfig.ImmortalStonePct / 100))
 	if primevalLoss < 0 {
 		primevalLoss = 0
 	}
@@ -102,7 +102,7 @@ func applyDeathDropRecord(tx *sql.Tx, loserID, winnerID *uuid.UUID) string {
 }
 
 // persistDeathDrop writes the computed losses to the DB and builds the summary.
-func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, primevalLoss, immortalLoss float64, droppedGus models.GuInventory) string {
+func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, primevalLoss, immortalLoss int64, droppedGus models.GuInventory) string {
 	var lost []string
 
 	// Tiền — trừ bên thua, cộng bên thắng (nếu PvP)
@@ -124,10 +124,10 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, primev
 			`, primevalLoss, immortalLoss, *winnerID)
 		}
 		if primevalLoss >= 1 {
-			lost = append(lost, fmt.Sprintf("%.0f Nguyên Thạch", primevalLoss))
+			lost = append(lost, fmt.Sprintf("%d Nguyên Thạch", primevalLoss))
 		}
 		if immortalLoss >= 1 {
-			lost = append(lost, fmt.Sprintf("%.0f Tiên Nguyên Thạch", immortalLoss))
+			lost = append(lost, fmt.Sprintf("%d Tiên Nguyên Thạch", immortalLoss))
 		}
 	}
 

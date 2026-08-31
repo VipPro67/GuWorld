@@ -235,9 +235,9 @@ func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec
 	// ── 20 % → Nguyên Thạch  |  80 % → Vật phẩm (vật liệu / bí phương)
 	if rand.Float64() < 0.20 {
 		// ── STONES: 100-500
-		stones := float64(100 + rand.Intn(401))
+		stones := int64(100 + rand.Intn(401))
 		player.PrimevalStones += stones
-		msg += fmt.Sprintf("- 💎 Nhận được %.0f Nguyên Thạch\n", stones)
+		msg += fmt.Sprintf("- 💎 Nhận được %d Nguyên Thạch\n", stones)
 		reward = map[string]interface{}{
 			"type":     "stones",
 			"quantity": stones,

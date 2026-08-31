@@ -615,9 +615,9 @@ func Simulate(state *CombatState) []CombatLog {
 							manaPerStone := (1.0 / math.Pow(100, float64(actor.Rank-6))) * regenMult
 							if manaPerStone > 0 {
 								stonesNeeded := math.Ceil(neededMana / manaPerStone)
-								stonesToConsume := math.Min(stonesNeeded, actor.ImmortalStones)
+								stonesToConsume := math.Min(stonesNeeded, float64(actor.ImmortalStones))
 								restore := int(stonesToConsume * manaPerStone)
-								actor.ImmortalStones -= stonesToConsume
+								actor.ImmortalStones -= int64(stonesToConsume)
 								actor.Mana += restore
 								if actor.Mana > actor.MaxMana {
 									actor.Mana = actor.MaxMana
@@ -627,7 +627,7 @@ func Simulate(state *CombatState) []CombatLog {
 									ActorId:   actor.ID,
 									ActorName: actor.Name,
 									Action:    "MANA_RESTORE",
-									Detail:    fmt.Sprintf("%s tự động nghiền nát %.0f Tiên Nguyên Thạch, khôi phục %d tiên nguyên!", actor.Name, stonesToConsume, restore),
+									Detail:    fmt.Sprintf("%s tự động nghiền nát %d Tiên Nguyên Thạch, khôi phục %d tiên nguyên!", actor.Name, int64(stonesToConsume), restore),
 								})
 							}
 						}
@@ -639,9 +639,9 @@ func Simulate(state *CombatState) []CombatLog {
 							manaPerStone := (20.0 / (rankMult * subRankMult)) * regenMult
 							if manaPerStone > 0 {
 								stonesNeeded := math.Ceil(neededMana / manaPerStone)
-								stonesToConsume := math.Min(stonesNeeded, actor.PrimevalStones)
+								stonesToConsume := math.Min(stonesNeeded, float64(actor.PrimevalStones))
 								restore := int(stonesToConsume * manaPerStone)
-								actor.PrimevalStones -= stonesToConsume
+								actor.PrimevalStones -= int64(stonesToConsume)
 								actor.Mana += restore
 								if actor.Mana > actor.MaxMana {
 									actor.Mana = actor.MaxMana
@@ -651,7 +651,7 @@ func Simulate(state *CombatState) []CombatLog {
 									ActorId:   actor.ID,
 									ActorName: actor.Name,
 									Action:    "MANA_RESTORE",
-									Detail:    fmt.Sprintf("%s tự động hấp thu %.0f Nguyên Thạch, khôi phục %d %s!", actor.Name, stonesToConsume, restore, actor.GetManaName()),
+									Detail:    fmt.Sprintf("%s tự động hấp thu %d Nguyên Thạch, khôi phục %d %s!", actor.Name, int64(stonesToConsume), restore, actor.GetManaName()),
 								})
 							}
 						}

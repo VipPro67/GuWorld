@@ -484,7 +484,7 @@ func BuyShopItem(c *gin.Context) {
 	if currency != "immortal" {
 		currency = "primeval"
 	}
-	totalCost := float64(selectedItem.Price * req.Quantity)
+	totalCost := int64(selectedItem.Price * req.Quantity)
 	currencyName := "Nguyên Thạch"
 	if currency == "immortal" {
 		currencyName = "Tiên Nguyên Thạch"
@@ -600,7 +600,7 @@ func BuyShopItem(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "shop.buy", EntityType: "shop_item",
 		EntityID:       selectedItem.ID,
-		RequestSummary: fmt.Sprintf("%s x%d | %.0f %s", selectedItem.Name, req.Quantity, totalCost, currencyName),
+		RequestSummary: fmt.Sprintf("%s x%d | %d %s", selectedItem.Name, req.Quantity, totalCost, currencyName),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
@@ -644,7 +644,7 @@ func SellShopItem(c *gin.Context) {
 		return
 	}
 
-	totalGain := 0.0
+	totalGain := int64(0)
 	sellRank := 1
 	var removedIDs []string
 	if req.ItemType == "Material" || req.ItemType == "Consumable" {
@@ -729,7 +729,7 @@ func SellShopItem(c *gin.Context) {
 			sellRank = rank
 			unitSellPrice = pricing.SellPrice(pricing.ItemBasePrice(dbBasePrice, rank))
 		}
-		totalGain = float64(unitSellPrice * req.Quantity)
+		totalGain = int64(unitSellPrice * req.Quantity)
 	} else if req.ItemType == "Gu" {
 		removed := 0
 		newInv := models.GuInventory{}
@@ -762,7 +762,7 @@ func SellShopItem(c *gin.Context) {
 			sellRank = rank
 			unitSellPrice = pricing.SellPrice(pricing.GuBasePrice(dbBasePrice, rank))
 		}
-		totalGain = float64(unitSellPrice * req.Quantity)
+		totalGain = int64(unitSellPrice * req.Quantity)
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "item_type phải là Gu hoặc Material"})
 		return
@@ -817,7 +817,7 @@ func SellShopItem(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "shop.sell", EntityType: "shop_item",
 		EntityID:       req.ItemID,
-		RequestSummary: fmt.Sprintf("%s x%d | nhận %.0f %s", itemName, req.Quantity, totalGain, sellCurrencyName),
+		RequestSummary: fmt.Sprintf("%s x%d | nhận %d %s", itemName, req.Quantity, totalGain, sellCurrencyName),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	player.MaterialsInventory = loadMaterialsInventory(player.ID.String())
@@ -874,13 +874,13 @@ func SellShopItemsBulk(c *gin.Context) {
 		return
 	}
 
-	totalGainPrimeval := 0.0
-	totalGainImmortal := 0.0
+	totalGainPrimeval := int64(0)
+	totalGainImmortal := int64(0)
 	guSold := false
 	var removedIDs []string
 	var auditSummaries []string
 
-	addGain := func(sellRank int, gain float64) {
+	addGain := func(sellRank int, gain int64) {
 		if pricing.StoneTierByRank(sellRank) == "immortal" {
 			totalGainImmortal += gain
 		} else {
@@ -971,7 +971,7 @@ func SellShopItemsBulk(c *gin.Context) {
 				sellRank = rank
 				unitSellPrice = pricing.SellPrice(pricing.ItemBasePrice(dbBasePrice, rank))
 			}
-			gain := float64(unitSellPrice * item.Quantity)
+			gain := int64(unitSellPrice * item.Quantity)
 			addGain(sellRank, gain)
 
 			var name string
@@ -979,7 +979,7 @@ func SellShopItemsBulk(c *gin.Context) {
 			if name == "" {
 				name = item.ItemID
 			}
-			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%.0f %s)", name, item.Quantity, gain, currencyLabel(sellRank)))
+			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%d %s)", name, item.Quantity, gain, currencyLabel(sellRank)))
 
 		} else if item.ItemType == "Gu" {
 			removed := 0
@@ -1015,7 +1015,7 @@ func SellShopItemsBulk(c *gin.Context) {
 				sellRank = rank
 				unitSellPrice = pricing.SellPrice(pricing.GuBasePrice(dbBasePrice, rank))
 			}
-			gain := float64(unitSellPrice * item.Quantity)
+			gain := int64(unitSellPrice * item.Quantity)
 			addGain(sellRank, gain)
 
 			var name string
@@ -1025,7 +1025,7 @@ func SellShopItemsBulk(c *gin.Context) {
 			if name == "" {
 				name = item.ItemID
 			}
-			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%.0f %s)", name, item.Quantity, gain, currencyLabel(sellRank)))
+			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%d %s)", name, item.Quantity, gain, currencyLabel(sellRank)))
 		} else if item.ItemType == "Recipe" {
 			recipeToSell, err := RecipeSvc.Get(tx, player.ID.String(), item.ItemID)
 			if err != nil || recipeToSell == nil {
@@ -1043,11 +1043,11 @@ func SellShopItemsBulk(c *gin.Context) {
 			}
 
 			unitSellPrice := pricing.RecipeSellPrice(targetRank)
-			gain := float64(unitSellPrice * item.Quantity)
+			gain := int64(unitSellPrice * item.Quantity)
 			addGain(targetRank, gain)
 
 			name := fmt.Sprintf("Bí phương (%s)", item.ItemID)
-			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%.0f %s)", name, item.Quantity, gain, currencyLabel(targetRank)))
+			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%d %s)", name, item.Quantity, gain, currencyLabel(targetRank)))
 		} else {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "item_type không hợp lệ (phải là Gu, Material, hoặc Recipe)"})
 			return
@@ -1089,12 +1089,12 @@ func SellShopItemsBulk(c *gin.Context) {
 		summaryStr = summaryStr[:247] + "..."
 	}
 
-	gainSummary := fmt.Sprintf("+%.0f Nguyên Thạch", totalGainPrimeval)
+	gainSummary := fmt.Sprintf("+%d Nguyên Thạch", totalGainPrimeval)
 	if totalGainImmortal > 0 {
 		if totalGainPrimeval > 0 {
-			gainSummary = fmt.Sprintf("+%.0f Nguyên Thạch và +%.0f Tiên Nguyên Thạch", totalGainPrimeval, totalGainImmortal)
+			gainSummary = fmt.Sprintf("+%d Nguyên Thạch và +%d Tiên Nguyên Thạch", totalGainPrimeval, totalGainImmortal)
 		} else {
-			gainSummary = fmt.Sprintf("+%.0f Tiên Nguyên Thạch", totalGainImmortal)
+			gainSummary = fmt.Sprintf("+%d Tiên Nguyên Thạch", totalGainImmortal)
 		}
 	}
 

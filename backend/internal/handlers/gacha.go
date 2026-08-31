@@ -684,20 +684,20 @@ func rollWeightedMaterial() string {
 func deductGachaCostAmount(player *models.Player, costType string, amount float64) error {
 	switch costType {
 	case "primeval_stones":
-		if player.PrimevalStones < amount {
-			return fmt.Errorf("Không đủ Nguyên Thạch. Cần %.0f Nguyên Thạch", amount)
+		if player.PrimevalStones < int64(amount) {
+			return fmt.Errorf("Không đủ Nguyên Thạch. Cần %d Nguyên Thạch", int64(amount))
 		}
-		player.PrimevalStones -= amount
+		player.PrimevalStones -= int64(amount)
 	case "lifespan":
 		if player.Lifespan < amount {
 			return fmt.Errorf("Không đủ Thọ Nguyên. Cần %.0f năm Thọ Nguyên", amount)
 		}
 		player.Lifespan -= amount
 	case "immortal_stones":
-		if float64(player.ImmortalStones) < amount {
-			return fmt.Errorf("Không đủ Tiên Nguyên Thạch. Cần %.0f Tiên Nguyên Thạch", amount)
+		if player.ImmortalStones < int64(amount) {
+			return fmt.Errorf("Không đủ Tiên Nguyên Thạch. Cần %d Tiên Nguyên Thạch", int64(amount))
 		}
-		player.ImmortalStones -= float64(amount)
+		player.ImmortalStones -= int64(amount)
 	default:
 		return fmt.Errorf("Loại chi phí không hợp lệ: %s", costType)
 	}
@@ -709,7 +709,7 @@ func deductGachaCostAmount(player *models.Player, costType string, amount float6
 func applyGachaRewardInMemory(player *models.Player, reward GachaResultItem) {
 	switch reward.Type {
 	case "primeval_stones":
-		player.PrimevalStones += reward.Amount
+		player.PrimevalStones += int64(reward.Amount)
 	case "lifespan":
 		player.Lifespan += reward.Amount
 	case "human_qi":

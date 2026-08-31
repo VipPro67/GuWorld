@@ -99,7 +99,7 @@ func ExploreNode(c *gin.Context) {
 
 	if roll < 40 {
 		stonesFound := 1 + rand.Intn(3)
-		player.PrimevalStones += float64(stonesFound)
+		player.PrimevalStones += int64(stonesFound)
 		logMsg = fmt.Sprintf("Khám phá hoàn tất tại %s. Đạo hữu may mắn phát hiện thấy %d viên Nguyên Thạch!", nodeName, stonesFound)
 	} else if roll < 70 {
 		combatTriggered = true

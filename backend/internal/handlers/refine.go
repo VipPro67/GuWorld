@@ -822,14 +822,14 @@ func DeduceRecipe(c *gin.Context) {
 
 	// Cost verification — Deduce tiêu hao Thought thay vì Mana
 	thoughtCost := 15.0
-	stoneCost := 10.0
+	stoneCost := int64(10)
 
 	if player.CurrentThought < thoughtCost {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Niệm Lực (cần %.1f)", thoughtCost)})
 		return
 	}
 	if player.PrimevalStones < stoneCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch (cần %.0f)", stoneCost)})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch (cần %d)", stoneCost)})
 		return
 	}
 

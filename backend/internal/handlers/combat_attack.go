@@ -1249,7 +1249,7 @@ func CombatAttack(c *gin.Context) {
 							}
 							for _, memberID := range partyMembers {
 								if memberID == player.ID {
-									player.PrimevalStones += float64(splitStones)
+									player.PrimevalStones += int64(splitStones)
 									ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhận được %d Nguyên Thạch.", splitStones))
 								} else {
 									_, _ = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", splitStones, memberID)
@@ -1353,9 +1353,9 @@ func CombatAttack(c *gin.Context) {
 						logger.S.Errorf("Failed to add mine rewards to player %s (slot %d): %v", player.ID, slotID, errMine)
 					} else {
 						if mineType == "immortal" {
-							player.ImmortalStones += float64(stonesHalf)
+							player.ImmortalStones += int64(stonesHalf)
 						} else {
-							player.PrimevalStones += float64(stonesHalf)
+							player.PrimevalStones += int64(stonesHalf)
 						}
 						player.HumanQi += qiHalf
 						
@@ -1417,7 +1417,7 @@ func CombatAttack(c *gin.Context) {
 		player.CurrentRegion, player.X, player.Y = NearestHub(player.X, player.Y)
 
 		if isTribulation {
-			player.ImmortalStones = player.ImmortalStones * 0.5
+			player.ImmortalStones /= 2
 			_, _ = tx.Exec(`
 				UPDATE immortal_apertures 
 				SET tribulation_count = 0, earth_calamity_count = 0, heavenly_tribulation_count = 0, grand_tribulation_count = 0, myriad_tribulation_count = 0, chaos_calamity_count = 0 

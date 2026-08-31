@@ -112,7 +112,7 @@ func ApplyLoot(tx *sql.Tx, player *models.Player, loot RolledLoot) []string {
 
 	for itemID, qty := range loot.Items {
 		if itemID == "primeval_stone" {
-			player.PrimevalStones += float64(qty)
+			player.PrimevalStones += int64(qty)
 			logs = append(logs, fmt.Sprintf("Thu hoạch Nguyên Thạch: +%d Nguyên Thạch.", qty))
 		} else {
 			name := itemID

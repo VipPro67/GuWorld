@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"time"
 
@@ -26,7 +27,7 @@ type CreateListingRequest struct {
 	GuInstanceIDs       []string `json:"gu_instance_ids"`
 	ItemID              string   `json:"item_id"`
 	Quantity            int      `json:"quantity"`
-	Price               float64  `json:"price" binding:"required"`
+	Price               int64    `json:"price" binding:"required"`
 	Currency            string   `json:"currency" binding:"required"` // primeval|immortal
 	DurationHours       int      `json:"duration_hours" binding:"required"`
 	ListingType         string   `json:"listing_type" binding:"required"` // MARKET|AUCTION|TRADE
@@ -34,8 +35,8 @@ type CreateListingRequest struct {
 }
 
 type PlaceBidRequest struct {
-	ListingID string  `json:"listing_id" binding:"required"`
-	Amount    float64 `json:"amount" binding:"required"`
+	ListingID string `json:"listing_id" binding:"required"`
+	Amount    int64  `json:"amount" binding:"required"`
 }
 
 type BuyListingRequest struct {
@@ -57,7 +58,7 @@ func getFeeTier(durationHours int) int {
 	}
 }
 
-func getUpfrontFee(listingType string, durationHours int) float64 {
+func getUpfrontFee(listingType string, durationHours int) int64 {
 	tier := getFeeTier(durationHours)
 	if listingType == "AUCTION" {
 		switch tier {
@@ -196,7 +197,7 @@ func CreateListing(c *gin.Context) {
 		upfrontFee = 0
 	}
 	if player.PrimevalStones < upfrontFee {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch để chi trả phí đăng bán cơ bản (cần %.0f Nguyên Thạch)", upfrontFee)})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Nguyên Thạch để chi trả phí đăng bán cơ bản (cần %d Nguyên Thạch)", upfrontFee)})
 		return
 	}
 	player.PrimevalStones -= upfrontFee
@@ -348,9 +349,9 @@ func CreateListing(c *gin.Context) {
 		}
 		var msgContent string
 		if req.ListingType == "AUCTION" {
-			msgContent = fmt.Sprintf("Đạo hữu %s vừa đưa lên đấu giá %d %s với mức giá khởi điểm là %.0f %s tại Bảo Hoàng Thiên!", player.Username, req.Quantity, itemName, req.Price, currencyName)
+			msgContent = fmt.Sprintf("Đạo hữu %s vừa đưa lên đấu giá %d %s với mức giá khởi điểm là %d %s tại Bảo Hoàng Thiên!", player.Username, req.Quantity, itemName, req.Price, currencyName)
 		} else {
-			msgContent = fmt.Sprintf("Đạo hữu %s vừa treo bán %d %s với giá %.0f %s tại Bảo Hoàng Thiên!", player.Username, req.Quantity, itemName, req.Price, currencyName)
+			msgContent = fmt.Sprintf("Đạo hữu %s vừa treo bán %d %s với giá %d %s tại Bảo Hoàng Thiên!", player.Username, req.Quantity, itemName, req.Price, currencyName)
 		}
 		_ = SendSystemMessage("general", sql.NullString{}, msgContent)
 	}
@@ -358,7 +359,7 @@ func CreateListing(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.create_listing", EntityType: "auction",
 		EntityID:       listingID,
-		RequestSummary: fmt.Sprintf("người bán=%s (%s) | loại vật phẩm=%s | tên=%s | id=%s | sl=%d | giá=%.0f %s | loại=%s", player.Username, authID, req.ItemType, itemName, req.ItemID, req.Quantity, req.Price, req.Currency, req.ListingType),
+		RequestSummary: fmt.Sprintf("người bán=%s (%s) | loại vật phẩm=%s | tên=%s | id=%s | sl=%d | giá=%d %s | loại=%s", player.Username, authID, req.ItemType, itemName, req.ItemID, req.Quantity, req.Price, req.Currency, req.ListingType),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đăng bán thành công", "listing_id": listingID})
@@ -500,7 +501,7 @@ func PlaceBid(c *gin.Context) {
 	var sellerName, itemType string
 	var rawItemData []byte
 	var currency, status, listingType string
-	var current float64
+	var current int64
 	var bidder sql.NullString
 	var end time.Time
 	err = tx.QueryRow(`
@@ -526,10 +527,10 @@ func PlaceBid(c *gin.Context) {
 		return
 	}
 	if req.Amount <= current {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Giá phải cao hơn %.2f", current)})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Giá phải cao hơn %d", current)})
 		return
 	}
-	var neededAmount float64 = req.Amount
+	var neededAmount int64 = req.Amount
 	if bidder.Valid && bidder.String == player.ID.String() {
 		neededAmount = req.Amount - current
 	}
@@ -574,7 +575,7 @@ func PlaceBid(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "refund failed"})
 			return
 		}
-		notify.Send(db.DB, prevBidder.ID, "auction_outbid", "Bị đè giá", fmt.Sprintf("Bạn đã bị đè giá ở phòng đấu giá cho vật phẩm đấu giá. Được hoàn trả %.2f %s.", current, currency))
+		notify.Send(db.DB, prevBidder.ID, "auction_outbid", "Bị đè giá", fmt.Sprintf("Bạn đã bị đè giá ở phòng đấu giá cho vật phẩm đấu giá. Được hoàn trả %d %s.", current, currency))
 	}
 	AddHumanQi(&player, 3.0)
 
@@ -602,14 +603,14 @@ func PlaceBid(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.bid", EntityType: "auction",
 		EntityID:       req.ListingID,
-		RequestSummary: fmt.Sprintf("người đặt giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | giá=%.0f %s | giá cũ=%.0f %s", player.Username, authID, sellerName, sellerID, itemName, req.Amount, currency, current, currency),
+		RequestSummary: fmt.Sprintf("người đặt giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | giá=%d %s | giá cũ=%d %s", player.Username, authID, sellerName, sellerID, itemName, req.Amount, currency, current, currency),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	if sellerID != authID {
 		auditlog.Log(db.DB, auditlog.Entry{
 			PlayerID: &sellerID, Action: "marketplace.bid_notify", EntityType: "auction",
 			EntityID:       req.ListingID,
-			RequestSummary: fmt.Sprintf("người đặt giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | giá=%.0f %s", player.Username, authID, sellerName, sellerID, itemName, req.Amount, currency),
+			RequestSummary: fmt.Sprintf("người đặt giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | giá=%d %s", player.Username, authID, sellerName, sellerID, itemName, req.Amount, currency),
 			IPAddress:      c.ClientIP(), Success: true,
 		})
 		currencyName := "Nguyên Thạch"
@@ -619,7 +620,7 @@ func PlaceBid(c *gin.Context) {
 		var buyerUsername string
 		_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, authID).Scan(&buyerUsername)
 		notify.Send(db.DB, sellerID, "auction_bid", "Ai đó đặt giá",
-			fmt.Sprintf("%s đã đặt giá %.0f %s cho mặt hàng của bạn.", buyerUsername, req.Amount, currencyName))
+			fmt.Sprintf("%s đã đặt giá %d %s cho mặt hàng của bạn.", buyerUsername, req.Amount, currencyName))
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đặt giá thành công"})
 }
@@ -664,7 +665,7 @@ func BuyListing(c *gin.Context) {
 
 	var sellerID uuid.UUID
 	var itemType, currency, status, listingType string
-	var currentPrice float64
+	var currentPrice int64
 	var qty, durationHours int
 	var rawItemData []byte
 	var targetBuyerID sql.NullString
@@ -707,7 +708,7 @@ func BuyListing(c *gin.Context) {
 		return
 	}
 
-	totalPrice := float64(purchaseQty) * currentPrice
+	totalPrice := int64(purchaseQty) * currentPrice
 	if currency == "primeval" {
 		if buyer.PrimevalStones < totalPrice {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch"})
@@ -748,7 +749,7 @@ func BuyListing(c *gin.Context) {
 	if listingType == "TRADE" {
 		commPct = 0.0
 	}
-	commission := totalPrice * commPct
+	commission := int64(math.Round(float64(totalPrice) * commPct))
 	payout := totalPrice - commission
 
 	if currency == "primeval" {
@@ -825,13 +826,13 @@ func BuyListing(c *gin.Context) {
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.buy", EntityType: "auction",
 		EntityID:       req.ListingID,
-		RequestSummary: fmt.Sprintf("người mua=%s (%s) | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá=%.0f %s | loại=%s", buyer.Username, authID, seller.Username, sellerID, itemName, purchaseQty, totalPrice, currency, listingType),
+		RequestSummary: fmt.Sprintf("người mua=%s (%s) | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá=%d %s | loại=%s", buyer.Username, authID, seller.Username, sellerID, itemName, purchaseQty, totalPrice, currency, listingType),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &sellerID, Action: "marketplace.sold", EntityType: "auction",
 		EntityID:       req.ListingID,
-		RequestSummary: fmt.Sprintf("người bán=%s (%s) | người mua=%s (%s) | vật phẩm=%s | sl=%d | nhận=%.0f %s (giá=%.0f, phí=%.0f) | loại=%s", seller.Username, sellerID, buyer.Username, authID, itemName, purchaseQty, payout, currency, totalPrice, commission, listingType),
+		RequestSummary: fmt.Sprintf("người bán=%s (%s) | người mua=%s (%s) | vật phẩm=%s | sl=%d | nhận=%d %s (giá=%d, phí=%d) | loại=%s", seller.Username, sellerID, buyer.Username, authID, itemName, purchaseQty, payout, currency, totalPrice, commission, listingType),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	currencyName := "Nguyên Thạch"
@@ -840,10 +841,10 @@ func BuyListing(c *gin.Context) {
 	}
 	if sellerID != authID {
 		notify.Send(db.DB, sellerID, "market_sold", "Mặt hàng đã bán",
-			fmt.Sprintf("%s đã mua %d %s với giá %.0f %s.", buyer.Username, purchaseQty, itemName, totalPrice, currencyName))
+			fmt.Sprintf("%s đã mua %d %s với giá %d %s.", buyer.Username, purchaseQty, itemName, totalPrice, currencyName))
 	}
 	notify.Send(db.DB, authID, "market_bought", "Mua hàng thành công",
-		fmt.Sprintf("Bạn đã mua %d %s với giá %.0f %s.", purchaseQty, itemName, totalPrice, currencyName))
+		fmt.Sprintf("Bạn đã mua %d %s với giá %d %s.", purchaseQty, itemName, totalPrice, currencyName))
 	buyer.MaterialsInventory = loadMaterialsInventory(buyer.ID.String())
 	responseWithPlayer(c, http.StatusOK, buyer, gin.H{"message": "Mua hàng thành công"})
 }
@@ -872,7 +873,7 @@ func settleExpiredAuctions() error {
 		var itemType string
 		var rawItemData []byte
 		var qty, durationHours int
-		var currentPrice float64
+		var currentPrice int64
 		var currency, listingType string
 		if err := rows.Scan(&id, &sellerID, &highestBidderID, &itemType, &rawItemData, &qty, &currentPrice, &currency, &listingType, &durationHours); err != nil {
 			logger.S.Errorf("Failed to scan expired auction row: %v", err)
@@ -893,7 +894,7 @@ func settleExpiredAuctions() error {
 	return rows.Err()
 }
 
-func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.NullString, itemType, itemData string, qty int, currentPrice float64, currency string, listingType string, durationHours int) error {
+func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.NullString, itemType, itemData string, qty int, currentPrice int64, currency string, listingType string, durationHours int) error {
 	tx, err := db.DB.Begin()
 	if err != nil {
 		return err
@@ -919,7 +920,7 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 		buyerBefore := append(models.GuInventory(nil), buyer.GuInventory...)
 
 		// Time-based commission fee
-		commission := currentPrice * getCommissionPct(listingType, durationHours)
+		commission := int64(math.Round(float64(currentPrice) * getCommissionPct(listingType, durationHours)))
 		payout := currentPrice - commission
 
 		if currency == "primeval" {
@@ -947,7 +948,7 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 		auditlog.Log(tx, auditlog.Entry{
 			PlayerID: &buyerID, Action: "marketplace.settle_auction_win", EntityType: "auction",
 			EntityID:       auctionID,
-			RequestSummary: fmt.Sprintf("người thắng đấu giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá=%.0f %s | loại=%s", buyer.Username, buyerID, seller.Username, sellerID, itemName, qty, currentPrice, currency, listingType),
+			RequestSummary: fmt.Sprintf("người thắng đấu giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá=%d %s | loại=%s", buyer.Username, buyerID, seller.Username, sellerID, itemName, qty, currentPrice, currency, listingType),
 			Success:        true,
 		})
 	} else {
@@ -965,7 +966,7 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 		auditlog.Log(tx, auditlog.Entry{
 			PlayerID: &sellerID, Action: "marketplace.settle_auction_expired", EntityType: "auction",
 			EntityID:       auctionID,
-			RequestSummary: fmt.Sprintf("đấu giá hết hạn không có người mua | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá khởi điểm=%.0f %s | loại=%s", seller.Username, sellerID, itemName, qty, currentPrice, currency, listingType),
+			RequestSummary: fmt.Sprintf("đấu giá hết hạn không có người mua | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá khởi điểm=%d %s | loại=%s", seller.Username, sellerID, itemName, qty, currentPrice, currency, listingType),
 			Success:        true,
 		})
 	}
@@ -982,9 +983,9 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 	if highestBidderID.Valid {
 		bidderUUID, _ := uuid.Parse(highestBidderID.String)
 		notify.Send(db.DB, bidderUUID, "auction_won", "Thắng đấu giá",
-			fmt.Sprintf("Bạn đã thắng đấu giá với giá %.0f %s!", currentPrice, currencyName))
+			fmt.Sprintf("Bạn đã thắng đấu giá với giá %d %s!", currentPrice, currencyName))
 		notify.Send(db.DB, sellerID, "auction_sold", "Đấu giá hoàn tất",
-			fmt.Sprintf("Mặt hàng đã được bán với giá %.0f %s.", currentPrice, currencyName))
+			fmt.Sprintf("Mặt hàng đã được bán với giá %d %s.", currentPrice, currencyName))
 	} else {
 		notify.Send(db.DB, sellerID, "auction_expired", "Đấu giá hết hạn",
 			"Phiên đấu giá đã hết hạn và không có người đặt giá.")

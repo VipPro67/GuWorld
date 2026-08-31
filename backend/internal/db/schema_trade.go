@@ -27,8 +27,8 @@ func schemaTrade() error {
 		item_data JSONB NOT NULL,
 		quantity INTEGER NOT NULL,
 		currency VARCHAR(20) NOT NULL,
-		start_price DOUBLE PRECISION NOT NULL,
-		current_price DOUBLE PRECISION NOT NULL,
+		start_price BIGINT NOT NULL,
+		current_price BIGINT NOT NULL,
 		highest_bidder_id UUID REFERENCES players(id) ON DELETE SET NULL,
 		end_time TIMESTAMP WITH TIME ZONE NOT NULL,
 		status VARCHAR(20) NOT NULL DEFAULT 'active',
@@ -53,6 +53,19 @@ func schemaTrade() error {
 	}
 	if err := execSchema("auction_status_endtime_buyer_idx", `
 	CREATE INDEX IF NOT EXISTS idx_auction_status_endtime_buyer ON auction (status, end_time, target_buyer_id);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("auction_price_type_upgrade", `
+	DO $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='auction' AND column_name='start_price' AND data_type='double precision') THEN
+			ALTER TABLE auction ALTER COLUMN start_price TYPE BIGINT USING COALESCE(start_price, 0)::BIGINT;
+		END IF;
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='auction' AND column_name='current_price' AND data_type='double precision') THEN
+			ALTER TABLE auction ALTER COLUMN current_price TYPE BIGINT USING COALESCE(current_price, 0)::BIGINT;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 

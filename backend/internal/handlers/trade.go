@@ -18,8 +18,8 @@ import (
 )
 
 type TradeOffer struct {
-	PrimevalStones float64            `json:"primeval_stones"`
-	ImmortalStones float64            `json:"immortal_stones"`
+	PrimevalStones int64              `json:"primeval_stones"`
+	ImmortalStones int64              `json:"immortal_stones"`
 	Gus            []string           `json:"gus"`       // slice of Gu instance IDs
 	Materials      map[string]int     `json:"materials"` // map of itemID -> quantity
 	Recipes        map[string]float64 `json:"recipes"`   // map of recipeID -> completion_rate
@@ -75,10 +75,10 @@ func getGuNamesFromInstances(tx *sql.Tx, instIDs []string) []string {
 func formatOffer(tx *sql.Tx, offer TradeOffer) string {
 	var parts []string
 	if offer.PrimevalStones > 0 {
-		parts = append(parts, fmt.Sprintf("%.0f Nguyên Thạch", offer.PrimevalStones))
+		parts = append(parts, fmt.Sprintf("%d Nguyên Thạch", offer.PrimevalStones))
 	}
 	if offer.ImmortalStones > 0 {
-		parts = append(parts, fmt.Sprintf("%.0f Tiên Nguyên Thạch", offer.ImmortalStones))
+		parts = append(parts, fmt.Sprintf("%d Tiên Nguyên Thạch", offer.ImmortalStones))
 	}
 	if len(offer.Gus) > 0 {
 		guNames := getGuNamesFromInstances(tx, offer.Gus)

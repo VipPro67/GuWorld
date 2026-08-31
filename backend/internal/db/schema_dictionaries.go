@@ -129,11 +129,24 @@ func schemaDictionaries() error {
 		required_gus JSONB NOT NULL,
 		required_materials JSONB NOT NULL,
 		success_rate DOUBLE PRECISION NOT NULL,
-		primeval_stones_cost DOUBLE PRECISION DEFAULT 0,
-		immortal_essence_stones_cost DOUBLE PRECISION DEFAULT 0,
+		primeval_stones_cost BIGINT DEFAULT 0,
+		immortal_essence_stones_cost BIGINT DEFAULT 0,
 		PRIMARY KEY (target_gu_id, target_rank, variant),
 		FOREIGN KEY (target_gu_id, target_rank) REFERENCES gu_dictionary(id, rank) ON UPDATE CASCADE ON DELETE RESTRICT
 	);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("refining_recipes_stones_type_upgrade", `
+	DO $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='refining_recipes' AND column_name='primeval_stones_cost' AND data_type='double precision') THEN
+			ALTER TABLE refining_recipes ALTER COLUMN primeval_stones_cost TYPE BIGINT USING COALESCE(primeval_stones_cost, 0)::BIGINT;
+		END IF;
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='refining_recipes' AND column_name='immortal_essence_stones_cost' AND data_type='double precision') THEN
+			ALTER TABLE refining_recipes ALTER COLUMN immortal_essence_stones_cost TYPE BIGINT USING COALESCE(immortal_essence_stones_cost, 0)::BIGINT;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 

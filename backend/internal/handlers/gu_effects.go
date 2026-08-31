@@ -452,8 +452,8 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		if amount == 0 {
 			amount = 500
 		}
-		player.PrimevalStones += amount
-		return fmt.Sprintf("Nhận ngay %.0f Nguyên Thạch.", amount), nil
+		player.PrimevalStones += int64(amount)
+		return fmt.Sprintf("Nhận ngay %d Nguyên Thạch.", int64(amount)), nil
 	case "SOUL_BOOST":
 		val, _ := params["value"].(float64)
 		if player.DaoMarks == nil {
@@ -533,7 +533,7 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		if val <= 0 {
 			val = 1.0
 		}
-		player.PrimevalStones += val
+		player.PrimevalStones += int64(val)
 		return "", nil
 	case "MANA_REGEN_TICK":
 		val, _ := params["value"].(float64)
@@ -560,8 +560,8 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		if val <= 0 {
 			val = 1.0
 		}
-		player.ImmortalStones += val
-		return fmt.Sprintf("Sản xuất %.0f Tiên Nguyên Thạch.", val), nil
+		player.ImmortalStones += int64(val)
+		return fmt.Sprintf("Sản xuất %d Tiên Nguyên Thạch.", int64(val)), nil
 	case "REDUCE_STRESS":
 		val, _ := params["value"].(float64)
 		if val <= 0 {
