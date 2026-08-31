@@ -24,11 +24,11 @@ const (
 	// PathMasteryMasterPoints is the milestone to reach Master (level 1).
 	PathMasteryMasterPoints = 100
 	// PathMasteryGrandmasterPoints is the milestone to reach Grandmaster (level 2).
-	PathMasteryGrandmasterPoints = 500
+	PathMasteryGrandmasterPoints = 1000
 	// PathMasteryGreatGrandmasterPoints is the milestone to reach Great Grandmaster (level 3).
-	PathMasteryGreatGrandmasterPoints = 2500
+	PathMasteryGreatGrandmasterPoints = 10000
 	// PathMasterySupremeGrandmasterPoints is the milestone to reach Supreme Grandmaster (level 4).
-	PathMasterySupremeGrandmasterPoints = 10000
+	PathMasterySupremeGrandmasterPoints = 100000
 )
 
 // pathMasteryLevelMultipliers maps an attainment level (0-4) to its bonus

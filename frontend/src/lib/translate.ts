@@ -201,7 +201,7 @@ export function translateMastery(mastery: string | undefined): string {
 }
 
 // Path mastery milestones (mirror backend gamefx.PathMasteryLevel).
-export const PATH_MASTERY_MILESTONES = [100, 500, 2500, 10000];
+export const PATH_MASTERY_MILESTONES = [100, 1000, 10000, 100000];
 
 // masteryLevelForPoints maps accumulated path mastery points to the attained
 // realm level (0-4). Mirrors gamefx.PathMasteryLevel.
