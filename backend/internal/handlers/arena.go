@@ -30,6 +30,20 @@ func EnsurePlayerArenaRanking(tx *sql.Tx, playerID uuid.UUID) (int, error) {
 	var rank int
 	err := tx.QueryRow("SELECT rank FROM arena_rankings WHERE player_id = $1", playerID).Scan(&rank)
 	if err == sql.ErrNoRows {
+		// Acquire lock to serialize rank assignment across all concurrent requests
+		_, errLock := tx.Exec("LOCK TABLE arena_rankings IN SHARE ROW EXCLUSIVE MODE")
+		if errLock != nil {
+			return 0, errLock
+		}
+
+		// Recheck in case another transaction assigned the rank while we were waiting for the lock
+		err = tx.QueryRow("SELECT rank FROM arena_rankings WHERE player_id = $1", playerID).Scan(&rank)
+		if err == nil {
+			return rank, nil
+		} else if err != sql.ErrNoRows {
+			return 0, err
+		}
+
 		// Assign next rank
 		var maxRank int
 		_ = tx.QueryRow("SELECT COALESCE(MAX(rank), 0) FROM arena_rankings").Scan(&maxRank)
@@ -38,7 +52,10 @@ func EnsurePlayerArenaRanking(tx *sql.Tx, playerID uuid.UUID) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		_, _ = tx.Exec("UPDATE players SET arena_rank = $1 WHERE id = $2", rank, playerID)
+		_, err = tx.Exec("UPDATE players SET arena_rank = $1 WHERE id = $2", rank, playerID)
+		if err != nil {
+			return 0, err
+		}
 	} else if err != nil {
 		return 0, err
 	}
@@ -60,8 +77,15 @@ func GetArenaLeaderboard(c *gin.Context) {
 	defer tx.Rollback()
 
 	// Ensure caller has ranking
-	_, _ = EnsurePlayerArenaRanking(tx, authID)
-	tx.Commit()
+	_, err = EnsurePlayerArenaRanking(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thiết lập thứ hạng Võ Đài"})
+		return
+	}
+	if errCommit := tx.Commit(); errCommit != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database commit failure"})
+		return
+	}
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT a.player_id, p.username, p.avatar_url, a.rank, a.points, a.updated_at
@@ -89,7 +113,8 @@ func GetArenaLeaderboard(c *gin.Context) {
 	_ = db.DB.QueryRowContext(c.Request.Context(), "SELECT daily_challenges, last_challenge_at FROM arena_rankings WHERE player_id = $1", authID).Scan(&dailyChallenges, &lastChallengeAt)
 
 	now := time.Now()
-	if lastChallengeAt.YearDay() != now.YearDay() || lastChallengeAt.Year() != now.Year() {
+	lastChallengeLocal := lastChallengeAt.In(now.Location())
+	if lastChallengeLocal.YearDay() != now.YearDay() || lastChallengeLocal.Year() != now.Year() {
 		dailyChallenges = 0
 	}
 
@@ -141,28 +166,40 @@ func ChallengeArena(c *gin.Context) {
 	}
 
 	// Ensure rankings
-	_, _ = EnsurePlayerArenaRanking(tx, player.ID)
-	_, _ = EnsurePlayerArenaRanking(tx, targetUUID)
+	_, err = EnsurePlayerArenaRanking(tx, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thiết lập thứ hạng của bạn: " + err.Error()})
+		return
+	}
+	_, err = EnsurePlayerArenaRanking(tx, targetUUID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể thiết lập thứ hạng đối thủ: " + err.Error()})
+		return
+	}
 
 	// Check daily challenges limit
 	var dailyChallenges int
 	var lastChallengeAt time.Time
 	err = tx.QueryRow("SELECT daily_challenges, last_challenge_at FROM arena_rankings WHERE player_id = $1", player.ID).Scan(&dailyChallenges, &lastChallengeAt)
-	if err == nil {
-		now := time.Now()
-		if lastChallengeAt.YearDay() != now.YearDay() || lastChallengeAt.Year() != now.Year() {
-			dailyChallenges = 0
-		}
-		if dailyChallenges >= 10 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Hôm nay đạo hữu đã hết lượt khiêu chiến Võ Đài (Tối đa 10 lần/ngày)!"})
-			return
-		}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi truy vấn thông tin Võ Đài: " + err.Error()})
+		return
+	}
 
-		_, err = tx.Exec("UPDATE arena_rankings SET daily_challenges = $1, last_challenge_at = $2 WHERE player_id = $3", dailyChallenges+1, now, player.ID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật lượt khiêu chiến"})
-			return
-		}
+	now := time.Now()
+	lastChallengeLocal := lastChallengeAt.In(now.Location())
+	if lastChallengeLocal.YearDay() != now.YearDay() || lastChallengeLocal.Year() != now.Year() {
+		dailyChallenges = 0
+	}
+	if dailyChallenges >= 10 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Hôm nay đạo hữu đã hết lượt khiêu chiến Võ Đài (Tối đa 10 lần/ngày)!"})
+		return
+	}
+
+	_, err = tx.Exec("UPDATE arena_rankings SET daily_challenges = $1, last_challenge_at = $2 WHERE player_id = $3", dailyChallenges+1, now, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật lượt khiêu chiến: " + err.Error()})
+		return
 	}
 
 	var targetPlayer models.Player

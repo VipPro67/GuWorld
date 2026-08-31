@@ -413,12 +413,16 @@ func RefineGu(c *gin.Context) {
 		paths = []string{string(pathRaw)}
 	}
 
-	// Calculate target path attainment bonus
+	// Calculate target path attainment bonus & points
 	targetPathMastery := 0.0
+	targetPathPoints := 0
 	if player.PathMasteries != nil {
 		for _, path := range paths {
 			cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
 			if points, ok := player.PathMasteries[cleanPath]; ok {
+				if points > targetPathPoints {
+					targetPathPoints = points
+				}
 				bonus := 0.0
 				switch gamefx.PathMasteryLevel(points) {
 				case 1:
@@ -446,7 +450,31 @@ func RefineGu(c *gin.Context) {
 	if player.PathMasteries != nil {
 		refinementPoints = player.PathMasteries["refinement"]
 	}
-	refinementDaoBonus := math.Min(0.20, float64(refinementMarks)/1000.0)
+	
+	rankScale := 1.0
+	switch recipe.TargetRank {
+	case 1:
+		rankScale = 1.0
+	case 2:
+		rankScale = 2.0
+	case 3:
+		rankScale = 5.0
+	case 4:
+		rankScale = 20.0
+	case 5:
+		rankScale = 100.0
+	case 6:
+		rankScale = 1000.0
+	case 7:
+		rankScale = 10000.0
+	case 8:
+		rankScale = 100000.0
+	case 9:
+		rankScale = 10000000.0
+	}
+
+	masteryMultiplier := 1.0 + float64(targetPathPoints)
+	refinementDaoBonus := (0.00632 * math.Sqrt(float64(refinementMarks)) * masteryMultiplier) / rankScale
 	
 	refinementRealm := gamefx.PathMasteryLevel(refinementPoints)
 	refinementMasteryBonus := 0.0
