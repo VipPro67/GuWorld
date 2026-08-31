@@ -24,6 +24,22 @@ export interface GuInstance {
   equipped_at?: string;
 }
 
+export interface RefineRateBreakdown {
+  base_rate: number;
+  completion_penalty: number;
+  combo_accuracy: boolean;
+  material_quality: number;
+  refinement_dao_marks: number;
+  refinement_mastery: number;
+  target_path_mastery: number;
+  luck_bonus: number;
+  support_bonus: number;
+  env_bonus: number;
+  final_rate: number;
+  refinement_realm: number;
+}
+
+
 export interface Combatant {
   id: string;
   name: string;
@@ -964,7 +980,7 @@ interface GameState {
   fetchRecipes: () => Promise<void>;
   quests: any[];
   fetchQuests: () => Promise<void>;
-  refineGu: (recipeId: string, selectedInstanceIds: string[]) => Promise<{ status: "success" | "failed"; message: string; new_gu?: GuInstance } | null>;
+  refineGu: (recipeId: string, selectedInstanceIds: string[]) => Promise<{ status: "success" | "failed"; message: string; new_gu?: GuInstance; rate_breakdown?: RefineRateBreakdown } | null>;
   deduceRecipe: (recipeId: string) => Promise<{ success: boolean; message: string; completion_rate: number } | null>;
   breakWall: (manaSpend: number) => Promise<{ success: boolean; message: string } | null>;
   useRelicGu: (relicKey: string) => Promise<{ success: boolean; message: string } | null>;

@@ -286,8 +286,8 @@ Tỉ lệ thành công của mỗi lần Luyện Cổ được tính dựa trên
 3. **Độ chính xác tổ hợp:** Lắp sai Cổ nguyên liệu lập tức tỷ lệ về 0%.
 4. **Chất lượng nguyên liệu:** Dùng Cổ nguyên liệu bậc cao hơn bậc yêu cầu (+2% mỗi bậc chênh lệch).
 5. **Đạo Ngân Luyện Đạo:** Tích lũy từ Tiên Khiếu (+0.1% mỗi điểm Đạo Ngân Luyện Đạo, tối đa +20%).
-6. **Cảnh giới Luyện Đạo:** Tăng tỉ lệ thành công (+3%, +6%, +10%, +15% tương ứng với cảnh giới Đại Sư trở lên).
-7. **Cảnh giới Lưu Phái đích:** Cảnh giới lưu phái của Cổ đang luyện (tối đa +20% ở Vô Thượng Tông Sư).
+6. **Cảnh giới Luyện Đạo:** Tăng tỉ lệ thành công (+5%, +10%, +18%, +25% tương ứng với cảnh giới từ Đại Sư đến Vô Thượng Đại Tông Sư).
+7. **Cảnh giới Lưu Phái đích:** Cảnh giới lưu phái của Cổ đang luyện (tối đa +10% ở Vô Thượng Đại Tông Sư, cụ thể: +2%, +5%, +8%, +10% ở các cấp cảnh giới tương ứng).
 8. **Khí vận:** Dựa trên Đạo Ngân Vận Đạo và hiệu ứng Phúc Trạch (tối đa +10%).
 9. **Hỗ trợ:** Cổ Trí Tuệ Đạo/Luyện Đạo đang kích hoạt (có dòng `success_rate_bonus`).
 10. **Môi trường:** Luyện Cổ tại Đại Vực có thuộc tính phù hợp (+5%).

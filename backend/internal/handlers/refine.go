@@ -422,13 +422,13 @@ func RefineGu(c *gin.Context) {
 				bonus := 0.0
 				switch gamefx.PathMasteryLevel(points) {
 				case 1:
-					bonus = 0.05
+					bonus = 0.02
 				case 2:
-					bonus = 0.10
+					bonus = 0.05
 				case 3:
-					bonus = 0.15
+					bonus = 0.08
 				case 4:
-					bonus = 0.20
+					bonus = 0.10
 				}
 				if bonus > targetPathMastery {
 					targetPathMastery = bonus
@@ -451,10 +451,10 @@ func RefineGu(c *gin.Context) {
 	refinementRealm := gamefx.PathMasteryLevel(refinementPoints)
 	refinementMasteryBonus := 0.0
 	switch refinementRealm {
-	case 1: refinementMasteryBonus = 0.03
-	case 2: refinementMasteryBonus = 0.06
-	case 3: refinementMasteryBonus = 0.10
-	case 4: refinementMasteryBonus = 0.15
+	case 1: refinementMasteryBonus = 0.05
+	case 2: refinementMasteryBonus = 0.10
+	case 3: refinementMasteryBonus = 0.18
+	case 4: refinementMasteryBonus = 0.25
 	}
 
 	// Luck Bonus

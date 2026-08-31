@@ -1078,7 +1078,7 @@ export const wikiPages: WikiPage[] = [
         <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Cơ chế Lò Luyện</h3>
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-            Tỉ lệ Luyện Cổ thành công được quyết định bởi 10 yếu tố: Tỷ lệ gốc của bí phương, Độ hoàn thiện của phương thức, Độ chính xác tổ hợp nguyên liệu, Chất lượng nguyên liệu đầu vào (+2% mỗi bậc chênh lệch), Đạo Ngân Luyện Đạo (+0.1% mỗi điểm, max 20%), Cảnh giới Luyện Đạo (lên tới +15%), Cảnh giới Lưu Phái của Cổ (max +20%), Khí vận (max +10%), Cổ phụ trợ kích hoạt, và Môi trường Đại Vực (+5%). Lắp sai nguyên liệu lập tức tỷ lệ về 0%.
+            Tỉ lệ Luyện Cổ thành công được quyết định bởi 10 yếu tố: Tỷ lệ gốc của bí phương, Độ hoàn thiện của phương thức, Độ chính xác tổ hợp nguyên liệu, Chất lượng nguyên liệu đầu vào (+2% mỗi bậc chênh lệch), Đạo Ngân Luyện Đạo (+0.1% mỗi điểm, max 20%), Cảnh giới Luyện Đạo (lên tới +25%), Cảnh giới Lưu Phái của Cổ (max +10%), Khí vận (max +10%), Cổ phụ trợ kích hoạt, và Môi trường Đại Vực (+5%). Lắp sai nguyên liệu lập tức tỷ lệ về 0%.
           </p>
           <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/10 text-xs text-amber-300 leading-relaxed">
             ⚠️ <strong>Hậu quả luyện cổ:</strong> Có 4 mốc hậu quả:

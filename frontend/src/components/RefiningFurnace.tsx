@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { GamePanel, GameCard } from "@/components/ui";
 // UI migrated to shared components
-import { Player, GuSpec, ItemSpec, RefiningRecipe, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
+import { Player, GuSpec, ItemSpec, RefiningRecipe, GuInstance, useGameStore, guSpecFor, RefineRateBreakdown } from "@/store/useGameStore";
 import { reqGuQty, reqGuRank } from "@/lib/gu-dict";
 import { Flame, Sparkles, AlertCircle, Check, X, RefreshCw, Coins, Zap, Trophy, HelpCircle, ChevronDown, Search } from "lucide-react";
 
@@ -12,7 +12,7 @@ interface RefiningFurnaceProps {
   guDictionary: Record<string, GuSpec>;
   itemDictionary: Record<string, ItemSpec>;
   actionLoading: boolean;
-  onRefine: (recipeId: string, selectedInstanceIds: string[]) => Promise<{ status: "success" | "failed"; message: string; new_gu?: GuInstance } | null>;
+  onRefine: (recipeId: string, selectedInstanceIds: string[]) => Promise<{ status: "success" | "failed"; message: string; new_gu?: GuInstance; rate_breakdown?: RefineRateBreakdown } | null>;
 }
 
 export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
@@ -32,7 +32,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   const [slottedGus, setSlottedGus] = useState<Record<number, string>>({}); // slotIndex -> guInstanceId
   const [isRefining, setIsRefining] = useState(false);
   const [furnaceStage, setFurnaceStage] = useState("Đang khởi động lò luyện...");
-  const [refineResult, setRefineResult] = useState<{ status: "success" | "failed"; new_gu?: GuInstance; message: string } | null>(null);
+  const [refineResult, setRefineResult] = useState<{ status: "success" | "failed"; new_gu?: GuInstance; message: string; rate_breakdown?: RefineRateBreakdown } | null>(null);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [customRecipes, setCustomRecipes] = useState<RefiningRecipe[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -378,6 +378,82 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
     }
 
     return { name, desc, icon, colorClass, bgClass };
+  };
+
+  const renderRateBreakdown = (breakdown?: RefineRateBreakdown) => {
+    if (!breakdown) return null;
+
+    return (
+      <div className="text-left text-xs bg-zinc-900/80 border border-zinc-800/80 p-3.5 rounded-2xl space-y-1.5 mt-4 font-sans select-none max-w-full">
+        <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono font-bold mb-2 pb-1 border-b border-zinc-900 flex justify-between">
+          <span>Thành Phần Tỷ Lệ</span>
+          <span>Gia Thành</span>
+        </div>
+        <div className="space-y-1">
+          <div className="flex justify-between items-center text-zinc-400">
+            <span className="flex items-center gap-1">📜 Tỷ lệ cơ bản:</span>
+            <span className="font-mono text-zinc-300">{(breakdown.base_rate * 100).toFixed(1)}%</span>
+          </div>
+          {breakdown.material_quality > 0 && (
+            <div className="flex justify-between items-center text-zinc-400">
+              <span className="flex items-center gap-1">💎 Phẩm chất nguyên liệu:</span>
+              <span className="font-mono text-emerald-400">+{(breakdown.material_quality * 100).toFixed(1)}%</span>
+            </div>
+          )}
+          {breakdown.refinement_dao_marks > 0 && (
+            <div className="flex justify-between items-center text-zinc-400">
+              <span className="flex items-center gap-1">🌀 Dao văn Luyện Đạo:</span>
+              <span className="font-mono text-emerald-400">+{(breakdown.refinement_dao_marks * 100).toFixed(1)}%</span>
+            </div>
+          )}
+          {breakdown.refinement_mastery > 0 && (
+            <div className="flex justify-between items-center text-zinc-400">
+              <span className="flex items-center gap-1">🎓 Cảnh giới Luyện Đạo:</span>
+              <span className="font-mono text-emerald-400">+{(breakdown.refinement_mastery * 100).toFixed(1)}%</span>
+            </div>
+          )}
+          {breakdown.target_path_mastery > 0 && (
+            <div className="flex justify-between items-center text-zinc-400">
+              <span className="flex items-center gap-1">⚔️ Cảnh giới lưu phái:</span>
+              <span className="font-mono text-emerald-400">+{(breakdown.target_path_mastery * 100).toFixed(1)}%</span>
+            </div>
+          )}
+          {breakdown.luck_bonus > 0 && (
+            <div className="flex justify-between items-center text-zinc-400">
+              <span className="flex items-center gap-1">🍀 Vận khí gia thành:</span>
+              <span className="font-mono text-emerald-400">+{(breakdown.luck_bonus * 100).toFixed(1)}%</span>
+            </div>
+          )}
+          {breakdown.support_bonus > 0 && (
+            <div className="flex justify-between items-center text-zinc-400">
+              <span className="flex items-center gap-1">🛡️ Cổ trùng phụ trợ:</span>
+              <span className="font-mono text-emerald-400">+{(breakdown.support_bonus * 100).toFixed(1)}%</span>
+            </div>
+          )}
+          {breakdown.env_bonus > 0 && (
+            <div className="flex justify-between items-center text-zinc-400">
+              <span className="flex items-center gap-1">🗺️ Địa lợi (Môi trường):</span>
+              <span className="font-mono text-emerald-400">+{(breakdown.env_bonus * 100).toFixed(1)}%</span>
+            </div>
+          )}
+          {breakdown.completion_penalty < 1.0 && (
+            <div className="flex justify-between items-center text-rose-400">
+              <span className="flex items-center gap-1">⚠️ Chiết khấu tàn phương:</span>
+              <span className="font-mono text-rose-400">x{(breakdown.completion_penalty * 100).toFixed(0)}%</span>
+            </div>
+          )}
+          {!breakdown.combo_accuracy && (
+            <div className="text-[10px] text-rose-400 font-bold italic mt-1 leading-tight">
+              ⚠️ Cổ trùng nguyên liệu sai công thức (Tỷ lệ về 0%)!
+            </div>
+          )}
+        </div>
+        <div className="flex justify-between items-center border-t border-zinc-900 pt-2 font-bold font-serif text-amber-400">
+          <span>✨ Tỷ lệ cuối cùng:</span>
+          <span className="font-mono text-sm">{(breakdown.final_rate * 100).toFixed(1)}%</span>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -966,7 +1042,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
             <div className="absolute inset-0 bg-white opacity-0 pointer-events-none animate-flash z-50" />
 
             {refineResult.status === "success" ? (
-              <div className="space-y-6 max-w-sm w-full animate-gold-glow p-6 rounded-3xl border border-amber-500/40 bg-zinc-950 relative overflow-hidden">
+              <div className="space-y-6 max-w-md w-full animate-gold-glow p-6 rounded-3xl border border-amber-500/40 bg-zinc-950 relative overflow-hidden">
                 <div className="absolute inset-0 bg-radial-gradient from-amber-500/10 to-transparent pointer-events-none" />
 
                 {/* Close/Exit Button */}
@@ -1026,6 +1102,8 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                   {refineResult.message}
                 </p>
 
+                {renderRateBreakdown(refineResult.rate_breakdown)}
+
                 <button
                   onClick={() => {
                     setRefineResult(null);
@@ -1037,7 +1115,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                 </button>
               </div>
             ) : (
-              <div className="space-y-6 max-w-sm w-full p-6 rounded-3xl border border-rose-500/20 bg-zinc-950 relative overflow-hidden">
+              <div className="space-y-6 max-w-md w-full p-6 rounded-3xl border border-rose-500/20 bg-zinc-950 relative overflow-hidden">
                 <div className="space-y-2">
                   <div className="w-14 h-14 rounded-full bg-rose-500/10 flex items-center justify-center mx-auto mb-2">
                     <AlertCircle className="w-7 h-7 text-rose-500" />
@@ -1053,6 +1131,8 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                 <p className="text-xs text-zinc-400 max-w-xs mx-auto leading-relaxed border border-zinc-900 p-4 rounded-2xl italic bg-zinc-950/60">
                   {refineResult.message}
                 </p>
+
+                {renderRateBreakdown(refineResult.rate_breakdown)}
 
                 <button
                   onClick={() => {
