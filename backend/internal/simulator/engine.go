@@ -394,6 +394,16 @@ func Simulate(state *CombatState) []CombatLog {
 			}
 		}
 
+		// ── Tick resource drain effects (ESSENCE_LEAK) ──
+		for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
+			for _, c := range combatants {
+				if c.HP <= 0 {
+					continue
+				}
+				turnLogs = append(turnLogs, tickResourceDrain(c, turn)...)
+			}
+		}
+
 		// ── Tick status effect durations and compute multipliers ──
 		for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
 			for _, c := range combatants {

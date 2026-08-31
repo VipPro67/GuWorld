@@ -1688,6 +1688,37 @@ func computeFoodNutrition(foodID string, guRank int) int {
 	return 100
 }
 
+func chooseFeedCandidate(player models.Player, targetGu models.GuInstance, foodOptions []string, targetInstanceID string, materialQty map[string]int) (foodID string, consumedGuIndex int) {
+	for _, food := range foodOptions {
+		if food == "primeval_stone" {
+			cost := int64(math.Pow(2, float64(targetGu.Rank)))
+			if player.PrimevalStones >= cost {
+				return food, -1
+			}
+			continue
+		}
+		if food == "immortal_stone" {
+			cost := int64(targetGu.Rank)
+			if player.ImmortalStones >= cost {
+				return food, -1
+			}
+			continue
+		}
+		if strings.HasPrefix(food, "GU_") {
+			for i, invGu := range player.GuInventory {
+				if invGu.GuID == food && invGu.InstanceID != targetInstanceID && invGu.Status != "DEAD" && invGu.Status != "SEALED" {
+					return food, i
+				}
+			}
+			continue
+		}
+		if materialQty != nil && materialQty[food] > 0 {
+			return food, -1
+		}
+	}
+	return "", -1
+}
+
 func FeedGu(c *gin.Context) {
 	var req FeedRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1753,46 +1784,17 @@ func FeedGu(c *gin.Context) {
 		return
 	}
 
-	for targetGu.Hunger < specs.MaxHunger {
-		chosenFoodItem := ""
-		consumedGuIndex := -1
-
-		for _, food := range foodOptions {
-			if food == "primeval_stone" {
-				cost := int64(math.Pow(2, float64(targetGu.Rank)))
-				if player.PrimevalStones >= cost {
-					chosenFoodItem = food
-					break
-				}
-			} else if food == "immortal_stone" {
-				cost := int64(targetGu.Rank)
-				if player.ImmortalStones >= cost {
-					chosenFoodItem = food
-					break
-				}
-			} else {
-				qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), food)
-				if qty > 0 {
-					chosenFoodItem = food
-					break
-				}
-			}
-
-			if strings.HasPrefix(food, "GU_") {
-				for i, invGu := range player.GuInventory {
-					if invGu.GuID == food &&
-						invGu.InstanceID != targetGu.InstanceID &&
-						invGu.Status != "DEAD" {
-						consumedGuIndex = i
-						break
-					}
-				}
-				if consumedGuIndex != -1 {
-					break
-				}
-			}
+	materialQty := make(map[string]int)
+	for _, food := range foodOptions {
+		if food == "primeval_stone" || food == "immortal_stone" || strings.HasPrefix(food, "GU_") {
+			continue
 		}
+		qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), food)
+		materialQty[food] = qty
+	}
 
+	for targetGu.Hunger < specs.MaxHunger {
+		chosenFoodItem, consumedGuIndex := chooseFeedCandidate(player, *targetGu, foodOptions, targetGu.InstanceID, materialQty)
 		if chosenFoodItem == "" && consumedGuIndex == -1 {
 			break // No more food
 		}
@@ -1800,7 +1802,13 @@ func FeedGu(c *gin.Context) {
 		foodID := ""
 		if chosenFoodItem != "" {
 			if chosenFoodItem != "primeval_stone" && chosenFoodItem != "immortal_stone" {
-				InventorySvc.RemoveItem(tx, player.ID.String(), chosenFoodItem, "materials", 1)
+				if err := InventorySvc.RemoveItem(tx, player.ID.String(), chosenFoodItem, "materials", 1); err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ thức ăn phù hợp để cho Cổ trùng ăn."})
+					return
+				}
+				if materialQty[chosenFoodItem] > 0 {
+					materialQty[chosenFoodItem]--
+				}
 			}
 			foodID = chosenFoodItem
 		} else {
@@ -1823,6 +1831,10 @@ func FeedGu(c *gin.Context) {
 					guIndex = i
 					break
 				}
+			}
+			if guIndex == -1 {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Target Gu instance was removed while feeding"})
+				return
 			}
 			targetGu = &player.GuInventory[guIndex]
 		}

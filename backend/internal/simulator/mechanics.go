@@ -150,6 +150,13 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 	c.AccuracyPenalty = 0.0
 	c.DamageTakenReduction = 0.0
 
+	// Reset new flags
+	c.IsEssenceLeaking = false
+	c.HasGuSeal = false
+	c.HasSoulWound = false
+	c.HasThoughtChaos = false
+	c.HasDaoConflict = false
+
 	speedMult := 1.0
 	for _, eff := range c.ActiveEffects {
 		switch eff.ID {
@@ -173,37 +180,88 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 			c.HasTaunt = true
 			c.TaunterID = c.ID
 
-		// New registry-driven statuses.
-		case statusfx.StatusSleep:
-			c.IsSleeping = true
-		case statusfx.StatusFear:
-			c.IsFeared = true
-		case statusfx.StatusCharm:
-			c.IsCharmed = true
-		case statusfx.StatusStealth:
-			c.IsStealthed = true
-		case statusfx.StatusConfuse:
-			c.IsConfused = true
-		case statusfx.StatusBlind:
-			c.IsBlinded = true
-			c.AccuracyPenalty = float64(eff.Value) / 100.0
-		case statusfx.StatusBind:
-			c.IsBound = true
-		case statusfx.StatusInvincible:
-			c.DamageTakenReduction = 1.0
-		case statusfx.StatusHaste:
-			speedMult *= (1.0 + float64(eff.Value)/100.0)
-		case statusfx.StatusArmorBreak:
-			c.DefenseMultiplier *= (1.0 - float64(eff.Value)/100.0)
-		case statusfx.StatusDamageReduction:
-			if r := float64(eff.Value) / 100.0; r > c.DamageTakenReduction {
-				c.DamageTakenReduction = r
+			// New registry-driven statuses.
+			case statusfx.StatusSleep:
+				c.IsSleeping = true
+			case statusfx.StatusFear:
+				c.IsFeared = true
+			case statusfx.StatusCharm:
+				c.IsCharmed = true
+			case statusfx.StatusStealth:
+				c.IsStealthed = true
+			case statusfx.StatusConfuse:
+				c.IsConfused = true
+			case statusfx.StatusBlind:
+				c.IsBlinded = true
+				c.AccuracyPenalty = float64(eff.Value) / 100.0
+			case statusfx.StatusBind:
+				c.IsBound = true
+			case statusfx.StatusInvincible:
+				c.DamageTakenReduction = 1.0
+			case statusfx.StatusHaste:
+				speedMult *= (1.0 + float64(eff.Value)/100.0)
+			case statusfx.StatusArmorBreak:
+				c.DefenseMultiplier *= (1.0 - float64(eff.Value)/100.0)
+			case statusfx.StatusDamageReduction:
+				if r := float64(eff.Value) / 100.0; r > c.DamageTakenReduction {
+					c.DamageTakenReduction = r
+				}
+			case statusfx.StatusReviveLock:
+				c.IsReviveLocked = true
+			case statusfx.StatusEssenceLeak:
+				c.IsEssenceLeaking = true
+			case statusfx.StatusGuSeal:
+				c.HasGuSeal = true
+			case statusfx.StatusSoulWound:
+				c.HasSoulWound = true
+			case statusfx.StatusThoughtChaos:
+				c.HasThoughtChaos = true
+			case statusfx.StatusDaoConflict:
+				c.HasDaoConflict = true
 			}
-		case statusfx.StatusReviveLock:
-			c.IsReviveLocked = true
-		}
 	}
 	c.EffectiveSpeed = c.Speed * speedMult
+}
+
+// tickResourceDrain handles resource-drain effects such as ESSENCE_LEAK.
+func tickResourceDrain(c *CombatantAuto, turn int) []CombatLog {
+	var logs []CombatLog
+	if c.IsEssenceLeaking {
+		// Example: drain 5% of max mana per turn.
+		drain := int(float64(c.MaxMana) * 0.05)
+		if drain > c.Mana {
+			drain = c.Mana
+		}
+		c.Mana -= drain
+		logs = append(logs, CombatLog{Turn: turn, ActorId: c.ID, ActorName: c.Name, Action: "ESSENCE_LEAK", Detail: fmt.Sprintf("%s mất %d Chân Nguyên do Rò Rỉ.", c.Name, drain)})
+	}
+	return logs
+}
+
+// DispelActorStatuses removes statuses of a given category from an actor.
+// maxCount limits how many statuses can be removed; 0 = unlimited.
+func DispelActorStatuses(actor *CombatantAuto, category statusfx.StatusCategory, maxCount int) []string {
+	cleansed := []string{}
+	remaining := []Effect{}
+	for _, st := range actor.ActiveEffects {
+		spec, ok := statusfx.Spec(st.ID)
+		if !ok || spec.Category != category {
+			remaining = append(remaining, st)
+			continue
+		}
+		if maxCount > 0 && len(cleansed) >= maxCount {
+			remaining = append(remaining, st)
+			continue
+		}
+		// Trigger cleanse trap for BLEED from Blood path.
+		if st.ID == statusfx.StatusBleed && spec.Path == "blood" {
+			burst := float64(st.Value) * float64(st.Duration) * 0.5
+			actor.HP -= int(burst)
+		}
+		cleansed = append(cleansed, st.ID)
+	}
+	actor.ActiveEffects = remaining
+	return cleansed
 }
 
 // ApplyThornsDamage applies thorns reflect damage from defender to attacker.

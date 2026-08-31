@@ -15,7 +15,11 @@ import (
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
-// persistentCellKey identifies a shared, DB-backed cell by global coords.
+// persistentCellKey identifies a shared, DB-backed cell by global world coords.
+// Boss/resource/safe-point cells are intentionally global to the server, not
+// scoped to a single player or a single region. The DB also enforces a global
+// (x, y) uniqueness, so all players resolve the same boss marker from the same
+// world coordinate.
 type persistentCellKey struct{ X, Y int }
 
 // persistentCell is a cell on the shared map: boss, high-tier resource or a
@@ -97,12 +101,12 @@ func LoadZoneRegistry(db *sql.DB) error {
 		var z models.Region
 		var active bool
 		var poolRaw string
-			var safeX, safeY sql.NullInt64
-			if err := rows.Scan(&z.ID, &z.Name, &z.Description, &z.Width, &z.Height,
-				&z.MinRank, &z.MaxRank, &active,
-				&z.ParentID, &z.ZoneType,
-				&z.MinX, &z.MinY, &z.MaxX, &z.MaxY,
-				&z.EntryX, &z.EntryY, &poolRaw, &safeX, &safeY); err != nil {
+		var safeX, safeY sql.NullInt64
+		if err := rows.Scan(&z.ID, &z.Name, &z.Description, &z.Width, &z.Height,
+			&z.MinRank, &z.MaxRank, &active,
+			&z.ParentID, &z.ZoneType,
+			&z.MinX, &z.MinY, &z.MaxX, &z.MaxY,
+			&z.EntryX, &z.EntryY, &poolRaw, &safeX, &safeY); err != nil {
 
 			logger.S.Warnf("zone registry scan: %v", err)
 			continue
@@ -165,6 +169,9 @@ func LoadZoneRegistry(db *sql.DB) error {
 			}
 		}
 		key := persistentCellKey{X: pc.X, Y: pc.Y}
+		if prev, exists := newReg.persistent[key]; exists && prev.RegionID != pc.RegionID {
+			logger.S.Warnf("shared persistent cell coordinate collision at (%d,%d): existing region=%s, new region=%s, cell=%s/%s", pc.X, pc.Y, prev.RegionID, pc.RegionID, prev.Type, pc.Type)
+		}
 		// Cell is considered cleared while within its respawn window.
 		if !pc.LastCleared.IsZero() && time.Since(pc.LastCleared) < time.Duration(pc.RespawnSeconds)*time.Second {
 			pc.cleared = true

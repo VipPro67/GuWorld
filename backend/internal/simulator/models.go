@@ -165,11 +165,12 @@ type SimAction struct {
 
 // Effect represents an active buff or debuff on a combatant.
 type Effect struct {
-	ID       string // effect constant (EffectSlow, EffectWeak, etc.)
-	Type     string // "buff" or "debuff"
-	Tier     int    // tier level (1-5) for scaling
-	Value    int    // computed percent or duration (from TierToPercent / TierToDuration)
-	Duration int    // remaining turns
+	ID         string // effect constant (EffectSlow, EffectWeak, etc.)
+	Type       string // "buff" or "debuff"
+	Tier       int    // tier level (1-5) for scaling
+	Value      int    // computed percent or duration (from TierToPercent / TierToDuration)
+	Duration   int    // remaining turns
+	SourcePath string // optional dao path source for cleansing traps
 }
 
 // DoTEffect tracks a damage-over-time or heal-over-time effect on a combatant.
@@ -250,6 +251,12 @@ type CombatantAuto struct {
 	IsBlinded            bool    // chance to miss (BLIND)
 	IsBound              bool    // immobilize, loses turn (BIND)
 	IsReviveLocked       bool    // cannot be revived (REVIVE_LOCK)
+	// New GuWorld specific flags
+	IsEssenceLeaking    bool    // ESSENCE_LEAK drains Chân Nguyên each turn
+	HasGuSeal            bool    // GU_SEAL disables one equipped Gu's active effects
+	HasSoulWound         bool    // SOUL_WOUND true damage and CN cost increase
+	HasThoughtChaos      bool    // THOUGHT_CHAOS can cause KillerMove failure
+	HasDaoConflict       bool    // DAO_CONFLICT reduces heal/shield from allies
 	AccuracyPenalty      float64 // 0..1 miss chance (BLIND)
 	DamageTakenReduction float64 // 0..1 damage reduction multiplier (DAMAGE_REDUCTION_UP / INVINCIBLE)
 

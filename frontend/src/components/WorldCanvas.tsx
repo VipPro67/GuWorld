@@ -20,6 +20,7 @@ const BG_COLOR = 0x1d1e2c;
 
 export interface MapLabelSettings {
   monster: boolean;
+  bossNearby: boolean;
   hub: boolean;
   khu_vuc: boolean;
   ngu_vuc: boolean;
@@ -94,6 +95,28 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const itemDictionary = useGameStore((s) => s.itemDictionary);
 
   const movementSpeed = useMemo(() => computeMovementSpeed(gamePlayer, guDictionary), [gamePlayer, guDictionary]);
+
+  const displayObjects = useMemo(() => {
+    const byKey = new Map<string, WorldObject>();
+    for (const obj of objects) {
+      byKey.set(`${obj.x},${obj.y}`, obj);
+    }
+    for (const cell of nearbyCells) {
+      if (cell.cell_type !== "Boss" && cell.cell_type !== "Resource" && cell.cell_type !== "SafePoint" && cell.cell_type !== "Village") continue;
+      const key = `${cell.x},${cell.y}`;
+      if (!byKey.has(key)) {
+        byKey.set(key, {
+          region_id: gamePlayer?.current_region || "",
+          x: cell.x,
+          y: cell.y,
+          cell_type: cell.cell_type,
+          content_id: cell.content,
+          rank: cell.rank,
+        });
+      }
+    }
+    return Array.from(byKey.values());
+  }, [objects, nearbyCells, gamePlayer?.current_region]);
 
   // Ensure regions loaded so we can draw them
   useEffect(() => {
@@ -460,7 +483,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         } else if (o.cell_type === "WildGu") {
           text = guDictionary[o.content_id]?.name || text;
         }
-        
+
+        const showBossLabel = isBoss && !!labelSettingsRef.current.bossNearby && !!gamePlayer && Math.hypot(o.x - gamePlayer.x, o.y - gamePlayer.y) <= useWorldStore.getState().investigationRange;
         const label = new Text({
           text: text,
           style: { fontSize: 12, fill: labelColor, fontFamily: "sans-serif", stroke: { color: 0x000000, width: 3 } },
@@ -468,6 +492,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         label.anchor.set(0.5, 1);
         label.y = -size - 0.8;
         label.name = "object-label-text";
+        label.visible = !isBoss || showBossLabel;
         g.addChild(label);
         g.position.set(o.x + 0.5, o.y + 0.5);
       }
@@ -604,7 +629,9 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       container.addChild(batchResource);
       container.addChild(batchWild);
 
-      // Draw bosses separately with labels (few in number).
+      // Draw bosses separately with labels (few in number). Only show boss
+      // names when the user enables the nearby-boss toggle and the boss is in
+      // the current visible radius.
       let bossCount = 0;
       for (const c of cells) {
         if (c.cell_type !== "Boss") continue;
@@ -614,13 +641,16 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         g.poly([0, -0.6, 0.6, 0, 0, 0.6, -0.6, 0]);
         g.fill({ color: 0xef4444 });
         g.stroke({ color: 0x7f1d1d, width: 0.1 });
-        const label = new Text({
-          text: monsterDictionary[c.content]?.name || c.content,
-          style: { fontSize: 12, fill: 0xfecaca, fontFamily: "sans-serif", stroke: { color: 0x000000, width: 2 } },
-        });
-        label.anchor.set(0.5, 1);
-        label.y = -0.8;
-        g.addChild(label);
+        const showBossLabel = !!labelSettings.bossNearby && !!gamePlayer && Math.hypot(c.x - gamePlayer.x, c.y - gamePlayer.y) <= useWorldStore.getState().investigationRange;
+        if (showBossLabel) {
+          const label = new Text({
+            text: monsterDictionary[c.content]?.name || c.content,
+            style: { fontSize: 12, fill: 0xfecaca, fontFamily: "sans-serif", stroke: { color: 0x000000, width: 2 } },
+          });
+          label.anchor.set(0.5, 1);
+          label.y = -0.8;
+          g.addChild(label);
+        }
         g.position.set(c.x + 0.5, c.y + 0.5);
         container.addChild(g);
       }
@@ -906,7 +936,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
       drawPlayer();
       drawRegions(regions);
-      drawObjects(objects);
+      drawObjects(displayObjects);
       const cleared = gamePlayer?.cleared_cells || {};
       drawMonsters(nearbyCells.filter((c) => !cleared[`${c.x},${c.y}`]));
       drawPlayers(nearbyPlayers);
@@ -1098,8 +1128,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;
-    drawObjects(objects);
-  }, [appReady, objects, drawObjects]);
+    drawObjects(displayObjects);
+  }, [appReady, displayObjects, drawObjects]);
 
   useEffect(() => {
     if (!appReady || !appRef.current) return;

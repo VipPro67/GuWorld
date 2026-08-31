@@ -37,8 +37,8 @@ func applyStatusOps(actor *CombatantAuto, targets []*CombatantAuto, ops []status
 }
 
 func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op statusfx.StatusOp, turn int, rng *rand.Rand, logs *[]CombatLog) {
-	// Resist gate (control effects subject to MentalResistance).
-	if spec.ResistGate && resistControl(target, rng) {
+	// Resist gate (control effects subject to MentalResistance) using advanced proc formula.
+	if spec.ResistGate && !statusfx.CanApplyStatus(actor.Rank, target.Rank, actor.DaoMarks, target.DaoMarks, spec, target.MentalResistance) {
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,
 			ActorId:   target.ID,
@@ -208,17 +208,64 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 			Detail:    fmt.Sprintf("%s nhận %s, miễn nhiễm mọi sát thương trong %d lượt!", target.Name, spec.Label, op.Turns),
 		})
 
-	case statusfx.BehaviourReviveLock: // REVIVE_LOCK (debuff, prevent revival)
-		target.ActiveEffects = append(target.ActiveEffects, Effect{
-			ID: spec.ID, Type: "debuff", Value: 1, Duration: op.Turns,
-		})
-		*logs = append(*logs, CombatLog{
-			Turn:      turn,
-			ActorId:   target.ID,
-			ActorName: target.Name,
-			Action:    "REVIVE_LOCK_APPLIED",
-			Detail:    fmt.Sprintf("%s bị %s, không thể hồi sinh trong %d lượt!", target.Name, spec.Label, op.Turns),
-		})
+case statusfx.BehaviourReviveLock: // REVIVE_LOCK (debuff, prevent revival)
+	target.ActiveEffects = append(target.ActiveEffects, Effect{
+		ID: spec.ID, Type: "debuff", Value: 1, Duration: op.Turns,
+	})
+	*logs = append(*logs, CombatLog{
+		Turn:      turn,
+		ActorId:   target.ID,
+		ActorName: target.Name,
+		Action:    "REVIVE_LOCK_APPLIED",
+		Detail:    fmt.Sprintf("%s bị %s, không thể hồi sinh trong %d lượt!", target.Name, spec.Label, op.Turns),
+	})
+
+	case statusfx.BehaviourAperture:
+		// Aperture related effects: ESSENCE_LEAK, GU_SEAL, THOUGHT_CHAOS
+		target.ActiveEffects = append(target.ActiveEffects, Effect{ID: spec.ID, Type: "debuff", Value: 1, Duration: op.Turns, SourcePath: spec.Path})
+		*logs = append(*logs, CombatLog{Turn: turn, ActorId: target.ID, ActorName: target.Name, Action: op.ID + "_APPLIED", Detail: fmt.Sprintf("%s bị %s (%d lượt)", target.Name, spec.Label, op.Turns)})
+
+	case statusfx.BehaviourSoulWound:
+		// Apply true damage now (ignores shield/armor). Value is damage amount.
+		damage := int(op.Value)
+		if target.VirtualShield > 0 {
+			if target.VirtualShield >= damage {
+				target.VirtualShield -= damage
+			} else {
+				damage -= target.VirtualShield
+				target.VirtualShield = 0
+			}
+		}
+		target.HP -= damage
+		if target.HP < 0 {
+			target.HP = 0
+		}
+		*logs = append(*logs, CombatLog{Turn: turn, ActorId: target.ID, ActorName: target.Name, Action: "SOUL_WOUND", Damage: damage, Detail: fmt.Sprintf("%s chịu %d sát thương thực (SOUL_WOUND)", target.Name, damage)})
+
+	case statusfx.BehaviourThoughtChaos:
+		// Simply set flag via Effect entry; resolution handled in ComputeEffectMultipliers.
+		target.ActiveEffects = append(target.ActiveEffects, Effect{ID: spec.ID, Type: "debuff", Value: 1, Duration: op.Turns, SourcePath: spec.Path})
+		*logs = append(*logs, CombatLog{Turn: turn, ActorId: target.ID, ActorName: target.Name, Action: "THOUGHT_CHAOS_APPLIED", Detail: fmt.Sprintf("%s bị %s (%d lượt)", target.Name, spec.Label, op.Turns)})
+
+	case statusfx.BehaviourDaoConflict:
+		// Apply as debuff; flag used in damage calculations.
+		target.ActiveEffects = append(target.ActiveEffects, Effect{ID: spec.ID, Type: "debuff", Value: 1, Duration: op.Turns, SourcePath: spec.Path})
+		*logs = append(*logs, CombatLog{Turn: turn, ActorId: target.ID, ActorName: target.Name, Action: "DAO_CONFLICT_APPLIED", Detail: fmt.Sprintf("%s bị %s (%d lượt)", target.Name, spec.Label, op.Turns)})
+
+	case statusfx.BehaviourBacklash:
+		// Immediate backlash damage to target.
+		damage := int(op.Value)
+		if target.VirtualShield > 0 {
+			if target.VirtualShield >= damage {
+				target.VirtualShield -= damage
+			} else {
+				damage -= target.VirtualShield
+				target.VirtualShield = 0
+			}
+		}
+		target.HP -= damage
+		if target.HP < 0 { target.HP = 0 }
+		*logs = append(*logs, CombatLog{Turn: turn, ActorId: target.ID, ActorName: target.Name, Action: "BACKLASH_APPLIED", Damage: damage, Detail: fmt.Sprintf("%s chịu phản phệ %d sát thương", target.Name, damage)})
 
 	default:
 		*logs = append(*logs, CombatLog{

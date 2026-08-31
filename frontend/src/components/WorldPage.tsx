@@ -89,6 +89,7 @@ export function WorldPage() {
   const [activeModal, setActiveModal] = useState<string | null>(null);
   interface MapLabelSettings {
     monster: boolean;
+    bossNearby: boolean;
     hub: boolean;
     khu_vuc: boolean;
     ngu_vuc: boolean;
@@ -99,11 +100,18 @@ export function WorldPage() {
       const saved = localStorage.getItem("gu_world_map_label_settings");
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          return {
+            monster: !!parsed.monster,
+            bossNearby: !!parsed.bossNearby,
+            hub: parsed.hub !== false,
+            khu_vuc: parsed.khu_vuc !== false,
+            ngu_vuc: parsed.ngu_vuc !== false,
+          };
         } catch (e) {}
       }
     }
-    return { monster: false, hub: true, khu_vuc: true, ngu_vuc: true };
+    return { monster: false, bossNearby: false, hub: true, khu_vuc: true, ngu_vuc: true };
   });
 
   const [showLabelMenu, setShowLabelMenu] = useState(false);
@@ -357,6 +365,15 @@ export function WorldPage() {
                     className="accent-purple-500 cursor-pointer"
                   />
                   <span className="font-serif">Quái & Cổ trùng</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer hover:text-white">
+                  <input
+                    type="checkbox"
+                    checked={labelSettings.bossNearby}
+                    onChange={(e) => updateLabelSetting("bossNearby", e.target.checked)}
+                    className="accent-red-500 cursor-pointer"
+                  />
+                  <span className="font-serif">Boss lân cận</span>
                 </label>
                 <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer hover:text-white">
                   <input
