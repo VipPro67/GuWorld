@@ -469,6 +469,37 @@ export default function Home() {
               <button onClick={handleCloseChangelog} className="text-zinc-500 hover:text-zinc-300 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
             <div className="flex-1 overflow-y-auto space-y-3 text-xs text-[var(--text-secondary)] leading-relaxed pr-1 custom-scrollbar">
+              <p className="text-[var(--text-secondary)]">Phiên bản <strong className="text-amber-600 dark:text-amber-400">v0.8.2</strong> — Hợp Luyện & Cảnh Giới Chân Ý:</p>
+              <div className="space-y-2">
+                <div className="flex gap-2.5 items-start bg-amber-950/20 border border-amber-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">📊</span>
+                  <div>
+                    <span className="font-bold text-amber-300">Hiện chi tiết % Luyện Cổ</span>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Hiển thị chi tiết đóng góp tỷ lệ % của từng thành phần (tỷ lệ gốc, đạo ngân, cảnh giới, vận khí, hỗ trợ, địa lợi...) khi lò luyện thành công hoặc thất bại.</p>
+                  </div>
+                </div>
+                <div className="flex gap-2.5 items-start bg-emerald-950/20 border border-emerald-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">🌀</span>
+                  <div>
+                    <span className="font-bold text-emerald-300">Đạo Ngân vô hạn & Cảnh giới tương quan</span>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Bỏ giới hạn đạo ngân luyện cổ (unlimit), tăng chậm dần theo căn bậc hai và giảm dần theo bậc Cổ đích (chia theo Rank). Cảnh giới Chân Ý nhân trực tiếp vào đạo ngân giúp hóa giải độ khó luyện Cổ bậc cao!</p>
+                  </div>
+                </div>
+                <div className="flex gap-2.5 items-start bg-purple-950/20 border border-purple-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">🎓</span>
+                  <div>
+                    <span className="font-bold text-purple-300">Cập nhật mốc điểm Cảnh giới</span>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Đồng bộ lại điểm Chân Ý: Đại Sư (100), Tông Sư (1.000 - khắc chế Tiên Cổ R6), Đại Tông Sư (10.000 - R7), Vô Thượng (100.000 - R8).</p>
+                  </div>
+                </div>
+                <div className="flex gap-2.5 items-start bg-rose-950/20 border border-rose-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">📖</span>
+                  <div>
+                    <span className="font-bold text-rose-300">Đọc kỹ Wiki thường xuyên</span>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Cơ chế Luyện Cổ và thăng thiên vô cùng phức tạp, khuyến cáo đạo hữu hãy thường xuyên tra cứu Wiki để thấu suốt thiên cơ!</p>
+                  </div>
+                </div>
+              </div>
               <p className="text-[var(--text-secondary)]">Phiên bản <strong className="text-amber-600 dark:text-amber-400">v0.8.1</strong> — Sủng vật & Hồn Phách:</p>
               <div className="space-y-2">
                 <div className="flex gap-2.5 items-start bg-purple-950/20 border border-purple-500/10 rounded-lg p-3">
