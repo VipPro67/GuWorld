@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
 
@@ -778,50 +779,55 @@ if (actor.IsSilenced || actor.IsFeared) && a.ActionType != "BASIC_ATTACK" {
 				remaining := actor.PathMasteryGainLimit - actor.PathMasteryGained
 				if remaining > 0 {
 					cleanPath := "strength"
-					pathGain := 1
-					if a.ActionType == "GU_SKILL" && len(a.Path) > 0 {
-						cleanPath = strings.TrimSuffix(strings.ToLower(a.Path[0]), " path")
-						if a.Rank >= 6 {
-							pathGain = 10
+					guRank := 1
+					baseGain := 1
+					if a.ActionType == "GU_SKILL" {
+						guRank = a.Rank
+						if guRank < 1 {
+							guRank = 1
 						}
-					}
-					clamped := pathGain > remaining
-					if clamped {
-						pathGain = remaining
+						if len(a.Path) > 0 {
+							cleanPath = strings.TrimSuffix(strings.ToLower(a.Path[0]), " path")
+						}
+						if guRank >= 6 {
+							baseGain = 10
+						}
 					}
 					if actor.PathMasteries == nil {
 						actor.PathMasteries = make(map[string]int)
 					}
-					actor.PathMasteryGained += pathGain
-					actor.PathMasteries[cleanPath] += pathGain
-
 					pts := actor.PathMasteries[cleanPath]
-					lvlName := "Sơ Học"
-					if pts >= 10000 {
-						lvlName = "Vô Thượng Tông Sư"
-					} else if pts >= 2500 {
-						lvlName = "Đại Tông Sư"
-					} else if pts >= 500 {
-						lvlName = "Tông Sư"
-					} else if pts >= 100 {
-						lvlName = "Đại Sư"
-					}
+					currentLevel := gamefx.PathMasteryLevel(pts)
+					pathGain := gamefx.CalculatePathMasteryGain(guRank, currentLevel, baseGain)
 
-					turnLogs = append(turnLogs, CombatLog{
-						Turn:      turn,
-						ActorId:   actor.ID,
-						ActorName: actor.Name,
-						Action:    "PATH_MASTERY_GAIN",
-						Detail:    fmt.Sprintf("-> Ngộ Đạo tăng tiến (%s)! +%d điểm Chân Ý %s (Cảnh giới: %s).", a.Name, pathGain, strings.Title(cleanPath), lvlName),
-					})
-					if clamped {
+					if pathGain > 0 {
+						clamped := pathGain > remaining
+						if clamped {
+							pathGain = remaining
+						}
+						actor.PathMasteryGained += pathGain
+						actor.PathMasteries[cleanPath] += pathGain
+
+						newPts := actor.PathMasteries[cleanPath]
+						newLvl := gamefx.PathMasteryLevel(newPts)
+						lvlName := gamefx.PathMasteryLevelName(newLvl)
+
 						turnLogs = append(turnLogs, CombatLog{
 							Turn:      turn,
 							ActorId:   actor.ID,
 							ActorName: actor.Name,
-							Action:    "PATH_MASTERY_CAP",
-							Detail:    fmt.Sprintf("-> %s đã đạt giới hạn %d điểm Chân Ý trong trận này, không thể ngộ đạo thêm.", actor.Name, actor.PathMasteryGainLimit),
+							Action:    "PATH_MASTERY_GAIN",
+							Detail:    fmt.Sprintf("-> Ngộ Đạo tăng tiến (%s)! +%d điểm Chân Ý %s (Cảnh giới: %s).", a.Name, pathGain, strings.Title(cleanPath), lvlName),
 						})
+						if clamped {
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   actor.ID,
+								ActorName: actor.Name,
+								Action:    "PATH_MASTERY_CAP",
+								Detail:    fmt.Sprintf("-> %s đã đạt giới hạn %d điểm Chân Ý trong trận này, không thể ngộ đạo thêm.", actor.Name, actor.PathMasteryGainLimit),
+							})
+						}
 					}
 				}
 			}

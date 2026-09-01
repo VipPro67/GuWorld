@@ -365,9 +365,15 @@ func CastKillerMove(c *gin.Context) {
 
 		applyKillerMoveToCombat(player.ActiveCombat, player.ID.String(), req.TargetID, preview.DamageValue, preview.DefenseValue, preview.Effects, preview.CompoundEffects, &logs)
 
-		// Sát chiêu thành công tăng Cảnh Giới Lưu Phái (+2 điểm path hạch tâm).
+		// Sát chiêu thành công tăng Cảnh Giới Lưu Phái (tính theo rank sát chiêu và cảnh giới hiện tại).
+		moveRank := move.RankRequired
+		if moveRank < 1 {
+			moveRank = 1
+		}
 		corePath := normalizePath(preview.Path)
-		if gained := applyPathMasteryGain(&player, corePath, killerMovePathMasteryGain); gained > 0 {
+		currentLevel := gamefx.PathMasteryLevel(player.PathMasteries[corePath])
+		pathGain := gamefx.CalculatePathMasteryGain(moveRank, currentLevel, killerMovePathMasteryGain)
+		if gained := applyPathMasteryGain(&player, corePath, pathGain); gained > 0 {
 			newLevel := gamefx.PathMasteryLevel(player.PathMasteries[corePath])
 			logs = append(logs, fmt.Sprintf("Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái %s (Cảnh giới: %s).", gained, strings.Title(corePath), gamefx.PathMasteryLevelName(newLevel)))
 		}

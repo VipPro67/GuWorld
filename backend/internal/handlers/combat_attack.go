@@ -444,10 +444,12 @@ func CombatAttack(c *gin.Context) {
 				if !isVirtual {
 					if len(spec.Path) > 0 {
 						cleanPath := strings.TrimSuffix(strings.ToLower(spec.Path[0]), " path")
-						pathGain := 1
+						baseGain := 1
 						if spec.Rank >= 6 {
-							pathGain = 10
+							baseGain = 10
 						}
+						currentLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
+						pathGain := gamefx.CalculatePathMasteryGain(spec.Rank, currentLevel, baseGain)
 						gained := applyPathMasteryGain(&player, cleanPath, pathGain)
 						if gained > 0 {
 							newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
@@ -656,20 +658,14 @@ func CombatAttack(c *gin.Context) {
 
 			strengthNote := ""
 			if grantsMastery {
-				strengthGain := applyPathMasteryGain(&player, "strength", 1)
+				strLvl := gamefx.PathMasteryLevel(player.PathMasteries["strength"])
+				calcGain := gamefx.CalculatePathMasteryGain(1, strLvl, 1)
+				strengthGain := applyPathMasteryGain(&player, "strength", calcGain)
 				if strengthGain > 0 {
 					pts := player.PathMasteries["strength"]
-					lvlName := "Sơ Học"
-					if pts >= 10000 {
-						lvlName = "Vô Thượng Tông Sư"
-					} else if pts >= 2500 {
-						lvlName = "Đại Tông Sư"
-					} else if pts >= 500 {
-						lvlName = "Tông Sư"
-					} else if pts >= 100 {
-						lvlName = "Đại Sư"
-					}
-					strengthNote = fmt.Sprintf(" Ngộ Đạo: +1 Chân Ý Lực (%s)", lvlName)
+					newLvl := gamefx.PathMasteryLevel(pts)
+					lvlName := gamefx.PathMasteryLevelName(newLvl)
+					strengthNote = fmt.Sprintf(" Ngộ Đạo: +%d Chân Ý Lực (%s)", strengthGain, lvlName)
 				}
 			}
 

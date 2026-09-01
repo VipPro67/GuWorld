@@ -1,6 +1,46 @@
 package gamefx
 
-import "strings"
+import (
+	"math"
+	"strings"
+)
+
+// CalculatePathMasteryGain calculates the Chân Ý (path mastery) points earned
+// when refining or using Gu skills / killer moves of a given rank, scaled down by
+// the player's current attainment level (level 0-4) in that path. High attainment
+// levels receive reduced efficiency when using lower rank Gu, and 0 points when
+// exceeding the rank's cap limit.
+func CalculatePathMasteryGain(guRank int, pathLevel int, baseGain int) int {
+	if baseGain <= 0 {
+		return 0
+	}
+	if guRank < 1 {
+		guRank = 1
+	}
+	// Rank 1: only gives gain when level < 2 (Ordinary / Master)
+	if guRank == 1 && pathLevel >= 2 {
+		return 0
+	}
+	// Rank 2 & 3: only gives gain when level < 3 (Ordinary / Master / Grandmaster)
+	if (guRank == 2 || guRank == 3) && pathLevel >= 3 {
+		return 0
+	}
+	// Rank 4+: only gives gain when level < 4 (Supreme Grandmaster is capped)
+	if guRank >= 4 && pathLevel >= 4 {
+		return 0
+	}
+
+	factor := 1.0 - 0.20*float64(pathLevel)
+	if factor < 0.0 {
+		factor = 0.0
+	}
+
+	gain := int(math.Round(float64(baseGain) * factor))
+	if gain < 1 && baseGain > 0 {
+		gain = 1 // guarantee at least 1 point if not capped by level
+	}
+	return gain
+}
 
 // Path mastery (Cảnh Giới Lưu Phái) is stored like Dao Marks: a JSONB map of
 // path -> accumulated points (players.path_masteries). The attained realm

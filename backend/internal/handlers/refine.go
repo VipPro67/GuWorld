@@ -1022,19 +1022,6 @@ func DeduceRecipe(c *gin.Context) {
 }
 
 func calculateRefinementPathGain(targetRank int, refinementRealm int) int {
-	// Rank 1: only gives gain when realm < 2 (points < 1000)
-	if targetRank == 1 && refinementRealm >= 2 {
-		return 0
-	}
-	// Rank 2 & 3: only gives gain when realm < 3 (points < 10000)
-	if (targetRank == 2 || targetRank == 3) && refinementRealm >= 3 {
-		return 0
-	}
-	// Rank 4+: only gives gain when realm < 4 (points < 100000)
-	if targetRank >= 4 && refinementRealm >= 4 {
-		return 0
-	}
-
 	baseGain := 0
 	switch targetRank {
 	case 1:
@@ -1059,14 +1046,5 @@ func calculateRefinementPathGain(targetRank int, refinementRealm int) int {
 		baseGain = 0
 	}
 
-	factor := 1.0 - 0.20*float64(refinementRealm)
-	if factor < 0.0 {
-		factor = 0.0
-	}
-
-	gain := int(math.Round(float64(baseGain) * factor))
-	if gain < 1 && baseGain > 0 {
-		gain = 1 // guarantee at least 1 point if not capped by level
-	}
-	return gain
+	return gamefx.CalculatePathMasteryGain(targetRank, refinementRealm, baseGain)
 }

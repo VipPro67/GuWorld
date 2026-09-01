@@ -122,3 +122,48 @@ func TestPathMasteryBattleGainLimit(t *testing.T) {
 		}
 	}
 }
+
+func TestCalculatePathMasteryGain(t *testing.T) {
+	tests := []struct {
+		guRank    int
+		pathLevel int
+		baseGain  int
+		want      int
+	}{
+		// Level 0 (Ordinary)
+		{guRank: 1, pathLevel: 0, baseGain: 1, want: 1},
+		{guRank: 1, pathLevel: 0, baseGain: 10, want: 10},
+		{guRank: 6, pathLevel: 0, baseGain: 10, want: 10},
+
+		// Level 1 (Master) -> factor 0.8
+		{guRank: 1, pathLevel: 1, baseGain: 1, want: 1}, // 1 * 0.8 = 0.8 -> 1
+		{guRank: 1, pathLevel: 1, baseGain: 10, want: 8}, // 10 * 0.8 = 8
+		{guRank: 6, pathLevel: 1, baseGain: 10, want: 8},
+
+		// Level 2 (Grandmaster) -> factor 0.6; Rank 1 capped at level 2
+		{guRank: 1, pathLevel: 2, baseGain: 1, want: 0},
+		{guRank: 1, pathLevel: 2, baseGain: 10, want: 0},
+		{guRank: 2, pathLevel: 2, baseGain: 1, want: 1}, // 1 * 0.6 = 0.6 -> 1
+		{guRank: 2, pathLevel: 2, baseGain: 10, want: 6}, // 10 * 0.6 = 6
+		{guRank: 6, pathLevel: 2, baseGain: 10, want: 6},
+
+		// Level 3 (Great Grandmaster) -> factor 0.4; Rank 1-3 capped at level 3
+		{guRank: 1, pathLevel: 3, baseGain: 1, want: 0},
+		{guRank: 2, pathLevel: 3, baseGain: 10, want: 0},
+		{guRank: 3, pathLevel: 3, baseGain: 10, want: 0},
+		{guRank: 4, pathLevel: 3, baseGain: 10, want: 4}, // 10 * 0.4 = 4
+		{guRank: 6, pathLevel: 3, baseGain: 10, want: 4},
+
+		// Level 4 (Supreme Grandmaster) -> Capped for all ranks
+		{guRank: 1, pathLevel: 4, baseGain: 10, want: 0},
+		{guRank: 5, pathLevel: 4, baseGain: 10, want: 0},
+		{guRank: 9, pathLevel: 4, baseGain: 50000, want: 0},
+	}
+
+	for _, tt := range tests {
+		got := CalculatePathMasteryGain(tt.guRank, tt.pathLevel, tt.baseGain)
+		if got != tt.want {
+			t.Errorf("CalculatePathMasteryGain(%d, %d, %d) = %d, want %d", tt.guRank, tt.pathLevel, tt.baseGain, got, tt.want)
+		}
+	}
+}
