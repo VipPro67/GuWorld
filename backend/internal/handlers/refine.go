@@ -249,6 +249,35 @@ func GetRecipes(c *gin.Context) {
 }
 
 // RefineGu handles the secure RNG-based craft logic
+// calculateRefineManaCost determines the amount of Mana/Immortal Essence required based on rank difference
+func calculateRefineManaCost(playerRank, targetRank int) (float64, error) {
+	if playerRank < 6 && targetRank >= 6 {
+		return 0, fmt.Errorf("Phàm nhân không có Tiên Nguyên, không thể luyện Tiên Cổ!")
+	}
+	if playerRank >= 6 && targetRank < 6 {
+		return 0, nil // Immortals refine Mortal Gu for effectively 0 cost
+	}
+	
+	if playerRank < 6 && targetRank < 6 {
+		baseCost := 20.0
+		if playerRank > targetRank {
+			return baseCost / math.Pow(10.0, float64(playerRank-targetRank)), nil
+		} else if playerRank < targetRank {
+			return baseCost * gamefx.HigherRankManaMultiplier(targetRank, playerRank), nil
+		}
+		return baseCost, nil
+	}
+	
+	// Immortal refining Immortal Gu
+	baseCost := 10.0
+	if playerRank > targetRank {
+		return baseCost / math.Pow(100.0, float64(playerRank-targetRank)), nil
+	} else if playerRank < targetRank {
+		return baseCost * gamefx.HigherRankManaMultiplier(targetRank, playerRank), nil
+	}
+	return baseCost, nil
+}
+
 func RefineGu(c *gin.Context) {
 	var req RefineRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -318,7 +347,23 @@ func RefineGu(c *gin.Context) {
 	}
 	recipe.ID = req.RecipeID
 
-	// 4. Validate Costs (Primeval Stones)
+	// 3b. Calculate Mana Cost
+	manaCost, err := calculateRefineManaCost(player.Rank, recipe.TargetRank)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 4. Validate Costs (Primeval Stones & Mana)
+	if player.CurrentMana < manaCost {
+		unit := "Chân Nguyên"
+		if player.Rank >= 6 {
+			unit = "Tiên Nguyên"
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ %s! Cần %.1f", unit, manaCost)})
+		return
+	}
+	
 	if player.PrimevalStones < recipe.PrimevalStonesCost {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Not enough Primeval Stones"})
 		return
@@ -394,7 +439,8 @@ func RefineGu(c *gin.Context) {
 		}
 	}
 
-	// 7. Consume resources (Stones & Materials & Gus)
+	// 7. Consume resources (Stones, Mana, Materials & Gus)
+	player.CurrentMana -= manaCost
 	player.PrimevalStones -= recipe.PrimevalStonesCost
 	if recipe.ImmortalEssenceStonesCost > 0 {
 		player.ImmortalStones -= recipe.ImmortalEssenceStonesCost

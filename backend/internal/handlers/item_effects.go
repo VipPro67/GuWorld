@@ -9,7 +9,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/internal/util"
-	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -230,7 +229,7 @@ func formatSummaryOfRewards(reward map[string]interface{}) string {
 
 func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec) (string, error) {
 	msg := fmt.Sprintf("Mở %s thành công!\n", item.Name)
-	var reward map[string]interface{}
+	// reward is implicitly used in messages
 
 	// ── 20 % → Nguyên Thạch  |  80 % → Vật phẩm (vật liệu / bí phương)
 	if rand.Float64() < 0.20 {
@@ -238,7 +237,7 @@ func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec
 		stones := int64(100 + rand.Intn(401))
 		player.PrimevalStones += stones
 		msg += fmt.Sprintf("- 💎 Nhận được %d Nguyên Thạch\n", stones)
-		reward = map[string]interface{}{
+		_ = map[string]interface{}{
 			"type":     "stones",
 			"quantity": stones,
 		}
@@ -250,36 +249,22 @@ func openMineChestEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec
 		if roll < 40.0 {
 			// ── RECIPE DROP (40%) ──
 			var recipeMsg string
-			recipeMsg, reward = rollRecipeDrop(tx, player, item)
+			recipeMsg, _ = rollRecipeDrop(tx, player, item)
 			if recipeMsg != "" {
 				msg += recipeMsg
 			} else {
 				var matMsg string
-				matMsg, reward = rollMaterialDrop(tx, player, item)
+				matMsg, _ = rollMaterialDrop(tx, player, item)
 				msg += matMsg
 			}
 		} else {
 			// ── MATERIAL DROP (60%) ──
 			var matMsg string
-			matMsg, reward = rollMaterialDrop(tx, player, item)
+			matMsg, _ = rollMaterialDrop(tx, player, item)
 			msg += matMsg
 		}
 	}
 
-	// Write Audit Log
-	auditlog.Log(tx, auditlog.Entry{
-		PlayerID:       &player.ID,
-		Action:         "item.open_mine_chest",
-		EntityType:     "item",
-		EntityID:       item.ID,
-		RequestSummary: fmt.Sprintf("Mở %s | %s", item.Name, formatSummaryOfRewards(reward)),
-		Metadata: map[string]interface{}{
-			"chest_id":   item.ID,
-			"chest_name": item.Name,
-			"reward":     reward,
-		},
-		Success: true,
-	})
 
 	return msg, nil
 }

@@ -1308,10 +1308,13 @@ func RechargeWithStones(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 			return
 		}
-
 		auditlog.Log(db.DB, auditlog.Entry{
 			PlayerID: &authID, Action: "player.recharge",
 			RequestSummary: fmt.Sprintf("%d Tiên Nguyên Thạch → %d Tiên Nguyên", stonesToUse, int(manaGain)),
+			Metadata: map[string]interface{}{
+				"stones_change": -stonesToUse,
+				"mana_change": int(manaGain),
+			},
 			IPAddress:      c.ClientIP(), Success: true,
 		})
 
@@ -1385,10 +1388,13 @@ func RechargeWithStones(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
 	}
-
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "player.recharge",
 		RequestSummary: fmt.Sprintf("%d Nguyên Thạch → %.4f%% chân nguyên", stonesToUse, addedMana),
+		Metadata: map[string]interface{}{
+			"stones_change": -stonesToUse,
+			"mana_change": addedMana,
+		},
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 
@@ -3269,6 +3275,12 @@ func UseItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
 		return
 	}
+	initialHP := player.HP
+	initialMana := player.CurrentMana
+	initialLifespan := player.Lifespan
+	initialHumanQi := player.HumanQi
+	initialStones := player.PrimevalStones
+
 
 	item, ok := models.ItemRegistry[req.ItemID]
 	if !ok {
@@ -3360,10 +3372,18 @@ func UseItem(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+		auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "item.use", EntityType: "item",
 		EntityID:       req.ItemID,
 		RequestSummary: item.Name,
+		Metadata: map[string]interface{}{
+			"hp_change": player.HP - initialHP,
+			"mana_change": player.CurrentMana - initialMana,
+			"lifespan_change": player.Lifespan - initialLifespan,
+			"stones_change": player.PrimevalStones - initialStones,
+			"human_qi_change": player.HumanQi - initialHumanQi,
+			"messages": messages,
+		},
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 
@@ -3405,7 +3425,6 @@ func UseItems(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player Aperture"})
 		return
 	}
-
 	initialHP := player.HP
 	initialMana := player.CurrentMana
 	initialLifespan := player.Lifespan
@@ -3585,9 +3604,18 @@ func UseItems(c *gin.Context) {
 		finalMessage += "\n" + strings.Join(aggregatedSpecial, "\n")
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+		auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "item.use_bulk",
 		RequestSummary: strings.Join(usageDetails, ", "),
+		Metadata: map[string]interface{}{
+			"items_used": usedCounts,
+			"hp_change": player.HP - initialHP,
+			"mana_change": player.CurrentMana - initialMana,
+			"lifespan_change": player.Lifespan - initialLifespan,
+			"stones_change": player.PrimevalStones - initialStones,
+			"human_qi_change": player.HumanQi - initialHumanQi,
+			"messages": specialMessages,
+		},
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 

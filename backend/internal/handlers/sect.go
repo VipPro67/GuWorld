@@ -1931,11 +1931,17 @@ func BuyFromSectVault(c *gin.Context) {
 	if itemName == "" {
 		itemName = req.ItemID
 	}
-
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.buy_vault", EntityType: "sect",
 		EntityID:       m.SectID,
 		RequestSummary: fmt.Sprintf("%s | %s x%d | giá %d điểm cống hiến", req.ItemType, itemName, quantity, cost),
+		Metadata: map[string]interface{}{
+			"item_type": req.ItemType,
+			"item_id": req.ItemID,
+			"quantity": quantity,
+			"cost_contribution": cost,
+			"contribution_change": -cost,
+		},
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	responseWithPlayer(c, http.StatusOK, player, gin.H{

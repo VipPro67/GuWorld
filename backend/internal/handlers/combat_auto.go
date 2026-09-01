@@ -20,7 +20,6 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
-	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
@@ -949,12 +948,6 @@ func AutoCombatStart(c *gin.Context) {
 			SaveCombatHistory(uuid.MustParse(targetPlayerID), pvpWinner, toInterfaceSlice(logs), summary, combatantInfosIface, player.Username, "PVP", player.CurrentRegion)
 		}
 	}()
-
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &authID, Action: "combat.finish",
-		RequestSummary: fmt.Sprintf("winner=%s enemy=%s type=%s stonesSpent=%d itemsUsed=%d", winner, enemyName, enemyType, stonesSpent, itemsUsed),
-		IPAddress:      c.ClientIP(), Success: alliesAlive,
-	})
 	c.JSON(http.StatusOK, gin.H{
 		"message":         "Chiến đấu hoàn tất. Nhân Khí +3.",
 		"logs":            logs,

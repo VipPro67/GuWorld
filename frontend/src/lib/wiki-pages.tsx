@@ -1080,6 +1080,8 @@ export const wikiPages: WikiPage[] = [
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
             Tỉ lệ Luyện Cổ thành công được quyết định bởi 10 yếu tố: Tỷ lệ gốc của bí phương, Độ hoàn thiện của phương thức, Độ chính xác tổ hợp nguyên liệu, Chất lượng nguyên liệu đầu vào (+2% mỗi bậc chênh lệch), Đạo Ngân Luyện Đạo (không giới hạn, tăng chậm dần theo hàm căn bậc hai, nhân hệ số Chân Ý lưu phái đích và chia theo hệ số Rank P), Cảnh giới Luyện Đạo (lên tới +25%), Cảnh giới Lưu Phái của Cổ (max +10%), Khí vận (max +10%), Cổ phụ trợ kích hoạt, và Môi trường Đại Vực (+5%). Lắp sai nguyên liệu lập tức tỷ lệ về 0%.
             <br/><br/>
+            <strong className="text-cyan-400">Tiêu hao Chân Nguyên/Tiên Nguyên:</strong>Cổ sư luyện Cổ đồng cấp tốn 20 Chân Nguyên (hoặc 10 Tiên Nguyên nếu là Tiên Cổ). Do giới hạn Tiên - Phàm, phàm nhân không thể tự luyện Tiên Cổ do cạn kiệt Chân Nguyên lập tức.
+            <br/><br/>
             <strong className="text-cyan-400">Tiên Cổ Giảm Trừ:</strong> Khi luyện Tiên Cổ (Rank 6 - 9), các chỉ số cộng thẳng ngoại vật (Chất lượng vật liệu, Cảnh giới, Khí vận, Phụ trợ, Môi trường) sẽ bị ép chia nhỏ theo độ khó. Rank 6: chia 2, Rank 7: chia 5, Rank 8: chia 20, Rank 9: chia 100. Cổ Tiên buộc phải dựa vào lượng Đạo Ngân khổng lồ để thành công.
           </p>
           <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/10 text-xs text-amber-300 leading-relaxed">

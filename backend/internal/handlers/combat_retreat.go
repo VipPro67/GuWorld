@@ -117,7 +117,7 @@ func Retreat(c *gin.Context) {
 
 	logMsg := "Đạo hữu trở về an toàn từ hành trình."
 
-	hadCombat := player.ActiveCombat != nil
+	_ = player.ActiveCombat != nil
 
 	if player.ActiveCombat != nil {
 		logMsg = fmt.Sprintf("Đạo hữu rút lui khỏi %s.", player.ActiveCombat.EnemyName)
@@ -162,13 +162,6 @@ func Retreat(c *gin.Context) {
 
 	var dbAfter int
 	_ = db.DB.QueryRow(`SELECT COUNT(*) FROM player_gu WHERE player_id = $1`, player.ID).Scan(&dbAfter)
-
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &authID, Action: "combat.retreat",
-		RequestSummary: fmt.Sprintf("hadCombat=%v invBefore=%d invAfter=%d added=%d dbBefore=%d dbAfterTx=%d dbAfter=%d",
-			hadCombat, inventoryBefore, inventoryAfter, inventoryAfter-inventoryBefore, dbBefore, dbAfterTx, dbAfter),
-		IPAddress: c.ClientIP(), Success: true,
-	})
 	logger.S.Infof("Retreat player=%s invBefore=%d invAfter=%d added=%d dbBefore=%d dbAfterTx=%d dbAfter=%d",
 		player.ID, inventoryBefore, inventoryAfter, inventoryAfter-inventoryBefore, dbBefore, dbAfterTx, dbAfter)
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
@@ -534,7 +527,6 @@ func Flee(c *gin.Context) {
 	if defeatAudit != nil {
 		auditlog.Log(db.DB, *defeatAudit)
 	}
-	auditlog.Logf(db.DB, &authID, "combat.flee", "enemy=%s", logMsg)
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
 		"log": logMsg + fmt.Sprintf(" Nhân Khí +%.0f.", qiGained),
 	})
