@@ -3,6 +3,8 @@ package models
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"math/rand"
 	"strings"
 
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -17,6 +19,7 @@ type MonsterTemplate struct {
 	BaseAttack       float64            `json:"base_attack"`
 	BaseDefense      float64            `json:"base_defense"`
 	GuInventory      GuInventory        `json:"gu_inventory"`
+	GuPool           []GuPoolEntry      `json:"gu_pool"`
 	ItemInventory    MaterialsInventory `json:"item_inventory"`
 	DaoMarks         map[string]int    `json:"dao_marks"`
 	PathMasteries    map[string]int    `json:"path_masteries"`
@@ -26,6 +29,16 @@ type MonsterTemplate struct {
 	IsCapturable     bool               `json:"is_capturable"`
 	CaptureChance    float64            `json:"capture_chance"`
 	PetHungerPerHour float64            `json:"pet_hunger_per_hour"`
+}
+
+type GuPoolEntry struct {
+	GuID         string  `json:"gu_id"`
+	Rank         int     `json:"rank"`
+	Weight       float64 `json:"weight"`
+	MinCount     int     `json:"min_count"`
+	MaxCount     int     `json:"max_count"`
+	IsWorldBoss  bool    `json:"is_world_boss"`
+	IsImmortal   bool    `json:"is_immortal"`
 }
 
 type LootEntry struct {
@@ -158,6 +171,7 @@ func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, sub
 
 func BuildCombatStateFromMonster(mon MonsterTemplate, rank int, subRank int) CombatState {
 	hp, atk, def := ScaleMonsterStats(mon.MaxHP, mon.BaseAttack, mon.BaseDefense, rank, subRank, mon.Type)
+	guInventory := buildMonsterGuInventory(mon, rank)
 	return CombatState{
 		EnemyTemplateID:    mon.ID,
 		EnemyName:          mon.Name,
@@ -170,12 +184,129 @@ func BuildCombatStateFromMonster(mon MonsterTemplate, rank int, subRank int) Com
 		EnemyDefense:       def,
 		EnemyRank:          rank,
 		EnemySubRank:       subRank,
-		EnemyGuInventory:   mon.GuInventory,
+		EnemyGuInventory:   guInventory,
 		EnemyDaoMarks:      mon.DaoMarks,
 		EnemyPathMasteries: mon.PathMasteries,
 		AIProfile:          mon.AIProfile,
 		LootTableID:        mon.LootTableID,
 	}
+}
+
+func buildMonsterGuInventory(mon MonsterTemplate, monsterRank int) GuInventory {
+	var result GuInventory
+
+	if len(mon.GuInventory) > 0 {
+		result = append(result, mon.GuInventory...)
+	}
+
+	if len(mon.GuPool) == 0 {
+		return result
+	}
+
+	pool := make([]GuPoolEntry, 0, len(mon.GuPool))
+	for _, entry := range mon.GuPool {
+		if entry.IsWorldBoss {
+			continue
+		}
+		if entry.Rank > monsterRank {
+			continue
+		}
+		pool = append(pool, entry)
+	}
+
+	if len(pool) == 0 {
+		return result
+	}
+
+	totalWeight := 0.0
+	for _, e := range pool {
+		totalWeight += e.Weight
+	}
+	if totalWeight <= 0 {
+		return result
+	}
+
+	for _, entry := range pool {
+		count := entry.MinCount
+		if entry.MaxCount > entry.MinCount {
+			count += rand.Intn(entry.MaxCount - entry.MinCount + 1)
+		}
+		for i := 0; i < count; i++ {
+			roll := rand.Float64() * totalWeight
+			acc := 0.0
+			var selected *GuPoolEntry
+			for j := range pool {
+				acc += pool[j].Weight
+				if roll <= acc {
+					selected = &pool[j]
+					break
+				}
+			}
+			if selected == nil {
+				selected = &pool[0]
+			}
+			inst := GuInstance{
+				InstanceID: fmt.Sprintf("%s_gu_%s_%d", mon.ID, selected.GuID, rand.Int63()),
+				GuID:       selected.GuID,
+				Rank:       selected.Rank,
+				Hunger:     0,
+				Status:     "ACTIVE",
+				Equipped:   true,
+				IsVital:    false,
+			}
+			result = append(result, inst)
+		}
+	}
+
+	return result
+}
+
+func GetWorldBossGuPool(mon MonsterTemplate, monsterRank int) []GuPoolEntry {
+	var pool []GuPoolEntry
+	for _, entry := range mon.GuPool {
+		if !entry.IsWorldBoss {
+			continue
+		}
+		if entry.Rank > monsterRank {
+			continue
+		}
+		pool = append(pool, entry)
+	}
+	return pool
+}
+
+func RollWorldBossGuDrop(pool []GuPoolEntry, playerRank int) *GuPoolEntry {
+	if len(pool) == 0 {
+		return nil
+	}
+
+	filtered := make([]GuPoolEntry, 0, len(pool))
+	for _, e := range pool {
+		if e.Rank <= playerRank+1 {
+			filtered = append(filtered, e)
+		}
+	}
+	if len(filtered) == 0 {
+		filtered = pool
+	}
+
+	totalWeight := 0.0
+	for _, e := range filtered {
+		totalWeight += e.Weight
+	}
+	if totalWeight <= 0 {
+		return nil
+	}
+
+	roll := rand.Float64() * totalWeight
+	acc := 0.0
+	for i := range filtered {
+		acc += filtered[i].Weight
+		if roll <= acc {
+			return &filtered[i]
+		}
+	}
+	return nil
 }
 
 func CombatantFromPlayer(player *Player, stats map[string]float64) Combatant {
@@ -235,7 +366,7 @@ var MonsterRegistry = make(map[string]MonsterTemplate)
 
 func LoadMonsterRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
-		SELECT id, name, type, max_hp, base_attack, base_defense, gu_inventory, item_inventory, dao_marks, path_masteries, ai_profile, loot_table_id, description,
+		SELECT id, name, type, max_hp, base_attack, base_defense, gu_inventory, gu_pool, item_inventory, dao_marks, path_masteries, ai_profile, loot_table_id, description,
 		       COALESCE(is_capturable, false),
 		       COALESCE(capture_chance, 0.20),
 		       COALESCE(pet_hunger_per_hour, 2.0)
@@ -252,11 +383,11 @@ func LoadMonsterRegistry(db *sql.DB) error {
 
 	for rows.Next() {
 		var mon MonsterTemplate
-		var guInvRaw, itemInvRaw, daoMarksRaw, masteriesRaw []byte
+		var guInvRaw, guPoolRaw, itemInvRaw, daoMarksRaw, masteriesRaw []byte
 		err = rows.Scan(
 			&mon.ID, &mon.Name, &mon.Type,
 			&mon.MaxHP, &mon.BaseAttack, &mon.BaseDefense,
-			&guInvRaw, &itemInvRaw, &daoMarksRaw, &masteriesRaw, &mon.AIProfile, &mon.LootTableID, &mon.Description,
+			&guInvRaw, &guPoolRaw, &itemInvRaw, &daoMarksRaw, &masteriesRaw, &mon.AIProfile, &mon.LootTableID, &mon.Description,
 			&mon.IsCapturable, &mon.CaptureChance, &mon.PetHungerPerHour,
 		)
 		if err != nil {
@@ -265,6 +396,7 @@ func LoadMonsterRegistry(db *sql.DB) error {
 		}
 
 		_ = json.Unmarshal(guInvRaw, &mon.GuInventory)
+		_ = json.Unmarshal(guPoolRaw, &mon.GuPool)
 		_ = json.Unmarshal(itemInvRaw, &mon.ItemInventory)
 		_ = json.Unmarshal(daoMarksRaw, &mon.DaoMarks)
 		_ = json.Unmarshal(masteriesRaw, &mon.PathMasteries)

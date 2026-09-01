@@ -520,6 +520,24 @@ func RefineGu(c *gin.Context) {
 	// Support Bonus
 	supportBonus := collectRefineSupportBonus(&player) + fx.RefineBonus
 
+	// Apply Immortal Penalty to flat bonuses for Rank 6+
+	immortalPenalty := 1.0
+	switch recipe.TargetRank {
+	case 6: immortalPenalty = 2.0
+	case 7: immortalPenalty = 5.0
+	case 8: immortalPenalty = 20.0
+	case 9: immortalPenalty = 100.0
+	}
+
+	if immortalPenalty > 1.0 {
+		refinementMasteryBonus /= immortalPenalty
+		targetPathMastery /= immortalPenalty
+		luckBonus /= immortalPenalty
+		supportBonus /= immortalPenalty
+		envBonus /= immortalPenalty
+		materialQualityBonus /= immortalPenalty
+	}
+
 	// Final Rate Calculation
 	baseRate := recipe.SuccessRate
 	sumBonus := refinementDaoBonus + refinementMasteryBonus + targetPathMastery + luckBonus + supportBonus + envBonus + materialQualityBonus
@@ -624,21 +642,7 @@ func RefineGu(c *gin.Context) {
 		newInventory = append(newInventory, newGuInstance)
 		player.GuInventory = newInventory
 		
-		pathGain := refinePathMasteryGain
-		if newGuInstance.Rank >= 6 {
-			pathGain = refinePathMasteryGainImmortal
-		}
-		if len(paths) > 0 {
-			if player.PathMasteries == nil {
-				player.PathMasteries = make(models.PathMasteriesMap)
-			}
-			cleanPath := strings.TrimSuffix(strings.ToLower(paths[0]), " path")
-			player.PathMasteries[cleanPath] += pathGain
-			newLevel := gamefx.PathMasteryLevel(player.PathMasteries[cleanPath])
-			statusMsg += fmt.Sprintf(" Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái %s (Cảnh giới: %s).", pathGain, strings.Title(cleanPath), gamefx.PathMasteryLevelName(newLevel))
-		}
-
-		// Also add refinement path mastery (Luyện Đạo)
+		// Add refinement path mastery (Luyện Đạo)
 		refineGain := calculateRefinementPathGain(recipe.TargetRank, refinementRealm)
 		if refineGain > 0 {
 			if player.PathMasteries == nil {
@@ -646,10 +650,7 @@ func RefineGu(c *gin.Context) {
 			}
 			player.PathMasteries["refinement"] += refineGain
 			newRefineLevel := gamefx.PathMasteryLevel(player.PathMasteries["refinement"])
-			if !strings.Contains(statusMsg, "Ngộ Đạo tăng tiến!") {
-				statusMsg += " Ngộ Đạo tăng tiến!"
-			}
-			statusMsg += fmt.Sprintf(" +%d điểm Chân Ý lưu phái Luyện Đạo (Cảnh giới: %s).", refineGain, gamefx.PathMasteryLevelName(newRefineLevel))
+			statusMsg += fmt.Sprintf(" Ngộ Đạo tăng tiến! +%d điểm Chân Ý lưu phái Luyện Đạo (Cảnh giới: %s).", refineGain, gamefx.PathMasteryLevelName(newRefineLevel))
 		}
 		if newGuInstance.Rank >= 6 {
 			guName := newGuInstance.GuID
@@ -936,29 +937,39 @@ func DeduceRecipe(c *gin.Context) {
 }
 
 func calculateRefinementPathGain(targetRank int, refinementRealm int) int {
-	if targetRank <= refinementRealm {
+	// Rank 1: only gives gain when realm < 2 (points < 1000)
+	if targetRank == 1 && refinementRealm >= 2 {
 		return 0
 	}
+	// Rank 2 & 3: only gives gain when realm < 3 (points < 10000)
+	if (targetRank == 2 || targetRank == 3) && refinementRealm >= 3 {
+		return 0
+	}
+	// Rank 4+: only gives gain when realm < 4 (points < 100000)
+	if targetRank >= 4 && refinementRealm >= 4 {
+		return 0
+	}
+
 	baseGain := 0
 	switch targetRank {
 	case 1:
 		baseGain = 2
 	case 2:
-		baseGain = 4
+		baseGain = 5
 	case 3:
-		baseGain = 6
+		baseGain = 15
 	case 4:
-		baseGain = 8
+		baseGain = 40
 	case 5:
-		baseGain = 10
+		baseGain = 100
 	case 6:
-		baseGain = 20
+		baseGain = 500
 	case 7:
-		baseGain = 35
+		baseGain = 2500
 	case 8:
-		baseGain = 50
+		baseGain = 15000
 	case 9:
-		baseGain = 75
+		baseGain = 50000
 	default:
 		baseGain = 0
 	}
@@ -969,7 +980,7 @@ func calculateRefinementPathGain(targetRank int, refinementRealm int) int {
 	}
 
 	gain := int(math.Round(float64(baseGain) * factor))
-	if gain < 1 && targetRank > refinementRealm {
+	if gain < 1 && baseGain > 0 {
 		gain = 1 // guarantee at least 1 point if not capped by level
 	}
 	return gain

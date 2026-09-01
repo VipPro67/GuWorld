@@ -12,39 +12,41 @@ func TestCalculateRefinementPathGain(t *testing.T) {
 	}{
 		// refinementRealm = 0 (Ordinary)
 		{targetRank: 1, refinementRealm: 0, want: 2},
-		{targetRank: 2, refinementRealm: 0, want: 4},
-		{targetRank: 3, refinementRealm: 0, want: 6},
-		{targetRank: 4, refinementRealm: 0, want: 8},
-		{targetRank: 5, refinementRealm: 0, want: 10},
-		{targetRank: 6, refinementRealm: 0, want: 20},
-		{targetRank: 7, refinementRealm: 0, want: 35},
-		{targetRank: 8, refinementRealm: 0, want: 50},
-		{targetRank: 9, refinementRealm: 0, want: 75},
+		{targetRank: 2, refinementRealm: 0, want: 5},
+		{targetRank: 3, refinementRealm: 0, want: 15},
+		{targetRank: 4, refinementRealm: 0, want: 40},
+		{targetRank: 5, refinementRealm: 0, want: 100},
+		{targetRank: 6, refinementRealm: 0, want: 500},
+		{targetRank: 7, refinementRealm: 0, want: 2500},
+		{targetRank: 8, refinementRealm: 0, want: 15000},
+		{targetRank: 9, refinementRealm: 0, want: 50000},
 
-		// refinementRealm = 1 (Master)
-		{targetRank: 1, refinementRealm: 1, want: 0}, // targetRank <= refinementRealm -> 0
-		{targetRank: 2, refinementRealm: 1, want: 3}, // base 4 * 0.8 = 3.2 -> 3
-		{targetRank: 5, refinementRealm: 1, want: 8}, // base 10 * 0.8 = 8
-		{targetRank: 6, refinementRealm: 1, want: 16}, // base 20 * 0.8 = 16
+		// refinementRealm = 1 (Master: points 100-999)
+		{targetRank: 1, refinementRealm: 1, want: 2}, // Rank 1 gives gain for realm < 2 (points < 1000)
+		{targetRank: 2, refinementRealm: 1, want: 4}, // base 5 * 0.8 = 4.0 -> 4
+		{targetRank: 5, refinementRealm: 1, want: 80}, // base 100 * 0.8 = 80
+		{targetRank: 6, refinementRealm: 1, want: 400}, // base 500 * 0.8 = 400
 
-		// refinementRealm = 2 (Grandmaster)
-		{targetRank: 1, refinementRealm: 2, want: 0},
-		{targetRank: 2, refinementRealm: 2, want: 0},
-		{targetRank: 3, refinementRealm: 2, want: 4}, // base 6 * 0.6 = 3.6 -> 4
-		{targetRank: 5, refinementRealm: 2, want: 6}, // base 10 * 0.6 = 6
-		{targetRank: 6, refinementRealm: 2, want: 12}, // base 20 * 0.6 = 12
+		// refinementRealm = 2 (Grandmaster: points 1000-9999)
+		{targetRank: 1, refinementRealm: 2, want: 0}, // Rank 1 capped at realm 2 (>= 1000)
+		{targetRank: 2, refinementRealm: 2, want: 3}, // base 5 * 0.6 = 3.0 -> 3
+		{targetRank: 3, refinementRealm: 2, want: 9}, // base 15 * 0.6 = 9.0 -> 9
+		{targetRank: 5, refinementRealm: 2, want: 60}, // base 100 * 0.6 = 60
+		{targetRank: 6, refinementRealm: 2, want: 300}, // base 500 * 0.6 = 300
 
-		// refinementRealm = 3 (Great Grandmaster)
-		{targetRank: 3, refinementRealm: 3, want: 0},
-		{targetRank: 4, refinementRealm: 3, want: 3}, // base 8 * 0.4 = 3.2 -> 3
-		{targetRank: 5, refinementRealm: 3, want: 4}, // base 10 * 0.4 = 4
-		{targetRank: 6, refinementRealm: 3, want: 8}, // base 20 * 0.4 = 8
+		// refinementRealm = 3 (Great Grandmaster: points 10000-99999)
+		{targetRank: 1, refinementRealm: 3, want: 0},
+		{targetRank: 2, refinementRealm: 3, want: 0}, // Rank 2 capped at realm 3 (>= 10000)
+		{targetRank: 3, refinementRealm: 3, want: 0}, // Rank 3 capped at realm 3 (>= 10000)
+		{targetRank: 4, refinementRealm: 3, want: 16}, // base 40 * 0.4 = 16
+		{targetRank: 5, refinementRealm: 3, want: 40}, // base 100 * 0.4 = 40
+		{targetRank: 6, refinementRealm: 3, want: 200}, // base 500 * 0.4 = 200
 
-		// refinementRealm = 4 (Supreme Grandmaster)
+		// refinementRealm = 4 (Supreme Grandmaster: points >= 100000)
 		{targetRank: 4, refinementRealm: 4, want: 0},
-		{targetRank: 5, refinementRealm: 4, want: 2}, // base 10 * 0.2 = 2
-		{targetRank: 6, refinementRealm: 4, want: 4}, // base 20 * 0.2 = 4
-		{targetRank: 9, refinementRealm: 4, want: 15}, // base 75 * 0.2 = 15
+		{targetRank: 5, refinementRealm: 4, want: 0},
+		{targetRank: 6, refinementRealm: 4, want: 0},
+		{targetRank: 9, refinementRealm: 4, want: 0},
 	}
 
 	for _, tt := range tests {

@@ -492,6 +492,13 @@ export default function Home() {
                     <p className="text-[var(--text-secondary)] mt-0.5">Đồng bộ lại điểm Chân Ý: Đại Sư (100), Tông Sư (1.000 - khắc chế Tiên Cổ R6), Đại Tông Sư (10.000 - R7), Vô Thượng (100.000 - R8).</p>
                   </div>
                 </div>
+                <div className="flex gap-2.5 items-start bg-cyan-950/20 border border-cyan-500/10 rounded-lg p-3">
+                  <span className="text-lg shrink-0 mt-0.5">🛡️</span>
+                  <div>
+                    <span className="font-bold text-cyan-300">Scale Chân Ý Luyện Đạo & Giới hạn Bậc</span>
+                    <p className="text-[var(--text-secondary)] mt-0.5">Luyện Cổ chỉ tăng Chân Ý Luyện Đạo (scale theo cấp Cổ: R1 +2đ, R2-3 +5~15đ, R4-5 +40~100đ, Tiên Cổ +500~50.000đ). Cổ R1 chỉ cho điểm dưới 1.000đ, R2-3 dưới 10.000đ, R4+ trên 10.000đ.</p>
+                  </div>
+                </div>
                 <div className="flex gap-2.5 items-start bg-rose-950/20 border border-rose-500/10 rounded-lg p-3">
                   <span className="text-lg shrink-0 mt-0.5">📖</span>
                   <div>

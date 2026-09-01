@@ -292,9 +292,14 @@ Tỉ lệ thành công của mỗi lần Luyện Cổ được tính dựa trên
 8. **Khí vận:** Dựa trên Đạo Ngân Vận Đạo và hiệu ứng Phúc Trạch (tối đa +10%).
 9. **Hỗ trợ:** Cổ Trí Tuệ Đạo/Luyện Đạo đang kích hoạt (có dòng `success_rate_bonus`).
 10. **Môi trường:** Luyện Cổ tại Đại Vực có thuộc tính phù hợp (+5%).
+11. **Tiên Cổ Giảm Trừ (Immortal Penalty):** Khi luyện Tiên Cổ (Rank 6 - 9), toàn bộ các gia thành cộng thẳng ở trên (Mục 4, 6, 7, 8, 9, 10) sẽ bị ép chia nhỏ theo độ khó. Rank 6: chia 2, Rank 7: chia 5, Rank 8: chia 20, Rank 9: chia 100. Việc này khiến ngoại vật trở nên yếu ớt ở cấp độ Tiên Cổ, buộc Cổ Tiên phải dựa hoàn toàn vào Đạo Ngân Luyện Đạo (Mục 5) khổng lồ để chống lại độ khó kinh khủng này.
 
 Hệ quả của quá trình luyện phân thành 4 bậc:
-- **Thành Công:** Nhận Cổ trùng mục tiêu, tăng Chân Ý lưu phái tương ứng của Cổ trùng và nhận thêm Chân Ý lưu phái Luyện Đạo (giảm dần khi Cảnh Giới Luyện Đạo tăng, và sẽ không nhận được Chân Ý Luyện Đạo khi luyện Cổ bậc thấp).
+- **Thành Công:** Nhận Cổ trùng mục tiêu và tăng điểm **Chân Ý lưu phái Luyện Đạo** (Luyện Cổ không tăng Chân Ý lưu phái khác; Chân Ý các hệ khác tích lũy qua sát chiêu, chiến đấu, phó bản):
+  - **Cổ Rank 1:** +2 điểm (Chỉ tăng khi dưới 1.000 điểm / Tông Sư).
+  - **Cổ Rank 2 & 3:** Rank 2 (+5 điểm), Rank 3 (+15 điểm) (Chỉ tăng khi dưới 10.000 điểm / Đại Tông Sư).
+  - **Cổ Rank 4 & 5:** Rank 4 (+40 điểm), Rank 5 (+100 điểm) (Tăng lên tới 100.000 điểm / Vô Thượng).
+  - **Tiên Cổ (Rank 6+):** Rank 6 (+500 điểm), Rank 7 (+2.500 điểm), Rank 8 (+15.000 điểm), Rank 9 (+50.000 điểm). Điểm gốc sẽ giảm trừ tương ứng khi Cảnh giới Luyện Đạo tăng cao.
 - **Thất Bại (Safe):** Nếu thất bại suýt sao và có Cảnh giới Luyện Đạo cao, đạo hữu được bảo toàn Cổ nguyên liệu chính, chỉ mất 50% nguyên liệu phụ (materials).
 - **Thất Bại (Normal):** Mất 100% nguyên liệu. Nếu có Cổ Bản Mệnh tham gia thì không chết mà rơi vào Hấp Hối (Hunger = 1).
 - **Cháy Nổ (Backfire):** Nếu vận rủi tột cùng (xúc xắc >= 90%, hoặc >= 75% với Tiên Cổ), Lò Luyện phát nổ! Tổn thất 50% HP tối đa và 30% Hồn Phách tối đa. Cổ nguyên liệu thường hóa thành tro bụi.

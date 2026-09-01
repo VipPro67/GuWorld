@@ -1302,12 +1302,44 @@ func CombatAttack(c *gin.Context) {
 								_ = db.AddPlayerGu(tx, winnerID.String(), newGu)
 								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ trùng: %s!", uname, gID))
 							}
+			}
+			// World Boss Immortal Gu drop logic
+			if strings.EqualFold(player.ActiveCombat.EnemyType, "WorldBoss") || strings.EqualFold(player.ActiveCombat.EnemyType, "WORLDBOSS") {
+				if monTemplate, ok := models.MonsterRegistry[player.ActiveCombat.EnemyTemplateID]; ok {
+					worldPool := models.GetWorldBossGuPool(monTemplate, player.ActiveCombat.EnemyRank)
+					if len(worldPool) > 0 && rand.Float64() < 0.05 { // 5% base chance
+						entry := models.RollWorldBossGuDrop(worldPool, player.Rank)
+						if entry != nil && entry.IsImmortal {
+							if exists, _ := db.CheckImmortalGuExists(tx, entry.GuID, entry.Rank, nil); !exists {
+								winnerID := partyMembers[rand.Intn(len(partyMembers))]
+								_, _ = models.GetGu(entry.GuID, entry.Rank)
+								newImmGu := models.GuInstance{
+									InstanceID: uuid.New().String(),
+									GuID:       entry.GuID,
+									Rank:       entry.Rank,
+									Hunger:     100,
+									Status:     "ACTIVE",
+									Equipped:   false,
+								}
+								if winnerID == player.ID {
+									player.GuInventory = append(player.GuInventory, newImmGu)
+									ctx.Logs = append(ctx.Logs, fmt.Sprintf("Bạn nhận được Cổ Trùng Vô Thánh %s!", entry.GuID))
+								} else {
+									var uname string
+									_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", winnerID).Scan(&uname)
+									_ = db.AddPlayerGu(tx, winnerID.String(), newImmGu)
+									ctx.Logs = append(ctx.Logs, fmt.Sprintf("Đồng đội %s thu phục thành công Cổ Trùng Vô Thánh %s!", uname, entry.GuID))
+								}
+							}
 						}
-					} else {
-						lootLogs := ApplyLoot(tx, &player, loot)
-						ctx.Logs = append(ctx.Logs, lootLogs...)
 					}
-					markBossCleared(tx, &player)
+				}
+			}
+		} else {
+			lootLogs := ApplyLoot(tx, &player, loot)
+			ctx.Logs = append(ctx.Logs, lootLogs...)
+		}
+		markBossCleared(tx, &player)
 				} else {
 					logger.S.Errorf("Failed to load loot table %s: %v", player.ActiveCombat.LootTableID, err)
 				}

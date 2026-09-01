@@ -1079,11 +1079,13 @@ export const wikiPages: WikiPage[] = [
           <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Cơ chế Lò Luyện</h3>
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
             Tỉ lệ Luyện Cổ thành công được quyết định bởi 10 yếu tố: Tỷ lệ gốc của bí phương, Độ hoàn thiện của phương thức, Độ chính xác tổ hợp nguyên liệu, Chất lượng nguyên liệu đầu vào (+2% mỗi bậc chênh lệch), Đạo Ngân Luyện Đạo (không giới hạn, tăng chậm dần theo hàm căn bậc hai, nhân hệ số Chân Ý lưu phái đích và chia theo hệ số Rank P), Cảnh giới Luyện Đạo (lên tới +25%), Cảnh giới Lưu Phái của Cổ (max +10%), Khí vận (max +10%), Cổ phụ trợ kích hoạt, và Môi trường Đại Vực (+5%). Lắp sai nguyên liệu lập tức tỷ lệ về 0%.
+            <br/><br/>
+            <strong className="text-cyan-400">Tiên Cổ Giảm Trừ:</strong> Khi luyện Tiên Cổ (Rank 6 - 9), các chỉ số cộng thẳng ngoại vật (Chất lượng vật liệu, Cảnh giới, Khí vận, Phụ trợ, Môi trường) sẽ bị ép chia nhỏ theo độ khó. Rank 6: chia 2, Rank 7: chia 5, Rank 8: chia 20, Rank 9: chia 100. Cổ Tiên buộc phải dựa vào lượng Đạo Ngân khổng lồ để thành công.
           </p>
           <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/10 text-xs text-amber-300 leading-relaxed">
             ⚠️ <strong>Hậu quả luyện cổ:</strong> Có 4 mốc hậu quả:
             <ul className="list-disc list-inside mt-2 space-y-1">
-              <li><strong>Thành công:</strong> Nhận Cổ trùng, tăng Chân Ý lưu phái.</li>
+              <li><strong>Thành công:</strong> Nhận Cổ trùng, tăng Chân Ý Luyện Đạo theo bậc Cổ (R1: +2đ; R2-3: +5~15đ; R4-5: +40~100đ; Tiên Cổ R6+: +500~50.000đ; không tăng Chân Ý lưu phái khác).</li>
               <li><strong>Thất bại (Safe):</strong> Cảnh giới Luyện Đạo cao cứu vãn, giữ lại nguyên liệu chính, chỉ mất 50% nguyên liệu phụ.</li>
               <li><strong>Thất bại (Normal):</strong> Mất 100% nguyên liệu. Nếu là Cổ Bản Mệnh thì không chết mà rơi vào Hấp Hối (Hunger = 1).</li>
               <li><strong>Cháy Nổ (Backfire):</strong> Tỉ lệ tột cùng xui xẻo (xúc xắc ≥ 90%, hoặc ≥ 75% với Tiên Cổ) khiến lò nổ, mất 50% HP max và 30% Hồn Phách max, nguyên liệu hóa tro bụi.</li>

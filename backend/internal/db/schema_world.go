@@ -50,6 +50,7 @@ func schemaWorld() error {
 		base_attack DOUBLE PRECISION NOT NULL,
 		base_defense DOUBLE PRECISION NOT NULL,
 		gu_inventory JSONB NOT NULL DEFAULT '[]',
+		gu_pool JSONB NOT NULL DEFAULT '[]',
 		item_inventory JSONB NOT NULL DEFAULT '{}',
 		dao_marks JSONB NOT NULL DEFAULT '{}',
 		path_masteries JSONB NOT NULL DEFAULT '{}',
