@@ -137,7 +137,7 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 		}
 	}
 
-	if base.EnemyType == "MINE_PVE" {
+	if base.EnemyType == "MINE_PVE" || (base.MineSlotID > 0 && base.EnemyType != "PVP") {
 		for i := 0; i < 2; i++ {
 			minion := models.Combatant{
 				ID:            fmt.Sprintf("minion_%d_%s", i, uuid.New().String()),

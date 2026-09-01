@@ -1,5 +1,7 @@
 package db
 
+import "github.com/vippro67/GuWorld/backend/pkg/logger"
+
 // World schema: regions/map, monsters, quests and instance templates. These are
 // created before players so players.current_region can reference regions(id).
 
@@ -65,6 +67,15 @@ func schemaWorld() error {
 		updated_at TIMESTAMP DEFAULT NOW()
 	);`); err != nil {
 		return err
+	}
+	// Add missing columns for existing databases without requiring a full wipe
+	if err := execSchema("monster_templates_alter_cols", `
+	ALTER TABLE monster_templates ADD COLUMN IF NOT EXISTS gu_pool JSONB NOT NULL DEFAULT '[]';
+	ALTER TABLE monster_templates ADD COLUMN IF NOT EXISTS is_capturable BOOLEAN NOT NULL DEFAULT false;
+	ALTER TABLE monster_templates ADD COLUMN IF NOT EXISTS capture_chance DOUBLE PRECISION NOT NULL DEFAULT 0.20;
+	ALTER TABLE monster_templates ADD COLUMN IF NOT EXISTS pet_hunger_per_hour DOUBLE PRECISION NOT NULL DEFAULT 2.0;
+	`); err != nil {
+		logger.S.Warnf("Failed to alter monster_templates columns: %v", err)
 	}
 	if err := execSchema("monster_templates_loot_table_idx", `
 	CREATE INDEX IF NOT EXISTS idx_monster_templates_loot_table ON monster_templates (loot_table_id);`); err != nil {

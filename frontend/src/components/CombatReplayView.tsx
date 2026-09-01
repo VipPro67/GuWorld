@@ -9,6 +9,7 @@ import {
 import { formatNumber } from "@/lib/utils";
 import { Num } from "./Num";
 import { translateMastery, masteryKeyForPoints } from "@/lib/translate";
+import { useGameStore } from "@/store/useGameStore";
 
 export interface CombatLogEntry {
   turn: number;
@@ -42,6 +43,8 @@ interface CombatantReplayInfo {
   sub_rank?: number;
   dao_marks?: Record<string, number>;
   path_masteries?: Record<string, number>;
+  gu_inventory?: Array<any>;
+  guInventory?: Array<any>;
   avatar_url?: string;
 }
 
@@ -74,6 +77,7 @@ interface CombatantState {
   subRank: number;
   daoMarks?: Record<string, number>;
   pathMasteries?: Record<string, number>;
+  guInventory?: Array<{ gu_id?: string; guId?: string; rank: number; status?: string }>;
   avatarUrl?: string;
 }
 
@@ -315,6 +319,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
   apertureHp: initialApertureHp = 0,
   apertureMaxHp: initialApertureMaxHp = 0,
 }) => {
+  const guDictionary = useGameStore((state) => state.guDictionary);
   const [speed, setSpeed] = React.useState(1);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -343,6 +348,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           subRank: c.sub_rank || 0,
           daoMarks: c.dao_marks,
           pathMasteries: c.path_masteries,
+          guInventory: c.gu_inventory || c.guInventory,
           avatarUrl: c.avatar_url,
         };
       }
@@ -744,6 +750,29 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
                       {k}: {translateMastery(masteryKeyForPoints(points as number))}
                     </span>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Equipped Gu List */}
+            {c.guInventory && c.guInventory.length > 0 && (
+              <div className="border-t border-zinc-800 pt-2 mt-2">
+                <span className="text-zinc-500 text-[10px]">Cổ Trùng Trang Bị ({c.guInventory.length}):</span>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {c.guInventory.map((g: any, idx: number) => {
+                    const rawId = g.gu_id || g.guId || g.GuID || g.id || "";
+                    const specName = (guDictionary && guDictionary[rawId]?.name) || g.gu_name || g.name || g.GuName || rawId || "Cổ trùng";
+                    const isImmortal = (g.rank || 0) >= 6;
+                    return (
+                      <span key={idx} className={`text-[10px] px-2 py-0.5 rounded-md font-medium border ${
+                        isImmortal 
+                          ? 'bg-amber-950/40 text-amber-300 border-amber-700/60 shadow-[0_0_8px_rgba(245,158,11,0.2)]' 
+                          : 'bg-purple-950/40 text-purple-300 border-purple-800/60'
+                      }`}>
+                        {isImmortal ? '✦ ' : ''}{specName} <span className="text-[9px] opacity-75 font-mono">(R{g.rank || 1})</span>
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             )}

@@ -82,6 +82,8 @@ func GetDictionary(c *gin.Context) {
 		MonsterSpawns: buildWikiMonsterSpawns(),
 	}
 
+	logger.S.Infof("GetDictionary: returning %d gu, %d items, %d monsters", len(flatGu), len(models.ItemRegistry), len(models.MonsterRegistry))
+
 	_ = cache.SetJSON(cacheKey, resp, 24*time.Hour)
 	c.JSON(http.StatusOK, resp)
 }

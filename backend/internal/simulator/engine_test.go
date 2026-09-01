@@ -1,6 +1,7 @@
 package simulator
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
@@ -297,5 +298,50 @@ func TestSupportDoesNotProvokeCounter(t *testing.T) {
 	want := []string{"ally", "enemy", "enemy"}
 	if !idsEqual(got, want) {
 		t.Fatalf("expected [ally damage -> enemy counter, then enemy slot], got %v", got)
+	}
+}
+
+func TestSmartActionSorting(t *testing.T) {
+	state := &CombatState{
+		Seed: 42,
+		Allies: []*CombatantAuto{
+			newTestCombatant("ally", "Player", 1000, 10),
+		},
+		Enemies: []*CombatantAuto{
+			newTestCombatant("boss", "Boss", 1000, 5),
+		},
+	}
+	state.Allies[0].Speed = 10
+	state.Enemies[0].Speed = 100
+	state.Enemies[0].Actions = []SimAction{
+		{ActionType: "GU_SKILL", Name: "WeakGu", Damage: 50},
+		{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: 300},
+		{ActionType: "GU_SKILL", Name: "ShieldGu", Defense: 500},
+		{ActionType: "GU_SKILL", Name: "StrongGu", Damage: 600},
+	}
+
+	logs := Simulate(state)
+
+	// Check action order of boss in log: ShieldGu -> StrongGu (600) -> Đánh thường (300) -> WeakGu (50)
+	var bossActionNames []string
+	for _, l := range logs {
+		if l.ActorId == "boss" && l.Turn == 1 {
+			if l.Action == "MANA_COST" || l.Action == "TURN_START" || l.Action == "BATTLE_START" {
+				continue
+			}
+			for _, name := range []string{"ShieldGu", "StrongGu", "Đánh thường", "WeakGu"} {
+				if strings.Contains(l.Detail, name) {
+					bossActionNames = append(bossActionNames, name)
+					break
+				}
+			}
+		}
+	}
+
+	if len(bossActionNames) > 0 && bossActionNames[0] != "ShieldGu" {
+		t.Errorf("expected ShieldGu to execute first, got %v", bossActionNames)
+	}
+	if len(bossActionNames) > 1 && bossActionNames[1] != "StrongGu" {
+		t.Errorf("expected StrongGu (600 dmg) to execute before weaker damage actions, got %v", bossActionNames)
 	}
 }

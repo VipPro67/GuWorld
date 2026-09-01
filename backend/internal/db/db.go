@@ -2319,17 +2319,23 @@ func seedSectMissionsFromCSV(filename string) error {
 //  2. auction — ACTIVE Gu listings
 //  3. sects.vault_gu — sect vault (kho tông môn)
 func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs []string) (bool, error) {
-	// Acquire transaction-level advisory lock to serialize checks/creation of this specific Immortal Gu.
-	// This prevents concurrent refinements of the same unique Gu from racing.
-	_, err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtext('refine_immortal_gu_' || $1))`, guID)
-	if err != nil {
-		return false, err
+	var runner interface {
+		QueryRow(query string, args ...any) *sql.Row
+	}
+
+	if tx != nil {
+		runner = tx
+		_, _ = tx.Exec(`SELECT pg_advisory_xact_lock(hashtext('refine_immortal_gu_' || $1))`, guID)
+	} else if DB != nil {
+		runner = DB
+	} else {
+		return false, nil
 	}
 
 	var exists bool
 
 	// 1. Kiểm tra trong bảng phụ player_gu (toàn bộ cổ của mọi người chơi)
-	err = tx.QueryRow(`
+	err := runner.QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM player_gu
 			WHERE gu_id = $1
@@ -2345,7 +2351,7 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 	}
 
 	// 2. Kiểm tra trên sàn giao dịch/đấu giá (auction)
-	err = tx.QueryRow(`
+	err = runner.QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM auction,
 			jsonb_array_elements(
@@ -2369,7 +2375,7 @@ func CheckImmortalGuExists(tx *sql.Tx, guID string, rank int, excludeInstanceIDs
 
 	// 3. Kiểm tra trong kho tông môn (sects.vault_gu) — một tiên cổ nằm trong kho vẫn
 	//    được tính là "đang tồn tại trong thiên hạ".
-	err = tx.QueryRow(`
+	err = runner.QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM sects,
 			jsonb_array_elements(

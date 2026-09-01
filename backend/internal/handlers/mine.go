@@ -512,26 +512,9 @@ func AttackMineSlot(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy dữ liệu quái vật canh giữ"})
 			return
 		}
-		maxHP, attack, defense := models.ScaleMonsterStats(monsterTemplate.MaxHP, monsterTemplate.BaseAttack, monsterTemplate.BaseDefense, monsterRank, monsterSubRank, monsterTemplate.Type)
-
-		pvpCombat = models.CombatState{
-			EnemyTemplateID:    monsterTemplate.ID,
-			EnemyName:          "Yêu Quái Canh Mỏ: " + monsterTemplate.Name,
-			EnemyType:          "MINE_PVE",
-			EnemyHP:            maxHP,
-			EnemyMaxHP:         maxHP,
-			EnemyDamage:        attack,
-			EnemyDefense:       defense,
-			EnemyRank:          monsterRank,
-			EnemySubRank:       monsterSubRank,
-			EnemyGuInventory:   monsterTemplate.GuInventory,
-			EnemyDaoMarks:      monsterTemplate.DaoMarks,
-			EnemyPathMasteries: monsterTemplate.PathMasteries,
-			AIProfile:          monsterTemplate.AIProfile,
-			LootTableID:        monsterTemplate.LootTableID,
-			TargetPlayerID:     "",
-			MineSlotID:         req.SlotID,
-		}
+		pvpCombat = models.BuildCombatStateFromMonster(monsterTemplate, monsterRank, monsterSubRank)
+		pvpCombat.EnemyName = "Yêu Quái Canh Mỏ: " + monsterTemplate.Name
+		pvpCombat.MineSlotID = req.SlotID
 	} else {
 		// PVP Combat against player occupier
 		occupierUUID, err := uuid.Parse(*occupierIDStr)
@@ -633,6 +616,27 @@ func StartMineMonsterWorker(ctx context.Context) {
 	go AssignMonstersToMines()
 }
 
+// getRandomMineMonsterID selects an active monster template of type Elite, Boss, or higher for mine slots.
+func getRandomMineMonsterID(tx *sql.Tx) string {
+	var chosenMonsterID string
+	err := tx.QueryRow(`
+		SELECT id FROM monster_templates 
+		WHERE is_active = TRUE 
+		  AND (LOWER(type) LIKE '%elite%' OR LOWER(type) LIKE '%boss%') 
+		ORDER BY RANDOM() LIMIT 1
+	`).Scan(&chosenMonsterID)
+
+	if err != nil || chosenMonsterID == "" {
+		_ = tx.QueryRow(`
+			SELECT id FROM monster_templates 
+			WHERE is_active = TRUE 
+			ORDER BY RANDOM() LIMIT 1
+		`).Scan(&chosenMonsterID)
+	}
+
+	return chosenMonsterID
+}
+
 func AssignMonstersToMines() {
 	tx, err := db.DB.Begin()
 	if err != nil {
@@ -704,9 +708,8 @@ func AssignMonstersToMines() {
 			}
 		}
 
-		// Find a monster template
-		var chosenMonsterID string
-		_ = tx.QueryRow("SELECT id FROM monster_templates WHERE is_active = TRUE ORDER BY RANDOM() LIMIT 1").Scan(&chosenMonsterID)
+		// Find a monster template (Elite or Boss+)
+		chosenMonsterID := getRandomMineMonsterID(tx)
 
 		if chosenMonsterID != "" {
 			_, err = tx.Exec("UPDATE mine_slots SET monster_id = $1, monster_rank = $2, monster_sub_rank = $3 WHERE id = $4", chosenMonsterID, targetRank, 1, slot.ID)
@@ -821,8 +824,7 @@ func AssignMonstersToEmptyMines() {
 			}
 		}
 
-		var chosenMonsterID string
-		_ = tx.QueryRow("SELECT id FROM monster_templates WHERE is_active = TRUE ORDER BY RANDOM() LIMIT 1").Scan(&chosenMonsterID)
+		chosenMonsterID := getRandomMineMonsterID(tx)
 
 		if chosenMonsterID != "" {
 			_, err = tx.Exec("UPDATE mine_slots SET monster_id = $1, monster_rank = $2, monster_sub_rank = $3, abandoned_at = NOW() WHERE id = $4", chosenMonsterID, targetRank, 1, slot.ID)

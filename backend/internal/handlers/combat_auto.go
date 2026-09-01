@@ -44,11 +44,12 @@ type CombatantInfo struct {
 	Damage        float64        `json:"damage,omitempty"`
 	Defense       float64        `json:"defense,omitempty"`
 	Speed         float64        `json:"speed,omitempty"`
-	KindDetail    string         `json:"kind_detail,omitempty"`
-	Rank          int            `json:"rank,omitempty"`
-	SubRank       int            `json:"sub_rank,omitempty"`
-	DaoMarks      map[string]int `json:"dao_marks,omitempty"`
-	PathMasteries map[string]int `json:"path_masteries,omitempty"`
+	KindDetail    string             `json:"kind_detail,omitempty"`
+	Rank          int                `json:"rank,omitempty"`
+	SubRank       int                `json:"sub_rank,omitempty"`
+	DaoMarks      map[string]int     `json:"dao_marks,omitempty"`
+	PathMasteries map[string]int     `json:"path_masteries,omitempty"`
+	GuInventory   models.GuInventory `json:"gu_inventory,omitempty"`
 }
 
 // AutoCombatStart initializes and fully simulates a combat, returning the deterministic log.
@@ -280,6 +281,7 @@ func AutoCombatStart(c *gin.Context) {
 			SubRank:       e.SubRank,
 			DaoMarks:      e.DaoMarks,
 			PathMasteries: e.PathMasteries,
+			GuInventory:   e.GuInventory,
 		})
 	}
 
@@ -469,9 +471,17 @@ func AutoCombatStart(c *gin.Context) {
 				if err == nil {
 					loot := RollLoot(lt, player.ActiveCombat.EnemyRank)
 
-					if player.ActiveCombat.EnemyGuInventory != nil && len(player.ActiveCombat.EnemyGuInventory) > 0 {
+					if len(player.ActiveCombat.EnemyGuInventory) > 0 {
 						for _, eg := range player.ActiveCombat.EnemyGuInventory {
-							if rand.Intn(100) < 10 && !models.HasImmortalRank(eg.GuID) {
+							if rand.Intn(100) < 10 {
+								guSpec, _ := models.GetGuAny(eg.GuID)
+								isImmortal := guSpec.IsImmortal || guSpec.Rank >= 6 || models.HasImmortalRank(eg.GuID)
+								if isImmortal {
+									exists, err := db.CheckImmortalGuExists(tx, eg.GuID, guSpec.Rank, nil)
+									if err == nil && exists {
+										continue
+									}
+								}
 								loot.Gus = append(loot.Gus, eg.GuID)
 							}
 						}
@@ -1308,7 +1318,15 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 
 					if player.ActiveCombat.EnemyGuInventory != nil && len(player.ActiveCombat.EnemyGuInventory) > 0 {
 						for _, eg := range player.ActiveCombat.EnemyGuInventory {
-							if rand.Intn(100) < 10 && !models.HasImmortalRank(eg.GuID) {
+							if rand.Intn(100) < 20 {
+								guSpec, _ := models.GetGuAny(eg.GuID)
+								isImmortal := guSpec.IsImmortal || guSpec.Rank >= 6 || models.HasImmortalRank(eg.GuID)
+								if isImmortal {
+									exists, err := db.CheckImmortalGuExists(tx, eg.GuID, guSpec.Rank, nil)
+									if err == nil && exists {
+										continue
+									}
+								}
 								loot.Gus = append(loot.Gus, eg.GuID)
 							}
 						}

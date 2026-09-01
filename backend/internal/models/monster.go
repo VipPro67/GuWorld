@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"strings"
 
@@ -169,9 +170,122 @@ func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, sub
 	return
 }
 
+func ScaleAndRandomizeMonsterDaoMarks(mon MonsterTemplate, rank int, subRank int) map[string]int {
+	if rank < 6 {
+		return map[string]int{}
+	}
+
+	baseDaoMarks := make(map[string]int)
+
+	// If template specifies DaoMarks, use them
+	if len(mon.DaoMarks) > 0 {
+		for k, v := range mon.DaoMarks {
+			if v > 0 {
+				baseDaoMarks[strings.TrimSuffix(strings.ToLower(k), " path")] = v
+			}
+		}
+	}
+
+	// If no base DaoMarks specified in template, pick random path(s)
+	if len(baseDaoMarks) == 0 {
+		availablePaths := make([]string, 0)
+		pathSet := make(map[string]bool)
+		for _, ranks := range GuRegistry {
+			for _, gu := range ranks {
+				for _, p := range gu.Path {
+					cleanP := strings.TrimSuffix(strings.ToLower(p), " path")
+					if cleanP != "" && !pathSet[cleanP] {
+						pathSet[cleanP] = true
+						availablePaths = append(availablePaths, cleanP)
+					}
+				}
+			}
+		}
+
+		if len(availablePaths) == 0 {
+			availablePaths = []string{"fire", "water", "earth", "wind", "lightning", "strength", "soul", "qi", "sword", "poison"}
+		}
+
+		isBoss := strings.Contains(strings.ToUpper(mon.Type), "BOSS")
+		numPaths := 1
+		if isBoss && len(availablePaths) > 1 {
+			numPaths = 2
+		}
+
+		randIndexes := rand.Perm(len(availablePaths))
+		for i := 0; i < numPaths && i < len(randIndexes); i++ {
+			p := availablePaths[randIndexes[i]]
+			baseDaoMarks[p] = 1000
+		}
+	}
+
+	// Range [minDao, maxDao] per Rank
+	var minDao, maxDao float64
+	switch rank {
+	case 6:
+		minDao, maxDao = 10000.0, 40000.0
+	case 7:
+		minDao, maxDao = 40000.0, 220000.0
+	case 8:
+		minDao, maxDao = 220000.0, 1400000.0
+	case 9:
+		// Rank 9 (Venerable): No static upper cap!
+		// Exponential growth by subRank (SubRank 1 ~8.5M, SubRank 10 ~580M+)
+		minDao = 8500000.0
+		srFactor := math.Pow(1.6, float64(subRank-1))
+		maxDao = minDao * srFactor
+	default:
+		if rank > 9 {
+			minDao = 8500000.0
+			srFactor := math.Pow(1.6, float64(subRank-1))
+			maxDao = minDao * srFactor
+		}
+	}
+
+	if subRank < 1 {
+		subRank = 1
+	}
+
+	targetTotalDao := minDao
+	if rank < 9 {
+		t := float64(subRank-1) / 9.0
+		if t > 1.0 {
+			t = 1.0
+		}
+		targetTotalDao = minDao + (maxDao-minDao)*t
+	} else {
+		targetTotalDao = maxDao
+	}
+
+	// Add random variance (-15% to +15%)
+	variance := (rand.Float64()*0.30 - 0.15)
+	targetTotalDao = targetTotalDao * (1.0 + variance)
+
+	totalBase := 0.0
+	for _, amt := range baseDaoMarks {
+		totalBase += float64(amt)
+	}
+	if totalBase <= 0 {
+		totalBase = 1.0
+	}
+
+	finalDaoMarks := make(map[string]int)
+	for path, baseAmt := range baseDaoMarks {
+		portion := float64(baseAmt) / totalBase
+		calculated := int(targetTotalDao * portion)
+		if calculated > 0 {
+			finalDaoMarks[path] = calculated
+		}
+	}
+
+	return finalDaoMarks
+}
+
 func BuildCombatStateFromMonster(mon MonsterTemplate, rank int, subRank int) CombatState {
 	hp, atk, def := ScaleMonsterStats(mon.MaxHP, mon.BaseAttack, mon.BaseDefense, rank, subRank, mon.Type)
-	guInventory := buildMonsterGuInventory(mon, rank)
+	finalDaoMarks := ScaleAndRandomizeMonsterDaoMarks(mon, rank, subRank)
+	guInventory := buildMonsterGuInventory(mon, rank, finalDaoMarks)
+
 	return CombatState{
 		EnemyTemplateID:    mon.ID,
 		EnemyName:          mon.Name,
@@ -185,76 +299,193 @@ func BuildCombatStateFromMonster(mon MonsterTemplate, rank int, subRank int) Com
 		EnemyRank:          rank,
 		EnemySubRank:       subRank,
 		EnemyGuInventory:   guInventory,
-		EnemyDaoMarks:      mon.DaoMarks,
+		EnemyDaoMarks:      finalDaoMarks,
 		EnemyPathMasteries: mon.PathMasteries,
 		AIProfile:          mon.AIProfile,
 		LootTableID:        mon.LootTableID,
 	}
 }
 
-func buildMonsterGuInventory(mon MonsterTemplate, monsterRank int) GuInventory {
+// ImmortalGuChecker is an optional global checker to verify if an Immortal Gu already exists in the world.
+// When set, buildMonsterGuInventory will skip Immortal Gu that are already owned by any player, listed in auction, or stored in sect vaults.
+var ImmortalGuChecker func(guID string, rank int) bool
+
+func buildMonsterGuInventory(mon MonsterTemplate, monsterRank int, daoMarks map[string]int) GuInventory {
+	// Normal monsters have NO Gu
+	monTypeUpper := strings.ToUpper(strings.TrimSpace(mon.Type))
+	if monTypeUpper == "NORMAL" || monTypeUpper == "MONSTER" {
+		return GuInventory{}
+	}
+
 	var result GuInventory
 
 	if len(mon.GuInventory) > 0 {
 		result = append(result, mon.GuInventory...)
 	}
 
-	if len(mon.GuPool) == 0 {
-		return result
-	}
+	isBoss := strings.Contains(monTypeUpper, "BOSS")
 
-	pool := make([]GuPoolEntry, 0, len(mon.GuPool))
-	for _, entry := range mon.GuPool {
-		if entry.IsWorldBoss {
-			continue
-		}
-		if entry.Rank > monsterRank {
-			continue
-		}
-		pool = append(pool, entry)
-	}
+	// Match Gu from GuRegistry (for Rank 6+ using DaoMarks, or for Rank 1-5 using any valid Gu rank <= monsterRank)
+	if len(GuRegistry) > 0 {
+		var activeGus []GuDictionaryItem
+		var passiveGus []GuDictionaryItem
+		var allGus []GuDictionaryItem
+		hasPaths := len(daoMarks) > 0
 
-	if len(pool) == 0 {
-		return result
-	}
+		for _, ranks := range GuRegistry {
+			for guRank, gu := range ranks {
+				if guRank > monsterRank || (gu.IsImmortal && monsterRank < 6) {
+					continue
+				}
 
-	totalWeight := 0.0
-	for _, e := range pool {
-		totalWeight += e.Weight
-	}
-	if totalWeight <= 0 {
-		return result
-	}
+				// Check if this Immortal Gu already exists anywhere in the world
+				isImmortalGu := gu.IsImmortal || guRank >= 6
+				if isImmortalGu && ImmortalGuChecker != nil {
+					if ImmortalGuChecker(gu.ID, guRank) {
+						continue // Already exists in the world -> skip!
+					}
+				}
 
-	for _, entry := range pool {
-		count := entry.MinCount
-		if entry.MaxCount > entry.MinCount {
-			count += rand.Intn(entry.MaxCount - entry.MinCount + 1)
-		}
-		for i := 0; i < count; i++ {
-			roll := rand.Float64() * totalWeight
-			acc := 0.0
-			var selected *GuPoolEntry
-			for j := range pool {
-				acc += pool[j].Weight
-				if roll <= acc {
-					selected = &pool[j]
-					break
+				// Check path match with monster dao marks if available
+				isMatch := false
+				if hasPaths {
+					for _, guPath := range gu.Path {
+						cleanPath := strings.TrimSuffix(strings.ToLower(guPath), " path")
+						if _, exists := daoMarks[cleanPath]; exists {
+							isMatch = true
+							break
+						}
+					}
+				} else {
+					// Rank 1-5 Elite/Boss without DaoMarks: any Gu rank <= monsterRank is valid
+					isMatch = true
+				}
+
+				if isMatch {
+					allGus = append(allGus, gu)
+					isPassive := gu.Effects.Passive != nil || strings.EqualFold(gu.Type, "PASSIVE")
+					if isPassive {
+						passiveGus = append(passiveGus, gu)
+					} else {
+						activeGus = append(activeGus, gu)
+					}
 				}
 			}
-			if selected == nil {
-				selected = &pool[0]
+		}
+
+		if len(allGus) > 0 {
+			numActive := 2
+			numPassive := 1
+			if isBoss {
+				numActive = 3
+				numPassive = 2
 			}
-			inst := GuInstance{
-				InstanceID: fmt.Sprintf("%s_gu_%s_%d", mon.ID, selected.GuID, rand.Int63()),
-				GuID:       selected.GuID,
-				Rank:       selected.Rank,
-				Hunger:     0,
-				Status:     "ACTIVE",
-				Equipped:   true,
-				IsVital:    false,
+
+			addedSet := make(map[string]bool)
+			immortalCount := 0
+
+			addFromPool := func(pool []GuDictionaryItem, count int) {
+				if len(pool) == 0 {
+					return
+				}
+				perm := rand.Perm(len(pool))
+				added := 0
+				for _, idx := range perm {
+					if added >= count {
+						break
+					}
+					gu := pool[idx]
+
+					// Limit: At most 1 same-rank Immortal Gu per monster (guRank == monsterRank && Rank >= 6)
+					isSameRankImmortal := (gu.IsImmortal || gu.Rank >= 6) && gu.Rank == monsterRank
+					if isSameRankImmortal && immortalCount >= 1 {
+						continue
+					}
+
+					if !addedSet[gu.ID] {
+						addedSet[gu.ID] = true
+						if isSameRankImmortal {
+							immortalCount++
+						}
+						inst := GuInstance{
+							InstanceID: fmt.Sprintf("%s_gu_%s_%d", mon.ID, gu.ID, rand.Int63()),
+							GuID:       gu.ID,
+							Rank:       gu.Rank,
+							Hunger:     0,
+							Status:     "ACTIVE",
+							Equipped:   true,
+							IsVital:    false,
+						}
+						result = append(result, inst)
+						added++
+					}
+				}
 			}
-			result = append(result, inst)
+
+			// 1. Add Active Combat Gu
+			if len(activeGus) > 0 {
+				addFromPool(activeGus, numActive)
+			} else {
+				addFromPool(allGus, numActive)
+			}
+
+			// 2. Add Passive Stat Gu (attack_base, hp_base, speed_base, etc.)
+			if len(passiveGus) > 0 {
+				addFromPool(passiveGus, numPassive)
+			} else {
+				addFromPool(allGus, numPassive)
+			}
+		}
+	}
+
+	// Fallback/additional Gu from mon.GuPool if configured
+	if len(mon.GuPool) > 0 {
+		pool := make([]GuPoolEntry, 0, len(mon.GuPool))
+		for _, entry := range mon.GuPool {
+			if entry.IsWorldBoss || entry.Rank > monsterRank {
+				continue
+			}
+			pool = append(pool, entry)
+		}
+
+		if len(pool) > 0 {
+			totalWeight := 0.0
+			for _, e := range pool {
+				totalWeight += e.Weight
+			}
+			if totalWeight > 0 {
+				for _, entry := range pool {
+					count := entry.MinCount
+					if entry.MaxCount > entry.MinCount {
+						count += rand.Intn(entry.MaxCount - entry.MinCount + 1)
+					}
+					for i := 0; i < count; i++ {
+						roll := rand.Float64() * totalWeight
+						acc := 0.0
+						var selected *GuPoolEntry
+						for j := range pool {
+							acc += pool[j].Weight
+							if roll <= acc {
+								selected = &pool[j]
+								break
+							}
+						}
+						if selected == nil {
+							selected = &pool[0]
+						}
+						inst := GuInstance{
+							InstanceID: fmt.Sprintf("%s_gu_%s_%d", mon.ID, selected.GuID, rand.Int63()),
+							GuID:       selected.GuID,
+							Rank:       selected.Rank,
+							Hunger:     0,
+							Status:     "ACTIVE",
+							Equipped:   true,
+							IsVital:    false,
+						}
+						result = append(result, inst)
+					}
+				}
+			}
 		}
 	}
 
@@ -366,12 +597,12 @@ var MonsterRegistry = make(map[string]MonsterTemplate)
 
 func LoadMonsterRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
-		SELECT id, name, type, max_hp, base_attack, base_defense, gu_inventory, gu_pool, item_inventory, dao_marks, path_masteries, ai_profile, COALESCE(loot_table_id, ''), COALESCE(description, ''),
+		SELECT id, name, type, COALESCE(max_hp, 100), COALESCE(base_attack, 10), COALESCE(base_defense, 10), COALESCE(gu_inventory, '[]'::jsonb), COALESCE(gu_pool, '[]'::jsonb), COALESCE(item_inventory, '{}'::jsonb), COALESCE(dao_marks, '{}'::jsonb), COALESCE(path_masteries, '{}'::jsonb), COALESCE(ai_profile, 'beast_basic'), COALESCE(loot_table_id, ''), COALESCE(description, ''),
 		       COALESCE(is_capturable, false),
 		       COALESCE(capture_chance, 0.20),
 		       COALESCE(pet_hunger_per_hour, 2.0)
 		FROM monster_templates
-		WHERE is_active = true
+		WHERE is_active = true OR is_active IS NULL
 	`)
 	if err != nil {
 		return err
@@ -404,9 +635,16 @@ func LoadMonsterRegistry(db *sql.DB) error {
 		newRegistry[mon.ID] = mon
 		count++
 	}
+	if err := rows.Err(); err != nil {
+		logger.S.Warnf("LoadMonsterRegistry rows iteration error: %v", err)
+	}
 
 	MonsterRegistry = newRegistry
-	logger.S.Infof("Loaded %d monster templates from database registry into memory cache", count)
+	if count == 0 {
+		logger.S.Warn("LoadMonsterRegistry completed but loaded 0 monsters. Please check if the 'monster_templates' table has data and if 'is_active' is set to true.")
+	} else {
+		logger.S.Infof("Loaded %d monster templates from database registry into memory cache", count)
+	}
 	return nil
 }
 

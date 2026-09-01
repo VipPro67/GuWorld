@@ -569,7 +569,15 @@ func fleeFailVictory(tx *sql.Tx, player *models.Player) []string {
 			loot := RollLoot(lt, cs.EnemyRank)
 			if cs.EnemyGuInventory != nil && len(cs.EnemyGuInventory) > 0 {
 				for _, eg := range cs.EnemyGuInventory {
-					if rand.Intn(100) < 10 {
+					if rand.Intn(100) < 20 {
+						guSpec, _ := models.GetGuAny(eg.GuID)
+						isImmortal := guSpec.IsImmortal || guSpec.Rank >= 6 || models.HasImmortalRank(eg.GuID)
+						if isImmortal {
+							exists, err := db.CheckImmortalGuExists(tx, eg.GuID, guSpec.Rank, nil)
+							if err == nil && exists {
+								continue
+							}
+						}
 						loot.Gus = append(loot.Gus, eg.GuID)
 					}
 				}

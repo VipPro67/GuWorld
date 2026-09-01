@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -113,6 +114,62 @@ func SetupRouter() *gin.Engine {
 		// Public endpoints — per IP
 		api.GET("/dictionary", middleware.RateLimitByIP(40, time.Minute), handlers.GetDictionary)
 		api.GET("/recipes", middleware.RateLimitByIP(40, time.Minute), handlers.GetRecipes)
+
+		api.GET("/debug/monsters", func(c *gin.Context) {
+			var totalCount, activeCount int
+			err1 := db.DB.QueryRow("SELECT COUNT(*) FROM monster_templates").Scan(&totalCount)
+			err2 := db.DB.QueryRow("SELECT COUNT(*) FROM monster_templates WHERE is_active = true OR is_active IS NULL").Scan(&activeCount)
+			
+			// Test the exact query that LoadMonsterRegistry runs
+			rows, err3 := db.DB.Query(`
+				SELECT id, name, type, COALESCE(max_hp, 100), COALESCE(base_attack, 10), COALESCE(base_defense, 10), COALESCE(gu_inventory, '[]'::jsonb), COALESCE(gu_pool, '[]'::jsonb), COALESCE(item_inventory, '{}'::jsonb), COALESCE(dao_marks, '{}'::jsonb), COALESCE(path_masteries, '{}'::jsonb), COALESCE(ai_profile, 'beast_basic'), COALESCE(loot_table_id, ''), COALESCE(description, ''),
+					   COALESCE(is_capturable, false),
+					   COALESCE(capture_chance, 0.20),
+					   COALESCE(pet_hunger_per_hour, 2.0)
+				FROM monster_templates
+				WHERE is_active = true OR is_active IS NULL
+			`)
+			
+			var queryErr string
+			var scanErrs []string
+			var parsedCount int
+			if err3 != nil {
+				queryErr = err3.Error()
+			} else {
+				defer rows.Close()
+				for rows.Next() {
+					var mon models.MonsterTemplate
+					var guInvRaw, guPoolRaw, itemInvRaw, daoMarksRaw, masteriesRaw []byte
+					err := rows.Scan(
+						&mon.ID, &mon.Name, &mon.Type,
+						&mon.MaxHP, &mon.BaseAttack, &mon.BaseDefense,
+						&guInvRaw, &guPoolRaw, &itemInvRaw, &daoMarksRaw, &masteriesRaw, &mon.AIProfile, &mon.LootTableID, &mon.Description,
+						&mon.IsCapturable, &mon.CaptureChance, &mon.PetHungerPerHour,
+					)
+					if err != nil {
+						scanErrs = append(scanErrs, err.Error())
+						if len(scanErrs) > 10 {
+							break
+						}
+					} else {
+						parsedCount++
+					}
+				}
+				if err := rows.Err(); err != nil {
+					queryErr = "rows.Err: " + err.Error()
+				}
+			}
+			
+			c.JSON(200, gin.H{
+				"total_count": totalCount,
+				"active_count": activeCount,
+				"parsed_count": parsedCount,
+				"query_err": queryErr,
+				"scan_errs": scanErrs,
+				"err1": func()string{if err1!=nil{return err1.Error()};return ""}(),
+				"err2": func()string{if err2!=nil{return err2.Error()};return ""}(),
+			})
+		})
 
 		// Auth Endpoints
 		authGroup := api.Group("/auth")

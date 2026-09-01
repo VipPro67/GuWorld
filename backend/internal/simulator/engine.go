@@ -366,11 +366,42 @@ func Simulate(state *CombatState) []CombatLog {
 	// they left off, enabling alternating damage turns.
 	actionCursor := make(map[*CombatantAuto]int)
 
-	// Pre-sort every combatant's actions by priority once before the battle.
+	// Pre-sort every combatant's actions once before the battle:
+	// 1. Defensive/Support actions (Shield, Heal, Buffs) first.
+	// 2. Damage actions sorted by highest damage first (comparing Gu skills vs Basic Attack).
 	for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
 		for _, c := range combatants {
 			sort.SliceStable(c.Actions, func(i, j int) bool {
-				return c.Actions[i].Priority < c.Actions[j].Priority
+				ai := c.Actions[i]
+				aj := c.Actions[j]
+
+				// Respect explicit non-zero priorities if set
+				if ai.Priority != aj.Priority && ai.Priority != 0 && aj.Priority != 0 {
+					return ai.Priority < aj.Priority
+				}
+
+				// Priority 1: Defense/Support (Shield/Heal) goes before Damage
+				isDefI := ai.Defense > 0 || ai.Healing > 0 || ai.DefUpTier > 0 || ai.RegenTier > 0 || ai.ActionType == "SHIELD" || ai.ActionType == "HEAL"
+				isDefJ := aj.Defense > 0 || aj.Healing > 0 || aj.DefUpTier > 0 || aj.RegenTier > 0 || aj.ActionType == "SHIELD" || aj.ActionType == "HEAL"
+
+				if isDefI != isDefJ {
+					return isDefI
+				}
+
+				if isDefI && isDefJ {
+					valI := ai.Defense + ai.Healing
+					valJ := aj.Defense + aj.Healing
+					if valI != valJ {
+						return valI > valJ
+					}
+				}
+
+				// Priority 2: Damage actions (both Gu skills and Basic Attack): sort by highest damage first
+				if ai.Damage != aj.Damage {
+					return ai.Damage > aj.Damage
+				}
+
+				return ai.Priority < aj.Priority
 			})
 		}
 	}
@@ -809,15 +840,18 @@ if (actor.IsSilenced || actor.IsFeared) && a.ActionType != "BASIC_ATTACK" {
 				}
 			}
 
-					if a.ManaCost > 0 && float64(actor.Mana) < a.ManaCost {
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "INSUFFICIENT_MANA",
-							Detail:    fmt.Sprintf("%s không đủ %s để dùng [%s] (cần %.0f, còn %d)", actor.Name, actor.GetManaName(), a.Name, a.ManaCost, actor.Mana),
-						})
-						return res
+					// Only Player combatants check and deduct mana/essence for Gu skills
+					if actor.Kind == "Player" {
+						if a.ManaCost > 0 && float64(actor.Mana) < a.ManaCost {
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   actor.ID,
+								ActorName: actor.Name,
+								Action:    "INSUFFICIENT_MANA",
+								Detail:    fmt.Sprintf("%s không đủ %s để dùng [%s] (cần %.0f, còn %d)", actor.Name, actor.GetManaName(), a.Name, a.ManaCost, actor.Mana),
+							})
+							return res
+						}
 					}
 
 					resolved := resolveTargets(enemyTargets, a)
@@ -834,18 +868,21 @@ if (actor.IsSilenced || actor.IsFeared) && a.ActionType != "BASIC_ATTACK" {
 
 					res.executed = true
 					actionStartIndex := len(turnLogs)
-					manaCost := int(a.ManaCost)
-					actor.Mana -= manaCost
 
-					if manaCost > 0 {
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "MANA_COST",
-							Damage:    manaCost,
-							Detail:    fmt.Sprintf("%s tiêu hao %d %s (còn %d)", actor.Name, manaCost, actor.GetManaName(), actor.Mana),
-						})
+					if actor.Kind == "Player" {
+						manaCost := int(a.ManaCost)
+						actor.Mana -= manaCost
+
+						if manaCost > 0 {
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   actor.ID,
+								ActorName: actor.Name,
+								Action:    "MANA_COST",
+								Damage:    manaCost,
+								Detail:    fmt.Sprintf("%s tiêu hao %d %s (còn %d)", actor.Name, manaCost, actor.GetManaName(), actor.Mana),
+							})
+						}
 					}
 
 // Path mastery handling moved earlier (original block removed)

@@ -1233,9 +1233,21 @@ func CombatAttack(c *gin.Context) {
 					loot := RollLoot(lt, player.ActiveCombat.EnemyRank)
 					if player.ActiveCombat.EnemyGuInventory != nil && len(player.ActiveCombat.EnemyGuInventory) > 0 {
 						for _, eg := range player.ActiveCombat.EnemyGuInventory {
-							if rand.Intn(100) < 10 {
+							if rand.Intn(100) < 20 {
+								guSpec, _ := models.GetGuAny(eg.GuID)
+								isImmortal := guSpec.IsImmortal || guSpec.Rank >= 6 || models.HasImmortalRank(eg.GuID)
+								if isImmortal {
+									exists, err := db.CheckImmortalGuExists(tx, eg.GuID, guSpec.Rank, nil)
+									if err == nil && exists {
+										continue // Tiên cổ duy nhất đã tồn tại trong thiên hạ -> không thể bóc tách trùng
+									}
+								}
 								loot.Gus = append(loot.Gus, eg.GuID)
-								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Cơ duyên! Đạo hữu bóc tách thành công cổ trùng ký sinh %s từ thi thể kẻ địch!", eg.GuID))
+								guName := eg.GuID
+								if guSpec.Name != "" {
+									guName = guSpec.Name
+								}
+								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Cơ duyên! Đạo hữu bóc tách thành công Cổ trùng [%s] từ thi thể của %s!", guName, player.ActiveCombat.EnemyName))
 							}
 						}
 					}
