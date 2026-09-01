@@ -393,13 +393,28 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		if value <= 0 {
 			value = 1
 		}
+		oldApt := player.AptitudePercent
 		player.AptitudePercent += value
 		if player.AptitudePercent > 99 {
 			player.AptitudePercent = 99
 		}
-		delta := float64(value)
+
+		if player.AptitudePercent >= 80 {
+			player.AptitudeType = "Giáp"
+		} else if player.AptitudePercent >= 60 {
+			player.AptitudeType = "Ất"
+		} else if player.AptitudePercent >= 40 {
+			player.AptitudeType = "Bính"
+		} else {
+			player.AptitudeType = "Đinh"
+		}
+
+		delta := float64(player.AptitudePercent - oldApt)
 		if delta > 0 {
 			player.MaxMana += delta
+			if player.Rank < 6 && player.MaxMana > 99 {
+				player.MaxMana = 99
+			}
 			if player.CurrentMana > player.MaxMana {
 				player.CurrentMana = player.MaxMana
 			}
@@ -414,13 +429,28 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		if player.AptitudePercent >= 99 {
 			return "", fmt.Errorf("Tư chất đã đạt mức tối đa (99%%), không thể hiến tế thêm!")
 		}
+		oldApt := player.AptitudePercent
 		player.AptitudePercent += value
 		if player.AptitudePercent > 99 {
 			player.AptitudePercent = 99
 		}
-		delta := float64(value)
+
+		if player.AptitudePercent >= 80 {
+			player.AptitudeType = "Giáp"
+		} else if player.AptitudePercent >= 60 {
+			player.AptitudeType = "Ất"
+		} else if player.AptitudePercent >= 40 {
+			player.AptitudeType = "Bính"
+		} else {
+			player.AptitudeType = "Đinh"
+		}
+
+		delta := float64(player.AptitudePercent - oldApt)
 		if delta > 0 {
 			player.MaxMana += delta
+			if player.Rank < 6 && player.MaxMana > 99 {
+				player.MaxMana = 99
+			}
 			if player.CurrentMana > player.MaxMana {
 				player.CurrentMana = player.MaxMana
 			}
