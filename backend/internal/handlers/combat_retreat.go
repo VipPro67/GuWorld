@@ -571,7 +571,7 @@ func fleeFailVictory(tx *sql.Tx, player *models.Player) []string {
 				for _, eg := range cs.EnemyGuInventory {
 					guSpec, _ := models.GetGuAny(eg.GuID)
 					dropChance := GetGuDropChancePercent(guSpec.Rank, isBossEnemy(cs))
-					if rand.Intn(100) < dropChance {
+					if rand.Float64()*100.0 < dropChance {
 						isImmortal := guSpec.IsImmortal || guSpec.Rank >= 6 || models.HasImmortalRank(eg.GuID)
 						if isImmortal {
 							exists, err := db.CheckImmortalGuExists(tx, eg.GuID, guSpec.Rank, nil)
@@ -580,9 +580,6 @@ func fleeFailVictory(tx *sql.Tx, player *models.Player) []string {
 							}
 						}
 						loot.Gus = append(loot.Gus, eg.GuID)
-						if isImmortal {
-							BroadcastImmortalGuLoot(player.ID, player.Username, cs.EnemyName, eg.GuID, guSpec.Rank)
-						}
 					}
 				}
 			}

@@ -1235,7 +1235,7 @@ func CombatAttack(c *gin.Context) {
 						for _, eg := range player.ActiveCombat.EnemyGuInventory {
 							guSpec, _ := models.GetGuAny(eg.GuID)
 							dropChance := GetGuDropChancePercent(guSpec.Rank, isBossEnemy(player.ActiveCombat))
-							if rand.Intn(100) < dropChance {
+							if rand.Float64()*100.0 < dropChance {
 								isImmortal := guSpec.IsImmortal || guSpec.Rank >= 6 || models.HasImmortalRank(eg.GuID)
 								if isImmortal {
 									exists, err := db.CheckImmortalGuExists(tx, eg.GuID, guSpec.Rank, nil)
@@ -1249,9 +1249,6 @@ func CombatAttack(c *gin.Context) {
 									guName = guSpec.Name
 								}
 								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Cơ duyên! Đạo hữu bóc tách thành công Cổ trùng [%s] từ thi thể của %s!", guName, player.ActiveCombat.EnemyName))
-								if isImmortal {
-									BroadcastImmortalGuLoot(player.ID, player.Username, player.ActiveCombat.EnemyName, eg.GuID, guSpec.Rank)
-								}
 							}
 						}
 					}

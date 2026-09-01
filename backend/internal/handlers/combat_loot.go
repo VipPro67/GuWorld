@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type RolledLoot struct {
@@ -153,8 +155,26 @@ func ApplyLoot(tx *sql.Tx, player *models.Player, loot RolledLoot) []string {
 		if guSpec.ID != "" {
 			guName = guSpec.Name
 		}
+
+		if tx != nil {
+			if err := db.AddPlayerGu(tx, player.ID.String(), newInstance); err != nil {
+				logger.S.Errorf("Failed to persist looted Gu %s to DB for player %s: %v", guID, player.ID, err)
+				continue // Skip if DB insertion failed
+			}
+		}
+
 		player.GuInventory = append(player.GuInventory, newInstance)
 		logs = append(logs, fmt.Sprintf("Chúc mừng đạo hữu thu phục được hoang dã Cổ trùng: [%s]!", guName))
+
+		// Broadcast ONLY AFTER SUCCESSFUL ADDITION TO PLAYER INVENTORY IN DB
+		isImmortal := guSpec.IsImmortal || guSpec.Rank >= 6 || models.HasImmortalRank(guID)
+		if isImmortal {
+			bossName := "Thái Cổ Yêu Quái"
+			if player.ActiveCombat != nil && player.ActiveCombat.EnemyName != "" {
+				bossName = player.ActiveCombat.EnemyName
+			}
+			BroadcastImmortalGuLoot(player.ID, player.Username, bossName, guID, guSpec.Rank)
+		}
 	}
 	return logs
 }
@@ -175,61 +195,62 @@ func isBossEnemy(cs *models.CombatState) bool {
 	return false
 }
 
-// GetGuDropChancePercent returns the drop chance percentage based on Gu rank and whether enemy is a Boss vs Elite.
+// GetGuDropChancePercent returns the drop chance percentage (0.0 - 100.0) based on Gu rank and whether enemy is a Boss vs Elite.
 // Defeating a Boss gives a higher drop chance for Gu than Elites/Normal enemies.
-func GetGuDropChancePercent(rank int, isBoss bool) int {
+// Immortal Gu (Rank >= 6) have significantly lower drop rates to ensure their rarity and uniqueness.
+func GetGuDropChancePercent(rank int, isBoss bool) float64 {
 	if isBoss {
 		switch rank {
 		case 1:
-			return 35 // 35% (Boss - Cổ Nhất Chuyển)
+			return 35.0 // 35% (Boss - Cổ Nhất Chuyển)
 		case 2:
-			return 28 // 28% (Boss - Cổ Nhị Chuyển)
+			return 25.0 // 25% (Boss - Cổ Nhị Chuyển)
 		case 3:
-			return 22 // 22% (Boss - Cổ Tam Chuyển)
+			return 18.0 // 18% (Boss - Cổ Tam Chuyển)
 		case 4:
-			return 16 // 16% (Boss - Cổ Tứ Chuyển)
+			return 12.0 // 12% (Boss - Cổ Tứ Chuyển)
 		case 5:
-			return 12 // 12% (Boss - Cổ Ngũ Chuyển)
+			return 8.0  // 8%  (Boss - Cổ Ngũ Chuyển)
 		case 6:
-			return 8  // 8%  (Boss - Tiên Cổ Lục Chuyển)
+			return 2.5  // 2.5% (Boss - Tiên Cổ Lục Chuyển)
 		case 7:
-			return 5  // 5%  (Boss - Tiên Cổ Thất Chuyển)
+			return 1.5  // 1.5% (Boss - Tiên Cổ Thất Chuyển)
 		case 8:
-			return 3  // 3%  (Boss - Tiên Cổ Bát Chuyển)
+			return 0.8  // 0.8% (Boss - Tiên Cổ Bát Chuyển)
 		case 9:
-			return 2  // 2%  (Boss - Tiên Cổ Cửu Chuyển)
+			return 0.3  // 0.3% (Boss - Tiên Cổ Cửu Chuyển)
 		default:
 			if rank >= 6 {
-				return 2
+				return 0.3
 			}
-			return 20
+			return 15.0
 		}
 	}
 
 	// Elite / Normal Enemy
 	switch rank {
 	case 1:
-		return 20 // 20%
+		return 20.0 // 20%
 	case 2:
-		return 15 // 15%
+		return 15.0 // 15%
 	case 3:
-		return 10 // 10%
+		return 10.0 // 10%
 	case 4:
-		return 7  // 7%
+		return 6.0  // 6%
 	case 5:
-		return 5  // 5%
+		return 4.0  // 4%
 	case 6:
-		return 3  // 3%  (Tiên Cổ Lục Chuyển)
+		return 1.0  // 1.0% (Tiên Cổ Lục Chuyển)
 	case 7:
-		return 2  // 2%  (Tiên Cổ Thất Chuyển)
+		return 0.5  // 0.5% (Tiên Cổ Thất Chuyển)
 	case 8:
-		return 1  // 1%  (Tiên Cổ Bát Chuyển)
+		return 0.2  // 0.2% (Tiên Cổ Bát Chuyển)
 	case 9:
-		return 1  // 1%  (Tiên Cổ Cửu Chuyển)
+		return 0.1  // 0.1% (Tiên Cổ Cửu Chuyển)
 	default:
 		if rank >= 6 {
-			return 1
+			return 0.1
 		}
-		return 10
+		return 8.0
 	}
 }
