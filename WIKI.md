@@ -276,8 +276,9 @@ Cổ sư có thể:
 - Luyện Cổ dùng `/api/refine` với recipe và selected Gu instances.
 - Cổ nguyên liệu trong công thức yêu cầu **bằng hoặc cao hơn bậc quy định**. Dùng Cổ nguyên liệu bậc cao hơn sẽ tăng thêm tỉ lệ thành công (Chất lượng nguyên liệu).
 - Có thể kéo-thả Cổ bất kỳ vào ô nguyên liệu (kể cả ô "Cổ Trùng Ẩn"). Nếu bộ Cổ không khớp công thức, khi Luyện sẽ **thất bại chắc chắn** — nguyên liệu, tài nguyên vẫn bị tiêu hao.
-- Suy diễn recipe dùng `/api/refine/deduce`, cập nhật tiến độ unlock recipe trong player.
-
+- Tàn phương (recipe chưa unlock 100%) có thể dùng `/api/refine/deduce` để suy diễn tăng % độ hoàn thiện. Tiêu hao 15 Niệm Lực và Nguyên Thạch mỗi lần.
+  - **Độ khó suy diễn:** Tiến độ (Improvement %) mỗi lần bấm sẽ bị chia cho hệ số Rank của Cổ (Rank 5 chia 100, Rank 6 chia 1.000, Rank 9 chia 10.000.000). Phàm nhân gần như không thể cày chay Tiên Cổ Phương.
+  - **Chìa khóa (Cảnh Giới & Đạo Ngân):** Bù đắp độ khó khổng lồ này bằng Cảnh Giới Trí Đạo (x3), Luyện Đạo (x2), Hệ đích (x1) và Đạo Ngân Trí Đạo (Tăng tiến độ theo hàm Căn bậc hai). Trí Đạo Vô Thượng Đại Tông Sư có thể suy tính nhanh gấp hàng vạn lần kẻ phàm. Mức Cảnh Giới Trí Đạo cũng gia tăng tỷ lệ Linh quang chớp lóe (Inspiration Flash - Lập tức hoàn thiện 100%).
 ### Tỉ lệ Luyện Cổ và Hệ quả (MỚI)
 
 Tỉ lệ thành công của mỗi lần Luyện Cổ được tính dựa trên 10 yếu tố:
@@ -293,6 +294,7 @@ Tỉ lệ thành công của mỗi lần Luyện Cổ được tính dựa trên
 9. **Hỗ trợ:** Cổ Trí Tuệ Đạo/Luyện Đạo đang kích hoạt (có dòng `success_rate_bonus`).
 10. **Môi trường:** Luyện Cổ tại Đại Vực có thuộc tính phù hợp (+5%).
 11. **Tiên Cổ Giảm Trừ (Immortal Penalty):** Khi luyện Tiên Cổ (Rank 6 - 9), toàn bộ các gia thành cộng thẳng ở trên (Mục 4, 6, 7, 8, 9, 10) sẽ bị ép chia nhỏ theo độ khó. Rank 6: chia 2, Rank 7: chia 5, Rank 8: chia 20, Rank 9: chia 100. Việc này khiến ngoại vật trở nên yếu ớt ở cấp độ Tiên Cổ, buộc Cổ Tiên phải dựa hoàn toàn vào Đạo Ngân Luyện Đạo (Mục 5) khổng lồ để chống lại độ khó kinh khủng này.
+12. **Tiêu hao Năng Lượng:** Luyện Cổ tiêu tốn sinh lực khiếu. Tiêu hao 20 Chân Nguyên đối với đồng cấp Phàm và 10 Tiên Nguyên đối với đồng cấp Tiên. Số lượng này nhân lên hoặc giảm đi (x10 lần với Phàm, x100 lần với Tiên) cho mỗi bậc chênh lệch. Phàm nhân không thể luyện Tiên Cổ do lập tức cạn kiệt Chân Nguyên.
 
 Hệ quả của quá trình luyện phân thành 4 bậc:
 - **Thành Công:** Nhận Cổ trùng mục tiêu và tăng điểm **Chân Ý lưu phái Luyện Đạo** (Luyện Cổ không tăng Chân Ý lưu phái khác; Chân Ý các hệ khác tích lũy qua sát chiêu, chiến đấu, phó bản):

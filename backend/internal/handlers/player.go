@@ -2499,45 +2499,64 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 	}
 
 	// Character effects from race / constitution / statuses (percentage modifiers)
-	charFX := gamefx.Get(player)
-	for key, pct := range charFX.StatMods {
-		cur, ok := stats[key]
-		if !ok || cur == 0 {
-			continue
+	applyCharEffect := func(sourceID, sourceName string, statMods map[string]float64) {
+		if statMods == nil {
+			return
 		}
-		delta := cur * pct
-		if delta == 0 {
-			continue
-		}
-		stats[key] += delta
-		srcName := "Trạng thái"
-		srcID := "status"
-		for _, status := range player.Statuses.Active() {
-			label := gamefx.StatusDisplayName(status.ID)
-			if srcID == "status" {
-				srcName = label
-				srcID = "status:" + status.ID
-			} else {
-				srcName += ", " + label
+		for key, pct := range statMods {
+			cur, ok := stats[key]
+			if !ok || cur == 0 {
+				continue
+			}
+			delta := cur * pct
+			if delta == 0 {
+				continue
+			}
+			stats[key] += delta
+
+			found := false
+			for i := range details {
+				if details[i].Key == key {
+					details[i].Sources = append(details[i].Sources, PassiveStatSource{
+						Source: sourceID, Name: sourceName, Value: delta, Mult: 1, Dao: 1, Final: delta,
+					})
+					details[i].Total += delta
+					found = true
+					break
+				}
+			}
+			if !found {
+				details = append(details, PassiveStatDetail{Key: key, Total: stats[key], Sources: []PassiveStatSource{{
+					Source: sourceID, Name: sourceName, Value: delta, Mult: 1, Dao: 1, Final: delta,
+				}}})
 			}
 		}
-		found := false
-		for i := range details {
-			if details[i].Key == key {
-				details[i].Sources = append(details[i].Sources, PassiveStatSource{
-					Source: srcID, Name: srcName, Value: delta, Mult: 1, Dao: 1, Final: delta,
-				})
-				details[i].Total += delta
-				found = true
+	}
+
+	for _, r := range gamefx.AllRaces() {
+		if r.Key == player.Race {
+			applyCharEffect("race:"+r.Key, "Chủng tộc: "+r.Name, r.Effects.StatMods)
+			break
+		}
+	}
+
+	for _, c := range gamefx.AllConstitutions() {
+		if c.Key == player.Constitution {
+			applyCharEffect("constitution:"+c.Key, "Thể chất: "+c.Name, c.Effects.StatMods)
+			break
+		}
+	}
+
+	for _, st := range player.Statuses.Active() {
+		for _, def := range gamefx.AllStatuses() {
+			if def.Key == st.ID {
+				applyCharEffect("status:"+def.Key, "Trạng thái: "+def.Name, def.Effects.StatMods)
 				break
 			}
 		}
-		if !found {
-			details = append(details, PassiveStatDetail{Key: key, Total: stats[key], Sources: []PassiveStatSource{{
-				Source: srcID, Name: srcName, Value: delta, Mult: 1, Dao: 1, Final: delta,
-			}}})
-		}
 	}
+
+	charFX := gamefx.Get(player)
 
 	// Derived defensive bonuses from constitution (soul defense, mental resistance)
 	constitutionName := "Thể chất"

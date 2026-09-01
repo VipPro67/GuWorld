@@ -1080,17 +1080,25 @@ export const wikiPages: WikiPage[] = [
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
             Tỉ lệ Luyện Cổ thành công được quyết định bởi 10 yếu tố: Tỷ lệ gốc của bí phương, Độ hoàn thiện của phương thức, Độ chính xác tổ hợp nguyên liệu, Chất lượng nguyên liệu đầu vào (+2% mỗi bậc chênh lệch), Đạo Ngân Luyện Đạo (không giới hạn, tăng chậm dần theo hàm căn bậc hai, nhân hệ số Chân Ý lưu phái đích và chia theo hệ số Rank P), Cảnh giới Luyện Đạo (lên tới +25%), Cảnh giới Lưu Phái của Cổ (max +10%), Khí vận (max +10%), Cổ phụ trợ kích hoạt, và Môi trường Đại Vực (+5%). Lắp sai nguyên liệu lập tức tỷ lệ về 0%.
             <br/><br/>
-            <strong className="text-cyan-400">Tiêu hao Chân Nguyên/Tiên Nguyên:</strong>Cổ sư luyện Cổ đồng cấp tốn 20 Chân Nguyên (hoặc 10 Tiên Nguyên nếu là Tiên Cổ). Do giới hạn Tiên - Phàm, phàm nhân không thể tự luyện Tiên Cổ do cạn kiệt Chân Nguyên lập tức.
+            <strong className="text-cyan-400">Tiêu hao Năng Lượng:</strong> Cổ sư luyện Cổ đồng cấp tốn 20 Chân Nguyên (hoặc 10 Tiên Nguyên nếu là Tiên Cổ). Chi phí này nhân lên hoặc giảm đi 10 lần (với Phàm) và 100 lần (với Tiên) cho mỗi bậc chênh lệch. Phàm nhân không thể luyện Tiên Cổ vì tiêu hao lập tức cạn kiệt khiếu.
             <br/><br/>
-            <strong className="text-cyan-400">Tiên Cổ Giảm Trừ:</strong> Khi luyện Tiên Cổ (Rank 6 - 9), các chỉ số cộng thẳng ngoại vật (Chất lượng vật liệu, Cảnh giới, Khí vận, Phụ trợ, Môi trường) sẽ bị ép chia nhỏ theo độ khó. Rank 6: chia 2, Rank 7: chia 5, Rank 8: chia 20, Rank 9: chia 100. Cổ Tiên buộc phải dựa vào lượng Đạo Ngân khổng lồ để thành công.
+            <strong className="text-cyan-400">Tiên Cổ Giảm Trừ:</strong> Khi luyện Tiên Cổ (Rank 6 - 9), các chỉ số cộng thẳng ngoại vật (Chất lượng vật liệu, Cảnh giới, Khí vận, Phụ trợ, Môi trường) sẽ bị ép chia nhỏ theo độ khó. Rank 6: chia 2, Rank 7: chia 5, Rank 8: chia 20, Rank 9: chia 100.
           </p>
-          <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/10 text-xs text-amber-300 leading-relaxed">
+
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono mt-6">Suy Diễn Bí Phương</h3>
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            Sử dụng <strong>Niệm Lực</strong> và Nguyên thạch để tăng % độ hoàn thiện của tàn phương. Độ khó của việc suy diễn phụ thuộc cực kỳ lớn vào Rank của Cổ, chia nhỏ tỷ lệ nhận được: Rank 5 (chia 100), Rank 6 (chia 1.000), tới Rank 9 (chia 10.000.000).
+            <br/><br/>
+            Để có thể suy diễn Tiên Cổ trong thời gian thực tế, đạo hữu bắt buộc phải dựa vào <strong>Cảnh Giới</strong> (Trí Đạo x3, Luyện Đạo x2, Lưu Phái Đích x1) và <strong>Đạo Ngân Trí Đạo</strong> (Gia tốc tư duy). Một Trí Đạo Vô Thượng sở hữu lượng lớn Đạo Ngân có thể suy diễn nhanh gấp hàng vạn lần phàm nhân. Cảnh giới Trí Đạo cũng tăng vọt cơ hội nhận <strong>Linh quang chớp lóe</strong> (lập tức hoàn thiện 100%).
+          </p>
+
+          <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/10 text-xs text-amber-300 leading-relaxed mt-4">
             ⚠️ <strong>Hậu quả luyện cổ:</strong> Có 4 mốc hậu quả:
             <ul className="list-disc list-inside mt-2 space-y-1">
               <li><strong>Thành công:</strong> Nhận Cổ trùng, tăng Chân Ý Luyện Đạo theo bậc Cổ (R1: +2đ; R2-3: +5~15đ; R4-5: +40~100đ; Tiên Cổ R6+: +500~50.000đ; không tăng Chân Ý lưu phái khác).</li>
-              <li><strong>Thất bại (Safe):</strong> Cảnh giới Luyện Đạo cao cứu vãn, giữ lại nguyên liệu chính, chỉ mất 50% nguyên liệu phụ.</li>
-              <li><strong>Thất bại (Normal):</strong> Mất 100% nguyên liệu. Nếu là Cổ Bản Mệnh thì không chết mà rơi vào Hấp Hối (Hunger = 1).</li>
-              <li><strong>Cháy Nổ (Backfire):</strong> Tỉ lệ tột cùng xui xẻo (xúc xắc ≥ 90%, hoặc ≥ 75% với Tiên Cổ) khiến lò nổ, mất 50% HP max và 30% Hồn Phách max, nguyên liệu hóa tro bụi.</li>
+              <li><strong>Thất bại (Safe):</strong> Cảnh giới Luyện Đạo cao cứu vãn, giữ lại nguyên liệu chính, mất 50% nguyên liệu phụ.</li>
+              <li><strong>Thất bại (Normal):</strong> Mất 100% nguyên liệu. Cổ Bản Mệnh sẽ chuyển sang trạng thái Hấp Hối thay vì chết.</li>
+              <li><strong>Cháy Nổ (Backfire):</strong> Tỉ lệ tột cùng xui xẻo khiến lò nổ, mất 50% HP max và 30% Hồn Phách max.</li>
             </ul>
           </div>
         </div>

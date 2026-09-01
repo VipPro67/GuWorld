@@ -895,7 +895,16 @@ func DeduceRecipe(c *gin.Context) {
 		return
 	}
 
-	// Cost verification — Deduce tiêu hao Thought thay vì Mana
+	// 1. Get Gu Rank and Path
+	targetGuID, targetRank, _, err := ParseRecipeID(req.RecipeID)
+	var targetPath string
+	if err == nil {
+		_ = tx.QueryRow(`SELECT path FROM gu_dictionary WHERE id = $1 AND rank = $2`, targetGuID, targetRank).Scan(&targetPath)
+	} else {
+		targetRank = 1 // Fallback just in case
+	}
+
+	// 2. Cost verification
 	thoughtCost := 15.0
 	stoneCost := int64(10)
 
@@ -912,11 +921,43 @@ func DeduceRecipe(c *gin.Context) {
 	player.CurrentThought -= thoughtCost
 	player.PrimevalStones -= stoneCost
 
-	// Roll for deduction outcome
-	inspirationFlashChance := 0.03
+	// 3. Deduction Calculation (Wisdom + Refinement + Target Path)
+	wisdomPts := player.PathMasteries["wisdom path"]
+	refinePts := player.PathMasteries["refinement path"]
+	targetPts := player.PathMasteries[targetPath]
 
+	wisdomRealm := gamefx.PathMasteryLevel(wisdomPts)
+	refineRealm := gamefx.PathMasteryLevel(refinePts)
+	targetRealm := gamefx.PathMasteryLevel(targetPts)
+
+	realmMultiplier := 1.0 + float64(wisdomRealm)*3.0 + float64(refineRealm)*2.0 + float64(targetRealm)*1.0
+	
+	wisdomDaoMarks := 0
+	if player.DaoMarks != nil {
+		wisdomDaoMarks = player.DaoMarks["wisdom"]
+	}
+	daoMultiplier := 1.0 + math.Sqrt(float64(wisdomDaoMarks))
+
+	rankPenalty := 1.0
+	switch targetRank {
+	case 2: rankPenalty = 2.0
+	case 3: rankPenalty = 5.0
+	case 4: rankPenalty = 20.0
+	case 5: rankPenalty = 100.0
+	case 6: rankPenalty = 1000.0
+	case 7: rankPenalty = 10000.0
+	case 8: rankPenalty = 100000.0
+	case 9: rankPenalty = 10000000.0
+	}
+
+	// Base improvement for Rank 1 is 10% - 25%
+	baseImprovement := 10.0 + rand.Float64()*15.0
+	improvement := (baseImprovement * realmMultiplier * daoMultiplier) / rankPenalty
+
+	// Flash of Inspiration chance scales with Wisdom
+	inspirationFlashChance := (0.03 * realmMultiplier) / rankPenalty
 	inspirationFlash := rand.Float64() < inspirationFlashChance
-	var improvement float64
+
 	var newRate float64
 	var message string
 
@@ -930,17 +971,15 @@ func DeduceRecipe(c *gin.Context) {
 		})
 		message = "Linh quang chớp lóe! Đạo hữu đột nhiên thông suốt, lập tức hoàn thiện 100% công thức!"
 	} else {
-		// improve by 10% - 25%
-		improvement = 10.0 + rand.Float64()*15.0
-		// round to 1 decimal place for neatness
-		improvement = float64(int(improvement*10)) / 10.0
+		// round to 4 decimal places for precision at high ranks
+		improvement = math.Round(improvement*10000) / 10000.0
 
 		newRate = currentRate + improvement
 		if newRate >= 100.0 {
 			newRate = 100.0
-			message = fmt.Sprintf("Thôi diễn thành công! Tăng thêm %.1f%% độ hoàn thiện. Công thức đã được hoàn thiện 100%%!", improvement)
+			message = fmt.Sprintf("Thôi diễn thành công! Tăng thêm %g%% độ hoàn thiện. Công thức đã được hoàn thiện 100%%!", improvement)
 		} else {
-			message = fmt.Sprintf("Thôi diễn thành công! Tăng thêm %.1f%% độ hoàn thiện.", improvement)
+			message = fmt.Sprintf("Thôi diễn thành công! Tăng thêm %g%% độ hoàn thiện.", improvement)
 		}
 		RecipeSvc.Upsert(tx, &services.RecipeProgress{
 			PlayerID:       player.ID.String(),
@@ -971,7 +1010,7 @@ func DeduceRecipe(c *gin.Context) {
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "refine.deduce_recipe", EntityType: "refining_recipe",
-		EntityID: req.RecipeID, RequestSummary: fmt.Sprintf("improvement=%.1f%% inspiration=%v", improvement, inspirationFlash),
+		EntityID: req.RecipeID, RequestSummary: fmt.Sprintf("improvement=%g%% inspiration=%v", improvement, inspirationFlash),
 		IPAddress: c.ClientIP(), Success: true,
 	})
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
