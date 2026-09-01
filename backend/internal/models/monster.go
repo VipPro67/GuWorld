@@ -366,7 +366,7 @@ var MonsterRegistry = make(map[string]MonsterTemplate)
 
 func LoadMonsterRegistry(db *sql.DB) error {
 	rows, err := db.Query(`
-		SELECT id, name, type, max_hp, base_attack, base_defense, gu_inventory, gu_pool, item_inventory, dao_marks, path_masteries, ai_profile, loot_table_id, description,
+		SELECT id, name, type, max_hp, base_attack, base_defense, gu_inventory, gu_pool, item_inventory, dao_marks, path_masteries, ai_profile, COALESCE(loot_table_id, ''), COALESCE(description, ''),
 		       COALESCE(is_capturable, false),
 		       COALESCE(capture_chance, 0.20),
 		       COALESCE(pet_hunger_per_hour, 2.0)

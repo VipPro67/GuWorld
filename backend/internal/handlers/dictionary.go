@@ -59,7 +59,7 @@ func GetDictionary(c *gin.Context) {
 	var resp DictionaryResponse
 	cacheKey := "game_dictionary_unified"
 
-	if err := cache.GetJSON(cacheKey, &resp); err == nil && resp.Gu != nil && resp.LootTables != nil && resp.Regions != nil && resp.MonsterSpawns != nil {
+	if err := cache.GetJSON(cacheKey, &resp); err == nil && resp.Gu != nil && resp.Items != nil && resp.Monsters != nil && resp.LootTables != nil && resp.Regions != nil && resp.MonsterSpawns != nil {
 		c.JSON(http.StatusOK, resp)
 		return
 	}
