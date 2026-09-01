@@ -44,530 +44,101 @@ type ResourceNodeTemplate struct {
 }
 
 var ResourceNodeTemplates = map[string]ResourceNodeTemplate{
-	"MOON_ORCHID_FIELD": {
-		NodeType:          "MOON_ORCHID_FIELD",
-		Name:              "Cánh Đồng Hoa Nguyệt Lan",
-		Path:              "Star Path",
-		CostStones:        500,
-		ProdType:          "Material",
-		ProdKey:           "moon_orchid_petal",
-		ProdAmount:        10,
-		ProdIntervalHours: 4,
-	},
-	"GREEN_BAMBOO_GROVE": {
-		NodeType:          "GREEN_BAMBOO_GROVE",
-		Name:              "Rừng Trúc Thanh Trúc",
-		Path:              "Wood Path",
-		CostStones:        600,
-		ProdType:          "Material",
-		ProdKey:           "green_bamboo_wine",
-		ProdAmount:        5,
-		ProdIntervalHours: 6,
-	},
-	"JADE_STONE_MINE": {
-		NodeType:          "JADE_STONE_MINE",
-		Name:              "Mỏ Ngọc Thạch Bản Địa",
-		Path:              "Earth Path",
-		CostStones:        1000,
-		ProdType:          "Material",
-		ProdKey:           "jade_stone",
-		ProdAmount:        3,
-		ProdIntervalHours: 8,
-	},
-	"PRIMEVAL_MINE": {
-		NodeType:          "PRIMEVAL_MINE",
-		Name:              "Mạch Nguyên Thạch Tiên Khiếu",
-		Path:              "Rule Path",
-		CostStones:        1500,
-		ProdType:          "Stones",
-		ProdAmount:        200,
-		ProdIntervalHours: 12,
-	},
-	"SWORD_LEAF_GRASS": {
-		NodeType:          "SWORD_LEAF_GRASS",
-		Name:              "Đồng Cỏ Kiếm Diệp",
-		Path:              "Sword Path",
-		CostStones:        800,
-		ProdType:          "Material",
-		ProdKey:           "sword_leaf_grass",
-		ProdAmount:        8,
-		ProdIntervalHours: 6,
-	},
-	"SPIRIT_DEER_PASTURE": {
-		NodeType:          "SPIRIT_DEER_PASTURE",
-		Name:              "Bãi Chăn Thả Hươu Linh",
-		Path:              "Food Path",
-		CostStones:        1200,
-		ProdType:          "Material",
-		ProdKey:           "spirit_deer_meat",
-		ProdAmount:        5,
-		ProdIntervalHours: 8,
-	},
-	"SILVER_WOLF_DEN": {
-		NodeType:          "SILVER_WOLF_DEN",
-		Name:              "Hang Sói Bạc",
-		Path:              "Food Path",
-		CostStones:        2000,
-		ProdType:          "Material",
-		ProdKey:           "silver_wolf_pelt",
-		ProdAmount:        3,
-		ProdIntervalHours: 12,
-	},
-	"HAIRY_MAN_SETTLEMENT": {
-		NodeType:          "HAIRY_MAN_SETTLEMENT",
-		Name:              "Bộ Lạc Người Lông",
-		Path:              "Human Path",
-		CostStones:        3000,
-		ProdType:          "Material",
-		ProdKey:           "hairy_man_slaves",
-		ProdAmount:        1,
-		ProdIntervalHours: 24,
-	},
-	"ROCKMAN_TRIBE": {
-		NodeType:          "ROCKMAN_TRIBE",
-		Name:              "Bản Doanh Người Đá",
-		Path:              "Human Path",
-		CostStones:        3000,
-		ProdType:          "Material",
-		ProdKey:           "jade_stone",
-		ProdAmount:        2,
-		ProdIntervalHours: 24,
-	},
-	"FEATHERMAN_CANYON": {
-		NodeType:          "FEATHERMAN_CANYON",
-		Name:              "Hẻm Núi Người Lông Vũ",
-		Path:              "Human Path",
-		CostStones:        3000,
-		ProdType:          "Material",
-		ProdKey:           "featherman_feather",
-		ProdAmount:        4,
-		ProdIntervalHours: 18,
-	},
-	// ---- GENERIC ZONES ----
+	// ---- GENERIC CUSTOMIZABLE ZONES ----
 	"FARMING_ZONE": {
 		NodeType:          "FARMING_ZONE",
 		Name:              "Khu Trồng Trọt",
 		Path:              "Wood Path",
-		CostStones:        500,
+		CostStones:        10,
 		ProdType:          "Material",
 		ProdAmount:        10,
 		ProdIntervalHours: 4,
+		ZoneType:          "khu_trong",
 	},
 	"BREEDING_ZONE": {
 		NodeType:          "BREEDING_ZONE",
 		Name:              "Khu Chăn Nuôi",
 		Path:              "Food Path",
-		CostStones:        1200,
+		CostStones:        24,
 		ProdType:          "Material",
 		ProdAmount:        5,
 		ProdIntervalHours: 8,
+		ZoneType:          "khu_nuoi",
 	},
 	"MINING_ZONE": {
 		NodeType:          "MINING_ZONE",
 		Name:              "Khu Khai Thác",
 		Path:              "Earth Path",
-		CostStones:        1000,
+		CostStones:        20,
 		ProdType:          "Material",
 		ProdAmount:        3,
 		ProdIntervalHours: 8,
+		ZoneType:          "khu_khai_thac",
 	},
 	// ---- DEFENSE STRUCTURES ----
 	"WALL": {
 		NodeType:       "WALL",
 		Name:           "Tường Thành Tiên Khiếu",
 		Path:           "Earth Path",
-		CostStones:     800,
+		CostStones:     16,
 		NodeCategory:   "DEFENSE",
 		HPMax:          3000,
 		BlocksMovement: true,
 		CostGu:         []string{"GU_BEAST_SKIN", "GU_STONE_SKIN"},
 		CostGuRank:     1,
+		ZoneType:       "khu_phong_thu",
 	},
 	"WATCHTOWER": {
 		NodeType:     "WATCHTOWER",
 		Name:         "Tháp Canh Tiên Khiếu",
 		Path:         "Metal Path",
-		CostStones:   1200,
+		CostStones:   24,
 		NodeCategory: "DEFENSE",
 		HPMax:        2000,
 		DefensePower: 5,
 		AttackRange:  3,
 		CostGu:       []string{"GU_IRON_SKIN", "GU_HALF_STONE"},
 		CostGuRank:   2,
+		ZoneType:     "khu_phong_thu",
 	},
 	"GUARDIAN_STATUE": {
 		NodeType:     "GUARDIAN_STATUE",
 		Name:         "Tượng Hộ Mệnh Tiên Khiếu",
 		Path:         "Earth Path",
-		CostStones:   1500,
+		CostStones:   30,
 		NodeCategory: "DEFENSE",
 		HPMax:        2500,
 		HPBonus:      500,
 		AttackRange:  2,
 		CostGu:       []string{"GU_WHITE_JADE", "GU_MOON_RAIMENT"},
 		CostGuRank:   2,
+		ZoneType:     "khu_phong_thu",
 	},
 	"BARRACKS": {
 		NodeType:        "BARRACKS",
 		Name:            "Doanh Trại Tiên Khiếu",
 		Path:            "Human Path",
-		CostStones:      2000,
+		CostStones:      40,
 		NodeCategory:    "DEFENSE",
 		HPMax:           4000,
 		DamageReduction: 15,
 		AttackRange:     0, // 0 = affects all nodes in aperture
 		CostGu:          []string{"GU_GOLDEN_BELL_SHIELD", "GU_IVORY_ARMOR"},
 		CostGuRank:      4,
+		ZoneType:        "khu_phong_thu",
 	},
 	"FORCE_FIELD": {
 		NodeType:        "FORCE_FIELD",
 		Name:            "Trường Lực Tiên Khiếu",
 		Path:            "Metal Path",
-		CostStones:      2500,
+		CostStones:      50,
 		NodeCategory:    "DEFENSE",
 		HPMax:           1500,
 		DamageReduction: 30,
 		AttackRange:     2,
 		CostGu:          []string{"GU_SUPREME_SHIELD", "GU_GOLDEN_BELL_SHIELD"},
 		CostGuRank:      4,
-	},
-	"TRI_FARM": {
-		NodeType:          "TRI_FARM",
-		Name:              "Trang Trại Trí Đạo",
-		Path:              "Wisdom Path",
-		CostStones:        2000,
-		ProdType:          "Material",
-		ProdKey:           "star_thoughts",
-		ProdAmount:        15,
-		ProdIntervalHours: 12,
-		FoodPath:          "wisdom",
-		ItemTier:          "T5",
-		ZoneType:          "khu_trong",
-	},
-	"TRI_FARM_ADV": {
-		NodeType:          "TRI_FARM_ADV",
-		Name:              "Trang Trại Trí Đạo Cao Cấp",
-		Path:              "Wisdom Path",
-		CostStones:        5000,
-		ProdType:          "Material",
-		ProdKey:           "deer_god_fruit",
-		ProdAmount:        25,
-		ProdIntervalHours: 24,
-		FoodPath:          "wisdom",
-		ItemTier:          "T6",
-		ZoneType:          "khu_trong",
-	},
-	"HOA_FARM": {
-		NodeType:          "HOA_FARM",
-		Name:              "Lò Đốt Hỏa Đá",
-		Path:              "Fire Path",
-		CostStones:        800,
-		ProdType:          "Material",
-		ProdKey:           "fire_coal",
-		ProdAmount:        5,
-		ProdIntervalHours: 8,
-		FoodPath:          "fire",
-		ItemTier:          "T1",
-		ZoneType:          "khu_trong",
-	},
-	"TIN_FARM": {
-		NodeType:          "TIN_FARM",
-		Name:              "Xưởng Giấy Tương",
-		Path:              "Faith Path",
-		CostStones:        300,
-		ProdType:          "Material",
-		ProdKey:           "paper_pulp",
-		ProdAmount:        10,
-		ProdIntervalHours: 4,
-		FoodPath:          "faith",
-		ItemTier:          "T1",
-		ZoneType:          "khu_trong",
-	},
-	"AM_FARM": {
-		NodeType:          "AM_FARM",
-		Name:              "Vườn Dạ Sương",
-		Path:              "Dark Path",
-		CostStones:        1000,
-		ProdType:          "Material",
-		ProdKey:           "night_fog",
-		ProdAmount:        8,
-		ProdIntervalHours: 8,
-		FoodPath:          "dark",
-		ItemTier:          "T3",
-		ZoneType:          "khu_trong",
-	},
-	"DOC_FARM": {
-		NodeType:          "DOC_FARM",
-		Name:              "Vườn Độc Trùng",
-		Path:              "Poison Path",
-		CostStones:        600,
-		ProdType:          "Material",
-		ProdKey:           "poisonous_flesh",
-		ProdAmount:        6,
-		ProdIntervalHours: 6,
-		FoodPath:          "poison",
-		ItemTier:          "T2",
-		ZoneType:          "khu_trong",
-	},
-	"NO_FARM": {
-		NodeType:          "NO_FARM",
-		Name:              "Bãi Nuôi Bò",
-		Path:              "Beast Path",
-		CostStones:        400,
-		ProdType:          "Material",
-		ProdKey:           "beast_meat",
-		ProdAmount:        8,
-		ProdIntervalHours: 6,
-		FoodPath:          "beast",
-		ItemTier:          "T1",
-		ZoneType:          "khu_nuoi",
-	},
-	"NO_FARM_ADV": {
-		NodeType:          "NO_FARM_ADV",
-		Name:              "Bãi Nuôi Sói",
-		Path:              "Slave Path",
-		CostStones:        2000,
-		ProdType:          "Material",
-		ProdKey:           "wolf_heart_meat",
-		ProdAmount:        12,
-		ProdIntervalHours: 12,
-		FoodPath:          "slave",
-		ItemTier:          "T5",
-		ZoneType:          "khu_nuoi",
-	},
-	"THOI_FARM": {
-		NodeType:          "THOI_FARM",
-		Name:              "Đồng Cỏ Lịch Sử",
-		Path:              "Time Path",
-		CostStones:        8000,
-		ProdType:          "Material",
-		ProdKey:           "historical_dust",
-		ProdAmount:        20,
-		ProdIntervalHours: 24,
-		FoodPath:          "time",
-		ItemTier:          "T7",
-		ZoneType:          "khu_trong",
-	},
-	"PHONG_FARM": {
-		NodeType:          "PHONG_FARM",
-		Name:              "Đỉnh Cuồng Phong",
-		Path:              "Wind Path",
-		CostStones:        20000,
-		ProdType:          "Material",
-		ProdKey:           "gale_of_the_nine_heavens",
-		ProdAmount:        30,
-		ProdIntervalHours: 48,
-		FoodPath:          "wind",
-		ItemTier:          "T9",
-		ZoneType:          "khu_trong",
-	},
-	"BAO_FARM": {
-		NodeType:          "BAO_FARM",
-		Name:              "Kho Cacao Đá",
-		Path:              "Earth Path",
-		CostStones:        1500,
-		ProdType:          "Material",
-		ProdKey:           "earth_qi",
-		ProdAmount:        10,
-		ProdIntervalHours: 8,
-		FoodPath:          "earth",
-		ItemTier:          "T1",
-		ZoneType:          "khu_trong",
-	},
-	"QUANG_FARM": {
-		NodeType:          "QUANG_FARM",
-		Name:              "Vườn Ánh Sáng",
-		Path:              "Light Path",
-		CostStones:        800,
-		ProdType:          "Material",
-		ProdKey:           "light",
-		ProdAmount:        10,
-		ProdIntervalHours: 4,
-		FoodPath:          "light",
-		ItemTier:          "T1",
-		ZoneType:          "khu_trong",
-	},
-	"KIEM_FARM": {
-		NodeType:          "KIEM_FARM",
-		Name:              "Đồng Cỏ Kiếm Cao Cấp",
-		Path:              "Sword Path",
-		CostStones:        1500,
-		ProdType:          "Material",
-		ProdKey:           "sword_qi",
-		ProdAmount:        12,
-		ProdIntervalHours: 8,
-		FoodPath:          "sword",
-		ItemTier:          "T3",
-		ZoneType:          "khu_trong",
-	},
-	"THUY_FARM": {
-		NodeType:          "THUY_FARM",
-		Name:              "Khu Tưới Nước",
-		Path:              "Water Path",
-		CostStones:        500,
-		ProdType:          "Water",
-		ProdKey:           "water",
-		ProdAmount:        15,
-		ProdIntervalHours: 6,
-		FoodPath:          "water",
-		ItemTier:          "T0",
-		ZoneType:          "khu_trong",
-	},
-	"BAC_FARM": {
-		NodeType:          "BAC_FARM",
-		Name:              "Lò Yếu Đá",
-		Path:              "Ice Path",
-		CostStones:        600,
-		ProdType:          "Material",
-		ProdKey:           "ice_crystal",
-		ProdAmount:        8,
-		ProdIntervalHours: 6,
-		FoodPath:          "ice",
-		ItemTier:          "T1",
-		ZoneType:          "khu_trong",
-	},
-	"CHUA_FARM": {
-		NodeType:          "CHUA_FARM",
-		Name:              "Đồng Cây Xương Rỗ",
-		Path:              "Bone Path",
-		CostStones:        700,
-		ProdType:          "Material",
-		ProdKey:           "beast_bones",
-		ProdAmount:        5,
-		ProdIntervalHours: 8,
-		FoodPath:          "beast",
-		ItemTier:          "T1",
-		ZoneType:          "khu_trong",
-	},
-	"CAM_FARM": {
-		NodeType:          "CAM_FARM",
-		Name:              "Mỏ Cuội Đá",
-		Path:              "Metal Path",
-		CostStones:        1200,
-		ProdType:          "Material",
-		ProdKey:           "copper_ore",
-		ProdAmount:        4,
-		ProdIntervalHours: 8,
-		FoodPath:          "metal",
-		ItemTier:          "T1",
-		ZoneType:          "khu_khai_thac",
-	},
-	"KIM_FARM": {
-		NodeType:          "KIM_FARM",
-		Name:              "Mỏ Sắt Cao Cấp",
-		Path:              "Metal Path",
-		CostStones:        1500,
-		ProdType:          "Material",
-		ProdKey:           "iron_ore",
-		ProdAmount:        5,
-		ProdIntervalHours: 6,
-		FoodPath:          "metal",
-		ItemTier:          "T1",
-		ZoneType:          "khu_khai_thac",
-	},
-	"VANG_FARM": {
-		NodeType:          "VANG_FARM",
-		Name:              "Mỏ Vàng",
-		Path:              "Metal Path",
-		CostStones:        2000,
-		ProdType:          "Material",
-		ProdKey:           "gold_ore",
-		ProdAmount:        6,
-		ProdIntervalHours: 12,
-		FoodPath:          "metal",
-		ItemTier:          "T3",
-		ZoneType:          "khu_khai_thac",
-	},
-	"HUYET_FARM": {
-		NodeType:          "HUYET_FARM",
-		Name:              "Khu Lồng Máu",
-		Path:              "Blood Path",
-		CostStones:        500,
-		ProdType:          "Material",
-		ProdKey:           "blood_sickle_grass",
-		ProdAmount:        10,
-		ProdIntervalHours: 6,
-		FoodPath:          "blood",
-		ItemTier:          "T1",
-		ZoneType:          "khu_trong",
-	},
-	"THAT_FARM": {
-		NodeType:          "THAT_FARM",
-		Name:              "Kho Dầu Đen",
-		Path:              "Fire Path",
-		CostStones:        2000,
-		ProdType:          "Material",
-		ProdKey:           "black_oil",
-		ProdAmount:        8,
-		ProdIntervalHours: 12,
-		FoodPath:          "fire",
-		ItemTier:          "T5",
-		ZoneType:          "khu_khai_thac",
-	},
-	"THAY_THUAT_FARM": {
-		NodeType:          "THAY_THUAT_FARM",
-		Name:              "Xưởng Thuốc Truyền",
-		Path:              "Sound Path",
-		CostStones:        800,
-		ProdType:          "Material",
-		ProdKey:           "sound_crystal",
-		ProdAmount:        6,
-		ProdIntervalHours: 8,
-		FoodPath:          "sound",
-		ItemTier:          "T1",
-		ZoneType:          "khu_trong",
-	},
-	"LUAT_FARM": {
-		NodeType:          "LUAT_FARM",
-		Name:              "Kho Nguyên Tinh",
-		Path:              "Law Path",
-		CostStones:        1500,
-		ProdType:          "Material",
-		ProdKey:           "sealing_stone",
-		ProdAmount:        4,
-		ProdIntervalHours: 10,
-		FoodPath:          "law",
-		ItemTier:          "T1",
-		ZoneType:          "khu_trong",
-	},
-	"THUAT_FARM": {
-		NodeType:          "THUAT_FARM",
-		Name:              "Vườn Sao Tinh",
-		Path:              "Light Path",
-		CostStones:        1000,
-		ProdType:          "Material",
-		ProdKey:           "soul_qi",
-		ProdAmount:        6,
-		ProdIntervalHours: 8,
-		FoodPath:          "soul",
-		ItemTier:          "T2",
-		ZoneType:          "khu_trong",
-	},
-	"THOI_THUAT_FARM": {
-		NodeType:          "THOI_THUAT_FARM",
-		Name:              "Ngọn Lửa Mặt Trời",
-		Path:              "Sun Flame Path",
-		CostStones:        5000,
-		ProdType:          "Material",
-		ProdKey:           "sun_flame",
-		ProdAmount:        15,
-		ProdIntervalHours: 24,
-		FoodPath:          "fire",
-		ItemTier:          "T9",
-		ZoneType:          "khu_trong",
-	},
-	"LUC_FARM": {
-		NodeType:          "LUC_FARM",
-		Name:              "Đồng Thịt Lạc",
-		Path:              "Strength Path",
-		CostStones:        1500,
-		ProdType:          "Material",
-		ProdKey:           "wolf_heart_meat",
-		ProdAmount:        12,
-		ProdIntervalHours: 12,
-		FoodPath:          "strength",
-		ItemTier:          "T5",
-		ZoneType:          "khu_nuoi",
+		ZoneType:        "khu_phong_thu",
 	},
 }
 
@@ -666,30 +237,34 @@ func GetImmortalAperture(c *gin.Context) {
 }
 
 func seedInitialApertureNodes(tx *sql.Tx, apertureID string, grade string) {
-	starterKeys := []string{
-		"MOON_ORCHID_FIELD",
-		"GREEN_BAMBOO_GROVE",
-		"JADE_STONE_MINE",
-		"PRIMEVAL_MINE",
-		"SWORD_LEAF_GRASS",
-		"SPIRIT_DEER_PASTURE",
+	type StarterConfig struct {
+		NodeType string
+		Name     string
+		Path     string
+		ProdKey  string
+		ZoneType string
+		ProdType string
+		ProdAmount int
+		ProdInterval int
+	}
+
+	starterConfigs := []StarterConfig{
+		{NodeType: "FARMING_ZONE", Name: "Khu Trồng Trọt (Rượu Thanh Trúc)", Path: "Wood Path", ProdKey: "green_bamboo_wine", ZoneType: "khu_trong", ProdType: "Material", ProdAmount: 10, ProdInterval: 4},
+		{NodeType: "BREEDING_ZONE", Name: "Khu Chăn Nuôi (Thịt Hươu Linh)", Path: "Food Path", ProdKey: "spirit_deer_meat", ZoneType: "khu_nuoi", ProdType: "Material", ProdAmount: 5, ProdInterval: 8},
+		{NodeType: "MINING_ZONE", Name: "Khu Khai Thác (Ngọc Thạch)", Path: "Earth Path", ProdKey: "jade_stone", ZoneType: "khu_khai_thac", ProdType: "Material", ProdAmount: 3, ProdInterval: 8},
 	}
 
 	count := 2
 	switch grade {
 	case "MID":
-		count = 3
+		count = 2
 	case "HIGH", "EXTREME":
-		count = 4
+		count = 3
 	}
 
-	rand.Shuffle(len(starterKeys), func(i, j int) {
-		starterKeys[i], starterKeys[j] = starterKeys[j], starterKeys[i]
-	})
-
 	used := make(map[string]bool)
-	for i := 0; i < count && i < len(starterKeys); i++ {
-		tmpl := ResourceNodeTemplates[starterKeys[i]]
+	for i := 0; i < count && i < len(starterConfigs); i++ {
+		cfg := starterConfigs[i]
 
 		x, y := rand.Intn(20), rand.Intn(20)
 		key := fmt.Sprintf("%d,%d", x, y)
@@ -699,29 +274,18 @@ func seedInitialApertureNodes(tx *sql.Tx, apertureID string, grade string) {
 		}
 		used[key] = true
 
-		nodeHPMax := tmpl.HPMax
-		if nodeHPMax <= 0 {
-			nodeHPMax = 1000
-		}
-		nodeCategory := tmpl.NodeCategory
-		if nodeCategory == "" {
-			nodeCategory = "RESOURCE"
-		}
-
 		_, _ = tx.Exec(`
 			INSERT INTO aperture_resource_nodes
 				(aperture_id, node_type, name, path, level, hp, max_hp, x, y,
 				 production_type, production_amount, production_interval_hours, last_collected_at,
 				 node_category, defense_power, attack_range, hp_bonus, damage_reduction, blocks_movement,
-				 required_gu_id, required_gu_rank, zone_type, food_path, item_tier)
-			VALUES ($1, $2, $3, $4, 1, $5, $5, $6, $7, $8, $9, $10, NOW(),
-				$11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
-		`, apertureID, tmpl.NodeType, tmpl.Name, tmpl.Path, nodeHPMax, x, y,
-			tmpl.ProdType, tmpl.ProdAmount, tmpl.ProdIntervalHours,
-			nodeCategory, tmpl.DefensePower, tmpl.AttackRange, tmpl.HPBonus,
-			tmpl.DamageReduction, tmpl.BlocksMovement,
-			strings.Join(tmpl.CostGu, ","), tmpl.CostGuRank,
-			tmpl.ZoneType, tmpl.FoodPath, tmpl.ItemTier)
+				 required_gu_id, required_gu_rank, zone_type, food_path, item_tier, production_key)
+			VALUES ($1, $2, $3, $4, 1, 1000, 1000, $5, $6, $7, $8, $9, NOW(),
+				'RESOURCE', 0, 0, 0, 0, false,
+				'', 0, $10, '', 'T1', $11)
+		`, apertureID, cfg.NodeType, cfg.Name, cfg.Path, x, y,
+			cfg.ProdType, cfg.ProdAmount, cfg.ProdInterval,
+			cfg.ZoneType, cfg.ProdKey)
 	}
 }
 
@@ -986,11 +550,10 @@ func PlaceApertureNode(c *gin.Context) {
 		return
 	}
 
-	var stones int
-	var immortalStones float64
+	var immortalStones int64
 	err = tx.QueryRow(`
-		SELECT FLOOR(primeval_stones)::BIGINT, immortal_stones FROM players WHERE id = $1
-	`, playerID).Scan(&stones, &immortalStones)
+		SELECT FLOOR(immortal_stones)::BIGINT FROM players WHERE id = $1
+	`, playerID).Scan(&immortalStones)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})
 		return
@@ -1055,15 +618,15 @@ func PlaceApertureNode(c *gin.Context) {
 			return
 		}
 	} else {
-		if stones < template.CostStones || int(immortalStones) < template.CostImmortal {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Nguyên Thạch hoặc Tiên nguyên không đủ để xây dựng mỏ này."})
+		if immortalStones < int64(template.CostStones) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Tiên Nguyên Thạch không đủ để xây dựng mỏ này (Yêu cầu: %d, Hiện có: %d).", template.CostStones, immortalStones)})
 			return
 		}
 		_, err = tx.Exec(`
 			UPDATE players 
-			SET primeval_stones = primeval_stones - $1, immortal_stones = immortal_stones - $2
-			WHERE id = $3
-		`, template.CostStones, template.CostImmortal, playerID)
+			SET immortal_stones = immortal_stones - $1
+			WHERE id = $2
+		`, template.CostStones, playerID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ chi phí"})
 			return
@@ -1211,11 +774,11 @@ func CollectApertureResource(c *gin.Context) {
 	var areaSize int64
 	var timeRate float64
 	err = tx.QueryRow(`
-		SELECT n.id, n.aperture_id, n.node_type, n.name, n.production_type, n.production_amount, n.production_interval_hours, n.last_collected_at, n.is_destroyed, a.area_size, a.time_rate, n.path, n.x, n.y, COALESCE(n.production_key, '')
+		SELECT n.id, n.aperture_id, n.node_type, n.name, n.production_type, n.production_amount, n.production_interval_hours, n.last_collected_at, n.is_destroyed, a.area_size, a.time_rate, n.path, n.x, n.y, COALESCE(n.production_key, ''), COALESCE(n.level, 1)
 		FROM aperture_resource_nodes n
 		JOIN immortal_apertures a ON n.aperture_id = a.id
 		WHERE n.id = $1 AND a.player_id = $2
-	`, nodeID, playerID).Scan(&n.ID, &n.ApertureID, &n.NodeType, &n.Name, &n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol, &n.IsDestroyed, &areaSize, &timeRate, &n.Path, &n.X, &n.Y, &n.ProductionKey)
+	`, nodeID, playerID).Scan(&n.ID, &n.ApertureID, &n.NodeType, &n.Name, &n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol, &n.IsDestroyed, &areaSize, &timeRate, &n.Path, &n.X, &n.Y, &n.ProductionKey, &n.Level)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Mỏ tài nguyên không tồn tại hoặc không thuộc đạo hữu"})
@@ -1361,9 +924,9 @@ func applyBulkReward(baseReward int, combinedMultiplier float64, bulkMultiplier 
 // (rounded up). Destroyed nodes cost max_hp*2; damaged nodes cost max_hp - hp.
 func computeBulkRepairCost(hp, maxHP int, isDestroyed bool, feeMultiplier float64) (baseCost, totalCost int) {
 	if isDestroyed {
-		baseCost = maxHP * 2
+		baseCost = int(math.Ceil(float64(maxHP*2) / 50.0))
 	} else {
-		baseCost = maxHP - hp
+		baseCost = int(math.Ceil(float64(maxHP-hp) / 50.0))
 	}
 	if baseCost <= 0 {
 		return 0, 0
@@ -1487,9 +1050,17 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 
 	suitabilityMultiplier := 1.0
 
-	// Item path Dao Mark boost - lookup path from models.ItemRegistry
+	// 5. Node Level / Rank multiplier (medium scaling: +20% per level above 1)
+	nodeLevel := n.Level
+	if nodeLevel < 1 {
+		nodeLevel = 1
+	}
+	nodeLevelMultiplier := 1.0 + float64(nodeLevel-1)*0.20
+
+	// 6. Item Rank / Rarity divisor (very strong scaling: 3.0^(rank - 1))
 	var itemFoodPath string
 	itemFoodPathMultiplier := 1.0
+	itemRankDivisor := 1.0
 	if n.ProductionType == "Material" {
 		prodKey := n.ProductionKey
 		if prodKey == "" {
@@ -1498,19 +1069,26 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 			}
 		}
 		if prodKey != "" {
-			if item, exists := models.ItemRegistry[prodKey]; exists && item.Path != "" {
-				itemFoodPath = item.Path
-				itemDaoMarks := nodeDaoMap[strings.ToLower(itemFoodPath)]
-				itemFoodPathMultiplier = 1.0 + float64(itemDaoMarks)*0.003
+			if item, exists := models.ItemRegistry[prodKey]; exists {
+				if item.Path != "" {
+					itemFoodPath = item.Path
+					itemDaoMarks := nodeDaoMap[strings.ToLower(itemFoodPath)]
+					itemFoodPathMultiplier = 1.0 + float64(itemDaoMarks)*0.003
+				}
+				if item.Rank > 1 {
+					itemRankDivisor = math.Pow(3.0, float64(item.Rank-1))
+				}
 			}
 		}
 	}
 
 	baseReward := n.ProductionAmount * multiples
 
-	// Apply area size production multiplier + optional bulk discount
+	// Apply area size production multiplier, node level, item rank divisor + optional bulk discount
 	areaMultiplier := 1.0 + float64(areaSize)/10000000.0
-	totalReward := applyBulkReward(baseReward, areaMultiplier*daoMultiplier*conflictMultiplier*ecoMultiplier*variantBonus*laborMultiplier*suitabilityMultiplier*itemFoodPathMultiplier, bulkMultiplier)
+	combinedMultiplier := (areaMultiplier * daoMultiplier * conflictMultiplier * ecoMultiplier * variantBonus * laborMultiplier * suitabilityMultiplier * itemFoodPathMultiplier * nodeLevelMultiplier) / itemRankDivisor
+
+	totalReward := applyBulkReward(baseReward, combinedMultiplier, bulkMultiplier)
 
 	note := ""
 	return totalReward, note, nil
@@ -1678,8 +1256,25 @@ func CollectAllApertureResources(c *gin.Context) {
 		return
 	}
 
+	var harvestDetails []string
+	if totalStones > 0 {
+		harvestDetails = append(harvestDetails, fmt.Sprintf("%d Nguyên Thạch", totalStones))
+	}
+	for prodKey, amount := range materialTotals {
+		itemName := prodKey
+		if itemSpec, exists := models.ItemRegistry[prodKey]; exists {
+			itemName = itemSpec.Name
+		}
+		harvestDetails = append(harvestDetails, fmt.Sprintf("%dx %s", amount, itemName))
+	}
+
+	detailStr := ""
+	if len(harvestDetails) > 0 {
+		detailStr = " Nhận được: " + strings.Join(harvestDetails, ", ") + "."
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"message":      fmt.Sprintf("Thu hoạch hàng loạt %d mỏ thành công! (Sản lượng -20%%) Nhân Khí +%d.", readyCount, readyCount),
+		"message":      fmt.Sprintf("Thu hoạch hàng loạt %d mỏ thành công!%s Nhân Khí +%d (Sản lượng -20%%).", readyCount, detailStr, readyCount),
 		"count":        readyCount,
 		"total_stones": totalStones,
 		"materials":    materialTotals,
@@ -1758,20 +1353,20 @@ func RepairAllApertureNodes(c *gin.Context) {
 
 	// 3. Check player stones
 	var stones int
-	err = tx.QueryRow(`SELECT FLOOR(primeval_stones)::BIGINT FROM players WHERE id = $1`, playerID).Scan(&stones)
+	err = tx.QueryRow(`SELECT FLOOR(immortal_stones)::BIGINT FROM players WHERE id = $1`, playerID).Scan(&stones)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})
 		return
 	}
 
 	if stones < totalCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Nguyên Thạch không đủ để sửa chữa toàn bộ (Yêu cầu: %d, Hiện có: %d).", totalCost, stones)})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Tiên Nguyên Thạch không đủ để sửa chữa toàn bộ (Yêu cầu: %d, Hiện có: %d).", totalCost, stones)})
 		return
 	}
 
 	// 4. Deduct + repair
-	if _, err := tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2`, totalCost, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Nguyên Thạch"})
+	if _, err := tx.Exec(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2`, totalCost, playerID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Tiên Nguyên Thạch"})
 		return
 	}
 
@@ -2189,9 +1784,9 @@ func RepairApertureNode(c *gin.Context) {
 		return
 	}
 
-	cost := n.MaxHP - n.HP
+	cost := int(math.Ceil(float64(n.MaxHP-n.HP) / 50.0))
 	if n.IsDestroyed {
-		cost = n.MaxHP * 2
+		cost = int(math.Ceil(float64(n.MaxHP*2) / 50.0))
 	}
 
 	if cost <= 0 {
@@ -2201,21 +1796,21 @@ func RepairApertureNode(c *gin.Context) {
 
 	// Check player stones
 	var stones int
-	err = tx.QueryRow(`SELECT FLOOR(primeval_stones)::BIGINT FROM players WHERE id = $1`, playerID).Scan(&stones)
+	err = tx.QueryRow(`SELECT FLOOR(immortal_stones)::BIGINT FROM players WHERE id = $1`, playerID).Scan(&stones)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})
 		return
 	}
 
 	if stones < cost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Nguyên Thạch không đủ để sửa chữa mỏ này (Yêu cầu: %d, Hiện có: %d).", cost, stones)})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Tiên Nguyên Thạch không đủ để sửa chữa mỏ này (Yêu cầu: %d, Hiện có: %d).", cost, stones)})
 		return
 	}
 
 	// Deduct stones
-	_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2`, cost, playerID)
+	_, err = tx.Exec(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2`, cost, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Nguyên Thạch"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Tiên Nguyên Thạch"})
 		return
 	}
 
@@ -2232,7 +1827,7 @@ func RepairApertureNode(c *gin.Context) {
 
 	_ = tx.Commit()
 
-	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Sửa chữa thành công %s! Tiêu tốn %d Nguyên Thạch.", n.Name, cost)})
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Sửa chữa thành công %s! Tiêu tốn %d Tiên Nguyên Thạch.", n.Name, cost)})
 }
 
 const MaxNodeLevel = 5
@@ -2297,27 +1892,27 @@ func UpgradeApertureNode(c *gin.Context) {
 		return
 	}
 	upgradeCost := int(float64(template.CostStones) * float64(n.Level) * 1.5)
-	if upgradeCost < 100 {
-		upgradeCost = 100
+	if upgradeCost < 5 {
+		upgradeCost = 5
 	}
 
 	// Check player stones
 	var stones int
-	err = tx.QueryRow(`SELECT FLOOR(primeval_stones)::BIGINT FROM players WHERE id = $1`, playerID).Scan(&stones)
+	err = tx.QueryRow(`SELECT FLOOR(immortal_stones)::BIGINT FROM players WHERE id = $1`, playerID).Scan(&stones)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})
 		return
 	}
 
 	if stones < upgradeCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Nguyên Thạch không đủ để nâng cấp (Yêu cầu: %d, Hiện có: %d).", upgradeCost, stones)})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Tiên Nguyên Thạch không đủ để nâng cấp (Yêu cầu: %d, Hiện có: %d).", upgradeCost, stones)})
 		return
 	}
 
 	// Deduct stones
-	_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2`, upgradeCost, playerID)
+	_, err = tx.Exec(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2`, upgradeCost, playerID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Nguyên Thạch"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi khấu trừ Tiên Nguyên Thạch"})
 		return
 	}
 
@@ -2368,7 +1963,7 @@ func UpgradeApertureNode(c *gin.Context) {
 	_ = tx.Commit()
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":    fmt.Sprintf("Nâng cấp %s lên cấp %d thành công!", n.Name, newLevel),
+		"message":    fmt.Sprintf("Nâng cấp %s lên cấp %d thành công! Tiêu tốn %d Tiên Nguyên Thạch.", n.Name, newLevel, upgradeCost),
 		"new_level":  newLevel,
 		"new_max_hp": newMaxHP,
 		"cost":       upgradeCost,

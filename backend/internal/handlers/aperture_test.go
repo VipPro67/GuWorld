@@ -32,10 +32,10 @@ func TestComputeBulkRepairCost(t *testing.T) {
 		wantBase  int
 		wantTotal int
 	}{
-		{hp: 500, maxHP: 1000, destroyed: false, fee: 1.3, wantBase: 500, wantTotal: 650},
-		{hp: 0, maxHP: 1000, destroyed: true, fee: 1.3, wantBase: 2000, wantTotal: 2600},
+		{hp: 500, maxHP: 1000, destroyed: false, fee: 1.3, wantBase: 10, wantTotal: 13},
+		{hp: 0, maxHP: 1000, destroyed: true, fee: 1.3, wantBase: 40, wantTotal: 52},
 		{hp: 1000, maxHP: 1000, destroyed: false, fee: 1.3, wantBase: 0, wantTotal: 0},
-		{hp: 900, maxHP: 1000, destroyed: false, fee: 1.3, wantBase: 100, wantTotal: 130},
+		{hp: 900, maxHP: 1000, destroyed: false, fee: 1.3, wantBase: 2, wantTotal: 3},
 		{hp: 999, maxHP: 1000, destroyed: false, fee: 1.3, wantBase: 1, wantTotal: 2},
 	}
 	for _, c := range cases {

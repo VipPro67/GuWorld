@@ -971,7 +971,7 @@ func CheckAndTriggerTribulations() error {
 					if CheckNodeConflict(nd, nodes) {
 						decayDamage += int(float64(nd.MaxHP) * 0.10 * float64(yearsDiff))
 					}
-					if overgrazing && (nd.NodeType == "MOON_ORCHID_FIELD" || nd.NodeType == "GREEN_BAMBOO_GROVE" || nd.NodeType == "SWORD_LEAF_GRASS") {
+					if overgrazing && (nd.NodeType == "FARMING_ZONE" || nd.ZoneType == "khu_trong" || nd.NodeType == "MOON_ORCHID_FIELD" || nd.NodeType == "GREEN_BAMBOO_GROVE" || nd.NodeType == "SWORD_LEAF_GRASS") {
 						decayDamage += int(float64(nd.MaxHP) * 0.05 * float64(yearsDiff))
 					}
 
@@ -1025,7 +1025,7 @@ func CheckAndTriggerTribulations() error {
 
 					totalFoodProd := 0
 					for _, nd := range nodes {
-						if nd.NodeType == "MOON_ORCHID_FIELD" || nd.NodeType == "GREEN_BAMBOO_GROVE" || nd.NodeType == "SWORD_LEAF_GRASS" || nd.NodeType == "SPIRIT_DEER_PASTURE" {
+						if nd.NodeType == "FARMING_ZONE" || nd.NodeType == "BREEDING_ZONE" || nd.ZoneType == "khu_trong" || nd.ZoneType == "khu_nuoi" || nd.NodeType == "MOON_ORCHID_FIELD" || nd.NodeType == "GREEN_BAMBOO_GROVE" || nd.NodeType == "SWORD_LEAF_GRASS" || nd.NodeType == "SPIRIT_DEER_PASTURE" {
 							totalFoodProd += nd.ProductionAmount
 						}
 					}
