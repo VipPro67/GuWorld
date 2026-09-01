@@ -221,7 +221,8 @@ type CombatantAuto struct {
 	MentalResistance float64            // chance (0-1) to resist control effects
 
 	// Equipment / Loadout
-	Loadout *CombatLoadout
+	Loadout            *CombatLoadout
+	CategoryPriorities []string // Priority order of skill categories: "shield", "heal", "damage", "other"
 
 	// Pre-computed actions (produced by handler, consumed by simulator)
 	Actions []SimAction

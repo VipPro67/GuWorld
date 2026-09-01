@@ -132,6 +132,23 @@ func UpdateCombatSettings(c *gin.Context) {
 	}
 	req.CombatSettings.GuPriorities = validGu
 
+	// Sanitize category_priorities: ensure complete permutation of shield, heal, damage, other.
+	validCats := map[string]bool{"shield": true, "heal": true, "damage": true, "other": true}
+	var cleanCats []string
+	seenCat := make(map[string]bool)
+	for _, cat := range req.CombatSettings.CategoryPriorities {
+		if validCats[cat] && !seenCat[cat] {
+			seenCat[cat] = true
+			cleanCats = append(cleanCats, cat)
+		}
+	}
+	for _, cat := range []string{"shield", "heal", "damage", "other"} {
+		if !seenCat[cat] {
+			cleanCats = append(cleanCats, cat)
+		}
+	}
+	req.CombatSettings.CategoryPriorities = cleanCats
+
 	settingsJSON, _ := json.Marshal(req.CombatSettings)
 	_, err = tx.Exec(`UPDATE players SET combat_settings = $1 WHERE id = $2`, settingsJSON, authID)
 	if err != nil {

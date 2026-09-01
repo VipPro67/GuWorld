@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -156,4 +157,79 @@ func ApplyLoot(tx *sql.Tx, player *models.Player, loot RolledLoot) []string {
 		logs = append(logs, fmt.Sprintf("Chúc mừng đạo hữu thu phục được hoang dã Cổ trùng: [%s]!", guName))
 	}
 	return logs
+}
+
+// isBossEnemy returns true if the defeated enemy is a Boss/WorldBoss/MineBoss
+func isBossEnemy(cs *models.CombatState) bool {
+	if cs == nil {
+		return false
+	}
+	if strings.EqualFold(cs.EnemyType, "Boss") || strings.EqualFold(cs.EnemyType, "World_Boss") || strings.EqualFold(cs.EnemyType, "Mine_PVE") {
+		return true
+	}
+	for _, e := range cs.Enemies {
+		if strings.EqualFold(e.Kind, "Boss") {
+			return true
+		}
+	}
+	return false
+}
+
+// GetGuDropChancePercent returns the drop chance percentage based on Gu rank and whether enemy is a Boss vs Elite.
+// Defeating a Boss gives a higher drop chance for Gu than Elites/Normal enemies.
+func GetGuDropChancePercent(rank int, isBoss bool) int {
+	if isBoss {
+		switch rank {
+		case 1:
+			return 35 // 35% (Boss - Cổ Nhất Chuyển)
+		case 2:
+			return 28 // 28% (Boss - Cổ Nhị Chuyển)
+		case 3:
+			return 22 // 22% (Boss - Cổ Tam Chuyển)
+		case 4:
+			return 16 // 16% (Boss - Cổ Tứ Chuyển)
+		case 5:
+			return 12 // 12% (Boss - Cổ Ngũ Chuyển)
+		case 6:
+			return 8  // 8%  (Boss - Tiên Cổ Lục Chuyển)
+		case 7:
+			return 5  // 5%  (Boss - Tiên Cổ Thất Chuyển)
+		case 8:
+			return 3  // 3%  (Boss - Tiên Cổ Bát Chuyển)
+		case 9:
+			return 2  // 2%  (Boss - Tiên Cổ Cửu Chuyển)
+		default:
+			if rank >= 6 {
+				return 2
+			}
+			return 20
+		}
+	}
+
+	// Elite / Normal Enemy
+	switch rank {
+	case 1:
+		return 20 // 20%
+	case 2:
+		return 15 // 15%
+	case 3:
+		return 10 // 10%
+	case 4:
+		return 7  // 7%
+	case 5:
+		return 5  // 5%
+	case 6:
+		return 3  // 3%  (Tiên Cổ Lục Chuyển)
+	case 7:
+		return 2  // 2%  (Tiên Cổ Thất Chuyển)
+	case 8:
+		return 1  // 1%  (Tiên Cổ Bát Chuyển)
+	case 9:
+		return 1  // 1%  (Tiên Cổ Cửu Chuyển)
+	default:
+		if rank >= 6 {
+			return 1
+		}
+		return 10
+	}
 }

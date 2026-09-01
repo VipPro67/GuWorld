@@ -60,8 +60,8 @@ Các route protected yêu cầu cookie/JWT hợp lệ qua `middleware.AuthRequir
 | POST | `/player/clear-stress` |
 | GET | `/player/profile/:username` |
 | PUT | `/player/profile/settings` |
-| GET | `/player/combat-settings` | Đọc `combat_settings` (auto-heal/mana + **bộ cổ sử dụng** `gu_priorities` + `km_priorities`). |
-| PUT | `/player/combat-settings` | Lưu `combat_settings`. `gu_priorities` = **bộ cổ mang theo** (danh sách `gu_id` theo thứ tự `priority`): dùng khi tấn công (ưu tiên hơn gợi ý UI) và khi bị tấn công; rỗng = dùng tất cả Cổ đang trang bị ACTIVE. Backend tự lọc bỏ các `gu_id` không thuộc túi hoặc không ACTIVE. |
+| GET | `/player/combat-settings` | Đọc `combat_settings` (auto-heal/mana + **thứ tự ưu tiên loại** `category_priorities` + **bộ cổ sử dụng** `gu_priorities` + `km_priorities`). |
+| PUT | `/player/combat-settings` | Lưu `combat_settings`. `category_priorities` = thứ tự ưu tiên loại kỹ năng (`shield`, `heal`, `damage`, `other`); `gu_priorities` = **bộ cổ mang theo** (danh sách `gu_id` theo thứ tự `priority`): dùng khi tấn công (ưu tiên hơn gợi ý UI) và khi bị tấn công; rỗng = dùng tất cả Cổ đang trang bị ACTIVE. |
 | GET | `/player/referrals` |
 | POST | `/player/simulate-deposit` | Admin only. |
 | POST | `/player/avatar` |

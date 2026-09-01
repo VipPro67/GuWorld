@@ -345,3 +345,31 @@ func TestSmartActionSorting(t *testing.T) {
 		t.Errorf("expected StrongGu (600 dmg) to execute before weaker damage actions, got %v", bossActionNames)
 	}
 }
+
+func TestCategoryPrioritiesActionSorting(t *testing.T) {
+	c := newTestCombatant("hero", "Player", 1000, 10)
+	c.CategoryPriorities = []string{"damage", "shield", "heal", "other"}
+	c.Actions = []SimAction{
+		{ActionType: "GU_SKILL", Name: "ShieldGu", Defense: 500},
+		{ActionType: "GU_SKILL", Name: "HealGu", Healing: 200},
+		{ActionType: "GU_SKILL", Name: "DamageGu", Damage: 300},
+	}
+
+	state := &CombatState{
+		Seed:    42,
+		Allies:  []*CombatantAuto{c},
+		Enemies: []*CombatantAuto{newTestCombatant("enemy", "Enemy", 1000, 0)},
+	}
+
+	Simulate(state)
+
+	if c.Actions[0].Name != "DamageGu" {
+		t.Errorf("expected DamageGu first under [damage, shield, heal, other] priority, got %s", c.Actions[0].Name)
+	}
+	if c.Actions[1].Name != "ShieldGu" {
+		t.Errorf("expected ShieldGu second under [damage, shield, heal, other] priority, got %s", c.Actions[1].Name)
+	}
+	if c.Actions[2].Name != "HealGu" {
+		t.Errorf("expected HealGu third under [damage, shield, heal, other] priority, got %s", c.Actions[2].Name)
+	}
+}

@@ -173,32 +173,37 @@ type KillerMoveTactic struct {
 
 // AutoCombatConfig holds a player's persistent auto-combat settings.
 type AutoCombatConfig struct {
-	AutoHealHP      bool               `json:"auto_heal_hp"`
-	HealThreshold   float64            `json:"heal_threshold"`
-	AutoRestoreMana bool               `json:"auto_restore_mana"`
-	ManaThreshold   float64            `json:"mana_threshold"`
-	GuPriorities    []GuTactic         `json:"gu_priorities"`
-	KMPriorities    []KillerMoveTactic `json:"km_priorities"`
-	SkipBattle      bool               `json:"skip_battle"`
+	AutoHealHP         bool               `json:"auto_heal_hp"`
+	HealThreshold      float64            `json:"heal_threshold"`
+	AutoRestoreMana    bool               `json:"auto_restore_mana"`
+	ManaThreshold      float64            `json:"mana_threshold"`
+	CategoryPriorities []string           `json:"category_priorities"`
+	GuPriorities       []GuTactic         `json:"gu_priorities"`
+	KMPriorities       []KillerMoveTactic `json:"km_priorities"`
+	SkipBattle         bool               `json:"skip_battle"`
 }
 
 // Scan implements the sql.Scanner interface for AutoCombatConfig.
 func (c *AutoCombatConfig) Scan(value interface{}) error {
 	if value == nil {
-		*c = AutoCombatConfig{}
+		*c = DefaultAutoCombatConfig()
 		return nil
 	}
 	bytes, ok := value.([]byte)
 	if !ok {
-		*c = AutoCombatConfig{}
+		*c = DefaultAutoCombatConfig()
 		logger.S.Warnf("AutoCombatConfig.Scan: unexpected type %T", value)
 		return nil
 	}
 	if len(bytes) == 0 || string(bytes) == "null" {
-		*c = AutoCombatConfig{}
+		*c = DefaultAutoCombatConfig()
 		return nil
 	}
-	return json.Unmarshal(bytes, c)
+	err := json.Unmarshal(bytes, c)
+	if err == nil && len(c.CategoryPriorities) == 0 {
+		c.CategoryPriorities = []string{"shield", "heal", "damage", "other"}
+	}
+	return err
 }
 
 // Value implements the driver.Valuer interface for AutoCombatConfig.
@@ -209,13 +214,14 @@ func (c AutoCombatConfig) Value() (driver.Value, error) {
 // DefaultAutoCombatConfig returns sensible defaults.
 func DefaultAutoCombatConfig() AutoCombatConfig {
 	return AutoCombatConfig{
-		AutoHealHP:      false,
-		HealThreshold:   30,
-		AutoRestoreMana: false,
-		ManaThreshold:   30,
-		GuPriorities:    []GuTactic{},
-		KMPriorities:    []KillerMoveTactic{},
-		SkipBattle:      false,
+		AutoHealHP:         false,
+		HealThreshold:      30,
+		AutoRestoreMana:    false,
+		ManaThreshold:      30,
+		CategoryPriorities: []string{"shield", "heal", "damage", "other"},
+		GuPriorities:       []GuTactic{},
+		KMPriorities:       []KillerMoveTactic{},
+		SkipBattle:         false,
 	}
 }
 

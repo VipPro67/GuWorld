@@ -366,42 +366,60 @@ func Simulate(state *CombatState) []CombatLog {
 	// they left off, enabling alternating damage turns.
 	actionCursor := make(map[*CombatantAuto]int)
 
-	// Pre-sort every combatant's actions once before the battle:
-	// 1. Defensive/Support actions (Shield, Heal, Buffs) first.
-	// 2. Damage actions sorted by highest damage first (comparing Gu skills vs Basic Attack).
+	// Pre-sort every combatant's actions once before the battle based on CategoryPriorities:
 	for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
 		for _, c := range combatants {
+			catPrio := c.CategoryPriorities
+			if len(catPrio) == 0 {
+				catPrio = []string{"shield", "heal", "damage", "other"}
+			}
+
 			sort.SliceStable(c.Actions, func(i, j int) bool {
 				ai := c.Actions[i]
 				aj := c.Actions[j]
 
-				// Respect explicit non-zero priorities if set
+				catI := GetSimActionCategory(ai)
+				catJ := GetSimActionCategory(aj)
+
+				rankI := getCategoryPriorityIndex(catI, catPrio)
+				rankJ := getCategoryPriorityIndex(catJ, catPrio)
+
+				if rankI != rankJ {
+					return rankI < rankJ
+				}
+
+				// Within the same category, respect explicit non-zero priorities if set
 				if ai.Priority != aj.Priority && ai.Priority != 0 && aj.Priority != 0 {
 					return ai.Priority < aj.Priority
 				}
 
-				// Priority 1: Defense/Support (Shield/Heal) goes before Damage
-				isDefI := ai.Defense > 0 || ai.Healing > 0 || ai.DefUpTier > 0 || ai.RegenTier > 0 || ai.ActionType == "SHIELD" || ai.ActionType == "HEAL"
-				isDefJ := aj.Defense > 0 || aj.Healing > 0 || aj.DefUpTier > 0 || aj.RegenTier > 0 || aj.ActionType == "SHIELD" || aj.ActionType == "HEAL"
-
-				if isDefI != isDefJ {
-					return isDefI
-				}
-
-				if isDefI && isDefJ {
-					valI := ai.Defense + ai.Healing
-					valJ := aj.Defense + aj.Healing
-					if valI != valJ {
-						return valI > valJ
+				// Within the same category, sort by highest key value first
+				switch catI {
+				case "shield":
+					if ai.Defense != aj.Defense {
+						return ai.Defense > aj.Defense
+					}
+				case "heal":
+					if ai.Healing != aj.Healing {
+						return ai.Healing > aj.Healing
+					}
+				case "damage":
+					if ai.Damage != aj.Damage {
+						return ai.Damage > aj.Damage
 					}
 				}
 
-				// Priority 2: Damage actions (both Gu skills and Basic Attack): sort by highest damage first
-				if ai.Damage != aj.Damage {
-					return ai.Damage > aj.Damage
+				if ai.Priority != aj.Priority {
+					if ai.Priority == 0 {
+						return false
+					}
+					if aj.Priority == 0 {
+						return true
+					}
+					return ai.Priority < aj.Priority
 				}
 
-				return ai.Priority < aj.Priority
+				return false
 			})
 		}
 	}
@@ -2087,4 +2105,30 @@ func checkActionCondition(action *SimAction, actor, target *CombatantAuto) bool 
 	default:
 		return true
 	}
+}
+
+// GetSimActionCategory returns the primary category for a SimAction: "shield", "heal", "damage", or "other".
+func GetSimActionCategory(act SimAction) string {
+	if act.Defense > 0 || act.DefUpTier > 0 || act.ActionType == "SHIELD" {
+		return "shield"
+	}
+	if act.Healing > 0 || act.RegenTier > 0 || act.LifeStealPct > 0 || act.ActionType == "HEAL" {
+		return "heal"
+	}
+	if act.Damage > 0 || act.DamageMult > 1.0 || act.ActionType == "BASIC_ATTACK" {
+		return "damage"
+	}
+	return "other"
+}
+
+func getCategoryPriorityIndex(cat string, priorities []string) int {
+	if len(priorities) == 0 {
+		priorities = []string{"shield", "heal", "damage", "other"}
+	}
+	for idx, p := range priorities {
+		if p == cat {
+			return idx
+		}
+	}
+	return 999
 }

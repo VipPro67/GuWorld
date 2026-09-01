@@ -226,6 +226,7 @@ export interface AutoCombatConfig {
   heal_threshold: number;
   auto_restore_mana: boolean;
   mana_threshold: number;
+  category_priorities?: string[];
   gu_priorities: GuTactic[];
   km_priorities: KillerMoveTactic[];
   skip_battle: boolean;

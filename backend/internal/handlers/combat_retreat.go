@@ -569,8 +569,9 @@ func fleeFailVictory(tx *sql.Tx, player *models.Player) []string {
 			loot := RollLoot(lt, cs.EnemyRank)
 			if cs.EnemyGuInventory != nil && len(cs.EnemyGuInventory) > 0 {
 				for _, eg := range cs.EnemyGuInventory {
-					if rand.Intn(100) < 20 {
-						guSpec, _ := models.GetGuAny(eg.GuID)
+					guSpec, _ := models.GetGuAny(eg.GuID)
+					dropChance := GetGuDropChancePercent(guSpec.Rank, isBossEnemy(cs))
+					if rand.Intn(100) < dropChance {
 						isImmortal := guSpec.IsImmortal || guSpec.Rank >= 6 || models.HasImmortalRank(eg.GuID)
 						if isImmortal {
 							exists, err := db.CheckImmortalGuExists(tx, eg.GuID, guSpec.Rank, nil)

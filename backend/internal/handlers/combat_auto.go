@@ -473,8 +473,9 @@ func AutoCombatStart(c *gin.Context) {
 
 					if len(player.ActiveCombat.EnemyGuInventory) > 0 {
 						for _, eg := range player.ActiveCombat.EnemyGuInventory {
-							if rand.Intn(100) < 10 {
-								guSpec, _ := models.GetGuAny(eg.GuID)
+							guSpec, _ := models.GetGuAny(eg.GuID)
+							dropChance := GetGuDropChancePercent(guSpec.Rank, isBossEnemy(player.ActiveCombat))
+							if rand.Intn(100) < dropChance {
 								isImmortal := guSpec.IsImmortal || guSpec.Rank >= 6 || models.HasImmortalRank(eg.GuID)
 								if isImmortal {
 									exists, err := db.CheckImmortalGuExists(tx, eg.GuID, guSpec.Rank, nil)
@@ -1321,8 +1322,9 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 
 					if player.ActiveCombat.EnemyGuInventory != nil && len(player.ActiveCombat.EnemyGuInventory) > 0 {
 						for _, eg := range player.ActiveCombat.EnemyGuInventory {
-							if rand.Intn(100) < 20 {
-								guSpec, _ := models.GetGuAny(eg.GuID)
+							guSpec, _ := models.GetGuAny(eg.GuID)
+							dropChance := GetGuDropChancePercent(guSpec.Rank, isBossEnemy(player.ActiveCombat))
+							if rand.Intn(100) < dropChance {
 								isImmortal := guSpec.IsImmortal || guSpec.Rank >= 6 || models.HasImmortalRank(eg.GuID)
 								if isImmortal {
 									exists, err := db.CheckImmortalGuExists(tx, eg.GuID, guSpec.Rank, nil)
@@ -2298,7 +2300,8 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		PathResistance:       charFX.PathResistanceBonus,
 		HealingReceived:      charFX.HealingReceivedBonus,
 		MentalResistance:     charFX.MentalResistanceBonus,
-		Actions:              allActions,
+		Actions:            allActions,
+		CategoryPriorities: player.CombatSettings.CategoryPriorities,
 
 		AutoHealHP:      autoHealHP,
 		HealThreshold:   healThreshold,

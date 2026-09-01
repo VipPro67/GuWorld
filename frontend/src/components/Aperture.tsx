@@ -369,15 +369,18 @@ export const Aperture: React.FC<ApertureProps> = ({
   const [fakeVitalGu, setFakeVitalGu] = useState(player.fake_vital_gu || "GU_SHADOW");
 
   // Auto combat settings state
-  const defaults = { auto_heal_hp: false, heal_threshold: 30, auto_restore_mana: false, mana_threshold: 30, gu_priorities: [], km_priorities: [], skip_battle: false };
+  const defaultCatPriorities = ["shield", "heal", "damage", "other"];
+  const defaults = { auto_heal_hp: false, heal_threshold: 30, auto_restore_mana: false, mana_threshold: 30, category_priorities: defaultCatPriorities, gu_priorities: [], km_priorities: [], skip_battle: false };
   const saved = player.combat_settings || store.combatSettings || defaults;
   const [csAutoHealHP, setCsAutoHealHP] = useState(saved.auto_heal_hp);
   const [csHealThreshold, setCsHealThreshold] = useState(saved.heal_threshold);
   const [csAutoRestoreMana, setCsAutoRestoreMana] = useState(saved.auto_restore_mana);
   const [csManaThreshold, setCsManaThreshold] = useState(saved.mana_threshold);
+  const [csCategoryPriorities, setCsCategoryPriorities] = useState<string[]>(saved.category_priorities || defaultCatPriorities);
   const [csGuPriorities, setCsGuPriorities] = useState(saved.gu_priorities || []);
   const [csKMPriorities, setCsKMPriorities] = useState(saved.km_priorities || []);
   const [csSkipBattle, setCsSkipBattle] = useState(saved.skip_battle);
+  const [combatCategoryTab, setCombatCategoryTab] = useState<"all" | "damage" | "heal" | "shield" | "other">("all");
   const [combatSettingsLoaded, setCombatSettingsLoaded] = useState(false);
 
   React.useEffect(() => {
@@ -396,6 +399,7 @@ export const Aperture: React.FC<ApertureProps> = ({
       setCsAutoRestoreMana(cs.auto_restore_mana);
       setCsManaThreshold(cs.mana_threshold);
       setCsSkipBattle(cs.skip_battle);
+      setCsCategoryPriorities(cs.category_priorities && cs.category_priorities.length > 0 ? cs.category_priorities : defaultCatPriorities);
       setCsGuPriorities(cs.gu_priorities || []);
       setCsKMPriorities(cs.km_priorities || []);
     }
@@ -1602,15 +1606,100 @@ export const Aperture: React.FC<ApertureProps> = ({
                     <span className="text-[10px] text-zinc-500">(Chỉ áp dụng khi khám phá bản đồ)</span>
                   </div>
 
+                  {/* Category Priority Ordering */}
+                  <div className="border-t border-zinc-900/30 pt-3">
+                    <div className="text-[10px] text-zinc-400 font-bold mb-1">Thứ Tự Ưu Tiên Loại Kỹ Năng</div>
+                    <p className="text-[9px] text-zinc-600 italic mb-2">Sắp xếp thứ tự ưu tiên kích hoạt giữa các nhóm kỹ năng khi tự động chiến đấu.</p>
+                    <div className="space-y-1.5">
+                      {csCategoryPriorities.map((catKey, index) => {
+                        const metaMap: Record<string, { label: string; icon: string; bg: string; text: string }> = {
+                          shield: { label: "Khiên (Phòng thủ)", icon: "🛡️", bg: "bg-blue-950/30 border-blue-900/40", text: "text-blue-300" },
+                          heal: { label: "Hồi máu (Phục hồi)", icon: "💖", bg: "bg-emerald-950/30 border-emerald-900/40", text: "text-emerald-300" },
+                          damage: { label: "Sát thương (DMG)", icon: "⚔️", bg: "bg-rose-950/30 border-rose-900/40", text: "text-rose-300" },
+                          other: { label: "Khác (Bổ trợ / Khống chế)", icon: "✨", bg: "bg-purple-950/30 border-purple-900/40", text: "text-purple-300" },
+                        };
+                        const meta = metaMap[catKey] || { label: catKey, icon: "•", bg: "bg-zinc-900", text: "text-zinc-300" };
+                        const moveCat = (dir: number) => {
+                          const list = [...csCategoryPriorities];
+                          const targetIdx = index + dir;
+                          if (targetIdx < 0 || targetIdx >= list.length) return;
+                          const tmp = list[index];
+                          list[index] = list[targetIdx];
+                          list[targetIdx] = tmp;
+                          setCsCategoryPriorities(list);
+                        };
+                        return (
+                          <div key={catKey} className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border ${meta.bg}`}>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-950/60 border border-amber-800/40 px-1.5 py-0.5 rounded">
+                                #{index + 1}
+                              </span>
+                              <span className="text-xs">{meta.icon}</span>
+                              <span className={`text-[11px] font-medium ${meta.text}`}>{meta.label}</span>
+                            </div>
+                            <div className="flex gap-0.5">
+                              <button type="button" onClick={() => moveCat(-1)} disabled={index === 0}
+                                className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-30 text-zinc-400 rounded">▲</button>
+                              <button type="button" onClick={() => moveCat(1)} disabled={index === csCategoryPriorities.length - 1}
+                                className="text-[10px] px-1.5 py-0.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-30 text-zinc-400 rounded">▼</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {/* Gu Loadout */}
                   <div className="border-t border-zinc-900/30 pt-3">
                     <div className="text-[10px] text-zinc-400 font-bold mb-1">Bộ Cổ Chiến Đấu</div>
-                    <p className="text-[9px] text-zinc-600 italic mb-2">Chọn cổ mang theo. Bộ cổ này được dùng khi tấn công (ưu tiên hơn gợi ý) và khi bị tấn công. Bỏ trống = dùng tất cả cổ đang trang bị.</p>
+                    <p className="text-[9px] text-zinc-600 italic mb-2">Chọn cổ mang theo. Bỏ trống = dùng tất cả cổ đang trang bị.</p>
+
+                    {/* Category Filter Tabs */}
+                    <div className="flex flex-wrap gap-1 mb-2 border-b border-zinc-900/50 pb-1.5">
+                      {[
+                        { key: "all", label: "Tất cả" },
+                        { key: "damage", label: "⚔️ DMG" },
+                        { key: "heal", label: "💖 Hồi máu" },
+                        { key: "shield", label: "🛡️ Khiên" },
+                        { key: "other", label: "✨ Khác" },
+                      ].map((tab) => (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          onClick={() => setCombatCategoryTab(tab.key as any)}
+                          className={`text-[10px] px-2 py-0.5 rounded transition-all ${
+                            combatCategoryTab === tab.key
+                              ? "bg-amber-600/30 border border-amber-500/40 text-amber-200 font-bold"
+                              : "bg-zinc-950/40 border border-zinc-900 text-zinc-400 hover:text-zinc-200"
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
                     {eligibleGusForCombat.length === 0 ? (
                       <p className="text-[10px] text-zinc-600 italic">Chưa có cổ trùng nào được trang bị.</p>
                     ) : (
                       <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                        {eligibleGusForCombat.map(gu => {
+                        {eligibleGusForCombat
+                          .filter((gu) => {
+                            if (combatCategoryTab === "all") return true;
+                            const spec = guDictionary[gu.gu_id];
+                            if (!spec || !spec.effects || !spec.effects.active) return combatCategoryTab === "other";
+                            const act = spec.effects.active;
+                            if ((act.shield_flat && act.shield_flat > 0) || act.apply_status === "DEF_UP" || act.wood_transformation) {
+                              return combatCategoryTab === "shield";
+                            }
+                            if ((act.heal_flat && act.heal_flat > 0) || act.apply_status === "REGEN" || (act.life_steal_rate && act.life_steal_rate > 0)) {
+                              return combatCategoryTab === "heal";
+                            }
+                            if ((act.damage_flat && act.damage_flat > 0) || (act.damage_mult && act.damage_mult > 1.0)) {
+                              return combatCategoryTab === "damage";
+                            }
+                            return combatCategoryTab === "other";
+                          })
+                          .map((gu) => {
                           const spec = guDictionary[gu.gu_id];
                           const idx = csGuPriorities.findIndex(t => t.gu_id === gu.gu_id);
                           const inLoadout = idx !== -1;
@@ -1742,6 +1831,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                         heal_threshold: csHealThreshold,
                         auto_restore_mana: csAutoRestoreMana,
                         mana_threshold: csManaThreshold,
+                        category_priorities: csCategoryPriorities,
                         gu_priorities: csGuPriorities,
                         km_priorities: csKMPriorities,
                         skip_battle: csSkipBattle,
