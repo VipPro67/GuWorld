@@ -38,6 +38,8 @@ export const DungeonView: React.FC = () => {
     activeInstanceSession,
     activeInstanceTemplate,
     availableInstances,
+    instanceDailyEntriesUsed,
+    instanceDailyEntriesMax,
     fetchInstances,
     fetchActiveInstance,
     enterInstance,
@@ -54,6 +56,7 @@ export const DungeonView: React.FC = () => {
   if (!player) return null;
 
   const dungeons: InstanceListItem[] = availableInstances;
+  const isDailyLimitReached = (instanceDailyEntriesUsed ?? 0) >= (instanceDailyEntriesMax ?? 2);
 
   // Helper to parse requirements for UI rendering
   const renderReqs = (requirements: Record<string, any>) => {
@@ -82,7 +85,7 @@ export const DungeonView: React.FC = () => {
   return (
     <GamePanel variant="default" className="w-full mx-auto px-4 py-4 flex flex-col gap-6">
       {/* Header bar */}
-      <div className="flex items-center justify-between bg-zinc-950/60 border border-zinc-900 rounded-2xl p-4 shadow-lg backdrop-blur-md">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-zinc-950/60 border border-zinc-900 rounded-2xl p-4 shadow-lg backdrop-blur-md gap-3">
         <div className="flex items-center gap-3">
           <BookOpen className="w-6 h-6 text-purple-400" />
           <div>
@@ -90,15 +93,20 @@ export const DungeonView: React.FC = () => {
             <p className="text-xs text-zinc-500 font-mono">Thám hiểm nhận Chân Ý tăng cảnh giới</p>
           </div>
         </div>
-        {!activeInstanceSession && (
-          <button
-            onClick={() => setView("dashboard")}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-zinc-850 hover:bg-zinc-900/60 text-zinc-400 hover:text-zinc-200 text-xs font-mono font-medium transition-all cursor-pointer"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Trở Về
-          </button>
-        )}
+        <div className="flex items-center gap-3 self-end sm:self-auto">
+          <span className="px-3 py-1.5 rounded-xl text-xs font-mono font-semibold bg-purple-950/60 border border-purple-800/40 text-purple-200">
+            Lượt hôm nay: {instanceDailyEntriesUsed ?? 0}/{instanceDailyEntriesMax ?? 2}
+          </span>
+          {!activeInstanceSession && (
+            <button
+              onClick={() => setView("dashboard")}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-zinc-850 hover:bg-zinc-900/60 text-zinc-400 hover:text-zinc-200 text-xs font-mono font-medium transition-all cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Trở Về
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ADVENTURE IN PROGRESS VIEW */}
@@ -182,16 +190,23 @@ export const DungeonView: React.FC = () => {
             Đang tải phó bản...
           </div>
         ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {dungeons.map((dg) => {
-            const isQualified = player.rank >= dg.required_rank;
-            const isDream = dg.type === "DREAM_REALM";
-            const typeLabel = TYPE_LABELS[dg.type]?.label ?? dg.type;
-            const inCooldown = (dg.cooldown_remaining ?? 0) > 0;
-            const cdText = formatCooldown(dg.cooldown_remaining ?? 0);
+        <div className="flex flex-col gap-4">
+          {isDailyLimitReached && (
+            <div className="bg-amber-950/40 border border-amber-800/40 rounded-2xl p-4 text-xs font-mono text-amber-200 flex items-center gap-2">
+              ⚠️ Đạo hữu đã sử dụng hết lượt thám hiểm phó bản hôm nay ({instanceDailyEntriesUsed}/{instanceDailyEntriesMax} lượt). Hãy quay lại vào ngày mai!
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {dungeons.map((dg) => {
+              const isQualified = player.rank >= dg.required_rank;
+              const isDream = dg.type === "DREAM_REALM";
+              const typeLabel = TYPE_LABELS[dg.type]?.label ?? dg.type;
+              const inCooldown = (dg.cooldown_remaining ?? 0) > 0;
+              const cdText = formatCooldown(dg.cooldown_remaining ?? 0);
+              const isInstanceDailyLimited = (dg.type === "DREAM_REALM" || dg.type === "SECRET_REALM") && isDailyLimitReached;
 
-            return (
-<GameCard
+              return (
+                <GameCard
                   key={dg.id}
                   variant={isDream ? "danger" : "default"}
                   className={`border rounded-3xl p-6 flex flex-col justify-between gap-5 transition-all duration-350 hover:-translate-y-1 hover:border-zinc-800 ${
@@ -262,7 +277,7 @@ export const DungeonView: React.FC = () => {
                   </div>
                 </div>
 
-                {isQualified && !inCooldown ? (
+                {isQualified && !inCooldown && !isInstanceDailyLimited ? (
                   <button
                     onClick={() => enterInstance(dg.id)}
                     disabled={actionLoading}
@@ -277,12 +292,13 @@ export const DungeonView: React.FC = () => {
                   </button>
                 ) : (
                   <GameCard className="w-full text-center py-2.5 rounded-xl bg-zinc-900/40 border border-zinc-900 text-zinc-650 text-xs font-mono">
-                    {inCooldown ? `Hồi chiêu: ${cdText}` : "Khóa"}
+                    {inCooldown ? `Hồi chiêu: ${cdText}` : isInstanceDailyLimited ? "Hết lượt thám hiểm hôm nay" : "Khóa"}
                   </GameCard>
                 )}
               </GameCard>
             );
           })}
+          </div>
         </div>
         )
       )}

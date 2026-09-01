@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -16,6 +17,84 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
+
+const MaxDailyInstanceEntries = 5
+
+var (
+	instanceTemplatesCache []InstanceListItem
+	instanceTemplatesMap   map[string]*InstanceTemplate
+	instanceCacheMutex     sync.RWMutex
+)
+
+// InitInstanceCache loads all instance_templates into memory cache.
+func InitInstanceCache() error {
+	if db.DB == nil {
+		return nil
+	}
+	rows, err := db.DB.Query(`
+		SELECT id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours
+		FROM instance_templates
+		ORDER BY required_rank ASC, id ASC
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to fetch instance templates for cache: %w", err)
+	}
+	defer rows.Close()
+
+	var list []InstanceListItem
+	tmplMap := make(map[string]*InstanceTemplate)
+
+	for rows.Next() {
+		var t InstanceTemplate
+		if err := rows.Scan(&t.ID, &t.Name, &t.Type, &t.RequiredRank, &t.EntryItem, &t.Description, &t.Rewards, &t.MapData, &t.CooldownHours); err != nil {
+			return fmt.Errorf("failed to scan instance template: %w", err)
+		}
+
+		list = append(list, InstanceListItem{
+			ID:            t.ID,
+			Name:          t.Name,
+			Type:          t.Type,
+			RequiredRank:  t.RequiredRank,
+			EntryItem:     t.EntryItem,
+			Description:   t.Description,
+			Rewards:       t.Rewards,
+			CooldownHours: t.CooldownHours,
+		})
+		tCopy := t
+		tmplMap[t.ID] = &tCopy
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed to iterate instance templates: %w", err)
+	}
+
+	instanceCacheMutex.Lock()
+	instanceTemplatesCache = list
+	instanceTemplatesMap = tmplMap
+	instanceCacheMutex.Unlock()
+
+	return nil
+}
+
+func getCachedInstanceList() []InstanceListItem {
+	instanceCacheMutex.RLock()
+	defer instanceCacheMutex.RUnlock()
+	if len(instanceTemplatesCache) == 0 {
+		return nil
+	}
+	res := make([]InstanceListItem, len(instanceTemplatesCache))
+	copy(res, instanceTemplatesCache)
+	return res
+}
+
+func getCachedInstanceTemplate(id string) (InstanceTemplate, bool) {
+	instanceCacheMutex.RLock()
+	t, found := instanceTemplatesMap[id]
+	instanceCacheMutex.RUnlock()
+	if found && t != nil {
+		return *t, true
+	}
+	return InstanceTemplate{}, false
+}
 
 type InstanceTemplate struct {
 	ID            string          `json:"id"`
@@ -123,19 +202,23 @@ func GetActiveInstance(c *gin.Context) {
 	}
 
 	var template InstanceTemplate
-	tplQuery := `
-		SELECT id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours
-		FROM instance_templates
-		WHERE id = $1
-	`
-	err = db.DB.QueryRowContext(c.Request.Context(), tplQuery, session.InstanceID).Scan(
-		&template.ID, &template.Name, &template.Type, &template.RequiredRank,
-		&template.EntryItem, &template.Description, &template.Rewards, &template.MapData,
-		&template.CooldownHours,
-	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch instance template: " + err.Error()})
-		return
+	var found bool
+	template, found = getCachedInstanceTemplate(session.InstanceID)
+	if !found {
+		tplQuery := `
+			SELECT id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours
+			FROM instance_templates
+			WHERE id = $1
+		`
+		err = db.DB.QueryRowContext(c.Request.Context(), tplQuery, session.InstanceID).Scan(
+			&template.ID, &template.Name, &template.Type, &template.RequiredRank,
+			&template.EntryItem, &template.Description, &template.Rewards, &template.MapData,
+			&template.CooldownHours,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch instance template: " + err.Error()})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -168,29 +251,37 @@ func ListInstances(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT id, name, type, required_rank, entry_item, description, rewards, cooldown_hours
-		FROM instance_templates
-		ORDER BY required_rank ASC, id ASC
-	`)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch instance templates: " + err.Error()})
-		return
+	items := getCachedInstanceList()
+	if len(items) == 0 {
+		if err := InitInstanceCache(); err == nil {
+			items = getCachedInstanceList()
+		}
 	}
-	defer rows.Close()
 
-	items := []InstanceListItem{}
-	for rows.Next() {
-		var it InstanceListItem
-		if err := rows.Scan(&it.ID, &it.Name, &it.Type, &it.RequiredRank, &it.EntryItem, &it.Description, &it.Rewards, &it.CooldownHours); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan instance template: " + err.Error()})
+	if len(items) == 0 {
+		rows, err := db.DB.QueryContext(c.Request.Context(), `
+			SELECT id, name, type, required_rank, entry_item, description, rewards, cooldown_hours
+			FROM instance_templates
+			ORDER BY required_rank ASC, id ASC
+		`)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch instance templates: " + err.Error()})
 			return
 		}
-		items = append(items, it)
-	}
-	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to iterate instance templates: " + err.Error()})
-		return
+		defer rows.Close()
+
+		for rows.Next() {
+			var it InstanceListItem
+			if err := rows.Scan(&it.ID, &it.Name, &it.Type, &it.RequiredRank, &it.EntryItem, &it.Description, &it.Rewards, &it.CooldownHours); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan instance template: " + err.Error()})
+				return
+			}
+			items = append(items, it)
+		}
+		if err := rows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to iterate instance templates: " + err.Error()})
+			return
+		}
 	}
 
 	// Enrich with cooldown remaining per instance for this player (computed in
@@ -220,7 +311,21 @@ func ListInstances(c *gin.Context) {
 		items[i].CooldownRemaining = int(cdMap[items[i].ID])
 	}
 
-	c.JSON(http.StatusOK, gin.H{"instances": items})
+	var dailyEntriesUsed int
+	_ = db.DB.QueryRowContext(c.Request.Context(), `
+		SELECT COUNT(*)
+		FROM player_instance_sessions s
+		JOIN instance_templates it ON it.id = s.instance_id
+		WHERE s.player_id = $1
+		  AND s.created_at >= CURRENT_DATE
+		  AND it.type IN ('DREAM_REALM', 'SECRET_REALM')
+	`, playerID).Scan(&dailyEntriesUsed)
+
+	c.JSON(http.StatusOK, gin.H{
+		"instances":          items,
+		"daily_entries_used": dailyEntriesUsed,
+		"daily_entries_max":  MaxDailyInstanceEntries,
+	})
 }
 
 // EnterInstance initializes a new instance session
@@ -257,23 +362,46 @@ func EnterInstance(c *gin.Context) {
 	}
 
 	// 2. Fetch the instance template
-	var template InstanceTemplate
-	err = tx.QueryRow(`
-		SELECT id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours
-		FROM instance_templates
-		WHERE id = $1
-	`, req.InstanceID).Scan(
-		&template.ID, &template.Name, &template.Type, &template.RequiredRank,
-		&template.EntryItem, &template.Description, &template.Rewards, &template.MapData,
-		&template.CooldownHours,
-	)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phó bản yêu cầu!"})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+	template, found := getCachedInstanceTemplate(req.InstanceID)
+	if !found {
+		err = tx.QueryRow(`
+			SELECT id, name, type, required_rank, entry_item, description, rewards, map_data, cooldown_hours
+			FROM instance_templates
+			WHERE id = $1
+		`, req.InstanceID).Scan(
+			&template.ID, &template.Name, &template.Type, &template.RequiredRank,
+			&template.EntryItem, &template.Description, &template.Rewards, &template.MapData,
+			&template.CooldownHours,
+		)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phó bản yêu cầu!"})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error: " + err.Error()})
+			}
+			return
 		}
-		return
+	}
+
+	// 2a. Enforce daily limit per player for DREAM_REALM and SECRET_REALM
+	if template.Type == "DREAM_REALM" || template.Type == "SECRET_REALM" {
+		var dailyEntries int
+		err = tx.QueryRow(`
+			SELECT COUNT(*)
+			FROM player_instance_sessions s
+			JOIN instance_templates it ON it.id = s.instance_id
+			WHERE s.player_id = $1
+			  AND s.created_at >= CURRENT_DATE
+			  AND it.type IN ('DREAM_REALM', 'SECRET_REALM')
+		`, playerID).Scan(&dailyEntries)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error checking daily limit: " + err.Error()})
+			return
+		}
+		if dailyEntries >= MaxDailyInstanceEntries {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Đạo hữu đã hết lượt thám hiểm phó bản hôm nay (tối đa %d lượt/ngày)!", MaxDailyInstanceEntries)})
+			return
+		}
 	}
 
 	// 2b. Enforce cooldown from the most recent session for this instance.

@@ -1190,6 +1190,8 @@ interface GameState {
   activeInstanceSession: PlayerInstanceSession | null;
   activeInstanceTemplate: InstanceTemplate | null;
   availableInstances: InstanceListItem[];
+  instanceDailyEntriesUsed: number;
+  instanceDailyEntriesMax: number;
   fetchInstances: () => Promise<void>;
   fetchActiveInstance: () => Promise<void>;
   enterInstance: (instanceId: string) => Promise<boolean>;
@@ -1598,6 +1600,8 @@ export const useGameStore = create<GameState>((set, get) => {
   activeInstanceSession: null,
   activeInstanceTemplate: null,
   availableInstances: [],
+  instanceDailyEntriesUsed: 0,
+  instanceDailyEntriesMax: 2,
   sects: [],
   mySectStatus: null,
   sectMissions: [],
@@ -5752,7 +5756,11 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401 || response.status === 403) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
-        set({ availableInstances: data.instances || [] });
+        set({
+          availableInstances: data.instances || [],
+          instanceDailyEntriesUsed: data.daily_entries_used ?? 0,
+          instanceDailyEntriesMax: data.daily_entries_max ?? 2,
+        });
       }
     } catch (err) {
       console.error("Failed to fetch instances:", err);

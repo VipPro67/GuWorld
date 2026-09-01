@@ -130,6 +130,13 @@ func main() {
 		logger.S.Info("Quest registry loaded successfully")
 	}
 
+	err = handlers.InitInstanceCache()
+	if err != nil {
+		logger.S.Warnf("Failed to load Instance registry: %v", err)
+	} else {
+		logger.S.Info("Instance registry loaded successfully")
+	}
+
 	playerSvc := services.NewPlayerService(db.DB)
 	handlers.PlayerSvc = playerSvc
 	handlers.RecipeSvc = services.NewRecipeService(db.DB)

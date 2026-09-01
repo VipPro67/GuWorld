@@ -2107,6 +2107,9 @@ func AdminImportData(c *gin.Context) {
 	if err := LoadQuestRegistry(); err != nil {
 		logger.S.Warnf("failed to reload Quest registry after import: %v", err)
 	}
+	if err := InitInstanceCache(); err != nil {
+		logger.S.Warnf("failed to reload Instance registry after import: %v", err)
+	}
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.import_data",

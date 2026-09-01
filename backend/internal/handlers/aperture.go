@@ -17,6 +17,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 type ResourceNodeTemplate struct {
@@ -740,9 +741,12 @@ func PlaceApertureNode(c *gin.Context) {
 	node.CreatedAt = createdAt
 	node.UpdatedAt = createdAt
 
+	buildMsg := fmt.Sprintf("Xây dựng thành công %s!", template.Name)
+	notify.Send(db.DB, playerID, "aperture_build", "Xây Dựng Tiên Khiếu", buildMsg)
+
 	c.JSON(http.StatusOK, gin.H{
 		"node":    node,
-		"message": fmt.Sprintf("Xây dựng thành công %s!", template.Name),
+		"message": buildMsg,
 	})
 }
 
@@ -905,8 +909,11 @@ func CollectApertureResource(c *gin.Context) {
 		return
 	}
 
+	fullRewardMsg := rewardMsg + " Nhân Khí +2."
+	notify.Send(db.DB, playerID, "aperture_harvest", "Thu Hoạch Tiên Khiếu", fullRewardMsg)
+
 	c.JSON(http.StatusOK, gin.H{
-		"message": rewardMsg + " Nhân Khí +2.",
+		"message": fullRewardMsg,
 	})
 }
 
@@ -1273,8 +1280,11 @@ func CollectAllApertureResources(c *gin.Context) {
 		detailStr = " Nhận được: " + strings.Join(harvestDetails, ", ") + "."
 	}
 
+	bulkMsg := fmt.Sprintf("Thu hoạch hàng loạt %d mỏ thành công!%s Nhân Khí +%d (Sản lượng -20%%).", readyCount, detailStr, readyCount)
+	notify.Send(db.DB, playerID, "aperture_harvest_bulk", "Thu Hoạch Hàng Loạt Tiên Khiếu", bulkMsg)
+
 	c.JSON(http.StatusOK, gin.H{
-		"message":      fmt.Sprintf("Thu hoạch hàng loạt %d mỏ thành công!%s Nhân Khí +%d (Sản lượng -20%%).", readyCount, detailStr, readyCount),
+		"message":      bulkMsg,
 		"count":        readyCount,
 		"total_stones": totalStones,
 		"materials":    materialTotals,
@@ -1386,8 +1396,11 @@ func RepairAllApertureNodes(c *gin.Context) {
 		return
 	}
 
+	repairAllMsg := fmt.Sprintf("Sửa chữa hàng loạt %d công trình thành công! Tiêu tốn tổng cộng %d Tiên Nguyên Thạch (Phí +30%%).", len(results), totalCost)
+	notify.Send(db.DB, playerID, "aperture_repair_bulk", "Sửa Chữa Hàng Loạt Tiên Khiếu", repairAllMsg)
+
 	c.JSON(http.StatusOK, gin.H{
-		"message":        fmt.Sprintf("Sửa chữa hàng loạt %d công trình thành công! Tiêu tốn %d Nguyên Thạch (Phí +30%%).", len(results), totalCost),
+		"message":        repairAllMsg,
 		"repaired_count": len(results),
 		"total_cost":     totalCost,
 		"nodes":          results,
@@ -1827,7 +1840,10 @@ func RepairApertureNode(c *gin.Context) {
 
 	_ = tx.Commit()
 
-	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Sửa chữa thành công %s! Tiêu tốn %d Tiên Nguyên Thạch.", n.Name, cost)})
+	repairMsg := fmt.Sprintf("Sửa chữa thành công %s! Tiêu tốn %d Tiên Nguyên Thạch.", n.Name, cost)
+	notify.Send(db.DB, playerID, "aperture_repair", "Sửa Chữa Tiên Khiếu", repairMsg)
+
+	c.JSON(http.StatusOK, gin.H{"message": repairMsg})
 }
 
 const MaxNodeLevel = 5
@@ -1962,8 +1978,11 @@ func UpgradeApertureNode(c *gin.Context) {
 
 	_ = tx.Commit()
 
+	upgradeMsg := fmt.Sprintf("Nâng cấp %s lên cấp %d thành công! Tiêu tốn %d Tiên Nguyên Thạch.", n.Name, newLevel, upgradeCost)
+	notify.Send(db.DB, playerID, "aperture_upgrade", "Nâng Cấp Tiên Khiếu", upgradeMsg)
+
 	c.JSON(http.StatusOK, gin.H{
-		"message":    fmt.Sprintf("Nâng cấp %s lên cấp %d thành công! Tiêu tốn %d Tiên Nguyên Thạch.", n.Name, newLevel, upgradeCost),
+		"message":    upgradeMsg,
 		"new_level":  newLevel,
 		"new_max_hp": newMaxHP,
 		"cost":       upgradeCost,
