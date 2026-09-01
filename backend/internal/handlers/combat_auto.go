@@ -626,36 +626,42 @@ func AutoCombatStart(c *gin.Context) {
 				var monsterIDStr *string
 				var lastClaimedAt *time.Time
 				err = tx.QueryRow("SELECT rarity, mine_type, occupier_id, monster_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &mineType, &currentOccupierStr, &monsterIDStr, &lastClaimedAt)
-				if err == nil && currentOccupierStr != nil && lastClaimedAt != nil {
-					stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
-					stonesHalf := stones / 2
-					qiHalf := qi / 2.0
-					chestsHalf := chests / 2
-					if stonesHalf > 0 || qiHalf > 0.0 || chestsHalf > 0 {
-						if errMine := AddMineRewardsToPlayerTx(tx, player.ID, stonesHalf, qiHalf, chestsHalf, mineType); errMine != nil {
-							logger.S.Errorf("Failed to add mine rewards to player %s (slot %d): %v", player.ID, slotID, errMine)
-						} else {
-							if mineType == "immortal" {
-								player.ImmortalStones += int64(stonesHalf)
+				if err == nil && currentOccupierStr != nil {
+					if defenderUUID, errParse := uuid.Parse(*currentOccupierStr); errParse == nil && defenderUUID != player.ID {
+						notify.Send(tx, defenderUUID, "mine_lost", "Mỏ bị đánh chiếm!",
+							fmt.Sprintf("Mỏ #%d (%s) của bạn đã bị đạo hữu [%s] tấn công và đánh chiếm thành công!", slotID, rarity, player.Username))
+					}
+					if lastClaimedAt != nil {
+						stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
+						stonesHalf := stones / 2
+						qiHalf := qi / 2.0
+						chestsHalf := chests / 2
+						if stonesHalf > 0 || qiHalf > 0.0 || chestsHalf > 0 {
+							if errMine := AddMineRewardsToPlayerTx(tx, player.ID, stonesHalf, qiHalf, chestsHalf, mineType); errMine != nil {
+								logger.S.Errorf("Failed to add mine rewards to player %s (slot %d): %v", player.ID, slotID, errMine)
 							} else {
-								player.PrimevalStones += int64(stonesHalf)
+								if mineType == "immortal" {
+									player.ImmortalStones += int64(stonesHalf)
+								} else {
+									player.PrimevalStones += int64(stonesHalf)
+								}
+								var stoneName = "Nguyên Thạch"
+								if mineType == "immortal" {
+									stoneName = "Tiên Nguyên Thạch"
+								}
+								logs = append(logs, simulator.CombatLog{
+									Turn:   simState.Turn,
+									Action: "MINE_LOOT",
+									Detail: fmt.Sprintf("Cướp mỏ thành công! +%d %s, +%.0f Nhân Khí, +%d Rương Mỏ", stonesHalf, stoneName, qiHalf, chestsHalf),
+								})
 							}
-							var stoneName = "Nguyên Thạch"
-							if mineType == "immortal" {
-								stoneName = "Tiên Nguyên Thạch"
-							}
+						} else {
 							logs = append(logs, simulator.CombatLog{
 								Turn:   simState.Turn,
 								Action: "MINE_LOOT",
-								Detail: fmt.Sprintf("Cướp mỏ thành công! +%d %s, +%.0f Nhân Khí, +%d Rương Mỏ", stonesHalf, stoneName, qiHalf, chestsHalf),
+								Detail: "Mỏ đối thủ chưa tích lũy đủ tài nguyên để cướp.",
 							})
 						}
-					} else {
-						logs = append(logs, simulator.CombatLog{
-							Turn:   simState.Turn,
-							Action: "MINE_LOOT",
-							Detail: "Mỏ đối thủ chưa tích lũy đủ tài nguyên để cướp.",
-						})
 					}
 				} else if err == nil {
 					logs = append(logs, simulator.CombatLog{
@@ -714,6 +720,14 @@ func AutoCombatStart(c *gin.Context) {
 		} else {
 			player.HP = 1.0
 			defeatMsg := "Đại bại! Đạo hữu bất tỉnh nhân sự. May mắn thoát chết."
+			if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 && player.ActiveCombat.TargetPlayerID != "" {
+				if defenderUUID, errParse := uuid.Parse(player.ActiveCombat.TargetPlayerID); errParse == nil && defenderUUID != player.ID {
+					var rarity string
+					_ = tx.QueryRow("SELECT rarity FROM mine_slots WHERE id = $1", player.ActiveCombat.MineSlotID).Scan(&rarity)
+					notify.Send(tx, defenderUUID, "mine_defended", "Phòng thủ Mỏ thành công!",
+						fmt.Sprintf("Đạo hữu [%s] đã tấn công Mỏ #%d (%s) của bạn nhưng đã bị lực lượng phòng thủ đánh bại!", player.Username, player.ActiveCombat.MineSlotID, rarity))
+				}
+			}
 			if isTribulation {
 				defeatMsg = "Đạo hữu kiệt sức trước quái tai kiếp! Tiên Khiếu phải gánh chịu phần sát thương còn lại."
 			} else {
@@ -1421,38 +1435,44 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 				var monsterIDStr *string
 				var lastClaimedAt *time.Time
 				err = tx.QueryRow("SELECT rarity, mine_type, occupier_id, monster_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &mineType, &currentOccupierStr, &monsterIDStr, &lastClaimedAt)
-				if err == nil && currentOccupierStr != nil && lastClaimedAt != nil {
-					stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
-					stonesHalf := stones / 2
-					qiHalf := qi / 2.0
-					chestsHalf := chests / 2
-					if stonesHalf > 0 || qiHalf > 0.0 || chestsHalf > 0 {
-						if errMine := AddMineRewardsToPlayerTx(tx, player.ID, stonesHalf, qiHalf, chestsHalf, mineType); errMine != nil {
-							logger.S.Errorf("Failed to add mine rewards to player %s (slot %d): %v", player.ID, slotID, errMine)
-						} else {
-							if mineType == "immortal" {
-								player.ImmortalStones += int64(stonesHalf)
+				if err == nil && currentOccupierStr != nil {
+					if defenderUUID, errParse := uuid.Parse(*currentOccupierStr); errParse == nil && defenderUUID != player.ID {
+						notify.Send(tx, defenderUUID, "mine_lost", "Mỏ bị đánh chiếm!",
+							fmt.Sprintf("Mỏ #%d (%s) của bạn đã bị đạo hữu [%s] tấn công và đánh chiếm thành công!", slotID, rarity, player.Username))
+					}
+					if lastClaimedAt != nil {
+						stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
+						stonesHalf := stones / 2
+						qiHalf := qi / 2.0
+						chestsHalf := chests / 2
+						if stonesHalf > 0 || qiHalf > 0.0 || chestsHalf > 0 {
+							if errMine := AddMineRewardsToPlayerTx(tx, player.ID, stonesHalf, qiHalf, chestsHalf, mineType); errMine != nil {
+								logger.S.Errorf("Failed to add mine rewards to player %s (slot %d): %v", player.ID, slotID, errMine)
 							} else {
-								player.PrimevalStones += int64(stonesHalf)
+								if mineType == "immortal" {
+									player.ImmortalStones += int64(stonesHalf)
+								} else {
+									player.PrimevalStones += int64(stonesHalf)
+								}
+								var stoneName = "Nguyên Thạch"
+								if mineType == "immortal" {
+									stoneName = "Tiên Nguyên Thạch"
+								}
+								mineLootMsg := fmt.Sprintf("Cướp mỏ thành công! +%d %s, +%.0f Nhân Khí, +%d Rương Mỏ", stonesHalf, stoneName, qiHalf, chestsHalf)
+								notify.Send(tx, player.ID, "combat_loot", "Chiến Lợi Phẩm (Cướp Mỏ)", mineLootMsg)
+								logs = append(logs, simulator.CombatLog{
+									Turn:   simState.Turn,
+									Action: "MINE_LOOT",
+									Detail: mineLootMsg,
+								})
 							}
-							var stoneName = "Nguyên Thạch"
-							if mineType == "immortal" {
-								stoneName = "Tiên Nguyên Thạch"
-							}
-							mineLootMsg := fmt.Sprintf("Cướp mỏ thành công! +%d %s, +%.0f Nhân Khí, +%d Rương Mỏ", stonesHalf, stoneName, qiHalf, chestsHalf)
-							notify.Send(tx, player.ID, "combat_loot", "Chiến Lợi Phẩm (Cướp Mỏ)", mineLootMsg)
+						} else {
 							logs = append(logs, simulator.CombatLog{
 								Turn:   simState.Turn,
 								Action: "MINE_LOOT",
-								Detail: mineLootMsg,
+								Detail: "Mỏ đối thủ chưa tích lũy đủ tài nguyên để cướp.",
 							})
 						}
-					} else {
-						logs = append(logs, simulator.CombatLog{
-							Turn:   simState.Turn,
-							Action: "MINE_LOOT",
-							Detail: "Mỏ đối thủ chưa tích lũy đủ tài nguyên để cướp.",
-						})
 					}
 				} else if err == nil {
 					logs = append(logs, simulator.CombatLog{
@@ -1495,6 +1515,14 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 		}
 	} else {
 		var defeatMsg string
+		if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 && player.ActiveCombat.TargetPlayerID != "" {
+			if defenderUUID, errParse := uuid.Parse(player.ActiveCombat.TargetPlayerID); errParse == nil && defenderUUID != player.ID {
+				var rarity string
+				_ = tx.QueryRow("SELECT rarity FROM mine_slots WHERE id = $1", player.ActiveCombat.MineSlotID).Scan(&rarity)
+				notify.Send(tx, defenderUUID, "mine_defended", "Phòng thủ Mỏ thành công!",
+					fmt.Sprintf("Đạo hữu [%s] đã tấn công Mỏ #%d (%s) của bạn nhưng đã bị lực lượng phòng thủ đánh bại!", player.Username, player.ActiveCombat.MineSlotID, rarity))
+			}
+		}
 		if isTribulation {
 			defeatMsg = "Đạo hữu kiệt sức trước quái tai kiếp! Tiên Khiếu phải gánh chịu phần sát thương còn lại."
 		} else {

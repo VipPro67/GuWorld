@@ -973,7 +973,7 @@ func AdminUpdatePlayer(c *gin.Context) {
 		argIdx++
 	}
 	if req.WallProgress != nil {
-		val := math.Max(0, *req.WallProgress)
+		val := math.Min(1.0, math.Max(0, *req.WallProgress))
 		sets = append(sets, "wall_progress=$"+strconv.Itoa(argIdx))
 		args = append(args, val)
 		argIdx++

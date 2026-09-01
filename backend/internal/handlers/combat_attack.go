@@ -17,6 +17,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 type CombatAttackRequest struct {
@@ -1388,30 +1389,36 @@ func CombatAttack(c *gin.Context) {
 			var monsterIDStr *string
 			var lastClaimedAt *time.Time
 			err = tx.QueryRow("SELECT rarity, mine_type, occupier_id, monster_id, last_claimed_at FROM mine_slots WHERE id = $1 FOR UPDATE", slotID).Scan(&rarity, &mineType, &currentOccupierStr, &monsterIDStr, &lastClaimedAt)
-			if err == nil && currentOccupierStr != nil && lastClaimedAt != nil {
-				stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
-				stonesHalf := stones / 2
-				qiHalf := qi / 2.0
-				chestsHalf := chests / 2
-				if stonesHalf > 0 || qiHalf > 0.0 || chestsHalf > 0 {
-					if errMine := AddMineRewardsToPlayerTx(tx, player.ID, stonesHalf, qiHalf, chestsHalf, mineType); errMine != nil {
-						logger.S.Errorf("Failed to add mine rewards to player %s (slot %d): %v", player.ID, slotID, errMine)
-					} else {
-						if mineType == "immortal" {
-							player.ImmortalStones += int64(stonesHalf)
+			if err == nil && currentOccupierStr != nil {
+				if defenderUUID, errParse := uuid.Parse(*currentOccupierStr); errParse == nil && defenderUUID != player.ID {
+					notify.Send(tx, defenderUUID, "mine_lost", "Mỏ bị đánh chiếm!",
+						fmt.Sprintf("Mỏ #%d (%s) của bạn đã bị đạo hữu [%s] tấn công và đánh chiếm thành công!", slotID, rarity, player.Username))
+				}
+				if lastClaimedAt != nil {
+					stones, qi, chests := CalculateMineRewards(slotID, rarity, *lastClaimedAt)
+					stonesHalf := stones / 2
+					qiHalf := qi / 2.0
+					chestsHalf := chests / 2
+					if stonesHalf > 0 || qiHalf > 0.0 || chestsHalf > 0 {
+						if errMine := AddMineRewardsToPlayerTx(tx, player.ID, stonesHalf, qiHalf, chestsHalf, mineType); errMine != nil {
+							logger.S.Errorf("Failed to add mine rewards to player %s (slot %d): %v", player.ID, slotID, errMine)
 						} else {
-							player.PrimevalStones += int64(stonesHalf)
+							if mineType == "immortal" {
+								player.ImmortalStones += int64(stonesHalf)
+							} else {
+								player.PrimevalStones += int64(stonesHalf)
+							}
+							player.HumanQi += qiHalf
+							
+							stoneName := "Nguyên Thạch"
+							if mineType == "immortal" {
+								stoneName = "Tiên Nguyên Thạch"
+							}
+							ctx.Logs = append(ctx.Logs, fmt.Sprintf("Cướp mỏ thành công! +%d %s, +%.0f Nhân Khí, +%d Rương Mỏ", stonesHalf, stoneName, qiHalf, chestsHalf))
 						}
-						player.HumanQi += qiHalf
-						
-						stoneName := "Nguyên Thạch"
-						if mineType == "immortal" {
-							stoneName = "Tiên Nguyên Thạch"
-						}
-						ctx.Logs = append(ctx.Logs, fmt.Sprintf("Cướp mỏ thành công! +%d %s, +%.0f Nhân Khí, +%d Rương Mỏ", stonesHalf, stoneName, qiHalf, chestsHalf))
+					} else {
+						ctx.Logs = append(ctx.Logs, "Mỏ đối thủ chưa tích lũy đủ tài nguyên để cướp.")
 					}
-				} else {
-					ctx.Logs = append(ctx.Logs, "Mỏ đối thủ chưa tích lũy đủ tài nguyên để cướp.")
 				}
 			} else if err == nil {
 				ctx.Logs = append(ctx.Logs, "Mỏ không có người chiếm giữ, không thể cướp tài nguyên.")
@@ -1454,6 +1461,14 @@ func CombatAttack(c *gin.Context) {
 		isTribulation := player.ActiveCombat != nil && player.ActiveCombat.EnemyTemplateID == "monster_heavenly_tribulation"
 
 		if player.ActiveCombat != nil && player.ActiveCombat.MineSlotID > 0 {
+			if player.ActiveCombat.TargetPlayerID != "" {
+				if defenderUUID, errParse := uuid.Parse(player.ActiveCombat.TargetPlayerID); errParse == nil && defenderUUID != player.ID {
+					var rarity string
+					_ = tx.QueryRow("SELECT rarity FROM mine_slots WHERE id = $1", player.ActiveCombat.MineSlotID).Scan(&rarity)
+					notify.Send(tx, defenderUUID, "mine_defended", "Phòng thủ Mỏ thành công!",
+						fmt.Sprintf("Đạo hữu [%s] đã tấn công Mỏ #%d (%s) của bạn nhưng đã bị lực lượng phòng thủ đánh bại!", player.Username, player.ActiveCombat.MineSlotID, rarity))
+				}
+			}
 			ctx.Logs = append(ctx.Logs, "Thách đấu mỏ linh thạch thất bại, không thể chiếm lĩnh mỏ.")
 		} else if !isTribulation {
 			ctx.Logs = append(ctx.Logs, "Đại bại! Đạo hữu bất tỉnh nhân sự trước áp lực của đối thủ. May mắn thoát chết.")

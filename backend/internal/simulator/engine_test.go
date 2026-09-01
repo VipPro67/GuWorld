@@ -1,6 +1,7 @@
 package simulator
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -297,7 +298,7 @@ func TestSupportDoesNotProvokeCounter(t *testing.T) {
 	got := firstTurnDamageActors(logs)
 	want := []string{"ally", "enemy", "enemy"}
 	if !idsEqual(got, want) {
-		t.Fatalf("expected [ally damage -> enemy counter, then enemy slot], got %v", got)
+		t.Fatalf("expected [ally damage -> enemy damage E1 -> enemy damage E2], got %v", got)
 	}
 }
 
@@ -373,3 +374,50 @@ func TestCategoryPrioritiesActionSorting(t *testing.T) {
 		t.Errorf("expected HealGu third under [damage, shield, heal, other] priority, got %s", c.Actions[2].Name)
 	}
 }
+
+func TestCategoryPhaseCombatExecution(t *testing.T) {
+	// Attacker A (Speed 100) has 2 shield skills and 1 damage skill
+	attacker := newTestCombatant("attacker", "Player", 2000, 100)
+	attacker.Actions = []SimAction{
+		{ActionType: "GU_SKILL", Name: "ShieldA1", Defense: 100},
+		{ActionType: "GU_SKILL", Name: "ShieldA2", Defense: 100},
+		{ActionType: "GU_SKILL", Name: "DamageA", Damage: 500},
+	}
+
+	// Defender B (Speed 90) has 2 shield skills and 1 damage skill
+	defender := newTestCombatant("defender", "Player", 1000, 90)
+	defender.Actions = []SimAction{
+		{ActionType: "GU_SKILL", Name: "ShieldB1", Defense: 200},
+		{ActionType: "GU_SKILL", Name: "ShieldB2", Defense: 200},
+		{ActionType: "GU_SKILL", Name: "DamageB", Damage: 300},
+	}
+
+	state := &CombatState{
+		Seed:    42,
+		Allies:  []*CombatantAuto{attacker},
+		Enemies: []*CombatantAuto{defender},
+	}
+
+	logs := Simulate(state)
+
+	var sequence []string
+	for _, l := range logs {
+		if l.Turn == 1 {
+			for _, name := range []string{"ShieldA1", "ShieldA2", "DamageA", "ShieldB1", "ShieldB2", "DamageB"} {
+				if strings.Contains(l.Detail, name) {
+					sequence = append(sequence, name)
+					break
+				}
+			}
+		}
+	}
+
+	// Expected Phase 1 (Defensive): ShieldA1, ShieldA2, ShieldB1, ShieldB2
+	// Expected Phase 2 (Damage): DamageA, DamageB
+	want := []string{"ShieldA1", "ShieldA2", "ShieldB1", "ShieldB2", "DamageA", "DamageB"}
+	if !reflect.DeepEqual(sequence, want) {
+		t.Fatalf("expected phase sequence %v, got %v", want, sequence)
+	}
+}
+
+

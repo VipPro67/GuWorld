@@ -2060,7 +2060,7 @@ function WallControls() {
       </div>
 
       <div className="text-[10px] text-zinc-500 text-center font-mono font-semibold">
-        Tiến độ phá vách khiếu: <span className="text-emerald-400 font-bold">{((player.wall_progress ?? 0) * 100).toFixed(1)}%</span>
+        Tiến độ phá vách khiếu: <span className="text-emerald-400 font-bold">{(Math.min(1.0, Math.max(0, player.wall_progress ?? 0)) * 100).toFixed(1)}%</span>
       </div>
       <div className="flex justify-between items-center text-xs">
         <span className="text-zinc-400 font-medium">Thọ Nguyên Còn Lại:</span>

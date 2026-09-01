@@ -1,1 +1,4 @@
 sect_id,title,description,mission_type,target_id,target_amount,reward_contribution,required_member_rank
+khi_nguyn_tng,Thiên khí cho ngộ,Lụm lẹ giúp cổ sắp đói chết,GATHER,heaven_qi,10,2000,NGOAI_MON
+khi_nguyn_tng,Tìm kiếm tiên tài,Thu thập kim loại quý,GATHER,heavy_gold_ore,10,2000,NGOAI_MON
+nh_tng,Thu linh tài,Bẹ,GATHER,ITEM_MEDICINAL_PASTE,1,10000,HO_PHAP

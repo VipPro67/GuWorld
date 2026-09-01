@@ -104,6 +104,9 @@ func BreakWall(c *gin.Context) {
 	}
 
 	player.WallProgress += progressGain
+	if player.WallProgress > 1.0 {
+		player.WallProgress = 1.0
+	}
 	success := player.WallProgress >= 1.0
 	player.ApertureStress += 5.0 * (1.0 + gamefx.Get(&player).ApertureStressBonus)
 	player.LastCultivateTime = time.Now()
@@ -134,8 +137,8 @@ func BreakWall(c *gin.Context) {
 		chance := GetBreakthroughChance(player.Rank, player.AptitudeType)
 
 		if rand.Float64() > chance {
-			player.CurrentMana *= 0.8                                  // mất 20% chân nguyên
-			player.WallProgress = math.Max(0, player.WallProgress-0.1) // mất 10% tiến độ
+			player.CurrentMana *= 0.8                                                  // mất 20% chân nguyên
+			player.WallProgress = math.Min(1.0, math.Max(0, player.WallProgress-0.1)) // mất 10% tiến độ
 
 			msg = fmt.Sprintf(
 				"Trùng kích thất bại! Xác suất %.0f%%. Vách không khiếu bị phản chấn, mất 20%% chân nguyên.",
