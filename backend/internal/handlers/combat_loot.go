@@ -212,16 +212,16 @@ func GetGuDropChancePercent(rank int, isBoss bool) float64 {
 		case 5:
 			return 8.0  // 8%  (Boss - Cổ Ngũ Chuyển)
 		case 6:
-			return 2.5  // 2.5% (Boss - Tiên Cổ Lục Chuyển)
+			return 1.0   // 1.0% (Boss - Tiên Cổ Lục Chuyển)
 		case 7:
-			return 1.5  // 1.5% (Boss - Tiên Cổ Thất Chuyển)
+			return 0.5   // 0.5% (Boss - Tiên Cổ Thất Chuyển)
 		case 8:
-			return 0.8  // 0.8% (Boss - Tiên Cổ Bát Chuyển)
+			return 0.2   // 0.2% (Boss - Tiên Cổ Bát Chuyển)
 		case 9:
-			return 0.3  // 0.3% (Boss - Tiên Cổ Cửu Chuyển)
+			return 0.05  // 0.05% (Boss - Tiên Cổ Cửu Chuyển)
 		default:
 			if rank >= 6 {
-				return 0.3
+				return 0.05
 			}
 			return 15.0
 		}
@@ -240,16 +240,16 @@ func GetGuDropChancePercent(rank int, isBoss bool) float64 {
 	case 5:
 		return 4.0  // 4%
 	case 6:
-		return 1.0  // 1.0% (Tiên Cổ Lục Chuyển)
+		return 0.3   // 0.3% (Tiên Cổ Lục Chuyển)
 	case 7:
-		return 0.5  // 0.5% (Tiên Cổ Thất Chuyển)
+		return 0.1   // 0.1% (Tiên Cổ Thất Chuyển)
 	case 8:
-		return 0.2  // 0.2% (Tiên Cổ Bát Chuyển)
+		return 0.05  // 0.05% (Tiên Cổ Bát Chuyển)
 	case 9:
-		return 0.1  // 0.1% (Tiên Cổ Cửu Chuyển)
+		return 0.01  // 0.01% (Tiên Cổ Cửu Chuyển)
 	default:
 		if rank >= 6 {
-			return 0.1
+			return 0.01
 		}
 		return 8.0
 	}

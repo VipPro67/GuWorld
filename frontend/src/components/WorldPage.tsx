@@ -6,7 +6,7 @@ import { useWorldStore } from "@/store/useWorldStore";
 import { useGameStore } from "@/store/useGameStore";
 import { WorldLogViewer } from "./WorldLogViewer";
 import TeleportModal from "./TeleportModal";
-import { Menu, X, User, Briefcase, Flame, Sparkles, Shield, Store, Trophy, Gift, Swords, Gem, Compass, Zap } from "lucide-react";
+import { Menu, X, User, Briefcase, Flame, Sparkles, Shield, Store, Trophy, Gift, Swords, Gem, Compass, Zap, Users } from "lucide-react";
 
 const WorldCanvas = dynamic(() => import("@/components/WorldCanvas"), {
   ssr: false,
@@ -28,6 +28,7 @@ const ArenaView = dynamic(() => import("./ArenaView").then(m => m.ArenaView), { 
 const PremiumStoreView = dynamic(() => import("./PremiumStoreView").then(m => m.PremiumStoreView), { ssr: false });
 const DungeonView = dynamic(() => import("./DungeonView").then(m => m.DungeonView), { ssr: false });
 const ImmortalApertureView = dynamic(() => import("./ImmortalApertureView").then(m => m.ImmortalApertureView), { ssr: false });
+const PartyView = dynamic(() => import("./PartyView").then(m => m.PartyView), { ssr: false });
 
 const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; borderColor: string; bgColor: string }> = {
   Boss:     { icon: "⚔️",  label: "Boss",        color: "text-red-300",     borderColor: "border-red-500/30",     bgColor: "bg-red-950/60" },
@@ -84,6 +85,10 @@ export function WorldPage() {
   const cancelMarketplaceListing = useGameStore((s) => s.cancelMarketplaceListing);
   const buyMarketplaceListing = useGameStore((s) => s.buyMarketplaceListing);
 
+  // Party
+  const fetchPartyStatus = useGameStore((s) => s.fetchPartyStatus);
+  const fetchPartyInvitations = useGameStore((s) => s.fetchPartyInvitations);
+
   const [mapMode, setMapMode] = useState<"select" | "drag">("select");
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -131,6 +136,7 @@ export function WorldPage() {
     { id: "inventory", label: "Túi Đồ", icon: Briefcase, color: "text-cyan-400" },
     { id: "aperture", label: "Không Khiếu", icon: Flame, color: "text-rose-400" },
     { id: "refine", label: "Luyện Cổ", icon: Sparkles, color: "text-purple-400" },
+    { id: "party", label: "Tổ Đội", icon: Users, color: "text-amber-400" },
     { id: "sect", label: "Tông Môn", icon: Shield, color: "text-blue-400" },
     { id: "market", label: "Chợ Tiên", icon: Store, color: "text-amber-400", locked: !isImmortal },
     { id: "teleport", label: "Di Chuyển", icon: Zap, color: "text-yellow-400" },
@@ -143,7 +149,9 @@ export function WorldPage() {
 
   useEffect(() => {
     if (!regionsLoaded) fetchRegions();
-  }, [regionsLoaded, fetchRegions]);
+    fetchPartyStatus();
+    fetchPartyInvitations();
+  }, [regionsLoaded, fetchRegions, fetchPartyStatus, fetchPartyInvitations]);
 
   const setInvestigationRange = useWorldStore((s) => s.setInvestigationRange);
 
@@ -253,6 +261,7 @@ export function WorldPage() {
                   onRefine={refineGu}
                 />
               )}
+              {activeModal === "party" && <PartyView />}
               {activeModal === "sect" && <SectView />}
               {activeModal === "market" && (
                 <BaoHoangMarket
