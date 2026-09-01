@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 type MailRequest struct {
@@ -302,4 +304,23 @@ func SendSystemMessage(channel string, sectID sql.NullString, content string) er
 
 	notifyBaoHoangMessages(channel, sectID)
 	return nil
+}
+
+// BroadcastImmortalGuLoot sends a world chat announcement and system notification when a player loots an Immortal Gu.
+func BroadcastImmortalGuLoot(playerID uuid.UUID, playerName, bossName, guID string, rank int) {
+	guSpec, _ := models.GetGuAny(guID)
+	guName := guID
+	if guSpec.Name != "" {
+		guName = guSpec.Name
+	}
+	if rank <= 0 {
+		rank = guSpec.Rank
+	}
+
+	content := fmt.Sprintf("【THIÊN HẠ CHẤN ĐỘNG】 Chúc mừng Cổ sư [%s] trong khi đánh bại [%s] đã thu phục thành công Tiên Cổ [%s] (Chuyển %d)! Tiên Cổ độc nhất vô nhị đã có chủ!", playerName, bossName, guName, rank)
+	_ = SendSystemMessage("world", sql.NullString{}, content)
+
+	if playerID != uuid.Nil {
+		notify.Send(db.DB, playerID, "IMMORTAL_GU_LOOT", "Thu Phục Tiên Cổ!", fmt.Sprintf("Chúc mừng đạo hữu đã đánh bại %s và thu phục thành công Tiên Cổ [%s] (Chuyển %d)!", bossName, guName, rank))
+	}
 }

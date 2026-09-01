@@ -1248,6 +1248,9 @@ func CombatAttack(c *gin.Context) {
 									guName = guSpec.Name
 								}
 								ctx.Logs = append(ctx.Logs, fmt.Sprintf("Cơ duyên! Đạo hữu bóc tách thành công Cổ trùng [%s] từ thi thể của %s!", guName, player.ActiveCombat.EnemyName))
+								if isImmortal {
+									BroadcastImmortalGuLoot(player.ID, player.Username, player.ActiveCombat.EnemyName, eg.GuID, guSpec.Rank)
+								}
 							}
 						}
 					}

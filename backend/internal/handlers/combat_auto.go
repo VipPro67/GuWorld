@@ -483,6 +483,9 @@ func AutoCombatStart(c *gin.Context) {
 									}
 								}
 								loot.Gus = append(loot.Gus, eg.GuID)
+								if isImmortal {
+									BroadcastImmortalGuLoot(player.ID, player.Username, player.ActiveCombat.EnemyName, eg.GuID, guSpec.Rank)
+								}
 							}
 						}
 					}
@@ -1328,6 +1331,9 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 									}
 								}
 								loot.Gus = append(loot.Gus, eg.GuID)
+								if isImmortal {
+									BroadcastImmortalGuLoot(player.ID, player.Username, player.ActiveCombat.EnemyName, eg.GuID, guSpec.Rank)
+								}
 							}
 						}
 					}

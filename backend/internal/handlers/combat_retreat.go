@@ -579,6 +579,9 @@ func fleeFailVictory(tx *sql.Tx, player *models.Player) []string {
 							}
 						}
 						loot.Gus = append(loot.Gus, eg.GuID)
+						if isImmortal {
+							BroadcastImmortalGuLoot(player.ID, player.Username, cs.EnemyName, eg.GuID, guSpec.Rank)
+						}
 					}
 				}
 			}
