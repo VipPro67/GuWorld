@@ -142,7 +142,7 @@ func UpdateCombatSettings(c *gin.Context) {
 			cleanCats = append(cleanCats, cat)
 		}
 	}
-	for _, cat := range []string{"shield", "heal", "damage", "other"} {
+	for _, cat := range []string{"other", "shield", "heal", "damage"} {
 		if !seenCat[cat] {
 			cleanCats = append(cleanCats, cat)
 		}

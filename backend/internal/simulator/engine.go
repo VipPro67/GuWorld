@@ -369,7 +369,7 @@ func Simulate(state *CombatState) []CombatLog {
 		for _, c := range combatants {
 			catPrio := c.CategoryPriorities
 			if len(catPrio) == 0 {
-				catPrio = []string{"shield", "heal", "damage", "other"}
+				catPrio = []string{"other", "shield", "heal", "damage"}
 			}
 
 			sort.SliceStable(c.Actions, func(i, j int) bool {
@@ -563,12 +563,16 @@ func Simulate(state *CombatState) []CombatLog {
 		}
 
 		// ── Category Phase Combat Loop ──
-		// Actions resolve in 3 distinct phases per turn:
-		// Phase 1: "defensive" (Shields, Heals & Buffs)
-		// Phase 2: "damage"    (Attacks / Basic Attack fallback)
-		// Phase 3: "other"     (Utility / Special / Summon)
+		// Actions resolve in distinct category phases per turn ordered by CategoryPriorities.
 		// In each phase, combatants act in order of EffectiveSpeed.
-		phases := []string{"defensive", "damage", "other"}
+		var phases []string
+		if len(state.Allies) > 0 && len(state.Allies[0].CategoryPriorities) > 0 {
+			phases = state.Allies[0].CategoryPriorities
+		} else if len(state.Enemies) > 0 && len(state.Enemies[0].CategoryPriorities) > 0 {
+			phases = state.Enemies[0].CategoryPriorities
+		} else {
+			phases = []string{"other", "shield", "heal", "damage"}
+		}
 
 		executedActions := make(map[*CombatantAuto][]bool)
 		for _, a := range allActors {
@@ -1607,11 +1611,9 @@ if (actor.IsSilenced || actor.IsFeared) && a.ActionType != "BASIC_ATTACK" {
 					a := &actor.Actions[ai]
 					cat := GetSimActionCategory(*a)
 					matchesPhase := false
-					if phase == "defensive" && (cat == "shield" || cat == "heal") {
+					if phase == cat {
 						matchesPhase = true
-					} else if phase == "damage" && cat == "damage" {
-						matchesPhase = true
-					} else if phase == "other" && cat == "other" {
+					} else if phase == "defensive" && (cat == "shield" || cat == "heal") {
 						matchesPhase = true
 					}
 
@@ -2144,7 +2146,7 @@ func GetSimActionCategory(act SimAction) string {
 
 func getCategoryPriorityIndex(cat string, priorities []string) int {
 	if len(priorities) == 0 {
-		priorities = []string{"shield", "heal", "damage", "other"}
+		priorities = []string{"other", "shield", "heal", "damage"}
 	}
 	for idx, p := range priorities {
 		if p == cat {

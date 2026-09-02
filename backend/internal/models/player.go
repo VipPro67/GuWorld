@@ -201,7 +201,7 @@ func (c *AutoCombatConfig) Scan(value interface{}) error {
 	}
 	err := json.Unmarshal(bytes, c)
 	if err == nil && len(c.CategoryPriorities) == 0 {
-		c.CategoryPriorities = []string{"shield", "heal", "damage", "other"}
+		c.CategoryPriorities = []string{"other", "shield", "heal", "damage"}
 	}
 	return err
 }
@@ -218,7 +218,7 @@ func DefaultAutoCombatConfig() AutoCombatConfig {
 		HealThreshold:      30,
 		AutoRestoreMana:    false,
 		ManaThreshold:      30,
-		CategoryPriorities: []string{"shield", "heal", "damage", "other"},
+		CategoryPriorities: []string{"other", "shield", "heal", "damage"},
 		GuPriorities:       []GuTactic{},
 		KMPriorities:       []KillerMoveTactic{},
 		SkipBattle:         false,

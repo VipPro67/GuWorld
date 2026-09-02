@@ -420,4 +420,40 @@ func TestCategoryPhaseCombatExecution(t *testing.T) {
 	}
 }
 
+func TestOtherCategoryFirstPhaseExecution(t *testing.T) {
+	attacker := newTestCombatant("attacker", "Player", 2000, 100)
+	attacker.CategoryPriorities = []string{"other", "shield", "heal", "damage"}
+	attacker.Actions = []SimAction{
+		{ActionType: "GU_SKILL", Name: "UtilityOther", Priority: 1}, // Category "other"
+		{ActionType: "GU_SKILL", Name: "ShieldSkill", Defense: 100}, // Category "shield"
+		{ActionType: "GU_SKILL", Name: "DamageSkill", Damage: 500}, // Category "damage"
+	}
+
+	state := &CombatState{
+		Seed:    42,
+		Allies:  []*CombatantAuto{attacker},
+		Enemies: []*CombatantAuto{newTestCombatant("defender", "Enemy", 1000, 50)},
+	}
+
+	logs := Simulate(state)
+
+	var sequence []string
+	for _, l := range logs {
+		if l.Turn == 1 {
+			for _, name := range []string{"UtilityOther", "ShieldSkill", "DamageSkill"} {
+				if strings.Contains(l.Detail, name) {
+					sequence = append(sequence, name)
+					break
+				}
+			}
+		}
+	}
+
+	want := []string{"UtilityOther", "ShieldSkill", "DamageSkill"}
+	if !reflect.DeepEqual(sequence, want) {
+		t.Fatalf("expected phase sequence with other first %v, got %v", want, sequence)
+	}
+}
+
+
 
