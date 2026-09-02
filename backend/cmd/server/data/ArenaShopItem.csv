@@ -4,7 +4,7 @@ blood_path_material,99,1,-1,true,1
 bone_path_material,99,1,-1,true,1
 cloud_path_material,99,1,-1,true,1
 dark_path_material,99,1,-1,true,1
-dream_material,99,1,-1,true,0
+dream_path_material,99,1,-1,true,0
 earth_path_material,99,1,-1,true,1
 enslavement_path_material,99,1,-1,true,1
 fire_path_material,99,1,-1,true,1

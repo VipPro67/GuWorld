@@ -805,16 +805,16 @@ func seedConstitutionsFromCSV(filename string) error {
 
 	for _, key := range order {
 		row := seen[key]
-name := get(row, nameIdx)
-	effects := safeJSONObject(get(row, effectsIdx), "{}", fmt.Sprintf("%s effects", key))
-	tierStr := get(row, tierIdx)
-	tierVal := 0
-	if tierStr != "" {
-		if v, err := strconv.Atoi(tierStr); err == nil {
-			tierVal = v
+		name := get(row, nameIdx)
+		effects := safeJSONObject(get(row, effectsIdx), "{}", fmt.Sprintf("%s effects", key))
+		tierStr := get(row, tierIdx)
+		tierVal := 0
+		if tierStr != "" {
+			if v, err := strconv.Atoi(tierStr); err == nil {
+				tierVal = v
+			}
 		}
-	}
-	_, err := DB.Exec(`
+		_, err := DB.Exec(`
 		INSERT INTO constitution_dictionary (key, name, effects, tier)
 		VALUES ($1, $2, $3::jsonb, $4)
 		ON CONFLICT (key) DO UPDATE
@@ -1883,7 +1883,7 @@ var pathMaterialIDs = map[string]bool{
 // to guts_gu when the path has no dedicated *_path_material item.
 func pathMaterialID(pathKey string) string {
 	if pathKey == "dream" {
-		return "dream_material"
+		return "dream_path_material"
 	}
 	if pathMaterialIDs[pathKey] {
 		return pathKey + "_path_material"

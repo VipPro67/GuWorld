@@ -133,7 +133,7 @@ dragon_elephant_bone,Long Tượng Ngạnh Cốt,Material,4,{},Xương cứng c�
 dragonfish,Long ngư,Food,7,"{""hunger"": 70}",Thức ăn của tiên cổ Lưỡi Đao thất chuyển.,25,,,"[""Water Path"", ""Food Path""]"
 dragon_scale_soil,Đất Long Lân,Material,5,{},Bùn đất nơi hoang long sinh sống dùng để nuôi cá Long Ngư.,25,,,"[""Earth Path""]"
 dream_bubble_film,Mộng Bọt Khí Mạc,Material,4,{},Bong bóng mộng cảnh phản chiếu hỷ nộ ái ố.,13,,,"[""Dream Path""]"
-dream_material,Tài Liệu Mộng Đạo,Material,5,{},Vật liệu sinh ra từ cõi mộng.,25,,,"[""Dream Path""]"
+dream_path_material,Tài Liệu Mộng Đạo,Material,5,{},Vật liệu sinh ra từ cõi mộng.,25,,,"[""Dream Path""]"
 dream_mist_dew,Mộng Ảo Sương Lộ,Material,3,{},Sương mù mộng ảo làm mê hoặc tâm trí.,6,,,"[""Dream Path""]"
 dream_mist_petal,Mộng Vụ Hoa Phiến,Material,2,{},Cánh hoa ngưng tụ sương mộng mông lung.,3,,,"[""Dream Path""]"
 dream_path_material,Tài liệu Mộng Đạo,Material,9,{},,1,,,"[""Dream Path""]"

@@ -397,7 +397,7 @@ Sủng vật là quái vật đã bắt, hỗ trợ chiến đấu:
 
 - Instance có template, session active và action theo option index.
 - Cổ sư vào instance, chọn hành động và nhận kết quả theo stage/map data.
-- **Mộng Cảnh (DREAM_REALM):** có 1 mộng cảnh cho mỗi lưu phái (49 path). Hoàn thành mộng cảnh của lưu phái X giúp **tăng cảnh giới lưu phái X** (thưởng +50 Chân Ý cho đúng path đó). Vào bằng `dream_material`, cooldown 24 giờ/lần, tiêu hao Soul HP.
+- **Mộng Cảnh (DREAM_REALM):** có 1 mộng cảnh cho mỗi lưu phái (49 path). Hoàn thành mộng cảnh của lưu phái X giúp **tăng cảnh giới lưu phái X** (thưởng +50 Chân Ý cho đúng path đó). Vào bằng `dream_path_material`, cooldown 24 giờ/lần, tiêu hao Soul HP.
 - **Bí Cảnh (SECRET_REALM):** phó bản chiến đấu thưởng Đạo Ngân theo path, cooldown 48 giờ.
 - **Truyền Thừa (INHERITANCE_*):** phó bản cốt truyện riêng (vd. Truyền Thừa Hoa Tửu Hành Giả).
 

@@ -618,24 +618,24 @@ recipe_GU_DREAM_BUTTERFLY_1_1_1,GU_DREAM_BUTTERFLY_1,1,1,{},"{""dream_sand_grain
 recipe_GU_DREAM_GREAT_DREAM_I_9_1,GU_DREAM_GREAT_DREAM_I,9,1,"{""GU_DREAM_PUDDLE_I"": {""qty"": 1, ""rank"": 8}}","{""dream_realm_core"": 30, ""immortal_essence"": 10}",1e-05,0,1600
 recipe_GU_DREAM_LEAD_2_2_1,GU_DREAM_LEAD_2,2,1,"{""GU_DREAM_PUDDLE_1"": {""qty"": 1, ""rank"": 1}}","{""dream_mist_petal"": 4}",0.8,40,0
 recipe_GU_DREAM_NIGHTMARE_3_3_1,GU_DREAM_NIGHTMARE_3,3,1,"{""GU_DREAM_PUDDLE_2"": {""qty"": 1, ""rank"": 2}}","{""dream_mist_dew"": 5}",0.7,80,0
-recipe_GU_DREAM_PILLOW_5_1,GU_DREAM_PILLOW,5,1,"{""GU_DREAM_WINGS"": {""qty"": 1, ""rank"": 6}}","{""nectar"": 7, ""soul_qi"": 6, ""sealing_stone"": 7, ""dream_material"": 12, ""memory_fragments"": 4}",0.5,300,0
+recipe_GU_DREAM_PILLOW_5_1,GU_DREAM_PILLOW,5,1,"{""GU_DREAM_WINGS"": {""qty"": 1, ""rank"": 6}}","{""nectar"": 7, ""soul_qi"": 6, ""sealing_stone"": 7, ""dream_path_material"": 12, ""memory_fragments"": 4}",0.5,300,0
 recipe_GU_DREAM_PUDDLE_1_1_1,GU_DREAM_PUDDLE_1,1,1,{},"{""dream_sand_grain"": 5}",0.81,20,0
 recipe_GU_DREAM_PUDDLE_2_2_1,GU_DREAM_PUDDLE_2,2,1,{},"{""dream_mist_petal"": 3}",0.8,40,0
 recipe_GU_DREAM_PUDDLE_3_3_1,GU_DREAM_PUDDLE_3,3,1,"{""GU_DREAM_PUDDLE_2"": {""qty"": 1, ""rank"": 2}}","{""dream_mist_dew"": 5}",0.7,80,0
 recipe_GU_DREAM_PUDDLE_4_4_1,GU_DREAM_PUDDLE_4,4,1,"{""GU_DREAM_PUDDLE_3"": {""qty"": 1, ""rank"": 3}}","{""dream_bubble_film"": 6}",0.6,150,0
-recipe_GU_DREAM_PUDDLE_5_5_1,GU_DREAM_PUDDLE_5,5,1,"{""GU_DREAM_PUDDLE_4"": {""qty"": 1, ""rank"": 4}}","{""dream_material"": 10}",0.072,300,0
+recipe_GU_DREAM_PUDDLE_5_5_1,GU_DREAM_PUDDLE_5,5,1,"{""GU_DREAM_PUDDLE_4"": {""qty"": 1, ""rank"": 4}}","{""dream_path_material"": 10}",0.072,300,0
 recipe_GU_DREAM_PUDDLE_I_6_1,GU_DREAM_PUDDLE_I,6,1,"{""GU_DREAM_PUDDLE_5"": {""qty"": 1, ""rank"": 5}}","{""immortal_essence"": 1, ""immortal_dream_tapestry_silk"": 10}",0.05,600,100
 recipe_GU_DREAM_PUDDLE_I_7_1,GU_DREAM_PUDDLE_I,7,1,"{""GU_DREAM_PUDDLE_I"": {""qty"": 1, ""rank"": 6}}","{""immortal_essence"": 2, ""myriad_dream_crystal_flower"": 15}",0.01,0,200
 recipe_GU_DREAM_PUDDLE_I_8_1,GU_DREAM_PUDDLE_I,8,1,"{""GU_DREAM_PUDDLE_I"": {""qty"": 1, ""rank"": 7}}","{""immortal_essence"": 5, ""deep_dream_immortal_sand"": 24}",0.0001,0,500
 recipe_GU_DREAM_PUDDLE_I_9_1,GU_DREAM_PUDDLE_I,9,1,"{""GU_DREAM_PUDDLE_I"": {""qty"": 1, ""rank"": 8}}","{""dream_realm_core"": 30, ""immortal_essence"": 10}",1e-05,0,1600
 recipe_GU_DREAM_SEEK_1_1_1,GU_DREAM_SEEK_1,1,1,{},"{""dream_sand_grain"": 5}",0.81,20,0
 recipe_GU_DREAM_SLEEPWALK_I_6_1,GU_DREAM_SLEEPWALK_I,6,1,"{""GU_DREAM_PUDDLE_5"": {""qty"": 1, ""rank"": 5}}","{""immortal_essence"": 1, ""immortal_dream_tapestry_silk"": 10}",0.05,600,100
-recipe_GU_DREAM_SOUL_ENTER_5_5_1,GU_DREAM_SOUL_ENTER_5,5,1,"{""GU_DREAM_PUDDLE_4"": {""qty"": 1, ""rank"": 4}}","{""dream_material"": 8}",0.5,300,0
+recipe_GU_DREAM_SOUL_ENTER_5_5_1,GU_DREAM_SOUL_ENTER_5,5,1,"{""GU_DREAM_PUDDLE_4"": {""qty"": 1, ""rank"": 4}}","{""dream_path_material"": 8}",0.5,300,0
 recipe_GU_DREAM_SWEAT_BUTTERFLY_3_1,GU_DREAM_SWEAT_BUTTERFLY,3,1,"{""GU_WHITE_COCOON"": {""qty"": 1, ""rank"": 2}}","{""nectar"": 3, ""gu_master_blood"": 5, ""restriction_iron_chain"": 2}",0.63,120,0
-recipe_GU_DREAM_UNRAVEL_5_5_1,GU_DREAM_UNRAVEL_5,5,1,"{""GU_DREAM_PUDDLE_4"": {""qty"": 1, ""rank"": 4}}","{""dream_material"": 8}",0.5,300,0
+recipe_GU_DREAM_UNRAVEL_5_5_1,GU_DREAM_UNRAVEL_5,5,1,"{""GU_DREAM_PUDDLE_4"": {""qty"": 1, ""rank"": 4}}","{""dream_path_material"": 8}",0.5,300,0
 recipe_GU_DREAM_WEAVE_4_4_1,GU_DREAM_WEAVE_4,4,1,"{""GU_DREAM_SWEAT_BUTTERFLY"": {""qty"": 1, ""rank"": 3}}","{""dream_bubble_film"": 6}",0.6,150,0
 recipe_GU_DREAM_WEAVE_IMMORTAL_I_7_1,GU_DREAM_WEAVE_IMMORTAL_I,7,1,"{""GU_DREAM_WINGS"": {""qty"": 1, ""rank"": 6}}","{""immortal_essence"": 2, ""myriad_dream_crystal_flower"": 15}",0.01,0,200
-recipe_GU_DREAM_WINGS_6_1,GU_DREAM_WINGS,6,1,"{""GU_DREAM_WINGS"": {""qty"": 1, ""rank"": 6}}","{""nectar"": 8, ""soul_qi"": 8, ""dream_material"": 24, ""memory_fragments"": 5, ""boundless_space_domain_stone"": 11}",0.05,600,100
+recipe_GU_DREAM_WINGS_6_1,GU_DREAM_WINGS,6,1,"{""GU_DREAM_WINGS"": {""qty"": 1, ""rank"": 6}}","{""nectar"": 8, ""soul_qi"": 8, ""dream_path_material"": 24, ""memory_fragments"": 5, ""boundless_space_domain_stone"": 11}",0.05,600,100
 recipe_GU_DREAM_YELLOW_MILLET_I_8_1,GU_DREAM_YELLOW_MILLET_I,8,1,"{""GU_PHOENIX_ROC_PHANTOM_DREAM_ARMAMENTS"": {""qty"": 1, ""rank"": 7}}","{""immortal_essence"": 5, ""deep_dream_immortal_sand"": 20}",0.0001,0,500
 recipe_GU_EAGLE_WINGS_3_1,GU_EAGLE_WINGS,3,1,"{""GU_EAGLE_WINGS"": {""qty"": 1, ""rank"": 3}}","{""flying_fox_fur"": 5, ""featherman_feather"": 6, ""swift_wind_feather"": 6}",0.7,80,0
 recipe_GU_EARTH_BASTION_6_1,GU_EARTH_BASTION,6,1,"{""GU_SPRING_EGG"": {""qty"": 1, ""rank"": 5}}","{""earth_qi"": 7, ""jade_stone"": 8, ""stone_man_rice"": 7, ""desolate_earth_spirit_stone"": 24, ""immortal_formation_core_stone"": 11}",0.05,900,150
@@ -1115,7 +1115,7 @@ recipe_GU_PHANTOM_SOUND_1_1_1,GU_PHANTOM_SOUND_1,1,1,{},"{""phantom_smoke_trace"
 recipe_GU_PHANTOM_STEP_3_3_1,GU_PHANTOM_STEP_3,3,1,"{""GU_PHANTOM_MIRAGE_2"": {""qty"": 1, ""rank"": 2}}","{""mirage_glimmer_sand"": 5}",0.7,80,0
 recipe_GU_PHANTOM_VOID_FORM_5_5_1,GU_PHANTOM_VOID_FORM_5,5,1,"{""GU_PHANTOM_MIRAGE_4"": {""qty"": 1, ""rank"": 4}}","{""phantom_mirage_core"": 8}",0.5,300,0
 recipe_GU_PHANTOM_WORLD_5_5_1,GU_PHANTOM_WORLD_5,5,1,"{""GU_PHANTOM_MIRAGE_4"": {""qty"": 1, ""rank"": 4}}","{""phantom_mirage_core"": 8}",0.5,300,0
-recipe_GU_PHOENIX_ROC_PHANTOM_DREAM_ARMAMENTS_7_1,GU_PHOENIX_ROC_PHANTOM_DREAM_ARMAMENTS,7,1,"{""GU_DREAM_WINGS"": {""qty"": 1, ""rank"": 6}}","{""soul_qi"": 16, ""star_thoughts"": 10, ""dream_material"": 48, ""dream_realm_core"": 1, ""memory_fragments"": 10, ""golden_crow_meteor"": 16}",0.01,0,200
+recipe_GU_PHOENIX_ROC_PHANTOM_DREAM_ARMAMENTS_7_1,GU_PHOENIX_ROC_PHANTOM_DREAM_ARMAMENTS,7,1,"{""GU_DREAM_WINGS"": {""qty"": 1, ""rank"": 6}}","{""soul_qi"": 16, ""star_thoughts"": 10, ""dream_path_material"": 48, ""dream_realm_core"": 1, ""memory_fragments"": 10, ""golden_crow_meteor"": 16}",0.01,0,200
 recipe_GU_POEM_CHANT_9_1,GU_POEM_CHANT,9,1,"{""GU_SHANG_SOUND"": {""qty"": 1, ""rank"": 8}}","{""sound_stone"": 18, ""musical_beast"": 18, ""sound_crystal"": 18, ""immortal_apertures_shards"": 18, ""great_dao_primordial_resonance"": 25}",1e-05,0,800
 recipe_GU_POEM_IMMORTAL_9_1,GU_POEM_IMMORTAL,9,1,"{""GU_INFO_LETTER_I"": {""qty"": 1, ""rank"": 8}}","{""book_worm"": 18, ""heaven_qi"": 18, ""star_fragment"": 18, ""immortal_apertures_shards"": 18, ""primordial_destiny_scripture"": 52}",1e-05,0,800
 recipe_GU_POISON_BLOOD_CORRUPT_I_8_1,GU_POISON_BLOOD_CORRUPT_I,8,1,"{""GU_POISON_STING_I"": {""qty"": 1, ""rank"": 7}}","{""immortal_essence"": 5, ""myriad_toxic_abyssal_corpse"": 20}",0.0001,0,500
