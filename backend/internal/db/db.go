@@ -150,8 +150,11 @@ func InitSchema() error {
 	if err := ensureAdmin(); err != nil {
 		return fmt.Errorf("ensure admin: %w", err)
 	}
+	if err := seedQuestsFromCSV(); err != nil {
+		logger.S.Warnf("seedQuestsFromCSV: %v", err)
+	}
 
-	logger.S.Info("Database schema initialized successfully (seed skipped, use admin panel to import data)")
+	logger.S.Info("Database schema initialized successfully")
 	return nil
 }
 

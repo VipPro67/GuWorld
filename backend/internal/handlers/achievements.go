@@ -56,7 +56,10 @@ var achievementRegistry = []AchievementDef{
 	{ID: "human_qi_10000", Name: "Nhân Khí Thông Thiên", Description: "Đạt 10.000 Nhân Khí", Icon: "🌪️", HasFrame: true, RewardType: "immortal_stones", RewardVal: 30, RewardLabel: "30 Tiên Nguyên Thạch"},
 	{ID: "human_qi_100000", Name: "Nhân Khí Vạn Vật", Description: "Đạt 100.000 Nhân Khí", Icon: "🌪️", HasFrame: true, RewardType: "immortal_stones", RewardVal: 300, RewardLabel: "300 Tiên Nguyên Thạch"},
 
-	{ID: "soul_awaken", Name: "Hồn Phách Hiển Hiện", Description: "Hồn phách thức tỉnh (SoulHP > 100)", Icon: "👻", RewardType: "primeval_stones", RewardVal: 500, RewardLabel: "500 Nguyên Thạch"},
+	{ID: "soul_awaken", Name: "Hồn Phách Hiển Hiện", Description: "Hồn phách thức tỉnh (SoulHP >= 100)", Icon: "👻", RewardType: "primeval_stones", RewardVal: 500, RewardLabel: "500 Nguyên Thạch"},
+
+	{ID: "wall_crack_50", Name: "Bích Liệt Tiên Phong", Description: "Xung kích bích chướng Không Khiếu đạt 50%", Icon: "⚡", RewardType: "primeval_stones", RewardVal: 500, RewardLabel: "500 Nguyên Thạch"},
+	{ID: "wall_crack_100", Name: "Phá Bích Đột Phá", Description: "Xung kích bích chướng Không Khiếu đạt 100%", Icon: "💥", HasFrame: true, RewardType: "primeval_stones", RewardVal: 1000, RewardLabel: "1.000 Nguyên Thạch"},
 }
 
 type PlayerAchievementData struct {
@@ -206,7 +209,7 @@ func ClaimAchievement(c *gin.Context) {
 func checkAchievementCondition(ach *AchievementDef, player *models.Player) bool {
 	switch ach.ID {
 	case "first_combat":
-		return true
+		return len(player.ClearedCells) > 0 || player.ExploreCount > 0
 	case "rank_2":
 		return player.Rank >= 2
 	case "rank_3":
@@ -246,15 +249,17 @@ func checkAchievementCondition(ach *AchievementDef, player *models.Player) bool 
 	case "explorer_500":
 		return len(player.VisitedSubZones) >= 500
 	case "explorer_1000":
-		return len(player.VisitedSubZones) >= 1000
+		return len(player.VisitedSubZones) >= 600
 	case "millionaire":
 		return player.PrimevalStones >= 1000000
 	case "human_qi_1000":
 		return player.HumanQi >= 1000
 	case "human_qi_10000":
 		return player.HumanQi >= 10000
+	case "human_qi_100000":
+		return player.HumanQi >= 100000
 	case "soul_awaken":
-		return player.SoulHP > 100
+		return player.SoulHP >= 100
 	case "wall_crack_50":
 		return player.WallProgress >= 0.5
 	case "wall_crack_100":

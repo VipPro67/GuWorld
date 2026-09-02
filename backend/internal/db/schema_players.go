@@ -170,8 +170,16 @@ func schemaPlayerExtras() error {
 		milestone1_rewarded BOOLEAN NOT NULL DEFAULT false,
 		milestone2_rewarded BOOLEAN NOT NULL DEFAULT false,
 		milestone3_rewarded BOOLEAN NOT NULL DEFAULT false,
+		milestone4_rewarded BOOLEAN NOT NULL DEFAULT false,
+		milestone5_rewarded BOOLEAN NOT NULL DEFAULT false,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("referrals_milestone_cols", `
+	ALTER TABLE referrals ADD COLUMN IF NOT EXISTS milestone4_rewarded BOOLEAN NOT NULL DEFAULT false;
+	ALTER TABLE referrals ADD COLUMN IF NOT EXISTS milestone5_rewarded BOOLEAN NOT NULL DEFAULT false;
+	`); err != nil {
 		return err
 	}
 	if err := execSchema("referrals_referrer_idx", `

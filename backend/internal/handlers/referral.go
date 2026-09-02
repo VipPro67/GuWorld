@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -13,6 +14,11 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
+
+// BindReferralRequest represents the request body to bind a referral code
+type BindReferralRequest struct {
+	RefCode string `json:"ref_code" binding:"required"`
+}
 
 // ClaimReferralRequest represents the body of a claim request
 type ClaimReferralRequest struct {
@@ -51,13 +57,13 @@ func ClaimReferralReward(c *gin.Context) {
 	var refID uuid.UUID
 	var hasDeposited bool
 	var depositAmountStones int
-	var milestone1Rewarded, milestone2Rewarded, milestone3Rewarded bool
+	var milestone1Rewarded, milestone2Rewarded, milestone3Rewarded, milestone4Rewarded, milestone5Rewarded bool
 
 	err = tx.QueryRow(`
-		SELECT id, has_deposited, deposit_amount_stones, milestone1_rewarded, milestone2_rewarded, milestone3_rewarded
+		SELECT id, has_deposited, deposit_amount_stones, milestone1_rewarded, milestone2_rewarded, milestone3_rewarded, milestone4_rewarded, milestone5_rewarded
 		FROM referrals
 		WHERE referee_id = $1 AND referrer_id = $2
-	`, refereeUUID, playerID).Scan(&refID, &hasDeposited, &depositAmountStones, &milestone1Rewarded, &milestone2Rewarded, &milestone3Rewarded)
+	`, refereeUUID, playerID).Scan(&refID, &hasDeposited, &depositAmountStones, &milestone1Rewarded, &milestone2Rewarded, &milestone3Rewarded, &milestone4Rewarded, &milestone5Rewarded)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Referral relationship not found or not your referee"})
 		return
@@ -109,15 +115,23 @@ func ClaimReferralReward(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đã nhận mốc này rồi."})
 			return
 		}
+		stonesAdded = 100
+		milestone1Rewarded = true
+		message = "Nhận thành công 100 Nguyên Thạch (Tân Thủ)!"
+	case 2:
+		if milestone2Rewarded {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đã nhận mốc này rồi."})
+			return
+		}
 		if refereeRank < 2 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đệ tử chưa đạt Nhị Chuyển."})
 			return
 		}
-		stonesAdded = 500
-		milestone1Rewarded = true
-		message = "Nhận thành công 500 Nguyên Thạch!"
-	case 2:
-		if milestone2Rewarded {
+		stonesAdded = 200
+		milestone2Rewarded = true
+		message = "Nhận thành công 200 Nguyên Thạch (Nhị Chuyển)!"
+	case 3:
+		if milestone3Rewarded {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đã nhận mốc này rồi."})
 			return
 		}
@@ -140,15 +154,26 @@ func ClaimReferralReward(c *gin.Context) {
 			Equipped:   false,
 			IsVital:    false,
 		}
-		milestone2Rewarded = true
-		message = fmt.Sprintf("Nhận thành công 1 %s!", guSpec.Name)
-		// Save the granted Gu immediately instead of rewriting the whole inventory
+		milestone3Rewarded = true
+		message = fmt.Sprintf("Nhận thành công 1 %s (Tam Chuyển)!", guSpec.Name)
 		if err := db.AddPlayerGu(tx, playerID.String(), newGu); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save Gu inventory"})
 			return
 		}
-	case 3:
-		if milestone3Rewarded {
+	case 4:
+		if milestone4Rewarded {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đã nhận mốc này rồi."})
+			return
+		}
+		if refereeRank < 4 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Đệ tử chưa đạt Tứ Chuyển."})
+			return
+		}
+		stonesAdded = 500
+		milestone4Rewarded = true
+		message = "Nhận thành công 500 Nguyên Thạch (Tứ Chuyển)!"
+	case 5:
+		if milestone5Rewarded {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đã nhận mốc này rồi."})
 			return
 		}
@@ -156,14 +181,14 @@ func ClaimReferralReward(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đệ tử chưa nạp tiền."})
 			return
 		}
-		commission := int(float64(depositAmountStones) * 0.10)
+		commission := int(float64(depositAmountStones) * 0.05)
 		if commission <= 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Hoa hồng không hợp lệ (số tiền nạp quá nhỏ)."})
 			return
 		}
 		stonesAdded = commission
-		milestone3Rewarded = true
-		message = fmt.Sprintf("Nhận thành công %d Nguyên Thạch tiền hoa hồng!", commission)
+		milestone5Rewarded = true
+		message = fmt.Sprintf("Nhận thành công %d Nguyên Thạch tiền hoa hồng nạp (5%%)!", commission)
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Mốc nhận thưởng không hợp lệ."})
 		return
@@ -179,9 +204,9 @@ func ClaimReferralReward(c *gin.Context) {
 	}
 	_, err = tx.Exec(`
 		UPDATE referrals 
-		SET milestone1_rewarded = $1, milestone2_rewarded = $2, milestone3_rewarded = $3 
-		WHERE id = $4
-	`, milestone1Rewarded, milestone2Rewarded, milestone3Rewarded, refID)
+		SET milestone1_rewarded = $1, milestone2_rewarded = $2, milestone3_rewarded = $3, milestone4_rewarded = $4, milestone5_rewarded = $5
+		WHERE id = $6
+	`, milestone1Rewarded, milestone2Rewarded, milestone3Rewarded, milestone4Rewarded, milestone5Rewarded, refID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update milestone flags"})
 		return
@@ -314,22 +339,27 @@ func GetReferralStats(c *gin.Context) {
 		return
 	}
 
-	// Fetch player's ref code
+	// Fetch player's ref code and rank
 	var refCode string
+	var rank int
 	err := db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT ref_code 
+		SELECT ref_code, rank 
 		FROM players 
 		WHERE id = $1
-	`, playerID).Scan(&refCode)
+	`, playerID).Scan(&refCode, &rank)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch referral code"})
 		return
 	}
 
+	var hasReferrer bool
+	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM referrals WHERE referee_id = $1)`, playerID).Scan(&hasReferrer)
+	canBindRef := !hasReferrer && rank == 1
+
 	// Fetch referrals stats
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
-		SELECT r.id, p.username, p.rank, r.is_suspicious, r.has_deposited, 
-		       r.milestone1_rewarded, r.milestone2_rewarded, r.milestone3_rewarded, r.created_at,
+		SELECT p.id, p.username, p.rank, r.is_suspicious, r.has_deposited, 
+		       r.milestone1_rewarded, r.milestone2_rewarded, r.milestone3_rewarded, r.milestone4_rewarded, r.milestone5_rewarded, r.created_at,
 		       (
 		           SELECT COUNT(*) >= 2 
 		           FROM player_quest_progress pqp 
@@ -355,6 +385,8 @@ func GetReferralStats(c *gin.Context) {
 		Milestone1Rewarded bool      `json:"milestone1_rewarded"`
 		Milestone2Rewarded bool      `json:"milestone2_rewarded"`
 		Milestone3Rewarded bool      `json:"milestone3_rewarded"`
+		Milestone4Rewarded bool      `json:"milestone4_rewarded"`
+		Milestone5Rewarded bool      `json:"milestone5_rewarded"`
 		IsVerified         bool      `json:"is_verified"`
 		CreatedAt          time.Time `json:"created_at"`
 	}
@@ -365,7 +397,7 @@ func GetReferralStats(c *gin.Context) {
 		var completedQuests bool
 		err := rows.Scan(
 			&r.ID, &r.Username, &r.Rank, &r.IsSuspicious, &r.HasDeposited,
-			&r.Milestone1Rewarded, &r.Milestone2Rewarded, &r.Milestone3Rewarded, &r.CreatedAt, &completedQuests,
+			&r.Milestone1Rewarded, &r.Milestone2Rewarded, &r.Milestone3Rewarded, &r.Milestone4Rewarded, &r.Milestone5Rewarded, &r.CreatedAt, &completedQuests,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse referee details"})
@@ -377,8 +409,104 @@ func GetReferralStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"ref_code":  refCode,
-		"referees":  referees,
-		"total_ref": len(referees),
+		"ref_code":     refCode,
+		"referees":     referees,
+		"total_ref":    len(referees),
+		"has_referrer": hasReferrer,
+		"can_bind_ref": canBindRef,
 	})
+}
+
+// BindReferralCode allows Rank 1 players who haven't set a referrer to bind one.
+func BindReferralCode(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var req BindReferralRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Vui lòng nhập mã giới thiệu."})
+		return
+	}
+
+	trimmedRef := strings.TrimSpace(req.RefCode)
+	if trimmedRef == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Mã giới thiệu không được để trống."})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kết nối cơ sở dữ liệu."})
+		return
+	}
+	defer tx.Rollback()
+
+	// 1. Check player rank (Must be Rank 1)
+	var rank int
+	err = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, playerID).Scan(&rank)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra thông tin người chơi."})
+		return
+	}
+	if rank > 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chức năng nhập mã giới thiệu chỉ dành cho Cổ Sư Nhất Chuyển."})
+		return
+	}
+
+	// 2. Check if player has already entered a referral code
+	var existingCount int
+	err = tx.QueryRow(`SELECT COUNT(*) FROM referrals WHERE referee_id = $1`, playerID).Scan(&existingCount)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cơ sở dữ liệu."})
+		return
+	}
+	if existingCount > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn đã nhập mã giới thiệu trước đó rồi."})
+		return
+	}
+
+	// 3. Query referrer by ref_code
+	var referrerID uuid.UUID
+	err = tx.QueryRow(`SELECT id FROM players WHERE ref_code = $1`, trimmedRef).Scan(&referrerID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Mã giới thiệu không tồn tại."})
+		return
+	}
+
+	if referrerID == playerID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể tự nhập mã giới thiệu của bản thân."})
+		return
+	}
+
+	// 4. Check suspicious IP/device
+	clientIP := c.ClientIP()
+	userAgent := c.Request.UserAgent()
+	var ipCount int
+	_ = tx.QueryRow("SELECT COUNT(*) FROM referrals WHERE referee_ip = $1 AND referee_device = $2", clientIP, userAgent).Scan(&ipCount)
+	isSuspicious := ipCount > 0
+
+	_, err = tx.Exec(`
+		INSERT INTO referrals (referrer_id, referee_id, referee_ip, referee_device, is_suspicious)
+		VALUES ($1, $2, $3, $4, $5)
+	`, referrerID, playerID, clientIP, userAgent, isSuspicious)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tạo liên kết giới thiệu: " + err.Error()})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu dữ liệu."})
+		return
+	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &playerID, Action: "referral.bind", EntityType: "referral",
+		RequestSummary: fmt.Sprintf("nhập mã giới thiệu %s từ người chơi %s", trimmedRef, referrerID.String()),
+		IPAddress: clientIP, Success: true,
+	})
+
+	c.JSON(http.StatusOK, gin.H{"message": "Nhập mã giới thiệu thành công!"})
 }

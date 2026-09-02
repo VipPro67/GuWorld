@@ -82,17 +82,19 @@ func CheckQuest(questID string, p *models.Player) bool {
 		for _, g := range p.GuInventory {
 			if spec, ok := models.GetGu(g.GuID, g.Rank); ok && spec.Rank >= 2 {
 				return true
+			} else if g.Rank >= 2 {
+				return true
 			}
 		}
 		return false
 	case "quest_5_fame":
 		return len(p.ClearedCells) >= 5
-	case "quest_6_rank_5":
-		return p.Rank >= 5
+	case "quest_6_rank_3":
+		return p.Rank >= 3
 	case "quest_7_stone_hoarder":
 		return p.PrimevalStones >= 5000
-	case "quest_8_immortal_capital":
-		return p.ImmortalStones >= 100.0
+	case "quest_8_rank_4":
+		return p.Rank >= 4
 	case "quest_9_liquor_worm":
 		for _, g := range p.GuInventory {
 			if g.GuID == "GU_LIQUOR_WORM" {
@@ -109,19 +111,33 @@ func CheckQuest(questID string, p *models.Player) bool {
 		return false
 	case "quest_11_gu_collector":
 		return len(p.GuInventory) >= 10
-	case "quest_12_immortal_gu_owner":
+	case "quest_12_rank_5":
+		return p.Rank >= 5
+	case "quest_13_gather_lan_flower":
+		qty, _ := InventorySvc.GetQuantity(db.DB, p.ID.String(), "moon_orchid_petal")
+		return qty >= 50
+	case "quest_14_immortal_capital":
+		return p.ImmortalStones >= 100
+	case "quest_15_immortal_gu_owner":
 		for _, g := range p.GuInventory {
 			if spec, ok := models.GetGu(g.GuID, g.Rank); ok && spec.Rank >= 6 {
+				return true
+			} else if g.Rank >= 6 {
 				return true
 			}
 		}
 		return false
-	case "quest_13_gather_lan_flower":
-		qty, _ := InventorySvc.GetQuantity(db.DB, p.ID.String(), "moon_orchid_petal")
-		return qty >= 50
-	case "quest_14_immortal_material":
+	case "quest_16_immortal_material":
 		qty, _ := InventorySvc.GetQuantity(db.DB, p.ID.String(), "immortal_blood")
 		return qty >= 1
+	case "quest_17_rank_6":
+		return p.Rank >= 6
+	case "quest_18_human_qi":
+		return p.HumanQi >= 500
+	case "quest_19_soul_growth":
+		return p.SoulHP >= 100
+	case "quest_20_exploration":
+		return len(p.VisitedSubZones) >= 20
 	default:
 		return false
 	}
@@ -315,40 +331,8 @@ func applyQuestRewardsTx(tx *sql.Tx, player *models.Player, rewards []QuestRewar
 }
 
 func buildQuestUpdateQuery(player *models.Player) (string, []interface{}) {
-	baseFields := []string{"human_qi"}
-	baseVals := []interface{}{player.HumanQi}
-	extraFields := []string{}
-	extraVals := []interface{}{}
-
-	if player.PrimevalStones != 0 {
-		extraFields = append(extraFields, "primeval_stones")
-		extraVals = append(extraVals, player.PrimevalStones)
-	}
-	if player.ImmortalStones != 0 {
-		extraFields = append(extraFields, "immortal_stones")
-		extraVals = append(extraVals, player.ImmortalStones)
-	}
-
-	allFields := append(baseFields, extraFields...)
-	allVals := append(baseVals, extraVals...)
-
-	placeholders := make([]string, len(allFields))
-	for i := range allFields {
-		placeholders[i] = fmt.Sprintf("$%d", i+1)
-	}
-
-	setClauses := make([]string, len(allFields))
-	for i, f := range allFields {
-		setClauses[i] = fmt.Sprintf("%s = %s", f, placeholders[i])
-	}
-
-	query := fmt.Sprintf("UPDATE players SET %s WHERE id = $%d",
-		strings.Join(setClauses, ", "),
-		len(allFields)+1,
-	)
-	allVals = append(allVals, player.ID)
-
-	return query, allVals
+	return "UPDATE players SET human_qi = $1, primeval_stones = $2, immortal_stones = $3 WHERE id = $4",
+		[]interface{}{player.HumanQi, player.PrimevalStones, player.ImmortalStones, player.ID}
 }
 
 func ListQuests(c *gin.Context) {

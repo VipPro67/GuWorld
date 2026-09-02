@@ -25,6 +25,7 @@ import {
   TrendingUp,
   Leaf,
   RefreshCw,
+  UserPlus,
 } from "lucide-react";
 import { formatNumber, statusRemainLabel } from "@/lib/utils";
 import { formatGameEffects } from "@/lib/effects";
@@ -347,6 +348,7 @@ export const Aperture: React.FC<ApertureProps> = ({
   const [giftCodeInput, setGiftCodeInput] = useState("");
   const [giftCodeMsg, setGiftCodeMsg] = useState<string | null>(null);
   const [giftCodeLoading, setGiftCodeLoading] = useState(false);
+  const [bindRefInput, setBindRefInput] = useState("");
 
   useEffect(() => {
     if (activeTab !== "growth") return;
@@ -1174,6 +1176,44 @@ export const Aperture: React.FC<ApertureProps> = ({
               </div>
             </div>
 
+            {/* Bind Referral Code for Rank 1 players who haven't bound a referrer */}
+            {player?.rank === 1 && store.referralsData?.has_referrer === false && (
+              <div className="bg-amber-950/20 border border-amber-500/30 rounded-2xl p-3 sm:p-5 shadow-inner flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-mono font-bold text-amber-400 flex items-center gap-1.5">
+                    <UserPlus className="w-4 h-4" /> Bái Sư (Nhập Mã Giới Thiệu)
+                  </span>
+                  <span className="text-[10px] text-zinc-400 font-serif">
+                    Dành riêng cho Cổ Sư Nhất Chuyển chưa có sư phụ hướng dẫn.
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Mã sư phụ..."
+                    value={bindRefInput}
+                    onChange={(e) => setBindRefInput(e.target.value)}
+                    className="bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-xs font-mono text-zinc-200 focus:outline-none focus:border-amber-500 w-36 uppercase"
+                  />
+                  <button
+                    disabled={store.actionLoading || !bindRefInput.trim()}
+                    onClick={async () => {
+                      const res = await store.bindReferralCode(bindRefInput.trim());
+                      if (res?.success) {
+                        store.addToast(res.message || "Bái sư thành công!", "success");
+                        setBindRefInput("");
+                      } else {
+                        store.addToast(res?.message || "Lỗi", "error");
+                      }
+                    }}
+                    className="bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-mono font-bold px-3.5 py-1.5 rounded-xl transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                  >
+                    Bái Sư
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Gift Code Redeem Card */}
             <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-3 sm:p-5 shadow-inner flex flex-col gap-4">
               <div className="flex items-center gap-2 border-b border-zinc-900 pb-2.5">
@@ -1268,7 +1308,19 @@ export const Aperture: React.FC<ApertureProps> = ({
                   </thead>
                   <tbody>
                     {store.referralsData?.referees && store.referralsData.referees.length > 0 ? (
-                      store.referralsData.referees.map((referee: any) => (
+                      store.referralsData.referees.map((referee: {
+                        id: string;
+                        username: string;
+                        rank: number;
+                        is_suspicious: boolean;
+                        has_deposited: boolean;
+                        milestone1_rewarded: boolean;
+                        milestone2_rewarded: boolean;
+                        milestone3_rewarded: boolean;
+                        milestone4_rewarded: boolean;
+                        milestone5_rewarded: boolean;
+                        is_verified: boolean;
+                      }) => (
                         <tr key={referee.id} className="border-b border-zinc-900 hover:bg-zinc-950/20">
                           <td className="py-3 font-semibold text-zinc-200">{referee.username}</td>
                           <td className="py-3 text-amber-500">{RANK_NAMES[referee.rank] || `Chuyển ${referee.rank}`}</td>
@@ -1285,32 +1337,57 @@ export const Aperture: React.FC<ApertureProps> = ({
                           </td>
                           <td className="py-3 text-right space-y-1">
                             <div className="flex flex-col gap-1 items-end">
-                              <div className={`flex items-center justify-between w-48 text-[10px] px-2 py-1 rounded ${referee.milestone1_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
-                                <span>Mốc 1 (Cấp 2):</span>
+                              {/* Mốc 1: Tân Thủ */}
+                              <div className={`flex items-center justify-between w-52 text-[10px] px-2 py-1 rounded ${referee.milestone1_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
+                                <span>Mốc 1 (Tân Thủ):</span>
                                 {referee.milestone1_rewarded ? (
-                                  <span>Đã nhận 500 NT</span>
-                                ) : (referee.is_verified && referee.rank >= 2) ? (
-                                  <button onClick={() => store.claimReferralReward(referee.id, 1)} disabled={store.actionLoading} className="bg-emerald-600/80 hover:bg-emerald-500 text-white px-2 py-0.5 rounded cursor-pointer disabled:opacity-50 transition-colors">Nhận 500 NT</button>
+                                  <span>Đã nhận 100 NT</span>
+                                ) : referee.is_verified ? (
+                                  <button onClick={() => store.claimReferralReward(referee.id, 1)} disabled={store.actionLoading} className="bg-emerald-600/80 hover:bg-emerald-500 text-white px-2 py-0.5 rounded cursor-pointer disabled:opacity-50 transition-colors">Nhận 100 NT</button>
                                 ) : (
                                   <span>Chưa đạt</span>
                                 )}
                               </div>
-                              <div className={`flex items-center justify-between w-48 text-[10px] px-2 py-1 rounded ${referee.milestone2_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
-                                <span>Mốc 2 (Cấp 3):</span>
+                              {/* Mốc 2: Nhị Chuyển */}
+                              <div className={`flex items-center justify-between w-52 text-[10px] px-2 py-1 rounded ${referee.milestone2_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
+                                <span>Mốc 2 (Nhị Chuyển):</span>
                                 {referee.milestone2_rewarded ? (
+                                  <span>Đã nhận 200 NT</span>
+                                ) : (referee.is_verified && referee.rank >= 2) ? (
+                                  <button onClick={() => store.claimReferralReward(referee.id, 2)} disabled={store.actionLoading} className="bg-emerald-600/80 hover:bg-emerald-500 text-white px-2 py-0.5 rounded cursor-pointer disabled:opacity-50 transition-colors">Nhận 200 NT</button>
+                                ) : (
+                                  <span>Chưa đạt</span>
+                                )}
+                              </div>
+                              {/* Mốc 3: Tam Chuyển */}
+                              <div className={`flex items-center justify-between w-52 text-[10px] px-2 py-1 rounded ${referee.milestone3_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
+                                <span>Mốc 3 (Tam Chuyển):</span>
+                                {referee.milestone3_rewarded ? (
                                   <span>Đã nhận Cổ trùng</span>
                                 ) : (referee.is_verified && referee.rank >= 3) ? (
-                                  <button onClick={() => store.claimReferralReward(referee.id, 2)} disabled={store.actionLoading} className="bg-emerald-600/80 hover:bg-emerald-500 text-white px-2 py-0.5 rounded cursor-pointer disabled:opacity-50 transition-colors">Nhận Cổ trùng</button>
+                                  <button onClick={() => store.claimReferralReward(referee.id, 3)} disabled={store.actionLoading} className="bg-emerald-600/80 hover:bg-emerald-500 text-white px-2 py-0.5 rounded cursor-pointer disabled:opacity-50 transition-colors">Nhận Cổ trùng</button>
                                 ) : (
                                   <span>Chưa đạt</span>
                                 )}
                               </div>
-                              <div className={`flex items-center justify-between w-48 text-[10px] px-2 py-1 rounded ${referee.milestone3_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : referee.has_deposited ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
-                                <span>Mốc 3 (Nạp thẻ):</span>
-                                {referee.milestone3_rewarded ? (
-                                  <span>Đã nhận (10%)</span>
+                              {/* Mốc 4: Tứ Chuyển */}
+                              <div className={`flex items-center justify-between w-52 text-[10px] px-2 py-1 rounded ${referee.milestone4_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
+                                <span>Mốc 4 (Tứ Chuyển):</span>
+                                {referee.milestone4_rewarded ? (
+                                  <span>Đã nhận 500 NT</span>
+                                ) : (referee.is_verified && referee.rank >= 4) ? (
+                                  <button onClick={() => store.claimReferralReward(referee.id, 4)} disabled={store.actionLoading} className="bg-emerald-600/80 hover:bg-emerald-500 text-white px-2 py-0.5 rounded cursor-pointer disabled:opacity-50 transition-colors">Nhận 500 NT</button>
+                                ) : (
+                                  <span>Chưa đạt</span>
+                                )}
+                              </div>
+                              {/* Mốc 5: Nạp Thẻ */}
+                              <div className={`flex items-center justify-between w-52 text-[10px] px-2 py-1 rounded ${referee.milestone5_rewarded ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : referee.has_deposited ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 'bg-zinc-900 text-zinc-500'}`}>
+                                <span>Mốc 5 (Nạp thẻ):</span>
+                                {referee.milestone5_rewarded ? (
+                                  <span>Đã nhận (5%)</span>
                                 ) : (referee.is_verified && referee.has_deposited) ? (
-                                  <button onClick={() => store.claimReferralReward(referee.id, 3)} disabled={store.actionLoading} className="bg-yellow-600/80 hover:bg-yellow-500 text-white px-2 py-0.5 rounded cursor-pointer disabled:opacity-50 transition-colors">Nhận (10%)</button>
+                                  <button onClick={() => store.claimReferralReward(referee.id, 5)} disabled={store.actionLoading} className="bg-yellow-600/80 hover:bg-yellow-500 text-white px-2 py-0.5 rounded cursor-pointer disabled:opacity-50 transition-colors">Nhận (5%)</button>
                                 ) : referee.has_deposited ? (
                                   <span>Chờ verified...</span>
                                 ) : (

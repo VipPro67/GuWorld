@@ -344,6 +344,7 @@ func SetupRouter() *gin.Engine {
 			player.PUT("/profile/settings", handlers.UpdateProfileSettings)
 			player.GET("/referrals", handlers.GetReferralStats)
 			player.POST("/referrals/claim", handlers.ClaimReferralReward)
+			player.POST("/referrals/bind", handlers.BindReferralCode)
 			player.POST("/simulate-deposit", handlers.SimulateDeposit)
 			player.POST("/avatar", handlers.UploadAvatar)
 			player.POST("/redeem-gift-code", handlers.RedeemGiftCode)

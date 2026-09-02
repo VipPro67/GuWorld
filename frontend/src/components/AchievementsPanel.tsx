@@ -12,7 +12,26 @@ import {
   ShieldAlert
 } from "lucide-react";
 import { useGameStore } from "@/store/useGameStore";
-import { checkQuest, formatRewards } from "@/data/quests";
+import { checkQuest, formatRewards, isClaimableAchievement } from "@/data/quests";
+
+interface AchievementItem {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  has_frame?: boolean;
+  reward_type?: string;
+  reward_val?: number;
+  reward_label?: string;
+}
+
+interface QuestItem {
+  id: string;
+  title: string;
+  desc: string;
+  req_desc: string;
+  rewards: Array<{ type: string; id?: string; amount: number; label: string }>;
+}
 
 export default function AchievementsPanel() {
   const store = useGameStore();
@@ -22,9 +41,10 @@ export default function AchievementsPanel() {
   useEffect(() => {
     store.fetchAchievements();
     store.fetchQuests();
+    // eslint-disable-next-deps
   }, []);
 
-  const isEarned = (id: string) => earnedAchievements.some((e: any) => e.achievement_id === id);
+  const isEarned = (id: string) => earnedAchievements.some((e: { achievement_id: string }) => e.achievement_id === id);
 
   const handleClaim = async (id: string) => {
     const result = await store.claimAchievement(id);
@@ -78,10 +98,10 @@ export default function AchievementsPanel() {
                 {selectedTitle && (
                   <div className="flex items-center gap-2 bg-zinc-950/80 px-3 py-1.5 rounded-xl border border-zinc-800">
                     <span className="text-lg">
-                      {achievements.find((a: any) => a.id === selectedTitle)?.icon || "🏆"}
+                      {achievements.find((a: AchievementItem) => a.id === selectedTitle)?.icon || "🏆"}
                     </span>
                     <span className="text-xs font-mono text-zinc-300">
-                      {achievements.find((a: any) => a.id === selectedTitle)?.name || selectedTitle}
+                      {achievements.find((a: AchievementItem) => a.id === selectedTitle)?.name || selectedTitle}
                     </span>
                   </div>
                 )}
@@ -89,7 +109,7 @@ export default function AchievementsPanel() {
                   <div className="flex items-center gap-2 bg-zinc-950/80 px-3 py-1.5 rounded-xl border border-zinc-800">
                     <ImageIcon className="w-4 h-4 text-purple-400" />
                     <span className="text-xs font-mono text-zinc-300">
-                      Frame: {achievements.find((a: any) => a.id === selectedFrame)?.name || selectedFrame}
+                      Frame: {achievements.find((a: AchievementItem) => a.id === selectedFrame)?.name || selectedFrame}
                     </span>
                   </div>
                 )}
@@ -107,8 +127,9 @@ export default function AchievementsPanel() {
               <p className="text-xs text-zinc-500 italic">Đang tải...</p>
             ) : (
               <div className="grid grid-cols-1 gap-3 max-h-[600px] overflow-y-auto pr-1">
-                {achievements.map((ach: any) => {
+                {achievements.map((ach: AchievementItem) => {
                   const earned = isEarned(ach.id);
+                  const canClaim = !earned && isClaimableAchievement(ach.id, store.player);
                   const isSelectedTitle = selectedTitle === ach.id;
                   const isSelectedFrame = selectedFrame === ach.id;
                   return (
@@ -117,6 +138,8 @@ export default function AchievementsPanel() {
                       className={`flex items-center justify-between p-3 rounded-xl border ${
                         earned
                           ? "bg-zinc-800/40 border-zinc-700"
+                          : canClaim
+                          ? "bg-amber-950/15 border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.08)]"
                           : "bg-zinc-950/40 border-zinc-900"
                       }`}
                     >
@@ -177,10 +200,15 @@ export default function AchievementsPanel() {
                           <Check className="w-5 h-5 text-green-400 shrink-0" />
                         ) : (
                           <button
+                            disabled={!canClaim || store.actionLoading}
                             onClick={() => handleClaim(ach.id)}
-                            className="text-[10px] px-3 py-1.5 rounded-lg font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition-all cursor-pointer shrink-0"
+                            className={`text-[10px] px-3 py-1.5 rounded-lg font-mono font-bold transition-all shrink-0 ${
+                              canClaim
+                                ? "bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-zinc-950 shadow-[0_0_10px_rgba(245,158,11,0.3)] active:scale-95 cursor-pointer"
+                                : "bg-zinc-900 text-zinc-650 border border-zinc-850 cursor-not-allowed"
+                            }`}
                           >
-                            Nhận
+                            {canClaim ? "Nhận" : "Chưa đạt"}
                           </button>
                         )}
                       </div>
@@ -223,7 +251,7 @@ function MainQuestsPanel() {
     }
   };
 
-  const buttonLabel = (q: any, isDone: boolean, canClaim: boolean) => {
+  const buttonLabel = (q: QuestItem, isDone: boolean, canClaim: boolean) => {
     if (isDone) return "ĐÃ NHẬN";
     if (!canClaim) return "CHƯA ĐẠT";
     const rewardStr = formatRewards(q.rewards);
@@ -243,7 +271,7 @@ function MainQuestsPanel() {
           </div>
         ) : (
           quests
-            .map((q: any) => {
+            .map((q: QuestItem) => {
               const isDone = completed.includes(q.id);
               const canClaim = !isDone && checkQuest(q.id, player, store.guDictionary || {});
 
@@ -274,10 +302,7 @@ function MainQuestsPanel() {
                   <button
                     disabled={isDone || !canClaim || store.actionLoading}
                     onClick={async () => {
-                      const res = await store.completeQuest(q.id);
-                      if (res && res.success) {
-                        store.addToast(res.message, "success");
-                      }
+                      await store.completeQuest(q.id);
                     }}
                     className={`px-3 py-1.5 rounded-xl text-[10px] font-bold font-mono transition-all shrink-0 cursor-pointer whitespace-nowrap max-w-[140px] sm:max-w-none truncate ${
                       isDone
