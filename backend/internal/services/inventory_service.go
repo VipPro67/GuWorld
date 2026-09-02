@@ -52,16 +52,13 @@ func (s *InventoryService) ListByPlayer(playerID string) ([]InventoryItem, error
 	return results, rows.Err()
 }
 
-// GetQuantity returns the quantity of a specific item, or 0 if not found.
+// GetQuantity returns the total quantity of a specific item across categories, or 0 if not found.
 func (s *InventoryService) GetQuantity(q QueryRower, playerID, itemID string) (int, error) {
 	var qty int
 	err := q.QueryRow(`
-		SELECT quantity FROM player_inventory_items
+		SELECT COALESCE(SUM(quantity), 0) FROM player_inventory_items
 		WHERE player_id = $1 AND item_id = $2
 	`, playerID, itemID).Scan(&qty)
-	if err == sql.ErrNoRows {
-		return 0, nil
-	}
 	if err != nil {
 		return 0, err
 	}
@@ -137,7 +134,7 @@ func (s *InventoryService) RemoveItem(tx *sql.Tx, playerID, itemID, category str
 	if current == quantity {
 		_, err = tx.Exec(`DELETE FROM player_inventory_items WHERE player_id = $1 AND item_id = $2 AND category = $3`, playerID, itemID, category)
 	} else {
-		_, err = tx.Exec(`UPDATE player_inventory_items SET quantity = quantity - $1, updated_at = NOW() WHERE player_id = $2 AND item_id = $3 AND category = $4`, quantity, playerID, itemID, category)
+		_, err = tx.Exec(`UPDATE player_inventory_items SET quantity = quantity - $1, updated_at = NOW() WHERE player_id = $2 AND item_id = $3 AND category = $4 AND quantity >= $1`, quantity, playerID, itemID, category)
 	}
 	return err
 }
@@ -230,21 +227,53 @@ func (s *InventoryService) BulkRemoveItems(tx *sql.Tx, playerID, category string
 		return nil
 	}
 
+	// First lock and verify quantities
+	rows, err := tx.Query(`
+		SELECT item_id, quantity FROM player_inventory_items
+		WHERE player_id = $1 AND category = $2 AND item_id = ANY($3)
+		FOR UPDATE
+	`, playerID, category, pq.Array(ids))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	avail := make(map[string]int)
+	for rows.Next() {
+		var id string
+		var q int
+		if err := rows.Scan(&id, &q); err != nil {
+			return err
+		}
+		avail[id] = q
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for i, id := range ids {
+		if avail[id] < qtys[i] {
+			return sql.ErrNoRows
+		}
+	}
+
 	// Decrement each row; rows with quantity <= 0 afterwards are deleted.
-	_, err := tx.Exec(`
-		WITH dec AS (
-			UPDATE player_inventory_items AS p
-			SET quantity = p.quantity - u.qty,
-			    updated_at = NOW()
-			FROM (
-				SELECT unnest($1::text[]) AS item_id, unnest($2::int[]) AS qty
-			) AS u(item_id, qty)
-			WHERE p.player_id = $3 AND p.item_id = u.item_id AND p.category = $4
-			RETURNING p.item_id
-		)
-		DELETE FROM player_inventory_items AS p
-		USING dec
-		WHERE p.player_id = $3 AND p.item_id = dec.item_id AND p.category = $4 AND p.quantity <= 0
+	_, err = tx.Exec(`
+		UPDATE player_inventory_items AS p
+		SET quantity = p.quantity - u.qty,
+		    updated_at = NOW()
+		FROM (
+			SELECT unnest($1::text[]) AS item_id, unnest($2::int[]) AS qty
+		) AS u(item_id, qty)
+		WHERE p.player_id = $3 AND p.item_id = u.item_id AND p.category = $4 AND p.quantity >= u.qty
 	`, pq.Array(ids), pq.Array(qtys), playerID, category)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(`
+		DELETE FROM player_inventory_items
+		WHERE player_id = $1 AND category = $2 AND item_id = ANY($3) AND quantity <= 0
+	`, playerID, category, pq.Array(ids))
 	return err
 }

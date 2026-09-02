@@ -6,8 +6,8 @@ import (
 )
 
 func TestMaxDailyInstanceEntriesConstant(t *testing.T) {
-	if MaxDailyInstanceEntries != 2 {
-		t.Fatalf("MaxDailyInstanceEntries = %d, expected 2", MaxDailyInstanceEntries)
+	if MaxDailyInstanceEntries != 5 {
+		t.Fatalf("MaxDailyInstanceEntries = %d, expected 5", MaxDailyInstanceEntries)
 	}
 }
 

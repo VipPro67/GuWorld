@@ -354,10 +354,13 @@ func AutoCombatStart(c *gin.Context) {
 				}
 				if _, hasHeal := item.Effects["restore_hp"]; hasHeal {
 					remove := inv.Quantity
-					if remove > remaining {
-						remove = remaining
+					_, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, authID.String(), inv.ItemID, "consumables", "materials", "other")
+					if cat == "" {
+						cat = "consumables"
 					}
-					InventorySvc.RemoveItem(tx, authID.String(), inv.ItemID, "materials", remove)
+					if err := InventorySvc.RemoveItem(tx, authID.String(), inv.ItemID, cat, remove); err != nil {
+						logger.S.Warnf("Failed to remove consumable %s: %v", inv.ItemID, err)
+					}
 					remaining -= remove
 				}
 			}
@@ -839,7 +842,13 @@ func AutoCombatStart(c *gin.Context) {
 						if remove > remaining {
 							remove = remaining
 						}
-						_ = InventorySvc.RemoveItem(tx, simAlly.ID, inv.ItemID, "materials", remove)
+						_, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, simAlly.ID, inv.ItemID, "consumables", "materials", "other")
+						if cat == "" {
+							cat = "consumables"
+						}
+						if err := InventorySvc.RemoveItem(tx, simAlly.ID, inv.ItemID, cat, remove); err != nil {
+							logger.S.Warnf("Failed to remove consumable %s for ally %s: %v", inv.ItemID, simAlly.ID, err)
+						}
 						remaining -= remove
 					}
 				}
@@ -1232,7 +1241,13 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 					if remove > remaining {
 						remove = remaining
 					}
-					InventorySvc.RemoveItem(tx, player.ID.String(), inv.ItemID, "materials", remove)
+					_, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, player.ID.String(), inv.ItemID, "consumables", "materials", "other")
+					if cat == "" {
+						cat = "consumables"
+					}
+					if err := InventorySvc.RemoveItem(tx, player.ID.String(), inv.ItemID, cat, remove); err != nil {
+						logger.S.Warnf("Failed to remove consumable %s: %v", inv.ItemID, err)
+					}
 					remaining -= remove
 				}
 			}
@@ -1631,7 +1646,13 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 						if remove > remaining {
 							remove = remaining
 						}
-						_ = InventorySvc.RemoveItem(tx, simAlly.ID, inv.ItemID, "materials", remove)
+						_, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, simAlly.ID, inv.ItemID, "consumables", "materials", "other")
+						if cat == "" {
+							cat = "consumables"
+						}
+						if err := InventorySvc.RemoveItem(tx, simAlly.ID, inv.ItemID, cat, remove); err != nil {
+							logger.S.Warnf("Failed to remove consumable %s for ally %s: %v", inv.ItemID, simAlly.ID, err)
+						}
 						remaining -= remove
 					}
 				}

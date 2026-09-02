@@ -348,9 +348,6 @@ func ResolveTribulation(c *gin.Context) {
 
 	// Helper: recalc next_year, check breakthrough
 	handleSuccess := func(tribType string) {
-		ap.State = "STABLE"
-		ap.ApertureHP = ap.MaxApertureHP
-
 		ap.TribulationCount++
 		switch tribType {
 		case "EARTH_CALAMITY":
@@ -416,6 +413,17 @@ func ResolveTribulation(c *gin.Context) {
 				ap.NextTribulationYear = guardNextTribulationYear(nextYear, ap.InternalYearsPassed)
 			}
 		}
+
+		// Update current event status and dead enemies to evaluate stability correctly
+		_, _ = tx.Exec(`UPDATE tribulation_events SET status = 'SUCCESS', aperture_hp_after = $1, ended_at = $2 WHERE id = $3`, ap.ApertureHP, now, ev.ID)
+		_, _ = tx.Exec(`UPDATE tribulation_enemies SET is_dead = true WHERE event_id = $1`, ev.ID)
+
+		hasActive, errActive := db.HasActiveTribulationOrEnemies(tx, ap.ID)
+		if errActive == nil && !hasActive {
+			ap.State = "STABLE"
+		} else {
+			ap.State = "TRIBULATION_ACTIVE"
+		}
 	}
 
 	if remainingEnemies == 0 {
@@ -428,6 +436,7 @@ func ResolveTribulation(c *gin.Context) {
 		}
 		updatedDaoMarks = daoMap
 
+		ap.ApertureHP = ap.MaxApertureHP
 		handleSuccess(ev.TribulationType)
 
 		_, err = tx.Exec(`
@@ -441,16 +450,6 @@ func ResolveTribulation(c *gin.Context) {
 			ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount, ap.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Tiên Khiếu"})
-			return
-		}
-
-		_, err = tx.Exec(`
-			UPDATE tribulation_events
-			SET status = 'SUCCESS', aperture_hp_after = $1, ended_at = $2
-			WHERE id = $3
-		`, ap.ApertureHP, now, ev.ID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật đợt tai kiếp"})
 			return
 		}
 
@@ -485,8 +484,8 @@ func ResolveTribulation(c *gin.Context) {
 			}
 			updatedDaoMarks = daoMap
 
-			handleSuccess(ev.TribulationType)
 			ap.ApertureHP = ap.MaxApertureHP / 2
+			handleSuccess(ev.TribulationType)
 
 			_, _ = tx.Exec(`
 				UPDATE aperture_resource_nodes 
@@ -1984,7 +1983,13 @@ func RegenerateImmortalApertures() error {
 		SET 
 			aperture_hp = LEAST(max_aperture_hp, aperture_hp + GREATEST(10, max_aperture_hp / 200)),
 			state = CASE 
-				WHEN state = 'DAMAGED' AND (aperture_hp + GREATEST(10, max_aperture_hp / 200)) >= max_aperture_hp THEN 'STABLE'
+				WHEN (aperture_hp + GREATEST(10, max_aperture_hp / 200)) >= max_aperture_hp THEN
+					CASE 
+						WHEN NOT EXISTS (SELECT 1 FROM tribulation_events WHERE aperture_id = immortal_apertures.id AND status = 'ACTIVE')
+						     AND NOT EXISTS (SELECT 1 FROM tribulation_enemies te JOIN tribulation_events ev ON te.event_id = ev.id WHERE ev.aperture_id = immortal_apertures.id AND te.is_dead = false)
+						THEN 'STABLE'
+						ELSE 'TRIBULATION_ACTIVE'
+					END
 				ELSE state
 			END,
 			updated_at = NOW()

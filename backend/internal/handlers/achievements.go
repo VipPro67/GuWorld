@@ -145,15 +145,10 @@ func ClaimAchievement(c *gin.Context) {
 	}
 
 	var earnedJSON []byte
-	var selectedTitle, selectedFrame string
-	tx.QueryRow(`SELECT COALESCE(earned_achievements, '[]'::jsonb), COALESCE(selected_title, ''), COALESCE(selected_frame, '') FROM players WHERE id = $1`, playerID).Scan(&earnedJSON, &selectedTitle, &selectedFrame)
-
+	tx.QueryRow(`SELECT COALESCE(earned_achievements, '[]'::jsonb) FROM players WHERE id = $1`, playerID).Scan(&earnedJSON)
 	var earned []PlayerAchievementData
 	if len(earnedJSON) > 0 {
 		json.Unmarshal(earnedJSON, &earned)
-	}
-	if earned == nil {
-		earned = []PlayerAchievementData{}
 	}
 
 	for _, e := range earned {

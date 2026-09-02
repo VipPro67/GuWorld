@@ -15,6 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 type TradeOffer struct {
@@ -165,13 +166,6 @@ func InitiateTrade(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	// Load sender
-	sender, err := evaluateManaTx(tx, authID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sender details"})
-		return
-	}
-
 	// Find receiver
 	var receiverID uuid.UUID
 	err = tx.QueryRow(`SELECT id FROM players WHERE username = $1`, req.ReceiverUsername).Scan(&receiverID)
@@ -184,16 +178,34 @@ func InitiateTrade(c *gin.Context) {
 		return
 	}
 
-	if receiverID == sender.ID {
+	if receiverID == authID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể tự giao dịch với chính mình"})
 		return
 	}
 
-	// Load receiver
-	receiver, err := evaluateManaTx(tx, receiverID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load receiver details"})
-		return
+	var sender, receiver models.Player
+	if authID.String() < receiverID.String() {
+		sender, err = evaluateManaTx(tx, authID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sender details"})
+			return
+		}
+		receiver, err = evaluateManaTx(tx, receiverID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load receiver details"})
+			return
+		}
+	} else {
+		receiver, err = evaluateManaTx(tx, receiverID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load receiver details"})
+			return
+		}
+		sender, err = evaluateManaTx(tx, authID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sender details"})
+			return
+		}
 	}
 
 	isCloseEnough := false
@@ -440,7 +452,7 @@ func UpdateTradeOffer(c *gin.Context) {
 		FROM trades t
 		JOIN players p1 ON t.sender_id = p1.id
 		JOIN players p2 ON t.receiver_id = p2.id
-		WHERE t.id = $1 FOR UPDATE
+		WHERE t.id = $1 FOR UPDATE OF t
 	`, tradeID).Scan(&senderID, &senderName, &receiverID, &receiverName, &status, &senderLocked, &receiverLocked)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phiên giao dịch"})
@@ -632,7 +644,7 @@ func LockTrade(c *gin.Context) {
 		FROM trades t
 		JOIN players p1 ON t.sender_id = p1.id
 		JOIN players p2 ON t.receiver_id = p2.id
-		WHERE t.id = $1 FOR UPDATE
+		WHERE t.id = $1 FOR UPDATE OF t
 	`, tradeID).Scan(&senderID, &senderName, &receiverID, &receiverName, &status)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Giao dịch không tồn tại"})
@@ -711,7 +723,7 @@ func ConfirmTrade(c *gin.Context) {
 		FROM trades t
 		JOIN players p1 ON t.sender_id = p1.id
 		JOIN players p2 ON t.receiver_id = p2.id
-		WHERE t.id = $1 FOR UPDATE
+		WHERE t.id = $1 FOR UPDATE OF t
 	`, tradeID).Scan(&senderID, &senderName, &receiverID, &receiverName, &status, &senderOfferBytes, &receiverOfferBytes,
 		&senderLocked, &receiverLocked, &senderConfirmed, &receiverConfirmed)
 
@@ -752,17 +764,30 @@ func ConfirmTrade(c *gin.Context) {
 		_ = json.Unmarshal(senderOfferBytes, &senderOffer)
 		_ = json.Unmarshal(receiverOfferBytes, &receiverOffer)
 
-		// Load players
-		sender, err := evaluateManaTx(tx, senderID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sender details"})
-			return
-		}
-
-		receiver, err := evaluateManaTx(tx, receiverID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load receiver details"})
-			return
+		// Load players in deterministic order by UUID to prevent deadlocks
+		var sender, receiver models.Player
+		if senderID.String() < receiverID.String() {
+			sender, err = evaluateManaTx(tx, senderID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sender details"})
+				return
+			}
+			receiver, err = evaluateManaTx(tx, receiverID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load receiver details"})
+				return
+			}
+		} else {
+			receiver, err = evaluateManaTx(tx, receiverID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load receiver details"})
+				return
+			}
+			sender, err = evaluateManaTx(tx, senderID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sender details"})
+				return
+			}
 		}
 
 		isCloseEnough := false
@@ -934,11 +959,17 @@ func ConfirmTrade(c *gin.Context) {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển Cổ trùng trong giao dịch"})
 				return
 			}
+			if _, err := tx.Exec(`UPDATE killer_moves SET player_id = $1, updated_at = NOW() WHERE core_player_gu_id = $2`, receiver.ID, instID); err != nil {
+				logger.S.Warnf("Failed to transfer killer move for gu %s: %v", instID, err)
+			}
 		}
 		for _, instID := range receiverOffer.Gus {
 			if _, err := tx.Exec(`UPDATE player_gu SET player_id = $1, updated_at = NOW() WHERE id = $2`, sender.ID, instID); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể chuyển Cổ trùng trong giao dịch"})
 				return
+			}
+			if _, err := tx.Exec(`UPDATE killer_moves SET player_id = $1, updated_at = NOW() WHERE core_player_gu_id = $2`, sender.ID, instID); err != nil {
+				logger.S.Warnf("Failed to transfer killer move for gu %s: %v", instID, err)
 			}
 		}
 

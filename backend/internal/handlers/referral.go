@@ -102,6 +102,7 @@ func ClaimReferralReward(c *gin.Context) {
 	}
 
 	message := ""
+	var stonesAdded int
 	switch req.Milestone {
 	case 1:
 		if milestone1Rewarded {
@@ -112,7 +113,7 @@ func ClaimReferralReward(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đệ tử chưa đạt Nhị Chuyển."})
 			return
 		}
-		referrerStones += 500
+		stonesAdded = 500
 		milestone1Rewarded = true
 		message = "Nhận thành công 500 Nguyên Thạch!"
 	case 2:
@@ -160,7 +161,7 @@ func ClaimReferralReward(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Hoa hồng không hợp lệ (số tiền nạp quá nhỏ)."})
 			return
 		}
-		referrerStones += commission
+		stonesAdded = commission
 		milestone3Rewarded = true
 		message = fmt.Sprintf("Nhận thành công %d Nguyên Thạch tiền hoa hồng!", commission)
 	default:
@@ -169,10 +170,12 @@ func ClaimReferralReward(c *gin.Context) {
 	}
 
 	// Save updates
-	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1 WHERE id = $2`, referrerStones, playerID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update resources"})
-		return
+	if stonesAdded > 0 {
+		_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2`, stonesAdded, playerID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update resources"})
+			return
+		}
 	}
 	_, err = tx.Exec(`
 		UPDATE referrals 

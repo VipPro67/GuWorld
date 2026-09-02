@@ -201,6 +201,19 @@ func GetImmortalAperture(c *gin.Context) {
 		_, _ = tx.Exec(`UPDATE immortal_apertures SET immortal_essence = $1 WHERE id = $2`, ap.ImmortalEssence, ap.ID)
 	}
 
+	// Verify state consistency: aperture can ONLY be STABLE if there are no active tribulation events
+	// and no living tribulation enemies.
+	hasActiveTrib, errActive := db.HasActiveTribulationOrEnemies(tx, ap.ID)
+	if errActive == nil {
+		if hasActiveTrib && ap.State == "STABLE" {
+			ap.State = "TRIBULATION_ACTIVE"
+			_, _ = tx.Exec(`UPDATE immortal_apertures SET state = 'TRIBULATION_ACTIVE' WHERE id = $1`, ap.ID)
+		} else if !hasActiveTrib && ap.State == "TRIBULATION_ACTIVE" && ap.ApertureHP >= ap.MaxApertureHP {
+			ap.State = "STABLE"
+			_, _ = tx.Exec(`UPDATE immortal_apertures SET state = 'STABLE' WHERE id = $1`, ap.ID)
+		}
+	}
+
 	ap.CreatedAt = createdAt
 	ap.UpdatedAt = updatedAt
 
@@ -553,7 +566,7 @@ func PlaceApertureNode(c *gin.Context) {
 
 	var immortalStones int64
 	err = tx.QueryRow(`
-		SELECT FLOOR(immortal_stones)::BIGINT FROM players WHERE id = $1
+		SELECT FLOOR(immortal_stones)::BIGINT FROM players WHERE id = $1 FOR UPDATE
 	`, playerID).Scan(&immortalStones)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy số dư tài khoản"})

@@ -88,12 +88,21 @@ func schemaPlayerItems() error {
 		return err
 	}
 
+	if err := execSchema("player_gu_state_idx", `
+	CREATE INDEX IF NOT EXISTS idx_player_gu_state ON player_gu (state);`); err != nil {
+		return err
+	}
+	if err := execSchema("player_gu_equipped_active_idx", `
+	CREATE INDEX IF NOT EXISTS idx_player_gu_equipped_active ON player_gu (player_id, gu_id, gu_rank) WHERE equipped = true AND state = 'ACTIVE';`); err != nil {
+		return err
+	}
+
 	if err := execSchema("player_inventory_items", `
 	CREATE TABLE IF NOT EXISTS player_inventory_items (
 		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
 		item_id VARCHAR(50) NOT NULL,
 		category VARCHAR(30) NOT NULL DEFAULT 'materials',
-		quantity INT NOT NULL DEFAULT 0,
+		quantity INT NOT NULL DEFAULT 0 CHECK (quantity >= 0),
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		PRIMARY KEY (player_id, item_id, category)

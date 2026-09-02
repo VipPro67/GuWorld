@@ -242,9 +242,12 @@ func CreateListing(c *gin.Context) {
 		var newInventory []models.GuInstance
 		var gusToSell []models.GuInstance
 		var removedCount int
-
 		for _, gu := range player.GuInventory {
 			if guMap[gu.InstanceID] {
+				if gu.Equipped {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể bán Cổ trùng đang trang bị"})
+					return
+				}
 				if gu.IsVital {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể bán Bản Mệnh Cổ"})
 					return

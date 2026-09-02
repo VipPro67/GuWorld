@@ -154,3 +154,23 @@ func schemaAperture() error {
 
 	return nil
 }
+
+// HasActiveTribulationOrEnemies returns true if the specified aperture has any active tribulation events
+// (status = 'ACTIVE') OR any non-dead tribulation enemies (is_dead = false).
+func HasActiveTribulationOrEnemies(q Queryer, apertureID string) (bool, error) {
+	if q == nil {
+		q = DB
+	}
+	var count int
+	query := `
+		SELECT 
+			(SELECT COUNT(*) FROM tribulation_events WHERE aperture_id = $1 AND status = 'ACTIVE') +
+			(SELECT COUNT(*) FROM tribulation_enemies te JOIN tribulation_events ev ON te.event_id = ev.id WHERE ev.aperture_id = $1 AND te.is_dead = false)
+	`
+	err := q.QueryRow(query, apertureID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+

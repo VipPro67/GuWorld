@@ -308,7 +308,14 @@ func UseRelicGu(c *gin.Context) {
 	}
 
 	// Consume relic
-	InventorySvc.RemoveItem(tx, player.ID.String(), req.RelicKey, "materials", 1)
+	_, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, player.ID.String(), req.RelicKey, "materials", "consumables", "other")
+	if cat == "" {
+		cat = "materials"
+	}
+	if err := InventorySvc.RemoveItem(tx, player.ID.String(), req.RelicKey, cat, 1); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "You do not possess that Relic Gu"})
+		return
+	}
 	// Instant advancement
 	player.SubRank += 1
 	if player.SubRank > 4 {

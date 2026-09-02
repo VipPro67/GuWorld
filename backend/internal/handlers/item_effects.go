@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 
+	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/services"
@@ -105,7 +106,10 @@ func healApertureEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec)
 	}
 	newState := state
 	if state == "DAMAGED" && newHP >= maxApertureHP {
-		newState = "STABLE"
+		hasActiveTrib, errActive := db.HasActiveTribulationOrEnemies(tx, apID)
+		if errActive == nil && !hasActiveTrib {
+			newState = "STABLE"
+		}
 	}
 
 	_, err = tx.Exec(`

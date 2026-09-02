@@ -77,10 +77,10 @@ func SendPrivateMail(c *gin.Context) {
 		return
 	}
 
-	// Deduct stone
+	// Deduct stone and add human qi atomically
 	player.PrimevalStones -= 1
 	qiGained := AddHumanQi(&player, 1.0)
-	_, err = tx.Exec("UPDATE players SET primeval_stones = $1, human_qi = $2 WHERE id = $3", player.PrimevalStones, player.HumanQi, player.ID)
+	_, err = tx.Exec("UPDATE players SET primeval_stones = GREATEST(0, primeval_stones - 1), human_qi = LEAST(100000.0, human_qi + 1.0) WHERE id = $1", player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct primeval stones"})
 		return

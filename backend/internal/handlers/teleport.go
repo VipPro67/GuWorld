@@ -53,18 +53,15 @@ func TeleportToRegion(c *gin.Context) {
 		return
 	}
 
-	// Load player
-	var player models.Player
-	err := db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT id, x, y, current_region, primeval_stones, immortal_stones,
-		       rank, sub_rank, equipped_gus, hp, base_hp, current_mana,
-		       `+db.GuInventoryAggregate("players.id")+`
-		FROM players WHERE id = $1
-	`, playerID).Scan(
-		&player.ID, &player.X, &player.Y, &player.CurrentRegion,
-		&player.PrimevalStones, &player.ImmortalStones,
-		&player.Rank, &player.SubRank, &player.EquippedGus, &player.HP, &player.BaseHP, &player.CurrentMana, &player.GuInventory,
-	)
+	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to start transaction"})
+		return
+	}
+	defer tx.Rollback()
+
+	// Load player for update with row lock
+	player, err := evaluateManaTx(tx, playerID)
 	if err == sql.ErrNoRows {
 		c.JSON(404, gin.H{"error": "Player not found"})
 		return
@@ -184,26 +181,39 @@ func TeleportToRegion(c *gin.Context) {
 		}
 	}
 
-	// Deduct currency
+	// Update player position and region atomically with relative currency deduction
+	var updateErr error
 	if currency == "primeval_stones" {
 		player.PrimevalStones -= costAmount
+		_, updateErr = tx.ExecContext(c.Request.Context(), `
+			UPDATE players
+			SET x = $1, y = $2, current_region = $3,
+			    primeval_stones = GREATEST(0, primeval_stones - $4)
+			WHERE id = $5
+		`, safeX, safeY, req.RegionID, costAmount, player.ID)
 	} else {
 		player.ImmortalStones -= costAmount
+		_, updateErr = tx.ExecContext(c.Request.Context(), `
+			UPDATE players
+			SET x = $1, y = $2, current_region = $3,
+			    immortal_stones = GREATEST(0, immortal_stones - $4)
+			WHERE id = $5
+		`, safeX, safeY, req.RegionID, costAmount, player.ID)
+	}
+	if updateErr != nil {
+		logger.S.Errorf("Failed to update player position after teleport: %v", updateErr)
+		c.JSON(500, gin.H{"error": "Failed to save position"})
+		return
 	}
 
-	// Update player position and region
+	if err := tx.Commit(); err != nil {
+		c.JSON(500, gin.H{"error": "Failed to commit transaction"})
+		return
+	}
+
 	player.X = safeX
 	player.Y = safeY
 	player.CurrentRegion = req.RegionID
-
-	// Persist to DB
-	_, err = db.DB.ExecContext(c.Request.Context(), `
-		UPDATE players
-		SET x = $1, y = $2, current_region = $3,
-		    primeval_stones = $4, immortal_stones = $5
-		WHERE id = $6
-	`, player.X, player.Y, player.CurrentRegion,
-		player.PrimevalStones, player.ImmortalStones, player.ID)
 	if err != nil {
 		logger.S.Errorf("Failed to update player position after teleport: %v", err)
 		c.JSON(500, gin.H{"error": "Failed to save position"})

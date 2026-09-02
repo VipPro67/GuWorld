@@ -641,12 +641,26 @@ func RefineGu(c *gin.Context) {
 		for matID, reqQty := range recipe.RequiredMaterials {
 			deductQty := int(math.Ceil(float64(reqQty) * 0.5))
 			if deductQty > 0 {
-				InventorySvc.RemoveItem(tx, player.ID.String(), matID, "materials", deductQty)
+				_, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, player.ID.String(), matID, "materials", "consumables", "other")
+				if cat == "" {
+					cat = "materials"
+				}
+				if err := InventorySvc.RemoveItem(tx, player.ID.String(), matID, cat, deductQty); err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ nguyên liệu %s để thực hiện hợp luyện", matID)})
+					return
+				}
 			}
 		}
 	} else {
 		for matID, reqQty := range recipe.RequiredMaterials {
-			InventorySvc.RemoveItem(tx, player.ID.String(), matID, "materials", reqQty)
+			_, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, player.ID.String(), matID, "materials", "consumables", "other")
+			if cat == "" {
+				cat = "materials"
+			}
+			if err := InventorySvc.RemoveItem(tx, player.ID.String(), matID, cat, reqQty); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ nguyên liệu %s để thực hiện hợp luyện", matID)})
+				return
+			}
 		}
 	}
 
