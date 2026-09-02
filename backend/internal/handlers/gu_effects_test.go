@@ -203,3 +203,50 @@ func TestPortalManaCostAndUsability(t *testing.T) {
 	}
 }
 
+func TestRestoreSoulHP(t *testing.T) {
+	player := &models.Player{
+		SoulState: models.SoulState{
+			SoulHP:  30,
+			MaxSoul: 100,
+		},
+	}
+	spec := models.GuDictionaryItem{
+		ID:   "GU_SOUL_RESTORE",
+		Name: "Hồi Hồn Cổ",
+		Rank: 3,
+	}
+	guInst := models.GuInstance{
+		InstanceID: "inst_1",
+		GuID:       "GU_SOUL_RESTORE",
+	}
+	mechanic := models.SpecialMechanic{
+		EventTrigger: "ON_CONSUME",
+		ActionCode:   "RESTORE_SOUL_HP",
+		Params:       []byte(`{"value": 20}`),
+	}
+
+	msg, err := HandleConsumeEvent(player, guInst, spec, mechanic)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if player.SoulHP != 50 {
+		t.Errorf("expected SoulHP = 50, got %d", player.SoulHP)
+	}
+	if msg != "Hồn phách được dưỡng hồi (+20 Hồn Phách)." {
+		t.Errorf("unexpected message: %s", msg)
+	}
+
+	// Test cap at MaxSoul
+	mechanic.Params = []byte(`{"value": 100}`)
+	msg, err = HandleConsumeEvent(player, guInst, spec, mechanic)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if player.SoulHP != 100 {
+		t.Errorf("expected SoulHP capped at MaxSoul (100), got %d", player.SoulHP)
+	}
+	if msg != "Hồn phách được dưỡng hồi (+50 Hồn Phách)." {
+		t.Errorf("unexpected message: %s", msg)
+	}
+}
+

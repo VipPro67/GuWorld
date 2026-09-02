@@ -274,6 +274,52 @@ func SetupRouter() *gin.Engine {
 			admin.POST("/gift-codes", handlers.AdminCreateGiftCode)
 			admin.GET("/gift-codes", handlers.AdminListGiftCodes)
 			admin.POST("/upload-image", handlers.AdminUploadImage)
+
+			// New Admin Endpoints for complete DB management
+			admin.PUT("/players/:id/gus/:instance_id", handlers.AdminUpdatePlayerGu)
+			admin.POST("/players/:id/pets", handlers.AdminCreatePlayerPet)
+			admin.PUT("/players/:id/pets/:pet_id", handlers.AdminUpdatePlayerPet)
+
+			admin.GET("/constitution-dictionary", handlers.AdminListConstitutions)
+			admin.POST("/constitution-dictionary", handlers.AdminCreateConstitution)
+			admin.PUT("/constitution-dictionary/:key", handlers.AdminUpdateConstitution)
+			admin.DELETE("/constitution-dictionary/:key", handlers.AdminDeleteConstitution)
+
+			admin.GET("/race-dictionary", handlers.AdminListRaces)
+			admin.POST("/race-dictionary", handlers.AdminCreateRace)
+			admin.PUT("/race-dictionary/:key", handlers.AdminUpdateRace)
+			admin.DELETE("/race-dictionary/:key", handlers.AdminDeleteRace)
+
+			admin.GET("/status-dictionary", handlers.AdminListStatuses)
+			admin.POST("/status-dictionary", handlers.AdminCreateStatus)
+			admin.PUT("/status-dictionary/:key", handlers.AdminUpdateStatus)
+			admin.DELETE("/status-dictionary/:key", handlers.AdminDeleteStatus)
+
+			admin.GET("/monster-spawns", handlers.AdminListMonsterSpawns)
+			admin.POST("/monster-spawns", handlers.AdminCreateMonsterSpawn)
+			admin.PUT("/monster-spawns/:id", handlers.AdminUpdateMonsterSpawn)
+			admin.DELETE("/monster-spawns/:id", handlers.AdminDeleteMonsterSpawn)
+
+			admin.GET("/quests", handlers.AdminListQuests)
+			admin.POST("/quests", handlers.AdminCreateQuest)
+			admin.PUT("/quests/:id", handlers.AdminUpdateQuest)
+			admin.DELETE("/quests/:id", handlers.AdminDeleteQuest)
+
+			admin.GET("/dungeons", handlers.AdminListDungeons)
+			admin.POST("/dungeons", handlers.AdminCreateDungeon)
+			admin.PUT("/dungeons/:id", handlers.AdminUpdateDungeon)
+			admin.DELETE("/dungeons/:id", handlers.AdminDeleteDungeon)
+
+			admin.GET("/sect-mines", handlers.AdminListSectMines)
+			admin.PUT("/sect-mines/:id", handlers.AdminUpdateSectMine)
+
+			admin.GET("/apertures/:id/nodes", handlers.AdminListApertureNodes)
+			admin.POST("/apertures/:id/nodes", handlers.AdminCreateApertureNode)
+			admin.DELETE("/apertures/:id/nodes/:node_id", handlers.AdminDeleteApertureNode)
+
+			admin.GET("/apertures/:id/variant-humans", handlers.AdminListApertureVariantHumans)
+			admin.POST("/apertures/:id/variant-humans", handlers.AdminCreateApertureVariantHuman)
+			admin.DELETE("/apertures/:id/variant-humans/:vh_id", handlers.AdminDeleteApertureVariantHuman)
 		}
 		api.GET("/wallet", middleware.AuthRequired(), handlers.GetWallet)
 		api.POST("/topup/orders", middleware.AuthRequired(), middleware.RateLimitByPlayer(10, time.Minute), handlers.CreateTopupOrder)

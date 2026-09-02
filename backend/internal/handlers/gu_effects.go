@@ -521,6 +521,9 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		if val <= 0 {
 			val = 10
 		}
+		if player.MaxSoul <= 0 {
+			player.MaxSoul = 100
+		}
 		before := player.SoulHP
 		player.SoulHP += int(val)
 		if player.SoulHP > player.MaxSoul {

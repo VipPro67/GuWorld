@@ -3361,11 +3361,11 @@ func UseItem(c *gin.Context) {
 		UPDATE players 
 		SET current_mana = $1, max_mana = $2, hp = $3, base_hp = $4,
 		    primeval_stones = $5, lifespan = $6, human_qi = $7,
-		    race = $8, constitution = $9
-		WHERE id = $10`,
+		    race = $8, constitution = $9, soul_hp = $10, max_soul = $11
+		WHERE id = $12`,
 		player.CurrentMana, player.MaxMana, player.HP, player.BaseHP,
 		player.PrimevalStones, player.Lifespan, player.HumanQi,
-		player.Race, player.Constitution,
+		player.Race, player.Constitution, player.SoulHP, player.MaxSoul,
 		player.ID,
 	)
 	if err != nil {
@@ -3518,11 +3518,11 @@ func UseItems(c *gin.Context) {
 		UPDATE players 
 		SET current_mana = $1, max_mana = $2, hp = $3, base_hp = $4,
 		    primeval_stones = $5, lifespan = $6, human_qi = $7,
-		    race = $8, constitution = $9
-		WHERE id = $10`,
+		    race = $8, constitution = $9, soul_hp = $10, max_soul = $11
+		WHERE id = $12`,
 		player.CurrentMana, player.MaxMana, player.HP, player.BaseHP,
 		player.PrimevalStones, player.Lifespan, player.HumanQi,
-		player.Race, player.Constitution,
+		player.Race, player.Constitution, player.SoulHP, player.MaxSoul,
 		player.ID,
 	)
 	if err != nil {
@@ -4110,9 +4110,9 @@ func UseConsumableGu(c *gin.Context) {
 
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET sub_rank = $1, rank = $2, primeval_stones = $3, max_mana = $4, current_mana = $5, equipped_gus = $6, wall_progress = $7, hp = $8, lifespan = $9, aptitude_percent = $10, immortal_stones = $11, aperture_stress = $12, human_qi = $13, max_soul = $14, current_thought = $15, path_masteries = $16, time_speed_multiplier = $17, aptitude_type = $18
-		WHERE id = $19`,
-		player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.WallProgress, player.HP, player.Lifespan, player.AptitudePercent, player.ImmortalStones, player.ApertureStress, player.HumanQi, player.MaxSoul, player.CurrentThought, player.PathMasteries, player.TimeSpeedMultiplier, player.AptitudeType, player.ID,
+		SET sub_rank = $1, rank = $2, primeval_stones = $3, max_mana = $4, current_mana = $5, equipped_gus = $6, wall_progress = $7, hp = $8, lifespan = $9, aptitude_percent = $10, immortal_stones = $11, aperture_stress = $12, human_qi = $13, max_soul = $14, current_thought = $15, path_masteries = $16, time_speed_multiplier = $17, aptitude_type = $18, soul_hp = $19
+		WHERE id = $20`,
+		player.SubRank, player.Rank, player.PrimevalStones, player.MaxMana, player.CurrentMana, player.EquippedGus, player.WallProgress, player.HP, player.Lifespan, player.AptitudePercent, player.ImmortalStones, player.ApertureStress, player.HumanQi, player.MaxSoul, player.CurrentThought, player.PathMasteries, player.TimeSpeedMultiplier, player.AptitudeType, player.SoulHP, player.ID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player state after using Gu"})
@@ -4240,9 +4240,9 @@ func UseSupportGu(c *gin.Context) {
 	// Save to DB — support Gu stays in inventory, no need to rewrite inventory
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET max_mana = $1, current_mana = $2, aptitude_percent = $3, hp = $4, aperture_stress = $5, human_qi = $6, current_thought = $7, time_speed_multiplier = $8
-		WHERE id = $9`,
-		player.MaxMana, player.CurrentMana, player.AptitudePercent, player.HP, player.ApertureStress, player.HumanQi, player.CurrentThought, player.TimeSpeedMultiplier,
+		SET max_mana = $1, current_mana = $2, aptitude_percent = $3, hp = $4, aperture_stress = $5, human_qi = $6, current_thought = $7, time_speed_multiplier = $8, soul_hp = $9, max_soul = $10, lifespan = $11
+		WHERE id = $12`,
+		player.MaxMana, player.CurrentMana, player.AptitudePercent, player.HP, player.ApertureStress, player.HumanQi, player.CurrentThought, player.TimeSpeedMultiplier, player.SoulHP, player.MaxSoul, player.Lifespan,
 		player.ID,
 	)
 	if err != nil {

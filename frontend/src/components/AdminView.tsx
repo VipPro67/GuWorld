@@ -51,6 +51,10 @@ import {
   MapPin,
 } from "lucide-react";
 import { translateGuType, translateItemType } from "@/lib/translate";
+import { TopupWalletAdminTab } from "./admin/TopupWalletAdminTab";
+import { DictionariesAdminTab } from "./admin/DictionariesAdminTab";
+import { WorldExtendedAdminTab } from "./admin/WorldExtendedAdminTab";
+import { SectMinesAdminTab } from "./admin/SectMinesAdminTab";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -167,11 +171,17 @@ interface PlayerDetail {
   current_mana: number; max_mana: number; primeval_stones: number;
   immortal_stones: number; hp: number; base_hp: number;
   wall_progress: number; human_qi: number; current_region: string;
+  x?: number; y?: number;
   is_admin: boolean; created_at: string; lifespan: number;
   soul_hp: number; max_soul: number; soul_tier: string;
   explore_count: number; aperture_stress: number;
   avatar_url: string; bio: string;
   race: string; gender: string; constitution: string; statuses?: (string | { id: string; expires_at?: string | null })[];
+  current_thought?: number; max_thought?: number; thought_regen_rate?: number;
+  time_speed_multiplier?: number; selected_title?: string; selected_frame?: string;
+  fake_rank?: number; fake_sub_rank?: number; fake_vital_gu?: string;
+  is_disguised?: boolean; needs_onboarding?: boolean; needs_soul_refine?: boolean;
+  immortal_jade?: number;
   gu_count: number;
   item_count: number;
 }
@@ -451,8 +461,9 @@ export const AdminView: React.FC = () => {
 
   const [actionLoading, setActionLoading] = useState(false);
   const [tableLoading, setTableLoading] = useState<string | null>(null);
-  const [section, setSection] = useState<"players" | "sects" | "data" | "logs" | "shop" | "mines" | "gift_codes" | "apertures">("players");
+  const [section, setSection] = useState<"players" | "sects" | "data" | "logs" | "shop" | "mines" | "gift_codes" | "apertures" | "topup_wallet">("players");
   const [playersTab, setPlayersTab] = useState<"list" | "online">("list");
+  const [minesTab, setMinesTab] = useState<"slots" | "sect_mines">("slots");
 
   // ----- Aperture state -----
   const [apertures, setApertures] = useState<any[]>([]);
@@ -524,7 +535,7 @@ export const AdminView: React.FC = () => {
   const [onlineLoading, setOnlineLoading] = useState(false);
 
   // ----- Dictionary state -----
-  const [dataTab, setDataTab] = useState<"import" | "tables" | "gus" | "items" | "recipes" | "monsters" | "loot_tables" | "regions" | "map_cells">("import");
+  const [dataTab, setDataTab] = useState<"import" | "tables" | "gus" | "items" | "recipes" | "monsters" | "loot_tables" | "regions" | "map_cells" | "constitution" | "race" | "status" | "spawns" | "quests" | "dungeons">("import");
   const [regions, setRegions] = useState<any[]>([]);
   const [regionsLoading, setRegionsLoading] = useState(false);
   const [regionEdit, setRegionEdit] = useState<any | null>(null);
@@ -1252,12 +1263,20 @@ export const AdminView: React.FC = () => {
                   max_mana: String(detail.max_mana ?? ""), hp: String(detail.hp ?? ""), base_hp: String(detail.base_hp ?? ""),
                   wall_progress: String(detail.wall_progress ?? ""), human_qi: String(detail.human_qi ?? ""),
                   lifespan: String(detail.lifespan ?? ""), current_region: detail.current_region || "",
+                  x: String(detail.x ?? 0), y: String(detail.y ?? 0),
                   is_admin: String(detail.is_admin), soul_hp: String(detail.soul_hp ?? ""),
                   max_soul: String(detail.max_soul ?? ""), soul_tier: detail.soul_tier || "",
                   explore_count: String(detail.explore_count ?? ""), aperture_stress: String(detail.aperture_stress ?? ""),
                   bio: detail.bio || "", avatar_url: detail.avatar_url || "",
                   race: detail.race || "", gender: detail.gender || "", constitution: detail.constitution || "",
                   statuses: (detail.statuses || []).map((s: string | { id: string }) => typeof s === "string" ? s : s.id).join(", "),
+                  current_thought: String(detail.current_thought ?? 0), max_thought: String(detail.max_thought ?? 0),
+                  thought_regen_rate: String(detail.thought_regen_rate ?? 0), time_speed_multiplier: String(detail.time_speed_multiplier ?? 1),
+                  selected_title: detail.selected_title || "", selected_frame: detail.selected_frame || "",
+                  fake_rank: String(detail.fake_rank ?? 0), fake_sub_rank: String(detail.fake_sub_rank ?? 0),
+                  fake_vital_gu: detail.fake_vital_gu || "", is_disguised: String(detail.is_disguised ?? false),
+                  needs_onboarding: String(detail.needs_onboarding ?? false), needs_soul_refine: String(detail.needs_soul_refine ?? false),
+                  immortal_jade: String(detail.immortal_jade ?? 0),
                 });
                 setShowEditPlayer(true);
               }
@@ -1847,10 +1866,66 @@ export const AdminView: React.FC = () => {
                   <label className="text-[11px] font-bold text-zinc-500 font-mono">Trạng thái (cách nhau bằng dấu phẩy)</label>
                   <input type="text" value={editPlayerForm.statuses || ""} onChange={e => setEditPlayerForm(f => ({ ...f, statuses: e.target.value }))} placeholder="trống" className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
                 </div>
-                <div className="flex items-end pb-1">
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tọa độ X</label>
+                  <input type="number" value={editPlayerForm.x || "0"} onChange={e => setEditPlayerForm(f => ({ ...f, x: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tọa độ Y</label>
+                  <input type="number" value={editPlayerForm.y || "0"} onChange={e => setEditPlayerForm(f => ({ ...f, y: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Niệm Lực hiện tại</label>
+                  <input type="number" value={editPlayerForm.current_thought || "0"} onChange={e => setEditPlayerForm(f => ({ ...f, current_thought: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Niệm Lực tối đa</label>
+                  <input type="number" value={editPlayerForm.max_thought || "0"} onChange={e => setEditPlayerForm(f => ({ ...f, max_thought: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tỉ lệ hồi Niệm Lực</label>
+                  <input type="number" value={editPlayerForm.thought_regen_rate || "0"} onChange={e => setEditPlayerForm(f => ({ ...f, thought_regen_rate: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tốc độ thời gian (Multiplier)</label>
+                  <input type="number" step="0.1" value={editPlayerForm.time_speed_multiplier || "1"} onChange={e => setEditPlayerForm(f => ({ ...f, time_speed_multiplier: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Tiên Ngọc (Immortal Jade)</label>
+                  <input type="number" value={editPlayerForm.immortal_jade || "0"} onChange={e => setEditPlayerForm(f => ({ ...f, immortal_jade: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Danh hiệu đã chọn</label>
+                  <input type="text" value={editPlayerForm.selected_title || ""} onChange={e => setEditPlayerForm(f => ({ ...f, selected_title: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Khung avatar đã chọn</label>
+                  <input type="text" value={editPlayerForm.selected_frame || ""} onChange={e => setEditPlayerForm(f => ({ ...f, selected_frame: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Cải trang: Tu vi giả</label>
+                  <input type="number" value={editPlayerForm.fake_rank || "0"} onChange={e => setEditPlayerForm(f => ({ ...f, fake_rank: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Cải trang: Cảnh giới giả</label>
+                  <input type="number" value={editPlayerForm.fake_sub_rank || "0"} onChange={e => setEditPlayerForm(f => ({ ...f, fake_sub_rank: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-500 font-mono">Cải trang: Bản mệnh Gu giả</label>
+                  <input type="text" value={editPlayerForm.fake_vital_gu || ""} onChange={e => setEditPlayerForm(f => ({ ...f, fake_vital_gu: e.target.value }))} className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div className="flex items-center gap-4 pt-2">
                   <label className="flex items-center gap-2 text-[11px] font-bold text-zinc-500 font-mono cursor-pointer">
                     <input type="checkbox" checked={editPlayerForm.is_admin === "true"} onChange={e => setEditPlayerForm(f => ({ ...f, is_admin: String(e.target.checked) }))} className="accent-amber-500 w-4 h-4" />
                     Quyền Admin
+                  </label>
+                  <label className="flex items-center gap-2 text-[11px] font-bold text-zinc-500 font-mono cursor-pointer">
+                    <input type="checkbox" checked={editPlayerForm.is_disguised === "true"} onChange={e => setEditPlayerForm(f => ({ ...f, is_disguised: String(e.target.checked) }))} className="accent-amber-500 w-4 h-4" />
+                    Đang Cải Trang
+                  </label>
+                  <label className="flex items-center gap-2 text-[11px] font-bold text-zinc-500 font-mono cursor-pointer">
+                    <input type="checkbox" checked={editPlayerForm.needs_onboarding === "true"} onChange={e => setEditPlayerForm(f => ({ ...f, needs_onboarding: String(e.target.checked) }))} className="accent-amber-500 w-4 h-4" />
+                    Cần Onboarding
                   </label>
                 </div>
               </div>
@@ -1862,7 +1937,7 @@ export const AdminView: React.FC = () => {
                 <button onClick={() => setShowEditPlayer(false)} className="px-4 py-2 rounded-lg text-xs font-bold bg-zinc-900 text-zinc-400 hover:text-white border border-zinc-800 transition-colors cursor-pointer">Hủy</button>
                 <button disabled={actionLoading} onClick={async () => {
                   const body: any = {};
-                  const num = (v: string) => (v.trim() === "" ? undefined : Number(v));
+                  const num = (v: string) => (v === undefined || v === null || v.trim() === "" ? undefined : Number(v));
                   const set = (field: string, cur: any, next: any) => {
                     if (next === undefined || next === "") return;
                     if (String(cur) !== String(next)) body[field] = next;
@@ -1880,6 +1955,8 @@ export const AdminView: React.FC = () => {
                   set("human_qi", detail.human_qi, num(editPlayerForm.human_qi));
                   set("lifespan", detail.lifespan, num(editPlayerForm.lifespan));
                   set("current_region", detail.current_region || "", editPlayerForm.current_region);
+                  set("x", detail.x, num(editPlayerForm.x));
+                  set("y", detail.y, num(editPlayerForm.y));
                   set("is_admin", detail.is_admin, editPlayerForm.is_admin === "true");
                   set("soul_hp", detail.soul_hp, num(editPlayerForm.soul_hp));
                   set("max_soul", detail.max_soul, num(editPlayerForm.max_soul));
@@ -1891,6 +1968,20 @@ export const AdminView: React.FC = () => {
                   set("race", detail.race || "", editPlayerForm.race);
                   set("gender", detail.gender || "", editPlayerForm.gender);
                   set("constitution", detail.constitution || "", editPlayerForm.constitution);
+                  set("current_thought", detail.current_thought, num(editPlayerForm.current_thought));
+                  set("max_thought", detail.max_thought, num(editPlayerForm.max_thought));
+                  set("thought_regen_rate", detail.thought_regen_rate, num(editPlayerForm.thought_regen_rate));
+                  set("time_speed_multiplier", detail.time_speed_multiplier, num(editPlayerForm.time_speed_multiplier));
+                  set("selected_title", detail.selected_title || "", editPlayerForm.selected_title);
+                  set("selected_frame", detail.selected_frame || "", editPlayerForm.selected_frame);
+                  set("fake_rank", detail.fake_rank, num(editPlayerForm.fake_rank));
+                  set("fake_sub_rank", detail.fake_sub_rank, num(editPlayerForm.fake_sub_rank));
+                  set("fake_vital_gu", detail.fake_vital_gu || "", editPlayerForm.fake_vital_gu);
+                  set("is_disguised", detail.is_disguised, editPlayerForm.is_disguised === "true");
+                  set("needs_onboarding", detail.needs_onboarding, editPlayerForm.needs_onboarding === "true");
+                  set("needs_soul_refine", detail.needs_soul_refine, editPlayerForm.needs_soul_refine === "true");
+                  set("immortal_jade", detail.immortal_jade, num(editPlayerForm.immortal_jade));
+
                   const statusesRaw = (editPlayerForm.statuses || "").split(",").map(s => s.trim()).filter(Boolean);
                   const detailStatusIds = (detail.statuses || []).map((s: string | { id: string }) => typeof s === "string" ? s : s.id);
                   const statusesChanged = JSON.stringify(statusesRaw) !== JSON.stringify(detailStatusIds);
@@ -2447,6 +2538,9 @@ export const AdminView: React.FC = () => {
         <button onClick={() => setSection("apertures")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "apertures" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
           <Globe className="w-3.5 h-3.5 inline mr-1.5" />Tiên Khiếu
         </button>
+        <button onClick={() => setSection("topup_wallet")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${section === "topup_wallet" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+          <Coins className="w-3.5 h-3.5 inline mr-1.5" />Nạp Tiền & Ví
+        </button>
       </div>
 
       {/* Players section */}
@@ -2661,6 +2755,24 @@ export const AdminView: React.FC = () => {
             </button>
             <button onClick={() => setDataTab("map_cells")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "map_cells" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
               <MapPin className="w-3.5 h-3.5 inline mr-1.5" />Ô bản đồ
+            </button>
+            <button onClick={() => setDataTab("constitution")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "constitution" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <Shield className="w-3.5 h-3.5 inline mr-1.5" />Thể chất
+            </button>
+            <button onClick={() => setDataTab("race")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "race" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <Users className="w-3.5 h-3.5 inline mr-1.5" />Chủng tộc
+            </button>
+            <button onClick={() => setDataTab("status")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "status" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <Activity className="w-3.5 h-3.5 inline mr-1.5" />Trạng thái
+            </button>
+            <button onClick={() => setDataTab("spawns")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "spawns" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <MapPin className="w-3.5 h-3.5 inline mr-1.5" />Điểm Spawn
+            </button>
+            <button onClick={() => setDataTab("quests")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "quests" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <ListTodo className="w-3.5 h-3.5 inline mr-1.5" />Nhiệm vụ SG
+            </button>
+            <button onClick={() => setDataTab("dungeons")} className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer flex-shrink-0 ${dataTab === "dungeons" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"}`}>
+              <Shield className="w-3.5 h-3.5 inline mr-1.5" />Phụ bản
             </button>
           </div>
 
@@ -3216,8 +3328,18 @@ export const AdminView: React.FC = () => {
               )}
             </div>
           )}
+
+          {dataTab === "constitution" && <DictionariesAdminTab type="constitution" addToast={addToast} />}
+          {dataTab === "race" && <DictionariesAdminTab type="race" addToast={addToast} />}
+          {dataTab === "status" && <DictionariesAdminTab type="status" addToast={addToast} />}
+          {dataTab === "spawns" && <WorldExtendedAdminTab type="spawns" addToast={addToast} />}
+          {dataTab === "quests" && <WorldExtendedAdminTab type="quests" addToast={addToast} />}
+          {dataTab === "dungeons" && <WorldExtendedAdminTab type="dungeons" addToast={addToast} />}
         </div>
       )}
+
+      {/* Topup & Wallet Section */}
+      {section === "topup_wallet" && <TopupWalletAdminTab addToast={addToast} />}
 
       {/* Audit Logs section */}
       {section === "logs" && (
@@ -3636,11 +3758,33 @@ export const AdminView: React.FC = () => {
       {/* Mines section */}
       {section === "mines" && (
         <div className="space-y-4">
-          <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
-            <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2 mb-4">
-              <Layers className="w-4 h-4 text-amber-400" />
-              Quản Lý Mỏ Linh Thạch
-            </h3>
+          <div className="border-b border-zinc-800/80 flex gap-0 mb-4 overflow-x-auto scrollbar-hide whitespace-nowrap">
+            <button
+              onClick={() => setMinesTab("slots")}
+              className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${
+                minesTab === "slots" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5 inline mr-1.5" />Mỏ Cá Nhân (31 Ô)
+            </button>
+            <button
+              onClick={() => setMinesTab("sect_mines")}
+              className={`px-4 py-2.5 text-xs font-semibold font-mono border-b-2 transition-colors cursor-pointer ${
+                minesTab === "sect_mines" ? "text-amber-400 border-amber-500" : "text-zinc-500 border-transparent hover:text-zinc-300"
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5 inline mr-1.5" />Mỏ Tông Môn (5 Mỏ Lớn)
+            </button>
+          </div>
+
+          {minesTab === "sect_mines" ? (
+            <SectMinesAdminTab addToast={addToast} />
+          ) : (
+            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-4">
+              <h3 className="text-sm font-serif font-bold text-zinc-200 flex items-center gap-2 mb-4">
+                <Layers className="w-4 h-4 text-amber-400" />
+                Quản Lý Mỏ Linh Thạch Cá Nhân
+              </h3>
             {mineLoading ? (
               <div className="flex justify-center py-10"><RefreshCw className="w-6 h-6 text-amber-400 animate-spin" /></div>
             ) : mineSlots.length === 0 ? (
@@ -3686,6 +3830,7 @@ export const AdminView: React.FC = () => {
               </div>
             )}
           </div>
+          )}
         </div>
       )}
       {/* Edit Mine Slot Modal */}

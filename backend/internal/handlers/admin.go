@@ -194,41 +194,62 @@ func AdminGetPlayerDetail(c *gin.Context) {
 	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM player_gu WHERE player_id=$1`, playerID).Scan(&guCount)
 	var itemCount int
 	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT COUNT(*) FROM player_inventory_items WHERE player_id=$1`, playerID).Scan(&itemCount)
+	var immortalJade float64
+	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(immortal_jade, 0) FROM wallets WHERE user_id=$1`, playerID).Scan(&immortalJade)
+
+	var selectedTitle, selectedFrame string
+	var thoughtRegenRate float64
+	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(selected_title,''), COALESCE(selected_frame,''), COALESCE(thought_regen_rate,0) FROM players WHERE id=$1`, playerID).Scan(&selectedTitle, &selectedFrame, &thoughtRegenRate)
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":               player.ID,
-		"username":         player.Username,
-		"email":            player.Email,
-		"rank":             player.Rank,
-		"sub_rank":         player.SubRank,
-		"aptitude_type":    player.AptitudeType,
-		"aptitude_percent": player.AptitudePercent,
-		"aptitude_grade":   player.AptitudeGrade,
-		"current_mana":     player.CurrentMana,
-		"max_mana":         player.MaxMana,
-		"primeval_stones":  player.PrimevalStones,
-		"immortal_stones":  player.ImmortalStones,
-		"hp":               player.HP,
-		"base_hp":          player.BaseHP,
-		"wall_progress":    player.WallProgress,
-		"human_qi":         player.HumanQi,
-		"current_region":   player.CurrentRegion,
-		"is_admin":         player.IsAdmin,
-		"created_at":       player.CreatedAt,
-		"lifespan":         player.Lifespan,
-		"soul_hp":          player.SoulHP,
-		"max_soul":         player.MaxSoul,
-		"soul_tier":        player.SoulTier,
-		"explore_count":    player.ExploreCount,
-		"aperture_stress":  player.ApertureStress,
-		"avatar_url":       player.AvatarURL,
-		"bio":              player.Bio,
-		"race":             player.Race,
-		"gender":           player.Gender,
-		"constitution":     player.Constitution,
-		"statuses":         player.Statuses,
-		"gu_count":         guCount,
-		"item_count":       itemCount,
+		"id":                    player.ID,
+		"username":              player.Username,
+		"email":                 player.Email,
+		"rank":                  player.Rank,
+		"sub_rank":              player.SubRank,
+		"aptitude_type":         player.AptitudeType,
+		"aptitude_percent":      player.AptitudePercent,
+		"aptitude_grade":        player.AptitudeGrade,
+		"current_mana":          player.CurrentMana,
+		"max_mana":              player.MaxMana,
+		"primeval_stones":       player.PrimevalStones,
+		"immortal_stones":       player.ImmortalStones,
+		"immortal_jade":         immortalJade,
+		"hp":                    player.HP,
+		"base_hp":               player.BaseHP,
+		"wall_progress":         player.WallProgress,
+		"human_qi":              player.HumanQi,
+		"current_region":        player.CurrentRegion,
+		"x":                     player.X,
+		"y":                     player.Y,
+		"is_admin":              player.IsAdmin,
+		"created_at":            player.CreatedAt,
+		"lifespan":              player.Lifespan,
+		"soul_hp":               player.SoulHP,
+		"max_soul":              player.MaxSoul,
+		"soul_tier":             player.SoulTier,
+		"explore_count":         player.ExploreCount,
+		"aperture_stress":       player.ApertureStress,
+		"avatar_url":            player.AvatarURL,
+		"bio":                   player.Bio,
+		"race":                  player.Race,
+		"gender":                player.Gender,
+		"constitution":          player.Constitution,
+		"statuses":              player.Statuses,
+		"current_thought":       player.CurrentThought,
+		"max_thought":           player.MaxThought,
+		"thought_regen_rate":    thoughtRegenRate,
+		"time_speed_multiplier": player.TimeSpeedMultiplier,
+		"needs_soul_refine":     player.NeedsSoulRefine,
+		"selected_title":        selectedTitle,
+		"selected_frame":        selectedFrame,
+		"fake_rank":             player.FakeRank,
+		"fake_sub_rank":         player.FakeSubRank,
+		"fake_vital_gu":         player.FakeVitalGu,
+		"is_disguised":          player.IsDisguised,
+		"needs_onboarding":      player.NeedsOnboarding,
+		"gu_count":              guCount,
+		"item_count":            itemCount,
 	})
 }
 
@@ -556,6 +577,110 @@ func AdminRemovePlayerGu(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa cổ trùng thành công"})
 }
 
+type AdminUpdateGuInstanceRequest struct {
+	Rank            *int     `json:"rank"`
+	Level           *int     `json:"level"`
+	Hunger          *float64 `json:"hunger"`
+	State           *string  `json:"state"`
+	Equipped        *bool    `json:"equipped"`
+	IsVital         *bool    `json:"is_vital"`
+	IsLocked        *bool    `json:"is_locked"`
+	IntegrationTime *float64 `json:"integration_time"`
+}
+
+func AdminUpdatePlayerGu(c *gin.Context) {
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
+
+	playerID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID người chơi không hợp lệ"})
+		return
+	}
+
+	instanceID := c.Param("instance_id")
+	if instanceID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Instance ID không hợp lệ"})
+		return
+	}
+
+	var req AdminUpdateGuInstanceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+
+	sets := []string{}
+	args := []interface{}{}
+	argIdx := 1
+
+	if req.Rank != nil {
+		sets = append(sets, "rank=$"+strconv.Itoa(argIdx), "gu_rank=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.Rank)
+		argIdx++
+	}
+	if req.Level != nil {
+		sets = append(sets, "level=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.Level)
+		argIdx++
+	}
+	if req.Hunger != nil {
+		sets = append(sets, "hunger=$"+strconv.Itoa(argIdx))
+		args = append(args, math.Max(0, *req.Hunger))
+		argIdx++
+	}
+	if req.State != nil {
+		sets = append(sets, "state=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.State)
+		argIdx++
+	}
+	if req.Equipped != nil {
+		sets = append(sets, "equipped=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.Equipped)
+		argIdx++
+	}
+	if req.IsVital != nil {
+		sets = append(sets, "is_vital=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.IsVital)
+		argIdx++
+	}
+	if req.IsLocked != nil {
+		sets = append(sets, "is_locked=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.IsLocked)
+		argIdx++
+	}
+	if req.IntegrationTime != nil {
+		sets = append(sets, "integration_time=$"+strconv.Itoa(argIdx))
+		args = append(args, math.Max(0, *req.IntegrationTime))
+		argIdx++
+	}
+
+	if len(sets) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có dữ liệu thay đổi"})
+		return
+	}
+
+	sets = append(sets, "updated_at=NOW()")
+	args = append(args, instanceID, playerID.String())
+
+	query := fmt.Sprintf(`UPDATE player_gu SET %s WHERE id=$%d AND player_id=$%d`, strings.Join(sets, ", "), argIdx, argIdx+1)
+	res, err := db.DB.ExecContext(c.Request.Context(), query, args...)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật Gu: " + err.Error()})
+		return
+	}
+
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Gu instance này"})
+		return
+	}
+
+	auditlog.Logf(db.DB, &adminID, "admin.update_gu_instance", "instance_id=%s, player_id=%s", instanceID, playerID.String())
+	c.JSON(http.StatusOK, gin.H{"message": "Cập nhật Gu instance thành công"})
+}
+
 func AdminChangePlayerStones(c *gin.Context) {
 	adminID, ok := requireAdmin(c)
 	if !ok {
@@ -843,31 +968,46 @@ func AdminListPlayerGus(c *gin.Context) {
 }
 
 type AdminUpdatePlayerRequest struct {
-	Rank            *int      `json:"rank"`
-	SubRank         *int      `json:"sub_rank"`
-	AptitudeType    *string   `json:"aptitude_type"`
-	AptitudePercent *float64  `json:"aptitude_percent"`
-	AptitudeGrade   *string   `json:"aptitude_grade"`
-	CurrentMana     *float64  `json:"current_mana"`
-	MaxMana         *float64  `json:"max_mana"`
-	HP              *float64  `json:"hp"`
-	BaseHP          *float64  `json:"base_hp"`
-	WallProgress    *float64  `json:"wall_progress"`
-	HumanQi         *float64  `json:"human_qi"`
-	Lifespan        *float64  `json:"lifespan"`
-	CurrentRegion   *string   `json:"current_region"`
-	IsAdmin         *bool     `json:"is_admin"`
-	SoulHP          *float64  `json:"soul_hp"`
-	MaxSoul         *float64  `json:"max_soul"`
-	SoulTier        *string   `json:"soul_tier"`
-	ExploreCount    *int      `json:"explore_count"`
-	ApertureStress  *float64  `json:"aperture_stress"`
-	Bio             *string   `json:"bio"`
-	AvatarURL       *string   `json:"avatar_url"`
-	Race            *string   `json:"race"`
-	Gender          *string   `json:"gender"`
-	Constitution    *string   `json:"constitution"`
-	Statuses        *models.StatusList `json:"statuses"`
+	Rank                 *int               `json:"rank"`
+	SubRank              *int               `json:"sub_rank"`
+	AptitudeType         *string            `json:"aptitude_type"`
+	AptitudePercent      *float64           `json:"aptitude_percent"`
+	AptitudeGrade        *string            `json:"aptitude_grade"`
+	CurrentMana          *float64           `json:"current_mana"`
+	MaxMana              *float64           `json:"max_mana"`
+	HP                   *float64           `json:"hp"`
+	BaseHP               *float64           `json:"base_hp"`
+	WallProgress         *float64           `json:"wall_progress"`
+	HumanQi              *float64           `json:"human_qi"`
+	Lifespan             *float64           `json:"lifespan"`
+	CurrentRegion        *string            `json:"current_region"`
+	X                    *int               `json:"x"`
+	Y                    *int               `json:"y"`
+	IsAdmin              *bool              `json:"is_admin"`
+	SoulHP               *float64           `json:"soul_hp"`
+	MaxSoul              *float64           `json:"max_soul"`
+	SoulTier             *string            `json:"soul_tier"`
+	ExploreCount         *int               `json:"explore_count"`
+	ApertureStress       *float64           `json:"aperture_stress"`
+	Bio                  *string            `json:"bio"`
+	AvatarURL            *string            `json:"avatar_url"`
+	Race                 *string            `json:"race"`
+	Gender               *string            `json:"gender"`
+	Constitution         *string            `json:"constitution"`
+	Statuses             *models.StatusList `json:"statuses"`
+	CurrentThought       *float64           `json:"current_thought"`
+	MaxThought           *float64           `json:"max_thought"`
+	ThoughtRegenRate     *float64           `json:"thought_regen_rate"`
+	TimeSpeedMultiplier  *float64           `json:"time_speed_multiplier"`
+	NeedsSoulRefine      *bool              `json:"needs_soul_refine"`
+	SelectedTitle        *string            `json:"selected_title"`
+	SelectedFrame        *string            `json:"selected_frame"`
+	FakeRank             *int               `json:"fake_rank"`
+	FakeSubRank          *int               `json:"fake_sub_rank"`
+	FakeVitalGu          *string            `json:"fake_vital_gu"`
+	IsDisguised          *bool              `json:"is_disguised"`
+	NeedsOnboarding      *bool              `json:"needs_onboarding"`
+	ImmortalJade         *float64           `json:"immortal_jade"`
 }
 
 // AdminUpdatePlayer allows admins to edit a wide range of player attributes in one call.
@@ -995,6 +1135,16 @@ func AdminUpdatePlayer(c *gin.Context) {
 		args = append(args, *req.CurrentRegion)
 		argIdx++
 	}
+	if req.X != nil {
+		sets = append(sets, "x=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.X)
+		argIdx++
+	}
+	if req.Y != nil {
+		sets = append(sets, "y=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.Y)
+		argIdx++
+	}
 	if req.IsAdmin != nil {
 		sets = append(sets, "is_admin=$"+strconv.Itoa(argIdx))
 		args = append(args, *req.IsAdmin)
@@ -1083,6 +1233,74 @@ func AdminUpdatePlayer(c *gin.Context) {
 		sets = append(sets, "statuses=$"+strconv.Itoa(argIdx))
 		args = append(args, statuses)
 		argIdx++
+	}
+	if req.CurrentThought != nil {
+		sets = append(sets, "current_thought=$"+strconv.Itoa(argIdx))
+		args = append(args, math.Max(0, *req.CurrentThought))
+		argIdx++
+	}
+	if req.MaxThought != nil {
+		sets = append(sets, "max_thought=$"+strconv.Itoa(argIdx))
+		args = append(args, math.Max(0, *req.MaxThought))
+		argIdx++
+	}
+	if req.ThoughtRegenRate != nil {
+		sets = append(sets, "thought_regen_rate=$"+strconv.Itoa(argIdx))
+		args = append(args, math.Max(0, *req.ThoughtRegenRate))
+		argIdx++
+	}
+	if req.TimeSpeedMultiplier != nil {
+		sets = append(sets, "time_speed_multiplier=$"+strconv.Itoa(argIdx))
+		args = append(args, math.Max(0.1, *req.TimeSpeedMultiplier))
+		argIdx++
+	}
+	if req.NeedsSoulRefine != nil {
+		sets = append(sets, "needs_soul_refine=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.NeedsSoulRefine)
+		argIdx++
+	}
+	if req.SelectedTitle != nil {
+		sets = append(sets, "selected_title=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.SelectedTitle)
+		argIdx++
+	}
+	if req.SelectedFrame != nil {
+		sets = append(sets, "selected_frame=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.SelectedFrame)
+		argIdx++
+	}
+	if req.FakeRank != nil {
+		sets = append(sets, "fake_rank=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.FakeRank)
+		argIdx++
+	}
+	if req.FakeSubRank != nil {
+		sets = append(sets, "fake_sub_rank=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.FakeSubRank)
+		argIdx++
+	}
+	if req.FakeVitalGu != nil {
+		sets = append(sets, "fake_vital_gu=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.FakeVitalGu)
+		argIdx++
+	}
+	if req.IsDisguised != nil {
+		sets = append(sets, "is_disguised=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.IsDisguised)
+		argIdx++
+	}
+	if req.NeedsOnboarding != nil {
+		sets = append(sets, "needs_onboarding=$"+strconv.Itoa(argIdx))
+		args = append(args, *req.NeedsOnboarding)
+		argIdx++
+	}
+
+	if req.ImmortalJade != nil {
+		_, err := tx.Exec(`INSERT INTO wallets (user_id, immortal_jade) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET immortal_jade = EXCLUDED.immortal_jade, updated_at = NOW()`, playerID, *req.ImmortalJade)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật Tiên Ngọc"})
+			return
+		}
 	}
 
 	if len(sets) == 0 {
