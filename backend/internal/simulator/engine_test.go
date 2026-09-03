@@ -1,7 +1,6 @@
 package simulator
 
 import (
-	"reflect"
 	"strings"
 	"testing"
 
@@ -274,7 +273,7 @@ func TestCounterDoesNotChain(t *testing.T) {
 }
 
 // TestSupportDoesNotProvokeCounter verifies that a non-damaging support cast
-// executes without damage, and the opponent responds on its turn.
+// executes without ending the turn pass, allowing the actor to also cast their attack action before yielding turn.
 func TestSupportDoesNotProvokeCounter(t *testing.T) {
 	state := &CombatState{
 		Seed: 21,
@@ -298,9 +297,9 @@ func TestSupportDoesNotProvokeCounter(t *testing.T) {
 
 	logs := Simulate(state)
 	got := firstTurnDamageActors(logs)
-	want := []string{"enemy"}
+	want := []string{"ally", "enemy"}
 	if !idsEqual(got, want) {
-		t.Fatalf("expected [enemy] damage in turn 1 (ally cast non-damaging buff), got %v", got)
+		t.Fatalf("expected [ally enemy] damage in turn 1 (ally cast non-damaging buff then damage A2), got %v", got)
 	}
 }
 
@@ -347,10 +346,11 @@ func TestExplicitPriorityActionSorting(t *testing.T) {
 
 func TestPerGuSequentialActionExecution(t *testing.T) {
 	attacker := newTestCombatant("attacker", "Player", 2000, 100)
+	attacker.Mana = 100
+	attacker.MaxMana = 100
 	attacker.Actions = []SimAction{
-		{ActionType: "GU_SKILL", Name: "GuFirst_Damage", Damage: 300},
-		{ActionType: "GU_SKILL", Name: "GuSecond_Shield", Defense: 200},
-		{ActionType: "GU_SKILL", Name: "GuThird_Heal", Healing: 150},
+		{ActionType: "GU_SKILL", Name: "GuFirst_Heal", Healing: 500, ManaCost: 40}, // High priority emergency heal (always condition)
+		{ActionType: "GU_SKILL", Name: "GuSecond_Damage", Damage: 300, ManaCost: 40}, // Secondary damage
 	}
 
 	defender := newTestCombatant("defender", "Enemy", 2000, 50)
@@ -363,19 +363,30 @@ func TestPerGuSequentialActionExecution(t *testing.T) {
 
 	logs := Simulate(state)
 
-	var executedNames []string
+	var firstTurnAction string
 	for _, l := range logs {
-		for _, name := range []string{"GuFirst_Damage", "GuSecond_Shield", "GuThird_Heal"} {
-			if strings.Contains(l.Detail, name) {
-				executedNames = append(executedNames, name)
+		if l.Turn == 1 && l.ActorId == "attacker" {
+			if strings.Contains(l.Detail, "GuFirst_Heal") {
+				firstTurnAction = "GuFirst_Heal"
 				break
 			}
 		}
 	}
 
-	want := []string{"GuFirst_Damage", "GuSecond_Shield", "GuThird_Heal"}
-	if !reflect.DeepEqual(executedNames, want) {
-		t.Fatalf("expected sequential per-Gu execution %v, got %v", want, executedNames)
+	if firstTurnAction != "GuFirst_Heal" {
+		t.Fatalf("expected top priority GuFirst_Heal on turn 1, got %s", firstTurnAction)
+	}
+
+	// Verify that when mana runs out, attacker falls back to BASIC_ATTACK
+	hasBasicAttack := false
+	for _, l := range logs {
+		if l.ActorId == "attacker" && strings.Contains(l.Detail, "Đánh thường") {
+			hasBasicAttack = true
+			break
+		}
+	}
+	if !hasBasicAttack {
+		t.Fatalf("expected attacker to fall back to BASIC_ATTACK when out of mana")
 	}
 }
 

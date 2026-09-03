@@ -387,13 +387,6 @@ func Simulate(state *CombatState) []CombatLog {
 		}
 	}
 
-	executedActions := make(map[*CombatantAuto][]bool)
-	for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
-		for _, c := range combatants {
-			executedActions[c] = make([]bool, len(c.Actions))
-		}
-	}
-
 	for turn := 1; turn <= maxTurns; turn++ {
 		state.Turn = turn
 		var turnLogs []CombatLog
@@ -1540,39 +1533,50 @@ func Simulate(state *CombatState) []CombatLog {
 					return res
 				}
 
-			// Iterate through actions sequentially
-			executedOne := false
-			for ai := 0; ai < len(actor.Actions); ai++ {
-				if executedActions[actor][ai] {
-					continue
-				}
-				a := &actor.Actions[ai]
+			// Non-damaging support actions (shield, heal, buff) resolve without ending the turn pass.
+			// The turn pass ends only when an attack / damage action (Damage > 0 or BASIC_ATTACK) is executed.
+			executedThisTurn := make([]bool, len(actor.Actions))
+			executedDamageThisTurn := false
 
-				var primaryTgt *CombatantAuto
-				if len(enemyTargets) > 0 {
-					primaryTgt = enemyTargets[0]
-				}
-				if !checkActionCondition(a, actor, primaryTgt) {
-					continue
-				}
-
-				out := runOne(actor, a, isAlly, enemyTargets)
-				postActionChecks(enemyTargets)
-				if out.abort {
-					for k := ai; k < len(actor.Actions); k++ {
-						executedActions[actor][k] = true
+			for {
+				executedActionInLoop := false
+				for ai := 0; ai < len(actor.Actions); ai++ {
+					if executedThisTurn[ai] {
+						continue
 					}
-					break
+					a := &actor.Actions[ai]
+
+					var primaryTgt *CombatantAuto
+					if len(enemyTargets) > 0 {
+						primaryTgt = enemyTargets[0]
+					}
+					if !checkActionCondition(a, actor, primaryTgt) {
+						continue
+					}
+
+					out := runOne(actor, a, isAlly, enemyTargets)
+					postActionChecks(enemyTargets)
+					if out.abort {
+						executedDamageThisTurn = true
+						break
+					}
+					if out.executed {
+						executedThisTurn[ai] = true
+						executedActionInLoop = true
+						if out.hasDamage {
+							executedDamageThisTurn = true
+							break // Attack / damage action ends the turn pass!
+						}
+					}
 				}
-				if out.executed {
-					executedActions[actor][ai] = true
-					executedOne = true
-					break // Yield turn pass after executing 1 action
+
+				if executedDamageThisTurn || !executedActionInLoop {
+					break
 				}
 			}
 
-			// Fallback: Basic attack if no action was executed
-			if !executedOne {
+			// Fallback: Basic attack if no attack / damage action was executed in this turn pass
+			if !executedDamageThisTurn {
 				daoMult, _ := actorDaoMultiplier(actor, []string{"strength"})
 				fallbackDmgMult := actor.DamageMultiplier
 				fallbackAction := &SimAction{

@@ -58,6 +58,7 @@ export default function Home() {
     explore,
     feedGu,
     feedGuGroup,
+    feedAllGu,
     clearError,
     guDictionary,
     itemDictionary,
@@ -292,6 +293,7 @@ export default function Home() {
               player={player}
               onFeed={feedGu}
               onFeedGroup={feedGuGroup}
+              onFeedAll={feedAllGu}
               actionLoading={actionLoading}
               guDictionary={guDictionary}
               itemDictionary={itemDictionary}

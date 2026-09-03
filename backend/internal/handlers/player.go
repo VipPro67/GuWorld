@@ -2168,6 +2168,199 @@ func FeedGroup(c *gin.Context) {
 	})
 }
 
+// FeedAll feeds all hungry Gu bugs in the player's inventory using available food
+func FeedAll(c *gin.Context) {
+	authID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
+		return
+	}
+	defer tx.Rollback()
+
+	player, err := evaluateManaTx(tx, authID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player stats"})
+		return
+	}
+	before := append(models.GuInventory(nil), player.GuInventory...)
+
+	fedCount := 0
+	foodConsumed := make(map[string]int)
+	materialQty := make(map[string]int)
+
+	getAvailableFood := func(specs models.GuDictionaryItem, targetRank int) string {
+		for _, food := range specs.FoodTypes {
+			if food == "primeval_stone" {
+				cost := int64(math.Pow(2, float64(targetRank)))
+				if player.PrimevalStones >= cost {
+					return food
+				}
+			} else if food == "immortal_stone" {
+				cost := int64(targetRank)
+				if player.ImmortalStones >= cost {
+					return food
+				}
+			} else if !strings.HasPrefix(food, "GU_") {
+				if _, cached := materialQty[food]; !cached {
+					qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), food)
+					materialQty[food] = qty
+				}
+				if materialQty[food] > 0 {
+					return food
+				}
+			}
+		}
+		return ""
+	}
+
+	getAvailableGuFood := func(specs models.GuDictionaryItem, skipInstanceID string) int {
+		for _, food := range specs.FoodTypes {
+			if strings.HasPrefix(food, "GU_") {
+				for i, invGu := range player.GuInventory {
+					if invGu.GuID == food && invGu.InstanceID != skipInstanceID && invGu.Status != "DEAD" && invGu.Status != "SEALED" {
+						return i
+					}
+				}
+			}
+		}
+		return -1
+	}
+
+	for i := 0; i < len(player.GuInventory); i++ {
+		gu := &player.GuInventory[i]
+		if gu.Status == "DEAD" || gu.Status == "SEALED" {
+			continue
+		}
+
+		specs, found := models.GetGu(gu.GuID, gu.Rank)
+		if !found {
+			if specAny, ok := models.GetGuAny(gu.GuID); ok {
+				specs = specAny
+				found = true
+			}
+		}
+		if !found || len(specs.FoodTypes) == 0 {
+			continue
+		}
+
+		if gu.Hunger >= specs.MaxHunger {
+			continue
+		}
+
+		fedThisGu := false
+		for gu.Hunger < specs.MaxHunger {
+			chosenFood := getAvailableFood(specs, gu.Rank)
+			consumedGuIndex := -1
+			if chosenFood == "" {
+				consumedGuIndex = getAvailableGuFood(specs, gu.InstanceID)
+			}
+
+			if chosenFood == "" && consumedGuIndex == -1 {
+				break // No more food for this Gu
+			}
+
+			foodID := ""
+			if chosenFood != "" {
+				switch chosenFood {
+				case "primeval_stone":
+					player.PrimevalStones -= int64(math.Pow(2, float64(gu.Rank)))
+				case "immortal_stone":
+					player.ImmortalStones -= int64(gu.Rank)
+				default:
+					if err := InventorySvc.RemoveItem(tx, player.ID.String(), chosenFood, "materials", 1); err == nil {
+						materialQty[chosenFood]--
+					} else {
+						materialQty[chosenFood] = 0
+						continue
+					}
+				}
+				foodID = chosenFood
+				foodConsumed[chosenFood]++
+			} else {
+				consumedGu := player.GuInventory[consumedGuIndex]
+				foodID = consumedGu.GuID
+				foodConsumed[consumedGu.GuID]++
+				player.GuInventory = append(player.GuInventory[:consumedGuIndex], player.GuInventory[consumedGuIndex+1:]...)
+				if consumedGuIndex <= i {
+					i--
+				}
+				gu = &player.GuInventory[i]
+			}
+
+			nutrition := computeFoodNutrition(foodID, gu.Rank)
+			gu.Hunger += nutrition
+			if gu.Hunger > specs.MaxHunger {
+				gu.Hunger = specs.MaxHunger
+			}
+			fedThisGu = true
+		}
+
+		if fedThisGu {
+			gu.Status = "ACTIVE"
+			if gu.IsVital {
+				gu.Equipped = true
+			}
+			fedCount++
+		}
+	}
+
+	if fedCount == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không có Cổ trùng nào cần cho ăn hoặc không có đủ thức ăn phù hợp"})
+		return
+	}
+
+	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
+		return
+	}
+	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, immortal_stones = $2 WHERE id = $3`,
+		player.PrimevalStones, player.ImmortalStones, player.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save feeding progress"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
+		return
+	}
+
+	var foodDetails []string
+	for foodID, qty := range foodConsumed {
+		foodName := foodID
+		if itemSpec, ok := models.ItemRegistry[foodID]; ok {
+			foodName = itemSpec.Name
+		} else if guSpec, ok := models.GetGuAny(foodID); ok {
+			foodName = guSpec.Name
+		}
+		foodDetails = append(foodDetails, fmt.Sprintf("%dx %s", qty, foodName))
+	}
+
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID:       &authID,
+		Action:         "gu.feed_all",
+		EntityType:     "player",
+		EntityID:       authID.String(),
+		RequestSummary: fmt.Sprintf("Cho tất cả Cổ trùng ăn (%d Cổ trùng). Tiêu hao: %s", fedCount, strings.Join(foodDetails, ", ")),
+		Metadata: map[string]interface{}{
+			"fed_count":     fedCount,
+			"food_consumed": foodConsumed,
+		},
+		IPAddress: c.ClientIP(),
+		Success:   true,
+	})
+
+	responseWithPlayer(c, http.StatusOK, player, gin.H{
+		"message": fmt.Sprintf("Cho tất cả Cổ trùng ăn thành công! Đã khôi phục cho %d Cổ trùng. Tiêu hao: %s.", fedCount, strings.Join(foodDetails, ", ")),
+	})
+}
+
 type playerQueryRower interface {
 	QueryRow(query string, args ...any) *sql.Row
 }

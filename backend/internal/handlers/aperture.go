@@ -26,22 +26,22 @@ type ResourceNodeTemplate struct {
 	Path              string
 	CostStones        int
 	CostImmortal      int
-	ProdType          string   // "Material" | "Stones"
-	ProdKey           string   // e.g. "moon_orchid_petal"
+	ProdType          string // "Material" | "Stones"
+	ProdKey           string // e.g. "moon_orchid_petal"
 	ProdAmount        int
 	ProdIntervalHours int
-	NodeCategory      string    // "RESOURCE" | "DEFENSE"
-	HPMax             int       // max HP for node (default 1000)
-	DefensePower      int       // damage per tick (WATCHTOWER)
-	AttackRange       int       // radius in cells (Manhattan distance)
-	HPBonus           int       // bonus HP to nearby nodes (GUARDIAN_STATUE)
-	DamageReduction   int       // % damage reduction (BARRACKS, FORCE_FIELD)
-	BlocksMovement    bool      // wall blocks enemy movement
-	CostGu            []string  // required Gu IDs
-	CostGuRank        int       // minimum rank for each required Gu
-	FoodPath          string    // path of the food item produced (if any)
-	ItemTier          string    // tier of the item (T1-T9)
-	ZoneType          string    // zone type (khu_trong, khu_nuoi, khu_khai_thac, khu_che_bien, khu_phong_thu, khu_thuc_an)
+	NodeCategory      string   // "RESOURCE" | "DEFENSE"
+	HPMax             int      // max HP for node (default 1000)
+	DefensePower      int      // damage per tick (WATCHTOWER)
+	AttackRange       int      // radius in cells (Manhattan distance)
+	HPBonus           int      // bonus HP to nearby nodes (GUARDIAN_STATUE)
+	DamageReduction   int      // % damage reduction (BARRACKS, FORCE_FIELD)
+	BlocksMovement    bool     // wall blocks enemy movement
+	CostGu            []string // required Gu IDs
+	CostGuRank        int      // minimum rank for each required Gu
+	FoodPath          string   // path of the food item produced (if any)
+	ItemTier          string   // tier of the item (T1-T9)
+	ZoneType          string   // zone type (khu_trong, khu_nuoi, khu_khai_thac, khu_che_bien, khu_phong_thu, khu_thuc_an)
 }
 
 var ResourceNodeTemplates = map[string]ResourceNodeTemplate{
@@ -252,13 +252,13 @@ func GetImmortalAperture(c *gin.Context) {
 
 func seedInitialApertureNodes(tx *sql.Tx, apertureID string, grade string) {
 	type StarterConfig struct {
-		NodeType string
-		Name     string
-		Path     string
-		ProdKey  string
-		ZoneType string
-		ProdType string
-		ProdAmount int
+		NodeType     string
+		Name         string
+		Path         string
+		ProdKey      string
+		ZoneType     string
+		ProdType     string
+		ProdAmount   int
 		ProdInterval int
 	}
 
@@ -676,7 +676,7 @@ func PlaceApertureNode(c *gin.Context) {
 	if req.Path != "" {
 		nodePath = req.Path
 	}
-	
+
 	nodeProdKey := template.ProdKey
 	if req.ProdKey != "" {
 		nodeProdKey = req.ProdKey
@@ -970,7 +970,7 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 		_ = json.Unmarshal(nodeDaoJSON, &nodeDaoMap)
 	}
 	daoMarks := nodeDaoMap[strings.TrimSuffix(strings.ToLower(n.Path), " path")]
-	daoMultiplier := 1.0 + float64(daoMarks)*0.005
+	daoMultiplier := 1.0 + float64(daoMarks)*0.01
 
 	// Check if player has Tiên Thai Chí Tôn (ignore Dao conflicts)
 	hasSovereignFetus := false
@@ -2032,4 +2032,3 @@ func GetApertureVariantHumans(c *gin.Context) {
 
 	c.JSON(http.StatusOK, list)
 }
-

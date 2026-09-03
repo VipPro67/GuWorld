@@ -13,6 +13,7 @@ interface GuInventoryProps {
   player: Player;
   onFeed: (guInstanceId: string) => Promise<void>;
   onFeedGroup?: (guId: string, rank?: number) => Promise<void>;
+  onFeedAll?: () => Promise<void>;
   actionLoading: boolean;
   guDictionary: Record<string, GuSpec>;
   itemDictionary: Record<string, ItemSpec>;
@@ -53,6 +54,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   player,
   onFeed,
   onFeedGroup,
+  onFeedAll,
   actionLoading,
   guDictionary,
   itemDictionary,
@@ -77,6 +79,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
 
   const [feedingId, setFeedingId] = useState<string | null>(null);
   const [feedingGroupGuId, setFeedingGroupGuId] = useState<string | null>(null);
+  const [feedingAll, setFeedingAll] = useState<boolean>(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [equippingId, setEquippingId] = useState<string | null>(null);
   const [usingId, setUsingId] = useState<string | null>(null);
@@ -112,6 +115,16 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
       await onFeedGroup(guId, rank);
     } finally {
       setFeedingGroupGuId(null);
+    }
+  };
+
+  const handleFeedAllClick = async () => {
+    if (!onFeedAll) return;
+    setFeedingAll(true);
+    try {
+      await onFeedAll();
+    } finally {
+      setFeedingAll(false);
     }
   };
 
@@ -668,6 +681,16 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                   </>
                 ) : (
                   <>
+                    {onFeedAll && (
+                      <button
+                        type="button"
+                        disabled={actionLoading || feedingAll}
+                        onClick={handleFeedAllClick}
+                        className="text-[10px] font-bold py-1 px-2.5 bg-emerald-950/20 text-emerald-400 border border-emerald-900 hover:bg-emerald-950/40 rounded-lg font-mono transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {feedingAll ? "🌱 Đang Cho Ăn..." : "🌱 Cho Ăn Tất Cả"}
+                      </button>
+                    )}
                     {onDropGus && (
                       <button
                         type="button"

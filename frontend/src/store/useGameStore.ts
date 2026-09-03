@@ -977,6 +977,7 @@ interface GameState {
   explore: () => Promise<void>;
   feedGu: (guInstanceId: string) => Promise<void>;
   feedGuGroup: (guId: string, rank?: number) => Promise<void>;
+  feedAllGu: () => Promise<void>;
   fetchDictionary: () => Promise<void>;
   fetchRecipes: () => Promise<void>;
   quests: any[];
@@ -2630,6 +2631,42 @@ export const useGameStore = create<GameState>((set, get) => {
     } catch (err: any) {
       set({ error: err.message });
       get().addLog(`Cho ăn hàng loạt thất bại: ${err.message}`);
+      get().addToast(err.message, "error");
+    } finally {
+      set({ actionLoading: false });
+    }
+  },
+
+  feedAllGu: async () => {
+    const { player, token, actionLoading, logout } = get();
+    if (!player || !token || actionLoading) return;
+
+    set({ actionLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/inventory/feed-all`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        logout();
+        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
+      }
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Không thể cho tất cả Cổ trùng ăn.");
+      }
+
+      const data: FeedResponse = await response.json();
+      setPlayerFromServer(data.player);
+      get().addLog(data.message);
+      get().addToast(data.message, "success");
+    } catch (err: any) {
+      set({ error: err.message });
+      get().addLog(`Cho tất cả Cổ trùng ăn thất bại: ${err.message}`);
       get().addToast(err.message, "error");
     } finally {
       set({ actionLoading: false });
