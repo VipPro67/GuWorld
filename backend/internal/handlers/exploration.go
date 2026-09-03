@@ -920,6 +920,8 @@ func MovePlayer(c *gin.Context) {
 		return
 	}
 
+	SyncPartyMembersLocation(tx, &player)
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})
 		return
@@ -1147,6 +1149,8 @@ func MovePlayerPath(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return
 	}
+
+	SyncPartyMembersLocation(tx, &player)
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failure"})

@@ -1364,7 +1364,7 @@ const apiFetch = async (input: RequestInfo | URL, init: ApiFetchInit = {}): Prom
 
     if (raw) return response;
 
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       if (!silent) {
         const state = useGameStore.getState();
         let errorMsg = "Phiên làm việc hết hạn. Vui lòng đăng nhập lại.";
@@ -2227,7 +2227,7 @@ export const useGameStore = create<GameState>((set, get) => {
         method: "POST",
         body: JSON.stringify({ mine_id: slotId, attacker_id: attackerId || "" }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Lỗi khi tấn công Lãnh địa");
       addToast(data.message || "Đã tấn công Lãnh địa Tông môn!", data.won ? "success" : "info");
@@ -2261,7 +2261,7 @@ export const useGameStore = create<GameState>((set, get) => {
           monster_rank: monsterRank || 1,
         }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bố trí phòng thủ thất bại.");
       addToast(data.message || "Đã bố trí phòng thủ!", "success");
@@ -2287,7 +2287,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ defender_id: defenderId }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Rút phòng thủ thất bại.");
       addToast(data.message || "Đã rút phòng thủ!", "success");
@@ -2330,7 +2330,7 @@ export const useGameStore = create<GameState>((set, get) => {
 
     try {
       const response = await authFetch(`${BACKEND_URL}/api/auth/me`);
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         set({ player: null, manaSnapshot: null, token: null });
         return;
       }
@@ -2366,7 +2366,7 @@ export const useGameStore = create<GameState>((set, get) => {
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/status/${id}`);
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         return;
       }
@@ -2401,7 +2401,7 @@ export const useGameStore = create<GameState>((set, get) => {
       try {
         const response = await authFetch(`${BACKEND_URL}/api/player/inventory/gus`);
 
-        if (response.status === 401 || response.status === 403) {
+        if (response.status === 401) {
           logout();
           return;
         }
@@ -2438,7 +2438,7 @@ export const useGameStore = create<GameState>((set, get) => {
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/profile/${encodeURIComponent(username)}`);
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         return;
       }
@@ -2541,7 +2541,7 @@ export const useGameStore = create<GameState>((set, get) => {
         method: "POST",
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -2577,7 +2577,7 @@ export const useGameStore = create<GameState>((set, get) => {
         body: JSON.stringify({ gu_instance_id: guInstanceId }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -2614,7 +2614,7 @@ export const useGameStore = create<GameState>((set, get) => {
         body: JSON.stringify({ gu_id: guId, ...(rank ? { rank } : {}) }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -2650,7 +2650,7 @@ export const useGameStore = create<GameState>((set, get) => {
         },
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -2722,7 +2722,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (get().recipesLoaded) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/recipes`);
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         set({ recipes: [], recipesLoaded: true });
         return;
       }
@@ -2740,7 +2740,7 @@ export const useGameStore = create<GameState>((set, get) => {
   fetchQuests: async () => {
     try {
       const response = await authFetch(`${BACKEND_URL}/api/quest`);
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         set({ quests: [] });
         return;
       }
@@ -2757,7 +2757,7 @@ export const useGameStore = create<GameState>((set, get) => {
   fetchRegions: async () => {
     try {
       const response = await authFetch(`${BACKEND_URL}/api/explore/regions`);
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         set({ regions: [], regionsLoaded: true });
         return;
       }
@@ -2804,7 +2804,7 @@ export const useGameStore = create<GameState>((set, get) => {
         }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -2844,7 +2844,7 @@ export const useGameStore = create<GameState>((set, get) => {
         }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -2892,7 +2892,7 @@ export const useGameStore = create<GameState>((set, get) => {
         body: JSON.stringify({ mana_spend: manaSpend}),
       });
 
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Trùng kích thất bại."); }
 
@@ -2918,7 +2918,7 @@ export const useGameStore = create<GameState>((set, get) => {
         body: JSON.stringify({ player_id: player.id, stones: stones }),
       });
 
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nạp nguyên thạch thất bại.");
 
@@ -2945,7 +2945,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ relic_key: relicKey }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Không thể dùng Cổ Xá Lợi."); }
       setPlayerFromServer(data.player);
@@ -2967,7 +2967,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/cultivate/ascension`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Thăng tiên thất bại."); }
       setPlayerFromServer(data.player);
@@ -2991,7 +2991,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ quest_id: questId }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Không thể nhận thưởng nhiệm vụ."); }
       setPlayerFromServer(data.player);
@@ -3014,7 +3014,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Mã quà không hợp lệ."); }
       setPlayerFromServer(data.player);
@@ -3033,7 +3033,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/achievements`);
-      if (response.status === 401 || response.status === 403) return;
+      if (response.status === 401) return;
       if (response.ok) {
         const data = await response.json();
         set({ achievements: data.achievements || [], earnedAchievements: data.earned || [], selectedTitle: data.selected_title || '', selectedFrame: data.selected_frame || '' });
@@ -3053,7 +3053,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ achievement_id: achievementId }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Nhận thưởng thất bại."); }
       setPlayerFromServer(data.player);
@@ -3076,7 +3076,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, frame }),
       });
-      if (response.status === 401 || response.status === 403) return null;
+      if (response.status === 401) return null;
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cập nhật thất bại.");
       set({ selectedTitle: title, selectedFrame: frame });
@@ -3094,7 +3094,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/gacha/pools`);
-      if (response.status === 401 || response.status === 403) return;
+      if (response.status === 401) return;
       if (response.ok) {
         const data = await response.json();
         set({ gachaPools: data.pools || [] });
@@ -3115,7 +3115,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pool_id: poolId, quantity }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Mở Đá  thất bại."); }
       setPlayerFromServer(data.player);
@@ -3134,7 +3134,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/beast-betting/current`);
-      if (response.status === 401 || response.status === 403) return;
+      if (response.status === 401) return;
       if (response.ok) {
         const data = await response.json();
         set({
@@ -3153,7 +3153,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/beast-betting/history`);
-      if (response.status === 401 || response.status === 403) return;
+      if (response.status === 401) return;
       if (response.ok) {
         const data = await response.json();
         set({ bettingHistory: data.history || [] });
@@ -3173,7 +3173,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ team, amount }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Đặt cược thất bại."); }
 
@@ -3210,7 +3210,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/cultivate/tribulation`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Không thể kích hoạt thiên kiếp."); }
       setPlayerFromServer(data.player);
@@ -3241,7 +3241,7 @@ export const useGameStore = create<GameState>((set, get) => {
         }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -3289,7 +3289,7 @@ export const useGameStore = create<GameState>((set, get) => {
         body: JSON.stringify({ player_id: player.id }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -3320,7 +3320,7 @@ export const useGameStore = create<GameState>((set, get) => {
         body: JSON.stringify({ npc_id: npcId }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -3352,7 +3352,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/killer-moves`);
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -3372,7 +3372,7 @@ export const useGameStore = create<GameState>((set, get) => {
     set({ combatSettingsLoading: true });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/combat-settings`);
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -3395,7 +3395,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ combat_settings: settings }),
       });
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -3417,7 +3417,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/killer-moves/${id}`, { method: "DELETE" });
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -3448,7 +3448,7 @@ export const useGameStore = create<GameState>((set, get) => {
           used_extra_gu_this_turn: usedExtraGuThisTurn,
         }),
       });
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -3503,7 +3503,7 @@ export const useGameStore = create<GameState>((set, get) => {
         }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -3544,7 +3544,7 @@ export const useGameStore = create<GameState>((set, get) => {
         body: JSON.stringify({ loadout }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -3588,7 +3588,7 @@ export const useGameStore = create<GameState>((set, get) => {
         }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -3623,7 +3623,7 @@ export const useGameStore = create<GameState>((set, get) => {
         timeoutMs: 30000,
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -3671,7 +3671,7 @@ export const useGameStore = create<GameState>((set, get) => {
         timeoutMs: 30000,
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -3726,7 +3726,7 @@ export const useGameStore = create<GameState>((set, get) => {
     set({ combatHistoryLoading: true });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/combat/history`, { method: "GET" });
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       if (response.ok) {
         set({ combatHistory: data.entries || [] });
@@ -3744,7 +3744,7 @@ export const useGameStore = create<GameState>((set, get) => {
 
     try {
       const response = await authFetch(`${BACKEND_URL}/api/combat/history/${id}`, { method: "GET" });
-      if (response.status === 401 || response.status === 403) { logout(); return null; }
+      if (response.status === 401) { logout(); return null; }
       const data = await response.json();
       if (response.ok) return data;
     } catch {
@@ -3774,7 +3774,7 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       const response = await authFetch(url, { method: "GET" });
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       if (response.ok) {
         set({ auditLogs: data || [] });
@@ -3793,7 +3793,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/listings`, {});
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       set({ marketplaceListings: Array.isArray(data) ? data : [] });
     } catch (err) {
@@ -3823,7 +3823,7 @@ export const useGameStore = create<GameState>((set, get) => {
           target_buyer_username: payload.targetBuyerUsername || "",
         }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Đăng bán thất bại");
       get().addLog(data.message || "Đăng bán thành công");
@@ -3843,7 +3843,7 @@ export const useGameStore = create<GameState>((set, get) => {
     set({ actionLoading: true, error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/bid`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listing_id: listingId, amount }) });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Đặt giá thất bại");
       get().addLog(data.message || "Đặt giá thành công");
@@ -3859,7 +3859,7 @@ export const useGameStore = create<GameState>((set, get) => {
     set({ actionLoading: true, error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/cancel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listing_id: listingId }) });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hủy listing thất bại");
       get().addLog(data.message || "Đã hủy");
@@ -3879,7 +3879,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ listing_id: listingId, quantity }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Mua hàng thất bại");
       get().addLog(data.message || "Mua hàng thành công");
@@ -3899,7 +3899,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/trade/active`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       if (!response.ok) return;
       const data = await response.json();
       set({ activeTrade: data.trade });
@@ -3919,7 +3919,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ receiver_username: receiverUsername }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Gửi yêu cầu giao dịch thất bại");
       get().addLog(data.message || "Yêu cầu giao dịch đã được gửi!");
@@ -3941,7 +3941,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/trade/accept/${tradeId}`, { method: "POST" });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Chấp nhận giao dịch thất bại");
       get().addLog(data.message || "Đã chấp nhận giao dịch!");
@@ -3959,7 +3959,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/trade/decline/${tradeId}`, { method: "POST" });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Từ chối giao dịch thất bại");
       get().addLog(data.message || "Đã từ chối giao dịch!");
@@ -3976,7 +3976,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/trade/cancel/${tradeId}`, { method: "POST" });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hủy giao dịch thất bại");
       get().addLog(data.message || "Đã hủy giao dịch!");
@@ -3998,7 +3998,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(offer),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cập nhật ưu đãi thất bại");
       await get().fetchActiveTrade();
@@ -4014,7 +4014,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/trade/lock/${tradeId}`, { method: "POST" });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Khóa giao dịch thất bại");
       get().addLog("Đã khóa ưu đãi giao dịch!");
@@ -4032,7 +4032,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/trade/confirm/${tradeId}`, { method: "POST" });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Xác nhận giao dịch thất bại");
       
@@ -4073,7 +4073,7 @@ export const useGameStore = create<GameState>((set, get) => {
         }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -4107,7 +4107,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ player_id: player.id, item_id: itemId, quantity, item_type: itemType, rank }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bán hàng thất bại.");
       setPlayerFromServer(data.player);
@@ -4131,7 +4131,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ player_id: player.id, items }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bán hàng thất bại.");
       setPlayerFromServer(data.player);
@@ -4155,7 +4155,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ gu_instance_id: instanceId }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Vứt Cổ thất bại.");
       setPlayerFromServer(data.player);
@@ -4178,7 +4178,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ gu_instance_ids: instanceIds }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Vứt Cổ thất bại.");
       setPlayerFromServer(data.player);
@@ -4208,7 +4208,7 @@ export const useGameStore = create<GameState>((set, get) => {
         }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -4244,7 +4244,7 @@ export const useGameStore = create<GameState>((set, get) => {
         },
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -4285,7 +4285,7 @@ export const useGameStore = create<GameState>((set, get) => {
         }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -4322,7 +4322,7 @@ export const useGameStore = create<GameState>((set, get) => {
         }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -4361,7 +4361,7 @@ export const useGameStore = create<GameState>((set, get) => {
         }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -4400,7 +4400,7 @@ export const useGameStore = create<GameState>((set, get) => {
         }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -4438,7 +4438,7 @@ export const useGameStore = create<GameState>((set, get) => {
         body: JSON.stringify({ item_ids: itemIds }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -4484,7 +4484,7 @@ export const useGameStore = create<GameState>((set, get) => {
           body: JSON.stringify({ gu_instance_id: guInstanceId }),
         });
 
-        if (response.status === 401 || response.status === 403) {
+        if (response.status === 401) {
           logout();
           throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
         }
@@ -4531,7 +4531,7 @@ export const useGameStore = create<GameState>((set, get) => {
         }),
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
       }
@@ -4578,7 +4578,7 @@ export const useGameStore = create<GameState>((set, get) => {
         },
       });
 
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         return null;
       }
@@ -4604,7 +4604,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/party/create`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Tạo tổ đội thất bại");
       set({ party: data.party });
@@ -4624,7 +4624,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/party/status`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       set({ party: data.party });
     } catch (err) {
@@ -4643,7 +4643,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Không thể mời");
       set({ party: data.party });
@@ -4665,7 +4665,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/party/leave`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Rời tổ đội thất bại");
       set({ party: null });
@@ -4685,7 +4685,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/party/invitations`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       set({ partyInvitations: data.invitations || [] });
     } catch (err) {
@@ -4703,7 +4703,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Thao tác thất bại.");
       if (action === "accept") {
@@ -4727,7 +4727,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/arena/leaderboard`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       set({ 
         arenaLeaderboard: Array.isArray(data.leaderboard) ? data.leaderboard : [],
@@ -4796,7 +4796,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ target_player_id: targetPlayerId }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Khiêu chiến thất bại");
       setPlayerFromServer(data.player, { currentView: "arena" });
@@ -4816,7 +4816,7 @@ export const useGameStore = create<GameState>((set, get) => {
     set({ leaderboardLoading: true, leaderboardCategory: category });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/leaderboard/${category}`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       set({
         leaderboardEntries: Array.isArray(data.entries) ? data.entries : [],
@@ -4837,7 +4837,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/leaderboard/toggle`, { method: "POST" });
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       set({ leaderboardShowOnLeaderboard: data.show_on_leaderboard });
       get().addLog(data.show_on_leaderboard ? "Đã tham gia bảng xếp hạng" : "Đã rút khỏi bảng xếp hạng");
@@ -4852,7 +4852,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/leaderboard/settings`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       set({ leaderboardShowOnLeaderboard: data.show_on_leaderboard });
     } catch (err) {
@@ -4871,7 +4871,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ receiver_username: receiverUsername, content }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Gửi thư thất bại");
       get().addLog(data.message || "Đã gửi thư truyền tin!");
@@ -4890,7 +4890,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/chat/mail/inbox`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       set({ inbox: Array.isArray(data.inbox) ? data.inbox : [] });
     } catch (err) {
@@ -4909,7 +4909,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content, channel }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Gửi tin nhắn thất bại");
       get().addLog(data.message || "Đã phát truyền tin nhắn!");
@@ -4928,7 +4928,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/chat/bao-hoang/messages?channel=${channel}`);
-      if (response.status === 401 || response.status === 403) { return; }
+      if (response.status === 401) { return; }
       const data = await response.json();
       set({ baoHoangMessages: Array.isArray(data.messages) ? data.messages : [] });
     } catch (err) {
@@ -4942,7 +4942,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/notifications?page=1&pageSize=50`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       const list = Array.isArray(data.notifications) ? data.notifications : [];
       set({
@@ -5009,7 +5009,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/mine/slots`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       if (response.ok) {
         set({ mineSlots: Array.isArray(data) ? data : [] });
@@ -5030,7 +5030,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slot_id: slotId }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Chiếm mỏ thất bại");
       get().addLog(data.message || "Chiếm mỏ thành công!");
@@ -5055,7 +5055,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slot_id: slotId }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nhận thưởng thất bại");
       get().addLog(data.message || "Đã nhận thưởng tích lũy!");
@@ -5080,7 +5080,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slot_id: slotId }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Rút lui thất bại");
       get().addLog(data.message || "Đã rời khỏi mỏ và nhận hết thưởng!");
@@ -5105,7 +5105,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slot_id: slotId }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Tấn công mỏ thất bại");
       get().addLog(data.message || "Bắt đầu thách đấu chiếm mỏ!");
@@ -5128,7 +5128,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/pets`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       if (response.ok) {
         set({ playerPets: data.pets || [], playerPetsLoaded: true });
@@ -5146,7 +5146,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pet_id: petId, item_id: itemId }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cho ăn thất bại");
       get().addToast(data.message || `Đã cho ăn +${data.restored} hunger`, "success");
@@ -5169,7 +5169,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slots: petIds }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cập nhật đội hình thất bại");
       get().addToast("Đội hình đã cập nhật", "success");
@@ -5192,7 +5192,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pet_id: petId, sleeping }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cập nhật trạng thái thất bại");
       await get().fetchPlayerPets();
@@ -5214,7 +5214,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pet_id: petId }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Thả pet thất bại");
       get().addToast("Đã thả pet", "success");
@@ -5237,7 +5237,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ target_id: targetId, source_ids: sourceIds }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Gộp bầy thất bại");
       get().addToast(data.message || `Đã gộp thành ${data.count} cá thể!`, "success");
@@ -5260,7 +5260,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ player_id: player.id }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bắt thất bại");
       setPlayerFromServer(data.player);
@@ -5285,7 +5285,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (!token) return;
       try {
         const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture`);
-        if (response.status === 401 || response.status === 403) {
+        if (response.status === 401) {
           logout();
           return;
         }
@@ -5316,7 +5316,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/dao-marks`);
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         return;
       }
@@ -5337,7 +5337,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (!token) return;
       try {
         const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes`);
-        if (response.status === 401 || response.status === 403) {
+        if (response.status === 401) {
           logout();
           return;
         }
@@ -5366,7 +5366,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ node_type: nodeType, x, y, path, prod_key: prodKey }),
       });
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn.");
       }
@@ -5397,7 +5397,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/collect`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn.");
       }
@@ -5427,7 +5427,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/collect-all`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn.");
       }
@@ -5457,7 +5457,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/uninstall`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn.");
       }
@@ -5488,7 +5488,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}`, {
         method: "DELETE",
       });
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn.");
       }
@@ -5518,7 +5518,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (!token) return;
       try {
         const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/variant-humans`);
-        if (response.status === 401 || response.status === 403) {
+        if (response.status === 401) {
           logout();
           return;
         }
@@ -5547,7 +5547,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ time_rate: rate }),
       });
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn.");
       }
@@ -5578,7 +5578,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ race, labor_intensity: intensity }),
       });
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn.");
       }
@@ -5607,7 +5607,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/repair`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn.");
       }
@@ -5638,7 +5638,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/repair-all`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn.");
       }
@@ -5669,7 +5669,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/upgrade`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn.");
       }
@@ -5696,7 +5696,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/tribulations/active`);
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         return;
       }
@@ -5719,7 +5719,7 @@ export const useGameStore = create<GameState>((set, get) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn.");
       }
@@ -5747,7 +5747,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/resolve`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) {
+      if (response.status === 401) {
         logout();
         throw new Error("Phiên làm việc hết hạn.");
       }
@@ -5777,7 +5777,7 @@ export const useGameStore = create<GameState>((set, get) => {
     set({ actionLoading: true, error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/soul/use-guts`, { method: "POST" });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Sử dụng Cổ trùng Can Đảm thất bại.");
       setPlayerFromServer(data.player);
@@ -5797,7 +5797,7 @@ export const useGameStore = create<GameState>((set, get) => {
     set({ actionLoading: true, error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/soul/refine`, { method: "POST" });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Luyện hồn thất bại.");
       setPlayerFromServer(data.player);
@@ -5816,7 +5816,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/instance/list`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         set({
@@ -5835,7 +5835,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/instance/active`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         if (data.active) {
@@ -5866,7 +5866,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ instance_id: instanceId }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Không thể tiến vào phó bản.");
       set({
@@ -5895,7 +5895,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ option_index: optionIndex }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hành động phó bản thất bại.");
       
@@ -5928,7 +5928,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         set({ sects: data || [] });
@@ -5947,7 +5947,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/sects/${sectId}/join`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Gia nhập tông môn thất bại.");
       get().addToast(data.message || "Gia nhập tông môn thành công!", "success");
@@ -5970,7 +5970,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/sects/leave`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Rời tông môn thất bại.");
       get().addToast(data.message || "Đã rời tông môn!", "info");
@@ -5993,7 +5993,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/sects/join-request/cancel`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hủy đơn xin gia nhập thất bại.");
       get().addToast(data.message || "Đã hủy đơn xin gia nhập tông môn!", "info");
@@ -6014,7 +6014,7 @@ export const useGameStore = create<GameState>((set, get) => {
       if (!token) return;
       try {
         const response = await authFetch(`${BACKEND_URL}/api/sects/me`);
-        if (response.status === 401 || response.status === 403) { logout(); return; }
+        if (response.status === 401) { logout(); return; }
         if (response.ok) {
           const data = await response.json();
           set({ mySectStatus: data });
@@ -6038,7 +6038,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/sects/promote`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Khảo hạch thăng cấp thất bại.");
       get().addToast(data.message || "Thăng cấp thành công!", "success");
@@ -6063,7 +6063,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
       get().addToast(data.message || "Quyên góp Nguyên Thạch thành công!", "success");
@@ -6088,7 +6088,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ material_id: materialId, amount }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
       get().addToast(data.message || "Quyên góp nguyên liệu thành công!", "success");
@@ -6113,7 +6113,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ gu_instance_id: guInstanceId }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
       get().addToast(data.message || "Quyên góp Cổ trùng thành công!", "success");
@@ -6138,7 +6138,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ recipe_id: recipeId }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
       get().addToast(data.message || "Quyên góp Bí phương thành công!", "success");
@@ -6167,7 +6167,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Quyên góp hàng loạt thất bại.");
       get().addToast(data.message || "Quyên góp hàng loạt thành công!", "success");
@@ -6192,7 +6192,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ item_type: itemType, item_id: itemId, quantity, rank }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Trao đổi vật phẩm thất bại.");
       get().addToast(data.message || "Trao đổi vật phẩm thành công!", "success");
@@ -6212,7 +6212,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/missions`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         set({ sectMissions: data || [] });
@@ -6231,7 +6231,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}/accept`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nhận nhiệm vụ thất bại.");
       get().addToast(data.message || "Nhận nhiệm vụ thành công!", "success");
@@ -6254,7 +6254,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}/complete`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hoàn thành nhiệm vụ thất bại.");
       get().addToast(data.message || "Hoàn thành nhiệm vụ thành công!", "success");
@@ -6277,7 +6277,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}`, {
         method: "DELETE",
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Xóa nhiệm vụ thất bại.");
       get().addToast(data.message || "Đã xóa nhiệm vụ tông môn!", "success");
@@ -6300,7 +6300,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}/abandon`, {
         method: "DELETE",
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hủy nhiệm vụ thất bại.");
       get().addToast(data.message || "Đã hủy nhiệm vụ tông môn!", "success");
@@ -6325,7 +6325,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, description, region }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Lập phái thất bại.");
       get().addToast(data.message || "Khai tông lập phái thành công!", "success");
@@ -6345,7 +6345,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/me/members`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         set({ sectMembers: data || [] });
@@ -6366,7 +6366,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rank }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Điều chỉnh chức vụ thất bại.");
       get().addToast(data.message || "Đã điều chỉnh chức vụ!", "success");
@@ -6388,7 +6388,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/sects/members/${memberId}/kick`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Trục xuất đệ tử thất bại.");
       get().addToast(data.message || "Đã trục xuất đệ tử!", "info");
@@ -6421,7 +6421,7 @@ export const useGameStore = create<GameState>((set, get) => {
           duration_hours: payload.duration_hours,
         }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Phát hành nhiệm vụ thất bại.");
       get().addToast(data.message || "Đã phát hành nhiệm vụ môn phái!", "success");
@@ -6450,7 +6450,7 @@ export const useGameStore = create<GameState>((set, get) => {
           quantity: quantity,
         }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nhập kho bảo khố thất bại.");
       get().addToast(data.message || "Đã nhập kho bảo khố thành công!", "success");
@@ -6474,7 +6474,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nhập kho bảo khố thất bại.");
       get().addToast(data.message || "Đã nhập kho bảo khố thành công!", "success");
@@ -6496,7 +6496,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/sects/upgrade`, {
         method: "POST",
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nâng cấp tông môn thất bại.");
       get().addToast(data.message || "Nâng cấp tông môn thành công!", "success");
@@ -6520,7 +6520,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ require_approval: requireApproval }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cài đặt thất bại.");
       get().addToast(data.message || "Đã cập nhật cài đặt duyệt thành viên!", "success");
@@ -6543,7 +6543,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ require_promotion_approval: requirePromotionApproval }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cài đặt thất bại.");
       get().addToast(data.message || "Đã cập nhật cài đặt duyệt lên cấp!", "success");
@@ -6566,7 +6566,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirm: true }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Phát lương thất bại.");
       get().addToast(data.message || "Đã phát lương thành công!", "success");
@@ -6585,7 +6585,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/join-requests`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         set({ sectJoinRequests: data || [] });
@@ -6606,7 +6606,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Thao tác thất bại.");
       get().addToast(data.message || "Thao tác thành công!", "success");
@@ -6625,7 +6625,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/promotion-requests`);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         set({ sectPromotionRequests: data || [] });
@@ -6646,7 +6646,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Thao tác thất bại.");
       get().addToast(data.message || "Thao tác thành công!", "success");
@@ -6672,7 +6672,7 @@ export const useGameStore = create<GameState>((set, get) => {
         url += `?${params.join("&")}`;
       }
       const response = await authFetch(url);
-      if (response.status === 401 || response.status === 403) { logout(); return; }
+      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         set({ feedbacks: data || [] });
@@ -6693,7 +6693,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, description, category }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Gửi góp ý thất bại.");
       get().addToast(data.message || "Gửi góp ý thành công!", "success");
@@ -6740,7 +6740,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ vote_type: voteType }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bình chọn thất bại.");
       get().addToast(data.message || "Bình chọn thành công!", "success");
@@ -6769,7 +6769,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status, developer_response: developerResponse }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cập nhật trạng thái thất bại.");
       get().addToast(data.message || "Cập nhật trạng thái thành công!", "success");
@@ -6791,7 +6791,7 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/feedback/${feedbackId}/comments`);
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Tải góp ý thất bại.");
       set((state) => ({ feedbackComments: { ...state.feedbackComments, [feedbackId]: data || [] } }));
@@ -6813,7 +6813,7 @@ export const useGameStore = create<GameState>((set, get) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Góp ý thất bại.");
       get().addToast(data.message || "Đã góp ý!", "success");
@@ -6839,7 +6839,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const response = await authFetch(`${BACKEND_URL}/api/feedback/${feedbackId}/comments/${commentId}`, {
         method: "DELETE",
       });
-      if (response.status === 401 || response.status === 403) { logout(); throw new Error("Phiên làm việc hết hạn."); }
+      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Xóa góp ý thất bại.");
       get().addToast(data.message || "Đã xóa góp ý!", "success");

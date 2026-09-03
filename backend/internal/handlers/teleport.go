@@ -88,6 +88,11 @@ func TeleportToRegion(c *gin.Context) {
 		return
 	}
 
+	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
+		c.JSON(400, gin.H{"error": errLeader.Error()})
+		return
+	}
+
 	// HP check: must have >20% HP to teleport (same as explore)
 	if hpTooLowForTeleport(&player) {
 		c.JSON(400, gin.H{"error": "HP too low to teleport"})
@@ -205,6 +210,11 @@ func TeleportToRegion(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "Failed to save position"})
 		return
 	}
+
+	player.X = safeX
+	player.Y = safeY
+	player.CurrentRegion = req.RegionID
+	SyncPartyMembersLocation(tx, &player)
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(500, gin.H{"error": "Failed to commit transaction"})

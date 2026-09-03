@@ -409,7 +409,11 @@ func RespondToInvitation(c *gin.Context) {
 		return
 	}
 
-	_, err = tx.Exec("UPDATE players SET party_id = $1 WHERE id = $2", partyID, player.ID)
+	var leaderRegion sql.NullString
+	var leaderX, leaderY int
+	_ = tx.QueryRow("SELECT current_region, x, y FROM players WHERE id = $1", leaderID).Scan(&leaderRegion, &leaderX, &leaderY)
+
+	_, err = tx.Exec("UPDATE players SET party_id = $1, current_region = $2, x = $3, y = $4 WHERE id = $5", partyID, leaderRegion, leaderX, leaderY, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật thông tin nhân vật"})
 		return
@@ -454,3 +458,15 @@ func checkPartyLeaderOrSolo(tx *sql.Tx, player *models.Player) error {
 	}
 	return nil
 }
+
+func SyncPartyMembersLocation(tx *sql.Tx, leader *models.Player) {
+	if leader.PartyID == nil {
+		return
+	}
+	var isLeader bool
+	err := tx.QueryRow("SELECT (leader_id = $1) FROM parties WHERE id = $2", leader.ID, leader.PartyID).Scan(&isLeader)
+	if err == nil && isLeader {
+		_, _ = tx.Exec("UPDATE players SET current_region = $1, x = $2, y = $3 WHERE party_id = $4 AND id != $5", leader.CurrentRegion, leader.X, leader.Y, leader.PartyID, leader.ID)
+	}
+}
+

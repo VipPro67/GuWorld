@@ -57,7 +57,7 @@ func ExploreNode(c *gin.Context) {
 	}
 
 	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": errLeader.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errLeader.Error()})
 		return
 	}
 

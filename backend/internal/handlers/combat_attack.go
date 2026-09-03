@@ -116,7 +116,7 @@ func CombatAttack(c *gin.Context) {
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": errLeader.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errLeader.Error()})
 		return
 	}
 
