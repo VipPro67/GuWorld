@@ -85,6 +85,50 @@ export function getPathIconAndColor(path: string | undefined, nodeType: string |
   return { icon: "📦", color: "bg-slate-800 border-slate-700" };
 }
 
+export function getItemZoneCategory(item: { id: string; name: string; item_type?: string; type?: string; description?: string; path?: string }): "khu_trong" | "khu_nuoi" | "khu_khai_thac" {
+  const text = `${item.id} ${item.name} ${item.description || ''} ${item.path || ''}`.toLowerCase();
+
+  // 1. Check Chăn Nuôi (Breeding / Animals / Beast / Meat / Food / Organisms)
+  const breedingKeywords = [
+    "thịt", "meat", "thú", "beast", "hươu", "deer", "sói", "wolf", "dơi", "bat", 
+    "long ngư", "dragonfish", "máu", "blood", "huyết", "xương", "bone", "tủy", "marrow",
+    "noãn", "egg", "cánh", "wing", "gấu", "bear", "lợn", "boar", "trư", "mãng", "python",
+    "lông", "vảy", "fur", "scale", "mật", "gall", "tạng", "gan", "tâm", "mao nhân", 
+    "hairy_man", "vũ nhân", "featherman", "thạch nhân", "rockman", "ngự thú", "tộc", "tổ"
+  ];
+  if (breedingKeywords.some(kw => text.includes(kw))) {
+    return "khu_nuoi";
+  }
+
+  // 2. Check Khai Thác (Mining / Minerals / Ores / Metals / Cores / Gem / Oil)
+  const miningKeywords = [
+    "đá", "stone", "khoáng", "ore", "thạch", "jade", "tinh thiết", "thiết", "iron", 
+    "đồng", "copper", "ngọc", "kim", "metal", "hạch", "core", "cát", "sand", 
+    "dầu", "oil", "bùn", "mud", "phấn", "dust", "tinh thể", "crystal", "băng", "ice",
+    "ma ngọc", "nham", "hỏa dung", "thiết sa", "thiết bì", "bán thạch"
+  ];
+  if (miningKeywords.some(kw => text.includes(kw))) {
+    return "khu_khai_thac";
+  }
+
+  // 3. Check Trồng Trọt (Farming / Plants / Flowers / Grass / Trees / Herbs / Wine / Seeds)
+  const farmingKeywords = [
+    "trúc", "bamboo", "rượu", "wine", "cỏ", "grass", "thảo", "herb", "hoa", "flower", 
+    "cây", "tree", "diệp", "leaf", "lá", "dịch", "fluid", "sâm", "ginseng", 
+    "quả", "fruit", "hạt", "seed", "lộ", "dew", "quang", "chi", "nấm", "mushroom", 
+    "mầm", "sprout", "tảo", "algae", "mạc"
+  ];
+  if (farmingKeywords.some(kw => text.includes(kw))) {
+    return "khu_trong";
+  }
+
+  // Fallback check by item type
+  const itemType = (item.item_type || item.type || "").toLowerCase();
+  if (itemType === "food") return "khu_nuoi";
+
+  return "khu_trong";
+}
+
 const CountdownTimer: React.FC<{ node: ApertureResourceNode; timeRate: number; onComplete?: () => void }> = ({ node, timeRate, onComplete }) => {
   const [timeLeft, setTimeLeft] = useState<string>("");
 
@@ -1611,6 +1655,18 @@ return (
                                       }
                                     });
                                   });
+
+                                  // Compute target zone
+                                  const targetZone = pendingBuildZone === "FARMING_ZONE" ? "khu_trong"
+                                    : pendingBuildZone === "BREEDING_ZONE" ? "khu_nuoi"
+                                    : pendingBuildZone === "MINING_ZONE" ? "khu_khai_thac"
+                                    : buildCategory;
+
+                                  const zoneLabel = targetZone === "khu_trong" ? "🌱 Nhóm Trồng Trọt (Thảo mộc, Hoa lá, Trúc rượu...)"
+                                    : targetZone === "khu_nuoi" ? "🐄 Nhóm Chăn Nuôi (Thịt thú, Tinh huyết, Trứng, Dị nhân...)"
+                                    : targetZone === "khu_khai_thac" ? "⛏️ Nhóm Khai Thác (Khoáng thạch, Tinh thiết, Hạch tâm...)"
+                                    : "Tất cả vật phẩm";
+
                                   // Sort paths alphabetically by Vietnamese translation
                                   const sortedPaths = Array.from(pathsSet).sort((a, b) => {
                                     const nameA = translatePath(a);
@@ -1627,13 +1683,16 @@ return (
                                     return viName.includes(searchP) || enName.includes(searchP);
                                   });
                                   
-                                  // Compute available items for the currently selected path
+                                  // Compute available items for the currently selected path & target zone
                                   const selectedRawPath = buildPath.replace(/ Path$/i, '').trim().toLowerCase();
                                   const availableItems = Object.values(itemDictionary || {}).filter(item => {
                                     const itemPaths = parseItemPaths(item.path).map(p => p.toLowerCase().replace(/ path$/i, '').trim());
                                     const matchesPath = itemPaths.includes(selectedRawPath);
                                     const isUsableType = !item.item_type || ["material", "food", "consumable"].includes(item.item_type.toLowerCase());
-                                    return matchesPath && isUsableType;
+                                    const matchesZone = ["khu_trong", "khu_nuoi", "khu_khai_thac"].includes(targetZone)
+                                      ? getItemZoneCategory(item) === targetZone
+                                      : true;
+                                    return matchesPath && isUsableType && matchesZone;
                                   }).sort((a, b) => (a.rank || 0) - (b.rank || 0) || a.name.localeCompare(b.name, "vi"));
 
                                   // Filter items by itemSearch query
@@ -1645,6 +1704,10 @@ return (
 
                                   return (
                                     <>
+                                      <div className="text-[10px] text-amber-400 font-semibold mb-2 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 flex items-center justify-between">
+                                        <span>{zoneLabel}</span>
+                                      </div>
+
                                       <div>
                                         <div className="flex justify-between items-center mb-1">
                                           <label className="text-[10px] text-slate-400">Chọn Đại Đạo (Path)</label>

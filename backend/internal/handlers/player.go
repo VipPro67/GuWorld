@@ -1670,28 +1670,54 @@ type FeedRequest struct {
 	GuInstanceID string `json:"gu_instance_id" binding:"required"`
 }
 
-// computeFoodNutrition calculates hunger restoration based on the Gu's rank and the food's rank.
-// If the food rank equals the Gu rank, it restores 100 hunger.
-// If the food rank is lower, it restores proportionally less (rounded down).
-// Food rank higher than Gu rank is treated as equal rank (still 100).
+var guManaTable = [10]float64{
+	0,           // index 0 unused
+	1,           // Rank 1
+	2,           // Rank 2
+	5,           // Rank 3
+	20,          // Rank 4
+	100,         // Rank 5
+	10000,       // Rank 6 (10^4)
+	1000000,     // Rank 7 (10^6)
+	100000000,   // Rank 8 (10^8)
+	10000000000, // Rank 9 (10^10)
+}
+
+func getManaVal(rank int) float64 {
+	if rank < 1 {
+		return guManaTable[1]
+	}
+	if rank > 9 {
+		return guManaTable[9]
+	}
+	return guManaTable[rank]
+}
+
+// computeFoodNutrition calculates hunger restoration based on the Gu's rank and the food's rank
+// using the standard rank mana table scaling (base 100 for same rank, no minimum floor limit).
 func computeFoodNutrition(foodID string, guRank int) int {
-	// Determine food rank from registry.
+	foodRank := 1
+	found := false
 	if spec, ok := models.GetGuAny(foodID); ok {
-		foodRank := spec.Rank
-		if foodRank >= guRank {
-			return 100
-		}
-		return int(float64(foodRank) / float64(guRank) * 100)
+		foodRank = spec.Rank
+		found = true
+	} else if spec, ok := models.ItemRegistry[foodID]; ok {
+		foodRank = spec.Rank
+		found = true
 	}
-	if spec, ok := models.ItemRegistry[foodID]; ok {
-		foodRank := spec.Rank
-		if foodRank >= guRank {
-			return 100
-		}
-		return int(float64(foodRank) / float64(guRank) * 100)
+
+	if !found {
+		// Default fallback if food rank is unknown.
+		return 100
 	}
-	// Default fallback.
-	return 100
+
+	if foodRank >= guRank {
+		return 100
+	}
+
+	guMana := getManaVal(guRank)
+	foodMana := getManaVal(foodRank)
+	return int(math.Floor((foodMana / guMana) * 100.0))
 }
 
 func chooseFeedCandidate(player models.Player, targetGu models.GuInstance, foodOptions []string, targetInstanceID string, materialQty map[string]int) (foodID string, consumedGuIndex int) {

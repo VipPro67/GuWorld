@@ -104,11 +104,11 @@ func HigherRankManaMultiplier(guRank, userRank int) float64 {
 	}
 
 	if userRank < util.ImmortalRankThreshold {
-		values := []float64{1, 2, 5, 25, 125}
+		values := []float64{1, 2, 5, 20, 100}
 		return values[guRank-1] / values[userRank-1]
 	}
 
-	values := []float64{1, 100, 10000, 1000000, 100000000}
+	values := []float64{1, 100, 10000, 1000000}
 	return values[guRank-6] / values[userRank-6]
 }
 

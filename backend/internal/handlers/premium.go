@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"database/sql"
@@ -254,10 +255,10 @@ func GetWallet(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
-	wallet, err := ensureWallet(db.DB, playerID)
+	wallet, err := ensureWalletContext(c.Request.Context(), db.DB, playerID)
 	if err != nil {
 		logger.S.Errorf("GetWallet failed for player %s: %v", playerID, err)
-		c.JSON(http.StatusOK, WalletDTO{})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải dữ liệu ví"})
 		return
 	}
 	c.JSON(http.StatusOK, wallet)
@@ -297,7 +298,7 @@ func CreateTopupOrder(c *gin.Context) {
 	frontendURL := strings.TrimRight(getEnvOrDefault("FRONTEND_URL", "http://localhost:3000"), "/")
 	returnURL := fmt.Sprintf("%s/topup/success?orderCode=%d", frontendURL, orderCode)
 	cancelURL := fmt.Sprintf("%s/topup?cancelled=1&orderCode=%d", frontendURL, orderCode)
-	description := fmt.Sprintf("GU%d", orderCode%1000000000)
+	description := fmt.Sprintf("GU%06d", orderCode%1000000)
 
 	tx, err := db.DB.Begin()
 	if err != nil {
@@ -321,6 +322,7 @@ func CreateTopupOrder(c *gin.Context) {
 
 	checkoutURL, qrCode, payErr := createPayOSPaymentLink(orderCode, pkg, description, returnURL, cancelURL)
 	if payErr != nil {
+		logger.S.Errorf("CreateTopupOrder createPayOSPaymentLink failed for order %d player %s: %v", orderCode, playerID, payErr)
 		_, _ = db.DB.Exec(`UPDATE topup_orders SET status='FAILED' WHERE order_code=$1 AND status='PENDING'`, orderCode)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "Không thể tạo link thanh toán", "details": payErr.Error()})
 		return
@@ -739,19 +741,23 @@ func ExchangeStones(c *gin.Context) {
 }
 
 func ensureWallet(database *sql.DB, playerID uuid.UUID) (WalletDTO, error) {
+	return ensureWalletContext(context.Background(), database, playerID)
+}
+
+func ensureWalletContext(ctx context.Context, database *sql.DB, playerID uuid.UUID) (WalletDTO, error) {
 	var w WalletDTO
 	// Stone balances are authoritative in players. If the player row is missing
 	// (e.g. the account is not present in this DB), fall back to the wallets
 	// mirror so the display never breaks.
-	err := database.QueryRow(`SELECT COALESCE(primeval_stones,0)::BIGINT, COALESCE(immortal_stones,0)::BIGINT FROM players WHERE id=$1`, playerID).Scan(&w.PrimevalStone, &w.ImmortalEssenceStone)
+	err := database.QueryRowContext(ctx, `SELECT COALESCE(primeval_stones,0)::BIGINT, COALESCE(immortal_stones,0)::BIGINT FROM players WHERE id=$1`, playerID).Scan(&w.PrimevalStone, &w.ImmortalEssenceStone)
 	if err != nil && err != sql.ErrNoRows {
 		return WalletDTO{}, err
 	}
 	// Jade only lives in wallets.
-	err = database.QueryRow(`SELECT immortal_jade FROM wallets WHERE user_id=$1`, playerID).Scan(&w.ImmortalJade)
+	err = database.QueryRowContext(ctx, `SELECT immortal_jade FROM wallets WHERE user_id=$1`, playerID).Scan(&w.ImmortalJade)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			if _, ierr := database.Exec(`INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, playerID); ierr != nil {
+			if _, ierr := database.ExecContext(ctx, `INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, playerID); ierr != nil {
 				logger.S.Warnf("ensureWallet backfill %s: %v", playerID, ierr)
 			}
 			w.ImmortalJade = 0
@@ -825,9 +831,6 @@ func createPayOSPaymentLink(orderCode int64, pkg TopupPackage, description, retu
 	}
 	defer resp.Body.Close()
 	respBody, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", "", fmt.Errorf("payOS status %d", resp.StatusCode)
-	}
 	var decoded struct {
 		Code string `json:"code"`
 		Desc string `json:"desc"`
@@ -836,11 +839,18 @@ func createPayOSPaymentLink(orderCode int64, pkg TopupPackage, description, retu
 			QRCode      string `json:"qrCode"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(respBody, &decoded); err != nil {
-		return "", "", err
+	_ = json.Unmarshal(respBody, &decoded)
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		logger.S.Errorf("payOS Payment Link API error status=%d body=%s", resp.StatusCode, string(respBody))
+		if decoded.Desc != "" {
+			return "", "", fmt.Errorf("payOS error (%s): %s", decoded.Code, decoded.Desc)
+		}
+		return "", "", fmt.Errorf("payOS HTTP status %d: %s", resp.StatusCode, string(respBody))
 	}
 	if decoded.Code != "00" {
-		return "", "", fmt.Errorf("payOS error: %s", decoded.Desc)
+		logger.S.Errorf("payOS payment link code error code=%s desc=%s", decoded.Code, decoded.Desc)
+		return "", "", fmt.Errorf("payOS error (%s): %s", decoded.Code, decoded.Desc)
 	}
 	return decoded.Data.CheckoutURL, decoded.Data.QRCode, nil
 }
@@ -852,6 +862,9 @@ func verifyPayOSSignature(data map[string]interface{}, signature string) bool {
 	}
 	keys := make([]string, 0, len(data))
 	for k := range data {
+		if k == "signature" {
+			continue
+		}
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)

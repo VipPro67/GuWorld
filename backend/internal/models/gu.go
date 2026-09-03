@@ -498,7 +498,7 @@ func AllGuPaths() []string {
 // ManaRegenScale is the per-rank "cost" used to scale MANA_REGEN_TICK so a Gu
 // gives its full value only when its rank matches the player's, and less when
 // the player outranks it. Index 0 = rank 1.
-var ManaRegenScale = []float64{1, 2, 5, 20, 100, 1000, 100000, 10000000, 100000000}
+var ManaRegenScale = []float64{1, 2, 5, 20, 100, 10000, 1000000, 100000000, 10000000000}
 
 // EquippedTimeSpeedBonus sums the passive time_speed_multiplier contributed by
 // every equipped ACTIVE Gu. The bonus is additive to the player's base

@@ -510,13 +510,13 @@ func RefineGu(c *gin.Context) {
 	case 5:
 		rankScale = 100.0
 	case 6:
-		rankScale = 1000.0
-	case 7:
 		rankScale = 10000.0
+	case 7:
+		rankScale = 1000000.0
 	case 8:
-		rankScale = 100000.0
+		rankScale = 100000000.0
 	case 9:
-		rankScale = 10000000.0
+		rankScale = 10000000000.0
 	}
 
 	masteryMultiplier := 1.0 + float64(targetPathPoints)
@@ -958,10 +958,10 @@ func DeduceRecipe(c *gin.Context) {
 	case 3: rankPenalty = 5.0
 	case 4: rankPenalty = 20.0
 	case 5: rankPenalty = 100.0
-	case 6: rankPenalty = 1000.0
-	case 7: rankPenalty = 10000.0
-	case 8: rankPenalty = 100000.0
-	case 9: rankPenalty = 10000000.0
+	case 6: rankPenalty = 10000.0
+	case 7: rankPenalty = 1000000.0
+	case 8: rankPenalty = 100000000.0
+	case 9: rankPenalty = 10000000000.0
 	}
 
 	// Base improvement for Rank 1 is 10% - 25%

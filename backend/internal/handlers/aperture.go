@@ -1077,7 +1077,7 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 	}
 	nodeLevelMultiplier := 1.0 + float64(nodeLevel-1)*0.20
 
-	// 6. Item Rank / Rarity divisor (very strong scaling: 3.0^(rank - 1))
+	// 6. Item Rank / Rarity divisor (scaled by standard rank power table P)
 	var itemFoodPath string
 	itemFoodPathMultiplier := 1.0
 	itemRankDivisor := 1.0
@@ -1095,8 +1095,8 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 					itemDaoMarks := nodeDaoMap[strings.ToLower(itemFoodPath)]
 					itemFoodPathMultiplier = 1.0 + float64(itemDaoMarks)*0.003
 				}
-				if item.Rank > 1 {
-					itemRankDivisor = math.Pow(3.0, float64(item.Rank-1))
+				if item.Rank >= 1 {
+					itemRankDivisor = getManaVal(item.Rank)
 				}
 			}
 		}

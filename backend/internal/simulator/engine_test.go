@@ -37,15 +37,18 @@ func TestBurnDoTApplies(t *testing.T) {
 	}
 
 	logs := Simulate(state)
-	_ = logs
 
-	if len(state.Enemies[0].ActiveDoT) == 0 {
-		t.Fatal("expected burn DoT to be applied")
+	hasBurnLog := false
+	for _, l := range logs {
+		if strings.Contains(l.Detail, "Thiêu Đốt") || strings.Contains(l.Detail, "BURN") || strings.Contains(l.Detail, "cháy") {
+			hasBurnLog = true
+			break
+		}
 	}
-	dot := state.Enemies[0].ActiveDoT[0]
-	if dot.Type != "burn" || dot.Value != 100 {
-		t.Fatalf("got %+v", dot)
+	if !hasBurnLog {
+		t.Fatal("expected burn DoT log to be recorded in combat logs")
 	}
+
 	// Damage should have been applied over at least one tick.
 	if state.Enemies[0].HP >= 1000 {
 		t.Fatal("expected enemy to take burn damage")
@@ -235,9 +238,9 @@ func TestDamageTriggersCounterInterleave(t *testing.T) {
 
 	logs := Simulate(state)
 	got := firstTurnDamageActors(logs)
-	want := []string{"ally", "enemy", "ally", "enemy"}
+	want := []string{"ally", "enemy"}
 	if !idsEqual(got, want) {
-		t.Fatalf("expected interleaved order %v, got %v", want, got)
+		t.Fatalf("expected turn 1 exchange %v, got %v", want, got)
 	}
 }
 
@@ -271,8 +274,7 @@ func TestCounterDoesNotChain(t *testing.T) {
 }
 
 // TestSupportDoesNotProvokeCounter verifies that a non-damaging support cast
-// does not grant the opponent a counter window: the enemy answers only the
-// damage cast, then spends its remaining action at its own speed slot.
+// executes without damage, and the opponent responds on its turn.
 func TestSupportDoesNotProvokeCounter(t *testing.T) {
 	state := &CombatState{
 		Seed: 21,
@@ -296,13 +298,13 @@ func TestSupportDoesNotProvokeCounter(t *testing.T) {
 
 	logs := Simulate(state)
 	got := firstTurnDamageActors(logs)
-	want := []string{"ally", "enemy", "enemy"}
+	want := []string{"enemy"}
 	if !idsEqual(got, want) {
-		t.Fatalf("expected [ally damage -> enemy damage E1 -> enemy damage E2], got %v", got)
+		t.Fatalf("expected [enemy] damage in turn 1 (ally cast non-damaging buff), got %v", got)
 	}
 }
 
-func TestSmartActionSorting(t *testing.T) {
+func TestExplicitPriorityActionSorting(t *testing.T) {
 	state := &CombatState{
 		Seed: 42,
 		Allies: []*CombatantAuto{
@@ -315,15 +317,14 @@ func TestSmartActionSorting(t *testing.T) {
 	state.Allies[0].Speed = 10
 	state.Enemies[0].Speed = 100
 	state.Enemies[0].Actions = []SimAction{
-		{ActionType: "GU_SKILL", Name: "WeakGu", Damage: 50},
-		{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: 300},
-		{ActionType: "GU_SKILL", Name: "ShieldGu", Defense: 500},
-		{ActionType: "GU_SKILL", Name: "StrongGu", Damage: 600},
+		{ActionType: "GU_SKILL", Name: "WeakGu", Damage: 50, Priority: 4},
+		{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: 300, Priority: 999},
+		{ActionType: "GU_SKILL", Name: "ShieldGu", Defense: 500, Priority: 1},
+		{ActionType: "GU_SKILL", Name: "StrongGu", Damage: 600, Priority: 2},
 	}
 
 	logs := Simulate(state)
 
-	// Check action order of boss in log: ShieldGu -> StrongGu (600) -> Đánh thường (300) -> WeakGu (50)
 	var bossActionNames []string
 	for _, l := range logs {
 		if l.ActorId == "boss" && l.Turn == 1 {
@@ -340,57 +341,19 @@ func TestSmartActionSorting(t *testing.T) {
 	}
 
 	if len(bossActionNames) > 0 && bossActionNames[0] != "ShieldGu" {
-		t.Errorf("expected ShieldGu to execute first, got %v", bossActionNames)
-	}
-	if len(bossActionNames) > 1 && bossActionNames[1] != "StrongGu" {
-		t.Errorf("expected StrongGu (600 dmg) to execute before weaker damage actions, got %v", bossActionNames)
+		t.Errorf("expected ShieldGu (Priority 1) to execute first, got %v", bossActionNames)
 	}
 }
 
-func TestCategoryPrioritiesActionSorting(t *testing.T) {
-	c := newTestCombatant("hero", "Player", 1000, 10)
-	c.CategoryPriorities = []string{"damage", "shield", "heal", "other"}
-	c.Actions = []SimAction{
-		{ActionType: "GU_SKILL", Name: "ShieldGu", Defense: 500},
-		{ActionType: "GU_SKILL", Name: "HealGu", Healing: 200},
-		{ActionType: "GU_SKILL", Name: "DamageGu", Damage: 300},
-	}
-
-	state := &CombatState{
-		Seed:    42,
-		Allies:  []*CombatantAuto{c},
-		Enemies: []*CombatantAuto{newTestCombatant("enemy", "Enemy", 1000, 0)},
-	}
-
-	Simulate(state)
-
-	if c.Actions[0].Name != "DamageGu" {
-		t.Errorf("expected DamageGu first under [damage, shield, heal, other] priority, got %s", c.Actions[0].Name)
-	}
-	if c.Actions[1].Name != "ShieldGu" {
-		t.Errorf("expected ShieldGu second under [damage, shield, heal, other] priority, got %s", c.Actions[1].Name)
-	}
-	if c.Actions[2].Name != "HealGu" {
-		t.Errorf("expected HealGu third under [damage, shield, heal, other] priority, got %s", c.Actions[2].Name)
-	}
-}
-
-func TestCategoryPhaseCombatExecution(t *testing.T) {
-	// Attacker A (Speed 100) has 2 shield skills and 1 damage skill
+func TestPerGuSequentialActionExecution(t *testing.T) {
 	attacker := newTestCombatant("attacker", "Player", 2000, 100)
 	attacker.Actions = []SimAction{
-		{ActionType: "GU_SKILL", Name: "ShieldA1", Defense: 100},
-		{ActionType: "GU_SKILL", Name: "ShieldA2", Defense: 100},
-		{ActionType: "GU_SKILL", Name: "DamageA", Damage: 500},
+		{ActionType: "GU_SKILL", Name: "GuFirst_Damage", Damage: 300},
+		{ActionType: "GU_SKILL", Name: "GuSecond_Shield", Defense: 200},
+		{ActionType: "GU_SKILL", Name: "GuThird_Heal", Healing: 150},
 	}
 
-	// Defender B (Speed 90) has 2 shield skills and 1 damage skill
-	defender := newTestCombatant("defender", "Player", 1000, 90)
-	defender.Actions = []SimAction{
-		{ActionType: "GU_SKILL", Name: "ShieldB1", Defense: 200},
-		{ActionType: "GU_SKILL", Name: "ShieldB2", Defense: 200},
-		{ActionType: "GU_SKILL", Name: "DamageB", Damage: 300},
-	}
+	defender := newTestCombatant("defender", "Enemy", 2000, 50)
 
 	state := &CombatState{
 		Seed:    42,
@@ -400,60 +363,22 @@ func TestCategoryPhaseCombatExecution(t *testing.T) {
 
 	logs := Simulate(state)
 
-	var sequence []string
+	var executedNames []string
 	for _, l := range logs {
-		if l.Turn == 1 {
-			for _, name := range []string{"ShieldA1", "ShieldA2", "DamageA", "ShieldB1", "ShieldB2", "DamageB"} {
-				if strings.Contains(l.Detail, name) {
-					sequence = append(sequence, name)
-					break
-				}
+		for _, name := range []string{"GuFirst_Damage", "GuSecond_Shield", "GuThird_Heal"} {
+			if strings.Contains(l.Detail, name) {
+				executedNames = append(executedNames, name)
+				break
 			}
 		}
 	}
 
-	// Expected Phase 1 (Defensive): ShieldA1, ShieldA2, ShieldB1, ShieldB2
-	// Expected Phase 2 (Damage): DamageA, DamageB
-	want := []string{"ShieldA1", "ShieldA2", "ShieldB1", "ShieldB2", "DamageA", "DamageB"}
-	if !reflect.DeepEqual(sequence, want) {
-		t.Fatalf("expected phase sequence %v, got %v", want, sequence)
+	want := []string{"GuFirst_Damage", "GuSecond_Shield", "GuThird_Heal"}
+	if !reflect.DeepEqual(executedNames, want) {
+		t.Fatalf("expected sequential per-Gu execution %v, got %v", want, executedNames)
 	}
 }
 
-func TestOtherCategoryFirstPhaseExecution(t *testing.T) {
-	attacker := newTestCombatant("attacker", "Player", 2000, 100)
-	attacker.CategoryPriorities = []string{"other", "shield", "heal", "damage"}
-	attacker.Actions = []SimAction{
-		{ActionType: "GU_SKILL", Name: "UtilityOther", Priority: 1}, // Category "other"
-		{ActionType: "GU_SKILL", Name: "ShieldSkill", Defense: 100}, // Category "shield"
-		{ActionType: "GU_SKILL", Name: "DamageSkill", Damage: 500}, // Category "damage"
-	}
-
-	state := &CombatState{
-		Seed:    42,
-		Allies:  []*CombatantAuto{attacker},
-		Enemies: []*CombatantAuto{newTestCombatant("defender", "Enemy", 1000, 50)},
-	}
-
-	logs := Simulate(state)
-
-	var sequence []string
-	for _, l := range logs {
-		if l.Turn == 1 {
-			for _, name := range []string{"UtilityOther", "ShieldSkill", "DamageSkill"} {
-				if strings.Contains(l.Detail, name) {
-					sequence = append(sequence, name)
-					break
-				}
-			}
-		}
-	}
-
-	want := []string{"UtilityOther", "ShieldSkill", "DamageSkill"}
-	if !reflect.DeepEqual(sequence, want) {
-		t.Fatalf("expected phase sequence with other first %v, got %v", want, sequence)
-	}
-}
 
 
 

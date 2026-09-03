@@ -364,48 +364,13 @@ func Simulate(state *CombatState) []CombatLog {
 	maxTurns := 100
 
 
-	// Pre-sort every combatant's actions once before the battle based on CategoryPriorities:
+	// Pre-sort every combatant's actions stably based on explicit Priority if set,
+	// preserving the player's exact per-Gu loadout sequence:
 	for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
 		for _, c := range combatants {
-			catPrio := c.CategoryPriorities
-			if len(catPrio) == 0 {
-				catPrio = []string{"other", "shield", "heal", "damage"}
-			}
-
 			sort.SliceStable(c.Actions, func(i, j int) bool {
 				ai := c.Actions[i]
 				aj := c.Actions[j]
-
-				catI := GetSimActionCategory(ai)
-				catJ := GetSimActionCategory(aj)
-
-				rankI := getCategoryPriorityIndex(catI, catPrio)
-				rankJ := getCategoryPriorityIndex(catJ, catPrio)
-
-				if rankI != rankJ {
-					return rankI < rankJ
-				}
-
-				// Within the same category, respect explicit non-zero priorities if set
-				if ai.Priority != aj.Priority && ai.Priority != 0 && aj.Priority != 0 {
-					return ai.Priority < aj.Priority
-				}
-
-				// Within the same category, sort by highest key value first
-				switch catI {
-				case "shield":
-					if ai.Defense != aj.Defense {
-						return ai.Defense > aj.Defense
-					}
-				case "heal":
-					if ai.Healing != aj.Healing {
-						return ai.Healing > aj.Healing
-					}
-				case "damage":
-					if ai.Damage != aj.Damage {
-						return ai.Damage > aj.Damage
-					}
-				}
 
 				if ai.Priority != aj.Priority {
 					if ai.Priority == 0 {
@@ -419,6 +384,13 @@ func Simulate(state *CombatState) []CombatLog {
 
 				return false
 			})
+		}
+	}
+
+	executedActions := make(map[*CombatantAuto][]bool)
+	for _, combatants := range [][]*CombatantAuto{state.Allies, state.Enemies} {
+		for _, c := range combatants {
+			executedActions[c] = make([]bool, len(c.Actions))
 		}
 	}
 
@@ -562,347 +534,315 @@ func Simulate(state *CombatState) []CombatLog {
 			}
 		}
 
-		// ── Category Phase Combat Loop ──
-		// Actions resolve in distinct category phases per turn ordered by CategoryPriorities.
-		// In each phase, combatants act in order of EffectiveSpeed.
-		var phases []string
-		if len(state.Allies) > 0 && len(state.Allies[0].CategoryPriorities) > 0 {
-			phases = state.Allies[0].CategoryPriorities
-		} else if len(state.Enemies) > 0 && len(state.Enemies[0].CategoryPriorities) > 0 {
-			phases = state.Enemies[0].CategoryPriorities
-		} else {
-			phases = []string{"other", "shield", "heal", "damage"}
-		}
-
-		executedActions := make(map[*CombatantAuto][]bool)
-		for _, a := range allActors {
-			executedActions[a] = make([]bool, len(a.Actions))
-		}
-		executedDamageThisTurn := make(map[*CombatantAuto]bool)
+		// ── Sequential Combatant Turn Loop ──
 		ccCheckedThisTurn := make(map[*CombatantAuto]bool)
 		ccDisabledThisTurn := make(map[*CombatantAuto]bool)
 
-		for _, phase := range phases {
-			anyActionsInPhase := true
-			for anyActionsInPhase {
-				anyActionsInPhase = false
-				for _, actor := range allActors {
-				if actor.HP <= 0 || actor.IsDead {
-					continue
+		for _, actor := range allActors {
+			if actor.HP <= 0 || actor.IsDead {
+				continue
+			}
+
+			// Check CC and Auto-restores once per turn on actor's turn
+			if !ccCheckedThisTurn[actor] {
+				ccCheckedThisTurn[actor] = true
+
+				// Check stun
+				isStunned := false
+				for _, eff := range actor.ActiveEffects {
+					if eff.ID == EffectStun && eff.Duration >= 0 {
+						isStunned = true
+						break
+					}
+				}
+				if isStunned {
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "STUNNED",
+						Detail:    fmt.Sprintf("%s bị choáng, bỏ lượt!", actor.Name),
+					})
+					ccDisabledThisTurn[actor] = true
+				} else if actor.IsFrozen {
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "FROZEN",
+						Detail:    fmt.Sprintf("%s bị đóng băng, bỏ lượt!", actor.Name),
+					})
+					ccDisabledThisTurn[actor] = true
+				} else if actor.IsSleeping {
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "SLEEPING",
+						Detail:    fmt.Sprintf("%s đang ngủ, bỏ lượt!", actor.Name),
+					})
+					ccDisabledThisTurn[actor] = true
+				} else if actor.IsBound {
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "BOUND",
+						Detail:    fmt.Sprintf("%s bị trói, không thể hành động!", actor.Name),
+					})
+					ccDisabledThisTurn[actor] = true
 				}
 
-				// Check CC and Auto-restores once per turn on actor's first phase pass
-				if !ccCheckedThisTurn[actor] {
-					ccCheckedThisTurn[actor] = true
-
-					// Check stun
-					isStunned := false
-					for _, eff := range actor.ActiveEffects {
-						if eff.ID == EffectStun && eff.Duration >= 0 {
-							isStunned = true
-							break
+				if !ccDisabledThisTurn[actor] {
+					// Auto-use healing items
+					if actor.AutoHealHP && actor.HP > 0 && actor.HealCharges > 0 && actor.ItemsUsedInBattle < 3 {
+						hpPct := float64(actor.HP) / float64(actor.MaxHP) * 100
+						if hpPct <= actor.HealThreshold {
+							healVal := int(actor.HealPotency)
+							actor.HP += healVal
+							if actor.HP > actor.MaxHP {
+								actor.HP = actor.MaxHP
+							}
+							actor.HealCharges--
+							actor.ItemsUsedInBattle++
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   actor.ID,
+								ActorName: actor.Name,
+								Action:    "ITEM_HEAL",
+								Damage:    healVal,
+								Detail:    fmt.Sprintf("%s tự động dùng dược liệu hồi phục %d HP! (đã dùng %d/3)", actor.Name, healVal, actor.ItemsUsedInBattle),
+							})
 						}
 					}
-					if isStunned {
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "STUNNED",
-							Detail:    fmt.Sprintf("%s bị choáng, bỏ lượt!", actor.Name),
-						})
-						ccDisabledThisTurn[actor] = true
-					} else if actor.IsFrozen {
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "FROZEN",
-							Detail:    fmt.Sprintf("%s bị đóng băng, bỏ lượt!", actor.Name),
-						})
-						ccDisabledThisTurn[actor] = true
-					} else if actor.IsSleeping {
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "SLEEPING",
-							Detail:    fmt.Sprintf("%s đang ngủ, bỏ lượt!", actor.Name),
-						})
-						ccDisabledThisTurn[actor] = true
-					} else if actor.IsBound {
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "BOUND",
-							Detail:    fmt.Sprintf("%s bị trói, không thể hành động!", actor.Name),
-						})
-						ccDisabledThisTurn[actor] = true
-					}
 
-					if !ccDisabledThisTurn[actor] {
-						// Auto-use healing items
-						if actor.AutoHealHP && actor.HP > 0 && actor.HealCharges > 0 && actor.ItemsUsedInBattle < 3 {
-							hpPct := float64(actor.HP) / float64(actor.MaxHP) * 100
-							if hpPct <= actor.HealThreshold {
-								healVal := int(actor.HealPotency)
-								actor.HP += healVal
-								if actor.HP > actor.MaxHP {
-									actor.HP = actor.MaxHP
+					// Auto-restore mana using stones
+					if actor.AutoRestoreMana && actor.Mana < actor.MaxMana {
+						manaPct := float64(actor.Mana) / float64(actor.MaxMana) * 100
+						if manaPct <= actor.ManaThreshold {
+							regenMult := 1.0
+							if actor.RefineManaTier > 0 {
+								regenMult = 0.4 + actor.RefineManaTier*0.1
+							}
+							neededMana := float64(actor.MaxMana - actor.Mana)
+
+							if actor.Rank >= 6 {
+								if actor.ImmortalStones >= 1 {
+									manaPerStone := (1.0 / math.Pow(100, float64(actor.Rank-6))) * regenMult
+									if manaPerStone > 0 {
+										stonesNeeded := math.Ceil(neededMana / manaPerStone)
+										stonesToConsume := math.Min(stonesNeeded, float64(actor.ImmortalStones))
+										restore := int(stonesToConsume * manaPerStone)
+										actor.ImmortalStones -= int64(stonesToConsume)
+										actor.Mana += restore
+										if actor.Mana > actor.MaxMana {
+											actor.Mana = actor.MaxMana
+										}
+										turnLogs = append(turnLogs, CombatLog{
+											Turn:      turn,
+											ActorId:   actor.ID,
+											ActorName: actor.Name,
+											Action:    "MANA_RESTORE",
+											Detail:    fmt.Sprintf("%s tự động nghiền nát %d Tiên Nguyên Thạch, khôi phục %d tiên nguyên!", actor.Name, int64(stonesToConsume), restore),
+										})
+									}
 								}
-								actor.HealCharges--
-								actor.ItemsUsedInBattle++
+							} else {
+								if actor.PrimevalStones >= 1 {
+									rankMult := math.Pow(10.0, float64(actor.Rank-1))
+									subRankMult := math.Pow(2.0, float64(actor.SubRank-1))
+									manaPerStone := (20.0 / (rankMult * subRankMult)) * regenMult
+									if manaPerStone > 0 {
+										stonesNeeded := math.Ceil(neededMana / manaPerStone)
+										stonesToConsume := math.Min(stonesNeeded, float64(actor.PrimevalStones))
+										restore := int(stonesToConsume * manaPerStone)
+										actor.PrimevalStones -= int64(stonesToConsume)
+										actor.Mana += restore
+										if actor.Mana > actor.MaxMana {
+											actor.Mana = actor.MaxMana
+										}
+										turnLogs = append(turnLogs, CombatLog{
+											Turn:      turn,
+											ActorId:   actor.ID,
+											ActorName: actor.Name,
+											Action:    "MANA_RESTORE",
+											Detail:    fmt.Sprintf("%s tự động hấp thu %d Nguyên Thạch, khôi phục %d %s!", actor.Name, int64(stonesToConsume), restore, actor.GetManaName()),
+										})
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			if ccDisabledThisTurn[actor] {
+				continue
+			}
+
+			// Determine target side
+			isAlly := false
+			for _, a := range state.Allies {
+				if a.ID == actor.ID {
+					isAlly = true
+					break
+				}
+			}
+
+			var enemyTargets []*CombatantAuto
+			if isAlly {
+				enemyTargets = state.Enemies
+			} else {
+				enemyTargets = state.Allies
+			}
+
+			if actor.IsCharmed {
+				if isAlly {
+					enemyTargets = state.Allies
+				} else {
+					enemyTargets = state.Enemies
+				}
+			}
+
+			if actor.IsConfused && confusedResult[actor] {
+				if isAlly {
+					enemyTargets = state.Allies
+				} else {
+					enemyTargets = state.Enemies
+				}
+				turnLogs = append(turnLogs, CombatLog{
+					Turn:      turn,
+					ActorId:   actor.ID,
+					ActorName: actor.Name,
+					Action:    "CONFUSED",
+					Detail:    fmt.Sprintf("%s bị mê loạn, tấn công nhầm đồng minh!", actor.Name),
+				})
+			}
+
+			runOne := func(actor *CombatantAuto, a *SimAction, isAlly bool, enemyTargets []*CombatantAuto) actionOutcome {
+				res := actionOutcome{}
+
+				if (actor.IsSilenced || actor.IsFeared) && a.ActionType != "BASIC_ATTACK" {
+					return res
+				}
+
+				if (a.ActionType == "GU_SKILL" || a.ActionType == "BASIC_ATTACK") && actor.Kind == "Player" && !state.VirtualMode {
+					remaining := actor.PathMasteryGainLimit - actor.PathMasteryGained
+					if remaining > 0 {
+						cleanPath := "strength"
+						guRank := 1
+						baseGain := 1
+						if a.ActionType == "GU_SKILL" {
+							guRank = a.Rank
+							if guRank < 1 {
+								guRank = 1
+							}
+							if len(a.Path) > 0 {
+								cleanPath = strings.TrimSuffix(strings.ToLower(a.Path[0]), " path")
+							}
+							if guRank >= 6 {
+								baseGain = 10
+							}
+						}
+						if actor.PathMasteries == nil {
+							actor.PathMasteries = make(map[string]int)
+						}
+						pts := actor.PathMasteries[cleanPath]
+						currentLevel := gamefx.PathMasteryLevel(pts)
+						pathGain := gamefx.CalculatePathMasteryGain(guRank, currentLevel, baseGain)
+
+						if pathGain > 0 {
+							clamped := pathGain > remaining
+							if clamped {
+								pathGain = remaining
+							}
+							actor.PathMasteryGained += pathGain
+							actor.PathMasteries[cleanPath] += pathGain
+
+							newPts := actor.PathMasteries[cleanPath]
+							newLvl := gamefx.PathMasteryLevel(newPts)
+							lvlName := gamefx.PathMasteryLevelName(newLvl)
+
+							turnLogs = append(turnLogs, CombatLog{
+								Turn:      turn,
+								ActorId:   actor.ID,
+								ActorName: actor.Name,
+								Action:    "PATH_MASTERY_GAIN",
+								Detail:    fmt.Sprintf("-> Ngộ Đạo tăng tiến (%s)! +%d điểm Chân Ý %s (Cảnh giới: %s).", a.Name, pathGain, strings.Title(cleanPath), lvlName),
+							})
+							if clamped {
 								turnLogs = append(turnLogs, CombatLog{
 									Turn:      turn,
 									ActorId:   actor.ID,
 									ActorName: actor.Name,
-									Action:    "ITEM_HEAL",
-									Damage:    healVal,
-									Detail:    fmt.Sprintf("%s tự động dùng dược liệu hồi phục %d HP! (đã dùng %d/3)", actor.Name, healVal, actor.ItemsUsedInBattle),
+									Action:    "PATH_MASTERY_CAP",
+									Detail:    fmt.Sprintf("-> %s đã đạt giới hạn %d điểm Chân Ý trong trận này, không thể ngộ đạo thêm.", actor.Name, actor.PathMasteryGainLimit),
 								})
 							}
 						}
-
-						// Auto-restore mana using stones
-						if actor.AutoRestoreMana && actor.Mana < actor.MaxMana {
-							manaPct := float64(actor.Mana) / float64(actor.MaxMana) * 100
-							if manaPct <= actor.ManaThreshold {
-								regenMult := 1.0
-								if actor.RefineManaTier > 0 {
-									regenMult = 0.4 + actor.RefineManaTier*0.1
-								}
-								neededMana := float64(actor.MaxMana - actor.Mana)
-
-								if actor.Rank >= 6 {
-									if actor.ImmortalStones >= 1 {
-										manaPerStone := (1.0 / math.Pow(100, float64(actor.Rank-6))) * regenMult
-										if manaPerStone > 0 {
-											stonesNeeded := math.Ceil(neededMana / manaPerStone)
-											stonesToConsume := math.Min(stonesNeeded, float64(actor.ImmortalStones))
-											restore := int(stonesToConsume * manaPerStone)
-											actor.ImmortalStones -= int64(stonesToConsume)
-											actor.Mana += restore
-											if actor.Mana > actor.MaxMana {
-												actor.Mana = actor.MaxMana
-											}
-											turnLogs = append(turnLogs, CombatLog{
-												Turn:      turn,
-												ActorId:   actor.ID,
-												ActorName: actor.Name,
-												Action:    "MANA_RESTORE",
-												Detail:    fmt.Sprintf("%s tự động nghiền nát %d Tiên Nguyên Thạch, khôi phục %d tiên nguyên!", actor.Name, int64(stonesToConsume), restore),
-											})
-										}
-									}
-								} else {
-									if actor.PrimevalStones >= 1 {
-										rankMult := math.Pow(10.0, float64(actor.Rank-1))
-										subRankMult := math.Pow(2.0, float64(actor.SubRank-1))
-										manaPerStone := (20.0 / (rankMult * subRankMult)) * regenMult
-										if manaPerStone > 0 {
-											stonesNeeded := math.Ceil(neededMana / manaPerStone)
-											stonesToConsume := math.Min(stonesNeeded, float64(actor.PrimevalStones))
-											restore := int(stonesToConsume * manaPerStone)
-											actor.PrimevalStones -= int64(stonesToConsume)
-											actor.Mana += restore
-											if actor.Mana > actor.MaxMana {
-												actor.Mana = actor.MaxMana
-											}
-											turnLogs = append(turnLogs, CombatLog{
-												Turn:      turn,
-												ActorId:   actor.ID,
-												ActorName: actor.Name,
-												Action:    "MANA_RESTORE",
-												Detail:    fmt.Sprintf("%s tự động hấp thu %d Nguyên Thạch, khôi phục %d %s!", actor.Name, int64(stonesToConsume), restore, actor.GetManaName()),
-											})
-										}
-									}
-								}
-							}
-						}
 					}
 				}
 
-				if ccDisabledThisTurn[actor] {
-					continue
-				}
+				actionStartIndex := len(turnLogs)
 
-				// Determine target side
-				isAlly := false
-				for _, a := range state.Allies {
-					if a.ID == actor.ID {
-						isAlly = true
-						break
+				if actor.Kind == "Player" {
+					if a.ManaCost > 0 && float64(actor.Mana) < a.ManaCost {
+						return res
+					}
+					if a.ManaCost > 0 {
+						actor.Mana -= int(a.ManaCost)
 					}
 				}
 
-				var enemyTargets []*CombatantAuto
-				if isAlly {
-					enemyTargets = state.Enemies
-				} else {
-					enemyTargets = state.Allies
+				resolved := resolveTargets(enemyTargets, a)
+				if len(resolved) == 0 {
+					return res
 				}
 
-				if actor.IsCharmed {
-					if isAlly {
-						enemyTargets = state.Allies
-					} else {
-						enemyTargets = state.Enemies
+				res.executed = true
+				res.hasDamage = a.ActionType == "BASIC_ATTACK" || a.Damage > 0
+
+				backlashDamage := 0.0
+				if actor.Kind == "Player" {
+					guRank := 1
+					if a.Rank > 0 {
+						guRank = a.Rank
+					}
+					if guRank > actor.Rank {
+						diff := guRank - actor.Rank
+						backlashPct := float64(diff) * 0.15
+						backlashDamage = float64(actor.MaxHP) * backlashPct
 					}
 				}
 
-				if actor.IsConfused && confusedResult[actor] {
-					if isAlly {
-						enemyTargets = state.Allies
-					} else {
-						enemyTargets = state.Enemies
+				if backlashDamage > 0 {
+					actor.HP -= int(backlashDamage)
+					if actor.HP < 0 {
+						actor.HP = 0
 					}
 					turnLogs = append(turnLogs, CombatLog{
 						Turn:      turn,
 						ActorId:   actor.ID,
 						ActorName: actor.Name,
-						Action:    "CONFUSED",
-						Detail:    fmt.Sprintf("%s bị mê loạn, tấn công nhầm đồng minh!", actor.Name),
+						Action:    "GU_BACKLASH",
+						Damage:    int(backlashDamage),
+						Detail:    fmt.Sprintf("%s chịu %d sát thương phản phệ do dùng Cổ chuyển cao hơn bản thân!", actor.Name, int(backlashDamage)),
 					})
-				}
-
-				// runOne attempts a single action for the given actor. The body is
-				// identical to the previous inline action loop; skip/abort control
-				// flow is expressed through the returned actionOutcome.
-				runOne := func(actor *CombatantAuto, a *SimAction, isAlly bool, enemyTargets []*CombatantAuto) actionOutcome {
-					res := actionOutcome{}
-
-					// Silence / Fear: skip skills and killer moves, only allow basic attack
-if (actor.IsSilenced || actor.IsFeared) && a.ActionType != "BASIC_ATTACK" {
-			return res
-			}
-
-			// Path mastery handling (mirrors original logic) – awarded before mana check
-			if (a.ActionType == "GU_SKILL" || a.ActionType == "BASIC_ATTACK") && actor.Kind == "Player" && !state.VirtualMode {
-				remaining := actor.PathMasteryGainLimit - actor.PathMasteryGained
-				if remaining > 0 {
-					cleanPath := "strength"
-					guRank := 1
-					baseGain := 1
-					if a.ActionType == "GU_SKILL" {
-						guRank = a.Rank
-						if guRank < 1 {
-							guRank = 1
-						}
-						if len(a.Path) > 0 {
-							cleanPath = strings.TrimSuffix(strings.ToLower(a.Path[0]), " path")
-						}
-						if guRank >= 6 {
-							baseGain = 10
-						}
-					}
-					if actor.PathMasteries == nil {
-						actor.PathMasteries = make(map[string]int)
-					}
-					pts := actor.PathMasteries[cleanPath]
-					currentLevel := gamefx.PathMasteryLevel(pts)
-					pathGain := gamefx.CalculatePathMasteryGain(guRank, currentLevel, baseGain)
-
-					if pathGain > 0 {
-						clamped := pathGain > remaining
-						if clamped {
-							pathGain = remaining
-						}
-						actor.PathMasteryGained += pathGain
-						actor.PathMasteries[cleanPath] += pathGain
-
-						newPts := actor.PathMasteries[cleanPath]
-						newLvl := gamefx.PathMasteryLevel(newPts)
-						lvlName := gamefx.PathMasteryLevelName(newLvl)
-
+					if actor.HP == 0 {
+						actor.IsDead = true
 						turnLogs = append(turnLogs, CombatLog{
 							Turn:      turn,
 							ActorId:   actor.ID,
 							ActorName: actor.Name,
-							Action:    "PATH_MASTERY_GAIN",
-							Detail:    fmt.Sprintf("-> Ngộ Đạo tăng tiến (%s)! +%d điểm Chân Ý %s (Cảnh giới: %s).", a.Name, pathGain, strings.Title(cleanPath), lvlName),
+							Action:    "DIED",
+							Detail:    fmt.Sprintf("%s đã gục ngã do phản phệ Cổ!", actor.Name),
 						})
-						if clamped {
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   actor.ID,
-								ActorName: actor.Name,
-								Action:    "PATH_MASTERY_CAP",
-								Detail:    fmt.Sprintf("-> %s đã đạt giới hạn %d điểm Chân Ý trong trận này, không thể ngộ đạo thêm.", actor.Name, actor.PathMasteryGainLimit),
-							})
-						}
-					}
-				}
-			}
-
-					// Only Player combatants check and deduct mana/essence for Gu skills
-					if actor.Kind == "Player" {
-						if a.ManaCost > 0 && float64(actor.Mana) < a.ManaCost {
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   actor.ID,
-								ActorName: actor.Name,
-								Action:    "INSUFFICIENT_MANA",
-								Detail:    fmt.Sprintf("%s không đủ %s để dùng [%s] (cần %.0f, còn %d)", actor.Name, actor.GetManaName(), a.Name, a.ManaCost, actor.Mana),
-							})
-							return res
-						}
-					}
-
-					resolved := resolveTargets(enemyTargets, a)
-					if len(resolved) == 0 {
 						res.abort = true
 						return res
 					}
-					firstTarget := resolved[0]
-					res.firstTarget = firstTarget
+				}
 
-					if !checkActionCondition(a, actor, firstTarget) {
-						return res
-					}
-
-					res.executed = true
-					actionStartIndex := len(turnLogs)
-
-					if actor.Kind == "Player" {
-						manaCost := int(a.ManaCost)
-						actor.Mana -= manaCost
-
-						if manaCost > 0 {
-							turnLogs = append(turnLogs, CombatLog{
-								Turn:      turn,
-								ActorId:   actor.ID,
-								ActorName: actor.Name,
-								Action:    "MANA_COST",
-								Damage:    manaCost,
-								Detail:    fmt.Sprintf("%s tiêu hao %d %s (còn %d)", actor.Name, manaCost, actor.GetManaName(), actor.Mana),
-							})
-						}
-					}
-
-// Path mastery handling moved earlier (original block removed)
-
-					// Backlash damage from using Gu rank > actor rank
-					if a.BacklashDamage > 0 {
-						backlash := int(a.BacklashDamage)
-						actor.HP -= backlash
-						if actor.HP < 0 {
-							actor.HP = 0
-						}
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "DAMAGE",
-							Damage:    backlash,
-							Detail:    fmt.Sprintf("[Phản Phệ] Cổ trùng Rank cao phản phệ %s, trừ %d HP (còn %d HP)!", actor.Name, backlash, actor.HP),
-						})
-						if actor.HP <= 0 {
-							res.abort = true
-							return res
-						}
-					}
+				firstTarget := resolved[0]
 
 					// Dao mark multiplier for this action's path (applies to damage, shield, heal)
 					daoMult, hasDao := actorDaoMultiplier(actor, a.Path)
@@ -1600,126 +1540,76 @@ if (actor.IsSilenced || actor.IsFeared) && a.ActionType != "BASIC_ATTACK" {
 					return res
 				}
 
-				// ── Multi-action per turn: actions resolve one at a time; after
-				// each executed action (buff, shield, heal, attack), the actor yields
-				// so the next actor (sorted by speed) gets to act in turn. ──
-				// Execute actions matching current phase
-				for ai := 0; ai < len(actor.Actions); ai++ {
-					if executedActions[actor][ai] {
-						continue
-					}
-					a := &actor.Actions[ai]
-					cat := GetSimActionCategory(*a)
-					matchesPhase := false
-					if phase == cat {
-						matchesPhase = true
-					} else if phase == "defensive" && (cat == "shield" || cat == "heal") {
-						matchesPhase = true
-					}
-
-					if matchesPhase {
-						out := runOne(actor, a, isAlly, enemyTargets)
-						postActionChecks(enemyTargets)
-						if out.abort {
-							for k := ai; k < len(actor.Actions); k++ {
-								executedActions[actor][k] = true
-							}
-							break
-						}
-						if out.executed {
-							executedActions[actor][ai] = true
-							if out.hasDamage {
-								executedDamageThisTurn[actor] = true
-							}
-							if phase == "damage" {
-								anyActionsInPhase = true
-								break // Yield after 1 damage action so damage turns alternate
-							}
-						}
-					}
-				}
-			}
-			if phase != "damage" {
-				break // Defensive & Other phases resolve in 1 pass per actor
-			}
-		} // end anyActionsInPhase loop
-
-		// Fallback: basic attack during damage phase for actors who did not execute damage actions
-		if phase == "damage" {
-			for _, actor := range allActors {
-				if actor.HP <= 0 || actor.IsDead || ccDisabledThisTurn[actor] {
+			// Iterate through actions sequentially
+			executedOne := false
+			for ai := 0; ai < len(actor.Actions); ai++ {
+				if executedActions[actor][ai] {
 					continue
 				}
-				if !executedDamageThisTurn[actor] {
-					executedDamageThisTurn[actor] = true
+				a := &actor.Actions[ai]
 
-					isAlly := false
-					for _, a := range state.Allies {
-						if a.ID == actor.ID {
-							isAlly = true
-							break
-						}
-					}
-					var enemyTargets []*CombatantAuto
-					if isAlly {
-						enemyTargets = state.Enemies
-					} else {
-						enemyTargets = state.Allies
-					}
-					if actor.IsCharmed {
-						if isAlly {
-							enemyTargets = state.Allies
-						} else {
-							enemyTargets = state.Enemies
-						}
-					}
-					if actor.IsConfused && confusedResult[actor] {
-						if isAlly {
-							enemyTargets = state.Allies
-						} else {
-							enemyTargets = state.Enemies
-						}
-					}
+				var primaryTgt *CombatantAuto
+				if len(enemyTargets) > 0 {
+					primaryTgt = enemyTargets[0]
+				}
+				if !checkActionCondition(a, actor, primaryTgt) {
+					continue
+				}
 
-					daoMult, _ := actorDaoMultiplier(actor, []string{"strength"})
-					fallbackDmgMult := actor.DamageMultiplier
-					fallbackAction := &SimAction{
-						ActionType: "BASIC_ATTACK",
-						Name:       "Đánh thường",
-						Damage:     float64(actor.BaseDmg) * daoMult * fallbackDmgMult,
-						ManaCost:   0,
-						TargetType: "SINGLE",
+				out := runOne(actor, a, isAlly, enemyTargets)
+				postActionChecks(enemyTargets)
+				if out.abort {
+					for k := ai; k < len(actor.Actions); k++ {
+						executedActions[actor][k] = true
 					}
-					fallbackTargets := resolveTargets(enemyTargets, fallbackAction)
-					if len(fallbackTargets) > 0 {
-						target := fallbackTargets[0]
-						netDmg := fallbackAction.Damage - float64(target.BaseDef)
-						netDmg *= (1.0 - pathBonus(target.PathResistance, []string{"strength"}))
-						if netDmg < 1 {
-							netDmg = 1
-						}
-						applied := applyDamageToTarget(state, actor, target, netDmg, &turnLogs, turn, false, !isAlly, rng)
-						detailMsg := fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %d HP)", actor.Name, fallbackAction.Name, target.Name, applied, target.HP)
-						if daoMult > 1.0 {
-							baseDmgVal := float64(actor.BaseDmg)
-							daoDmgVal := baseDmgVal * (daoMult - 1.0)
-							detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f + %.0f sát thương do Đạo Ngân (còn %d HP)", actor.Name, fallbackAction.Name, target.Name, baseDmgVal, daoDmgVal, target.HP)
-						}
-						turnLogs = append(turnLogs, CombatLog{
-							Turn:      turn,
-							ActorId:   actor.ID,
-							ActorName: actor.Name,
-							Action:    "BASIC_ATTACK",
-							TargetId:  target.ID,
-							Damage:    int(applied),
-							Detail:    detailMsg,
-						})
-					}
-					postActionChecks(enemyTargets)
+					break
+				}
+				if out.executed {
+					executedActions[actor][ai] = true
+					executedOne = true
+					break // Yield turn pass after executing 1 action
 				}
 			}
+
+			// Fallback: Basic attack if no action was executed
+			if !executedOne {
+				daoMult, _ := actorDaoMultiplier(actor, []string{"strength"})
+				fallbackDmgMult := actor.DamageMultiplier
+				fallbackAction := &SimAction{
+					ActionType: "BASIC_ATTACK",
+					Name:       "Đánh thường",
+					Damage:     float64(actor.BaseDmg) * daoMult * fallbackDmgMult,
+					ManaCost:   0,
+					TargetType: "SINGLE",
+				}
+				fallbackTargets := resolveTargets(enemyTargets, fallbackAction)
+				if len(fallbackTargets) > 0 {
+					target := fallbackTargets[0]
+					netDmg := fallbackAction.Damage - float64(target.BaseDef)
+					netDmg *= (1.0 - pathBonus(target.PathResistance, []string{"strength"}))
+					if netDmg < 1 {
+						netDmg = 1
+					}
+					applied := applyDamageToTarget(state, actor, target, netDmg, &turnLogs, turn, false, !isAlly, rng)
+					detailMsg := fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %d HP)", actor.Name, fallbackAction.Name, target.Name, applied, target.HP)
+					if daoMult > 1.0 {
+						baseDmgVal := float64(actor.BaseDmg)
+						daoDmgVal := baseDmgVal * (daoMult - 1.0)
+						detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f + %.0f sát thương do Đạo Ngân (còn %d HP)", actor.Name, fallbackAction.Name, target.Name, baseDmgVal, daoDmgVal, target.HP)
+					}
+					turnLogs = append(turnLogs, CombatLog{
+						Turn:      turn,
+						ActorId:   actor.ID,
+						ActorName: actor.Name,
+						Action:    "BASIC_ATTACK",
+						TargetId:  target.ID,
+						Damage:    int(applied),
+						Detail:    detailMsg,
+					})
+				}
+				postActionChecks(enemyTargets)
+			}
 		}
-	} // end phase loop
 
 		logs = append(logs, turnLogs...)
 

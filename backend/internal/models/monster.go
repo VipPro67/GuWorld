@@ -115,16 +115,16 @@ func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, sub
 	case 5:
 		rankMultiplier = 100.0
 	case 6:
-		rankMultiplier = 1000.0
-	case 7:
 		rankMultiplier = 10000.0
+	case 7:
+		rankMultiplier = 1000000.0
 	case 8:
-		rankMultiplier = 100000.0
+		rankMultiplier = 100000000.0
 	case 9:
-		rankMultiplier = 10000000.0
+		rankMultiplier = 10000000000.0
 	default:
 		if rank > 9 {
-			rankMultiplier = 10000000.0
+			rankMultiplier = 10000000000.0
 		}
 	}
 

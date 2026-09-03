@@ -17,19 +17,55 @@ interface PremiumWalletProps {
   refreshKey?: number;
 }
 
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
+  return match ? decodeURIComponent(match[2]) : null;
+}
+
+function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  const csrfToken = getCookie("gu_csrf_token");
+  const headers: Record<string, string> = {};
+  if (init.headers) {
+    if (Array.isArray(init.headers)) {
+      for (const [k, v] of init.headers) headers[k] = v;
+    } else if (init.headers instanceof Headers) {
+      init.headers.forEach((v, k) => { headers[k] = v; });
+    } else {
+      Object.assign(headers, init.headers);
+    }
+  }
+  if (csrfToken && init.method && init.method !== "GET" && init.method !== "HEAD") {
+    headers["X-CSRF-Token"] = csrfToken;
+  }
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("gu_auth_token");
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+  return fetch(input, { ...init, headers, credentials: "include" });
+}
+
 export const PremiumWallet: React.FC<PremiumWalletProps> = ({ compact = false, onLoaded, refreshKey = 0 }) => {
   const [wallet, setWallet] = useState<WalletBalance | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchWallet = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/wallet`, { credentials: "include" });
+      const response = await authFetch(`${BACKEND_URL}/api/wallet`);
       if (response.ok) {
         const data = await response.json();
         setWallet(data);
         onLoaded?.(data);
+      } else {
+        setError("Không thể tải ví");
       }
+    } catch {
+      setError("Lỗi kết nối máy chủ");
     } finally {
       setLoading(false);
     }
@@ -42,8 +78,17 @@ export const PremiumWallet: React.FC<PremiumWalletProps> = ({ compact = false, o
 
   if (!wallet) {
     return (
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-xs text-zinc-500">
-        Đang tải ví...
+      <div className="flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-xs text-zinc-500">
+        <span>{error ? error : "Đang tải ví..."}</span>
+        {error && (
+          <button
+            onClick={() => { void fetchWallet(); }}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-950/30 px-2.5 py-1 text-xs text-amber-300 hover:bg-amber-900/40 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} /> Thử lại
+          </button>
+        )}
       </div>
     );
   }
