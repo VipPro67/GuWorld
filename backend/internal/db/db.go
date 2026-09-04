@@ -1,7 +1,9 @@
 package db
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -273,16 +275,40 @@ func backfillLeaderboardSettings() error {
 	return nil
 }
 
-// ensureAdmin promotes the reserved admin accounts when no admin exists yet.
+// generateSecurePassword generates a cryptographically secure random password.
+func generateSecurePassword(length int) (string, error) {
+	// Generate random bytes
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("failed to generate random password: %w", err)
+	}
+	// Encode to base64 and trim to desired length
+	password := base64.URLEncoding.EncodeToString(bytes)
+	if len(password) > length {
+		password = password[:length]
+	}
+	return password, nil
+}
+
+// ensureAdmin creates the reserved admin account with a randomly generated password
+// when no admin exists yet. The generated password is logged once to the console
+// for the operator to retrieve. Subsequent startups will not regenerate or log
+// the password.
 func ensureAdmin() error {
 	var adminCount int
 	if err := DB.QueryRow(`SELECT COUNT(*) FROM players WHERE username = 'admin'`).Scan(&adminCount); err != nil {
 		return nil
 	}
 	if adminCount == 0 {
-		hash, err := bcrypt.GenerateFromPassword([]byte("1231237618989@Ahihi"), bcrypt.DefaultCost)
+		// Generate a secure random password for the admin account
+		password, err := generateSecurePassword(24)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to generate admin password: %w", err)
+		}
+
+		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			return fmt.Errorf("failed to hash admin password: %w", err)
 		}
 
 		if _, err := DB.Exec(`
@@ -297,9 +323,21 @@ func ensureAdmin() error {
 				100, 100, 'hub_nam_cuong', 50, 50, 'REF-ADMIN', true,
 				0, 0
 			)`, string(hash)); err != nil {
-			return err
+			return fmt.Errorf("failed to create admin account: %w", err)
 		}
+
+		// Log the generated password to the console for the operator to retrieve.
+		// This is only logged once during initial account creation.
+		logger.S.Warnf("═══════════════════════════════════════════════════════════════")
+		logger.S.Warnf("INITIAL ADMIN ACCOUNT CREATED")
+		logger.S.Warnf("Username: admin")
+		logger.S.Warnf("Email: admin@guworld.local")
+		logger.S.Warnf("Password: %s", password)
+		logger.S.Warnf("IMPORTANT: Change this password immediately after first login!")
+		logger.S.Warnf("This password will not be displayed again.")
+		logger.S.Warnf("═══════════════════════════════════════════════════════════════")
 	} else {
+		// Ensure existing admin account has admin privileges
 		if _, err := DB.Exec(`UPDATE players SET is_admin = true WHERE username = 'admin'`); err != nil {
 			return err
 		}
