@@ -4094,7 +4094,7 @@ export const AdminView: React.FC = () => {
                         <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{ap.aperture_hp?.toLocaleString()}/{ap.max_aperture_hp?.toLocaleString()}</td>
                         <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{ap.area_size?.toLocaleString()} mẫu</td>
                         <td className="px-3 py-2.5 text-right font-mono text-yellow-500 font-bold">{ap.immortal_essence?.toLocaleString()}</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">Năm {ap.next_tribulation_year?.toFixed(1)}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300">Năm {Math.round(ap.next_tribulation_year || 0)}</td>
                         <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{ap.tribulation_count}</td>
                         <td className="px-3 py-2.5 text-center">
                           <button onClick={() => setSelectedApertureId(ap.id)} className="px-2 py-1 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/20 hover:border-amber-500/40 text-amber-400 rounded text-[10px] font-bold cursor-pointer transition-colors">

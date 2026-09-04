@@ -2177,7 +2177,7 @@ function BlessedLandControls() {
 
               <div className="space-y-1">
                 <div className="flex justify-between text-[10px] text-zinc-500 font-mono">
-                  <span>Chu kỳ Kiếp nạn ({aperture.internal_years_passed.toFixed(2)} / {aperture.next_tribulation_year.toFixed(1)} năm)</span>
+                  <span>Chu kỳ Kiếp nạn ({Math.floor(aperture.internal_years_passed)} / {Math.round(aperture.next_tribulation_year)} năm)</span>
                   <span>{((aperture.internal_years_passed / aperture.next_tribulation_year) * 100).toFixed(1)}%</span>
                 </div>
                 <div className="w-full bg-zinc-950 h-1.5 rounded-full overflow-hidden border border-zinc-900">

@@ -459,11 +459,12 @@ export function WorldPage() {
               </div>
             )}
 
-            <div className="flex gap-2">
+            <div className="flex gap-2.5">
               {selectedObject.cell_type === "Player" ? (
                 <>
                   <button
                     disabled={isMoving}
+                    title={isMoving ? "Đang di chuyển..." : (gamePlayer?.x === selectedObject.x && gamePlayer?.y === selectedObject.y) ? "Tấn Công" : "Tiếp Cận"}
                     onClick={async () => {
                       if (gamePlayer?.x === selectedObject.x && gamePlayer?.y === selectedObject.y) {
                         movePlayer(selectedObject.x, selectedObject.y, selectedObject.id);
@@ -471,40 +472,61 @@ export function WorldPage() {
                         window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
                       }
                     }}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-red-600 hover:bg-red-500 shadow-red-950/30 disabled:opacity-60 text-white text-xs font-serif font-bold transition-all cursor-pointer shadow-lg"
+                    className="flex-1 flex items-center justify-center py-2.5 rounded-xl bg-red-600 hover:bg-red-500 shadow-red-950/30 disabled:opacity-60 text-white text-base transition-all cursor-pointer shadow-lg"
                   >
                     <span>⚔️</span>
-                    <span>{isMoving ? "Đang di chuyển..." : (gamePlayer?.x === selectedObject.x && gamePlayer?.y === selectedObject.y) ? "Tấn Công" : "Tiếp Cận"}</span>
                   </button>
                   <button
+                    title="Trinh Thám"
                     onClick={() => fetchPlayerProfile(selectedObject.content_id)}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 shadow-purple-950/30 text-white text-xs font-serif font-bold transition-all cursor-pointer shadow-lg"
+                    className="flex-1 flex items-center justify-center py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 shadow-purple-950/30 text-white text-base transition-all cursor-pointer shadow-lg"
                   >
                     <span>👁️</span>
-                    <span>Trinh Thám</span>
                   </button>
+                  {gamePlayer && gamePlayer.username !== selectedObject.content_id && (
+                    <button
+                      title="Mời Tổ Đội"
+                      onClick={async () => {
+                        let currentParty = useGameStore.getState().party;
+                        if (!currentParty) {
+                          const created = await useGameStore.getState().createParty();
+                          if (!created) return;
+                          currentParty = useGameStore.getState().party;
+                        }
+                        if (currentParty && currentParty.leader_id !== gamePlayer.id) {
+                          useGameStore.getState().addToast("Chỉ có Trưởng nhóm mới có quyền mời!", "error");
+                          return;
+                        }
+                        await useGameStore.getState().invitePlayer(selectedObject.content_id);
+                      }}
+                      className="flex-1 flex items-center justify-center py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 shadow-amber-950/30 text-white text-base transition-all cursor-pointer shadow-lg"
+                    >
+                      <span>🤝</span>
+                    </button>
+                  )}
                 </>
               ) : (
                 <button
                   disabled={isMoving || !!selectedObject.cleared}
+                  title={isMoving ? "Đang di chuyển..." : selectedObject.cell_type === "Monster" || selectedObject.cell_type === "Boss" ? "Chiến Đấu" : "Tiếp Cận"}
                   onClick={() => {
                     window.dispatchEvent(new CustomEvent("gu_world_move", { detail: { x: selectedObject.x, y: selectedObject.y } }));
                   }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl ${
+                  className={`flex-1 flex items-center justify-center py-2.5 rounded-xl ${
                     selectedObject.cell_type === "Monster" || selectedObject.cell_type === "Boss"
                       ? "bg-red-600 hover:bg-red-500 shadow-red-950/30"
                       : "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-950/30"
-                  } disabled:opacity-60 text-white text-xs font-serif font-bold transition-all cursor-pointer shadow-lg`}
+                  } disabled:opacity-60 text-white text-base transition-all cursor-pointer shadow-lg`}
                 >
                   <span>{selectedObject.cell_type === "Monster" || selectedObject.cell_type === "Boss" ? "⚔️" : "🏃"}</span>
-                  <span>{isMoving ? "Đang di chuyển..." : selectedObject.cell_type === "Monster" || selectedObject.cell_type === "Boss" ? "Chiến Đấu" : "Tiếp Cận"}</span>
                 </button>
               )}
               <button
+                title="Đóng"
                 onClick={() => selectObject(null)}
-                className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs font-serif transition-all cursor-pointer border border-zinc-700/40"
+                className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 text-sm font-bold transition-all cursor-pointer border border-zinc-700/40"
               >
-                Đóng
+                ✕
               </button>
             </div>
           </div>

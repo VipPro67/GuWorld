@@ -213,6 +213,7 @@ func tribulationPriority(t string) int {
 }
 
 func GetNextTribulationInfo(rank int, rankStartYear float64, earthCnt, heavenCnt, grandCnt, myriadCnt, chaosCnt int) (nextYear float64, nextType string) {
+	cleanRankStartYear := math.Round(rankStartYear)
 	types := []struct {
 		Type     string
 		Interval float64
@@ -235,13 +236,17 @@ func GetNextTribulationInfo(rank int, rankStartYear float64, earthCnt, heavenCnt
 		// Schedule is relative to when the current rank began, so each rank's
 		// tribulation cadence (e.g. Địa Tai every 10 internal years) restarts
 		// cleanly after a breakthrough.
-		year := rankStartYear + t.Interval*float64(t.Count+1)
+		year := math.Round(cleanRankStartYear + t.Interval*float64(t.Count+1))
 		priority := tribulationPriority(t.Type)
 
 		if year < nextYear || (math.Abs(year-nextYear) < 0.001 && priority > tribulationPriority(nextType)) {
 			nextYear = year
 			nextType = t.Type
 		}
+	}
+
+	if nextYear != math.MaxFloat64 {
+		nextYear = math.Round(nextYear)
 	}
 
 	return nextYear, nextType

@@ -385,7 +385,7 @@ func ResolveTribulation(c *gin.Context) {
 				breakthroughMsg = blockedMsg
 			} else {
 				_, _ = tx.Exec(`UPDATE players SET rank = $1 WHERE id = $2`, newRank, playerID)
-				ap.RankStartYear = ap.InternalYearsPassed
+				ap.RankStartYear = math.Floor(ap.InternalYearsPassed)
 				// Reset per-type counters: each rank has its own tribulation set
 				// and cadence (lower types drop off), so the schedule restarts.
 				ap.EarthCalamityCount = 0
@@ -685,9 +685,9 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 
 	calcNextYear, calcNextType := models.GetNextTribulationInfo(rank, ap.RankStartYear, ap.EarthCalamityCount, ap.HeavenlyTribulationCount, ap.GrandTribulationCount, ap.MyriadTribulationCount, ap.ChaosCalamityCount)
 
-	triggerYear := calcNextYear
+	triggerYear := math.Round(calcNextYear)
 	if ap.NextTribulationYear > triggerYear {
-		triggerYear = ap.NextTribulationYear
+		triggerYear = math.Round(ap.NextTribulationYear)
 	}
 
 	if ap.InternalYearsPassed >= triggerYear {
@@ -826,9 +826,9 @@ func distributeDaoMarks(mainPath string, totalMarks int) map[string]int {
 // due at the same milestone resolve one right after the other instead of drifting.
 func guardNextTribulationYear(nextYear, currentYears float64) float64 {
 	if nextYear < currentYears {
-		return currentYears + 10
+		return math.Ceil(currentYears) + 10
 	}
-	return nextYear
+	return math.Round(nextYear)
 }
 
 // Offline-protection tuning for tribulations. While the player is offline the
@@ -1129,9 +1129,9 @@ func CheckAndTriggerTribulations() error {
 		// advanced by the resolve handlers (success or failure) and by the guard
 		// on rank-up. Counters are NOT incremented here — they only grow in
 		// handleSuccess on a successful resolve (single count per crossing).
-		triggerYear := calcNextYear
+		triggerYear := math.Round(calcNextYear)
 		if ap.NextTribulationYear > triggerYear {
-			triggerYear = ap.NextTribulationYear
+			triggerYear = math.Round(ap.NextTribulationYear)
 		}
 
 		if newYearsPassed >= triggerYear {

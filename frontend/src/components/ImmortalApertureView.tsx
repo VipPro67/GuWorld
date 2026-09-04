@@ -841,11 +841,11 @@ return (
                 <div className="space-y-3">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-400">Số năm nội bộ đã trôi qua</span>
-                    <span className="text-slate-200 font-semibold">{aperture.internal_years_passed.toFixed(4)} năm</span>
+                    <span className="text-slate-200 font-semibold">{Math.floor(aperture.internal_years_passed)} năm</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-400">Mốc tai kiếp kế tiếp</span>
-                    <span className="text-rose-400 font-semibold">{aperture.next_tribulation_year.toFixed(1)} năm</span>
+                    <span className="text-rose-400 font-semibold">{Math.round(aperture.next_tribulation_year)} năm</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-400">Tổng số kiếp nạn vượt qua</span>

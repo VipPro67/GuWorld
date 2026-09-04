@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Player, CombatState, Combatant, GuSpec, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
-import { Sparkles, Play, Swords, Eye, Shield, Zap, ChevronDown, ChevronUp, Wand2, AlertTriangle, PawPrint } from "lucide-react";
+import { Sparkles, Play, Swords, Eye, Shield, Zap, ChevronDown, ChevronUp, Wand2, AlertTriangle, PawPrint, Users } from "lucide-react";
 import { CombatReplayView } from "./CombatReplayView";
 import { Num } from "./Num";
 import { getPathColor } from "@/lib/utils";
@@ -167,6 +167,25 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const fetchCombatSettings = useGameStore((state) => state.fetchCombatSettings);
   const addToast = useGameStore((state) => state.addToast);
   const monsterDictionary = useGameStore((state) => state.monsterDictionary);
+  const party = useGameStore((state) => state.party);
+  const fetchPartyStatus = useGameStore((state) => state.fetchPartyStatus);
+
+  const isPartyLeader = party ? party.leader_id === player.id : true;
+  const isPartyMemberNotLeader = party !== null && !isPartyLeader;
+
+  useEffect(() => {
+    if (player.party_id && !party) {
+      fetchPartyStatus();
+    }
+  }, [player.party_id, party, fetchPartyStatus]);
+
+  const notifiedPartyMemberRef = useRef(false);
+  useEffect(() => {
+    if (isPartyMemberNotLeader && !notifiedPartyMemberRef.current) {
+      notifiedPartyMemberRef.current = true;
+      addToast("Bạn đang trong tổ đội. Trưởng nhóm sẽ điều khiển trận chiến.", "info");
+    }
+  }, [isPartyMemberNotLeader, addToast]);
 
   // useEffect(() => {
   //   void fetchKillerMoves();
@@ -1098,7 +1117,26 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       {/* Ally Intel Panel */}
       {renderAllyIntel()}
 
-      {/* Action Buttons (Tấn công, Bắt quái, Rút lui) */}
+      {isPartyMemberNotLeader ? (
+        <div className="bg-gradient-to-r from-amber-950/40 via-zinc-900/80 to-amber-950/40 border border-amber-500/40 rounded-2xl p-6 text-center shadow-lg my-2">
+          <div className="flex items-center justify-center gap-2 text-amber-400 font-bold text-base mb-2">
+            <Users className="w-5 h-5" />
+            <span>Trạng Thái Tổ Đội (Thành Viên)</span>
+          </div>
+          <p className="text-sm text-zinc-200">
+            Bạn đang tham gia trận chiến với vai trò thành viên tổ đội. Trưởng nhóm{" "}
+            <span className="text-amber-300 font-bold font-serif">
+              {party?.members?.find((m) => m.id === party.leader_id)?.username || "Trưởng nhóm"}
+            </span>{" "}
+            sẽ trực tiếp điều khiển và tiến hành giao chiến.
+          </p>
+          <p className="text-xs text-zinc-500 mt-2">
+            * Giao diện chuẩn bị đội hình và các thao tác giao chiến đã được ẩn đối với thành viên tổ đội.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Action Buttons (Tấn công, Bắt quái, Rút lui) */}
       <div className="flex gap-4 flex-wrap">
         <button
           onClick={handleStartSimulation}
@@ -1481,10 +1519,10 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             · Tiên Nguyên Thạch: {player.immortal_stones?.toLocaleString() || 0}
           </div>
         </div>
-
-
       </div>
-    </div>
+    </>
+  )}
+</div>
   );
 
   const renderReplayPhase = () => (

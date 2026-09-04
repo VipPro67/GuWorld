@@ -181,35 +181,13 @@ export function PartyView() {
               })}
             </div>
 
-            {/* Invite Form for Leader */}
+            {/* Invite Guidance for Leader */}
             {party.leader_id === player.id && (
-              <div className="pt-4 border-t border-zinc-800/80 space-y-2.5">
-                <span className="text-xs text-zinc-500 uppercase tracking-wider font-mono block font-bold">
-                  Chiêu mộ thành viên
-                </span>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Đạo hiệu đối phương..."
-                    value={inviteUsername}
-                    onChange={(e) => {
-                      setInviteUsername(e.target.value);
-                      setInviteError(null);
-                    }}
-                    className="bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-zinc-100 placeholder-zinc-600 flex-grow focus:outline-none focus:border-amber-500/50 transition-colors"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleInvitePlayer}
-                    disabled={partyLoading || !inviteUsername.trim()}
-                    className="bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-amber-400 font-bold px-4 py-2 rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer font-mono shrink-0 disabled:opacity-50"
-                  >
-                    Mời
-                  </button>
-                </div>
-                {inviteError && (
-                  <p className="text-xs text-rose-400 font-mono">{inviteError}</p>
-                )}
+              <div className="pt-3 border-t border-zinc-800/80">
+                <p className="text-xs text-amber-400/90 font-serif bg-amber-950/20 border border-amber-800/30 rounded-xl p-3 flex items-center gap-2">
+                  <span>💡</span>
+                  <span>Nhấp chọn Cổ sư khác trực tiếp trên bản đồ Ngũ Vực để gửi lời mời vào tổ đội.</span>
+                </p>
               </div>
             )}
 

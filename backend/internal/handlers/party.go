@@ -12,6 +12,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 type PartyMember struct {
@@ -200,6 +201,8 @@ func InvitePlayer(c *gin.Context) {
 		return
 	}
 
+	notify.Send(tx, targetPlayer.ID, "PARTY_INVITE", "Lời Mời Tổ Đội", fmt.Sprintf("Cổ sư %s đã mời bạn tham gia tổ đội!", player.Username))
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
@@ -276,6 +279,12 @@ func LeaveParty(c *gin.Context) {
 		}
 		newMembersBytes, _ := json.Marshal(newMembers)
 		_, _ = tx.Exec("UPDATE parties SET leader_id = $1, members = $2 WHERE id = $3", newLeaderID, newMembersBytes, partyID)
+	}
+
+	for _, m := range newMembers {
+		if mUUID, errM := uuid.Parse(m.ID); errM == nil {
+			notify.Send(tx, mUUID, "PARTY_LEAVE", "Cập Nhật Tổ Đội", fmt.Sprintf("Cổ sư %s đã rời khỏi tổ đội.", player.Username))
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -428,6 +437,10 @@ func RespondToInvitation(c *gin.Context) {
 	// Update invitation status to ACCEPTED and clean up other pending ones
 	_, _ = tx.Exec("UPDATE party_invitations SET status = 'ACCEPTED' WHERE id = $1", invID)
 	_, _ = tx.Exec("DELETE FROM party_invitations WHERE invitee_id = $1 AND status = 'PENDING'", player.ID)
+
+	if leaderUUID, errL := uuid.Parse(leaderID); errL == nil {
+		notify.Send(tx, leaderUUID, "PARTY_JOIN", "Thành Viên Mới", fmt.Sprintf("Cổ sư %s đã chấp nhận lời mời và gia nhập tổ đội!", player.Username))
+	}
 
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database commit error"})

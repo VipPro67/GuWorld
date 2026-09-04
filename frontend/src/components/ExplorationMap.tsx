@@ -718,35 +718,13 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({
                   })}
                 </div>
 
-                {/* Invite Form for Leader */}
+                {/* Invite Guidance for Leader */}
                 {party.leader_id === player.id && (
-                  <div className="pt-2 border-t border-zinc-900/60 space-y-2">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono block">
-                      Chiêu mộ thành viên
-                    </span>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Đạo hiệu đối phương..."
-                        value={inviteUsername}
-                        onChange={(e) => {
-                          setInviteUsername(e.target.value);
-                          setInviteError(null);
-                        }}
-                        className="bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-750 flex-grow focus:outline-none focus:border-zinc-800 transition-colors"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleInvitePlayer}
-                        disabled={partyLoading || !inviteUsername.trim()}
-                        className="bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-250 hover:text-zinc-100 font-bold px-3 py-1.5 rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer font-mono shrink-0"
-                      >
-                        Mời
-                      </button>
-                    </div>
-                    {inviteError && (
-                      <p className="text-[9px] text-rose-600 dark:text-rose-400 font-mono">{inviteError}</p>
-                    )}
+                  <div className="pt-2 border-t border-zinc-900/60">
+                    <p className="text-[11px] text-amber-400/90 font-serif bg-amber-950/20 border border-amber-800/30 rounded-xl p-2.5 flex items-center gap-2">
+                      <span>💡</span>
+                      <span>Nhấp chọn Cổ sư khác trực tiếp trên bản đồ Ngũ Vực để gửi lời mời vào tổ đội.</span>
+                    </p>
                   </div>
                 )}
 

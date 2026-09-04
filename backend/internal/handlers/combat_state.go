@@ -10,6 +10,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.Player) *models.CombatState {
@@ -304,6 +305,7 @@ func StartCombat(tx *sql.Tx, base *models.CombatState, player *models.Player) *m
 			allyUUID, errParse := uuid.Parse(ally.ID)
 			if errParse == nil && allyUUID != player.ID {
 				_, _ = tx.Exec("UPDATE players SET active_combat = $1 WHERE id = $2", combatBytes, allyUUID)
+				notify.Send(tx, allyUUID, "PARTY_COMBAT", "Tổ Đội Giao Chiến", fmt.Sprintf("Trưởng nhóm %s đã bắt đầu giao chiến! Bạn đang ở trạng thái chờ và được bảo vệ theo đội hình.", player.Username))
 			}
 		}
 	}
