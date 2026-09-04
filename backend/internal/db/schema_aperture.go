@@ -82,6 +82,12 @@ func schemaAperture() error {
 		return err
 	}
 
+	if err := execSchema("aperture_resource_nodes_interval_10h_upgrade", `
+	UPDATE aperture_resource_nodes SET production_interval_hours = 10 WHERE node_category = 'RESOURCE' OR node_type IN ('FARMING_ZONE', 'BREEDING_ZONE', 'MINING_ZONE');
+	`); err != nil {
+		return err
+	}
+
 	if err := execSchema("aperture_nodes_category_idx", `
 	CREATE INDEX IF NOT EXISTS idx_aperture_nodes_category ON aperture_resource_nodes (aperture_id, node_category);`); err != nil {
 		return err

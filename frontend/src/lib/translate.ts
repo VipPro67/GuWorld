@@ -171,9 +171,39 @@ export const pathLabels: Record<string, string> = {
 };
 
 
+export function parsePaths(path: unknown): string[] {
+  if (!path) return [];
+  if (Array.isArray(path)) {
+    return path.flatMap((p) => parsePaths(p));
+  }
+  if (typeof path === "string") {
+    const trimmed = path.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.flatMap((p) => parsePaths(p));
+        }
+      } catch {
+        // Fallback to single string if JSON parsing fails
+      }
+    }
+    return [trimmed];
+  }
+  return [];
+}
+
 export function translatePath(path: string | undefined): string {
   if (!path) return "?";
   
+  if (typeof path === "string" && path.trim().startsWith("[") && path.trim().endsWith("]")) {
+    const parsed = parsePaths(path);
+    if (parsed.length > 0) {
+      return parsed.map(translatePath).join(", ");
+    }
+  }
+
   // Normalize by stripping " Path" suffix if it exists
   const base = path.endsWith(" Path") ? path.slice(0, -5) : path;
   

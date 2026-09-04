@@ -53,7 +53,7 @@ var ResourceNodeTemplates = map[string]ResourceNodeTemplate{
 		CostStones:        10,
 		ProdType:          "Material",
 		ProdAmount:        10,
-		ProdIntervalHours: 4,
+		ProdIntervalHours: 10,
 		ZoneType:          "khu_trong",
 	},
 	"BREEDING_ZONE": {
@@ -63,7 +63,7 @@ var ResourceNodeTemplates = map[string]ResourceNodeTemplate{
 		CostStones:        24,
 		ProdType:          "Material",
 		ProdAmount:        5,
-		ProdIntervalHours: 8,
+		ProdIntervalHours: 10,
 		ZoneType:          "khu_nuoi",
 	},
 	"MINING_ZONE": {
@@ -73,7 +73,7 @@ var ResourceNodeTemplates = map[string]ResourceNodeTemplate{
 		CostStones:        20,
 		ProdType:          "Material",
 		ProdAmount:        3,
-		ProdIntervalHours: 8,
+		ProdIntervalHours: 10,
 		ZoneType:          "khu_khai_thac",
 	},
 	// ---- DEFENSE STRUCTURES ----
@@ -263,9 +263,9 @@ func seedInitialApertureNodes(tx *sql.Tx, apertureID string, grade string) {
 	}
 
 	starterConfigs := []StarterConfig{
-		{NodeType: "FARMING_ZONE", Name: "Khu Trồng Trọt (Rượu Thanh Trúc)", Path: "Wood Path", ProdKey: "green_bamboo_wine", ZoneType: "khu_trong", ProdType: "Material", ProdAmount: 10, ProdInterval: 4},
-		{NodeType: "BREEDING_ZONE", Name: "Khu Chăn Nuôi (Thịt Hươu Linh)", Path: "Food Path", ProdKey: "spirit_deer_meat", ZoneType: "khu_nuoi", ProdType: "Material", ProdAmount: 5, ProdInterval: 8},
-		{NodeType: "MINING_ZONE", Name: "Khu Khai Thác (Ngọc Thạch)", Path: "Earth Path", ProdKey: "jade_stone", ZoneType: "khu_khai_thac", ProdType: "Material", ProdAmount: 3, ProdInterval: 8},
+		{NodeType: "FARMING_ZONE", Name: "Khu Trồng Trọt (Rượu Thanh Trúc)", Path: "Wood Path", ProdKey: "green_bamboo_wine", ZoneType: "khu_trong", ProdType: "Material", ProdAmount: 10, ProdInterval: 10},
+		{NodeType: "BREEDING_ZONE", Name: "Khu Chăn Nuôi (Thịt Hươu Linh)", Path: "Food Path", ProdKey: "spirit_deer_meat", ZoneType: "khu_nuoi", ProdType: "Material", ProdAmount: 5, ProdInterval: 10},
+		{NodeType: "MINING_ZONE", Name: "Khu Khai Thác (Ngọc Thạch)", Path: "Earth Path", ProdKey: "jade_stone", ZoneType: "khu_khai_thac", ProdType: "Material", ProdAmount: 3, ProdInterval: 10},
 	}
 
 	count := 2

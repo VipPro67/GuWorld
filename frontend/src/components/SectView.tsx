@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useGameStore, Sect, SectMission, GuInstance, SectMine, formatRecipeName } from "@/store/useGameStore";
-import { translatePath } from "@/lib/translate";
+import { translatePath, parsePaths } from "@/lib/translate";
 import {
   Shield,
   Activity,
@@ -2014,14 +2014,14 @@ export const SectView: React.FC = () => {
             ).sort((a, b) => a - b);
 
             const availableDonateMatPaths = Array.from(
-              new Set(playerMaterials.flatMap(([matId]) => itemDictionary[matId]?.path ? [itemDictionary[matId].path] : []))
-            ).filter(Boolean).sort();
+              new Set(playerMaterials.flatMap(([matId]) => parsePaths(itemDictionary[matId]?.path)))
+            ).filter(Boolean).sort((a, b) => translatePath(a).localeCompare(translatePath(b), "vi"));
 
             const filteredMaterials = playerMaterials.filter(([matId]) => {
               const spec = itemDictionary[matId];
               const name = spec?.name || matId;
               const rank = spec?.rank || 1;
-              const paths = spec?.path ? [spec.path] : [];
+              const paths = parsePaths(spec?.path);
 
               const matchesSearch = !donateSearch || name.toLowerCase().includes(donateSearch.toLowerCase()) || matId.toLowerCase().includes(donateSearch.toLowerCase());
               const matchesRank = donateRankFilter === "All" || rank.toString() === donateRankFilter;
@@ -2059,7 +2059,7 @@ export const SectView: React.FC = () => {
                       placeholder="Tìm kiếm linh tài..."
                       className="flex-1 bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-blue-500/50"
                     />
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <select
                         value={donateRankFilter}
                         onChange={(e) => setDonateRankFilter(e.target.value)}
@@ -2542,15 +2542,15 @@ export const SectView: React.FC = () => {
             ).sort((a, b) => a - b);
 
             const availableDonateGuPaths = Array.from(
-              new Set(groupedGusList.flatMap((g) => guDictionary[g.gu_id]?.path || []))
-            ).filter(Boolean).sort();
+              new Set(groupedGusList.flatMap((g) => parsePaths(guDictionary[g.gu_id]?.path)))
+            ).filter(Boolean).sort((a, b) => translatePath(a).localeCompare(translatePath(b), "vi"));
 
             const filteredGus = groupedGusList.filter((g) => {
               const matchesSearch = !donateSearch || g.name.toLowerCase().includes(donateSearch.toLowerCase()) || g.gu_id.toLowerCase().includes(donateSearch.toLowerCase());
               const matchesRank = donateRankFilter === "All" || g.rank.toString() === donateRankFilter;
               
               const spec = guDictionary[g.gu_id];
-              const paths = spec?.path || [];
+              const paths = parsePaths(spec?.path);
               const matchesPath = donatePathFilter === "All" || paths.includes(donatePathFilter);
 
               return matchesSearch && matchesRank && matchesPath;
@@ -2746,7 +2746,7 @@ export const SectView: React.FC = () => {
                               <div className="min-w-0">
                                 <h5 className="text-xs font-bold text-zinc-200 truncate">{g.name}</h5>
                                 <p className="text-[10px] text-zinc-500 font-mono mt-1">
-                                  Hạng {g.rank} • Lưu Phái: <span className="text-zinc-300 font-medium">{(spec?.path || []).map(translatePath).join(", ") || "Không"}</span>
+                                  Hạng {g.rank} • Lưu Phái: <span className="text-zinc-300 font-medium">{parsePaths(spec?.path).map(translatePath).join(", ") || "Không"}</span>
                                 </p>
                                 <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
                                   Đang có: <span className="text-zinc-300 font-semibold">{g.instances.length} con</span>
@@ -3488,10 +3488,8 @@ export const SectView: React.FC = () => {
                   const availableRanks = Array.from(new Set(allEntries.map(([, spec]) => (spec.rank || 1)))).sort((a, b) => a - b);
 
                   const availablePaths = Array.from(new Set(allEntries.flatMap(([, spec]): string[] => {
-                    const p = spec.path;
-                    if (Array.isArray(p)) return p;
-                    return p ? [p] : [];
-                  }))).filter(Boolean).sort();
+                    return parsePaths(spec.path);
+                  }))).filter(Boolean).sort((a, b) => translatePath(a).localeCompare(translatePath(b), "vi"));
 
                   const filtered = allEntries.filter(([id, spec]) => {
                     const name = spec.name || id;
@@ -3499,7 +3497,7 @@ export const SectView: React.FC = () => {
                     const q = stockSearch.trim().toLowerCase();
                     const matchesSearch = !q || name.toLowerCase().includes(q) || id.toLowerCase().includes(q);
                     const matchesRank = stockRankFilter === "All" || rank.toString() === stockRankFilter;
-                    const paths = Array.isArray(spec.path) ? spec.path : (spec.path ? [spec.path] : []);
+                    const paths = parsePaths(spec.path);
                     const matchesPath = stockPathFilter === "All" || paths.includes(stockPathFilter);
                     return matchesSearch && matchesRank && matchesPath;
                   });
