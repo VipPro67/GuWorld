@@ -853,6 +853,18 @@ func BuyListing(c *gin.Context) {
 }
 
 func SettleExpiredAuctions(c *gin.Context) {
+	// Restrict to admin-only to prevent abuse
+	playerID, ok := middleware.GetPlayerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	var isAdmin bool
+	if err := db.DB.QueryRow(`SELECT COALESCE(is_admin, false) FROM players WHERE id=$1`, playerID).Scan(&isAdmin); err != nil || !isAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin required"})
+		return
+	}
+
 	if err := settleExpiredAuctions(); err != nil {
 		logger.S.Errorf("Failed to settle expired auctions: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to settle expired auctions"})
@@ -863,6 +875,7 @@ func SettleExpiredAuctions(c *gin.Context) {
 }
 
 func settleExpiredAuctions() error {
+	// Query expired ACTIVE auctions without locking (read-only scan)
 	rows, err := db.DB.Query(`SELECT id,seller_id,highest_bidder_id,item_type,item_data,quantity,current_price,currency,listing_type,duration_hours FROM auction WHERE status='ACTIVE' AND end_time <= NOW()`)
 	if err != nil {
 		return err
@@ -888,8 +901,10 @@ func settleExpiredAuctions() error {
 			itemData = string(rawItemData)
 		}
 
+		// settleAuction now atomically claims the auction before processing
 		if err := settleAuction(id, sellerID, highestBidderID, itemType, itemData, qty, currentPrice, currency, listingType, durationHours); err != nil {
-			logger.S.Errorf("Failed to settle auction %s: %v", id, err)
+			// Log but continue - auction may have been claimed by another worker
+			logger.S.Debugf("Skipped auction %s: %v", id, err)
 			continue
 		}
 	}
@@ -903,6 +918,18 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 		return err
 	}
 	defer tx.Rollback()
+
+	// Atomically claim the auction by locking and verifying it's still ACTIVE
+	// This prevents concurrent settlement attempts from processing the same auction
+	var auctionStatus string
+	err = tx.QueryRow(`SELECT status FROM auction WHERE id=$1 FOR UPDATE`, auctionID).Scan(&auctionStatus)
+	if err != nil {
+		return fmt.Errorf("failed to lock auction: %w", err)
+	}
+	if auctionStatus != "ACTIVE" {
+		// Auction already settled by another worker/request
+		return fmt.Errorf("auction %s already settled (status=%s)", auctionID, auctionStatus)
+	}
 
 	seller, err := evaluateManaTx(tx, sellerID)
 	if err != nil {
@@ -943,8 +970,17 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 			return err
 		}
 
-		if _, err := tx.Exec(`UPDATE auction SET status='COMPLETED' WHERE id=$1`, auctionID); err != nil {
+		// Idempotent update: only mark COMPLETED if still ACTIVE
+		result, err := tx.Exec(`UPDATE auction SET status='COMPLETED' WHERE id=$1 AND status='ACTIVE'`, auctionID)
+		if err != nil {
 			return err
+		}
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rowsAffected == 0 {
+			return fmt.Errorf("auction %s was not ACTIVE during final update", auctionID)
 		}
 
 		itemName := GetItemName(itemType, []byte(itemData))
@@ -961,8 +997,18 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 		if err := updatePlayerInventory(tx, seller, sellerBefore); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`UPDATE auction SET status='CANCELLED' WHERE id=$1`, auctionID); err != nil {
+		
+		// Idempotent update: only mark CANCELLED if still ACTIVE
+		result, err := tx.Exec(`UPDATE auction SET status='CANCELLED' WHERE id=$1 AND status='ACTIVE'`, auctionID)
+		if err != nil {
 			return err
+		}
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rowsAffected == 0 {
+			return fmt.Errorf("auction %s was not ACTIVE during final update", auctionID)
 		}
 
 		itemName := GetItemName(itemType, []byte(itemData))
