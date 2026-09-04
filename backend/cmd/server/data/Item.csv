@@ -559,8 +559,6 @@ yellow_gold_sand,Hoàng Kim Sa,Material,4,{},Cát vàng chứa vụn kim loại 
 yellow_mud,Hoàng nê,Food,2,"{""hunger"": 20}",Đất bùn vàng màu mỡ dùng cho Lại Thổ Cáp Mô và luyện Hoàng Đồng Thiềm.,3,,,"[""Earth Path""]"
 yin_bone_ash,Âm Cốt Hôi,Material,4,{},Tro xương lạnh lẽo ngưng tụ từ âm khí ngàn năm.,35,,,"[""Bone Path"", ""Dark Path""]"
 yin_soul_rock,Âm Hồn Nham,Material,4,{},Vách đá hấp thụ vô số u hồn lang thang.,50,,,"[""Dark Path"", ""Soul Path""]"
-primeval_stone,Nguyên Thạch,Food,1,"{""hunger"": 20}",Nguyên thạch tinh khiết dùng làm giao dịch và thức ăn cho phàm cổ.,10,,Common,"[""Food Path""]"
-immortal_stone,Tiên Nguyên Thạch,Food,6,"{""hunger"": 100}",Tiên nguyên thạch chí bảo dùng làm giao dịch và thức ăn cho tiên cổ.,10000,,Rare,"[""Food Path""]"
 beast_blood_rank1,Phàm Thú Huyết,Material,1,{},Tiên tài phẩm cấp đặc thù: Phàm Thú Huyết,10,,,"[""Blood Path""]"
 beast_blood_rank2,Linh Thú Huyết Ngưng,Material,2,{},Tiên tài phẩm cấp đặc thù: Linh Thú Huyết Ngưng,40,,,"[""Blood Path""]"
 beast_blood_rank3,Yêu Thú Tinh Huyết,Material,3,{},Tiên tài phẩm cấp đặc thù: Yêu Thú Tinh Huyết,90,,,"[""Blood Path""]"
