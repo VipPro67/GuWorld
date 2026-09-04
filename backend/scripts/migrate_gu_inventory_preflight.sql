@@ -4,7 +4,11 @@
 -- Chạy TRƯỚC khi deploy bản code mới (READ-ONLY, an toàn).
 --
 -- Cách chạy:
---   psql "postgres://gu_admin:gu_pass_123@localhost:5432/gu_db?sslmode=disable" \
+--   psql "postgres://<DB_USER>:<DB_PASSWORD>@<DB_HOST>:<DB_PORT>/<DB_NAME>?sslmode=<DB_SSLMODE>" \
+--       -f backend/scripts/migrate_gu_inventory_preflight.sql
+--
+-- Ví dụ với biến môi trường:
+--   psql "postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=${DB_SSLMODE}" \
 --       -f backend/scripts/migrate_gu_inventory_preflight.sql
 --
 -- Kết quả:

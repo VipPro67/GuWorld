@@ -16,7 +16,8 @@ Các biến thường dùng:
 | Variable | Mục đích |
 | --- | --- |
 | `PORT` | Port backend, mặc định `8080`. |
-| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSLMODE` | Kết nối PostgreSQL; có default local trong `db.Connect()`. |
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_NAME`, `DB_SSLMODE` | Kết nối PostgreSQL; có default local trong `db.Connect()`. |
+| `DB_PASSWORD` | **Required.** Mật khẩu PostgreSQL; không có giá trị mặc định, phải được cung cấp qua biến môi trường. |
 | `CORS_ALLOWED_ORIGINS` | Danh sách origin frontend, mặc định `http://localhost:3000`. |
 | `JWT_SECRET` | Ký token/cookie auth. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `MAIL_FROM` | Cấu hình SMTP (ví dụ: Brevo) để gửi mã OTP đăng ký. |

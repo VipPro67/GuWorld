@@ -30,7 +30,10 @@ func Connect() error {
 	host := getEnv("DB_HOST", "localhost")
 	port := getEnv("DB_PORT", "5432")
 	user := getEnv("DB_USER", "gu_admin")
-	password := getEnv("DB_PASSWORD", "gu_pass_123")
+	password := os.Getenv("DB_PASSWORD")
+	if password == "" {
+		return fmt.Errorf("DB_PASSWORD environment variable is required and must not be empty")
+	}
 	dbname := getEnv("DB_NAME", "gu_db")
 	sslmode := getEnv("DB_SSLMODE", "disable")
 

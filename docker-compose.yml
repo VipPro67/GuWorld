@@ -21,13 +21,15 @@ services:
       - DB_HOST=ls-19158de3f63de849869984a18834806cd5e6215a.c52mq4a6of6b.ap-southeast-1.rds.amazonaws.com
       - DB_PORT=5432
       - DB_USER=gu_admin
-      - DB_PASSWORD=cKsQD[ER&.z=1Xe$,+9KaH+#0vmen^~h
+      # DB_PASSWORD must be provided via backend/.env or secrets management
+      # - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=gu_db
       - DB_SSLMODE=require
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_SSL=false
-      - JWT_SECRET=guworld_cultivation_secret_key_change_me
+      # JWT_SECRET must be provided via backend/.env or secrets management
+      # - JWT_SECRET=${JWT_SECRET}
       - CORS_ALLOWED_ORIGINS=https://www.cogioi.io.vn,https://cogioi.io.vn,http://localhost:3000
     depends_on:
       redis:
