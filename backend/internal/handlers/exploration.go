@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
@@ -911,11 +912,22 @@ func MovePlayer(c *gin.Context) {
 		WHERE id = $13
 	`
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
+		logger.S.Errorf("MovePlayer: failed to sync Gu inventory for player=%s: %v", player.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return
 	}
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, player.ActiveCombat, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
+	var combatJSON any
+	if player.ActiveCombat != nil {
+		combatJSON, err = json.Marshal(player.ActiveCombat)
+		if err != nil {
+			logger.S.Errorf("MovePlayer: failed to marshal active combat for player=%s: %v", player.ID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
+			return
+		}
+	}
+	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, combatJSON, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
 	if err != nil {
+		logger.S.Errorf("MovePlayer: failed to update player=%s at (%d,%d), region=%s, combat=%t: %v", player.ID, player.X, player.Y, player.CurrentRegion, player.ActiveCombat != nil, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return
 	}
@@ -1137,15 +1149,26 @@ func MovePlayerPath(c *gin.Context) {
 	}
 
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
+		logger.S.Errorf("MovePlayerPath: failed to sync Gu inventory for player=%s: %v", player.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return
+	}
+	var combatJSON any
+	if player.ActiveCombat != nil {
+		combatJSON, err = json.Marshal(player.ActiveCombat)
+		if err != nil {
+			logger.S.Errorf("MovePlayerPath: failed to marshal active combat for player=%s: %v", player.ID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
+			return
+		}
 	}
 	_, err = tx.Exec(`
 		UPDATE players
 		SET current_mana = $1, x = $2, y = $3, current_region = $4, cleared_cells = $5, active_combat = $6, last_mana_update = $7, primeval_stones = $8, hp = $9, max_mana = $10, human_qi = $11, visited_subzones = $12
 		WHERE id = $13
-	`, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, player.ActiveCombat, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
+	`, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, combatJSON, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
 	if err != nil {
+		logger.S.Errorf("MovePlayerPath: failed to update player=%s at (%d,%d), region=%s, combat=%t: %v", player.ID, player.X, player.Y, player.CurrentRegion, player.ActiveCombat != nil, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 		return
 	}

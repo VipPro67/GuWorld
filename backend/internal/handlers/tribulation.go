@@ -268,6 +268,7 @@ func EngageTribulation(c *gin.Context) {
 	}
 	_, err = tx.Exec(`UPDATE players SET active_combat = $1, human_qi = LEAST(human_qi + 3, $2) WHERE id = $3`, combatBytes, MaxHumanQi, playerID)
 	if err != nil {
+		logger.S.Errorf("StartTribulation: failed to save active combat for player=%s, event=%s, enemies=%d: %v", playerID, eventIDStr, len(state.Enemies), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu trạng thái chiến đấu"})
 		return
 	}
@@ -530,7 +531,7 @@ func ResolveTribulation(c *gin.Context) {
 			// Failed Tribulation
 			var playerRank int
 			_ = tx.QueryRow(`SELECT rank FROM players WHERE id = $1`, playerID).Scan(&playerRank)
-			
+
 			// Compute nextYear using simulated incremented counts
 			earthVal := ap.EarthCalamityCount
 			heavenVal := ap.HeavenlyTribulationCount

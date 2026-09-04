@@ -179,6 +179,14 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
 
   const performMove = useCallback(
     (targetX: number, targetY: number) => {
+      const currentParty = useGameStore.getState().party;
+      const curPlayer = useGameStore.getState().player;
+      const isMemberNotLeader = Boolean(curPlayer?.party_id) && (currentParty === null || currentParty.leader_id !== curPlayer?.id);
+      if (isMemberNotLeader) {
+        useGameStore.getState().addToast("Chỉ có Trưởng nhóm mới có quyền di chuyển trên bản đồ!", "error");
+        return;
+      }
+
       const startX = playerRef.current.position.x;
       const startY = playerRef.current.position.y;
       const dist = Math.hypot(targetX + 0.5 - startX, targetY + 0.5 - startY);

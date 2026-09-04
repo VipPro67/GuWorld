@@ -299,14 +299,10 @@ func StartCombat(tx *sql.Tx, base *models.CombatState, player *models.Player) *m
 		}
 	}
 
-	combatBytes, err := json.Marshal(initialized)
-	if err == nil {
-		for _, ally := range initialized.Allies {
-			allyUUID, errParse := uuid.Parse(ally.ID)
-			if errParse == nil && allyUUID != player.ID {
-				_, _ = tx.Exec("UPDATE players SET active_combat = $1 WHERE id = $2", combatBytes, allyUUID)
-				notify.Send(tx, allyUUID, "PARTY_COMBAT", "Tổ Đội Giao Chiến", fmt.Sprintf("Trưởng nhóm %s đã bắt đầu giao chiến! Bạn đang ở trạng thái chờ và được bảo vệ theo đội hình.", player.Username))
-			}
+	for _, ally := range initialized.Allies {
+		allyUUID, errParse := uuid.Parse(ally.ID)
+		if errParse == nil && allyUUID != player.ID {
+			notify.Send(tx, allyUUID, "PARTY_COMBAT", "Tổ Đội Giao Chiến", fmt.Sprintf("Trưởng nhóm %s đã bắt đầu giao chiến! Đội hình của bạn đã tự động tham chiến.", player.Username))
 		}
 	}
 	return initialized

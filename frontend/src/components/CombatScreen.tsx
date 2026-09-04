@@ -171,7 +171,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   const fetchPartyStatus = useGameStore((state) => state.fetchPartyStatus);
 
   const isPartyLeader = party ? party.leader_id === player.id : true;
-  const isPartyMemberNotLeader = party !== null && !isPartyLeader;
+  const isPartyMemberNotLeader = Boolean(player.party_id) && (party === null || !isPartyLeader);
 
   useEffect(() => {
     if (player.party_id && !party) {

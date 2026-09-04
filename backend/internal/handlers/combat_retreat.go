@@ -112,6 +112,11 @@ func Retreat(c *gin.Context) {
 		respondCombatTxErr(c, err, "Failed to lock player Aperture")
 		return
 	}
+
+	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": errLeader.Error()})
+		return
+	}
 	before := append(models.GuInventory(nil), player.GuInventory...)
 	inventoryBefore := len(before)
 
@@ -197,6 +202,11 @@ func Flee(c *gin.Context) {
 	player, err := evaluateManaTxEquipped(tx, authID)
 	if err != nil {
 		respondCombatTxErr(c, err, "Failed to lock player Aperture")
+		return
+	}
+
+	if errLeader := checkPartyLeaderOrSolo(tx, &player); errLeader != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": errLeader.Error()})
 		return
 	}
 

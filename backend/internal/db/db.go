@@ -154,6 +154,9 @@ func InitSchema() error {
 		logger.S.Warnf("seedQuestsFromCSV: %v", err)
 	}
 
+	// Clean up any stale active_combat records for non-leader party members
+	_, _ = DB.Exec(`UPDATE players SET active_combat = NULL WHERE party_id IS NOT NULL AND id NOT IN (SELECT leader_id FROM parties WHERE leader_id IS NOT NULL)`)
+
 	logger.S.Info("Database schema initialized successfully")
 	return nil
 }

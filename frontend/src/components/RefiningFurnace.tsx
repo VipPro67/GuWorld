@@ -5,7 +5,7 @@ import { GamePanel, GameCard } from "@/components/ui";
 // UI migrated to shared components
 import { Player, GuSpec, ItemSpec, RefiningRecipe, GuInstance, useGameStore, guSpecFor, RefineRateBreakdown } from "@/store/useGameStore";
 import { reqGuQty, reqGuRank } from "@/lib/gu-dict";
-import { Flame, Sparkles, AlertCircle, Check, X, RefreshCw, Coins, Zap, Trophy, HelpCircle, ChevronDown, Search } from "lucide-react";
+import { Flame, Sparkles, AlertCircle, Check, X, RefreshCw, Coins, Zap, Trophy, HelpCircle, ChevronDown, Search, Brain } from "lucide-react";
 
 interface RefiningFurnaceProps {
   player: Player;
@@ -40,6 +40,33 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   const [statusTab, setStatusTab] = useState<"all" | "complete" | "incomplete">("all");
   const [isDeducing, setIsDeducing] = useState(false);
   const [showFullDesc, setShowFullDesc] = useState(false);
+
+  const consumeGu = useGameStore((state) => state.useGu);
+  const [isUsingRestoreGu, setIsUsingRestoreGu] = useState(false);
+
+  const restoreMentalGus = (player.gu_inventory || []).filter((gu) => {
+    if (gu.status === "DEAD" || gu.status === "SEALED") return false;
+    if (gu.gu_id === "GU_THOUGHT_RECOVERY") return true;
+    const spec = guSpecFor(gu.gu_id, gu.rank) || guDictionary[gu.gu_id];
+    if (!spec) return false;
+    return spec.effects?.other?.some(
+      (eff) => eff.event_trigger === "ON_CONSUME" && eff.action_code === "RESTORE_MENTAL"
+    ) ?? false;
+  });
+
+  const handleQuickUseRestoreMental = async () => {
+    if (restoreMentalGus.length === 0 || isUsingRestoreGu || actionLoading) return;
+    setIsUsingRestoreGu(true);
+    try {
+      const targetGu = restoreMentalGus[0];
+      await consumeGu(targetGu.instance_id);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Lỗi khi sử dụng Cổ trùng hồi Niệm Lực";
+      addToast(msg, "error");
+    } finally {
+      setIsUsingRestoreGu(false);
+    }
+  };
 
   const toggleGroupExpand = (guId: string, event?: React.MouseEvent) => {
     if (event) event.stopPropagation();
@@ -672,6 +699,41 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
               </div>
             </div>
 
+            {/* Player Mental (Niệm Lực) & Quick Use Bar */}
+            <div className="flex items-center justify-between bg-zinc-950/70 border border-violet-900/40 px-3.5 py-2 rounded-xl text-xs">
+              <div className="flex items-center gap-2 font-mono">
+                <Brain className="w-4 h-4 text-violet-400" />
+                <span className="text-zinc-400 font-serif">Niệm Lực:</span>
+                <span className={`font-bold ${(player.current_thought ?? 0) < 15 ? "text-rose-400" : "text-violet-300"}`}>
+                  {(player.current_thought ?? 0).toFixed(0)} / {player.max_thought ?? 100}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleQuickUseRestoreMental}
+                disabled={restoreMentalGus.length === 0 || isUsingRestoreGu || actionLoading}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold font-serif transition-all flex items-center gap-1.5 cursor-pointer ${
+                  restoreMentalGus.length > 0 && !isUsingRestoreGu && !actionLoading
+                    ? "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-zinc-100 shadow-sm active:scale-95"
+                    : "bg-zinc-900 border border-zinc-800 text-zinc-600 cursor-not-allowed"
+                }`}
+                title={
+                  restoreMentalGus.length > 0
+                    ? `Sử dụng ${guSpecFor(restoreMentalGus[0].gu_id, restoreMentalGus[0].rank)?.name || restoreMentalGus[0].gu_id} để hồi Niệm Lực`
+                    : "Không có Cổ trùng hồi Niệm Lực trong túi đồ"
+                }
+              >
+                {isUsingRestoreGu ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Brain className="w-3.5 h-3.5 text-violet-300" />
+                )}
+                <span>
+                  Dùng Cổ Hồi Niệm Lực {restoreMentalGus.length > 0 ? `(${restoreMentalGus.length})` : "(0)"}
+                </span>
+              </button>
+            </div>
+
             {/* Recipe Selection Combobox */}
             <div className="relative" ref={dropdownRef}>
               <div 
@@ -923,9 +985,9 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                         </div>
                         <div className="flex items-center justify-between text-[10px] font-mono">
                           <span className="text-zinc-500">Niệm Lực hiện có:</span>
-                          <span className={player.current_thought >= 15 ? "text-violet-300" : "text-rose-400 font-bold"}>
-                            {(player.current_thought ?? 0).toFixed(1)} / {player.max_thought ?? 100}
-                          </span>
+                            <span className={(player.current_thought ?? 0) >= 15 ? "text-violet-300" : "text-rose-400 font-bold"}>
+                              {(player.current_thought ?? 0).toFixed(1)} / {player.max_thought ?? 100}
+                            </span>
                         </div>
                         <button
                           type="button"

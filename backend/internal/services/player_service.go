@@ -170,7 +170,22 @@ FROM players
 	if len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
 		if json.Unmarshal(activeCombatBytes, &cs) == nil {
-			player.ActiveCombat = &cs
+			if player.PartyID != nil {
+				var leaderID string
+				errL := q.QueryRow(`SELECT leader_id FROM parties WHERE id = $1`, player.PartyID).Scan(&leaderID)
+				if errL == nil && leaderID != player.ID.String() {
+					player.ActiveCombat = nil
+					if execer, ok := q.(interface {
+						Exec(query string, args ...any) (sql.Result, error)
+					}); ok {
+						_, _ = execer.Exec(`UPDATE players SET active_combat = NULL WHERE id = $1`, player.ID)
+					}
+				} else {
+					player.ActiveCombat = &cs
+				}
+			} else {
+				player.ActiveCombat = &cs
+			}
 		}
 	}
 

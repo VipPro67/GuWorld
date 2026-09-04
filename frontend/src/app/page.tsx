@@ -101,6 +101,7 @@ export default function Home() {
     setShowChangelog,
     playerPets,
     monsterDictionary,
+    party,
   } = useGameStore();
 
   const [dontShowToday, setDontShowToday] = useState(false);
@@ -146,8 +147,9 @@ export default function Home() {
     logout();
   };
 
-  // Force combat view if player is actively in combat or if we have an active replay
-  const inCombat = (player && player.active_combat) || !!activeCombatReplay;
+  const isPartyMemberNotLeader = Boolean(player?.party_id) && party !== null && party.leader_id !== player?.id;
+  // Force combat view if player is actively in combat (and is leader or solo) or if we have an active replay
+  const inCombat = (player && player.active_combat && !isPartyMemberNotLeader) || !!activeCombatReplay;
 
   
   const IS_MAINTENANCE = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
