@@ -6,10 +6,16 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 func AdminListPlayerPets(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+
 	playerID := c.Param("id")
 	if playerID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing player ID"})
@@ -58,6 +64,11 @@ func AdminListPlayerPets(c *gin.Context) {
 }
 
 func AdminDeletePlayerPet(c *gin.Context) {
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
+
 	playerID := c.Param("id")
 	petID := c.Param("pet_id")
 	if playerID == "" || petID == "" {
@@ -87,6 +98,15 @@ func AdminDeletePlayerPet(c *gin.Context) {
 	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
 	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã thu hồi Linh thú '%s' của đạo hữu %s", nickname, username))
 
+	playerUUID, _ := uuid.Parse(playerID)
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.delete_pet",
+		EntityType: "player_pet", EntityID: petID,
+		RequestSummary: fmt.Sprintf("player=%s pet=%s nickname=%s", playerID, petID, nickname),
+		IPAddress:      c.ClientIP(), Success: true,
+	})
+	_ = playerUUID
+
 	c.JSON(http.StatusOK, gin.H{"deleted": true, "pet_id": petID})
 }
 
@@ -109,6 +129,11 @@ type AdminPetInput struct {
 }
 
 func AdminCreatePlayerPet(c *gin.Context) {
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
+
 	playerID := c.Param("id")
 	if playerID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing player ID"})
@@ -150,10 +175,24 @@ func AdminCreatePlayerPet(c *gin.Context) {
 		return
 	}
 
+	playerUUID, _ := uuid.Parse(playerID)
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.create_pet",
+		EntityType: "player_pet", EntityID: playerID,
+		RequestSummary: fmt.Sprintf("player=%s template=%s nickname=%s", playerID, req.MonsterTemplateID, req.Nickname),
+		IPAddress:      c.ClientIP(), Success: true,
+	})
+	_ = playerUUID
+
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cấp linh thú thành công"})
 }
 
 func AdminUpdatePlayerPet(c *gin.Context) {
+	adminID, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
+
 	playerID := c.Param("id")
 	petID := c.Param("pet_id")
 	if playerID == "" || petID == "" {
@@ -176,6 +215,15 @@ func AdminUpdatePlayerPet(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật linh thú: " + err.Error()})
 		return
 	}
+
+	playerUUID, _ := uuid.Parse(playerID)
+	auditlog.Log(db.DB, auditlog.Entry{
+		PlayerID: &adminID, Action: "admin.update_pet",
+		EntityType: "player_pet", EntityID: petID,
+		RequestSummary: fmt.Sprintf("player=%s pet=%s nickname=%s", playerID, petID, req.Nickname),
+		IPAddress:      c.ClientIP(), Success: true,
+	})
+	_ = playerUUID
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật linh thú thành công"})
 }
