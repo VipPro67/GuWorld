@@ -16,8 +16,10 @@ var secretKey []byte
 func init() {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		logger.S.Warn("JWT_SECRET not set! Using default insecure secret. Set JWT_SECRET in production.")
-		secret = "guworld_cultivation_secret_key_change_me"
+		logger.S.Fatal("JWT_SECRET environment variable is required for secure token signing. Please set it before starting the server.")
+	}
+	if len(secret) < 32 {
+		logger.S.Fatal("JWT_SECRET must be at least 32 characters long for adequate security.")
 	}
 	secretKey = []byte(secret)
 }

@@ -45,8 +45,16 @@ func GetFeedbacks(c *gin.Context) {
 				claims, err := auth.ValidateToken(parts[1])
 				if err == nil {
 					if parsedID, err := uuid.Parse(claims.PlayerID); err == nil {
-						authID = parsedID
-						exists = true
+						// Validate that the session_id in the token matches the active session in the database
+						var dbSessionID string
+						var playerExists bool
+						err := db.DB.QueryRowContext(c.Request.Context(), 
+							"SELECT EXISTS(SELECT 1 FROM players WHERE id=$1), COALESCE(active_session_id, '') FROM players WHERE id=$1", 
+							parsedID).Scan(&playerExists, &dbSessionID)
+						if err == nil && playerExists && claims.SessionID == dbSessionID {
+							authID = parsedID
+							exists = true
+						}
 					}
 				}
 			}
@@ -54,8 +62,16 @@ func GetFeedbacks(c *gin.Context) {
 			claims, err := auth.ValidateToken(tokenStr)
 			if err == nil {
 				if parsedID, err := uuid.Parse(claims.PlayerID); err == nil {
-					authID = parsedID
-					exists = true
+					// Validate that the session_id in the token matches the active session in the database
+					var dbSessionID string
+					var playerExists bool
+					err := db.DB.QueryRowContext(c.Request.Context(), 
+						"SELECT EXISTS(SELECT 1 FROM players WHERE id=$1), COALESCE(active_session_id, '') FROM players WHERE id=$1", 
+						parsedID).Scan(&playerExists, &dbSessionID)
+					if err == nil && playerExists && claims.SessionID == dbSessionID {
+						authID = parsedID
+						exists = true
+					}
 				}
 			}
 		}

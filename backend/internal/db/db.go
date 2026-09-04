@@ -181,17 +181,22 @@ func seedHubRegion() error {
 
 // seedSystemPlayers seeds the two reserved system accounts used by the
 // global/world/sect chat channels and automated notifications.
+// These accounts are initialized with a non-empty active_session_id to prevent
+// authentication bypass via forged tokens with empty session claims.
 func seedSystemPlayers() error {
+	// Use deterministic but non-empty session IDs for system accounts
+	// These accounts should never be used for actual login, so the session ID
+	// acts as a security barrier against token forgery
 	if _, err := DB.Exec(`
-	INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, hp, base_hp, current_region, x, y, email, ref_code, is_admin)
-	VALUES ('00000000-0000-0000-0000-000000000000', 'Bảo Hoàng Thiên', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'hub_nam_cuong', 50, 50, 'system@guworld.local', 'REF-SYSTEM', true)
-	ON CONFLICT (id) DO NOTHING;`); err != nil {
+	INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, hp, base_hp, current_region, x, y, email, ref_code, is_admin, active_session_id)
+	VALUES ('00000000-0000-0000-0000-000000000000', 'Bảo Hoàng Thiên', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'hub_nam_cuong', 50, 50, 'system@guworld.local', 'REF-SYSTEM', true, 'SYSTEM_ACCOUNT_NO_LOGIN')
+	ON CONFLICT (id) DO UPDATE SET active_session_id = COALESCE(NULLIF(players.active_session_id, ''), 'SYSTEM_ACCOUNT_NO_LOGIN');`); err != nil {
 		return err
 	}
 	if _, err := DB.Exec(`
-	INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, hp, base_hp, current_region, x, y, email, ref_code, is_admin)
-	VALUES ('11111111-1111-1111-1111-111111111111', 'Hệ thống', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'hub_nam_cuong', 50, 50, 'system_npc@guworld.local', 'REF-SYSTEM-NPC', true)
-	ON CONFLICT (id) DO NOTHING;`); err != nil {
+	INSERT INTO players (id, username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, current_mana, max_mana, primeval_stones, immortal_stones, hp, base_hp, current_region, x, y, email, ref_code, is_admin, active_session_id)
+	VALUES ('11111111-1111-1111-1111-111111111111', 'Hệ thống', '', 6, 1, 'Giáp', 99, 100, 100, 0, 0, 100, 100, 'hub_nam_cuong', 50, 50, 'system_npc@guworld.local', 'REF-SYSTEM-NPC', true, 'SYSTEM_ACCOUNT_NO_LOGIN')
+	ON CONFLICT (id) DO UPDATE SET active_session_id = COALESCE(NULLIF(players.active_session_id, ''), 'SYSTEM_ACCOUNT_NO_LOGIN');`); err != nil {
 		return err
 	}
 	return nil
@@ -274,6 +279,8 @@ func backfillLeaderboardSettings() error {
 }
 
 // ensureAdmin promotes the reserved admin accounts when no admin exists yet.
+// The admin account is initialized with a non-empty active_session_id to prevent
+// authentication bypass via forged tokens with empty session claims.
 func ensureAdmin() error {
 	var adminCount int
 	if err := DB.QueryRow(`SELECT COUNT(*) FROM players WHERE username = 'admin'`).Scan(&adminCount); err != nil {
@@ -290,17 +297,18 @@ func ensureAdmin() error {
 				id, username, password_hash, email, rank, sub_rank, 
 				aptitude_type, aptitude_percent, current_mana, max_mana, 
 				hp, base_hp, current_region, x, y, ref_code, is_admin,
-				primeval_stones, immortal_stones
+				primeval_stones, immortal_stones, active_session_id
 			) VALUES (
 				gen_random_uuid(), 'admin', $1, 'admin@guworld.local', 6, 1, 
 				'Giáp', 99, 100, 100, 
 				100, 100, 'hub_nam_cuong', 50, 50, 'REF-ADMIN', true,
-				0, 0
+				0, 0, 'ADMIN_ACCOUNT_CHANGE_PASSWORD'
 			)`, string(hash)); err != nil {
 			return err
 		}
 	} else {
-		if _, err := DB.Exec(`UPDATE players SET is_admin = true WHERE username = 'admin'`); err != nil {
+		// Ensure existing admin account has a non-empty session ID
+		if _, err := DB.Exec(`UPDATE players SET is_admin = true, active_session_id = COALESCE(NULLIF(active_session_id, ''), 'ADMIN_ACCOUNT_CHANGE_PASSWORD') WHERE username = 'admin'`); err != nil {
 			return err
 		}
 	}
