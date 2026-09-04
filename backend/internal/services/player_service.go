@@ -119,7 +119,8 @@ func (s *PlayerService) loadRow(q QueryRower, id uuid.UUID, forUpdate bool) (mod
 		       COALESCE(needs_onboarding, false),
 		       COALESCE(current_thought, 100.0), COALESCE(max_thought, 100.0), COALESCE(thought_regen_rate, 1.0),
    COALESCE(immortal_state, '{}'), growth_data,
-		       COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses
+		       COALESCE(race, ''), COALESCE(gender, ''), COALESCE(constitution, ''), statuses,
+		       COALESCE(version, 0)
 FROM players
 		WHERE id = $1
 	`
@@ -148,6 +149,7 @@ FROM players
 		&player.ImmortalState,
 		&player.GrowthData,
 		&player.Race, &player.Gender, &player.Constitution, &player.Statuses,
+		&player.Version,
 	)
 	if err != nil {
 		return player, err
@@ -422,7 +424,8 @@ func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models
 		UPDATE players
 		SET current_mana = $1, max_mana = $2, last_mana_update = $3,
 		    lifespan = $4, time_speed_multiplier = $5, aperture_stress = $6,
-		    last_cultivate_time = $7, hp = $8, soul_hp = $9, current_thought = $10
+		    last_cultivate_time = $7, hp = $8, soul_hp = $9, current_thought = $10,
+		    version = version + 1
 		WHERE id = $11
 	`, player.CurrentMana, player.MaxMana, player.LastManaUpdate,
 		player.Lifespan, player.TimeSpeedMultiplier, player.ApertureStress,
@@ -430,6 +433,7 @@ func (s *PlayerService) EvaluateAndPersistMana(tx *sql.Tx, id uuid.UUID) (models
 	if err != nil {
 		return player, err
 	}
+	player.Version++
 
 	if player.Rank >= 6 {
 		_, _ = tx.Exec(`UPDATE immortal_apertures SET immortal_essence = $1 WHERE player_id = $2`, int(player.CurrentMana), player.ID)
@@ -485,7 +489,8 @@ func (s *PlayerService) EvaluateAndPersistManaEquipped(tx *sql.Tx, id uuid.UUID)
 		UPDATE players
 		SET current_mana = $1, max_mana = $2, last_mana_update = $3,
 		    lifespan = $4, time_speed_multiplier = $5, aperture_stress = $6,
-		    last_cultivate_time = $7, hp = $8, soul_hp = $9, current_thought = $10
+		    last_cultivate_time = $7, hp = $8, soul_hp = $9, current_thought = $10,
+		    version = version + 1
 		WHERE id = $11
 	`, player.CurrentMana, player.MaxMana, player.LastManaUpdate,
 		player.Lifespan, player.TimeSpeedMultiplier, player.ApertureStress,
@@ -493,6 +498,7 @@ func (s *PlayerService) EvaluateAndPersistManaEquipped(tx *sql.Tx, id uuid.UUID)
 	if err != nil {
 		return player, err
 	}
+	player.Version++
 
 	if player.Rank >= 6 {
 		_, _ = tx.Exec(`UPDATE immortal_apertures SET immortal_essence = $1 WHERE player_id = $2`, int(player.CurrentMana), player.ID)

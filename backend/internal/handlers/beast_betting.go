@@ -444,7 +444,7 @@ func resolveRound(tx *sql.Tx, r *BettingRound) error {
 				return err
 			}
 			after := before + payout
-			_, err = tx.Exec("UPDATE players SET primeval_stones = $1 WHERE id = $2", after, pID)
+			_, err = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2", payout, pID)
 			if err != nil {
 				return err
 			}
@@ -649,9 +649,13 @@ func PlaceBeastBet(c *gin.Context) {
 	}
 
 	newBalance := balance - req.Amount
-	_, err = tx.Exec("UPDATE players SET primeval_stones = $1 WHERE id = $2", newBalance, userID)
+	res, err := tx.Exec("UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2 AND primeval_stones >= $1", req.Amount, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch"})
 		return
 	}
 

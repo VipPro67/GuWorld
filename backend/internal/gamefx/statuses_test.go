@@ -83,3 +83,25 @@ func TestEffectsMergeBlockedActions(t *testing.T) {
 		t.Fatalf("blocked actions not merged: %+v", dst.BlockedActions)
 	}
 }
+
+func TestRefineStatuses(t *testing.T) {
+	valid := ValidStatuses()
+	if !valid["refine_fatigue"] || !valid["refine_backfire"] {
+		t.Fatal("refine_fatigue and refine_backfire missing from fallback registry")
+	}
+
+	pFatigue := &models.Player{}
+	pFatigue.Statuses = models.StatusList{{ID: "refine_fatigue"}}
+	fxFatigue := Get(pFatigue)
+	if fxFatigue.RefineBonus != -0.25 {
+		t.Fatalf("refine_fatigue RefineBonus = %v, want -0.25", fxFatigue.RefineBonus)
+	}
+
+	pBackfire := &models.Player{}
+	pBackfire.Statuses = models.StatusList{{ID: "refine_backfire"}}
+	fxBackfire := Get(pBackfire)
+	if fxBackfire.RefineBonus != -0.50 {
+		t.Fatalf("refine_backfire RefineBonus = %v, want -0.50", fxBackfire.RefineBonus)
+	}
+}
+

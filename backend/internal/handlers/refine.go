@@ -794,6 +794,36 @@ func RefineGu(c *gin.Context) {
 
 	qiGained := AddHumanQi(&player, 10.0)
 
+	// Apply / escalate refine fatigue and backfire statuses
+	// Only trigger fatigue when refining Immortal Gu (Rank >= 6) or Gu with Rank >= player's Rank.
+	isTiringRefine := recipe.TargetRank >= 6 || recipe.TargetRank >= player.Rank
+	activeStatuses := player.Statuses.Active()
+	hasFatigue := activeStatuses.Has("refine_fatigue")
+	hasBackfire := activeStatuses.Has("refine_backfire")
+
+	if isTiringRefine || outcome == OutcomeFailBackfire {
+		if hasFatigue {
+			player.Statuses.Remove("refine_fatigue")
+			player.Statuses.Add("refine_backfire", "refine", 20*time.Minute, 0)
+			statusMsg += " [Luyện Cổ Phản Phệ]: Tỉ lệ Luyện Cổ giảm 50% trong 20 phút do cố luyện khi tâm thần mệt mỏi!"
+		} else if hasBackfire {
+			player.Statuses.Add("refine_backfire", "refine", 20*time.Minute, 0)
+			statusMsg += " Trạng thái [Luyện Cổ Phản Phệ] (giảm 50% tỉ lệ) đã được gia hạn thêm 20 phút."
+		} else if outcome == OutcomeFailBackfire {
+			player.Statuses.Add("refine_backfire", "refine", 20*time.Minute, 0)
+			statusMsg += " [Luyện Cổ Phản Phệ]: Thất bại cháy nổ khiến bạn bị Phản Phệ! Tỉ lệ Luyện Cổ giảm 50% trong 20 phút."
+		} else {
+			player.Statuses.Add("refine_fatigue", "refine", 10*time.Minute, 0)
+			statusMsg += " [Tâm Thần Mệt Mỏi]: Tỉ lệ Luyện Cổ lượt tiếp theo giảm 25% trong 10 phút."
+		}
+	}
+
+	statusesRaw, err := player.Statuses.Value()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to serialize player statuses"})
+		return
+	}
+
 	// 9. Update player status in database
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		logger.S.Error("DEBUG SyncPlayerGus failed:", err)
@@ -802,10 +832,10 @@ func RefineGu(c *gin.Context) {
 	}
 	updateQuery := `
 		UPDATE players
-		SET primeval_stones = $1, immortal_stones = $2, equipped_gus = $3, hp = $4, max_mana = $5, current_mana = $6, human_qi = $7, path_masteries = $8, soul_hp = $9
-		WHERE id = $10
+		SET primeval_stones = $1, immortal_stones = $2, equipped_gus = $3, hp = $4, max_mana = $5, current_mana = $6, human_qi = $7, path_masteries = $8, soul_hp = $9, statuses = $10
+		WHERE id = $11
 	`
-	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ImmortalStones, player.EquippedGus, player.HP, player.MaxMana, player.CurrentMana, player.HumanQi, player.PathMasteries, player.SoulHP, player.ID)
+	_, err = tx.Exec(updateQuery, player.PrimevalStones, player.ImmortalStones, player.EquippedGus, player.HP, player.MaxMana, player.CurrentMana, player.HumanQi, player.PathMasteries, player.SoulHP, statusesRaw, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save refining results"})
 		return

@@ -3,11 +3,16 @@ package models
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
+
+// ErrOptimisticLockConflict is returned when a player row update fails due to a version mismatch.
+var ErrOptimisticLockConflict = errors.New("concurrent update detected")
+
 
 // GuInstance represents an individual Gu bug owned by a player.
 type GuInstance struct {

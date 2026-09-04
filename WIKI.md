@@ -40,6 +40,8 @@ Danh sách chủng tộc được **data-driven** từ bảng `race_dictionary` 
 | Kiệt Sức (`exhausted`) | **-30%** tốc độ, **-50%** hiệu suất tu luyện; không thể tu luyện | 10 phút |
 | Phúc Trạch (`blessed`) | **+5** may mắn, **+10%** hiệu suất tu luyện | 60 phút |
 | Hình Phạt Tử Vong (`death_penalty`) | **-50%** tấn công, phòng thủ, tốc độ | 30 phút |
+| Tâm Thần Mệt Mỏi (`refine_fatigue`) | **-25%** tỉ lệ Luyện Cổ thành công (khi Luyện Tiên Cổ hoặc Cổ $\ge$ Rank bản thân) | 10 phút |
+| Luyện Cổ Phản Phệ (`refine_backfire`) | **-50%** tỉ lệ Luyện Cổ thành công (khi cố luyện lúc mệt mỏi hoặc bị nổ lò) | 20 phút |
 
 **Thể chất (10 Thập Tuyệt Thể + Thuần Mộng Cầu Chân Thể):**
 
@@ -305,6 +307,13 @@ Hệ quả của quá trình luyện phân thành 4 bậc:
 - **Thất Bại (Safe):** Nếu thất bại suýt sao và có Cảnh giới Luyện Đạo cao, đạo hữu được bảo toàn Cổ nguyên liệu chính, chỉ mất 50% nguyên liệu phụ (materials).
 - **Thất Bại (Normal):** Mất 100% nguyên liệu. Nếu có Cổ Bản Mệnh tham gia thì không chết mà rơi vào Hấp Hối (Hunger = 1).
 - **Cháy Nổ (Backfire):** Nếu vận rủi tột cùng (xúc xắc >= 90%, hoặc >= 75% với Tiên Cổ), Lò Luyện phát nổ! Tổn thất 50% HP tối đa và 30% Hồn Phách tối đa. Cổ nguyên liệu thường hóa thành tro bụi.
+
+### Trạng thái Mệt Mỏi & Phản Phệ khi Luyện Cổ
+
+Để mô phỏng tiêu hao Thần Hồn và hạn chế việc spam Luyện Cổ liên tục:
+- **Điều kiện kích hoạt:** Chỉ bị ảnh hưởng khi **Luyện Tiên Cổ (Rank 6 trở lên)** hoặc **Luyện Cổ có Rank $\ge$ Rank Cảnh Giới của bản thân**. Luyện Cổ bậc thấp hơn bản thân ("cổ cùi") không làm tổn hao tâm thần và không làm dính mệt mỏi.
+- **[Tâm Thần Mệt Mỏi] (`refine_fatigue`):** Nhận được sau khi Luyện Cổ thỏa điều kiện trên. Giảm **25%** tỉ lệ thành công Luyện Cổ lượt tiếp theo trong **10 phút**.
+- **[Luyện Cổ Phản Phệ] (`refine_backfire`):** Xuất hiện khi người chơi **vẫn cố gắng Luyện Cổ** trong lúc đang bị `refine_fatigue` (tự động leo thang) hoặc khi Luyện Cổ bị **Cháy Nổ (Backfire)**. Giảm **50%** tỉ lệ thành công Luyện Cổ lượt tiếp theo trong **20 phút**. Tiếp tục luyện khi đang bị Phản Phệ sẽ gia hạn thêm 20 phút.
 
 ## 7. Sát chiêu
 

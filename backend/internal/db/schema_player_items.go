@@ -109,6 +109,10 @@ func schemaPlayerItems() error {
 	);`); err != nil {
 		return err
 	}
+	if err := execSchema("player_inventory_items_player_cat_idx", `
+	CREATE INDEX IF NOT EXISTS idx_player_inventory_items_player_cat ON player_inventory_items (player_id, category);`); err != nil {
+		return err
+	}
 
 	if err := execSchema("player_recipe_progress", `
 	CREATE TABLE IF NOT EXISTS player_recipe_progress (

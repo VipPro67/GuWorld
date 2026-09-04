@@ -22,6 +22,7 @@ type Account struct {
 	FakeSubRank     int       `json:"fake_sub_rank"`
 	FakeVitalGu     string    `json:"fake_vital_gu"`
 	NeedsOnboarding bool      `json:"needs_onboarding"`
+	Version         int       `json:"version"`
 	CreatedAt       time.Time `json:"created_at"`
 }
 
@@ -42,6 +43,7 @@ func NewAccount(p *Player) Account {
 		FakeSubRank:     p.FakeSubRank,
 		FakeVitalGu:     p.FakeVitalGu,
 		NeedsOnboarding: p.NeedsOnboarding,
+		Version:         p.Version,
 		CreatedAt:       p.CreatedAt,
 	}
 }
@@ -62,6 +64,7 @@ func (s Account) Apply(p *Player) {
 	p.FakeSubRank = s.FakeSubRank
 	p.FakeVitalGu = s.FakeVitalGu
 	p.NeedsOnboarding = s.NeedsOnboarding
+	p.Version = s.Version
 	p.CreatedAt = s.CreatedAt
 }
 

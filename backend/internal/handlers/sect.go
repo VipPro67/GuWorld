@@ -710,10 +710,13 @@ func DonateStones(c *gin.Context) {
 	}
 
 	qiGained := AddHumanQi(&player, 5.0)
-
-	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1, human_qi = $2 WHERE id = $3`, player.PrimevalStones, player.HumanQi, player.ID)
+	res, err := tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1, human_qi = LEAST(human_qi + $2, 100000.0) WHERE id = $3 AND primeval_stones >= $1`, req.Amount, qiGained, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct stones"})
+		return
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch"})
 		return
 	}
 
@@ -2488,10 +2491,13 @@ func CreateSect(c *gin.Context) {
 	}
 
 	// Deduct resources
-	player.PrimevalStones -= cost
-	_, err = tx.Exec(`UPDATE players SET primeval_stones = $1 WHERE id = $2`, player.PrimevalStones, player.ID)
+	res, err := tx.Exec(`UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2 AND primeval_stones >= $1`, cost, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Deduct primeval stones failed"})
+		return
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để lập Tông môn"})
 		return
 	}
 

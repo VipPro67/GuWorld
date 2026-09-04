@@ -699,7 +699,7 @@ func AutoCombatStart(c *gin.Context) {
 				player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
 			}
 
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, aptitude_percent = $4, lifespan = $5, path_masteries = $6, cleared_cells = $7 WHERE id = $8`
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, aptitude_percent = $4, lifespan = $5, path_masteries = $6, cleared_cells = $7, version = version + 1 WHERE id = $8`
 			args = append(args, finalPlayerHP, finalMana, player.PrimevalStones, player.AptitudePercent, player.Lifespan, player.PathMasteries, player.ClearedCells, player.ID)
 		}
 	} else {
@@ -754,7 +754,7 @@ func AutoCombatStart(c *gin.Context) {
 				Detail: defeatMsg,
 			})
 
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, current_region = $3, x = $4, y = $5, aptitude_percent = $6, lifespan = $7, primeval_stones = $8, path_masteries = $9 WHERE id = $10`
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, current_region = $3, x = $4, y = $5, aptitude_percent = $6, lifespan = $7, primeval_stones = $8, path_masteries = $9, version = version + 1 WHERE id = $10`
 			args = append(args, player.HP, finalMana, player.CurrentRegion, player.X, player.Y, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.PathMasteries, player.ID)
 		}
 	}
@@ -1523,7 +1523,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 			clearedCellsJSON, _ := json.Marshal(player.ClearedCells)
 
 			player.HP = float64(finalPlayerHP)
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, immortal_stones = $4, path_masteries = $5, aptitude_percent = $6, lifespan = $7, cleared_cells = $8 WHERE id = $9`
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, immortal_stones = $4, path_masteries = $5, aptitude_percent = $6, lifespan = $7, cleared_cells = $8, version = version + 1 WHERE id = $9`
 			args = append(args, player.HP, finalMana, player.PrimevalStones, player.ImmortalStones, player.PathMasteries, player.AptitudePercent, player.Lifespan, clearedCellsJSON, player.ID)
 
 			summary["loot"] = lootDetailLogs
@@ -1563,7 +1563,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 			Detail: defeatMsg,
 		})
 
-		updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, current_region = $3, x = $4, y = $5, aptitude_percent = $6, lifespan = $7, primeval_stones = $8, path_masteries = $9 WHERE id = $10`
+		updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, current_region = $3, x = $4, y = $5, aptitude_percent = $6, lifespan = $7, primeval_stones = $8, path_masteries = $9, version = version + 1 WHERE id = $10`
 		args = append(args, player.HP, finalMana, player.CurrentRegion, player.X, player.Y, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.PathMasteries, player.ID)
 	}
 

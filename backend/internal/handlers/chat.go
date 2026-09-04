@@ -240,16 +240,19 @@ func SendBaoHoangChat(c *gin.Context) {
 	}
 
 	if fee > 0 {
-		player.PrimevalStones -= fee
-		_, err = tx.Exec("UPDATE players SET primeval_stones = $1 WHERE id = $2", player.PrimevalStones, player.ID)
+		res, err := tx.Exec("UPDATE players SET primeval_stones = primeval_stones - $1 WHERE id = $2 AND primeval_stones >= $1", fee, player.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to deduct stones"})
+			return
+		}
+		if rows, _ := res.RowsAffected(); rows == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ Nguyên Thạch để chat kênh này"})
 			return
 		}
 	}
 
 	qiGained := AddHumanQi(&player, 1.0)
-	_, err = tx.Exec("UPDATE players SET human_qi = $1 WHERE id = $2", player.HumanQi, player.ID)
+	_, err = tx.Exec("UPDATE players SET human_qi = LEAST(human_qi + $1, 100000.0) WHERE id = $2", qiGained, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update human qi"})
 		return

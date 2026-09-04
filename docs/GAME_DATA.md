@@ -120,7 +120,7 @@ Bảng `status_dictionary`:
 | `blocked_actions` | JSONB (`[]string`) | Chặn hành động: `explore`, `cultivate`, `combat`, `refine`, `trade` |
 | `description` | TEXT | Mô tả |
 
-Danh sách hiện tại (5 trạng thái):
+Danh sách hiện tại (7 trạng thái):
 
 | Key | Tên Việt | Effect | Thời hạn | Chặn |
 | --- | --- | --- | --- | --- |
@@ -129,6 +129,8 @@ Danh sách hiện tại (5 trạng thái):
 | `exhausted` | Kiệt Sức | -30% speed, -50% hiệu suất tu luyện | 10 phút | `cultivate` |
 | `blessed` | Phúc Trạch | +5 may mắn, +10% hiệu suất tu luyện | 60 phút | — |
 | `death_penalty` | Hình Phạt Tử Vong | -50% attack/defense/speed | 30 phút | — |
+| `refine_fatigue` | Tâm Thần Mệt Mỏi | -25% tỉ lệ Luyện Cổ | 10 phút | — |
+| `refine_backfire` | Luyện Cổ Phản Phệ | -50% tỉ lệ Luyện Cổ | 20 phút | — |
 
 Helper dùng chung: `gamefx.Get(player)` (resolve effects + BlockedActions), `gamefx.HasBlockedAction(player, action)`, `gamefx.BlockingStatuses(player, action)`, `handlers.GrantPlayerStatus/RevokePlayerStatus/CleanExpiredPlayerStatuses` (cấp/gỡ/dọn trạng thái trong transaction), worker `worker.StartStatusExpiryWorker` (dọn hết hạn mỗi phút).
 

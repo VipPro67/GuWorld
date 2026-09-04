@@ -502,8 +502,7 @@ func UpdateFeedbackStatus(c *gin.Context) {
 				}
 			} else {
 				// Cổ Sư Phàm nhân: Thưởng 500 Nguyên Thạch
-				primevalStones += 500
-				_, err = tx.Exec("UPDATE players SET primeval_stones = $1 WHERE id = $2", primevalStones, authorID)
+				_, err = tx.Exec("UPDATE players SET primeval_stones = primeval_stones + 500 WHERE id = $1", authorID)
 				if err == nil {
 					content = fmt.Sprintf("Chúc mừng đạo hữu! Góp ý '%s' của đạo hữu đã được Thiên Đạo tiếp nhận phát triển (Trạng thái: %s). Thiên Đạo ban thưởng đạo hữu 500 Nguyên Thạch làm khích lệ!", title, statusLower)
 					_, _ = tx.Exec(`

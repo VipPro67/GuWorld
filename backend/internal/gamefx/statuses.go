@@ -91,6 +91,24 @@ func defaultStatuses() []StatusDef {
 			DefaultDurationMinutes: 30,
 			Description:            "Sát khí chưa tan sau khi chết, toàn bộ chỉ số suy giảm.",
 		},
+		{
+			Key:  "refine_fatigue",
+			Name: "Tâm Thần Mệt Mỏi",
+			Effects: Effects{
+				RefineBonus: -0.25,
+			},
+			DefaultDurationMinutes: 10,
+			Description:            "Luyện cổ khiến tâm thần mệt mỏi, giảm 25% tỉ lệ luyện cổ thành công.",
+		},
+		{
+			Key:  "refine_backfire",
+			Name: "Luyện Cổ Phản Phệ",
+			Effects: Effects{
+				RefineBonus: -0.50,
+			},
+			DefaultDurationMinutes: 20,
+			Description:            "Bị cổ khí phản phệ do cố luyện cổ khi mệt mỏi, giảm 50% tỉ lệ luyện cổ thành công.",
+		},
 	}
 }
 

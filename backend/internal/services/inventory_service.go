@@ -95,8 +95,57 @@ func (s *InventoryService) GetQuantityInAnyCategory(q QueryRower, playerID, item
 	return qty, cat, nil
 }
 
-// AddItem adds quantity to an existing item or inserts a new row.
-// If tx is nil, operates directly on the DB.
+// ItemBatchEntry holds information for batch insertion.
+type ItemBatchEntry struct {
+	ItemID   string
+	Category string
+	Quantity int
+}
+
+// AddItemsBatch inserts or increments multiple items for a player in a single SQL query.
+func (s *InventoryService) AddItemsBatch(tx *sql.Tx, playerID string, items []ItemBatchEntry) error {
+	if len(items) == 0 {
+		return nil
+	}
+	if len(items) == 1 {
+		return s.AddItem(tx, playerID, items[0].ItemID, items[0].Category, items[0].Quantity)
+	}
+
+	valueStrings := make([]string, 0, len(items))
+	valueArgs := make([]any, 0, len(items)*3+1)
+	valueArgs = append(valueArgs, playerID)
+
+	validCount := 0
+	for _, entry := range items {
+		if entry.Quantity <= 0 {
+			continue
+		}
+		baseIdx := validCount*3 + 2
+		valueStrings = append(valueStrings, fmt.Sprintf("($1, $%d, $%d, $%d, NOW())", baseIdx, baseIdx+1, baseIdx+2))
+		valueArgs = append(valueArgs, entry.ItemID, entry.Category, entry.Quantity)
+		validCount++
+	}
+
+	if len(valueStrings) == 0 {
+		return nil
+	}
+
+	query := fmt.Sprintf(`
+		INSERT INTO player_inventory_items (player_id, item_id, category, quantity, updated_at)
+		VALUES %s
+		ON CONFLICT (player_id, item_id, category)
+		DO UPDATE SET quantity = player_inventory_items.quantity + EXCLUDED.quantity, updated_at = NOW()
+	`, strings.Join(valueStrings, ", "))
+
+	var err error
+	if tx != nil {
+		_, err = tx.Exec(query, valueArgs...)
+	} else {
+		_, err = s.db.Exec(query, valueArgs...)
+	}
+	return err
+}
+
 func (s *InventoryService) AddItem(tx *sql.Tx, playerID, itemID, category string, quantity int) error {
 	var err error
 	if tx != nil {

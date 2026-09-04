@@ -270,6 +270,8 @@ func seedDefaultStatusRows() error {
 		{"exhausted", "Kiệt Sức", `{"stat_mods":{"speed":-0.30},"cultivation_efficiency":-0.50}`, 10, `["cultivate"]`, "Lực kiệt sức, tạm thời không thể tu luyện."},
 		{"blessed", "Phúc Trạch", `{"luck":5,"cultivation_efficiency":0.10}`, 60, `[]`, "Nhận phúc trạch, may mắn và tu luyện hiệu quả hơn."},
 		{"death_penalty", "Hình Phạt Tử Vong", `{"stat_mods":{"attack":-0.50,"defense":-0.50,"speed":-0.50}}`, 30, `[]`, "Sát khí chưa tan sau khi chết, toàn bộ chỉ số suy giảm."},
+		{"refine_fatigue", "Tâm Thần Mệt Mỏi", `{"refine":-0.25}`, 10, `[]`, "Luyện cổ khiến tâm thần mệt mỏi, giảm 25% tỉ lệ luyện cổ thành công."},
+		{"refine_backfire", "Luyện Cổ Phản Phệ", `{"refine":-0.50}`, 20, `[]`, "Bị cổ khí phản phệ do cố luyện cổ khi mệt mỏi, giảm 50% tỉ lệ luyện cổ thành công."},
 	}
 	for _, s := range statuses {
 		if _, err := DB.Exec(`

@@ -1101,6 +1101,15 @@ export const wikiPages: WikiPage[] = [
               <li><strong>Cháy Nổ (Backfire):</strong> Tỉ lệ tột cùng xui xẻo khiến lò nổ, mất 50% HP max và 30% Hồn Phách max.</li>
             </ul>
           </div>
+
+          <div className="p-4 rounded-2xl bg-red-950/20 border border-red-500/10 text-xs text-red-300 leading-relaxed mt-4">
+            💤 <strong>Mệt Mỏi & Phản Phệ khi Luyện Cổ:</strong>
+            <ul className="list-disc list-inside mt-2 space-y-1">
+              <li><strong>Điều kiện:</strong> Chỉ bị ảnh hưởng khi <em>Luyện Tiên Cổ (Rank 6+)</em> hoặc <em>Luyện Cổ Rank &ge; Rank Cảnh Giới bản thân</em>. Luyện Cổ bậc thấp hơn bản thân ("cổ cùi") không làm tổn hao tâm thần.</li>
+              <li><strong>Tâm Thần Mệt Mỏi (refine_fatigue):</strong> Giảm <strong>25%</strong> tỉ lệ Luyện Cổ thành công trong 10 phút.</li>
+              <li><strong>Luyện Cổ Phản Phệ (refine_backfire):</strong> Xuất hiện khi cố Luyện Cổ trong lúc đang mệt mỏi hoặc bị nổ lò. Giảm <strong>50%</strong> tỉ lệ Luyện Cổ thành công trong 20 phút (tiếp tục luyện sẽ gia hạn 20 phút).</li>
+            </ul>
+          </div>
         </div>
       </div>
     )
