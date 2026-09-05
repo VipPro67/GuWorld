@@ -1283,16 +1283,16 @@ return (
               ) : (
                 // STANDARD LAND ACTION PANEL
                 <div>
-                  <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800 pb-3 mb-4 flex items-center gap-2">
-                    <Plus className="w-5 h-5 text-cyan-400" />
+                  <h2 className="text-sm font-bold text-slate-100 border-b border-slate-800/80 pb-1.5 mb-2.5 flex items-center gap-1.5">
+                    <Plus className="w-4 h-4 text-cyan-400" />
                     Hành Động Ô Đất
                   </h2>
 
                 {selectedCell ? (
-                  <div className="space-y-6">
-                    <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-850">
-                      <div className="text-xs text-slate-400 font-semibold">Tọa độ đang chọn</div>
-                      <div className="text-lg font-bold text-amber-300 mt-1">X: {selectedCell.x}, Y: {selectedCell.y}</div>
+                  <div className="space-y-3">
+                    <div className="bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-850 flex items-center justify-between text-xs">
+                      <span className="text-slate-400 font-medium">Tọa độ đang chọn:</span>
+                      <span className="font-bold text-amber-300">X: {selectedCell.x}, Y: {selectedCell.y}</span>
                     </div>
 
                     {selectedNode ? (
@@ -1572,19 +1572,17 @@ return (
                       };
 
                       return (
-                        <div className="space-y-4">
-                          <div className="text-sm font-semibold text-slate-300">Xây dựng điểm tài nguyên</div>
-
-                          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-850 flex justify-between items-center text-xs">
-                            <span className="text-slate-400">Số lượng điểm tài nguyên:</span>
-                            <span className={`${isAtLimit ? 'text-rose-400 font-bold' : 'text-amber-400'} font-bold`}>
+                        <div className="space-y-2.5">
+                          <div className="bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-850 flex justify-between items-center text-xs">
+                            <span className="text-slate-400 font-medium">Số lượng mỏ tài nguyên:</span>
+                            <span className={`${isAtLimit ? 'text-rose-400' : 'text-amber-400'} font-bold`}>
                               {currentNodesCount} / {maxNodes} mỏ
                             </span>
                           </div>
 
                           {isAtLimit && (
-                            <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-center text-xs text-rose-300">
-                              Quy mô Tiên Khiếu đạt giới hạn mỏ tài nguyên. Hãy tháo dỡ hoặc mở rộng thêm đất đai.
+                            <div className="p-2 bg-rose-500/10 border border-rose-500/20 rounded-lg text-center text-xs text-rose-300">
+                              Quy mô Tiên Khiếu đạt giới hạn mỏ. Hãy tháo dỡ hoặc mở rộng thêm đất đai.
                             </div>
                           )}
 
@@ -1593,8 +1591,11 @@ return (
                             {["khu_trong", "khu_nuoi", "khu_khai_thac", "defense"].map((cat) => (
                               <button
                                 key={cat}
-                                onClick={() => setBuildCategory(cat as any)}
-                                className={`flex-1 py-1.5 font-bold rounded capitalize transition-all ${
+                                onClick={() => {
+                                  setBuildCategory(cat as any);
+                                  setPendingBuildZone(null); // Tắt bảng chọn tùy chỉnh khi chuyển tab!
+                                }}
+                                className={`flex-1 py-1 font-bold rounded capitalize transition-all ${
                                   buildCategory === cat ? "bg-slate-800 text-amber-400" : "text-slate-400"
                                 }`}
                               >
@@ -1603,11 +1604,14 @@ return (
                             ))}
                           </div>
 
-                          <div className="space-y-3 pt-2 max-h-[350px] overflow-y-auto pr-1">
+                          <div className="space-y-3 pt-1">
                             {pendingBuildZone ? (
-                              <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 space-y-3">
-                                <div className="text-xs font-bold text-slate-200">
-                                  {pendingBuildZone === "FARMING_ZONE" ? "Tùy chỉnh Khu Trồng Trọt" : pendingBuildZone === "BREEDING_ZONE" ? "Tùy chỉnh Khu Chăn Nuôi" : pendingBuildZone === "MINING_ZONE" ? "Tùy chỉnh Khu Khai Thác" : "Tùy chỉnh Khu Nuôi Trồng"}
+                              <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-700/60 space-y-3 shadow-md">
+                                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                                  <div className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                                    {pendingBuildZone === "FARMING_ZONE" ? "🌱 Tùy chỉnh Khu Trồng Trọt" : pendingBuildZone === "BREEDING_ZONE" ? "🐄 Tùy chỉnh Khu Chăn Nuôi" : pendingBuildZone === "MINING_ZONE" ? "⛏️ Tùy chỉnh Khu Khai Thác" : "⚙️ Tùy chỉnh Mỏ Tài Nguyên"}
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 font-medium">Chi phí: 10 Tiên Nguyên Thạch</span>
                                 </div>
                                 
                                 {(() => {
@@ -1656,16 +1660,14 @@ return (
                                     });
                                   });
 
-                                  // Compute target zone
-                                  const targetZone = pendingBuildZone === "FARMING_ZONE" ? "khu_trong"
-                                    : pendingBuildZone === "BREEDING_ZONE" ? "khu_nuoi"
-                                    : pendingBuildZone === "MINING_ZONE" ? "khu_khai_thac"
-                                    : buildCategory;
-
-                                  const zoneLabel = targetZone === "khu_trong" ? "🌱 Nhóm Trồng Trọt (Thảo mộc, Hoa lá, Trúc rượu...)"
-                                    : targetZone === "khu_nuoi" ? "🐄 Nhóm Chăn Nuôi (Thịt thú, Tinh huyết, Trứng, Dị nhân...)"
-                                    : targetZone === "khu_khai_thac" ? "⛏️ Nhóm Khai Thác (Khoáng thạch, Tinh thiết, Hạch tâm...)"
-                                    : "Tất cả vật phẩm";
+                                  // Helper to count items for a path
+                                  const getItemCountForPath = (pathName: string) => {
+                                    const rawPath = pathName.replace(/ Path$/i, '').trim().toLowerCase();
+                                    return Object.values(itemDictionary || {}).filter(item => {
+                                      const itemPaths = parseItemPaths(item.path).map(p => p.toLowerCase().replace(/ path$/i, '').trim());
+                                      return itemPaths.includes(rawPath);
+                                    }).length;
+                                  };
 
                                   // Sort paths alphabetically by Vietnamese translation
                                   const sortedPaths = Array.from(pathsSet).sort((a, b) => {
@@ -1683,16 +1685,12 @@ return (
                                     return viName.includes(searchP) || enName.includes(searchP);
                                   });
                                   
-                                  // Compute available items for the currently selected path & target zone
+                                  // Compute available items for the currently selected path
                                   const selectedRawPath = buildPath.replace(/ Path$/i, '').trim().toLowerCase();
                                   const availableItems = Object.values(itemDictionary || {}).filter(item => {
+                                    if (buildPath === "ALL") return true;
                                     const itemPaths = parseItemPaths(item.path).map(p => p.toLowerCase().replace(/ path$/i, '').trim());
-                                    const matchesPath = itemPaths.includes(selectedRawPath);
-                                    const isUsableType = !item.item_type || ["material", "food", "consumable"].includes(item.item_type.toLowerCase());
-                                    const matchesZone = ["khu_trong", "khu_nuoi", "khu_khai_thac"].includes(targetZone)
-                                      ? getItemZoneCategory(item) === targetZone
-                                      : true;
-                                    return matchesPath && isUsableType && matchesZone;
+                                    return itemPaths.includes(selectedRawPath);
                                   }).sort((a, b) => (a.rank || 0) - (b.rank || 0) || a.name.localeCompare(b.name, "vi"));
 
                                   // Filter items by itemSearch query
@@ -1702,29 +1700,27 @@ return (
                                     return item.name.toLowerCase().includes(searchI) || item.id.toLowerCase().includes(searchI);
                                   });
 
-                                  return (
-                                    <>
-                                      <div className="text-[10px] text-amber-400 font-semibold mb-2 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 flex items-center justify-between">
-                                        <span>{zoneLabel}</span>
-                                      </div>
+                                  const selectedItemSpec = buildProdKey ? itemDictionary[buildProdKey] : null;
 
+                                  return (
+                                    <div className="space-y-3">
                                       <div>
                                         <div className="flex justify-between items-center mb-1">
-                                          <label className="text-[10px] text-slate-400">Chọn Đại Đạo (Path)</label>
-                                          <span className="text-[9px] text-amber-400 font-semibold">{translatePath(buildPath)} ({buildPath})</span>
+                                          <label className="text-[11px] font-semibold text-slate-300">1. Chọn Đại Đạo (Path)</label>
+                                          <span className="text-[10px] text-amber-400 font-bold">{translatePath(buildPath)}</span>
                                         </div>
 
                                         {/* Search Input for Path */}
                                         <input 
                                           type="text"
-                                          placeholder="🔍 Tìm Đại Đạo (vd: Trí Đạo, Phong Đạo...)"
-                                          className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded p-1.5 mb-1 focus:border-amber-500 outline-none"
+                                          placeholder="🔍 Tìm Đại Đạo (vd: Huyết Đạo, Trí Đạo...)"
+                                          className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg p-2 mb-1.5 focus:border-amber-500 outline-none transition"
                                           value={pathSearch}
                                           onChange={(e) => setPathSearch(e.target.value)}
                                         />
 
                                         <select 
-                                          className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-300 rounded p-1.5"
+                                          className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg p-2 focus:border-amber-500 outline-none cursor-pointer"
                                           value={buildPath} 
                                           onChange={(e) => {
                                             setBuildPath(e.target.value);
@@ -1732,43 +1728,70 @@ return (
                                             setItemSearch("");
                                           }}
                                         >
-                                          {filteredPaths.map(p => (
-                                            <option key={p} value={p}>
-                                              {translatePath(p)} ({p})
-                                            </option>
-                                          ))}
+                                          <option value="ALL">✨ Tất cả Đại Đạo (All Paths)</option>
+                                          {filteredPaths.map(p => {
+                                            const icon = getPathIconAndColor(p, "RESOURCE").icon;
+                                            const count = getItemCountForPath(p);
+                                            return (
+                                              <option key={p} value={p}>
+                                                {icon} {translatePath(p)} ({p}) — [{count} vật phẩm]
+                                              </option>
+                                            );
+                                          })}
                                         </select>
                                       </div>
                                       
                                       <div>
                                         <div className="flex justify-between items-center mb-1">
-                                          <label className="text-[10px] text-slate-400">Chọn loại tài liệu / vật phẩm</label>
-                                          <span className="text-[9px] text-slate-400">({filteredItems.length}/{availableItems.length} vật phẩm)</span>
+                                          <label className="text-[11px] font-semibold text-slate-300">2. Chọn vật phẩm sản xuất</label>
+                                          <span className="text-[10px] text-slate-400 font-medium">({filteredItems.length}/{availableItems.length} vật phẩm)</span>
                                         </div>
 
                                         {/* Search Input for Item */}
                                         <input 
                                           type="text"
-                                          placeholder="🔍 Tìm vật phẩm theo tên..."
-                                          className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded p-1.5 mb-1 focus:border-amber-500 outline-none"
+                                          placeholder="🔍 Tìm theo tên vật phẩm..."
+                                          className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg p-2 mb-1.5 focus:border-amber-500 outline-none transition"
                                           value={itemSearch}
                                           onChange={(e) => setItemSearch(e.target.value)}
                                         />
 
                                         <select 
-                                          className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-300 rounded p-1.5"
+                                          className="w-full bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-lg p-2 focus:border-amber-500 outline-none cursor-pointer"
                                           value={buildProdKey} 
                                           onChange={(e) => setBuildProdKey(e.target.value)}
                                         >
-                                          <option value="" disabled>-- Chọn một vật phẩm --</option>
-                                          {filteredItems.map(item => (
-                                            <option key={item.id} value={item.id}>
-                                              {item.name} (Rank {item.rank || 1})
-                                            </option>
-                                          ))}
+                                          <option value="" disabled>-- Chọn một vật phẩm ({filteredItems.length} vật phẩm) --</option>
+                                          {filteredItems.map(item => {
+                                            const rankTag = item.rank ? (item.rank >= 6 ? `Rank ${item.rank} ⭐ Tiên Cấp` : `Rank ${item.rank}`) : "Rank 1";
+                                            return (
+                                              <option key={item.id} value={item.id}>
+                                                [{rankTag}] {item.name}
+                                              </option>
+                                            );
+                                          })}
                                         </select>
                                       </div>
-                                    </>
+
+                                      {/* Selected Item Preview Card */}
+                                      {selectedItemSpec && (
+                                        <div className="p-3 bg-slate-950/90 rounded-xl border border-amber-500/40 space-y-1.5 shadow-lg">
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-xs font-bold text-amber-400">{selectedItemSpec.name}</span>
+                                            <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
+                                              Rank {selectedItemSpec.rank || 1} {(selectedItemSpec.rank && selectedItemSpec.rank >= 6) ? "⭐ Tiên Cấp" : ""}
+                                            </span>
+                                          </div>
+                                          {selectedItemSpec.description && (
+                                            <div className="text-[10px] text-slate-300 leading-relaxed">{selectedItemSpec.description}</div>
+                                          )}
+                                          <div className="text-[9px] text-slate-400 pt-1.5 flex items-center justify-between border-t border-slate-800">
+                                            <span>Đại Đạo: <strong className="text-slate-200">{translatePath(buildPath)}</strong></span>
+                                            <span>Chu kỳ thu: <strong className="text-emerald-400">10 tiếng/lần</strong></span>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
                                   );
                                 })()}
                                 <div className="flex gap-2 pt-2">
