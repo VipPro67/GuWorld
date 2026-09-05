@@ -163,6 +163,26 @@ func schemaPlayers() error {
 	CREATE INDEX IF NOT EXISTS idx_players_username_trgm ON players USING gin (public.immutable_unaccent(username) gin_trgm_ops);`); err != nil {
 		return err
 	}
+	if err := execSchema("players_active_combat_gin_idx", `
+	CREATE INDEX IF NOT EXISTS idx_players_active_combat ON players USING gin (active_combat);`); err != nil {
+		return err
+	}
+	if err := execSchema("players_statuses_gin_idx", `
+	CREATE INDEX IF NOT EXISTS idx_players_statuses ON players USING gin (statuses);`); err != nil {
+		return err
+	}
+	if err := execSchema("players_equipped_gus_gin_idx", `
+	CREATE INDEX IF NOT EXISTS idx_players_equipped_gus ON players USING gin (equipped_gus);`); err != nil {
+		return err
+	}
+	if err := execSchema("players_path_masteries_gin_idx", `
+	CREATE INDEX IF NOT EXISTS idx_players_path_masteries ON players USING gin (path_masteries);`); err != nil {
+		return err
+	}
+	if err := execSchema("players_body_mods_gin_idx", `
+	CREATE INDEX IF NOT EXISTS idx_players_body_mods ON players USING gin (body_mods);`); err != nil {
+		return err
+	}
 
 	return nil
 }

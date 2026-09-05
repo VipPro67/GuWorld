@@ -775,10 +775,8 @@ func SellShopItem(c *gin.Context) {
 		player.PrimevalStones += totalGain
 	}
 	player.EquippedGus = []string{}
-	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-		}
+	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
+		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 	}
 	qiGained := AddHumanQi(&player, 5.0)
 	if req.ItemType == "Gu" {
@@ -1058,10 +1056,8 @@ func SellShopItemsBulk(c *gin.Context) {
 	player.ImmortalStones += totalGainImmortal
 
 	player.EquippedGus = []string{}
-	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-		}
+	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
+		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 	}
 
 	qiGained := AddHumanQi(&player, float64(len(req.Items))*5.0)

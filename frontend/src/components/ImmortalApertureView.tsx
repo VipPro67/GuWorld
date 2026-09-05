@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useGameStore, ApertureResourceNode, TribulationEnemy, ImmortalAperture } from "@/store/useGameStore";
+import { useGameStore, ApertureResourceNode, TribulationEnemy } from "@/store/useGameStore";
 import {
   Shield,
   Activity,
@@ -28,6 +28,8 @@ import { translatePath } from "@/lib/translate";
 import { formatNumber } from "@/lib/utils";
 import { Num } from "./Num";
 import { GamePanel, GameTabs, GameButton, GameCard, GameModal, GameProgressBar, GameSection } from "@/components/ui";
+import { CountdownTimer } from "./CountdownTimer";
+import { TribulationRealTimeInfo } from "./TribulationRealTimeInfo";
 export function getPathIconAndColor(path: string | undefined, nodeType: string | undefined): { icon: string; color: string } {
   if (nodeType === "WALL") return { icon: "🧱", color: "bg-orange-950/50 border-orange-500/40" };
   if (nodeType === "WATCHTOWER") return { icon: "🗼", color: "bg-blue-950/50 border-blue-500/40" };
@@ -137,145 +139,6 @@ export function getItemZoneCategory(item: { id: string; name: string; item_type?
 
   return "khu_khai_thac";
 }
-
-const CountdownTimer: React.FC<{ node: ApertureResourceNode; timeRate: number; onComplete?: () => void }> = ({ node, timeRate, onComplete }) => {
-  const [timeLeft, setTimeLeft] = useState<string>("");
-
-  useEffect(() => {
-    const calculateTime = () => {
-      if (!node.last_collected_at) {
-        setTimeLeft("Sẵn sàng");
-        return;
-      }
-      const lastTime = new Date(node.last_collected_at).getTime();
-      const rate = timeRate <= 0 ? 1.0 : timeRate;
-      const nextCollectTime = lastTime + (node.production_interval_hours * 60 * 60 * 1000) / rate;
-      const diff = nextCollectTime - Date.now();
-
-      if (diff <= 0) {
-        setTimeLeft("Sẵn sàng");
-        if (onComplete) onComplete();
-        return;
-      }
-
-      const hours = Math.floor(diff / (60 * 60 * 1000));
-      const minutes = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
-      const seconds = Math.floor((diff % (60 * 1000)) / 1000);
-
-      const parts = [];
-      if (hours > 0) parts.push(`${hours}h`);
-      if (minutes > 0 || hours > 0) parts.push(`${minutes}m`);
-      parts.push(`${seconds}s`);
-
-      setTimeLeft(parts.join(" "));
-    };
-
-    calculateTime();
-    const interval = setInterval(calculateTime, 1000);
-    return () => clearInterval(interval);
-  }, [node, timeRate]);
-
-  return <span>{timeLeft}</span>;
-};
-
-interface TribulationRealTimeInfoProps {
-  aperture: ImmortalAperture;
-  timeSpeedMultiplier?: number;
-  isCompact?: boolean;
-}
-
-const TribulationRealTimeInfo: React.FC<TribulationRealTimeInfoProps> = ({ aperture, timeSpeedMultiplier = 1, isCompact }) => {
-  const [timeLeftText, setTimeLeftText] = useState<string>("");
-  const [arrivalTimeText, setArrivalTimeText] = useState<string>("");
-  const [isPassed, setIsPassed] = useState<boolean>(false);
-
-  useEffect(() => {
-    const updateTime = () => {
-      if (aperture.state === "TRIBULATION_ACTIVE") {
-        setTimeLeftText("Đang diễn ra");
-        setArrivalTimeText("Đang chiến đấu");
-        setIsPassed(true);
-        return;
-      }
-
-      const rate = (aperture.time_rate || 1.0) * (timeSpeedMultiplier > 0 ? timeSpeedMultiplier : 1.0);
-      const internalYearsLeft = aperture.next_tribulation_year - aperture.internal_years_passed;
-      if (internalYearsLeft <= 0) {
-        setTimeLeftText("Đang ập đến");
-        setArrivalTimeText("Bất cứ lúc nào");
-        setIsPassed(true);
-        return;
-      }
-
-      const remainingRealSeconds = (internalYearsLeft * 36000.0) / rate;
-      const updatedAtMs = new Date(aperture.updated_at).getTime();
-      const arrivalTimeMs = updatedAtMs + remainingRealSeconds * 1000;
-      const now = Date.now();
-      const diff = arrivalTimeMs - now;
-
-      if (diff <= 0) {
-        setTimeLeftText("Đang ập đến");
-        setArrivalTimeText("Bất cứ lúc nào");
-        setIsPassed(true);
-        return;
-      }
-
-      setIsPassed(false);
-
-      const arrivalDate = new Date(arrivalTimeMs);
-      const hours = String(arrivalDate.getHours()).padStart(2, '0');
-      const minutes = String(arrivalDate.getMinutes()).padStart(2, '0');
-      const seconds = String(arrivalDate.getSeconds()).padStart(2, '0');
-      const day = String(arrivalDate.getDate()).padStart(2, '0');
-      const month = String(arrivalDate.getMonth() + 1).padStart(2, '0');
-      const year = arrivalDate.getFullYear();
-      
-      setArrivalTimeText(`${hours}:${minutes}:${seconds} ${day}/${month}/${year}`);
-
-      const diffHours = Math.floor(diff / (60 * 60 * 1000));
-      const diffMinutes = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
-      const diffSeconds = Math.floor((diff % (60 * 1000)) / 1000);
-
-      const parts = [];
-      if (diffHours > 0) parts.push(`${diffHours}g`);
-      if (diffMinutes > 0 || diffHours > 0) parts.push(`${diffMinutes}p`);
-      parts.push(`${diffSeconds}s`);
-      setTimeLeftText(parts.join(" "));
-    };
-
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, [aperture.next_tribulation_year, aperture.internal_years_passed, aperture.time_rate, aperture.state, aperture.updated_at, timeSpeedMultiplier]);
-
-  if (isCompact) {
-    return (
-      <div className="flex justify-between items-center text-[10px] text-zinc-400 font-mono">
-        <span>Thời gian thực:</span>
-        <span className={isPassed ? "text-rose-400 font-bold animate-pulse" : "text-amber-400 font-bold"}>
-          {arrivalTimeText} ({timeLeftText})
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-1 bg-slate-950/40 p-3 rounded-lg border border-slate-800/50 mt-2">
-      <div className="flex justify-between items-center text-xs">
-        <span className="text-slate-400">Thời gian thực tế đến:</span>
-        <span className={`font-mono font-semibold ${isPassed ? "text-rose-400 font-bold animate-pulse" : "text-amber-400 font-bold"}`}>
-          {arrivalTimeText}
-        </span>
-      </div>
-      <div className="flex justify-between items-center text-xs">
-        <span className="text-slate-400">Còn lại :</span>
-        <span className={`font-mono font-semibold ${isPassed ? "text-rose-400 font-bold animate-pulse" : "text-cyan-400 font-bold"}`}>
-          {timeLeftText}
-        </span>
-      </div>
-    </div>
-  );
-};
 
 export const ImmortalApertureView: React.FC = () => {
   const {

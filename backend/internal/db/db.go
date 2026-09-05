@@ -54,8 +54,8 @@ func Connect() error {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	DB.SetMaxOpenConns(25)
-	DB.SetMaxIdleConns(10)
+	DB.SetMaxOpenConns(50)
+	DB.SetMaxIdleConns(25)
 	DB.SetConnMaxLifetime(5 * time.Minute)
 
 	logger.S.Info("Successfully connected to the database")

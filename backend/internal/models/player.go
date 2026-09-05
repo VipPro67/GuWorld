@@ -518,6 +518,9 @@ func (c *CombatState) IsEmpty() bool {
 
 // Scan implements the sql.Scanner interface for CombatState pointer
 func (c *CombatState) Scan(value interface{}) error {
+	if c == nil {
+		return nil
+	}
 	if value == nil {
 		*c = CombatState{}
 		return nil
@@ -529,6 +532,10 @@ func (c *CombatState) Scan(value interface{}) error {
 		} else {
 			return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
 		}
+	}
+	if len(b) == 0 || string(b) == "null" || string(b) == "{}" {
+		*c = CombatState{}
+		return nil
 	}
 	return json.Unmarshal(b, c)
 }

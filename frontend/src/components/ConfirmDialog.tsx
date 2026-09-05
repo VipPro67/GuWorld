@@ -1,9 +1,10 @@
 import React from "react";
-import { useGameStore } from "@/store/useGameStore";
+import { useUIStore } from "@/store/useUIStore";
 import { AlertTriangle, X } from "lucide-react";
 
 export const ConfirmDialog: React.FC = () => {
-  const { confirmDialog, closeConfirm } = useGameStore();
+  const confirmDialog = useUIStore((s) => s.confirmDialog);
+  const closeConfirm = useUIStore((s) => s.closeConfirm);
 
   if (!confirmDialog.open) return null;
 

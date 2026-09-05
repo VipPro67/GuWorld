@@ -144,25 +144,28 @@ var ResourceNodeTemplates = map[string]ResourceNodeTemplate{
 }
 
 func resolveNodeProdKey(n models.ApertureResourceNode) string {
+	var prodKey string
 	if n.ProductionKey != "" {
-		return n.ProductionKey
-	}
-	if template, ok := ResourceNodeTemplates[n.NodeType]; ok && template.ProdKey != "" {
-		return template.ProdKey
-	}
-	if strings.Contains(n.Name, "(") && strings.Contains(n.Name, ")") {
+		prodKey = n.ProductionKey
+	} else if template, ok := ResourceNodeTemplates[n.NodeType]; ok && template.ProdKey != "" {
+		prodKey = template.ProdKey
+	} else if strings.Contains(n.Name, "(") && strings.Contains(n.Name, ")") {
 		start := strings.Index(n.Name, "(")
 		end := strings.Index(n.Name, ")")
 		if start < end {
 			itemName := strings.TrimSpace(n.Name[start+1 : end])
 			for id, spec := range models.ItemRegistry {
 				if strings.EqualFold(spec.Name, itemName) {
-					return id
+					prodKey = id
+					break
 				}
 			}
 		}
 	}
-	return ""
+	if len(prodKey) > 50 {
+		prodKey = prodKey[:50]
+	}
+	return prodKey
 }
 
 func getVariantHumanForNode(nodeType string) string {
@@ -1332,11 +1335,10 @@ func CollectAllApertureResources(c *gin.Context) {
 			return
 		}
 	}
-	for prodKey, amount := range materialTotals {
-		if err := InventorySvc.AddItem(tx, playerID.String(), prodKey, "materials", amount); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng vật phẩm thu hoạch"})
-			return
-		}
+	if err := InventorySvc.BulkAddItems(tx, playerID.String(), "materials", materialTotals); err != nil {
+		logger.S.Errorf("CollectAllApertureResources BulkAddItems failed: player=%s, err=%v", playerID.String(), err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cộng vật phẩm thu hoạch"})
+		return
 	}
 
 	// 5. Reset timers + Human Qi for harvested nodes

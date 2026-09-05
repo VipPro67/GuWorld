@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { useGameStore, type Player } from "@/store/useGameStore";
+import { useUIStore } from "@/store/useUIStore";
 
 export interface WorldObject {
   id?: string;
@@ -167,7 +168,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         } catch {
           /* ignore */
         }
-        useGameStore.getState().addToast(msg, "error");
+        useUIStore.getState().addToast(msg, "error");
         set((s) => ({
           isMoving: false,
           error: null,
@@ -208,7 +209,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       }
       if (!res.ok) {
         const msg = data?.error || data?.message || "Failed to use Gu on map";
-        useGameStore.getState().addToast(msg, "error");
+        useUIStore.getState().addToast(msg, "error");
         set((s) => ({
           error: null,
           loading: false,
@@ -252,7 +253,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         } catch {
           /* ignore */
         }
-        useGameStore.getState().addToast(msg, "error");
+        useUIStore.getState().addToast(msg, "error");
         set((s) => ({
           loading: false,
           error: null,

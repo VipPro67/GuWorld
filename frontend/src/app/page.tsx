@@ -1,49 +1,51 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+import { useShallow } from "zustand/react/shallow";
 import { useGameStore } from "@/store/useGameStore";
+import { useUIStore } from "@/store/useUIStore";
 import { Registration } from "@/components/Registration";
 import { OnboardingModal } from "@/components/OnboardingModal";
-import { Aperture } from "@/components/Aperture";
-import { LogConsole } from "@/components/LogConsole";
-import { GuInventory } from "@/components/GuInventory";
-import { RefiningFurnace } from "@/components/RefiningFurnace";
-import { ExplorationMap } from "@/components/ExplorationMap";
-import { WorldPage } from "@/components/WorldPage";
-import { CombatScreen } from "@/components/CombatScreen";
-import { CaravanShop } from "@/components/CaravanShop";
-import { PremiumStoreView } from "@/components/PremiumStoreView";
-import { Sparkles, HelpCircle, X } from "lucide-react";
-import Link from "next/link";
-import { BaoHoangMarket } from "@/components/BaoHoangMarket";
-import { ArenaView } from "@/components/ArenaView";
-import { MineView } from "@/components/MineView";
-import { EntertainmentPanel } from "@/components/EntertainmentPanel";
-import AchievementsPanel from "@/components/AchievementsPanel";
 import { LobbyView } from "@/components/LobbyView";
+import { Sparkles, HelpCircle, X, Handshake } from "@/lib/icons";
+import Link from "next/link";
 import { GlobalChatOverlay } from "@/components/GlobalChatOverlay";
 import { NotificationBell } from "@/components/NotificationBell";
-import { ImmortalApertureView } from "@/components/ImmortalApertureView";
-import { DungeonView } from "@/components/DungeonView";
-import { PetPanel } from "@/components/PetPanel";
-import { SectView } from "@/components/SectView";
-import { WikiView } from "@/components/WikiView";
-import { CombatHistoryView } from "@/components/CombatHistoryView";
-import { PlayerProfileModal } from "@/components/PlayerProfileModal";
-import { FeedbackView } from "@/components/FeedbackView";
-import { TradeRoomModal } from "@/components/TradeRoomModal";
-import { Handshake } from "lucide-react";
-import { KillerMoveBuilder } from "@/components/killer-moves/KillerMoveBuilder";
-import { AuditLogsView } from "@/components/AuditLogsView";
-import { AdminView } from "@/components/AdminView";
-import { LeaderboardView } from "@/components/LeaderboardView";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { TrainingRoom } from "@/components/TrainingRoom";
 import { MaintenanceView } from "@/components/MaintenanceView";
-import { UtilitiesView } from "@/components/UtilitiesView";
+import { PlayerProfileModal } from "@/components/PlayerProfileModal";
+import { TradeRoomModal } from "@/components/TradeRoomModal";
+
+const Aperture = dynamic(() => import("@/components/Aperture").then(m => m.Aperture), { ssr: false });
+const GuInventory = dynamic(() => import("@/components/GuInventory").then(m => m.GuInventory), { ssr: false });
+const RefiningFurnace = dynamic(() => import("@/components/RefiningFurnace").then(m => m.RefiningFurnace), { ssr: false });
+const ExplorationMap = dynamic(() => import("@/components/ExplorationMap").then(m => m.ExplorationMap), { ssr: false });
+const WorldPage = dynamic(() => import("@/components/WorldPage").then(m => m.WorldPage), { ssr: false });
+const CombatScreen = dynamic(() => import("@/components/CombatScreen").then(m => m.CombatScreen), { ssr: false });
+const CaravanShop = dynamic(() => import("@/components/CaravanShop").then(m => m.CaravanShop), { ssr: false });
+const PremiumStoreView = dynamic(() => import("@/components/PremiumStoreView").then(m => m.PremiumStoreView), { ssr: false });
+const BaoHoangMarket = dynamic(() => import("@/components/BaoHoangMarket").then(m => m.BaoHoangMarket), { ssr: false });
+const ArenaView = dynamic(() => import("@/components/ArenaView").then(m => m.ArenaView), { ssr: false });
+const MineView = dynamic(() => import("@/components/MineView").then(m => m.MineView), { ssr: false });
+const EntertainmentPanel = dynamic(() => import("@/components/EntertainmentPanel").then(m => m.EntertainmentPanel), { ssr: false });
+const AchievementsPanel = dynamic(() => import("@/components/AchievementsPanel"), { ssr: false });
+const ImmortalApertureView = dynamic(() => import("@/components/ImmortalApertureView").then(m => m.ImmortalApertureView), { ssr: false });
+const DungeonView = dynamic(() => import("@/components/DungeonView").then(m => m.DungeonView), { ssr: false });
+const PetPanel = dynamic(() => import("@/components/PetPanel").then(m => m.PetPanel), { ssr: false });
+const SectView = dynamic(() => import("@/components/SectView").then(m => m.SectView), { ssr: false });
+const WikiView = dynamic(() => import("@/components/WikiView").then(m => m.WikiView), { ssr: false });
+const CombatHistoryView = dynamic(() => import("@/components/CombatHistoryView").then(m => m.CombatHistoryView), { ssr: false });
+const FeedbackView = dynamic(() => import("@/components/FeedbackView").then(m => m.FeedbackView), { ssr: false });
+const AuditLogsView = dynamic(() => import("@/components/AuditLogsView").then(m => m.AuditLogsView), { ssr: false });
+const AdminView = dynamic(() => import("@/components/AdminView").then(m => m.AdminView), { ssr: false });
+const LeaderboardView = dynamic(() => import("@/components/LeaderboardView").then(m => m.LeaderboardView), { ssr: false });
+const TrainingRoom = dynamic(() => import("@/components/TrainingRoom").then(m => m.TrainingRoom), { ssr: false });
+const UtilitiesView = dynamic(() => import("@/components/UtilitiesView").then(m => m.UtilitiesView), { ssr: false });
+const KillerMoveBuilder = dynamic(() => import("@/components/killer-moves/KillerMoveBuilder").then(m => m.KillerMoveBuilder), { ssr: false });
 
 export default function Home() {
-  const {
+  const [
     player,
     isLoading,
     actionLoading,
@@ -55,7 +57,6 @@ export default function Home() {
     fetchPlayerStatus,
     initializeSession,
     logout,
-    explore,
     feedGu,
     feedGuGroup,
     feedAllGu,
@@ -65,10 +66,8 @@ export default function Home() {
     fetchDictionary,
     refineGu,
     exploreNode,
-    retreat,
     fleeCombat,
     activeCombatReplay,
-    setActiveCombatReplay,
     buyShopItem,
     sellShopItem,
     sellShopItemsBulk,
@@ -81,9 +80,6 @@ export default function Home() {
     useGus,
     dropGu,
     dropGus,
-    executeCombatTurn,
-    currentView,
-    setView,
     marketplaceListings,
     fetchMarketplaceListings,
     createMarketplaceListing,
@@ -97,12 +93,68 @@ export default function Home() {
     acceptTrade,
     declineTrade,
     cancelTrade,
-    showChangelog,
-    setShowChangelog,
     playerPets,
     monsterDictionary,
     party,
-  } = useGameStore();
+  ] = useGameStore(
+    useShallow((state) => [
+      state.player,
+      state.isLoading,
+      state.actionLoading,
+      state.error,
+      state.login,
+      state.register,
+      state.sendOTP,
+      state.completeOnboarding,
+      state.fetchPlayerStatus,
+      state.initializeSession,
+      state.logout,
+      state.feedGu,
+      state.feedGuGroup,
+      state.feedAllGu,
+      state.clearError,
+      state.guDictionary,
+      state.itemDictionary,
+      state.fetchDictionary,
+      state.refineGu,
+      state.exploreNode,
+      state.fleeCombat,
+      state.activeCombatReplay,
+      state.buyShopItem,
+      state.sellShopItem,
+      state.sellShopItemsBulk,
+      state.equipGu,
+      state.updateGuStatus,
+      state.useItem,
+      state.useItems,
+      state.setVitalGu,
+      state.useGu,
+      state.useGus,
+      state.dropGu,
+      state.dropGus,
+      state.marketplaceListings,
+      state.fetchMarketplaceListings,
+      state.createMarketplaceListing,
+      state.placeMarketplaceBid,
+      state.cancelMarketplaceListing,
+      state.buyMarketplaceListing,
+      state.inspectedProfile,
+      state.activeTrade,
+      state.subscribeTradeEvents,
+      state.unsubscribeTradeEvents,
+      state.acceptTrade,
+      state.declineTrade,
+      state.cancelTrade,
+      state.playerPets,
+      state.monsterDictionary,
+      state.party,
+    ])
+  );
+
+  const currentView = useUIStore((s) => s.currentView);
+  const setView = useUIStore((s) => s.setView);
+  const showChangelog = useUIStore((s) => s.showChangelog);
+  const setShowChangelog = useUIStore((s) => s.setShowChangelog);
 
   const [dontShowToday, setDontShowToday] = useState(false);
 

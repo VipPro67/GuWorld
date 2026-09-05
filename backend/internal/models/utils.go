@@ -44,3 +44,113 @@ func RemoveAccents(s string) string {
 	}
 	return sb.String()
 }
+
+// Gu inventory helper functions
+
+// FindEquippedGuByID returns the first equipped ACTIVE Gu matching guID, and its index.
+func FindEquippedGuByID(inventory GuInventory, guID string) (*GuInstance, int, bool) {
+	for i, gu := range inventory {
+		if gu.GuID == guID && gu.Equipped && gu.Status == "ACTIVE" {
+			return &inventory[i], i, true
+		}
+	}
+	return nil, -1, false
+}
+
+// HasEquippedGu checks if player has an equipped ACTIVE Gu of the given type.
+func HasEquippedGu(inventory GuInventory, guID string) bool {
+	_, _, ok := FindEquippedGuByID(inventory, guID)
+	return ok
+}
+
+// CountEquippedGuByID counts equipped ACTIVE Gus of the given type.
+func CountEquippedGuByID(inventory GuInventory, guID string) int {
+	count := 0
+	for _, gu := range inventory {
+		if gu.GuID == guID && gu.Equipped && gu.Status == "ACTIVE" {
+			count++
+		}
+	}
+	return count
+}
+
+// CountEquippedActive counts all equipped ACTIVE Gus regardless of type.
+func CountEquippedActive(inventory GuInventory) int {
+	count := 0
+	for _, gu := range inventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			count++
+		}
+	}
+	return count
+}
+
+// FindGuByInstanceID finds a Gu by its InstanceID, returning pointer, index, and found flag.
+func FindGuByInstanceID(inventory GuInventory, instanceID string) (*GuInstance, int, bool) {
+	for i, gu := range inventory {
+		if gu.InstanceID == instanceID {
+			return &inventory[i], i, true
+		}
+	}
+	return nil, -1, false
+}
+
+// FindGuByIDAndRank finds a Gu by GuID and Rank, returning pointer, index, and found flag.
+func FindGuByIDAndRank(inventory GuInventory, guID string, rank int) (*GuInstance, int, bool) {
+	for i, gu := range inventory {
+		if gu.GuID == guID && gu.Rank == rank {
+			return &inventory[i], i, true
+		}
+	}
+	return nil, -1, false
+}
+
+// FilterEquippedActive returns a new inventory containing only equipped ACTIVE Gus.
+func FilterEquippedActive(inventory GuInventory) GuInventory {
+	result := make(GuInventory, 0, len(inventory))
+	for _, gu := range inventory {
+		if gu.Equipped && gu.Status == "ACTIVE" {
+			result = append(result, gu)
+		}
+	}
+	return result
+}
+
+// RemoveGuByInstanceID removes a Gu by InstanceID from inventory, returning new inventory.
+func RemoveGuByInstanceID(inventory GuInventory, instanceID string) GuInventory {
+	for i, gu := range inventory {
+		if gu.InstanceID == instanceID {
+			return append(inventory[:i], inventory[i+1:]...)
+		}
+	}
+	return inventory
+}
+
+// RemoveGuByIndex removes a Gu at the given index, returning new inventory.
+func RemoveGuByIndex(inventory GuInventory, index int) GuInventory {
+	if index < 0 || index >= len(inventory) {
+		return inventory
+	}
+	return append(inventory[:index], inventory[index+1:]...)
+}
+
+// FindFirstMatchingGu finds the first Gu matching the predicate.
+func FindFirstMatchingGu(inventory GuInventory, fn func(GuInstance) bool) (*GuInstance, int, bool) {
+	for i, gu := range inventory {
+		if fn(gu) {
+			return &inventory[i], i, true
+		}
+	}
+	return nil, -1, false
+}
+
+// FindAllMatchingGus returns all Gus matching the predicate.
+func FindAllMatchingGus(inventory GuInventory, fn func(GuInstance) bool) []*GuInstance {
+	result := make([]*GuInstance, 0)
+	for i := range inventory {
+		if fn(inventory[i]) {
+			result = append(result, &inventory[i])
+		}
+	}
+	return result
+}

@@ -12,6 +12,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/util"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 // QueryRower is satisfied by *sql.DB and *sql.Tx for read-only queries.
@@ -169,23 +170,27 @@ FROM players
 
 	if len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
-		if json.Unmarshal(activeCombatBytes, &cs) == nil && !cs.IsEmpty() {
-			if player.PartyID != nil {
-				var leaderID string
-				errL := q.QueryRow(`SELECT leader_id FROM parties WHERE id = $1`, player.PartyID).Scan(&leaderID)
-				if errL == nil && leaderID != player.ID.String() {
-					player.ActiveCombat = nil
-					if execer, ok := q.(interface {
-						Exec(query string, args ...any) (sql.Result, error)
-					}); ok {
-						_, _ = execer.Exec(`UPDATE players SET active_combat = NULL WHERE id = $1`, player.ID)
+		if errU := json.Unmarshal(activeCombatBytes, &cs); errU == nil {
+			if !cs.IsEmpty() {
+				if player.PartyID != nil {
+					var leaderID string
+					errL := q.QueryRow(`SELECT leader_id FROM parties WHERE id = $1`, player.PartyID).Scan(&leaderID)
+					if errL == nil && leaderID != player.ID.String() {
+						player.ActiveCombat = nil
+						if execer, ok := q.(interface {
+							Exec(query string, args ...any) (sql.Result, error)
+						}); ok {
+							_, _ = execer.Exec(`UPDATE players SET active_combat = NULL WHERE id = $1`, player.ID)
+						}
+					} else {
+						player.ActiveCombat = &cs
 					}
 				} else {
 					player.ActiveCombat = &cs
 				}
-			} else {
-				player.ActiveCombat = &cs
 			}
+		} else {
+			logger.S.Warnf("LoadForUpdate: failed to unmarshal active_combat for player=%s: %v", player.ID, errU)
 		}
 	}
 

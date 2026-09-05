@@ -786,10 +786,8 @@ func RefineGu(c *gin.Context) {
 
 	// Recalculate equipped_gus list
 	player.EquippedGus = []string{}
-	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-		}
+	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
+		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 	}
 
 	qiGained := AddHumanQi(&player, 10.0)

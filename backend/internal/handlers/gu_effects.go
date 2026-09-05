@@ -94,10 +94,8 @@ func RemoveGuFromInventory(player *models.Player, instanceID string) {
 
 func RebuildEquippedGus(player *models.Player) {
 	player.EquippedGus = []string{}
-	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-		}
+	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
+		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 	}
 }
 

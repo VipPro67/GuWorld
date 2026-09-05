@@ -72,6 +72,10 @@ func schemaSects() error {
 	CREATE INDEX IF NOT EXISTS idx_sect_members_sect ON sect_members (sect_id);`); err != nil {
 		return err
 	}
+	if err := execSchema("sect_members_sect_rank_idx", `
+	CREATE INDEX IF NOT EXISTS idx_sect_members_sect_rank ON sect_members (sect_id, member_rank);`); err != nil {
+		return err
+	}
 
 	if err := execSchema("sect_join_requests", `
 	CREATE TABLE IF NOT EXISTS sect_join_requests (
@@ -96,6 +100,10 @@ func schemaSects() error {
 		created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
 		UNIQUE (sect_id, player_id)
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("sect_promotion_requests_idx", `
+	CREATE INDEX IF NOT EXISTS idx_sect_promotion_requests ON sect_promotion_requests (sect_id, status, created_at);`); err != nil {
 		return err
 	}
 

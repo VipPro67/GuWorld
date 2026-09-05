@@ -460,9 +460,12 @@ func AttackMineSlot(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load player info"})
 		return
 	}
-	if len(activeCombatBytes) > 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang ở trong trạng thái chiến đấu!"})
-		return
+	if len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
+		var checkCS models.CombatState
+		if err := json.Unmarshal(activeCombatBytes, &checkCS); err == nil && !checkCS.IsEmpty() {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang ở trong trạng thái chiến đấu!"})
+			return
+		}
 	}
 
 	// 2. Verify player does not already occupy a mine slot

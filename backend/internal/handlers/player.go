@@ -27,6 +27,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/services"
 	"github.com/vippro67/GuWorld/backend/internal/util"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -1023,8 +1024,12 @@ func LoginPlayer(c *gin.Context) {
 	}
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
-		if json.Unmarshal(activeCombatBytes, &cs) == nil && !cs.IsEmpty() {
-			player.ActiveCombat = &cs
+		if errU := json.Unmarshal(activeCombatBytes, &cs); errU == nil {
+			if !cs.IsEmpty() {
+				player.ActiveCombat = &cs
+			}
+		} else {
+			logger.S.Warnf("Login: failed to unmarshal active_combat for player=%s: %v", player.ID, errU)
 		}
 	}
 
@@ -3136,12 +3141,7 @@ func EquipGu(c *gin.Context) {
 			// persist the list cleanup below.
 			statusMsg = "Gu bug is already equipped"
 		} else {
-			equippedCount := 0
-			for _, gu := range player.GuInventory {
-				if gu.Equipped && gu.Status == "ACTIVE" {
-					equippedCount++
-				}
-			}
+			equippedCount := models.CountEquippedActive(player.GuInventory)
 			if equippedCount >= db.MaxEquippedGus {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Aperture capacity full! Cannot equip more than %d Gu bugs.", db.MaxEquippedGus)})
 				return
@@ -3296,10 +3296,8 @@ func UnequipAllGu(c *gin.Context) {
 	}
 
 	player.EquippedGus = []string{}
-	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-		}
+	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
+		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 	}
 
 	_, err = tx.Exec("UPDATE players SET equipped_gus = $1, base_hp = $2, growth_data = $3 WHERE id = $4",
@@ -3407,10 +3405,8 @@ func UpdateGuStatus(c *gin.Context) {
 
 	// Recalculate equipped_gus list
 	player.EquippedGus = []string{}
-	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-		}
+	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
+		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 	}
 
 	if err := db.UpdatePlayerGu(tx, *targetGu); err != nil {
@@ -3932,26 +3928,16 @@ func SetVitalGu(c *gin.Context) {
 
 	// Vital Gu is always equipped; refuse if equipping it would exceed the aperture capacity
 	if !targetGu.Equipped {
-		equippedCount := 0
-		for _, gu := range player.GuInventory {
-			if gu.Equipped && gu.Status == "ACTIVE" {
-				equippedCount++
-			}
-		}
-		if equippedCount >= db.MaxEquippedGus {
+		if models.CountEquippedActive(player.GuInventory) >= db.MaxEquippedGus {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Aperture capacity full! Cannot equip more than %d Gu bugs.", db.MaxEquippedGus)})
 			return
 		}
 	}
 
 	// Check if they already have an existing Vital Gu
-	hadVital := false
-	for _, gu := range player.GuInventory {
-		if gu.IsVital {
-			hadVital = true
-			break
-		}
-	}
+	_, _, hadVital := models.FindFirstMatchingGu(player.GuInventory, func(gu models.GuInstance) bool {
+		return gu.IsVital
+	})
 
 	backlashMessage := ""
 	if hadVital {
@@ -3989,10 +3975,8 @@ func SetVitalGu(c *gin.Context) {
 
 	// Recalculate equipped_gus
 	player.EquippedGus = []string{}
-	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-		}
+	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
+		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 	}
 
 	_, err = tx.Exec(`
@@ -4074,11 +4058,8 @@ func DropGu(c *gin.Context) {
 		}
 	}
 	player.GuInventory = newInv
-	player.EquippedGus = []string{}
-	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-		}
+	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
+		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 	}
 	if err := db.RemovePlayerGu(tx, droppedInstanceID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gu"})
@@ -4162,11 +4143,8 @@ func DropGus(c *gin.Context) {
 		}
 	}
 	player.GuInventory = newInv
-	player.EquippedGus = []string{}
-	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
-		}
+	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
+		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 	}
 	if err := db.RemovePlayerGus(tx, req.GuInstanceIDs); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to drop Gus"})

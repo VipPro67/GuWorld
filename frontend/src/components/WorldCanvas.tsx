@@ -1229,18 +1229,29 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     prefetch();
     window.addEventListener("gu_world_pos", onWorldPos);
     window.addEventListener("gu_world_cell", onWorldCell);
-    // Cells are deterministic (server now serves them from a cache), so a slow
-    // safety refresh plus push-based cell events is enough; the fast 2s player
-    // poll keeps the nearby window current for the viewport filter.
-    const cellsId = setInterval(pollCells, 30000);
-    const playersId = setInterval(pollPlayers, 2000);
-    const prefetchId = setInterval(prefetch, 3000);
+    const lastCellsPoll = useRef(0);
+    const lastPlayersPoll = useRef(0);
+    const lastPrefetchPoll = useRef(0);
+    const unifiedTick = () => {
+      const now = Date.now();
+      if (now - lastCellsPoll.current >= 30000) {
+        lastCellsPoll.current = now;
+        pollCells();
+      }
+      if (now - lastPlayersPoll.current >= 2000) {
+        lastPlayersPoll.current = now;
+        pollPlayers();
+      }
+      if (now - lastPrefetchPoll.current >= 3000) {
+        lastPrefetchPoll.current = now;
+        prefetch();
+      }
+    };
+    const intervalId = setInterval(unifiedTick, 1000);
     return () => {
       window.removeEventListener("gu_world_pos", onWorldPos);
       window.removeEventListener("gu_world_cell", onWorldCell);
-      clearInterval(cellsId);
-      clearInterval(playersId);
-      clearInterval(prefetchId);
+      clearInterval(intervalId);
     };
   }, [appReady, gamePlayer?.x, gamePlayer?.y, investigationRange, fetchNearbyCells, fetchNearbyPlayers, fetchCellsRect, upsertPlayerPosition, pruneStalePlayers, fetchObjects]);
 

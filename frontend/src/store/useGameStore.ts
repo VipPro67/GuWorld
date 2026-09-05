@@ -1,10 +1,8 @@
-import { ToastContainer } from "@/components/ToastContainer";
 import { create } from "zustand";
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
 import type { RequiredGus } from "@/lib/gu-dict";
 import type { EffectDictionaryEntry } from "@/lib/effects";
-
-let confirmResolve: ((value: boolean) => void) | null = null;
+import { useUIStore } from "@/store/useUIStore";
 let fetchAperturePromise: Promise<void> | null = null;
 let fetchApertureNodesPromise: Promise<void> | null = null;
 let fetchVariantHumansPromise: Promise<void> | null = null;
@@ -1002,7 +1000,6 @@ interface GameState {
   placeBeastBet: (team: string, amount: number) => Promise<{ success: boolean; message: string } | null>;
   rechargeWithStones: (stones: number) => Promise<{ success: boolean; message: string } | null>;
   clearStress: () => Promise<{ success: boolean; message: string } | null>;
-  showChangelog: boolean;
   setShowChangelog: (v: boolean) => void;
   achievements: any[];
   earnedAchievements: any[];
@@ -1037,7 +1034,6 @@ interface GameState {
   fetchPassiveStats: () => Promise<void>;
   simulateDeposit: (stones: number) => Promise<boolean>;
   addLog: (message: string) => void;
-  currentView: string;
   setView: (view: string) => void;
   retreat: () => Promise<void>;
   fleeCombat: () => Promise<any>;
@@ -1153,13 +1149,11 @@ interface GameState {
   mergePets: (targetId: string, sourceIds: string[]) => Promise<boolean>;
   captureMonster: () => Promise<{ captured: boolean; message: string } | null>;
 
-  // Toast System State & Actions
-  toasts: ToastMessage[];
+  // Toast System Actions (state lives in useUIStore)
   addToast: (message: string, type?: "success" | "error" | "info", duration?: number) => void;
   removeToast: (id: string) => void;
 
-  // Confirm Dialog
-  confirmDialog: { open: boolean; message: string; confirmText: string; cancelText: string };
+  // Confirm Dialog Actions (state lives in useUIStore)
   showConfirm: (message: string, options?: { confirmText?: string; cancelText?: string }) => Promise<boolean>;
   closeConfirm: (result: boolean) => void;
 
@@ -1302,7 +1296,6 @@ const getAbortSignal = (key: string, timeoutMs = 30000): AbortSignal => {
   const id = Date.now();
   pendingTimestamps.set(key, id);
   setTimeout(() => controller.abort(), timeoutMs);
-  // Attach cleanup to signal
   const originalAddEventListener = controller.signal.addEventListener.bind(controller.signal);
   controller.signal.addEventListener = (type: string, listener: EventListenerOrEventListenerObject, options?: AddEventListenerOptions | boolean) => {
     if (type === "abort") {
@@ -1313,6 +1306,16 @@ const getAbortSignal = (key: string, timeoutMs = 30000): AbortSignal => {
     originalAddEventListener(type, listener, options);
   };
   return controller.signal;
+};
+
+// Deduplicate concurrent fetches by key so multiple callers share one in-flight request.
+const pendingFetches = new Map<string, Promise<void>>();
+const fetchWithDedupe = async (key: string, fetcher: () => Promise<void>): Promise<void> => {
+  const existing = pendingFetches.get(key);
+  if (existing) return existing;
+  const promise = fetcher().finally(() => pendingFetches.delete(key));
+  pendingFetches.set(key, promise);
+  return promise;
 };
 
 const authFetch = (input: RequestInfo | URL, init: RequestInit & { timeoutMs?: number } = {}) => {
@@ -1494,15 +1497,21 @@ export const useGameStore = create<GameState>((set, get) => {
     }
   };
 
+  const translateCache = new Map<string, string>();
+
   const translateIDs = (msg: string): string => {
     if (!msg) return "";
+    const cacheKey = `${msg}\x00${JSON.stringify(get().guDictionary || {})}\x00${JSON.stringify(get().itemDictionary || {})}\x00${JSON.stringify(get().monsterDictionary || {})}`;
+    const cached = translateCache.get(cacheKey);
+    if (cached) return cached;
+
     let formatted = msg;
     const { guDictionary, itemDictionary, monsterDictionary } = get();
 
     // Replace Gu IDs
     Object.keys(guDictionary || {}).forEach((id) => {
       const name = guDictionary[id]?.name;
-      if (name) {
+      if (name && formatted.includes(id)) {
         formatted = formatted.split(id).join(name);
       }
     });
@@ -1510,7 +1519,7 @@ export const useGameStore = create<GameState>((set, get) => {
     // Replace Item IDs
     Object.keys(itemDictionary || {}).forEach((id) => {
       const name = itemDictionary[id]?.name;
-      if (name) {
+      if (name && formatted.includes(id)) {
         formatted = formatted.split(id).join(name);
       }
     });
@@ -1518,11 +1527,16 @@ export const useGameStore = create<GameState>((set, get) => {
     // Replace Monster IDs
     Object.keys(monsterDictionary || {}).forEach((id) => {
       const name = monsterDictionary[id]?.name;
-      if (name) {
+      if (name && formatted.includes(id)) {
         formatted = formatted.split(id).join(name);
       }
     });
 
+    translateCache.set(cacheKey, formatted);
+    if (translateCache.size > 500) {
+      const firstKey = translateCache.keys().next().value;
+      if (firstKey) translateCache.delete(firstKey);
+    }
     return formatted;
   };
 
@@ -1587,7 +1601,6 @@ export const useGameStore = create<GameState>((set, get) => {
   leaderboardLastUpdated: "",
   inbox: [],
   baoHoangMessages: [],
-  showChangelog: false,
   activeChannel: "world",
   chatOpen: false,
   chatMessages: { world: [], general: [], sect: [] },
@@ -1615,46 +1628,19 @@ export const useGameStore = create<GameState>((set, get) => {
   sectMines: [],
   feedbacks: [],
   feedbackComments: {},
-  setView: (view) => set({ currentView: view }),
-  setShowChangelog: (v) => set({ showChangelog: v }),
 
-  toasts: [],
+  setView: (view) => useUIStore.getState().setView(view),
+  setShowChangelog: (v) => useUIStore.getState().setShowChangelog(v),
   addToast: (message, type = "info", duration = 4000) => {
     const formatted = translateIDs(message);
-    const id = Math.random().toString(36).substring(2, 9);
-    set((state) => ({
-      toasts: [...state.toasts, { id, message: formatted, type, duration }],
-    }));
-    setTimeout(() => {
-      get().removeToast(id);
-    }, duration);
+    useUIStore.getState().addToast(formatted, type, duration);
   },
-  removeToast: (id) => {
-    set((state) => ({
-      toasts: state.toasts.filter((t) => t.id !== id),
-    }));
-  },
-
-  confirmDialog: { open: false, message: "", confirmText: "Xác nhận", cancelText: "Hủy" },
+  removeToast: (id) => useUIStore.getState().removeToast(id),
   showConfirm: async (message, options) => {
-    return new Promise((resolve) => {
-      confirmResolve = resolve;
-      set({
-        confirmDialog: {
-          open: true,
-          message,
-          confirmText: options?.confirmText || "Xác nhận",
-          cancelText: options?.cancelText || "Hủy",
-        },
-      });
-    });
+    return useUIStore.getState().showConfirm(message, options);
   },
   closeConfirm: (result) => {
-    if (confirmResolve) {
-      confirmResolve(result);
-      confirmResolve = null;
-    }
-    set({ confirmDialog: { open: false, message: "", confirmText: "Xác nhận", cancelText: "Hủy" } });
+    useUIStore.getState().closeConfirm(result);
   },
 
   login: async (email, password) => {
@@ -1688,7 +1674,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const today = new Date().toISOString().split('T')[0];
       const hiddenUntil = typeof window !== "undefined" ? localStorage.getItem("gu_changelog_hide_until") : null;
       if (hiddenUntil !== today) {
-        set({ showChangelog: true });
+        useUIStore.getState().setShowChangelog(true);
       }
       return true;
     } catch (err: any) {
@@ -2351,7 +2337,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const today = new Date().toISOString().split('T')[0];
       const hiddenUntil = typeof window !== "undefined" ? localStorage.getItem("gu_changelog_hide_until") : null;
       if (hiddenUntil !== today) {
-        set({ showChangelog: true });
+        useUIStore.getState().setShowChangelog(true);
       }
     } catch (err: any) {
       console.error("Session restore failed:", err.message);
@@ -2674,48 +2660,50 @@ export const useGameStore = create<GameState>((set, get) => {
   },
 
   fetchDictionary: async () => {
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/dictionary`);
-      if (!response.ok) {
-        throw new Error("Failed to load global metadata");
-      }
-      const data = await response.json();
-      const guArray = data.gu || [];
-      const guMap: Record<string, GuSpec> = {};
-      const guByRank: Record<string, Record<number, GuSpec>> = {};
-      if (Array.isArray(guArray)) {
-        for (const item of guArray) {
-          if (!guByRank[item.id]) guByRank[item.id] = {};
-          guByRank[item.id][item.rank] = item;
-          const existing = guMap[item.id];
-          if (!existing || item.rank > existing.rank) {
-            guMap[item.id] = item;
+    await fetchWithDedupe("fetchDictionary", async () => {
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/dictionary`);
+        if (!response.ok) {
+          throw new Error("Failed to load global metadata");
+        }
+        const data = await response.json();
+        const guArray = data.gu || [];
+        const guMap: Record<string, GuSpec> = {};
+        const guByRank: Record<string, Record<number, GuSpec>> = {};
+        if (Array.isArray(guArray)) {
+          for (const item of guArray) {
+            if (!guByRank[item.id]) guByRank[item.id] = {};
+            guByRank[item.id][item.rank] = item;
+            const existing = guMap[item.id];
+            if (!existing || item.rank > existing.rank) {
+              guMap[item.id] = item;
+            }
           }
         }
+        const constitutionDict: Record<string, EffectDictionaryEntry> = {};
+        const constitutionArr = Array.isArray(data.constitutions) ? data.constitutions : [];
+        for (const c of constitutionArr) {
+          constitutionDict[c.key] = c;
+        }
+        const raceDict: Record<string, EffectDictionaryEntry> = {};
+        const raceArr = Array.isArray(data.races) ? data.races : [];
+        for (const r of raceArr) {
+          raceDict[r.key] = r;
+        }
+        set({
+          guDictionary: guMap,
+          guByRank,
+          itemDictionary: data.items || {},
+          monsterDictionary: data.monsters || {},
+          constitutionDictionary: constitutionDict,
+          raceDictionary: raceDict,
+          dictionaryLoaded: true,
+        });
+      } catch (err: any) {
+        console.error("Dictionary fetch failed:", err.message);
+        set({ dictionaryLoaded: true });
       }
-      const constitutionDict: Record<string, EffectDictionaryEntry> = {};
-      const constitutionArr = Array.isArray(data.constitutions) ? data.constitutions : [];
-      for (const c of constitutionArr) {
-        constitutionDict[c.key] = c;
-      }
-      const raceDict: Record<string, EffectDictionaryEntry> = {};
-      const raceArr = Array.isArray(data.races) ? data.races : [];
-      for (const r of raceArr) {
-        raceDict[r.key] = r;
-      }
-      set({
-        guDictionary: guMap,
-        guByRank,
-        itemDictionary: data.items || {},
-        monsterDictionary: data.monsters || {},
-        constitutionDictionary: constitutionDict,
-        raceDictionary: raceDict,
-        dictionaryLoaded: true,
-      });
-    } catch (err: any) {
-      console.error("Dictionary fetch failed:", err.message);
-      set({ dictionaryLoaded: true }); // Don't block the app on dictionary failure
-    }
+    });
   },
 
   fetchRecipes: async () => {
@@ -3633,7 +3621,8 @@ export const useGameStore = create<GameState>((set, get) => {
         throw new Error(data.error || "Rút lui thất bại.");
       }
 
-      setPlayerFromServer(data.player, { currentView: "dashboard" });
+      setPlayerFromServer(data.player);
+      useUIStore.getState().setView("dashboard");
       get().addLog(data.log || "Đạo hữu đã rút lui an toàn.");
     } catch (err: any) {
       set({ error: err.message });
@@ -3701,13 +3690,14 @@ export const useGameStore = create<GameState>((set, get) => {
       }
 
       const combat = player.active_combat;
-      let returnView = get().currentView;
+      let returnView = useUIStore.getState().currentView;
       if (combat) {
         if (combat.combat_mode === "virtual") returnView = "arena";
         else if (combat.mine_slot_id) returnView = "mine";
         else if (combat.tribulation_event_id) returnView = "aperture";
       }
-      setPlayerFromServer(data.player, { currentView: returnView });
+      setPlayerFromServer(data.player);
+      useUIStore.getState().setView(returnView);
       get().addLog(data.log || "Đạo hữu đã bỏ chạy an toàn.");
       return data;
     } catch (err: any) {
@@ -4799,7 +4789,8 @@ export const useGameStore = create<GameState>((set, get) => {
       if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Khiêu chiến thất bại");
-      setPlayerFromServer(data.player, { currentView: "arena" });
+      setPlayerFromServer(data.player);
+      useUIStore.getState().setView("arena");
       get().addLog(data.message || "Đã thách đấu đối thủ!");
       return true;
     } catch (err: any) {
@@ -4940,19 +4931,21 @@ export const useGameStore = create<GameState>((set, get) => {
   fetchNotifications: async () => {
     const { token, logout } = get();
     if (!token) return;
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/player/notifications?page=1&pageSize=50`);
-      if (response.status === 401) { logout(); return; }
-      const data = await response.json();
-      const list = Array.isArray(data.notifications) ? data.notifications : [];
-      set({
-        notifications: list,
-        notificationsLoaded: true,
-        unreadNotifications: list.filter((n: PlayerNotification) => !n.is_read).length,
-      });
-    } catch (err) {
-      console.error("fetch notifications failed", err);
-    }
+    await fetchWithDedupe("fetchNotifications", async () => {
+      try {
+        const response = await authFetch(`${BACKEND_URL}/api/player/notifications?page=1&pageSize=50`);
+        if (response.status === 401) { logout(); return; }
+        const data = await response.json();
+        const list = Array.isArray(data.notifications) ? data.notifications : [];
+        set({
+          notifications: list,
+          notificationsLoaded: true,
+          unreadNotifications: list.filter((n: PlayerNotification) => !n.is_read).length,
+        });
+      } catch (err) {
+        console.error("fetch notifications failed", err);
+      }
+    });
   },
 
   fetchUnreadNotificationsCount: async () => {

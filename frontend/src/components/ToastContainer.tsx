@@ -1,9 +1,10 @@
 import React from "react";
-import { useGameStore, ToastMessage } from "@/store/useGameStore";
+import { useUIStore, ToastMessage } from "@/store/useUIStore";
 import { CheckCircle2, AlertTriangle, Info, X } from "lucide-react";
 
 export const ToastContainer: React.FC = () => {
-  const { toasts, removeToast } = useGameStore();
+  const toasts = useUIStore((s) => s.toasts);
+  const removeToast = useUIStore((s) => s.removeToast);
 
   if (toasts.length === 0) return null;
 
