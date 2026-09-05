@@ -1096,25 +1096,9 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 	}
 	daoMultiplier := getPathDaoMultiplier(n.Path, nodeDaoMap)
 
-	// Check if player has Tiên Thai Chí Tôn (ignore Dao conflicts)
-	hasSovereignFetus := false
-	var guJSON []byte
-	errGu := tx.QueryRow(`SELECT `+db.GuInventoryAggregate("players.id")+` FROM players WHERE id = $1`, playerID).Scan(&guJSON)
-	if errGu == nil {
-		var guInv models.GuInventory
-		if json.Unmarshal(guJSON, &guInv) == nil {
-			for _, gu := range guInv {
-				if gu.GuID == "GU_SOVEREIGN_FETUS" && gu.Equipped && gu.Status == "ACTIVE" {
-					hasSovereignFetus = true
-					break
-				}
-			}
-		}
-	}
-
 	// 2. Conflict multiplier
 	conflictMultiplier := 1.0
-	if CheckNodeConflict(n, allNodes) && !hasSovereignFetus {
+	if CheckNodeConflict(n, allNodes) {
 		conflictMultiplier = 0.5
 	}
 
@@ -1144,20 +1128,15 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 	race := getVariantHumanForNode(n.NodeType)
 	if race != "" {
 		var pop int
-		_ = tx.QueryRow(`
-			SELECT count FROM aperture_variant_humans 
-			WHERE aperture_id = $1 AND race = $2
-		`, n.ApertureID, race).Scan(&pop)
-		if pop > 0 {
-			variantBonus = 1.0 + float64(pop)/1000.0
-		}
-
 		var intensity string
 		err := tx.QueryRow(`
-			SELECT labor_intensity FROM aperture_variant_humans 
+			SELECT population, labor_intensity FROM aperture_variant_humans 
 			WHERE aperture_id = $1 AND race = $2
-		`, n.ApertureID, race).Scan(&intensity)
+		`, n.ApertureID, race).Scan(&pop, &intensity)
 		if err == nil {
+			if pop > 0 {
+				variantBonus = 1.0 + float64(pop)/1000.0
+			}
 			switch intensity {
 			case "LOW":
 				laborMultiplier = 0.7
