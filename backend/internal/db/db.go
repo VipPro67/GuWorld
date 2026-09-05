@@ -1402,7 +1402,17 @@ func seedRegionsFromCSV(filename string) error {
 		}
 		return def
 	}
-	seeded := 0
+	type regionRow struct {
+		id, name, desc, zoneType, poolWeights string
+		width, height, minRank, maxRank       int
+		active                                bool
+		parentID                              interface{}
+		minX, minY, maxX, maxY                int
+		entryX, entryY, safeX, safeY          int
+	}
+
+	var rowsToInsert []regionRow
+
 	for {
 		row, err := r.Read()
 		if err == io.EOF {
@@ -1439,21 +1449,45 @@ func seedRegionsFromCSV(filename string) error {
 		if p := get(row, parentIdx); p != "" {
 			parentID = p
 		}
+		rowsToInsert = append(rowsToInsert, regionRow{
+			id: id, name: get(row, nameIdx), desc: get(row, descIdx),
+			width: width, height: height, minRank: minRank, maxRank: maxRank,
+			active: active, parentID: parentID, zoneType: zoneType,
+			minX: minX, minY: minY, maxX: maxX, maxY: maxY,
+			entryX: entryX, entryY: entryY, safeX: safeX, safeY: safeY,
+			poolWeights: poolWeights,
+		})
+	}
+
+	// Pass 1: Upsert all rows with parent_id = NULL to ensure all region IDs exist in table
+	seeded := 0
+	for _, item := range rowsToInsert {
 		_, err = DB.Exec(`
 			INSERT INTO regions (id, name, description, width, height, min_rank, max_rank, is_active, parent_id, zone_type, min_x, min_y, max_x, max_y, entry_x, entry_y, safe_zone_x, safe_zone_y, pool_weights, updated_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,NOW())
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULL,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,NOW())
 			ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description,
 			width=EXCLUDED.width, height=EXCLUDED.height, min_rank=EXCLUDED.min_rank, max_rank=EXCLUDED.max_rank,
-			is_active=EXCLUDED.is_active, parent_id=EXCLUDED.parent_id, zone_type=EXCLUDED.zone_type,
+			is_active=EXCLUDED.is_active, zone_type=EXCLUDED.zone_type,
 			min_x=EXCLUDED.min_x, min_y=EXCLUDED.min_y, max_x=EXCLUDED.max_x, max_y=EXCLUDED.max_y,
 			entry_x=EXCLUDED.entry_x, entry_y=EXCLUDED.entry_y, safe_zone_x=EXCLUDED.safe_zone_x, safe_zone_y=EXCLUDED.safe_zone_y, pool_weights=EXCLUDED.pool_weights, updated_at=NOW()
-		`, id, get(row, nameIdx), get(row, descIdx), width, height, minRank, maxRank, active,
-			parentID, zoneType, minX, minY, maxX, maxY, entryX, entryY, safeX, safeY, poolWeights)
+		`, item.id, item.name, item.desc, item.width, item.height, item.minRank, item.maxRank, item.active,
+			item.zoneType, item.minX, item.minY, item.maxX, item.maxY, item.entryX, item.entryY, item.safeX, item.safeY, item.poolWeights)
 		if err != nil {
-			return fmt.Errorf("upsert region %s: %w", id, err)
+			return fmt.Errorf("upsert region %s (pass 1): %w", item.id, err)
 		}
 		seeded++
 	}
+
+	// Pass 2: Update parent_id for rows that specify a parent
+	for _, item := range rowsToInsert {
+		if item.parentID != nil {
+			_, err = DB.Exec(`UPDATE regions SET parent_id = $1 WHERE id = $2`, item.parentID, item.id)
+			if err != nil {
+				return fmt.Errorf("update region parent_id %s -> %v: %w", item.id, item.parentID, err)
+			}
+		}
+	}
+
 	logger.S.Infof("Regions seeded from %s (%d seeded)", filename, seeded)
 	return nil
 }
