@@ -1496,7 +1496,20 @@ return (
                             let itemPathMarks = 0;
 
                             if (selectedNode.production_type === "Material") {
-                              const prodKey = selectedNode.production_key;
+                              let prodKey = selectedNode.production_key;
+                              if (!prodKey && selectedNode.name && selectedNode.name.includes("(") && selectedNode.name.includes(")")) {
+                                const match = selectedNode.name.match(/\(([^)]+)\)/);
+                                if (match && match[1]) {
+                                  const itemName = match[1].trim().toLowerCase();
+                                  for (const [id, spec] of Object.entries(itemDictionary || {})) {
+                                    if (spec.name.toLowerCase() === itemName) {
+                                      prodKey = id;
+                                      break;
+                                    }
+                                  }
+                                }
+                              }
+
                               if (prodKey && itemDictionary[prodKey]) {
                                 const item = itemDictionary[prodKey];
                                 itemSpecName = item.name;
@@ -1513,7 +1526,11 @@ return (
 
                             const combinedMultiplier = (areaMultiplier * daoMultiplier * conflictMult * ecoMult * vhLaborMult * vhPopBonus * itemFoodPathMultiplier * levelMultiplier) / itemRankDivisor;
                             const baseProd = selectedNode.production_amount || 0;
-                            const expectedYield = baseProd > 0 ? Math.max(1, Math.floor(baseProd * combinedMultiplier)) : 0;
+                            let rawExpected = baseProd > 0 ? Math.max(1, Math.floor(baseProd * combinedMultiplier)) : 0;
+                            if (selectedNode.production_type === "Material" && rawExpected > 10000) {
+                              rawExpected = 10000;
+                            }
+                            const expectedYield = rawExpected;
 
                             const efficiencyPercent = Math.round(combinedMultiplier * 100);
 
