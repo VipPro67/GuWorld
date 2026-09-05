@@ -1541,3 +1541,10 @@ GU_QINGXUAN_6,6,1,"{""GU_QINGXUAN"": {""qty"": 1, ""rank"": 5}}","{""star_though
 GU_QINGXUAN_I,7,1,"{""GU_QINGXUAN_I"": {""qty"": 1, ""rank"": 6}}","{""sound_stone_rank7"": 2, ""heaven_qi_rank7"": 15}",0.01,0,300
 GU_QINGXUAN_I,8,1,"{""GU_QINGXUAN_I"": {""qty"": 1, ""rank"": 7}}","{""heaven_qi_rank8"": 10, ""heaven_qi_rank7"": 20, ""all_knowing_divine_calculation_core"": 15}",0.0001,0,400
 GU_QINGXUAN_I,9,1,"{""GU_QINGXUAN_I"": {""qty"": 1, ""rank"": 8}}","{""heaven_qi_rank8"": 15, ""heaven_qi_rank9"": 10, ""all_knowing_divine_calculation_core"": 20}",0.000001,0,500
+GU_INVESTIGATION_EAR_2,2,1,"{""GU_INVESTIGATION_SIGHT_1"": {""qty"": 1, ""rank"": 1}}","{""sound_stone_rank2"": 5}",0.7,80,0
+GU_INVESTIGATION_SHADOW_EYE_3,3,1,"{""GU_INVESTIGATION_EAR_2"": {""qty"": 1, ""rank"": 2}}","{""sound_stone_rank3"": 6}",0.65,120,0
+GU_INVESTIGATION_THOUSAND_LI_EYE_4,4,1,"{""GU_INVESTIGATION_SHADOW_EYE_3"": {""qty"": 1, ""rank"": 3}}","{""heaven_qi_rank4"": 6}",0.6,150,0
+GU_INVESTIGATION_WIND_EAR_5,5,1,"{""GU_INVESTIGATION_THOUSAND_LI_EYE_4"": {""qty"": 1, ""rank"": 4}}","{""book_worm"": 10}",0.5,300,0
+GU_INVESTIGATION_HEAVEN_SENSE_6,6,1,"{""GU_INVESTIGATION_WIND_EAR_5"": {""qty"": 1, ""rank"": 5}}","{""star_thoughts"": 20, ""heavenly_river_dew"": 11, ""sound_stone_rank6"": 5, ""water_rank6"": 4}",0.05,0,150
+GU_INVESTIGATION_ALL_KNOWING_7,7,1,"{""GU_INVESTIGATION_HEAVEN_SENSE_6"": {""qty"": 1, ""rank"": 6}}","{""sound_stone_rank7"": 2, ""heaven_qi_rank7"": 15}",0.01,0,200
+GU_INVESTIGATION_COSMIC_MIRROR_8,8,1,"{""GU_INVESTIGATION_ALL_KNOWING_7"": {""qty"": 1, ""rank"": 7}}","{""heaven_qi_rank8"": 10, ""heaven_qi_rank7"": 20}",0.01,0,300

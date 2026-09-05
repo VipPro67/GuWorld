@@ -14,17 +14,12 @@ import (
 
 type ActiveEffect struct {
 	DamageFlat          float64 `json:"damage_flat,omitempty"`
-	DamagePath          string  `json:"damage_path,omitempty"`
 	HealFlat            float64 `json:"heal_flat,omitempty"`
 	ShieldFlat          float64 `json:"shield_flat,omitempty"`
 	ApplyStatus         string  `json:"apply_status,omitempty"`
 	StatusTickDamage    float64 `json:"status_tick_damage,omitempty"`
 	StatusDurationTicks int     `json:"status_duration_ticks,omitempty"`
 	TargetSelector      string  `json:"target_selector,omitempty"`
-	TargetCount         int     `json:"target_count,omitempty"`
-	SummonMonsterID     string  `json:"summon_monster_id,omitempty"`
-	SummonPosition      string  `json:"summon_position,omitempty"`
-	InheritStatsPercent float64 `json:"inherit_stats_percent,omitempty"`
 
 	Range              float64 `json:"range,omitempty"`
 	CurveAttack        bool    `json:"curve_attack,omitempty"`
@@ -68,7 +63,6 @@ type PassiveEffect struct {
 	StatBaseDefense       float64 `json:"stat_base_defense,omitempty"`
 	StatBaseHP            float64 `json:"stat_base_hp,omitempty"`
 	StatBaseSpeed         float64 `json:"stat_base_speed,omitempty"`
-	ManaRegenMult         float64 `json:"mana_regen_mult,omitempty"`
 	PathConflictReduction float64 `json:"path_conflict_reduction,omitempty"`
 
 	DamageMultiplierOnHit float64 `json:"damage_multiplier_on_hit,omitempty"`
@@ -81,7 +75,6 @@ type PassiveEffect struct {
 	RefineManaTier        float64 `json:"refine_mana_tier,omitempty"`
 	CleansingPower        float64 `json:"cleansing_power,omitempty"`
 	Luck                  float64 `json:"luck,omitempty"`
-	ControlPower          float64 `json:"control_power,omitempty"`
 	SuccessRateBonus      float64 `json:"success_rate_bonus,omitempty"`
 	TimeSpeedMultiplier   float64 `json:"time_speed_multiplier,omitempty"`
 }
