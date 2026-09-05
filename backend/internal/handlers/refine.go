@@ -964,9 +964,23 @@ func DeduceRecipe(c *gin.Context) {
 	player.PrimevalStones -= stoneCost
 
 	// 3. Deduction Calculation (Wisdom + Refinement + Target Path)
-	wisdomPts := player.PathMasteries["wisdom path"]
-	refinePts := player.PathMasteries["refinement path"]
-	targetPts := player.PathMasteries[targetPath]
+	getPathPoints := func(p string) int {
+		if player.PathMasteries == nil {
+			return 0
+		}
+		clean := strings.TrimSuffix(strings.ToLower(strings.Trim(p, " []\"")), " path")
+		if pts, ok := player.PathMasteries[clean]; ok {
+			return pts
+		}
+		if pts, ok := player.PathMasteries[p]; ok {
+			return pts
+		}
+		return 0
+	}
+
+	wisdomPts := getPathPoints("wisdom")
+	refinePts := getPathPoints("refinement")
+	targetPts := getPathPoints(targetPath)
 
 	wisdomRealm := gamefx.PathMasteryLevel(wisdomPts)
 	refineRealm := gamefx.PathMasteryLevel(refinePts)
