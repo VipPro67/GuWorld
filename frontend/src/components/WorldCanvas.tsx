@@ -1229,21 +1229,21 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
     prefetch();
     window.addEventListener("gu_world_pos", onWorldPos);
     window.addEventListener("gu_world_cell", onWorldCell);
-    const lastCellsPoll = useRef(0);
-    const lastPlayersPoll = useRef(0);
-    const lastPrefetchPoll = useRef(0);
+    let lastCellsPoll = Date.now();
+    let lastPlayersPoll = Date.now();
+    let lastPrefetchPoll = Date.now();
     const unifiedTick = () => {
       const now = Date.now();
-      if (now - lastCellsPoll.current >= 30000) {
-        lastCellsPoll.current = now;
+      if (now - lastCellsPoll >= 30000) {
+        lastCellsPoll = now;
         pollCells();
       }
-      if (now - lastPlayersPoll.current >= 2000) {
-        lastPlayersPoll.current = now;
+      if (now - lastPlayersPoll >= 2000) {
+        lastPlayersPoll = now;
         pollPlayers();
       }
-      if (now - lastPrefetchPoll.current >= 3000) {
-        lastPrefetchPoll.current = now;
+      if (now - lastPrefetchPoll >= 3000) {
+        lastPrefetchPoll = now;
         prefetch();
       }
     };
