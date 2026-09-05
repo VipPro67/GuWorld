@@ -878,7 +878,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                       >
                         {/* Summary Header */}
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                          <div className="flex items-center gap-3 flex-wrap">
+                          <div className="flex items-center gap-2.5 flex-wrap">
                             {isBatchMode && eligibleGrpGus.length > 0 && (
                               <input
                                 type="checkbox"
@@ -890,7 +890,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                             )}
                             <h4 className="text-sm font-bold text-zinc-100 font-serif flex items-center gap-2">
                               {spec.name}
-                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-405">
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400">
                                 x{totalCount}
                               </span>
                             </h4>
@@ -907,6 +907,64 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                 {translatePath(p)}
                               </span>
                             ))}
+
+                            {/* Status & Hunger display when totalCount === 1 */}
+                            {totalCount === 1 ? (() => {
+                              const single = instances[0];
+                              const status = single.status || "ACTIVE";
+                              const hasHunger = spec.gu_type !== "Consumable" || (spec.max_hunger && spec.max_hunger > 0);
+                              const hungerPercent = hasHunger
+                                ? Math.min(100, Math.max(0, (single.hunger / (spec.max_hunger || 1)) * 100))
+                                : 0;
+
+                              return (
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {single.equipped && (
+                                    <span className="text-[8px] font-mono font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 px-1.5 py-0.5 rounded uppercase">
+                                      Xuất Trận
+                                    </span>
+                                  )}
+                                  <span className={`text-[9px] font-mono font-medium ${
+                                    status === "ACTIVE" ? "text-emerald-400" :
+                                    status === "SLEEPING" ? "text-amber-400" :
+                                    status === "SEALED" ? "text-cyan-400" :
+                                    status === "DYING" ? "text-rose-400 animate-pulse font-bold" :
+                                    "text-zinc-500"
+                                  }`}>
+                                    {status === "ACTIVE" && "☀️ Hoạt Động"}
+                                    {status === "SLEEPING" && "💤 Ngủ Đông"}
+                                    {status === "SEALED" && "🔒 Phong Ấn"}
+                                    {status === "DYING" && "💀 Hấp Hối"}
+                                    {status === "DEAD" && "🪦 Đã Chết"}
+                                  </span>
+
+                                  {hasHunger && (
+                                    <div className="flex items-center gap-1.5 bg-zinc-900/80 px-2.5 py-1 rounded-xl border border-zinc-800/80">
+                                      <span className="text-[10px] text-zinc-400 font-mono font-medium">Độ no:</span>
+                                      <div className="w-16 sm:w-24 h-2 bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
+                                        <div
+                                          className={`h-full rounded-full transition-all duration-300 ${
+                                            hungerPercent < 20
+                                              ? "bg-rose-500 animate-pulse"
+                                              : hungerPercent < 50
+                                              ? "bg-amber-500"
+                                              : "bg-emerald-500"
+                                          }`}
+                                          style={{ width: `${hungerPercent}%` }}
+                                        />
+                                      </div>
+                                      <span className="text-[10px] font-mono text-zinc-200 font-bold">
+                                        {single.hunger}/{spec.max_hunger}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })() : statusSummary ? (
+                              <span className="text-[9px] text-zinc-400 font-mono bg-zinc-900/50 px-2 py-0.5 rounded border border-zinc-850">
+                                {statusSummary}
+                              </span>
+                            ) : null}
                           </div>
 
                           {/* Group actions */}
@@ -939,7 +997,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                                     : "bg-zinc-900 text-zinc-650 border border-zinc-850"
                                 }`}
                               >
-                                {isCurrentlyFeedingGroup ? "..." : `Cho Ăn Nhóm (${hungryBugsCount} con)`}
+                                {isCurrentlyFeedingGroup ? "..." : totalCount === 1 ? "Cho Ăn" : `Cho Ăn Nhóm (${hungryBugsCount} con)`}
                               </button>
                             )}
 

@@ -998,13 +998,13 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 	_, herbivores, _, overgrazing, starvationHerb, starvationCarn := EvaluateEcosystem(allNodes)
 	ecoMultiplier := 1.0
 	switch n.NodeType {
-	case "MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS":
+	case "MOON_ORCHID_FIELD", "GREEN_BAMBOO_GROVE", "SWORD_LEAF_GRASS", "FARMING_ZONE":
 		if overgrazing {
 			ecoMultiplier = 0.5
 		} else if herbivores > 0 {
 			ecoMultiplier = 1.25 // Fertilization bonus
 		}
-	case "SPIRIT_DEER_PASTURE":
+	case "SPIRIT_DEER_PASTURE", "BREEDING_ZONE":
 		if starvationHerb {
 			ecoMultiplier = 0.2
 		}
@@ -1017,7 +1017,7 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 	// 4. Variant Human labor intensity multiplier
 	laborMultiplier := 1.0
 	variantBonus := 1.0
-	if n.NodeType == "JADE_STONE_MINE" || n.NodeType == "PRIMEVAL_MINE" {
+	if n.NodeType == "JADE_STONE_MINE" || n.NodeType == "PRIMEVAL_MINE" || n.NodeType == "MINING_ZONE" {
 		var pop int
 		var intensity string
 		err := tx.QueryRow(`
@@ -1092,8 +1092,8 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 			if item, exists := models.ItemRegistry[prodKey]; exists {
 				if item.Path != "" {
 					itemFoodPath = item.Path
-					itemDaoMarks := nodeDaoMap[strings.ToLower(itemFoodPath)]
-					itemFoodPathMultiplier = 1.0 + float64(itemDaoMarks)*0.003
+					itemDaoMarks := nodeDaoMap[strings.TrimSuffix(strings.ToLower(itemFoodPath), " path")]
+					itemFoodPathMultiplier = 1.0 + float64(itemDaoMarks)*0.01
 				}
 				if item.Rank >= 1 {
 					itemRankDivisor = getManaVal(item.Rank)

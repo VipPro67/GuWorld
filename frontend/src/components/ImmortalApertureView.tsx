@@ -88,45 +88,53 @@ export function getPathIconAndColor(path: string | undefined, nodeType: string |
 export function getItemZoneCategory(item: { id: string; name: string; item_type?: string; type?: string; description?: string; path?: string }): "khu_trong" | "khu_nuoi" | "khu_khai_thac" {
   const text = `${item.id} ${item.name} ${item.description || ''} ${item.path || ''}`.toLowerCase();
 
-  // 1. Check Chăn Nuôi (Breeding / Animals / Beast / Meat / Food / Organisms)
+  // 1. Check Trồng Trọt (Farming / Plants / Flowers / Grass / Trees / Herbs / Wine / Seeds / Dew / Wood)
+  const farmingKeywords = [
+    "trúc", "bamboo", "rượu", "wine", "cỏ", "grass", "thảo", "herb", "hoa", "flower", 
+    "cây", "tree", "diệp", "leaf", "lá", "dịch", "fluid", "sâm", "ginseng", 
+    "quả", "fruit", "hạt", "seed", "lộ", "dew", "chi", "nấm", "mushroom", 
+    "mầm", "sprout", "tảo", "algae", "mạc", "nha", "trà", "tea", "hương", "incense", 
+    "họa", "painting", "trục", "scroll", "mực", "ink", "bột màu", "gỗ", "wood", 
+    "bạch quả", "liên", "bọt mây", "vân ti", "tơ mây"
+  ];
+  if (farmingKeywords.some(kw => text.includes(kw))) {
+    return "khu_trong";
+  }
+
+  // 2. Check Chăn Nuôi (Breeding / Animals / Beast / Meat / Food / Organisms / Insects / Blood / Bone)
   const breedingKeywords = [
     "thịt", "meat", "thú", "beast", "hươu", "deer", "sói", "wolf", "dơi", "bat", 
-    "long ngư", "dragonfish", "máu", "blood", "huyết", "xương", "bone", "tủy", "marrow",
+    "ngư", "fish", "long ngư", "máu", "blood", "huyết", "xương", "bone", "tủy", "marrow",
     "noãn", "egg", "cánh", "wing", "gấu", "bear", "lợn", "boar", "trư", "mãng", "python",
-    "lông", "vảy", "fur", "scale", "mật", "gall", "tạng", "gan", "tâm", "mao nhân", 
-    "hairy_man", "vũ nhân", "featherman", "thạch nhân", "rockman", "ngự thú", "tộc", "tổ"
+    "lông", "fur", "scale", "vảy", "mật", "gall", "tạng", "gan", "tâm", "tằm", "silkworm", 
+    "côn trùng", "insect", "sâu", "worm", "bọ", "hạc", "crane", "cọp", "tiger", 
+    "báo", "leopard", "ngưu", "ox", "bull", "xà", "snake", "hạt", "scorpion", 
+    "nhện", "spider", "tổ", "nest", "gân", "sinew", "nanh", "tusk", "rùa", "turtle", 
+    "long", "dragon", "phượng", "phoenix", "mao nhân", "hairy_man", "vũ nhân", "featherman", 
+    "thạch nhân", "rockman", "dị nhân", "tộc", "dạ minh sa", "bức", "nọc độc"
   ];
   if (breedingKeywords.some(kw => text.includes(kw))) {
     return "khu_nuoi";
   }
 
-  // 2. Check Khai Thác (Mining / Minerals / Ores / Metals / Cores / Gem / Oil)
+  // 3. Check Khai Thác (Mining / Minerals / Ores / Metals / Cores / Gem / Oil / Dust / Sand / Ice)
   const miningKeywords = [
     "đá", "stone", "khoáng", "ore", "thạch", "jade", "tinh thiết", "thiết", "iron", 
     "đồng", "copper", "ngọc", "kim", "metal", "hạch", "core", "cát", "sand", 
     "dầu", "oil", "bùn", "mud", "phấn", "dust", "tinh thể", "crystal", "băng", "ice",
-    "ma ngọc", "nham", "hỏa dung", "thiết sa", "thiết bì", "bán thạch"
+    "ma ngọc", "nham", "hỏa dung", "thiết sa", "thiết bì", "bán thạch", "lưu ly", "glass",
+    "hóa thạch", "fossil", "kim cương", "diamond", "ngô đồng thiết", "giới thạch", "chân không thạch",
+    "diệt thế", "lôi hỏa tương", "hồng hoang trận hạch", "xu đấu trường", "tiền"
   ];
   if (miningKeywords.some(kw => text.includes(kw))) {
     return "khu_khai_thac";
-  }
-
-  // 3. Check Trồng Trọt (Farming / Plants / Flowers / Grass / Trees / Herbs / Wine / Seeds)
-  const farmingKeywords = [
-    "trúc", "bamboo", "rượu", "wine", "cỏ", "grass", "thảo", "herb", "hoa", "flower", 
-    "cây", "tree", "diệp", "leaf", "lá", "dịch", "fluid", "sâm", "ginseng", 
-    "quả", "fruit", "hạt", "seed", "lộ", "dew", "quang", "chi", "nấm", "mushroom", 
-    "mầm", "sprout", "tảo", "algae", "mạc"
-  ];
-  if (farmingKeywords.some(kw => text.includes(kw))) {
-    return "khu_trong";
   }
 
   // Fallback check by item type
   const itemType = (item.item_type || item.type || "").toLowerCase();
   if (itemType === "food") return "khu_nuoi";
 
-  return "khu_trong";
+  return "khu_khai_thac";
 }
 
 const CountdownTimer: React.FC<{ node: ApertureResourceNode; timeRate: number; onComplete?: () => void }> = ({ node, timeRate, onComplete }) => {
@@ -312,6 +320,7 @@ export const ImmortalApertureView: React.FC = () => {
   const [buildProdKey, setBuildProdKey] = useState<string>("");
   const [pathSearch, setPathSearch] = useState<string>("");
   const [itemSearch, setItemSearch] = useState<string>("");
+  const [showAllZoneItems, setShowAllZoneItems] = useState<boolean>(false);
 
   const essenceProd = aperture?.essence_production_per_year ?? 10;
   const rank = player?.rank ?? 6;
@@ -1363,28 +1372,175 @@ return (
                             const starvingHerb = isHerb && pCount === 0;
                             const starvingCarn = isCarn && hCount === 0;
 
-                            const pathDaoMarks = daoMarks.find(d => d.path === selectedNode.path)?.amount || 0;
-                            const daoBonusPercent = pathDaoMarks * 0.5;
+                            const normNodePath = (selectedNode.path || "").toLowerCase().replace(/ path$/i, "").trim();
+                            const pathDaoMarks = daoMarks.find(d => (d.path || "").toLowerCase().replace(/ path$/i, "").trim() === normNodePath)?.amount || 0;
 
+                            const hasSovereignFetus = (player?.gu_inventory || []).some(
+                              (g: any) => (g.gu_id || g.id) === "GU_SOVEREIGN_FETUS" && g.equipped
+                            );
+
+                            const levelMultiplier = 1.0 + (Math.max(1, selectedNode.level) - 1) * 0.20;
+                            const daoMultiplier = 1.0 + pathDaoMarks * 0.01;
+                            const conflictMult = (isConflicting && !hasSovereignFetus) ? 0.5 : 1.0;
+                            let ecoMult = 1.0;
+                            if (overgrazed) ecoMult = 0.5;
+                            else if (starvingHerb || starvingCarn) ecoMult = 0.2;
+                            else if (isPlant && hCount > 0) ecoMult = 1.25;
+
+                            let vhLaborMult = 1.0;
+                            let vhPopBonus = 1.0;
                             const rockmanVH = variantHumans.find(v => v.race === "ROCKMAN");
                             const rockmanPop = rockmanVH ? rockmanVH.population : 0;
                             const rockmanLabor = rockmanVH ? rockmanVH.labor_intensity : "NORMAL";
                             const laborLabels: Record<string, string> = { LOW: "x0.7 (Nhàn)", NORMAL: "x1.0", HIGH: "x1.5", EXPLOIT: "x2.0 (Bóc lột)" };
 
+                            if (isMine && rockmanPop > 0) {
+                              vhPopBonus = 1.0 + Math.min(0.5, rockmanPop * 0.001);
+                              if (rockmanLabor === "LOW") vhLaborMult = 0.7;
+                              if (rockmanLabor === "HIGH") vhLaborMult = 1.5;
+                              if (rockmanLabor === "EXPLOIT") vhLaborMult = 2.0;
+                            }
+
+                            const getManaVal = (rank: number): number => {
+                              const table: Record<number, number> = { 1: 1, 2: 3, 3: 10, 4: 30, 5: 100, 6: 300, 7: 1000, 8: 3000, 9: 10000 };
+                              return table[Math.min(9, Math.max(1, rank))] || 1;
+                            };
+
+                            const areaSize = aperture?.area_size || 0;
+                            const areaMultiplier = 1.0 + areaSize / 10000000.0;
+
+                            let itemRankDivisor = 1.0;
+                            let itemFoodPathMultiplier = 1.0;
+                            let itemSpecName = "";
+                            let itemSpecRank = 1;
+
+                            if (selectedNode.production_type === "Material") {
+                              const prodKey = selectedNode.production_key;
+                              if (prodKey && itemDictionary[prodKey]) {
+                                const item = itemDictionary[prodKey];
+                                itemSpecName = item.name;
+                                itemSpecRank = item.rank || 1;
+                                const r = item.rank;
+                                if (r !== undefined && r >= 1) {
+                                  itemRankDivisor = getManaVal(r);
+                                }
+                                if (item.path) {
+                                  const normItemPath = item.path.toLowerCase().replace(/ path$/i, "").trim();
+                                  const itemMarks = daoMarks.find(d => (d.path || "").toLowerCase().replace(/ path$/i, "").trim() === normItemPath)?.amount || 0;
+                                  itemFoodPathMultiplier = 1.0 + itemMarks * 0.01;
+                                }
+                              }
+                            }
+
+                            const combinedMultiplier = (areaMultiplier * daoMultiplier * conflictMult * ecoMult * vhLaborMult * vhPopBonus * itemFoodPathMultiplier * levelMultiplier) / itemRankDivisor;
+                            const baseProd = selectedNode.production_amount || 0;
+                            const expectedYield = baseProd > 0 ? Math.max(1, Math.floor(baseProd * combinedMultiplier)) : 0;
+
+                            const efficiencyPercent = Math.round(combinedMultiplier * 100);
+
                             return (
-                              <div className="p-3 bg-slate-900/40 rounded-lg border border-slate-805 text-[10px] space-y-1 text-slate-400">
-                                <div className="font-bold text-slate-300">Phân Tích Hiệu Suất Sản Lượng:</div>
-                                <div>• Đạo ngân bổ trợ ({selectedNode.path}): <span className="text-emerald-400 font-medium">+{daoBonusPercent.toFixed(1)}%</span></div>
-                                {isConflicting && <div className="text-rose-400">• Xung đột Đạo ngân: <span className="font-medium">-50% hiệu suất, mất 10% HP/năm</span></div>}
-                                {overgrazed && <div className="text-amber-400">• Quá tải gặm nhấm (Ecosystem): <span className="font-medium">-50% hiệu suất, mất 5% HP/năm</span></div>}
-                                {starvingHerb && <div className="text-rose-400">• Thiếu cỏ thực vật (Herbivore): <span className="font-medium">-80% hiệu suất</span></div>}
-                                {starvingCarn && <div className="text-rose-400">• Thiếu con mồi (Carnivore): <span className="font-medium">-80% hiệu suất</span></div>}
-                                {isMine && rockmanPop > 0 && (
-                                  <div>
-                                    <div>• Dân số Người Đá: <span className="text-cyan-400 font-medium">+{Math.min(50, rockmanPop * 0.1).toFixed(1)}%</span></div>
-                                    <div>• Cường độ lao động: <span className="text-amber-400 font-medium">{laborLabels[rockmanLabor]}</span></div>
+                              <div className="p-3 bg-slate-950/80 rounded-xl border border-amber-500/30 text-xs space-y-2.5 shadow-md">
+                                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                                  <div className="font-bold text-amber-400 flex items-center gap-1.5">
+                                    <TrendingUp className="w-4 h-4 text-emerald-400" />
+                                    Phân Tích Hiệu Suất Sản Lượng
                                   </div>
-                                )}
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    combinedMultiplier >= 1.0 
+                                      ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" 
+                                      : "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                                  }`}>
+                                    Hiệu suất thực tế: {efficiencyPercent}% ({combinedMultiplier >= 1.0 ? `+${Math.round((combinedMultiplier - 1) * 100)}%` : `-${Math.round((1 - combinedMultiplier) * 100)}%`})
+                                  </span>
+                                </div>
+
+                                {/* Banner Sản Lượng Dự Tính (1 lần thu hoạch) */}
+                                <div className="p-2.5 bg-gradient-to-r from-emerald-950/70 to-slate-900 border border-emerald-500/40 rounded-lg flex items-center justify-between shadow-inner">
+                                  <div>
+                                    <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                                      <Package className="w-3.5 h-3.5 text-emerald-300" />
+                                      Sản Lượng Dự Tính (1 Lần Thu Hoạch)
+                                    </div>
+                                    <div className="text-xs text-slate-300 mt-0.5">
+                                      Gốc: <span className="font-semibold text-slate-200">{baseProd}</span> {selectedNode.production_type === "Stones" ? "Nguyên Thạch" : (itemSpecName || "vật phẩm")}
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-sm font-extrabold text-emerald-300">
+                                      +{expectedYield.toLocaleString()} {selectedNode.production_type === "Stones" ? "Đá" : "món"}
+                                    </div>
+                                    {selectedNode.production_type === "Material" && itemSpecRank > 1 && (
+                                      <div className="text-[10px] text-amber-400 font-medium">
+                                        (Rank {itemSpecRank}: /{itemRankDivisor})
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="space-y-1.5 text-[11px]">
+                                  {/* 1. Dao Marks Bonus */}
+                                  <div className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-850">
+                                    <span className="text-slate-300 flex items-center gap-1.5">
+                                      <span>☯️</span> Đạo ngân bổ trợ ({translatePath(selectedNode.path)}):
+                                    </span>
+                                    <span className={pathDaoMarks > 0 ? "text-emerald-400 font-bold" : "text-slate-400"}>
+                                      {pathDaoMarks} vết (+{(pathDaoMarks * 1.0).toFixed(1)}%)
+                                    </span>
+                                  </div>
+
+                                  {/* 2. Node Level Bonus */}
+                                  <div className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-850">
+                                    <span className="text-slate-300 flex items-center gap-1.5">
+                                      <span>⭐</span> Cấp độ mỏ (Lv.{selectedNode.level}):
+                                    </span>
+                                    <span className="text-amber-400 font-bold">
+                                      +{((selectedNode.level - 1) * 20).toFixed(0)}% sản lượng
+                                    </span>
+                                  </div>
+
+                                  {/* 3. Dao Conflict Status */}
+                                  <div className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-850">
+                                    <span className="text-slate-300 flex items-center gap-1.5">
+                                      <span>⚔️</span> Xung đột Đạo ngân:
+                                    </span>
+                                    {hasSovereignFetus ? (
+                                      <span className="text-purple-400 font-bold">Thân thể Chí Tôn (Miễn xung đột)</span>
+                                    ) : isConflicting ? (
+                                      <span className="text-rose-400 font-bold">-50% sản lượng (-10% HP/năm)</span>
+                                    ) : (
+                                      <span className="text-emerald-400 font-semibold">Hài hòa (100%)</span>
+                                    )}
+                                  </div>
+
+                                  {/* 4. Ecosystem Status */}
+                                  {(overgrazed || starvingHerb || starvingCarn || (isPlant && hCount > 0)) && (
+                                    <div className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-850">
+                                      <span className="text-slate-300 flex items-center gap-1.5">
+                                        <span>🌿</span> Trạng thái Sinh Thái:
+                                      </span>
+                                      {overgrazed && <span className="text-amber-400 font-bold">Quá tải gặm nhấm (-50%)</span>}
+                                      {starvingHerb && <span className="text-rose-400 font-bold">Thiếu cỏ thực vật (-80%)</span>}
+                                      {starvingCarn && <span className="text-rose-400 font-bold">Thiếu con mồi (-80%)</span>}
+                                      {!overgrazed && !starvingHerb && !starvingCarn && isPlant && hCount > 0 && (
+                                        <span className="text-emerald-400 font-bold">Phân bón sinh thái (+25%)</span>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* 5. Variant Humans Labor Status */}
+                                  {isMine && rockmanPop > 0 && (
+                                    <div className="space-y-1 bg-slate-900/60 p-2 rounded-lg border border-slate-850 text-[10px]">
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-slate-300">🪨 Dân số Người Đá:</span>
+                                        <span className="text-cyan-400 font-bold">{rockmanPop} (+{(Math.min(0.5, rockmanPop * 0.001) * 100).toFixed(1)}%)</span>
+                                      </div>
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-slate-300">⚙️ Cường độ lao động:</span>
+                                        <span className="text-amber-400 font-bold">{laborLabels[rockmanLabor]}</span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             );
                           })()}
@@ -1669,6 +1825,17 @@ return (
                                     }).length;
                                   };
 
+                                  // Target zone category
+                                  const targetZone = pendingBuildZone === "FARMING_ZONE" ? "khu_trong"
+                                    : pendingBuildZone === "BREEDING_ZONE" ? "khu_nuoi"
+                                    : pendingBuildZone === "MINING_ZONE" ? "khu_khai_thac"
+                                    : buildCategory;
+
+                                  const targetZoneTitle = targetZone === "khu_trong" ? "🌱 Trồng Trọt"
+                                    : targetZone === "khu_nuoi" ? "🐄 Chăn Nuôi"
+                                    : targetZone === "khu_khai_thac" ? "⛏️ Khai Thác"
+                                    : "Tất cả";
+
                                   // Sort paths alphabetically by Vietnamese translation
                                   const sortedPaths = Array.from(pathsSet).sort((a, b) => {
                                     const nameA = translatePath(a);
@@ -1685,12 +1852,15 @@ return (
                                     return viName.includes(searchP) || enName.includes(searchP);
                                   });
                                   
-                                  // Compute available items for the currently selected path
+                                  // Compute available items for the currently selected path & target zone
                                   const selectedRawPath = buildPath.replace(/ Path$/i, '').trim().toLowerCase();
                                   const availableItems = Object.values(itemDictionary || {}).filter(item => {
-                                    if (buildPath === "ALL") return true;
                                     const itemPaths = parseItemPaths(item.path).map(p => p.toLowerCase().replace(/ path$/i, '').trim());
-                                    return itemPaths.includes(selectedRawPath);
+                                    const matchesPath = buildPath === "ALL" || itemPaths.includes(selectedRawPath);
+                                    const matchesZone = showAllZoneItems || !["khu_trong", "khu_nuoi", "khu_khai_thac"].includes(targetZone)
+                                      ? true
+                                      : getItemZoneCategory(item) === targetZone;
+                                    return matchesPath && matchesZone;
                                   }).sort((a, b) => (a.rank || 0) - (b.rank || 0) || a.name.localeCompare(b.name, "vi"));
 
                                   // Filter items by itemSearch query
@@ -1743,8 +1913,10 @@ return (
                                       
                                       <div>
                                         <div className="flex justify-between items-center mb-1">
-                                          <label className="text-[11px] font-semibold text-slate-300">2. Chọn vật phẩm sản xuất</label>
-                                          <span className="text-[10px] text-slate-400 font-medium">({filteredItems.length}/{availableItems.length} vật phẩm)</span>
+                                          <label className="text-[11px] font-semibold text-slate-300">
+                                            2. Chọn vật phẩm sản xuất {targetZoneTitle}
+                                          </label>
+                                          <span className="text-[10px] text-slate-400 font-medium">({filteredItems.length} vật phẩm)</span>
                                         </div>
 
                                         {/* Search Input for Item */}
@@ -1761,16 +1933,31 @@ return (
                                           value={buildProdKey} 
                                           onChange={(e) => setBuildProdKey(e.target.value)}
                                         >
-                                          <option value="" disabled>-- Chọn một vật phẩm ({filteredItems.length} vật phẩm) --</option>
+                                          <option value="" disabled>-- Chọn vật phẩm ({filteredItems.length} vật phẩm) --</option>
                                           {filteredItems.map(item => {
+                                            const itemCat = getItemZoneCategory(item);
+                                            const catTag = itemCat === "khu_trong" ? "🌱 Trồng" : itemCat === "khu_nuoi" ? "🐄 Nuôi" : "⛏️ Khai Thác";
                                             const rankTag = item.rank ? (item.rank >= 6 ? `Rank ${item.rank} ⭐ Tiên Cấp` : `Rank ${item.rank}`) : "Rank 1";
                                             return (
                                               <option key={item.id} value={item.id}>
-                                                [{rankTag}] {item.name}
+                                                [{catTag}] [{rankTag}] {item.name}
                                               </option>
                                             );
                                           })}
                                         </select>
+
+                                        {filteredItems.length === 0 && (
+                                          <div className="mt-2 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[10px] text-amber-300 text-center space-y-1">
+                                            <div>Chưa tìm thấy vật phẩm thuộc nhóm <strong>{targetZoneTitle}</strong> trong <strong>{translatePath(buildPath)}</strong>.</div>
+                                            <button 
+                                              type="button"
+                                              onClick={() => setShowAllZoneItems(true)} 
+                                              className="text-cyan-400 underline font-semibold cursor-pointer"
+                                            >
+                                              Bấm vào đây để xem tất cả vật phẩm của {translatePath(buildPath)}
+                                            </button>
+                                          </div>
+                                        )}
                                       </div>
 
                                       {/* Selected Item Preview Card */}
