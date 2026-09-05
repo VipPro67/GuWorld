@@ -481,7 +481,7 @@ func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu mo
 		if player.DaoMarks == nil {
 			player.DaoMarks = make(models.DaoMarksMap)
 		}
-		player.DaoMarks["soul"] += int(val)
+		player.DaoMarks["soul"] += int64(val)
 		return fmt.Sprintf("Hồn phách của đạo hữu được tráng kiện (+%.0f điểm Hồn lực).", val), nil
 	case "FORCE_RANK_UP":
 		player.SubRank = 1

@@ -242,7 +242,7 @@ func HasBlockedAction(p *models.Player, action string) bool {
 // DaoPathMultiplier computes the standard dao-marks multiplier for a single
 // path and applies an additive per-path bonus (e.g. from a constitution).
 // marks <= 0 means no dao marks for the path (base multiplier 1.0).
-func DaoPathMultiplier(marks int, bonus float64) float64 {
+func DaoPathMultiplier(marks int64, bonus float64) float64 {
 	if marks <= 0 {
 		return 1.0 + bonus
 	}
@@ -254,14 +254,14 @@ func DaoPathMultiplier(marks int, bonus float64) float64 {
 
 // DaoMultiplierForPaths computes the maximum dao multiplier across the given
 // paths, including per-path bonuses from daoBonus (e.g. DaoNganBonus).
-func DaoMultiplierForPaths(daoMarks map[string]int, paths []string, daoBonus map[string]float64) float64 {
+func DaoMultiplierForPaths(daoMarks map[string]int64, paths []string, daoBonus map[string]float64) float64 {
 	if len(paths) == 0 {
 		paths = []string{"strength"}
 	}
 	maxMult := 1.0
 	for _, path := range paths {
 		cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
-		var amt int
+		var amt int64
 		if daoMarks != nil {
 			amt = daoMarks[cleanPath]
 		}

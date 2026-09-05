@@ -14,7 +14,7 @@ func TestChooseFeedCandidate(t *testing.T) {
 		{InstanceID: "gu_food_1", GuID: "GU_WOLF", Rank: 2, Status: "ACTIVE"},
 	}
 
-	materialQty := map[string]int{"herb": 2}
+	materialQty := map[string]int64{"herb": 2}
 	foodID, consumedIndex := chooseFeedCandidate(player, models.GuInstance{InstanceID: "target", GuID: "GU_RAVEN", Rank: 3, Status: "ACTIVE"}, []string{"herb", "GU_WOLF"}, "target", materialQty)
 	if foodID != "herb" || consumedIndex != -1 {
 		t.Fatalf("expected herb material choice, got foodID=%q index=%d", foodID, consumedIndex)

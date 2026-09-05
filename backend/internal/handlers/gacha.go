@@ -362,12 +362,12 @@ func runGachaOpen(c *gin.Context, forced int) {
 
 	// Roll all rewards, batch items, apply non-item rewards in-memory
 	rewards := make([]GachaResultItem, quantity)
-	itemQtyMap := make(map[string]int)
+	itemQtyMap := make(map[string]int64)
 	for i := 0; i < quantity; i++ {
 		rewards[i] = rollGachaRewardPrecomputed(pool, pc, excludedImmortal)
 		switch rewards[i].Type {
 		case "item":
-			itemQtyMap[rewards[i].ID] += int(rewards[i].Amount)
+			itemQtyMap[rewards[i].ID] += int64(rewards[i].Amount)
 		case "recipe_rank":
 			recipeID := rewards[i].ID
 			completionRate := rewards[i].Amount

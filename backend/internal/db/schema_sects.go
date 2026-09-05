@@ -44,12 +44,24 @@ func schemaSects() error {
 		description TEXT NOT NULL,
 		mission_type VARCHAR(30) NOT NULL,
 		target_id VARCHAR(50) NOT NULL,
-		target_amount INTEGER NOT NULL DEFAULT 1,
-		reward_contribution INTEGER NOT NULL DEFAULT 0,
+		target_amount BIGINT NOT NULL DEFAULT 1,
+		reward_contribution BIGINT NOT NULL DEFAULT 0,
 		required_member_rank VARCHAR(30) NOT NULL DEFAULT 'NGOAI_MON',
 		expires_at TIMESTAMP WITHOUT TIME ZONE,
 		UNIQUE (sect_id, title)
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("sect_missions_bigint_upgrade", `
+	DO $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sect_missions' AND column_name='target_amount' AND data_type IN ('integer', 'int')) THEN
+			ALTER TABLE sect_missions ALTER COLUMN target_amount TYPE BIGINT USING COALESCE(target_amount, 0)::BIGINT;
+		END IF;
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sect_missions' AND column_name='reward_contribution' AND data_type IN ('integer', 'int')) THEN
+			ALTER TABLE sect_missions ALTER COLUMN reward_contribution TYPE BIGINT USING COALESCE(reward_contribution, 0)::BIGINT;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 
@@ -112,12 +124,21 @@ func schemaSects() error {
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
 		mission_id UUID NOT NULL REFERENCES sect_missions(id) ON DELETE CASCADE,
-		current_progress INTEGER NOT NULL DEFAULT 0,
+		current_progress BIGINT NOT NULL DEFAULT 0,
 		status VARCHAR(30) NOT NULL DEFAULT 'IN_PROGRESS',
 		assigned_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(),
 		expires_at TIMESTAMP WITHOUT TIME ZONE,
 		UNIQUE (player_id, mission_id)
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("player_sect_missions_bigint_upgrade", `
+	DO $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='player_sect_missions' AND column_name='current_progress' AND data_type IN ('integer', 'int')) THEN
+			ALTER TABLE player_sect_missions ALTER COLUMN current_progress TYPE BIGINT USING COALESCE(current_progress, 0)::BIGINT;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 	if err := execSchema("player_sect_missions_player_idx", `

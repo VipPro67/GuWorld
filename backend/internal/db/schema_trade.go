@@ -25,7 +25,7 @@ func schemaTrade() error {
 		seller_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
 		item_type VARCHAR(20) NOT NULL,
 		item_data JSONB NOT NULL,
-		quantity INTEGER NOT NULL,
+		quantity BIGINT NOT NULL,
 		currency VARCHAR(20) NOT NULL,
 		start_price BIGINT NOT NULL,
 		current_price BIGINT NOT NULL,
@@ -64,6 +64,9 @@ func schemaTrade() error {
 		END IF;
 		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='auction' AND column_name='current_price' AND data_type='double precision') THEN
 			ALTER TABLE auction ALTER COLUMN current_price TYPE BIGINT USING COALESCE(current_price, 0)::BIGINT;
+		END IF;
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='auction' AND column_name='quantity' AND data_type IN ('integer', 'int')) THEN
+			ALTER TABLE auction ALTER COLUMN quantity TYPE BIGINT USING COALESCE(quantity, 0)::BIGINT;
 		END IF;
 	END $$;`); err != nil {
 		return err

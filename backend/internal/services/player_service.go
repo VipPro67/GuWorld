@@ -200,10 +200,10 @@ FROM players
 		`, id.String())
 		if err == nil {
 			defer invRows.Close()
-			mi := make(map[string]int)
+			mi := make(models.MaterialsInventory)
 			for invRows.Next() {
 				var itemID string
-				var qty int
+				var qty int64
 				if invRows.Scan(&itemID, &qty) == nil {
 					mi[itemID] += qty
 				}

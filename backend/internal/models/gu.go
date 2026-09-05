@@ -125,7 +125,7 @@ type GuDictionaryItem struct {
 	CombatRoles  []string  `json:"combat_roles"`
 	CombatTags   []string  `json:"combat_tags"`
 	SupportTags  []string  `json:"support_tags"`
-	BasePrice    int       `json:"base_price"`
+	BasePrice    int64     `json:"base_price"`
 	ImageURL     string    `json:"image_url"`
 }
 

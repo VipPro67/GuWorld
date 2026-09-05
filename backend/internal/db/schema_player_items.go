@@ -106,11 +106,20 @@ func schemaPlayerItems() error {
 		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
 		item_id VARCHAR(50) NOT NULL,
 		category VARCHAR(30) NOT NULL DEFAULT 'materials',
-		quantity INT NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+		quantity BIGINT NOT NULL DEFAULT 0 CHECK (quantity >= 0),
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		PRIMARY KEY (player_id, item_id, category)
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("player_inventory_items_quantity_upgrade", `
+	DO $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='player_inventory_items' AND column_name='quantity' AND data_type IN ('integer', 'int')) THEN
+			ALTER TABLE player_inventory_items ALTER COLUMN quantity TYPE BIGINT USING COALESCE(quantity, 0)::BIGINT;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 	if err := execSchema("player_inventory_items_player_cat_idx", `
@@ -153,11 +162,20 @@ func schemaPlayerItems() error {
 		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
 		path VARCHAR(50) NOT NULL,
 		mastery VARCHAR(50) NOT NULL DEFAULT 'Ordinary',
-		dao_marks INT NOT NULL DEFAULT 0,
+		dao_marks BIGINT NOT NULL DEFAULT 0,
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		PRIMARY KEY (player_id, path)
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("player_dao_path_dao_marks_upgrade", `
+	DO $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='player_dao_path' AND column_name='dao_marks' AND data_type IN ('integer', 'int')) THEN
+			ALTER TABLE player_dao_path ALTER COLUMN dao_marks TYPE BIGINT USING COALESCE(dao_marks, 0)::BIGINT;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 

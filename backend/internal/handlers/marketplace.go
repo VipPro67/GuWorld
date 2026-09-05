@@ -26,7 +26,7 @@ type CreateListingRequest struct {
 	GuInstanceID        string   `json:"gu_instance_id"`
 	GuInstanceIDs       []string `json:"gu_instance_ids"`
 	ItemID              string   `json:"item_id"`
-	Quantity            int      `json:"quantity"`
+	Quantity            int64    `json:"quantity"`
 	Price               int64    `json:"price" binding:"required"`
 	Currency            string   `json:"currency" binding:"required"` // primeval|immortal
 	DurationHours       int      `json:"duration_hours" binding:"required"`
@@ -41,7 +41,7 @@ type PlaceBidRequest struct {
 
 type BuyListingRequest struct {
 	ListingID string `json:"listing_id" binding:"required"`
-	Quantity  int    `json:"quantity"`
+	Quantity  int64  `json:"quantity"`
 }
 
 // Duration-based fee tiers
@@ -275,7 +275,7 @@ func CreateListing(c *gin.Context) {
 	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
 		player.EquippedGus = append(player.EquippedGus, gu.InstanceID)
 	}
-	req.Quantity = len(guIDsToSell)
+	req.Quantity = int64(len(guIDsToSell))
 
 		itemDataJSON, err = json.Marshal(gusToSell)
 		if err != nil {
@@ -654,8 +654,8 @@ func BuyListing(c *gin.Context) {
 
 	var sellerID uuid.UUID
 	var itemType, currency, status, listingType string
-	var currentPrice int64
-	var qty, durationHours int
+	var currentPrice, qty int64
+	var durationHours int
 	var rawItemData []byte
 	var targetBuyerID sql.NullString
 	err = tx.QueryRow(`SELECT seller_id, item_type, item_data, quantity, currency, current_price, status, listing_type, target_buyer_id, duration_hours FROM auction WHERE id=$1 FOR UPDATE`, req.ListingID).Scan(&sellerID, &itemType, &rawItemData, &qty, &currency, &currentPrice, &status, &listingType, &targetBuyerID, &durationHours)
@@ -746,8 +746,8 @@ func BuyListing(c *gin.Context) {
 	var itemDataToSend string
 	if itemType == "Gu" {
 		var gus []models.GuInstance
-		if err := json.Unmarshal(rawItemData, &gus); err == nil && len(gus) >= purchaseQty {
-			purchasedGus := gus[:purchaseQty]
+		if err := json.Unmarshal(rawItemData, &gus); err == nil && len(gus) >= int(purchaseQty) {
+			purchasedGus := gus[:int(purchaseQty)]
 			purchasedJSON, _ := json.Marshal(purchasedGus)
 			itemDataToSend = string(purchasedJSON)
 		} else {
@@ -785,8 +785,8 @@ func BuyListing(c *gin.Context) {
 	} else {
 		if itemType == "Gu" {
 			var gus []models.GuInstance
-			if err := json.Unmarshal(rawItemData, &gus); err == nil && len(gus) >= purchaseQty {
-				remainingGus := gus[purchaseQty:]
+			if err := json.Unmarshal(rawItemData, &gus); err == nil && len(gus) >= int(purchaseQty) {
+				remainingGus := gus[int(purchaseQty):]
 				remainingJSON, _ := json.Marshal(remainingGus)
 				_, err = tx.Exec(`UPDATE auction SET quantity=quantity-$1, item_data=$2 WHERE id=$3`, purchaseQty, remainingJSON, req.ListingID)
 			} else {
@@ -857,7 +857,8 @@ func settleExpiredAuctions() error {
 		var highestBidderID sql.NullString
 		var itemType string
 		var rawItemData []byte
-		var qty, durationHours int
+		var qty int64
+		var durationHours int
 		var currentPrice int64
 		var currency, listingType string
 		if err := rows.Scan(&id, &sellerID, &highestBidderID, &itemType, &rawItemData, &qty, &currentPrice, &currency, &listingType, &durationHours); err != nil {
@@ -879,7 +880,7 @@ func settleExpiredAuctions() error {
 	return rows.Err()
 }
 
-func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.NullString, itemType, itemData string, qty int, currentPrice int64, currency string, listingType string, durationHours int) error {
+func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.NullString, itemType, itemData string, qty int64, currentPrice int64, currency string, listingType string, durationHours int) error {
 	tx, err := db.DB.Begin()
 	if err != nil {
 		return err
@@ -978,14 +979,14 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 	return nil
 }
 
-func addAuctionItemToPlayer(tx *sql.Tx, player *models.Player, itemType, itemData string, qty int) error {
+func addAuctionItemToPlayer(tx *sql.Tx, player *models.Player, itemType, itemData string, qty int64) error {
 	if itemType == "Gu" {
 		var gus []models.GuInstance
 		if err := json.Unmarshal([]byte(itemData), &gus); err == nil {
-			if qty > len(gus) {
-				qty = len(gus)
+			if qty > int64(len(gus)) {
+				qty = int64(len(gus))
 			}
-			for i := 0; i < qty; i++ {
+			for i := int64(0); i < qty; i++ {
 				gu := gus[i]
 				gu.InstanceID = uuid.New().String() // Tạo ID mới để tránh trùng lặp
 				gu.Status = "SLEEPING"
@@ -995,7 +996,7 @@ func addAuctionItemToPlayer(tx *sql.Tx, player *models.Player, itemType, itemDat
 			}
 		} else {
 			// Tương thích ngược với định dạng cũ (chỉ lưu string guID)
-			for i := 0; i < qty; i++ {
+			for i := int64(0); i < qty; i++ {
 				player.GuInventory = append(player.GuInventory, mapGuFromRaw(itemData))
 			}
 		}
@@ -1097,7 +1098,7 @@ func CancelListing(c *gin.Context) {
 		return
 	}
 	playerBefore := append(models.GuInventory(nil), player.GuInventory...)
-	if err := addAuctionItemToPlayer(tx, &player, itemType, itemData, qty); err != nil {
+	if err := addAuctionItemToPlayer(tx, &player, itemType, itemData, int64(qty)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể hoàn trả vật phẩm"})
 		return
 	}

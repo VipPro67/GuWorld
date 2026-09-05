@@ -48,7 +48,8 @@ func StoneTierByRank(rank int) string {
 // Ranks 1-5 are in Primeval Stones (Nguyên Thạch); ranks 6-9 are Tiên Cổ and
 // are in Immortal Stones (Tiên Nguyên Thạch) - see StoneTierByRank.
 // Index 0 unused; index i = rank i.
-var guRankBasePrice = [10]int{
+// Index 0 unused; index i = rank i.
+var guRankBasePrice = [10]int64{
 	0,    // unused
 	200,  // Rank 1 - Nhat Chuyen
 	500,  // Rank 2 - Nhi Chuyen
@@ -65,7 +66,7 @@ var guRankBasePrice = [10]int{
 // Ranks 1-5 are in Primeval Stones (Nguyên Thạch); ranks 6-9 are in Immortal
 // Stones (Tiên Nguyên Thạch) - see StoneTierByRank.
 // Rank 1 = 1, scales proportionally to the Gu curve (Gu / 200).
-var itemRankBasePrice = [10]int{
+var itemRankBasePrice = [10]int64{
 	0,   // unused
 	1,   // Rank 1
 	3,   // Rank 2
@@ -81,7 +82,7 @@ var itemRankBasePrice = [10]int{
 // ---- Base price helpers ----------------------------------------------------
 
 // GuBasePriceByRank returns the default base price for a Gu of the given rank.
-func GuBasePriceByRank(rank int) int {
+func GuBasePriceByRank(rank int) int64 {
 	if rank < 1 || rank > 9 {
 		return guRankBasePrice[1]
 	}
@@ -91,7 +92,7 @@ func GuBasePriceByRank(rank int) int {
 // GuBasePrice resolves the effective base price for a Gu.
 // If dbBasePrice is positive it is used as-is (manual override from CSV/DB).
 // Otherwise falls back to the rank table.
-func GuBasePrice(dbBasePrice, rank int) int {
+func GuBasePrice(dbBasePrice int64, rank int) int64 {
 	if dbBasePrice > 0 {
 		return dbBasePrice
 	}
@@ -99,7 +100,7 @@ func GuBasePrice(dbBasePrice, rank int) int {
 }
 
 // ItemBasePriceByRank returns the default base price for an Item of the given rank.
-func ItemBasePriceByRank(rank int) int {
+func ItemBasePriceByRank(rank int) int64 {
 	if rank < 1 || rank > 9 {
 		return itemRankBasePrice[1]
 	}
@@ -107,7 +108,7 @@ func ItemBasePriceByRank(rank int) int {
 }
 
 // ItemBasePrice resolves the effective base price for an Item.
-func ItemBasePrice(dbBasePrice, rank int) int {
+func ItemBasePrice(dbBasePrice int64, rank int) int64 {
 	if dbBasePrice > 0 {
 		return dbBasePrice
 	}
@@ -118,8 +119,8 @@ func ItemBasePrice(dbBasePrice, rank int) int {
 
 // SellPrice returns Primeval Stones refunded when selling to the Caravan Shop.
 // = SellBackRatio * basePrice, minimum 1.
-func SellPrice(basePrice int) int {
-	p := int(float64(basePrice) * SellBackRatio)
+func SellPrice(basePrice int64) int64 {
+	p := int64(float64(basePrice) * SellBackRatio)
 	if p < 1 {
 		return 1
 	}
@@ -128,8 +129,8 @@ func SellPrice(basePrice int) int {
 
 // DonatePoints returns contribution points earned when donating to a sect.
 // = DonateRatio * basePrice, minimum 1.
-func DonatePoints(basePrice int) int {
-	p := int(float64(basePrice) * DonateRatio)
+func DonatePoints(basePrice int64) int64 {
+	p := int64(float64(basePrice) * DonateRatio)
 	if p < 1 {
 		return 1
 	}
@@ -138,8 +139,8 @@ func DonatePoints(basePrice int) int {
 
 // VaultCost returns contribution points needed to buy from the sect vault.
 // = DonatePoints * VaultMarkup, always > DonatePoints to prevent farming.
-func VaultCost(basePrice int) int {
-	p := int(float64(DonatePoints(basePrice)) * VaultMarkup)
+func VaultCost(basePrice int64) int64 {
+	p := int64(float64(DonatePoints(basePrice)) * VaultMarkup)
 	if p < 1 {
 		return 1
 	}
@@ -148,7 +149,7 @@ func VaultCost(basePrice int) int {
 
 // RecipeCostByGuRank returns contribution points cost for a recipe in the sect
 // vault, scaled by the rank of the target Gu.
-func RecipeCostByGuRank(targetGuRank int) int {
+func RecipeCostByGuRank(targetGuRank int) int64 {
 	p := GuBasePriceByRank(targetGuRank) / RecipeRankDivisor
 	if p < 20 {
 		return 20 // minimum floor
@@ -160,8 +161,8 @@ func RecipeCostByGuRank(targetGuRank int) int {
 // to a sect. It mirrors the material formula: donate value = vault cost /
 // VaultMarkup, ensuring buying from the vault is always more expensive than
 // donating (no contribution-point farming loop).
-func RecipeDonatePoints(targetGuRank int) int {
-	p := int(float64(RecipeCostByGuRank(targetGuRank)) / VaultMarkup)
+func RecipeDonatePoints(targetGuRank int) int64 {
+	p := int64(float64(RecipeCostByGuRank(targetGuRank)) / VaultMarkup)
 	if p < 1 {
 		return 1
 	}
@@ -170,11 +171,11 @@ func RecipeDonatePoints(targetGuRank int) int {
 
 // RecipeBasePrice returns the effective base price of a recipe.
 // We set it equal to GuBasePrice(targetRank) so it scales properly when selling.
-func RecipeBasePrice(targetGuRank int) int {
+func RecipeBasePrice(targetGuRank int) int64 {
 	return GuBasePriceByRank(targetGuRank)
 }
 
 // RecipeSellPrice returns Primeval Stones refunded when selling a Recipe to the Caravan Shop.
-func RecipeSellPrice(targetGuRank int) int {
+func RecipeSellPrice(targetGuRank int) int64 {
 	return SellPrice(RecipeBasePrice(targetGuRank))
 }

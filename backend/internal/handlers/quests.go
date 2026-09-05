@@ -290,7 +290,7 @@ func buildRewardLabel(rewards []QuestReward) string {
 }
 
 func applyQuestRewardsTx(tx *sql.Tx, player *models.Player, rewards []QuestReward) error {
-	itemRewards := make(map[string]int)
+	itemRewards := make(map[string]int64)
 	for _, r := range rewards {
 		switch r.Type {
 		case "human_qi":
@@ -306,9 +306,9 @@ func applyQuestRewardsTx(tx *sql.Tx, player *models.Player, rewards []QuestRewar
 			if player.DaoMarks == nil {
 				player.DaoMarks = make(models.DaoMarksMap)
 			}
-			player.DaoMarks[r.ID] += int(r.Amount)
+			player.DaoMarks[r.ID] += int64(r.Amount)
 		case "item":
-			itemRewards[r.ID] += int(r.Amount)
+			itemRewards[r.ID] += int64(r.Amount)
 		case "gu":
 			guSpec, _ := models.GetGuAny(r.ID)
 			newGu := models.GuInstance{

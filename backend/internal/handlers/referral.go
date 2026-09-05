@@ -56,7 +56,7 @@ func ClaimReferralReward(c *gin.Context) {
 	// 1. Check if a referral relationship exists
 	var refID uuid.UUID
 	var hasDeposited bool
-	var depositAmountStones int
+	var depositAmountStones int64
 	var milestone1Rewarded, milestone2Rewarded, milestone3Rewarded, milestone4Rewarded, milestone5Rewarded bool
 
 	err = tx.QueryRow(`
@@ -95,7 +95,7 @@ func ClaimReferralReward(c *gin.Context) {
 
 	// 3. Process the milestone
 	var referrerUsername string
-	var referrerStones int
+	var referrerStones int64
 	err = tx.QueryRow(`
 		SELECT username, FLOOR(primeval_stones)::BIGINT
 		FROM players
@@ -230,7 +230,7 @@ func ClaimReferralReward(c *gin.Context) {
 
 // SimulateDepositRequest represents the body of simulated deposit request
 type SimulateDepositRequest struct {
-	Stones int `json:"stones" binding:"required,min=100"`
+	Stones int64 `json:"stones" binding:"required,min=100"`
 }
 
 // SimulateDeposit simulates referee purchasing Primeval Stones
@@ -258,7 +258,7 @@ func SimulateDeposit(c *gin.Context) {
 	defer tx.Rollback()
 
 	// 1. Add stones to the player making the deposit
-	var currentStones int
+	var currentStones int64
 	err = tx.QueryRow(`
 		SELECT FLOOR(primeval_stones)::BIGINT 
 		FROM players 
@@ -284,7 +284,7 @@ func SimulateDeposit(c *gin.Context) {
 	// 2. Track deposit in referrals table if they were referred
 	var refID uuid.UUID
 	var hasDeposited bool
-	var depositAmountStones int
+	var depositAmountStones int64
 
 	err = tx.QueryRow(`
 		SELECT id, has_deposited, deposit_amount_stones 

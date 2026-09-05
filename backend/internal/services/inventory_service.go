@@ -14,7 +14,7 @@ type InventoryItem struct {
 	PlayerID  string    `json:"player_id"`
 	ItemID    string    `json:"item_id"`
 	Category  string    `json:"category"`
-	Quantity  int       `json:"quantity"`
+	Quantity  int64     `json:"quantity"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -53,8 +53,8 @@ func (s *InventoryService) ListByPlayer(playerID string) ([]InventoryItem, error
 }
 
 // GetQuantity returns the total quantity of a specific item across categories, or 0 if not found.
-func (s *InventoryService) GetQuantity(q QueryRower, playerID, itemID string) (int, error) {
-	var qty int
+func (s *InventoryService) GetQuantity(q QueryRower, playerID, itemID string) (int64, error) {
+	var qty int64
 	err := q.QueryRow(`
 		SELECT COALESCE(SUM(quantity), 0) FROM player_inventory_items
 		WHERE player_id = $1 AND item_id = $2
@@ -67,7 +67,7 @@ func (s *InventoryService) GetQuantity(q QueryRower, playerID, itemID string) (i
 
 // GetQuantityInAnyCategory checks multiple categories in a single query.
 // Returns (quantity, foundCategory, error).
-func (s *InventoryService) GetQuantityInAnyCategory(q QueryRower, playerID, itemID string, categories ...string) (int, string, error) {
+func (s *InventoryService) GetQuantityInAnyCategory(q QueryRower, playerID, itemID string, categories ...string) (int64, string, error) {
 	if len(categories) == 0 {
 		return 0, "", nil
 	}
@@ -83,7 +83,7 @@ func (s *InventoryService) GetQuantityInAnyCategory(q QueryRower, playerID, item
 		LIMIT 1
 	`, strings.Join(placeholders, ","))
 
-	var qty int
+	var qty int64
 	var cat string
 	err := q.QueryRow(query, args...).Scan(&qty, &cat)
 	if err == sql.ErrNoRows {
@@ -99,7 +99,7 @@ func (s *InventoryService) GetQuantityInAnyCategory(q QueryRower, playerID, item
 type ItemBatchEntry struct {
 	ItemID   string
 	Category string
-	Quantity int
+	Quantity int64
 }
 
 // AddItemsBatch inserts or increments multiple items for a player in a single SQL query.
@@ -146,7 +146,7 @@ func (s *InventoryService) AddItemsBatch(tx *sql.Tx, playerID string, items []It
 	return err
 }
 
-func (s *InventoryService) AddItem(tx *sql.Tx, playerID, itemID, category string, quantity int) error {
+func (s *InventoryService) AddItem(tx *sql.Tx, playerID, itemID, category string, quantity int64) error {
 	var err error
 	if tx != nil {
 		_, err = tx.Exec(`
@@ -167,8 +167,8 @@ func (s *InventoryService) AddItem(tx *sql.Tx, playerID, itemID, category string
 }
 
 // RemoveItem decrements quantity and deletes the row if it reaches 0.
-func (s *InventoryService) RemoveItem(tx *sql.Tx, playerID, itemID, category string, quantity int) error {
-	var current int
+func (s *InventoryService) RemoveItem(tx *sql.Tx, playerID, itemID, category string, quantity int64) error {
+	var current int64
 	err := tx.QueryRow(`
 		SELECT quantity FROM player_inventory_items
 		WHERE player_id = $1 AND item_id = $2 AND category = $3
@@ -189,7 +189,7 @@ func (s *InventoryService) RemoveItem(tx *sql.Tx, playerID, itemID, category str
 }
 
 // SetQuantity sets the exact quantity for an item (inserts or deletes if 0).
-func (s *InventoryService) SetQuantity(tx *sql.Tx, playerID, itemID, category string, quantity int) error {
+func (s *InventoryService) SetQuantity(tx *sql.Tx, playerID, itemID, category string, quantity int64) error {
 	if quantity <= 0 {
 		_, err := tx.Exec(`DELETE FROM player_inventory_items WHERE player_id = $1 AND item_id = $2 AND category = $3`, playerID, itemID, category)
 		return err
@@ -211,13 +211,13 @@ func (s *InventoryService) DeleteAll(tx *sql.Tx, playerID string) error {
 
 // BulkAddItems upserts multiple items in a single query using unnest.
 // items maps itemID → total quantity to add.
-func (s *InventoryService) BulkAddItems(tx *sql.Tx, playerID, category string, items map[string]int) error {
+func (s *InventoryService) BulkAddItems(tx *sql.Tx, playerID, category string, items map[string]int64) error {
 	if len(items) == 0 {
 		return nil
 	}
 
 	ids := make([]string, 0, len(items))
-	qtys := make([]int, 0, len(items))
+	qtys := make([]int64, 0, len(items))
 	for id, qty := range items {
 		if qty <= 0 {
 			continue
@@ -258,13 +258,13 @@ func (s *InventoryService) BulkAddItems(tx *sql.Tx, playerID, category string, i
 // BulkRemoveItems decrements multiple items in a single query using unnest.
 // items maps itemID → total quantity to remove. Rows that would drop to zero
 // are deleted. It requires tx to guarantee the read-modify-write is atomic.
-func (s *InventoryService) BulkRemoveItems(tx *sql.Tx, playerID, category string, items map[string]int) error {
+func (s *InventoryService) BulkRemoveItems(tx *sql.Tx, playerID, category string, items map[string]int64) error {
 	if len(items) == 0 {
 		return nil
 	}
 
 	ids := make([]string, 0, len(items))
-	qtys := make([]int, 0, len(items))
+	qtys := make([]int64, 0, len(items))
 	for id, qty := range items {
 		if qty <= 0 {
 			continue
@@ -287,10 +287,10 @@ func (s *InventoryService) BulkRemoveItems(tx *sql.Tx, playerID, category string
 	}
 	defer rows.Close()
 
-	avail := make(map[string]int)
+	avail := make(map[string]int64)
 	for rows.Next() {
 		var id string
-		var q int
+		var q int64
 		if err := rows.Scan(&id, &q); err != nil {
 			return err
 		}
@@ -312,7 +312,7 @@ func (s *InventoryService) BulkRemoveItems(tx *sql.Tx, playerID, category string
 		SET quantity = p.quantity - u.qty,
 		    updated_at = NOW()
 		FROM (
-			SELECT unnest($1::text[]) AS item_id, unnest($2::int[]) AS qty
+			SELECT unnest($1::text[]) AS item_id, unnest($2::bigint[]) AS qty
 		) AS u(item_id, qty)
 		WHERE p.player_id = $3 AND p.item_id = u.item_id AND p.category = $4 AND p.quantity >= u.qty
 	`, pq.Array(ids), pq.Array(qtys), playerID, category)

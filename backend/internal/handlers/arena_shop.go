@@ -15,8 +15,8 @@ import (
 type ArenaShopItem struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
-	Price int    `json:"price"` // in ARENA_COIN
-	Qty   int    `json:"qty"`
+	Price int64  `json:"price"` // in ARENA_COIN
+	Qty   int64  `json:"qty"`
 	Stock int    `json:"stock"`
 }
 
@@ -67,7 +67,7 @@ func GetArenaShop(c *gin.Context) {
 
 type BuyArenaShopRequest struct {
 	ItemID   string `json:"item_id" binding:"required"`
-	Quantity int    `json:"quantity"`
+	Quantity int64  `json:"quantity"`
 }
 
 func BuyArenaShopItem(c *gin.Context) {
@@ -89,7 +89,8 @@ func BuyArenaShopItem(c *gin.Context) {
 	}
 
 	// Look up item in DB
-	var targetPrice, targetQty, targetStock int
+	var targetPrice, targetQty int64
+	var targetStock int
 	var targetName string
 	err := db.DB.QueryRow(`
 		SELECT a.price, a.qty, a.stock, COALESCE(i.name, g.name, 'Công thức ' || rg.name, a.id)

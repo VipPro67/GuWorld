@@ -22,7 +22,7 @@ type TradeOffer struct {
 	PrimevalStones int64              `json:"primeval_stones"`
 	ImmortalStones int64              `json:"immortal_stones"`
 	Gus            []string           `json:"gus"`       // slice of Gu instance IDs
-	Materials      map[string]int     `json:"materials"` // map of itemID -> quantity
+	Materials      map[string]int64   `json:"materials"` // map of itemID -> quantity
 	Recipes        map[string]float64 `json:"recipes"`   // map of recipeID -> completion_rate
 }
 

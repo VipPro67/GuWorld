@@ -22,7 +22,7 @@ type MonsterTemplate struct {
 	GuInventory      GuInventory        `json:"gu_inventory"`
 	GuPool           []GuPoolEntry      `json:"gu_pool"`
 	ItemInventory    MaterialsInventory `json:"item_inventory"`
-	DaoMarks         map[string]int    `json:"dao_marks"`
+	DaoMarks         DaoMarksMap        `json:"dao_marks"`
 	PathMasteries    map[string]int    `json:"path_masteries"`
 	AIProfile        string             `json:"ai_profile"`
 	LootTableID      string             `json:"loot_table_id"`
@@ -84,7 +84,7 @@ type Combatant struct {
 	BaseAttack    float64           `json:"base_attack"`
 	BaseDefense   float64           `json:"base_defense"`
 	GuInventory   GuInventory       `json:"gu_inventory"`
-	DaoMarks      map[string]int    `json:"dao_marks"`
+	DaoMarks      DaoMarksMap       `json:"dao_marks"`
 	PathMasteries map[string]int    `json:"path_masteries"`
 	AIProfile     string            `json:"ai_profile"`
 	LootTableID   string            `json:"loot_table_id"`
@@ -170,12 +170,12 @@ func ScaleMonsterStats(baseMaxHP, baseAttack, baseDefense float64, rank int, sub
 	return
 }
 
-func ScaleAndRandomizeMonsterDaoMarks(mon MonsterTemplate, rank int, subRank int) map[string]int {
+func ScaleAndRandomizeMonsterDaoMarks(mon MonsterTemplate, rank int, subRank int) DaoMarksMap {
 	if rank < 6 {
-		return map[string]int{}
+		return DaoMarksMap{}
 	}
 
-	baseDaoMarks := make(map[string]int)
+	baseDaoMarks := make(DaoMarksMap)
 
 	// If template specifies DaoMarks, use them
 	if len(mon.DaoMarks) > 0 {
@@ -269,10 +269,10 @@ func ScaleAndRandomizeMonsterDaoMarks(mon MonsterTemplate, rank int, subRank int
 		totalBase = 1.0
 	}
 
-	finalDaoMarks := make(map[string]int)
+	finalDaoMarks := make(DaoMarksMap)
 	for path, baseAmt := range baseDaoMarks {
 		portion := float64(baseAmt) / totalBase
-		calculated := int(targetTotalDao * portion)
+		calculated := int64(targetTotalDao * portion)
 		if calculated > 0 {
 			finalDaoMarks[path] = calculated
 		}
@@ -310,7 +310,7 @@ func BuildCombatStateFromMonster(mon MonsterTemplate, rank int, subRank int) Com
 // When set, buildMonsterGuInventory will skip Immortal Gu that are already owned by any player, listed in auction, or stored in sect vaults.
 var ImmortalGuChecker func(guID string, rank int) bool
 
-func buildMonsterGuInventory(mon MonsterTemplate, monsterRank int, daoMarks map[string]int) GuInventory {
+func buildMonsterGuInventory(mon MonsterTemplate, monsterRank int, daoMarks DaoMarksMap) GuInventory {
 	// Normal monsters have NO Gu
 	monTypeUpper := strings.ToUpper(strings.TrimSpace(mon.Type))
 	if monTypeUpper == "NORMAL" || monTypeUpper == "MONSTER" {

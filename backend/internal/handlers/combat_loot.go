@@ -111,7 +111,7 @@ func RollLoot(lt models.LootTable, rank int) RolledLoot {
 
 func ApplyLoot(tx *sql.Tx, player *models.Player, loot RolledLoot) []string {
 	var logs []string
-	materialsToAdd := make(map[string]int)
+	materialsToAdd := make(map[string]int64)
 
 	for itemID, qty := range loot.Items {
 		if itemID == "primeval_stone" {
@@ -124,14 +124,14 @@ func ApplyLoot(tx *sql.Tx, player *models.Player, loot RolledLoot) []string {
 				name = "Thịt Lợn Rừng"
 			case "wild_boar_tusk":
 				name = "Nanh Lợn Rừng"
-			case "jade_stone":
-				name = "Ngọc Thạch"
+			case "bear_gall":
+				name = "Mật Gấu"
 			case "moon_orchid_petal":
 				name = "Cánh hoa Nguyệt Lan"
 			case "green_bamboo_wine":
 				name = "Rượu Thanh Trúc"
 			}
-			materialsToAdd[itemID] += qty
+			materialsToAdd[itemID] += int64(qty)
 			logs = append(logs, fmt.Sprintf("Thu hoạch chiến lợi phẩm thú dữ: %dx %s.", qty, name))
 		}
 	}

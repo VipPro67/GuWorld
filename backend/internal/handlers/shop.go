@@ -26,7 +26,7 @@ type ShopItem struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Type        string `json:"type"` // "Gu", "Material", "Recipe" or "Consumable"
-	Price       int    `json:"price"`
+	Price       int64  `json:"price"`
 	Rank        int    `json:"rank"`
 	Currency    string `json:"currency"` // "primeval" (rank < 6) | "immortal" (rank >= 6)
 	Stock       int    `json:"stock"`    // -1 for unlimited
@@ -88,8 +88,8 @@ func randomPoolStock(rank int) int {
 }
 
 // markedUpPrice applies the random-pool markup to a base price (minimum 1).
-func markedUpPrice(basePrice int) int {
-	p := int(float64(basePrice) * randomPoolMarkup)
+func markedUpPrice(basePrice int64) int64 {
+	p := int64(float64(basePrice) * randomPoolMarkup)
 	if p < 1 {
 		return 1
 	}
@@ -162,7 +162,8 @@ func autoShopPool() ([]ShopItem, error) {
 	}
 	for guRows.Next() {
 		var id, name, desc string
-		var rank, basePrice int
+		var rank int
+		var basePrice int64
 		var remaining sql.NullInt64
 		if err := guRows.Scan(&id, &rank, &name, &desc, &basePrice, &remaining); err != nil {
 			guRows.Close()
@@ -203,7 +204,8 @@ func autoShopPool() ([]ShopItem, error) {
 	}
 	for foodRows.Next() {
 		var id, name, desc, itemType string
-		var rank, basePrice int
+		var rank int
+		var basePrice int64
 		var remaining sql.NullInt64
 		if err := foodRows.Scan(&id, &name, &desc, &itemType, &rank, &basePrice, &remaining); err != nil {
 			foodRows.Close()
@@ -380,7 +382,7 @@ func GetShopList(c *gin.Context) {
 type BuyShopRequest struct {
 	PlayerID string `json:"player_id" binding:"required"`
 	ItemID   string `json:"item_id" binding:"required"`
-	Quantity int    `json:"quantity" binding:"required,min=1"`
+	Quantity int64  `json:"quantity" binding:"required,min=1"`
 	Rank     int    `json:"rank"` // 0 = auto (lowest/legacy); >0 = pinned rank variant
 }
 
@@ -484,7 +486,7 @@ func BuyShopItem(c *gin.Context) {
 	if currency != "immortal" {
 		currency = "primeval"
 	}
-	totalCost := int64(selectedItem.Price * req.Quantity)
+	totalCost := selectedItem.Price * req.Quantity
 	currencyName := "Nguyên Thạch"
 	if currency == "immortal" {
 		currencyName = "Tiên Nguyên Thạch"
@@ -500,7 +502,7 @@ func BuyShopItem(c *gin.Context) {
 	// Validate Inventory space
 	incomingCount := 0
 	if selectedItem.Type == "Gu" {
-		incomingCount = req.Quantity
+		incomingCount = int(req.Quantity)
 	} else {
 		qty, _ := InventorySvc.GetQuantity(tx, player.ID.String(), selectedItem.ID)
 		if qty == 0 {
@@ -533,7 +535,7 @@ func BuyShopItem(c *gin.Context) {
 			return
 		}
 
-		for i := 0; i < req.Quantity; i++ {
+		for i := int64(0); i < req.Quantity; i++ {
 			newInstance := models.GuInstance{
 				InstanceID: uuid.New().String(),
 				GuID:       spec.ID,
@@ -610,7 +612,7 @@ func BuyShopItem(c *gin.Context) {
 type SellShopRequest struct {
 	PlayerID string `json:"player_id" binding:"required"`
 	ItemID   string `json:"item_id" binding:"required"`
-	Quantity int    `json:"quantity" binding:"required,min=1"`
+	Quantity int64  `json:"quantity" binding:"required,min=1"`
 	ItemType string `json:"item_type" binding:"required"`
 	Rank     int    `json:"rank"` // 0 = auto; >0 = the specific rank being sold
 }
@@ -661,10 +663,10 @@ func SellShopItem(c *gin.Context) {
 
 		type invItem struct {
 			category string
-			quantity int
+			quantity int64
 		}
 		var invs []invItem
-		totalQty := 0
+		totalQty := int64(0)
 		for rows.Next() {
 			var iv invItem
 			if err := rows.Scan(&iv.category, &iv.quantity); err != nil {
@@ -719,19 +721,20 @@ func SellShopItem(c *gin.Context) {
 		}
 
 		// Resolve sell price: prefer shop catalog price, fallback to item_dictionary rank
-		var unitSellPrice int
+		var unitSellPrice int64
 		if shopItem, err := findCaravanShopItem(req.ItemID, req.Rank); err == nil {
 			unitSellPrice = pricing.SellPrice(shopItem.Price)
 			sellRank = shopItem.Rank
 		} else {
-			var dbBasePrice, rank int
+			var rank int
+			var dbBasePrice int64
 			_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, req.ItemID).Scan(&dbBasePrice, &rank)
 			sellRank = rank
 			unitSellPrice = pricing.SellPrice(pricing.ItemBasePrice(dbBasePrice, rank))
 		}
-		totalGain = int64(unitSellPrice * req.Quantity)
+		totalGain = unitSellPrice * req.Quantity
 	} else if req.ItemType == "Gu" {
-		removed := 0
+		var removed int64 = 0
 		newInv := models.GuInventory{}
 		for _, gu := range player.GuInventory {
 			if gu.GuID == req.ItemID && !gu.IsVital && removed < req.Quantity {
@@ -747,12 +750,13 @@ func SellShopItem(c *gin.Context) {
 		}
 		player.GuInventory = newInv
 		// Resolve sell price: prefer shop catalog price, fallback to gu_dictionary rank
-		var unitSellPrice int
+		var unitSellPrice int64
 		if shopItem, err := findCaravanShopItem(req.ItemID, req.Rank); err == nil {
 			unitSellPrice = pricing.SellPrice(shopItem.Price)
 			sellRank = shopItem.Rank
 		} else {
-			var dbBasePrice, rank int
+			var rank int
+			var dbBasePrice int64
 			if req.Rank > 0 {
 				_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1 AND rank=$2`, req.ItemID, req.Rank).Scan(&dbBasePrice, &rank)
 			}
@@ -762,7 +766,7 @@ func SellShopItem(c *gin.Context) {
 			sellRank = rank
 			unitSellPrice = pricing.SellPrice(pricing.GuBasePrice(dbBasePrice, rank))
 		}
-		totalGain = int64(unitSellPrice * req.Quantity)
+		totalGain = unitSellPrice * req.Quantity
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "item_type phải là Gu hoặc Material"})
 		return
@@ -824,7 +828,7 @@ func SellShopItem(c *gin.Context) {
 
 type SellShopItemInfo struct {
 	ItemID   string `json:"item_id" binding:"required"`
-	Quantity int    `json:"quantity" binding:"required,min=1"`
+	Quantity int64  `json:"quantity" binding:"required,min=1"`
 	ItemType string `json:"item_type" binding:"required"`
 	Rank     int    `json:"rank"` // 0 = auto; >0 = the specific rank being sold
 }
@@ -901,10 +905,10 @@ func SellShopItemsBulk(c *gin.Context) {
 
 			type invItem struct {
 				category string
-				quantity int
+				quantity int64
 			}
 			var invs []invItem
-			totalQty := 0
+			totalQty := int64(0)
 			for rows.Next() {
 				var iv invItem
 				if err := rows.Scan(&iv.category, &iv.quantity); err != nil {
@@ -958,18 +962,19 @@ func SellShopItemsBulk(c *gin.Context) {
 				}
 			}
 
-			var unitSellPrice int
+			var unitSellPrice int64
 			sellRank := 1
 			if shopItem, err := findCaravanShopItem(item.ItemID, item.Rank); err == nil {
 				unitSellPrice = pricing.SellPrice(shopItem.Price)
 				sellRank = shopItem.Rank
 			} else {
-				var dbBasePrice, rank int
+				var rank int
+				var dbBasePrice int64
 				_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, item.ItemID).Scan(&dbBasePrice, &rank)
 				sellRank = rank
 				unitSellPrice = pricing.SellPrice(pricing.ItemBasePrice(dbBasePrice, rank))
 			}
-			gain := int64(unitSellPrice * item.Quantity)
+			gain := unitSellPrice * item.Quantity
 			addGain(sellRank, gain)
 
 			var name string
@@ -980,7 +985,7 @@ func SellShopItemsBulk(c *gin.Context) {
 			auditSummaries = append(auditSummaries, fmt.Sprintf("%s x%d (+%d %s)", name, item.Quantity, gain, currencyLabel(sellRank)))
 
 		} else if item.ItemType == "Gu" {
-			removed := 0
+			var removed int64 = 0
 			var newInv models.GuInventory
 			for _, gu := range player.GuInventory {
 				if gu.GuID == item.ItemID && !gu.IsVital && !gu.Equipped && gu.Status != "DEAD" && removed < item.Quantity {
@@ -997,13 +1002,14 @@ func SellShopItemsBulk(c *gin.Context) {
 			player.GuInventory = newInv
 			guSold = true
 
-			var unitSellPrice int
+			var unitSellPrice int64
 			sellRank := 1
 			if shopItem, err := findCaravanShopItem(item.ItemID, item.Rank); err == nil {
 				unitSellPrice = pricing.SellPrice(shopItem.Price)
 				sellRank = shopItem.Rank
 			} else {
-				var dbBasePrice, rank int
+				var rank int
+				var dbBasePrice int64
 				if item.Rank > 0 {
 					_ = db.DB.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id=$1 AND rank=$2`, item.ItemID, item.Rank).Scan(&dbBasePrice, &rank)
 				}
@@ -1013,7 +1019,7 @@ func SellShopItemsBulk(c *gin.Context) {
 				sellRank = rank
 				unitSellPrice = pricing.SellPrice(pricing.GuBasePrice(dbBasePrice, rank))
 			}
-			gain := int64(unitSellPrice * item.Quantity)
+			gain := unitSellPrice * item.Quantity
 			addGain(sellRank, gain)
 
 			var name string
@@ -1041,7 +1047,7 @@ func SellShopItemsBulk(c *gin.Context) {
 			}
 
 			unitSellPrice := pricing.RecipeSellPrice(targetRank)
-			gain := int64(unitSellPrice * item.Quantity)
+			gain := unitSellPrice * item.Quantity
 			addGain(targetRank, gain)
 
 			name := fmt.Sprintf("Bí phương (%s)", item.ItemID)

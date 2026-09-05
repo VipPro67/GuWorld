@@ -182,7 +182,7 @@ func (e *UnknownStatusError) Error() string {
 
 // CanApplyStatus tính toán xác suất thành công dựa trên Cảnh Giới (Rank) và Đạo Ngân.
 // Trả về true nếu hiệu ứng được áp dụng thành công.
-func CanApplyStatus(casterRank, targetRank int, casterDaoMarks, targetDaoMarks map[string]int, spec StatusSpec, targetStatusResist float64) bool {
+func CanApplyStatus(casterRank, targetRank int, casterDaoMarks, targetDaoMarks map[string]int64, spec StatusSpec, targetStatusResist float64) bool {
 	// 1. Hệ số chênh lệch Chuyển (Rank)
 	rankDiff := casterRank - targetRank
 	rankFactor := 1.0

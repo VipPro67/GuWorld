@@ -32,7 +32,7 @@ type GuInstance struct {
 type GuInventory []GuInstance
 
 // MaterialsInventory maps material keys to their quantities.
-type MaterialsInventory map[string]int
+type MaterialsInventory map[string]int64
 
 // ItemCategory returns the sub-inventory bucket name for a given item type.
 func ItemCategory(itemType string) string {
@@ -55,7 +55,8 @@ func (p *Player) InventoryForCategory(category string) *MaterialsInventory {
 }
 
 // DaoMarksMap maps Dao mark types to their counts.
-type DaoMarksMap map[string]int
+// Amount is int64 to support large quantities.
+type DaoMarksMap map[string]int64
 
 // PathMasteriesMap maps cultivation path names to their accumulated mastery
 // points (cảnh giới lưu phái). The attained realm is derived from point
@@ -247,7 +248,7 @@ type CombatState struct {
 	EnemyRank           int            `json:"enemy_rank,omitempty"`
 	EnemySubRank        int            `json:"enemy_sub_rank,omitempty"`
 	EnemyGuInventory    GuInventory    `json:"enemy_gu_inventory,omitempty"`
-	EnemyDaoMarks       map[string]int `json:"enemy_dao_marks,omitempty"`
+	EnemyDaoMarks       DaoMarksMap    `json:"enemy_dao_marks,omitempty"`
 	EnemyPathMasteries  map[string]int `json:"enemy_path_masteries,omitempty"`
 	AIProfile           string         `json:"ai_profile,omitempty"`
 	LootTableID         string         `json:"loot_table_id,omitempty"`
@@ -331,7 +332,7 @@ type Player struct {
 	GuInventory        GuInventory         `json:"gu_inventory"`
 	ActiveCombat       *CombatState        `json:"active_combat"`
 	GrowthData         GrowthData          `json:"growth_data"`
-	MaterialsInventory map[string]int      `json:"materials_inventory,omitempty"`
+	MaterialsInventory MaterialsInventory `json:"materials_inventory,omitempty"`
 	CompletedQuests    CompletedQuestsList `json:"completed_quests,omitempty"`
 	UnlockedRecipes    UnlockedRecipesList `json:"unlocked_recipes,omitempty"`
 

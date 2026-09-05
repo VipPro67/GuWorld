@@ -74,8 +74,8 @@ type SectMission struct {
 	Description        string     `json:"description"`
 	MissionType        string     `json:"mission_type"` // GATHER, COMBAT, REFINE, DONATE
 	TargetID           string     `json:"target_id"`
-	TargetAmount       int        `json:"target_amount"`
-	RewardContribution int        `json:"reward_contribution"`
+	TargetAmount       int64      `json:"target_amount"`
+	RewardContribution int64      `json:"reward_contribution"`
 	RequiredMemberRank string     `json:"required_member_rank"`
 	ExpiresAt          *time.Time `json:"expires_at"`
 }
@@ -84,7 +84,7 @@ type PlayerSectMission struct {
 	ID              uuid.UUID  `json:"id"`
 	PlayerID        uuid.UUID  `json:"player_id"`
 	MissionID       uuid.UUID  `json:"mission_id"`
-	CurrentProgress int        `json:"current_progress"`
+	CurrentProgress int64      `json:"current_progress"`
 	Status          string     `json:"status"` // IN_PROGRESS, COMPLETED, FAILED
 	AssignedAt      time.Time  `json:"assigned_at"`
 	ExpiresAt       *time.Time `json:"expires_at"`
@@ -121,8 +121,8 @@ func canManageSect(rank string) bool {
 type SectVaultGuItem struct {
 	ID       string  `json:"id"`
 	Rank     int     `json:"rank,omitempty"`
-	Cost     int     `json:"cost"`
-	Quantity int     `json:"quantity"`
+	Cost     int64   `json:"cost"`
+	Quantity int64   `json:"quantity"`
 	Hunger   float64 `json:"hunger,omitempty"`
 }
 
@@ -169,12 +169,12 @@ func mergeVaultGuHunger(id string, rank int, current, donated float64) float64 {
 }
 
 type DonateStonesRequest struct {
-	Amount int `json:"amount" binding:"required,min=1"`
+	Amount int64 `json:"amount" binding:"required,min=1"`
 }
 
 type DonateMaterialsRequest struct {
 	MaterialID string `json:"material_id" binding:"required"`
-	Amount     int    `json:"amount" binding:"required,min=1"`
+	Amount     int64  `json:"amount" binding:"required,min=1"`
 }
 
 type DonateGuRequest struct {
@@ -185,12 +185,14 @@ type DonateRecipeRequest struct {
 	RecipeID string `json:"recipe_id" binding:"required"`
 }
 
-type VaultBuyRequest struct {
-	ItemType string `json:"item_type" binding:"required"` // gu, material, recipe
+type ExchangeVaultItemRequest struct {
+	ItemType string `json:"item_type" binding:"required"`
 	ItemID   string `json:"item_id" binding:"required"`
 	Rank     int    `json:"rank,omitempty"`
-	Quantity int    `json:"quantity" binding:"min=1"`
+	Quantity int64  `json:"quantity" binding:"min=1"`
 }
+
+type VaultBuyRequest = ExchangeVaultItemRequest
 
 // GetSects lists all available sects
 func GetSects(c *gin.Context) {
@@ -781,10 +783,10 @@ func DonateMaterials(c *gin.Context) {
 
 	type invItem struct {
 		category string
-		quantity int
+		quantity int64
 	}
 	var invs []invItem
-	totalQty := 0
+	totalQty := int64(0)
 	for rows.Next() {
 		var iv invItem
 		if err := rows.Scan(&iv.category, &iv.quantity); err != nil {
@@ -814,7 +816,8 @@ func DonateMaterials(c *gin.Context) {
 	}
 
 	// Calculate value dynamically from item_dictionary.base_price + rank (via pricing package)
-	var dbBasePrice, matRank int
+	var dbBasePrice int64
+	var matRank int
 	var itemType string
 	if err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1), COALESCE(item_type,'') FROM item_dictionary WHERE id=$1`, req.MaterialID).Scan(&dbBasePrice, &matRank, &itemType); err != nil {
 		matRank = 1
@@ -823,7 +826,7 @@ func DonateMaterials(c *gin.Context) {
 	}
 	pointsPerItem := pricing.DonatePoints(pricing.ItemBasePrice(dbBasePrice, matRank))
 
-	gainedContribution := pointsPerItem * req.Amount
+	gainedContribution := int64(pointsPerItem) * req.Amount
 
 	preferredCat := "materials"
 	if itemType == "Consumable" {
@@ -866,7 +869,7 @@ func DonateMaterials(c *gin.Context) {
 		}
 	}
 
-	m.ContributionPoints += int64(gainedContribution)
+	m.ContributionPoints += gainedContribution
 	qiGained := AddHumanQi(&player, 5.0)
 
 	// Increase sect funds
@@ -884,7 +887,7 @@ func DonateMaterials(c *gin.Context) {
 		return
 	}
 
-	vaultMats := make(map[string]int)
+	vaultMats := make(map[string]int64)
 	if len(vaultMaterialsRaw) > 0 {
 		_ = json.Unmarshal(vaultMaterialsRaw, &vaultMats)
 	}
@@ -996,7 +999,8 @@ func DonateGu(c *gin.Context) {
 	}
 
 	// Fetch Gu base_price + rank for contribution calculation
-	var guRank, guBasePrice int
+	var guRank int
+	var guBasePrice int64
 	err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1 AND rank = $2`, guInstance.GuID, guInstance.Rank).Scan(&guBasePrice, &guRank)
 	if err != nil {
 		guRank = 1
@@ -1005,7 +1009,7 @@ func DonateGu(c *gin.Context) {
 
 	effectiveBase := pricing.GuBasePrice(guBasePrice, guRank)
 	gainedContribution := pricing.DonatePoints(effectiveBase)
-	vaultItemCost := pricing.VaultCost(effectiveBase)
+	vaultItemCost := int64(pricing.VaultCost(effectiveBase))
 
 	// Add to sect vault
 	var vaultGuRaw json.RawMessage
@@ -1289,7 +1293,7 @@ func DonateBulk(c *gin.Context) {
 		return
 	}
 
-	totalGainedContribution := 0
+	totalGainedContribution := int64(0)
 	var auditSummaries []string
 
 	// 1. Process Materials
@@ -1301,7 +1305,7 @@ func DonateBulk(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sect vault materials"})
 			return
 		}
-		vaultMats := make(map[string]int)
+		vaultMats := make(map[string]int64)
 		if len(vaultMaterialsRaw) > 0 {
 			_ = json.Unmarshal(vaultMaterialsRaw, &vaultMats)
 		}
@@ -1315,10 +1319,10 @@ func DonateBulk(c *gin.Context) {
 
 			type invItem struct {
 				category string
-				quantity int
+				quantity int64
 			}
 			var invs []invItem
-			totalQty := 0
+			totalQty := int64(0)
 			for rows.Next() {
 				var iv invItem
 				if err := rows.Scan(&iv.category, &iv.quantity); err != nil {
@@ -1337,7 +1341,8 @@ func DonateBulk(c *gin.Context) {
 			}
 
 			// Calculate contribution points dynamically
-			var dbBasePrice, matRank int
+			var dbBasePrice int64
+			var matRank int
 			var itemType string
 			if err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1), COALESCE(item_type,'') FROM item_dictionary WHERE id=$1`, matReq.MaterialID).Scan(&dbBasePrice, &matRank, &itemType); err != nil {
 				matRank = 1
@@ -1345,7 +1350,7 @@ func DonateBulk(c *gin.Context) {
 				itemType = ""
 			}
 			pointsPerItem := pricing.DonatePoints(pricing.ItemBasePrice(dbBasePrice, matRank))
-			gained := pointsPerItem * matReq.Amount
+			gained := int64(pointsPerItem) * matReq.Amount
 			totalGainedContribution += gained
 
 			preferredCat := "materials"
@@ -1447,15 +1452,16 @@ func DonateBulk(c *gin.Context) {
 				}
 
 				// Fetch base price
-				var guRank, guBasePrice int
+				var guRank int
+				var guBasePrice int64
 				err = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1 AND rank = $2`, gi.GuID, gi.Rank).Scan(&guBasePrice, &guRank)
 				if err != nil {
 					guRank = 1
 					guBasePrice = 0
 				}
 				effectiveBase := pricing.GuBasePrice(guBasePrice, guRank)
-				gained := pricing.DonatePoints(effectiveBase)
-				vaultItemCost := pricing.VaultCost(effectiveBase)
+				gained := int64(pricing.DonatePoints(effectiveBase))
+				vaultItemCost := int64(pricing.VaultCost(effectiveBase))
 
 				totalGainedContribution += gained
 
@@ -1557,7 +1563,7 @@ func DonateBulk(c *gin.Context) {
 			if gained < 1 {
 				gained = 1
 			}
-			totalGainedContribution += gained
+			totalGainedContribution += int64(gained)
 
 			if err := RecipeSvc.Delete(tx, playerID.String(), recipeReq.RecipeID); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Không thể xóa Bí phương %s", recipeReq.RecipeID)})
@@ -1753,7 +1759,7 @@ func BuyFromSectVault(c *gin.Context) {
 		if vaultGus[targetIdx].Quantity <= 0 {
 			vaultGus = append(vaultGus[:targetIdx], vaultGus[targetIdx+1:]...)
 		}
-		for i := 0; i < quantity; i++ {
+		for i := int64(0); i < quantity; i++ {
 			newGu := models.GuInstance{
 				InstanceID: uuid.New().String(),
 				GuID:       req.ItemID,
@@ -1782,7 +1788,7 @@ func BuyFromSectVault(c *gin.Context) {
 		}
 
 	} else if strings.ToLower(req.ItemType) == "material" {
-		var vaultMats map[string]int
+		var vaultMats map[string]int64
 		if err := json.Unmarshal(s.VaultMaterials, &vaultMats); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse vault materials"})
 			return
@@ -1796,9 +1802,10 @@ func BuyFromSectVault(c *gin.Context) {
 
 		// Dynamic cost from item_dictionary base_price + rank via pricing package
 		{
-			var matBasePrice, matRank int
+			var matRank int
+			var matBasePrice int64
 			_ = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM item_dictionary WHERE id=$1`, req.ItemID).Scan(&matBasePrice, &matRank)
-			cost = int64(pricing.VaultCost(pricing.ItemBasePrice(matBasePrice, matRank)) * quantity)
+			cost = int64(pricing.VaultCost(pricing.ItemBasePrice(matBasePrice, matRank))) * quantity
 		}
 
 		if m.ContributionPoints < cost {
@@ -2157,7 +2164,7 @@ func CompleteSectMission(c *gin.Context) {
 			var vaultMaterialsRaw json.RawMessage
 			err = tx.QueryRow(`SELECT vault_materials FROM sects WHERE id = $1`, memberForVault.SectID).Scan(&vaultMaterialsRaw)
 			if err == nil {
-				vaultMats := make(map[string]int)
+				vaultMats := make(map[string]int64)
 				if len(vaultMaterialsRaw) > 0 {
 					_ = json.Unmarshal(vaultMaterialsRaw, &vaultMats)
 				}
@@ -2208,8 +2215,8 @@ func CompleteSectMission(c *gin.Context) {
 				if len(vaultGuRaw) > 0 {
 					_ = json.Unmarshal(vaultGuRaw, &vaultGus)
 				}
-				// Look up Gu base_price + rank for vault cost calculation
-				var donatedGuRank, donatedGuBase int
+				var donatedGuRank int
+				var donatedGuBase int64
 				_ = tx.QueryRow(`SELECT COALESCE(base_price,0), COALESCE(rank,1) FROM gu_dictionary WHERE id = $1 ORDER BY rank DESC LIMIT 1`, donatedGuID).Scan(&donatedGuBase, &donatedGuRank)
 				if donatedGuRank == 0 {
 					donatedGuRank = 1
@@ -2226,7 +2233,7 @@ func CompleteSectMission(c *gin.Context) {
 				if !missionGuFound {
 					vaultGus = append(vaultGus, SectVaultGuItem{
 						ID:       donatedGuID,
-						Cost:     pricing.VaultCost(pricing.GuBasePrice(donatedGuBase, donatedGuRank)),
+						Cost:     int64(pricing.VaultCost(pricing.GuBasePrice(donatedGuBase, donatedGuRank))),
 						Quantity: 1,
 						Hunger:   normalizeVaultGuHunger(donatedGuID, donatedGuInstRank, donatedGuHunger),
 					})
@@ -2271,7 +2278,7 @@ func CompleteSectMission(c *gin.Context) {
 	auditlog.Logf(db.DB, &playerID, "sect.mission_complete", "sectId=%s missionId=%s reward=%d", m.SectID, missionID, sm.RewardContribution)
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message":             "Hoàn thành nhiệm vụ tông môn! Nhận được " + strconv.Itoa(sm.RewardContribution) + " Điểm cống hiến.",
+		"message":             "Hoàn thành nhiệm vụ tông môn! Nhận được " + strconv.FormatInt(sm.RewardContribution, 10) + " Điểm cống hiến.",
 		"contribution_points": m.ContributionPoints,
 	})
 }
@@ -2351,7 +2358,7 @@ func DeleteSectMission(c *gin.Context) {
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 
-	c.JSON(http.StatusOK, gin.H{"message": "Đã thu hồi nhiệm vụ tông môn và hoàn lại " + strconv.Itoa(sm.RewardContribution) + " quỹ bang!"})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã thu hồi nhiệm vụ tông môn và hoàn lại " + strconv.FormatInt(sm.RewardContribution, 10) + " quỹ bang!"})
 }
 
 // AbandonSectMission lets a player give up their own in-progress mission.
@@ -2409,8 +2416,8 @@ type CreateCustomMissionRequest struct {
 	Description        string `json:"description" binding:"required"`
 	MissionType        string `json:"mission_type" binding:"required"` // GATHER, DONATE
 	TargetID           string `json:"target_id" binding:"required"`
-	TargetAmount       int    `json:"target_amount" binding:"required,min=1"`
-	RewardContribution int    `json:"reward_contribution" binding:"required,min=1"`
+	TargetAmount       int64  `json:"target_amount" binding:"required,min=1"`
+	RewardContribution int64  `json:"reward_contribution" binding:"required,min=1"`
 	RequiredMemberRank string `json:"required_member_rank" binding:"required"`
 	DurationHours      int    `json:"duration_hours"` // 0 => default 24h, < 0 => no expiry
 }
@@ -2826,7 +2833,7 @@ func CreateCustomMission(c *gin.Context) {
 	}
 
 	// Check if sect has enough funds
-	var currentFunds int
+	var currentFunds int64
 	err = tx.QueryRow(`SELECT funds FROM sects WHERE id = $1`, callerSectID).Scan(&currentFunds)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
@@ -2835,7 +2842,7 @@ func CreateCustomMission(c *gin.Context) {
 
 	missionCost := req.RewardContribution
 	if currentFunds < missionCost {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Quỹ bang không đủ để ban bố nhiệm vụ này! (Cần tối thiểu " + strconv.Itoa(missionCost) + " quỹ bang)"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Quỹ bang không đủ để ban bố nhiệm vụ này! (Cần tối thiểu " + strconv.FormatInt(missionCost, 10) + " quỹ bang)"})
 		return
 	}
 
@@ -2879,13 +2886,13 @@ func CreateCustomMission(c *gin.Context) {
 type StockVaultRequest struct {
 	ItemType string `json:"item_type" binding:"required"` // gu, material, recipe
 	ItemID   string `json:"item_id" binding:"required"`
-	Quantity int    `json:"quantity" binding:"required,min=1"`
+	Quantity int64  `json:"quantity" binding:"required,min=1"`
 }
 
 // stockItemUnitCost computes the sect-funds unit cost for stocking an item and
 // enforces the rank gates (Gu: rank 1-5 & <= sect level; material: rank <= sect level).
 // Returns (unitCost, httpStatusOK, "") on success; otherwise (0, status, errorMessage).
-func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int, int, string) {
+func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int64, int, string) {
 	itemType = strings.ToLower(itemType)
 	if itemType == "gu" {
 		return 0, http.StatusForbidden, "Không thể nhập Cổ trùng vào bảo khố."
@@ -2916,7 +2923,7 @@ func stockItemUnitCost(tx *sql.Tx, sectLevel int, itemType, itemID string) (int,
 			return 0, http.StatusForbidden, fmt.Sprintf("Tông môn chưa đạt cấp %d để nhập Linh tài hạng %d! (Hiện tại: Cấp %d)", (effectiveLevel-1)*10, effectiveLevel, sectLevel)
 		}
 
-		return effectiveLevel * 50, http.StatusOK, ""
+		return int64(effectiveLevel * 50), http.StatusOK, ""
 	}
 
 	if itemType == "recipe" {
@@ -3025,12 +3032,13 @@ func StockSectVault(c *gin.Context) {
 		}
 
 		// Recalculate cost for this Gu using pricing package
-		var stockGuRank, stockGuBasePrice int
+		var stockGuRank int
+		var stockGuBasePrice int64
 		_ = tx.QueryRow(`SELECT COALESCE(rank,1), COALESCE(base_price,0) FROM gu_dictionary WHERE id = $1 ORDER BY rank DESC LIMIT 1`, req.ItemID).Scan(&stockGuRank, &stockGuBasePrice)
 		if stockGuRank == 0 {
 			stockGuRank = 1
 		}
-		stockGuCost := pricing.VaultCost(pricing.GuBasePrice(stockGuBasePrice, stockGuRank))
+		stockGuCost := int64(pricing.VaultCost(pricing.GuBasePrice(stockGuBasePrice, stockGuRank)))
 
 		found := false
 		for i, v := range vaultGus {
@@ -3092,7 +3100,7 @@ func StockSectVault(c *gin.Context) {
 			return
 		}
 	} else {
-		vaultMats := make(map[string]int)
+		vaultMats := make(map[string]int64)
 		if len(s.VaultMaterials) > 0 {
 			_ = json.Unmarshal(s.VaultMaterials, &vaultMats)
 		}
@@ -3151,7 +3159,7 @@ func StockSectVault(c *gin.Context) {
 type StockVaultBulkItem struct {
 	ItemType string `json:"item_type" binding:"required"` // gu, material, recipe
 	ItemID   string `json:"item_id" binding:"required"`
-	Quantity int    `json:"quantity" binding:"required,min=1"`
+	Quantity int64  `json:"quantity" binding:"required,min=1"`
 }
 
 type StockVaultBulkRequest struct {
@@ -3206,8 +3214,8 @@ func StockSectVaultBulk(c *gin.Context) {
 	type stockLine struct {
 		itemType string
 		itemID   string
-		quantity int
-		unitCost int
+		quantity int64
+		unitCost int64
 	}
 	lines := make([]stockLine, 0, len(req.Items))
 	var totalCost int64
@@ -3218,7 +3226,7 @@ func StockSectVaultBulk(c *gin.Context) {
 			return
 		}
 		lines = append(lines, stockLine{strings.ToLower(it.ItemType), it.ItemID, it.Quantity, unitCost})
-		totalCost += int64(unitCost) * int64(it.Quantity)
+		totalCost += unitCost * it.Quantity
 	}
 
 	if s.Funds < totalCost {
@@ -3231,7 +3239,7 @@ func StockSectVaultBulk(c *gin.Context) {
 	if len(s.VaultGu) > 0 {
 		_ = json.Unmarshal(s.VaultGu, &vaultGus)
 	}
-	vaultMats := make(map[string]int)
+	vaultMats := make(map[string]int64)
 	if len(s.VaultMaterials) > 0 {
 		_ = json.Unmarshal(s.VaultMaterials, &vaultMats)
 	}
@@ -3246,12 +3254,13 @@ func StockSectVaultBulk(c *gin.Context) {
 	for _, line := range lines {
 		if line.itemType == "gu" {
 			// Recalculate cost for this Gu using pricing package
-			var stockGuRank, stockGuBasePrice int
+			var stockGuRank int
+			var stockGuBasePrice int64
 			_ = tx.QueryRow(`SELECT COALESCE(rank,1), COALESCE(base_price,0) FROM gu_dictionary WHERE id = $1 ORDER BY rank DESC LIMIT 1`, line.itemID).Scan(&stockGuRank, &stockGuBasePrice)
 			if stockGuRank == 0 {
 				stockGuRank = 1
 			}
-			stockGuCost := pricing.VaultCost(pricing.GuBasePrice(stockGuBasePrice, stockGuRank))
+			stockGuCost := int64(pricing.VaultCost(pricing.GuBasePrice(stockGuBasePrice, stockGuRank)))
 
 			found := false
 			for i := range vaultGus {

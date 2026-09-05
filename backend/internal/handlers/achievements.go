@@ -179,7 +179,7 @@ func ClaimAchievement(c *gin.Context) {
 	} else if ach.RewardType == "immortal_stones" {
 		player.ImmortalStones += int64(ach.RewardVal)
 	} else if ach.RewardType == "item" {
-		if err := InventorySvc.AddItem(tx, playerID.String(), ach.RewardID, "materials", int(ach.RewardVal)); err != nil {
+		if err := InventorySvc.AddItem(tx, playerID.String(), ach.RewardID, "materials", int64(ach.RewardVal)); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi cập nhật vật phẩm"})
 			return
 		}

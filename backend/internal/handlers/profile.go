@@ -31,20 +31,20 @@ type PlayerProfileResponse struct {
 	EquippedGus     []string          `json:"equipped_gus"`
 	ScoutingStatus  string            `json:"scouting_status"`
 	StatusType      string            `json:"status_type"` // "success", "partial", "failure"
-	DominantPath    string            `json:"dominant_path"`
-	DaoMarks        map[string]int `json:"dao_marks"`
-	PathMasteries   map[string]int `json:"path_masteries"`
-	Bio             string            `json:"bio"`
-	AvatarURL       string            `json:"avatar_url"`
-	Race            string            `json:"race"`
-	Gender          string            `json:"gender"`
-	Constitution    string            `json:"constitution"`
-	Statuses        models.StatusList `json:"statuses"`
+	DominantPath    string             `json:"dominant_path"`
+	DaoMarks        models.DaoMarksMap `json:"dao_marks"`
+	PathMasteries   map[string]int     `json:"path_masteries"`
+	Bio             string             `json:"bio"`
+	AvatarURL       string             `json:"avatar_url"`
+	Race            string             `json:"race"`
+	Gender          string             `json:"gender"`
+	Constitution    string             `json:"constitution"`
+	Statuses        models.StatusList  `json:"statuses"`
 }
 
 // getDominantPath determines the player's primary path based on Dao Marks or Path Masteries
-func getDominantPath(daoMarks map[string]int, pathMasteries map[string]int) string {
-	maxMarks := 0
+func getDominantPath(daoMarks models.DaoMarksMap, pathMasteries map[string]int) string {
+	maxMarks := int64(0)
 	dominant := ""
 	for path, marks := range daoMarks {
 		if marks > maxMarks {
@@ -265,7 +265,7 @@ func GetPlayerProfile(c *gin.Context) {
 		resp.ScoutingStatus = "Nhìn thấu sơ bộ. Đối phương che giấu một phần thông tin."
 		resp.StatusType = "partial"
 		resp.DominantPath = getDominantPath(targetDaoMarks, target.PathMasteries)
-		resp.DaoMarks = map[string]int{}
+		resp.DaoMarks = models.DaoMarksMap{}
 		resp.PathMasteries = map[string]int{}
 
 		equipped := []string{}
@@ -292,7 +292,7 @@ func GetPlayerProfile(c *gin.Context) {
 	} else {
 		// Scouting Failure
 		resp.StatusType = "failure"
-		resp.DaoMarks = map[string]int{}
+		resp.DaoMarks = models.DaoMarksMap{}
 		resp.PathMasteries = map[string]int{}
 
 		if target.IsDisguised {
@@ -338,7 +338,7 @@ func GetPlayerProfile(c *gin.Context) {
 				resp.EquippedGus = []string{"GU_SHADOW"}
 				// resp.ScoutingStatus = "Thất bại trinh sát! Đối phương ngụy trang hoàn hảo hoặc tu vi/trí đạo vượt trội."
 				resp.DominantPath = "Trí Đạo"
-				resp.DaoMarks = map[string]int{"wisdom": 50}
+				resp.DaoMarks = models.DaoMarksMap{"wisdom": 50}
 				resp.PathMasteries = map[string]int{"wisdom": gamefx.PathMasteryMasterPoints}
 			} else {
 				// Scramble username, randomize rank

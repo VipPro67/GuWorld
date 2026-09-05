@@ -81,7 +81,7 @@ func runArenaSettlement() {
 	rows.Close()
 
 	for _, r := range rewards {
-		errUpdate := InventorySvc.AddItem(tx, r.playerID, "arena_coin", "materials", r.rewardCoins)
+		errUpdate := InventorySvc.AddItem(tx, r.playerID, "arena_coin", "materials", int64(r.rewardCoins))
 		if errUpdate != nil {
 			logger.S.Errorf("ArenaSettlement Error: Failed to give reward to %s: %v", r.playerID, errUpdate)
 		}

@@ -303,9 +303,9 @@ func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCod
 			if player.DaoMarks == nil {
 				player.DaoMarks = make(models.DaoMarksMap)
 			}
-			player.DaoMarks[r.ID] += int(r.Amount)
+			player.DaoMarks[r.ID] += int64(r.Amount)
 		case "item":
-			InventorySvc.AddItem(tx, player.ID.String(), r.ID, "materials", int(r.Amount))
+			InventorySvc.AddItem(tx, player.ID.String(), r.ID, "materials", int64(r.Amount))
 		case "gu":
 			guSpec, _ := models.GetGuAny(r.ID)
 			rank := r.Rank

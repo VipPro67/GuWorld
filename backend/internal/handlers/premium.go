@@ -549,7 +549,7 @@ func BuyPremiumPackage(c *gin.Context) {
 						}
 					}
 				} else {
-					InventorySvc.AddItem(tx, playerID.String(), reward.ItemID, "materials", int(reward.Quantity))
+					InventorySvc.AddItem(tx, playerID.String(), reward.ItemID, "materials", reward.Quantity)
 				}
 			}
 		}

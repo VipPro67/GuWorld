@@ -1528,3 +1528,16 @@ GU_LIFESPAN_100,5,1,"{""GU_LIFESPAN_50"": {""qty"": 2, ""rank"": 4}}","{""beast_
 GU_SPIRIT_BUD,1,1,"{""GU_CLEANSE_SOUL"": {""qty"": 1, ""rank"": 1}}","{""wandering_soul_dust"": 5}",0.81,20,0
 GU_HEAVEN_SECRET,6,1,"{""GU_DIVINE_SENSE"": {""qty"": 1, ""rank"": 5}}","{""heaven_qi_rank6"": 30, ""sound_stone_rank6"": 6, ""water_rank6"": 6, ""heaven_essence_cloud"": 6}",0.05,600,100
 GU_HEAVEN_SECRET,7,1,"{""GU_HEAVEN_SECRET"": {""qty"": 1, ""rank"": 6}}","{""heaven_qi_rank7"": 33, ""sound_stone_rank7"": 9, ""water_rank7"": 15, ""iron_rank7"": 14}",0.01,0,200
+GU_WISDOM_RAPID_THOUGHT,2,1,"{""GU_WISDOM_FAST_THOUGHT_1"": {""qty"": 1, ""rank"": 1}}","{""sound_stone_rank3"": 5}",0.7,80,0
+GU_WISDOM_INSTANT_THOUGHT,4,1,"{""GU_WISDOM_RAPID_THOUGHT"": {""qty"": 1, ""rank"": 2}}","{""heaven_qi_rank4"": 6}",0.6,150,0
+GU_WISDOM_CHAOTIC_MIND,4,1,"{""GU_WISDOM_STAR_THOUGHT_3"": {""qty"": 1, ""rank"": 3}}","{""heaven_qi_rank4"": 6}",0.6,150,0
+GU_WISDOM_BATTLE_THOUGHT,4,1,"{""GU_WISDOM_LIGHT_3"": {""qty"": 1, ""rank"": 3}}","{""heaven_qi_rank4"": 6}",0.6,150,0
+GU_WISDOM_BATTLE_WILL,5,1,"{""GU_WISDOM_BATTLE_THOUGHT"": {""qty"": 1, ""rank"": 4}}","{""book_worm"": 10}",0.72,300,0
+GU_WISDOM_SELF_WILL,4,1,"{""GU_MY_WILL"": {""qty"": 1, ""rank"": 3}}","{""heaven_qi_rank4"": 6}",0.6,150,0
+GU_WISDOM_KEEP_WILL,5,1,"{""GU_WISDOM_SELF_WILL"": {""qty"": 1, ""rank"": 4}}","{""book_worm"": 10}",0.72,300,0
+GU_WISDOM_PROTECT_WILL,6,1,"{""GU_WISDOM_KEEP_WILL"": {""qty"": 1, ""rank"": 5}}","{""star_thoughts"": 24, ""heavenly_river_dew"": 11, ""sword_leaf_grass_rank6"": 8, ""sound_stone_rank6"": 5, ""water_rank6"": 4}",0.05,900,150
+GU_WISDOM_SHIELD_WILL,7,1,"{""GU_WISDOM_PROTECT_WILL"": {""qty"": 1, ""rank"": 6}}","{""sound_stone_rank7"": 2, ""heaven_qi_rank7"": 15}",0.01,0,200
+GU_QINGXUAN_6,6,1,"{""GU_QINGXUAN"": {""qty"": 1, ""rank"": 5}}","{""star_thoughts"": 20, ""heavenly_river_dew"": 11, ""sword_leaf_grass_rank6"": 8, ""sound_stone_rank6"": 5, ""water_rank6"": 4}",0.05,0,200
+GU_QINGXUAN_I,7,1,"{""GU_QINGXUAN_I"": {""qty"": 1, ""rank"": 6}}","{""sound_stone_rank7"": 2, ""heaven_qi_rank7"": 15}",0.01,0,300
+GU_QINGXUAN_I,8,1,"{""GU_QINGXUAN_I"": {""qty"": 1, ""rank"": 7}}","{""heaven_qi_rank8"": 10, ""heaven_qi_rank7"": 20, ""all_knowing_divine_calculation_core"": 15}",0.0001,0,400
+GU_QINGXUAN_I,9,1,"{""GU_QINGXUAN_I"": {""qty"": 1, ""rank"": 8}}","{""heaven_qi_rank8"": 15, ""heaven_qi_rank9"": 10, ""all_knowing_divine_calculation_core"": 20}",0.000001,0,500

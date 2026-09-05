@@ -54,7 +54,7 @@ func schemaAperture() error {
 		x INTEGER NOT NULL,
 		y INTEGER NOT NULL,
 		production_type VARCHAR(50),
-		production_amount INTEGER NOT NULL DEFAULT 0,
+		production_amount BIGINT NOT NULL DEFAULT 0,
 		production_interval_hours INTEGER NOT NULL DEFAULT 24,
 		last_collected_at TIMESTAMP WITH TIME ZONE,
 		is_destroyed BOOLEAN NOT NULL DEFAULT false,
@@ -73,6 +73,15 @@ func schemaAperture() error {
 		item_tier VARCHAR(10),
 		production_key VARCHAR(100)
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_resource_nodes_prod_amount_upgrade", `
+	DO $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='aperture_resource_nodes' AND column_name='production_amount' AND data_type IN ('integer', 'int')) THEN
+			ALTER TABLE aperture_resource_nodes ALTER COLUMN production_amount TYPE BIGINT USING COALESCE(production_amount, 0)::BIGINT;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 

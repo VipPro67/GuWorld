@@ -42,12 +42,12 @@ type MineSlotResponse struct {
 	MonsterID         *string    `json:"monster_id"`
 	OccupiedAt        *time.Time `json:"occupied_at"`
 	LastClaimedAt     *time.Time `json:"last_claimed_at"`
-	AccumulatedStones int        `json:"accumulated_stones"`
+	AccumulatedStones int64      `json:"accumulated_stones"`
 	AccumulatedQi     float64    `json:"accumulated_qi"`
 	AccumulatedChests int        `json:"accumulated_chests"`
 }
 
-func CalculateMineRewards(slotID int, rarity string, lastClaimedAt time.Time) (int, float64, int) {
+func CalculateMineRewards(slotID int, rarity string, lastClaimedAt time.Time) (int64, float64, int) {
 	elapsed := time.Since(lastClaimedAt)
 	elapsedMinutes := int(elapsed.Minutes())
 	if elapsedMinutes <= 0 {
@@ -59,7 +59,7 @@ func CalculateMineRewards(slotID int, rarity string, lastClaimedAt time.Time) (i
 		rates = MineRarityRates["Thường"]
 	}
 
-	stones := int(float64(elapsedMinutes) * rates.StonesPerMin)
+	stones := int64(float64(elapsedMinutes) * rates.StonesPerMin)
 	qi := float64(elapsedMinutes) * rates.QiPerMin
 
 	// Stable chest roll
@@ -75,9 +75,9 @@ func CalculateMineRewards(slotID int, rarity string, lastClaimedAt time.Time) (i
 	return stones, qi, chests
 }
 
-func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int, qi float64, chests int, mineType string) error {
-	var currentStones int
-	var currentImmortalStones int
+func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int64, qi float64, chests int, mineType string) error {
+	var currentStones int64
+	var currentImmortalStones int64
 	var currentQi float64
 
 	err := tx.QueryRow(`
@@ -109,7 +109,7 @@ func AddMineRewardsToPlayerTx(tx *sql.Tx, playerID uuid.UUID, stones int, qi flo
 	}
 
 	if chests > 0 {
-		if err := InventorySvc.AddItem(tx, playerID.String(), "mine_chest", "materials", chests); err != nil {
+		if err := InventorySvc.AddItem(tx, playerID.String(), "mine_chest", "materials", int64(chests)); err != nil {
 			return err
 		}
 	}
@@ -150,7 +150,7 @@ func GetMineSlots(c *gin.Context) {
 			name = &occupierName.String
 		}
 
-		stones := 0
+		var stones int64 = 0
 		qi := 0.0
 		chests := 0
 

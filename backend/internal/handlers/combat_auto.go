@@ -44,7 +44,7 @@ type CombatantInfo struct {
 	KindDetail    string             `json:"kind_detail,omitempty"`
 	Rank          int                `json:"rank,omitempty"`
 	SubRank       int                `json:"sub_rank,omitempty"`
-	DaoMarks      map[string]int     `json:"dao_marks,omitempty"`
+	DaoMarks      models.DaoMarksMap `json:"dao_marks,omitempty"`
 	PathMasteries map[string]int     `json:"path_masteries,omitempty"`
 	GuInventory   models.GuInventory `json:"gu_inventory,omitempty"`
 }
@@ -351,6 +351,9 @@ func AutoCombatStart(c *gin.Context) {
 				}
 				if _, hasHeal := item.Effects["restore_hp"]; hasHeal {
 					remove := inv.Quantity
+					if remove > int64(remaining) {
+						remove = int64(remaining)
+					}
 					_, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, authID.String(), inv.ItemID, "consumables", "materials", "other")
 					if cat == "" {
 						cat = "consumables"
@@ -358,7 +361,7 @@ func AutoCombatStart(c *gin.Context) {
 					if err := InventorySvc.RemoveItem(tx, authID.String(), inv.ItemID, cat, remove); err != nil {
 						logger.S.Warnf("Failed to remove consumable %s: %v", inv.ItemID, err)
 					}
-					remaining -= remove
+					remaining -= int(remove)
 				}
 			}
 		}
@@ -567,7 +570,7 @@ func AutoCombatStart(c *gin.Context) {
 							if matID == "primeval_stone" {
 								continue
 							}
-							InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", qty)
+							InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", int64(qty))
 						}
 						for _, guID := range loot.Gus {
 							guSpec, _ := models.GetGuAny(guID)
@@ -836,8 +839,8 @@ func AutoCombatStart(c *gin.Context) {
 					}
 					if _, hasHeal := item.Effects["restore_hp"]; hasHeal {
 						remove := inv.Quantity
-						if remove > remaining {
-							remove = remaining
+						if remove > int64(remaining) {
+							remove = int64(remaining)
 						}
 						_, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, simAlly.ID, inv.ItemID, "consumables", "materials", "other")
 						if cat == "" {
@@ -846,7 +849,7 @@ func AutoCombatStart(c *gin.Context) {
 						if err := InventorySvc.RemoveItem(tx, simAlly.ID, inv.ItemID, cat, remove); err != nil {
 							logger.S.Warnf("Failed to remove consumable %s for ally %s: %v", inv.ItemID, simAlly.ID, err)
 						}
-						remaining -= remove
+						remaining -= int(remove)
 					}
 				}
 			}

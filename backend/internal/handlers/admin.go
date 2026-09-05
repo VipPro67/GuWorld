@@ -255,7 +255,7 @@ func AdminGetPlayerDetail(c *gin.Context) {
 
 type AdminItemRequest struct {
 	ItemID   string `json:"item_id"`
-	Quantity int    `json:"quantity"`
+	Quantity int64  `json:"quantity"`
 }
 
 // adminItemKind returns "item" if the ID is a material item, "recipe" if it is
@@ -1922,7 +1922,7 @@ type AdminStockVaultRequest struct {
 	ItemType string `json:"item_type"` // gu, material, recipe
 	ItemID   string `json:"item_id"`
 	Rank     int    `json:"rank,omitempty"`
-	Quantity int    `json:"quantity"`
+	Quantity int64  `json:"quantity"`
 }
 
 func AdminStockSectVault(c *gin.Context) {
@@ -1975,10 +1975,10 @@ func AdminStockSectVault(c *gin.Context) {
 		_, err = tx.Exec(`UPDATE sects SET vault_gu=$1 WHERE id=$2`, updated, sectID)
 
 	case "material":
-		var mats map[string]int
+		var mats map[string]int64
 		json.Unmarshal(vaultMatsJSON, &mats)
 		if mats == nil {
-			mats = map[string]int{}
+			mats = map[string]int64{}
 		}
 		mats[req.ItemID] += req.Quantity
 		updated, _ := json.Marshal(mats)
@@ -2080,7 +2080,7 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 		_, err = tx.Exec(`UPDATE sects SET vault_gu=$1 WHERE id=$2`, updated, sectID)
 
 	case "material":
-		var mats map[string]int
+		var mats map[string]int64
 		json.Unmarshal(vaultMatsJSON, &mats)
 		if mats[req.ItemID] < req.Quantity {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không đủ số lượng trong bảo khố"})
@@ -2096,7 +2096,7 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 	case "recipe":
 		var recipes []models.SectVaultRecipe
 		json.Unmarshal(vaultRecipesJSON, &recipes)
-		removed := 0
+		removed := int64(0)
 		newRecipes := make([]models.SectVaultRecipe, 0, len(recipes))
 		for _, r := range recipes {
 			if r.RecipeID == req.ItemID && removed < req.Quantity {
@@ -2155,8 +2155,8 @@ func AdminListSectMissions(c *gin.Context) {
 		Description        string     `json:"description"`
 		MissionType        string     `json:"mission_type"`
 		TargetID           string     `json:"target_id"`
-		TargetAmount       int        `json:"target_amount"`
-		RewardContribution int        `json:"reward_contribution"`
+		TargetAmount       int64      `json:"target_amount"`
+		RewardContribution int64      `json:"reward_contribution"`
 		RequiredMemberRank string     `json:"required_member_rank"`
 		ExpiresAt          *time.Time `json:"expires_at"`
 	}
@@ -2177,8 +2177,8 @@ type AdminCreateMissionRequest struct {
 	Description        string `json:"description"`
 	MissionType        string `json:"mission_type"` // GATHER, DONATE, COMBAT, REFINE
 	TargetID           string `json:"target_id"`
-	TargetAmount       int    `json:"target_amount"`
-	RewardContribution int    `json:"reward_contribution"`
+	TargetAmount       int64  `json:"target_amount"`
+	RewardContribution int64  `json:"reward_contribution"`
 	RequiredMemberRank string `json:"required_member_rank"`
 	DurationHours      int    `json:"duration_hours"` // 0 => default 24h, < 0 => no expiry
 }
@@ -2659,7 +2659,7 @@ func AdminGetAuditLogs(c *gin.Context) {
 type AdminShopItem struct {
 	ID        string `json:"id"`
 	Rank      int    `json:"rank"`
-	Price     int    `json:"price"`
+	Price     int64  `json:"price"`
 	Stock     int    `json:"stock"`
 	IsDefault bool   `json:"is_default"`
 	SortOrder int    `json:"sort_order"`
@@ -2704,7 +2704,7 @@ func AdminListShopItems(c *gin.Context) {
 type AdminShopItemRequest struct {
 	ID        string `json:"id"`
 	Rank      int    `json:"rank"`
-	Price     int    `json:"price"`
+	Price     int64  `json:"price"`
 	Stock     int    `json:"stock"`
 	IsDefault bool   `json:"is_default"`
 	SortOrder int    `json:"sort_order"`
@@ -2804,7 +2804,7 @@ func AdminDeleteShopItem(c *gin.Context) {
 
 type AdminArenaShopItem struct {
 	ID        string `json:"id"`
-	Price     int    `json:"price"`
+	Price     int64  `json:"price"`
 	Qty       int    `json:"qty"`
 	Stock     int    `json:"stock"`
 	IsDefault bool   `json:"is_default"`
@@ -2847,7 +2847,7 @@ func AdminListArenaShopItems(c *gin.Context) {
 
 type AdminArenaShopItemRequest struct {
 	ID        string `json:"id"`
-	Price     int    `json:"price"`
+	Price     int64  `json:"price"`
 	Qty       int    `json:"qty"`
 	Stock     int    `json:"stock"`
 	IsDefault bool   `json:"is_default"`
@@ -3114,7 +3114,7 @@ func AdminListGuItems(c *gin.Context) {
 		CombatRoles  json.RawMessage `json:"combat_roles"`
 		CombatTags   json.RawMessage `json:"combat_tags"`
 		SupportTags  json.RawMessage `json:"support_tags"`
-		BasePrice    int             `json:"base_price"`
+		BasePrice    int64           `json:"base_price"`
 		ImageURL     string          `json:"image_url"`
 	}
 
@@ -3151,7 +3151,7 @@ type AdminGuInput struct {
 	CombatRoles  []string        `json:"combat_roles"`
 	CombatTags   []string        `json:"combat_tags"`
 	SupportTags  []string        `json:"support_tags"`
-	BasePrice    int             `json:"base_price"`
+	BasePrice    int64           `json:"base_price"`
 	ImageURL     string          `json:"image_url"`
 }
 
@@ -3418,7 +3418,7 @@ func AdminListItemItems(c *gin.Context) {
 		Rank        int             `json:"rank"`
 		Effects     json.RawMessage `json:"effects"`
 		Description string          `json:"description"`
-		BasePrice   int             `json:"base_price"`
+		BasePrice   int64           `json:"base_price"`
 		ImageURL    string          `json:"image_url"`
 		Rarity      int             `json:"rarity"`
 	}
@@ -3440,7 +3440,7 @@ type AdminItemInput struct {
 	Rank        int             `json:"rank"`
 	Effects     json.RawMessage `json:"effects"`
 	Description string          `json:"description"`
-	BasePrice   int             `json:"base_price"`
+	BasePrice   int64           `json:"base_price"`
 	ImageURL    string          `json:"image_url"`
 	Rarity      int             `json:"rarity"`
 }

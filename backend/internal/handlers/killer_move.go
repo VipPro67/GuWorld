@@ -466,7 +466,7 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 
 	attainment := float64(attainmentLevel(player, core.Spec.Path))
 
-	conflictingMarks := 0
+	conflictingMarks := int64(0)
 	if player.DaoMarks != nil && !hasSovereignFetus && attainment < 4 {
 		for path, amount := range player.DaoMarks {
 			if !isPathInGu(core.Spec.Path, path) {
@@ -474,7 +474,7 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 			}
 		}
 		if attainment >= 3 {
-			conflictingMarks = int(float64(conflictingMarks) * 0.5)
+			conflictingMarks = int64(float64(conflictingMarks) * 0.5)
 		}
 	}
 

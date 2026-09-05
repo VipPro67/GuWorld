@@ -197,7 +197,7 @@ func schemaPlayerExtras() error {
 		referee_device TEXT NOT NULL DEFAULT '',
 		is_suspicious BOOLEAN NOT NULL DEFAULT false,
 		has_deposited BOOLEAN NOT NULL DEFAULT false,
-		deposit_amount_stones INTEGER NOT NULL DEFAULT 0,
+		deposit_amount_stones BIGINT NOT NULL DEFAULT 0,
 		milestone1_rewarded BOOLEAN NOT NULL DEFAULT false,
 		milestone2_rewarded BOOLEAN NOT NULL DEFAULT false,
 		milestone3_rewarded BOOLEAN NOT NULL DEFAULT false,
@@ -205,6 +205,15 @@ func schemaPlayerExtras() error {
 		milestone5_rewarded BOOLEAN NOT NULL DEFAULT false,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("referrals_deposit_stones_type_upgrade", `
+	DO $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referrals' AND column_name='deposit_amount_stones' AND data_type IN ('integer', 'int')) THEN
+			ALTER TABLE referrals ALTER COLUMN deposit_amount_stones TYPE BIGINT USING COALESCE(deposit_amount_stones, 0)::BIGINT;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 	if err := execSchema("referrals_milestone_cols", `

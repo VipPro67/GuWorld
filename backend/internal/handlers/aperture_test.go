@@ -4,10 +4,10 @@ import "testing"
 
 func TestApplyBulkReward(t *testing.T) {
 	cases := []struct {
-		base     int
+		base     int64
 		combined float64
 		bulk     float64
-		want     int
+		want     int64
 	}{
 		{base: 100, combined: 1.0, bulk: 1.0, want: 100},
 		{base: 100, combined: 1.0, bulk: 0.8, want: 80},

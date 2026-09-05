@@ -45,7 +45,7 @@ func LoadMonsterTemplate(tx *sql.Tx, id string) (models.MonsterTemplate, error) 
 	if len(daoMarksRaw) > 0 {
 		_ = json.Unmarshal(daoMarksRaw, &mon.DaoMarks)
 	} else {
-		mon.DaoMarks = make(map[string]int)
+		mon.DaoMarks = make(models.DaoMarksMap)
 	}
 
 	if len(pathMasteriesRaw) > 0 {

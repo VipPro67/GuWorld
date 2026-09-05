@@ -181,7 +181,7 @@ type DoTEffect struct {
 }
 
 // DaoMarks represents the dao marks of a combatant, grouped by path.
-type DaoMarks map[string]int
+type DaoMarks map[string]int64
 
 // CombatantAuto represents a stripped-down, deterministic entity in the combat grid.
 type CombatantAuto struct {

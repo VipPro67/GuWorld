@@ -264,11 +264,11 @@ func dropMaterials(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID) []string 
 		if qty <= 0 {
 			continue
 		}
-		if err := InventorySvc.RemoveItem(tx, loserID.String(), r.itemID, r.category, qty); err != nil {
+		if err := InventorySvc.RemoveItem(tx, loserID.String(), r.itemID, r.category, int64(qty)); err != nil {
 			continue
 		}
 		if winnerID != nil {
-			_ = InventorySvc.AddItem(tx, winnerID.String(), r.itemID, r.category, qty)
+			_ = InventorySvc.AddItem(tx, winnerID.String(), r.itemID, r.category, int64(qty))
 		}
 		name := r.itemID
 		if spec, ok := models.ItemRegistry[r.itemID]; ok && spec.Name != "" {

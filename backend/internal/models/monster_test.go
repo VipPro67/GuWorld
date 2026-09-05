@@ -133,7 +133,7 @@ func TestBuildCombatStateFromMonster_RankFilteringAndGuAssignment(t *testing.T) 
 				ID:       "mon_1",
 				Name:     "Sói Đá",
 				Type:     "Normal",
-				DaoMarks: map[string]int{"fire": 100},
+				DaoMarks: DaoMarksMap{"fire": 100},
 			},
 			rank:             1,
 			expectedDaoMarks: false,
@@ -145,7 +145,7 @@ func TestBuildCombatStateFromMonster_RankFilteringAndGuAssignment(t *testing.T) 
 				ID:       "mon_2",
 				Name:     "Điện Lang",
 				Type:     "Normal",
-				DaoMarks: map[string]int{"fire": 100},
+				DaoMarks: DaoMarksMap{"fire": 100},
 			},
 			rank:             6,
 			expectedDaoMarks: true,
@@ -157,7 +157,7 @@ func TestBuildCombatStateFromMonster_RankFilteringAndGuAssignment(t *testing.T) 
 				ID:       "mon_3",
 				Name:     "Thạch Hầu Vương",
 				Type:     "Elite",
-				DaoMarks: map[string]int{"fire": 100},
+				DaoMarks: DaoMarksMap{"fire": 100},
 			},
 			rank:             3,
 			expectedDaoMarks: false,
@@ -169,7 +169,7 @@ func TestBuildCombatStateFromMonster_RankFilteringAndGuAssignment(t *testing.T) 
 				ID:       "mon_4",
 				Name:     "Thạch Hầu Tiên",
 				Type:     "Elite",
-				DaoMarks: map[string]int{"fire": 500},
+				DaoMarks: DaoMarksMap{"fire": 500},
 			},
 			rank:             6,
 			expectedDaoMarks: true,
@@ -181,7 +181,7 @@ func TestBuildCombatStateFromMonster_RankFilteringAndGuAssignment(t *testing.T) 
 				ID:       "mon_5",
 				Name:     "Cuồng Lang Vương",
 				Type:     "Boss",
-				DaoMarks: map[string]int{"fire": 1000},
+				DaoMarks: DaoMarksMap{"fire": 1000},
 			},
 			rank:             6,
 			expectedDaoMarks: true,
@@ -231,7 +231,7 @@ func TestScaleAndRandomizeMonsterDaoMarks(t *testing.T) {
 	mon := MonsterTemplate{
 		ID:       "boss_test",
 		Type:     "Boss",
-		DaoMarks: map[string]int{"fire": 1000},
+		DaoMarks: DaoMarksMap{"fire": 1000},
 	}
 
 	dm6 := ScaleAndRandomizeMonsterDaoMarks(mon, 6, 1)

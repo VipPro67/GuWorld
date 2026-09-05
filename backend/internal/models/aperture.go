@@ -38,7 +38,7 @@ type DaoMark struct {
 	ID        string    `json:"id"`
 	PlayerID  string    `json:"player_id"`
 	Path      string    `json:"path"`
-	Amount    int       `json:"amount"`
+	Amount    int64     `json:"amount"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -55,7 +55,7 @@ type ApertureResourceNode struct {
 	X                       int        `json:"x"`
 	Y                       int        `json:"y"`
 	ProductionType          string     `json:"production_type"`
-	ProductionAmount        int        `json:"production_amount"`
+	ProductionAmount        int64      `json:"production_amount"`
 	ProductionIntervalHours int        `json:"production_interval_hours"`
 	LastCollectedAt         *time.Time `json:"last_collected_at"`
 	IsDestroyed             bool       `json:"is_destroyed"`

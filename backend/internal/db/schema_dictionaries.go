@@ -14,7 +14,7 @@ func schemaDictionaries() error {
 		rank INTEGER DEFAULT 1,
 		effects JSONB NOT NULL DEFAULT '{}',
 		description TEXT,
-		base_price INTEGER NOT NULL DEFAULT 0,
+		base_price BIGINT NOT NULL DEFAULT 0,
 		image_url TEXT NOT NULL DEFAULT '',
 		rarity INTEGER NOT NULL DEFAULT 0,
 		path VARCHAR(50) NOT NULL DEFAULT ''
@@ -25,6 +25,15 @@ func schemaDictionaries() error {
 	if err := execSchema("item_dictionary_path_upgrade", `
 	ALTER TABLE item_dictionary ADD COLUMN IF NOT EXISTS path VARCHAR(50) NOT NULL DEFAULT '';
 	`); err != nil {
+		return err
+	}
+	if err := execSchema("item_dictionary_price_upgrade", `
+	DO $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='item_dictionary' AND column_name='base_price' AND data_type IN ('integer', 'int')) THEN
+			ALTER TABLE item_dictionary ALTER COLUMN base_price TYPE BIGINT USING COALESCE(base_price, 0)::BIGINT;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 
@@ -69,10 +78,19 @@ func schemaDictionaries() error {
 		combat_roles JSONB DEFAULT '[]',
 		combat_tags JSONB DEFAULT '[]',
 		support_tags JSONB DEFAULT '[]',
-		base_price INTEGER NOT NULL DEFAULT 0,
+		base_price BIGINT NOT NULL DEFAULT 0,
 		image_url TEXT NOT NULL DEFAULT '',
 		PRIMARY KEY (id, rank)
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("gu_dictionary_price_upgrade", `
+	DO $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gu_dictionary' AND column_name='base_price' AND data_type IN ('integer', 'int')) THEN
+			ALTER TABLE gu_dictionary ALTER COLUMN base_price TYPE BIGINT USING COALESCE(base_price, 0)::BIGINT;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 
@@ -159,7 +177,7 @@ func schemaDictionaries() error {
 	CREATE TABLE IF NOT EXISTS caravan_shop_items (
 		id VARCHAR(50),
 		rank INTEGER NOT NULL DEFAULT 0,
-		price INTEGER NOT NULL,
+		price BIGINT NOT NULL,
 		stock INTEGER NOT NULL DEFAULT -1,
 		is_default BOOLEAN NOT NULL DEFAULT TRUE,
 		sort_order INTEGER NOT NULL DEFAULT 0,
@@ -174,6 +192,15 @@ func schemaDictionaries() error {
 	ALTER TABLE caravan_shop_items ADD COLUMN IF NOT EXISTS rank INTEGER NOT NULL DEFAULT 0;
 	ALTER TABLE caravan_shop_items DROP CONSTRAINT IF EXISTS caravan_shop_items_pkey;
 	ALTER TABLE caravan_shop_items ADD CONSTRAINT caravan_shop_items_pkey PRIMARY KEY (id, rank);`); err != nil {
+		return err
+	}
+	if err := execSchema("caravan_shop_items_price_upgrade", `
+	DO $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='caravan_shop_items' AND column_name='price' AND data_type IN ('integer', 'int')) THEN
+			ALTER TABLE caravan_shop_items ALTER COLUMN price TYPE BIGINT USING COALESCE(price, 0)::BIGINT;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 
@@ -194,13 +221,22 @@ func schemaDictionaries() error {
 	if err := execSchema("arena_shop_items", `
 	CREATE TABLE IF NOT EXISTS arena_shop_items (
 		id VARCHAR(50) PRIMARY KEY,
-		price INTEGER NOT NULL,
+		price BIGINT NOT NULL,
 		qty INTEGER NOT NULL DEFAULT 1,
 		stock INTEGER NOT NULL DEFAULT -1,
 		is_default BOOLEAN NOT NULL DEFAULT TRUE,
 		sort_order INTEGER NOT NULL DEFAULT 0,
 		updated_at TIMESTAMP DEFAULT NOW()
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("arena_shop_items_price_upgrade", `
+	DO $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='arena_shop_items' AND column_name='price' AND data_type IN ('integer', 'int')) THEN
+			ALTER TABLE arena_shop_items ALTER COLUMN price TYPE BIGINT USING COALESCE(price, 0)::BIGINT;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 

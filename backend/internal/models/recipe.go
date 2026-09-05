@@ -19,7 +19,7 @@ type RequiredGuItem struct {
 // ranked JSON form {"GU_ID": {"rank": N, "qty": Q}} and the legacy form
 // {"GU_ID": Q} (parsed as {rank: 0, qty: Q}).
 type RequiredGusMap map[string]RequiredGuItem
-type RequiredMaterialsMap map[string]int
+type RequiredMaterialsMap map[string]int64
 
 type RefiningRecipe struct {
 	ID                        string               `json:"id"`

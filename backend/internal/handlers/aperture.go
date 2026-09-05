@@ -28,7 +28,7 @@ type ResourceNodeTemplate struct {
 	CostImmortal      int
 	ProdType          string // "Material" | "Stones"
 	ProdKey           string // e.g. "moon_orchid_petal"
-	ProdAmount        int
+	ProdAmount        int64
 	ProdIntervalHours int
 	NodeCategory      string   // "RESOURCE" | "DEFENSE"
 	HPMax             int      // max HP for node (default 1000)
@@ -53,7 +53,7 @@ var ResourceNodeTemplates = map[string]ResourceNodeTemplate{
 		CostStones:        10,
 		ProdType:          "Material",
 		ProdAmount:        10,
-		ProdIntervalHours: 10,
+		ProdIntervalHours: 50,
 		ZoneType:          "khu_trong",
 	},
 	"BREEDING_ZONE": {
@@ -63,7 +63,7 @@ var ResourceNodeTemplates = map[string]ResourceNodeTemplate{
 		CostStones:        24,
 		ProdType:          "Material",
 		ProdAmount:        5,
-		ProdIntervalHours: 10,
+		ProdIntervalHours: 50,
 		ZoneType:          "khu_nuoi",
 	},
 	"MINING_ZONE": {
@@ -73,7 +73,7 @@ var ResourceNodeTemplates = map[string]ResourceNodeTemplate{
 		CostStones:        20,
 		ProdType:          "Material",
 		ProdAmount:        3,
-		ProdIntervalHours: 10,
+		ProdIntervalHours: 50,
 		ZoneType:          "khu_khai_thac",
 	},
 	// ---- DEFENSE STRUCTURES ----
@@ -466,7 +466,7 @@ func GetDaoMarks(c *gin.Context) {
 			ID:       playerID.String() + ":" + path,
 			PlayerID: playerID.String(),
 			Path:     path,
-			Amount:   amount,
+			Amount:   int64(amount),
 		})
 	}
 	sort.Slice(marks, func(i, j int) bool {
@@ -968,8 +968,8 @@ func CollectApertureResource(c *gin.Context) {
 
 // applyBulkReward applies a combined multiplier and an optional bulk discount to a base reward,
 // clamping the result to at least 1 whenever the base reward is positive.
-func applyBulkReward(baseReward int, combinedMultiplier float64, bulkMultiplier float64) int {
-	totalReward := int(float64(baseReward) * combinedMultiplier * bulkMultiplier)
+func applyBulkReward(baseReward int64, combinedMultiplier float64, bulkMultiplier float64) int64 {
+	totalReward := int64(float64(baseReward) * combinedMultiplier * bulkMultiplier)
 	if totalReward < 1 && baseReward > 0 {
 		totalReward = 1
 	}
@@ -1077,14 +1077,14 @@ func getPathDaoMultiplier(pathRaw string, nodeDaoMap map[string]int) float64 {
 			bestMarks = marks
 		}
 	}
-	return 1.0 + float64(bestMarks)*0.01
+	return 1.0 + float64(bestMarks)*0.0001
 }
 
 // computeApertureNodeReward computes the total reward for harvesting a single resource node,
 // applying all multipliers (Dao marks, conflicts, ecosystem, labor, suitability, area size)
 // and an optional bulkMultiplier (used by collect-all, e.g. 0.8 for a -20% bulk penalty).
 // It returns the reward amount and a suitability warning note (empty when production is optimal).
-func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.ApertureResourceNode, multiples int, areaSize int64, allNodes []models.ApertureResourceNode, bulkMultiplier float64) (int, string, error) {
+func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.ApertureResourceNode, multiples int, areaSize int64, allNodes []models.ApertureResourceNode, bulkMultiplier float64) (int64, string, error) {
 	// 1. Dao Marks multiplier
 	var nodeDaoJSON []byte
 	if err := tx.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&nodeDaoJSON); err != nil {
@@ -1154,7 +1154,9 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 
 	// 5. Node Level / Rank multiplier (medium scaling: +20% per level above 1)
 	nodeLevel := n.Level
-	if nodeLevel < 1 { nodeLevel = 1 }
+	if nodeLevel < 1 {
+		nodeLevel = 1
+	}
 	nodeLevelMultiplier := 1.0 + float64(nodeLevel-1)*0.20
 
 	// 6. Item Rank / Rarity divisor (scaled by standard rank power table P)
@@ -1168,13 +1170,17 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 					itemFoodPathMultiplier = getPathDaoMultiplier(item.Path, nodeDaoMap)
 				}
 				effectiveRank := item.Rank
-				if item.Rarity > effectiveRank { effectiveRank = item.Rarity }
-				if effectiveRank >= 1 { itemRankDivisor = getManaVal(effectiveRank) }
+				if item.Rarity > effectiveRank {
+					effectiveRank = item.Rarity
+				}
+				if effectiveRank >= 1 {
+					itemRankDivisor = getManaVal(effectiveRank)
+				}
 			}
 		}
 	}
 
-	baseReward := n.ProductionAmount * multiples
+	baseReward := n.ProductionAmount * int64(multiples)
 
 	// Apply area size production multiplier, node level, item rank divisor + optional bulk discount
 	areaMultiplier := 1.0 + float64(areaSize)/10000000.0
@@ -1216,7 +1222,9 @@ func CollectAllApertureResources(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Tiên Khiếu."})
 		return
 	}
-	if timeRate <= 0 { timeRate = 1.0 }
+	if timeRate <= 0 {
+		timeRate = 1.0
+	}
 
 	// 2. Load all active nodes
 	rows, err := tx.Query(`
@@ -1240,7 +1248,9 @@ func CollectAllApertureResources(c *gin.Context) {
 			&n.ProductionType, &n.ProductionAmount, &n.ProductionIntervalHours, &lastCol,
 			&n.IsDestroyed, &n.CreatedAt, &n.UpdatedAt,
 			&n.NodeCategory, &n.ProductionKey); err == nil {
-			if lastCol.Valid { n.LastCollectedAt = &lastCol.Time }
+			if lastCol.Valid {
+				n.LastCollectedAt = &lastCol.Time
+			}
 			allNodes = append(allNodes, n)
 		}
 	}
@@ -1250,12 +1260,12 @@ func CollectAllApertureResources(c *gin.Context) {
 	type collectResult struct {
 		NodeID string `json:"node_id"`
 		Name   string `json:"name"`
-		Reward int    `json:"reward"`
+		Reward int64  `json:"reward"`
 	}
 
 	var readyCount int
-	var totalStones int
-	materialTotals := make(map[string]int)
+	var totalStones int64
+	materialTotals := make(map[string]int64)
 	var results []collectResult
 
 	now := time.Now()
@@ -1266,7 +1276,9 @@ func CollectAllApertureResources(c *gin.Context) {
 		}
 
 		intervalHours := n.ProductionIntervalHours
-		if intervalHours <= 0 { intervalHours = 1 }
+		if intervalHours <= 0 {
+			intervalHours = 1
+		}
 		intervalDuration := time.Duration(float64(intervalHours*3600)/timeRate) * time.Second
 
 		var elapsed time.Duration
@@ -1283,7 +1295,9 @@ func CollectAllApertureResources(c *gin.Context) {
 
 		// Calculate reward with 0.8 bulk discount (-20%)
 		reward, _, err := computeApertureNodeReward(tx, playerID, n, multiples, areaSize, allNodes, 0.8)
-		if err != nil || reward <= 0 { continue }
+		if err != nil || reward <= 0 {
+			continue
+		}
 
 		if n.ProductionType == "Stones" {
 			totalStones += reward
@@ -2017,7 +2031,7 @@ func UpgradeApertureNode(c *gin.Context) {
 
 	if n.NodeCategory == "RESOURCE" {
 		// Resource nodes: +50% production per level
-		newProductionAmount = int(float64(n.ProductionAmount) * 1.5)
+		newProductionAmount = int64(float64(n.ProductionAmount) * 1.5)
 		if newProductionAmount == n.ProductionAmount {
 			newProductionAmount = n.ProductionAmount + 1
 		}

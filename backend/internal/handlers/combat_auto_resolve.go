@@ -266,8 +266,8 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 				}
 				if _, hasHeal := item.Effects["restore_hp"]; hasHeal {
 					remove := inv.Quantity
-					if remove > remaining {
-						remove = remaining
+					if remove > int64(remaining) {
+						remove = int64(remaining)
 					}
 					_, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, player.ID.String(), inv.ItemID, "consumables", "materials", "other")
 					if cat == "" {
@@ -276,7 +276,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 					if err := InventorySvc.RemoveItem(tx, player.ID.String(), inv.ItemID, cat, remove); err != nil {
 						logger.S.Warnf("Failed to remove consumable %s: %v", inv.ItemID, err)
 					}
-					remaining -= remove
+					remaining -= int(remove)
 				}
 			}
 		}
@@ -426,10 +426,10 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 							}
 							for _, memberID := range partyMembers {
 								if memberID == player.ID {
-									_ = InventorySvc.AddItem(tx, memberID.String(), matID, "materials", splitQty)
+									_ = InventorySvc.AddItem(tx, memberID.String(), matID, "materials", int64(splitQty))
 									lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Bạn nhận được %dx %s.", splitQty, itemName))
 								} else {
-									_ = InventorySvc.AddItem(tx, memberID.String(), matID, "materials", splitQty)
+									_ = InventorySvc.AddItem(tx, memberID.String(), matID, "materials", int64(splitQty))
 									var uname string
 									_ = tx.QueryRow("SELECT username FROM players WHERE id = $1", memberID).Scan(&uname)
 									lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Đồng đội %s nhận được %dx %s.", uname, splitQty, itemName))
@@ -446,7 +446,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 								player.PrimevalStones += int64(qty)
 								lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Nhận được %d Nguyên Thạch.", qty))
 							} else {
-								_ = InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", qty)
+								_ = InventorySvc.AddItem(tx, player.ID.String(), matID, "materials", int64(qty))
 								lootDetailLogs = append(lootDetailLogs, fmt.Sprintf("Nhận được %dx %s.", qty, itemName))
 							}
 						}
@@ -671,8 +671,8 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 					}
 					if _, hasHeal := item.Effects["restore_hp"]; hasHeal {
 						remove := inv.Quantity
-						if remove > remaining {
-							remove = remaining
+						if remove > int64(remaining) {
+							remove = int64(remaining)
 						}
 						_, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, simAlly.ID, inv.ItemID, "consumables", "materials", "other")
 						if cat == "" {
@@ -681,7 +681,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 						if err := InventorySvc.RemoveItem(tx, simAlly.ID, inv.ItemID, cat, remove); err != nil {
 							logger.S.Warnf("Failed to remove consumable %s for ally %s: %v", inv.ItemID, simAlly.ID, err)
 						}
-						remaining -= remove
+						remaining -= int(remove)
 					}
 				}
 			}
@@ -1023,7 +1023,7 @@ func computeGlobalGuDamageMultiplier(selectedGuIDs []string, resolveSpec func(st
 	return multiplier
 }
 
-func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlot, daoMarks map[string]int) simulator.SimAction {
+func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlot, daoMarks models.DaoMarksMap) simulator.SimAction {
 	act := simulator.SimAction{
 		ActionType: "KILLER_MOVE",
 		Name:       km.Name,
@@ -1035,7 +1035,7 @@ func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlo
 
 	// Strip the dao bonus baked in at creation so the engine re-applies it
 	// using the current dao marks (and reports it in the combat log).
-	if mult, ok := simulator.DaoMultiplier(daoMarks, act.Path); ok && mult > 1.0 {
+	if mult, ok := simulator.DaoMultiplier(simulator.DaoMarks(daoMarks), act.Path); ok && mult > 1.0 {
 		act.Damage /= mult
 		act.Defense /= mult
 	}

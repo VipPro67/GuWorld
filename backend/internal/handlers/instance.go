@@ -131,10 +131,10 @@ type InstanceRewardAttainment struct {
 }
 
 type InstanceReward struct {
-	Materials      map[string]int            `json:"materials"`
-	PrimevalStones int64                     `json:"primeval_stones"`
-	Attainment     *InstanceRewardAttainment `json:"attainment"`
-	DaoMarks       map[string]int            `json:"dao_marks"`
+	Materials      map[string]int64           `json:"materials"`
+	PrimevalStones int64                      `json:"primeval_stones"`
+	Attainment     *InstanceRewardAttainment  `json:"attainment"`
+	DaoMarks       map[string]int             `json:"dao_marks"`
 }
 
 type InstanceOption struct {
@@ -609,7 +609,7 @@ func ActionInstance(c *gin.Context) {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid material requirement template"})
 				return
 			}
-			requiredAmt := int(amtFloat)
+			requiredAmt := int64(amtFloat)
 			qty, err := InventorySvc.GetQuantity(tx, player.ID.String(), matID)
 			if err != nil || qty < requiredAmt {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không đủ nguyên liệu \"" + matID + "\" yêu cầu!"})

@@ -1252,7 +1252,7 @@ func GetPlayerInventoryGus(c *gin.Context) {
 }
 
 type RechargeWithStoneRequest struct {
-	Stones int `json:"stones" binding:"required,min=1"`
+	Stones int64 `json:"stones" binding:"required,min=1"`
 }
 
 // RechargeWithStones converts primeval stones into current mana for mortals
@@ -1725,7 +1725,7 @@ func computeFoodNutrition(foodID string, guRank int) int {
 	return int(math.Floor((foodMana / guMana) * 100.0))
 }
 
-func chooseFeedCandidate(player models.Player, targetGu models.GuInstance, foodOptions []string, targetInstanceID string, materialQty map[string]int) (foodID string, consumedGuIndex int) {
+func chooseFeedCandidate(player models.Player, targetGu models.GuInstance, foodOptions []string, targetInstanceID string, materialQty map[string]int64) (foodID string, consumedGuIndex int) {
 	for _, food := range foodOptions {
 		if food == "primeval_stone" {
 			cost := int64(math.Pow(2, float64(targetGu.Rank)))
@@ -1821,7 +1821,7 @@ func FeedGu(c *gin.Context) {
 		return
 	}
 
-	materialQty := make(map[string]int)
+	materialQty := make(map[string]int64)
 	for _, food := range foodOptions {
 		if food == "primeval_stone" || food == "immortal_stone" || strings.HasPrefix(food, "GU_") {
 			continue
@@ -2196,8 +2196,8 @@ func FeedAll(c *gin.Context) {
 	before := append(models.GuInventory(nil), player.GuInventory...)
 
 	fedCount := 0
-	foodConsumed := make(map[string]int)
-	materialQty := make(map[string]int)
+	foodConsumed := make(map[string]int64)
+	materialQty := make(map[string]int64)
 
 	getAvailableFood := func(specs models.GuDictionaryItem, targetRank int) string {
 		for _, food := range specs.FoodTypes {
@@ -2458,7 +2458,7 @@ func responseWithPlayer(c *gin.Context, status int, player models.Player, extra 
 
 // responseWithPlayerData sends a JSON response with pre-loaded player data,
 // avoiding redundant DB queries for MaterialsInventory and CompletedQuests.
-func responseWithPlayerData(c *gin.Context, status int, player models.Player, materials map[string]int, quests models.CompletedQuestsList, extra ...gin.H) {
+func responseWithPlayerData(c *gin.Context, status int, player models.Player, materials models.MaterialsInventory, quests models.CompletedQuestsList, extra ...gin.H) {
 	player.MaxMana = gamefx.EffectiveMaxMana(&player)
 	player.BaseHP = gamefx.EffectiveMaxHP(&player)
 	player.TimeSpeedMultiplier += models.EquippedTimeSpeedBonus(player.GuInventory)
@@ -2494,7 +2494,7 @@ func loadUnlockedRecipes(playerID string) models.UnlockedRecipesList {
 }
 
 // loadMaterialsInventory fetches the player's materials inventory as a flat id->quantity map.
-func loadMaterialsInventory(playerID string) map[string]int {
+func loadMaterialsInventory(playerID string) models.MaterialsInventory {
 	if InventorySvc == nil {
 		return nil
 	}
@@ -2502,7 +2502,7 @@ func loadMaterialsInventory(playerID string) map[string]int {
 	if err != nil {
 		return nil
 	}
-	mi := make(map[string]int)
+	mi := make(models.MaterialsInventory)
 	for _, it := range items {
 		mi[it.ItemID] += it.Quantity
 	}
@@ -2548,7 +2548,7 @@ type PassiveStatsResult struct {
 // GetPassiveStats computes a detailed breakdown of all passive stats, attributing
 // each contribution to its source (base cultivation, growth boosts, equipped Gu).
 func GetPassiveStats(player *models.Player) PassiveStatsResult {
-	strengthMarks := 0
+	strengthMarks := int64(0)
 	if player.DaoMarks != nil {
 		strengthMarks = player.DaoMarks["strength"]
 	}
@@ -2858,7 +2858,7 @@ func GetPassiveStatsHandler(c *gin.Context) {
 // DaoNganPathDetail describes the contribution of one dao path to the đạo ngân score.
 type DaoNganPathDetail struct {
 	Path       string  `json:"path"`       // e.g. "strength", "fire", "sword"
-	Amount     int     `json:"amount"`     // raw dao mark count
+	Amount     int64   `json:"amount"`     // raw dao mark count
 	Multiplier float64 `json:"multiplier"` // combat multiplier from this path
 	Power      float64 `json:"power"`      // effective power contribution
 }
@@ -2866,7 +2866,7 @@ type DaoNganPathDetail struct {
 // DaoNganResult is the full đạo ngân calculation response.
 type DaoNganResult struct {
 	TotalDaoNgan      float64             `json:"total_dao_ngan"`     // composite đạo ngân score
-	TotalMarks        int                 `json:"total_marks"`        // sum of all dao marks
+	TotalMarks        int64               `json:"total_marks"`        // sum of all dao marks
 	UniquePathCount   int                 `json:"unique_path_count"`  // number of paths with marks
 	AverageMultiplier float64             `json:"average_multiplier"` // mean multiplier across paths
 	MaxMultiplier     float64             `json:"max_multiplier"`     // highest single-path multiplier
@@ -2898,7 +2898,7 @@ func CalculateDaoNgan(daoMarks models.DaoMarksMap, daoBonus ...map[string]float6
 	}
 
 	var totalPower float64
-	var totalMarks int
+	var totalMarks int64
 	var maxMult float64
 	var maxPath string
 	var sumMult float64
@@ -3664,7 +3664,7 @@ func UseItems(c *gin.Context) {
 	initialLifespan := player.Lifespan
 	initialHumanQi := player.HumanQi
 	initialStones := player.PrimevalStones
-	initialSoul := 0
+	initialSoul := int64(0)
 	if player.DaoMarks != nil {
 		initialSoul = player.DaoMarks["soul"]
 	}
@@ -3795,7 +3795,7 @@ func UseItems(c *gin.Context) {
 	if diffStones := player.PrimevalStones - initialStones; diffStones > 0 {
 		statChanges = append(statChanges, fmt.Sprintf("+%d Nguyên Thạch", diffStones))
 	}
-	finalSoul := 0
+	finalSoul := int64(0)
 	if player.DaoMarks != nil {
 		finalSoul = player.DaoMarks["soul"]
 	}

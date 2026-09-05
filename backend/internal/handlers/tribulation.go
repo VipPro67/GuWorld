@@ -1023,7 +1023,7 @@ func CheckAndTriggerTribulations() error {
 					}
 					vRows.Close()
 
-					totalFoodProd := 0
+					totalFoodProd := int64(0)
 					for _, nd := range nodes {
 						if nd.NodeType == "FARMING_ZONE" || nd.NodeType == "BREEDING_ZONE" || nd.ZoneType == "khu_trong" || nd.ZoneType == "khu_nuoi" || nd.NodeType == "MOON_ORCHID_FIELD" || nd.NodeType == "GREEN_BAMBOO_GROVE" || nd.NodeType == "SWORD_LEAF_GRASS" || nd.NodeType == "SPIRIT_DEER_PASTURE" {
 							totalFoodProd += nd.ProductionAmount

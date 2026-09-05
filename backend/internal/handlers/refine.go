@@ -479,7 +479,7 @@ func RefineGu(c *gin.Context) {
 	}
 
 	// Refinement Dao Marks & Mastery
-	refinementMarks := 0
+	refinementMarks := int64(0)
 	refinementPoints := 0
 	if player.DaoMarks != nil {
 		refinementMarks = player.DaoMarks["refinement"]
@@ -523,7 +523,7 @@ func RefineGu(c *gin.Context) {
 	}
 
 	// Luck Bonus
-	luckMarks := 0
+	luckMarks := int64(0)
 	if player.DaoMarks != nil {
 		luckMarks = player.DaoMarks["luck"]
 	}
@@ -630,7 +630,7 @@ func RefineGu(c *gin.Context) {
 	// Consume Materials based on outcome
 	if outcome == OutcomeFailSafe {
 		for matID, reqQty := range recipe.RequiredMaterials {
-			deductQty := int(math.Ceil(float64(reqQty) * 0.5))
+			deductQty := int64(math.Ceil(float64(reqQty) * 0.5))
 			if deductQty > 0 {
 				_, cat, _ := InventorySvc.GetQuantityInAnyCategory(tx, player.ID.String(), matID, "materials", "consumables", "other")
 				if cat == "" {
@@ -979,7 +979,7 @@ func DeduceRecipe(c *gin.Context) {
 
 	realmMultiplier := 1.0 + float64(wisdomRealm)*3.0 + float64(refineRealm)*2.0 + float64(targetRealm)*1.0
 	
-	wisdomDaoMarks := 0
+	wisdomDaoMarks := int64(0)
 	if player.DaoMarks != nil {
 		wisdomDaoMarks = player.DaoMarks["wisdom"]
 	}
