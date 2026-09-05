@@ -82,13 +82,7 @@ func ValidateGuUsable(player *models.Player, gu *models.GuInstance, spec *models
 }
 
 func RemoveGuFromInventory(player *models.Player, instanceID string) {
-	newInventory := models.GuInventory{}
-	for _, gu := range player.GuInventory {
-		if gu.InstanceID != instanceID {
-			newInventory = append(newInventory, gu)
-		}
-	}
-	player.GuInventory = newInventory
+	player.GuInventory = models.RemoveGuByInstanceID(player.GuInventory, instanceID)
 	RebuildEquippedGus(player)
 }
 

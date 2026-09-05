@@ -218,26 +218,18 @@ func InitiateTrade(c *gin.Context) {
 
 	if !isCloseEnough {
 		// Verify sender has Connecting Heaven Gu
-		senderHasConnecting := false
-		for _, gu := range sender.GuInventory {
-			if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
-				senderHasConnecting = true
-				break
-			}
-		}
+		_, _, senderHasConnecting := models.FindFirstMatchingGu(sender.GuInventory, func(gu models.GuInstance) bool {
+			return gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD"
+		})
 		if !senderHasConnecting {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu cần có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) hoặc ở gần đối phương để mở kết nối giao dịch!"})
 			return
 		}
 
 		// Verify receiver has Connecting Heaven Gu
-		receiverHasConnecting := false
-		for _, gu := range receiver.GuInventory {
-			if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
-				receiverHasConnecting = true
-				break
-			}
-		}
+		_, _, receiverHasConnecting := models.FindFirstMatchingGu(receiver.GuInventory, func(gu models.GuInstance) bool {
+			return gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD"
+		})
 		if !receiverHasConnecting {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đối phương không sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để kết nối giao dịch từ xa!"})
 			return
@@ -505,15 +497,7 @@ func UpdateTradeOffer(c *gin.Context) {
 
 	// Validate Gu instances
 	for _, instID := range offer.Gus {
-		found := false
-		var targetGu models.GuInstance
-		for _, g := range player.GuInventory {
-			if g.InstanceID == instID {
-				found = true
-				targetGu = g
-				break
-			}
-		}
+		targetGu, _, found := models.FindGuByInstanceID(player.GuInventory, instID)
 		if !found {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không tìm thấy Cổ trùng trong túi: %s", instID)})
 			return
@@ -800,20 +784,12 @@ func ConfirmTrade(c *gin.Context) {
 
 		if !isCloseEnough {
 			// Double-check Connecting Heaven Gu on both sides
-			senderConnecting := false
-			for _, gu := range sender.GuInventory {
-				if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
-					senderConnecting = true
-					break
-				}
-			}
-			receiverConnecting := false
-			for _, gu := range receiver.GuInventory {
-				if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
-					receiverConnecting = true
-					break
-				}
-			}
+			_, _, senderConnecting := models.FindFirstMatchingGu(sender.GuInventory, func(gu models.GuInstance) bool {
+				return gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD"
+			})
+			_, _, receiverConnecting := models.FindFirstMatchingGu(receiver.GuInventory, func(gu models.GuInstance) bool {
+				return gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD"
+			})
 			if !senderConnecting || !receiverConnecting {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Giao dịch thất bại! Cần phải có Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) hoặc ở gần đối phương để duy trì kết nối."})
 				return
@@ -830,14 +806,8 @@ func ConfirmTrade(c *gin.Context) {
 
 		// Deduct sender Gu
 		for _, instID := range senderOffer.Gus {
-			idx := -1
-			for i, gu := range sender.GuInventory {
-				if gu.InstanceID == instID {
-					idx = i
-					break
-				}
-			}
-			if idx == -1 {
+			_, idx, found := models.FindGuByInstanceID(sender.GuInventory, instID)
+			if !found {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Người gửi thiếu Cổ trùng trang bị trong ưu đãi"})
 				return
 			}
@@ -891,14 +861,8 @@ func ConfirmTrade(c *gin.Context) {
 
 		// Deduct receiver Gu
 		for _, instID := range receiverOffer.Gus {
-			idx := -1
-			for i, gu := range receiver.GuInventory {
-				if gu.InstanceID == instID {
-					idx = i
-					break
-				}
-			}
-			if idx == -1 {
+			_, idx, found := models.FindGuByInstanceID(receiver.GuInventory, instID)
+			if !found {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Người nhận thiếu Cổ trùng trang bị trong ưu đãi"})
 				return
 			}

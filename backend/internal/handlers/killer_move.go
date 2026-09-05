@@ -462,13 +462,7 @@ func calculateKillerMoveStatsForPlayer(req CalculateKillerMoveRequest, player *m
 	successRateBonus := 0.0
 	channelTime := int(effectValue(coreActive, "channel_time", "channeling"))
 
-	hasSovereignFetus := false
-	for _, gu := range player.GuInventory {
-		if gu.GuID == "GU_SOVEREIGN_FETUS" && gu.Equipped && gu.Status == "ACTIVE" {
-			hasSovereignFetus = true
-			break
-		}
-	}
+	hasSovereignFetus := models.HasEquippedGu(player.GuInventory, "GU_SOVEREIGN_FETUS")
 
 	attainment := float64(attainmentLevel(player, core.Spec.Path))
 
@@ -666,30 +660,28 @@ func resolveKillerMoveGu(req CalculateKillerMoveRequest, player *models.Player, 
 }
 
 func findUsableOwnedGu(player *models.Player, instanceID string, tx *sql.Tx) (ownedGu, error) {
-	for _, inst := range player.GuInventory {
-		if inst.InstanceID != instanceID {
-			continue
-		}
-		if inst.Status != "ACTIVE" {
-			return ownedGu{}, fmt.Errorf("Cổ trùng không ở trạng thái ACTIVE")
-		}
-		if inst.Hunger <= 0 {
-			return ownedGu{}, fmt.Errorf("Cổ trùng đã cạn đói, không thể kích hoạt")
-		}
-		locked, err := isGuLockedForExchange(tx, player.ID, instanceID)
-		if err != nil {
-			return ownedGu{}, err
-		}
-		if locked {
-			return ownedGu{}, fmt.Errorf("Cổ trùng đang bị khóa trong giao dịch hoặc đấu giá")
-		}
-		spec, ok := models.GetGu(inst.GuID, inst.Rank)
-		if !ok {
-			return ownedGu{}, fmt.Errorf("không tìm thấy định nghĩa Cổ trùng %s", inst.GuID)
-		}
-		return ownedGu{Instance: inst, Spec: spec}, nil
+	inst, _, found := models.FindGuByInstanceID(player.GuInventory, instanceID)
+	if !found {
+		return ownedGu{}, fmt.Errorf("người chơi không sở hữu Cổ trùng này")
 	}
-	return ownedGu{}, fmt.Errorf("người chơi không sở hữu Cổ trùng này")
+	if inst.Status != "ACTIVE" {
+		return ownedGu{}, fmt.Errorf("Cổ trùng không ở trạng thái ACTIVE")
+	}
+	if inst.Hunger <= 0 {
+		return ownedGu{}, fmt.Errorf("Cổ trùng đã cạn đói, không thể kích hoạt")
+	}
+	locked, err := isGuLockedForExchange(tx, player.ID, instanceID)
+	if err != nil {
+		return ownedGu{}, err
+	}
+	if locked {
+		return ownedGu{}, fmt.Errorf("Cổ trùng đang bị khóa trong giao dịch hoặc đấu giá")
+	}
+	spec, ok := models.GetGu(inst.GuID, inst.Rank)
+	if !ok {
+		return ownedGu{}, fmt.Errorf("không tìm thấy định nghĩa Cổ trùng %s", inst.GuID)
+	}
+	return ownedGu{Instance: *inst, Spec: spec}, nil
 }
 
 func isGuLockedForExchange(tx *sql.Tx, playerID uuid.UUID, instanceID string) (bool, error) {

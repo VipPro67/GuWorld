@@ -148,18 +148,16 @@ func GetPlayerProfile(c *gin.Context) {
 
 	// 3. Compute Scouting Level of Viewer
 	scoutingLevel := float64(viewerRank)
-	for _, gu := range viewerGuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			switch gu.GuID {
-			case "GU_FLESH_EAR":
-				scoutingLevel += 1.0
-			case "GU_EARTH_COMMUNICATION":
-				scoutingLevel += 2.0
-			case "GU_CONNECTING_HEAVEN":
-				scoutingLevel += 3.0
-			case "GU_DIVINE_SENSE":
-				scoutingLevel += 4.0
-			}
+	for _, gu := range models.FilterEquippedActive(viewerGuInventory) {
+		switch gu.GuID {
+		case "GU_FLESH_EAR":
+			scoutingLevel += 1.0
+		case "GU_EARTH_COMMUNICATION":
+			scoutingLevel += 2.0
+		case "GU_CONNECTING_HEAVEN":
+			scoutingLevel += 3.0
+		case "GU_DIVINE_SENSE":
+			scoutingLevel += 4.0
 		}
 	}
 	for path, points := range viewerPathMasteries {
@@ -180,18 +178,16 @@ func GetPlayerProfile(c *gin.Context) {
 
 	// 4. Compute Disguise Level of Target
 	disguiseLevel := float64(target.Rank)
-	for _, gu := range target.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			switch gu.GuID {
-			case "GU_SHADOW", "GU_SHADOW_STEPS":
-				disguiseLevel += 1.0
-			case "GU_STEALTH_SCALES":
-				disguiseLevel += 2.0
-			case "GU_CHANGE_FORM":
-				disguiseLevel += 3.0
-			case "GU_ATTITUDE":
-				disguiseLevel += 8.0
-			}
+	for _, gu := range models.FilterEquippedActive(target.GuInventory) {
+		switch gu.GuID {
+		case "GU_SHADOW", "GU_SHADOW_STEPS":
+			disguiseLevel += 1.0
+		case "GU_STEALTH_SCALES":
+			disguiseLevel += 2.0
+		case "GU_CHANGE_FORM":
+			disguiseLevel += 3.0
+		case "GU_ATTITUDE":
+			disguiseLevel += 8.0
 		}
 	}
 	for path, points := range target.PathMasteries {
@@ -246,10 +242,8 @@ func GetPlayerProfile(c *gin.Context) {
 		resp.Statuses = target.Statuses.Active()
 
 		equipped := []string{}
-		for _, gu := range target.GuInventory {
-			if gu.Equipped && gu.Status == "ACTIVE" {
-				equipped = append(equipped, gu.GuID)
-			}
+		for _, gu := range models.FilterEquippedActive(target.GuInventory) {
+			equipped = append(equipped, gu.GuID)
 		}
 		resp.EquippedGus = equipped
 
@@ -275,10 +269,8 @@ func GetPlayerProfile(c *gin.Context) {
 		resp.PathMasteries = map[string]int{}
 
 		equipped := []string{}
-		for _, gu := range target.GuInventory {
-			if gu.Equipped && gu.Status == "ACTIVE" {
-				equipped = append(equipped, gu.GuID)
-			}
+		for _, gu := range models.FilterEquippedActive(target.GuInventory) {
+			equipped = append(equipped, gu.GuID)
 		}
 		if len(equipped) > 0 {
 			rand.Shuffle(len(equipped), func(i, j int) {
@@ -326,13 +318,7 @@ func GetPlayerProfile(c *gin.Context) {
 			// resp.ScoutingStatus = "Trinh sát thất bại! Đối phương ngụy trang tinh vi hoặc tu vi vượt trội."
 			resp.DominantPath = "Chưa rõ"
 		} else {
-			hasAttitudeGu := false
-			for _, gu := range target.GuInventory {
-				if gu.GuID == "GU_ATTITUDE" && gu.Equipped && gu.Status == "ACTIVE" {
-					hasAttitudeGu = true
-					break
-				}
-			}
+			hasAttitudeGu := models.HasEquippedGu(target.GuInventory, "GU_ATTITUDE")
 
 			if hasAttitudeGu {
 				// Perfect disguise via Attitude Gu

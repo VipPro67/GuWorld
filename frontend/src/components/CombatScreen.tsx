@@ -98,15 +98,18 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
   }, [combatSettings]);
 
   // Filter: only show Gu with combat-relevant active effects (mirrors backend hasCombatActiveEffects)
-  const isCombatGu = (gu: GuInstance): boolean => {
+  const isCombatGu = useCallback((gu: GuInstance): boolean => {
     const spec = guSpecFor(gu.gu_id, gu.rank);
     if (!spec?.effects?.active) return false;
     return true; // For now, consider all active effect Gu as combat-relevant
-  };
+  }, [guDictionary]);
 
-  const eligibleGus = (player.gu_inventory || []).filter((gu) => gu.status === "ACTIVE" && gu.equipped && isCombatGu(gu));
+  const eligibleGus = useMemo(
+    () => (player.gu_inventory || []).filter((gu) => gu.status === "ACTIVE" && gu.equipped && isCombatGu(gu)),
+    [player.gu_inventory, isCombatGu]
+  );
 
-  const computeInvestigation = (): number => {
+  const investigationLevel = useMemo(() => {
     let inv = 1.0;
     (player.gu_inventory || []).forEach((gu) => {
       if (gu.status !== "ACTIVE" || !gu.equipped) return;
@@ -116,9 +119,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       }
     });
     return inv;
-  };
-
-  const investigationLevel = useMemo(() => computeInvestigation(), [player.gu_inventory, guDictionary]);
+  }, [player.gu_inventory, guDictionary]);
 
   const enemyInfoRevealed = useMemo(() => {
     if (!enemy) return { showHP: false, showStats: false, showLootHints: false };
@@ -652,7 +653,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
       });
 
     for (const item of remaining) {
-      if (picked.length >= 7) break;
+      if (picked.length >= 15) break;
 
       picked.push(item.gu.instance_id);
     }
@@ -730,7 +731,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         // Populate recommended killer moves, then override the Gu selection
         // with the player's saved loadout (higher priority than recommendation).
         recommendLoadout();
-        setSelectedGuIds(instanceIds.slice(0, 7));
+        setSelectedGuIds(instanceIds.slice(0, 15));
         hasAutoRecommended.current = true;
         return;
       }

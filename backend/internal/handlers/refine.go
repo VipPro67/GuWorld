@@ -73,10 +73,7 @@ func determineRefineOutcome(roll, finalRate float64, refinementRealm, targetRank
 
 func collectRefineSupportBonus(player *models.Player) float64 {
 	totalBonus := 0.0
-	for _, gu := range player.GuInventory {
-		if !gu.Equipped || gu.Status != "ACTIVE" {
-			continue
-		}
+	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
 		spec, ok := models.GetGu(gu.GuID, gu.Rank)
 		if !ok || spec.Effects.Passive == nil {
 			continue
@@ -406,27 +403,21 @@ func RefineGu(c *gin.Context) {
 		}
 		seenInstances[instID] = true
 
-		found := false
-		for _, item := range player.GuInventory {
-			if item.InstanceID == instID {
-				if item.Status == "DEAD" {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot use a DEAD Gu bug for refining"})
-					return
-				}
-				// Count instances that satisfy the recipe requirement (equal or higher rank).
-				if reqGu, ok := recipe.RequiredGus[item.GuID]; ok && (reqGu.Rank == 0 || item.Rank >= reqGu.Rank) {
-					selectedGusCounts[item.GuID]++
-					if reqGu.Rank > 0 && item.Rank > reqGu.Rank {
-						materialQualityBonus += 0.02 * float64(item.Rank-reqGu.Rank)
-					}
-				}
-				found = true
-				break
-			}
-		}
+		item, _, found := models.FindGuByInstanceID(player.GuInventory, instID)
 		if !found {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Gu bug not found in your inventory: " + instID})
 			return
+		}
+		if item.Status == "DEAD" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot use a DEAD Gu bug for refining"})
+			return
+		}
+		// Count instances that satisfy the recipe requirement (equal or higher rank).
+		if reqGu, ok := recipe.RequiredGus[item.GuID]; ok && (reqGu.Rank == 0 || item.Rank >= reqGu.Rank) {
+			selectedGusCounts[item.GuID]++
+			if reqGu.Rank > 0 && item.Rank > reqGu.Rank {
+				materialQualityBonus += 0.02 * float64(item.Rank-reqGu.Rank)
+			}
 		}
 	}
 

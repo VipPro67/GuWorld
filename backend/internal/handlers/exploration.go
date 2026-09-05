@@ -605,13 +605,7 @@ func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTarge
 			player.ActiveCombat = &combatState
 			logMsg = fmt.Sprintf("Nguy hiểm! Đạo hữu chạm trán %s tại tọa độ (%d, %d)!", mon.Name, player.X, player.Y)
 
-			hasHeavenSecret := false
-			for _, gu := range player.GuInventory {
-				if gu.GuID == "GU_HEAVEN_SECRET" && gu.Equipped && gu.Status == "ACTIVE" {
-					hasHeavenSecret = true
-					break
-				}
-			}
+			_, _, hasHeavenSecret := models.FindEquippedGuByID(player.GuInventory, "GU_HEAVEN_SECRET")
 			if hasHeavenSecret && mon.LootTableID != "" {
 				lt, errLt := db.LoadLootTable(tx, mon.LootTableID)
 				if errLt == nil {

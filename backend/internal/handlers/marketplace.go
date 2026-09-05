@@ -152,13 +152,9 @@ func CreateListing(c *gin.Context) {
 		return
 	}
 
-	hasConnectingHeaven := false
-	for _, gu := range player.GuInventory {
-		if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
-			hasConnectingHeaven = true
-			break
-		}
-	}
+	_, _, hasConnectingHeaven := models.FindFirstMatchingGu(player.GuInventory, func(gu models.GuInstance) bool {
+		return gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD"
+	})
 	if !hasConnectingHeaven {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để truy cập Bảo Hoàng Thiên!"})
 		return
@@ -486,13 +482,9 @@ func PlaceBid(c *gin.Context) {
 		return
 	}
 
-	hasConnectingHeaven := false
-	for _, gu := range player.GuInventory {
-		if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
-			hasConnectingHeaven = true
-			break
-		}
-	}
+	_, _, hasConnectingHeaven := models.FindFirstMatchingGu(player.GuInventory, func(gu models.GuInstance) bool {
+		return gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD"
+	})
 	if !hasConnectingHeaven {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để truy cập Bảo Hoàng Thiên!"})
 		return
@@ -650,13 +642,9 @@ func BuyListing(c *gin.Context) {
 		return
 	}
 
-	hasConnectingHeaven := false
-	for _, gu := range buyer.GuInventory {
-		if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
-			hasConnectingHeaven = true
-			break
-		}
-	}
+	_, _, hasConnectingHeaven := models.FindFirstMatchingGu(buyer.GuInventory, func(gu models.GuInstance) bool {
+		return gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD"
+	})
 	if !hasConnectingHeaven {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để truy cập Bảo Hoàng Thiên!"})
 		return
@@ -732,13 +720,9 @@ func BuyListing(c *gin.Context) {
 	sellerBefore := append(models.GuInventory(nil), seller.GuInventory...)
 
 	if listingType == "TRADE" {
-		sellerConnectingHeaven := false
-		for _, gu := range seller.GuInventory {
-			if gu.GuID == "GU_CONNECTING_HEAVEN" {
-				sellerConnectingHeaven = true
-				break
-			}
-		}
+		_, _, sellerConnectingHeaven := models.FindFirstMatchingGu(seller.GuInventory, func(gu models.GuInstance) bool {
+			return gu.GuID == "GU_CONNECTING_HEAVEN"
+		})
 		if !sellerConnectingHeaven {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Người bán không còn sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để kết nối Bảo Hoàng Thiên, giao dịch thất bại!"})
 			return
@@ -1105,13 +1089,9 @@ func CancelListing(c *gin.Context) {
 		return
 	}
 
-	hasConnectingHeaven := false
-	for _, gu := range player.GuInventory {
-		if gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD" {
-			hasConnectingHeaven = true
-			break
-		}
-	}
+	_, _, hasConnectingHeaven := models.FindFirstMatchingGu(player.GuInventory, func(gu models.GuInstance) bool {
+		return gu.GuID == "GU_CONNECTING_HEAVEN" && gu.Status != "DEAD"
+	})
 	if !hasConnectingHeaven {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bạn cần sở hữu Cổ trùng Thông Thiên Cổ (GU_CONNECTING_HEAVEN) để truy cập Bảo Hoàng Thiên!"})
 		return

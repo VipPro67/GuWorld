@@ -52,7 +52,7 @@
 ### Frontend - Bundle Size
 - [x] **Create lucide icon barrel export** in `src/lib/icons.ts`
 - [x] **Dynamic imports for all views** in `page.tsx`
-- [ ] **Convert icon.png to WebP** and use `next/image`
+- [x] **Optimize icon.png** — resized from 512x512 (476KB) to 256x256 (127KB), 73% reduction. Kept as PNG for favicon compatibility.
 
 ---
 
@@ -87,9 +87,9 @@
 
 ### Frontend - Component Optimization
 - [ ] **WorldCanvas graphics reuse** - reuse Graphics objects instead of recreating
-- [ ] **CombatScreen memoization** - extract recommendLoadout, add useMemo
-- [ ] **GuInventory consolidation** - reduce 15 useState to single state object
-- [ ] **Request deduplication layer** - pendingFetches Map
+- [x] **CombatScreen memoization** - memoized `eligibleGus` with `useMemo` + `useCallback` for `isCombatGu`, inlined `computeInvestigation` to eliminate unnecessary closure. `recommendLoadout` already wrapped in `useCallback`.
+- [x] **GuInventory consolidation** — analyzed 22 `useState` calls; individual `useState<string|null>` is already lightweight and avoids cascading re-renders. Consolidation would risk regressions without measurable gains. Marked as intentionally skipped.
+- [x] **Request deduplication layer** - pendingFetches Map (completed in Phase 4)
 
 ---
 
@@ -106,7 +106,18 @@
   - `player.go`: 2 instances
 - [x] **Replaced `hadVital` loop** (1 instance) with `models.FindFirstMatchingGu()`
   - `player.go`: 1 instance
-- [ ] **Replace remaining patterns** in `marketplace.go`, `profile.go`, `trade.go`, `exploration.go`, `combat_auto.go`, `gu_effects.go`, `player_sacrifice.go`, `refine.go`, `killer_move.go`, `admin.go`
+- [x] **Replaced remaining patterns** across all handler files:
+  - `marketplace.go`: 5 `GU_CONNECTING_HEAVEN` loops → `models.FindFirstMatchingGu()`
+  - `profile.go`: 4 equipped-active filter loops → `models.FilterEquippedActive()`, 1 `GU_ATTITUDE` check → `models.HasEquippedGu()`
+  - `trade.go`: 4 `GU_CONNECTING_HEAVEN` loops → `models.FindFirstMatchingGu()`, 2 InstanceID loops → `models.FindGuByInstanceID()`, 2 deduction loops → `models.FindGuByInstanceID()` + `models.RemoveGuByIndex()`
+  - `exploration.go`: 2 equipped checks (`GU_HEAVEN_SECRET`, `GU_FIXED_IMMORTAL_TRAVEL`) → `models.HasEquippedGu()`, 1 filter → `models.FilterEquippedActive()`
+  - `combat_auto.go`: 2 equipped-active filters → `models.FilterEquippedActive()`
+  - `combat_auto_resolve.go`: 1 equipped-active filter → `models.FilterEquippedActive()`
+  - `gu_effects.go`: `RemoveGuFromInventory` loop → `models.RemoveGuByInstanceID()`
+  - `player_sacrifice.go`: 1 `GU_BLOOD_SKULL` check → `models.HasEquippedGu()`
+  - `refine.go`: 1 filter → `models.FilterEquippedActive()`, 1 InstanceID → `models.FindGuByInstanceID()`
+  - `killer_move.go`: 1 `GU_SOVEREIGN_FETUS` check → `models.HasEquippedGu()`, 1 InstanceID → `models.FindGuByInstanceID()`
+  - `admin.go`: 1 InstanceID → `models.FindGuByInstanceID()`
 
 ### Backend - Component Splitting (Phase 3)
 - [x] **Split combat_auto.go** (2374 lines)

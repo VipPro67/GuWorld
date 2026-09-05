@@ -541,19 +541,12 @@ func AdminRemovePlayerGu(c *gin.Context) {
 		return
 	}
 
-	found := false
-	var removedGuID string
-	for _, gu := range player.GuInventory {
-		if gu.InstanceID == instanceID {
-			found = true
-			removedGuID = gu.GuID
-			break
-		}
-	}
+	gu, _, found := models.FindGuByInstanceID(player.GuInventory, instanceID)
 	if !found {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy cổ trùng này"})
 		return
 	}
+	removedGuID := gu.GuID
 
 	if err := db.RemovePlayerGu(tx, instanceID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật cổ trùng"})

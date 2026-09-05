@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
@@ -47,13 +48,7 @@ func SacrificeNPC(c *gin.Context) {
 	}
 
 	// 1. Check if Huyết Sọ Cổ (GU_BLOOD_SKULL) is equipped and active
-	hasBloodSkull := false
-	for _, gu := range player.GuInventory {
-		if gu.GuID == "GU_BLOOD_SKULL" && gu.Equipped && gu.Status == "ACTIVE" {
-			hasBloodSkull = true
-			break
-		}
-	}
+	hasBloodSkull := models.HasEquippedGu(player.GuInventory, "GU_BLOOD_SKULL")
 	if !hasBloodSkull {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu cần phải trang bị Huyết Sọ Cổ (GU_BLOOD_SKULL) ở trạng thái ACTIVE để thực hiện hiến tế!"})
 		return
