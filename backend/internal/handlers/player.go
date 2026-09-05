@@ -1023,7 +1023,7 @@ func LoginPlayer(c *gin.Context) {
 	}
 	if err == nil && len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
-		if json.Unmarshal(activeCombatBytes, &cs) == nil {
+		if json.Unmarshal(activeCombatBytes, &cs) == nil && !cs.IsEmpty() {
 			player.ActiveCombat = &cs
 		}
 	}

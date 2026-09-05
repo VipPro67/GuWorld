@@ -581,7 +581,7 @@ func AttackMineSlot(c *gin.Context) {
 	attacker.ActiveCombat = StartCombat(tx, &pvpCombat, &attacker)
 
 	combatBytes, _ := json.Marshal(attacker.ActiveCombat)
-	_, err = tx.Exec("UPDATE players SET active_combat = $1, human_qi = LEAST(human_qi + 3, $2) WHERE id = $3", combatBytes, MaxHumanQi, authID)
+	_, err = tx.Exec("UPDATE players SET active_combat = $1, human_qi = LEAST(human_qi + 3, $2) WHERE id = $3", string(combatBytes), MaxHumanQi, authID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat state"})
 		return

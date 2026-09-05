@@ -266,7 +266,7 @@ func EngageTribulation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi tạo trạng thái chiến đấu"})
 		return
 	}
-	_, err = tx.Exec(`UPDATE players SET active_combat = $1, human_qi = LEAST(human_qi + 3, $2) WHERE id = $3`, combatBytes, MaxHumanQi, playerID)
+	_, err = tx.Exec(`UPDATE players SET active_combat = $1, human_qi = LEAST(human_qi + 3, $2) WHERE id = $3`, string(combatBytes), MaxHumanQi, playerID)
 	if err != nil {
 		logger.S.Errorf("StartTribulation: failed to save active combat for player=%s, event=%s, enemies=%d: %v", playerID, eventIDStr, len(state.Enemies), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lưu trạng thái chiến đấu"})

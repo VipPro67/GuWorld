@@ -1503,7 +1503,7 @@ func CombatAttack(c *gin.Context) {
 		for _, ally := range player.ActiveCombat.Allies {
 			allyUUID, errParse := uuid.Parse(ally.ID)
 			if errParse == nil && allyUUID != player.ID {
-				_, _ = tx.Exec("UPDATE players SET active_combat = $1 WHERE id = $2", combatBytes, allyUUID)
+				_, _ = tx.Exec("UPDATE players SET active_combat = $1 WHERE id = $2", string(combatBytes), allyUUID)
 			}
 		}
 	}

@@ -169,7 +169,7 @@ FROM players
 
 	if len(activeCombatBytes) > 0 && string(activeCombatBytes) != "null" {
 		var cs models.CombatState
-		if json.Unmarshal(activeCombatBytes, &cs) == nil {
+		if json.Unmarshal(activeCombatBytes, &cs) == nil && !cs.IsEmpty() {
 			if player.PartyID != nil {
 				var leaderID string
 				errL := q.QueryRow(`SELECT leader_id FROM parties WHERE id = $1`, player.PartyID).Scan(&leaderID)

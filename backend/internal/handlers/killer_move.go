@@ -382,7 +382,7 @@ func CastKillerMove(c *gin.Context) {
 	}
 
 	combatJSON, _ := json.Marshal(player.ActiveCombat)
-	_, err = tx.Exec(`UPDATE players SET current_mana = $1, hp = $2, active_combat = $3, path_masteries = $4 WHERE id = $5`, player.CurrentMana, player.HP, combatJSON, player.PathMasteries, player.ID)
+	_, err = tx.Exec(`UPDATE players SET current_mana = $1, hp = $2, active_combat = $3, path_masteries = $4 WHERE id = $5`, player.CurrentMana, player.HP, string(combatJSON), player.PathMasteries, player.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trạng thái chiến đấu"})
 		return

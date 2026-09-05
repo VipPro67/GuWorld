@@ -508,6 +508,14 @@ func (d DaoMarksMap) Value() (driver.Value, error) {
 	return json.Marshal(d)
 }
 
+// IsEmpty returns true if the CombatState has no active combat content.
+func (c *CombatState) IsEmpty() bool {
+	if c == nil {
+		return true
+	}
+	return c.EnemyName == "" && c.EnemyTemplateID == "" && len(c.Enemies) == 0 && c.TargetPlayerID == "" && c.TribulationEventID == "" && c.MineSlotID == 0
+}
+
 // Scan implements the sql.Scanner interface for CombatState pointer
 func (c *CombatState) Scan(value interface{}) error {
 	if value == nil {
@@ -516,17 +524,25 @@ func (c *CombatState) Scan(value interface{}) error {
 	}
 	b, ok := value.([]byte)
 	if !ok {
-		return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+		if s, ok := value.(string); ok {
+			b = []byte(s)
+		} else {
+			return fmt.Errorf("unsupported Scan, expected []byte, got %T", value)
+		}
 	}
 	return json.Unmarshal(b, c)
 }
 
 // Value implements the driver.Valuer interface for CombatState
 func (c *CombatState) Value() (driver.Value, error) {
-	if c == nil {
+	if c == nil || c.IsEmpty() {
 		return nil, nil
 	}
-	return json.Marshal(c)
+	b, err := json.Marshal(c)
+	if err != nil {
+		return nil, err
+	}
+	return string(b), nil
 }
 
 // Scan implements the sql.Scanner interface for PathMasteriesMap

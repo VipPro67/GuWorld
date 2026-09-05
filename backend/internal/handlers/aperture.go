@@ -955,6 +955,95 @@ func computeBulkRepairCost(hp, maxHP int, isDestroyed bool, feeMultiplier float6
 	return baseCost, totalCost
 }
 
+func parseItemPaths(pathRaw string) []string {
+	pathRaw = strings.TrimSpace(pathRaw)
+	if pathRaw == "" {
+		return nil
+	}
+	var paths []string
+	if strings.HasPrefix(pathRaw, "[") && strings.HasSuffix(pathRaw, "]") {
+		_ = json.Unmarshal([]byte(pathRaw), &paths)
+	}
+	if len(paths) == 0 {
+		paths = []string{pathRaw}
+	}
+	return paths
+}
+
+func normalizePathKey(path string) string {
+	p := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(path)), " path")
+	p = strings.TrimSuffix(p, "_path")
+	switch p {
+	case "vận", "vận đạo", "luck":
+		return "luck"
+	case "mộc", "mộc đạo", "wood":
+		return "wood"
+	case "hỏa", "hỏa đạo", "fire":
+		return "fire"
+	case "thủy", "thủy đạo", "water":
+		return "water"
+	case "kim", "kim đạo", "metal":
+		return "metal"
+	case "thổ", "thổ đạo", "earth":
+		return "earth"
+	case "lôi", "lôi đạo", "lightning":
+		return "lightning"
+	case "băng", "băng đạo", "ice":
+		return "ice"
+	case "phong", "phong đạo", "wind":
+		return "wind"
+	case "quang", "quang đạo", "light":
+		return "light"
+	case "ám", "ám đạo", "dark":
+		return "dark"
+	case "kiếm", "kiếm đạo", "sword":
+		return "sword"
+	case "đao", "đao đạo", "blade":
+		return "blade"
+	case "thực", "thực đạo", "food":
+		return "food"
+	case "biến hóa", "transformation":
+		return "transformation"
+	case "nô", "enslavement":
+		return "enslavement"
+	case "tín", "information":
+		return "information"
+	case "huyết", "blood":
+		return "blood"
+	case "độc", "poison":
+		return "poison"
+	case "nhân", "human":
+		return "human"
+	case "mộng", "dream":
+		return "dream"
+	case "huyễn", "phantom":
+		return "phantom"
+	case "sát", "killing":
+		return "killing"
+	case "lực", "strength":
+		return "strength"
+	case "trí", "wisdom":
+		return "wisdom"
+	default:
+		return p
+	}
+}
+
+func getPathDaoMultiplier(pathRaw string, nodeDaoMap map[string]int) float64 {
+	paths := parseItemPaths(pathRaw)
+	if len(paths) == 0 {
+		return 1.0
+	}
+	bestMarks := 0
+	for _, p := range paths {
+		key := normalizePathKey(p)
+		if marks, ok := nodeDaoMap[key]; ok && marks > bestMarks {
+			bestMarks = marks
+		}
+	}
+	return 1.0 + float64(bestMarks)*0.01
+}
+
 // computeApertureNodeReward computes the total reward for harvesting a single resource node,
 // applying all multipliers (Dao marks, conflicts, ecosystem, labor, suitability, area size)
 // and an optional bulkMultiplier (used by collect-all, e.g. 0.8 for a -20% bulk penalty).
@@ -969,8 +1058,7 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 	if len(nodeDaoJSON) > 0 {
 		_ = json.Unmarshal(nodeDaoJSON, &nodeDaoMap)
 	}
-	daoMarks := nodeDaoMap[strings.TrimSuffix(strings.ToLower(n.Path), " path")]
-	daoMultiplier := 1.0 + float64(daoMarks)*0.01
+	daoMultiplier := getPathDaoMultiplier(n.Path, nodeDaoMap)
 
 	// Check if player has Tiên Thai Chí Tôn (ignore Dao conflicts)
 	hasSovereignFetus := false
@@ -1092,8 +1180,7 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 			if item, exists := models.ItemRegistry[prodKey]; exists {
 				if item.Path != "" {
 					itemFoodPath = item.Path
-					itemDaoMarks := nodeDaoMap[strings.TrimSuffix(strings.ToLower(itemFoodPath), " path")]
-					itemFoodPathMultiplier = 1.0 + float64(itemDaoMarks)*0.01
+					itemFoodPathMultiplier = getPathDaoMultiplier(itemFoodPath, nodeDaoMap)
 				}
 				if item.Rank >= 1 {
 					itemRankDivisor = getManaVal(item.Rank)

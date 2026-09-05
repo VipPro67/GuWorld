@@ -350,17 +350,20 @@ export const ImmortalApertureView: React.FC = () => {
 
   useEffect(() => {
     fetchAperture();
+    fetchDaoMarks();
     fetchActiveTribulation();
   }, []);
 
   useEffect(() => {
     if (activeTab === "map") {
       fetchApertureNodes();
+      fetchDaoMarks();
     } else if (activeTab === "dao") {
       fetchDaoMarks();
     } else if (activeTab === "ecosystem" || activeTab === "variant_humans") {
       fetchVariantHumans();
       fetchApertureNodes();
+      fetchDaoMarks();
     }
   }, [activeTab]);
 
@@ -1372,15 +1375,79 @@ return (
                             const starvingHerb = isHerb && pCount === 0;
                             const starvingCarn = isCarn && hCount === 0;
 
-                            const normNodePath = (selectedNode.path || "").toLowerCase().replace(/ path$/i, "").trim();
-                            const pathDaoMarks = daoMarks.find(d => (d.path || "").toLowerCase().replace(/ path$/i, "").trim() === normNodePath)?.amount || 0;
+                             const parseItemPaths = (pathVal: any): string[] => {
+                              if (!pathVal) return [];
+                              if (Array.isArray(pathVal)) return pathVal.map(p => String(p).trim());
+                              if (typeof pathVal === "string") {
+                                const s = pathVal.trim();
+                                if (s.startsWith("[") && s.endsWith("]")) {
+                                  try {
+                                    const arr = JSON.parse(s);
+                                    if (Array.isArray(arr)) return arr.map(p => String(p).trim());
+                                  } catch (e) {}
+                                }
+                                const cleaned = s.replace(/[\[\]"]/g, "").trim();
+                                return cleaned ? [cleaned] : [];
+                              }
+                              return [];
+                            };
+
+                            const getDaoMarkAmount = (pathStr: string | undefined): number => {
+                              if (!pathStr) return 0;
+                              const paths = parseItemPaths(pathStr);
+                              if (!paths || paths.length === 0) return 0;
+
+                              let maxMarks = 0;
+                              for (const p of paths) {
+                                const target = p.toLowerCase().replace(/ path$/i, "").replace(/_path$/i, "").trim();
+                                for (const d of daoMarks) {
+                                  if (!d || !d.path) continue;
+                                  const dp = d.path.toLowerCase().replace(/ path$/i, "").replace(/_path$/i, "").trim();
+                                  if (dp === target && d.amount > maxMarks) {
+                                    maxMarks = d.amount;
+                                  }
+                                }
+                                const vietToKey: Record<string, string> = {
+                                  "vận": "luck", "vận đạo": "luck",
+                                  "mộc": "wood", "mộc đạo": "wood",
+                                  "hỏa": "fire", "hỏa đạo": "fire",
+                                  "thủy": "water", "thủy đạo": "water",
+                                  "kim": "metal", "kim đạo": "metal",
+                                  "thổ": "earth", "thổ đạo": "earth",
+                                  "lôi": "lightning", "lôi đạo": "lightning",
+                                  "băng": "ice", "băng đạo": "ice",
+                                  "phong": "wind", "phong đạo": "wind",
+                                  "quang": "light", "quang đạo": "light",
+                                  "ám": "dark", "ám đạo": "dark",
+                                  "kiếm": "sword", "kiếm đạo": "sword",
+                                  "đao": "blade", "đao đạo": "blade",
+                                  "thực": "food", "thực đạo": "food",
+                                  "biến hóa": "transformation", "nô": "enslavement",
+                                  "tín": "information", "huyết": "blood", "độc": "poison",
+                                  "nhân": "human", "mộng": "dream", "huyễn": "phantom",
+                                  "sát": "killing", "lực": "strength", "trí": "wisdom",
+                                };
+                                const mappedKey = vietToKey[target];
+                                if (mappedKey) {
+                                  for (const d of daoMarks) {
+                                    if (!d || !d.path) continue;
+                                    const dp = d.path.toLowerCase().replace(/ path$/i, "").replace(/_path$/i, "").trim();
+                                    if (dp === mappedKey && d.amount > maxMarks) {
+                                      maxMarks = d.amount;
+                                    }
+                                  }
+                                }
+                              }
+                              return maxMarks;
+                            };
 
                             const hasSovereignFetus = (player?.gu_inventory || []).some(
                               (g: any) => (g.gu_id || g.id) === "GU_SOVEREIGN_FETUS" && g.equipped
                             );
 
                             const levelMultiplier = 1.0 + (Math.max(1, selectedNode.level) - 1) * 0.20;
-                            const daoMultiplier = 1.0 + pathDaoMarks * 0.01;
+                            const nodePathMarks = getDaoMarkAmount(selectedNode.path);
+                            const daoMultiplier = 1.0 + nodePathMarks * 0.01;
                             const conflictMult = (isConflicting && !hasSovereignFetus) ? 0.5 : 1.0;
                             let ecoMult = 1.0;
                             if (overgrazed) ecoMult = 0.5;
@@ -1413,6 +1480,8 @@ return (
                             let itemFoodPathMultiplier = 1.0;
                             let itemSpecName = "";
                             let itemSpecRank = 1;
+                            let itemPathName = "";
+                            let itemPathMarks = 0;
 
                             if (selectedNode.production_type === "Material") {
                               const prodKey = selectedNode.production_key;
@@ -1425,9 +1494,9 @@ return (
                                   itemRankDivisor = getManaVal(r);
                                 }
                                 if (item.path) {
-                                  const normItemPath = item.path.toLowerCase().replace(/ path$/i, "").trim();
-                                  const itemMarks = daoMarks.find(d => (d.path || "").toLowerCase().replace(/ path$/i, "").trim() === normItemPath)?.amount || 0;
-                                  itemFoodPathMultiplier = 1.0 + itemMarks * 0.01;
+                                  itemPathName = item.path;
+                                  itemPathMarks = getDaoMarkAmount(item.path);
+                                  itemFoodPathMultiplier = 1.0 + itemPathMarks * 0.01;
                                 }
                               }
                             }
@@ -1437,6 +1506,10 @@ return (
                             const expectedYield = baseProd > 0 ? Math.max(1, Math.floor(baseProd * combinedMultiplier)) : 0;
 
                             const efficiencyPercent = Math.round(combinedMultiplier * 100);
+
+                            // Determine displayed path for Dao Marks row
+                            const displayPath = (itemPathName && (itemPathMarks > 0 || !nodePathMarks)) ? itemPathName : (selectedNode.path || "");
+                            const displayMarks = (itemPathName && (itemPathMarks > 0 || !nodePathMarks)) ? itemPathMarks : nodePathMarks;
 
                             return (
                               <div className="p-3 bg-slate-950/80 rounded-xl border border-amber-500/30 text-xs space-y-2.5 shadow-md">
@@ -1481,12 +1554,27 @@ return (
                                   {/* 1. Dao Marks Bonus */}
                                   <div className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-850">
                                     <span className="text-slate-300 flex items-center gap-1.5">
-                                      <span>☯️</span> Đạo ngân bổ trợ ({translatePath(selectedNode.path)}):
+                                      <span>☯️</span> Đạo ngân bổ trợ ({translatePath(displayPath)}):
                                     </span>
-                                    <span className={pathDaoMarks > 0 ? "text-emerald-400 font-bold" : "text-slate-400"}>
-                                      {pathDaoMarks} vết (+{(pathDaoMarks * 1.0).toFixed(1)}%)
+                                    <span className={displayMarks > 0 ? "text-emerald-400 font-bold" : "text-slate-400"}>
+                                      {displayMarks} vết (+{((displayMarks * 1.0) / itemRankDivisor).toFixed(1)}% thực nhận)
+                                      {itemRankDivisor > 1 && (
+                                        <span className="text-[10px] text-amber-400 font-normal ml-1">(chia Rank /{itemRankDivisor})</span>
+                                      )}
                                     </span>
                                   </div>
+
+                                  {/* Secondary Node Path Dao Marks if different from item path */}
+                                  {itemPathName && selectedNode.path && itemPathName !== selectedNode.path && nodePathMarks > 0 && (
+                                    <div className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-850 text-[10px]">
+                                      <span className="text-slate-400 flex items-center gap-1.5">
+                                        <span>☯️</span> Đạo ngân mỏ ({translatePath(selectedNode.path)}):
+                                      </span>
+                                      <span className="text-emerald-400 font-bold">
+                                        {nodePathMarks} vết (+{(nodePathMarks * 1.0).toFixed(1)}%)
+                                      </span>
+                                    </div>
+                                  )}
 
                                   {/* 2. Node Level Bonus */}
                                   <div className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-850">

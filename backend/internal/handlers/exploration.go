@@ -918,12 +918,13 @@ func MovePlayer(c *gin.Context) {
 	}
 	var combatJSON any
 	if player.ActiveCombat != nil {
-		combatJSON, err = json.Marshal(player.ActiveCombat)
+		b, err := json.Marshal(player.ActiveCombat)
 		if err != nil {
 			logger.S.Errorf("MovePlayer: failed to marshal active combat for player=%s: %v", player.ID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 			return
 		}
+		combatJSON = string(b)
 	}
 	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, combatJSON, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
 	if err != nil {
@@ -1155,12 +1156,13 @@ func MovePlayerPath(c *gin.Context) {
 	}
 	var combatJSON any
 	if player.ActiveCombat != nil {
-		combatJSON, err = json.Marshal(player.ActiveCombat)
+		b, err := json.Marshal(player.ActiveCombat)
 		if err != nil {
 			logger.S.Errorf("MovePlayerPath: failed to marshal active combat for player=%s: %v", player.ID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
 			return
 		}
+		combatJSON = string(b)
 	}
 	_, err = tx.Exec(`
 		UPDATE players
