@@ -881,7 +881,7 @@ func DonateMaterials(c *gin.Context) {
 
 	// Add to sect vault
 	var vaultMaterialsRaw json.RawMessage
-	err = tx.QueryRow(`SELECT vault_materials FROM sects WHERE id = $1`, m.SectID).Scan(&vaultMaterialsRaw)
+	err = tx.QueryRow(`SELECT vault_materials FROM sects WHERE id = $1 FOR UPDATE`, m.SectID).Scan(&vaultMaterialsRaw)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sect vault"})
 		return
@@ -1013,7 +1013,7 @@ func DonateGu(c *gin.Context) {
 
 	// Add to sect vault
 	var vaultGuRaw json.RawMessage
-	err = tx.QueryRow(`SELECT vault_gu FROM sects WHERE id = $1`, m.SectID).Scan(&vaultGuRaw)
+	err = tx.QueryRow(`SELECT vault_gu FROM sects WHERE id = $1 FOR UPDATE`, m.SectID).Scan(&vaultGuRaw)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sect vault"})
 		return
@@ -1185,7 +1185,7 @@ func DonateRecipe(c *gin.Context) {
 
 	// Add recipe to sect vault, keeping the higher completion rate.
 	var vaultRecipes []models.SectVaultRecipe
-	_ = tx.QueryRow(`SELECT vault_recipes FROM sects WHERE id = $1`, m.SectID).Scan(&vaultRecipes)
+	_ = tx.QueryRow(`SELECT vault_recipes FROM sects WHERE id = $1 FOR UPDATE`, m.SectID).Scan(&vaultRecipes)
 	if vaultRecipes == nil {
 		vaultRecipes = []models.SectVaultRecipe{}
 	}
@@ -1300,7 +1300,7 @@ func DonateBulk(c *gin.Context) {
 	if len(req.Materials) > 0 {
 		// Fetch sect vault materials
 		var vaultMaterialsRaw json.RawMessage
-		err = tx.QueryRow(`SELECT vault_materials FROM sects WHERE id = $1`, m.SectID).Scan(&vaultMaterialsRaw)
+		err = tx.QueryRow(`SELECT vault_materials FROM sects WHERE id = $1 FOR UPDATE`, m.SectID).Scan(&vaultMaterialsRaw)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sect vault materials"})
 			return
@@ -1420,7 +1420,7 @@ func DonateBulk(c *gin.Context) {
 	if len(req.Gus) > 0 {
 		// Fetch sect vault Gu
 		var vaultGuRaw json.RawMessage
-		err = tx.QueryRow(`SELECT vault_gu FROM sects WHERE id = $1`, m.SectID).Scan(&vaultGuRaw)
+		err = tx.QueryRow(`SELECT vault_gu FROM sects WHERE id = $1 FOR UPDATE`, m.SectID).Scan(&vaultGuRaw)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sect vault gu"})
 			return
@@ -1523,7 +1523,7 @@ func DonateBulk(c *gin.Context) {
 	if len(req.Recipes) > 0 {
 		var vaultRecipes []models.SectVaultRecipe
 		var vaultRecipesRaw json.RawMessage
-		err = tx.QueryRow(`SELECT vault_recipes FROM sects WHERE id = $1`, m.SectID).Scan(&vaultRecipesRaw)
+		err = tx.QueryRow(`SELECT vault_recipes FROM sects WHERE id = $1 FOR UPDATE`, m.SectID).Scan(&vaultRecipesRaw)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch sect vault recipes"})
 			return
@@ -1708,6 +1708,7 @@ func BuyFromSectVault(c *gin.Context) {
 		SELECT id, vault_gu, vault_materials, vault_recipes
 		FROM sects
 		WHERE id = $1
+		FOR UPDATE
 	`, m.SectID).Scan(&s.ID, &s.VaultGu, &s.VaultMaterials, &s.VaultRecipes)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details"})
@@ -2162,7 +2163,7 @@ func CompleteSectMission(c *gin.Context) {
 		err = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&memberForVault.SectID)
 		if err == nil {
 			var vaultMaterialsRaw json.RawMessage
-			err = tx.QueryRow(`SELECT vault_materials FROM sects WHERE id = $1`, memberForVault.SectID).Scan(&vaultMaterialsRaw)
+			err = tx.QueryRow(`SELECT vault_materials FROM sects WHERE id = $1 FOR UPDATE`, memberForVault.SectID).Scan(&vaultMaterialsRaw)
 			if err == nil {
 				vaultMats := make(map[string]int64)
 				if len(vaultMaterialsRaw) > 0 {
@@ -2209,7 +2210,7 @@ func CompleteSectMission(c *gin.Context) {
 		err = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&memberForVault.SectID)
 		if err == nil {
 			var vaultGuRaw json.RawMessage
-			err = tx.QueryRow(`SELECT vault_gu FROM sects WHERE id = $1`, memberForVault.SectID).Scan(&vaultGuRaw)
+			err = tx.QueryRow(`SELECT vault_gu FROM sects WHERE id = $1 FOR UPDATE`, memberForVault.SectID).Scan(&vaultGuRaw)
 			if err == nil {
 				var vaultGus []SectVaultGuItem
 				if len(vaultGuRaw) > 0 {
@@ -2834,7 +2835,7 @@ func CreateCustomMission(c *gin.Context) {
 
 	// Check if sect has enough funds
 	var currentFunds int64
-	err = tx.QueryRow(`SELECT funds FROM sects WHERE id = $1`, callerSectID).Scan(&currentFunds)
+	err = tx.QueryRow(`SELECT funds FROM sects WHERE id = $1 FOR UPDATE`, callerSectID).Scan(&currentFunds)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
@@ -3361,7 +3362,7 @@ func UpgradeSect(c *gin.Context) {
 	// Fetch level and funds
 	var level int
 	var funds int64
-	err = tx.QueryRow(`SELECT level, funds FROM sects WHERE id = $1`, sectID).Scan(&level, &funds)
+	err = tx.QueryRow(`SELECT level, funds FROM sects WHERE id = $1 FOR UPDATE`, sectID).Scan(&level, &funds)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sect details"})
 		return
