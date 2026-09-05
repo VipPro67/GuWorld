@@ -463,6 +463,12 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
               <span className="font-mono text-emerald-400">+{(breakdown.env_bonus * 100).toFixed(1)}%</span>
             </div>
           )}
+          {breakdown.status_penalty && breakdown.status_penalty > 0 ? (
+            <div className="flex justify-between items-center text-rose-400">
+              <span className="flex items-center gap-1">⚡ Phản phệ / Mệt mỏi:</span>
+              <span className="font-mono text-rose-400">-{(breakdown.status_penalty * 100).toFixed(1)}%</span>
+            </div>
+          ) : null}
           {breakdown.completion_penalty < 1.0 && (
             <div className="flex justify-between items-center text-rose-400">
               <span className="flex items-center gap-1">⚠️ Chiết khấu tàn phương:</span>

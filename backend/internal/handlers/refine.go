@@ -48,6 +48,7 @@ type RefineRateBreakdown struct {
 	TargetPathMastery  float64 `json:"target_path_mastery"`
 	LuckBonus          float64 `json:"luck_bonus"`
 	SupportBonus       float64 `json:"support_bonus"`
+	StatusPenalty      float64 `json:"status_penalty"`
 	EnvBonus           float64 `json:"env_bonus"`
 	FinalRate          float64 `json:"final_rate"`
 	RefinementRealm    int     `json:"refinement_realm"`
@@ -554,8 +555,16 @@ func RefineGu(c *gin.Context) {
 		}
 	}
 
-	// Support Bonus
-	supportBonus := collectRefineSupportBonus(&player) + fx.RefineBonus
+	// Support Bonus & Status/Race Refine Effects
+	supportGuBonus := collectRefineSupportBonus(&player)
+	posRefineBonus := 0.0
+	negRefinePenalty := 0.0
+	if fx.RefineBonus > 0 {
+		posRefineBonus = fx.RefineBonus
+	} else if fx.RefineBonus < 0 {
+		negRefinePenalty = -fx.RefineBonus
+	}
+	supportBonus := supportGuBonus + posRefineBonus
 
 	// Apply Immortal Penalty to flat bonuses for Rank 6+
 	immortalPenalty := 1.0
@@ -577,17 +586,25 @@ func RefineGu(c *gin.Context) {
 
 	// Final Rate Calculation
 	baseRate := recipe.SuccessRate
-	sumBonus := refinementDaoBonus + refinementMasteryBonus + targetPathMastery + luckBonus + supportBonus + envBonus + materialQualityBonus
+	sumPositiveBonus := refinementDaoBonus + refinementMasteryBonus + targetPathMastery + luckBonus + supportBonus + envBonus + materialQualityBonus
 	
-	finalSuccessRate := baseRate + sumBonus
+	rawPositiveRate := baseRate + sumPositiveBonus
 	completionPenalty := 1.0
 	if isForcedRefine {
 		completionPenalty = unlockedRate / 100.0
-		finalSuccessRate = finalSuccessRate * completionPenalty
+		rawPositiveRate = rawPositiveRate * completionPenalty
 	}
 	
-	if finalSuccessRate > 1.0 {
-		finalSuccessRate = 1.0
+	// Cap positive rate at 1.0 (100%) BEFORE applying negative debuff penalties
+	cappedPositiveRate := rawPositiveRate
+	if cappedPositiveRate > 1.0 {
+		cappedPositiveRate = 1.0
+	}
+
+	// Subtract debuff penalties (e.g., refine_backfire, refine_fatigue) after capping
+	finalSuccessRate := cappedPositiveRate - negRefinePenalty
+	if finalSuccessRate < 0.0 {
+		finalSuccessRate = 0.0
 	}
 	if guRequirementsNotMet {
 		finalSuccessRate = 0.0
@@ -606,6 +623,7 @@ func RefineGu(c *gin.Context) {
 		TargetPathMastery:  targetPathMastery,
 		LuckBonus:          luckBonus,
 		SupportBonus:       supportBonus,
+		StatusPenalty:      negRefinePenalty,
 		EnvBonus:           envBonus,
 		FinalRate:          finalSuccessRate,
 		RefinementRealm:    refinementRealm,

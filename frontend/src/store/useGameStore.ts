@@ -32,6 +32,7 @@ export interface RefineRateBreakdown {
   target_path_mastery: number;
   luck_bonus: number;
   support_bonus: number;
+  status_penalty?: number;
   env_bonus: number;
   final_rate: number;
   refinement_realm: number;
