@@ -865,11 +865,8 @@ func CollectApertureResource(c *gin.Context) {
 		return
 	}
 
-	// Calculate multiples of production if player waited longer (max 3x stock)
-	multiples := int(elapsedInternal / requiredHoursInternal)
-	if multiples > 3 {
-		multiples = 3
-	}
+	// Single collection always harvests 1 production interval
+	multiples := 1
 
 	// Retrieve all active nodes in the aperture to evaluate conflicts and food chain
 	rows, err := tx.Query(`
@@ -1297,8 +1294,10 @@ func CollectAllApertureResources(c *gin.Context) {
 			elapsed = now.Sub(n.CreatedAt)
 		}
 
-		multiples := int(elapsed / intervalDuration)
-		if multiples < 1 { continue }
+		if elapsed < intervalDuration {
+			continue
+		}
+		multiples := 1
 
 		// Calculate reward with 0.8 bulk discount (-20%)
 		reward, _, err := computeApertureNodeReward(tx, playerID, n, multiples, areaSize, allNodes, 0.8)
@@ -1307,15 +1306,14 @@ func CollectAllApertureResources(c *gin.Context) {
 		if n.ProductionType == "Stones" {
 			totalStones += reward
 		} else if n.ProductionType == "Material" {
-			prodKey := n.ProductionKey
-			if prodKey == "" {
-				if template, ok := ResourceNodeTemplates[n.NodeType]; ok {
-					prodKey = template.ProdKey
-				} else {
-					prodKey = "unknown"
+			prodKey := resolveNodeProdKey(n)
+			if prodKey != "" {
+				rewardToGrant := reward
+				if rewardToGrant > 10000000 {
+					rewardToGrant = 10000000
 				}
+				materialTotals[prodKey] += rewardToGrant
 			}
-			materialTotals[prodKey] += reward
 		}
 
 		results = append(results, collectResult{NodeID: n.ID, Name: n.Name, Reward: reward})

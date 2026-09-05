@@ -1527,8 +1527,8 @@ return (
                             const combinedMultiplier = (areaMultiplier * daoMultiplier * conflictMult * ecoMult * vhLaborMult * vhPopBonus * itemFoodPathMultiplier * levelMultiplier) / itemRankDivisor;
                             const baseProd = selectedNode.production_amount || 0;
                             let rawExpected = baseProd > 0 ? Math.max(1, Math.floor(baseProd * combinedMultiplier)) : 0;
-                            if (selectedNode.production_type === "Material" && rawExpected > 10000) {
-                              rawExpected = 10000;
+                            if (selectedNode.production_type === "Material" && rawExpected > 10000000) {
+                              rawExpected = 10000000;
                             }
                             const expectedYield = rawExpected;
 
