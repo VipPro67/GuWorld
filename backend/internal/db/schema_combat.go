@@ -46,10 +46,6 @@ func schemaCombat() error {
 	);`); err != nil {
 		return err
 	}
-	if err := execSchema("combat_sessions_status_idx", `
-	CREATE INDEX IF NOT EXISTS idx_combat_sessions_status ON combat_sessions (status) WHERE status = 'ACTIVE';`); err != nil {
-		return err
-	}
 	if err := execSchema("combat_history_player_created_idx", `
 	CREATE INDEX IF NOT EXISTS idx_combat_history_player_created ON combat_history (player_id, created_at DESC);`); err != nil {
 		return err
