@@ -25,6 +25,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { translatePath } from "@/lib/translate";
+import { formatNumber } from "@/lib/utils";
 import { Num } from "./Num";
 import { GamePanel, GameTabs, GameButton, GameCard, GameModal, GameProgressBar, GameSection } from "@/components/ui";
 export function getPathIconAndColor(path: string | undefined, nodeType: string | undefined): { icon: string; color: string } {
@@ -355,15 +356,16 @@ export const ImmortalApertureView: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    // Fetch Dao Marks whenever tab changes to ensure latest data on map, tribulation (phòng thủ), dao tabs
+    fetchDaoMarks();
+
     if (activeTab === "map") {
       fetchApertureNodes();
-      fetchDaoMarks();
-    } else if (activeTab === "dao") {
-      fetchDaoMarks();
+    } else if (activeTab === "tribulation") {
+      fetchActiveTribulation();
     } else if (activeTab === "ecosystem" || activeTab === "variant_humans") {
       fetchVariantHumans();
       fetchApertureNodes();
-      fetchDaoMarks();
     }
   }, [activeTab]);
 
@@ -1469,7 +1471,17 @@ return (
                             }
 
                             const getManaVal = (rank: number): number => {
-                              const table: Record<number, number> = { 1: 1, 2: 3, 3: 10, 4: 30, 5: 100, 6: 300, 7: 1000, 8: 3000, 9: 10000 };
+                              const table: Record<number, number> = {
+                                1: 1,
+                                2: 2,
+                                3: 5,
+                                4: 20,
+                                5: 100,
+                                6: 10000,
+                                7: 1000000,
+                                8: 100000000,
+                                9: 10000000000,
+                              };
                               return table[Math.min(9, Math.max(1, rank))] || 1;
                             };
 
@@ -1488,11 +1500,9 @@ return (
                               if (prodKey && itemDictionary[prodKey]) {
                                 const item = itemDictionary[prodKey];
                                 itemSpecName = item.name;
-                                itemSpecRank = item.rank || 1;
-                                const r = item.rank;
-                                if (r !== undefined && r >= 1) {
-                                  itemRankDivisor = getManaVal(r);
-                                }
+                                const effectiveRank = Math.max(item.rank || 0, item.rarity || 0, 1);
+                                itemSpecRank = effectiveRank;
+                                itemRankDivisor = getManaVal(effectiveRank);
                                 if (item.path) {
                                   itemPathName = item.path;
                                   itemPathMarks = getDaoMarkAmount(item.path);
@@ -1544,7 +1554,7 @@ return (
                                     </div>
                                     {selectedNode.production_type === "Material" && itemSpecRank > 1 && (
                                       <div className="text-[10px] text-amber-400 font-medium">
-                                        (Rank {itemSpecRank}: /{itemRankDivisor})
+                                        (Rank {itemSpecRank}: /{itemRankDivisor >= 10000 ? formatNumber(itemRankDivisor) : itemRankDivisor.toLocaleString("vi-VN")})
                                       </div>
                                     )}
                                   </div>
@@ -1553,13 +1563,20 @@ return (
                                 <div className="space-y-1.5 text-[11px]">
                                   {/* 1. Dao Marks Bonus */}
                                   <div className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-850">
-                                    <span className="text-slate-300 flex items-center gap-1.5">
+                                    <span className="text-slate-300 flex items-center gap-1.5 shrink-0">
                                       <span>☯️</span> Đạo ngân bổ trợ ({translatePath(displayPath)}):
                                     </span>
-                                    <span className={displayMarks > 0 ? "text-emerald-400 font-bold" : "text-slate-400"}>
-                                      {displayMarks} vết (+{((displayMarks * 1.0) / itemRankDivisor).toFixed(1)}% thực nhận)
+                                    <span
+                                      className={displayMarks > 0 ? "text-emerald-400 font-bold text-right" : "text-slate-400 text-right"}
+                                      title={`${displayMarks.toLocaleString("vi-VN")} vết Đạo ngân`}
+                                    >
+                                      {((displayMarks * 1.0) / itemRankDivisor) >= 10000
+                                        ? `+${formatNumber((displayMarks * 1.0) / itemRankDivisor)}%`
+                                        : `+${((displayMarks * 1.0) / itemRankDivisor).toFixed(1)}%`}
                                       {itemRankDivisor > 1 && (
-                                        <span className="text-[10px] text-amber-400 font-normal ml-1">(chia Rank /{itemRankDivisor})</span>
+                                        <span className="text-[10px] text-amber-400 font-normal ml-1">
+                                          (chia Rank /{itemRankDivisor >= 10000 ? formatNumber(itemRankDivisor) : itemRankDivisor.toLocaleString("vi-VN")})
+                                        </span>
                                       )}
                                     </span>
                                   </div>
@@ -1567,11 +1584,14 @@ return (
                                   {/* Secondary Node Path Dao Marks if different from item path */}
                                   {itemPathName && selectedNode.path && itemPathName !== selectedNode.path && nodePathMarks > 0 && (
                                     <div className="flex justify-between items-center bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-slate-850 text-[10px]">
-                                      <span className="text-slate-400 flex items-center gap-1.5">
+                                      <span className="text-slate-400 flex items-center gap-1.5 shrink-0">
                                         <span>☯️</span> Đạo ngân mỏ ({translatePath(selectedNode.path)}):
                                       </span>
-                                      <span className="text-emerald-400 font-bold">
-                                        {nodePathMarks} vết (+{(nodePathMarks * 1.0).toFixed(1)}%)
+                                      <span
+                                        className="text-emerald-400 font-bold text-right"
+                                        title={`${nodePathMarks.toLocaleString("vi-VN")} vết Đạo ngân`}
+                                      >
+                                        {nodePathMarks >= 10000 ? `+${formatNumber(nodePathMarks)}%` : `+${(nodePathMarks * 1.0).toFixed(1)}%`}
                                       </span>
                                     </div>
                                   )}
@@ -2176,8 +2196,8 @@ return (
                           <Flame className="w-4 h-4 text-amber-400" />
                           <span className="font-bold text-slate-200 uppercase">{mark.path} Path</span>
                         </div>
-                        <div className="text-xs text-slate-400">
-                          Tích lũy: <span className="text-amber-400 font-bold">{mark.amount.toLocaleString()}</span> Đạo Ngân
+                        <div className="text-xs text-slate-400" title={`${mark.amount.toLocaleString("vi-VN")} Đạo Ngân`}>
+                          Tích lũy: <span className="text-amber-400 font-bold">{mark.amount >= 100000 ? formatNumber(mark.amount) : mark.amount.toLocaleString("vi-VN")}</span> Đạo Ngân
                         </div>
                       </div>
 

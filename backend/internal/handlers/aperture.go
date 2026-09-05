@@ -1182,8 +1182,12 @@ func computeApertureNodeReward(tx *sql.Tx, playerID uuid.UUID, n models.Aperture
 					itemFoodPath = item.Path
 					itemFoodPathMultiplier = getPathDaoMultiplier(itemFoodPath, nodeDaoMap)
 				}
-				if item.Rank >= 1 {
-					itemRankDivisor = getManaVal(item.Rank)
+				effectiveRank := item.Rank
+				if item.Rarity > effectiveRank {
+					effectiveRank = item.Rarity
+				}
+				if effectiveRank >= 1 {
+					itemRankDivisor = getManaVal(effectiveRank)
 				}
 			}
 		}
