@@ -27,28 +27,6 @@ func schemaDictionaries() error {
 	`); err != nil {
 		return err
 	}
-
-	if err := execSchema("migrate_node_outputs_to_items", `
-	DO $$
-	BEGIN
-		IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'node_outputs') THEN
-			INSERT INTO item_dictionary (id, name, item_type, rank, rarity, description, path)
-			SELECT item_id, item_name, item_type, rank, 
-			       CASE WHEN item_tier = 'T1' THEN 1 WHEN item_tier = 'T2' THEN 2 WHEN item_tier = 'T3' THEN 3 WHEN item_tier = 'T4' THEN 4 WHEN item_tier = 'T5' THEN 5 WHEN item_tier = 'T6' THEN 6 WHEN item_tier = 'T7' THEN 7 WHEN item_tier = 'T8' THEN 8 WHEN item_tier = 'T9' THEN 9 ELSE 1 END,
-			       description, COALESCE(food_path, '')
-			FROM node_outputs
-			ON CONFLICT (id) DO UPDATE SET 
-			    path = EXCLUDED.path, 
-			    rank = EXCLUDED.rank, 
-			    rarity = EXCLUDED.rarity;
-			
-			DROP TABLE node_outputs CASCADE;
-		END IF;
-	END $$;
-	`); err != nil {
-		return err
-	}
-
 	if err := execSchema("gu_dictionary", `
 	CREATE TABLE IF NOT EXISTS gu_dictionary (
 		id VARCHAR(50) NOT NULL,
@@ -73,15 +51,6 @@ func schemaDictionaries() error {
 		image_url TEXT NOT NULL DEFAULT '',
 		PRIMARY KEY (id, rank)
 	);`); err != nil {
-		return err
-	}
-	if err := execSchema("gu_dictionary_price_upgrade", `
-	DO $$
-	BEGIN
-		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gu_dictionary' AND column_name='base_price' AND data_type IN ('integer', 'int')) THEN
-			ALTER TABLE gu_dictionary ALTER COLUMN base_price TYPE BIGINT USING COALESCE(base_price, 0)::BIGINT;
-		END IF;
-	END $$;`); err != nil {
 		return err
 	}
 

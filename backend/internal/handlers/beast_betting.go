@@ -66,7 +66,11 @@ type PlaceBetRequest struct {
 var (
 	workerStarted bool
 	workerMutex   sync.Mutex
+	resolveTimer  *time.Timer
 )
+
+// resolveTimerReset guards against concurrent resolveAndAdvance calls.
+var resolveTimerMu sync.Mutex
 
 // SimulateBeastFight runs a step-by-step combat simulation between two identical teams of 9 beasts
 func SimulateBeastFight() (string, string) {
@@ -217,6 +221,11 @@ func getOrCreateCurrentRound(tx *sql.Tx, now time.Time) (*BettingRound, error) {
 	return &r, nil
 }
 
+// StartBeastBettingWorker replaces the 10-second polling ticker with a
+// time.AfterFunc schedule driven by the beast_betting_rounds table.
+// On startup it replays any unfinished past rounds, then schedules a single
+// timer that fires when the current hour ends.  Each fire resolves the round
+// and schedules the next one, eliminating continuous polling.
 func StartBeastBettingWorker(ctx context.Context) {
 	workerMutex.Lock()
 	if workerStarted {
@@ -226,52 +235,44 @@ func StartBeastBettingWorker(ctx context.Context) {
 	workerStarted = true
 	workerMutex.Unlock()
 
-	logger.S.Info("Started Beast Betting background worker (hourly pool resolve)")
+	logger.S.Info("Started Beast Betting worker (DB-driven schedule)")
 
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
+	// 1. Replay any past unfinished rounds (survives server restarts)
+	replayUnfinishedRounds()
 
-	for {
-		select {
-		case <-ctx.Done():
-			logger.S.Info("Shutting down Beast Betting worker")
-			return
-		case <-ticker.C:
-			if err := runWorkerTick(ctx); err != nil {
-				logger.S.Errorf("Error in beast betting worker tick: %v", err)
-			}
-		}
-	}
+	// 2. Ensure current hour has a round
+	ensureCurrentRound()
+
+	// 3. Schedule the next resolve at the end of the current hour
+	scheduleNextResolve()
 }
 
-func runWorkerTick(ctx context.Context) error {
-	now := time.Now()
-	currentHour := now.Truncate(time.Hour)
-
-	tx, err := db.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	// Find all past unfinished rounds
-	rows, err := tx.QueryContext(ctx, `
-		SELECT id, status, winner, team_a_name, team_b_name, total_bet_a, total_bet_b, battle_log, created_at, locked_at, resolved_at
+// replayUnfinishedRounds resolves all rounds whose created_at < current hour
+// and status != 'FINISHED'.  Called once at startup so restarts don't leave
+// stale rounds hanging.
+func replayUnfinishedRounds() {
+	currentHour := time.Now().Truncate(time.Hour)
+	rows, err := db.DB.Query(`
+		SELECT id, status, winner, team_a_name, team_b_name, total_bet_a, total_bet_b,
+		       battle_log, created_at, locked_at, resolved_at
 		FROM beast_betting_rounds
 		WHERE created_at < $1 AND status != 'FINISHED'
 		ORDER BY created_at ASC
 	`, currentHour)
 	if err != nil {
-		return err
+		logger.S.Errorf("beast_betting: replay query failed: %v", err)
+		return
 	}
+	defer rows.Close()
 
-	var pastRounds []BettingRound
+	resolvedAny := false
 	for rows.Next() {
 		var r BettingRound
 		var lockedAt, resolvedAt sql.NullTime
-		if err := rows.Scan(&r.ID, &r.Status, &r.Winner, &r.TeamAName, &r.TeamBName, &r.TotalBetA, &r.TotalBetB, &r.BattleLog, &r.CreatedAt, &lockedAt, &resolvedAt); err != nil {
-			rows.Close()
-			return err
+		if err := rows.Scan(&r.ID, &r.Status, &r.Winner, &r.TeamAName, &r.TeamBName,
+			&r.TotalBetA, &r.TotalBetB, &r.BattleLog, &r.CreatedAt, &lockedAt, &resolvedAt); err != nil {
+			logger.S.Errorf("beast_betting: replay scan failed: %v", err)
+			return
 		}
 		if lockedAt.Valid {
 			r.LockedAt = &lockedAt.Time
@@ -279,46 +280,160 @@ func runWorkerTick(ctx context.Context) error {
 		if resolvedAt.Valid {
 			r.ResolvedAt = &resolvedAt.Time
 		}
-		pastRounds = append(pastRounds, r)
+		if err := resolveRoundTx(&r); err != nil {
+			logger.S.Errorf("beast_betting: replay resolve failed for round %s: %v", r.ID, err)
+			continue
+		}
+		resolvedAny = true
+	}
+	if resolvedAny {
+		notifyBaoHoangMessages("world", sql.NullString{})
+	}
+}
+
+// ensureCurrentRound creates the current hour's round if it does not exist yet.
+func ensureCurrentRound() {
+	tx, err := db.DB.Begin()
+	if err != nil {
+		logger.S.Errorf("beast_betting: ensureCurrentRound begin tx: %v", err)
+		return
+	}
+	defer tx.Rollback()
+	if _, err := getOrCreateCurrentRound(tx, time.Now()); err != nil {
+		logger.S.Errorf("beast_betting: ensureCurrentRound: %v", err)
+		return
+	}
+	_ = tx.Commit()
+}
+
+// scheduleNextResolve computes the delay until the current hour ends and
+// schedules a one-shot timer.  When it fires, the round is resolved and the
+// next hour's timer is scheduled recursively.
+func scheduleNextResolve() {
+	resolveTimerMu.Lock()
+	defer resolveTimerMu.Unlock()
+
+	scheduleNextResolveLocked()
+}
+
+// scheduleNextResolveLocked must be called while resolveTimerMu is held.
+func scheduleNextResolveLocked() {
+	if resolveTimer != nil {
+		resolveTimer.Stop()
+	}
+
+	now := time.Now()
+	nextHour := now.Truncate(time.Hour).Add(time.Hour)
+	delay := time.Until(nextHour)
+
+	if delay <= 0 {
+		go resolveAndAdvance()
+		return
+	}
+
+	logger.S.Infof("Beast Betting: next resolve in %v (at %s)", delay.Round(time.Second), nextHour.Format("15:04:05"))
+	resolveTimer = time.AfterFunc(delay, func() {
+		resolveAndAdvance()
+	})
+}
+
+// resolveAndAdvance resolves all past unfinished rounds, then schedules the
+// next timer based on the new current-hour round in the DB.
+func resolveAndAdvance() {
+	resolveTimerMu.Lock()
+	defer resolveTimerMu.Unlock()
+
+	currentHour := time.Now().Truncate(time.Hour)
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		logger.S.Errorf("beast_betting: resolveAndAdvance begin tx: %v", err)
+		scheduleNextResolveLocked()
+		return
+	}
+	defer tx.Rollback()
+
+	// Find and resolve past unfinished rounds
+	rows, err := tx.Query(`
+		SELECT id, status, winner, team_a_name, team_b_name, total_bet_a, total_bet_b,
+		       battle_log, created_at, locked_at, resolved_at
+		FROM beast_betting_rounds
+		WHERE created_at < $1 AND status != 'FINISHED'
+		ORDER BY created_at ASC
+	`, currentHour)
+	if err != nil {
+		logger.S.Errorf("beast_betting: resolve query failed: %v", err)
+		scheduleNextResolveLocked()
+		return
+	}
+
+	type roundRow struct {
+		id, status, winner, teamAName, teamBName string
+		totalBetA, totalBetB                     float64
+		battleLog                                string
+		createdAt                                time.Time
+		lockedAt, resolvedAt                     sql.NullTime
+	}
+	var pastRows []roundRow
+	for rows.Next() {
+		var r roundRow
+		if err := rows.Scan(&r.id, &r.status, &r.winner, &r.teamAName, &r.teamBName,
+			&r.totalBetA, &r.totalBetB, &r.battleLog, &r.createdAt, &r.lockedAt, &r.resolvedAt); err != nil {
+			rows.Close()
+			logger.S.Errorf("beast_betting: resolve scan failed: %v", err)
+			scheduleNextResolveLocked()
+			return
+		}
+		pastRows = append(pastRows, r)
 	}
 	rows.Close()
 
-	// Resolve all of them
 	resolvedAny := false
-	for _, r := range pastRounds {
-		if err := resolveRound(tx, &r); err != nil {
-			return err
+	for _, pr := range pastRows {
+		r := &BettingRound{
+			ID: pr.id, Status: pr.status, Winner: pr.winner,
+			TeamAName: pr.teamAName, TeamBName: pr.teamBName,
+			TotalBetA: pr.totalBetA, TotalBetB: pr.totalBetB,
+			BattleLog: pr.battleLog, CreatedAt: pr.createdAt,
+		}
+		if pr.lockedAt.Valid {
+			r.LockedAt = &pr.lockedAt.Time
+		}
+		if pr.resolvedAt.Valid {
+			r.ResolvedAt = &pr.resolvedAt.Time
+		}
+		if err := resolveRound(tx, r); err != nil {
+			logger.S.Errorf("beast_betting: resolve round %s failed: %v", r.ID, err)
+			continue
 		}
 		resolvedAny = true
 	}
 
-	// Get or create current hour's round
-	r, err := getOrCreateCurrentRound(tx, now)
-	if err != nil {
-		return err
-	}
-
-	// Lock if it is past minute 55 of current hour
-	if r.Status == "ACTIVE" && now.Minute() >= 55 {
-		_, err = tx.ExecContext(ctx, `
-			UPDATE beast_betting_rounds
-			SET status = 'LOCKED', locked_at = $1
-			WHERE id = $2
-		`, now, r.ID)
-		if err != nil {
-			return err
-		}
+	// Ensure current hour's round exists
+	if _, err := getOrCreateCurrentRound(tx, time.Now()); err != nil {
+		logger.S.Errorf("beast_betting: getOrCreateCurrentRound in resolveAndAdvance: %v", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return err
-	}
-
-	if resolvedAny {
+		logger.S.Errorf("beast_betting: resolveAndAdvance commit: %v", err)
+	} else if resolvedAny {
 		notifyBaoHoangMessages("world", sql.NullString{})
 	}
 
-	return nil
+	scheduleNextResolveLocked()
+}
+
+// resolveRoundTx resolves a round using its own transaction (for startup replay).
+func resolveRoundTx(r *BettingRound) error {
+	tx, err := db.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := resolveRound(tx, r); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func resolveRound(tx *sql.Tx, r *BettingRound) error {

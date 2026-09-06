@@ -28,7 +28,7 @@ services:
       - REDIS_PORT=6379
       - REDIS_SSL=false
       - JWT_SECRET=guworld_cultivation_secret_key_change_me
-      - CORS_ALLOWED_ORIGINS=https://www.cogioi.io.vn,https://cogioi.io.vn,http://localhost:3000
+      - CORS_ALLOWED_ORIGINS=https://www.cogioi.io.vn,https://cogioi.io.vn
     depends_on:
       redis:
         condition: service_started

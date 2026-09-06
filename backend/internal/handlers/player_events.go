@@ -93,8 +93,8 @@ func StreamPlayerEvents(c *gin.Context) {
 		case <-c.Request.Context().Done():
 			return
 		case <-ticker.C:
-			db.DB.Exec(`UPDATE players SET last_activity = NOW() WHERE id = $1`, playerID)
-			if err := writePlayerSnapshotEvent(c, playerID, PlayerEventHeartbeat); err != nil {
+			lastActivity.Touch(playerID)
+			if err := writeSSE(c, PlayerEventHeartbeat, PlayerRealtimeEvent{Type: PlayerEventHeartbeat}); err != nil {
 				writeSSEError(c, err)
 				flusher.Flush()
 				return
@@ -319,8 +319,8 @@ func StreamUnifiedEvents(c *gin.Context) {
 			return
 
 		case <-ticker.C:
-			db.DB.Exec(`UPDATE players SET last_activity = NOW() WHERE id = $1`, playerID)
-			if err := writePlayerSnapshotEvent(c, playerID, PlayerEventHeartbeat); err != nil {
+			lastActivity.Touch(playerID)
+			if err := writeSSE(c, PlayerEventHeartbeat, PlayerRealtimeEvent{Type: PlayerEventHeartbeat}); err != nil {
 				writeSSEError(c, err)
 				flusher.Flush()
 				return

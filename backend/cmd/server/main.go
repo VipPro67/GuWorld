@@ -166,6 +166,7 @@ func main() {
 	worker.StartSectMissionWorker(ctx, db.DB, 60*time.Second)
 	worker.StartSectTerritoryWorker(ctx, db.DB, 60*time.Second)
 	worker.StartSectMaintenanceWorker(ctx, db.DB, 24*time.Hour)
+	handlers.StartLastActivityFlusher(ctx)
 
 	r := server.SetupRouter()
 
