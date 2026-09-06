@@ -904,7 +904,7 @@ func AutoCombatStart(c *gin.Context) {
 				UPDATE players
 				SET hp = $1, current_mana = $2, primeval_stones = $3, immortal_stones = $4, active_combat = NULL, path_masteries = $5
 				WHERE id = $6
-			`, allyHP, simAlly.Mana, simAlly.PrimevalStones, simAlly.ImmortalStones, simAlly.PathMasteries, allyUUID)
+			`, allyHP, simAlly.Mana, simAlly.PrimevalStones, simAlly.ImmortalStones, models.PathMasteriesMap(simAlly.PathMasteries), allyUUID)
 			if errUpd != nil {
 				logger.S.Errorf("Failed to update ally %s outcome: %v", simAlly.Name, errUpd)
 			}
