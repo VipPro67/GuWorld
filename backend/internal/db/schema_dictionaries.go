@@ -269,20 +269,23 @@ func seedDefaultRaceConstitutionRows() error {
 		}
 	}
 
-	constitutions := []struct{ key, name, effects string; tier int }{
-    {"", "(Không)", "{}", 0},
-    {"solar_sun_moon_body", "Thái Nhật Dương Mãng Thể", `{"dao_mark":{"light":0.50},"path_damage":{"light":0.20},"max_mana":0.50,"mana_regen":1}`, 3},
-    {"ancient_moon_yin_desolate_body", "Cổ Nguyệt Âm Hoang Thể", `{"dao_mark":{"dark":0.50},"max_mana":0.50,"mana_regen":1,"mental_resistance":0.20}`, 3},
-    {"northern_dark_ice_soul_body", "Bắc Minh Băng Phách Thể", `{"dao_mark":{"ice":0.50},"path_resistance":{"ice":0.10},"max_mana":0.50,"mana_regen":1}`, 3},
-    {"forest_sea_reincarnation_body", "Sâm Hải Luân Hồi Thể", `{"dao_mark":{"water":0.50},"healing_received":0.50,"max_mana":0.50,"mana_regen":1}`, 3},
-    {"myriad_gold_brilliant_flower_body", "Vạn Kim Diệu Hoa Thể", `{"dao_mark":{"metal":0.50},"stat_mods":{"attack":0.30,"defense":0.30},"max_mana":0.50,"mana_regen":1}`, 3},
-    {"blazing_glory_lightning_brilliance_body", "Viêm Hoàng Lôi Trạch Thể", `{"dao_mark":{"lightning":0.50},"stat_mods":{"speed":0.20},"max_mana":0.50,"mana_regen":1}`, 3},
-    {"great_strength_true_martial_body", "Đại Lực Chân Võ Thể", `{"dao_mark":{"strength":0.50},"stat_mods":{"attack":0.30,"defense":0.30},"max_mana":0.50,"mana_regen":1}`, 3},
-    {"carefree_wisdom_heart_body", "Tiêu Dao Trí Tâm Thể", `{"dao_mark":{"wisdom":0.50},"mental_resistance":0.30,"max_mana":0.50,"mana_regen":1}`, 3},
-    {"great_earth_origin_body", "Hậu Thổ Nguyên Ương Thể", `{"dao_mark":{"earth":0.50},"stat_mods":{"defense":0.45},"mental_resistance":0.45,"max_mana":0.50,"mana_regen":1}`, 3},
-    {"universe_great_evolution_body", "Vũ Trụ Đại Diễn Thể", `{"dao_mark":{"space":0.50},"stat_mods":{"attack":0.15,"defense":0.15,"speed":0.15},"max_mana":0.50,"mana_regen":1}`, 3},
-    {"pure_dream_reality_seeker_body", "Thuần Mộng Cầu Chân Thể", `{"dao_mark":{"dream":0.40},"path_damage":{"dream":0.10},"max_mana":0.40,"mana_regen":1}`, 3},
-}
+	constitutions := []struct {
+		key, name, effects string
+		tier               int
+	}{
+		{"", "(Không)", "{}", 0},
+		{"solar_sun_moon_body", "Thái Nhật Dương Mãng Thể", `{"dao_mark":{"light":0.50},"path_damage":{"light":0.20},"max_mana":0.50,"mana_regen":1}`, 3},
+		{"ancient_moon_yin_desolate_body", "Cổ Nguyệt Âm Hoang Thể", `{"dao_mark":{"dark":0.50},"max_mana":0.50,"mana_regen":1,"mental_resistance":0.20}`, 3},
+		{"northern_dark_ice_soul_body", "Bắc Minh Băng Phách Thể", `{"dao_mark":{"ice":0.50},"path_resistance":{"ice":0.10},"max_mana":0.50,"mana_regen":1}`, 3},
+		{"forest_sea_reincarnation_body", "Sâm Hải Luân Hồi Thể", `{"dao_mark":{"water":0.50},"healing_received":0.50,"max_mana":0.50,"mana_regen":1}`, 3},
+		{"myriad_gold_brilliant_flower_body", "Vạn Kim Diệu Hoa Thể", `{"dao_mark":{"metal":0.50},"stat_mods":{"attack":0.30,"defense":0.30},"max_mana":0.50,"mana_regen":1}`, 3},
+		{"blazing_glory_lightning_brilliance_body", "Viêm Hoàng Lôi Trạch Thể", `{"dao_mark":{"lightning":0.50},"stat_mods":{"speed":0.20},"max_mana":0.50,"mana_regen":1}`, 3},
+		{"great_strength_true_martial_body", "Đại Lực Chân Võ Thể", `{"dao_mark":{"strength":0.50},"stat_mods":{"attack":0.30,"defense":0.30},"max_mana":0.50,"mana_regen":1}`, 3},
+		{"carefree_wisdom_heart_body", "Tiêu Dao Trí Tâm Thể", `{"dao_mark":{"wisdom":0.50},"mental_resistance":0.30,"max_mana":0.50,"mana_regen":1}`, 3},
+		{"great_earth_origin_body", "Hậu Thổ Nguyên Ương Thể", `{"dao_mark":{"earth":0.50},"stat_mods":{"defense":0.45},"mental_resistance":0.45,"max_mana":0.50,"mana_regen":1}`, 3},
+		{"universe_great_evolution_body", "Vũ Trụ Đại Diễn Thể", `{"dao_mark":{"space":0.50},"stat_mods":{"attack":0.15,"defense":0.15,"speed":0.15},"max_mana":0.50,"mana_regen":1}`, 3},
+		{"pure_dream_reality_seeker_body", "Thuần Mộng Cầu Chân Thể", `{"dao_mark":{"dream":0.40},"path_damage":{"dream":0.10},"max_mana":0.40,"mana_regen":1}`, 3},
+	}
 	for _, c := range constitutions {
 		if _, err := DB.Exec(`INSERT INTO constitution_dictionary (key, name, effects, tier) VALUES ($1,$2,$3::jsonb,$4) ON CONFLICT (key) DO NOTHING`, c.key, c.name, c.effects, c.tier); err != nil {
 			return err
@@ -301,21 +304,80 @@ func seedDefaultStatusRows() error {
 		blocked            string
 		desc               string
 	}{
-		{"severely_wounded", "Trọng Thương", `{"stat_mods":{"attack":-0.20,"defense":-0.20,"speed":-0.20},"healing_received":-0.50}`, 0, `["explore"]`, "Thân trúng trọng thương, công thủ tốc đều giảm mạnh."},
-		{"poisoned", "Trúng Độc", `{"stat_mods":{"attack":-0.10,"speed":-0.10}}`, 30, `[]`, "Độc tố xâm nhập cơ thể, suy giảm công kích và tốc độ."},
-		{"exhausted", "Kiệt Sức", `{"stat_mods":{"speed":-0.30},"cultivation_efficiency":-0.50}`, 10, `["cultivate"]`, "Lực kiệt sức, tạm thời không thể tu luyện."},
-		{"blessed", "Phúc Trạch", `{"luck":5,"cultivation_efficiency":0.10}`, 60, `[]`, "Nhận phúc trạch, may mắn và tu luyện hiệu quả hơn."},
-		{"death_penalty", "Hình Phạt Tử Vong", `{"stat_mods":{"attack":-0.50,"defense":-0.50,"speed":-0.50}}`, 30, `[]`, "Sát khí chưa tan sau khi chết, toàn bộ chỉ số suy giảm."},
-		{"refine_fatigue", "Tâm Thần Mệt Mỏi", `{"refine":-0.25}`, 10, `[]`, "Luyện cổ khiến tâm thần mệt mỏi, giảm 25% tỉ lệ luyện cổ thành công."},
-		{"refine_backfire", "Luyện Cổ Phản Phệ", `{"refine":-0.50}`, 20, `[]`, "Bị cổ khí phản phệ do cố luyện cổ khi mệt mỏi, giảm 50% tỉ lệ luyện cổ thành công."},
+		{
+			"severely_wounded",
+			"Trọng Thương",
+			`{"stat_mods":{"attack":-0.20,"defense":-0.20,"speed":-0.20},"healing_received":-0.50,"refine":-0.5}`,
+			60,
+			`["explore"]`,
+			"Thân trúng trọng thương, công thủ tốc đều giảm mạnh.",
+		},
+		{
+			"poisoned",
+			"Trúng Độc",
+			`{"stat_mods":{"attack":-0.10,"speed":-0.10}}`,
+			30,
+			`[]`,
+			"Độc tố xâm nhập cơ thể, suy giảm công kích và tốc độ.",
+		},
+		{
+			"exhausted",
+			"Kiệt Sức",
+			`{"stat_mods":{"speed":-0.30},"cultivation_efficiency":-0.50}`,
+			10,
+			`["cultivate"]`,
+			"Lực kiệt sức, tạm thời không thể tu luyện.",
+		},
+		{
+			"blessed",
+			"Phúc Trạch",
+			`{"luck":5,"cultivation_efficiency":0.10}`,
+			60,
+			`[]`,
+			"Nhận phúc trạch, may mắn và tu luyện hiệu quả hơn.",
+		},
+		{
+			"death_penalty",
+			"Hình Phạt Tử Vong",
+			`{"stat_mods":{"attack":-0.50,"defense":-0.50,"speed":-0.50}}`,
+			30,
+			`[]`,
+			"Sát khí chưa tan sau khi chết, toàn bộ chỉ số suy giảm.",
+		},
+		{
+			"refine_fatigue",
+			"Tâm Thần Mệt Mỏi",
+			`{"refine":-0.5}`,
+			10,
+			`[]`,
+			"Luyện cổ khiến tâm thần mệt mỏi, giảm 5% tỉ lệ luyện cổ thành công.",
+		},
+		{
+			"refine_backfire",
+			"Luyện Cổ Phản Phệ",
+			`{"refine":-0.95}`,
+			20,
+			`[]`,
+			"Bị cổ khí phản phệ do cố luyện cổ khi mệt mỏi, giảm 95% tỉ lệ luyện cổ thành công.",
+		},
 	}
+
 	for _, s := range statuses {
 		if _, err := DB.Exec(`
-			INSERT INTO status_dictionary (key, name, effects, default_duration_minutes, blocked_actions, description)
-			VALUES ($1,$2,$3::jsonb,$4,$5::jsonb,$6)
-			ON CONFLICT (key) DO NOTHING`, s.key, s.name, s.effects, s.duration, s.blocked, s.desc); err != nil {
+			INSERT INTO status_dictionary (
+				key,
+				name,
+				effects,
+				default_duration_minutes,
+				blocked_actions,
+				description
+			)
+			VALUES ($1, $2, $3::jsonb, $4, $5::jsonb, $6)
+			ON CONFLICT (key) DO NOTHING
+		`, s.key, s.name, s.effects, s.duration, s.blocked, s.desc); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }

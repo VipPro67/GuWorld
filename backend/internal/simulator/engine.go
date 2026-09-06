@@ -42,12 +42,7 @@ func DaoMultiplier(dm DaoMarks, paths []string) (float64, bool) {
 			continue
 		}
 		found = true
-		var mult float64
-		if amt <= 10000 {
-			mult = 1.0 + float64(amt)/100.0
-		} else {
-			mult = 1.0 + 100.0 + float64(amt-10000)/500.0
-		}
+		mult := 1.0 + float64(amt)/100.0
 		if mult > maxMult {
 			maxMult = mult
 		}

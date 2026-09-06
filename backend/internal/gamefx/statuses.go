@@ -49,8 +49,9 @@ func defaultStatuses() []StatusDef {
 				StatMods:             map[string]float64{"attack": -0.20, "defense": -0.20, "speed": -0.20},
 				HealingReceivedBonus: -0.50,
 			},
-			BlockedActions: []string{ActionExplore},
-			Description:    "Thân trúng trọng thương, công thủ tốc đều giảm mạnh.",
+			DefaultDurationMinutes: 60,
+			BlockedActions:         []string{ActionExplore},
+			Description:            "Thân trúng trọng thương, công thủ tốc đều giảm mạnh.",
 		},
 		{
 			Key:  "poisoned",

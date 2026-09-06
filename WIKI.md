@@ -35,7 +35,7 @@ Danh sách chủng tộc được **data-driven** từ bảng `race_dictionary` 
 
 | Trạng thái | Hiệu ứng | Thời hạn |
 | --- | --- | --- |
-| Trọng Thương (`severely_wounded`) | **-20%** tấn công, phòng thủ, tốc độ; **-50%** hồi phục nhận; không thể thám hiểm | Vĩnh viễn (đến khi được chữa trị) |
+| Trọng Thương (`severely_wounded`) | **-20%** tấn công, phòng thủ, tốc độ; **-50%** hồi phục nhận; không thể thám hiểm | 60 phút (hoặc đến khi được chữa trị) |
 | Trúng Độc (`poisoned`) | **-10%** tấn công, **-10%** tốc độ | 30 phút |
 | Kiệt Sức (`exhausted`) | **-30%** tốc độ, **-50%** hiệu suất tu luyện; không thể tu luyện | 10 phút |
 | Phúc Trạch (`blessed`) | **+5** may mắn, **+10%** hiệu suất tu luyện | 60 phút |
@@ -565,7 +565,7 @@ Hệ thống cung cấp trang Hướng Dẫn Tân Thủ chi tiết từng bướ
 
 ### Thuật ngữ cốt lõi:
 - **Không Khiếu & Tiên Khiếu:** Phàm nhân sử dụng Không Khiếu tích lũy Chân Nguyên chiến đấu. Cổ Tiên (Lục Chuyển trở lên) sở hữu **Tiên Khiếu** (thế giới nhỏ độc lập bên trong cơ thể) tự sản sinh Tiên Nguyên với 4 phẩm cấp: Thấp, Trung, Cao, Cực Hạn dựa trên Nhân Khí lúc Thăng Tiên.
-- **Đạo Ngân (Dao Marks):** Vết khắc của quy luật tự nhiên, chia thành 49 lưu phái (Lực đạo, Hỏa đạo...). Mỗi điểm Đạo Ngân tăng **+1%** sát thương/phòng ngự cho các kỹ năng/Cổ trùng thuộc lưu phái đó (soft cap ở 10.000 điểm).
+- **Đạo Ngân (Dao Marks):** Vết khắc của quy luật tự nhiên, chia thành 49 lưu phái (Lực đạo, Hỏa đạo...). Mỗi điểm Đạo Ngân tăng **+1%** sát thương/phòng ngự cho các kỹ năng/Cổ trùng thuộc lưu phái đó.
 - **Cảnh Giới Lưu Phái (Attainment):** Độ ngộ Chân Ý gồm 5 bậc: Phàm Thai ➔ Đại Sư ➔ Tông Sư ➔ Đại Tông Sư ➔ Vô Thượng Đại Tông Sư. Điểm tích lũy theo từng lưu phái (thi triển sát chiêu thành công, luyện Cổ thành công, vượt ải phó bản). Cảnh giới suy ra từ mốc điểm: Đại Sư=100, Tông Sư=1.000, Đại Tông Sư=10.000, Vô Thượng=100.000. **Để đột phá lên Rank 7/8/9 khi vượt Kiếp Nạn, cần ít nhất 1 lưu phái đạt Tông Sư/Đại Tông Sư/Vô Thượng tương ứng.** Cảnh giới càng cao càng tăng tỉ lệ thành công của sát chiêu và luyện Cổ.
 - **Bản Mệnh Cổ (Vital Gu):** Cổ trùng gắn liền sinh mệnh, không bao giờ mất khi thất bại dã ngoại.
 - **Độ No (Hunger):** Cổ trùng giảm Độ No mỗi 3 giờ. Cần cho ăn đúng loại thức ăn (thịt thú, khoáng thạch...), nếu về 0 Độ No Cổ sẽ **chết vĩnh viễn**. Quy luật này áp dụng cả với Cổ đang nằm trong **Bảo khố Tông Môn**: Cổ trong kho vẫn hao Độ No mỗi 3 giờ (ngang mức hoạt động), về 0 sẽ chết và bị xóa khỏi kho; khi đổi ra, Cổ nhận đúng Độ No hiện tại chứ không được reset đầy.

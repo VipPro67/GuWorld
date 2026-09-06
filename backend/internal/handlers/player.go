@@ -2616,12 +2616,7 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 				for _, path := range spec.Path {
 					cleanPath := strings.TrimSuffix(strings.ToLower(path), " path")
 					if amt, ok := player.DaoMarks[cleanPath]; ok && amt > 0 {
-						var pm float64
-						if amt <= 10000 {
-							pm = 1.0 + float64(amt)/100.0
-						} else {
-							pm = 1.0 + 100.0 + float64(amt-10000)/500.0
-						}
+						pm := 1.0 + float64(amt)/100.0
 						if pm > maxDaoMult {
 							maxDaoMult = pm
 						}
@@ -2884,8 +2879,7 @@ type DaoNganResult struct {
 //
 // where multiplier follows the standard combat formula:
 //
-//	marks <= 10000: multiplier = 1.0 + marks/100
-//	marks  > 10000: multiplier = 101.0 + (marks-10000)/500  (soft cap)
+//	multiplier = 1.0 + marks/100
 //
 // TotalDaoNgan = Σ power(path) for all paths with marks > 0
 func CalculateDaoNgan(daoMarks models.DaoMarksMap, daoBonus ...map[string]float64) DaoNganResult {
@@ -3941,14 +3935,9 @@ func SetVitalGu(c *gin.Context) {
 
 	backlashMessage := ""
 	if hadVital {
-		// Backlash: cost 50 HP
-		player.HP -= 50.0
-		backlashMessage = " Đạo hữu bị phản phệ mất 50 HP do thay đổi Bản Mệnh Cổ!"
-		if player.HP <= 0 {
-			player.HP = 0
-			player.ActiveCombat = nil // reset combat
-			backlashMessage += " Đạo hữu khí huyết cạn kiệt, bất tĩnh nhân sự!"
-		}
+		// Backlash: apply severely_wounded status for 1 hour
+		player.Statuses.Add("severely_wounded", "set_vital_gu", 1*time.Hour, 0)
+		backlashMessage = " Đạo hữu bị phản phệ rơi vào trạng thái Trọng Thương do thay đổi Bản Mệnh Cổ!"
 	}
 
 	// Update is_vital flags; vital Gu is always ACTIVE and equipped
@@ -3981,9 +3970,9 @@ func SetVitalGu(c *gin.Context) {
 
 	_, err = tx.Exec(`
 		UPDATE players 
-		SET hp = $1, equipped_gus = $2, active_combat = $3
-		WHERE id = $4`,
-		player.HP, player.EquippedGus, player.ActiveCombat, player.ID,
+		SET hp = $1, equipped_gus = $2, active_combat = $3, statuses = $4
+		WHERE id = $5`,
+		player.HP, player.EquippedGus, player.ActiveCombat, player.Statuses, player.ID,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update player vital Gu status"})

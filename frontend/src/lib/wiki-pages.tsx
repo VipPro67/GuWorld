@@ -922,7 +922,7 @@ export const wikiPages: WikiPage[] = [
             </table>
           </div>
           <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-xs leading-relaxed text-[var(--text-secondary)]">
-            💡 <strong>Công thức sát thương:</strong> Mỗi điểm Đạo Ngân = <strong>+1%</strong> sát thương/phòng ngự cho lưu phái đó, áp dụng cả trong chiến đấu thường lẫn tự động. Vượt quá 10.000 điểm, hiệu quả giảm xuống còn <strong>+0.2%/điểm</strong> (soft cap).
+            💡 <strong>Công thức sát thương:</strong> Mỗi điểm Đạo Ngân = <strong>+1%</strong> sát thương/phòng ngự cho lưu phái đó, áp dụng cả trong chiến đấu thường lẫn tự động.
           </div>
         </div>
       </div>

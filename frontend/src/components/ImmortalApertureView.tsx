@@ -2053,7 +2053,7 @@ return (
             </h2>
 
             <p className="text-sm text-slate-400 leading-relaxed">
-              Đạo ngân là dấu vết quy tắc tiên thiên khắc sâu vào Tiên Khiếu khi vượt kiếp nạn. Đạo ngân tích lũy giúp tăng cường vĩnh viễn sát thương và phòng thủ của Cổ sư khi sử dụng thuộc tính tương ứng. Khi vượt quá 10,000 Đạo Ngân hệ sẽ bị giới hạn gia tăng.
+              Đạo ngân là dấu vết quy tắc tiên thiên khắc sâu vào Tiên Khiếu khi vượt kiếp nạn. Đạo ngân tích lũy giúp tăng cường vĩnh viễn sát thương và phòng thủ của Cổ sư khi sử dụng thuộc tính tương ứng.
             </p>
 
             {daoMarks.length === 0 ? (
@@ -2064,7 +2064,6 @@ return (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {daoMarks.map((mark) => {
                   const multiplier = calculateDaoMarkMultiplier(mark.amount);
-                  const isCap = mark.amount > 10000;
 
                   return (
                     <div
@@ -2087,7 +2086,7 @@ return (
                           x{multiplier.toFixed(1)}
                         </div>
                         <div className="text-[10px] text-slate-500">
-                          {isCap ? "Đã chạm Soft Cap (+200% / 10K)" : "Hệ số cường hoá sát thương"}
+                          Hệ số cường hoá sát thương
                         </div>
                       </div>
                     </div>
@@ -2615,8 +2614,6 @@ function canCollect(node: ApertureResourceNode, timeRate: number = 1.0): boolean
 
 // Calculate Dao Mark multipliers matching Go backend formula
 function calculateDaoMarkMultiplier(amount: number): number {
-  if (amount <= 10000) {
-    return 1.0 + amount / 100.0;
-  }
-  return 101.0 + (amount - 10000.0) / 500.0;
+  if (amount <= 0) return 1.0;
+  return 1.0 + amount / 100.0;
 }

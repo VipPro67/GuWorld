@@ -246,10 +246,7 @@ func DaoPathMultiplier(marks int64, bonus float64) float64 {
 	if marks <= 0 {
 		return 1.0 + bonus
 	}
-	if marks <= 10000 {
-		return 1.0 + float64(marks)/100.0 + bonus
-	}
-	return 1.0 + 100.0 + float64(marks-10000)/500.0 + bonus
+	return 1.0 + float64(marks)/100.0 + bonus
 }
 
 // DaoMultiplierForPaths computes the maximum dao multiplier across the given

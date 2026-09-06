@@ -39,10 +39,7 @@ Blade, Blood, Bone, Cloud, Concealment, Creation, Dark, Death, Destruction, Drea
 Áp dụng trong sát chiêu (`killer_move.go:494-501`) và hiệu ứng Cổ (`combat_effects.go:109-118`):
 
 ```
-Nếu amount <= 10000:
-    daoMultiplier = 1.0 + amount / 100      // mỗi 1 điểm = +1%
-Nếu amount > 10000:
-    daoMultiplier = 1.0 + 100 + (amount - 10000) / 500  // mỗi 1 điểm = +0.2% (soft cap)
+daoMultiplier = 1.0 + amount / 100      // mỗi 1 điểm = +1%
 
 finalDamage = baseDamage × daoMultiplier
 finalDefense = baseDefense × daoMultiplier
@@ -198,8 +195,7 @@ Tại `killer_move.go:494-501`:
 
 ```go
 daoMarks = player.DaoMarks[corePath]
-daoBonus = 1.0 + daoMarks / 100.0      // ≤ 10000
-daoBonus = 101.0 + (daoMarks-10000)/500.0  // > 10000
+daoBonus = 1.0 + daoMarks / 100.0
 
 finalDamage *= daoBonus
 finalDefense *= daoBonus

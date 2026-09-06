@@ -74,7 +74,26 @@ func determineRefineOutcome(roll, finalRate float64, refinementRealm, targetRank
 
 func collectRefineSupportBonus(player *models.Player) float64 {
 	totalBonus := 0.0
-	for _, gu := range models.FilterEquippedActive(player.GuInventory) {
+	bestRank := map[string]int{}
+	for _, gu := range player.GuInventory {
+		if !gu.Equipped || gu.Status != "ACTIVE" {
+			continue
+		}
+		if r, ok := bestRank[gu.GuID]; !ok || gu.Rank > r {
+			bestRank[gu.GuID] = gu.Rank
+		}
+	}
+
+	applied := map[string]bool{}
+	for _, gu := range player.GuInventory {
+		if !gu.Equipped || gu.Status != "ACTIVE" {
+			continue
+		}
+		if gu.Rank != bestRank[gu.GuID] || applied[gu.GuID] {
+			continue
+		}
+		applied[gu.GuID] = true
+
 		spec, ok := models.GetGu(gu.GuID, gu.Rank)
 		if !ok || spec.Effects.Passive == nil {
 			continue

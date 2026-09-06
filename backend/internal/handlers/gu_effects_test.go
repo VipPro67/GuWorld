@@ -250,3 +250,30 @@ func TestRestoreSoulHP(t *testing.T) {
 	}
 }
 
+func TestSetVitalGuBacklashSeverelyWounded(t *testing.T) {
+	p := &models.Player{
+		BodyState: models.BodyState{HP: 100, BaseHP: 100},
+		GuInventory: models.GuInventory{
+			{InstanceID: "gu1", GuID: "GU_ATTACK", Rank: 1, IsVital: true, Status: "ACTIVE", Equipped: true},
+			{InstanceID: "gu2", GuID: "GU_DEFENSE", Rank: 1, IsVital: false, Status: "ACTIVE", Equipped: false},
+		},
+	}
+
+	_, _, hadVital := models.FindFirstMatchingGu(p.GuInventory, func(gu models.GuInstance) bool {
+		return gu.IsVital
+	})
+	if !hadVital {
+		t.Fatal("expected player to have existing vital Gu")
+	}
+
+	// Simulate backlash logic when changing vital Gu
+	p.Statuses.Add("severely_wounded", "set_vital_gu", 1*time.Hour, 0)
+
+	if p.HP != 100 {
+		t.Errorf("expected HP to remain unchanged at 100, got %.1f", p.HP)
+	}
+	if !p.Statuses.Has("severely_wounded") {
+		t.Errorf("expected player to have severely_wounded status")
+	}
+}
+

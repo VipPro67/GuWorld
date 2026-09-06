@@ -767,7 +767,7 @@ export const WikiView: React.FC = () => {
               </table>
             </div>
             <div className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-900 text-xs leading-relaxed text-zinc-400">
-              💡 <strong>Công thức sát thương:</strong> Mỗi điểm Đạo Ngân = <strong>+1%</strong> sát thương/phòng ngự cho lưu phái đó, áp dụng cả trong chiến đấu thường lẫn tự động. Vượt quá 10.000 điểm, hiệu quả giảm xuống còn <strong>+0.2%/điểm</strong> (soft cap).
+              💡 <strong>Công thức sát thương:</strong> Mỗi điểm Đạo Ngân = <strong>+1%</strong> sát thương/phòng ngự cho lưu phái đó, áp dụng cả trong chiến đấu thường lẫn tự động.
             </div>
           </div>
         </div>
