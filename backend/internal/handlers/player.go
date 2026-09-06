@@ -2633,7 +2633,7 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 				addSrc("defense", srcID, spec.Name, passive.StatBaseDefense, mult, daoMult)
 			}
 			if passive.StatBaseSpeed > 0 {
-				addSrc("speed", srcID, spec.Name, passive.StatBaseSpeed, mult, daoMult)
+				addSrc("speed", srcID, spec.Name, passive.StatBaseSpeed, mult, 1)
 			}
 			if passive.StatBaseHP > 0 {
 				addSrc("hp", srcID, spec.Name, passive.StatBaseHP, mult, daoMult)

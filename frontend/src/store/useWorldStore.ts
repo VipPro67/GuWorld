@@ -49,6 +49,16 @@ export interface TeleportResponse {
   message: string;
 }
 
+export interface SkillFxEvent {
+  id: string;
+  type: string;
+  value?: number;
+  text: string;
+  x: number;
+  y: number;
+  timestamp: number;
+}
+
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
 const getCookie = (name: string): string | null => {
@@ -81,6 +91,8 @@ interface WorldStoreState {
   movementRange: number;
   investigationRange: number;
   selectedObject: WorldObject | null;
+  targetingGu: { guInstanceId: string; guId: string; name: string } | null;
+  skillFxEvents: SkillFxEvent[];
   isMoving: boolean;
   loading: boolean;
   error: string | null;
@@ -97,9 +109,12 @@ interface WorldStoreState {
   fetchNearbyPlayers: (x: number, y: number, r: number) => Promise<void>;
   upsertPlayerPosition: (p: NearbyPlayer) => void;
   pruneStalePlayers: () => void;
-  movePath: (x: number, y: number) => Promise<{ player: Player; log: string; combat_triggered: boolean; reached: boolean; skip_result?: any } | null>;
+  movePath: (x: number, y: number) => Promise<{ player: Player; log: string; combat_triggered: boolean; reached: boolean; skip_result?: unknown } | null>;
   teleportToRegion: (regionId: string) => Promise<TeleportResponse | null>;
-  useGuOnMap: (guInstanceId: string, targetX: number, targetY: number) => Promise<{ message: string; logs: string[] } | null>;
+  useGuOnMap: (guInstanceId: string, targetX: number, targetY: number) => Promise<{ message: string; logs: string[]; effect_type?: string; effect_value?: number } | null>;
+  setTargetingGu: (gu: { guInstanceId: string; guId: string; name: string } | null) => void;
+  triggerSkillFx: (type: string, value: number, text: string, x: number, y: number) => void;
+  clearSkillFx: (id: string) => void;
   setExploredSubZones: (keys: string[]) => void;
   setMovementRange: (r: number) => void;
   setInvestigationRange: (r: number) => void;
@@ -122,6 +137,8 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   movementRange: 1,
   investigationRange: 10,
   selectedObject: null,
+  targetingGu: null,
+  skillFxEvents: [],
   isMoving: false,
   loading: false,
   error: null,
@@ -132,6 +149,16 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   cameraScale: 0,
   cameraX: 0,
   cameraY: 0,
+
+  setTargetingGu: (gu) => set({ targetingGu: gu }),
+  triggerSkillFx: (type, value, text, x, y) =>
+    set((s) => ({
+      skillFxEvents: [
+        ...s.skillFxEvents,
+        { id: Math.random().toString(36).substring(2, 9), type, value, text, x, y, timestamp: Date.now() },
+      ].slice(-20),
+    })),
+  clearSkillFx: (id) => set((s) => ({ skillFxEvents: s.skillFxEvents.filter((e) => e.id !== id) })),
 
   requestCenterCamera: () => set((s) => ({ cameraCenterRequest: s.cameraCenterRequest + 1 })),
   addWorldLog: (text: string) =>
@@ -204,7 +231,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       let data;
       try {
         data = JSON.parse(body);
-      } catch (e) {
+      } catch {
         throw new Error(body || "Invalid response");
       }
       if (!res.ok) {
@@ -221,8 +248,17 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       if (data.player) {
         get().fetchNearbyCells(data.player.x, data.player.y, 300);
         get().fetchNearbyPlayers(data.player.x, data.player.y, 300);
+        if (data.effect_type) {
+          get().triggerSkillFx(
+            data.effect_type,
+            data.effect_value || 0,
+            data.message || "Kích hoạt Cổ trùng!",
+            data.player.x,
+            data.player.y
+          );
+        }
       }
-      set({ loading: false });
+      set({ loading: false, targetingGu: null });
       return data;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error";

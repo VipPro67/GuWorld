@@ -95,13 +95,27 @@ func UseGuOnMap(c *gin.Context) {
 	}
 	logs := []string{}
 	var cdDuration time.Duration = 10 * time.Second // default CD
-
 	applied := false
+	effectType := "utility"
+	effectValue := 0.0
 
 	// Apply effects from Active (Combat mapping to World Map)
 	if specs.Effects.Active != nil {
 		active := specs.Effects.Active
-		
+
+		if active.HealFlat > 0 {
+			maxHP := gamefx.EffectiveMaxHP(&player)
+			healVal := active.HealFlat
+			player.HP += healVal
+			if player.HP > maxHP {
+				player.HP = maxHP
+			}
+			logs = append(logs, fmt.Sprintf("%s điều trị thương thế, phục hồi %.0f Sinh Lực.", specs.Name, healVal))
+			applied = true
+			cdDuration = 45 * time.Second
+			effectType = "heal"
+			effectValue = healVal
+		}
 		if active.ManaRegen > 0 {
 			player.CurrentMana += active.ManaRegen
 			if player.CurrentMana > player.MaxMana {
@@ -110,6 +124,8 @@ func UseGuOnMap(c *gin.Context) {
 			logs = append(logs, fmt.Sprintf("%s hồi phục %.1f Chân Nguyên.", specs.Name, active.ManaRegen))
 			applied = true
 			cdDuration = 30 * time.Second
+			effectType = "mana_regen"
+			effectValue = active.ManaRegen
 		}
 		if active.PortalCreate {
 			// We can teleport to TargetX, TargetY if within bounds
@@ -120,6 +136,7 @@ func UseGuOnMap(c *gin.Context) {
 				logs = append(logs, fmt.Sprintf("%s xé rách không gian, dịch chuyển đến (%d, %d).", specs.Name, player.X, player.Y))
 				applied = true
 				cdDuration = 120 * time.Second
+				effectType = "teleport"
 			} else {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Tọa độ không hợp lệ!"})
 				return
@@ -132,10 +149,14 @@ func UseGuOnMap(c *gin.Context) {
 			logs = append(logs, fmt.Sprintf("%s xé rách không gian hỗn loạn, dịch chuyển ngẫu nhiên đến (%d, %d).", specs.Name, player.X, player.Y))
 			applied = true
 			cdDuration = 120 * time.Second
+			effectType = "teleport"
 		}
 		// HOT tick -> heal
 		if active.ApplyStatus == "REGEN" {
 			healVal := active.StatusTickDamage * float64(active.StatusDurationTicks)
+			if healVal <= 0 {
+				healVal = 100.0
+			}
 			player.HP += healVal
 			if player.HP > gamefx.EffectiveMaxHP(&player) {
 				player.HP = gamefx.EffectiveMaxHP(&player)
@@ -143,6 +164,8 @@ func UseGuOnMap(c *gin.Context) {
 			logs = append(logs, fmt.Sprintf("%s kích hoạt Hồi Sinh, phục hồi %.1f HP.", specs.Name, healVal))
 			applied = true
 			cdDuration = 60 * time.Second
+			effectType = "heal"
+			effectValue = healVal
 		}
 		// Shield -> Virtual Shield
 		if active.ShieldFlat > 0 {
@@ -150,6 +173,8 @@ func UseGuOnMap(c *gin.Context) {
 			logs = append(logs, fmt.Sprintf("%s tạo một lớp ảo thuẫn hộ thể (%.1f) duy trì 5 phút.", specs.Name, active.ShieldFlat))
 			applied = true
 			cdDuration = 60 * time.Second
+			effectType = "shield"
+			effectValue = active.ShieldFlat
 		}
 		// Stat Buffs
 		if active.ApplyStatus == "ATK_UP" {
@@ -165,6 +190,8 @@ func UseGuOnMap(c *gin.Context) {
 			logs = append(logs, fmt.Sprintf("%s tăng %.0f Công Kích trong %.0f phút.", specs.Name, buffValue, duration.Minutes()))
 			applied = true
 			cdDuration = duration + (30 * time.Second)
+			effectType = "buff_atk"
+			effectValue = buffValue
 		}
 		if active.ApplyStatus == "DEF_UP" {
 			buffValue := active.StatusTickDamage
@@ -179,6 +206,24 @@ func UseGuOnMap(c *gin.Context) {
 			logs = append(logs, fmt.Sprintf("%s tăng %.0f Phòng Ngự trong %.0f phút.", specs.Name, buffValue, duration.Minutes()))
 			applied = true
 			cdDuration = duration + (30 * time.Second)
+			effectType = "buff_def"
+			effectValue = buffValue
+		}
+		if active.ApplyStatus == "SPEED_UP" {
+			buffValue := active.StatusTickDamage
+			if buffValue == 0 {
+				buffValue = 20
+			}
+			duration := time.Duration(active.StatusDurationTicks) * time.Minute
+			if duration == 0 {
+				duration = 5 * time.Minute
+			}
+			player.Statuses.Add("buff_speed", specs.Name, duration, buffValue)
+			logs = append(logs, fmt.Sprintf("%s gia tăng %.0f Tốc Độ trong %.0f phút.", specs.Name, buffValue, duration.Minutes()))
+			applied = true
+			cdDuration = duration + (30 * time.Second)
+			effectType = "buff_speed"
+			effectValue = buffValue
 		}
 	}
 
@@ -194,13 +239,47 @@ func UseGuOnMap(c *gin.Context) {
 				if msg != "" {
 					logs = append(logs, msg)
 					applied = true
+					if effectType == "utility" {
+						effectType = "other"
+					}
 				}
 			}
 		}
 	}
 
+	// Fallback for general Active Gu effects if no map-specific condition matched
+	if !applied && specs.Effects.Active != nil {
+		stats := CalculatePlayerStats(&player)
+		ctx := &CombatContext{
+			Attacker: &models.Combatant{
+				MaxHP:      gamefx.EffectiveMaxHP(&player),
+				BaseAttack: stats["attack"],
+			},
+		}
+		act, err := BuildCombatAction(ctx, specs)
+		if err == nil {
+			applied = true
+			cdDuration = 30 * time.Second
+			effectType = "utility"
+			if act.Dmg > 0 {
+				effectValue = act.Dmg
+				logs = append(logs, fmt.Sprintf("Kích hoạt %s thôi động sát chiêu (Uy lực %.0f)!", specs.Name, act.Dmg))
+			} else if act.Def > 0 {
+				effectValue = act.Def
+				player.Statuses.Add("virtual_shield", "world_map", 5*time.Minute, act.Def)
+				logs = append(logs, fmt.Sprintf("Kích hoạt %s tạo lớp ảo thuẫn hộ thể (%.0f) duy trì 5 phút.", specs.Name, act.Def))
+			}
+			if len(act.Logs) > 0 {
+				logs = append(logs, act.Logs...)
+			}
+			if len(logs) == 0 {
+				logs = append(logs, fmt.Sprintf("Kích hoạt %s thành công!", specs.Name))
+			}
+		}
+	}
+
 	if !applied {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng này không có hiệu ứng nào có thể kích hoạt trên World Map!"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng này không có kỹ năng chủ động (Active) để kích hoạt!"})
 		return
 	}
 
@@ -222,8 +301,11 @@ func UseGuOnMap(c *gin.Context) {
 	}
 
 	responseWithPlayer(c, http.StatusOK, player, gin.H{
-		"message": strings.Join(logs, " "),
-		"logs":    logs,
+		"message":          strings.Join(logs, " "),
+		"logs":             logs,
+		"effect_type":      effectType,
+		"effect_value":     effectValue,
+		"cooldown_seconds": cdDuration.Seconds(),
 	})
 }
 

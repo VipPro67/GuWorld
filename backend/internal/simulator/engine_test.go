@@ -390,6 +390,65 @@ func TestPerGuSequentialActionExecution(t *testing.T) {
 	}
 }
 
+func TestPreAttackDefenseShieldPass(t *testing.T) {
+	// Attacker A is faster (Speed 200) with attack Gu
+	attacker := newTestCombatant("attacker", "Player", 1000, 200)
+	attacker.Speed = 200
+	attacker.Actions = []SimAction{
+		{ActionType: "BASIC_ATTACK", Name: "Đao Thần", Damage: 300},
+	}
+
+	// Defender B is slower (Speed 50) with shield Gu and attack Gu
+	defender := newTestCombatant("defender", "Enemy", 1000, 50)
+	defender.Speed = 50
+	defender.Actions = []SimAction{
+		{ActionType: "GU_SKILL", Name: "Kim Giáp Gu", Defense: 500},
+		{ActionType: "BASIC_ATTACK", Name: "Đánh Thường", Damage: 50},
+	}
+
+	state := &CombatState{
+		Seed:    42,
+		Allies:  []*CombatantAuto{attacker},
+		Enemies: []*CombatantAuto{defender},
+	}
+
+	logs := Simulate(state)
+
+	shieldLogIndex := -1
+	attackLogIndex := -1
+
+	for i, l := range logs {
+		if l.Turn == 1 {
+			if l.ActorId == "defender" && strings.Contains(l.Detail, "Khiên Ảo") {
+				if shieldLogIndex == -1 {
+					shieldLogIndex = i
+				}
+			}
+			if l.ActorId == "attacker" && strings.Contains(l.Detail, "Đao Thần") {
+				if attackLogIndex == -1 {
+					attackLogIndex = i
+				}
+			}
+		}
+	}
+
+	if shieldLogIndex == -1 {
+		t.Fatalf("expected defender to gain VirtualShield on turn 1")
+	}
+	if attackLogIndex == -1 {
+		t.Fatalf("expected attacker to strike on turn 1")
+	}
+	if shieldLogIndex >= attackLogIndex {
+		t.Fatalf("expected defender shield gain log (index %d) BEFORE attacker attack log (index %d)", shieldLogIndex, attackLogIndex)
+	}
+
+	// Verify defender HP was fully preserved by shield
+	if defender.HP < 1000 {
+		t.Fatalf("expected defender HP to be 1000 (shield absorbed all 300 damage), got %d", defender.HP)
+	}
+}
+
+
 
 
 

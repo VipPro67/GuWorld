@@ -48,6 +48,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const fogRef = useRef<Graphics>(new Graphics());
   const playerRef = useRef<Graphics>(new Graphics());
   const rangeRef = useRef<Graphics>(new Graphics());
+  const skillFxContainerRef = useRef<Container>(new Container());
+  const processedFxRef = useRef<Set<string>>(new Set());
 
   const playerAvatarRef = useRef<Sprite | null>(null);
   const fogDirtyRef = useRef(true);
@@ -93,6 +95,91 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const fetchObjects = useWorldStore((s) => s.fetchObjects);
   const guDictionary = useGameStore((s) => s.guDictionary);
   const itemDictionary = useGameStore((s) => s.itemDictionary);
+  const skillFxEvents = useWorldStore((s) => s.skillFxEvents);
+  const clearSkillFx = useWorldStore((s) => s.clearSkillFx);
+
+  // Render Pixi.js skill animations (Aura ring & floating text popups)
+  useEffect(() => {
+    if (!appReady || !skillFxContainerRef.current) return;
+
+    for (const event of skillFxEvents) {
+      if (processedFxRef.current.has(event.id)) continue;
+      processedFxRef.current.add(event.id);
+
+      const colorMap: Record<string, number> = {
+        heal: 0x10b981,
+        buff_atk: 0xef4444,
+        buff_def: 0x3b82f6,
+        buff_speed: 0xeab308,
+        mana_regen: 0x06b6d4,
+        shield: 0xa855f7,
+        teleport: 0x06b6d4,
+      };
+      const color = colorMap[event.type] || 0xf59e0b;
+
+      const fxGroup = new Container();
+      fxGroup.position.set(event.x + 0.5, event.y + 0.5);
+
+      // Aura Ring
+      const ring = new Graphics();
+      ring.circle(0, 0, 0.4);
+      ring.stroke({ width: 0.1, color, alpha: 0.9 });
+      fxGroup.addChild(ring);
+
+      // Floating Text Label
+      let textStr = event.text;
+      if (event.value && event.value > 0) {
+        if (event.type === "heal") textStr = `+${Math.round(event.value)} HP`;
+        else if (event.type === "buff_atk") textStr = `+${Math.round(event.value)} ATK`;
+        else if (event.type === "buff_def") textStr = `+${Math.round(event.value)} DEF`;
+        else if (event.type === "buff_speed") textStr = `+${Math.round(event.value)} SPEED`;
+        else if (event.type === "mana_regen") textStr = `+${Math.round(event.value)} Mana`;
+        else if (event.type === "shield") textStr = `+${Math.round(event.value)} Khiên`;
+      }
+
+      const txt = new Text({
+        text: textStr,
+        style: {
+          fontSize: 16,
+          fill: color,
+          fontWeight: "bold",
+          stroke: { color: 0x000000, width: 3 },
+        },
+      });
+      txt.anchor.set(0.5, 1);
+      txt.position.set(0, -0.6);
+      const targetScale = scaleRef.current > 0 ? 1.0 / scaleRef.current : 20;
+      txt.scale.set(targetScale);
+      fxGroup.addChild(txt);
+
+      skillFxContainerRef.current.addChild(fxGroup);
+
+      const startTime = performance.now();
+      const duration = 1600;
+
+      const animateFx = () => {
+        const elapsed = performance.now() - startTime;
+        const progress = elapsed / duration;
+
+        if (progress >= 1.0) {
+          if (fxGroup.parent) fxGroup.parent.removeChild(fxGroup);
+          fxGroup.destroy({ children: true });
+          clearSkillFx(event.id);
+        } else {
+          const scaleVal = 0.4 + progress * 1.2;
+          ring.clear();
+          ring.circle(0, 0, scaleVal);
+          ring.stroke({ width: Math.max(0.01, 0.15 * (1 - progress)), color, alpha: Math.max(0, 1 - progress) });
+
+          txt.position.y = -0.6 - progress * 1.2;
+          txt.alpha = Math.max(0, 1 - progress * 0.8);
+          requestAnimationFrame(animateFx);
+        }
+      };
+
+      requestAnimationFrame(animateFx);
+    }
+  }, [skillFxEvents, appReady, clearSkillFx]);
 
   const movementSpeed = useMemo(() => computeMovementSpeed(gamePlayer, guDictionary), [gamePlayer, guDictionary]);
 
@@ -241,7 +328,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
               
               // Handle skip battle result
               if (res.skip_result) {
-                const skipResult = res.skip_result;
+                const skipResult = res.skip_result as { winner?: string; enemy_name?: string; mine_occupied?: string };
                 const addToast = useGameStore.getState().addToast;
                 if (skipResult.winner === "Phe Ta") {
                   addToast(`Tự động chiến thắng ${skipResult.enemy_name || "kẻ thù"}!`, "success");
@@ -254,7 +341,8 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
               }
               
               if (!res.reached && !res.combat_triggered) {
-                if (res.skip_result && res.skip_result.winner !== "Phe Ta") {
+                const skipRes = res.skip_result as { winner?: string } | undefined;
+                if (skipRes && skipRes.winner !== "Phe Ta") {
                   isMovingRef.current = false;
                   setMoving(false);
                   selectObject(null);
@@ -304,6 +392,11 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const ty = Math.floor(worldY);
 
       const s = useWorldStore.getState();
+      if (s.targetingGu) {
+        s.useGuOnMap(s.targetingGu.guInstanceId, tx, ty);
+        return;
+      }
+
       const nearby = s.nearbyCells.find((c) => c.x === tx && c.y === ty);
       const persistent = s.objects.find((c) => c.x === tx && c.y === ty);
       const nearbyPl = s.nearbyPlayers.find((p) => p.x === tx && p.y === ty);
@@ -360,8 +453,49 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
         performMove(detail.x, detail.y);
       }
     };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable)) {
+        return;
+      }
+
+      let dx = 0;
+      let dy = 0;
+      const key = e.key.toLowerCase();
+
+      if (key === "w" || key === "arrowup") {
+        dy = -1;
+      } else if (key === "s" || key === "arrowdown") {
+        dy = 1;
+      } else if (key === "a" || key === "arrowleft") {
+        dx = -1;
+      } else if (key === "d" || key === "arrowright") {
+        dx = 1;
+      } else {
+        return;
+      }
+
+      e.preventDefault();
+
+      const curPlayer = useGameStore.getState().player;
+      if (!curPlayer) return;
+
+      const currentX = playerRef.current?.position.x ? Math.round(playerRef.current.position.x - 0.5) : curPlayer.x;
+      const currentY = playerRef.current?.position.y ? Math.round(playerRef.current.position.y - 0.5) : curPlayer.y;
+
+      const targetX = Math.max(0, Math.min(WORLD_W - 1, currentX + dx));
+      const targetY = Math.max(0, Math.min(WORLD_H - 1, currentY + dy));
+
+      performMove(targetX, targetY);
+    };
+
     window.addEventListener("gu_world_move", handleCustomMove);
-    return () => window.removeEventListener("gu_world_move", handleCustomMove);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("gu_world_move", handleCustomMove);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [performMove]);
 
   const handleObjectClick = useCallback(
@@ -941,6 +1075,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       stageRef.current.addChild(playersContainerRef.current);
       stageRef.current.addChild(rangeRef.current);
       stageRef.current.addChild(playerRef.current);
+      stageRef.current.addChild(skillFxContainerRef.current);
 
       drawPlayer();
       drawRegions(regions);

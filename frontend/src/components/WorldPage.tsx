@@ -29,6 +29,7 @@ const PremiumStoreView = dynamic(() => import("./PremiumStoreView").then(m => m.
 const DungeonView = dynamic(() => import("./DungeonView").then(m => m.DungeonView), { ssr: false });
 const ImmortalApertureView = dynamic(() => import("./ImmortalApertureView").then(m => m.ImmortalApertureView), { ssr: false });
 const PartyView = dynamic(() => import("./PartyView").then(m => m.PartyView), { ssr: false });
+const GuQuickBar = dynamic(() => import("./GuQuickBar").then(m => m.GuQuickBar), { ssr: false });
 
 const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; borderColor: string; bgColor: string }> = {
   Boss:     { icon: "⚔️",  label: "Boss",        color: "text-red-300",     borderColor: "border-red-500/30",     bgColor: "bg-red-950/60" },
@@ -533,6 +534,7 @@ export function WorldPage() {
         </div>
       )}
 
+      <GuQuickBar />
       <WorldLogViewer />
     </div>
   );

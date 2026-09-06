@@ -276,4 +276,68 @@ func TestSetVitalGuBacklashSeverelyWounded(t *testing.T) {
 		t.Errorf("expected player to have severely_wounded status")
 	}
 }
+func TestGetPassiveStatsStatBaseSpeedNoDaoScaling(t *testing.T) {
+	models.GuRegistry = map[string]map[int]models.GuDictionaryItem{
+		"GU_WIND": {
+			1: {
+				ID:   "GU_WIND",
+				Name: "Phong Cổ",
+				Rank: 1,
+				Path: []string{"wind"},
+				Type: "Passive",
+				Effects: models.GuEffects{
+					Passive: &models.PassiveEffect{
+						StatBaseAttack: 10,
+						StatBaseSpeed:  10,
+					},
+				},
+			},
+		},
+	}
 
+	p := &models.Player{
+		CultivationState: models.CultivationState{Rank: 1, SubRank: 1},
+		DaoState: models.DaoState{
+			DaoMarks: map[string]int64{
+				"wind": 100, // 100 dao marks = +100% (daoMult = 2.0)
+			},
+		},
+		GuInventory: models.GuInventory{
+			{InstanceID: "inst_wind", GuID: "GU_WIND", Rank: 1, Status: "ACTIVE", Equipped: true},
+		},
+	}
+
+	res := GetPassiveStats(p)
+
+	// StatBaseAttack: value=10, mult=1.0, daoMult=2.0 -> final = 20
+	// StatBaseSpeed: value=10, mult=1.0, daoMult=1.0 -> final = 10
+	var speedGuFinal float64
+	var attackGuFinal float64
+
+	for _, detail := range res.Details {
+		if detail.Key == "speed" {
+			for _, src := range detail.Sources {
+				if src.Source == "gu:GU_WIND" {
+					speedGuFinal = src.Final
+					if src.Dao != 1.0 {
+						t.Errorf("expected StatBaseSpeed Dao multiplier to be 1.0, got %f", src.Dao)
+					}
+				}
+			}
+		}
+		if detail.Key == "attack" {
+			for _, src := range detail.Sources {
+				if src.Source == "gu:GU_WIND" {
+					attackGuFinal = src.Final
+					if src.Dao != 2.0 {
+						t.Errorf("expected StatBaseAttack Dao multiplier to be 2.0, got %f", src.Dao)
+					}
+				}
+			}
+		}
+	}
+
+	if speedGuFinal != 10.0 || attackGuFinal != 20.0 {
+		t.Fatalf("res.Details = %+v, speedGuFinal=%f, attackGuFinal=%f", res.Details, speedGuFinal, attackGuFinal)
+	}
+}
