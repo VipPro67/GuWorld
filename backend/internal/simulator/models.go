@@ -260,6 +260,10 @@ type CombatantAuto struct {
 	HasDaoConflict       bool    // DAO_CONFLICT reduces heal/shield from allies
 	AccuracyPenalty      float64 // 0..1 miss chance (BLIND)
 	DamageTakenReduction float64 // 0..1 damage reduction multiplier (DAMAGE_REDUCTION_UP / INVINCIBLE)
+	Accuracy             float64 // accuracy bonus (reduces miss chance from Blind, adds to dodge check)
+	CritRateBonus        float64 // extra crit chance (0..1) from Gu active effects
+	IgnoreDefenseFlat    float64 // flat defense ignored by attacker
+	IgnoreDefensePct     float64 // % defense ignored by attacker (0..1)
 
 	// Auto-use settings
 	AutoHealHP      bool

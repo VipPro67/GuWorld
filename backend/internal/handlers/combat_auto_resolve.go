@@ -614,8 +614,8 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 			Detail: defeatMsg,
 		})
 
-		updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, current_region = $3, x = $4, y = $5, aptitude_percent = $6, lifespan = $7, primeval_stones = $8, path_masteries = $9, version = version + 1 WHERE id = $10`
-		args = append(args, player.HP, finalMana, player.CurrentRegion, player.X, player.Y, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.PathMasteries, player.ID)
+		updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, current_region = $3, x = $4, y = $5, aptitude_percent = $6, lifespan = $7, primeval_stones = $8, immortal_stones = $9, path_masteries = $10, version = version + 1 WHERE id = $11`
+		args = append(args, player.HP, finalMana, player.CurrentRegion, player.X, player.Y, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.ImmortalStones, player.PathMasteries, player.ID)
 	}
 
 	// Fire ON_COMBAT_END on equipped ACTIVE Gus
@@ -667,8 +667,19 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 		}
 	}
 
+	if math.IsNaN(finalPlayerHP) || math.IsInf(finalPlayerHP, 0) {
+		finalPlayerHP = 0
+	}
+	if math.IsNaN(finalMana) || math.IsInf(finalMana, 0) {
+		finalMana = 0
+	}
+	if math.IsNaN(player.HP) || math.IsInf(player.HP, 0) {
+		player.HP = 1.0
+	}
+
 	_, err = tx.Exec(updateQuery, args...)
 	if err != nil {
+		logger.S.Errorf("Failed to save combat outcome for player %s: %v", player.ID, err)
 		return "", nil, nil, fmt.Errorf("failed to save combat outcome: %w", err)
 	}
 
@@ -785,6 +796,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 
 	if alliesAlive && !isVirtual {
 		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
+			logger.S.Errorf("Failed to sync player gus for player %s: %v", player.ID, err)
 			return "", nil, nil, fmt.Errorf("failed to save combat outcome: %w", err)
 		}
 	}
@@ -1044,6 +1056,87 @@ func computeGlobalGuDamageMultiplier(selectedGuIDs []string, resolveSpec func(st
 		}
 	}
 	return multiplier
+}
+
+// computeGlobalIgnoreDefense aggregates ignore_defense from all equipped active Gu (additive, capped at 0.8).
+func computeGlobalIgnoreDefense(selectedGuIDs []string, resolveSpec func(string) (models.GuDictionaryItem, bool)) (flat float64, pct float64) {
+	seen := make(map[string]struct{}, len(selectedGuIDs))
+	for _, guID := range selectedGuIDs {
+		if _, ok := seen[guID]; ok {
+			continue
+		}
+		seen[guID] = struct{}{}
+		spec, ok := resolveSpec(guID)
+		if !ok || spec.Effects.Active == nil {
+			continue
+		}
+		flat += spec.Effects.Active.IgnoreDefense
+		pct += spec.Effects.Active.IgnoreDefensePct
+	}
+	if pct > 0.8 {
+		pct = 0.8
+	}
+	return flat, pct
+}
+
+// computeGlobalCritRate aggregates crit_rate_boost from all equipped active Gu (additive, capped at 0.8).
+func computeGlobalCritRate(selectedGuIDs []string, resolveSpec func(string) (models.GuDictionaryItem, bool)) float64 {
+	total := 0.0
+	seen := make(map[string]struct{}, len(selectedGuIDs))
+	for _, guID := range selectedGuIDs {
+		if _, ok := seen[guID]; ok {
+			continue
+		}
+		seen[guID] = struct{}{}
+		spec, ok := resolveSpec(guID)
+		if !ok || spec.Effects.Active == nil {
+			continue
+		}
+		total += spec.Effects.Active.CritRateBoost
+	}
+	if total > 0.8 {
+		total = 0.8
+	}
+	return total
+}
+
+// computeGlobalSpeedBoost aggregates speed_boost_flat from all equipped active Gu (additive).
+func computeGlobalSpeedBoost(selectedGuIDs []string, resolveSpec func(string) (models.GuDictionaryItem, bool)) float64 {
+	total := 0.0
+	seen := make(map[string]struct{}, len(selectedGuIDs))
+	for _, guID := range selectedGuIDs {
+		if _, ok := seen[guID]; ok {
+			continue
+		}
+		seen[guID] = struct{}{}
+		spec, ok := resolveSpec(guID)
+		if !ok || spec.Effects.Active == nil {
+			continue
+		}
+		total += spec.Effects.Active.SpeedBoostFlat
+	}
+	return total
+}
+
+// computeGlobalAllStatsBuff aggregates all_stats_buff_percent from all equipped active Gu (additive, capped at 0.5).
+func computeGlobalAllStatsBuff(selectedGuIDs []string, resolveSpec func(string) (models.GuDictionaryItem, bool)) float64 {
+	total := 0.0
+	seen := make(map[string]struct{}, len(selectedGuIDs))
+	for _, guID := range selectedGuIDs {
+		if _, ok := seen[guID]; ok {
+			continue
+		}
+		seen[guID] = struct{}{}
+		spec, ok := resolveSpec(guID)
+		if !ok || spec.Effects.Active == nil {
+			continue
+		}
+		total += spec.Effects.Active.AllStatsBuffPct
+	}
+	if total > 0.5 {
+		total = 0.5
+	}
+	return total
 }
 
 func buildSimActionFromKillerMove(km models.KillerMove, _ []models.KillerMoveSlot, daoMarks models.DaoMarksMap) simulator.SimAction {

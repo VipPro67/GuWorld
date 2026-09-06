@@ -947,11 +947,30 @@ func Simulate(state *CombatState) []CombatLog {
 						if a.SourceID == "GU_BREAK_SPACE" {
 							targetDef = math.Max(0, targetDef-30.0)
 						}
+						// Apply ignore_defense from attacker
+						if actor.IgnoreDefenseFlat > 0 {
+							targetDef = math.Max(0, targetDef-actor.IgnoreDefenseFlat)
+						}
+						if actor.IgnoreDefensePct > 0 {
+							targetDef = math.Max(0, targetDef*(1.0-actor.IgnoreDefensePct))
+						}
 
 						for h := 0; h < hitCount; h++ {
 							hitDmg := a.Damage * dmgMultiplier * daoMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path))
 							if h > 0 {
 								hitDmg *= 0.7
+							}
+							// Critical hit check
+							if actor.CritRateBonus > 0 && rng.Float64() < actor.CritRateBonus {
+								hitDmg *= 1.5
+								turnLogs = append(turnLogs, CombatLog{
+									Turn:      turn,
+									ActorId:   actor.ID,
+									ActorName: actor.Name,
+									Action:    "CRIT",
+									TargetId:  target.ID,
+									Detail:    fmt.Sprintf("%s chí mạng! Đòn %s gây 150%% sát thương!", actor.Name, a.Name),
+								})
 							}
 							netDmg := hitDmg - targetDef
 							netDmg *= (1.0 - pathBonus(target.PathResistance, a.Path))

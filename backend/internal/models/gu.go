@@ -41,6 +41,13 @@ type ActiveEffect struct {
 	SummonCountPerTick   float64 `json:"summon_count_per_tick,omitempty"`
 	PhantomDamageScale   float64 `json:"phantom_damage_scale,omitempty"`
 
+	// Combat modifier fields
+	IgnoreDefense       float64 `json:"ignore_defense,omitempty"`       // flat defense ignored
+	IgnoreDefensePct    float64 `json:"ignore_defense_pct,omitempty"`   // % defense ignored (0..1)
+	CritRateBoost       float64 `json:"crit_rate_boost,omitempty"`      // extra crit chance (0..1)
+	AllStatsBuffPct     float64 `json:"all_stats_buff_percent,omitempty"` // % buff to all stats (0..1)
+	SpeedBoostFlat      float64 `json:"speed_boost_flat,omitempty"`     // flat speed bonus
+
 	// Shorthand status effect fields — tier value (e.g. "freeze": 1 = speed T1)
 	// Normalized to ApplyStatus + StatusDurationTicks during loading.
 	Freeze  float64 `json:"freeze,omitempty"`
@@ -77,6 +84,7 @@ type PassiveEffect struct {
 	Luck                  float64 `json:"luck,omitempty"`
 	SuccessRateBonus      float64 `json:"success_rate_bonus,omitempty"`
 	TimeSpeedMultiplier   float64 `json:"time_speed_multiplier,omitempty"`
+	Accuracy              float64 `json:"accuracy,omitempty"` // accuracy bonus (reduces enemy dodge)
 }
 
 type SpecialMechanic struct {
@@ -304,6 +312,21 @@ func GetFlatGuEffects(gu Gu) map[string]float64 {
 		if gu.Effects.Active.RandomPortal {
 			res["random_portal"] = 1.0
 		}
+		if gu.Effects.Active.IgnoreDefense > 0 {
+			res["ignore_defense"] = gu.Effects.Active.IgnoreDefense
+		}
+		if gu.Effects.Active.IgnoreDefensePct > 0 {
+			res["ignore_defense_pct"] = gu.Effects.Active.IgnoreDefensePct
+		}
+		if gu.Effects.Active.CritRateBoost > 0 {
+			res["crit_rate_boost"] = gu.Effects.Active.CritRateBoost
+		}
+		if gu.Effects.Active.AllStatsBuffPct > 0 {
+			res["all_stats_buff_percent"] = gu.Effects.Active.AllStatsBuffPct
+		}
+		if gu.Effects.Active.SpeedBoostFlat > 0 {
+			res["speed_boost_flat"] = gu.Effects.Active.SpeedBoostFlat
+		}
 		res["channel_time"] = 0 // default
 	}
 	if gu.Effects.Passive != nil {
@@ -321,6 +344,9 @@ func GetFlatGuEffects(gu Gu) map[string]float64 {
 		}
 		if gu.Effects.Passive.PathConflictReduction > 0 {
 			res["path_conflict_reduction"] = gu.Effects.Passive.PathConflictReduction
+		}
+		if gu.Effects.Passive.Accuracy > 0 {
+			res["accuracy"] = gu.Effects.Passive.Accuracy
 		}
 	}
 	return res

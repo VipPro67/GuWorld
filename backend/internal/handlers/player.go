@@ -2660,6 +2660,9 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 			if passive.Evasion > 0 {
 				addSrc("evasion", srcID, spec.Name, passive.Evasion, 1, 1)
 			}
+			if passive.Accuracy > 0 {
+				addSrc("accuracy", srcID, spec.Name, passive.Accuracy, 1, 1)
+			}
 			if passive.CleansingPower > 0 {
 				addSrc("cleansing_power", srcID, spec.Name, passive.CleansingPower, 1, 1)
 			}
@@ -2690,6 +2693,7 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 		"movement":      0.0,
 		"investigation": 0.0,
 		"storage":       0.0,
+		"accuracy":      0.0,
 	}
 	var details []PassiveStatDetail
 	for key, srcs := range acc {
@@ -2713,6 +2717,72 @@ func GetPassiveStats(player *models.Player) PassiveStatsResult {
 				})
 				details[i].Total += storageBonus
 				break
+			}
+		}
+	}
+
+	// Apply speed_boost_flat from equipped Gu active effects
+	{
+		totalSpeedBoost := 0.0
+		for _, gu := range player.GuInventory {
+			if gu.Equipped && gu.Status == "ACTIVE" {
+				spec, ok := models.GetGu(gu.GuID, gu.Rank)
+				if !ok || spec.Effects.Active == nil {
+					continue
+				}
+				if spec.Effects.Active.SpeedBoostFlat > 0 {
+					totalSpeedBoost += spec.Effects.Active.SpeedBoostFlat
+				}
+			}
+		}
+		if totalSpeedBoost > 0 {
+			stats["speed"] += totalSpeedBoost
+			details = append(details, PassiveStatDetail{Key: "speed", Total: totalSpeedBoost, Sources: []PassiveStatSource{{
+				Source: "gu:active", Name: "Speed Boost", Value: totalSpeedBoost, Mult: 1, Dao: 1, Final: totalSpeedBoost,
+			}}})
+		}
+	}
+
+	// Apply all_stats_buff_percent from equipped Gu active effects
+	{
+		totalBuffPct := 0.0
+		for _, gu := range player.GuInventory {
+			if gu.Equipped && gu.Status == "ACTIVE" {
+				spec, ok := models.GetGu(gu.GuID, gu.Rank)
+				if !ok || spec.Effects.Active == nil {
+					continue
+				}
+				if spec.Effects.Active.AllStatsBuffPct > 0 {
+					totalBuffPct += spec.Effects.Active.AllStatsBuffPct
+				}
+			}
+		}
+		if totalBuffPct > 0 {
+			for key := range stats {
+				if key == "storage" || key == "accuracy" {
+					continue
+				}
+				cur := stats[key]
+				if cur > 0 {
+					delta := cur * totalBuffPct
+					stats[key] += delta
+					found := false
+					for i := range details {
+						if details[i].Key == key {
+							details[i].Sources = append(details[i].Sources, PassiveStatSource{
+								Source: "gu:active", Name: "All Stats Buff", Value: delta, Mult: 1, Dao: 1, Final: delta,
+							})
+							details[i].Total += delta
+							found = true
+							break
+						}
+					}
+					if !found {
+						details = append(details, PassiveStatDetail{Key: key, Total: delta, Sources: []PassiveStatSource{{
+							Source: "gu:active", Name: "All Stats Buff", Value: delta, Mult: 1, Dao: 1, Final: delta,
+						}}})
+					}
+				}
 			}
 		}
 	}

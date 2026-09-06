@@ -722,8 +722,8 @@ func AutoCombatStart(c *gin.Context) {
 				player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
 			}
 
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, aptitude_percent = $4, lifespan = $5, path_masteries = $6, cleared_cells = $7, version = version + 1 WHERE id = $8`
-			args = append(args, finalPlayerHP, finalMana, player.PrimevalStones, player.AptitudePercent, player.Lifespan, player.PathMasteries, player.ClearedCells, player.ID)
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, primeval_stones = $3, immortal_stones = $4, aptitude_percent = $5, lifespan = $6, path_masteries = $7, cleared_cells = $8, version = version + 1 WHERE id = $9`
+			args = append(args, finalPlayerHP, finalMana, player.PrimevalStones, player.ImmortalStones, player.AptitudePercent, player.Lifespan, player.PathMasteries, player.ClearedCells, player.ID)
 		}
 	} else {
 		if isVirtual {
@@ -777,8 +777,8 @@ func AutoCombatStart(c *gin.Context) {
 				Detail: defeatMsg,
 			})
 
-			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, current_region = $3, x = $4, y = $5, aptitude_percent = $6, lifespan = $7, primeval_stones = $8, path_masteries = $9, version = version + 1 WHERE id = $10`
-			args = append(args, player.HP, finalMana, player.CurrentRegion, player.X, player.Y, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.PathMasteries, player.ID)
+			updateQuery = `UPDATE players SET hp = $1, current_mana = $2, active_combat = NULL, current_region = $3, x = $4, y = $5, aptitude_percent = $6, lifespan = $7, primeval_stones = $8, immortal_stones = $9, path_masteries = $10, version = version + 1 WHERE id = $11`
+			args = append(args, player.HP, finalMana, player.CurrentRegion, player.X, player.Y, player.AptitudePercent, player.Lifespan, player.PrimevalStones, player.ImmortalStones, player.PathMasteries, player.ID)
 		}
 	}
 
@@ -833,8 +833,19 @@ func AutoCombatStart(c *gin.Context) {
 		}
 	}
 
+	if math.IsNaN(finalPlayerHP) || math.IsInf(finalPlayerHP, 0) {
+		finalPlayerHP = 0
+	}
+	if math.IsNaN(finalMana) || math.IsInf(finalMana, 0) {
+		finalMana = 0
+	}
+	if math.IsNaN(player.HP) || math.IsInf(player.HP, 0) {
+		player.HP = 1.0
+	}
+
 	_, err = tx.Exec(updateQuery, args...)
 	if err != nil {
+		logger.S.Errorf("Failed to save combat outcome for player %s: %v", player.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat outcome"})
 		return
 	}
@@ -956,6 +967,7 @@ func AutoCombatStart(c *gin.Context) {
 
 	if alliesAlive && !isVirtual {
 		if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
+			logger.S.Errorf("Failed to sync player gus for player %s: %v", player.ID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save combat outcome"})
 			return
 		}
@@ -1270,7 +1282,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		Mana:                 simMana,
 		BaseDmg:              playerStats["attack"],
 		BaseDef:              playerStats["defense"],
-		Speed:                playerStats["speed"],
+		Speed:                playerStats["speed"] + computeGlobalSpeedBoost(selectedGuIDs, loadoutSpec),
 		DaoMarks:             simulator.DaoMarks(player.DaoMarks),
 		PathMasteries:        player.PathMasteries,
 		PathMasteryGainLimit: gamefx.PathMasteryBattleGainLimit(player.Rank),
@@ -1291,6 +1303,10 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		PrimevalStones:  simStones,
 		ImmortalStones:  simImmortalStones,
 		RefineManaTier:  gamefx.RefineManaTier(player.Rank, player.GuInventory),
+		Accuracy:        playerStats["accuracy"],
+		CritRateBonus:   computeGlobalCritRate(selectedGuIDs, loadoutSpec),
+		IgnoreDefenseFlat: func() float64 { f, _ := computeGlobalIgnoreDefense(selectedGuIDs, loadoutSpec); return f }(),
+		IgnoreDefensePct:  func() float64 { _, p := computeGlobalIgnoreDefense(selectedGuIDs, loadoutSpec); return p }(),
 		GuHunger: func() map[string]int {
 			gh := make(map[string]int)
 			for guID, inst := range equippedInstByGuID {
