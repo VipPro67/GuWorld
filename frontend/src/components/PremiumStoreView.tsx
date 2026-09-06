@@ -159,24 +159,8 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
 
   // Create payOS order
   const createOrder = async (packageId: string) => {
-    setLoadingPackage(packageId);
-    setTopupMessage(null);
-    try {
-      const response = await authFetch(`${BACKEND_URL}/api/topup/orders`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ packageId }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Tạo đơn thất bại");
-      setOrder(data);
-      if (data.checkoutUrl) window.location.assign(data.checkoutUrl);
-    } catch (err) {
-      setTopupMessage(err instanceof Error ? err.message : "Tạo đơn thất bại");
-    } finally {
-      setLoadingPackage(null);
-    }
+    setTopupMessage("Chức năng nạp tiền hiện đang tạm ngưng.");
+    return;
   };
 
   // Buy Premium Package
@@ -275,7 +259,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
       <GameTabs
         items={[
           { id: "packages", label: "Gói Tu Luyện", icon: <ShoppingBag className="h-4 w-4" />, disabled: false },
-          { id: "topup", label: "Nạp Tiên Ngọc", icon: <Gem className="h-4 w-4" />, disabled: false },
+          { id: "topup", label: "Nạp Tiên Ngọc", icon: <Gem className="h-4 w-4" />, disabled: true },
           { id: "exchange", label: "Đổi Đá", icon: <ArrowLeftRight className="h-4 w-4" />, disabled: false },
         ]}
         activeId={activeTab}
@@ -367,6 +351,9 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
       {/* Tab 2: Nạp Tiên Ngọc */}
       {activeTab === "topup" && (
         <div className="space-y-6">
+          <div className="rounded-2xl border border-amber-700/40 bg-amber-950/30 p-3 text-sm text-amber-200 font-mono">
+            ⚠️ Chức năng nạp tiền hiện đang tạm ngưng bảo trì.
+          </div>
           {topupMessage && (
             <div className="rounded-2xl border border-red-700/40 bg-red-950/30 p-3 text-sm text-red-200 font-mono">
               {topupMessage}
@@ -441,11 +428,11 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
                     </div>
                   </div>
                   <button
-                    disabled={loadingPackage === pkg.id}
+                    disabled={true}
                     onClick={() => createOrder(pkg.id)}
-                    className="mt-5 w-full rounded-xl bg-emerald-650 hover:bg-emerald-650 px-4 py-2 text-xs font-mono font-bold text-white disabled:opacity-60 transition-colors"
+                    className="mt-5 w-full rounded-xl bg-zinc-800 px-4 py-2 text-xs font-mono font-bold text-zinc-500 cursor-not-allowed opacity-60 transition-colors"
                   >
-                    {loadingPackage === pkg.id ? "Đang tạo đơn..." : "Nạp ngay"}
+                    Tạm ngưng nạp
                   </button>
                 </div>
               ))}

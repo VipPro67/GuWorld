@@ -278,68 +278,7 @@ type createTopupOrderRequest struct {
 }
 
 func CreateTopupOrder(c *gin.Context) {
-	playerID, ok := middleware.GetPlayerID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-	var req createTopupOrderRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	pkg, ok := findTopupPackage(req.PackageID)
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Gói nạp không hợp lệ"})
-		return
-	}
-
-	orderCode := time.Now().UnixMilli()%900000000000 + 100000000000
-	frontendURL := strings.TrimRight(getEnvOrDefault("FRONTEND_URL", "http://localhost:3000"), "/")
-	returnURL := fmt.Sprintf("%s/topup/success?orderCode=%d", frontendURL, orderCode)
-	cancelURL := fmt.Sprintf("%s/topup?cancelled=1&orderCode=%d", frontendURL, orderCode)
-	description := fmt.Sprintf("GU%06d", orderCode%1000000)
-
-	tx, err := db.DB.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction failure"})
-		return
-	}
-	defer tx.Rollback()
-
-	if _, err = tx.Exec(`INSERT INTO wallets (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`, playerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể khởi tạo ví"})
-		return
-	}
-	if _, err = tx.Exec(`INSERT INTO topup_orders (user_id, order_code, amount_vnd, jade_amount, status, provider) VALUES ($1,$2,$3,$4,'PENDING','PAYOS')`, playerID, orderCode, pkg.AmountVND, pkg.Jade); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tạo đơn nạp"})
-		return
-	}
-	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu đơn nạp"})
-		return
-	}
-
-	checkoutURL, qrCode, payErr := createPayOSPaymentLink(orderCode, pkg, description, returnURL, cancelURL)
-	if payErr != nil {
-		logger.S.Errorf("CreateTopupOrder createPayOSPaymentLink failed for order %d player %s: %v", orderCode, playerID, payErr)
-		_, _ = db.DB.Exec(`UPDATE topup_orders SET status='FAILED' WHERE order_code=$1 AND status='PENDING'`, orderCode)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Không thể tạo link thanh toán", "details": payErr.Error()})
-		return
-	}
-	_, err = db.DB.Exec(`UPDATE topup_orders SET checkout_url=$1, qr_code=$2 WHERE order_code=$3`, checkoutURL, qrCode, orderCode)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu link thanh toán"})
-		return
-	}
-
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &playerID, Action: "topup.create_order", EntityType: "topup_order",
-		EntityID:       strconv.FormatInt(orderCode, 10),
-		RequestSummary: fmt.Sprintf("Gói %s | %d VND | %d Tiên Ngọc", req.PackageID, pkg.AmountVND, pkg.Jade),
-		IPAddress:      c.ClientIP(), Success: true,
-	})
-	c.JSON(http.StatusOK, gin.H{"orderCode": orderCode, "amountVnd": pkg.AmountVND, "jadeAmount": pkg.Jade, "checkoutUrl": checkoutURL, "qrCode": qrCode, "status": "PENDING"})
+	c.JSON(http.StatusBadRequest, gin.H{"error": "Chức năng nạp tiền hiện đang tạm ngưng"})
 }
 
 func GetTopupOrder(c *gin.Context) {
