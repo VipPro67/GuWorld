@@ -920,12 +920,10 @@ func MovePlayer(c *gin.Context) {
 		}
 		combatJSON = string(b)
 	}
-	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, combatJSON, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
-	if err != nil && player.CurrentRegion != HubRegionID {
-		// Fall back to HubRegionID if current_region is not found in database regions table
+	if ZoneByID(player.CurrentRegion) == nil {
 		player.CurrentRegion = HubRegionID
-		_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, combatJSON, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
 	}
+	_, err = tx.Exec(updateQuery, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, combatJSON, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
 	if err != nil {
 		logger.S.Errorf("MovePlayer: failed to update player=%s at (%d,%d), region=%s, combat=%t: %v", player.ID, player.X, player.Y, player.CurrentRegion, player.ActiveCombat != nil, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
@@ -1163,20 +1161,14 @@ func MovePlayerPath(c *gin.Context) {
 		}
 		combatJSON = string(b)
 	}
+	if ZoneByID(player.CurrentRegion) == nil {
+		player.CurrentRegion = HubRegionID
+	}
 	_, err = tx.Exec(`
 		UPDATE players
 		SET current_mana = $1, x = $2, y = $3, current_region = $4, cleared_cells = $5, active_combat = $6, last_mana_update = $7, primeval_stones = $8, hp = $9, max_mana = $10, human_qi = $11, visited_subzones = $12
 		WHERE id = $13
 	`, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, combatJSON, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
-	if err != nil && player.CurrentRegion != HubRegionID {
-		// Fall back to HubRegionID if current_region is not found in database regions table
-		player.CurrentRegion = HubRegionID
-		_, err = tx.Exec(`
-			UPDATE players
-			SET current_mana = $1, x = $2, y = $3, current_region = $4, cleared_cells = $5, active_combat = $6, last_mana_update = $7, primeval_stones = $8, hp = $9, max_mana = $10, human_qi = $11, visited_subzones = $12
-			WHERE id = $13
-		`, player.CurrentMana, player.X, player.Y, player.CurrentRegion, player.ClearedCells, combatJSON, time.Now(), player.PrimevalStones, player.HP, player.MaxMana, player.HumanQi, player.VisitedSubZones, player.ID)
-	}
 	if err != nil {
 		logger.S.Errorf("MovePlayerPath: failed to update player=%s at (%d,%d), region=%s, combat=%t: %v", player.ID, player.X, player.Y, player.CurrentRegion, player.ActiveCombat != nil, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"})
