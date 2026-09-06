@@ -33,7 +33,23 @@ func StartStatusExpiryWorker(ctx context.Context, db *sql.DB, interval time.Dura
 // has at least one entry carrying an expires_at, dropping elements whose
 // expires_at has passed. Permanent entries (no expires_at) are kept as-is.
 func processStatusExpiryTick(db *sql.DB) {
-	res, err := db.Exec(`
+	tx, err := db.Begin()
+	if err != nil {
+		logger.S.Errorf("Status Expiry Worker Error starting transaction: %v", err)
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`SET LOCAL statement_timeout = '30000'`); err != nil {
+		logger.S.Errorf("Status Expiry Worker Error setting statement_timeout: %v", err)
+		return
+	}
+	if _, err := tx.Exec(`SET LOCAL lock_timeout = '30000'`); err != nil {
+		logger.S.Errorf("Status Expiry Worker Error setting lock_timeout: %v", err)
+		return
+	}
+
+	res, err := tx.Exec(`
 		UPDATE players p
 		SET statuses = COALESCE((
 			SELECT jsonb_agg(s ORDER BY idx)
@@ -53,6 +69,12 @@ func processStatusExpiryTick(db *sql.DB) {
 		logger.S.Errorf("Status Expiry Worker Error purging expired statuses: %v", err)
 		return
 	}
+
+	if err := tx.Commit(); err != nil {
+		logger.S.Errorf("Status Expiry Worker Error committing transaction: %v", err)
+		return
+	}
+
 	if n, _ := res.RowsAffected(); n > 0 {
 		logger.S.Infof("Status Expiry Worker: cleaned expired statuses for %d player(s)", n)
 	}

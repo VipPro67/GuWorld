@@ -13,6 +13,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
+
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -1520,16 +1522,19 @@ func autoResolveEvent(eventID string, playerID string) {
 	_ = tx.Commit()
 }
 
-// ProcessActiveTribulationGrid moves tribulation enemies towards resource nodes and attacks them
-func ProcessActiveTribulationGrid() error {
-	tx, err := db.DB.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
+type ActiveTribulationEvent struct {
+	EventID         string
+	ApertureID      string
+	PlayerID        string
+	TribulationType string
+	StartedAt       time.Time
+}
 
-	// 1. Fetch all active tribulation events
-	rows, err := tx.Query(`
+// ProcessActiveTribulationGrid moves tribulation enemies towards resource nodes and attacks them.
+// Position updates and watchtower damage are processed per event in isolated transactions with timeouts.
+func ProcessActiveTribulationGrid() error {
+	// 1. Fetch all active tribulation events outside of long-held transactions
+	rows, err := db.DB.Query(`
 		SELECT id, aperture_id, player_id, tribulation_type, started_at
 		FROM tribulation_events 
 		WHERE status = 'ACTIVE'
@@ -1539,165 +1544,193 @@ func ProcessActiveTribulationGrid() error {
 	}
 	defer rows.Close()
 
-	type ActiveEvent struct {
-		EventID         string
-		ApertureID      string
-		PlayerID        string
-		TribulationType string
-		StartedAt       time.Time
-	}
-	var events []ActiveEvent
+	var events []ActiveTribulationEvent
 	for rows.Next() {
-		var ev ActiveEvent
+		var ev ActiveTribulationEvent
 		if err := rows.Scan(&ev.EventID, &ev.ApertureID, &ev.PlayerID, &ev.TribulationType, &ev.StartedAt); err == nil {
 			events = append(events, ev)
 		}
 	}
 	rows.Close()
 
+	// 2. Process each event in its own transaction so a single failing or slow event doesn't block the rest
 	for _, ev := range events {
-		// Freeze the tribulation while the player is offline: enemies hold their
-		// position and never damage nodes. Bump started_at so the 24h auto-resolve
-		// window only counts online time.
-		if !isPlayerOnline(ev.PlayerID) {
-			_, _ = tx.Exec(`UPDATE tribulation_events SET started_at = NOW() WHERE id = $1`, ev.EventID)
-			continue
+		if err := processActiveTribulationEvent(ev); err != nil {
+			logger.S.Errorf("Error processing tribulation event %s for player %s: %v", ev.EventID, ev.PlayerID, err)
 		}
+	}
+	return nil
+}
 
-		// Grace period after spawn/return: enemies stay idle for a short window.
-		if time.Since(ev.StartedAt) < tribulationGracePeriod {
-			continue
-		}
+func processActiveTribulationEvent(ev ActiveTribulationEvent) error {
+	tx, err := db.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
-		// Fixed node damage per hit, based on tribulation type
-		nodeDmgPerHit := 1 // EARTH_CALAMITY
-		switch ev.TribulationType {
-		case "HEAVENLY_TRIBULATION":
-			nodeDmgPerHit = 2
-		case "GRAND_TRIBULATION":
-			nodeDmgPerHit = 4
-		case "MYRIAD_TRIBULATION":
-			nodeDmgPerHit = 8
-		case "CHAOS_CALAMITY":
-			nodeDmgPerHit = 16
-		}
+	if _, err := tx.Exec(`SET LOCAL statement_timeout = '30000'`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`SET LOCAL lock_timeout = '10000'`); err != nil {
+		return err
+	}
 
-		// Fetch living enemies
-		enRows, err := tx.Query(`
-			SELECT id, name, enemy_type, x, y 
-			FROM tribulation_enemies 
-			WHERE event_id = $1 AND is_dead = false
-		`, ev.EventID)
-		if err != nil {
-			return fmt.Errorf("failed to query tribulation enemies: %w", err)
-		}
+	// Batch accumulators – reset per event.
+	type posUpdate struct {
+		ID string
+		X  int
+		Y  int
+	}
+	type nodeDmgAcc struct {
+		HP          int
+		IsDestroyed bool
+	}
 
-		type TEnemy struct {
-			ID        string
-			Name      string
-			EnemyType string
-			X         int
-			Y         int
-			NodeDmg   int
+	// Freeze the tribulation while the player is offline: enemies hold their
+	// position and never damage nodes. Bump started_at so the 24h auto-resolve
+	// window only counts online time.
+	if !isPlayerOnline(ev.PlayerID) {
+		_, _ = tx.Exec(`UPDATE tribulation_events SET started_at = NOW() WHERE id = $1`, ev.EventID)
+		return tx.Commit()
+	}
+
+	// Grace period after spawn/return: enemies stay idle for a short window.
+	if time.Since(ev.StartedAt) < tribulationGracePeriod {
+		return tx.Commit()
+	}
+
+	// Fixed node damage per hit, based on tribulation type
+	nodeDmgPerHit := 1 // EARTH_CALAMITY
+	switch ev.TribulationType {
+	case "HEAVENLY_TRIBULATION":
+		nodeDmgPerHit = 2
+	case "GRAND_TRIBULATION":
+		nodeDmgPerHit = 4
+	case "MYRIAD_TRIBULATION":
+		nodeDmgPerHit = 8
+	case "CHAOS_CALAMITY":
+		nodeDmgPerHit = 16
+	}
+
+	// Fetch living enemies
+	enRows, err := tx.Query(`
+		SELECT id, name, enemy_type, x, y 
+		FROM tribulation_enemies 
+		WHERE event_id = $1 AND is_dead = false
+	`, ev.EventID)
+	if err != nil {
+		return fmt.Errorf("failed to query tribulation enemies: %w", err)
+	}
+
+	type TEnemy struct {
+		ID        string
+		Name      string
+		EnemyType string
+		X         int
+		Y         int
+		NodeDmg   int
+	}
+	var enemies []TEnemy
+	for enRows.Next() {
+		var en TEnemy
+		if err := enRows.Scan(&en.ID, &en.Name, &en.EnemyType, &en.X, &en.Y); err != nil {
+			enRows.Close()
+			return fmt.Errorf("failed to scan enemy row: %w", err)
 		}
-		var enemies []TEnemy
-		for enRows.Next() {
-			var en TEnemy
-			if err := enRows.Scan(&en.ID, &en.Name, &en.EnemyType, &en.X, &en.Y); err != nil {
-				enRows.Close()
-				return fmt.Errorf("failed to scan enemy row: %w", err)
+		// Minions chip away at the mine; the boss deals double the minion damage
+		en.NodeDmg = nodeDmgPerHit
+		if en.EnemyType == "BOSS" {
+			en.NodeDmg = nodeDmgPerHit * 2
+		}
+		enemies = append(enemies, en)
+	}
+	enRows.Close()
+
+	if len(enemies) == 0 {
+		return tx.Commit()
+	}
+
+	// Fetch non-destroyed resource nodes
+	nodeRows, err := tx.Query(`
+		SELECT id, name, hp, x, y,
+			COALESCE(node_category, 'RESOURCE'), COALESCE(blocks_movement, false),
+			COALESCE(defense_power, 0), COALESCE(attack_range, 0),
+			COALESCE(hp_bonus, 0), COALESCE(damage_reduction, 0)
+		FROM aperture_resource_nodes 
+		WHERE aperture_id = $1 AND is_destroyed = false
+	`, ev.ApertureID)
+	if err != nil {
+		return fmt.Errorf("failed to query aperture resource nodes: %w", err)
+	}
+
+	type TNode struct {
+		ID              string
+		Name            string
+		HP              int
+		X               int
+		Y               int
+		NodeCategory    string
+		BlocksMovement  bool
+		DefensePower    int
+		AttackRange     int
+		HPBonus         int
+		DamageReduction int
+	}
+	var nodes []TNode
+	for nodeRows.Next() {
+		var nd TNode
+		if err := nodeRows.Scan(&nd.ID, &nd.Name, &nd.HP, &nd.X, &nd.Y,
+			&nd.NodeCategory, &nd.BlocksMovement,
+			&nd.DefensePower, &nd.AttackRange,
+			&nd.HPBonus, &nd.DamageReduction); err != nil {
+			nodeRows.Close()
+			return fmt.Errorf("failed to scan resource node row: %w", err)
+		}
+		nodes = append(nodes, nd)
+	}
+	nodeRows.Close()
+
+	// Accumulate batch updates for this event
+	var pendingPos []posUpdate
+	pendingNodeDmg := make(map[string]*nodeDmgAcc)
+	type pendingMsg struct {
+		ReceiverID string
+		Content    string
+	}
+	var pendingMsgs []pendingMsg
+	// Track tower damage to enemies (enemyID -> total damage)
+	pendingTowerDmg := make(map[string]int)
+
+	if len(nodes) == 0 {
+		// No nodes to attack: enemies wander around aimlessly
+		for _, en := range enemies {
+			dx, dy := 0, 0
+			switch rand.Intn(4) {
+			case 0:
+				dx = 1
+			case 1:
+				dx = -1
+			case 2:
+				dy = 1
+			case 3:
+				dy = -1
 			}
-			// Minions chip away at the mine; the boss deals double the minion damage
-			en.NodeDmg = nodeDmgPerHit
-			if en.EnemyType == "BOSS" {
-				en.NodeDmg = nodeDmgPerHit * 2
+			newX := en.X + dx
+			if newX < 0 {
+				newX = 0
+			} else if newX > 19 {
+				newX = 19
 			}
-			enemies = append(enemies, en)
-		}
-		enRows.Close()
-
-		if len(enemies) == 0 {
-			continue
-		}
-
-		// Fetch non-destroyed resource nodes
-		nodeRows, err := tx.Query(`
-			SELECT id, name, hp, x, y,
-				COALESCE(node_category, 'RESOURCE'), COALESCE(blocks_movement, false),
-				COALESCE(defense_power, 0), COALESCE(attack_range, 0),
-				COALESCE(hp_bonus, 0), COALESCE(damage_reduction, 0)
-			FROM aperture_resource_nodes 
-			WHERE aperture_id = $1 AND is_destroyed = false
-		`, ev.ApertureID)
-		if err != nil {
-			return fmt.Errorf("failed to query aperture resource nodes: %w", err)
-		}
-
-		type TNode struct {
-			ID              string
-			Name            string
-			HP              int
-			X               int
-			Y               int
-			NodeCategory    string
-			BlocksMovement  bool
-			DefensePower    int
-			AttackRange     int
-			HPBonus         int
-			DamageReduction int
-		}
-		var nodes []TNode
-		for nodeRows.Next() {
-			var nd TNode
-			if err := nodeRows.Scan(&nd.ID, &nd.Name, &nd.HP, &nd.X, &nd.Y,
-				&nd.NodeCategory, &nd.BlocksMovement,
-				&nd.DefensePower, &nd.AttackRange,
-				&nd.HPBonus, &nd.DamageReduction); err != nil {
-				nodeRows.Close()
-				return fmt.Errorf("failed to scan resource node row: %w", err)
+			newY := en.Y + dy
+			if newY < 0 {
+				newY = 0
+			} else if newY > 19 {
+				newY = 19
 			}
-			nodes = append(nodes, nd)
+			pendingPos = append(pendingPos, posUpdate{ID: en.ID, X: newX, Y: newY})
 		}
-		nodeRows.Close()
-
-		if len(nodes) == 0 {
-			// No nodes to attack: enemies wander around aimlessly
-			for _, en := range enemies {
-				dx, dy := 0, 0
-				switch rand.Intn(4) {
-				case 0:
-					dx = 1
-				case 1:
-					dx = -1
-				case 2:
-					dy = 1
-				case 3:
-					dy = -1
-				}
-				newX := en.X + dx
-				if newX < 0 {
-					newX = 0
-				} else if newX > 19 {
-					newX = 19
-				}
-				newY := en.Y + dy
-				if newY < 0 {
-					newY = 0
-				} else if newY > 19 {
-					newY = 19
-				}
-				_, err = tx.Exec(`
-					UPDATE tribulation_enemies 
-					SET x = $1, y = $2, updated_at = NOW() 
-					WHERE id = $3
-				`, newX, newY, en.ID)
-				if err != nil {
-					return fmt.Errorf("failed to update enemy coordinates: %w", err)
-				}
-			}
-			continue
-		}
-
+	} else {
 		// Process each enemy
 		for _, en := range enemies {
 			// Find nearest non-wall node (prefer defense nodes, then resource)
@@ -1742,7 +1775,6 @@ func ProcessActiveTribulationGrid() error {
 
 			if absDx <= 1 && absDy <= 1 {
 				// Enemy is adjacent or on top of the node, attack!
-				// Calculate damage buffs/reductions from nearby defense structures
 				effectiveDmg := en.NodeDmg
 				totalDamageReduction := 0
 				totalHPBonus := 0
@@ -1752,7 +1784,6 @@ func ProcessActiveTribulationGrid() error {
 					if buffNode.ID == nearestNode.ID || buffNode.HP <= 0 {
 						continue
 					}
-					// Manhattan distance from buff node to target node
 					bdx := buffNode.X - nearestNode.X
 					if bdx < 0 {
 						bdx = -bdx
@@ -1763,57 +1794,38 @@ func ProcessActiveTribulationGrid() error {
 					}
 					bdist := bdx + bdy
 
-					// Guardian Statue: bonus HP to nearby nodes
 					if buffNode.HPBonus > 0 && buffNode.AttackRange > 0 && bdist <= buffNode.AttackRange {
 						totalHPBonus += buffNode.HPBonus
 					}
-					// Barracks: damage reduction to ALL nodes (attack_range=0 means global)
 					if buffNode.DamageReduction > 0 && buffNode.AttackRange == 0 {
 						totalDamageReduction += buffNode.DamageReduction
 					}
-					// Force Field: damage reduction to nearby nodes
 					if buffNode.DamageReduction > 0 && buffNode.AttackRange > 0 && bdist <= buffNode.AttackRange {
 						totalDamageReduction += buffNode.DamageReduction
 					}
 				}
 
-				// Cap damage reduction at 80%
 				if totalDamageReduction > 80 {
 					totalDamageReduction = 80
 				}
-				// Apply damage reduction
 				effectiveDmg = en.NodeDmg * (100 - totalDamageReduction) / 100
 				if effectiveDmg < 1 {
 					effectiveDmg = 1
 				}
 
-				// Apply damage (HP cannot go below 0, but node survives if HP > 0 even with bonus)
 				nearestNode.HP -= effectiveDmg
 				isDestroyed := false
 				if nearestNode.HP <= 0 {
 					nearestNode.HP = 0
 					isDestroyed = true
 				}
-				_, err = tx.Exec(`
-					UPDATE aperture_resource_nodes 
-					SET hp = $1, is_destroyed = $2, updated_at = NOW() 
-					WHERE id = $3
-				`, nearestNode.HP, isDestroyed, nearestNode.ID)
-				if err != nil {
-					return fmt.Errorf("failed to update resource node HP: %w", err)
-				}
+				pendingNodeDmg[nearestNode.ID] = &nodeDmgAcc{HP: nearestNode.HP, IsDestroyed: isDestroyed}
 
 				if isDestroyed {
-					// Send system message
-					_, err = tx.Exec(`
-						INSERT INTO messages (sender_id, receiver_id, content, channel)
-						VALUES ('11111111-1111-1111-1111-111111111111', $1, 'Tai kiếp đã phá hủy hoàn toàn ' || $2 || '!', 'private')
-					`, ev.PlayerID, nearestNode.Name)
-					if err != nil {
-						return fmt.Errorf("failed to insert message for destroyed node: %w", err)
-					}
-
-					// Remove from local list so other enemies target something else
+					pendingMsgs = append(pendingMsgs, pendingMsg{
+						ReceiverID: ev.PlayerID,
+						Content:    fmt.Sprintf("Tai kiếp đã phá hủy hoàn toàn %s!", nearestNode.Name),
+					})
 					var remainingNodes []TNode
 					for _, nd := range nodes {
 						if nd.ID != nearestNode.ID {
@@ -1824,7 +1836,6 @@ func ProcessActiveTribulationGrid() error {
 				}
 			} else {
 				// Move towards the node (allows diagonal movement)
-				// Wall block check: if the target cell has a wall, redirect to attack it
 				targetX := en.X
 				if dx > 0 {
 					targetX = en.X + 1
@@ -1838,7 +1849,6 @@ func ProcessActiveTribulationGrid() error {
 					targetY = en.Y - 1
 				}
 
-				// Check if target cell has a wall blocking movement
 				var wallNode *TNode
 				for i := range nodes {
 					nd := &nodes[i]
@@ -1849,9 +1859,7 @@ func ProcessActiveTribulationGrid() error {
 				}
 
 				if wallNode != nil {
-					// Wall blocks path - attack the wall instead
 					nearestNode = wallNode
-					// Calculate damage buffs/reductions
 					effectiveDmg := en.NodeDmg
 					totalDamageReduction := 0
 					for i := range nodes {
@@ -1889,23 +1897,13 @@ func ProcessActiveTribulationGrid() error {
 						nearestNode.HP = 0
 						isDestroyed = true
 					}
-					_, err = tx.Exec(`
-						UPDATE aperture_resource_nodes 
-						SET hp = $1, is_destroyed = $2, updated_at = NOW() 
-						WHERE id = $3
-					`, nearestNode.HP, isDestroyed, nearestNode.ID)
-					if err != nil {
-						return fmt.Errorf("failed to update wall HP: %w", err)
-					}
+					pendingNodeDmg[nearestNode.ID] = &nodeDmgAcc{HP: nearestNode.HP, IsDestroyed: isDestroyed}
 
 					if isDestroyed {
-						_, err = tx.Exec(`
-							INSERT INTO messages (sender_id, receiver_id, content, channel)
-							VALUES ('11111111-1111-1111-1111-111111111111', $1, 'Tai kiếp đã phá hủy Tường Thành!', 'private')
-						`, ev.PlayerID)
-						if err != nil {
-							return fmt.Errorf("failed to insert message for destroyed wall: %w", err)
-						}
+						pendingMsgs = append(pendingMsgs, pendingMsg{
+							ReceiverID: ev.PlayerID,
+							Content:    "Tai kiếp đã phá hủy Tường Thành!",
+						})
 						var remainingNodes []TNode
 						for _, nd := range nodes {
 							if nd.ID != wallNode.ID {
@@ -1915,7 +1913,6 @@ func ProcessActiveTribulationGrid() error {
 						nodes = remainingNodes
 					}
 				} else {
-					// No wall blocking, move normally
 					if dx > 0 {
 						en.X++
 					} else if dx < 0 {
@@ -1926,14 +1923,7 @@ func ProcessActiveTribulationGrid() error {
 					} else if dy < 0 {
 						en.Y--
 					}
-					_, err = tx.Exec(`
-						UPDATE tribulation_enemies 
-						SET x = $1, y = $2, updated_at = NOW() 
-						WHERE id = $3
-					`, en.X, en.Y, en.ID)
-					if err != nil {
-						return fmt.Errorf("failed to update enemy coordinates: %w", err)
-					}
+					pendingPos = append(pendingPos, posUpdate{ID: en.ID, X: en.X, Y: en.Y})
 				}
 			}
 		}
@@ -1945,7 +1935,6 @@ func ProcessActiveTribulationGrid() error {
 				continue
 			}
 			for _, en := range enemies {
-				// Manhattan distance from tower to enemy
 				wdx := tower.X - en.X
 				if wdx < 0 {
 					wdx = -wdx
@@ -1956,19 +1945,84 @@ func ProcessActiveTribulationGrid() error {
 				}
 				wdist := wdx + wdy
 				if wdist <= tower.AttackRange {
-					// Tower shoots at enemy - deal defense_power as direct HP damage to enemy
-					// We need to update enemy HP in DB (enemies have HP in tribulation_enemies)
-					_, err = tx.Exec(`
-						UPDATE tribulation_enemies 
-						SET hp = GREATEST(hp - $1, 0), 
-							is_dead = CASE WHEN hp - $1 <= 0 THEN true ELSE false END,
-							updated_at = NOW() 
-						WHERE id = $2
-					`, tower.DefensePower, en.ID)
-					if err != nil {
-						return fmt.Errorf("failed to apply watchtower damage: %w", err)
-					}
+					pendingTowerDmg[en.ID] += tower.DefensePower
 				}
+			}
+		}
+	}
+
+	// --- Batch: update enemy positions ---
+	if len(pendingPos) > 0 {
+		ids := make([]string, len(pendingPos))
+		xs := make([]int, len(pendingPos))
+		ys := make([]int, len(pendingPos))
+		for i, p := range pendingPos {
+			ids[i] = p.ID
+			xs[i] = p.X
+			ys[i] = p.Y
+		}
+		_, err = tx.Exec(`
+			UPDATE tribulation_enemies AS e
+			SET x = v.x, y = v.y, updated_at = NOW()
+			FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::int[]) AS x, unnest($3::int[]) AS y) AS v
+			WHERE e.id = v.id
+		`, pq.Array(ids), pq.Array(xs), pq.Array(ys))
+		if err != nil {
+			return fmt.Errorf("batch update enemy positions: %w", err)
+		}
+	}
+
+	// --- Batch: update resource node HPs ---
+	if len(pendingNodeDmg) > 0 {
+		ndIDs := make([]string, 0, len(pendingNodeDmg))
+		ndHPs := make([]int, 0, len(pendingNodeDmg))
+		ndDestroyed := make([]bool, 0, len(pendingNodeDmg))
+		for id, acc := range pendingNodeDmg {
+			ndIDs = append(ndIDs, id)
+			ndHPs = append(ndHPs, acc.HP)
+			ndDestroyed = append(ndDestroyed, acc.IsDestroyed)
+		}
+		_, err = tx.Exec(`
+			UPDATE aperture_resource_nodes AS n
+			SET hp = v.hp, is_destroyed = v.is_destroyed, updated_at = NOW()
+			FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::int[]) AS hp, unnest($3::bool[]) AS is_destroyed) AS v
+			WHERE n.id = v.id
+		`, pq.Array(ndIDs), pq.Array(ndHPs), pq.Array(ndDestroyed))
+		if err != nil {
+			return fmt.Errorf("batch update node HP: %w", err)
+		}
+	}
+
+	// --- Batch: apply watchtower damage to enemies ---
+	if len(pendingTowerDmg) > 0 {
+		tIDs := make([]string, 0, len(pendingTowerDmg))
+		tDmg := make([]int, 0, len(pendingTowerDmg))
+		for enemyID, dmg := range pendingTowerDmg {
+			tIDs = append(tIDs, enemyID)
+			tDmg = append(tDmg, dmg)
+		}
+		_, err = tx.Exec(`
+			UPDATE tribulation_enemies AS e
+			SET hp = GREATEST(e.hp - v.dmg, 0),
+			    is_dead = CASE WHEN e.hp - v.dmg <= 0 THEN true ELSE false END,
+			    updated_at = NOW()
+			FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::int[]) AS dmg) AS v
+			WHERE e.id = v.id
+		`, pq.Array(tIDs), pq.Array(tDmg))
+		if err != nil {
+			return fmt.Errorf("batch watchtower damage: %w", err)
+		}
+	}
+
+	// --- Batch: insert system messages ---
+	if len(pendingMsgs) > 0 {
+		for _, m := range pendingMsgs {
+			_, err = tx.Exec(`
+				INSERT INTO messages (sender_id, receiver_id, content, channel)
+				VALUES ('11111111-1111-1111-1111-111111111111', $1, $2, 'private')
+			`, m.ReceiverID, m.Content)
+			if err != nil {
+				return fmt.Errorf("insert tribulation message: %w", err)
 			}
 		}
 	}

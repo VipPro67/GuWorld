@@ -6,7 +6,8 @@ import (
 	"encoding/json"
 	"time"
 
-	pkgdb "github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/lib/pq"
+
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -29,31 +30,358 @@ func StartGrowthWorker(ctx context.Context, db *sql.DB, interval time.Duration) 
 }
 
 // processGrowthTick advances Gu growth for every equipped ACTIVE Gu that has a
-// growth profile. A set-based SQL query narrows the work to only the players
-// who actually own such a Gu (a tiny subset of the player base); the growth_data
-// fold for those players is then done in Go.
+// growth profile. Instead of one transaction per player, it batch-reads all
+// affected data in two queries, processes in Go, then writes back with two
+// batch UPDATEs via unnest().
 func processGrowthTick(ctx context.Context, db *sql.DB) {
-	players, err := findGrowthAffectedPlayers(db)
+	// ── Step 1: find affected player IDs ──────────────────────────────────
+	playerIDs, err := findGrowthAffectedPlayers(db)
 	if err != nil {
 		logger.S.Errorf("Growth Worker Error finding affected players: %v", err)
 		return
 	}
+	if len(playerIDs) == 0 {
+		return
+	}
 
-	for _, pID := range players {
-		// Use a per-player deadline so a contended lock aborts quickly and the
-		// worker moves on rather than blocking the whole tick until the global
-		// statement_timeout fires.
-		pCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
-		err := updatePlayerGrowth(pCtx, db, pID)
-		cancel()
-		if err != nil {
-			logger.S.Errorf("Growth Worker Error updating player %s: %v", pID, err)
+	pqIDs := pq.Array(playerIDs)
+
+	// ── Step 2: batch-fetch player metadata ───────────────────────────────
+	type playerRow struct {
+		GrowthData []byte
+		BaseHP     float64
+		TimeSpeed  float64
+	}
+	playerMap := make(map[string]*playerRow, len(playerIDs))
+
+	pRows, err := db.Query(`
+		SELECT id, growth_data, base_hp, time_speed_multiplier
+		FROM players WHERE id = ANY($1::text[])`, pqIDs)
+	if err != nil {
+		logger.S.Errorf("Growth Worker Error fetching players: %v", err)
+		return
+	}
+	defer pRows.Close()
+
+	for pRows.Next() {
+		var (
+			id  string
+			pr  playerRow
+			gd  sql.NullString
+		)
+		if err := pRows.Scan(&id, &gd, &pr.BaseHP, &pr.TimeSpeed); err != nil {
+			logger.S.Errorf("Growth Worker Error scanning player row: %v", err)
+			continue
 		}
+		if gd.Valid {
+			pr.GrowthData = []byte(gd.String)
+		}
+		playerMap[id] = &pr
+	}
+	if err := pRows.Err(); err != nil {
+		logger.S.Errorf("Growth Worker Error iterating players: %v", err)
+		return
+	}
+
+	// ── Step 3: batch-fetch all player_gu rows ───────────────────────────
+	type guRow struct {
+		PlayerID    string
+		InstanceID  string
+		GuID        string
+		Rank        int
+		State       string
+		Equipped    bool
+		IsVital     bool
+		IntegrTime  float64
+		EquippedAt  *time.Time
+		GrowthHours float64
+	}
+
+	guByPlayer := make(map[string][]guRow)
+
+	gRows, err := db.Query(`
+		SELECT player_id::text, id, gu_id, gu_rank, state, equipped,
+		       is_vital, integration_time, equipped_at, growth_hours
+		FROM player_gu WHERE player_id = ANY($1::text[])`, pqIDs)
+	if err != nil {
+		logger.S.Errorf("Growth Worker Error fetching player_gu: %v", err)
+		return
+	}
+	defer gRows.Close()
+
+	for gRows.Next() {
+		var g guRow
+		if err := gRows.Scan(
+			&g.PlayerID, &g.InstanceID, &g.GuID, &g.Rank, &g.State,
+			&g.Equipped, &g.IsVital, &g.IntegrTime, &g.EquippedAt, &g.GrowthHours,
+		); err != nil {
+			continue
+		}
+		guByPlayer[g.PlayerID] = append(guByPlayer[g.PlayerID], g)
+	}
+	if err := gRows.Err(); err != nil {
+		logger.S.Errorf("Growth Worker Error iterating player_gu: %v", err)
+		return
+	}
+
+	// ── Step 4: process growth in Go (same logic, no DB access) ──────────
+	type guUpdate struct {
+		InstanceID  string
+		GrowthHours float64
+		EquippedAt  time.Time
+	}
+	type playerUpdate struct {
+		GrowthData string
+		BaseHP     float64
+	}
+
+	var (
+		guUpdates      []guUpdate
+		playerUpdates  []playerUpdate
+		playerUpdateIDs []string
+	)
+
+	now := time.Now()
+
+	type typeKey struct {
+		guID string
+		rank int
+	}
+	type growthGroup struct {
+		spec     models.GuDictionaryItem
+		active   []int
+		maxHours float64
+	}
+
+	for pID, pRow := range playerMap {
+		guList := guByPlayer[pID]
+		if len(guList) == 0 {
+			continue
+		}
+
+		// Build GuInventory from rows.
+		guInv := make(models.GuInventory, len(guList))
+		for i, g := range guList {
+			guInv[i] = models.GuInstance{
+				InstanceID:  g.InstanceID,
+				GuID:        g.GuID,
+				Rank:        g.Rank,
+				Status:      g.State,
+				Equipped:    g.Equipped,
+				IsVital:     g.IsVital,
+				IntegrationTime: g.IntegrTime,
+				EquippedAt:  g.EquippedAt,
+				GrowthHours: g.GrowthHours,
+			}
+		}
+
+		timeSpeed := pRow.TimeSpeed
+		if timeSpeed <= 0 {
+			timeSpeed = 1.0
+		}
+		timeSpeed += models.EquippedTimeSpeedBonus(guInv)
+
+		var growthData models.GrowthData
+		if err := json.Unmarshal(pRow.GrowthData, &growthData); err != nil {
+			growthData = models.GrowthData{
+				Boosts:     models.GrowthBoosts{},
+				FullyGrown: []models.FullyGrownInfo{},
+			}
+		}
+
+		groups := make(map[typeKey]*growthGroup)
+
+		for i := range guInv {
+			gu := &guInv[i]
+			spec, ok := models.GetGu(gu.GuID, gu.Rank)
+			if !ok || spec.Effects.Growth == nil || spec.Effects.Growth.HoursToMax <= 0 {
+				continue
+			}
+			key := typeKey{guID: gu.GuID, rank: gu.Rank}
+			g, exists := groups[key]
+			if !exists {
+				g = &growthGroup{spec: spec}
+				groups[key] = g
+			}
+			if gu.GrowthHours > g.maxHours {
+				g.maxHours = gu.GrowthHours
+			}
+			if gu.Equipped && gu.Status == "ACTIVE" {
+				g.active = append(g.active, i)
+			}
+		}
+
+		hasGrowthGu := false
+		baseHP := pRow.BaseHP
+
+		for _, g := range groups {
+			spec := g.spec
+			hasGrowthGu = true
+
+			typeDone := false
+			for _, fg := range growthData.FullyGrown {
+				if fg.GuID == spec.ID && fg.Rank == spec.Rank {
+					typeDone = true
+					break
+				}
+			}
+			if typeDone || len(g.active) == 0 {
+				continue
+			}
+
+			// Initialize EquippedAt for legacy Gus.
+			for _, idx := range g.active {
+				gu := &guInv[idx]
+				if gu.EquippedAt == nil || gu.EquippedAt.IsZero() {
+					gu.EquippedAt = &now
+					guUpdates = append(guUpdates, guUpdate{
+						InstanceID:  gu.InstanceID,
+						GrowthHours: gu.GrowthHours,
+						EquippedAt:  now,
+					})
+				}
+			}
+
+			// Carrier = the active instance holding the type's progress.
+			carrier := g.active[0]
+			for _, idx := range g.active[1:] {
+				if guInv[idx].GrowthHours > guInv[carrier].GrowthHours {
+					carrier = idx
+				}
+			}
+			gu := &guInv[carrier]
+
+			// Bump non-carrier active anchors.
+			for _, idx := range g.active {
+				if idx == carrier {
+					continue
+				}
+				guInv[idx].EquippedAt = &now
+				guUpdates = append(guUpdates, guUpdate{
+					InstanceID:  guInv[idx].InstanceID,
+					GrowthHours: guInv[idx].GrowthHours,
+					EquippedAt:  now,
+				})
+			}
+
+			elapsed := now.Sub(*gu.EquippedAt).Hours() * timeSpeed
+			if elapsed <= 0 {
+				continue
+			}
+
+			if gu.GrowthHours < g.maxHours {
+				gu.GrowthHours = g.maxHours
+			}
+
+			atk, def, hpBoost, spd := ApplyGrowthProgressWorker(gu, spec, elapsed)
+			if atk != 0 || def != 0 || hpBoost != 0 || spd != 0 {
+				growthData.Boosts.Attack += atk
+				growthData.Boosts.Defense += def
+				growthData.Boosts.HP += hpBoost
+				growthData.Boosts.Speed += spd
+				baseHP += hpBoost
+			}
+
+			if gu.GrowthHours >= spec.Effects.Growth.HoursToMax {
+				growthData.FullyGrown = append(growthData.FullyGrown, models.FullyGrownInfo{
+					GuID:    gu.GuID,
+					Rank:    gu.Rank,
+					Attack:  spec.Effects.Growth.MaxAttack,
+					Defense: spec.Effects.Growth.MaxDefense,
+					HP:      spec.Effects.Growth.MaxHP,
+					Speed:   spec.Effects.Growth.MaxSpeed,
+				})
+			}
+
+			// Carrier update.
+			guUpdates = append(guUpdates, guUpdate{
+				InstanceID:  gu.InstanceID,
+				GrowthHours: gu.GrowthHours,
+				EquippedAt:  now,
+			})
+		}
+
+		if !hasGrowthGu {
+			continue
+		}
+
+		growthRaw, _ := json.Marshal(growthData)
+		playerUpdates = append(playerUpdates, playerUpdate{
+			GrowthData: string(growthRaw),
+			BaseHP:     baseHP,
+		})
+		playerUpdateIDs = append(playerUpdateIDs, pID)
+	}
+
+	if len(guUpdates) == 0 && len(playerUpdates) == 0 {
+		return
+	}
+
+	// ── Step 5: batch-write via single transaction ────────────────────────
+	batchCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
+	tx, err := db.BeginTx(batchCtx, nil)
+	if err != nil {
+		logger.S.Errorf("Growth Worker Error starting batch transaction: %v", err)
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`SET LOCAL statement_timeout = '30000'`); err != nil {
+		logger.S.Errorf("Growth Worker Error setting statement timeout: %v", err)
+		return
+	}
+
+	// Batch update player_gu (equipped_at + growth_hours for all touched Gus).
+	if len(guUpdates) > 0 {
+		ids := make([]string, len(guUpdates))
+		ghs := make([]float64, len(guUpdates))
+		eas := make([]time.Time, len(guUpdates))
+		for i, u := range guUpdates {
+			ids[i] = u.InstanceID
+			ghs[i] = u.GrowthHours
+			eas[i] = u.EquippedAt
+		}
+		_, err = tx.Exec(`
+			UPDATE player_gu AS pg
+			SET growth_hours = v.gh, equipped_at = v.ea, updated_at = NOW()
+			FROM (SELECT unnest($1::text[]) AS id, unnest($2::float8[]) AS gh, unnest($3::timestamptz[]) AS ea) AS v
+			WHERE pg.id = v.id
+		`, pq.Array(ids), pq.Array(ghs), pq.Array(eas))
+		if err != nil {
+			logger.S.Errorf("Growth Worker Error batch updating player_gu: %v", err)
+			return
+		}
+	}
+
+	// Batch update players (growth_data + base_hp).
+	if len(playerUpdates) > 0 {
+		gds := make([]string, len(playerUpdates))
+		bhps := make([]float64, len(playerUpdates))
+		for i, u := range playerUpdates {
+			gds[i] = u.GrowthData
+			bhps[i] = u.BaseHP
+		}
+		_, err = tx.Exec(`
+			UPDATE players AS p
+			SET growth_data = v.gd::jsonb, base_hp = v.bhp
+			FROM (SELECT unnest($1::text[]) AS id, unnest($2::text[]) AS gd, unnest($3::float8[]) AS bhp) AS v
+			WHERE p.id = v.id
+		`, pq.Array(playerUpdateIDs), pq.Array(gds), pq.Array(bhps))
+		if err != nil {
+			logger.S.Errorf("Growth Worker Error batch updating players: %v", err)
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		logger.S.Errorf("Growth Worker Error committing batch transaction: %v", err)
 	}
 }
 
 // findGrowthAffectedPlayers returns players who own at least one equipped ACTIVE
-// Gu with a growth profile. This replaces the old full-table player scan.
+// Gu with a growth profile.
 func findGrowthAffectedPlayers(db *sql.DB) ([]string, error) {
 	rows, err := db.Query(`
 		SELECT DISTINCT pg.player_id::text
@@ -75,193 +403,6 @@ func findGrowthAffectedPlayers(db *sql.DB) ([]string, error) {
 		}
 	}
 	return playerIDs, rows.Err()
-}
-
-func updatePlayerGrowth(ctx context.Context, db *sql.DB, playerID string) error {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	var guInvRaw []byte
-	var growthDataRaw []byte
-	var baseHP float64
-	var timeSpeedMultiplier float64
-
-	// No FOR UPDATE: growth deltas are idempotent. EquippedAt is reset to now
-	// after each tick, so even if two ticks overlap the next tick's elapsed
-	// will be near-zero. Holding FOR UPDATE caused lock contention with combat,
-	// hunger, and tribulation handlers → 57014 statement timeout / 55P03 lock timeout.
-	err = tx.QueryRow(`
-		SELECT `+pkgdb.GuInventoryAggregate("players.id")+`, growth_data, base_hp, time_speed_multiplier
-		FROM players
-		WHERE id = $1`, playerID).Scan(&guInvRaw, &growthDataRaw, &baseHP, &timeSpeedMultiplier)
-	if timeSpeedMultiplier <= 0 {
-		timeSpeedMultiplier = 1.0
-	}
-	if err != nil {
-		return err
-	}
-
-	var guInv models.GuInventory
-	if err := json.Unmarshal(guInvRaw, &guInv); err != nil {
-		return err
-	}
-
-	timeSpeedMultiplier += models.EquippedTimeSpeedBonus(guInv)
-
-	var growthData models.GrowthData
-	if err := json.Unmarshal(growthDataRaw, &growthData); err != nil {
-		growthData = models.GrowthData{
-			Boosts:     models.GrowthBoosts{},
-			FullyGrown: []models.FullyGrownInfo{},
-		}
-	}
-
-	hasGrowthGu := false
-	now := time.Now()
-
-	// ── Growth runs ONCE per (gu_id, rank) type ─────────────────────────
-	// The player's bonus is tracked by type, not by instance: owning several
-	// copies of the same Gu only ever grows it once. The type's progress is the
-	// max growth_hours across all owned instances, and only the equipped ACTIVE
-	// instance holding the most progress ("carrier") accumulates time. This keeps
-	// progress continuous across equip/unequip/swaps and prevents duplicates from
-	// stacking stats or getting frozen mid-way.
-	type typeKey struct {
-		guID string
-		rank int
-	}
-	type growthGroup struct {
-		spec     models.GuDictionaryItem
-		active   []int // indices of equipped+ACTIVE instances
-		maxHours float64
-	}
-	groups := make(map[typeKey]*growthGroup)
-
-	for i := range guInv {
-		gu := &guInv[i]
-		spec, ok := models.GetGu(gu.GuID, gu.Rank)
-		if !ok || spec.Effects.Growth == nil || spec.Effects.Growth.HoursToMax <= 0 {
-			continue
-		}
-		key := typeKey{guID: gu.GuID, rank: gu.Rank}
-		g, exists := groups[key]
-		if !exists {
-			g = &growthGroup{spec: spec}
-			groups[key] = g
-		}
-		if gu.GrowthHours > g.maxHours {
-			g.maxHours = gu.GrowthHours
-		}
-		if gu.Equipped && gu.Status == "ACTIVE" {
-			g.active = append(g.active, i)
-		}
-	}
-
-	for _, g := range groups {
-		spec := g.spec
-		hasGrowthGu = true
-
-		// Type already fully grown → permanent, never grows again.
-		typeDone := false
-		for _, fg := range growthData.FullyGrown {
-			if fg.GuID == spec.ID && fg.Rank == spec.Rank {
-				typeDone = true
-				break
-			}
-		}
-		if typeDone {
-			continue
-		}
-
-		if len(g.active) == 0 {
-			continue
-		}
-
-		// Initialize EquippedAt for legacy Gus equipped before growth feature existed.
-		for _, idx := range g.active {
-			gu := &guInv[idx]
-			if gu.EquippedAt == nil || gu.EquippedAt.IsZero() {
-				gu.EquippedAt = &now
-				if _, err = tx.Exec(`UPDATE player_gu SET equipped_at = $1, updated_at = NOW() WHERE id = $2`, now, gu.InstanceID); err != nil {
-					return err
-				}
-			}
-		}
-
-		// Carrier = the active instance holding the type's progress.
-		carrier := g.active[0]
-		for _, idx := range g.active[1:] {
-			if guInv[idx].GrowthHours > guInv[carrier].GrowthHours {
-				carrier = idx
-			}
-		}
-		gu := &guInv[carrier]
-
-		// Bump non-carrier active anchors so their elapsed time never counts twice.
-		for _, idx := range g.active {
-			if idx == carrier {
-				continue
-			}
-			guInv[idx].EquippedAt = &now
-			if _, err = tx.Exec(`UPDATE player_gu SET equipped_at = $1, updated_at = NOW() WHERE id = $2`, now, guInv[idx].InstanceID); err != nil {
-				return err
-			}
-		}
-
-		elapsed := now.Sub(*gu.EquippedAt).Hours() * timeSpeedMultiplier
-		if elapsed <= 0 {
-			continue
-		}
-
-		// Resume from the type's max progress so swapping instances doesn't reset it.
-		if gu.GrowthHours < g.maxHours {
-			gu.GrowthHours = g.maxHours
-		}
-
-		atk, def, hpBoost, spd := ApplyGrowthProgressWorker(gu, spec, elapsed)
-		if atk != 0 || def != 0 || hpBoost != 0 || spd != 0 {
-			growthData.Boosts.Attack += atk
-			growthData.Boosts.Defense += def
-			growthData.Boosts.HP += hpBoost
-			growthData.Boosts.Speed += spd
-			baseHP += hpBoost
-		}
-
-		if gu.GrowthHours >= spec.Effects.Growth.HoursToMax {
-			growthData.FullyGrown = append(growthData.FullyGrown, models.FullyGrownInfo{
-				GuID:    gu.GuID,
-				Rank:    gu.Rank,
-				Attack:  spec.Effects.Growth.MaxAttack,
-				Defense: spec.Effects.Growth.MaxDefense,
-				HP:      spec.Effects.Growth.MaxHP,
-				Speed:   spec.Effects.Growth.MaxSpeed,
-			})
-		}
-
-		// Persist growth_hours / equipped_at for the carrier (no full-inventory rewrite).
-		if _, err = tx.Exec(`
-			UPDATE player_gu SET growth_hours = $1, equipped_at = $2, updated_at = NOW() WHERE id = $3`,
-			gu.GrowthHours, gu.EquippedAt, gu.InstanceID); err != nil {
-			return err
-		}
-	}
-
-	if !hasGrowthGu {
-		return nil
-	}
-
-	growthDataRawUpdated, _ := json.Marshal(growthData)
-
-	_, err = tx.Exec(`UPDATE players SET growth_data = $1, base_hp = $2 WHERE id = $3`,
-		string(growthDataRawUpdated), baseHP, playerID)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit()
 }
 
 func ApplyGrowthProgressWorker(gu *models.GuInstance, spec models.GuDictionaryItem, elapsedHours float64) (attack, defense, hp, speed float64) {
