@@ -48,6 +48,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const fogRef = useRef<Graphics>(new Graphics());
   const playerRef = useRef<Graphics>(new Graphics());
   const rangeRef = useRef<Graphics>(new Graphics());
+  const targetRingRef = useRef<Graphics>(new Graphics());
   const skillFxContainerRef = useRef<Container>(new Container());
   const processedFxRef = useRef<Set<string>>(new Set());
 
@@ -97,6 +98,29 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
   const itemDictionary = useGameStore((s) => s.itemDictionary);
   const skillFxEvents = useWorldStore((s) => s.skillFxEvents);
   const clearSkillFx = useWorldStore((s) => s.clearSkillFx);
+  const selectedTarget = useWorldStore((s) => s.selectedTarget);
+
+  const drawTargetRing = useCallback(() => {
+    const ring = targetRingRef.current;
+    ring.clear();
+    if (!selectedTarget) return;
+
+    ring.position.set(selectedTarget.x + 0.5, selectedTarget.y + 0.5);
+
+    // Outer red pulsing circle
+    ring.circle(0, 0, 0.65);
+    ring.stroke({ width: 0.08, color: 0xef4444, alpha: 0.9 });
+
+    // Inner reticle notches
+    ring.rect(-0.7, -0.05, 0.2, 0.1).fill(0xef4444);
+    ring.rect(0.5, -0.05, 0.2, 0.1).fill(0xef4444);
+    ring.rect(-0.05, -0.7, 0.1, 0.2).fill(0xef4444);
+    ring.rect(-0.05, 0.5, 0.1, 0.2).fill(0xef4444);
+  }, [selectedTarget]);
+
+  useEffect(() => {
+    drawTargetRing();
+  }, [drawTargetRing]);
 
   // Render Pixi.js skill animations (Aura ring & floating text popups)
   useEffect(() => {
@@ -107,6 +131,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       processedFxRef.current.add(event.id);
 
       const colorMap: Record<string, number> = {
+        damage: 0xef4444,
         heal: 0x10b981,
         buff_atk: 0xef4444,
         buff_def: 0x3b82f6,
@@ -402,6 +427,25 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       const nearbyPl = s.nearbyPlayers.find((p) => p.x === tx && p.y === ty);
 
       if (nearby || persistent || nearbyPl) {
+        const cellType = nearby ? nearby.cell_type : persistent ? persistent.cell_type : "Player";
+        const contentId = nearby ? nearby.content : persistent ? persistent.content_id : nearbyPl?.username || "";
+        const rank = nearby?.rank || persistent?.rank || 1;
+
+        if (cellType === "Monster" || cellType === "Boss" || cellType === "WildGu") {
+          const name = monsterDictionary[contentId]?.name || guDictionary[contentId]?.name || contentId;
+          const baseHp = monsterDictionary[contentId]?.max_hp || rank * 500;
+          s.selectTarget({
+            x: tx,
+            y: ty,
+            cellType,
+            contentId,
+            name,
+            rank,
+            hp: baseHp,
+            maxHp: baseHp,
+          });
+        }
+
         if (s.selectedObject && s.selectedObject.x === tx && s.selectedObject.y === ty) {
           // Already selected, proceed to move
           moveTargetRef.current = { x: tx, y: ty };
@@ -1075,6 +1119,7 @@ export default function WorldCanvas({ mode, labelSettings }: WorldCanvasProps) {
       stageRef.current.addChild(playersContainerRef.current);
       stageRef.current.addChild(rangeRef.current);
       stageRef.current.addChild(playerRef.current);
+      stageRef.current.addChild(targetRingRef.current);
       stageRef.current.addChild(skillFxContainerRef.current);
 
       drawPlayer();

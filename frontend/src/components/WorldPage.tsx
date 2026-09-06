@@ -30,6 +30,7 @@ const DungeonView = dynamic(() => import("./DungeonView").then(m => m.DungeonVie
 const ImmortalApertureView = dynamic(() => import("./ImmortalApertureView").then(m => m.ImmortalApertureView), { ssr: false });
 const PartyView = dynamic(() => import("./PartyView").then(m => m.PartyView), { ssr: false });
 const GuQuickBar = dynamic(() => import("./GuQuickBar").then(m => m.GuQuickBar), { ssr: false });
+const TargetHud = dynamic(() => import("./TargetHud").then(m => m.TargetHud), { ssr: false });
 
 const TYPE_CONFIG: Record<string, { icon: string; label: string; color: string; borderColor: string; bgColor: string }> = {
   Boss:     { icon: "⚔️",  label: "Boss",        color: "text-red-300",     borderColor: "border-red-500/30",     bgColor: "bg-red-950/60" },
@@ -189,6 +190,8 @@ export function WorldPage() {
       <div className="w-full h-[calc(100vh-8rem)] min-h-[480px]">
         <WorldCanvas mode={mapMode} labelSettings={labelSettings} />
       </div>
+
+      <TargetHud />
 
       <div className="absolute top-2 right-2 flex flex-col items-end gap-2 pointer-events-none z-30">
         <button

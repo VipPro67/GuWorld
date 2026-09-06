@@ -18,7 +18,7 @@ func tickDoTs(c *CombatantAuto, turn int) []CombatLog {
 			continue
 		}
 		if dot.Type == "regen" {
-			heal := int(dot.Value)
+			heal := dot.Value
 			c.HP += heal
 			if c.HP > c.MaxHP {
 				c.HP = c.MaxHP
@@ -29,10 +29,10 @@ func tickDoTs(c *CombatantAuto, turn int) []CombatLog {
 				ActorName: c.Name,
 				Action:    "REGEN_TICK",
 				Damage:    heal,
-				Detail:    fmt.Sprintf("%s hồi phục %d HP do Hồi Sinh (còn %d HP).", c.Name, heal, c.HP),
+				Detail:    fmt.Sprintf("%s hồi phục %.0f HP do Hồi Sinh (còn %.0f HP).", c.Name, heal, c.HP),
 			})
 		} else {
-			c.HP -= int(dot.Value)
+			c.HP -= dot.Value
 			if c.HP < 0 {
 				c.HP = 0
 			}
@@ -54,8 +54,8 @@ func tickDoTs(c *CombatantAuto, turn int) []CombatLog {
 				ActorId:   c.ID,
 				ActorName: c.Name,
 				Action:    "DOT_TICK",
-				Damage:    int(dot.Value),
-				Detail:    fmt.Sprintf("%s chịu %.0f %s sát thương (còn %d HP).", c.Name, dot.Value, label, c.HP),
+				Damage:    dot.Value,
+				Detail:    fmt.Sprintf("%s chịu %.0f %s sát thương (còn %.0f HP).", c.Name, dot.Value, label, c.HP),
 			})
 		}
 		dot.Turns--
@@ -228,12 +228,12 @@ func tickResourceDrain(c *CombatantAuto, turn int) []CombatLog {
 	var logs []CombatLog
 	if c.IsEssenceLeaking {
 		// Example: drain 5% of max mana per turn.
-		drain := int(float64(c.MaxMana) * 0.05)
+		drain := c.MaxMana * 0.05
 		if drain > c.Mana {
 			drain = c.Mana
 		}
 		c.Mana -= drain
-		logs = append(logs, CombatLog{Turn: turn, ActorId: c.ID, ActorName: c.Name, Action: "ESSENCE_LEAK", Detail: fmt.Sprintf("%s mất %d Chân Nguyên do Rò Rỉ.", c.Name, drain)})
+		logs = append(logs, CombatLog{Turn: turn, ActorId: c.ID, ActorName: c.Name, Action: "ESSENCE_LEAK", Detail: fmt.Sprintf("%s mất %.0f Chân Nguyên do Rò Rỉ.", c.Name, drain)})
 	}
 	return logs
 }
@@ -256,7 +256,7 @@ func DispelActorStatuses(actor *CombatantAuto, category statusfx.StatusCategory,
 		// Trigger cleanse trap for BLEED from Blood path.
 		if st.ID == statusfx.StatusBleed && spec.Path == "blood" {
 			burst := float64(st.Value) * float64(st.Duration) * 0.5
-			actor.HP -= int(burst)
+			actor.HP -= burst
 		}
 		cleansed = append(cleansed, st.ID)
 	}
@@ -271,8 +271,8 @@ func ApplyThornsDamage(defender, attacker *CombatantAuto, damageDealt float64, t
 		return 0
 	}
 	thornsNet := damageDealt * defender.ThornsDamage
-	thornsNet = math.Max(1, thornsNet-float64(attacker.BaseDef))
-	attacker.HP -= int(thornsNet)
+	thornsNet = math.Max(1, thornsNet-attacker.BaseDef)
+	attacker.HP -= thornsNet
 	if attacker.HP < 0 {
 		attacker.HP = 0
 	}
@@ -282,8 +282,8 @@ func ApplyThornsDamage(defender, attacker *CombatantAuto, damageDealt float64, t
 		ActorName: attacker.Name,
 		Action:    "THORNS_DAMAGE",
 		TargetId:  defender.ID,
-		Damage:    int(thornsNet),
-		Detail:    fmt.Sprintf("Gai nhọn từ %s phản %.0f sát thương lên %s! (còn %d HP)", defender.Name, thornsNet, attacker.Name, attacker.HP),
+		Damage:    thornsNet,
+		Detail:    fmt.Sprintf("Gai nhọn từ %s phản %.0f sát thương lên %s! (còn %.0f HP)", defender.Name, thornsNet, attacker.Name, attacker.HP),
 	})
 	return thornsNet
 }
@@ -295,7 +295,7 @@ func CheckBossPhaseTransitions(state *CombatState, boss *CombatantAuto) []Combat
 		return logs
 	}
 
-	hpPercent := float64(boss.HP) / float64(boss.MaxHP)
+	hpPercent := boss.HP / boss.MaxHP
 
 	if hpPercent <= 0.70 && hpPercent > 0.30 && state.BossPhase < 1 {
 		state.BossPhase = 1
@@ -336,13 +336,13 @@ func CheckBossPhaseTransitions(state *CombatState, boss *CombatantAuto) []Combat
 
 // CalculateDamage is kept for backward compatibility but no longer used by the engine.
 // Use proper defense mitigation via applyDamageToTarget in engine.go.
-func CalculateDamage(attacker *CombatantAuto, defender *CombatantAuto, baseDamage int, attackPath string) (int, []CombatLog) {
-	netDmg := float64(baseDamage) - float64(defender.BaseDef)
+func CalculateDamage(attacker *CombatantAuto, defender *CombatantAuto, baseDamage float64, attackPath string) (float64, []CombatLog) {
+	netDmg := baseDamage - defender.BaseDef
 	if netDmg < 1 {
 		netDmg = 1
 	}
 
-	finalDamage := int(math.Max(1.0, netDmg))
+	finalDamage := math.Max(1.0, netDmg)
 
 	var logs []CombatLog
 	if defender.VirtualShield > 0 {
@@ -353,7 +353,7 @@ func CalculateDamage(attacker *CombatantAuto, defender *CombatantAuto, baseDamag
 				ActorName: defender.Name,
 				Action:    "SHIELD_ABSORB",
 				Damage:    finalDamage,
-				Detail:    fmt.Sprintf("%s dùng Khiên Ảo hấp thụ %d sát thương (còn %d khiên)", defender.Name, finalDamage, defender.VirtualShield),
+				Detail:    fmt.Sprintf("%s dùng Khiên Ảo hấp thụ %.0f sát thương (còn %.0f khiên)", defender.Name, finalDamage, defender.VirtualShield),
 			})
 			return 0, logs
 		} else {
@@ -365,7 +365,7 @@ func CalculateDamage(attacker *CombatantAuto, defender *CombatantAuto, baseDamag
 				ActorName: defender.Name,
 				Action:    "SHIELD_BREAK",
 				Damage:    absorbed,
-				Detail:    fmt.Sprintf("Khiên Ảo của %s bị phá vỡ sau khi chặn %d sát thương!", defender.Name, absorbed),
+				Detail:    fmt.Sprintf("Khiên Ảo của %s bị phá vỡ sau khi chặn %.0f sát thương!", defender.Name, absorbed),
 			})
 		}
 	}

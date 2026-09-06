@@ -59,6 +59,17 @@ export interface SkillFxEvent {
   timestamp: number;
 }
 
+export interface SelectedTarget {
+  x: number;
+  y: number;
+  cellType: string;
+  contentId: string;
+  name: string;
+  rank?: number;
+  hp: number;
+  maxHp: number;
+}
+
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
 const getCookie = (name: string): string | null => {
@@ -91,6 +102,7 @@ interface WorldStoreState {
   movementRange: number;
   investigationRange: number;
   selectedObject: WorldObject | null;
+  selectedTarget: SelectedTarget | null;
   targetingGu: { guInstanceId: string; guId: string; name: string } | null;
   skillFxEvents: SkillFxEvent[];
   isMoving: boolean;
@@ -111,8 +123,9 @@ interface WorldStoreState {
   pruneStalePlayers: () => void;
   movePath: (x: number, y: number) => Promise<{ player: Player; log: string; combat_triggered: boolean; reached: boolean; skip_result?: unknown } | null>;
   teleportToRegion: (regionId: string) => Promise<TeleportResponse | null>;
-  useGuOnMap: (guInstanceId: string, targetX: number, targetY: number) => Promise<{ message: string; logs: string[]; effect_type?: string; effect_value?: number } | null>;
+  useGuOnMap: (guInstanceId: string, targetX: number, targetY: number) => Promise<{ message: string; logs: string[]; effect_type?: string; effect_value?: number; damage_dealt?: number; target_defeated?: boolean; target_hp?: number; target_max_hp?: number } | null>;
   setTargetingGu: (gu: { guInstanceId: string; guId: string; name: string } | null) => void;
+  selectTarget: (target: SelectedTarget | null) => void;
   triggerSkillFx: (type: string, value: number, text: string, x: number, y: number) => void;
   clearSkillFx: (id: string) => void;
   setExploredSubZones: (keys: string[]) => void;
@@ -137,6 +150,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   movementRange: 1,
   investigationRange: 10,
   selectedObject: null,
+  selectedTarget: null,
   targetingGu: null,
   skillFxEvents: [],
   isMoving: false,
@@ -151,6 +165,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   cameraY: 0,
 
   setTargetingGu: (gu) => set({ targetingGu: gu }),
+  selectTarget: (target) => set({ selectedTarget: target }),
   triggerSkillFx: (type, value, text, x, y) =>
     set((s) => ({
       skillFxEvents: [
@@ -222,10 +237,14 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   useGuOnMap: async (guInstanceId: string, targetX: number, targetY: number) => {
     set({ loading: true, error: null });
     try {
+      const curTarget = get().selectedTarget;
+      const tx = targetX || (curTarget ? curTarget.x : 0);
+      const ty = targetY || (curTarget ? curTarget.y : 0);
+
       const res = await fetch(`${BACKEND_URL}/api/explore/use_gu`, {
         method: "POST",
         headers: { ...authHeaders("POST"), "Content-Type": "application/json" },
-        body: JSON.stringify({ gu_instance_id: guInstanceId, target_x: targetX, target_y: targetY }),
+        body: JSON.stringify({ gu_instance_id: guInstanceId, target_x: tx, target_y: ty }),
       });
       const body = await res.text();
       let data;
@@ -248,7 +267,29 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       if (data.player) {
         get().fetchNearbyCells(data.player.x, data.player.y, 300);
         get().fetchNearbyPlayers(data.player.x, data.player.y, 300);
-        if (data.effect_type) {
+
+        if (data.damage_dealt && data.damage_dealt > 0) {
+          const fxX = data.target_x || tx || data.player.x;
+          const fxY = data.target_y || ty || data.player.y;
+          get().triggerSkillFx(
+            "damage",
+            data.damage_dealt,
+            `-${Math.round(data.damage_dealt)}`,
+            fxX,
+            fxY
+          );
+
+          if (data.target_defeated) {
+            useUIStore.getState().addToast(`Tiêu diệt thành công ${data.target_name || "quái vật"}!`, "success");
+            set({ selectedTarget: null });
+          } else if (data.target_hp !== undefined) {
+            set((s) => ({
+              selectedTarget: s.selectedTarget
+                ? { ...s.selectedTarget, hp: data.target_hp, maxHp: data.target_max_hp || s.selectedTarget.maxHp }
+                : null,
+            }));
+          }
+        } else if (data.effect_type) {
           get().triggerSkillFx(
             data.effect_type,
             data.effect_value || 0,

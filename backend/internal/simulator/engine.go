@@ -610,11 +610,11 @@ func Simulate(state *CombatState) []CombatLog {
 			actionStartIndex := len(turnLogs)
 
 			if actor.Kind == "Player" {
-				if a.ManaCost > 0 && float64(actor.Mana) < a.ManaCost {
+				if a.ManaCost > 0 && actor.Mana < a.ManaCost {
 					return res
 				}
 				if a.ManaCost > 0 {
-					actor.Mana -= int(a.ManaCost)
+					actor.Mana -= a.ManaCost
 				}
 			}
 
@@ -635,12 +635,12 @@ func Simulate(state *CombatState) []CombatLog {
 				if guRank > actor.Rank {
 					diff := guRank - actor.Rank
 					backlashPct := float64(diff) * 0.15
-					backlashDamage = float64(actor.MaxHP) * backlashPct
+					backlashDamage = actor.MaxHP * backlashPct
 				}
 			}
 
 			if backlashDamage > 0 {
-				actor.HP -= int(backlashDamage)
+				actor.HP -= backlashDamage
 				if actor.HP < 0 {
 					actor.HP = 0
 				}
@@ -649,7 +649,7 @@ func Simulate(state *CombatState) []CombatLog {
 					ActorId:   actor.ID,
 					ActorName: actor.Name,
 					Action:    "GU_BACKLASH",
-					Damage:    int(backlashDamage),
+					Damage:    backlashDamage,
 					Detail:    fmt.Sprintf("%s chịu %d sát thương phản phệ do dùng Cổ chuyển cao hơn bản thân!", actor.Name, int(backlashDamage)),
 				})
 				if actor.HP == 0 {
@@ -676,10 +676,10 @@ func Simulate(state *CombatState) []CombatLog {
 
 				// Apply shield to self
 				if a.Defense > 0 {
-					baseShield := int(a.Defense)
-					daoShield := 0
+					baseShield := a.Defense
+					daoShield := 0.0
 					if hasDao && daoMult > 1.0 {
-						daoShield = int(float64(baseShield) * (daoMult - 1.0))
+						daoShield = baseShield * (daoMult - 1.0)
 					}
 					actor.VirtualShield += baseShield + daoShield
 					sl := CombatLog{
@@ -688,22 +688,22 @@ func Simulate(state *CombatState) []CombatLog {
 						ActorName: actor.Name,
 						Action:    "SHIELD_GAIN",
 						Damage:    baseShield + daoShield,
-						Detail:    fmt.Sprintf("%s nhận %d Khiên Ảo!", actor.Name, baseShield),
+						Detail:    fmt.Sprintf("%s nhận %.0f Khiên Ảo!", actor.Name, baseShield),
 					}
 					if daoShield > 0 {
-						sl.Detail = fmt.Sprintf("%s nhận %d + %d Khiên Ảo do Đạo Ngân!", actor.Name, baseShield, daoShield)
+						sl.Detail = fmt.Sprintf("%s nhận %.0f + %.0f Khiên Ảo do Đạo Ngân!", actor.Name, baseShield, daoShield)
 					}
 					shieldLog = &sl
 				}
 
 				// Apply healing to self
 				if a.Healing > 0 {
-					baseHeal := int(a.Healing)
-					daoHeal := 0
+					baseHeal := a.Healing
+					daoHeal := 0.0
 					if hasDao && daoMult > 1.0 {
-						daoHeal = int(float64(baseHeal) * (daoMult - 1.0))
+						daoHeal = baseHeal * (daoMult - 1.0)
 					}
-					heal := int(float64(baseHeal+daoHeal) * (1.0 + actor.HealingReceived))
+					heal := (baseHeal + daoHeal) * (1.0 + actor.HealingReceived)
 					actor.HP += heal
 					if actor.HP > actor.MaxHP {
 						actor.HP = actor.MaxHP
@@ -714,17 +714,17 @@ func Simulate(state *CombatState) []CombatLog {
 						ActorName: actor.Name,
 						Action:    "HEAL",
 						Damage:    heal,
-						Detail:    fmt.Sprintf("%s hồi phục %d HP!", actor.Name, baseHeal),
+						Detail:    fmt.Sprintf("%s hồi phục %.0f HP!", actor.Name, baseHeal),
 					}
 					if daoHeal > 0 {
-						hl.Detail = fmt.Sprintf("%s hồi phục %d + %d HP do Đạo Ngân!", actor.Name, baseHeal, daoHeal)
+						hl.Detail = fmt.Sprintf("%s hồi phục %.0f + %.0f HP do Đạo Ngân!", actor.Name, baseHeal, daoHeal)
 					}
 					healLog = &hl
 				}
 
 				// ── Special Actions preprocessing ──
 				if a.SourceID == "GU_WOLF_ENSLAVEMENT_CORE" {
-					minionHP := int(float64(actor.MaxHP) * 0.50)
+					minionHP := actor.MaxHP * 0.50
 					minion := &CombatantAuto{
 						ID:      actor.ID + "_dialang",
 						Name:    "Địa Lang Vương (Triệu hồi)",
@@ -733,8 +733,8 @@ func Simulate(state *CombatState) []CombatLog {
 						GridY:   2, // Mid
 						MaxHP:   minionHP,
 						HP:      minionHP,
-						BaseDmg: actor.BaseDmg / 3,
-						BaseDef: actor.BaseDef / 2,
+						BaseDmg: actor.BaseDmg / 3.0,
+						BaseDef: actor.BaseDef / 2.0,
 					}
 					if isAlly {
 						state.Allies = append(state.Allies, minion)
@@ -747,7 +747,7 @@ func Simulate(state *CombatState) []CombatLog {
 						ActorId:   actor.ID,
 						ActorName: actor.Name,
 						Action:    "SUMMONED",
-						Detail:    fmt.Sprintf("%s triệu hồi Địa Lang Vương (%d HP) lên tiền tuyến để đỡ đòn!", actor.Name, minionHP),
+						Detail:    fmt.Sprintf("%s triệu hồi Địa Lang Vương (%.0f HP) lên tiền tuyến để đỡ đòn!", actor.Name, minionHP),
 					})
 				}
 
@@ -765,9 +765,9 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 
 				if a.SourceID == "GU_SWORD_DRAGON_TRANSFORM" {
-					shieldGain := actor.HP - 1
+					shieldGain := actor.HP - 1.0
 					if shieldGain > 0 {
-						actor.HP = 1
+						actor.HP = 1.0
 						actor.VirtualShield += shieldGain
 						actor.ActiveEffects = append(actor.ActiveEffects, Effect{
 							ID:       "sword_dragon_form",
@@ -780,7 +780,7 @@ func Simulate(state *CombatState) []CombatLog {
 							ActorId:   actor.ID,
 							ActorName: actor.Name,
 							Action:    "TRANSFORM",
-							Detail:    fmt.Sprintf("%s hóa thân thành Thượng Cổ Kiếm Long! Chuyển %d HP thành Khiên Ảo, tăng 50%% sát thương trong 3 lượt!", actor.Name, shieldGain),
+							Detail:    fmt.Sprintf("%s hóa thân thành Thượng Cổ Kiếm Long! Chuyển %.0f HP thành Khiên Ảo, tăng 50%% sát thương trong 3 lượt!", actor.Name, shieldGain),
 						})
 					}
 				}
@@ -851,10 +851,10 @@ func Simulate(state *CombatState) []CombatLog {
 						})
 					} else if chosenEffect == "reduce_enemy_hp_90" {
 						effectMsg = "Giảm trực tiếp 90% lượng HP hiện tại của kẻ địch!"
-						damageToEnemy := float64(firstTarget.HP) * 0.90
-						firstTarget.HP -= int(damageToEnemy)
-						if firstTarget.HP < 1 {
-							firstTarget.HP = 1
+						damageToEnemy := firstTarget.HP * 0.90
+						firstTarget.HP -= damageToEnemy
+						if firstTarget.HP < 1.0 {
+							firstTarget.HP = 1.0
 						}
 					}
 
@@ -881,7 +881,7 @@ func Simulate(state *CombatState) []CombatLog {
 				}
 
 				// ── Apply damage & compound effects to all resolved targets ──
-				totalDamageDealt := 0
+				totalDamageDealt := 0.0
 				hasDamage := a.ActionType == "BASIC_ATTACK" || a.Damage > 0
 				res.hasDamage = hasDamage
 
@@ -927,7 +927,7 @@ func Simulate(state *CombatState) []CombatLog {
 							}
 						}
 
-						targetDef := float64(target.BaseDef) * target.DefenseMultiplier
+						targetDef := target.BaseDef * target.DefenseMultiplier
 						if a.SourceID == "GU_BREAK_SPACE" {
 							targetDef = math.Max(0, targetDef-30.0)
 						}
@@ -944,16 +944,16 @@ func Simulate(state *CombatState) []CombatLog {
 							}
 							totalDmg += applyDamageToTarget(state, actor, target, netDmg, &turnLogs, turn, shieldBypass, !isAlly, rng)
 						}
-						totalDamageDealt += int(totalDmg)
+						totalDamageDealt += totalDmg
 
-						if int(totalDmg) > 0 {
-							damageDetail := fmt.Sprintf("%s dùng [%s] lên %s, gây %d sát thương (còn %d HP)", actor.Name, a.Name, target.Name, int(totalDmg), target.HP)
+						if totalDmg > 0 {
+							damageDetail := fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %.0f HP)", actor.Name, a.Name, target.Name, totalDmg, target.HP)
 							if hasDao && daoMult > 1.0 {
-								appliedTotal := int(totalDmg)
-								daoShare := int(float64(appliedTotal) * (daoMult - 1.0) / daoMult)
+								appliedTotal := totalDmg
+								daoShare := float64(appliedTotal) * (daoMult - 1.0) / daoMult
 								if daoShare > 0 {
 									baseShare := appliedTotal - daoShare
-									damageDetail = fmt.Sprintf("%s dùng [%s] lên %s, gây %d + %d sát thương do Đạo Ngân (còn %d HP)", actor.Name, a.Name, target.Name, baseShare, daoShare, target.HP)
+									damageDetail = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f + %.0f sát thương do Đạo Ngân (còn %.0f HP)", actor.Name, a.Name, target.Name, baseShare, daoShare, target.HP)
 								}
 							}
 							turnLogs = append(turnLogs, CombatLog{
@@ -962,7 +962,7 @@ func Simulate(state *CombatState) []CombatLog {
 								ActorName: actor.Name,
 								Action:    a.ActionType,
 								TargetId:  target.ID,
-								Damage:    int(totalDmg),
+								Damage:    totalDmg,
 								Detail:    damageDetail,
 							})
 						} else if target.VirtualShield > 0 {
@@ -973,30 +973,30 @@ func Simulate(state *CombatState) []CombatLog {
 								Action:    a.ActionType,
 								TargetId:  target.ID,
 								Damage:    0,
-								Detail:    fmt.Sprintf("%s dùng [%s] lên %s, toàn bộ sát thương bị khiên hấp thụ (còn %d khiên)", actor.Name, a.Name, target.Name, target.VirtualShield),
+								Detail:    fmt.Sprintf("%s dùng [%s] lên %s, toàn bộ sát thương bị khiên hấp thụ (còn %.0f khiên)", actor.Name, a.Name, target.Name, target.VirtualShield),
 							})
 						}
 
 						if a.PhantomDmg > 0 {
-							phantomDef := float64(target.BaseDef)
+							phantomDef := target.BaseDef
 							phantomNet := (a.PhantomDmg * dmgMultiplier) - phantomDef
 							phantomNet *= (1.0 - pathBonus(target.PathResistance, a.Path))
 							phantomNet = math.Max(1, phantomNet)
 							phantomDealt := applyDamageToTarget(state, actor, target, phantomNet, &turnLogs, turn, shieldBypass, !isAlly, rng)
-							totalDamageDealt += int(phantomDealt)
+							totalDamageDealt += phantomDealt
 							turnLogs = append(turnLogs, CombatLog{
 								Turn:      turn,
 								ActorId:   actor.ID,
 								ActorName: actor.Name,
 								Action:    "PHANTOM_ATTACK",
 								TargetId:  target.ID,
-								Damage:    int(phantomDealt),
-								Detail:    fmt.Sprintf("Hư ảnh của %s tấn công thêm %d sát thương lên %s!", actor.Name, int(phantomDealt), target.Name),
+								Damage:    phantomDealt,
+								Detail:    fmt.Sprintf("Hư ảnh của %s tấn công thêm %.0f sát thương lên %s!", actor.Name, phantomDealt, target.Name),
 							})
 						}
 
 						// ── Freeze break: if target is frozen and takes damage, 50% chance to break ──
-						if target.IsFrozen && int(totalDmg) > 0 {
+						if target.IsFrozen && totalDmg > 0 {
 							if rng.Float64() < 0.50 {
 								var unfrozenKept []Effect
 								for _, eff := range target.ActiveEffects {
@@ -1046,7 +1046,7 @@ func Simulate(state *CombatState) []CombatLog {
 							ActorName: actor.Name,
 							Action:    "THORNS",
 							TargetId:  firstTarget.ID,
-							Damage:    int(thornsNet),
+							Damage:    thornsNet,
 							Detail:    fmt.Sprintf("Phản thương từ %s gây %.0f sát thương lên %s!", firstTarget.Name, thornsNet, actor.Name),
 						})
 					}
@@ -1060,7 +1060,7 @@ func Simulate(state *CombatState) []CombatLog {
 					}
 
 					if a.LifeStealPct > 0 && totalDamageDealt > 0 {
-						healAmount := int(float64(totalDamageDealt) * a.LifeStealPct)
+						healAmount := totalDamageDealt * a.LifeStealPct
 						hpNeeded := actor.MaxHP - actor.HP
 						if healAmount <= hpNeeded {
 							actor.HP += healAmount
@@ -1070,7 +1070,7 @@ func Simulate(state *CombatState) []CombatLog {
 								ActorName: actor.Name,
 								Action:    "LIFESTEAL",
 								Damage:    healAmount,
-								Detail:    fmt.Sprintf("%s hút %d máu từ sát chiêu, hồi phục HP!", actor.Name, healAmount),
+								Detail:    fmt.Sprintf("%s hút %.0f máu từ sát chiêu, hồi phục HP!", actor.Name, healAmount),
 							})
 						} else {
 							actor.HP = actor.MaxHP
@@ -1082,7 +1082,7 @@ func Simulate(state *CombatState) []CombatLog {
 								ActorName: actor.Name,
 								Action:    "LIFESTEAL_SHIELD",
 								Damage:    excess,
-								Detail:    fmt.Sprintf("%s hút %d máu từ sát chiêu, HP đầy, chuyển %d thành khiên!", actor.Name, healAmount, excess),
+								Detail:    fmt.Sprintf("%s hút %.0f máu từ sát chiêu, HP đầy, chuyển %.0f thành khiên!", actor.Name, healAmount, excess),
 							})
 						}
 					}
@@ -1247,7 +1247,7 @@ func Simulate(state *CombatState) []CombatLog {
 				if a.RegenTier > 0 {
 					hpPct := TierToPercent(EffectRegen, a.RegenTier)
 					dur := TierToDuration(EffectRegen, a.RegenTier)
-					regenPerTurn := float64(actor.MaxHP) * hpPct / 100.0
+					regenPerTurn := actor.MaxHP * hpPct / 100.0
 					actor.ActiveDoT = append(actor.ActiveDoT, DoTEffect{
 						Type: "regen", Value: regenPerTurn, Turns: dur,
 					})
@@ -1497,9 +1497,9 @@ func Simulate(state *CombatState) []CombatLog {
 				if !ccDisabledThisTurn[actor] {
 					// Auto-use healing items
 					if actor.AutoHealHP && actor.HP > 0 && actor.HealCharges > 0 && actor.ItemsUsedInBattle < 3 {
-						hpPct := float64(actor.HP) / float64(actor.MaxHP) * 100
+						hpPct := actor.HP / actor.MaxHP * 100
 						if hpPct <= actor.HealThreshold {
-							healVal := int(actor.HealPotency)
+							healVal := actor.HealPotency
 							actor.HP += healVal
 							if actor.HP > actor.MaxHP {
 								actor.HP = actor.MaxHP
@@ -1512,20 +1512,20 @@ func Simulate(state *CombatState) []CombatLog {
 								ActorName: actor.Name,
 								Action:    "ITEM_HEAL",
 								Damage:    healVal,
-								Detail:    fmt.Sprintf("%s tự động dùng dược liệu hồi phục %d HP! (đã dùng %d/3)", actor.Name, healVal, actor.ItemsUsedInBattle),
+								Detail:    fmt.Sprintf("%s tự động dùng dược liệu hồi phục %.0f HP! (đã dùng %d/3)", actor.Name, healVal, actor.ItemsUsedInBattle),
 							})
 						}
 					}
 
 					// Auto-restore mana using stones
 					if actor.AutoRestoreMana && actor.Mana < actor.MaxMana {
-						manaPct := float64(actor.Mana) / float64(actor.MaxMana) * 100
+						manaPct := actor.Mana / actor.MaxMana * 100
 						if manaPct <= actor.ManaThreshold {
 							regenMult := 1.0
 							if actor.RefineManaTier > 0 {
 								regenMult = 0.4 + actor.RefineManaTier*0.1
 							}
-							neededMana := float64(actor.MaxMana - actor.Mana)
+							neededMana := actor.MaxMana - actor.Mana
 
 							if actor.Rank >= 6 {
 								if actor.ImmortalStones >= 1 {
@@ -1533,7 +1533,7 @@ func Simulate(state *CombatState) []CombatLog {
 									if manaPerStone > 0 {
 										stonesNeeded := math.Ceil(neededMana / manaPerStone)
 										stonesToConsume := math.Min(stonesNeeded, float64(actor.ImmortalStones))
-										restore := int(stonesToConsume * manaPerStone)
+										restore := stonesToConsume * manaPerStone
 										actor.ImmortalStones -= int64(stonesToConsume)
 										actor.Mana += restore
 										if actor.Mana > actor.MaxMana {
@@ -1544,7 +1544,7 @@ func Simulate(state *CombatState) []CombatLog {
 											ActorId:   actor.ID,
 											ActorName: actor.Name,
 											Action:    "MANA_RESTORE",
-											Detail:    fmt.Sprintf("%s tự động nghiền nát %d Tiên Nguyên Thạch, khôi phục %d tiên nguyên!", actor.Name, int64(stonesToConsume), restore),
+											Detail:    fmt.Sprintf("%s tự động nghiền nát %d Tiên Nguyên Thạch, khôi phục %.0f tiên nguyên!", actor.Name, int64(stonesToConsume), restore),
 										})
 									}
 								}
@@ -1556,7 +1556,7 @@ func Simulate(state *CombatState) []CombatLog {
 									if manaPerStone > 0 {
 										stonesNeeded := math.Ceil(neededMana / manaPerStone)
 										stonesToConsume := math.Min(stonesNeeded, float64(actor.PrimevalStones))
-										restore := int(stonesToConsume * manaPerStone)
+										restore := stonesToConsume * manaPerStone
 										actor.PrimevalStones -= int64(stonesToConsume)
 										actor.Mana += restore
 										if actor.Mana > actor.MaxMana {
@@ -1567,7 +1567,7 @@ func Simulate(state *CombatState) []CombatLog {
 											ActorId:   actor.ID,
 											ActorName: actor.Name,
 											Action:    "MANA_RESTORE",
-											Detail:    fmt.Sprintf("%s tự động hấp thu %d Nguyên Thạch, khôi phục %d %s!", actor.Name, int64(stonesToConsume), restore, actor.GetManaName()),
+											Detail:    fmt.Sprintf("%s tự động hấp thu %d Nguyên Thạch, khôi phục %.0f %s!", actor.Name, int64(stonesToConsume), restore, actor.GetManaName()),
 										})
 									}
 								}
@@ -1678,24 +1678,24 @@ func Simulate(state *CombatState) []CombatLog {
 				fallbackAction := &SimAction{
 					ActionType: "BASIC_ATTACK",
 					Name:       "Đánh thường",
-					Damage:     float64(actor.BaseDmg) * daoMult * fallbackDmgMult,
+					Damage:     actor.BaseDmg * daoMult * fallbackDmgMult,
 					ManaCost:   0,
 					TargetType: "SINGLE",
 				}
 				fallbackTargets := resolveTargets(enemyTargets, fallbackAction)
 				if len(fallbackTargets) > 0 {
 					target := fallbackTargets[0]
-					netDmg := fallbackAction.Damage - float64(target.BaseDef)
+					netDmg := fallbackAction.Damage - target.BaseDef
 					netDmg *= (1.0 - pathBonus(target.PathResistance, []string{"strength"}))
 					if netDmg < 1 {
 						netDmg = 1
 					}
 					applied := applyDamageToTarget(state, actor, target, netDmg, &turnLogs, turn, false, !isAlly, rng)
-					detailMsg := fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %d HP)", actor.Name, fallbackAction.Name, target.Name, applied, target.HP)
+					detailMsg := fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f sát thương (còn %.0f HP)", actor.Name, fallbackAction.Name, target.Name, applied, target.HP)
 					if daoMult > 1.0 {
-						baseDmgVal := float64(actor.BaseDmg)
+						baseDmgVal := actor.BaseDmg
 						daoDmgVal := baseDmgVal * (daoMult - 1.0)
-						detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f + %.0f sát thương do Đạo Ngân (còn %d HP)", actor.Name, fallbackAction.Name, target.Name, baseDmgVal, daoDmgVal, target.HP)
+						detailMsg = fmt.Sprintf("%s dùng [%s] lên %s, gây %.0f + %.0f sát thương do Đạo Ngân (còn %.0f HP)", actor.Name, fallbackAction.Name, target.Name, baseDmgVal, daoDmgVal, target.HP)
 					}
 					turnLogs = append(turnLogs, CombatLog{
 						Turn:      turn,
@@ -1703,7 +1703,7 @@ func Simulate(state *CombatState) []CombatLog {
 						ActorName: actor.Name,
 						Action:    "BASIC_ATTACK",
 						TargetId:  target.ID,
-						Damage:    int(applied),
+						Damage:    applied,
 						Detail:    detailMsg,
 					})
 				}
@@ -1802,7 +1802,7 @@ func buildSnapshot(state *CombatState) *CombatSnapshot {
 			ID: a.ID, Name: a.Name, Kind: a.Kind,
 			HP: a.HP, MaxHP: a.MaxHP, Mana: a.Mana, MaxMana: a.MaxMana,
 			GridX: a.GridX, GridY: a.GridY, Shield: a.VirtualShield,
-			Damage: float64(a.BaseDmg), Defense: float64(a.BaseDef),
+			Damage: a.BaseDmg, Defense: a.BaseDef,
 			Speed: a.EffectiveSpeed, IsDead: a.IsDead,
 		})
 	}
@@ -1811,7 +1811,7 @@ func buildSnapshot(state *CombatState) *CombatSnapshot {
 			ID: e.ID, Name: e.Name, Kind: e.Kind,
 			HP: e.HP, MaxHP: e.MaxHP, Mana: e.Mana, MaxMana: e.MaxMana,
 			GridX: e.GridX, GridY: e.GridY, Shield: e.VirtualShield,
-			Damage: float64(e.BaseDmg), Defense: float64(e.BaseDef),
+			Damage: e.BaseDmg, Defense: e.BaseDef,
 			Speed: e.EffectiveSpeed, IsDead: e.IsDead,
 		})
 	}
@@ -1898,7 +1898,7 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 
 	// Phá Không Cổ shield bypass
 	if shieldBypass {
-		target.HP -= int(damage)
+		target.HP -= damage
 		if spillToAperture {
 			redirectApertureOverflow(state, target, logs, turn)
 		} else if target.HP < 0 {
@@ -1910,7 +1910,7 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 			ActorName: actor.Name,
 			Action:    "SHIELD_BYPASS_ATTACK",
 			TargetId:  target.ID,
-			Damage:    int(damage),
+			Damage:    damage,
 			Detail:    fmt.Sprintf("%s sử dụng Phá Không Cổ xuyên thẳng qua Chân Nguyên Giáp, gây %d sát thương lên %s!", actor.Name, int(damage), target.Name),
 		})
 		return damage
@@ -1972,13 +1972,13 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 					ignorePct = 1.0
 				}
 
-				shieldIgnored := float64(target.VirtualShield) * ignorePct
+				shieldIgnored := target.VirtualShield * ignorePct
 				if shieldIgnored > damage {
 					shieldIgnored = damage
 				}
 
 				if shieldIgnored > 0 {
-					target.HP -= int(shieldIgnored)
+					target.HP -= shieldIgnored
 					if target.HP < 0 {
 						target.HP = 0
 					}
@@ -2024,23 +2024,23 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 			return hpDamageDealt
 		}
 
-		if float64(target.VirtualShield) >= damage {
-			target.VirtualShield -= int(damage)
+		if target.VirtualShield >= damage {
+			target.VirtualShield -= damage
 			*logs = append(*logs, CombatLog{
 				Turn:      turn,
 				ActorId:   actor.ID,
 				ActorName: actor.Name,
 				Action:    "SHIELD_ABSORB",
-				Damage:    int(damage),
-				Detail:    fmt.Sprintf("%s tấn công %s gây %.0f sát thương (còn %d khiên, %d HP)", actor.Name, target.Name, damage, target.VirtualShield, target.HP),
+				Damage:    damage,
+				Detail:    fmt.Sprintf("%s tấn công %s gây %.0f sát thương (còn %.0f khiên, %.0f HP)", actor.Name, target.Name, damage, target.VirtualShield, target.HP),
 			})
 			return hpDamageDealt // Trả về hpDamageDealt để caller không log double damage
 		}
 
-		absorbed := float64(target.VirtualShield)
+		absorbed := target.VirtualShield
 		damage -= absorbed
 		target.VirtualShield = 0
-		target.HP -= int(damage)
+		target.HP -= damage
 		if spillToAperture {
 			redirectApertureOverflow(state, target, logs, turn)
 		} else if target.HP < 0 {
@@ -2053,14 +2053,14 @@ func applyDamageToTarget(state *CombatState, actor, target *CombatantAuto, damag
 			ActorId:   actor.ID,
 			ActorName: actor.Name,
 			Action:    "SHIELD_BREAK",
-			Damage:    int(totalDmg),
-			Detail:    fmt.Sprintf("%s tấn công %s gây %.0f sát thương (phá vỡ %.0f khiên, còn %d HP)", actor.Name, target.Name, totalDmg, absorbed, target.HP),
+			Damage:    totalDmg,
+			Detail:    fmt.Sprintf("%s tấn công %s gây %.0f sát thương (phá vỡ %.0f khiên, còn %.0f HP)", actor.Name, target.Name, totalDmg, absorbed, target.HP),
 		})
 		return hpDamageDealt // Chỉ trả về lượng sát thương trừ vào HP để caller log
 	}
 
 	// Direct HP damage (no shield)
-	target.HP -= int(damage)
+	target.HP -= damage
 	if spillToAperture {
 		redirectApertureOverflow(state, target, logs, turn)
 	} else if target.HP < 0 {
@@ -2091,7 +2091,7 @@ func redirectApertureOverflow(state *CombatState, target *CombatantAuto, logs *[
 		ActorName: target.Name,
 		Action:    "APERTURE_DAMAGE",
 		Damage:    overflow,
-		Detail:    fmt.Sprintf("Tiên Khiếu chịu %d sát thương xuyên phá (còn %d/%d)!", overflow, state.ApertureHP, state.ApertureMaxHP),
+		Detail:    fmt.Sprintf("Tiên Khiếu chịu %.0f sát thương xuyên phá (còn %.0f/%.0f)!", overflow, state.ApertureHP, state.ApertureMaxHP),
 	})
 }
 
@@ -2104,12 +2104,12 @@ func checkActionCondition(action *SimAction, actor, target *CombatantAuto) bool 
 		if actor.MaxHP <= 0 {
 			return true
 		}
-		return float64(actor.HP)/float64(actor.MaxHP)*100 <= action.ConditionValue
+		return actor.HP/actor.MaxHP*100 <= action.ConditionValue
 	case "mana_above":
 		if actor.MaxMana <= 0 {
 			return true
 		}
-		return float64(actor.Mana)/float64(actor.MaxMana)*100 >= action.ConditionValue
+		return actor.Mana/actor.MaxMana*100 >= action.ConditionValue
 	case "enemy_hp_below":
 		if target == nil || target.MaxHP <= 0 {
 			return true

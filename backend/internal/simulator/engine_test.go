@@ -8,7 +8,7 @@ import (
 )
 
 // newTestCombatant builds a minimal combatant for engine tests.
-func newTestCombatant(id string, kind string, hp int, dmg int) *CombatantAuto {
+func newTestCombatant(id string, kind string, hp float64, dmg float64) *CombatantAuto {
 	return &CombatantAuto{
 		ID: id, Name: id, Kind: kind, Rank: 3,
 		GridX: 1, GridY: 1,
@@ -444,7 +444,7 @@ func TestPreAttackDefenseShieldPass(t *testing.T) {
 
 	// Verify defender HP was fully preserved by shield
 	if defender.HP < 1000 {
-		t.Fatalf("expected defender HP to be 1000 (shield absorbed all 300 damage), got %d", defender.HP)
+		t.Fatalf("expected defender HP to be 1000 (shield absorbed all 300 damage), got %.0f", defender.HP)
 	}
 }
 

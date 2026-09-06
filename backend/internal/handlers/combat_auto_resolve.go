@@ -37,8 +37,8 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 		Seed:          seed,
 		BossPhase:     0,
 		VirtualMode:   isVirtual,
-		ApertureHP:    int(player.ActiveCombat.ApertureHP),
-		ApertureMaxHP: int(player.ActiveCombat.ApertureMaxHP),
+		ApertureHP:    player.ActiveCombat.ApertureHP,
+		ApertureMaxHP: player.ActiveCombat.ApertureMaxHP,
 	}
 
 	// Build loadout from player's saved combat settings
@@ -67,12 +67,12 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 				Kind:    "Pet",
 				GridX:   ally.GridX,
 				GridY:   ally.GridY,
-				MaxHP:   int(ally.MaxHP),
-				HP:      int(ally.HP),
+				MaxHP:   ally.MaxHP,
+				HP:      ally.HP,
 				MaxMana: 10,
 				Mana:    10,
-				BaseDmg: int(ally.BaseAttack),
-				BaseDef: int(ally.BaseDefense),
+				BaseDmg: ally.BaseAttack,
+				BaseDef: ally.BaseDefense,
 				Speed:   ally.Speed,
 				Actions: []simulator.SimAction{{
 					ActionType: "BASIC_ATTACK",
@@ -93,7 +93,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 					simAlly.Kind = "Ally"
 					simAlly.GridX = ally.GridX
 					simAlly.GridY = ally.GridY
-					simAlly.HP = int(ally.HP)
+					simAlly.HP = ally.HP
 					if simAlly.HP > simAlly.MaxHP {
 						simAlly.HP = simAlly.MaxHP
 					}
@@ -106,16 +106,16 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 	// Build enemies
 	for idx := range player.ActiveCombat.Enemies {
 		enemy := &player.ActiveCombat.Enemies[idx]
-		eHP := int(enemy.HP)
+		eHP := enemy.HP
 		if eHP <= 0 {
-			eHP = int(enemy.MaxHP)
+			eHP = enemy.MaxHP
 		}
-		enemyMana := int(enemy.CurrentMana)
+		enemyMana := enemy.CurrentMana
 		if isVirtual {
-			eHP = int(enemy.MaxHP)
-			enemyMana = int(enemy.MaxMana)
+			eHP = enemy.MaxHP
+			enemyMana = enemy.MaxMana
 		}
-		enemyShield := 0
+		enemyShield := 0.0
 		for _, guInst := range enemy.GuInventory {
 			if guInst.Status != "ACTIVE" {
 				continue
@@ -125,7 +125,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 				continue
 			}
 			if spec.Effects.Active != nil && spec.Effects.Active.ShieldFlat > 0 {
-				enemyShield += int(spec.Effects.Active.ShieldFlat)
+				enemyShield += spec.Effects.Active.ShieldFlat
 			}
 		}
 
@@ -139,12 +139,12 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 			Kind:          enemyKind,
 			GridX:         enemy.GridX,
 			GridY:         enemy.GridY,
-			MaxHP:         int(enemy.MaxHP),
+			MaxHP:         enemy.MaxHP,
 			HP:            eHP,
-			MaxMana:       int(enemy.MaxMana),
+			MaxMana:       enemy.MaxMana,
 			Mana:          enemyMana,
-			BaseDmg:       int(enemy.BaseAttack),
-			BaseDef:       int(enemy.BaseDefense),
+			BaseDmg:       enemy.BaseAttack,
+			BaseDef:       enemy.BaseDefense,
 			Speed:         enemy.Speed,
 			VirtualShield: enemyShield,
 			DaoMarks: func() simulator.DaoMarks {
@@ -241,7 +241,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 		player.PrimevalStones = player.PrimevalStones / 2
 	}
 
-	var finalPlayerHP int
+	var finalPlayerHP float64
 	for _, a := range simState.Allies {
 		if a.ID == player.ID.String() {
 			finalPlayerHP = a.HP
@@ -287,7 +287,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 		player.ImmortalStones = simPlayer.ImmortalStones
 	}
 
-	var finalMana int
+	var finalMana float64
 	for _, a := range simState.Allies {
 		if a.ID == player.ID.String() {
 			finalMana = a.Mana
@@ -624,7 +624,7 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 			logger.S.Errorf("Failed to persist aperture HP after tribulation combat: %v", errAp)
 		}
 
-		finalByID := make(map[string]int)
+		finalByID := make(map[string]float64)
 		for _, e := range simState.Enemies {
 			finalByID[e.ID] = e.HP
 		}

@@ -1,29 +1,45 @@
-export function formatNumber(n: number): string {
-    const units = [
-        { value: 1e33, suffix: "Dc" },
-        { value: 1e30, suffix: "No" },
-        { value: 1e27, suffix: "Oc" },
-        { value: 1e24, suffix: "Sp" },
-        { value: 1e21, suffix: "Sx" },
-        { value: 1e18, suffix: "Qi" },
-        { value: 1e15, suffix: "Qa" },
-        { value: 1e12, suffix: "T" },
-        { value: 1e9, suffix: "B" },
-        { value: 1e6, suffix: "M" },
-        { value: 1e3, suffix: "K" }
-    ];
+const units = [
+    "Vạn",
+    "Ức",
+    "Triệu",
+    "Kinh",
+    "Cai",
+    "Tử",
+    "Nhưỡng",
+    "Câu",
+    "Giản",
+    "Chính",
+    "Tải",
+    "Cực",
+    "Hằng Hà Sa",
+    "A Tăng Kỳ",
+    "Na Do Tha",
+    "Bất Khả Tư Nghị",
+    "Vô Lượng"
+];
+
+export function formatNumber(n: number, decimals = 2): string {
+    if (!Number.isFinite(n) || Number.isNaN(n)) return "0";
 
     const abs = Math.abs(n);
 
-    for (const unit of units) {
-        if (abs >= unit.value) {
-            const v = n / unit.value;
-            return `${Number(v.toFixed(1))}${unit.suffix}`;
-        }
+    if (abs < 10_000) {
+        return Math.floor(n).toLocaleString("vi-VN");
     }
 
-    return n.toLocaleString();
+    const level = Math.floor(Math.log10(abs) / 4) - 1;
+    const value = n / Math.pow(10, (level + 1) * 4);
+    const unit = units[level];
+
+    if (!unit) {
+        return n.toExponential(decimals);
+    }
+
+    const dec = Math.abs(value) >= 100 ? 0 : decimals;
+
+    return `${Number(value.toFixed(dec))} ${unit}`;
 }
+
 const PATH_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   Fire:       { bg: "bg-red-900/40",    text: "text-red-300",     border: "border-red-500/40" },
   Sword:      { bg: "bg-slate-700/40",  text: "text-slate-200",   border: "border-slate-400/40" },

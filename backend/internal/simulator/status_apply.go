@@ -227,7 +227,7 @@ case statusfx.BehaviourReviveLock: // REVIVE_LOCK (debuff, prevent revival)
 
 	case statusfx.BehaviourSoulWound:
 		// Apply true damage now (ignores shield/armor). Value is damage amount.
-		damage := int(op.Value)
+		damage := op.Value
 		if target.VirtualShield > 0 {
 			if target.VirtualShield >= damage {
 				target.VirtualShield -= damage
@@ -240,7 +240,7 @@ case statusfx.BehaviourReviveLock: // REVIVE_LOCK (debuff, prevent revival)
 		if target.HP < 0 {
 			target.HP = 0
 		}
-		*logs = append(*logs, CombatLog{Turn: turn, ActorId: target.ID, ActorName: target.Name, Action: "SOUL_WOUND", Damage: damage, Detail: fmt.Sprintf("%s chịu %d sát thương thực (SOUL_WOUND)", target.Name, damage)})
+		*logs = append(*logs, CombatLog{Turn: turn, ActorId: target.ID, ActorName: target.Name, Action: "SOUL_WOUND", Damage: damage, Detail: fmt.Sprintf("%s chịu %.0f sát thương thực (SOUL_WOUND)", target.Name, damage)})
 
 	case statusfx.BehaviourThoughtChaos:
 		// Simply set flag via Effect entry; resolution handled in ComputeEffectMultipliers.
@@ -254,7 +254,7 @@ case statusfx.BehaviourReviveLock: // REVIVE_LOCK (debuff, prevent revival)
 
 	case statusfx.BehaviourBacklash:
 		// Immediate backlash damage to target.
-		damage := int(op.Value)
+		damage := op.Value
 		if target.VirtualShield > 0 {
 			if target.VirtualShield >= damage {
 				target.VirtualShield -= damage
@@ -264,8 +264,10 @@ case statusfx.BehaviourReviveLock: // REVIVE_LOCK (debuff, prevent revival)
 			}
 		}
 		target.HP -= damage
-		if target.HP < 0 { target.HP = 0 }
-		*logs = append(*logs, CombatLog{Turn: turn, ActorId: target.ID, ActorName: target.Name, Action: "BACKLASH_APPLIED", Damage: damage, Detail: fmt.Sprintf("%s chịu phản phệ %d sát thương", target.Name, damage)})
+		if target.HP < 0 {
+			target.HP = 0
+		}
+		*logs = append(*logs, CombatLog{Turn: turn, ActorId: target.ID, ActorName: target.Name, Action: "BACKLASH_APPLIED", Damage: damage, Detail: fmt.Sprintf("%s chịu phản phệ %.0f sát thương", target.Name, damage)})
 
 	default:
 		*logs = append(*logs, CombatLog{

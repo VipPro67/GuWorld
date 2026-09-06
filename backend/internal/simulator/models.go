@@ -192,16 +192,16 @@ type CombatantAuto struct {
 	SubRank int
 	GridX   int // 1=Front, 2=Mid, 3=Back
 	GridY   int // 1=Top, 2=Mid, 3=Bottom
-	MaxHP   int
-	HP      int
-	MaxMana int
-	Mana    int
-	BaseDmg int // fallback basic-attack damage
-	BaseDef int
+	MaxHP   float64
+	HP      float64
+	MaxMana float64
+	Mana    float64
+	BaseDmg float64 // fallback basic-attack damage
+	BaseDef float64
 	Speed   float64
 
 	// Pre-combat Auto-Barrier
-	VirtualShield int
+	VirtualShield float64
 
 	DaoMarks      DaoMarks
 	PathMasteries map[string]int // path -> mastery points
@@ -305,8 +305,8 @@ type CombatState struct {
 	// Aperture (Tiên Khiếu) being defended during tribulation combat. When
 	// ApertureMaxHP > 0, enemy damage that overflows the player's shield + HP
 	// spills into the aperture. Tracked so the replay can show it depleting.
-	ApertureHP    int
-	ApertureMaxHP int
+	ApertureHP    float64
+	ApertureMaxHP float64
 }
 
 // CombatSnapshot captures full stats of all combatants at a point in time.
@@ -315,8 +315,8 @@ type CombatSnapshot struct {
 	Allies  []CombatantSnapshot `json:"allies"`
 	Enemies []CombatantSnapshot `json:"enemies"`
 
-	ApertureHP    int `json:"aperture_hp"`
-	ApertureMaxHP int `json:"aperture_max_hp"`
+	ApertureHP    float64 `json:"aperture_hp"`
+	ApertureMaxHP float64 `json:"aperture_max_hp"`
 }
 
 // CombatantSnapshot is a point-in-time snapshot of one combatant's stats.
@@ -324,13 +324,13 @@ type CombatantSnapshot struct {
 	ID      string  `json:"id"`
 	Name    string  `json:"name"`
 	Kind    string  `json:"kind"`
-	HP      int     `json:"hp"`
-	MaxHP   int     `json:"max_hp"`
-	Mana    int     `json:"mana"`
-	MaxMana int     `json:"max_mana"`
+	HP      float64 `json:"hp"`
+	MaxHP   float64 `json:"max_hp"`
+	Mana    float64 `json:"mana"`
+	MaxMana float64 `json:"max_mana"`
 	GridX   int     `json:"grid_x"`
 	GridY   int     `json:"grid_y"`
-	Shield  int     `json:"shield"`
+	Shield  float64 `json:"shield"`
 	Damage  float64 `json:"damage"`
 	Defense float64 `json:"defense"`
 	Speed   float64 `json:"speed"`
@@ -344,7 +344,7 @@ type CombatLog struct {
 	ActorName string          `json:"actor_name"`
 	Action    string          `json:"action"` // e.g. "CAST_KILLER_MOVE", "BASIC_ATTACK", "TRIGGERED", "PHASE_TRANSITION"
 	TargetId  string          `json:"target_id,omitempty"`
-	Damage    int             `json:"damage,omitempty"`
+	Damage    float64         `json:"damage,omitempty"`
 	IsCrit    bool            `json:"is_crit,omitempty"`
 	Trigger   string          `json:"trigger,omitempty"` // Name of the fixed trigger e.g. "THIET_HUYET_CO"
 	Detail    string          `json:"detail,omitempty"`  // Human readable flavor text

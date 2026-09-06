@@ -12,10 +12,10 @@ import (
 
 type PracticeStartRequest struct {
 	Loadout      simulator.CombatLoadout `json:"loadout"`
-	DummyHP      int                     `json:"dummy_hp"`
-	DummyShield  int                     `json:"dummy_shield"`
-	DummyAtk     int                     `json:"dummy_atk"`
-	DummyDef     int                     `json:"dummy_def"`
+	DummyHP      float64                 `json:"dummy_hp"`
+	DummyShield  float64                 `json:"dummy_shield"`
+	DummyAtk     float64                 `json:"dummy_atk"`
+	DummyDef     float64                 `json:"dummy_def"`
 	DummySpeed   float64                 `json:"dummy_speed"`
 }
 
@@ -92,7 +92,7 @@ func PracticeCombatStart(c *gin.Context) {
 		Actions: []simulator.SimAction{{
 			ActionType: "BASIC_ATTACK",
 			Name:       "Đánh thường",
-			Damage:     float64(req.DummyAtk),
+			Damage:     req.DummyAtk,
 			ManaCost:   0,
 		}},
 	}

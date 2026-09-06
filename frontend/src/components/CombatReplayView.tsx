@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { formatNumber } from "@/lib/utils";
 import { Num } from "./Num";
+import { FormattedText } from "./FormattedText";
 import { translateMastery, masteryKeyForPoints } from "@/lib/translate";
 import { useGameStore } from "@/store/useGameStore";
 
@@ -294,10 +295,10 @@ const actionIcon = (action: string) => {
 const actionColor = (action: string) => {
   switch (action) {
     case "DAMAGE": case "BASIC_ATTACK": case "SHIELD_BREAK": case "SHIELD_PIERCE": case "SHIELD_BYPASS_ATTACK": return "text-rose-400";
-    case "GU_SKILL": return "text-emerald-400";
+    case "GU_SKILL": return "text-zinc-200";
     case "KILLER_MOVE": return "text-purple-400";
     case "HEAL": case "ITEM_HEAL": return "text-emerald-400";
-    case "SHIELD_GAIN": case "SHIELD_ABSORB": case "DEFEND": return "text-blue-400";
+    case "SHIELD_GAIN": case "SHIELD_ABSORB": case "DEFEND": return "text-cyan-400";
     case "DOT_TICK": return "text-yellow-400";
     case "DIED": return "text-rose-500";
     case "LIFESTEAL": return "text-pink-400";
@@ -1145,7 +1146,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
                   <span className="text-[8px] text-cyan-500 bg-cyan-950/40 px-1 rounded shrink-0">Kích hoạt</span>
                 )}
                 <span className={`${baseColor} leading-tight ${isCurrent ? 'font-medium' : ''}`}>
-                  {log.detail}
+                  <FormattedText text={log.detail ?? ""} />
                 </span>
                 {log.damage && log.damage > 0 && !["DOT_TICK", "SHIELD_GAIN", "SHIELD_ABSORB", "HEAL", "ITEM_HEAL", "LIFESTEAL"].includes(log.action) && (
                   <span className="text-red-400 font-bold shrink-0 ml-auto">

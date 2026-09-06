@@ -732,6 +732,130 @@ export const wikiPages: WikiPage[] = [
               </tbody>
             </table>
           </div>
+
+          <div className="space-y-4 pt-4 border-t border-zinc-900">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] font-mono">Bảng Quy Đổi Đơn Vị Số Lượng (Vạn, Ức, Kinh...)</h3>
+            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+              Hệ thống hiển thị chỉ số chiến đấu, sát thương, khiên ảo và tài nguyên theo thang đơn vị truyền thống Á Đông (mỗi bậc tăng 10.000 lần = 10⁴).
+            </p>
+
+            <div className="overflow-hidden rounded-2xl border border-[var(--border)]">
+              <table className="w-full text-left text-xs font-mono">
+                <thead className="bg-zinc-950 text-[var(--text-secondary)] border-b border-[var(--border)]">
+                  <tr>
+                    <th className="p-2.5">Đơn vị</th>
+                    <th className="p-2.5">Lũy thừa ($10^n$)</th>
+                    <th className="p-2.5">Giá trị bằng số</th>
+                    <th className="p-2.5">Diễn giải</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-900 text-[var(--text-primary)] bg-[var(--surface)]">
+                  <tr>
+                    <td className="p-2.5 font-bold text-amber-400">Vạn</td>
+                    <td className="p-2.5">10⁴</td>
+                    <td className="p-2.5">10.000</td>
+                    <td className="p-2.5 text-[var(--text-secondary)]">10 nghìn</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 font-bold text-amber-400">Ức</td>
+                    <td className="p-2.5">10⁸</td>
+                    <td className="p-2.5">100.000.000</td>
+                    <td className="p-2.5 text-[var(--text-secondary)]">100 triệu (1 vạn vạn)</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 font-bold text-amber-400">Triệu</td>
+                    <td className="p-2.5">10¹²</td>
+                    <td className="p-2.5">1.000.000.000.000</td>
+                    <td className="p-2.5 text-[var(--text-secondary)]">1 nghìn tỷ (1 triệu triệu / 1 vạn ức)</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 font-bold text-amber-400">Kinh</td>
+                    <td className="p-2.5">10¹⁶</td>
+                    <td className="p-2.5">10.000.000.000.000.000</td>
+                    <td className="p-2.5 text-[var(--text-secondary)]">10 triệu tỷ (10,000 Triệu)</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 font-bold text-amber-400">Cai</td>
+                    <td className="p-2.5">10²⁰</td>
+                    <td className="p-2.5">10²⁰</td>
+                    <td className="p-2.5 text-[var(--text-secondary)]">100 nghìn tỷ tỷ</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 font-bold text-amber-400">Tử</td>
+                    <td className="p-2.5">10²⁴</td>
+                    <td className="p-2.5">10²⁴</td>
+                    <td className="p-2.5 text-[var(--text-secondary)]">1 triệu tỷ tỷ</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 font-bold text-amber-400">Nhưỡng</td>
+                    <td className="p-2.5">10²⁸</td>
+                    <td className="p-2.5">10²⁸</td>
+                    <td className="p-2.5 text-[var(--text-secondary)]">10 tỷ tỷ tỷ</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 font-bold text-amber-400">Câu</td>
+                    <td className="p-2.5">10³²</td>
+                    <td className="p-2.5">10³²</td>
+                    <td className="p-2.5 text-[var(--text-secondary)]">100 triệu tỷ tỷ tỷ</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 font-bold text-amber-400">Giản</td>
+                    <td className="p-2.5">10³⁶</td>
+                    <td className="p-2.5">10³⁶</td>
+                    <td className="p-2.5 text-[var(--text-secondary)]">1 trạch / 1 tỷ tỷ tỷ tỷ</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 font-bold text-amber-400">Chính</td>
+                    <td className="p-2.5">10⁴⁰</td>
+                    <td className="p-2.5">10⁴⁰</td>
+                    <td className="p-2.5 text-[var(--text-secondary)]">10,000 Giản</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 font-bold text-amber-400">Tải</td>
+                    <td className="p-2.5">10⁴⁴</td>
+                    <td className="p-2.5">10⁴⁴</td>
+                    <td className="p-2.5 text-[var(--text-secondary)]">10,000 Chính</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 font-bold text-amber-400">Cực</td>
+                    <td className="p-2.5">10⁴⁸</td>
+                    <td className="p-2.5">10⁴⁸</td>
+                    <td className="p-2.5 text-[var(--text-secondary)]">10,000 Tải</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 font-bold text-amber-400">Hằng Hà Sa</td>
+                    <td className="p-2.5">10⁵²</td>
+                    <td className="p-2.5">10⁵²</td>
+                    <td className="p-2.5 text-[var(--text-secondary)]">Nhiều như số cát sông Hằng</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 font-bold text-amber-400">A Tăng Kỳ</td>
+                    <td className="p-2.5">10⁵⁶</td>
+                    <td className="p-2.5">10⁵⁶</td>
+                    <td className="p-2.5 text-[var(--text-secondary)]">Vô số lượng lớn (Asamkhyeya)</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 font-bold text-amber-400">Na Do Tha</td>
+                    <td className="p-2.5">10⁶⁰</td>
+                    <td className="p-2.5">10⁶⁰</td>
+                    <td className="p-2.5 text-[var(--text-secondary)]">Vô lượng số (Nayuta)</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 font-bold text-amber-400">Bất Khả Tư Nghị</td>
+                    <td className="p-2.5">10⁶⁴</td>
+                    <td className="p-2.5">10⁶⁴</td>
+                    <td className="p-2.5 text-[var(--text-secondary)]">Vượt xa suy tư tư duy</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 font-bold text-amber-400">Vô Lượng</td>
+                    <td className="p-2.5">10⁶⁸</td>
+                    <td className="p-2.5">10⁶⁸</td>
+                    <td className="p-2.5 text-[var(--text-secondary)]">Cực hạn vô lượng</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     )

@@ -27,13 +27,13 @@ type CombatHistoryEntry struct {
 }
 
 type CombatSummary struct {
-	TotalDamageDealt  int `json:"total_damage_dealt"`
-	TotalDamageTaken  int `json:"total_damage_taken"`
-	ShieldsUsed       int `json:"shields_used"`
-	FinalPlayerHP     int `json:"final_player_hp"`
-	ItemsUsed         int `json:"items_used"`
-	StonesUsed        int64 `json:"stones_used"`
-	LootCount         int `json:"loot_count"`
+	TotalDamageDealt  float64 `json:"total_damage_dealt"`
+	TotalDamageTaken  float64 `json:"total_damage_taken"`
+	ShieldsUsed       float64 `json:"shields_used"`
+	FinalPlayerHP     float64 `json:"final_player_hp"`
+	ItemsUsed         int     `json:"items_used"`
+	StonesUsed        int64   `json:"stones_used"`
+	LootCount         int     `json:"loot_count"`
 }
 
 // SaveCombatHistory persists a completed combat result to the combat_history table.
@@ -63,8 +63,8 @@ func toInterfaceSlice(logs []simulator.CombatLog) []interface{} {
 	return s
 }
 
-func buildCombatSummaryFromLogs(logs []simulator.CombatLog, finalHP, itemsUsed int, stonesSpent int64) CombatSummary {
-	var totalDmgDealt, totalDmgTaken, shieldsUsed int
+func buildCombatSummaryFromLogs(logs []simulator.CombatLog, finalHP float64, itemsUsed int, stonesSpent int64) CombatSummary {
+	var totalDmgDealt, totalDmgTaken, shieldsUsed float64
 	for _, log := range logs {
 		if log.Damage > 0 {
 			if log.TargetId != "" && log.Action != "SHIELD_ABSORB" {

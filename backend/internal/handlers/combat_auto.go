@@ -28,19 +28,19 @@ type AutoCombatStartRequest struct {
 
 // CombatantInfo returned to frontend for visual replay
 type CombatantInfo struct {
-	ID            string         `json:"id"`
-	Name          string         `json:"name"`
-	Kind          string         `json:"kind"`
-	MaxHP         int            `json:"max_hp"`
-	HP            int            `json:"hp"`
-	MaxMana       int            `json:"max_mana"`
-	Mana          int            `json:"mana"`
-	GridX         int            `json:"grid_x"`
-	GridY         int            `json:"grid_y"`
-	Shield        int            `json:"shield"`
-	Damage        float64        `json:"damage,omitempty"`
-	Defense       float64        `json:"defense,omitempty"`
-	Speed         float64        `json:"speed,omitempty"`
+	ID            string             `json:"id"`
+	Name          string             `json:"name"`
+	Kind          string             `json:"kind"`
+	MaxHP         float64            `json:"max_hp"`
+	HP            float64            `json:"hp"`
+	MaxMana       float64            `json:"max_mana"`
+	Mana          float64            `json:"mana"`
+	GridX         int                `json:"grid_x"`
+	GridY         int                `json:"grid_y"`
+	Shield        float64            `json:"shield"`
+	Damage        float64            `json:"damage,omitempty"`
+	Defense       float64            `json:"defense,omitempty"`
+	Speed         float64            `json:"speed,omitempty"`
 	KindDetail    string             `json:"kind_detail,omitempty"`
 	Rank          int                `json:"rank,omitempty"`
 	SubRank       int                `json:"sub_rank,omitempty"`
@@ -96,8 +96,8 @@ func AutoCombatStart(c *gin.Context) {
 		Seed:          seed,
 		BossPhase:     0,
 		VirtualMode:   isVirtual,
-		ApertureHP:    int(player.ActiveCombat.ApertureHP),
-		ApertureMaxHP: int(player.ActiveCombat.ApertureMaxHP),
+		ApertureHP:    player.ActiveCombat.ApertureHP,
+		ApertureMaxHP: player.ActiveCombat.ApertureMaxHP,
 	}
 
 	simPlayer, err := buildSimCombatant(tx, &player, isVirtual, true, &req.Loadout)
@@ -120,12 +120,12 @@ func AutoCombatStart(c *gin.Context) {
 				Kind:    "Pet",
 				GridX:   ally.GridX,
 				GridY:   ally.GridY,
-				MaxHP:   int(ally.MaxHP),
-				HP:      int(ally.HP),
+				MaxHP:   ally.MaxHP,
+				HP:      ally.HP,
 				MaxMana: 10,
 				Mana:    10,
-				BaseDmg: int(ally.BaseAttack),
-				BaseDef: int(ally.BaseDefense),
+				BaseDmg: ally.BaseAttack,
+				BaseDef: ally.BaseDefense,
 				Speed:   ally.Speed,
 				Actions: []simulator.SimAction{{
 					ActionType: "BASIC_ATTACK",
@@ -147,7 +147,7 @@ func AutoCombatStart(c *gin.Context) {
 					simAlly.Kind = "Ally"
 					simAlly.GridX = ally.GridX
 					simAlly.GridY = ally.GridY
-					simAlly.HP = int(ally.HP) // Use their combat starting HP
+					simAlly.HP = ally.HP // Use their combat starting HP
 					if simAlly.HP > simAlly.MaxHP {
 						simAlly.HP = simAlly.MaxHP
 					}
@@ -160,17 +160,17 @@ func AutoCombatStart(c *gin.Context) {
 	// ── Build enemies ──
 	for idx := range player.ActiveCombat.Enemies {
 		enemy := &player.ActiveCombat.Enemies[idx]
-		eHP := int(enemy.HP)
+		eHP := enemy.HP
 		if eHP <= 0 {
-			eHP = int(enemy.MaxHP)
+			eHP = enemy.MaxHP
 		}
-		enemyMana := int(enemy.CurrentMana)
+		enemyMana := enemy.CurrentMana
 		if isVirtual {
-			eHP = int(enemy.MaxHP)
-			enemyMana = int(enemy.MaxMana)
+			eHP = enemy.MaxHP
+			enemyMana = enemy.MaxMana
 		}
 		// Calculate enemy VirtualShield from their Gu inventory
-		enemyShield := 0
+		enemyShield := 0.0
 		for _, guInst := range enemy.GuInventory {
 			if guInst.Status != "ACTIVE" {
 				continue
@@ -180,7 +180,7 @@ func AutoCombatStart(c *gin.Context) {
 				continue
 			}
 			if spec.Effects.Active != nil && spec.Effects.Active.ShieldFlat > 0 {
-				enemyShield += int(spec.Effects.Active.ShieldFlat)
+				enemyShield += spec.Effects.Active.ShieldFlat
 			}
 		}
 
@@ -194,12 +194,12 @@ func AutoCombatStart(c *gin.Context) {
 			Kind:          enemyKind,
 			GridX:         enemy.GridX,
 			GridY:         enemy.GridY,
-			MaxHP:         int(enemy.MaxHP),
+			MaxHP:         enemy.MaxHP,
 			HP:            eHP,
-			MaxMana:       int(enemy.MaxMana),
+			MaxMana:       enemy.MaxMana,
 			Mana:          enemyMana,
-			BaseDmg:       int(enemy.BaseAttack),
-			BaseDef:       int(enemy.BaseDefense),
+			BaseDmg:       enemy.BaseAttack,
+			BaseDef:       enemy.BaseDefense,
 			Speed:         enemy.Speed,
 			VirtualShield: enemyShield,
 			DaoMarks: func() simulator.DaoMarks {
@@ -264,10 +264,10 @@ func AutoCombatStart(c *gin.Context) {
 			ID:            e.ID,
 			Name:          e.Name,
 			Kind:          "enemy",
-			MaxHP:         int(e.MaxHP),
-			HP:            int(e.HP),
-			MaxMana:       int(e.MaxMana),
-			Mana:          int(e.CurrentMana),
+			MaxHP:         e.MaxHP,
+			HP:            e.HP,
+			MaxMana:       e.MaxMana,
+			Mana:          e.CurrentMana,
 			GridX:         e.GridX,
 			GridY:         e.GridY,
 			Damage:        e.BaseAttack,
@@ -324,7 +324,7 @@ func AutoCombatStart(c *gin.Context) {
 	}
 
 	var alliesAlive bool
-	var finalPlayerHP int
+	var finalPlayerHP float64
 	for _, a := range simState.Allies {
 		if a.ID == player.ID.String() {
 			alliesAlive = (a.HP > 0) && !enemiesAlive
@@ -396,7 +396,7 @@ func AutoCombatStart(c *gin.Context) {
 	}
 
 	// ── Grab final mana from sim ──
-	var finalMana int
+	var finalMana float64
 	for _, a := range simState.Allies {
 		if a.ID == player.ID.String() {
 			finalMana = a.Mana
@@ -790,7 +790,7 @@ func AutoCombatStart(c *gin.Context) {
 		}
 
 		// Sync enemy HP using LEAST so watchtower/worker damage is never overwritten upward.
-		finalByID := make(map[string]int)
+		finalByID := make(map[string]float64)
 		for _, e := range simState.Enemies {
 			finalByID[e.ID] = e.HP
 		}
@@ -1202,13 +1202,13 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	}
 
 	baseHP := player.BaseHP + playerStats["hp"]
-	simMaxHP := int(baseHP)
+	simMaxHP := baseHP
 	if simMaxHP <= 0 {
 		simMaxHP = 100
 	}
 	simHP := simMaxHP
 	if !isVirtual {
-		simHP = int(player.HP)
+		simHP = player.HP
 	}
 	if simHP > simMaxHP {
 		simHP = simMaxHP
@@ -1217,9 +1217,9 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		simHP = simMaxHP
 	}
 
-	simMana := int(player.MaxMana)
+	simMana := player.MaxMana
 	if !isVirtual {
-		simMana = int(player.CurrentMana)
+		simMana = player.CurrentMana
 	}
 
 	simStones := player.PrimevalStones
@@ -1243,10 +1243,10 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		GridY:                3,
 		MaxHP:                simMaxHP,
 		HP:                   simHP,
-		MaxMana:              int(player.MaxMana),
+		MaxMana:              player.MaxMana,
 		Mana:                 simMana,
-		BaseDmg:              int(playerStats["attack"]),
-		BaseDef:              int(playerStats["defense"]),
+		BaseDmg:              playerStats["attack"],
+		BaseDef:              playerStats["defense"],
 		Speed:                playerStats["speed"],
 		DaoMarks:             simulator.DaoMarks(player.DaoMarks),
 		PathMasteries:        player.PathMasteries,

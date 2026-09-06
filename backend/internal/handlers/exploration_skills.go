@@ -281,12 +281,62 @@ func UseGuOnMap(c *gin.Context) {
 		return
 	}
 
+	// Calculate map target damage if targeting a monster/boss cell
+	var targetDefeated bool
+	var targetHP, targetMaxHP float64
+	var targetName string
+	var damageDealt float64
+
+	if inWorld(req.TargetX, req.TargetY) && (req.TargetX != 0 || req.TargetY != 0) {
+		cell := ResolveCell(req.TargetX, req.TargetY)
+		if (cell.Type == "Monster" || cell.Type == "Boss") && !isCellClearedRecently(&player, req.TargetX, req.TargetY, 5*time.Minute) {
+			mon, err := db.LoadMonsterTemplate(tx, cell.Content)
+			if err == nil {
+				maxHP, _, def := models.ScaleMonsterStats(mon.MaxHP, mon.BaseAttack, mon.BaseDefense, cell.Rank, cell.SubRank, mon.Type)
+				targetName = mon.Name
+				targetMaxHP = maxHP
+
+				rawDmg := effectValue
+				if rawDmg <= 0 {
+					stats := CalculatePlayerStats(&player)
+					rawDmg = math.Max(20.0, stats["attack"]*0.8)
+				}
+				damageDealt = math.Max(10.0, rawDmg-def*0.3)
+				effectType = "damage"
+
+				if damageDealt >= maxHP {
+					targetDefeated = true
+					targetHP = 0
+					if player.ClearedCells == nil {
+						player.ClearedCells = make(models.ClearedCellsMap)
+					}
+					coordKey := fmt.Sprintf("%d,%d", req.TargetX, req.TargetY)
+					player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
+
+					stonesGain := int64(float64(cell.Rank) * 30.0)
+					if stonesGain <= 0 {
+						stonesGain = 20
+					}
+					player.PrimevalStones += stonesGain
+
+					logs = append(logs, fmt.Sprintf("💥 Sát chiêu %s giáng xuống %s (Rank %d), gây %.0f sát thương diệt sát mục tiêu! Nhận +%d Nguyên Thạch.", specs.Name, mon.Name, cell.Rank, damageDealt, stonesGain))
+				} else {
+					targetDefeated = false
+					targetHP = maxHP - damageDealt
+					logs = append(logs, fmt.Sprintf("⚡ Sát chiêu %s giáng xuống %s (Rank %d), gây %.0f sát thương! (HP còn: %.0f/%.0f)", specs.Name, mon.Name, cell.Rank, damageDealt, targetHP, maxHP))
+				}
+			}
+		}
+	}
+
 	player.CurrentMana -= cost
 	player.Statuses.Add(cdID, "cooldown", cdDuration, 0)
 
 	statusesJSON, _ := json.Marshal(player.Statuses)
-	_, err = tx.Exec(`UPDATE players SET current_mana = $1, hp = $2, x = $3, y = $4, current_region = $5, statuses = $6 WHERE id = $7`,
-		player.CurrentMana, player.HP, player.X, player.Y, player.CurrentRegion, statusesJSON, player.ID)
+	clearedJSON, _ := json.Marshal(player.ClearedCells)
+
+	_, err = tx.Exec(`UPDATE players SET current_mana = $1, hp = $2, x = $3, y = $4, current_region = $5, statuses = $6, cleared_cells = $7, primeval_stones = $8 WHERE id = $9`,
+		player.CurrentMana, player.HP, player.X, player.Y, player.CurrentRegion, statusesJSON, clearedJSON, player.PrimevalStones, player.ID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu trạng thái"})
@@ -304,6 +354,13 @@ func UseGuOnMap(c *gin.Context) {
 		"effect_type":      effectType,
 		"effect_value":     effectValue,
 		"cooldown_seconds": cdDuration.Seconds(),
+		"damage_dealt":     damageDealt,
+		"target_defeated":  targetDefeated,
+		"target_hp":        targetHP,
+		"target_max_hp":    targetMaxHP,
+		"target_name":      targetName,
+		"target_x":         req.TargetX,
+		"target_y":         req.TargetY,
 	})
 }
 

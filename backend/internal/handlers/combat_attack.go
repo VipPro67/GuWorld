@@ -1552,7 +1552,7 @@ func CombatAttack(c *gin.Context) {
 				logsIface[i] = l
 			}
 			summary := CombatSummary{
-				FinalPlayerHP: int(player.HP),
+				FinalPlayerHP: player.HP,
 				ItemsUsed:     histItemsUsed,
 			}
 			SaveCombatHistory(player.ID, winner, logsIface, summary, nil, histEnemyName, histEnemyType, player.CurrentRegion)

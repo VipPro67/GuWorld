@@ -580,3 +580,28 @@ Hệ thống cung cấp trang Hướng Dẫn Tân Thủ chi tiết từng bướ
 5. **Ải Cốt truyện & Đấu Trường:** Đi ải cốt truyện và khiêu chiến Cổ sư khác kiếm Chiến Công đổi đồ.
 6. **Thương hội & Tông môn:** Đấu giá vật phẩm tự do tại Bảo Hoàng Thiên và các hoạt động quyên góp, giao dịch bảo khố Tông Môn.
 7. **Thăng Tiên:** Đột phá lên Lục Chuyển Cổ Tiên ở Ngũ Chuyển Đỉnh Phong dựa trên tích lũy Nhân Khí (chance tỷ lệ thuận với Nhân Khí, tối đa 100k = 100% thành công). Thất bại phế bỏ tu vi về Nhất Chuyển.
+
+## 20. Bảng Quy Đổi Đơn Vị Số Lượng (Vạn, Ức, Kinh...)
+
+Hệ thống rút gọn hiển thị số lượng lớn (sát thương, khiên, HP, tài nguyên) sử dụng thang đơn vị truyền thống Á Đông (mỗi cấp bậc tăng $10^4 = 10.000$ lần):
+
+| Đơn vị | Lũy thừa ($10^n$) | Giá trị số | Diễn giải |
+| --- | --- | --- | --- |
+| **Vạn** | $10^4$ | 10.000 | 10 nghìn |
+| **Ức** | $10^8$ | 100.000.000 | 100 triệu (1 vạn vạn) |
+| **Triệu** | $10^{12}$ | 1.000.000.000.000 | 1 nghìn tỷ (1 triệu triệu / 1 vạn ức) |
+| **Kinh** | $10^{16}$ | $10^{16}$ | 10 triệu tỷ (10.000 Triệu) |
+| **Cai** | $10^{20}$ | $10^{20}$ | 100 nghìn tỷ tỷ |
+| **Tử** | $10^{24}$ | $10^{24}$ | 1 triệu tỷ tỷ |
+| **Nhưỡng** | $10^{28}$ | $10^{28}$ | 10 tỷ tỷ tỷ |
+| **Câu** | $10^{32}$ | $10^{32}$ | 100 triệu tỷ tỷ tỷ |
+| **Giản** | $10^{36}$ | $10^{36}$ | 1 trạch / 1 tỷ tỷ tỷ tỷ |
+| **Chính** | $10^{40}$ | $10^{40}$ | 10.000 Giản |
+| **Tải** | $10^{44}$ | $10^{44}$ | 10.000 Chính |
+| **Cực** | $10^{48}$ | $10^{48}$ | 10.000 Tải |
+| **Hằng Hà Sa** | $10^{52}$ | $10^{52}$ | Nhiều như số cát sông Hằng |
+| **A Tăng Kỳ** | $10^{56}$ | $10^{56}$ | Vô số lượng lớn (Asamkhyeya) |
+| **Na Do Tha** | $10^{60}$ | $10^{60}$ | Vô lượng số (Nayuta) |
+| **Bất Khả Tư Nghị** | $10^{64}$ | $10^{64}$ | Vượt xa suy tư tư duy |
+| **Vô Lượng** | $10^{68}$ | $10^{68}$ | Cực hạn vô lượng |
+
