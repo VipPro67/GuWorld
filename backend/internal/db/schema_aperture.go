@@ -11,8 +11,8 @@ func schemaAperture() error {
 		player_id UUID NOT NULL UNIQUE REFERENCES players(id) ON DELETE CASCADE,
 		grade VARCHAR(20) NOT NULL,
 		time_rate DOUBLE PRECISION NOT NULL DEFAULT 10,
-		aperture_hp BIGINT NOT NULL DEFAULT 10000,
-		max_aperture_hp BIGINT NOT NULL DEFAULT 10000,
+		aperture_hp DOUBLE PRECISION NOT NULL DEFAULT 10000,
+		max_aperture_hp DOUBLE PRECISION NOT NULL DEFAULT 10000,
 		area_size BIGINT NOT NULL DEFAULT 3000000,
 		immortal_essence BIGINT NOT NULL DEFAULT 0,
 		essence_production_per_year INTEGER NOT NULL DEFAULT 10,
@@ -38,6 +38,17 @@ func schemaAperture() error {
 	if err := execSchema("immortal_apertures_tribulation_pending_at_upgrade", `
 	ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS tribulation_pending_at TIMESTAMP WITH TIME ZONE;
 	`); err != nil {
+		return err
+	}
+
+	if err := execSchema("immortal_apertures_float_upgrade", `
+	DO $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='immortal_apertures' AND column_name='aperture_hp' AND data_type IN ('bigint', 'integer', 'int')) THEN
+			ALTER TABLE immortal_apertures ALTER COLUMN aperture_hp TYPE DOUBLE PRECISION USING aperture_hp::DOUBLE PRECISION;
+			ALTER TABLE immortal_apertures ALTER COLUMN max_aperture_hp TYPE DOUBLE PRECISION USING max_aperture_hp::DOUBLE PRECISION;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 
@@ -128,8 +139,8 @@ func schemaAperture() error {
 		path VARCHAR(50) NOT NULL,
 		difficulty INTEGER NOT NULL DEFAULT 1,
 		status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
-		aperture_hp_before BIGINT NOT NULL,
-		aperture_hp_after BIGINT,
+		aperture_hp_before DOUBLE PRECISION NOT NULL,
+		aperture_hp_after DOUBLE PRECISION,
 		reward_dao_marks BIGINT NOT NULL DEFAULT 0,
 		started_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
 		ended_at TIMESTAMP WITH TIME ZONE
@@ -141,6 +152,17 @@ func schemaAperture() error {
 		return err
 	}
 
+	if err := execSchema("tribulation_events_float_upgrade", `
+	DO $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tribulation_events' AND column_name='aperture_hp_before' AND data_type IN ('bigint', 'integer', 'int')) THEN
+			ALTER TABLE tribulation_events ALTER COLUMN aperture_hp_before TYPE DOUBLE PRECISION USING aperture_hp_before::DOUBLE PRECISION;
+			ALTER TABLE tribulation_events ALTER COLUMN aperture_hp_after TYPE DOUBLE PRECISION USING aperture_hp_after::DOUBLE PRECISION;
+		END IF;
+	END $$;`); err != nil {
+		return err
+	}
+
 	if err := execSchema("tribulation_enemies", `
 	CREATE TABLE IF NOT EXISTS tribulation_enemies (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -148,10 +170,10 @@ func schemaAperture() error {
 		name VARCHAR(100) NOT NULL,
 		enemy_type VARCHAR(50) NOT NULL,
 		path VARCHAR(50) NOT NULL,
-		hp BIGINT NOT NULL,
-		max_hp BIGINT NOT NULL,
-		attack BIGINT NOT NULL,
-		defense BIGINT NOT NULL,
+		hp DOUBLE PRECISION NOT NULL,
+		max_hp DOUBLE PRECISION NOT NULL,
+		attack DOUBLE PRECISION NOT NULL,
+		defense DOUBLE PRECISION NOT NULL,
 		target_node_id UUID REFERENCES aperture_resource_nodes(id) ON DELETE SET NULL,
 		x INTEGER NOT NULL,
 		y INTEGER NOT NULL,
@@ -164,6 +186,19 @@ func schemaAperture() error {
 	}
 	if err := execSchema("tribulation_enemies_event_idx", `
 	CREATE INDEX IF NOT EXISTS idx_tribulation_enemies_event ON tribulation_enemies (event_id);`); err != nil {
+		return err
+	}
+
+	if err := execSchema("tribulation_enemies_float_upgrade", `
+	DO $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tribulation_enemies' AND column_name='hp' AND data_type IN ('bigint', 'integer', 'int')) THEN
+			ALTER TABLE tribulation_enemies ALTER COLUMN hp TYPE DOUBLE PRECISION USING hp::DOUBLE PRECISION;
+			ALTER TABLE tribulation_enemies ALTER COLUMN max_hp TYPE DOUBLE PRECISION USING max_hp::DOUBLE PRECISION;
+			ALTER TABLE tribulation_enemies ALTER COLUMN attack TYPE DOUBLE PRECISION USING attack::DOUBLE PRECISION;
+			ALTER TABLE tribulation_enemies ALTER COLUMN defense TYPE DOUBLE PRECISION USING defense::DOUBLE PRECISION;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 

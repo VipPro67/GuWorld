@@ -474,7 +474,8 @@ func Flee(c *gin.Context) {
 		return
 	}
 
-	isExploration := player.ActiveCombat.CombatMode != "virtual" && player.ActiveCombat.EnemyTemplateID != "monster_heavenly_tribulation" && player.ActiveCombat.MineSlotID == 0 && player.ActiveCombat.EnemyType != "PVP"
+	isTribulation := player.ActiveCombat.TribulationEventID != "" || player.ActiveCombat.EnemyTemplateID == "monster_heavenly_tribulation" || player.ActiveCombat.EnemyType == "TRIBULATION_BOSS" || player.ActiveCombat.EnemyType == "TRIBULATION_MONSTER"
+	isExploration := player.ActiveCombat.CombatMode != "virtual" && !isTribulation && player.ActiveCombat.MineSlotID == 0 && player.ActiveCombat.EnemyType != "PVP"
 
 	if isExploration {
 		maxHP := gamefx.EffectiveMaxHP(&player)
@@ -507,6 +508,8 @@ func Flee(c *gin.Context) {
 		} else {
 			logMsg = fmt.Sprintf("Đạo hữu đã bỏ chạy khỏi %s. Chịu thương tổn %.0f HP.", enemyName, damage)
 		}
+	} else if isTribulation {
+		logMsg = fmt.Sprintf("Đạo hữu đã rút lui an toàn khỏi %s.", enemyName)
 	} else {
 		logMsg = fmt.Sprintf("Đạo hữu đã bỏ chạy khỏi %s.", enemyName)
 	}
@@ -543,10 +546,14 @@ func Flee(c *gin.Context) {
 }
 
 // fleeFreeRetreat reports whether an active combat allows a guaranteed,
-// penalty-free escape (PvP and mine encounters).
+// penalty-free escape (PvP, mine encounters, and tribulation encounters).
 func fleeFreeRetreat(cs *models.CombatState) bool {
 	if cs == nil {
 		return false
+	}
+	if cs.TribulationEventID != "" || cs.EnemyTemplateID == "monster_heavenly_tribulation" ||
+		cs.EnemyType == "TRIBULATION_BOSS" || cs.EnemyType == "TRIBULATION_MONSTER" {
+		return true
 	}
 	return cs.EnemyType == "PVP" || cs.MineSlotID > 0
 }

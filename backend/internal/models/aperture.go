@@ -10,8 +10,8 @@ type ImmortalAperture struct {
 	PlayerID                 string    `json:"player_id"`
 	Grade                    string    `json:"grade"` // 'LOW' | 'MID' | 'HIGH' | 'EXTREME'
 	TimeRate                 float64   `json:"time_rate"`
-	ApertureHP               int       `json:"aperture_hp"`
-	MaxApertureHP            int       `json:"max_aperture_hp"`
+	ApertureHP               float64   `json:"aperture_hp"`
+	MaxApertureHP            float64   `json:"max_aperture_hp"`
 	AreaSize                 int64     `json:"area_size"`
 	ImmortalEssence          int       `json:"immortal_essence"`
 	EssenceProductionPerYear int       `json:"essence_production_per_year"`
@@ -83,8 +83,8 @@ type TribulationEvent struct {
 	Path             string     `json:"path"`
 	Difficulty       int        `json:"difficulty"`
 	Status           string     `json:"status"` // 'ACTIVE' | 'SUCCESS' | 'FAILED'
-	ApertureHPBefore int        `json:"aperture_hp_before"`
-	ApertureHPAfter  *int       `json:"aperture_hp_after"`
+	ApertureHPBefore float64    `json:"aperture_hp_before"`
+	ApertureHPAfter  *float64   `json:"aperture_hp_after"`
 	RewardDaoMarks   int        `json:"reward_dao_marks"`
 	StartedAt        time.Time  `json:"started_at"`
 	EndedAt          *time.Time `json:"ended_at"`
@@ -96,10 +96,10 @@ type TribulationEnemy struct {
 	Name         string    `json:"name"`
 	EnemyType    string    `json:"enemy_type"`
 	Path         string    `json:"path"`
-	HP           int       `json:"hp"`
-	MaxHP        int       `json:"max_hp"`
-	Attack       int       `json:"attack"`
-	Defense      int       `json:"defense"`
+	HP           float64   `json:"hp"`
+	MaxHP        float64   `json:"max_hp"`
+	Attack       float64   `json:"attack"`
+	Defense      float64   `json:"defense"`
 	TargetNodeID *string   `json:"target_node_id"`
 	X            int       `json:"x"`
 	Y            int       `json:"y"`

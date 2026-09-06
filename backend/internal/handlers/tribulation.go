@@ -39,7 +39,7 @@ func GetActiveTribulation(c *gin.Context) {
 	// 1. Fetch active event
 	var ev models.TribulationEvent
 	var endedAt sql.NullTime
-	var hpAfter sql.NullInt64
+	var hpAfter sql.NullFloat64
 	err = tx.QueryRow(`
 		SELECT id, aperture_id, player_id, tribulation_type, path, difficulty, status, aperture_hp_before, aperture_hp_after, reward_dao_marks, started_at, ended_at
 		FROM tribulation_events
@@ -56,8 +56,7 @@ func GetActiveTribulation(c *gin.Context) {
 	}
 
 	if hpAfter.Valid {
-		h := int(hpAfter.Int64)
-		ev.ApertureHPAfter = &h
+		ev.ApertureHPAfter = &hpAfter.Float64
 	}
 	if endedAt.Valid {
 		ev.EndedAt = &endedAt.Time

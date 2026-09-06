@@ -639,10 +639,14 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 	}
 
 	if isTribulation && player.ActiveCombat != nil {
+		apertureHP := simState.ApertureHP
+		if math.IsNaN(apertureHP) || math.IsInf(apertureHP, 0) || apertureHP < 0 {
+			apertureHP = 0
+		}
 		_, errAp := tx.Exec(`
 			UPDATE immortal_apertures SET aperture_hp = $1, updated_at = NOW()
 			WHERE id = (SELECT aperture_id FROM tribulation_events WHERE id = $2 AND player_id = $3)
-		`, simState.ApertureHP, player.ActiveCombat.TribulationEventID, player.ID)
+		`, apertureHP, player.ActiveCombat.TribulationEventID, player.ID)
 		if errAp != nil {
 			logger.S.Errorf("Failed to persist aperture HP after tribulation combat: %v", errAp)
 		}
@@ -655,6 +659,9 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 			finalHP, ok := finalByID[en.ID]
 			if !ok {
 				continue
+			}
+			if math.IsNaN(finalHP) || math.IsInf(finalHP, 0) || finalHP < 0 {
+				finalHP = 0
 			}
 			_, errEn := tx.Exec(`
 				UPDATE tribulation_enemies

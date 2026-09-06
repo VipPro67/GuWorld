@@ -26,8 +26,21 @@ func TestFleeFreeRetreatPVP(t *testing.T) {
 	}
 }
 
+func TestFleeFreeRetreatTribulation(t *testing.T) {
+	for _, et := range []string{"TRIBULATION_BOSS", "TRIBULATION_MONSTER"} {
+		cs := &models.CombatState{EnemyType: et}
+		if !fleeFreeRetreat(cs) {
+			t.Fatalf("expected combat type %q to allow free retreat", et)
+		}
+	}
+	cs := &models.CombatState{TribulationEventID: "some-event"}
+	if !fleeFreeRetreat(cs) {
+		t.Fatalf("expected tribulation event combat to allow free retreat")
+	}
+}
+
 func TestFleeFreeRetreatNormalPvE(t *testing.T) {
-	for _, et := range []string{"", "BOSS", "TRIBULATION_BOSS", "TRIBULATION_MONSTER"} {
+	for _, et := range []string{"", "BOSS"} {
 		cs := &models.CombatState{EnemyType: et}
 		if fleeFreeRetreat(cs) {
 			t.Fatalf("expected combat type %q to NOT allow free retreat", et)

@@ -81,8 +81,8 @@ func AdminListApertures(c *gin.Context) {
 	apertures := []gin.H{}
 	for rows.Next() {
 		var id, playerID, username, grade, state string
-		var timeRate, nextTribulationYear, internalYearsPassed float64
-		var apertureHP, maxApertureHP, immortalEssence, areaSize int64
+		var timeRate, nextTribulationYear, internalYearsPassed, apertureHP, maxApertureHP float64
+		var immortalEssence, areaSize int64
 		var essenceProductionPerYear, tribulationCount int
 		var createdAt, updatedAt time.Time
 
@@ -157,7 +157,8 @@ func AdminGetApertureDetail(c *gin.Context) {
 		WHERE ia.id = $1
 	`
 
-	var hp, maxHp, immortalEssence int64
+	var hp, maxHp float64
+	var immortalEssence int64
 	err = db.DB.QueryRowContext(c.Request.Context(), query, apertureID).Scan(
 		&ap.ID, &ap.PlayerID, &username, &ap.Grade, &ap.TimeRate,
 		&hp, &maxHp, &ap.AreaSize, &immortalEssence,
@@ -173,8 +174,8 @@ func AdminGetApertureDetail(c *gin.Context) {
 		return
 	}
 
-	ap.ApertureHP = int(hp)
-	ap.MaxApertureHP = int(maxHp)
+	ap.ApertureHP = hp
+	ap.MaxApertureHP = maxHp
 	ap.ImmortalEssence = int(immortalEssence)
 
 	var daoMarks models.DaoMarksMap
@@ -197,8 +198,8 @@ func AdminGetApertureDetail(c *gin.Context) {
 type AdminUpdateApertureRequest struct {
 	Grade                    *string             `json:"grade"`
 	TimeRate                 *float64            `json:"time_rate"`
-	ApertureHP               *int64              `json:"aperture_hp"`
-	MaxApertureHP            *int64              `json:"max_aperture_hp"`
+	ApertureHP               *float64            `json:"aperture_hp"`
+	MaxApertureHP            *float64            `json:"max_aperture_hp"`
 	AreaSize                 *int64              `json:"area_size"`
 	ImmortalEssence          *int64              `json:"immortal_essence"`
 	EssenceProductionPerYear *int                `json:"essence_production_per_year"`
