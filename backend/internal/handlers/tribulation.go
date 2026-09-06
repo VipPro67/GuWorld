@@ -139,7 +139,7 @@ func EngageTribulation(c *gin.Context) {
 	}
 
 	// 2. Aperture gate: player may only fight while the Aperture is above 5% max HP
-	var apHP, apMaxHP int
+	var apHP, apMaxHP float64
 	err = tx.QueryRow(`
 		SELECT aperture_hp, max_aperture_hp FROM immortal_apertures WHERE id = $1
 	`, apertureID).Scan(&apHP, &apMaxHP)
@@ -175,16 +175,17 @@ func EngageTribulation(c *gin.Context) {
 	type liveEnemy struct {
 		ID      string
 		Name    string
-		HP      int
-		MaxHP   int
-		Attack  int
-		Defense int
+		HP      float64
+		MaxHP   float64
+		Attack  float64
+		Defense float64
 		IsBoss  bool
 	}
 	var enemies []liveEnemy
 	for rows.Next() {
 		var e liveEnemy
 		if err := rows.Scan(&e.ID, &e.Name, &e.HP, &e.MaxHP, &e.Attack, &e.Defense, &e.IsBoss); err != nil {
+			logger.S.Errorf("EngageTribulation rows.Scan failed for event %s: %v", eventID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi đọc quái tai kiếp"})
 			return
 		}
@@ -647,8 +648,8 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 		ID                       string
 		PlayerID                 string
 		TimeRate                 float64
-		ApertureHP               int
-		MaxApertureHP            int
+		ApertureHP               float64
+		MaxApertureHP            float64
 		InternalYearsPassed      float64
 		NextTribulationYear      float64
 		TribulationCount         int
@@ -868,8 +869,8 @@ func CheckAndTriggerTribulations() error {
 		ID                       string
 		PlayerID                 string
 		TimeRate                 float64
-		ApertureHP               int
-		MaxApertureHP            int
+		ApertureHP               float64
+		MaxApertureHP            float64
 		InternalYearsPassed      float64
 		NextTribulationYear      float64
 		TribulationCount         int
@@ -1069,7 +1070,7 @@ func CheckAndTriggerTribulations() error {
 										ORDER BY random() LIMIT 2
 									)
 								`, ap.ID)
-								ap.ApertureHP = int(math.Max(0.0, float64(ap.ApertureHP)-float64(ap.MaxApertureHP)*0.05))
+								ap.ApertureHP = math.Max(0.0, ap.ApertureHP-ap.MaxApertureHP*0.05)
 								_, _ = db.DB.Exec(`UPDATE immortal_apertures SET aperture_hp = $1 WHERE id = $2`, ap.ApertureHP, ap.ID)
 
 								_, _ = db.DB.Exec(`
@@ -1207,7 +1208,7 @@ func CheckAndTriggerTribulations() error {
 	return nil
 }
 
-func spawnTribulationEventWorker(apertureID string, playerID string, tribCount int, currentHP int, newYearsPassed float64, tribulationType string, rewardMult float64) error {
+func spawnTribulationEventWorker(apertureID string, playerID string, tribCount int, currentHP float64, newYearsPassed float64, tribulationType string, rewardMult float64) error {
 	tx, err := db.DB.Begin()
 	if err != nil {
 		return err
