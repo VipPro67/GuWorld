@@ -105,11 +105,35 @@ func HigherRankManaMultiplier(guRank, userRank int) float64 {
 
 	if userRank < util.ImmortalRankThreshold {
 		values := []float64{1, 2, 5, 20, 100}
-		return values[guRank-1] / values[userRank-1]
+		uIdx := userRank - 1
+		if uIdx < 0 {
+			uIdx = 0
+		} else if uIdx >= len(values) {
+			uIdx = len(values) - 1
+		}
+		gIdx := guRank - 1
+		if gIdx < 0 {
+			gIdx = 0
+		} else if gIdx >= len(values) {
+			gIdx = len(values) - 1
+		}
+		return values[gIdx] / values[uIdx]
 	}
 
 	values := []float64{1, 100, 10000, 1000000}
-	return values[guRank-6] / values[userRank-6]
+	uIdx := userRank - 6
+	if uIdx < 0 {
+		uIdx = 0
+	} else if uIdx >= len(values) {
+		uIdx = len(values) - 1
+	}
+	gIdx := guRank - 6
+	if gIdx < 0 {
+		gIdx = 0
+	} else if gIdx >= len(values) {
+		gIdx = len(values) - 1
+	}
+	return values[gIdx] / values[uIdx]
 }
 
 // CanUseGuWithMana reports whether a user of the given rank may spend mana to

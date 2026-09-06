@@ -79,6 +79,11 @@ func TestHigherRankManaMultiplier(t *testing.T) {
 		{6, 5, math.Inf(1)},
 		{7, 5, math.Inf(1)},
 		{9, 1, math.Inf(1)},
+
+		// Safety bounds test for zero / uninitialized ranks
+		{1, 0, 1},
+		{5, 0, 100},
+		{7, 0, math.Inf(1)},
 	}
 
 	for _, c := range cases {

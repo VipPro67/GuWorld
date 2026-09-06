@@ -250,11 +250,9 @@ func UseGuOnMap(c *gin.Context) {
 	// Fallback for general Active Gu effects if no map-specific condition matched
 	if !applied && specs.Effects.Active != nil {
 		stats := CalculatePlayerStats(&player)
+		attacker := models.CombatantFromPlayer(&player, stats)
 		ctx := &CombatContext{
-			Attacker: &models.Combatant{
-				MaxHP:      gamefx.EffectiveMaxHP(&player),
-				BaseAttack: stats["attack"],
-			},
+			Attacker: &attacker,
 		}
 		act, err := BuildCombatAction(ctx, specs)
 		if err == nil {
