@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM node:22-alpine AS builder
 
 WORKDIR /app
@@ -7,7 +8,8 @@ ENV NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm \
+	npm ci --cache=/root/.npm --prefer-offline
 
 COPY . .
 

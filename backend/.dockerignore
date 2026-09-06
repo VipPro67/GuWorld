@@ -1,0 +1,22 @@
+.git
+.env
+.env.*
+
+# Local build artifacts and binaries
+guworld_bin
+guworld_server
+server
+tmp_server
+
+# Go/tool caches
+bin
+.build
+coverage.out
+
+# Runtime-generated uploads are persisted outside the image
+storage/images
+
+# Editor and OS files
+.vscode
+.idea
+.DS_Store
