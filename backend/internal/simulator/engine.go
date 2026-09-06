@@ -550,6 +550,22 @@ func Simulate(state *CombatState) []CombatLog {
 				return res
 			}
 
+			if a.ActionType == "GU_SKILL" && actor.Kind == "Player" {
+				if actor.GuHunger != nil {
+					h, exists := actor.GuHunger[a.SourceID]
+					if exists && h <= 0 {
+						return res
+					}
+					if exists {
+						actor.GuHunger[a.SourceID]--
+					}
+				}
+				if actor.GuUsedCounts == nil {
+					actor.GuUsedCounts = make(map[string]int)
+				}
+				actor.GuUsedCounts[a.SourceID]++
+			}
+
 			if (a.ActionType == "GU_SKILL" || a.ActionType == "BASIC_ATTACK") && actor.Kind == "Player" && !state.VirtualMode {
 				remaining := actor.PathMasteryGainLimit - actor.PathMasteryGained
 				if remaining > 0 {

@@ -278,6 +278,8 @@ type CombatantAuto struct {
 
 	// Tracking
 	ItemsUsedInBattle int
+	GuHunger          map[string]int // gu_id or instance_id -> hunger remaining in battle
+	GuUsedCounts      map[string]int // gu_id or instance_id -> times used in battle
 
 	// Custom state for special Gu effects (e.g. GU_POEM_IMMORTAL stacks)
 	CustomState map[string]int

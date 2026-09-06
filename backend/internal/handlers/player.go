@@ -4420,6 +4420,15 @@ func UseSupportGu(c *gin.Context) {
 		return
 	}
 
+	targetGu.Hunger -= 1
+	if targetGu.Hunger < 0 {
+		targetGu.Hunger = 0
+	}
+	if _, errGu := tx.Exec(`UPDATE player_gu SET hunger = $1, updated_at = NOW() WHERE id = $2`, targetGu.Hunger, targetGu.InstanceID); errGu != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật độ no Cổ trùng"})
+		return
+	}
+
 	qiGained := AddHumanQi(&player, float64(3))
 
 	logMsg := strings.Join(logs, " ")

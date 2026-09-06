@@ -316,15 +316,20 @@ func CombatAttack(c *gin.Context) {
 
 		for _, instID := range req.EquippedGuIDs {
 			found := false
-			for _, inst := range player.GuInventory {
+			for idx := range player.GuInventory {
+				inst := &player.GuInventory[idx]
 				if inst.InstanceID == instID {
-					if inst.Status == "DEAD" {
-						c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể chiến đấu bằng Cổ trùng ĐÃ CHẾT: " + inst.GuID})
-						return
-					}
 					spec, ok := models.GetGu(inst.GuID, inst.Rank)
 					if !ok {
 						c.JSON(http.StatusInternalServerError, gin.H{"error": "Không tìm thấy định nghĩa của Cổ trùng: " + inst.GuID})
+						return
+					}
+					if inst.Status == "DEAD" {
+						c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể chiến đấu bằng Cổ trùng ĐÃ CHẾT: " + spec.Name})
+						return
+					}
+					if inst.Hunger <= 0 {
+						c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng " + spec.Name + " đã kiệt sức (độ no = 0), không thể sử dụng chiến đấu!"})
 						return
 					}
 
@@ -342,7 +347,15 @@ func CombatAttack(c *gin.Context) {
 						}
 					}
 
-					selectedGus = append(selectedGus, inst)
+					// Deduct 1 hunger upon use (skip in virtual mode)
+					if !isVirtual {
+						inst.Hunger -= 1
+						if inst.Hunger < 0 {
+							inst.Hunger = 0
+						}
+					}
+
+					selectedGus = append(selectedGus, *inst)
 					selectedSpecs = append(selectedSpecs, spec)
 
 					_, _, cost, errVal := CalculateGuEffectForCombatant(&playerCombatant, &spec, true, gamefx.Get(&player).DaoNganBonus, gamefx.Get(&player).PathDamageBonus)

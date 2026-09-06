@@ -332,6 +332,15 @@ func UseGuOnMap(c *gin.Context) {
 	player.CurrentMana -= cost
 	player.Statuses.Add(cdID, "cooldown", cdDuration, 0)
 
+	targetGu.Hunger -= 1
+	if targetGu.Hunger < 0 {
+		targetGu.Hunger = 0
+	}
+	if _, errGu := tx.Exec(`UPDATE player_gu SET hunger = $1, updated_at = NOW() WHERE id = $2`, targetGu.Hunger, targetGu.InstanceID); errGu != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật độ no Cổ trùng"})
+		return
+	}
+
 	statusesJSON, _ := json.Marshal(player.Statuses)
 	clearedJSON, _ := json.Marshal(player.ClearedCells)
 
@@ -431,11 +440,40 @@ func UseKillerMoveOnMap(c *gin.Context) {
 		}
 	}
 
+	allGuIDs := append([]string{move.CorePlayerGuID}, supportIDs...)
+	for _, gID := range allGuIDs {
+		for _, gu := range player.GuInventory {
+			if gu.InstanceID == gID {
+				if gu.Hunger <= 0 {
+					spec, _ := models.GetGu(gu.GuID, gu.Rank)
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cổ trùng %s trong sát chiêu đã kiệt sức (độ no = 0)!", spec.Name)})
+					return
+				}
+			}
+		}
+	}
+
 	if player.CurrentMana < preview.TotalManaCost {
 		c.JSON(http.StatusBadRequest, gin.H{"error": insufficientEnergyMessage(&player)})
 		return
 	}
 	player.CurrentMana -= preview.TotalManaCost
+
+	for _, gID := range allGuIDs {
+		for idx := range player.GuInventory {
+			if player.GuInventory[idx].InstanceID == gID {
+				player.GuInventory[idx].Hunger -= 1
+				if player.GuInventory[idx].Hunger < 0 {
+					player.GuInventory[idx].Hunger = 0
+				}
+				break
+			}
+		}
+		if _, errExec := tx.Exec(`UPDATE player_gu SET hunger = GREATEST(hunger - 1, 0), updated_at = NOW() WHERE id = $1`, gID); errExec != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật độ no Cổ trùng"})
+			return
+		}
+	}
 
 	succeeded := math.Max(0.0, float64(preview.SuccessRate)) >= (100.0 * 0.5)
 	logs := []string{}

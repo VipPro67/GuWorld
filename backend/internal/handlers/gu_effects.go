@@ -56,6 +56,10 @@ func ValidateGuUsable(player *models.Player, gu *models.GuInstance, spec *models
 		return fmt.Errorf("Không thể sử dụng Cổ trùng ĐÃ CHẾT: %s", spec.Name)
 	}
 
+	if gu.Hunger <= 0 {
+		return fmt.Errorf("Cổ trùng %s đã kiệt sức (độ no = 0), cần cho ăn trước khi sử dụng!", spec.Name)
+	}
+
 	if actionRequiresEquipped && !gu.Equipped {
 		return fmt.Errorf("Cổ trùng chưa được trang bị: %s", spec.Name)
 	}

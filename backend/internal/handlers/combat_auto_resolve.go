@@ -285,6 +285,29 @@ func AutoResolveCombat(tx *sql.Tx, player *models.Player) (string, []simulator.C
 		immortalStonesSpent = player.ImmortalStones - simPlayer.ImmortalStones
 		player.PrimevalStones = simPlayer.PrimevalStones
 		player.ImmortalStones = simPlayer.ImmortalStones
+
+		if simPlayer != nil && len(simPlayer.GuUsedCounts) > 0 {
+			beforeGus := append(models.GuInventory(nil), player.GuInventory...)
+			hungerDeducted := false
+			for idx := range player.GuInventory {
+				g := &player.GuInventory[idx]
+				if !g.Equipped {
+					continue
+				}
+				if count, used := simPlayer.GuUsedCounts[g.GuID]; used && count > 0 {
+					g.Hunger -= count
+					if g.Hunger < 0 {
+						g.Hunger = 0
+					}
+					hungerDeducted = true
+				}
+			}
+			if hungerDeducted {
+				if errSync := db.SyncPlayerGus(tx, player.ID.String(), beforeGus, player.GuInventory); errSync != nil {
+					logger.S.Warnf("Failed to sync player Gu hunger after auto combat: %v", errSync)
+				}
+			}
+		}
 	}
 
 	var finalMana float64

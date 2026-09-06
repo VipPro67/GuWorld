@@ -370,6 +370,29 @@ func AutoCombatStart(c *gin.Context) {
 		immortalStonesSpent = player.ImmortalStones - simPlayer.ImmortalStones
 		player.PrimevalStones = simPlayer.PrimevalStones
 		player.ImmortalStones = simPlayer.ImmortalStones
+
+		if simPlayer != nil && len(simPlayer.GuUsedCounts) > 0 {
+			beforeGus := append(models.GuInventory(nil), player.GuInventory...)
+			hungerDeducted := false
+			for idx := range player.GuInventory {
+				g := &player.GuInventory[idx]
+				if !g.Equipped {
+					continue
+				}
+				if count, used := simPlayer.GuUsedCounts[g.GuID]; used && count > 0 {
+					g.Hunger -= count
+					if g.Hunger < 0 {
+						g.Hunger = 0
+					}
+					hungerDeducted = true
+				}
+			}
+			if hungerDeducted {
+				if errSync := db.SyncPlayerGus(tx, player.ID.String(), beforeGus, player.GuInventory); errSync != nil {
+					logger.S.Warnf("Failed to sync player Gu hunger after auto combat: %v", errSync)
+				}
+			}
+		}
 	}
 
 	// ── Log item/mana usage ──
@@ -1005,7 +1028,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	ownedGuInstanceSet := make(map[string]bool)              // instance_id → true
 	equippedInstByGuID := make(map[string]models.GuInstance) // gu_id → highest-rank equipped ACTIVE instance
 	for _, gu := range player.GuInventory {
-		if gu.Equipped && gu.Status == "ACTIVE" {
+		if gu.Equipped && gu.Status == "ACTIVE" && gu.Hunger > 0 {
 			ownedGuTypeSet[gu.GuID] = true
 			ownedGuInstanceSet[gu.InstanceID] = true
 			if best, ok := equippedInstByGuID[gu.GuID]; !ok || gu.Rank > best.Rank {
@@ -1268,6 +1291,14 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		PrimevalStones:  simStones,
 		ImmortalStones:  simImmortalStones,
 		RefineManaTier:  gamefx.RefineManaTier(player.Rank, player.GuInventory),
+		GuHunger: func() map[string]int {
+			gh := make(map[string]int)
+			for guID, inst := range equippedInstByGuID {
+				gh[guID] = inst.Hunger
+			}
+			return gh
+		}(),
+		GuUsedCounts: make(map[string]int),
 	}
 
 	if isInitiator && reqLoadout != nil {

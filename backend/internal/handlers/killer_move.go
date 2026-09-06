@@ -16,6 +16,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 const (
@@ -322,12 +323,41 @@ func CastKillerMove(c *gin.Context) {
 		}
 	}
 
+	allGuIDs := append([]string{move.CorePlayerGuID}, supportIDs...)
+	for _, gID := range allGuIDs {
+		for _, gu := range player.GuInventory {
+			if gu.InstanceID == gID {
+				if gu.Hunger <= 0 {
+					spec, _ := models.GetGu(gu.GuID, gu.Rank)
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cổ trùng %s trong sát chiêu đã kiệt sức (độ no = 0)!", spec.Name)})
+					return
+				}
+			}
+		}
+	}
+
 	if player.CurrentMana < preview.TotalManaCost {
 		c.JSON(http.StatusBadRequest, gin.H{"error": insufficientEnergyMessage(&player)})
 		return
 	}
 
 	player.CurrentMana -= preview.TotalManaCost
+
+	beforeGus := append(models.GuInventory(nil), player.GuInventory...)
+	for _, gID := range allGuIDs {
+		for idx := range player.GuInventory {
+			if player.GuInventory[idx].InstanceID == gID {
+				player.GuInventory[idx].Hunger -= 1
+				if player.GuInventory[idx].Hunger < 0 {
+					player.GuInventory[idx].Hunger = 0
+				}
+				break
+			}
+		}
+	}
+	if errSync := db.SyncPlayerGus(tx, player.ID.String(), beforeGus, player.GuInventory); errSync != nil {
+		logger.S.Warnf("Failed to sync player Gu hunger in CastKillerMove: %v", errSync)
+	}
 	logs := []string{fmt.Sprintf("Thi triển sát chiêu %s: -%.1f %s.", move.Name, preview.TotalManaCost, energyName(&player))}
 	eventType := "KILLER_MOVE_CASTED"
 	succeeded := rand.Float64()*100 <= preview.SuccessRate

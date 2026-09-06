@@ -175,6 +175,7 @@ func TestPortalManaCostAndUsability(t *testing.T) {
 		InstanceID: "inst_mortal_5",
 		GuID:       "GU_MORTAL_PORTAL",
 		Rank:       5,
+		Hunger:     100,
 		Status:     "ACTIVE",
 		Equipped:   true,
 	}
@@ -182,6 +183,7 @@ func TestPortalManaCostAndUsability(t *testing.T) {
 		InstanceID: "inst_immortal_6",
 		GuID:       "GU_IMMORTAL_PORTAL",
 		Rank:       6,
+		Hunger:     100,
 		Status:     "ACTIVE",
 		Equipped:   true,
 	}
@@ -200,6 +202,20 @@ func TestPortalManaCostAndUsability(t *testing.T) {
 	// 3. Mortal 5 using Immortal 6 -> Blocked by CanUseGuWithMana
 	if err := ValidateGuUsable(playerMortal5, guInstImmortal6, specImmortal6, true); err == nil {
 		t.Error("expected mortal using immortal Gu to be blocked, got nil")
+	}
+
+	// 4. Zero hunger Gu -> Blocked due to exhaustion
+	guInstExhausted := &models.GuInstance{
+		InstanceID: "inst_exhausted",
+		GuID:       "GU_MORTAL_PORTAL",
+		Rank:       5,
+		Hunger:     0,
+		Status:     "ACTIVE",
+		Equipped:   true,
+	}
+	playerMortal5.CurrentMana = 100
+	if err := ValidateGuUsable(playerMortal5, guInstExhausted, specMortal5, true); err == nil {
+		t.Error("expected zero hunger Gu to be blocked, got nil")
 	}
 }
 
